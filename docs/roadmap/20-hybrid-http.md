@@ -230,8 +230,8 @@ the server).
   `HttpServerOptions`), `src/http-wire.rkt`, `src/http-client.rkt`,
   `src/http-server.rkt`, the `http-producer` checker rule and the one-argument
   `HTTP.client` overload; `HTTP` left `reserved-type-names`, a test checks that
-  `import "std/http" as HTTP` links, and an `HTTP.` call without the import gets
-  `CHECK-UNKNOWN-NAME` with a help that shows it; `examples/http_get.agc` uses
+  `import HTTP from "std/http"` links, and an `HTTP.` call without the import
+  gets `CHECK-UNKNOWN-NAME` with a help that shows it; `examples/http_get.agc` uses
   `std/http`, `examples/http_server.agc` was removed until 20c;
   `tests/http-test.rkt` went (its client cases are goldens and
   `tests/test_vm_http.py` cases; its server cases return with 20c's tests); the
@@ -278,7 +278,7 @@ the server).
   with the SSE pattern in `references/network.md`, CHANGELOG ("Added").
 
 **Done when:** `examples/http_get.agc` and `examples/http_server.agc` run on the
-VM with `import "std/http" as HTTP` (the first since 7i, the second with 20c);
+VM with `import HTTP from "std/http"` (the first since 7i, the second with 20c);
 every hostile case of §10.6 is rejected with its code; the VM's client and
 server work with Python and Node peers over HTTP and HTTPS; the performance
 check is recorded (item 20c-bench); and, after 20g, a download bigger than 64

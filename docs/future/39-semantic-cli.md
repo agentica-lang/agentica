@@ -78,7 +78,7 @@ Checked at `29d64d2`:
 
 ```text
 $ agentica outline src/orders.agc
-src/orders.agc:1:1 import "models" as Models
+src/orders.agc:1:1 import Models from "models"
 src/orders.agc:3:1 export struct Order
 src/orders.agc:8:1 export def total(order: Order) -> Int
 src/orders.agc:14:1 def round_cents(value: Float) -> Int

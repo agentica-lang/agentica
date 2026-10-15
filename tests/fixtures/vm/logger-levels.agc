@@ -1,4 +1,4 @@
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def name_of(level: LogLevel) -> String
   case level

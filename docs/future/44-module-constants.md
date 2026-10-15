@@ -228,8 +228,8 @@ parser). Text forms of the parser and linker goldens print the new shape
 `compiler/modules.agc`, `declarations.agc`, `resolve.agc`, `rewrite.agc`. The
 checker does not see imports (the linker rewrote them), but two of its help
 texts show the import form (`src/checker.rkt`, the unknown-function help for
-`BDD.` and `HTTP.` names: `import "std/bdd" as BDD`, `import "std/http" as
-HTTP`). So 44a0-2 edits `src/checker.rkt` (message text only) and
+`BDD.` and `HTTP.` names: `import BDD from "std/bdd"`, `import HTTP from
+"std/http"`). So 44a0-2 edits `src/checker.rkt` (message text only) and
 `src/modules.rkt` and `compiler/` (more help texts), and the goldens that hold
 messages. A checker port that exists by then carries the new text (44.13).
 

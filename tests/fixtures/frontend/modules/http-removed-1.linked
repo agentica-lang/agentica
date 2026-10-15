@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 47:3:3-71:3:27 "unknown or private imported name" "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))" file="root.agc"
+ERROR CHECK-IMPORT-NAME 49:3:3-73:3:27 "unknown or private imported name" "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))" file="root.agc"

@@ -1,12 +1,12 @@
 ## The module linker: loads the root file and its imports (modules.agc) and rewrites them into one program (rewrite.agc). This is link-program and load-program of src/modules.rkt.
 
-import "ast" as Ast
-import "declarations" as Declarations
-import "link_env" as Env
-import "link_failure" as Failure
-import "modules" as Modules
-import "resolve" as Resolve
-import "rewrite" as Rewrite
+import Ast from "ast"
+import Declarations from "declarations"
+import Env from "link_env"
+import Failure from "link_failure"
+import Modules from "modules"
+import Resolve from "resolve"
+import Rewrite from "rewrite"
 
 ## One file of the linked program: its source text (for the help of the checker), its declarations with linked names and without exports, in the order of the file. first_id and next_id bound the node ids of the file (its imports and exports count too, so the declarations leave gaps).
 export struct LinkedModule

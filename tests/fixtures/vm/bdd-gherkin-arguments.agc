@@ -1,4 +1,4 @@
-import "std/bdd/gherkin" as Gherkin
+import Gherkin from "std/bdd/gherkin"
 
 def check(text: String) -> Void
   case Gherkin.parse("sample.feature", text)

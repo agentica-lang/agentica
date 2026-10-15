@@ -1,4 +1,4 @@
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 struct IntReader
   name: String

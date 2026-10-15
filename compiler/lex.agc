@@ -1,4 +1,4 @@
-import "lex_text" as LexText
+import LexText from "lex_text"
 
 def main() -> Void
   for path in System.args()

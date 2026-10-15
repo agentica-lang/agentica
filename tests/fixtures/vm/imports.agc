@@ -1,4 +1,4 @@
-import "lib/geometry" as Geo
+import Geo from "lib/geometry"
 
 struct Point
   x: Int

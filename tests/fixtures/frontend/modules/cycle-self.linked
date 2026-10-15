@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-CYCLE 0:1:1-22:2:1 "import cycle" - file="root.agc"
+ERROR CHECK-IMPORT-CYCLE 0:1:1-24:2:1 "import cycle" - file="root.agc"

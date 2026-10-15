@@ -1,7 +1,7 @@
 # Logging (`std/logger`)
 
 ```ruby
-import "std/logger" as Logger
+import Logger from "std/logger"
 ```
 
 ```text

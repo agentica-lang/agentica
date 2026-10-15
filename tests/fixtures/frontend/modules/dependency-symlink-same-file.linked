@@ -1,11 +1,11 @@
-program #8 0:1:1-81:8:1
+program #8 0:1:1-85:8:1
   module "root.agc"
-    declaration: function-decl #7 39:3:1-80:7:1 name="main"
-      result: type-ref #2 53:3:15-57:3:19 name="Void"
-      body: expr-stmt #4 60:4:3-67:5:1
-        value: call #3 60:4:3-66:4:9 name="@2::go" piped=false
-      body: expr-stmt #6 69:5:3-76:6:1
-        value: call #5 69:5:3-75:5:9 name="@2::go" piped=false
+    declaration: function-decl #7 43:3:1-84:7:1 name="main"
+      result: type-ref #2 57:3:15-61:3:19 name="Void"
+      body: expr-stmt #4 64:4:3-71:5:1
+        value: call #3 64:4:3-70:4:9 name="@2::go" piped=false
+      body: expr-stmt #6 73:5:3-80:6:1
+        value: call #5 73:5:3-79:5:9 name="@2::go" piped=false
   module "real.agc"
     declaration: function-decl #1 7:1:8-28:3:1 name="@2::go"
       result: type-ref #0 19:1:20-23:1:24 name="Void"

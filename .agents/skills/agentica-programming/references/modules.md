@@ -1,6 +1,6 @@
 # File modules and imports
 
-Each file is a module. `import Models from "models"` loads `models.agc` and names it `Models`; `import Util from "../lib/util"` loads `../lib/util.agc`. The older form `import "models" as Models` still works and means the same. Paths never include the extension (`import "models.agc"` is `CHECK-IMPORT-PATH`, and so are an empty path, a path ending in `/`, or a last part with a dot such as `"models.rb"`). So a module file name has no dot except `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
+Each file is a module. `import Models from "models"` loads `models.agc` and names it `Models`; `import Util from "../lib/util"` loads `../lib/util.agc`. Paths never include the extension (`import "models.agc"` is `CHECK-IMPORT-PATH`, and so are an empty path, a path ending in `/`, or a last part with a dot such as `"models.rb"`). So a module file name has no dot except `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
 
 - Relative paths resolve from the importing file, not the working directory.
 - Every file, imported ones included, keeps the order: `import`s, then `struct` and `enum`, then `export def`, then private `def`. An imported file out of order is `CHECK-DECL-ORDER`, located in that file.
@@ -37,8 +37,8 @@ There are no wildcard imports, package registry, module state, nested module blo
 
 Two prefixes select where a module comes from:
 
-- `import "std/queue" as Queue` loads the standard library embedded at build time. No installation, environment variable, or checkout is needed at run time. Local files and external roots cannot shadow it.
-- `import "pkg/acme/tools" as Tools` searches for `acme/tools.agc` in, in order:
+- `import Queue from "std/queue"` loads the standard library embedded at build time. No installation, environment variable, or checkout is needed at run time. Local files and external roots cannot shadow it.
+- `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in, in order:
   1. `agc_libs/` beside the root program (not beside each dependency, and not the working directory);
   2. absolute roots in `AGENTICA_PATH`, in the listed order;
   3. `$XDG_DATA_HOME/agentica/lib/`, defaulting to `~/.local/share/agentica/lib/`;

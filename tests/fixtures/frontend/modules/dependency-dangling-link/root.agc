@@ -1,4 +1,4 @@
-import "dangling" as D
+import D from "dangling"
 def main() -> Void
 end
 

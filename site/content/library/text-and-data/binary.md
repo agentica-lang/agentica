@@ -4,12 +4,12 @@ weight: 4
 description: The std/binary module, which reads and writes binary numbers in a list of bytes.
 ---
 
-`std/binary` is part of the standard library. It is written in Agentica itself, on the bit functions of [Int and Float](/library/text-and-data/numbers/). Import it with an alias: `import "std/binary" as Binary`.
+`std/binary` is part of the standard library. It is written in Agentica itself, on the bit functions of [Int and Float](/library/text-and-data/numbers/). Import it with an alias: `import Binary from "std/binary"`.
 
 Binary data is a `List[Int]` with each item in `0 .. 255`, the same list that `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and `Process.read_bytes` give. A reader takes the list and a zero-based `offset` and returns a `Result`. A writer returns a new list with the bytes of a number, and you join the lists with `Binary.concat`.
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   header = Binary.write_u16_be(513).unwrap!
@@ -55,7 +55,7 @@ Binary.read_f64_le(data: List[Int], offset: Int) -> Result[Float]
 A reader reads the bytes of its type from `offset`. It never halts the program: a bad offset or a bad item is an `error(...)` (see Errors below).
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   data = [1, 2, 3, 4, 255, 254]
@@ -107,7 +107,7 @@ Binary.write_f64_le(x: Float) -> List[Int]
 A writer returns a new list with exactly the bytes of its type. The ranges are `u8` `0 .. 255`, `i8` `-128 .. 127`, `u16` `0 .. 65535`, `i16` `-32768 .. 32767`, `u32` `0 .. 4294967295`, `i32` `-2147483648 .. 2147483647`, and `u64` `0 .. 9223372036854775807`. A writer that can fail, because the value may be outside its type, returns a `Result`. `write_i64_*`, `write_f32_*` and `write_f64_*` cannot fail and return a plain list, so a `try` on them is a check error.
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   puts(Binary.write_u16_be(513))
@@ -135,7 +135,7 @@ ok([254, 255, 255, 255])
 `write_f64_*` writes the 8 bytes of `Float.to_bits`, and `read_f64_*` is `Float.from_bits` of those bytes. `write_f32_*` writes the 4 bytes of `Float.to_bits32`, so it rounds to the nearest binary32 value and never fails; `read_f32_*` widens the value back, which is exact. `-0.0`, infinities and subnormals are kept. Every NaN is written as the canonical NaN, so a NaN with another payload comes back canonical.
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   puts(Binary.write_f32_be(1.0))
@@ -161,7 +161,7 @@ true
 `Int` is signed, so a `u64` above `9223372036854775807` is not an `Int`. `read_u64_*` returns an error for it instead of a negative number, and `write_u64_*` rejects a negative value. A program that needs all 64 bits (a hash, an ID) uses `read_i64_*` and `write_i64_*`, which read and write the same bytes as two's complement.
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   top = [128, 0, 0, 0, 0, 0, 0, 0]
@@ -188,7 +188,7 @@ Binary.concat(parts: List[List[Int]]) -> List[Int]
 Joins any number of parts in order. It costs O(n log k) for n bytes in k parts. Build `parts` with `map`. A loop of `out = List.concat(out, part)` copies the whole output on each pass and is O(n²) in the output size.
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   ids = [1, 258, 65536]
@@ -213,7 +213,7 @@ Binary.read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[Int]
 `frame` puts the 4-byte big-endian length of the payload in front of it. `read_frame_length` reads that length at `offset` and returns an error when it is above `max`, so a reader can reject a hostile length before it reads the body. The program then reads that many bytes itself (`TCP.recv_bytes` and `Process.read_bytes` may return fewer bytes than asked, so read in a loop). Neither function looks at the payload items.
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   framed = Binary.frame([104, 105]).unwrap!
@@ -248,7 +248,7 @@ Every problem is an `error(message)`. A function checks these in order and retur
 The type in a message is the one in the function name. The index in `is not a byte` is the item's position in `data`.
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   data = [0, 0, 1, 44]

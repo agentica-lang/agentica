@@ -1,4 +1,4 @@
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def event(level: LogLevel, message: String, fields: Map[String, String]) -> LogEvent
   return LogEvent(level: level, message: message, fields: fields, time_ms: 1760523302345, task: 7)

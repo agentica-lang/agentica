@@ -4,7 +4,7 @@ weight: 6
 description: Levels, named handlers and text or JSON lines on stderr with std/logger.
 ---
 
-`std/logger` is an Elixir-style logger written in Agentica. Import it with `import "std/logger" as Logger`. It has four levels, one global level, handlers that you attach and detach while the program runs, and fields on each call.
+`std/logger` is an Elixir-style logger written in Agentica. Import it with `import Logger from "std/logger"`. It has four levels, one global level, handlers that you attach and detach while the program runs, and fields on each call.
 
 The first call of any `Logger` function attaches a handler named `console` that writes text lines to stderr at level `info`. A program that only logs needs no setup.
 
@@ -31,7 +31,7 @@ The levels are the builtin enum `LogLevel`: `LogLevel.Debug < LogLevel.Info < Lo
 The global level is `info` until `set_level` changes it, and every call checks it first: a call below it makes no event. Each handler also has its own level and gets only events at or above it. `enabled?` is true only if the level is at or above the global level and some attached handler would accept it, so a costly message belongs inside an `if`. In the example the console handler is at `info`, so `enabled?` is false for `debug` until a handler at `debug` is attached.
 
 ```agentica
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def count_lines() -> Int
   return 3
@@ -69,7 +69,7 @@ A handler is a function (`&Logger.stderr_json`) or a block that takes a `LogEven
 Handlers run in the order they were attached, synchronously, in the task that logs, so a line is written when the log call returns. An event keeps the handlers it started with, so a handler that detaches another does not change the event in progress. A handler stays attached when the task that attached it ends. A handler error is the error of the task that logged.
 
 ```agentica
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def main() -> Void
   _ = Logger.detach("console")
@@ -108,7 +108,7 @@ The JSON form is one object per line with the keys `time`, `level` (`debug`, `in
 `time_text` turns milliseconds since the Unix epoch into the time text, such as `2026-10-12T10:15:02.345Z`. A year outside 0 to 9999 is written with its sign and at least four digits.
 
 ```agentica
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def main() -> Void
   event = LogEvent(level: LogLevel.Info, message: "request done", fields: {"path": "/items", "status": "200"}, time_ms: 1760523302345, task: 1)
@@ -130,7 +130,7 @@ end
 There is no built-in file handler. A block that appends one line per event does the job, and the `_ =` drops a write error:
 
 ```agentica {mode="check"}
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def main() -> Void
   _ = Logger.attach("file", LogLevel.Info) do |event|
@@ -143,7 +143,7 @@ end
 A handler that is slow can hand each event to a task over a `Channel`. The writer is started with `Task.spawn_owning`, so it owns the channel. The run ends in this order: detach the handler, close the channel, await the writer. Without the await, returning from `main` ends the run and the queued lines are lost.
 
 ```agentica {mode="check"}
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def write_events(events: Channel[LogEvent]) -> Result[Void]
   while true

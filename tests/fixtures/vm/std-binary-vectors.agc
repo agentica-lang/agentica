@@ -1,4 +1,4 @@
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 struct Tables
   int_readers: Map[String, Fn[List[Int], Int, Result[Int]]]

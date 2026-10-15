@@ -1,7 +1,7 @@
-import "diagnostic" as Diag
-import "source" as Source
-import "token" as Tokens
-import "unicode" as Unicode
+import Diag from "diagnostic"
+import Source from "source"
+import Tokens from "token"
+import Unicode from "unicode"
 
 # An open bracket (`(`, `[`, `{`), an interpolation (`#`) or a block (`kw`), and
 # where it opened.

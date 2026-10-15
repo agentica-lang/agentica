@@ -1,15 +1,15 @@
 ## The type checker (src/checker.rkt, `check`): takes a linked program and gives the type of every expression and the resolution of every method call, or the first problem. The declarations are registered first (enums, structs, variants, functions, main), then each function is checked in program order, file by file.
 
-import "ast" as Ast
-import "builtins" as Builtins
-import "check_expr" as Expr
-import "check_failure" as Failure
-import "check_help" as Help
-import "check_register" as Register
-import "check_state" as State
-import "check_stmt" as Statements
-import "linker" as Linker
-import "types" as T
+import Ast from "ast"
+import Builtins from "builtins"
+import Expr from "check_expr"
+import Failure from "check_failure"
+import Help from "check_help"
+import Register from "check_register"
+import State from "check_state"
+import Statements from "check_stmt"
+import Linker from "linker"
+import T from "types"
 
 ## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that has none: node ids are dense, so a list is faster than a Map to write and read), and what each method call or field access resolved to, by node id (lower.rkt reads them).
 export struct Checked

@@ -1,4 +1,4 @@
-import "root.agc/x" as Sub
+import Sub from "root.agc/x"
 def main() -> Void
 end
 

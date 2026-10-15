@@ -1,6 +1,6 @@
 ## A small inventory module used to exercise the parser.
 
-import "util" as Util
+import Util from "util"
 
 ## One stocked item.
 struct Item

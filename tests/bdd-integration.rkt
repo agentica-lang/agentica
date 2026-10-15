@@ -102,7 +102,7 @@
     (with-suite
      `(("echo.agc" . "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  IO.flush()\n  ending = IO.gets()\nend\n")
        ("steps.agc" . ,(string-append
-                        "import \"std/bdd\" as BDD\n\n"
+                        "import BDD from \"std/bdd\"\n\n"
                         "def receive(ctx: BDD.Context) -> BDD.Context\n  return BDD.then_line(ctx, \"hello\", 5000)\nend\n\n"
                         "def exchange(ctx: BDD.Context, args: List[String]) -> BDD.Context\n  task = Task.spawn(&receive, ctx)\n"
                         "  Task.sleep(0)\n  sent = BDD.when_line(ctx, \"hello\")\n  return Task.await(task)\nend\n\n"
@@ -122,7 +122,7 @@
     (define draw "Random.int(1, 1000000).to_s + \" \" + Random.int(1, 1000000).to_s")
     (with-suite
      `(("draw.agc" . ,(format "def main() -> Void\n  puts(~a)\nend\n" draw))
-       ("steps.agc" . ,(format (string-append "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+       ("steps.agc" . ,(format (string-append "import BDD from \"std/bdd\"\n\ndef main() -> Void\n"
                                               "  BDD.run([BDD.step(\"stdout repeats the seeded draw\") do |ctx, args| BDD.then_stdout(ctx, ~a + \"\\n\") end])\nend\n")
                                draw))
        ("seed.feature" . ,(string-append "Feature: Seeds\nScenario: seeded\nGiven the Agentica program \"draw.agc\"\n"
@@ -203,7 +203,7 @@
   (test-case "a handler that prints for ever fails at the output limit, long before the scenario deadline"
     (with-suite
      `(("steps.agc" . ,(string-append
-                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "import BDD from \"std/bdd\"\n\ndef main() -> Void\n"
                         "  BDD.run([BDD.step(\"the handler prints for ever\") do |ctx, args|\n"
                         "    chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
                         "    while true\n      puts(chunk)\n      Task.sleep(5)\n    end\n"
@@ -218,7 +218,7 @@
   (test-case "a step program that prints for ever while it lists its steps fails at the output limit"
     (with-suite
      `(("steps.agc" . ,(string-append
-                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "import BDD from \"std/bdd\"\n\ndef main() -> Void\n"
                         "  chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
                         "  while true\n    puts(chunk)\n    Task.sleep(5)\n  end\n"
                         "  BDD.run([])\nend\n"))
@@ -242,7 +242,7 @@
        ("json.agc" . ,json-program)
        ("quotes.agc" . "def main() -> Void\n  puts(String.join(List.repeat(\"\\\"\", 300000), \"\"))\nend\n")
        ("steps.agc" . ,(string-append
-                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "import BDD from \"std/bdd\"\n\ndef main() -> Void\n"
                         "  BDD.run([BDD.step(\"the handler floods stdout\") do |ctx, args|\n"
                         "    puts(String.join(List.repeat(String.join(List.repeat(\"x\", 1000), \"\"), 1100), \"\\n\"))\n"
                         "    ctx\n  end,\n"

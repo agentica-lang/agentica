@@ -1,13 +1,13 @@
-program #9 0:1:1-93:11:1
+program #9 0:1:1-95:11:1
   module "root.agc"
-    declaration: function-decl #4 21:3:1-55:6:1 name="helpe"
-      result: type-ref #1 36:3:16-39:3:19 name="Int"
-      body: return-stmt #3 42:4:3-51:5:1
-        value: literal #2 49:4:10-50:4:11 value=int:2
-    declaration: function-decl #8 56:7:1-92:10:1 name="main"
-      result: type-ref #5 70:7:15-74:7:19 name="Void"
-      body: binding #7 77:8:3-88:9:1 name="n"
-        value: call #6 81:8:7-87:8:13 name="@2::go" piped=false
+    declaration: function-decl #4 23:3:1-57:6:1 name="helpe"
+      result: type-ref #1 38:3:16-41:3:19 name="Int"
+      body: return-stmt #3 44:4:3-53:5:1
+        value: literal #2 51:4:10-52:4:11 value=int:2
+    declaration: function-decl #8 58:7:1-94:10:1 name="main"
+      result: type-ref #5 72:7:15-76:7:19 name="Void"
+      body: binding #7 79:8:3-90:9:1 name="n"
+        value: call #6 83:8:7-89:8:13 name="@2::go" piped=false
   module "calls.agc"
     declaration: function-decl #3 7:1:8-44:4:1 name="@2::go"
       result: type-ref #0 19:1:20-22:1:23 name="Int"

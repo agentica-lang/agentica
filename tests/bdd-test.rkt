@@ -38,7 +38,7 @@
   (hash-ref (hash-ref (hash-ref problem 'range) 'start) 'line))
 
 (define (steps-program . parts)
-  (string-append "import \"std/bdd\" as BDD\n\n" (string-join parts "\n") "\n"))
+  (string-append "import BDD from \"std/bdd\"\n\n" (string-join parts "\n") "\n"))
 
 (define (main-running . steps)
   (format "def main() -> Void\n  BDD.run([\n~a\n  ])\nend\n"

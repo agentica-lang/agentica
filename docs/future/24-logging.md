@@ -72,7 +72,7 @@ while the program runs (each with its own level), a formatter for each output
 form, and fields on each call. It is built (14c): the examples run on the VM.
 
 ```agentica
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def expensive_dump() -> String
   return "..."
@@ -260,7 +260,7 @@ drops. A program that must keep those events waits for those tasks before it
 closes the channel.
 
 ```agentica
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def write_events(events: Channel[LogEvent]) -> Result[Void]
   while true

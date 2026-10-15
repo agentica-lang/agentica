@@ -1,15 +1,15 @@
 ## Calls and constructions (src/checker.rkt: check-call, check-plain-call, check-pipe-method!, check-enum-constructor, check-construct, check-struct-construct, check-named-fields!, check-struct-update): a call of a builtin or of a function of the program, an enum variant, a struct construction and a struct update.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "builtins" as Builtins
-import "check_help" as Help
-import "check_names" as Names
-import "check_rules" as Rules
-import "check_state" as State
-import "check_types" as Types
-import "source" as Source
-import "types" as T
+import Ast from "ast"
+import Model from "builtin_model"
+import Builtins from "builtins"
+import Help from "check_help"
+import Names from "check_names"
+import Rules from "check_rules"
+import State from "check_state"
+import Types from "check_types"
+import Source from "source"
+import T from "types"
 
 # What checking the arguments of a variant learned: the state and the type arguments found.
 struct Inferred
@@ -226,9 +226,9 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
   elsif name.starts_with?("Agent.")
     return "return values from tasks and combine them with reduce, or keep the state in one task that receives on a Channel"
   elsif name.starts_with?("BDD.")
-    return "import \"std/bdd\" as BDD"
+    return "import BDD from \"std/bdd\""
   elsif name.starts_with?("HTTP.")
-    return "import \"std/http\" as HTTP"
+    return "import HTTP from \"std/http\""
   end
   return Help.near(name, cx.functions.keys, cx.catalog.public_names)
 end

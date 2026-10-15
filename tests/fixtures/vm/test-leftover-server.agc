@@ -1,4 +1,4 @@
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   return ok(HttpResponse(status: 200, headers: [], body: "served"))

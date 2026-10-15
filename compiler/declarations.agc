@@ -1,9 +1,9 @@
 ## Helpers for the top-level declarations of a parsed file, and the declaration order rule (CHECK-DECL-ORDER).
 
-import "ast" as Ast
-import "diagnostic" as Diag
-import "link_failure" as Failure
-import "source" as Source
+import Ast from "ast"
+import Diag from "diagnostic"
+import Failure from "link_failure"
+import Source from "source"
 
 ## What a top-level declaration is.
 export enum Kind
@@ -92,10 +92,10 @@ export def exported?(decl: Ast.Decl) -> Bool
   end
 end
 
-## The text of the import line a help shows, for the path as written (quoted): the alias form as the file wrote it, or the name list.
+## The text of the import line a help shows, for the path as written (quoted): the alias form, or the name list.
 export def import_line(written: String, decl: Ast.ImportDecl) -> String
   case decl.alias
-    Ast.Optional.Present(alias) -> return "import " + written + " as " + alias
+    Ast.Optional.Present(alias) -> return "import " + alias + " from " + written
     Ast.Optional.Absent ->
       pieces = decl.names.map do |entry| entry_text(entry) end
       return "import {" + pieces.join(", ") + "} from " + written

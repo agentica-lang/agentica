@@ -1,4 +1,4 @@
-import "module.txt" as M
+import M from "module.txt"
 def main() -> Void
 end
 

@@ -1,5 +1,5 @@
-import "std/test/report" as Report
-import "std/bdd/gherkin" as Gherkin
+import Report from "std/test/report"
+import Gherkin from "std/bdd/gherkin"
 
 def at(span: Report.Span) -> String
   return "#{span.file}:#{span.line}:#{span.column}-#{span.end_column}"

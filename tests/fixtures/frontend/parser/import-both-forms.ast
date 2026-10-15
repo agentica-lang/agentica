@@ -1,8 +1,8 @@
-program #7 0:1:1-127:8:1
-  declaration: import-decl #0 0:1:1-20:2:1 path="old" alias="Old"
-  declaration: import-decl #1 20:2:1-42:3:1 path="new" alias="New"
-  declaration: import-decl #2 42:3:1-72:4:1 path="new" names=["a"@50:3:9-51:3:10,"B"@53:3:12-54:3:13 as "C"@58:3:17-59:3:18]
-  declaration: import-decl #3 72:4:1-96:5:1 path="new" alias="Other"
-  declaration: export-decl #6 97:6:1-127:8:1
-    declaration: function-decl #5 104:6:8-127:8:1 name="main"
-      result: type-ref #4 118:6:22-122:6:26 name="Void"
+program #7 0:1:1-129:8:1
+  declaration: import-decl #0 0:1:1-22:2:1 path="old" alias="Old"
+  declaration: import-decl #1 22:2:1-44:3:1 path="new" alias="New"
+  declaration: import-decl #2 44:3:1-74:4:1 path="new" names=["a"@52:3:9-53:3:10,"B"@55:3:12-56:3:13 as "C"@60:3:17-61:3:18]
+  declaration: import-decl #3 74:4:1-98:5:1 path="new" alias="Other"
+  declaration: export-decl #6 99:6:1-129:8:1
+    declaration: function-decl #5 106:6:8-129:8:1 name="main"
+      result: type-ref #4 120:6:22-124:6:26 name="Void"

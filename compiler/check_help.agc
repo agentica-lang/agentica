@@ -1,10 +1,10 @@
 ## The help texts of the checker (src/checker.rkt): the tables of check_tables.agc loaded into Maps once, and the helps that depend only on types or names. A help is a String, and "" means there is none.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "check_tables" as Data
-import "suggest" as Suggest
-import "types" as Types
+import Ast from "ast"
+import Model from "builtin_model"
+import Data from "check_tables"
+import Suggest from "suggest"
+import Types from "types"
 
 ## The tables of check_tables.agc, built once per run. A key is the receiver kind and the name, `String.size`.
 export struct Tables

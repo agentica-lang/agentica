@@ -1,5 +1,5 @@
-import "a" as A
-import "b" as B
+import A from "a"
+import B from "b"
 
 struct Both
   a: A.Point

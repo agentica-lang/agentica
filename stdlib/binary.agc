@@ -1,6 +1,6 @@
 ## Reads and writes binary numbers in a `List[Int]` of bytes.
 ##
-## Import it with `import "std/binary" as Binary`. Binary data is a `List[Int]` with each item in `0 .. 255`, like `IO.read_bytes` and `File.read_bytes` give.
+## Import it with `import Binary from "std/binary"`. Binary data is a `List[Int]` with each item in `0 .. 255`, like `IO.read_bytes` and `File.read_bytes` give.
 ## A reader takes a zero-based `offset` and returns a `Result`; it never halts. A writer returns a new list with exactly the bytes of its type.
 ## `_be` is big-endian (most significant byte first, network order) and `_le` is little-endian. Signed types use two's complement.
 ## A `u64` above `9223372036854775807` is not an `Int`: use `read_i64_be` and `write_i64_be` for all 64 bits.

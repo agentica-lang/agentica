@@ -1,4 +1,4 @@
-import "lib" as Lib
+import Lib from "lib"
 
 struct Local
   n: Int

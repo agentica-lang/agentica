@@ -1,5 +1,5 @@
-import "std/test/child" as Child
-import "std/test/report" as Report
+import Child from "std/test/child"
+import Report from "std/test/report"
 
 def show(label: String, line: String) -> Void
   puts("#{label}: #{JSON.encode(Child.record_of(line))}")

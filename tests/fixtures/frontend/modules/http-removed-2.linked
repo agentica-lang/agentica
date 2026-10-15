@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 47:3:3-62:3:18 "unknown or private imported name" - file="root.agc"
+ERROR CHECK-IMPORT-NAME 49:3:3-64:3:18 "unknown or private imported name" - file="root.agc"

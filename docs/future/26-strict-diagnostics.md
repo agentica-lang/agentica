@@ -99,8 +99,8 @@ other codes do (`CHECK-IMPORT-NAME`, `CHECK-IMPORT-CYCLE`).
 ### 26.1 Unused imports
 
 ```agentica
-import "text" as Text
-import "json_util" as JsonUtil
+import Text from "text"
+import JsonUtil from "json_util"
 
 def main() -> Void
   puts(Text.shout("hi"))
@@ -113,9 +113,9 @@ end
 app.agc:2:27 error[CHECK-UNUSED-IMPORT]
 the import alias "JsonUtil" is never used
 
-2 | import "json_util" as JsonUtil
+2 | import JsonUtil from "json_util"
   |                           ^^^^^^^^
-  = help: remove import "json_util" as JsonUtil
+  = help: remove import JsonUtil from "json_util"
 ```
 
 **Rule:** an import whose alias is never used in its file is
@@ -169,11 +169,11 @@ not in each program that uses it.
   `program`, `src/modules.rkt:266`), the linker walks the files in link order
   (the root first) and, in each file, the imports in source order, and fails at
   the first alias that was never marked.
-- **A mistyped alias is not an unused import.** In `import "text" as Text` with
-  a call `Txet.shout("hi")`, the alias `Text` looks unused, but the real mistake
-  is the call. `resolve` sends a two-part function name whose first part is not
-  an alias to the checker unchanged, so the checker can report it with its
-  stable code (the comment at `src/modules.rkt:169`). So while rewriting,
+- **A mistyped alias is not an unused import.** In `import Text from "text"`
+  with a call `Txet.shout("hi")`, the alias `Text` looks unused, but the real
+  mistake is the call. `resolve` sends a two-part function name whose first
+  part is not an alias to the checker unchanged, so the checker can report it
+  with its stable code (the comment at `src/modules.rkt:169`). So while rewriting,
   `resolve` also records, per file, the two-part function names whose first part
   is not an alias of that file and that are not builtins (`builtin-ref`;
   `IO.inspect` and `String.length` are valid calls of that shape). When a file
@@ -187,9 +187,9 @@ not in each program that uses it.
   Two shapes reach `resolve` as one-part names:
   - a type, construction or type expression: `u: User`, a parameter
     `def show(u: User)`, `User(name: "Ana")` (a `construct`), or `User` alone as
-    a value (a `type-expression`), all with `import "user" as User`; these come
-    as one-part `'type` names;
-  - an enum variant without the enum's name: with `import "domain" as Domain`,
+    a value (a `type-expression`), all with `import User from "user"`; these
+    come as one-part `'type` names;
+  - an enum variant without the enum's name: with `import Domain from "domain"`,
     the call `Domain.Some(1)` and the pattern `Domain.Some(x)`. The parser reads
     them as the variant `Some` of an enum named `Domain`, so they come as
     one-part `'enum` names.
@@ -214,7 +214,7 @@ not in each program that uses it.
   from hiding it. Apart from that case, every linker error comes before every
   checker error, since the linker runs first.
 
-**Help idea:** `remove import "json_util" as JsonUtil`, which names the whole
+**Help idea:** `remove import JsonUtil from "json_util"`, which names the whole
 line, as in the example above. There is no "use it" hint: the linker cannot know
 what the code meant to call.
 

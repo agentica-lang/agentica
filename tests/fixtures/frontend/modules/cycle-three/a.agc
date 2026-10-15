@@ -1,1 +1,1 @@
-import "b" as B
+import B from "b"

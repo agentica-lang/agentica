@@ -1,4 +1,4 @@
-import "a" as A
+import A from "a"
 def main() -> Void
   case 1
     A.P.Q(x) -> puts(1)

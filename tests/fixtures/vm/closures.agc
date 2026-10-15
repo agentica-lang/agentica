@@ -1,4 +1,4 @@
-import "lib/callbacks" as Cb
+import Cb from "lib/callbacks"
 
 struct Handler
   name: String

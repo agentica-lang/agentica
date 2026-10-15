@@ -117,7 +117,7 @@
              "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  Result.unwrap!(Process.wait(p, 5000))"
              "" ", \"child\"") (build-path directory "child.agc"))
            (display-to-file
-             (string-append "import \"std/bdd\" as BDD\n\ndef handler(ctx: BDD.Context, args: List[String]) -> BDD.Context\n"
+             (string-append "import BDD from \"std/bdd\"\n\ndef handler(ctx: BDD.Context, args: List[String]) -> BDD.Context\n"
                (spawn "args" ", \"handler\"")
                "  checked = BDD.assert(ctx, Result.unwrap!(Process.read_line(p, 5000)) == \"[\\\"handler\\\"]\", \"argv\")\n"
                "  Result.unwrap!(Process.wait(p, 5000))\n  return checked\nend\n\n"

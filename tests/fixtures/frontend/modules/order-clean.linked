@@ -1,25 +1,25 @@
-program #25 0:1:1-272:33:1 module-doc="Module doc."
+program #25 0:1:1-276:33:1 module-doc="Module doc."
   module "root.agc"
-    declaration: enum-decl #3 72:6:8-90:9:1 name="Kind" type-parameters=[]
-      variant: enum-variant #2 84:7:3-86:8:1 name="A"
-    declaration: struct-decl #7 91:10:1-115:13:1 name="Box"
-      field: field-decl #6 104:11:3-111:12:1 name="n"
-        type: type-ref #5 107:11:6-110:11:9 name="Int"
-    declaration: struct-decl #10 123:14:8-148:17:1 name="Pair"
-      field: field-decl #9 137:15:3-144:16:1 name="n"
-        type: type-ref #8 140:15:6-143:15:9 name="Int"
-    declaration: enum-decl #13 149:18:1-169:21:1 name="Hidden" type-parameters=[]
-      variant: enum-variant #12 163:19:3-165:20:1 name="B"
-    declaration: function-decl #19 177:22:8-221:26:1 name="api"
-      result: type-ref #14 190:22:21-194:22:25 name="Void"
-      body: expr-stmt #16 197:23:3-206:24:1
-        value: call #15 197:23:3-205:23:11 name="@2::go" piped=false
-      body: expr-stmt #18 208:24:3-217:25:1
-        value: call #17 208:24:3-216:24:11 name="helper" piped=false
-    declaration: function-decl #22 222:27:1-247:29:1 name="helper"
-      result: type-ref #21 238:27:17-242:27:21 name="Void"
-    declaration: function-decl #24 248:30:1-271:32:1 name="main"
-      result: type-ref #23 262:30:15-266:30:19 name="Void"
+    declaration: enum-decl #3 76:6:8-94:9:1 name="Kind" type-parameters=[]
+      variant: enum-variant #2 88:7:3-90:8:1 name="A"
+    declaration: struct-decl #7 95:10:1-119:13:1 name="Box"
+      field: field-decl #6 108:11:3-115:12:1 name="n"
+        type: type-ref #5 111:11:6-114:11:9 name="Int"
+    declaration: struct-decl #10 127:14:8-152:17:1 name="Pair"
+      field: field-decl #9 141:15:3-148:16:1 name="n"
+        type: type-ref #8 144:15:6-147:15:9 name="Int"
+    declaration: enum-decl #13 153:18:1-173:21:1 name="Hidden" type-parameters=[]
+      variant: enum-variant #12 167:19:3-169:20:1 name="B"
+    declaration: function-decl #19 181:22:8-225:26:1 name="api"
+      result: type-ref #14 194:22:21-198:22:25 name="Void"
+      body: expr-stmt #16 201:23:3-210:24:1
+        value: call #15 201:23:3-209:23:11 name="@2::go" piped=false
+      body: expr-stmt #18 212:24:3-221:25:1
+        value: call #17 212:24:3-220:24:11 name="helper" piped=false
+    declaration: function-decl #22 226:27:1-251:29:1 name="helper"
+      result: type-ref #21 242:27:17-246:27:21 name="Void"
+    declaration: function-decl #24 252:30:1-275:32:1 name="main"
+      result: type-ref #23 266:30:15-270:30:19 name="Void"
   module "lib.agc"
     declaration: function-decl #1 7:1:8-28:3:1 name="@2::go"
       result: type-ref #0 19:1:20-23:1:24 name="Void"

@@ -1,4 +1,4 @@
-import "unicode_table" as Table
+import Table from "unicode_table"
 
 export def graphic?(code: Int) -> Bool
   ranges = Table.graphic_ranges()
