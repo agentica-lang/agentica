@@ -1,0 +1,13 @@
+key = "value"
+
+[table]
+number = 1 # comment
+arr = [
+  1,
+  2,
+]
+ml = """
+line one
+line two"""
+ml2 = """a \
+   b"""

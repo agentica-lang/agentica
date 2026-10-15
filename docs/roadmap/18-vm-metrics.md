@@ -38,7 +38,7 @@ that starts at the first scrape; with metrics off the cost is zero, and
   VM it starts, so the scenario VMs and programs under test inherit the cleaned
   environment (`docs/bdd.md`, "How a run works"), with a test; the `metrics`
   trace category in `vm/trace.c` (its `write` lines) and `metrics` in the
-  category regex of `tests/vm-trace-test.rkt`; the lazy start's call sites (the
+  category regex of `tests/test_vm_trace.py`; the lazy start's call sites (the
   first request, and main before `agc_vm_run` in file mode), which do nothing
   until 18c; request numbers (`snapshot_seq` and `answered_seq`, one part buffer
   per scheduler freed only after the join) so an answer to a timed-out request

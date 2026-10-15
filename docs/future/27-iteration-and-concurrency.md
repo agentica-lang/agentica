@@ -379,8 +379,10 @@ with 17b). These forms get a help, through the hint table of `grammar.md` §7
   `error("task crashed: ...")` and the other items give `ok`, §37.7); a nested
   `Task.map`; the step count of a 1,000-item call with no timeouts.
 - A Racket timing test, `tests/vm-task-map-test.rkt`, planned like
-  `tests/vm-latency-test.rkt`: it is listed in `test-omit-paths` in
-  `tests/info.rkt`, so `make test`'s parallel batch skips it; a
+  `tests/test_vm_latency.py`: it is listed in `test-omit-paths` in
+  `tests/info.rkt` (the latency test itself is now a Python module that
+  `PY_ALONE` in the Makefile keeps out of directory runs), so
+  `make test`'s parallel batch skips it; a
   `make vm-task-map` target runs it alone; the CI `test` job runs it right after
   `make vm-latency`; the Commands section of `AGENTS.md` gets the target; it
   skips when `AGENTICA_VM` names another binary; it uses lower bounds that

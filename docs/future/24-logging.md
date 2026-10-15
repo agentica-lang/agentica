@@ -813,10 +813,10 @@ stderr (none when they go to a file):
   `unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE` in the Makefile covers
   `make test` and every other target, and for a direct `raco test`,
   `tests/vm-diff-common.rkt`, `tests/cli-in-process.rkt` and
-  `tests/vm-latency-test.rkt` (which starts `dist/agentica-vm` directly) remove
+  `tests/test_vm_latency.py` (which starts `dist/agentica-vm` directly) remove
   both from the environment when they load. Any later test file that starts the
   VM itself removes them the same way; a developer's exported variable cannot
-  change expected output. Only `tests/vm-trace-test.rkt` sets them: it runs a
+  change expected output. Only `tests/test_vm_trace.py` sets them: it runs a
   few fixtures (tasks, files and stdin, processes with a child that writes to
   stderr, a runtime failure) with `AGENTICA_VM_TRACE=all` and
   `AGENTICA_VM_TRACE_FILE` in a temporary directory, and checks that exit code,

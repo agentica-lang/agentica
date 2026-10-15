@@ -23,7 +23,9 @@ comment), then a step that calls it. Targets that are not obvious:
   (the default `tests/` is both). A leading `./` and a trailing `/` are
   ignored; a `.py` path that is not `tests/test_<area>.py` fails with a message.
   A directory adds its own `test_*.py` files and is not searched recursively on
-  purpose: `tests/eval/test_*.py` are not modules for this runner.
+  purpose: `tests/eval/test_*.py` are not modules for this runner. `PY_ALONE`
+  in the Makefile (`tests/test_vm_latency.py`) lists modules that a directory
+  does not pick up: they run when named, as `make vm-latency` does.
 - Each Python module runs in its own process (`python3 -m unittest
   tests.test_<area>` from the root), run by make itself: `make -k -O -j$(JOBS)`
   over `py-test/<file>` targets, so a failure shows that module's report and
@@ -35,7 +37,7 @@ comment), then a step that calls it. Targets that are not obvious:
   `make_temp_dir`, `compile_text`, `@slow`, `tool` for Node;
   `run(stdout_to=, stderr_to=)` sends a stream to a file such as `/dev/full`),
   and `Child` and `start_vm(flags=)` for a peer or VM read line by line
-  (`next_line`, `next_stderr_line`, `wait`, `close_stdin`; `read_stdout=False`
+  (`next_line`, `next_stderr_line`, `stdout_text`, `wait`, `close_stdin`; `read_stdout=False`
   for a pipe that must stay full), killed with its process group when the test
   ends, also on Ctrl-C or SIGTERM; `process_alive` and `wait_until` check
   that a test left no process, and `make_suite` and `report_cases` build and
@@ -155,7 +157,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
 
 - `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
   `src/stdlib.rkt` (the registry that embeds the `std/` modules);
-- `tests/vm-diff-*`, `tests/vm-trace-test.rkt`, `tests/test_vm_tcp.py`,
+- `tests/vm-diff-*`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
   `tests/fixtures/tls/`, `tests/test_vm_http.py`, `tests/fixtures/http-*`,

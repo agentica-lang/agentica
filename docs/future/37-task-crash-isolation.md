@@ -453,7 +453,7 @@ parked task, with no crash, closes the handle it owns.
 
 Invariants, in the existing timing tests:
 
-- **Latency** (`tests/vm-latency-test.rkt`): while one task crashes with 10,000
+- **Latency** (`tests/test_vm_latency.py`): while one task crashes with 10,000
   running descendants and 1,000 open files, a `Task.sleep(10)` wake in another
   task stays within the limit of the 7h latency test.
 - **Step budget:** a crash spends no steps of its own and gives none back; a
