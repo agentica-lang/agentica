@@ -38,6 +38,7 @@ racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
 make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
 make frontend-freeze                      # rewrite the frozen Racket outputs of tests/fixtures/frontend/frozen/ (references/frontend.md); needs Racket, slow
+python3 tools/refreeze.py                  # rewrite those goldens from the Agentica stages (no Racket) and print what changed; --stage, --fast-only
 make vm-golden-check FIXTURES="a b"       # CI golden check of only those fixtures; make goldens FIXTURES="a b" rewrites only them
 make dup-check                            # jscpd: a new copy fails CI; share a helper instead
 make site                                 # before merging a site change

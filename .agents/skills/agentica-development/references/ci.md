@@ -37,7 +37,8 @@ comment), then a step that calls it. Targets that are not obvious:
   frozen Racket outputs and the snapshot of the corpus that
   `tests/test_frontend_<stage>.py` compare the Agentica stages with
   (`references/frontend.md`, "Frozen comparisons"). They need Racket and go away
-  with the Racket stages.
+  with the Racket stages; `tools/refreeze.py` (Python, no Racket) rewrites the
+  same goldens from the Agentica stages and is not a CI step either.
 - Each Python module runs in its own process (`python3 -m unittest
   tests.test_<area>` from the root), run by make itself: `make -k -O -j$(JOBS)`
   over `py-test/<file>` targets, so a failure shows that module's report and

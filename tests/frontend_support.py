@@ -25,7 +25,10 @@ FROZEN = FIXTURES / "frontend" / "frozen"
 # tools/refreeze.py runs these tests with AGENTICA_REFREEZE=1: a comparison with a golden then rewrites the golden from the
 # Agentica output instead of failing, and appends what changed, as one JSON line, to the file AGENTICA_REFREEZE_LOG. This is
 # how the goldens are kept once the Racket stages that wrote them are gone.
-REFREEZE = os.environ.get("AGENTICA_REFREEZE", "") not in ("", "0")
+def refreezing():
+    """True while tools/refreeze.py runs the tests (read at each call, so a test can switch it)."""
+    return os.environ.get("AGENTICA_REFREEZE", "") not in ("", "0")
+
 
 # The stages read the environment of the pkg/ search when they are not given the flags; the Racket writers ran with no
 # AGENTICA_PATH and a user data folder that does not exist, and so do the stages here.
@@ -82,7 +85,114 @@ def sections(output):
     return found
 
 
-class StageTestCase(TestCase):
+class GoldenTestCase(TestCase):
+    """A test case that compares text with goldens, and rewrites them in refreeze mode (tools/refreeze.py)."""
+
+    def rewrite_manifest(self, outputs, relative, entries, inputs, keys):
+        """Refreeze mode of assert_manifest: write the manifest from the outputs and report the entries that changed."""
+        old = {entry.key: entry for entry in entries}
+        selected = set(old) | set(outputs) if keys is None else set(keys)
+        rewritten, changed, added, removed = [], [], [], []
+        for entry in entries:
+            if entry.key not in selected:
+                rewritten.append(entry)
+            elif entry.key not in outputs:
+                removed.append(entry.key)
+            else:
+                text = outputs[entry.key]
+                input_sha = sha256(inputs[entry.key]) if inputs is not None else entry.input_sha
+                new = Entry(sha256(text), len(text.encode("utf-8")), input_sha, entry.key)
+                rewritten.append(new)
+                if new != entry:
+                    changed.append({"key": entry.key, "old": [entry.size, entry.output_sha[:12], entry.input_sha[:12]],
+                                    "new": [new.size, new.output_sha[:12], new.input_sha[:12]]})
+        for key in sorted(selected - set(old)):
+            text = outputs[key]
+            input_sha = sha256(inputs[key]) if inputs is not None else sha256("")
+            rewritten.append(Entry(sha256(text), len(text.encode("utf-8")), input_sha, key))
+            added.append(key)
+        if changed or added or removed:
+            (FROZEN / relative).write_text(
+                "".join("%s %d %s %s\n" % (e.output_sha, e.size, e.input_sha, e.key) for e in rewritten), encoding="utf-8")
+            report({"file": "frozen/" + relative, "changed": changed, "added": added, "removed": removed})
+
+    def assert_golden(self, actual, path, label=None):
+        """Compare text with the golden file at `path` (a Path); in refreeze mode, rewrite the golden."""
+        path = Path(path)
+        expected = path.read_bytes().decode("utf-8") if path.exists() else None
+        if refreezing():
+            if actual != expected:
+                path.write_bytes(actual.encode("utf-8"))
+                report({"file": shown(path), "diff": [expected or "", actual]})
+            return
+        self.assertEqual(actual, expected, label or str(path))
+
+    def fixture_goldens(self, folder, stems, suffix):
+        """The golden file of each stem in `stems`, as {stem: Path}: <folder>/<stem><suffix>.
+
+        Every input has a golden and no golden is left over; in refreeze mode a missing golden is made by the caller's
+        comparison and a leftover one is deleted.
+        """
+        folder = Path(folder)
+        found = sorted(path.name[:-len(suffix)] for path in folder.iterdir() if path.name.endswith(suffix))
+        if refreezing():
+            for stem in sorted(set(found) - set(stems)):
+                (folder / (stem + suffix)).unlink()
+                report({"file": shown(folder / (stem + suffix)), "removed": True})
+        else:
+            self.assertEqual(found, sorted(stems), "the inputs and the %s goldens of %s" % (suffix, folder.name))
+        return {stem: folder / (stem + suffix) for stem in stems}
+
+    def fixture_pairs(self, folder, input_suffix, golden_suffix):
+        """The goldens of the input files of a folder, as {input file name: Path of its golden}."""
+        names = sorted(path.name for path in Path(folder).iterdir() if path.name.endswith(input_suffix))
+        stems = {name[:-len(input_suffix)]: name for name in names}
+        goldens = self.fixture_goldens(folder, list(stems), golden_suffix)
+        return {stems[stem]: golden for stem, golden in goldens.items()}
+
+    def assert_goldens(self, outputs, goldens, label):
+        """Compare {name: text} with the golden file of each name ({name: Path}), naming every name that differs."""
+        self.assertEqual(sorted(outputs), sorted(goldens), label)
+        if refreezing():
+            for name in sorted(goldens):
+                self.assert_golden(outputs[name], goldens[name])
+            return
+        different = [name for name in sorted(goldens)
+                     if outputs[name] != goldens[name].read_bytes().decode("utf-8")]
+        self.assertEqual(different[:10], [], "%d of %d %s differ from their goldens" % (len(different), len(goldens), label))
+
+    def assert_manifest(self, outputs, relative, inputs=None, keys=None):
+        """Compare the outputs {key: text} with a manifest, key by key.
+
+        `inputs` ({key: text or bytes}), when given, are also checked against the input hashes of the manifest;
+        `keys` limits the check to those entries. Without `keys`, the outputs and the manifest must name the same inputs,
+        so a path that the test stops listing is not a silent loss of coverage.
+        """
+        problems = []
+        checked = 0
+        entries = read_manifest(relative)
+        if refreezing():
+            self.rewrite_manifest(outputs, relative, entries, inputs, keys)
+            return
+        if keys is None:
+            self.assertEqual(sorted(outputs), sorted(entry.key for entry in entries), relative)
+        for entry in entries:
+            if keys is not None and entry.key not in keys:
+                continue
+            checked += 1
+            if inputs is not None and sha256(inputs[entry.key]) != entry.input_sha:
+                problems.append("%s: the input is not the one the Racket writer used" % entry.key)
+            text = outputs.get(entry.key)
+            if text is None:
+                problems.append("%s: no output" % entry.key)
+            elif sha256(text) != entry.output_sha:
+                problems.append("%s: the output differs from the frozen one (%d bytes, frozen %d), it starts with:\n%s" % (
+                    entry.key, len(text.encode("utf-8")), entry.size, text[:300]))
+        self.assertGreater(checked, 0, relative)
+        self.assertEqual(problems[:5], [], "%d of %d entries of %s differ" % (len(problems), checked, relative))
+
+
+class StageTestCase(GoldenTestCase):
     """A test case over one stage of compiler/: ENTRY is the file below compiler/ that is compiled once for the class."""
 
     ENTRY = None
@@ -118,79 +228,6 @@ class StageTestCase(TestCase):
         """Run the stage over the paths (after the arguments `before`); gives the output of each by its path."""
         return sections(self.run_stage(*before, *paths, flags=flags, cwd=cwd, timeout=timeout))
 
-    def rewrite_manifest(self, outputs, relative, entries, inputs, keys):
-        """Refreeze mode of assert_manifest: write the manifest from the outputs and report the entries that changed."""
-        old = {entry.key: entry for entry in entries}
-        selected = set(old) | set(outputs) if keys is None else set(keys)
-        rewritten, changed, added, removed = [], [], [], []
-        for entry in entries:
-            if entry.key not in selected:
-                rewritten.append(entry)
-            elif entry.key not in outputs:
-                removed.append(entry.key)
-            else:
-                text = outputs[entry.key]
-                input_sha = sha256(inputs[entry.key]) if inputs is not None else entry.input_sha
-                new = Entry(sha256(text), len(text.encode("utf-8")), input_sha, entry.key)
-                rewritten.append(new)
-                if new != entry:
-                    changed.append({"key": entry.key, "old": [entry.size, entry.output_sha[:12], entry.input_sha[:12]],
-                                    "new": [new.size, new.output_sha[:12], new.input_sha[:12]]})
-        for key in sorted(selected - set(old)):
-            text = outputs[key]
-            input_sha = sha256(inputs[key]) if inputs is not None else sha256("")
-            rewritten.append(Entry(sha256(text), len(text.encode("utf-8")), input_sha, key))
-            added.append(key)
-        if changed or added or removed:
-            (FROZEN / relative).write_text(
-                "".join("%s %d %s %s\n" % (e.output_sha, e.size, e.input_sha, e.key) for e in rewritten), encoding="utf-8")
-            report({"file": "frozen/" + relative, "changed": changed, "added": added, "removed": removed})
-
-    def assert_golden(self, actual, path, label=None):
-        """Compare text with the golden file at `path` (a Path); in refreeze mode, rewrite the golden."""
-        path = Path(path)
-        expected = path.read_bytes().decode("utf-8") if path.exists() else None
-        if REFREEZE:
-            if actual != expected:
-                path.write_bytes(actual.encode("utf-8"))
-                report({"file": str(path.relative_to(ROOT)), "diff": [expected or "", actual]})
-            return
-        self.assertEqual(actual, expected, label or str(path))
-
-    def fixture_goldens(self, folder, stems, suffix):
-        """The golden file of each stem in `stems`, as {stem: Path}: <folder>/<stem><suffix>.
-
-        Every input has a golden and no golden is left over; in refreeze mode a missing golden is made by the caller's
-        comparison and a leftover one is deleted.
-        """
-        folder = Path(folder)
-        found = sorted(path.name[:-len(suffix)] for path in folder.iterdir() if path.name.endswith(suffix))
-        if REFREEZE:
-            for stem in sorted(set(found) - set(stems)):
-                (folder / (stem + suffix)).unlink()
-                report({"file": str((folder / (stem + suffix)).relative_to(ROOT)), "removed": True})
-        else:
-            self.assertEqual(found, sorted(stems), "the inputs and the %s goldens of %s" % (suffix, folder.name))
-        return {stem: folder / (stem + suffix) for stem in stems}
-
-    def fixture_pairs(self, folder, input_suffix, golden_suffix):
-        """The goldens of the input files of a folder, as {input file name: Path of its golden}."""
-        names = sorted(path.name for path in Path(folder).iterdir() if path.name.endswith(input_suffix))
-        stems = {name[:-len(input_suffix)]: name for name in names}
-        goldens = self.fixture_goldens(folder, list(stems), golden_suffix)
-        return {stems[stem]: golden for stem, golden in goldens.items()}
-
-    def assert_goldens(self, outputs, goldens, label):
-        """Compare {name: text} with the golden file of each name ({name: Path}), naming every name that differs."""
-        self.assertEqual(sorted(outputs), sorted(goldens), label)
-        if REFREEZE:
-            for name in sorted(goldens):
-                self.assert_golden(outputs[name], goldens[name])
-            return
-        different = [name for name in sorted(goldens)
-                     if outputs[name] != goldens[name].read_bytes().decode("utf-8")]
-        self.assertEqual(different[:10], [], "%d of %d %s differ from their goldens" % (len(different), len(goldens), label))
-
     def run_cases(self, cases, *before, flags=(), timeout=STAGE_TIMEOUT, folder="cases"):
         """Write the programs {key: text} as <folder>/<key>.agc into a fresh folder and run the stage over them.
 
@@ -204,35 +241,10 @@ class StageTestCase(TestCase):
         outputs = self.run_sections(sorted(paths.values()), *before, flags=flags, cwd=directory, timeout=timeout)
         return {key: outputs[path] for key, path in paths.items()}
 
-    def assert_manifest(self, outputs, relative, inputs=None, keys=None):
-        """Compare the outputs {key: text} with a manifest, key by key.
-
-        `inputs` ({key: text or bytes}), when given, are also checked against the input hashes of the manifest;
-        `keys` limits the check to those entries. Without `keys`, the outputs and the manifest must name the same inputs,
-        so a path that the test stops listing is not a silent loss of coverage.
-        """
-        problems = []
-        checked = 0
-        entries = read_manifest(relative)
-        if REFREEZE:
-            self.rewrite_manifest(outputs, relative, entries, inputs, keys)
-            return
-        if keys is None:
-            self.assertEqual(sorted(outputs), sorted(entry.key for entry in entries), relative)
-        for entry in entries:
-            if keys is not None and entry.key not in keys:
-                continue
-            checked += 1
-            if inputs is not None and sha256(inputs[entry.key]) != entry.input_sha:
-                problems.append("%s: the input is not the one the Racket writer used" % entry.key)
-            text = outputs.get(entry.key)
-            if text is None:
-                problems.append("%s: no output" % entry.key)
-            elif sha256(text) != entry.output_sha:
-                problems.append("%s: the output differs from the frozen one (%d bytes, frozen %d), it starts with:\n%s" % (
-                    entry.key, len(text.encode("utf-8")), entry.size, text[:300]))
-        self.assertGreater(checked, 0, relative)
-        self.assertEqual(problems[:5], [], "%d of %d entries of %s differ" % (len(problems), checked, relative))
+def shown(path):
+    """A path as the refreeze report names it: relative to the repository when it is inside."""
+    path = Path(path)
+    return str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
 
 
 def report(record):

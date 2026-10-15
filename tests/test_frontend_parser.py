@@ -115,20 +115,20 @@ class ParserFrozenTest(StageTestCase):
         directory = self.make_temp_dir()
         write_files(directory, {"invalid.agc": b"# caf\xc3\xa9\ndef \xff\n"})
         outputs = self.run_sections(["invalid.agc"], cwd=directory)
-        self.assertEqual(outputs["invalid.agc"], (FROZEN / "parser" / "invalid-utf8.expected").read_text(encoding="utf-8"))
+        self.assert_golden(outputs["invalid.agc"], FROZEN / "parser" / "invalid-utf8.expected")
 
     def test_the_first_node_id_can_be_chosen_so_modules_can_share_one_numbering(self):
         path = "tests/fixtures/frontend/parser/synthetic.input"
         shifted = self.run_sections([path], "--first-id=1000")
-        self.assertEqual(shifted[path], (FROZEN / "parser" / "first-id.expected").read_text(encoding="utf-8"))
+        self.assert_golden(shifted[path], FROZEN / "parser" / "first-id.expected")
         self.assertIn(" #1000 ", shifted[path])
 
     def test_a_second_file_continues_the_numbering_from_the_next_free_id_of_the_first(self):
         first = "tests/fixtures/frontend/parser/hello.input"
         second = "tests/fixtures/frontend/parser/synthetic.input"
         continued = self.run_sections([first, second], "--continue")
-        self.assertEqual(continued[first], (PARSER_FIXTURES / "hello.ast").read_text(encoding="utf-8"))
-        self.assertEqual(continued[second], (FROZEN / "parser" / "continue-synthetic.expected").read_text(encoding="utf-8"))
+        self.assert_golden(continued[first], PARSER_FIXTURES / "hello.ast")
+        self.assert_golden(continued[second], FROZEN / "parser" / "continue-synthetic.expected")
 
     @slow
     def test_corpus(self):

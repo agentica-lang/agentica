@@ -114,7 +114,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references
   testing.c       # Test builtins for unit tests (references/vm-tasks.md)
   fuzz.c          # agc_fuzz_one (references/vm-build.md)
   fuzz_main.c     # the mutation driver (references/vm-build.md)
-  tools/          # check-layers.sh and its self-test, gen-unicode.rkt (references/vm-build.md)
+  tools/          # check-layers.sh and its self-test, gen-unicode.rkt (references/vm-build.md), refreeze.py (rewrites the frozen front-end goldens from the Agentica stages; references/frontend.md)
   third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c with AGENTICA_GC=vendored (the Linux default links the system libgc)
   third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
   third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
@@ -150,20 +150,20 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   bytecode-test.rkt  # step merging, opcode list vs vm/value.h, every builtin on the VM (references/vm-lowering.md)
   frontend-corpus-common.rkt  # shared by the frontend-*-test.rkt files: the compiled stage's temp folder, the VM run, the `== path` output sections, the .agc corpus listing
   frontend-lexer-common.rkt  # the lexer text form and goldens (references/frontend.md)
-  frontend-lexer-test.rkt  # the Racket and Agentica lexers against the goldens (references/frontend.md)
+  frontend-lexer-test.rkt  # the Racket printer against its goldens, invalid UTF-8 and nesting against Racket (the Agentica lexer against the goldens is in test_frontend_lexer.py; references/frontend.md)
   frontend-parser-common.rkt  # the parser text form (node ids, spans) and goldens (references/frontend.md)
-  frontend-parser-test.rkt  # fast: printer and Agentica parser against the goldens; slow: live and generated comparisons (references/frontend.md)
+  frontend-parser-test.rkt  # fast: the Racket printer against its goldens, limits and node ids against Racket; slow: live and generated comparisons (references/frontend.md)
   frontend-modules-common.rkt  # the linked program text form and goldens (fixture folders in tests/fixtures/frontend/modules/; references/frontend.md)
-  frontend-modules-test.rkt  # fast: printer and Agentica linker against the goldens, ids; slow: corpus, site, large inputs (references/frontend.md)
+  frontend-modules-test.rkt  # fast: the Racket printer against its goldens, ids and error cases against Racket; slow: corpus, site, large inputs (references/frontend.md)
   frontend-catalog-common.rkt  # the builtin catalog text form (tables, signatures, shapes, probes) and its golden (references/frontend.md)
-  frontend-catalog-test.rkt  # the generated compiler/builtins_data.agc, the Rule enum, and Racket against Agentica on the catalog (references/frontend.md)
+  frontend-catalog-test.rkt  # the generated compiler/builtins_data.agc and the Racket text form of the catalog against its golden (references/frontend.md)
   frontend-check-common.rkt  # the checker text form (types, resolutions, diagnostic notes) printed from src/checker.rkt, and its goldens (references/frontend.md)
   frontend-lower-common.rkt  # the lowering text form (IR, sources, structs, enums, spans, constants) printed from src/lower.rkt, and its goldens (tests/fixtures/frontend/lower/; references/frontend.md)
-  frontend-lower-test.rkt  # fast: VM_BUILTINS, goldens, opcode coverage, Agentica lowering on them and on examples/; slow: tests/fixtures/vm, checker-test programs, std/ and compiler/, deep trees at the limit, a generated program
+  frontend-lower-test.rkt  # fast: the Racket printer against its goldens, Agentica lowering on examples/; slow: tests/fixtures/vm, checker-test programs, std/ and compiler/, deep trees at the limit, a generated program
   frontend-bytecode-test.rkt  # fast: the .agcb bytes of the Agentica writer against the Racket writer on the lowering fixtures, examples/, fixtures/frontend/bytecode/ and the synthetic programs of fixtures/frontend/limits/; slow: tests/fixtures/vm, std/ and compiler/, deep trees, a generated program
-  frontend-check-test.rkt  # fast: generated tables, goldens, every CHECK- code and rule; slow: both checkers on the corpus, mutants, deep trees, a large program
+  frontend-check-test.rkt  # fast: the Racket printer against its goldens; slow: both checkers on the corpus, mutants, deep trees, a large program
   frontend-freeze-common.rkt, frontend-freeze-corpus.rkt, frontend-<stage>-freeze.rkt  # the Racket writers of the frozen comparisons (`make frontend-freeze`, `make frontend-snapshot`; references/frontend.md)
-  test_frontend_<lexer|parser|modules|check|lower|bytecode>.py  # unittest: the Agentica stages against tests/fixtures/frontend/frozen/ (references/frontend.md); frontend_support.py and frontend_cases.py are their helpers
+  test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # unittest: the Agentica stages against tests/fixtures/frontend/frozen/ and the goldens of tests/fixtures/frontend/<stage>/ (references/frontend.md); frontend_support.py and frontend_cases.py are their helpers; test_frontend_refreeze.py tests tools/refreeze.py
   test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
   test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
   test_filesystem.py  # unittest: File and Path programs on the VM (references/vm-io.md)

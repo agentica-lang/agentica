@@ -57,9 +57,8 @@ class LexerFrozenTest(StageTestCase):
     def test_invalid_utf8_is_lex_invalid_utf8_at_the_first_bad_byte(self):
         # The file is read by compiler/source_file.agc before the lexer sees it.
         outputs = self.lex({"invalid.agc": b"# caf\xc3\xa9\ndef \xff\n"})
-        expected = (FROZEN / "lexer" / "invalid-utf8.expected").read_text(encoding="utf-8")
-        self.assertEqual(outputs["invalid.agc"], expected)
-        self.assertRegex(expected, r"^ERROR LEX-INVALID-UTF8 11:2:5-12:2:6 ")
+        self.assert_golden(outputs["invalid.agc"], FROZEN / "lexer" / "invalid-utf8.expected")
+        self.assertRegex(outputs["invalid.agc"], r"^ERROR LEX-INVALID-UTF8 11:2:5-12:2:6 ")
 
     def test_a_deeply_nested_file_lexes_in_a_linear_number_of_steps(self):
         self.check_nested(4000)

@@ -264,7 +264,7 @@ class ModulesFrozenTest(StageTestCase):
         # Resolution allows "../", and the stored name of such a file keeps the .. part (35.4, "Source paths").
         output = self.link_tree({"above/app/root.agc": SHARED_ROOT, "above/shared/x.agc": SHARED_X}, "above/app/root.agc")
         self.assertIn('\n  module "../shared/x.agc"\n', output)
-        self.assertEqual(output, (FROZEN / "modules" / "above.expected").read_text(encoding="utf-8"))
+        self.assert_golden(output, FROZEN / "modules" / "above.expected")
 
     def test_an_entry_reached_through_a_symbolic_link_to_its_folder_is_named_from_the_real_folder(self):
         # The stored name comes from the canonical file, so a link in the way of the entry changes nothing.
@@ -275,7 +275,7 @@ class ModulesFrozenTest(StageTestCase):
         output = self.link([(DEFAULT_ENV, root)], directory)[root]
         self.assertIn('\n  module "root.agc"\n', output)
         self.assertIn('\n  module "../shared/x.agc"\n', output)
-        self.assertEqual(output, (FROZEN / "modules" / "symlink.expected").read_text(encoding="utf-8"))
+        self.assert_golden(output, FROZEN / "modules" / "symlink.expected")
 
     def test_invalid_utf8_in_the_root_file_or_in_an_import_is_lex_invalid_utf8_at_its_first_bad_byte(self):
         trees = {}
@@ -303,7 +303,7 @@ class ModulesFrozenTest(StageTestCase):
         (directory / "bad.agc").mkdir()
         output = self.link([(DEFAULT_ENV, "root.agc")], directory)["root.agc"]
         self.assertRegex(output, r'^ERROR CHECK-IMPORT-IO [^ ]+ "cannot read import"')
-        self.assertEqual(output, (FROZEN / "modules" / "unreadable-import.expected").read_text(encoding="utf-8"))
+        self.assert_golden(output, FROZEN / "modules" / "unreadable-import.expected")
 
     def test_a_valid_source_file_over_1_mib_links_as_the_root_and_as_an_import(self):
         comment = big_comment()

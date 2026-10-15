@@ -95,8 +95,7 @@ class BytecodeFrozenTest(StageTestCase):
         text = TABLES.read_text(encoding="utf-8")
         start = re.search(r"OPCODES = \{", text).end()
         pairs = re.findall(r'"([^"]+)": ([0-9]+)', text[start:text.index("\n}", start)])
-        expected = (FROZEN / "bytecode" / "opcodes.expected").read_text(encoding="utf-8")
-        self.assertEqual("".join("%s %s\n" % pair for pair in pairs), expected)
+        self.assert_golden("".join("%s %s\n" % pair for pair in pairs), FROZEN / "bytecode" / "opcodes.expected")
 
     def test_the_lowering_fixtures_fill_every_section_of_the_file(self):
         # The writer turns the lowering of these programs into the file, so the sections that their goldens fill are the
@@ -138,7 +137,7 @@ class BytecodeFrozenTest(StageTestCase):
         result = run_vm(bytecode, cwd=ROOT, env=vm_environment(), timeout=300)
         self.assertEqual(result.code, 0, result.stderr)
         self.assertGreater(len(scenario_names("SCENARIOS")), 15)
-        self.assertEqual(result.stdout, (FROZEN / "bytecode" / "limits.expected").read_text(encoding="utf-8"))
+        self.assert_golden(result.stdout, FROZEN / "bytecode" / "limits.expected")
 
     def test_the_writer_writes_the_bytes_of_the_racket_writer(self):
         files, paths = self.fast_paths()
@@ -154,15 +153,15 @@ class BytecodeFrozenTest(StageTestCase):
     def test_the_vm_runs_the_agentica_file_as_it_runs_the_racket_file(self):
         files, paths = self.fast_paths()
         self.compile_paths(paths, self.corpus_dir("examples", "fixtures"))
-        golden = sections((FROZEN / "bytecode" / "runs.expected").read_text(encoding="utf-8"))
+        found = ""
         for name, path in (("basics", "tests/fixtures/frontend/lower/basics.agc"),
                            ("unicode", "tests/fixtures/frontend/bytecode/unicode.agc")):
-            with self.subTest(name):
-                result = run_vm(self.files[path], cwd=ROOT, env=vm_environment())
-                found = ("exit %d\nstdout %s\nstderr %s\n"
-                         % (result.code, json.dumps(result.stdout, ensure_ascii=False),
-                            json.dumps(result.stderr, ensure_ascii=False)))
-                self.assertEqual(found, golden[name])
+            result = run_vm(self.files[path], cwd=ROOT, env=vm_environment())
+            found += ("== %s\nexit %d\nstdout %s\nstderr %s\n"
+                      % (name, result.code, json.dumps(result.stdout, ensure_ascii=False),
+                         json.dumps(result.stderr, ensure_ascii=False)))
+        # The whole file, so that a missing or an extra section fails too (and a refreeze rewrites it).
+        self.assert_golden(found, FROZEN / "bytecode" / "runs.expected")
 
     @slow
     def test_the_vm_fixtures(self):
@@ -199,4 +198,4 @@ class BytecodeFrozenTest(StageTestCase):
         result = run_vm(bytecode, args=["slow"], cwd=ROOT, env=vm_environment(), timeout=1800)
         self.assertEqual(result.code, 0, result.stderr)
         self.assertEqual(len(scenario_names("SLOW_SCENARIOS")), 4)
-        self.assertEqual(result.stdout, (FROZEN / "bytecode" / "limits-slow.expected").read_text(encoding="utf-8"))
+        self.assert_golden(result.stdout, FROZEN / "bytecode" / "limits-slow.expected")
