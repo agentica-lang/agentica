@@ -9,10 +9,11 @@ paths. Each case runs the CLI as a child.
 import fcntl
 import json
 import os
+import signal
 import time
 
-from tests.agentica_test import (TESTS, Child, TestCase, cli, process_alive, processes_mentioning, run, slow,
-                                 vm_environment, wait_until)
+from tests.agentica_test import (TESTS, Child, TestCase, cli, process_alive, report_cases, run, slow, vm_environment,
+                                 wait_until)
 
 STREAM_SPEC = str(TESTS / "bdd" / "specs" / "json-lines.feature")
 
@@ -25,6 +26,21 @@ HOLDER_PROGRAM = (
 BUFFERED_PROGRAM = "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  line = IO.gets!()\nend\n"
 OUTPUT_PROGRAM = 'def main() -> Void\n  puts("actual")\n  IO.warn("warning")\n  System.exit(3)\nend\n'
 JSON_PROGRAM = 'def main() -> Void\n  puts("{\\"b\\": \\"3\\", \\"a\\": 1}")\nend\n'
+
+
+def processes_mentioning(text):
+    """The pids whose command line contains `text` (Linux /proc)."""
+    needle = os.fsencode(str(text))
+    found = []
+    for entry in os.listdir("/proc"):
+        if entry.isdigit():
+            try:
+                with open("/proc/%s/cmdline" % entry, "rb") as cmdline:
+                    if needle in cmdline.read():
+                        found.append(int(entry))
+            except OSError:
+                pass
+    return found
 
 
 def doc(text):
@@ -46,12 +62,8 @@ JSON_MISMATCH_SCENARIO = (
     "Then I receive a JSON line within 5000 milliseconds:\n" + doc('{"a": 1, "b": 3}'))
 
 
-def cases(report):
-    return [scenario for file in report["files"] for scenario in file["scenarios"]]
-
-
 def codes(report):
-    return [item["error"]["code"] if isinstance(item["error"], dict) else None for item in cases(report)]
+    return [item["error"]["code"] if isinstance(item["error"], dict) else None for item in report_cases(report)]
 
 
 def details(item):
@@ -66,10 +78,17 @@ class BddIntegration(TestCase):
         return json.loads(result.stdout)
 
     def suite(self, files):
-        directory = self.make_temp_dir("agentica-bdd-integration-").resolve()
-        for name, text in files.items():
-            (directory / name).write_text(text, encoding="utf-8")
-        return directory
+        return self.make_suite(files, "agentica-bdd-integration-")
+
+    def kill_at_end(self, pids):
+        """Kill what a failing test would leave running; `pids` is called at the end, when the pids are known."""
+        def kill():
+            for pid in pids():
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except (ProcessLookupError, ValueError):
+                    pass
+        self.addCleanup(kill)
 
     def test_live_json_replies_arrive_before_eof_and_recover_after_errors(self):
         report = self.json_test(STREAM_SPEC)
@@ -123,7 +142,7 @@ class BddIntegration(TestCase):
             "smoke.feature": "Feature: Smoke\n" + WRONG_STDOUT_SCENARIO + LITERAL_INPUT_SCENARIO + JSON_MISMATCH_SCENARIO})
         report = self.json_test(directory / "smoke.feature")
         self.assertEqual(codes(report), ["RUNTIME-BDD-ASSERTION", None, "RUNTIME-BDD-ASSERTION"])
-        self.assertEqual([details(cases(report)[0]), details(cases(report)[2])],
+        self.assertEqual([details(report_cases(report)[0]), details(report_cases(report)[2])],
                          [['"incorrect"', '"actual\\n"'], ['{"a":1,"b":3}', '{"a":1,"b":"3"}']])
 
     def test_a_failed_scenario_leaves_no_process_of_its_program_behind(self):
@@ -132,9 +151,11 @@ class BddIntegration(TestCase):
             "holder.feature": ('Feature: Cleanup\nScenario: held\nGiven the Agentica program "holder.agc"\n'
                                'Then I receive the line "ready" within 5000 milliseconds\n'
                                "And the program exits with code 0 within 200 milliseconds\n")})
+        pid_file = directory / "pid.txt"
+        self.kill_at_end(lambda: [pid_file.read_text().strip()] if pid_file.exists() else [])
         report = self.json_test("--allow-run", directory / "holder.feature")
         self.assertEqual(codes(report), ["RUNTIME-BDD-TIMEOUT"])
-        pid = (directory / "pid.txt").read_text().strip()
+        pid = pid_file.read_text().strip()
         self.assertTrue(wait_until(lambda: not process_alive(pid), 5), pid)
 
     def test_a_temporary_directory_others_can_write_to_without_the_sticky_bit_is_refused(self):
@@ -235,7 +256,7 @@ class BddIntegration(TestCase):
             "RUNTIME-BDD-OUTPUT-LIMIT", "RUNTIME-BDD-OUTPUT-LIMIT", None, None, None,
             "RUNTIME-BDD-OUTPUT-LIMIT", "RUNTIME-BDD-IO", "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-ASSERTION",
             "RUNTIME-BDD-OUTPUT-LIMIT"])
-        results = cases(report)
+        results = report_cases(report)
         self.assertEqual([details(results[1]), details(results[3]), details(results[11])],
                          [['"incorrect"', '"actual\\n"'], ["0", "3"], ['{"a":1,"b":3}', '{"a":1,"b":"3"}']])
         long_actual = details(results[12])[1]
@@ -261,6 +282,8 @@ class BddIntegration(TestCase):
         temporary = directory / "tmp"
         temporary.mkdir(0o700)
         env = vm_environment({"TMPDIR": temporary})
+        # The runner, the VM and the program are not children of the test: kill them if the cleanup under test fails.
+        self.kill_at_end(lambda: processes_mentioning(temporary))
         driver = self.adopt(Child(cli() + ["test", "--allow-run", directory / "holder.feature"], env=env))
         pid_file = directory / "pid.txt"
         self.assertTrue(wait_until(lambda: pid_file.exists() and any(c.isdigit() for c in pid_file.read_text()), 20))

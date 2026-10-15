@@ -7,14 +7,10 @@ formats. tests/bdd/handlers.agc holds the shared step handlers.
 import json
 import os
 
-from tests.agentica_test import TESTS, TestCase, cli, run, vm_environment
+from tests.agentica_test import TESTS, TestCase, cli, report_cases, run, vm_environment
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
-
-
-def cases(report):
-    return [scenario for file in report["files"] for scenario in file["scenarios"]]
 
 
 def code_of(item):
@@ -49,17 +45,14 @@ class Bdd(TestCase):
 
     def suite(self, files):
         """A temp directory with the given files (name -> text); returns its path as a string."""
-        directory = self.make_temp_dir("agentica-bdd-")
-        for name, text in files.items():
-            (directory / name).write_text(text, encoding="utf-8")
-        return str(directory)
+        return str(self.make_suite(files, "agentica-bdd-"))
 
     def test_the_custom_suite_passes_in_the_three_formats_with_outline_names_and_quiet_handlers(self):
         status, report = self.json_test(CUSTOM, CUSTOM, "--steps", HANDLERS)
         self.assertEqual(status, 0)
         self.assertIs(report["ok"], True)
         self.assertEqual(report["passed"], 4)
-        self.assertEqual([item["name"] for item in cases(report)],
+        self.assertEqual([item["name"] for item in report_cases(report)],
                          ["Remember 7", "Remember -3", "Doc String and Data Table", "Quoted capture"])
         for style in ([], ["--ai"]):
             result = self.agentica_test(*style, CUSTOM, "--steps", HANDLERS)
@@ -86,7 +79,7 @@ class Bdd(TestCase):
         self.assertEqual(status, 1)
         self.assertEqual((report["passed"], report["failed"], report["file_errors"]), (2, 6, 1))
         self.assertEqual(file_error(report)["code"], "PARSE-GHERKIN-EMPTY")
-        results = cases(report)
+        results = report_cases(report)
         self.assertEqual([code_of(item) for item in results[:6]],
                          ["RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-NO-ASSERTION", "RUNTIME-DIVISION-BY-ZERO",
                           "RUNTIME-BDD-PREMATURE-EXIT", "RUNTIME-STEP-LIMIT", "CHECK-BDD-UNDEFINED"])
@@ -141,16 +134,16 @@ class Bdd(TestCase):
         feature = os.path.join(directory, "tasks.feature")
         status, report = self.json_test(feature, "--steps", os.path.join(directory, "steps.agc"))
         self.assertEqual(status, 1)
-        self.assertEqual([item["status"] for item in cases(report)], ["passed", "failed", "failed", "passed"])
-        self.assertEqual([code_of(item) for item in cases(report)[1:3]],
+        self.assertEqual([item["status"] for item in report_cases(report)], ["passed", "failed", "failed", "passed"])
+        self.assertEqual([code_of(item) for item in report_cases(report)[1:3]],
                          ["RUNTIME-BDD-PENDING-TASKS", "RUNTIME-TASK-CRASHED"])
-        self.assertIn("RUNTIME-DIVISION-BY-ZERO", cases(report)[2]["error"]["message"])
+        self.assertIn("RUNTIME-DIVISION-BY-ZERO", report_cases(report)[2]["error"]["message"])
         _, early = self.json_test(feature, "--steps", os.path.join(directory, "early.agc"))
         self.assertEqual(file_error(early)["code"], "RUNTIME-BDD-PENDING-TASKS")
-        self.assertEqual(cases(early), [])
+        self.assertEqual(report_cases(early), [])
         _, crashed = self.json_test(feature, "--steps", os.path.join(directory, "crashed.agc"))
         self.assertEqual(file_error(crashed)["code"], "RUNTIME-TASK-CRASHED")
-        self.assertEqual(cases(crashed), [])
+        self.assertEqual(report_cases(crashed), [])
 
     def test_blocks_capture_ambiguous_steps_fail_and_a_bad_step_program_is_one_file_error_with_no_scenario_run(self):
         feature = ("Feature: Steps\nScenario: small\nThen 3 is small\nScenario: big\nThen 9 is small\n"
@@ -184,10 +177,10 @@ class Bdd(TestCase):
 
         status, report = self.json_test(path("steps.feature"), "--steps", path("blocks.agc"))
         self.assertEqual(status, 1)
-        self.assertEqual([item["status"] for item in cases(report)], ["passed", "failed", "failed"])
-        self.assertEqual(code_of(cases(report)[1]), "RUNTIME-BDD-ASSERTION")
-        self.assertEqual(code_of(cases(report)[2]), "CHECK-BDD-AMBIGUOUS")
-        self.assertEqual(cases(report)[2]["error"]["actual"], '"value is 1"')
+        self.assertEqual([item["status"] for item in report_cases(report)], ["passed", "failed", "failed"])
+        self.assertEqual(code_of(report_cases(report)[1]), "RUNTIME-BDD-ASSERTION")
+        self.assertEqual(code_of(report_cases(report)[2]), "CHECK-BDD-AMBIGUOUS")
+        self.assertEqual(report_cases(report)[2]["error"]["actual"], '"value is 1"')
         for file, code, line in (("duplicate.agc", "RUNTIME-BDD-DUPLICATE", 1), ("predefined.agc", "RUNTIME-BDD-DUPLICATE", 1),
                                  ("pattern.agc", "RUNTIME-BDD-PATTERN", 1), ("type.agc", "CHECK-TYPE-MISMATCH", 9),
                                  ("silent.agc", "RUNTIME-BDD-CONTEXT", 1), ("loops.agc", "RUNTIME-STEP-LIMIT", 4)):
@@ -202,8 +195,8 @@ class Bdd(TestCase):
         self.assertRegex(file_error(http)["help"], "std/http")
         forged_status, forged = self.json_test(path("forged.feature"), "--steps", path("forged.agc"))
         self.assertEqual(forged_status, 1)
-        self.assertEqual(code_of(cases(forged)[0]), "RUNTIME-BDD-ASSERTION")
-        self.assertEqual([step["status"] for step in cases(forged)[0]["steps"]], ["passed", "failed"])
+        self.assertEqual(code_of(report_cases(forged)[0]), "RUNTIME-BDD-ASSERTION")
+        self.assertEqual([step["status"] for step in report_cases(forged)[0]["steps"]], ["passed", "failed"])
 
     def test_discovery_reports_unreadable_folders_broken_links_bad_names_and_large_files_and_skips_folder_links(self):
         directory = self.suite({
@@ -229,7 +222,7 @@ class Bdd(TestCase):
             codes.append((os.path.basename(file["path"]), problem["code"] if isinstance(problem, dict) else None))
         self.assertEqual(sorted(codes), sorted([
             ("locked", "RUNTIME-BDD-INFRA"), ("broken.feature", "RUNTIME-BDD-INFRA"),
-            ("bad�.feature", "RUNTIME-BDD-INFRA"), ("a.feature", None), ("big.feature", "RUNTIME-BDD-IO")]))
+            ("bad\ufffd.feature", "RUNTIME-BDD-INFRA"), ("a.feature", None), ("big.feature", "RUNTIME-BDD-IO")]))
         self.assertEqual(report["failed"], 1)
 
     def fake_vm(self, directory, script):

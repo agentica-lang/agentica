@@ -97,6 +97,13 @@ class TestCase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, path, ignore_errors=True)
         return path
 
+    def make_suite(self, files, prefix="agentica-"):
+        """A resolved temp dir holding the given files (name -> text); removed when the test ends."""
+        directory = self.make_temp_dir(prefix).resolve()
+        for name, text in files.items():
+            (directory / name).write_text(text, encoding="utf-8")
+        return directory
+
     def adopt(self, child):
         """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
         self.addCleanup(child.stop)
@@ -331,6 +338,11 @@ def output_lines(text):
     return lines
 
 
+def report_cases(report):
+    """The scenarios of an `agentica test --json` report, in file order."""
+    return [scenario for file in report["files"] for scenario in file["scenarios"]]
+
+
 def check_lines(case, text, expected, message):
     """One output line per expectation: a string is equal, ("prefix", text) is a prefix."""
     lines = output_lines(text)
@@ -345,7 +357,11 @@ def check_lines(case, text, expected, message):
 def process_alive(pid):
     """True while the process exists and is not a zombie (Linux /proc)."""
     try:
-        with open("/proc/%d/stat" % int(pid)) as stat:
+        number = int(pid)
+    except ValueError:
+        raise AssertionError("not a process id: %r" % (pid,)) from None
+    try:
+        with open("/proc/%d/stat" % number) as stat:
             text = stat.read()
     except OSError:
         return False
@@ -361,18 +377,3 @@ def wait_until(predicate, timeout=WAIT_SECONDS, interval=0.05):
         if time.monotonic() >= deadline:
             return False
         time.sleep(interval)
-
-
-def processes_mentioning(text):
-    """The pids whose command line contains `text` (Linux /proc)."""
-    needle = os.fsencode(str(text))
-    found = []
-    for entry in os.listdir("/proc"):
-        if entry.isdigit():
-            try:
-                with open("/proc/%s/cmdline" % entry, "rb") as cmdline:
-                    if needle in cmdline.read():
-                        found.append(int(entry))
-            except OSError:
-                pass
-    return found
