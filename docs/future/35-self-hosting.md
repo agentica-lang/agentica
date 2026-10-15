@@ -486,7 +486,7 @@ language or VM change. Notes for the next steps:
   site, and the large inputs of the slow tier (chains of 3,000 files, 2,000
   imports, cycles, and deep trees).
 
-Status on 2026-10-16 (PR #258): step 4a is done. The checker (step 4) is split
+Status on 2026-10-15 (PR #258): step 4a is done. The checker (step 4) is split
 in PRs that each hold their tests and docs: 4a is the builtin catalog, which the
 linker already needed (the name tables) and the checker needs for every call;
 4b and 4c are the checker.
@@ -520,11 +520,12 @@ linker already needed (the name tables) and the checker needs for every call;
   whose length differs by more than the limit before it computes a distance.
 - The text form of the catalog is `tests/frontend-catalog-common.rkt` (Racket)
   and `compiler/catalog.agc` with `catalog_text.agc` (Agentica): one line per
-  form (signature, rule, implementation, effects, description), the records,
-  the enums and the name tables, then the answer to each probe (`near:`, `ref:`,
-  `std:` and `type:` questions, listed in the common file). The golden is
-  `tests/fixtures/frontend/catalog/catalog.text`; the Agentica output on the VM
-  equals it.
+  form (signature, the parameter and result types with their variants written
+  out, rule, implementation, effects, description), the records, the enums and
+  the name tables, then the answer to each probe (`near:`, `ref:`, `std:`,
+  `type:`, `sig:` and `disp:` questions, listed in the common file). The golden
+  is `tests/fixtures/frontend/catalog/catalog.text`; the Agentica output on the
+  VM equals it.
 - Not in 4a: `agentica help` still reads the Racket catalog (step 8), and the
   method tables, the foreign-name help texts and the rules of the checker
   (`method-aliases`, `foreign-names`, the `case` on `builtin-rule`) go with the

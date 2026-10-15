@@ -27,7 +27,18 @@ end
 export def catalog() -> Catalog
   entries = entry_table()
   std_only = std_only_table()
-  return Catalog(entries: entries, public_names: public_names(entries.keys, std_only), bare_names: bare_names(entries.keys), records: record_table(), enums: enum_table(), opaque: Set.new(Data.opaque_types()), handles: Set.new(Data.handle_types()), reserved: Set.new(Data.reserved_type_names()), std_only: std_only)
+  names = entries.keys
+  return Catalog(
+    entries: entries,
+    public_names: public_names(names, std_only),
+    bare_names: bare_names(names),
+    records: record_table(),
+    enums: enum_table(),
+    opaque: Set.new(Data.opaque_types()),
+    handles: Set.new(Data.handle_types()),
+    reserved: Set.new(Data.reserved_type_names()),
+    std_only: std_only
+  )
 end
 
 ## The builtin of that name, or an error when there is none (builtin-ref without an arity).

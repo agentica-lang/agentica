@@ -127,7 +127,9 @@ tests/            # rackunit files; the lists of references/vm-tests.md say whic
   frontend-parser-common.rkt  # the parser text form (node ids, spans) and goldens (references/frontend.md)
   frontend-parser-test.rkt  # fast: printer and Agentica parser against the goldens; slow: live and generated comparisons (references/frontend.md)
   frontend-modules-common.rkt  # the linked program text form and goldens (fixture folders in tests/fixtures/frontend/modules/; references/frontend.md)
-  frontend-modules-test.rkt  # fast: printer and Agentica linker against the goldens, ids, name tables; slow: corpus, site, large inputs (references/frontend.md)
+  frontend-modules-test.rkt  # fast: printer and Agentica linker against the goldens, ids; slow: corpus, site, large inputs (references/frontend.md)
+  frontend-catalog-common.rkt  # the builtin catalog text form (tables, signatures, shapes, probes) and its golden (references/frontend.md)
+  frontend-catalog-test.rkt  # the generated compiler/builtins_data.agc, the Rule enum, and Racket against Agentica on the catalog (references/frontend.md)
   process-test.rkt  # Process builtins on the VM, every way a run ends (references/vm-net.md)
   filesystem-test.rkt  # File and Path programs on the VM (references/vm-io.md)
   cli-in-process.rkt  # helper: runs src/main.rkt in process for CLI tests

@@ -20,7 +20,11 @@
 ;; Rows per generated function, so that no function passes the 60 lines of the style rule.
 (define chunk-size 40)
 
-(define (quoted text) (format "~s" text))
+;; "#{" inside an Agentica string starts an interpolation, so a text with one cannot be written as data.
+(define (quoted text)
+  (when (regexp-match? #rx"#[{]" text)
+    (error 'gen-builtins-data "the text ~s contains an interpolation start" text))
+  (format "~s" text))
 
 (define (string-list names)
   (string-append "[" (string-join (map quoted names) ", ") "]"))

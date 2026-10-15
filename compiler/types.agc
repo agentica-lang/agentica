@@ -33,7 +33,7 @@ export def display_name(name: String) -> String
   while digits_end < name.length and digit?(name.at(digits_end))
     digits_end += 1
   end
-  if digits_end > 1 and name.slice(digits_end, 2) == "::"
+  if digits_end > 1 and name.length >= digits_end + 2 and name.slice(digits_end, 2) == "::"
     return name.slice(digits_end + 2, name.length - digits_end - 2)
   end
   return name
@@ -65,9 +65,31 @@ export def to_text(type: Type) -> String
   end
 end
 
+## The type with its variant written out, for tests: Struct(Header), Enum(Await, [Var(T)]), Fn([Int], Void). Unlike to_text, two variants never print the same.
+export def debug_text(type: Type) -> String
+  case type
+    Type.Opaque(name) -> return "Opaque(" + name + ")"
+    Type.Var(name) -> return "Var(" + name + ")"
+    Type.Struct(name) -> return "Struct(" + name + ")"
+    Type.Enum(name, args) -> return "Enum(" + name + ", [" + debug_list(args) + "])"
+    Type.Result(item) -> return "Result(" + debug_text(item) + ")"
+    Type.Task(item) -> return "Task(" + debug_text(item) + ")"
+    Type.Channel(item) -> return "Channel(" + debug_text(item) + ")"
+    Type.List(item) -> return "List(" + debug_text(item) + ")"
+    Type.Set(item) -> return "Set(" + debug_text(item) + ")"
+    Type.Map(key, value) -> return "Map(" + debug_text(key) + ", " + debug_text(value) + ")"
+    Type.Fn(params, result) -> return "Fn([" + debug_list(params) + "], " + debug_text(result) + ")"
+    _ -> return to_text(type)
+  end
+end
+
 ## The types joined by ", ".
 export def list_text(types: List[Type]) -> String
   return types.map do |type: Type| to_text(type) end.join(", ")
+end
+
+def debug_list(types: List[Type]) -> String
+  return types.map do |type: Type| debug_text(type) end.join(", ")
 end
 
 def enum_text(name: String, args: List[Type]) -> String

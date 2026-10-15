@@ -4,7 +4,8 @@
          "frontend-lexer-common.rkt"
          "../src/builtins.rkt"
          "../src/builtin-types.rkt"
-         (only-in "../src/checker.rkt" reserved-type-names))
+         (only-in "../src/checker.rkt" reserved-type-names)
+         (only-in "../tools/gen-builtins-data.rkt" rule-variant))
 
 (provide catalog-text
          catalog-probes
@@ -16,7 +17,7 @@
 ; The questions put to both catalogs after the tables: near:WORD is did-you-mean among the public builtin names,
 ; ref:NAME/ARITY the form of NAME with that many arguments, std:NAME whether NAME is inside a std-only module,
 ; type:WORD did-you-mean among the record and enum names plus the primitive and handle type names, as the checker
-; offers for an unknown type.
+; offers for an unknown type, sig:NAME the signature of every form of NAME, disp:NAME the display-name of a name.
 ; A name with a "@N::" prefix is a linked name: only candidates with the same prefix count, so it finds nothing here.
 (define catalog-probes
   '("near:pust" "near:put" "near:prnt" "near:Task.spwn" "near:Strng.length" "near:String.lenght" "near:List.apend"
@@ -25,7 +26,9 @@
     "ref:puts/1" "ref:puts/0" "ref:ok/0" "ref:ok/1" "ref:ok/2" "ref:Task.await/1" "ref:Task.await/2" "ref:Task.await/3"
     "ref:Map.get/2" "ref:Map.get/3" "ref:Map.get/4" "ref:Nope/1" "ref:HttpWire.client/5" "ref:List.map/2"
     "std:HttpWire.client" "std:LogRegistry.level" "std:Http.x" "std:HttpWireX.y" "std:puts" "std:HttpWire" "std:.x"
-    "type:Strng" "type:Hedaer" "type:LogLevl" "type:Lst" "type:@3::Strng" "type:@3::Hedaer" "type:Socet"))
+    "type:Strng" "type:Hedaer" "type:LogLevl" "type:Lst" "type:@3::Strng" "type:@3::Hedaer" "type:Socet"
+    "sig:puts" "sig:Task.await" "sig:Map.get" "sig:Nope"
+    "disp:@12::Point" "disp:@x" "disp:@1" "disp:@1:" "disp:@1::" "disp:@12:Point" "disp:Point" "disp:@::x"))
 
 (define shared-type-names
   (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Set" "Result" "Json" "Fn" "Task" "Channel" "Range")
@@ -39,15 +42,33 @@
   (builtin-signature (builtin (builtin-name form) (builtin-parameters form) (builtin-result form) (builtin-rule form)
                               (builtin-implementation form) (builtin-effects form) (builtin-description form))))
 
-(define (rule-name rule)
-  (if rule
-      (string-append* (for/list ([part (in-list (string-split (symbol->string rule) "-"))])
-                        (string-append (string-upcase (substring part 0 1)) (substring part 1))))
-      "Plain"))
+; A type with its variant written out, from the Racket shape and written again here (not through the generator),
+; so a wrong variant in compiler/builtins_data.agc shows: a bare symbol is a primitive, an opaque type or a type
+; variable; (Await R) is the builtin enum.
+(define (debug-type type)
+  (match type
+    [(? symbol?)
+     (define name (symbol->string type))
+     (cond [(memq type opaque-types) (format "Opaque(~a)" name)]
+           [(regexp-match? #px"^[A-Z]$" name) (format "Var(~a)" name)]
+           [else name])]
+    [(list 'Struct name) (format "Struct(~a)" name)]
+    [(list 'TypeVar name) (format "Var(~a)" name)]
+    [(list 'Enum name args ...) (format "Enum(~a, [~a])" name (debug-types args))]
+    [(list 'Await args ...) (format "Enum(Await, [~a])" (debug-types args))]
+    [(list 'Map key value) (format "Map(~a, ~a)" (debug-type key) (debug-type value))]
+    [(list 'Fn parts ...) (format "Fn([~a], ~a)" (debug-types (drop-right parts 1)) (debug-type (last parts)))]
+    [(list head item) (format "~a(~a)" head (debug-type item))]))
+
+(define (debug-types types)
+  (string-join (map debug-type types) ", "))
+
+(define (shape form)
+  (format "(~a) -> ~a" (debug-types (map cadr (builtin-parameters form))) (debug-type (builtin-result form))))
 
 (define (form-line form)
-  (format "~a rule=~a impl=~a effects=~a desc=~a"
-          (form-signature form) (rule-name (builtin-rule form)) (quote-text (builtin-implementation form))
+  (format "~a shape=~a rule=~a impl=~a effects=~a desc=~a"
+          (form-signature form) (shape form) (rule-variant (builtin-rule form)) (quote-text (builtin-implementation form))
           (quoted-list (map symbol->string (builtin-effects form))) (quote-text (builtin-description form))))
 
 (define (builtin-lines entry)
@@ -59,13 +80,13 @@
   (for/list ([name (in-list (sort (hash-keys builtin-records) string<?))])
     (format "record ~a ~a" name
             (string-join (for/list ([field (in-list (hash-ref builtin-records name))])
-                           (format "~a: ~a" (car field) (type->string (cdr field))))
+                           (format "~a: ~a" (car field) (debug-type (cdr field))))
                          ", "))))
 
 (define (variant-text variant)
   (if (null? (cdr variant))
       (car variant)
-      (format "~a(~a)" (car variant) (string-join (map type->string (cdr variant)) ", "))))
+      (format "~a(~a)" (car variant) (debug-types (cdr variant)))))
 
 (define (enum-lines)
   (for/list ([declaration (in-list (sort builtin-enum-declarations string<? #:key car))])
@@ -97,6 +118,10 @@
      [("type")
       (define help (did-you-mean rest (append (hash-keys builtin-records) (hash-keys builtin-enums)) #:shared shared-type-names))
       (if help (quote-text help) "-")]
+     [("sig")
+      (define entry (builtin-ref rest))
+      (if entry (quote-text (builtin-signature entry)) "-")]
+     [("disp") (quote-text (display-name rest))]
      [else (if (std-only-name? rest) "true" "false")])))
 
 ; The text form of the catalog; compiler/catalog.agc prints the same for the same probes.

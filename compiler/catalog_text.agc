@@ -7,7 +7,7 @@ import "suggest" as Suggest
 import "text" as Text
 import "types" as Types
 
-## The whole catalog, one line per fact, then the answer to each probe. A probe is `near:WORD` (the did-you-mean help among the public builtin names), `ref:NAME/ARITY` (the form of NAME with that many arguments), `std:NAME` (is NAME inside a std-only module) or `type:WORD` (the help for an unknown type: the record and enum names, and the primitive and handle type names).
+## The whole catalog, one line per fact, then the answer to each probe. A probe is `near:WORD` (the did-you-mean help among the public builtin names), `ref:NAME/ARITY` (the form of NAME with that many arguments), `std:NAME` (is NAME inside a std-only module) `type:WORD` (the help for an unknown type: the record and enum names, and the primitive and handle type names), `sig:NAME` (the signature of every form of NAME) or `disp:NAME` (display_name of a linked name).
 export def catalog_text(probes: List[String]) -> String
   catalog = Builtins.catalog()
   lines: List[String] = []
@@ -31,13 +31,19 @@ def builtin_lines(entry: Model.Builtin) -> List[String]
 end
 
 def form_line(form: Model.Builtin) -> String
-  return Builtins.form_signature(form) + " rule=" + rule_name(form.rule) + " impl=" + Text.quote(form.implementation) + " effects=" + quoted_list(form.effects) + " desc=" + Text.quote(form.description)
+  return Builtins.form_signature(form) + " shape=" + shape_text(form) + " rule=" + rule_name(form.rule) + " impl=" + Text.quote(form.implementation) + " effects=" + quoted_list(form.effects) + " desc=" + Text.quote(form.description)
+end
+
+# The parameter and result types with their variants written out, because to_text prints Struct("X"), Enum("X", []) and Var("X") alike.
+def shape_text(form: Model.Builtin) -> String
+  parameters = form.parameters.map do |parameter: Model.Named| Types.debug_text(parameter.type) end
+  return "(" + parameters.join(", ") + ") -> " + Types.debug_text(form.result)
 end
 
 def record_lines(catalog: Builtins.Catalog) -> List[String]
   lines: List[String] = []
   for name in catalog.records.keys.sort
-    fields = catalog.records[name].map do |field: Model.Named| field.name + ": " + Types.to_text(field.type) end
+    fields = catalog.records[name].map do |field: Model.Named| field.name + ": " + Types.debug_text(field.type) end
     lines = lines.push("record " + name + " " + fields.join(", "))
   end
   return lines
@@ -71,6 +77,10 @@ def probe_line(catalog: Builtins.Catalog, probe: String) -> String
     return probe + " -> " + ref_text(catalog, rest)
   elsif kind == "type"
     return probe + " -> " + help_text(type_help(catalog, rest))
+  elsif kind == "sig"
+    return probe + " -> " + signature_text(catalog, rest)
+  elsif kind == "disp"
+    return probe + " -> " + Text.quote(Types.display_name(rest))
   end
   return probe + " -> " + Builtins.std_only_name?(catalog, rest).to_s
 end
@@ -78,6 +88,14 @@ end
 def type_help(catalog: Builtins.Catalog, word: String) -> Ast.Optional[String]
   shared = ["Int", "Float", "Bool", "String", "Nil", "Void", "List", "Map", "Set", "Result", "Json", "Fn", "Task", "Channel", "Range"].concat(catalog.opaque.to_a)
   return Suggest.did_you_mean_among(word, catalog.records.keys.concat(catalog.enums.keys), shared)
+end
+
+def signature_text(catalog: Builtins.Catalog, name: String) -> String
+  found = Builtins.lookup(catalog, name)
+  if found.ok?
+    return Text.quote(Builtins.signature(found.unwrap!))
+  end
+  return "-"
 end
 
 def ref_text(catalog: Builtins.Catalog, spec: String) -> String
@@ -100,7 +118,7 @@ def variant_text(variant: Model.Variant) -> String
   if variant.payload.size == 0
     return variant.name
   end
-  return variant.name + "(" + Types.list_text(variant.payload) + ")"
+  return variant.name + "(" + variant.payload.map do |type: Types.Type| Types.debug_text(type) end.join(", ") + ")"
 end
 
 def quoted_list(items: List[String]) -> String
