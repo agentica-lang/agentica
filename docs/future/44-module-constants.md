@@ -723,8 +723,8 @@ argument functions and threaded structs it replaces and no other code.
   between 4a and 4b, and the checker port starts from a `src/checker.rkt`
   that already has constants, which is the rule of `Set[T]` and `.with`
   again ("the checker port carries it"). If the owner prefers the other order,
-  4b would port the checker and 44a2 would change both checkers in one PR (the bug-fix rule).
-  Question 5.
+  4b would port the checker and 44a2 would change both checkers in one PR
+  (the bug-fix rule). Question 5.
 - **What each ported step carries.**
   - Step 2 (parser, done): 44a2 changes `compiler/parser.agc`, `ast.agc` and
     the golden printer in the same PR as `src/parser.rkt`.
