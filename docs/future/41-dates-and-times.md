@@ -33,11 +33,12 @@ reasons:
   An Agentica version would cost about a hundred interpreted steps per
   conversion (an estimate, not measured), and each step counts against
   `--max-steps`.
-- No registration: a `std/` module is registered in `src/stdlib.rkt`, which the
-  freeze of row 7.2.7 covers (41.13).
+- Registration: a `std/` module needs one line in `src/stdlib.rkt`. Row 7.2.7
+  counts that line as data (41.13), so it does not block a `std/` module; the
+  reasons above decide this section.
 
 The exception is new and is not yet in the roadmap rule. When the types land,
-the rule gets a sixth item: calendar types and their conversions, which need a
+the rule gets a new item: calendar types and their conversions, which need a
 builtin type. This section does not edit the rule text.
 
 ### 41.2 Types
