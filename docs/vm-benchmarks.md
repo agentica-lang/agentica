@@ -382,6 +382,14 @@ map), while `Map.put` of an existing key copies its path. A first version that
 looked the key up before the `put` made `add` 10% to 35% slower than `put` when
 every key was new; the single pass removed that cost.
 
+`intersection` and `difference` first count the elements they keep with lookups
+only, and return the first set itself when none is dropped. On a 300,000-element
+set this took 3,455 ms when it built a copy that nothing needed; the count pass
+takes about 150 ms (an `intersection` of two equal sets) or 19 ms (a `difference`
+with an empty set). When half the elements go, the second pass builds the
+result: about 1.8 s for 150,000 puts. `Test.eq` and `subset?` on two equal
+sets of 300,000 take about 145 ms.
+
 ## HTTP sanity check
 
 `benchmarks/http_bench.py` is not a CI gate. It needs Python 3.10 or newer,

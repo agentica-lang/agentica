@@ -48,13 +48,12 @@ static bool push_map(agc_vm *vm, pair_stack *s, const agc_map *x, const agc_map 
 }
 
 /* Elements are Ints or Strings, so no pair is pushed: equal sets have the same
-   size and every element of x is in y, in any order. */
+   size and every element of x is in y, in any order. Each element costs a
+   lookup, so the walk is charged its size up front. */
 static bool set_equal(agc_vm *vm, const agc_map *x, const agc_map *y) {
   if (x->size != y->size) return false;
-  agc_value present;
-  for (const agc_keys *cell = x->reversed; cell; cell = cell->next)
-    if (!agc_map_get(vm, y, cell->key, &present)) return false;
-  return true;
+  agc_charge(vm, x->size);
+  return agc_set_subset(vm, x, y);
 }
 
 static bool push_items(pair_stack *s, const agc_value *x, const agc_value *y, size_t n) {

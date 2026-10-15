@@ -182,7 +182,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   hash is keyed per run, so nothing observable may depend on it; the
   printer, `Map.keys` and `Map.values` walk the key list, not the trie.
   `Map.delete` copies the trie path and the key list up to the key's cell
-  (the rest is shared); a missing key returns the same map. `List.sort`
+  (the rest is shared); a missing key returns the same map. The key-list
+  copy makes it O(n), so it is `AGC_COST_SIZE`. `List.sort`
   reuses `agc_sort_by_keys` (`vm/interp.c`) with the items as their own
   keys. `MAP` and `Map.put` share
   `agc_map_put`; HAMT recursion is bounded by 14 levels, printing nested
@@ -191,16 +192,20 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (`agc_set_value`, `agc_as_set`), so they share the trie, the first-insertion
   key list and the persistence; nothing else reads their layout. `Set.add` and
   `Set.new` go through `agc_map_add_hash`, which returns the input map for a
-  member (no copy, the first insertion keeps its place); `union`,
-  `intersection` and `difference` walk `agc_map_keys` of one side and build the
-  result with the same call, and return the first set itself when nothing
-  changed. `subset?` walks the reversed key list (order does not matter).
-  `Set.delete` is `agc_map_delete`, O(position) like `Map.delete`. The text
-  printer opens `Set[` and reads the key array; `agc_equal` compares sets by
-  size and membership (for `Test.eq`; there is no `==`). Set builtins are
-  `AGC_COST_SIZE` when they walk a set or a list and `AGC_COST_NONE` for
-  `add`, `delete`, `include?`, `size` and `empty?`. A hostile `.agcb` that puts a
-  non-Int, non-String in a set stops in `agc_key_hash` (`wrong_tag`).
+  member (no copy, the first insertion keeps its place); `union` walks
+  `agc_map_keys` of the second set and adds with the same call, and returns an
+  input set when nothing changes. `intersection` and `difference` count the
+  survivors first with lookups only, return the first set itself when none is
+  dropped, and build the result in a second pass only otherwise. `subset?` and
+  the set case of `agc_equal` call `agc_set_subset`, so the key-list layout stays
+  in `vm/map.c`. `Set.delete` is
+  `agc_map_delete`, O(n) like `Map.delete`. The text printer opens `Set[` and
+  reads the key array; `agc_equal` compares sets by size and membership
+  (for `Test.eq`; there is no `==`) and charges the size. Set builtins are
+  `AGC_COST_SIZE` when they walk or copy a set or a list (`delete` too) and
+  `AGC_COST_NONE` for `add`, `include?`, `size` and `empty?`. A hostile `.agcb`
+  that puts a non-Int, non-String in a set stops in `agc_key_hash`
+  (`wrong_tag`).
 - Lists can share items, so a list's text can be exponential in the code
   that built it (`a1 = [a0, a0]`, `a2 = [a1, a1]`, ...); printing then ends in the out-of-memory exit, as the trust
   model allows. Never print or compare nested values with C recursion.

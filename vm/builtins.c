@@ -315,26 +315,31 @@ static agc_value builtin_set_union(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_map *a = agc_as_set(vm, args[0]), *b = agc_as_set(vm, args[1]);
   if (b->size == 0) return args[0];
   if (a->size == 0) return args[1];
-  agc_map *out = (agc_map *)a;
+  const agc_map *out = a;
   const agc_value *keys = agc_map_keys(vm, b, span);
   for (size_t k = 0; k < b->size; k++) out = set_with(vm, out, keys[k]);
-  return agc_set_value(out);
+  return agc_set_value((agc_map *)out);
 }
 
 /* The elements of a, in a's order, that are (intersection) or are not
-   (difference) in b. The kept elements are distinct, so each put adds. When
-   nothing is dropped the result is the first set itself. */
+   (difference) in b. A first pass only counts them, so a filter that drops
+   nothing returns the first set itself without building one. The second pass
+   builds the result: the kept elements are distinct, so each put adds. */
 static agc_value set_filter(agc_vm *vm, agc_value *args, uint32_t span, bool in_b) {
   const agc_map *a = agc_as_set(vm, args[0]), *b = agc_as_set(vm, args[1]);
   const agc_value *keys = agc_map_keys(vm, a, span);
-  agc_map *out = agc_new_map();
   agc_value present;
+  size_t kept = 0;
+  for (size_t k = 0; k < a->size; k++)
+    if (agc_map_get(vm, b, keys[k], &present) == in_b) kept++;
+  if (kept == a->size) return args[0];
+  agc_map *out = agc_new_map();
   for (size_t k = 0; k < a->size; k++) {
     uint64_t hash = agc_key_hash(vm, keys[k]);
     if (agc_map_get_hash(vm, b, hash, keys[k], &present) == in_b)
       out = agc_map_put_hash(vm, out, hash, keys[k], agc_nil());
   }
-  return out->size == a->size ? args[0] : agc_set_value(out);
+  return agc_set_value(out);
 }
 
 static agc_value builtin_set_intersection(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -345,15 +350,9 @@ static agc_value builtin_set_difference(agc_vm *vm, agc_value *args, uint32_t sp
   return set_filter(vm, args, span, false);
 }
 
-/* The key list of a is walked newest first: order does not matter here. */
 static agc_value builtin_set_subset(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  const agc_map *a = agc_as_set(vm, args[0]), *b = agc_as_set(vm, args[1]);
-  if (a->size > b->size) return agc_bool(false);
-  agc_value present;
-  for (const agc_keys *cell = a->reversed; cell; cell = cell->next)
-    if (!agc_map_get(vm, b, cell->key, &present)) return agc_bool(false);
-  return agc_bool(true);
+  return agc_bool(agc_set_subset(vm, agc_as_set(vm, args[0]), agc_as_set(vm, args[1])));
 }
 
 static agc_value builtin_ok(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -484,10 +483,10 @@ const agc_builtin agc_core_builtins[] = {
   {"Map.values", 1, builtin_map_values, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Map.get", 2, builtin_map_get, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Map.get", 3, builtin_map_get_default, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Map.delete", 2, builtin_map_delete, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Map.delete", 2, builtin_map_delete, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Set.new", 1, builtin_set_new, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Set.add", 2, builtin_set_add, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Set.delete", 2, builtin_set_delete, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Set.delete", 2, builtin_set_delete, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Set.include?", 2, builtin_set_include, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Set.size", 1, builtin_set_size, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Set.empty?", 1, builtin_set_empty, AGC_NATIVE_NONE, AGC_COST_NONE},

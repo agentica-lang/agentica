@@ -113,6 +113,27 @@ int main(void) {
   agc_value *prefix_keys = agc_map_keys(&vm, prefix, 0);
   assert(agc_as_int(&vm, prefix_keys[0]) == 0 && agc_as_int(&vm, prefix_keys[16]) == 99);
 
+  /* agc_map_add_hash on the long shared prefixes: a member returns the map itself (a leaf at the end of the chain, a
+     collision node, a leaf at the root); a new key adds where its hash leaves the chain or joins a leaf with its own hash. */
+  const uint64_t tail = 0x0aaaaaaaaaaaaaaaULL;
+  assert(agc_map_add_hash(&vm, prefix, ((uint64_t)9 << 60) | tail, agc_int(9), agc_int(555)) == prefix);
+  assert(agc_map_add_hash(&vm, prefix, tail, agc_int(99), agc_int(555)) == prefix);
+  assert(agc_map_add_hash(&vm, prefix, 0, agc_int(-1), agc_int(555)) == prefix);
+  assert(agc_map_add_hash(&vm, prefix, 1ULL << 63, agc_int(-2), agc_int(555)) == prefix);
+  uint64_t branch = ((uint64_t)3 << 60) | (tail ^ (1ULL << 59));
+  agc_map *branched = agc_map_add_hash(&vm, prefix, branch, agc_int(200), agc_int(555));
+  assert(branched != prefix && branched->size == 20 && prefix->size == 19);
+  assert(get_hashed(branched, branch, 200) == 555 && !agc_map_get_hash(&vm, prefix, branch, agc_int(200), &missing));
+  assert(agc_map_add_hash(&vm, branched, branch, agc_int(200), agc_int(1)) == branched);
+  uint64_t twin = ((uint64_t)7 << 60) | tail;
+  agc_map *twinned = agc_map_add_hash(&vm, branched, twin, agc_int(201), agc_int(556));
+  assert(twinned != branched && twinned->size == 21 && branched->size == 20);
+  assert(get_hashed(twinned, twin, 201) == 556 && get_hashed(twinned, twin, 7) == 107 && get_hashed(twinned, branch, 200) == 555);
+  assert(agc_map_add_hash(&vm, twinned, twin, agc_int(201), agc_int(1)) == twinned);
+  agc_value *twin_keys = agc_map_keys(&vm, twinned, 0);
+  assert(agc_as_int(&vm, twin_keys[19]) == 200 && agc_as_int(&vm, twin_keys[20]) == 201);
+  for (int64_t k = 0; k < 16; k++) assert(get_hashed(twinned, ((uint64_t)k << 60) | tail, k) == k + 100);
+
   const int64_t few = 2000;
   agc_map *removed = agc_new_map();
   for (int64_t k = 0; k < few; k++) removed = agc_map_put(&vm, removed, agc_int(k * 7919 - 50000), agc_int(k));

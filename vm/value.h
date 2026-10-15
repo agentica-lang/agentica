@@ -364,6 +364,7 @@ agc_map *agc_map_add_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value
 bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value);
 bool agc_map_get_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value *value);
 agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span);
+bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b);
 agc_map *agc_map_delete(agc_vm *vm, const agc_map *m, agc_value key);
 agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key);
 

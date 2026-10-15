@@ -2,7 +2,7 @@
  * Maps in C: the persistent 32-way HAMT behind Map and Set, hashed with
  * SipHash-1-3 keyed by vm->rt->hash_key, with agc_map_put, get and delete (and
  * their _hash variants for tests), agc_map_add_hash (put that leaves a member
- * alone, for Set) and agc_map_keys in insertion order. Core layer.
+ * alone, for Set), agc_map_keys in insertion order and agc_set_subset. Core layer.
  * Design: docs/vm/05-values-execution-builtins.md §5.1.
  */
 #include "core.h"
@@ -251,6 +251,16 @@ agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span) {
   for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next) keys[--k] = cell->key;
   if (k != 0) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
   return keys;
+}
+
+/* True when every element of a is in b. The key list is walked newest first
+   because order does not matter here, and it needs no array. */
+bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b) {
+  if (a->size > b->size) return false;
+  agc_value present;
+  for (const agc_keys *cell = a->reversed; cell; cell = cell->next)
+    if (!agc_map_get(vm, b, cell->key, &present)) return false;
+  return true;
 }
 
 static agc_hamt *remove_at(const agc_hamt *node, uint32_t bitmap, uint32_t at) {
