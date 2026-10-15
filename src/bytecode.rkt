@@ -8,7 +8,7 @@
          (struct-out bc-program)
          (struct-out bc-function))
 
-(struct bc-program (span sources spans constants structs types decodable enums updates builtins functions entry) #:transparent)
+(struct bc-program (span sources spans constants structs types decodable enums updates globals builtins functions entry) #:transparent)
 (struct bc-function (name params captures registers span code spans) #:transparent)
 
 (define format-version 5)
@@ -54,6 +54,7 @@
     (when (for/or ([entry (in-list enums)])
             (for/or ([variant (in-list (ir-enum-variants entry))]) (> (cdr variant) max-u16)))
       (too-big "payload items in one variant" (ir-program-span ir)))
+    (when (> (ir-program-globals ir) max-u16) (too-big "module constants" (ir-program-span ir)))
     (define struct-index
       (for/hash ([entry (in-list structs)] [index (in-naturals)]) (values (ir-struct-name entry) index)))
     (define types '())
@@ -178,7 +179,7 @@
                   [(step) (list (first args) 0 0)]
                   [(jump) (wide 0 (hash-ref labels (first args)))]
                   [(jump-if-false jump-if-true) (wide (first args) (hash-ref labels (second args)))]
-                  [(call tail-call closure) (wide (first args) (second args))]
+                  [(call tail-call closure global global-set) (wide (first args) (second args))]
                   [(call-value) (list (first args) (second args) 0)]
                   [(struct-with) (list (first args) (second args) (update! (third args) (fourth args)))]
                   [(call-builtin) (wide (first args) (builtin! (second args) (third args)))]
@@ -200,6 +201,7 @@
                 decodable
                 enums
                 (reverse updates)
+                (ir-program-globals ir)
                 builtins
                 functions
                 (ir-program-entry ir))))
@@ -266,8 +268,7 @@
     (u32 out (length (cdr entry)))
     (for ([field (in-list (cdr entry))]) (u32 out field)))
   ;; Globals: the slot count of the module constants (docs/future/44-module-constants.md 44.8).
-  ;; Nothing lowers constants yet, so it is always zero.
-  (u32 out 0)
+  (u32 out (bc-program-globals program))
   (u32 out (length (bc-program-builtins program)))
   (for ([entry (in-list (bc-program-builtins program))])
     (str out (car entry))

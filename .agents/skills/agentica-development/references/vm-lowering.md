@@ -55,8 +55,8 @@ functions up by name.
 ## Gotchas
 
 - Module constants (format version 5, `docs/future/44-module-constants.md`
-  §44.8): the Globals section is only a `u32` slot count (at most 65,535; the
-  writer writes 0 until 44a2 lowers constants). `GLOBAL a bx` reads slot `bx`
+  §44.8): the Globals section is only a `u32` slot count (at most 65,535, else
+  `BYTECODE-LIMIT`; `ir-program-globals`). `GLOBAL a bx` reads slot `bx`
   into `R[a]` and `GLOBAL_SET a bx` writes it. The loader allows `GLOBAL_SET`
   only in the entry function, and only in a function with no backward jump, and
   when the count is above zero it rejects any `CALL`, `TAIL_CALL` or `CLOSURE`
@@ -64,6 +64,27 @@ functions up by name.
   call). So a lowering that emits them must put every `GLOBAL_SET` in straight
   line code of the entry (`<start>`), which ends with a tail call of `main`,
   and must never call `<start>` or take `&<start>`.
+- How `src/lower.rkt` lowers constants (44a2-2). The linked program is flat, so
+  `plan-constants` in `src/constants.rkt` decides from the call graph: the
+  functions reachable from `main` (calls, `&f`, blocks) keep the constants they
+  read, and the constants those read; only kept constants are initialized. A
+  scalar literal constant (one literal, or `-` and a number) is a `CONST` at
+  each read and has no slot. Every other constant that any emitted function
+  reads gets a slot, numbered in initialization order (`constant-order`), so an
+  unreachable function still loads; a slot nothing writes stays unset, and
+  nothing can run the function that reads it. A kept constant is a function
+  with no parameters named by its linked name whose body is `return <value>`.
+  The function table is: the declared functions in program order, the kept
+  constants' functions in initialization order, `<start>`, then the block
+  functions in the order they are lowered (functions first, then constants).
+  `<start>` exists whenever the Globals count is above zero, even with no kept
+  constant, so the entry is never `main` when slots exist (the loader would
+  reject a call of `main` inside `main`); it starts with a `step` and ends with
+  `return` after the tail call, as the loader wants of every function. A read
+  is `step` and `global`; `--dump-ir` shows `globals N` and `g<slot>`. An error
+  in an initializer shows the constant's function, then `<start>`, in the
+  stack trace (`tests/fixtures/vm/constants-error`). The Agentica lowering of
+  step 5 must produce the same table and the same bytes.
 - Typed JSON: `user-tables` in `src/lower.rkt` gives each `ir-struct` its
   JSON field types when the struct is decodable (greatest fixpoint, so
   recursive structs stay in), and `src/bytecode.rkt` interns them into the

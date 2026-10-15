@@ -39,7 +39,8 @@ Each line is a function and the place it runs: the error for the first, the call
 | `PARSE-TOP-LEVEL-STATEMENT` | a statement outside a function (put it in `def main() -> Void`), or an extra `end` (a stray `else` or `elsif` has no matching `if`) |
 | `PARSE-CHAINED-COMPARISON` | `a < b < c` |
 | `PARSE-TOO-DEEP` | more than 1,000 levels of nesting (parentheses, brackets, blocks, statements, prefix operators, type arguments), or chains of operators or `.` suffixes counted as levels too (what follows the k-th link of a chain is k levels deeper); split the code into functions or bindings |
-| `PARSE-INVALID-ASSIGNMENT-TARGET` | assignment to an index or field |
+| `PARSE-INVALID-ASSIGNMENT-TARGET` | assignment to an index or field, or to a constant inside a function (constants never change) |
+| `PARSE-CONSTANT-NAME` | a top-level `Name = ...` whose name is not capitals, digits and `_` of two or more characters; the help gives `MAX_DEPTH` for `MaxDepth` |
 | `PARSE-PIPE-TARGET` | the right side of `\|>` is not a call written with parentheses (a bare name, field, index, `f(1).g`, `(U.f)`, `U.f do ... end`); wrap the pipe in parentheses and use `.` on the result. The call may follow `try` and take a trailing block. `a + 1 \|> f()` is `f(a + 1)`; put a multi-line chain in parentheses, one `\|>` per line |
 | `CHECK-TYPE-MISMATCH` | a value, operand, condition, argument, or return has the wrong type; also printing or interpolating a value without `to_s` (a function, task or handle). Int with Float: `n.to_f`, `x.to_i!`; String with a number: `s.to_i!`, `n.to_s`; `<` on Strings: only numbers are ordered |
 | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD` | a name, type, or field that does not exist (`continue` says `next`; `Map.new` says `m: Map[String, Int] = {}`); also a field that `value.with(...)` names but the struct lacks |
@@ -57,8 +58,12 @@ Each line is a function and the place it runs: the error for the first, the call
 | `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`, `CHECK-UNREACHABLE-CASE-ARM` | a pattern that does not fit the value, a `case` missing variants or `_`, an arm already covered |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
 | `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE` | a `Set` element type that is not `Int` or `String`; `Set.new([])` with no expected type: annotate it, `s: Set[Int] = Set.new([])` |
-| `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` | Missing/unreadable import, invalid path (including a path with `.agc` or another extension), cycle, or unknown/private imported name; for a misspelled name the help suggests the closest export (`did you mean "name"?`); a struct that its module keeps private cannot be constructed or updated with `.with` from another module |
-| `CHECK-DECL-ORDER` | a declaration out of the file order (imports, `struct`/`enum`, `export def`, `def`): a type after a function, a private `def` before an `export def`, an `import` after a declaration; move it to its group |
+| `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` | Missing/unreadable import, invalid path (including a path with `.agc` or another extension), cycle, or unknown/private imported name; for a misspelled name the help suggests the closest export (`did you mean "name"?`); a struct that its module keeps private cannot be constructed or updated with `.with` from another module; `Mod.NAME` on a constant is also `CHECK-IMPORT-NAME` (write `import {NAME} from "path"`) |
+| `CHECK-IMPORT-RENAME` | `import {A as b}` where the new name breaks the case rule of what it renames: a struct or enum gets a capitalized name, a function a lowercase one, a constant a constant name (capitals and underscores) |
+| `CHECK-CONSTANT-EXPRESSION` | a constant uses a call of your own function, `&f`, a block outside a builtin call, `while`, or a builtin with effects; compute it in a function instead |
+| `CHECK-CONSTANT-TYPE` | a constant expression has a type that is not data (`Channel`, `Task`, `Fn`, handles, `Void`) |
+| `CHECK-CONSTANT-CYCLE` | constants that read each other in a loop; the help lists `A -> B -> A` |
+| `CHECK-DECL-ORDER` | a declaration out of the file order (imports, constants, `struct`/`enum`, `export def`, `def`): a type after a function, a private `def` before an `export def`, an `import` after a declaration; move it to its group |
 | `CHECK-MODULE-CONTEXT` | Raw import/export declarations need module resolution before checking |
 | `CHECK-NOT-DECODABLE` | JSON.decode/schema target is not a struct or contains unsupported field types |
 | `CHECK-NOT-ENCODABLE` | JSON.encode on a type with unsupported nested values or Int-keyed maps |

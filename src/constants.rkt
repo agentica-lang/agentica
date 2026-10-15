@@ -9,7 +9,9 @@
 (provide node-children
          constant-references
          constant-order
-         cycle-text)
+         cycle-text
+         (struct-out constant-plan)
+         plan-constants)
 
 ;; The expressions and statements directly below a node, in source order. Literals and names have none.
 (define (node-children node)
@@ -87,3 +89,88 @@
 ;; A -> B -> A, with the names as written.
 (define (cycle-text names)
   (string-join (map display-name names) " -> "))
+
+;; What the lowering does with the constants of a program (44.7, 44.8).
+;; kept: the constants to initialize, in initialization order. slots: linked name -> slot, for every
+;; non-literal constant that an emitted function reads, numbered in initialization order; its size is the
+;; Globals count. literals: linked name -> value, for the constants with a scalar literal initializer,
+;; which are inlined at each read and have no slot.
+(struct constant-plan (kept slots literals) #:transparent)
+
+;; The value of a scalar literal initializer (one literal, or `-` and a number literal) in a box, or #f.
+(define (literal-value-box declaration)
+  (define value (const-decl-value declaration))
+  (cond
+    [(literal? value) (box (literal-value value))]
+    [(and (unary? value) (eq? (unary-op value) 'minus)
+          (literal? (unary-operand value))
+          (real? (literal-value (unary-operand value))))
+     (box (- (literal-value (unary-operand value))))]
+    [else #f]))
+
+;; The names of the constants, the functions and the function references below a node, in the order found.
+(define (names-below node)
+  (define constants '())
+  (define functions '())
+  (let walk ([node node])
+    (cond
+      [(list? node) (for-each walk node)]
+      [(const-ref? node) (set! constants (cons (const-ref-name node) constants))]
+      [(call? node) (set! functions (cons (call-name node) functions))]
+      [(function-ref? node) (set! functions (cons (function-ref-name node) functions))])
+    (unless (list? node) (for-each walk (node-children node))))
+  (values (reverse constants) (reverse functions)))
+
+;; Decides which constants are initialized and which get a slot. The functions reachable from main (by
+;; calls, `&f` and the blocks inside, to a fixed point) decide the kept constants, then the constants those
+;; read; a slot is given to every non-literal constant that any emitted function reads, reachable or not,
+;; so the code of an unreachable function still loads. `order` is the initialization order of the program's
+;; constants; functions are the function-decls and constants the const-decls, in program order.
+(define (plan-constants functions constants order)
+  (define by-name (for/hash ([declaration (in-list constants)]) (values (const-decl-name declaration) declaration)))
+  (define literals
+    (for*/hash ([declaration (in-list constants)]
+                [found (in-value (literal-value-box declaration))]
+                #:when found)
+      (values (const-decl-name declaration) (unbox found))))
+  (define function-by-name
+    (for/hash ([declaration (in-list functions)]) (values (function-decl-name declaration) declaration)))
+  (define (reads-of declaration)
+    (names-below (if (const-decl? declaration) (const-decl-value declaration) (function-decl-body declaration))))
+  (define (non-literal names) (filter (lambda (name) (not (hash-has-key? literals name))) names))
+  ;; The reachable functions.
+  (define reached (make-hash))
+  (define reached-reads '())
+  (let loop ([pending (list "main")])
+    (unless (null? pending)
+      (define name (car pending))
+      (cond
+        [(or (hash-ref reached name #f) (not (hash-has-key? function-by-name name))) (loop (cdr pending))]
+        [else
+         (hash-set! reached name #t)
+         (define-values (constant-names function-names) (reads-of (hash-ref function-by-name name)))
+         (set! reached-reads (append (reverse constant-names) reached-reads))
+         (loop (append function-names (cdr pending)))])))
+  ;; The constants those functions keep, then the ones those constants read.
+  (define kept-set (make-hash))
+  (let loop ([pending (non-literal (reverse reached-reads))])
+    (unless (null? pending)
+      (define name (car pending))
+      (cond
+        [(hash-ref kept-set name #f) (loop (cdr pending))]
+        [else
+         (hash-set! kept-set name #t)
+         (define-values (constant-names function-names) (reads-of (hash-ref by-name name)))
+         (loop (append (non-literal constant-names) (cdr pending)))])))
+  ;; Every function is emitted, so every constant any of them reads needs a slot.
+  (define slot-set (make-hash))
+  (for ([name (in-hash-keys kept-set)]) (hash-set! slot-set name #t))
+  (for ([declaration (in-list functions)])
+    (define-values (constant-names function-names) (reads-of declaration))
+    (for ([name (in-list (non-literal constant-names))]) (hash-set! slot-set name #t)))
+  (define kept (filter (lambda (declaration) (hash-ref kept-set (const-decl-name declaration) #f)) order))
+  (define slots
+    (for/hash ([declaration (in-list (filter (lambda (declaration) (hash-ref slot-set (const-decl-name declaration) #f)) order))]
+               [index (in-naturals)])
+      (values (const-decl-name declaration) index)))
+  (constant-plan kept slots literals))

@@ -1,0 +1,9 @@
+check failed: 1 error
+
+[RUNTIME-INDEX-OUT-OF-RANGE]
+  message: index 7 is outside a list of length 3
+  at: @fixtures/vm/constants-error.agc:2:13
+  source: BAD = FIRST[7]
+  stack:
+    BAD at @fixtures/vm/constants-error.agc:2:13
+    <start> at @fixtures/vm/constants-error.agc:2:1

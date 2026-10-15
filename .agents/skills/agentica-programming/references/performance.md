@@ -16,10 +16,14 @@ ms = (Time.monotonic_ns() - start) / 1000000
 
 ## Lookup tables
 
-Build a `Set` or `Map` once per call, then test it with `include?` or `get`,
-instead of a chain of comparisons. On 900,000 characters, a `Set[String]` test
-took 185 ms against 400 ms for an `or` chain of five comparisons, and a
-`Set[Int]` test took 205 ms against 305 ms [measured, three runs].
+Build a `Set` or `Map` once, then test it with `include?` or `get`, instead of
+a chain of comparisons. A table that does not depend on the arguments belongs
+in a module constant (`VOWELS = Set.new(["a", "e", "i", "o", "u"])` at the top
+of the file): it is built once before `main`, not on every call, and a read is
+one array access. Build it in the function only when it depends on the input.
+On 900,000 characters, a `Set[String]` test took 185 ms against 400 ms for an
+`or` chain of five comparisons, and a `Set[Int]` test took 205 ms against
+305 ms [measured, three runs].
 
 The lexer rewrite of PR #255 cut time by 13% to 32% against master. That gain
 is the whole rewrite (tables and a `while` loop), not the tables alone: 1 MB of

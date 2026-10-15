@@ -12,6 +12,7 @@
   '(("vm/stack-trace-nested" ())
     ("vm/stack-trace-main" ())
     ("vm/stack-trace-import" ())
+    ("vm/constants-error" ())
     ("vm/stack-trace-block" ())
     ("vm/stack-trace-tail" ())
     ("vm/stack-trace-recursion" ())
