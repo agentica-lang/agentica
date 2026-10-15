@@ -63,7 +63,8 @@ comment), then a step that calls it. Targets that are not obvious:
   mode (`docs/vm/15-layers.md` §15.5) and its self-test. A new `vm/*.c` file
   goes in one list of the script.
 - `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
-  Racket tests that run against the VM in the sanitizer job. They and
+  Racket tests (`VM_RKT_TESTS`) and the unittest modules (`VM_PY_TESTS`, run
+  with `make test-py`) that run against the VM in the sanitizer job. They and
   `vm-diff-test` do not depend on `vm` on purpose: they test the VM that an
   earlier step built.
 - `vm-diff-build` and `vm-diff-test` are the golden tests; `sweep-full` runs
@@ -195,7 +196,7 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   pull requests. PR jobs can write to that volume, so the release sets
   `CCACHE=` (in the job env and on the `make` line) and never uses it.
 - `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`, and
-  `make vm-sanitize-test` runs `raco test -j 4`. `make vm-test` and `make vm-lint` run their C tests
+  `make vm-sanitize-test` runs `raco test -j 4` and then the Python modules. `make vm-test` and `make vm-lint` run their C tests
   and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and

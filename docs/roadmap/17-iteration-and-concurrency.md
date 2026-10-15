@@ -88,7 +88,7 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   cases that need `Task.map` move to 17a's PR, where `Task.map` exists: the two
   `RUNTIME-TASK-CANCELLED` cases and the `Task.map` form of the hand-off case.
   17b keeps the deterministic C test of the hand-off, and its socket case goes
-  in its own file, `tests/vm-channel-test.rkt`. `Channel.new(capacity)`,
+  in its own file, `tests/test_vm_channel.py`. `Channel.new(capacity)`,
   `send(value, timeout_ms) -> Result[Void]`, `recv(timeout_ms) -> Result[T]`,
   `close`, `closed?` (closed, buffer empty, no reservation outstanding); bounded
   only (capacity 1 to 1,048,576), FIFO, required timeouts (0 means do not wait),
@@ -112,7 +112,7 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   `vm/tests/task_cancel_test.c`, the deterministic C test of the hand-off (a
   woken receiver is cancelled and the next one is still served), the C tests of
   the two late-reservation races with `close`, and, in
-  `tests/vm-channel-test.rkt`, a socket handed to a worker against a Python TCP
+  `tests/test_vm_channel.py`, a socket handed to a worker against a Python TCP
   counterpart on port 0. Docs: `grammar.md` (channels, reserved names, §7
   hints), `references/tasks.md` (the canonical receive loop, pipeline, fan-in (a
   coordinator awaits all sources, then closes) and owner-task patterns, and the
@@ -126,7 +126,7 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   keeps only its open questions. Done: `vm/channel.c`, the checker and catalog
   rules, `CHECK-EXPECTED-TYPE` and `RUNTIME-TASK-AWAIT-CYCLE`, the hints, nine
   golden fixtures, `vm/tests/channel_test.c` and the channel case of
-  `task_cancel_test.c`, `tests/vm-channel-test.rkt`, and
+  `task_cancel_test.c`, `tests/test_vm_channel.py`, and
   `site/content/library/concurrency/channel.md`. A value that goes back to a
   full ring may make it hold more than its capacity until receivers take values;
   a waiter whose timer fired still takes a value that reached the ring before it
