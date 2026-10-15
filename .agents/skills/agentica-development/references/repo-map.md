@@ -141,7 +141,7 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   frontend-check-common.rkt  # the checker text form (types, resolutions, diagnostic notes) printed from src/checker.rkt, and its goldens (references/frontend.md)
   frontend-check-test.rkt  # fast: generated tables, goldens, every CHECK- code and rule; slow: both checkers on the corpus, mutants, deep trees, a large program
   test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
-  filesystem-test.rkt  # File and Path programs on the VM (references/vm-io.md)
+  test_filesystem.py  # unittest: File and Path programs on the VM (references/vm-io.md)
   cli-in-process.rkt  # helper: runs src/main.rkt in process for CLI tests
   info.rkt        # the Racket package info: lists the tests the runner omits
   vm-diff-common.rkt  # the golden harness: fixtures, sidecars, sweeps (references/vm-build.md)

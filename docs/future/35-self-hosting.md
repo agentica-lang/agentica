@@ -733,7 +733,8 @@ in rackunit until phase 3.
   style check, 13 cases), then the network tests (PR #266: TCP, HTTP and TLS,
   19 cases), the VM I/O tests (PR #267: stdout, stop signals and
   `File.each_line`, 35 cases) and the process, BDD and BDD integration tests
-  (PR #269: 26 fast cases and 5 slow ones, which run the CLI as a child).
+  (PR #269: 26 fast cases and 5 slow ones, which run the CLI as a child) and
+  the file system tests (PR #274: 21 cases).
   `tests/vm-stack-test.rkt` stays, because `make goldens` writes its sidecars.
   `tests/unit-test-test.rkt` waits for phase 2: it calls
   `run-agentica-test` of `src/bdd-driver.rkt` to set a test timeout that the CLI

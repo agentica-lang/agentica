@@ -312,6 +312,19 @@ class Child:
             thread.join(5)
         return code
 
+    def stdout_text(self):
+        """The stdout lines that next_line() has not returned, as text (call after wait(), when the reader has ended)."""
+        lines = []
+        while True:
+            try:
+                line = self._lines.get_nowait()
+            except queue.Empty:
+                break
+            if line is None:
+                break
+            lines.append(line)
+        return "".join(lines)
+
     def stderr_text(self):
         """What the child wrote to stderr (capture_stderr=True; call after wait())."""
         return "".join(self._stderr)
