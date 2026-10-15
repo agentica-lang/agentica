@@ -55,15 +55,7 @@
     (define text (file->string (path->complete-path path root)))
     (check-equal? (hash-ref outputs path #f) (string-append (lexer-text text) "\n") path)))
 
-(define (with-bytecode proc)
-  (define work (make-temporary-directory "agentica-frontend~a"))
-  (dynamic-wind
-    void
-    (lambda ()
-      (define bytecode (build-path work "lex.agcb"))
-      (compile-file entry bytecode)
-      (proc work bytecode))
-    (lambda () (delete-directory/files work))))
+(define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
 
 (module+ test
   (define inputs (lexer-inputs))

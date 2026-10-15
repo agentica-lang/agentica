@@ -250,7 +250,7 @@ Notes:
 | Write binary `.agcb` output | Known, ready | Agentica has no byte type: `Bytes` is deferred (§12.5, §23.1), and bytes are `List[Int]`, written with `File.write_bytes` (1 MiB per call). An `Int` as 8 two's-complement bytes and a `Float` as its IEEE bits are `std/binary` (§23: `Binary.write_i64_be`, `Binary.write_f64_le`, `Binary.concat`), built on the `Int` and `Float` bit builtins; phase 13 (row 7.2.4 of the order) is done. To check: a 2 MB `.agcb` as `List[Int]` is 32 MB of values; if that is too slow or too big for the start-up target, `Bytes` becomes a prerequisite. |
 | Process spawning for the BDD driver | Partly known | `Process.spawn_captured` exists (21a), and the environment builtin above reads `AGENTICA_VM` and `TMPDIR`. To check, one by one: a child environment without `AGENTICA_VM_METRICS*`, a private 0700 temporary directory with an `flock`'d lock, the `TMPDIR` mode check, an `lstat`-like builtin, the process's own PID, file modes for 0600 writes, and builtins that delete a file and remove a directory tree (`src/bdd-driver.rkt`). Each missing one is an OS builtin (exception 1). The path of the binary itself comes from C as an argument. |
 | Handing the program to the VM | Known, missing | `agentica file.agc` must run the compiled program without a temporary file. A new builtin returns the bytes to C. C frees the front end's runtime and loads the program in a new one, so the user program never sees the compiler's heap or tasks, and `--max-steps`, `--seed` and `--allow-run` apply only to it. A second builtin reads an embedded `std/` source. Both are guarded in C at run time: they fail unless the running program is the embedded front end, which C knows because it loaded that program itself (from its own data, or from `--front-end`, 35.3). A linker rule like the std-only `HttpWire` check cannot work here, because `compiler/` is not in `stdlib/`. |
-| Call depth | To check | The VM stops at call depth 10,000 (`RUNTIME-STACK-OVERFLOW`, `docs/vm/05-values-execution-builtins.md` §6.1). A recursive-descent parser or checker on deeply nested input can reach it where Racket does not. Use explicit stacks on the deep paths, or add a `PARSE-` nesting limit (a diagnostic change, decided in step 2). **Decided in step 2:** both parsers stop with `PARSE-TOO-DEEP` past 1,000 levels (about 5 VM frames per level). |
+| Call depth | To check | The VM stops at call depth 10,000 (`RUNTIME-STACK-OVERFLOW`, `docs/vm/05-values-execution-builtins.md` §6.1). A recursive-descent parser or checker on deeply nested input can reach it where Racket does not. Use explicit stacks on the deep paths, or add a `PARSE-` nesting limit (a diagnostic change, decided in step 2). **Decided in step 2:** both parsers stop with `PARSE-TOO-DEEP` past 1,000 levels (up to about 6 VM frames per level). It bounds the parser's calls, not the depth of its tree (see 35.9). |
 | Speed | To check | The VM must run the front end on the largest corpus file within the start-up target (35.2), including loading and validating the embedded `.agcb`. The JIT (7m) is not required if the numbers hold. Compiling `compiler/` itself is a build step and has no target, but its time is recorded. |
 | Stack traces | Known, planned | A crash inside the compiler must show where it happened in `compiler/`. 14b (row 7.2.5 of the order, before the freeze) gives runtime errors a stack trace. |
 
@@ -369,10 +369,19 @@ goldens are in `tests/fixtures/frontend/parser/`. Notes:
   need a second pass. Map keys stay `Int`.
 - Nesting limit: `PARSE-TOO-DEEP` at 1,000 levels in both parsers (a parser
   rule in `src/`, allowed by the owner's relaxed freeze defaults of
-  2026-10-15). The Agentica parser overflows the VM stack at about 2,000
-  levels of calls or lists and at about 1,400 levels of blocks, so the limit
-  leaves a margin of two or more. Explicit stacks were not needed. Racket
-  alone handled one million nested parentheses.
+  2026-10-15). A chain operator or suffix counts a level, and what follows the
+  k-th link of a chain starts k levels deeper. With the limit raised, the
+  Agentica parser overflows the VM stack at: `Result.Ok(` or `M.f(` nested
+  1,665 levels, `f(` or lists 1,998, parentheses or interpolations 2,498,
+  `if` 3,328, `case` 4,992, `do` blocks 1,427 (4 counted levels each, so 249
+  fit under the limit). The tightest margin is 1.7 times. Explicit stacks
+  were not needed. Racket alone handled one million nested parentheses.
+  The limit bounds the parser's calls, not the depth of the tree: the right
+  operand of the first link of a chain hangs below the whole chain, so nested
+  chains give deeper trees (1,990 levels for two nested chains, 89,000 for
+  100). The checker of step 4 must not assume the tree is less than 1,000
+  levels deep; it needs an explicit stack or its own depth check on the
+  deep paths.
 - Measured on `stdlib/bdd/gherkin.agc` (4,354 tokens): the Agentica parser
   takes 15 ms on the VM after the 37 ms of the lexer, so the front end so far
   uses 53 ms of the 100 ms budget of `check`. Printing the tree takes 28 ms
@@ -382,5 +391,4 @@ goldens are in `tests/fixtures/frontend/parser/`. Notes:
   groups parse in linear time.
 - The Agentica parser matches the Racket parser on the 285 files of
   `examples/`, `stdlib/` and `tests/fixtures/vm/`, on 300 generated inputs and
-  on the 241 goldens.
-
+  on the 250 goldens.

@@ -165,9 +165,9 @@
     [(type-expression? node) (values "type-expression" (name-attr (type-expression-name node)) '())]
     [else (error 'parser-text "unexpected node ~s" node)]))
 
-(define (number-nodes root docs)
+(define (number-nodes root docs first-id)
   (define ids (make-hasheq))
-  (define counter 0)
+  (define counter first-id)
   (let walk ([node root])
     (define-values (kind attrs children) (shape node docs))
     (let visit ([children children])
@@ -181,9 +181,9 @@
     (set! counter (add1 counter)))
   ids)
 
-(define (program-lines program)
+(define (program-lines program first-id)
   (define docs (program-docs program))
-  (define ids (number-nodes program docs))
+  (define ids (number-nodes program docs first-id))
   (define out '())
   (define (emit! line) (set! out (cons line out)))
   (let walk ([node program] [role #f] [indent ""])
@@ -201,7 +201,7 @@
           [else (walk item (car child) indent)]))))
   (reverse out))
 
-(define (parser-text text)
+(define (parser-text text #:first-id [first-id 0])
   (define tokens (lex (source "input.agc" text)))
   (cond
     [(diagnostic? tokens) (diagnostic-line tokens)]
@@ -209,7 +209,7 @@
      (define program (parse tokens))
      (if (diagnostic? program)
          (diagnostic-line program)
-         (string-join (program-lines program) "\n"))]))
+         (string-join (program-lines program first-id) "\n"))]))
 
 (define (parser-inputs)
   (for/list ([file (in-list (sort (directory-list fixtures) path<?))]

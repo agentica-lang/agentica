@@ -43,6 +43,7 @@ phase 13).
 - `make test TESTS="tests/lexer-test.rkt"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
 - `racket src/main.rkt file.agc` runs a program; `... check file.agc` checks.
+- `make test-slow`: the `(module+ slow ...)` cases; CI only.
 - `make smoke`, `make goldens` (rewrite the VM and front-end goldens; commit
   them), `make site` (before merging a site change).
 - CI steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are make

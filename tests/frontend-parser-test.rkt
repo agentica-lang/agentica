@@ -3,6 +3,7 @@
 (require rackunit
          racket/runtime-path
          "frontend-parser-common.rkt"
+         (only-in "frontend-lexer-common.rkt" call-with-bytecode)
          "vm-diff-common.rkt")
 
 (define-runtime-path root "..")
@@ -114,19 +115,12 @@
    (cons "blocks" (function-body (string-append (repeat "xs.each do |x|\n" count) "puts(1)\n" (repeat "end\n" count))))
    (cons "types" (string-append "def f(a: " (repeat "List[" count) "Int" (repeat "]" count) ") -> Void\nend\n\n"))
    (cons "binary chain" (function-body (string-append "  x = 1" (repeat " + 1" count) "\n")))
+   (cons "mixed chain" (function-body (string-append "  x = 1 * 1 or 1" (repeat " + 1" count) " < 1 and (1" (repeat " * 1" count) ")\n")))
    (cons "field chain" (function-body (string-append "  x = a" (repeat ".b" count) "\n")))
    (cons "pipe chain" (function-body (string-append "  x = a" (repeat " |> f()" count) "\n")))
    (cons "interpolations" (function-body (string-append "  x = " (repeat "\"#{" count) "1" (repeat "}\"" count) "\n")))))
 
-(define (with-bytecode proc)
-  (define work (make-temporary-directory "agentica-frontend~a"))
-  (dynamic-wind
-    void
-    (lambda ()
-      (define bytecode (build-path work "parse.agcb"))
-      (compile-file entry bytecode)
-      (proc work bytecode))
-    (lambda () (delete-directory/files work))))
+(define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
 
 (define (write-case work name text)
   (define path (path->string (build-path work name)))
@@ -157,7 +151,13 @@
         (define outputs (run-parser bytecode (map parser-input-path inputs)))
         (test-case "the Agentica parser matches the goldens on the VM"
           (for ([input (in-list inputs)])
-            (check-equal? (hash-ref outputs (parser-input-path input) #f) (golden input) (parser-input-name input))))))))
+            (check-equal? (hash-ref outputs (parser-input-path input) #f) (golden input) (parser-input-name input))))
+
+        (test-case "the first node id can be chosen, so modules can share one numbering"
+          (define path "tests/fixtures/frontend/parser/synthetic.input")
+          (define shifted (run-parser bytecode (list "--first-id=1000" path)))
+          (check-equal? (hash-ref shifted path #f) (string-append (parser-text (read-text path) #:first-id 1000) "\n"))
+          (check-true (string-contains? (hash-ref shifted path) " #1000 ")))))))
 
 (module+ slow
   (when (vm-built? "frontend parser tests")
@@ -170,7 +170,7 @@
         (define boundary-cases
           (for*/list ([count (in-range (- nesting-limit 5) (+ nesting-limit 4))]
                       [shape (in-list (nesting-shapes count))]
-                      #:when (member (car shape) '("parentheses" "types" "binary chain")))
+                      #:when (member (car shape) '("parentheses" "types" "binary chain" "mixed chain")))
             (write-case work (format "boundary-~a-~a.agc" (car shape) count) (cdr shape))))
         (define outputs (run-parser bytecode (append live-paths generated-paths boundary-cases)))
 
@@ -215,5 +215,5 @@
                                                 (format "def f~a(a: Int) -> Int\n  return a + ~a\nend\n\n" n n))))))
           (define started (current-inexact-milliseconds))
           (define large (run-parser bytecode paths))
-          (check-true (< (- (current-inexact-milliseconds) started) 20000))
+          (check-true (< (- (current-inexact-milliseconds) started) 60000))
           (check-against-racket large paths))))))

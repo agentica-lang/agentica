@@ -17,8 +17,12 @@ def head(indent: String, role: String, kind: String, id: Int, span: Source.Span,
 end
 
 def doc_attr(doc: Ast.Optional[String]) -> String
+  return text_attr(" doc=", doc)
+end
+
+def text_attr(label: String, doc: Ast.Optional[String]) -> String
   case doc
-    Ast.Optional.Present(text) -> return " doc=" + Text.quote(text)
+    Ast.Optional.Present(text) -> return label + Text.quote(text)
     Ast.Optional.Absent -> return ""
   end
 end
@@ -300,7 +304,7 @@ def print_decl(out: List[String], indent: String, role: String, decl: Ast.Decl) 
 end
 
 def print_program(program: Ast.Program) -> List[String]
-  lines: List[String] = [head("", "", "program", program.id, program.span, doc_attr(program.module_doc).replace(" doc=", " module-doc="))]
+  lines: List[String] = [head("", "", "program", program.id, program.span, text_attr(" module-doc=", program.module_doc))]
   for decl in program.declarations
     lines = print_decl(lines, "  ", "declaration", decl)
   end
@@ -309,10 +313,15 @@ end
 
 ## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node per line: `role: kind #id span attributes`, children indented by two spaces. tests/frontend-parser-common.rkt prints the same text from the Racket tree.
 export def parse_text(text: String) -> String
+  return parse_text_from(text, 0)
+end
+
+## Like parse_text, with the ids of the nodes starting at first_id.
+export def parse_text_from(text: String, first_id: Int) -> String
   case Lexer.lex(text)
     Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
     Diag.Outcome.Done(tokens) ->
-      case Parser.parse(tokens)
+      case Parser.parse(tokens, first_id)
         Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
         Diag.Outcome.Done(program) -> return print_program(program).join("\n")
       end

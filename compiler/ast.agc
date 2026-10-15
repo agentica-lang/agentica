@@ -1,6 +1,6 @@
 ## The syntax tree of the Agentica parser: the nodes of src/ast.rkt as structs and enums.
 ##
-## Every node has an Int id and a span. The parser numbers the nodes in post-order: a node's children have smaller ids than the node, siblings are numbered in source order, the first id is 0, there are no gaps, and the Program has the last one. The checker keys its types by id, because Agentica has no object identity.
+## Every node has an Int id and a span. The parser numbers the nodes in post-order: a node's children have smaller ids than the node, siblings are numbered in source order, the first id is the one given to the parser (0 for a single file), there are no gaps, and the Program has the last one. To number the modules of one program without renumbering, parse the next file from next_free_id of the previous Program. The checker keys its types by id, because Agentica has no object identity.
 ##
 ## Docs (`##` comments) are a field of the declaration, field or variant they document, not a table keyed by span.
 
@@ -36,6 +36,11 @@ export struct Program
   declarations: List[Decl]
   module_doc: Optional[String]
   span: Source.Span
+end
+
+## The first id the next file can use: one more than the id of the Program.
+export def next_free_id(program: Program) -> Int
+  return program.id + 1
 end
 
 ## A top-level declaration.

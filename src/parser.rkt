@@ -97,13 +97,19 @@
             (current)
             #:help "split the code into smaller functions or simpler expressions"))
 
+;; One counter bounds the calls of the parser and the depth of the tree: a statement, an expression,
+    ;; a prefix operator and a type count one level, and so does each link of a chain (a + b + c, a.b.c).
+    ;; Everything parsed after the k-th link of a chain (its right operand, arguments, index or block)
+    ;; starts from the level the chain started at plus k. A loop that makes links restores the level when it ends.
     (define (nested thunk)
-      (when (>= nesting nesting-limit) (too-deep))
-      (set! nesting (add1 nesting))
-      (begin0 (thunk) (set! nesting (sub1 nesting))))
+      (define saved nesting)
+      (when (>= saved nesting-limit) (too-deep))
+      (set! nesting (add1 saved))
+      (begin0 (thunk) (set! nesting saved)))
 
-    (define (check-links! links)
-      (when (> (+ nesting links) nesting-limit) (too-deep)))
+    (define (link! base links)
+      (when (> (+ base links) nesting-limit) (too-deep))
+      (set! nesting (+ base links)))
 
     (define (brace-help form)
       (format "blocks have no braces: write \"~a\" ... \"end\"" form))
@@ -701,15 +707,18 @@
 
     (define (parse-left-assoc kinds parse-operand)
       (define start (current))
+      (define base nesting)
       (let loop ([left (parse-operand)] [links 0])
-        (if (memq (token-kind (current)) kinds)
-            (let ()
-              (check-links! (add1 links))
-              (let* ([operator (advance!)]
-                     [right (parse-operand)])
-                (loop (binary (token-kind operator) (token-span operator) left right (span-from start))
-                      (add1 links))))
-            left)))
+        (cond
+          [(memq (token-kind (current)) kinds)
+           (link! base (add1 links))
+           (let* ([operator (advance!)]
+                  [right (parse-operand)])
+             (loop (binary (token-kind operator) (token-span operator) left right (span-from start))
+                   (add1 links)))]
+          [else
+           (set! nesting base)
+           left])))
 
     (define (parse-or) (parse-left-assoc '(or) parse-and))
 
@@ -744,10 +753,11 @@
         [else left]))
 
     (define (parse-pipe)
+      (define base nesting)
       (let loop ([left (parse-additive)] [links 0])
         (cond
           [(kind? 'pipe-forward)
-           (check-links! (add1 links))
+           (link! base (add1 links))
            (advance!)
            (define right-start (current))
            (define right (parse-additive))
@@ -767,7 +777,9 @@
                                    right-span
                                    #:help "wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!"))])
             (add1 links))]
-          [else left])))
+          [else
+           (set! nesting base)
+           left])))
 
     (define (parse-additive) (parse-left-assoc '(plus minus) parse-multiplicative))
 
@@ -788,10 +800,11 @@
 
     (define (parse-postfix)
       (define start (current))
+      (define base nesting)
       (let loop ([target (parse-primary)] [links 0])
         (cond
           [(kind? 'dot)
-           (check-links! (add1 links))
+           (link! base (add1 links))
            (advance!)
            (define name (expect 'name "a field or method name" #t))
            (cond
@@ -805,7 +818,7 @@
                     (add1 links))]
              [else (loop (field-access target (token-lexeme name) (span-from start)) (add1 links))])]
           [(kind? 'left-bracket)
-           (check-links! (add1 links))
+           (link! base (add1 links))
            (advance!)
            (define index (with-blocks #t parse-expression))
            (expect 'right-bracket "\"]\"")
@@ -823,7 +836,7 @@
                            (format "to call a function, add parentheses: ~a() do ... end; an if condition ends with a newline, not do"
                                    (name-ref-name target))]))]
           [(and allow-blocks (kind? 'do) (or (call? target) (method-call? target) (field-access? target)))
-           (check-links! (add1 links))
+           (link! base (add1 links))
            (define block (parse-block-lit))
            (loop
             (cond
@@ -841,7 +854,9 @@
                (method-call (field-access-target target) (field-access-name target)
                             (list block) (span-from start))])
             (add1 links))]
-          [else target])))
+          [else
+           (set! nesting base)
+           target])))
 
     (define (parse-block-lit)
       (define start (expect 'do "do"))

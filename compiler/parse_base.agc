@@ -66,7 +66,7 @@ struct BindingsAt
   pos: Int
 end
 
-## The deepest nesting the parser accepts (PARSE-TOO-DEEP beyond it). Each statement, expression, prefix operator and type level counts one, and so does each operator or suffix of a chain such as a + b + c or a.b.c. A level uses at most 5 VM calls, so the limit stays far below the VM limit of 10,000 (RUNTIME-STACK-OVERFLOW), and the tree is at most about this deep, so later passes can recurse on it. src/parser.rkt has the same limit.
+## The deepest nesting the parser accepts (PARSE-TOO-DEEP beyond it). Each statement, expression, prefix operator and type level counts one, and so does each operator or suffix (link) of a chain such as a + b + c or a.b.c: everything parsed after the k-th link of a chain (its right operand, arguments, index or block) starts from the depth of the chain plus k. The counter bounds the calls of the parser: a level uses about 6 VM calls at most (measured: `M.f(` nested overflows near 1,700 levels), so the limit stays below the VM limit of 10,000 (RUNTIME-STACK-OVERFLOW). It does not bound the depth of the tree: the right operand of the first link of a chain hangs below the whole chain, so nested chains build deeper trees, and a pass that recurses on the tree needs its own stack or limit. src/parser.rkt has the same limit and counts the same way.
 export def nesting_limit() -> Int
   return 1000
 end
@@ -200,20 +200,27 @@ export def found(e: Env, at: Int, expected: String) -> String
   return unexpected(e, at, "expected " + expected + ", found " + describe(e.tokens[at]))
 end
 
-## Counts one more level of nesting; PARSE-TOO-DEEP when that passes nesting_limit.
-export def enter(e: Env, pos: Int) -> Result[Env]
-  if e.nesting >= nesting_limit()
-    return error(bail(e, pos, "PARSE-TOO-DEEP", "nesting is deeper than " + nesting_limit().to_s + " levels", hint("split the code into smaller functions or simpler expressions")))
-  end
-  return ok(Env(tokens: e.tokens, size: e.size, allow_blocks: e.allow_blocks, depth: e.depth, brace_at: e.brace_at, brace_form: e.brace_form, nesting: e.nesting + 1))
+# The PARSE-TOO-DEEP failure at the token at pos.
+def too_deep(e: Env, pos: Int) -> String
+  return bail(e, pos, "PARSE-TOO-DEEP", "nesting is deeper than " + nesting_limit().to_s + " levels", hint("split the code into smaller functions or simpler expressions"))
 end
 
-## Checks the nesting level plus the number of links of the chain being built (operators of one level, or suffixes after one primary); returns links.
-export def link(e: Env, pos: Int, links: Int) -> Result[Int]
-  if e.nesting + links > nesting_limit()
-    return error(bail(e, pos, "PARSE-TOO-DEEP", "nesting is deeper than " + nesting_limit().to_s + " levels", hint("split the code into smaller functions or simpler expressions")))
+## The context `levels` deeper than e; PARSE-TOO-DEEP when that passes nesting_limit. enter adds one level, deepen adds the k links of a chain so far.
+export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
+  if e.nesting + levels > nesting_limit()
+    return error(too_deep(e, pos))
   end
-  return ok(links)
+  return ok(Env(tokens: e.tokens, size: e.size, allow_blocks: e.allow_blocks, depth: e.depth, brace_at: e.brace_at, brace_form: e.brace_form, nesting: e.nesting + levels))
+end
+
+## Counts one more level of nesting; PARSE-TOO-DEEP when that passes nesting_limit.
+export def enter(e: Env, pos: Int) -> Result[Env]
+  return deepen(e, pos, 1)
+end
+
+## A failure for a state the grammar functions cannot reach, so that no code path needs a bare string error: PARSE-UNEXPECTED-TOKEN at the token at pos.
+export def impossible(e: Env, pos: Int) -> String
+  return unexpected(e, pos, "the parser cannot continue at " + describe(e.tokens[pos]))
 end
 
 def decorated?(lexeme: String) -> Bool

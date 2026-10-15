@@ -148,23 +148,33 @@ def chained_message(level: Int) -> String
 end
 
 # Precedence climbing over the binary levels of level_of, the same grammar as the chain of parse-or ... parse-multiplicative in src/parser.rkt. It parses the operators of level minimum and above, left to right. The operand on the right of a level L operator is parsed with minimum L + 1, so operators of one level group to the left. Equality and comparison do not chain: a second operator of the same level is PARSE-CHAINED-COMPARISON at that operator. Every binary node starts at the first token of the whole expression, as in the Racket parser.
-# links counts the operators of the current level in a row, for the nesting limit; the Racket parser counts the same in its loop for each level.
+# Nesting limit: src/parser.rkt has one loop per level, and in each loop the right operand of the k-th operator starts from the nesting of the loop plus k. Here one loop serves all levels, so run counts the operators of the current level in a row (the levels never rise inside the loop, because the right operand of a level L operator takes everything above L) and operand_env is the context for the right operand. Equality and comparison do not chain, so they add nothing.
 def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.ExprAt]
   first = try parse_unary(e, pos, ids)
   left = first.node
   cursor = first.pos
   next_id = first.ids
-  links = 0
+  run = 0
+  run_level = 0
   while true
     kind = e.tokens[cursor].kind
     level = level_of(kind)
     if level == 0 or level < minimum
       return ok(Base.ExprAt(node: left, pos: cursor, ids: next_id))
     end
-    links = try Base.link(e, cursor, links + 1)
+    operand_env = e
+    if level != 3 and level != 4
+      if level == run_level
+        run += 1
+      else
+        run = 1
+        run_level = level
+      end
+      operand_env = try Base.deepen(e, cursor, run)
+    end
     if level == 5
       right_start = cursor + 1
-      right = try parse_climb(e, right_start, next_id, 6)
+      right = try parse_climb(operand_env, right_start, next_id, 6)
       case pipe_insert(left, right.node)
         Ast.Optional.Present(node) ->
           left = node
@@ -174,7 +184,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
       cursor = right.pos
       next_id = right.ids
     else
-      right = try parse_climb(e, cursor + 1, next_id, level + 1)
+      right = try parse_climb(operand_env, cursor + 1, next_id, level + 1)
       following = level_of(e.tokens[right.pos].kind)
       if following == level and (level == 3 or level == 4)
         return error(Base.bail(e, right.pos, "PARSE-CHAINED-COMPARISON", chained_message(level), Diag.Help.NoHelp))
@@ -184,7 +194,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
       next_id = right.ids + 1
     end
   end
-  return error("unreachable")
+  return error(Base.impossible(e, cursor))
 end
 
 # try, - and not nest, so each one counts a level.
@@ -238,11 +248,11 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
     Ast.Expr.FieldAccess(access) ->
       node = Ast.Expr.MethodCall(Ast.MethodCall(id: block.ids, target: access.target, name: access.name, args: [block.node], span: span))
       return expr_at(node, block.pos, block.ids)
-    _ -> return error("unreachable")
+    _ -> return error(Base.impossible(e, cursor))
   end
 end
 
-# A primary followed by .name, .name(args), [index] and `do` blocks. `.call(args)` is an Invoke of a function value. A `do` after a plain name is an error with a help text, except where blocks are not allowed (case, while and for headers). Each suffix counts a link of the nesting limit.
+# A primary followed by .name, .name(args), [index] and `do` blocks. `.call(args)` is an Invoke of a function value. A `do` after a plain name is an error with a help text, except where blocks are not allowed (case, while and for headers). Each suffix is a link of the nesting limit: what follows the k-th suffix (arguments, index, block) is parsed k levels deeper.
 def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   first = try parse_primary(e, pos, ids)
   target = first.node
@@ -252,11 +262,12 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   while true
     kind = e.tokens[cursor].kind
     if kind == "dot"
-      links = try Base.link(e, cursor, links + 1)
+      links += 1
+      inner = try Base.deepen(e, cursor, links)
       after_name = try Base.expect(e, cursor + 1, "name", "a field or method name", true)
       name = e.tokens[cursor + 1].lexeme
       if e.tokens[after_name].kind == "left-paren"
-        args = try parse_expression_list(e, after_name + 1, next_id, "right-paren")
+        args = try parse_expression_list(inner, after_name + 1, next_id, "right-paren")
         close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
         span = Base.span_from(e, pos, close)
         if name == "call"
@@ -272,15 +283,17 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
         next_id += 1
       end
     elsif kind == "left-bracket"
-      links = try Base.link(e, cursor, links + 1)
-      index = try parse_expression(Base.with_blocks(e, true), cursor + 1, next_id)
+      links += 1
+      inner = try Base.deepen(e, cursor, links)
+      index = try parse_expression(Base.with_blocks(inner, true), cursor + 1, next_id)
       close = try Base.expect(e, index.pos, "right-bracket", "\"]\"", false)
       target = Ast.Expr.Index(Ast.IndexAccess(id: index.ids, target: target, index: index.node, span: Base.span_from(e, pos, close)))
       cursor = close
       next_id = index.ids + 1
     elsif kind == "do" and e.allow_blocks and block_target?(target)
-      links = try Base.link(e, cursor, links + 1)
-      attached = try attach_block(e, pos, target, cursor, next_id)
+      links += 1
+      inner = try Base.deepen(e, cursor, links)
+      attached = try attach_block(inner, pos, target, cursor, next_id)
       target = attached.node
       cursor = attached.pos
       next_id = attached.ids
@@ -290,7 +303,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       return ok(Base.ExprAt(node: target, pos: cursor, ids: next_id))
     end
   end
-  return error("unreachable")
+  return error(Base.impossible(e, cursor))
 end
 
 def name_target?(target: Ast.Expr) -> Bool
@@ -514,7 +527,7 @@ def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       return error(Base.unexpected(e, parsed.pos, "expected \"}\" to close the interpolation, found " + Base.describe(piece)))
     end
   end
-  return error("unreachable")
+  return error(Base.impossible(e, cursor))
 end
 
 def literal_node(token: Tokens.Token, value: Ast.LitValue, ids: Int) -> Ast.Expr
@@ -814,6 +827,8 @@ end
 
 # x += v is the binding x = x + v. The name node is numbered first so the ids stay in post-order: it is the left child of the binary node.
 def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
+  # A name ending in ? or ! is not a variable, so `foo? += 1` fails here as in src/parser.rkt.
+  after_name = try Base.expect(e, pos, "name", "a name", false)
   operator = e.tokens[pos + 1]
   target = Ast.Expr.Name(Ast.NameRef(id: ids, name: e.tokens[pos].lexeme, span: e.tokens[pos].span))
   value = try parse_expression(e, pos + 2, ids + 1)
@@ -1313,12 +1328,12 @@ def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
 end
 
 # The blank line rule: right after a declaration other than an import, the next token must not start a declaration, an import or a doc block (PARSE-MISSING-BLANK-LINE), before the newlines are skipped. The first doc block of a file, followed by a blank line, is the module doc.
-def parse_program(e: Base.Env) -> Result[Ast.Program]
+def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
   declarations: List[Ast.Decl] = []
   module_doc: Ast.Optional[String] = Ast.Optional.Absent
   after_declaration = false
   cursor = 0
-  next_id = 0
+  next_id = first_id
   looping = true
   while looping
     kind = e.tokens[cursor].kind
@@ -1359,9 +1374,9 @@ def module_doc_absent?(doc: Ast.Optional[String]) -> Bool
   end
 end
 
-## Parses the tokens of the lexer into a Program, or returns the first PARSE- diagnostic. It stops at the first error and never fails otherwise; the nodes are numbered in post-order (see ast.agc).
-export def parse(tokens: List[Tokens.Token]) -> Diag.Outcome[Ast.Program]
-  case parse_program(Base.make_env(tokens))
+## Parses the tokens of the lexer into a Program, or returns the first PARSE- diagnostic. It stops at the first error and never fails otherwise. The nodes are numbered in post-order from first_id (see ast.agc), so that the modules of one program can share one numbering: start the next file at Ast.next_free_id(program).
+export def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.Program]
+  case parse_program(Base.make_env(tokens), first_id)
     ok(program) -> return Diag.Outcome.Done(program)
     error(text) -> return Diag.Outcome.Failed(Base.unpack(text))
   end
