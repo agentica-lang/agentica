@@ -187,7 +187,8 @@
                                 "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"]
                                [(and (equal? target "std/logger.agc") (equal? member "error"))
                                 "the function for the error level is Logger.err; error is a reserved name"]
-                               [else #f])))
+                               ;; Only exports are candidates, so a private name is never suggested.
+                               [else (did-you-mean member (hash-keys (hash-ref exports target)))])))
               (unless (case kind
                         [(type) (or (struct-decl? declaration) (enum-decl? declaration))]
                         [(enum) (enum-decl? declaration)]

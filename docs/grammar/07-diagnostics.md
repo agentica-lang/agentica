@@ -82,6 +82,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |
 | `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import "std/http" as HTTP`, then `HTTP.get`, `HTTP.post` or `HTTP.request` |
 | `LogRegistry.level()` or another `LogRegistry` call outside `std/logger` | `import "std/logger" as Logger`, then `Logger.info`, `Logger.attach` and the other `Logger` functions |
+| `M.nme` when module `M` exports `name` (`CHECK-IMPORT-NAME`) | the help suggests the closest export of `M` (`did you mean "name"?`); it never suggests a private name, and it stays empty when no export is close |
 | `Logger.error(...)` (`CHECK-IMPORT-NAME`) | `Logger.err(...)`; `error` is a reserved name, so the function for the error level is `err` |
 | `HTTP.get(...)` or another `HTTP.` call without the import | `import "std/http" as HTTP` |
 | `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`) | a handler that returns its whole response: `return ok(HttpResponse(status: 200, headers: [], body: text))` |

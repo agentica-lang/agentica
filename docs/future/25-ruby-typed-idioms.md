@@ -241,7 +241,7 @@ the checker cannot reject a hand-written wrapper, as with `with`.
 - The alias must be an import of this file: otherwise `CHECK-IMPORT-NAME` with
   the help "unknown module alias", decided in the linker. The name must be
   exported by that module (`CHECK-IMPORT-NAME`, with the "did you mean" help
-  that §24.2 proposes).
+  that §24.2 (D9) added).
 - Re-exports are resolved after the file's imports are visited. Today the
   linker's `visit` fills a module's exports before it visits its imports, so
   this changes the order: the plain exports are filled first, the imports are
