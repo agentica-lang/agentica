@@ -1,7 +1,7 @@
 # Bytecode VM development (phase 7)
 
 The VM's codename is Aurora (Aurora VM). Only the docs use it: the binary,
-the `AGENTICA_VM*` variables, the `agc_` prefix, `.agcb` and `vm/` keep
+the `AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb` and `vm/` keep
 their names.
 
 `docs/vm/` is the contract: reference behavior, IR, bytecode format, value
@@ -22,19 +22,19 @@ check #:types (src/checker.rkt)   eq? hash: expression node -> checked type
 lower         (src/lower.rkt)     checked program -> IR, or LOWER-UNSUPPORTED / LOWER-INTERNAL
 ir->bytecode  (src/bytecode.rkt)  IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL
 write-bytecode                    the versioned .agcb file (magic, format version, Agentica version)
-vm/agentica.c dist/agentica-next WORDS...: the front end in a first runtime, then the program it hands over in a second (references/vm-core.md)
-vm/main.c     dist/agentica-vm [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000)
-src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then the VM (LOWER-UNSUPPORTED exits 1)
+vm/agentica.c dist/agentica WORDS...: the front end (compiler/front_end.agc, carried in the binary) in a first runtime, then the program it hands over in a second (references/vm-core.md)
+vm/agentica.c dist/agentica run [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000)
+src/main.rkt  the Racket oracle: agentica file.agc through a 0600 temp file and `dist/agentica run` (LOWER-UNSUPPORTED exits 1)
 ```
 
 ## Which layer
 
-`vm/*.c` has three layers and a driver (`docs/vm/15-layers.md` §15). A file includes the header of its layer, and `make vm-layers` keeps the direction. A new `vm/*.c` file goes in `VM_SRC` (a driver file that has a `main` or only the two programs link, such as `main.c`, `launch.c` and `agentica.c`, has its own rule) and in one list of `vm/tools/check-layers.sh`.
+`vm/*.c` has three layers and a driver (`docs/vm/15-layers.md` §15). A file includes the header of its layer, and `make vm-layers` keeps the direction. A new `vm/*.c` file goes in `VM_SRC` (a driver file that has a `main` or only the binary links, such as `launch.c` and `agentica.c`, has its own rule) and in one list of `vm/tools/check-layers.sh`.
 
 - **Core** (`core.h`): values, maps, text, the Json value, the interpreter, the scheduler, the loop, stdin, the loader, core builtins, diagnostics, tracing. It never includes or links a service.
 - **Services** (`services.h`; `net.h` and `http_fields.h` include it): strings, numbers, JSON, files, streams, processes, TCP, HTTP, `Test`. They reach the core through the port in `port.h` (park and wake a task, jobs with a timeout, register and close a handle, spawn and cancel, fail and charge) and the value API in `value.h`, never `core.h`.
 - **Adapters** (`tls.h`, `http_parse.h`): TLS over OpenSSL and the HTTP head and body parsers. They use their library and, from `value.h`, only the memory functions.
-- **Driver** (`main.c`, `launch.c`, `agentica.c`, `builtin_tables.c`, `fuzz*.c`): wires the layers and includes `core.h` and `services.h`; `launch.h` and `embedded.h` are theirs.
+- **Driver** (`launch.c`, `agentica.c`, `builtin_tables.c`, `fuzz*.c`): wires the layers and includes `core.h` and `services.h`; `launch.h` and `embedded.h` are theirs.
 
 Where a declaration goes: a type or function that values and services both need goes in `value.h`; one a service calls to wait, do I/O or own a handle goes in `port.h` (check a new one against `docs/vm/14-core-invariants.md`); one only the core and the driver call goes in `core.h`; a service's export goes in `services.h`. A `vm/tests/*.c` file includes what it uses. Third-party headers stay in their place: `gc.h` in `value.c`, `uv.h` in `loop.c` and the stream services, OpenSSL in `tls_openssl.c`, picohttpparser in `http_pico.c`, `yyjson.h` in `json.c`.
 

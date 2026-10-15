@@ -8,22 +8,23 @@ Read first: `references/vm.md`.
 
 ```sh
 git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser and openssl after a clone or a bump
-make vm                              # dist/agentica-vm (Linux: the system libgc and OpenSSL 3 from pkg-config, dynamic: Debian libgc-dev libssl-dev pkg-config)
-make vm AGENTICA_GC=vendored         # libgc from the submodule (extra/gc.c) instead, static; the release, the GC-stress build and non-Linux hosts build this way
-make vm AGENTICA_OPENSSL=vendored    # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
+make                                 # dist/agentica, the one binary, from bootstrap/stage0.agcb (Linux: the system libgc and OpenSSL 3 from pkg-config, dynamic: Debian libgc-dev libssl-dev pkg-config)
+make AGENTICA_GC=vendored            # libgc from the submodule (extra/gc.c) instead, static; the release, the GC-stress build and non-Linux hosts build this way
+make AGENTICA_OPENSSL=vendored       # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
 make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
 make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
 make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser and libuv for this mode
 make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
-make stage1 stage2 stage3            # the front end (compiler/front_end.agc) in build/stage/: Racket compiles stage1, stage1 compiles stage2, stage2 compiles stage3 (on dist/agentica-vm, --stdlib stdlib)
-make agentica-next                   # dist/agentica-next, the single binary (Linux): the VM, vm/agentica.c, stage2 and the std/ sources embedded by vm/tools/gen-embedded.sh
-make fixed-point                     # stage2 == stage3, Racket's stage1 == stage2, and dist/agentica-next compiling the front end gives stage2 again (about 25 s after the VM is built); CI runs it in `test` and in `vm-sanitizers`
+make stage1 stage2 stage3            # the front end (compiler/front_end.agc) in build/stage/: a first binary linked with bootstrap/stage0.agcb compiles stage1; stage1 compiles stage2; stage2 compiles stage3 (--front-end); stage2 == stage3
+make fixed-point                     # the stages, dist/agentica (Linux: the VM, vm/agentica.c, stage2 and the std/ sources embedded by vm/tools/gen-embedded.sh), and dist/agentica compiling the front end gives stage2 again (about 25 s after the VM objects are built); CI runs it in `test` and in `vm-sanitizers`
+make racket-fixed-point              # while Racket exists: racket src/main.rkt compile of compiler/front_end.agc is stage2 too
+make stage0                          # refresh bootstrap/stage0.agcb from stage2 (references/ci.md, "Refreshing stage0")
 make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
-make vm CCACHE=                      # without ccache (used when installed and its cache dir is writable)
-make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
-make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
-AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
+make CCACHE=                         # without ccache (used when installed and its cache dir is writable)
+make SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
+make vm-test TRACE=0                 # trace points compiled out (still type-checked); `agentica run --version` says "trace off"
+AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica run -- prog.agcb   # sched,io,proc,tls,loader,gc
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
@@ -34,9 +35,9 @@ make vm-golden-check FIXTURES="name ..."  # the CI golden check (3 formats, swee
 make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
 make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; use Racket CS 9.3, the CI version; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 make vm-diff-test JOBS=4
-racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
-racket src/main.rkt --dump-ir prog.agc
-racket src/main.rkt prog.agc         # front end + VM in one step (the default); AGENTICA_VM=path picks the binary
+dist/agentica compile prog.agc -o prog.agcb && dist/agentica run -- prog.agcb
+dist/agentica --dump-ir prog.agc
+dist/agentica prog.agc               # front end + VM in one step, in one process
 ```
 
 - CI runs `vm-sanitizers` (`make vm-lint`, `make vm-layers`, ASan diff and bytecode tests, `make vm-fuzz`,
@@ -44,42 +45,34 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   in the `changes` job of `.github/workflows/ci.yml`; the list and the other
   jobs are in `references/ci.md`. A new VM source or test file outside those
   paths must be added there.
-- `agentica file.agc` runs on the VM (Linux only for now,
-  `docs/vm/08-loader-and-cli.md` §9): `src/main.rkt` lowers the checked
-  program; a `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1.
-  Every catalog implementation is in `vm-builtins` in `src/lower.rkt`
-  (`tests/bytecode-test.rkt` checks it), so no builtin reaches it today.
-  `agentica test` runs on the VM: `src/bdd-driver.rkt` starts the Agentica
-  BDD driver (`compiler/bdd.agc`) with `--driver-pid`, which compiles the step
-  program and `std/test/runner` and starts the runner VM with `--driver-pid`
-  too (see `references/bdd.md`).
-  Otherwise it writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
-  in the temp directory and runs the VM with the hidden `--driver-pid PID`
-  flag. The VM then deletes its input right after reading it; on Linux it
-  first resets `SIGTERM` to its default, sets `PR_SET_PDEATHSIG` to
-  `SIGTERM` and exits 2 when `getppid()` is not `PID`. On a break the
-  driver (`stop-vm #:interrupted? #t`, after `call-noting-break` in
-  `src/vm-launch.rkt`) first waits up to 2 s, since a terminal's Ctrl-C
-  reached the VM too and an early `SIGTERM` would be its second signal,
-  then sends `SIGTERM` (libc `kill` through the FFI), waits up to 2 s, then
-  `SIGKILL`; on other exits it sends `SIGTERM` at once.
-  The driver deletes the file too (VM never ran, failed early, break), and
-  copies stdin/stdout/stderr through pipes only when they are not file
-  streams. The VM is found (`find-vm` in `src/vm-launch.rkt`) by `AGENTICA_VM`, else `dist/` of the checkout
-  (module source path), else next to a `raco exe` executable (the release
-  archive has it in `bin/`); no `define-runtime-path`, since `raco
-  distribute` would copy the VM. A missing VM exits 2, never a silent
-  fallback. `--max-steps`, `--seed`, `--allow-run`, `--ai` and `--json`
-  pass through; add new options to the pass-through list in `src/main.rkt`
-  as the VM gains them. A new builtin goes into `vm-builtins` with its C
-  implementation.
-  `tests/test_vm_diff_8.py` checks the CLI against the goldens (with
-  `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), that the
-  removed `--vm` and `--legacy-eval` flags are unknown, and that `compile`
-  exits 1 on a diagnostic and 2 on an unwritable output. Its `RacketLauncher`
-  class (a missing VM, a standard input that cannot be read) runs only against
-  `racket src/main.rkt`, and step 8d deletes it with `AGENTICA_VM`. The same
-  file checks `--driver-pid` on the VM alone.
+- `agentica file.agc` runs in one process (Linux only,
+  `docs/vm/08-loader-and-cli.md` §9): the front end of the binary
+  (`compiler/front_end.agc`) compiles in memory and hands the bytes to C with
+  `FrontEnd.hand_off`; `vm/agentica.c` runs them in a new runtime. A
+  `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1. Every catalog
+  implementation is in `vm-builtins` (`compiler/builtins_data.agc`; the Racket
+  copy is in `src/lower.rkt`), so no builtin reaches it today.
+  `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
+  handles it when `run` is the first word, with the VM flags (`--max-steps`,
+  `--seed`, `--flush-timeout`, `--allow-run`, `--ai`, `--json`, `--source-root`,
+  `--version`) and the hidden `--driver-pid PID`. The VM then deletes its
+  input right after reading it (only a private file is read with that flag); on
+  Linux it first resets `SIGTERM` to its default, sets `PR_SET_PDEATHSIG` to
+  `SIGTERM` and exits 2 when `getppid()` is not `PID`. `agentica test` runs the
+  BDD driver in the front end; it starts the runner with `self_path run
+  --driver-pid ...` (see `references/bdd.md`). A new VM option goes in
+  `agc_launch_parse` and in the pass-through list of the front end
+  (`compiler/cli_options.agc`, `src/main.rkt` and the hand-off check in
+  `vm/agentica.c`). A new builtin goes into `vm-builtins` with its C
+  implementation. There is no `AGENTICA_VM`: no code reads it, and
+  `AGENTICA_VM_BINARY` is a test knob only (the Python tests run that build of
+  the binary: the GC stress, the vendored link, a sanitizer build).
+  `tests/test_vm_diff_8.py` checks the CLI against the goldens (with `TMPDIR`
+  set, checking no `.agcb` is left), that the removed `--vm` and `--legacy-eval`
+  flags are unknown, that `compile` exits 1 on a diagnostic and 2 on an
+  unwritable output, a standard input that cannot be read, and that
+  `AGENTICA_VM` changes nothing. The same file checks `--driver-pid` on `run`
+  alone.
 
 - Each mode compiles `vm/*.c`, `vm/tests/*.c` and the drivers once into
   `$(VM_BUILD)/obj/` with `-MMD -MP` (dependency files beside the objects),
@@ -100,10 +93,10 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   keep their absolute paths until their key changes. A read-only ccache
   (`CCACHE_READONLY`, or a cache dir you cannot write) is turned off.
 - `build/vm/<mode>/obj/tests/*_test.o` are `.SECONDARY`, so make keeps them
-  and a second `make vm vm-test` recompiles nothing.
+  and a second `make vm-test` recompiles nothing.
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
-  flags change. Run `make build` (raco make) before many `compile` calls, or
-  each one recompiles `src/`.
+  flags change. Run `make build` (raco make) before many calls of the Racket
+  oracle, or each one recompiles `src/`.
 - Golden tests (`docs/vm/README.md` §1, `docs/vm/12-testing-and-pr-plan.md`
   §12.1): `tests/test_vm_diff_1.py` … `test_vm_diff_8.py` (unittest) run each
   fixture of `tests/fixtures/vm/` on the VM and compare exit code, stdout,
@@ -213,8 +206,8 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   `cat`, `sleep`) and must end or be closed.
   Fixture stdin comes from a file; pipe stdin is covered by the extras of
   shard 8 and the CLI tests. `AGENTICA_VM_BINARY=path` makes the tests
-  use another binary (`make vm-gc-stress` uses it
-  for `build/vm/gcstress/agentica-vm`).
+  run another build of the binary (`make vm-gc-stress` uses it
+  for `build/vm/gcstress/agentica`).
   `tests/bytecode-test.rkt` needs no VM binary.
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
   `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS
@@ -243,12 +236,12 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
   `-municode` and defaults `CC` to `gcc` (UCRT64 has no `cc`), and Darwin
   only drops `-pie` and RELRO. Every binary
-  target ends in `$(EXE)`; the diff test runs `dist/agentica-vm.exe` on
-  Windows. The `platforms.yml` workflow, run by hand, runs `make vm vm-test`
-  and the diff and bytecode tests on `macos-15` and `windows-2025`, not the
-  whole `make test`; run it before merging platform code. macOS and
-  Windows are paused (`references/ci.md`); Linux code goes under
-  `#ifdef __linux__`.
+  target ends in `$(EXE)`, a leftover of the Windows build: the binary embeds
+  the front end with `.incbin` in ELF assembly, so only Linux builds it (since
+  8d-2). The `platforms.yml` workflow, run by hand, runs `make vm-test` (the C
+  VM and its C tests) on `macos-15` and `windows-2025`; run it before merging
+  platform code. macOS and Windows are paused (`references/ci.md`); Linux code
+  goes under `#ifdef __linux__`.
 
 ## Files
 
@@ -267,15 +260,15 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   back.
 - Under ASan, Boehm is off (`-DAGC_NO_GC`); GC bugs need the GC-debug stress
   run (`make vm-gc-stress`), not ASan.
-- Portability: keep platform code in `vm/main.c` (`open_input`, `wmain`)
-  and the Makefile platform block. `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
+- Portability: keep platform code in `vm/launch.c` and the Makefile platform
+  block (`vm/agentica.c` is Linux only). `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
   guards the signal. `_Exit` is C11; mingw-w64 still provides `write`,
   `open`, `read`, `fstat` and `ssize_t` with `-std=c11`, but its `struct
-  stat` has a 32-bit `st_size`, so Windows uses `_fstat64`. The input file
-  is opened with `_wopen` on the original UTF-16 argument (`wide_args`),
-  never through `open` (ANSI code page) or a UTF-8 round trip (a lone
-  surrogate would become U+FFFD and name another file). `-municode` goes only on binaries that link
-  `vm/main.c`; the C tests have a plain `main`.
+  stat` has a 32-bit `st_size`, so Windows uses `_fstat64`. A Windows port of
+  the binary would open its input with `_wopen` on the original UTF-16
+  argument, never through `open` (ANSI code page) or a UTF-8 round trip (a
+  lone surrogate would become U+FFFD and name another file); the old
+  `vm/main.c` did that, and `-municode` went only on binaries that linked it.
 - libgc without `NO_EXECUTE_PERMISSION` maps writable and executable pages,
   and macOS on arm64 aborts with `Cannot allocate executable pages` as soon
   as the heap grows (the loader test does). Interior pointers on the stack
