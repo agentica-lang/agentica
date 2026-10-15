@@ -60,8 +60,14 @@ test-slow: build vm bdd-driver $(NEXT_PREREQ)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py RKT_FLAGS="--submodule slow --no-run-if-absent" AGENTICA_TEST_SLOW=1
 
+# Hang guards, innermost first: the limit of one test (tests/agentica_test.py), then this limit of one test module or
+# rackunit file, then the timeout-minutes of the job in ci.yml. Seconds, times AGENTICA_TEST_TIMEOUT_SCALE (default 1),
+# which also stretches the deadlines inside the tests. The slow tier gets the longer base.
+MODULE_BASE_LIMIT = $(if $(filter-out 0,$(AGENTICA_TEST_SLOW)),1800,600)
+MODULE_LIMIT = $(shell awk -v scale='$(or $(AGENTICA_TEST_TIMEOUT_SCALE),1)' -v base=$(MODULE_BASE_LIMIT) 'BEGIN { printf "%d", base * scale }')
+
 test-rkt:
-	@test -z "$(RKT_TESTS)" || $(RACO) test $(RKT_FLAGS) -j $(JOBS) $(RKT_TESTS)
+	@test -z "$(RKT_TESTS)" || $(RACO) test $(RKT_FLAGS) --timeout $(MODULE_LIMIT) -j $(JOBS) $(RKT_TESTS)
 
 # One unittest process per module, run by make itself: -j gives the workers, -O (GNU make 4.0 or newer) keeps each
 # module's output together, -k runs the other modules after a failure. A failing module shows its unittest report and a make error line.
@@ -77,9 +83,17 @@ test-py:
 	    || { echo "The Python tests failed" >&2; exit 1; }; \
 	fi
 
+# `timeout` (coreutils) ends a hung module: exit 124, or 137 when it had to send KILL after the 10 s of grace. Without
+# the command the module runs unguarded; the per-test limit and the job timeout remain.
 py-test/%: FORCE
 	@echo "unittest $*"
-	@$(PYTHON) -m unittest $(call PY_MODULE,$*)
+	@if command -v timeout >/dev/null 2>&1; then \
+	  timeout -k 10 $(MODULE_LIMIT) $(PYTHON) -m unittest $(call PY_MODULE,$*); status=$$?; \
+	  if [ $$status -eq 124 ] || [ $$status -eq 137 ]; then \
+	    echo "unittest $*: hung, stopped after $(MODULE_LIMIT) s (the module limit)" >&2; \
+	  fi; \
+	  exit $$status; \
+	else $(PYTHON) -m unittest $(call PY_MODULE,$*); fi
 
 # The BDD driver of `agentica test` (compiler/bdd.agc), compiled once here by the Racket front end and run by the VM; it
 # sits next to the VM and the executable (docs/future/35-self-hosting.md, step 7b). Racket compiles `compiler/` to the

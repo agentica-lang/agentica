@@ -25,6 +25,11 @@
 (define-runtime-path root "..")
 (define make-lock-wait 900)
 (define run-timeout 60)
+; AGENTICA_TEST_TIMEOUT_SCALE (default 1) stretches the deadline of every run for slow machines, as in
+; tests/agentica_test.py. run-process applies it, so callers pass the unscaled seconds.
+(define timeout-scale
+  (let ([value (string->number (or (getenv "AGENTICA_TEST_TIMEOUT_SCALE") "1"))])
+    (if (and (real? value) (positive? value)) value 1)))
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
 (define vm-file
   (if vm-binary
@@ -85,7 +90,7 @@
   (define readers
     (list (thread (lambda () (set! stderr (port->string err))))
           (thread (lambda () (set! stdout (port->string out))))))
-  (define finished (sync/timeout timeout process))
+  (define finished (sync/timeout (and timeout (* timeout timeout-scale)) process))
   (unless finished (subprocess-kill process #t))
   (for-each thread-wait readers)
   (thread-wait writer)

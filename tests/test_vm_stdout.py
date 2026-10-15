@@ -11,10 +11,10 @@ import json
 import re
 import time
 
-from tests.agentica_test import FIXTURES, PYTHON, TestCase, run, vm_binary, vm_environment
+from tests.agentica_test import FIXTURES, PYTHON, TestCase, run, scaled, vm_binary, vm_environment
 
 PEER = FIXTURES / "stdout-peer.py"
-PEER_LIMIT = 90
+PEER_LIMIT = scaled(90)
 FILLER = "x" * 1024
 
 
@@ -455,7 +455,7 @@ class VmStdout(TestCase):
     def test_a_regular_file_written_by_the_pool_is_drained_while_a_child_is_stopped_at_the_end_of_the_run(self):
         status, elapsed, out, err = self.run_to_file("live-child", LIVE_CHILD_PROGRAM)
         self.assertEqual(status, 0)
-        self.assertLess(elapsed, 10, "the run does not wait for the flush limit")
+        self.assertLess(elapsed, min(scaled(10), 25), "the run does not wait for the flush limit")
         self.assertEqual(err, "")
         self.assertRegex(out, re.compile(r"\Achild started\n.*\ndone\n\Z", re.S))
 

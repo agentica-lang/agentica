@@ -5,6 +5,7 @@ process (`python3 -m unittest tests.test_<area>` from the repository root, so
 this module imports as `tests.agentica_test`). Keep this file small: add a
 helper here only when a second test module needs it.
 """
+import faulthandler
 import os
 import queue
 import shutil
@@ -25,8 +26,56 @@ FIXTURES = TESTS / "fixtures"
 # The interpreter that runs the tests also runs the Python peers and is the `python3` that VM programs spawn.
 PYTHON = sys.executable
 
+
+
+def _timeout_scale():
+    raw = os.environ.get("AGENTICA_TEST_TIMEOUT_SCALE", "").strip()
+    if not raw:
+        return 1
+    try:
+        scale = float(raw)
+    except ValueError:
+        scale = 0
+    if not scale > 0 or scale == float("inf"):
+        raise SystemExit("AGENTICA_TEST_TIMEOUT_SCALE must be a positive number, got %r" % raw)
+    return scale
+
+
+# Slow runners (a capped CPU frequency, a busy shared host) need longer deadlines. CI sets this to stretch every
+# deadline that a correct run must beat; read it once, here, and wrap such a literal in scaled(). A deadline that a
+# test expects to expire, and a limit that measures the product, stay unscaled.
+TIMEOUT_SCALE = _timeout_scale()
+
+
+def scaled(value):
+    """`value` (seconds or milliseconds) times AGENTICA_TEST_TIMEOUT_SCALE; an int stays an int."""
+    result = value * TIMEOUT_SCALE
+    return max(1, round(result)) if isinstance(value, int) else result
+
+
+# The limit of one test (setUp, the body and the cleanups), like pytest-timeout: fast tests, then @slow ones. A test
+# that legitimately takes longer says so with @timeout(seconds). The limits are scaled like every other deadline.
+TEST_TIMEOUT = 120
+SLOW_TEST_TIMEOUT = 900
+# Extra time before the backstop kills the whole module process: the signal handler cannot run while the test sits
+# in C code, so faulthandler dumps the stacks of every thread and exits from its own thread.
+BACKSTOP_GRACE = 30
+
+
+def timeout(seconds):
+    """Give a test method or a TestCase class its own limit in seconds (scaled), replacing the tier's default."""
+    def mark(item):
+        item.agentica_timeout = seconds
+        return item
+    return mark
+
+
+class TestTimeout(AssertionError):
+    """A test that outlived its limit: unittest reports that test as failed and goes on with the next."""
+
+
 # The time limit of a run, as in the VM golden harness (tests/vm_diff_support.py).
-RUN_TIMEOUT = 60
+RUN_TIMEOUT = scaled(60)
 
 # `make test-slow` sets this. The two tiers are exclusive, like the rackunit
 # `test` and `slow` submodules: with the flag only @slow cases run, without it
@@ -34,7 +83,7 @@ RUN_TIMEOUT = 60
 SLOW = os.environ.get("AGENTICA_TEST_SLOW", "") not in ("", "0")
 
 # Time limit of one line or one exit of a Child.
-WAIT_SECONDS = 30
+WAIT_SECONDS = scaled(30)
 
 def _terminate(signum, frame):
     raise KeyboardInterrupt
@@ -77,6 +126,33 @@ class TestCase(unittest.TestCase):
     def _is_slow(self):
         return _method_is_slow(type(self), self._testMethodName)
 
+    def _time_limit(self):
+        """Seconds that this test may take: its @timeout, else its class's, else the tier's default; all scaled."""
+        method = getattr(type(self), self._testMethodName)
+        seconds = getattr(method, "agentica_timeout", None) or getattr(type(self), "agentica_timeout", None)
+        return scaled(seconds or (SLOW_TEST_TIMEOUT if self._is_slow() else TEST_TIMEOUT))
+
+    def _arm_timeout(self):
+        """Start the per-test limit; return the function that stops it. SIGALRM and its timer exist only in the main
+        thread of a POSIX process: elsewhere the test runs unguarded and the module limit of make is the net."""
+        if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "setitimer"):
+            return lambda: None
+        limit = self._time_limit()
+
+        def expired(signum, frame):
+            raise TestTimeout("%s took longer than %s s (AGENTICA_TEST_TIMEOUT_SCALE=%s)" % (
+                self.id(), limit, TIMEOUT_SCALE))
+
+        previous = signal.signal(signal.SIGALRM, expired)
+        signal.setitimer(signal.ITIMER_REAL, limit)
+        faulthandler.dump_traceback_later(limit + BACKSTOP_GRACE, exit=True)
+
+        def disarm():
+            faulthandler.cancel_dump_traceback_later()
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
+        return disarm
+
     def run(self, result=None):
         # Skipping before setUp keeps the other tier's fixtures from being built.
         if result is not None and self._is_slow() != SLOW:
@@ -84,12 +160,15 @@ class TestCase(unittest.TestCase):
             result.addSkip(self, "slow tier only" if self._is_slow() else "fast tier only")
             result.stopTest(self)
             return result
+        disarm = self._arm_timeout()
         try:
             return super().run(result)
         except KeyboardInterrupt:
             # unittest skips the cleanups on Ctrl-C; they stop the children and remove the temp dirs.
             self.doCleanups()
             raise
+        finally:
+            disarm()
 
     def make_temp_dir(self, prefix="agentica-"):
         """A fresh directory, removed when the test ends (also after a failure)."""

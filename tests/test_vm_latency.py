@@ -10,10 +10,10 @@ import threading
 import time
 import unittest
 
-from tests.agentica_test import FIXTURES, Child, TestCase, vm_binary, vm_environment
+from tests.agentica_test import FIXTURES, Child, TestCase, scaled, vm_binary, vm_environment
 
 LIMIT_MS = 250
-WAIT_SECONDS = 60
+WAIT_SECONDS = scaled(60)
 LATENCY = FIXTURES / "latency" / "latency.agc"
 CLOSE_READER = FIXTURES / "latency" / "close-reader.agc"
 
