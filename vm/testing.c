@@ -1,4 +1,10 @@
-/* The builtin Test module (docs/future/36-unit-tests.md §36.3, §36.6). */
+/*
+ * The builtin Test module: Test.test, Test.eq, Test.ok?, Test.error? and
+ * Test.assert (a failed assertion records a note on the test's task), and
+ * Test.run, which runs each test as its own task for agentica test and reports
+ * over the parent channel. Service layer. Design:
+ * docs/future/36-unit-tests.md §36.3 and §36.6.
+ */
 #include "services.h"
 
 #include <string.h>

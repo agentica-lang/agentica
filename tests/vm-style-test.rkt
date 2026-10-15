@@ -7,14 +7,37 @@
 
 (define skipped '("unicode_data.c"))
 
-(define (vm-files)
-  (define (in dir prefix)
+(define (vm-files-matching root-ext)
+  (define (in dir prefix ext)
     (for/list ([p (directory-list (build-path vm-dir dir))]
-               #:when (regexp-match? #rx"[.]c$" (path->string p)))
+               #:when (regexp-match? ext (path->string p)))
       (string-append prefix (path->string p))))
   (sort (filter (lambda (f) (not (member f skipped)))
-                (append (in "." "") (in "tests" "tests/")))
+                (append (in "." "" root-ext) (in "tests" "tests/" #rx"[.]c$")))
         string<?))
+
+(define (vm-files) (vm-files-matching #rx"[.]c$"))
+
+(define (header-files) (vm-files-matching #rx"[.][ch]$"))
+
+(define (header-problems file text)
+  (define test? (regexp-match? #rx"^tests/" file))
+  (define-values (low high) (if test? (values 1 4) (values 3 8)))
+  (define (legal? comment) (regexp-match? #px"^[\\s*]*(?i:copyright|spdx|licen[sc]e)" comment))
+  (let loop ([rest text])
+    (define m (regexp-match #px"^\\s*/\\*(.*?)\\*/(.*)$" rest))
+    (cond
+      [(not m)
+       (list (format "vm/~a: no header comment: the file must start with a /* */ comment of ~a to ~a lines"
+                     file low high))]
+      [(legal? (cadr m)) (loop (caddr m))]
+      [else
+       (define (blank? l) (regexp-match? #px"^[\\s*]*$" l))
+       (define body (filter (lambda (l) (not (blank? l))) (regexp-split #rx"\n" (cadr m))))
+       (if (<= low (length body) high)
+           '()
+           (list (format "vm/~a: header comment has ~a line(s) of text, want ~a to ~a (references/vm-c.md)"
+                         file (length body) low high)))])))
 
 (define (top-level-headers text)
   (define n (string-length text))
@@ -138,4 +161,32 @@
   (define files (vm-files))
   (check-not-false (member "interp.c" files))
   (define problems (append-map style-problems files))
+  (check-true (null? problems) (string-join problems "\n")))
+
+(test-case "header comment bounds"
+  (define (lines n) (string-join (for/list ([i n]) (format " * line ~a" i)) "\n"))
+  (define (file n) (string-append "/*\n" (lines n) "\n */\nint x;\n"))
+  (check-equal? (header-problems "a.c" (file 3)) '())
+  (check-equal? (header-problems "a.c" (file 8)) '())
+  (check-equal? (length (header-problems "a.c" (file 2))) 1)
+  (check-equal? (length (header-problems "a.c" (file 9))) 1)
+  (check-equal? (header-problems "tests/a_test.c" (file 1)) '())
+  (check-equal? (header-problems "tests/a_test.c" (file 4)) '())
+  (check-equal? (length (header-problems "tests/a_test.c" (file 5))) 1)
+  (check-equal? (header-problems "a.c" (string-append "/* Copyright 2026 */\n" (file 3))) '())
+  (check-regexp-match #rx"^vm/a[.]c: no header comment" (car (header-problems "a.c" "int x;\n/* late */\n")))
+  (check-regexp-match #rx"^vm/a[.]c: no header" (car (header-problems "a.c" "// line\nint x;\n")))
+  (check-equal? (header-problems "a.c" (string-append "/*\n * The license check of the TLS adapter.\n * Two.\n * Three.\n */\nint x;\n")) '())
+  (check-equal? (length (header-problems "a.c" "/* Copyright 2026 */\nint x;\n/* late */\n")) 1)
+  (check-equal? (length (header-problems "a.c" (string-append "/* Copyright 2026 */\n/* one line */\nint x;\n"))) 1)
+  (check-equal? (header-problems "a.c" "/*\n * one\n *\n * two\n *\n * three\n */\nint x;\n") '())
+  (check-equal? (length (header-problems "a.c" "/*\n * one\n *\n *\n * two\n */\nint x;\n")) 1))
+
+(test-case "every vm C file starts with a header comment of the right length"
+  (define files (header-files))
+  (check-not-false (member "interp.c" files))
+  (check-not-false (member "port.h" files))
+  (check-not-false (member "tests/map_test.c" files))
+  (define problems
+    (append-map (lambda (f) (header-problems f (file->string (build-path vm-dir f)))) files))
   (check-true (null? problems) (string-join problems "\n")))
