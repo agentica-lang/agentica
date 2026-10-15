@@ -72,8 +72,8 @@ after them may run in parallel when needed and keep their relative order.
 | 7.5 | New features, VM-only (cont.): UDP, then logging and debugging (14c, **done**: `std/logger` of `docs/future/24-logging.md` §24.2, with no default parameter values and no flags; its Racket parts are data under the freeze of row 7.2.7 (§24.2, "The freeze")), then the `Crypto` module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`). Binary data (row 7.2.4) and stack traces (row 7.2.5) moved to their own rows | Programs send UDP; programs log with levels, fields and JSON lines, and sign, hash and encrypt |
 | 7.7 | VM metrics (phase 18, `docs/future/28-vm-metrics.md` §28), VM-only, no language change: 18a metrics derived from the VM's own state and the `.prom` file, 18b the `GET /metrics` endpoint, 18c the enabled-only hooks with the overhead check, then 18d memory diagnosis ([§28.12](../future/28-vm-metrics.md#2812-memory-diagnosis-18d): per-task allocation counters, which need channels (17b) done and, for handle bytes, the one-owner rule of 24b; and an on-demand dump of the top tasks); it needs only 7i (not the HTTP stack), and goes before the server measurement (7j) | Prometheus scrapes a running VM and Grafana graphs its GC, tasks, run-queue delay and I/O; batch runs leave their exit code and totals for node_exporter; nothing costs anything while nobody asks |
 | 7.8 | **Deferred until after the bootstrap** (46c and 46d; 46a and 46b may run earlier as VM-only rows, when no other VM PR is waiting), decided by the owner on 2026-10-15 (phase 27, [`docs/roadmap/27-signals.md`](27-signals.md); design: [§46](../future/46-signals.md#46-signals)): signals that a program can handle, in four parts. 46a, subscription: the `Signal` enum and its subscription builtin (the name is decided in 46a), so a program handles TERM, INT, HUP, USR1 and USR2, and QUIT forces the exit. 46b, sending: `Process.signal`, `Process.spawn_group`, `Process.signal_group` and `System.signal`. 46c, the driver forwards a stop at once. 46d, `std/http` drains its handlers on a stop. 46a and 46b are VM C code and builtin table rows, which row 7.2.7 allows; that holds for option (B) of §46.3.1, and option (A) is a front-end change that its PR justifies against the freeze. 46c and 46d come after 46b by the owner's order (§46.7 does not require it); 46d is Agentica code in `std/http` | A container entrypoint can stop its children and exit on its own terms, and an Agentica program can send signals to its children |
-| 7.9 | **Deferred until after the bootstrap**, decided by the owner on 2026-10-15 (phase 28, [`docs/roadmap/28-formatter.md`](28-formatter.md); design: [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)): a code formatter, `agentica fmt`, written in Agentica on the self-hosted lexer and parser. 47a, comments kept in a side list and attached to nodes; 47b, the printer and `--check` over `compiler/` and `stdlib/`; 47c, the CLI, the `max_line_width` key (the only `[style]` key today) and `CHECK-LINE-TOO-LONG` in `agentica check`, which replaces `tests/test_style_line_width.py`. 47d, the LSP format-document hook, is outside this order: it waits for the language server (§43, not scheduled) | Every `.agc` file has one layout, checked in CI, and an editor can format a file with the compiler's own parser |
-| 7.10 | **Deferred until after the bootstrap**, decided by the owner on 2026-10-15 (phase 29, [`docs/roadmap/29-regex.md`](29-regex.md); design: [§48](../future/48-regex.md#48-regular-expressions)): regular expressions, new library features, std first: `std/regex` in Agentica (a parser and a linear-time Pike VM, no backtracking), then the regex literal `/pattern/flags` (48b, `compiler/` only); a C matcher only if measured (48c) | A program searches, extracts, replaces and splits text with a pattern, written as a literal or a string, and no pattern can stall the VM |
+| 7.9 | **Deferred until after the bootstrap**, decided by the owner on 2026-10-15 (phase 28, [`docs/roadmap/28-formatter.md`](28-formatter.md); design: [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)): a code formatter, `agentica fmt`, written in Agentica on the self-hosted lexer and parser. 47a, comments kept in a side list and attached to nodes; 47b, the printer and `--check` over `compiler/` and `stdlib/`; 47c, the CLI, the `max_line_width` key (the only `[style]` key today) and `CHECK-LINE-TOO-LONG` in `agentica check`, which replaces `tests/test_style_line_width.py`. 47d, the LSP format-document hook, is outside this order: it waits for the language server (§43, not scheduled). Row 7.10 (regular expressions) comes before this row, by the owner's decision of 2026-10-15. | Every `.agc` file has one layout, checked in CI, and an editor can format a file with the compiler's own parser |
+| 7.10 | **Deferred until after the bootstrap**, decided by the owner on 2026-10-15 (phase 29, [`docs/roadmap/29-regex.md`](29-regex.md); design: [§48](../future/48-regex.md#48-regular-expressions)): regular expressions, new library features, std first: `std/regex` in Agentica (a parser and a linear-time Pike VM, no backtracking), then the regex literal `/pattern/flags` (48b, `compiler/` only); a C matcher only if measured (48c). It comes before row 7.9 (the formatter), by the owner's decision of 2026-10-15. | A program searches, extracts, replaces and splits text with a pattern, written as a literal or a string, and no pattern can stall the VM |
 | 8.1 | The rest of the VM layers (7l, `docs/future/21-vm-layers.md` §21: opcode helpers, builtin metadata flags, the callback-builtin protocol; the header split is row 7.2.1b); after the tasks PR, next to 7k | The prerequisites of the JIT |
 | 9 | Server measurement on the VM (7j), with the source → result runner (7g); it also reads the VM metrics of phase 18 (GC, run-queue delay, I/O) while the load runs | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
 | 11 | Decided by the owner on 2026-10-14: it comes right after step 9 and before the JIT (9.1), and decides with the numbers of step 9 (and the 6c pilot of step 7.2.2): multicore schedulers (7h item, gated). After step 9 the work stops so the owner reviews the next steps (a review point, not a gate on the JIT: 9.1 stays required and not gated). The front end is decided: self-hosting, in this table from row 7.2.7 on ([§35](../future/35-self-hosting.md)) | Build multicore only if the numbers ask for it |
@@ -92,8 +92,41 @@ The self-hosted front end and a single binary
 ([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13, are
 in the order from row 7.2.7 on, after their prerequisites (rows 8 and 7.2.4 to
 7.2.6; [§35.9](../future/35-self-hosting.md#359-order)). Its steps (§35.4) are
-PRs, not rows of this table. Right after step 7b merges: cut a
-release (the last one with the Racket front end; owner decision, 2026-10-15).
+PRs, not rows of this table. The release cut right after step 7b was 0.3.0,
+the last one with the Racket front end (owner decision, 2026-10-15).
+
+The owner set this order for the work after the bootstrap on 2026-10-15:
+
+1. Release 0.4.0, the first release with the single binary, right after step
+   8d ([§35.4](../future/35-self-hosting.md#354-stages-to-port)). Racket can
+   be deleted only after one release has the self-hosted front end as its
+   default ([§35.3](../future/35-self-hosting.md#353-bootstrap)).
+2. Delete the Racket front end (`src/*.rkt`, the `raco distribute` steps),
+   port `vm/tools/gen-unicode.rkt` and tag `bootstrap-racket` (§35.3).
+3. A speed pass on the self-hosted front end: the targets of
+   [§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria), the
+   precompiled BDD runner (about 0.7 s that step 7b added to `agentica test`),
+   and maybe a VM profiler and the start-up cut of row 8.3.
+4. `case` guards, nested patterns and the `<<~NAME` heredoc
+   ([§25.10](../future/25-ruby-typed-idioms.md#2510-heredocs),
+   [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
+   in `compiler/` only. They are the first language changes after the
+   bootstrap and the first use of the two-step stage0 refresh of §35.3.
+5. Signals (row 7.8, [§46](../future/46-signals.md#46-signals)), parts 46a to
+   46d. 46c also lets `agentica test` clean its run directory on Ctrl-C.
+6. Regular expressions (row 7.10,
+   [§48](../future/48-regex.md#48-regular-expressions)) before the formatter
+   (row 7.9, [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt));
+   the owner swapped the two. Regex first needs the owner's answer on the Ruby
+   anchors question of
+   [§48.10](../future/48-regex.md#4810-decisions-and-open-questions). The
+   formatter needs the heredoc of step 4 and the open questions of
+   [§47.9](../future/47-formatter.md#479-open-questions).
+
+Later, in no fixed order yet: the 6c evaluation round (row 10), the 44b to 44d
+table rewrites
+([§44.12](../future/44-module-constants.md#4412-implementation-plan)), HTTP
+streaming (row 7.4) and `Task.map` (row 7.3).
 
 Designed, not scheduled: dates and times (§41,
 [`docs/future/41-dates-and-times.md`](../future/41-dates-and-times.md)).
