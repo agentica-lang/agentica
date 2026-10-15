@@ -32,7 +32,8 @@ Read before writing or reviewing C in `vm/`.
   `*/` lines do not count): what the file is, its main functions or builtin
   family, its layer, and where its design lives in `docs/vm/`, as `vm/main.c`
   does. A C test's header is 1 to 4 lines on what it tests. A legal header may
-  come before it.
+  come before it. *Checked* by `tests/vm-style-test.rkt` (3 to 8 lines of text
+  for a source file, 1 to 4 for a C test, the generated file skipped).
 - Apart from the headers, the default is no comment. Add one only where the
   code's complexity justifies it, and make it say why, not what: an
   invariant, a subtle ownership or lifetime rule, a protocol, OpenSSL or libuv
@@ -40,7 +41,7 @@ Read before writing or reviewing C in `vm/`.
   follows. Use short `/* */` block comments. Never narrate obvious code and
   never leave commented-out code. Tool markers (`// NOLINT(...)`,
   `/* fall through */`) are not comments in this sense.
-- Only `value.c` reads the value union. Immediates write the full word.
+- Only `value.c` reads the value union, except the two inline word helpers of `value.h` (`agc_value_word`, `agc_word_value`) that list leaves use for the 8-byte payload of an Int or Float. Immediates write the full word.
 
 `make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
 skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes
@@ -61,8 +62,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 
 **Boehm GC.**
 - Allocate only through `agc_alloc` (objects that hold `agc_value`s) and
-  `agc_alloc_atomic` (strings, byte buffers; not zeroed under Boehm, so never
-  expose an unfilled tail), or `load_alloc` in the loader. They switch to
+  `agc_alloc_atomic` (strings, byte buffers, the leaf blocks of Int and Float
+  lists; not zeroed under Boehm, so never expose an unfilled tail), or
+  `load_alloc` in the loader. They switch to
   `calloc` under `AGC_NO_GC` and route out-of-memory to the handler. Only
   `value.c` calls `GC_*` or includes `gc.h`.
 - Under `AGC_NO_GC`, `agc_fuzz_one` frees every block after each mutant

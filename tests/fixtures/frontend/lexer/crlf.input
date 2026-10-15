@@ -1,0 +1,13 @@
+## Doc line
+## more
+
+def main() -> Void
+  x = 1 # c
+  y = [1,
+    2]
+  s = "a#{x}b"
+
+  f(xs.map do |x|
+    x
+  end)
+end

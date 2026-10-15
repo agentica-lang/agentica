@@ -1,8 +1,9 @@
 /*
  * Text and debug forms: agc_text (the print form), agc_debug (the inspect
- * form, with a Json as its canonical text for Test.eq), agc_concat, and
- * agc_write_form, the one escaper for String debug output. Core layer.
- * Design: docs/vm/02-reference-behavior.md §2.3 and §2.4.
+ * form), agc_test_text (the inspect form with a Json at any depth as its
+ * canonical text, for Test.eq), agc_concat, and agc_write_form, the one
+ * escaper for String debug output. Core layer. Design:
+ * docs/vm/02-reference-behavior.md §2.3 and §2.4.
  */
 #include "core.h"
 

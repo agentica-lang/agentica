@@ -1,0 +1,33 @@
+DOC 0:1:1-52:3:35 "## Module doc.\n##\n## Second paragraph with   spaces." doc "Module doc.\n\nSecond paragraph with   spaces." blank
+NL 52:3:35-53:4:1 "\n" -
+NL 53:4:1-54:5:1 "\n" -
+NL 69:5:16-70:6:1 "\n" -
+NL 71:6:2-72:7:1 "\n" -
+NL 85:7:14-86:8:1 "\n" -
+name 86:8:1-87:8:2 "x" =
+assign 88:8:3-89:8:4 "=" =
+integer 90:8:5-91:8:6 "1" 1
+NL 104:8:19-105:9:1 "\n" -
+DOC 105:9:1-141:12:14 "## First\n##\n##   Third\n  ### Heading" doc "First\n\n  Third\n# Heading" code
+NL 141:12:14-142:13:1 "\n" -
+def 142:13:1-145:13:4 "def" =
+name 146:13:5-147:13:6 "f" =
+left-paren 147:13:6-148:13:7 "(" =
+right-paren 148:13:7-149:13:8 ")" =
+NL 149:13:8-150:14:1 "\n" -
+DOC 152:14:3-188:15:21 "## indented doc\n\t## tab-indented doc" doc "indented doc\ntab-indented doc" code
+NL 188:15:21-189:16:1 "\n" -
+name 191:16:3-192:16:4 "x" =
+NL 192:16:4-193:17:1 "\n" -
+end 193:17:1-196:17:4 "end" =
+NL 196:17:4-197:18:1 "\n" -
+NL 197:18:1-198:19:1 "\n" -
+DOC 198:19:1-212:19:15 "## after blank" doc "after blank" blank
+NL 212:19:15-213:20:1 "\n" -
+NL 213:20:1-214:21:1 "\n" -
+DOC 214:21:1-231:21:18 "## before comment" doc "before comment" comment
+NL 231:21:18-232:22:1 "\n" -
+NL 238:22:7-239:23:1 "\n" -
+DOC 239:23:1-278:26:8 "## split by comment\n##tight\n###\n## last" doc "split by comment\ntight\n#\nlast" eof
+NL 278:26:8-279:27:1 "\n" -
+EOF 279:27:1-279:27:1 "" -

@@ -13,6 +13,7 @@ src/                Racket front end, one module per stage
   source.rkt token.rkt diagnostic.rkt   shared data: spans, tokens, diagnostics
   main.rkt          thin CLI: printing and exit codes live only here
   bdd-driver.rkt    `agentica test`
+compiler/           front end ported to Agentica, one stage per PR (§35): lexer
 vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, tasks, I/O, HTTP, JSON
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
@@ -41,8 +42,8 @@ phase 13).
 - `make test TESTS="tests/lexer-test.rkt"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
 - `racket src/main.rkt file.agc` runs a program; `... check file.agc` checks.
-- `make smoke`, `make goldens` (rewrite VM goldens; commit them), `make site`
-  (before merging a site change).
+- `make smoke`, `make goldens` (rewrite the VM and front-end goldens; commit
+  them), `make site` (before merging a site change).
 - CI steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are make
   targets, so they run locally the same way.
 
@@ -63,6 +64,13 @@ phase 13).
 - Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
   `RUNTIME-`, `LOWER-`, `BYTECODE-`), and carry a source span. Tests assert
   the code (and the span when it matters), never message text.
+- By default the Racket front end in `src/` is frozen (roadmap row 7.2.7): no
+  new syntax and no new checker rules. Only bug fixes, and new rows in the
+  `src/builtins.rkt` table with the matching name in the `vm-builtins` list of
+  `src/lower.rkt`. Every later language change goes into `compiler/`. A bug
+  fix in a ported stage changes both front ends in the same PR. They may be
+  relaxed when following them costs more than it saves; the PR says which
+  rule it relaxes and why.
 - Core grammar only (sections 4–6): user enums (the only user generics),
   `case`, file modules with explicit imports/exports, builtin `List[T]`,
   `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in `docs/future/`

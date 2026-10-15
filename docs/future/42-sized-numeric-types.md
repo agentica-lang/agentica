@@ -66,10 +66,11 @@ commit, and with `racket src/main.rkt check` on small probe programs.
   `Float.to_int!` (`src/checker.rkt:49-57`).
 - `check-binary` in `src/checker.rkt` checks both operands with no expected
   type. Literal typing from the other operand needs a change there.
-- A `List[Int]` item is an `agc_value`, which is 16 bytes (`vm/value.h`,
-  `vm/list_impl.h`). So a byte in a `List[Int]` costs 16 bytes, not one. §38.1
-  says there are 20 tags; the enum has 23 values today (the tag enum of
-  `vm/value.h`).
+- A `List[Int]` item takes 8 bytes since step 3 of 8d (unboxed leaves,
+  `docs/vm/17-lists.md` §17.12), and an item of any other list is an
+  `agc_value`, which is 16 bytes (`vm/value.h`). So a byte in a `List[Int]`
+  costs 8 bytes, not one. §38.1 says there are 20 tags; the enum has 23 values
+  today (the tag enum of `vm/value.h`).
 - The VM already picks typed opcodes from static types: `AGC_OP_ADD_I` (the
   opcode list of `vm/value.h`) and `AGC_OP_ADD_F` are separate opcodes. The
   checker's types reach lowering.
@@ -92,10 +93,10 @@ commit, and with `racket src/main.rkt check` on small probe programs.
 
 The reasons, in the order of their weight:
 
-- **Memory.** A byte in `List[Int]` costs 16 bytes. A type alone does not fix
-  that: a `List[UInt8]` whose items are still `agc_value` costs 16 bytes per
-  item too. The memory gain needs typed storage that uses the element width (1
-  byte for `UInt8`, §42.12). The types are the input that storage needs.
+- **Memory.** A byte in `List[Int]` costs 8 bytes. A type alone does not fix
+  that: a `List[UInt8]` stored as 64-bit numbers costs 8 bytes per item too.
+  The memory gain needs typed storage that uses the element width (1 byte for
+  `UInt8`, §42.12). The types are the input that storage needs.
 - **Binary protocols and files.** §23 reads and writes numbers as `Int`, so the
   width is only a convention in the function name, and `write_u16_be` checks the
   range at run time (`value 70000 does not fit in u16`). With `UInt16` the range
@@ -535,9 +536,11 @@ With (C), the operations are:
   element kind, so the paths that have no static type (`inspect`, `to_s`,
   `JSON.encode`, `List.sort` and equality, §42.11) read the width from the list,
   as they read a tag today. A read rebuilds the `agc_value` from the element
-  kind (§38.6, item 1).
+  kind (§38.6, item 1). `Int` and `Float` lists are already unboxed at 8 bytes
+  (8d step 3, §17.12), so step 4 is for `UInt64` and the narrower widths.
 - **Why not earlier.** It touches every container that holds values, and the
-  persistent vector of 8d (done before the bootstrap) would need typed leaves.
+  persistent vector of 8d (done before the bootstrap) would need leaves of
+  more widths than its 8-byte Int and Float leaves (§17.12).
   §38.7 says to change the value layout only when a measurement says so. The
   criterion: a program that reads a 10 MB file into a `List[UInt8]` has a peak
   RSS that is too high for its task, measured with the benchmark script, and the

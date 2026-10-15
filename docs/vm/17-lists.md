@@ -2,7 +2,8 @@
 
 **Status:** roadmap item 8d
 ([`08-data-structures.md`](../roadmap/08-data-structures.md)) is built: PR 1 of
-§17.9 (the API over the flat array) and PR 2 (the trie behind it). It fills in
+§17.9 (the API over the flat array), PR 2 (the trie behind it) and step 3, the
+unboxed leaves of Int and Float lists (§17.12). It fills in
 [`docs/future/12-data-structures.md`
 §12.4](../future/12-data-structures.md#124-faster-lists) for the C VM, which is
 the only backend since 7i. Line numbers are from master at 5713a2c, before PR 1
@@ -36,8 +37,9 @@ loop of n pushes takes 0.41 s for n = 10,000, 6.0 s for 40,000 and 88 s for
   [§38.6](../future/38-value-representation.md#386-direction-use-the-static-types);
   the owner scheduled them as step 3 of 8d on 2026-10-14
   ([`08-data-structures.md`](../roadmap/08-data-structures.md)). Because every
-  site goes through the API of §17.4, that step changes `vm/list.c` and the
-  places that create a list, which get the element type from the front end.
+  site goes through the API of §17.4, that step changes `vm/list.c` and little
+  else. It is built: §17.12. The VM decides the kind of a list by itself from
+  its values, so the front end passes nothing.
 - No shared empty list ([§34](../future/34-shared-small-values.md) is separate).
 - No cursor opcode for `for` (§17.3, row 4).
 
@@ -54,9 +56,11 @@ struct agc_list { size_t len; list_branch *root; uint32_t shift; agc_value tail[
 ```
 
 `struct agc_list` and the two node types live in `vm/list.c` only. Outside it
-the type is opaque (§17.4). The algorithms below were run in a throwaway C model
-against a flat array at every length of §17.8, so the boundaries quoted here are
-measured, not only derived. The model is not in the repository.
+the type is opaque (§17.4). (As built, they are in the private `vm/list_impl.h`,
+the list has a `uint32_t kind` after `shift`, and a leaf is 32 items of that
+kind, 512 bytes or 256: §17.12.) The algorithms below were run in a throwaway C
+model against a flat array at every length of §17.8, so the boundaries quoted
+here are measured, not only derived. The model is not in the repository.
 
 - `tail_len(n)` is 0 for n = 0, else `((n - 1) & 31) + 1`. `tail_off(n)` is
   `n - tail_len(n)`. The list object holds the last `tail_len(len)` items inline
@@ -79,8 +83,8 @@ measured, not only derived. The model is not in the repository.
   (`GC_MALLOC`, zeroed, scanned): they hold GC pointers or `agc_value`s, which
   can hold them (§5.3). Never `agc_alloc_atomic` for them. Atomic stays for
   temporary arrays (the sort's entries for Int and Float keys,
-  `vm/interp.c:321-340`) and, in the later §38 step, for leaves of Int or Float
-  only. A branch is 256 bytes and a
+  `vm/interp.c:321-340`) and, since §17.12, for the leaves of a list of Ints or
+  of Floats. A branch is 256 bytes and a
   leaf 512, so they are small Boehm objects, served from size-class free lists.
   A flat list of 100,000 items is one large object of 1.6 MB. Under `AGC_NO_GC`
   (the ASan build) `agc_alloc` is `calloc` kept until `agc_release_all`
@@ -524,7 +528,7 @@ operations after the trie").
   so a program cannot tell. A million-character `split("")` allocates no
   String.
 - **Cursor and builder.** `agc_list_builder_push` and `agc_list_cursor_next`
-  are inline in `value.h` (`agc_list_builder_advance` and
+  are inline in `value.h` (`agc_list_builder_more` and
   `agc_list_cursor_fill` take the slow path), so `map`, `join`, `Range.to_a` and
   the JSON builders do not call into `list.c` per item.
 - **Tried and left out.** A chunked staging area for `filter` (leaves filled
@@ -532,3 +536,115 @@ operations after the trie").
   half and cost 3% on one that keeps everything, so `filter` still stages in a
   flat array. `map` and `filter` spend 70 to 100 ns per item in the callback
   (frame, registers, turn cost); the list is about 10% of it.
+
+### 17.12 Unboxed numeric leaves
+
+Step 3 of roadmap item 8d
+([§38.6](../future/38-value-representation.md#386-direction-use-the-static-types),
+item 1). The owner decided on 2026-10-15 that the VM decides, not the front end.
+The first plan had the checker's element type reach the VM, which needs a new
+operand or a new builtin argument, a loader change, and a type for every list
+that C code makes (JSON, `String.split`, `Map.keys`, the byte lists of files and
+streams). The static types already say that a `List[Int]` holds only Ints, so
+the list code looks at the values it is given. There is no change to the front
+end, the lowering, the bytecode (format version 3) or the loader, and `Int`
+stays 64 bits.
+
+**Kind.** A list has a kind, a `uint32_t` after `shift` that takes the padding
+(the header stays 24 bytes):
+
+- 0: boxed. The items are 16-byte `agc_value`s (§17.2).
+- `AGC_T_INT` or `AGC_T_FLOAT`: every item has that tag. A leaf and the tail
+  hold the 8 raw bytes of each item and no tag. A leaf is 256 bytes, not 512.
+
+An empty list has kind 0, however it was made: it has no kind, and its first
+item decides. In a valid program a list never changes kind after that, because
+a `List[T]` has one element type (there is no `Any`, and `Nil` is not a
+wildcard). Only a hostile `.agcb` can mix.
+
+| Operation | Kind of the result |
+|---|---|
+| sized builder | the tag of the first item pushed (0 unless Int or Float); the list object is allocated at that push, since its size depends on the kind |
+| `agc_list_from_array` (a literal, `filter`) | the tag of the first item when all items have it |
+| `append` | the kind of the list; of the item for an empty list |
+| `set`, `slice`, `reverse` | the kind of the list |
+| `repeat` | the tag of the value |
+| `concat` | the kind of both lists when equal; an empty side gives the other list as is |
+
+**Reads and writes.** `list_at` and `agc_list_trie_get` rebuild the value from
+the kind: the tag is the kind and the payload is the 8 bytes. That is one more
+compare, predictable because a list has one kind. The cursor and the inline
+`agc_list_builder_push` of `value.h` carry the kind in their structs and branch
+the same way. Two details keep the boxed code as fast as it was. The stores of
+`push` are typed (`uint64_t` and `agc_value`): a `char *` store may alias the
+builder's own fields, so the compiler reloaded `next`, `stop` and `kind` for
+every item and `Range.to_a` took 25% longer. And a value is built from its two
+8-byte words (`agc_word_value`, with `agc_value_word` the other way, both in
+`value.h`), because the field-by-field form made the compiler merge the boxed
+and the numeric path with masks.
+
+**Memory and the GC.**
+
+- The leaf blocks of a numeric list (the block of a build, a copied leaf, the
+  leaf of `repeat`) come from `agc_alloc_atomic`: the collector does not scan
+  them, and under Boehm they are not zeroed. Every word is written before the
+  list is returned: `finish` aborts unless the builder is full, and a leaf copy
+  is always given 32 items.
+- Branches and the list object stay `agc_alloc`: the object holds `root`. A
+  numeric tail (at most 256 bytes) is part of that object and is scanned, so an
+  Int that looks like a pointer can keep garbage alive for as long as its list
+  lives. Boehm already accepts that for the stack and the registers.
+- A leaf is a slice of a block and the branches hold interior pointers into it.
+  `GC_set_all_interior_pointers(1)` keeps the block alive. `list_test.c` forces
+  collections while only such pointers refer to an atomic block, for each kind.
+- The size bound of §17.7 is still checked on 16-byte items, for every kind, so
+  `1 << (shift + 5)` fits.
+
+**Mixing kinds.** The checker does not allow it, but a `.agcb` can ask for it:
+`List.set` of a String into an Int list, a `map` block that returns an Int and
+then a String, `List.concat` of an Int list and a Float list. The rule is that
+no code reads an item as another kind and that the kind of a returned list never
+changes. Where kinds meet, the result is boxed, and no operation fails:
+
+- The builder: a push whose tag differs from the kind of a numeric builder
+  replaces the builder by a boxed one of the same size that holds the items
+  written so far (read back as values). It costs O(n) once. A boxed builder
+  never becomes numeric. A builder that shares leaves (`slice`, `concat`) is
+  only made for lists of one kind, so it never converts.
+- `append` and `set` of a value of another tag onto a numeric list copy the list
+  to boxed first, then do the operation. The input list is unchanged.
+- `concat` of two non-empty lists of different kinds fills one boxed builder
+  from both and shares nothing.
+- `from_array` starts over as boxed at the first tag that differs.
+- `sort` of such a list takes the boxed path, which checks the type of every key
+  (`agc_as_int`, `agc_as_float`) and fails as it did before.
+
+**Sort.** `agc_sort_by_keys` sorts `(key, item)` entries. For a boxed list the
+item is the index. When a list sorts by itself (`List.sort`) and has a numeric
+kind, the item is the raw 8 bytes of the number, and the result is built by
+pushing the sorted words, with no read through the trie by index. The order
+keys, the checks for keys that never decrease or strictly decrease, and the
+merge are the same, so the order is the same: stable, `-0.0` equal to `0.0`,
+every NaN last and equal. A first version sorted the 8-byte words directly with
+a second merge. It was no faster for Float, because the order key had to be
+recomputed at every compare, and it was a second copy of the merge, so it was
+dropped. `sort_by` and the sort of Strings are unchanged.
+
+**Costs.** A numeric item takes 8 bytes instead of 16; the branches are still
+about 1.6% of that, and a list of at most 32 items is 24 + 8k bytes. A builder
+is 48 bytes (it was 24): the final length and the kind. Step counts, turn costs
+(one unit per item) and the `.agcb` format do not change. The numbers are in
+[`docs/vm-benchmarks.md`](../vm-benchmarks.md), "Unboxed numeric leaves".
+
+**Left as it was.** `filter` still stages `agc_value`s in a flat array before
+`from_array` packs the result. Registers, calls, structs, maps and Json values
+stay `agc_value`.
+
+**Tests.** `vm/tests/list_test.c` runs the whole API three times, with Int,
+Float and boxed items, over the lengths of §17.8 (the million lengths for Int
+only). It also builds mixed lists by hand through the C API at every boundary of
+the block and the tail (builder, `append`, `set`, `concat`, `from_array`),
+checks that an empty list has no kind, that `-0.0`, NaN and the limits of Int
+survive each operation, and that leaves shared by `take`, `drop` and `concat`
+stay correct when the other list has another kind. The golden
+`tests/fixtures/vm/list-unboxed.agc` prints the same output on master and here.

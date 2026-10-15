@@ -1,0 +1,1 @@
+ERROR LEX-INVALID-ESCAPE 5:1:6-7:1:8 "unsupported escape \\\u{1F600}" -
