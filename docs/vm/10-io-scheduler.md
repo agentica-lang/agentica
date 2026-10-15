@@ -556,7 +556,7 @@ section says how the scheduler and the loop keep them, as built.
   keep their names, types and results, and a full stdout pipe stalls only the
   tasks that print.
   - **Tests** (VM only, hermetic, Python stdlib peers).
-    `tests/vm-stdout-test.rkt` with `tests/fixtures/stdout-peer.py` (a pipe, a
+    `tests/test_vm_stdout.py` with `tests/fixtures/stdout-peer.py` (a pipe, a
     socket pair or a pty as stdout, a separate or merged stderr, a delay before
     the reader starts): a pipe that nobody reads for a while, while a timer task
     keeps running, and the run ends once the reader drains; two tasks that print
@@ -578,7 +578,7 @@ section says how the scheduler and the loop keep them, as built.
     of jobs that finished during the child stop, `drain` in `finish_flushes`); a
     reader that went away (`RUNTIME-INTERNAL`, exit 1); a crashed parent whose
     waiting child leaves the FIFO with nothing partial written.
-    `tests/vm-stop-test.rkt`: a stop signal with a stdout nobody reads ends the
+    `tests/test_vm_stop.py`: a stop signal with a stdout nobody reads ends the
     run long before the flush limit. `vm/tests/output_test.c`: the buffer and
     the FIFO without the interpreter (order, wrap, `IO.flush`, a head that
     leaves, a leaving long print that lets a queued notice and the next writer
