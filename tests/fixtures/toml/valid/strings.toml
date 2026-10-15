@@ -1,0 +1,29 @@
+basic = "I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF."
+escapes = "\b\t\n\f\r\"\\ \u0041 \U0001F600 \u00e9"
+empty = ""
+literal = 'C:\Users\nodejs\templates'
+quoted = 'Tom "Dubs" Preston-Werner'
+ml_basic = """
+Roses are red
+Violets are blue"""
+ml_quotes = """Here are two quotation marks: "". Simple enough.
+Here are three: ""\". And ten: ""\"""\"""\"""\"\"."""
+ml_continued = """
+The quick brown \
+
+
+  fox jumps over \
+    the lazy dog."""
+ml_trailing = """one\   
+   two"""
+ml_literal = '''
+The first newline is
+trimmed in raw strings.
+   All other whitespace
+   is preserved. \n stays as it is
+'''
+ml_literal_quotes = '''Here is "" and '' and a quote: ''''
+ml_empty = """"""
+ml_literal_empty = ''''''
+crlf_in_text = "a\r\nb"
+unicode = "héllo wörld, 日本語, 😀"

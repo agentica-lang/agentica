@@ -71,5 +71,6 @@ Push adds at the back; pop removes the oldest value. Pop and peek on an empty qu
 
 - `std/http`: the HTTP client and server, written in Agentica. See `network.md`.
 - `std/binary`: reads and writes binary numbers in a `List[Int]` of bytes. See `binary.md`.
+- `std/toml`: reads and writes TOML 1.0. See `toml.md`.
 - `std/logger`: levels, handlers, text and JSON lines on stderr. See `logger.md`.
 - `std/bdd`: the step API of `agentica test`. See `bdd.md`.

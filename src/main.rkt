@@ -32,7 +32,7 @@
    "Builtins: agentica help NAME prints one signature (NAME is Namespace.function, or a bare function).\n"
    "  namespaces: " (string-join namespaces " ") "\n"
    "  bare functions: " (string-join bare " ") "\n"
-   "  std modules written in Agentica (import \"std/http\", \"std/queue\", \"std/binary\", \"std/bdd\") are not in this catalog."))
+   "  std modules written in Agentica (import \"std/http\", \"std/queue\", \"std/binary\", \"std/toml\", \"std/bdd\") are not in this catalog."))
 
 (define (temporary-bytecode-path)
   (build-path (find-system-path 'temp-dir)

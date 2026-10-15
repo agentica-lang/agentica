@@ -1,0 +1,13 @@
+# full line comment
+a = 1 # trailing comment with "quotes", [brackets] and = signs
+b = "# not a comment"
+c = '# not a comment either'
+[t] # after a header
+d = [ # after the bracket
+  1, # after a value
+] # after the array
+	# a tab before a comment
+e = { x = 1 } # after an inline table
+f = "tab	in string"
+g = "caf\u00e9 # and \u0023 after"
+# last line without a newline
