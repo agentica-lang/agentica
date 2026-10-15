@@ -122,7 +122,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references
     text_test.c          # text forms
     tls_test.c           # TLS adapter
     trace_test.c         # trace points
-tests/            # rackunit files; the lists of references/vm-tests.md say which covers what
+tests/            # rackunit files and unittest modules (test_<area>.py); the lists of references/vm-tests.md say which covers what
   lexer-test.rkt  # the lexer (references/stages.md)
   parser-test.rkt  # the parser (references/stages.md)
   checker-test.rkt  # ranges, JSON contracts and other checker rules (references/stages.md)
@@ -160,7 +160,8 @@ tests/            # rackunit files; the lists of references/vm-tests.md say whic
   vm-test-protocol-test.rkt  # a Python peer plays a test runner over the child channel (references/vm-tests.md)
   vm-child-channel-test.rkt  # the child channel on its own, against Python peers (references/vm-tests.md)
   vm-tls-test.rkt  # the VM TLS builtins against independent peers (references/vm-tests.md)
-  vm-bits-test.rkt  # spans of the Int and Float bit builtin errors (references/library-notes.md)
+  test_vm_bits.py  # unittest: spans of the Int and Float bit builtin errors (references/library-notes.md)
+  agentica_test.py  # unittest helpers: paths, VM and CLI, run with timeout, temp dirs, @slow (references/ci.md)
   std-binary-test.rkt  # std/binary on the VM (references/library-notes.md)
   site-examples-test.rkt  # agentica blocks in site/content run or check; fast: three pages, slow: all (references/site.md)
   stdlib-distribution-test.rkt  # the relocated executable still finds std/ (references/ci.md)

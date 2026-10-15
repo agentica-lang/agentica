@@ -19,7 +19,8 @@ vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, 
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
 stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner)
-tests/              rackunit: <stage>-test.rkt, vm-*-test.rkt; fixtures/ (goldens, Node/Python peers)
+tests/              rackunit: <stage>-test.rkt, vm-*-test.rkt; unittest: test_<area>.py
+                    (agentica_test.py is the shared helper); fixtures/ (goldens, Node/Python peers)
 examples/           small programs per feature (README.md lists them)
 docs/
   grammar/          the language definition (index: docs/grammar.md)
@@ -43,7 +44,9 @@ phase 13).
 - `make test TESTS="tests/lexer-test.rkt"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
 - `racket src/main.rkt file.agc` runs a program; `... check file.agc` checks.
-- `make test-slow`: the `(module+ slow ...)` cases; CI only.
+- `make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"`: a `.rkt` file
+  goes to rackunit, a `.py` file to unittest (one process per module).
+- `make test-slow`: the `(module+ slow ...)` and `@slow` cases; CI only.
 - `make smoke`, `make goldens` (rewrite the VM and front-end goldens; commit
   them), `make site` (before merging a site change).
 - CI steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are make
@@ -82,18 +85,26 @@ phase 13).
   until its phase lands. No placeholder files or nodes for later phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
-- Tests: `rackunit`. Racket, Node and Python test code and peers (curl included)
-  use the standard library only, with no third-party libraries or test
-  frameworks. The VM's C dependencies are the submodules in `vm/third_party`;
-  the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
+- Tests: rackunit and Python `unittest` during the migration to unittest
+  (a test lives in one framework only; new tests go to unittest unless they
+  need the Racket front end as an oracle). Racket, Node and Python test code
+  and peers (curl included) use the standard library only, with no third-party
+  libraries or test frameworks. The VM's C dependencies are the submodules in
+  `vm/third_party`; the only dev-tool dependency is the pinned jscpd in
+  `tools/jscpd`.
 - Network and process tests are hermetic: localhost, port 0, no external
   services, everything cleaned up. TCP/HTTP interop uses an independent
   protocol implementation as the peer. Fixtures go in `tests/fixtures/`.
   CI installs the tools and fails if one is missing; local runs may report a
   skip. Racket-only tests may add coverage but are not the base layer.
-- Two test tiers: the fast tier is `(module+ test ...)`; slow cases (live
-  corpus, generated inputs, stress) go in `(module+ slow ...)`, which CI runs
-  with `make test-slow`. Local runs use only the fast tier
+- Python tests live in `tests/test_<area>.py` and derive from
+  `tests.agentica_test.TestCase`; `make test` runs each module in its own
+  process, `JOBS` at a time (standard library only, no pytest).
+- Two test tiers: the fast tier is `(module+ test ...)` or the default cases
+  of a unittest module; slow cases (live corpus, generated inputs, stress) go
+  in `(module+ slow ...)` or are marked `@slow` (run only with
+  `AGENTICA_TEST_SLOW=1`, which `make test-slow` sets), and CI runs them with
+  `make test-slow`. Local runs use only the fast tier
   (`make test TESTS=...`). Sanitizers, gc-stress, fuzz, smoke and full
   sweeps are slow by nature.
 - When a phase item is done, tick it in the roadmap and update the
