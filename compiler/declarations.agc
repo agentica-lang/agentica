@@ -109,10 +109,10 @@ end
 ## The text of the import line a help shows, for the path as written (quoted): the alias form, or the name list.
 export def import_line(written: String, decl: Ast.ImportDecl) -> String
   case decl.alias
-    Ast.Optional.Present(alias) -> return "import " + alias + " from " + written
+    Ast.Optional.Present(alias) -> return "import #{alias} from #{written}"
     Ast.Optional.Absent ->
       pieces = decl.names.map do |entry| entry_text(entry) end
-      return "import {" + pieces.join(", ") + "} from " + written
+      return "import {#{pieces.join(", ")}} from #{written}"
   end
 end
 
@@ -200,5 +200,5 @@ def entry_text(entry: Ast.ImportName) -> String
   if entry.name == entry.local
     return entry.name
   end
-  return entry.name + " as " + entry.local
+  return "#{entry.name} as #{entry.local}"
 end

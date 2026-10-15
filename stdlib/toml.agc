@@ -106,7 +106,7 @@ export def parse(text: String) -> Result[Value]
       end
       close_at = key.pos
       if piece(src, close_at, close_at + closing.length) != closing
-        return error(place(src, close_at, "expected '" + closing + "' to end the table header"))
+        return error(place(src, close_at, "expected '#{closing}' to end the table header"))
       end
       section += 1
       opened = open_table(root, key.parts, is_array)
@@ -152,7 +152,7 @@ export def encode(value: Value) -> Result[String]
       if lines.size == 0
         return ok("")
       end
-      return ok(lines.join("\n") + "\n")
+      return ok("#{lines.join("\n")}\n")
     _ -> return error("the root of a TOML document must be a table")
   end
 end
@@ -174,16 +174,16 @@ export def get(value: Value, path: String) -> Result[Value]
     case current
       Value.Table(entries) ->
         if !entries.has_key?(part)
-          return error("no key \"" + part + "\" in \"" + path + "\"")
+          return error("no key \"#{part}\" in \"#{path}\"")
         end
         current = entries[part]
       Value.Array(items) ->
         index = part.to_i
         if !index_segment?(part) or !index.ok? or index.unwrap! >= items.size
-          return error("no index \"" + part + "\" in \"" + path + "\"")
+          return error("no index \"#{part}\" in \"#{path}\"")
         end
         current = items[index.unwrap!]
-      _ -> return error("\"" + part + "\" in \"" + path + "\" is not inside a table or an array")
+      _ -> return error("\"#{part}\" in \"#{path}\" is not inside a table or an array")
     end
   end
   return ok(current)
@@ -214,7 +214,7 @@ def json_of(value: Value, depth: Int) -> Result[Json]
     Value.DateTime(s) -> return ok(JSON.from(s))
     Value.Float(x) ->
       if !finite?(x)
-        return error("cannot convert " + float_text(x) + " to JSON")
+        return error("cannot convert #{float_text(x)} to JSON")
       end
       return ok(JSON.from(x))
     Value.Array(items) ->
@@ -326,7 +326,7 @@ def place(src: Src, pos: Int, message: String) -> String
     end
     i += 1
   end
-  return "line " + line.to_s + ", column " + column.to_s + ": " + message
+  return "line #{line}, column #{column}: #{message}"
 end
 
 def skip_ws(src: Src, pos: Int) -> Int
@@ -690,7 +690,7 @@ def read_unicode(src: Src, pos: Int, count: Int) -> Result[Scan]
   for i in 0...count
     d = hex_value(at(src, pos + i))
     if d < 0
-      return error(place(src, pos - 2, "a unicode escape needs " + count.to_s + " hex digits"))
+      return error(place(src, pos - 2, "a unicode escape needs #{count} hex digits"))
     end
     code = code * 16 + d
   end
@@ -1006,7 +1006,9 @@ def header_into(table: Tbl, path: List[String], i: Int, is_array: Bool) -> Resul
       sub = try header_into(last_row(rows), path, i + 1, is_array)
       replaced = Node.Rows(rows.set(rows.size - 1, sub))
       return ok(Node.Tab(table.with(entries: entries.put(seg, replaced))))
-    Node.Leaf(_) -> return error("\"" + seg + "\" is not a table, so it cannot hold \"" + path.join(".") + "\"")
+    Node.Leaf(_) ->
+      held = path.join(".")
+      return error("\"#{seg}\" is not a table, so it cannot hold \"#{held}\"")
   end
 end
 
@@ -1026,7 +1028,7 @@ def header_last(entries: Map[String, Node], seg: String, name: String, is_array:
     end
     case entries[seg]
       Node.Rows(rows) -> return ok(Node.Rows(rows.push(Node.Tab(empty_tbl(Origin.Header, 0)))))
-      _ -> return error("\"" + name + "\" is already defined and is not an array of tables")
+      _ -> return error("\"#{name}\" is already defined and is not an array of tables")
     end
   end
   if !entries.has_key?(seg)
@@ -1036,11 +1038,11 @@ def header_last(entries: Map[String, Node], seg: String, name: String, is_array:
     Node.Tab(existing) ->
       case existing.origin
         Origin.Implicit -> return ok(Node.Tab(existing.with(origin: Origin.Header)))
-        Origin.Header -> return error("table \"" + name + "\" is already defined")
-        Origin.Dotted -> return error("table \"" + name + "\" is already defined by dotted keys")
+        Origin.Header -> return error("table \"#{name}\" is already defined")
+        Origin.Dotted -> return error("table \"#{name}\" is already defined by dotted keys")
       end
-    Node.Rows(_) -> return error("\"" + name + "\" is an array of tables, not a table")
-    Node.Leaf(_) -> return error("\"" + name + "\" is already defined")
+    Node.Rows(_) -> return error("\"#{name}\" is an array of tables, not a table")
+    Node.Leaf(_) -> return error("\"#{name}\" is already defined")
   end
 end
 
@@ -1059,7 +1061,7 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
   entries = table.entries
   if i == full.size - 1
     if entries.has_key?(seg)
-      return error("key \"" + seg + "\" is already defined")
+      return error("key \"#{seg}\" is already defined")
     end
     return ok(Node.Tab(table.with(entries: entries.put(seg, Node.Leaf(value)))))
   end
@@ -1072,10 +1074,10 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
       entered = inner
       if i >= header_size
         case inner.origin
-          Origin.Header -> return error("cannot add keys to table \"" + seg + "\", which a header defines")
+          Origin.Header -> return error("cannot add keys to table \"#{seg}\", which a header defines")
           Origin.Dotted ->
             if inner.stamp != section
-              return error("cannot add keys to table \"" + seg + "\", which dotted keys defined in an earlier section")
+              return error("cannot add keys to table \"#{seg}\", which dotted keys defined in an earlier section")
             end
           Origin.Implicit -> entered = inner.with(origin: Origin.Dotted, stamp: section)
         end
@@ -1084,11 +1086,11 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
       return ok(Node.Tab(table.with(entries: entries.put(seg, sub))))
     Node.Rows(rows) ->
       if i >= header_size
-        return error("cannot add keys to the array of tables \"" + seg + "\" with dotted keys")
+        return error("cannot add keys to the array of tables \"#{seg}\" with dotted keys")
       end
       sub = try put_into(last_row(rows), full, header_size, i + 1, value, section)
       return ok(Node.Tab(table.with(entries: entries.put(seg, Node.Rows(rows.set(rows.size - 1, sub))))))
-    Node.Leaf(_) -> return error("\"" + seg + "\" is a value, not a table")
+    Node.Leaf(_) -> return error("\"#{seg}\" is a value, not a table")
   end
 end
 
@@ -1143,7 +1145,7 @@ def escape_for(c: Int) -> String
   elsif c == 13
     return "\\r"
   end
-  return "\\u00" + hex_digit(c / 16) + hex_digit(c % 16)
+  return "\\u00#{hex_digit(c / 16)}#{hex_digit(c % 16)}"
 end
 
 # A basic string with escapes. Characters above 127 are written as they are. Runs of plain
@@ -1205,7 +1207,7 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
     Value.Bool(b) -> return ok(b.to_s)
     Value.DateTime(s) ->
       if !valid_date_time?(s, cls)
-        return error("not a valid TOML date-time: " + quote(s))
+        return error("not a valid TOML date-time: #{quote(s)}")
       end
       return ok(s)
     Value.Array(items) ->
@@ -1217,7 +1219,7 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
         text = try inline(item, cls, depth + 1)
         texts = texts.push(text)
       end
-      return ok("[" + texts.join(", ") + "]")
+      return ok("[#{texts.join(", ")}]")
     Value.Table(entries) ->
       if depth >= max_depth()
         return error("arrays and inline tables nest more than 256 levels")
@@ -1225,9 +1227,9 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
       texts: List[String] = []
       for k in entries.keys
         text = try inline(entries[k], cls, depth + 1)
-        texts = texts.push(key_text(k) + " = " + text)
+        texts = texts.push("#{key_text(k)} = #{text}")
       end
-      return ok("{" + texts.join(", ") + "}")
+      return ok("{#{texts.join(", ")}}")
   end
 end
 
@@ -1267,7 +1269,7 @@ def emit_table(
       _ ->
         if !table_array?(v)
           text = try inline(v, cls, 0)
-          lines = lines.push(key_text(k) + " = " + text)
+          lines = lines.push("#{key_text(k)} = #{text}")
         end
     end
   end
@@ -1281,7 +1283,7 @@ def emit_table(
           if lines.size > 0
             lines = lines.push("")
           end
-          lines = lines.push("[" + path_text(sub_path) + "]")
+          lines = lines.push("[#{path_text(sub_path)}]")
         end
         lines = try emit_table(sub, sub_path, lines, cls)
       Value.Array(items) ->
@@ -1292,7 +1294,7 @@ def emit_table(
                 if lines.size > 0
                   lines = lines.push("")
                 end
-                lines = lines.push("[[" + path_text(sub_path) + "]]")
+                lines = lines.push("[[#{path_text(sub_path)}]]")
                 lines = try emit_table(row, sub_path, lines, cls)
               _ -> next
             end

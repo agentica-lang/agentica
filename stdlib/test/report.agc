@@ -369,7 +369,7 @@ def stack_text(problem: Error, ai: Bool) -> String
   if lines.length == 0
     return ""
   elsif ai
-    return " | stack " + lines.join("; ")
+    return " | stack #{lines.join("; ")}"
   end
   return "\n  stack, innermost first:\n" + lines.map do |line| "    #{line}" end.join("\n")
 end
@@ -413,10 +413,10 @@ def frame_line(frame: Json) -> String
   line = "#{name} at #{place_text(frame)}"
   repeat = int_at(frame, "repeat").unwrap_or(1)
   if repeat > 1
-    line = line + " (#{repeat} times)"
+    line = "#{line} (#{repeat} times)"
   end
   if JSON.get(frame, "tail").ok?
-    line = line + " (after a tail call)"
+    line = "#{line} (after a tail call)"
   end
   return line
 end

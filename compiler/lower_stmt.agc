@@ -69,7 +69,7 @@ export def lower_block_function(
   cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.BlockLit, captured: List[String]
 ) -> Result[Lowering.Fx]
   index = fx.block_count
-  name = "block@" + Paths.last_part(cx.file) + ":" + node.span.start.line.to_s + ":" + node.span.start.column.to_s
+  name = "block@#{Paths.last_part(cx.file)}:#{node.span.start.line}:#{node.span.start.column}"
   params = node.params.map do |param: Ast.BlockParam| param.name end
   inner = Lowering.fresh(cx.index, fx.blocks, index + 1)
   built = try lower_function(cx, inner, name, params, captured, node.body, node.span, true)
@@ -378,7 +378,7 @@ def lower_test(
         end
         return ok(Lowering.emit_at(fx, jump, [slot, skip], span))
       end
-      id = cx.variants[node.enum_name + "." + node.variant_name]
+      id = cx.variants["#{node.enum_name}.#{node.variant_name}"]
       fx = Lowering.emit_at(fx, "is-variant", [slot, value, id], span)
       return ok(Lowering.emit_at(fx, "jump-if-false", [slot, skip], span))
   end
@@ -396,7 +396,7 @@ def lower_literal_test(
     Ast.LitValue.Flag(flag) -> imm = Ir.Imm.Bool(flag)
     Ast.LitValue.Nothing -> imm = Ir.Imm.Nil
     Ast.LitValue.Huge(digits) ->
-      if digits != "-" + INT_MIN_DIGITS
+      if digits != "-#{INT_MIN_DIGITS}"
         return ok(Lowering.emit_at(fx, "jump", [skip], node.span))
       end
       imm = Ir.Imm.Int(INT_MIN)

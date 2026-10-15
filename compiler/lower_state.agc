@@ -83,7 +83,7 @@ end
 
 ## The failure of a form the VM does not support: LOWER-UNSUPPORTED "the VM does not support WHAT yet".
 export def unsupported(cx: Cx, what: String, span: Source.Span) -> String
-  message = "the VM does not support " + what + " yet"
+  message = "the VM does not support #{what} yet"
   return Failure.pack(Failure.problem(cx.file, "", "LOWER-UNSUPPORTED", message, span, Diag.Help.NoHelp))
 end
 
@@ -208,7 +208,7 @@ export def require_type(cx: Cx, expr: Ast.Expr, void: Bool, type: Types.Type) ->
   end
   what = "this expression"
   if !Types.unknown?(type)
-    what = "values of type " + Types.to_text(type)
+    what = "values of type #{Types.to_text(type)}"
   end
   return error(unsupported(cx, what, Ast.expr_span(expr)))
 end

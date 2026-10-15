@@ -26,21 +26,12 @@ end
 
 ## A span as offset:line:column-offset:line:column.
 export def span_text(span: Source.Span) -> String
-  return position_text(span.start) + "-" + position_text(span.stop)
+  return "#{position_text(span.start)}-#{position_text(span.stop)}"
 end
 
 ## The ERROR line of a diagnostic: code, span, message and help (- when there is none).
 export def diagnostic_line(problem: Diag.Diagnostic) -> String
-  return (
-    "ERROR " +
-    problem.code +
-    " " +
-    span_text(problem.span) +
-    " " +
-    quote(problem.message) +
-    " " +
-    help_text(problem.help)
-  )
+  return "ERROR #{problem.code} #{span_text(problem.span)} #{quote(problem.message)} #{help_text(problem.help)}"
 end
 
 def escaped(code: Int) -> String
@@ -50,7 +41,7 @@ def escaped(code: Int) -> String
     10 -> return "\\n"
     13 -> return "\\r"
     9 -> return "\\t"
-    _ -> return "\\u{" + Unicode.hex_text(code) + "}"
+    _ -> return "\\u{#{Unicode.hex_text(code)}}"
   end
 end
 

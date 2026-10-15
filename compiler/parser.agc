@@ -90,7 +90,7 @@ export def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.
 end
 
 def brace_help(form: String) -> String
-  return "blocks have no braces: write \"" + form + "\" ... \"end\""
+  return "blocks have no braces: write \"#{form}\" ... \"end\""
 end
 
 # The newline that ends the head of a def, if, case, while or for. A `{` here gets the help that blocks have no braces.
@@ -100,7 +100,7 @@ def expect_head_end(e: Base.Env, pos: Int, description: String, form: String) ->
       Base.unexpected_help(
         e,
         pos,
-        "expected " + description + ", found " + Base.describe(e.tokens[pos]),
+        "expected #{description}, found #{Base.describe(e.tokens[pos])}",
         brace_help(form),
       ),
     )
@@ -122,8 +122,8 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
       Base.unexpected_help(
         e,
         pos,
-        "expected a newline after the statement, found " + Base.describe(token),
-        "there are no " + token.lexeme + " modifiers: put the statement inside " + token.lexeme + " cond ... end",
+        "expected a newline after the statement, found #{Base.describe(token)}",
+        "there are no #{token.lexeme} modifiers: put the statement inside #{token.lexeme} cond ... end",
       ),
     )
   end
@@ -219,7 +219,7 @@ def parse_expression(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       Base.unexpected_help(
         e,
         right.pos,
-        "ranges do not chain, found " + Base.describe(e.tokens[right.pos]),
+        "ranges do not chain, found #{Base.describe(e.tokens[right.pos])}",
         "wrap each range in parentheses: (a..b) == (c..d)",
       ),
     )
@@ -404,7 +404,7 @@ def block_name_help(name: String) -> String
   if name == "loop"
     return "there is no loop; use while true ... end, or a while condition"
   end
-  return "to call a function, add parentheses: " + name + "() do ... end; an if condition ends with a newline, not do"
+  return "to call a function, add parentheses: #{name}() do ... end; an if condition ends with a newline, not do"
 end
 
 # `do` after a call, a method call or a field access adds a block as the last argument. The node built before is
@@ -520,7 +520,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
         Base.unexpected_help(
           e,
           cursor,
-          "a block needs a call before it, found the name \"" + target_name(target) + "\"",
+          "a block needs a call before it, found the name \"#{target_name(target)}\"",
           block_name_help(target_name(target)),
         ),
       )
@@ -603,7 +603,7 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     form = "do"
     if params.size > 0
       names = params.map do |param| param.name end
-      form = "do |" + names.join(", ") + "|"
+      form = "do |#{names.join(", ")}|"
     end
   end
   body = try parse_block(Base.with_block_body(e, brace_at, form), cursor, next_id, 1)
@@ -720,12 +720,12 @@ def expect_update_argument(e: Base.Env, pos: Int) -> Result[Int]
       Base.unexpected_help(
         e,
         pos + 1,
-        "expected \":\" after the field name, found " + Base.describe(e.tokens[pos + 1]),
+        "expected \":\" after the field name, found #{Base.describe(e.tokens[pos + 1])}",
         help,
       ),
     )
   end
-  return error(Base.unexpected_help(e, pos, "expected a field name, found " + Base.describe(e.tokens[pos]), help))
+  return error(Base.unexpected_help(e, pos, "expected a field name, found #{Base.describe(e.tokens[pos])}", help))
 end
 
 def parse_list_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
@@ -742,8 +742,8 @@ def parse_map_entry(e: Base.Env, pos: Int, ids: Int, block_form: String) -> Resu
       Base.unexpected_help(
         e,
         key.pos,
-        "expected \":\", found " + Base.describe(e.tokens[key.pos]),
-        "if \"{\" opens the block: blocks have no braces, write \"" + block_form + "\" ... \"end\"",
+        "expected \":\", found #{Base.describe(e.tokens[key.pos])}",
+        "if \"{\" opens the block: blocks have no braces, write \"#{block_form}\" ... \"end\"",
       ),
     )
   end
@@ -813,7 +813,7 @@ def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       end
     else
       return error(
-        Base.unexpected(e, parsed.pos, "expected \"}\" to close the interpolation, found " + Base.describe(piece)),
+        Base.unexpected(e, parsed.pos, "expected \"}\" to close the interpolation, found #{Base.describe(piece)}"),
       )
     end
   end
@@ -830,7 +830,7 @@ def parse_function_ref(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   if e.tokens[cursor].kind == "type-name"
     dot = try Base.expect(e, cursor + 1, "dot", "a dot", false)
     stop = try Base.expect(e, dot, "name", "a function name", true)
-    name = e.tokens[cursor].lexeme + "." + e.tokens[dot].lexeme
+    name = "#{e.tokens[cursor].lexeme}.#{e.tokens[dot].lexeme}"
     cursor = stop
   else
     stop = try Base.expect(e, cursor, "name", "a function name", true)
@@ -927,7 +927,7 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
   name = e.tokens[pos].lexeme
   member_pos = pos + 2
   member = e.tokens[member_pos].lexeme
-  qualified = name + "." + member
+  qualified = "#{name}.#{member}"
   cursor = member_pos + 1
   kind = e.tokens[cursor].kind
   no_args: List[Ast.Expr] = []
@@ -997,13 +997,13 @@ def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
         Base.unexpected_help(
           e,
           after_member,
-          "expected \"(\" or the end of the call, found " + Base.describe(e.tokens[after_member]),
-          "calls need parentheses, as in " + name + "." + member.lexeme + "(...)",
+          "expected \"(\" or the end of the call, found #{Base.describe(e.tokens[after_member])}",
+          "calls need parentheses, as in #{name}.#{member.lexeme}(...)",
         ),
       )
     end
   end
-  return call_node(e, pos, name + "." + member.lexeme, args.nodes, parenthesized, args.ids, cursor)
+  return call_node(e, pos, "#{name}.#{member.lexeme}", args.nodes, parenthesized, args.ids, cursor)
 end
 
 # NAME.with(field: x) updates a constant of a struct type: the postfix loop reads the .with. A call has no named
@@ -1078,7 +1078,7 @@ def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       e,
       pos,
       "PARSE-UNEXPECTED-TOKEN",
-      "expected an expression, found " + Base.describe(token),
+      "expected an expression, found #{Base.describe(token)}",
       primary_help(e, pos),
     ),
   )
@@ -1267,25 +1267,19 @@ end
 
 def keyword_message(name: String) -> String
   if name == "break" or name == "next"
-    return "\"" + name + "\" stands alone on its line"
+    return "\"#{name}\" stands alone on its line"
   end
-  return "\"" + name + "\" is not a keyword"
+  return "\"#{name}\" is not a keyword"
 end
 
 def keyword_help(name: String) -> String
   case name
     "match" -> return "use case value, then arms pattern -> ..., then end"
     "break" -> return (
-      name +
-      " stands alone on its line; there are no if modifiers: write if cond, then " +
-      name +
-      ", then end"
+      "#{name} stands alone on its line; there are no if modifiers: write if cond, then #{name}, then end"
     )
     "next" -> return (
-      name +
-      " stands alone on its line; there are no if modifiers: write if cond, then " +
-      name +
-      ", then end"
+      "#{name} stands alone on its line; there are no if modifiers: write if cond, then #{name}, then end"
     )
     "continue" -> return "write next to skip to the next iteration"
     _ -> return "write x = 5, or x: Int = 5 to give a type"
@@ -1329,7 +1323,7 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
         Base.unexpected_help(
           e,
           pos,
-          "\"" + name + "\" is not a keyword",
+          "\"#{name}\" is not a keyword",
           "write elsif: if a ... elsif b ... else ... end",
         ),
       )
@@ -1342,7 +1336,7 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
         Base.unexpected(
           e,
           value.pos,
-          "expected a newline after the statement; calls need parentheses, as in " + name + "(...)",
+          "expected a newline after the statement; calls need parentheses, as in #{name}(...)",
         ),
       )
     end
@@ -1403,7 +1397,7 @@ def parse_if_branch(e: Base.Env, pos: Int, ids: Int) -> Result[IfBranchAt]
       ),
     )
   end
-  head = try expect_head_end(e, condition.pos, "a newline after the condition", e.tokens[pos].lexeme + " cond")
+  head = try expect_head_end(e, condition.pos, "a newline after the condition", "#{e.tokens[pos].lexeme} cond")
   body = try parse_block(e, head, condition.ids, 0)
   node = Ast.IfBranch(
     id: body.ids,
@@ -1630,7 +1624,7 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
       Base.unexpected_help(
         e,
         after_params,
-        "expected \"->\", found " + Base.describe(e.tokens[after_params]),
+        "expected \"->\", found #{Base.describe(e.tokens[after_params])}",
         brace_help("def name() -> Type"),
       ),
     )
@@ -1888,7 +1882,7 @@ def constant_name_help(text: String) -> String
   if suggestion == ""
     return "write constant names in capitals with underscores, at least two characters, such as LIMIT"
   end
-  return "write constant names in capitals with underscores: use " + suggestion
+  return "write constant names in capitals with underscores: use #{suggestion}"
 end
 
 # [export] NAME[: Type] = value. name_at is the name token, start the first token (the export, or the name).
@@ -1907,7 +1901,7 @@ def parse_constant_decl(
         e,
         name_at,
         "PARSE-CONSTANT-NAME",
-        "\"" + name + "\" is not a constant name",
+        "\"#{name}\" is not a constant name",
         Base.hint(constant_name_help(name)),
       ),
     )
@@ -1975,8 +1969,8 @@ def top_level_help(kind: String) -> String
     return "this else has no matching if"
   end
   return (
-    "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import, " +
-    "export and constants (NAME = value)"
+    "statements go inside a function: def main() -> Void ... end; " +
+    "a file holds only def, struct, enum, import, export and constants (NAME = value)"
   )
 end
 
@@ -1990,7 +1984,7 @@ def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   elsif kind == "left-brace"
     return parse_import_names(e, pos, ids)
   end
-  message = "expected a module alias or \"{\", found " + Base.describe(e.tokens[pos + 1])
+  message = "expected a module alias or \"{\", found #{Base.describe(e.tokens[pos + 1])}"
   if kind == "string"
     return error(Base.unexpected_help(e, pos + 1, message, "write import Alias from \"path\""))
   end
@@ -2042,7 +2036,7 @@ def expect_word(e: Base.Env, at: Int, word: String, help: String) -> Result[Int]
   if e.tokens[at].kind == "name" and e.tokens[at].lexeme == word
     return ok(at + 1)
   end
-  message = "expected " + word + ", found " + Base.describe(e.tokens[at])
+  message = "expected #{word}, found #{Base.describe(e.tokens[at])}"
   if help == ""
     return error(Base.unexpected(e, at, message))
   end
@@ -2056,7 +2050,7 @@ def parse_import_list(e: Base.Env, at: Int) -> Result[ImportNamesAt]
       Base.unexpected_help(
         e,
         at,
-        "expected an imported name, found " + Base.describe(e.tokens[at]),
+        "expected an imported name, found #{Base.describe(e.tokens[at])}",
         "name at least one export, as in import {name} from \"path\"",
       ),
     )
@@ -2079,7 +2073,7 @@ def parse_import_list(e: Base.Env, at: Int) -> Result[ImportNamesAt]
       cursor += 1
       looping = false
     else
-      message = "expected \",\" or \"}\", found " + Base.describe(e.tokens[cursor])
+      message = "expected \",\" or \"}\", found #{Base.describe(e.tokens[cursor])}"
       return error(Base.unexpected_help(e, cursor, message, "separate names with commas: import {a, b} from \"path\""))
     end
   end
@@ -2185,8 +2179,8 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
           cursor,
           "PARSE-TOP-LEVEL-STATEMENT",
           (
-            "expected a top-level declaration (def, struct, enum, constant, or import), found " +
-            Base.describe(e.tokens[cursor])
+            "expected a top-level declaration (def, struct, enum, constant, or import), " +
+            "found #{Base.describe(e.tokens[cursor])}"
           ),
           Base.hint(top_level_help(kind)),
         ),

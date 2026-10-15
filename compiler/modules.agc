@@ -289,7 +289,7 @@ def enter(
   try Declarations.check_order(file, program.declarations)
   collected = try collect(settings, file, program.declarations)
   count = walk.seen.size + 1
-  prefix = "@" + count.to_s + "::"
+  prefix = "@#{count}::"
   if walk.order.size == 0
     prefix = ""
   end

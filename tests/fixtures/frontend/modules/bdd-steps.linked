@@ -300,1205 +300,1205 @@ program #3 0:1:1-50:5:1
               arg: name-ref #289 4047:127:45-4051:127:49 name="path"
       body: return-stmt #295 4061:129:3-4072:130:1
         value: name-ref #294 4068:129:10-4071:129:13 name="ctx"
-    declaration: function-decl #309 4138:133:8-4227:136:1 name="@3::when_line"
+    declaration: function-decl #308 4138:133:8-4227:136:1 name="@3::when_line"
       param: param #299 4152:133:22-4164:133:34 name="ctx"
         type: type-ref #298 4157:133:27-4164:133:34 name="@3::Context"
       param: param #301 4166:133:36-4178:133:48 name="text"
         type: type-ref #300 4172:133:42-4178:133:48 name="String"
       result: type-ref #302 4183:133:53-4190:133:60 name="@3::Context"
-      body: return-stmt #308 4193:134:3-4223:135:1
-        value: call #307 4200:134:10-4222:134:32 name="@3::send" piped=false
+      body: return-stmt #307 4193:134:3-4223:135:1
+        value: call #306 4200:134:10-4222:134:32 name="@3::send" piped=false
           arg: name-ref #303 4205:134:15-4208:134:18 name="ctx"
-          arg: binary #306 4210:134:20-4221:134:31 op=plus op-span=4215:134:25-4216:134:26
-            left: name-ref #304 4210:134:20-4214:134:24 name="text"
-            right: literal #305 4217:134:27-4221:134:31 value=string:"\n"
-    declaration: function-decl #320 4284:138:8-4367:141:1 name="@3::when_input"
-      param: param #312 4299:138:23-4311:138:35 name="ctx"
-        type: type-ref #311 4304:138:28-4311:138:35 name="@3::Context"
-      param: param #314 4313:138:37-4325:138:49 name="text"
-        type: type-ref #313 4319:138:43-4325:138:49 name="String"
-      result: type-ref #315 4330:138:54-4337:138:61 name="@3::Context"
-      body: return-stmt #319 4340:139:3-4363:140:1
-        value: call #318 4347:139:10-4362:139:25 name="@3::send" piped=false
-          arg: name-ref #316 4352:139:15-4355:139:18 name="ctx"
-          arg: name-ref #317 4357:139:20-4361:139:24 name="text"
-    declaration: function-decl #340 4406:143:8-4556:149:1 name="@3::when_eof"
-      param: param #323 4419:143:21-4431:143:33 name="ctx"
-        type: type-ref #322 4424:143:26-4431:143:33 name="@3::Context"
-      result: type-ref #324 4436:143:38-4443:143:45 name="@3::Context"
-      body: binding #327 4446:144:3-4463:145:1 name="p"
-        value: call #326 4450:144:7-4462:144:19 name="@3::program" piped=false
-          arg: name-ref #325 4458:144:15-4461:144:18 name="ctx"
-      body: binding #331 4465:145:3-4503:146:1 name="closed"
-        value: call #330 4474:145:12-4502:145:40 name="Process.close_stdin" piped=false
-          arg: name-ref #328 4494:145:32-4495:145:33 name="p"
-          arg: literal #329 4497:145:35-4501:145:39 value=int:5000
-      body: expr-stmt #337 4505:146:3-4539:147:1
-        value: call #336 4505:146:3-4538:146:36 name="@3::check" piped=false
-          arg: field-access #333 4511:146:9-4521:146:19 name="ok?"
-            target: name-ref #332 4511:146:9-4517:146:15 name="closed"
-          arg: field-access #335 4523:146:21-4537:146:35 name="message"
-            target: name-ref #334 4523:146:21-4529:146:27 name="closed"
-      body: return-stmt #339 4541:147:3-4552:148:1
-        value: name-ref #338 4548:147:10-4551:147:13 name="ctx"
-    declaration: function-decl #356 4671:151:8-4814:154:1 name="@3::then_line"
-      param: param #343 4685:151:22-4697:151:34 name="ctx"
-        type: type-ref #342 4690:151:27-4697:151:34 name="@3::Context"
-      param: param #345 4699:151:36-4715:151:52 name="expected"
-        type: type-ref #344 4709:151:46-4715:151:52 name="String"
-      param: param #347 4717:151:54-4732:151:69 name="timeout_ms"
-        type: type-ref #346 4729:151:66-4732:151:69 name="Int"
-      result: type-ref #348 4737:151:74-4744:151:81 name="@3::Context"
-      body: return-stmt #355 4747:152:3-4810:153:1
-        value: call #354 4754:152:10-4809:152:65 name="@3::compare_text" piped=false
-          arg: name-ref #349 4767:152:23-4770:152:26 name="ctx"
-          arg: call #352 4772:152:28-4798:152:54 name="@3::read_line" piped=false
-            arg: name-ref #350 4782:152:38-4785:152:41 name="ctx"
-            arg: name-ref #351 4787:152:43-4797:152:53 name="timeout_ms"
-          arg: name-ref #353 4800:152:56-4808:152:64 name="expected"
-    declaration: function-decl #404 4960:157:8-5390:167:1 name="@3::then_json_line"
-      param: param #359 4979:157:27-4991:157:39 name="ctx"
-        type: type-ref #358 4984:157:32-4991:157:39 name="@3::Context"
-      param: param #361 4993:157:41-5009:157:57 name="expected"
-        type: type-ref #360 5003:157:51-5009:157:57 name="String"
-      param: param #363 5011:157:59-5026:157:74 name="timeout_ms"
-        type: type-ref #362 5023:157:71-5026:157:74 name="Int"
-      result: type-ref #364 5031:157:79-5038:157:86 name="@3::Context"
-      body: binding #368 5041:158:3-5077:159:1 name="actual"
-        value: call #367 5050:158:12-5076:158:38 name="@3::read_line" piped=false
-          arg: name-ref #365 5060:158:22-5063:158:25 name="ctx"
-          arg: name-ref #366 5065:158:27-5075:158:37 name="timeout_ms"
-      body: binding #371 5079:159:3-5107:160:1 name="left"
-        value: call #370 5086:159:10-5106:159:30 name="JSON.parse" piped=false
-          arg: name-ref #369 5097:159:21-5105:159:29 name="expected"
-      body: binding #374 5109:160:3-5136:161:1 name="right"
-        value: call #373 5117:160:11-5135:160:29 name="JSON.parse" piped=false
-          arg: name-ref #372 5128:160:22-5134:160:28 name="actual"
-      body: if-stmt #389 5138:161:3-5271:165:1
-        branch: if-branch #388 5138:161:3-5265:164:1
-          condition: binary #381 5141:161:6-5170:161:35 op=or op-span=5154:161:19-5156:161:21
-            left: unary #377 5141:161:6-5153:161:18 op=not op-span=5141:161:6-5144:161:9
-              operand: field-access #376 5145:161:10-5153:161:18 name="ok?"
-                target: name-ref #375 5145:161:10-5149:161:14 name="left"
-            right: unary #380 5157:161:22-5170:161:35 op=not op-span=5157:161:22-5160:161:25
-              operand: field-access #379 5161:161:26-5170:161:35 name="ok?"
-                target: name-ref #378 5161:161:26-5166:161:31 name="right"
-          body: expr-stmt #385 5175:162:5-5250:163:1
-            value: call #384 5175:162:5-5249:162:79 name="@3::halt" piped=false
-              arg: literal #382 5180:162:10-5198:162:28 value=string:"RUNTIME-BDD-JSON"
-              arg: literal #383 5200:162:30-5248:162:78 value=string:"expected and received lines must be valid JSON"
-          body: return-stmt #387 5254:163:5-5265:164:1
-            value: name-ref #386 5261:163:12-5264:163:15 name="ctx"
-      body: return-stmt #403 5273:165:3-5386:166:1
-        value: call #402 5280:165:10-5385:165:115 name="@3::compare" piped=false
-          arg: name-ref #390 5288:165:18-5291:165:21 name="ctx"
-          arg: call #395 5293:165:23-5329:165:59 name="Test.eq" piped=false
-            arg: field-access #392 5301:165:31-5314:165:44 name="unwrap!"
-              target: name-ref #391 5301:165:31-5306:165:36 name="right"
-            arg: field-access #394 5316:165:46-5328:165:58 name="unwrap!"
-              target: name-ref #393 5316:165:46-5320:165:50 name="left"
-          arg: call #398 5331:165:61-5356:165:86 name="JSON.encode" piped=false
-            arg: field-access #397 5343:165:73-5355:165:85 name="unwrap!"
-              target: name-ref #396 5343:165:73-5347:165:77 name="left"
-          arg: call #401 5358:165:88-5384:165:114 name="JSON.encode" piped=false
-            arg: field-access #400 5370:165:100-5383:165:113 name="unwrap!"
-              target: name-ref #399 5370:165:100-5375:165:105 name="right"
-    declaration: function-decl #439 5463:169:8-5770:178:1 name="@3::then_stdin_open"
-      param: param #407 5483:169:28-5495:169:40 name="ctx"
-        type: type-ref #406 5488:169:33-5495:169:40 name="@3::Context"
-      result: type-ref #408 5500:169:45-5507:169:52 name="@3::Context"
-      body: binding #411 5510:170:3-5527:171:1 name="p"
-        value: call #410 5514:170:7-5526:170:19 name="@3::program" piped=false
-          arg: name-ref #409 5522:170:15-5525:170:18 name="ctx"
-      body: binding #413 5529:171:3-5570:172:1 name="wanted"
-        value: literal #412 5538:171:12-5569:171:43 value=string:"open stdin and active program"
-      body: binding #415 5572:172:3-5614:173:1 name="state"
-        value: literal #414 5580:172:11-5613:172:44 value=string:"closed stdin or stopped program"
-      body: if-stmt #430 5616:173:3-5705:176:1
-        branch: if-branch #429 5616:173:3-5699:175:1
-          condition: binary #426 5619:173:6-5679:173:66 op=and op-span=5649:173:36-5652:173:39
-            left: field-access #420 5619:173:6-5648:173:35 name="ok?"
-              target: call #419 5619:173:6-5644:173:31 name="Process.send" piped=false
-                arg: name-ref #416 5632:173:19-5633:173:20 name="p"
-                arg: literal #417 5635:173:22-5637:173:24 value=string:""
-                arg: literal #418 5639:173:26-5643:173:30 value=int:5000
-            right: unary #425 5653:173:40-5679:173:66 op=not op-span=5653:173:40-5656:173:43
-              operand: field-access #424 5657:173:44-5679:173:66 name="ok?"
-                target: call #423 5657:173:44-5675:173:62 name="Process.wait" piped=false
-                  arg: name-ref #421 5670:173:57-5671:173:58 name="p"
-                  arg: literal #422 5673:173:60-5674:173:61 value=int:1
-          body: binding #428 5684:174:5-5699:175:1 name="state"
-            value: name-ref #427 5692:174:13-5698:174:19 name="wanted"
-      body: return-stmt #438 5707:176:3-5766:177:1
-        value: call #437 5714:176:10-5765:176:61 name="@3::compare" piped=false
-          arg: name-ref #431 5722:176:18-5725:176:21 name="ctx"
-          arg: call #434 5727:176:23-5749:176:45 name="Test.eq" piped=false
-            arg: name-ref #432 5735:176:31-5740:176:36 name="state"
-            arg: name-ref #433 5742:176:38-5748:176:44 name="wanted"
-          arg: name-ref #435 5751:176:47-5757:176:53 name="wanted"
-          arg: name-ref #436 5759:176:55-5764:176:60 name="state"
-    declaration: function-decl #480 5884:180:8-6187:189:1 name="@3::then_exit"
-      param: param #442 5898:180:22-5910:180:34 name="ctx"
-        type: type-ref #441 5903:180:27-5910:180:34 name="@3::Context"
-      param: param #444 5912:180:36-5921:180:45 name="code"
-        type: type-ref #443 5918:180:42-5921:180:45 name="Int"
-      param: param #446 5923:180:47-5938:180:62 name="timeout_ms"
-        type: type-ref #445 5935:180:59-5938:180:62 name="Int"
-      result: type-ref #447 5943:180:67-5950:180:74 name="@3::Context"
-      body: binding #450 5953:181:3-5970:182:1 name="p"
-        value: call #449 5957:181:7-5969:181:19 name="@3::program" piped=false
-          arg: name-ref #448 5965:181:15-5968:181:18 name="ctx"
-      body: expr-stmt #453 5972:182:3-5993:183:1
-        value: call #452 5972:182:3-5992:182:23 name="@3::positive" piped=false
-          arg: name-ref #451 5981:182:12-5991:182:22 name="timeout_ms"
-      body: binding #457 5995:183:3-6032:184:1 name="status"
-        value: call #456 6004:183:12-6031:183:39 name="Process.wait" piped=false
-          arg: name-ref #454 6017:183:25-6018:183:26 name="p"
-          arg: name-ref #455 6020:183:28-6030:183:38 name="timeout_ms"
-      body: expr-stmt #463 6034:184:3-6068:185:1
-        value: call #462 6034:184:3-6067:184:36 name="@3::check" piped=false
-          arg: field-access #459 6040:184:9-6050:184:19 name="ok?"
-            target: name-ref #458 6040:184:9-6046:184:15 name="status"
-          arg: field-access #461 6052:184:21-6066:184:35 name="message"
-            target: name-ref #460 6052:184:21-6058:184:27 name="status"
-      body: expr-stmt #466 6070:185:3-6082:186:1
-        value: call #465 6070:185:3-6081:185:14 name="@3::finished" piped=false
-          arg: name-ref #464 6079:185:12-6080:185:13 name="p"
-      body: binding #469 6084:186:3-6108:187:1 name="actual"
-        value: field-access #468 6093:186:12-6107:186:26 name="unwrap!"
-          target: name-ref #467 6093:186:12-6099:186:18 name="status"
-      body: return-stmt #479 6110:187:3-6183:188:1
-        value: call #478 6117:187:10-6182:187:75 name="@3::compare" piped=false
-          arg: name-ref #470 6125:187:18-6128:187:21 name="ctx"
-          arg: call #473 6130:187:23-6151:187:44 name="Test.eq" piped=false
-            arg: name-ref #471 6138:187:31-6144:187:37 name="actual"
-            arg: name-ref #472 6146:187:39-6150:187:43 name="code"
-          arg: field-access #475 6153:187:46-6165:187:58 name="inspect"
-            target: name-ref #474 6153:187:46-6157:187:50 name="code"
-          arg: field-access #477 6167:187:60-6181:187:74 name="inspect"
-            target: name-ref #476 6167:187:60-6173:187:66 name="actual"
-    declaration: function-decl #496 6292:191:8-6431:194:1 name="@3::then_stdout"
-      param: param #483 6308:191:24-6320:191:36 name="ctx"
-        type: type-ref #482 6313:191:29-6320:191:36 name="@3::Context"
-      param: param #485 6322:191:38-6338:191:54 name="expected"
-        type: type-ref #484 6332:191:48-6338:191:54 name="String"
-      result: type-ref #486 6343:191:59-6350:191:66 name="@3::Context"
-      body: return-stmt #495 6353:192:3-6427:193:1
-        value: call #494 6360:192:10-6426:192:76 name="@3::compare_text" piped=false
-          arg: name-ref #487 6373:192:23-6376:192:26 name="ctx"
-          arg: field-access #492 6378:192:28-6415:192:65 name="stdout"
-            target: call #491 6378:192:28-6408:192:58 name="@3::finished" piped=false
-              arg: call #490 6387:192:37-6407:192:57 name="@3::exited" piped=false
-                arg: call #489 6394:192:44-6406:192:56 name="@3::program" piped=false
-                  arg: name-ref #488 6402:192:52-6405:192:55 name="ctx"
-          arg: name-ref #493 6417:192:67-6425:192:75 name="expected"
-    declaration: function-decl #512 6522:196:8-6661:199:1 name="@3::then_stderr"
-      param: param #499 6538:196:24-6550:196:36 name="ctx"
-        type: type-ref #498 6543:196:29-6550:196:36 name="@3::Context"
-      param: param #501 6552:196:38-6568:196:54 name="expected"
-        type: type-ref #500 6562:196:48-6568:196:54 name="String"
-      result: type-ref #502 6573:196:59-6580:196:66 name="@3::Context"
-      body: return-stmt #511 6583:197:3-6657:198:1
-        value: call #510 6590:197:10-6656:197:76 name="@3::compare_text" piped=false
-          arg: name-ref #503 6603:197:23-6606:197:26 name="ctx"
-          arg: field-access #508 6608:197:28-6645:197:65 name="stderr"
-            target: call #507 6608:197:28-6638:197:58 name="@3::finished" piped=false
-              arg: call #506 6617:197:37-6637:197:57 name="@3::exited" piped=false
-                arg: call #505 6624:197:44-6636:197:56 name="@3::program" piped=false
-                  arg: name-ref #504 6632:197:52-6635:197:55 name="ctx"
-          arg: name-ref #509 6647:197:67-6655:197:75 name="expected"
-    declaration: function-decl #655 6662:200:1-7885:224:1 name="@3::predefined"
-      result: type-ref #515 6682:200:21-6692:200:31 name="List"
-        arg: type-ref #514 6687:200:26-6691:200:30 name="@3::Step"
-      body: return-stmt #654 6695:201:3-7881:223:1
-        value: list-lit #653 6702:201:10-7880:222:4
-          element: call #526 6708:202:5-6792:202:89 name="@3::step" piped=false
-            arg: literal #516 6713:202:10-6744:202:41 value=string:"the Agentica program {string}"
-            arg: block-lit #525 6746:202:43-6792:202:89
-              param: block-param #517 6750:202:47-6753:202:50 name="ctx"
-              param: block-param #518 6755:202:52-6759:202:56 name="args"
-              body: expr-stmt #524 6761:202:58-6788:202:85
-                value: call #523 6761:202:58-6788:202:85 name="@3::given_program" piped=false
-                  arg: name-ref #519 6775:202:72-6778:202:75 name="ctx"
-                  arg: index-access #522 6780:202:77-6787:202:84
-                    target: name-ref #520 6780:202:77-6784:202:81 name="args"
-                    index: literal #521 6785:202:82-6786:202:83 value=int:0
-          element: call #536 6798:203:5-6871:203:78 name="@3::step" piped=false
-            arg: literal #527 6803:203:10-6819:203:26 value=string:"I send a line:"
-            arg: block-lit #535 6821:203:28-6871:203:78
-              param: block-param #528 6825:203:32-6828:203:35 name="ctx"
-              param: block-param #529 6830:203:37-6834:203:41 name="args"
-              body: expr-stmt #534 6836:203:43-6867:203:74
-                value: call #533 6836:203:43-6867:203:74 name="@3::when_line" piped=false
-                  arg: name-ref #530 6846:203:53-6849:203:56 name="ctx"
-                  arg: call #532 6851:203:58-6866:203:73 name="@3::doc_string" piped=false
-                    arg: name-ref #531 6862:203:69-6865:203:72 name="ctx"
-          element: call #547 6877:204:5-6952:204:80 name="@3::step" piped=false
-            arg: literal #537 6882:204:10-6908:204:36 value=string:"I send the line {string}"
-            arg: block-lit #546 6910:204:38-6952:204:80
-              param: block-param #538 6914:204:42-6917:204:45 name="ctx"
-              param: block-param #539 6919:204:47-6923:204:51 name="args"
-              body: expr-stmt #545 6925:204:53-6948:204:76
-                value: call #544 6925:204:53-6948:204:76 name="@3::when_line" piped=false
-                  arg: name-ref #540 6935:204:63-6938:204:66 name="ctx"
-                  arg: index-access #543 6940:204:68-6947:204:75
-                    target: name-ref #541 6940:204:68-6944:204:72 name="args"
-                    index: literal #542 6945:204:73-6946:204:74 value=int:0
-          element: call #557 6958:205:5-7031:205:78 name="@3::step" piped=false
-            arg: literal #548 6963:205:10-6978:205:25 value=string:"I send input:"
-            arg: block-lit #556 6980:205:27-7031:205:78
-              param: block-param #549 6984:205:31-6987:205:34 name="ctx"
-              param: block-param #550 6989:205:36-6993:205:40 name="args"
-              body: expr-stmt #555 6995:205:42-7027:205:74
-                value: call #554 6995:205:42-7027:205:74 name="@3::when_input" piped=false
-                  arg: name-ref #551 7006:205:53-7009:205:56 name="ctx"
-                  arg: call #553 7011:205:58-7026:205:73 name="@3::doc_string" piped=false
-                    arg: name-ref #552 7022:205:69-7025:205:72 name="ctx"
-          element: call #565 7037:206:5-7091:206:59 name="@3::step" piped=false
-            arg: literal #558 7042:206:10-7057:206:25 value=string:"I close stdin"
-            arg: block-lit #564 7059:206:27-7091:206:59
-              param: block-param #559 7063:206:31-7066:206:34 name="ctx"
-              param: block-param #560 7068:206:36-7072:206:40 name="args"
-              body: expr-stmt #563 7074:206:42-7087:206:55
-                value: call #562 7074:206:42-7087:206:55 name="@3::when_eof" piped=false
-                  arg: name-ref #561 7083:206:51-7086:206:54 name="ctx"
-          element: call #579 7097:207:5-7224:209:8 name="@3::step" piped=false
-            arg: literal #566 7102:207:10-7147:207:55 value=string:"I receive a line within {int} milliseconds:"
-            arg: block-lit #578 7149:207:57-7224:209:8
-              param: block-param #567 7153:207:61-7156:207:64 name="ctx"
-              param: block-param #568 7158:207:66-7162:207:70 name="args"
-              body: expr-stmt #577 7170:208:7-7217:209:1
-                value: call #576 7170:208:7-7216:208:53 name="@3::then_line" piped=false
-                  arg: name-ref #569 7180:208:17-7183:208:20 name="ctx"
-                  arg: call #571 7185:208:22-7200:208:37 name="@3::doc_string" piped=false
-                    arg: name-ref #570 7196:208:33-7199:208:36 name="ctx"
-                  arg: field-access #575 7202:208:39-7215:208:52 name="to_i!"
-                    target: index-access #574 7202:208:39-7209:208:46
-                      target: name-ref #572 7202:208:39-7206:208:43 name="args"
-                      index: literal #573 7207:208:44-7208:208:45 value=int:0
-          element: call #594 7230:210:5-7359:212:8 name="@3::step" piped=false
-            arg: literal #580 7235:210:10-7290:210:65 value=string:"I receive the line {string} within {int} milliseconds"
-            arg: block-lit #593 7292:210:67-7359:212:8
-              param: block-param #581 7296:210:71-7299:210:74 name="ctx"
-              param: block-param #582 7301:210:76-7305:210:80 name="args"
-              body: expr-stmt #592 7313:211:7-7352:212:1
-                value: call #591 7313:211:7-7351:211:45 name="@3::then_line" piped=false
-                  arg: name-ref #583 7323:211:17-7326:211:20 name="ctx"
-                  arg: index-access #586 7328:211:22-7335:211:29
-                    target: name-ref #584 7328:211:22-7332:211:26 name="args"
-                    index: literal #585 7333:211:27-7334:211:28 value=int:0
-                  arg: field-access #590 7337:211:31-7350:211:44 name="to_i!"
-                    target: index-access #589 7337:211:31-7344:211:38
-                      target: name-ref #587 7337:211:31-7341:211:35 name="args"
-                      index: literal #588 7342:211:36-7343:211:37 value=int:1
-          element: call #608 7365:213:5-7502:215:8 name="@3::step" piped=false
-            arg: literal #595 7370:213:10-7420:213:60 value=string:"I receive a JSON line within {int} milliseconds:"
-            arg: block-lit #607 7422:213:62-7502:215:8
-              param: block-param #596 7426:213:66-7429:213:69 name="ctx"
-              param: block-param #597 7431:213:71-7435:213:75 name="args"
-              body: expr-stmt #606 7443:214:7-7495:215:1
-                value: call #605 7443:214:7-7494:214:58 name="@3::then_json_line" piped=false
-                  arg: name-ref #598 7458:214:22-7461:214:25 name="ctx"
-                  arg: call #600 7463:214:27-7478:214:42 name="@3::doc_string" piped=false
-                    arg: name-ref #599 7474:214:38-7477:214:41 name="ctx"
-                  arg: field-access #604 7480:214:44-7493:214:57 name="to_i!"
-                    target: index-access #603 7480:214:44-7487:214:51
-                      target: name-ref #601 7480:214:44-7484:214:48 name="args"
-                      index: literal #602 7485:214:49-7486:214:50 value=int:0
-          element: call #616 7508:216:5-7574:216:71 name="@3::step" piped=false
-            arg: literal #609 7513:216:10-7533:216:30 value=string:"stdin remains open"
-            arg: block-lit #615 7535:216:32-7574:216:71
-              param: block-param #610 7539:216:36-7542:216:39 name="ctx"
-              param: block-param #611 7544:216:41-7548:216:45 name="args"
-              body: expr-stmt #614 7550:216:47-7570:216:67
-                value: call #613 7550:216:47-7570:216:67 name="@3::then_stdin_open" piped=false
-                  arg: name-ref #612 7566:216:63-7569:216:66 name="ctx"
-          element: call #632 7580:217:5-7721:219:8 name="@3::step" piped=false
-            arg: literal #617 7585:217:10-7646:217:71 value=string:"the program exits with code {int} within {int} milliseconds"
-            arg: block-lit #631 7648:217:73-7721:219:8
-              param: block-param #618 7652:217:77-7655:217:80 name="ctx"
-              param: block-param #619 7657:217:82-7661:217:86 name="args"
-              body: expr-stmt #630 7669:218:7-7714:219:1
-                value: call #629 7669:218:7-7713:218:51 name="@3::then_exit" piped=false
-                  arg: name-ref #620 7679:218:17-7682:218:20 name="ctx"
-                  arg: field-access #624 7684:218:22-7697:218:35 name="to_i!"
-                    target: index-access #623 7684:218:22-7691:218:29
-                      target: name-ref #621 7684:218:22-7688:218:26 name="args"
-                      index: literal #622 7689:218:27-7690:218:28 value=int:0
-                  arg: field-access #628 7699:218:37-7712:218:50 name="to_i!"
-                    target: index-access #627 7699:218:37-7706:218:44
-                      target: name-ref #625 7699:218:37-7703:218:41 name="args"
-                      index: literal #626 7704:218:42-7705:218:43 value=int:1
-          element: call #642 7727:220:5-7798:220:76 name="@3::step" piped=false
-            arg: literal #633 7732:220:10-7744:220:22 value=string:"stdout is:"
-            arg: block-lit #641 7746:220:24-7798:220:76
-              param: block-param #634 7750:220:28-7753:220:31 name="ctx"
-              param: block-param #635 7755:220:33-7759:220:37 name="args"
-              body: expr-stmt #640 7761:220:39-7794:220:72
-                value: call #639 7761:220:39-7794:220:72 name="@3::then_stdout" piped=false
-                  arg: name-ref #636 7773:220:51-7776:220:54 name="ctx"
-                  arg: call #638 7778:220:56-7793:220:71 name="@3::doc_string" piped=false
-                    arg: name-ref #637 7789:220:67-7792:220:70 name="ctx"
-          element: call #652 7804:221:5-7875:221:76 name="@3::step" piped=false
-            arg: literal #643 7809:221:10-7821:221:22 value=string:"stderr is:"
-            arg: block-lit #651 7823:221:24-7875:221:76
-              param: block-param #644 7827:221:28-7830:221:31 name="ctx"
-              param: block-param #645 7832:221:33-7836:221:37 name="args"
-              body: expr-stmt #650 7838:221:39-7871:221:72
-                value: call #649 7838:221:39-7871:221:72 name="@3::then_stderr" piped=false
-                  arg: name-ref #646 7850:221:51-7853:221:54 name="ctx"
-                  arg: call #648 7855:221:56-7870:221:71 name="@3::doc_string" piped=false
-                    arg: name-ref #647 7866:221:67-7869:221:70 name="ctx"
-    declaration: function-decl #825 8009:227:1-9536:270:1 name="@3::serve"
-      param: param #658 8019:227:11-8034:227:26 name="all"
-        type: type-ref #657 8024:227:16-8034:227:26 name="List"
-          arg: type-ref #656 8029:227:21-8033:227:25 name="@3::Step"
-      result: type-ref #659 8039:227:31-8043:227:35 name="Void"
-      body: binding #662 8046:228:3-8089:229:1 name="init"
-        value: call #661 8053:228:10-8088:228:45 name="Process.parent_read_line" piped=false
-          arg: call #660 8078:228:35-8087:228:44 name="@3::idle_ms" piped=false
-      body: if-stmt #670 8091:229:3-8132:232:1
-        branch: if-branch #669 8091:229:3-8126:231:1
-          condition: unary #665 8094:229:6-8106:229:18 op=not op-span=8094:229:6-8097:229:9
-            operand: field-access #664 8098:229:10-8106:229:18 name="ok?"
-              target: name-ref #663 8098:229:10-8102:229:14 name="init"
-          body: expr-stmt #668 8111:230:5-8126:231:1
-            value: call #667 8111:230:5-8125:230:19 name="System.exit" piped=false
-              arg: literal #666 8123:230:17-8124:230:18 value=int:0
-      body: binding #675 8134:232:3-8181:233:1 name="settings"
-        value: call #674 8145:232:14-8180:232:49 name="JSON.decode" piped=false
-          arg: field-access #672 8157:232:26-8169:232:38 name="unwrap!"
-            target: name-ref #671 8157:232:26-8161:232:30 name="init"
-          arg: type-expression #673 8171:232:40-8179:232:48 name="@3::Settings"
-      body: if-stmt #686 8183:233:3-8289:236:1
-        branch: if-branch #685 8183:233:3-8283:235:1
-          condition: unary #678 8186:233:6-8202:233:22 op=not op-span=8186:233:6-8189:233:9
-            operand: field-access #677 8190:233:10-8202:233:22 name="ok?"
-              target: name-ref #676 8190:233:10-8198:233:18 name="settings"
-          body: expr-stmt #684 8207:234:5-8283:235:1
-            value: call #683 8207:234:5-8282:234:80 name="@3::halt" piped=false
-              arg: literal #679 8212:234:10-8231:234:29 value=string:"RUNTIME-BDD-INFRA"
-              arg: interpolation #682 8233:234:31-8281:234:79
+          arg: interpolation #305 4210:134:20-4221:134:31
+            part: name-ref #304 4213:134:23-4217:134:27 name="text"
+            part: text "\n"
+    declaration: function-decl #319 4284:138:8-4367:141:1 name="@3::when_input"
+      param: param #311 4299:138:23-4311:138:35 name="ctx"
+        type: type-ref #310 4304:138:28-4311:138:35 name="@3::Context"
+      param: param #313 4313:138:37-4325:138:49 name="text"
+        type: type-ref #312 4319:138:43-4325:138:49 name="String"
+      result: type-ref #314 4330:138:54-4337:138:61 name="@3::Context"
+      body: return-stmt #318 4340:139:3-4363:140:1
+        value: call #317 4347:139:10-4362:139:25 name="@3::send" piped=false
+          arg: name-ref #315 4352:139:15-4355:139:18 name="ctx"
+          arg: name-ref #316 4357:139:20-4361:139:24 name="text"
+    declaration: function-decl #339 4406:143:8-4556:149:1 name="@3::when_eof"
+      param: param #322 4419:143:21-4431:143:33 name="ctx"
+        type: type-ref #321 4424:143:26-4431:143:33 name="@3::Context"
+      result: type-ref #323 4436:143:38-4443:143:45 name="@3::Context"
+      body: binding #326 4446:144:3-4463:145:1 name="p"
+        value: call #325 4450:144:7-4462:144:19 name="@3::program" piped=false
+          arg: name-ref #324 4458:144:15-4461:144:18 name="ctx"
+      body: binding #330 4465:145:3-4503:146:1 name="closed"
+        value: call #329 4474:145:12-4502:145:40 name="Process.close_stdin" piped=false
+          arg: name-ref #327 4494:145:32-4495:145:33 name="p"
+          arg: literal #328 4497:145:35-4501:145:39 value=int:5000
+      body: expr-stmt #336 4505:146:3-4539:147:1
+        value: call #335 4505:146:3-4538:146:36 name="@3::check" piped=false
+          arg: field-access #332 4511:146:9-4521:146:19 name="ok?"
+            target: name-ref #331 4511:146:9-4517:146:15 name="closed"
+          arg: field-access #334 4523:146:21-4537:146:35 name="message"
+            target: name-ref #333 4523:146:21-4529:146:27 name="closed"
+      body: return-stmt #338 4541:147:3-4552:148:1
+        value: name-ref #337 4548:147:10-4551:147:13 name="ctx"
+    declaration: function-decl #355 4671:151:8-4814:154:1 name="@3::then_line"
+      param: param #342 4685:151:22-4697:151:34 name="ctx"
+        type: type-ref #341 4690:151:27-4697:151:34 name="@3::Context"
+      param: param #344 4699:151:36-4715:151:52 name="expected"
+        type: type-ref #343 4709:151:46-4715:151:52 name="String"
+      param: param #346 4717:151:54-4732:151:69 name="timeout_ms"
+        type: type-ref #345 4729:151:66-4732:151:69 name="Int"
+      result: type-ref #347 4737:151:74-4744:151:81 name="@3::Context"
+      body: return-stmt #354 4747:152:3-4810:153:1
+        value: call #353 4754:152:10-4809:152:65 name="@3::compare_text" piped=false
+          arg: name-ref #348 4767:152:23-4770:152:26 name="ctx"
+          arg: call #351 4772:152:28-4798:152:54 name="@3::read_line" piped=false
+            arg: name-ref #349 4782:152:38-4785:152:41 name="ctx"
+            arg: name-ref #350 4787:152:43-4797:152:53 name="timeout_ms"
+          arg: name-ref #352 4800:152:56-4808:152:64 name="expected"
+    declaration: function-decl #403 4960:157:8-5390:167:1 name="@3::then_json_line"
+      param: param #358 4979:157:27-4991:157:39 name="ctx"
+        type: type-ref #357 4984:157:32-4991:157:39 name="@3::Context"
+      param: param #360 4993:157:41-5009:157:57 name="expected"
+        type: type-ref #359 5003:157:51-5009:157:57 name="String"
+      param: param #362 5011:157:59-5026:157:74 name="timeout_ms"
+        type: type-ref #361 5023:157:71-5026:157:74 name="Int"
+      result: type-ref #363 5031:157:79-5038:157:86 name="@3::Context"
+      body: binding #367 5041:158:3-5077:159:1 name="actual"
+        value: call #366 5050:158:12-5076:158:38 name="@3::read_line" piped=false
+          arg: name-ref #364 5060:158:22-5063:158:25 name="ctx"
+          arg: name-ref #365 5065:158:27-5075:158:37 name="timeout_ms"
+      body: binding #370 5079:159:3-5107:160:1 name="left"
+        value: call #369 5086:159:10-5106:159:30 name="JSON.parse" piped=false
+          arg: name-ref #368 5097:159:21-5105:159:29 name="expected"
+      body: binding #373 5109:160:3-5136:161:1 name="right"
+        value: call #372 5117:160:11-5135:160:29 name="JSON.parse" piped=false
+          arg: name-ref #371 5128:160:22-5134:160:28 name="actual"
+      body: if-stmt #388 5138:161:3-5271:165:1
+        branch: if-branch #387 5138:161:3-5265:164:1
+          condition: binary #380 5141:161:6-5170:161:35 op=or op-span=5154:161:19-5156:161:21
+            left: unary #376 5141:161:6-5153:161:18 op=not op-span=5141:161:6-5144:161:9
+              operand: field-access #375 5145:161:10-5153:161:18 name="ok?"
+                target: name-ref #374 5145:161:10-5149:161:14 name="left"
+            right: unary #379 5157:161:22-5170:161:35 op=not op-span=5157:161:22-5160:161:25
+              operand: field-access #378 5161:161:26-5170:161:35 name="ok?"
+                target: name-ref #377 5161:161:26-5166:161:31 name="right"
+          body: expr-stmt #384 5175:162:5-5250:163:1
+            value: call #383 5175:162:5-5249:162:79 name="@3::halt" piped=false
+              arg: literal #381 5180:162:10-5198:162:28 value=string:"RUNTIME-BDD-JSON"
+              arg: literal #382 5200:162:30-5248:162:78 value=string:"expected and received lines must be valid JSON"
+          body: return-stmt #386 5254:163:5-5265:164:1
+            value: name-ref #385 5261:163:12-5264:163:15 name="ctx"
+      body: return-stmt #402 5273:165:3-5386:166:1
+        value: call #401 5280:165:10-5385:165:115 name="@3::compare" piped=false
+          arg: name-ref #389 5288:165:18-5291:165:21 name="ctx"
+          arg: call #394 5293:165:23-5329:165:59 name="Test.eq" piped=false
+            arg: field-access #391 5301:165:31-5314:165:44 name="unwrap!"
+              target: name-ref #390 5301:165:31-5306:165:36 name="right"
+            arg: field-access #393 5316:165:46-5328:165:58 name="unwrap!"
+              target: name-ref #392 5316:165:46-5320:165:50 name="left"
+          arg: call #397 5331:165:61-5356:165:86 name="JSON.encode" piped=false
+            arg: field-access #396 5343:165:73-5355:165:85 name="unwrap!"
+              target: name-ref #395 5343:165:73-5347:165:77 name="left"
+          arg: call #400 5358:165:88-5384:165:114 name="JSON.encode" piped=false
+            arg: field-access #399 5370:165:100-5383:165:113 name="unwrap!"
+              target: name-ref #398 5370:165:100-5375:165:105 name="right"
+    declaration: function-decl #438 5463:169:8-5770:178:1 name="@3::then_stdin_open"
+      param: param #406 5483:169:28-5495:169:40 name="ctx"
+        type: type-ref #405 5488:169:33-5495:169:40 name="@3::Context"
+      result: type-ref #407 5500:169:45-5507:169:52 name="@3::Context"
+      body: binding #410 5510:170:3-5527:171:1 name="p"
+        value: call #409 5514:170:7-5526:170:19 name="@3::program" piped=false
+          arg: name-ref #408 5522:170:15-5525:170:18 name="ctx"
+      body: binding #412 5529:171:3-5570:172:1 name="wanted"
+        value: literal #411 5538:171:12-5569:171:43 value=string:"open stdin and active program"
+      body: binding #414 5572:172:3-5614:173:1 name="state"
+        value: literal #413 5580:172:11-5613:172:44 value=string:"closed stdin or stopped program"
+      body: if-stmt #429 5616:173:3-5705:176:1
+        branch: if-branch #428 5616:173:3-5699:175:1
+          condition: binary #425 5619:173:6-5679:173:66 op=and op-span=5649:173:36-5652:173:39
+            left: field-access #419 5619:173:6-5648:173:35 name="ok?"
+              target: call #418 5619:173:6-5644:173:31 name="Process.send" piped=false
+                arg: name-ref #415 5632:173:19-5633:173:20 name="p"
+                arg: literal #416 5635:173:22-5637:173:24 value=string:""
+                arg: literal #417 5639:173:26-5643:173:30 value=int:5000
+            right: unary #424 5653:173:40-5679:173:66 op=not op-span=5653:173:40-5656:173:43
+              operand: field-access #423 5657:173:44-5679:173:66 name="ok?"
+                target: call #422 5657:173:44-5675:173:62 name="Process.wait" piped=false
+                  arg: name-ref #420 5670:173:57-5671:173:58 name="p"
+                  arg: literal #421 5673:173:60-5674:173:61 value=int:1
+          body: binding #427 5684:174:5-5699:175:1 name="state"
+            value: name-ref #426 5692:174:13-5698:174:19 name="wanted"
+      body: return-stmt #437 5707:176:3-5766:177:1
+        value: call #436 5714:176:10-5765:176:61 name="@3::compare" piped=false
+          arg: name-ref #430 5722:176:18-5725:176:21 name="ctx"
+          arg: call #433 5727:176:23-5749:176:45 name="Test.eq" piped=false
+            arg: name-ref #431 5735:176:31-5740:176:36 name="state"
+            arg: name-ref #432 5742:176:38-5748:176:44 name="wanted"
+          arg: name-ref #434 5751:176:47-5757:176:53 name="wanted"
+          arg: name-ref #435 5759:176:55-5764:176:60 name="state"
+    declaration: function-decl #479 5884:180:8-6187:189:1 name="@3::then_exit"
+      param: param #441 5898:180:22-5910:180:34 name="ctx"
+        type: type-ref #440 5903:180:27-5910:180:34 name="@3::Context"
+      param: param #443 5912:180:36-5921:180:45 name="code"
+        type: type-ref #442 5918:180:42-5921:180:45 name="Int"
+      param: param #445 5923:180:47-5938:180:62 name="timeout_ms"
+        type: type-ref #444 5935:180:59-5938:180:62 name="Int"
+      result: type-ref #446 5943:180:67-5950:180:74 name="@3::Context"
+      body: binding #449 5953:181:3-5970:182:1 name="p"
+        value: call #448 5957:181:7-5969:181:19 name="@3::program" piped=false
+          arg: name-ref #447 5965:181:15-5968:181:18 name="ctx"
+      body: expr-stmt #452 5972:182:3-5993:183:1
+        value: call #451 5972:182:3-5992:182:23 name="@3::positive" piped=false
+          arg: name-ref #450 5981:182:12-5991:182:22 name="timeout_ms"
+      body: binding #456 5995:183:3-6032:184:1 name="status"
+        value: call #455 6004:183:12-6031:183:39 name="Process.wait" piped=false
+          arg: name-ref #453 6017:183:25-6018:183:26 name="p"
+          arg: name-ref #454 6020:183:28-6030:183:38 name="timeout_ms"
+      body: expr-stmt #462 6034:184:3-6068:185:1
+        value: call #461 6034:184:3-6067:184:36 name="@3::check" piped=false
+          arg: field-access #458 6040:184:9-6050:184:19 name="ok?"
+            target: name-ref #457 6040:184:9-6046:184:15 name="status"
+          arg: field-access #460 6052:184:21-6066:184:35 name="message"
+            target: name-ref #459 6052:184:21-6058:184:27 name="status"
+      body: expr-stmt #465 6070:185:3-6082:186:1
+        value: call #464 6070:185:3-6081:185:14 name="@3::finished" piped=false
+          arg: name-ref #463 6079:185:12-6080:185:13 name="p"
+      body: binding #468 6084:186:3-6108:187:1 name="actual"
+        value: field-access #467 6093:186:12-6107:186:26 name="unwrap!"
+          target: name-ref #466 6093:186:12-6099:186:18 name="status"
+      body: return-stmt #478 6110:187:3-6183:188:1
+        value: call #477 6117:187:10-6182:187:75 name="@3::compare" piped=false
+          arg: name-ref #469 6125:187:18-6128:187:21 name="ctx"
+          arg: call #472 6130:187:23-6151:187:44 name="Test.eq" piped=false
+            arg: name-ref #470 6138:187:31-6144:187:37 name="actual"
+            arg: name-ref #471 6146:187:39-6150:187:43 name="code"
+          arg: field-access #474 6153:187:46-6165:187:58 name="inspect"
+            target: name-ref #473 6153:187:46-6157:187:50 name="code"
+          arg: field-access #476 6167:187:60-6181:187:74 name="inspect"
+            target: name-ref #475 6167:187:60-6173:187:66 name="actual"
+    declaration: function-decl #495 6292:191:8-6431:194:1 name="@3::then_stdout"
+      param: param #482 6308:191:24-6320:191:36 name="ctx"
+        type: type-ref #481 6313:191:29-6320:191:36 name="@3::Context"
+      param: param #484 6322:191:38-6338:191:54 name="expected"
+        type: type-ref #483 6332:191:48-6338:191:54 name="String"
+      result: type-ref #485 6343:191:59-6350:191:66 name="@3::Context"
+      body: return-stmt #494 6353:192:3-6427:193:1
+        value: call #493 6360:192:10-6426:192:76 name="@3::compare_text" piped=false
+          arg: name-ref #486 6373:192:23-6376:192:26 name="ctx"
+          arg: field-access #491 6378:192:28-6415:192:65 name="stdout"
+            target: call #490 6378:192:28-6408:192:58 name="@3::finished" piped=false
+              arg: call #489 6387:192:37-6407:192:57 name="@3::exited" piped=false
+                arg: call #488 6394:192:44-6406:192:56 name="@3::program" piped=false
+                  arg: name-ref #487 6402:192:52-6405:192:55 name="ctx"
+          arg: name-ref #492 6417:192:67-6425:192:75 name="expected"
+    declaration: function-decl #511 6522:196:8-6661:199:1 name="@3::then_stderr"
+      param: param #498 6538:196:24-6550:196:36 name="ctx"
+        type: type-ref #497 6543:196:29-6550:196:36 name="@3::Context"
+      param: param #500 6552:196:38-6568:196:54 name="expected"
+        type: type-ref #499 6562:196:48-6568:196:54 name="String"
+      result: type-ref #501 6573:196:59-6580:196:66 name="@3::Context"
+      body: return-stmt #510 6583:197:3-6657:198:1
+        value: call #509 6590:197:10-6656:197:76 name="@3::compare_text" piped=false
+          arg: name-ref #502 6603:197:23-6606:197:26 name="ctx"
+          arg: field-access #507 6608:197:28-6645:197:65 name="stderr"
+            target: call #506 6608:197:28-6638:197:58 name="@3::finished" piped=false
+              arg: call #505 6617:197:37-6637:197:57 name="@3::exited" piped=false
+                arg: call #504 6624:197:44-6636:197:56 name="@3::program" piped=false
+                  arg: name-ref #503 6632:197:52-6635:197:55 name="ctx"
+          arg: name-ref #508 6647:197:67-6655:197:75 name="expected"
+    declaration: function-decl #654 6662:200:1-7885:224:1 name="@3::predefined"
+      result: type-ref #514 6682:200:21-6692:200:31 name="List"
+        arg: type-ref #513 6687:200:26-6691:200:30 name="@3::Step"
+      body: return-stmt #653 6695:201:3-7881:223:1
+        value: list-lit #652 6702:201:10-7880:222:4
+          element: call #525 6708:202:5-6792:202:89 name="@3::step" piped=false
+            arg: literal #515 6713:202:10-6744:202:41 value=string:"the Agentica program {string}"
+            arg: block-lit #524 6746:202:43-6792:202:89
+              param: block-param #516 6750:202:47-6753:202:50 name="ctx"
+              param: block-param #517 6755:202:52-6759:202:56 name="args"
+              body: expr-stmt #523 6761:202:58-6788:202:85
+                value: call #522 6761:202:58-6788:202:85 name="@3::given_program" piped=false
+                  arg: name-ref #518 6775:202:72-6778:202:75 name="ctx"
+                  arg: index-access #521 6780:202:77-6787:202:84
+                    target: name-ref #519 6780:202:77-6784:202:81 name="args"
+                    index: literal #520 6785:202:82-6786:202:83 value=int:0
+          element: call #535 6798:203:5-6871:203:78 name="@3::step" piped=false
+            arg: literal #526 6803:203:10-6819:203:26 value=string:"I send a line:"
+            arg: block-lit #534 6821:203:28-6871:203:78
+              param: block-param #527 6825:203:32-6828:203:35 name="ctx"
+              param: block-param #528 6830:203:37-6834:203:41 name="args"
+              body: expr-stmt #533 6836:203:43-6867:203:74
+                value: call #532 6836:203:43-6867:203:74 name="@3::when_line" piped=false
+                  arg: name-ref #529 6846:203:53-6849:203:56 name="ctx"
+                  arg: call #531 6851:203:58-6866:203:73 name="@3::doc_string" piped=false
+                    arg: name-ref #530 6862:203:69-6865:203:72 name="ctx"
+          element: call #546 6877:204:5-6952:204:80 name="@3::step" piped=false
+            arg: literal #536 6882:204:10-6908:204:36 value=string:"I send the line {string}"
+            arg: block-lit #545 6910:204:38-6952:204:80
+              param: block-param #537 6914:204:42-6917:204:45 name="ctx"
+              param: block-param #538 6919:204:47-6923:204:51 name="args"
+              body: expr-stmt #544 6925:204:53-6948:204:76
+                value: call #543 6925:204:53-6948:204:76 name="@3::when_line" piped=false
+                  arg: name-ref #539 6935:204:63-6938:204:66 name="ctx"
+                  arg: index-access #542 6940:204:68-6947:204:75
+                    target: name-ref #540 6940:204:68-6944:204:72 name="args"
+                    index: literal #541 6945:204:73-6946:204:74 value=int:0
+          element: call #556 6958:205:5-7031:205:78 name="@3::step" piped=false
+            arg: literal #547 6963:205:10-6978:205:25 value=string:"I send input:"
+            arg: block-lit #555 6980:205:27-7031:205:78
+              param: block-param #548 6984:205:31-6987:205:34 name="ctx"
+              param: block-param #549 6989:205:36-6993:205:40 name="args"
+              body: expr-stmt #554 6995:205:42-7027:205:74
+                value: call #553 6995:205:42-7027:205:74 name="@3::when_input" piped=false
+                  arg: name-ref #550 7006:205:53-7009:205:56 name="ctx"
+                  arg: call #552 7011:205:58-7026:205:73 name="@3::doc_string" piped=false
+                    arg: name-ref #551 7022:205:69-7025:205:72 name="ctx"
+          element: call #564 7037:206:5-7091:206:59 name="@3::step" piped=false
+            arg: literal #557 7042:206:10-7057:206:25 value=string:"I close stdin"
+            arg: block-lit #563 7059:206:27-7091:206:59
+              param: block-param #558 7063:206:31-7066:206:34 name="ctx"
+              param: block-param #559 7068:206:36-7072:206:40 name="args"
+              body: expr-stmt #562 7074:206:42-7087:206:55
+                value: call #561 7074:206:42-7087:206:55 name="@3::when_eof" piped=false
+                  arg: name-ref #560 7083:206:51-7086:206:54 name="ctx"
+          element: call #578 7097:207:5-7224:209:8 name="@3::step" piped=false
+            arg: literal #565 7102:207:10-7147:207:55 value=string:"I receive a line within {int} milliseconds:"
+            arg: block-lit #577 7149:207:57-7224:209:8
+              param: block-param #566 7153:207:61-7156:207:64 name="ctx"
+              param: block-param #567 7158:207:66-7162:207:70 name="args"
+              body: expr-stmt #576 7170:208:7-7217:209:1
+                value: call #575 7170:208:7-7216:208:53 name="@3::then_line" piped=false
+                  arg: name-ref #568 7180:208:17-7183:208:20 name="ctx"
+                  arg: call #570 7185:208:22-7200:208:37 name="@3::doc_string" piped=false
+                    arg: name-ref #569 7196:208:33-7199:208:36 name="ctx"
+                  arg: field-access #574 7202:208:39-7215:208:52 name="to_i!"
+                    target: index-access #573 7202:208:39-7209:208:46
+                      target: name-ref #571 7202:208:39-7206:208:43 name="args"
+                      index: literal #572 7207:208:44-7208:208:45 value=int:0
+          element: call #593 7230:210:5-7359:212:8 name="@3::step" piped=false
+            arg: literal #579 7235:210:10-7290:210:65 value=string:"I receive the line {string} within {int} milliseconds"
+            arg: block-lit #592 7292:210:67-7359:212:8
+              param: block-param #580 7296:210:71-7299:210:74 name="ctx"
+              param: block-param #581 7301:210:76-7305:210:80 name="args"
+              body: expr-stmt #591 7313:211:7-7352:212:1
+                value: call #590 7313:211:7-7351:211:45 name="@3::then_line" piped=false
+                  arg: name-ref #582 7323:211:17-7326:211:20 name="ctx"
+                  arg: index-access #585 7328:211:22-7335:211:29
+                    target: name-ref #583 7328:211:22-7332:211:26 name="args"
+                    index: literal #584 7333:211:27-7334:211:28 value=int:0
+                  arg: field-access #589 7337:211:31-7350:211:44 name="to_i!"
+                    target: index-access #588 7337:211:31-7344:211:38
+                      target: name-ref #586 7337:211:31-7341:211:35 name="args"
+                      index: literal #587 7342:211:36-7343:211:37 value=int:1
+          element: call #607 7365:213:5-7502:215:8 name="@3::step" piped=false
+            arg: literal #594 7370:213:10-7420:213:60 value=string:"I receive a JSON line within {int} milliseconds:"
+            arg: block-lit #606 7422:213:62-7502:215:8
+              param: block-param #595 7426:213:66-7429:213:69 name="ctx"
+              param: block-param #596 7431:213:71-7435:213:75 name="args"
+              body: expr-stmt #605 7443:214:7-7495:215:1
+                value: call #604 7443:214:7-7494:214:58 name="@3::then_json_line" piped=false
+                  arg: name-ref #597 7458:214:22-7461:214:25 name="ctx"
+                  arg: call #599 7463:214:27-7478:214:42 name="@3::doc_string" piped=false
+                    arg: name-ref #598 7474:214:38-7477:214:41 name="ctx"
+                  arg: field-access #603 7480:214:44-7493:214:57 name="to_i!"
+                    target: index-access #602 7480:214:44-7487:214:51
+                      target: name-ref #600 7480:214:44-7484:214:48 name="args"
+                      index: literal #601 7485:214:49-7486:214:50 value=int:0
+          element: call #615 7508:216:5-7574:216:71 name="@3::step" piped=false
+            arg: literal #608 7513:216:10-7533:216:30 value=string:"stdin remains open"
+            arg: block-lit #614 7535:216:32-7574:216:71
+              param: block-param #609 7539:216:36-7542:216:39 name="ctx"
+              param: block-param #610 7544:216:41-7548:216:45 name="args"
+              body: expr-stmt #613 7550:216:47-7570:216:67
+                value: call #612 7550:216:47-7570:216:67 name="@3::then_stdin_open" piped=false
+                  arg: name-ref #611 7566:216:63-7569:216:66 name="ctx"
+          element: call #631 7580:217:5-7721:219:8 name="@3::step" piped=false
+            arg: literal #616 7585:217:10-7646:217:71 value=string:"the program exits with code {int} within {int} milliseconds"
+            arg: block-lit #630 7648:217:73-7721:219:8
+              param: block-param #617 7652:217:77-7655:217:80 name="ctx"
+              param: block-param #618 7657:217:82-7661:217:86 name="args"
+              body: expr-stmt #629 7669:218:7-7714:219:1
+                value: call #628 7669:218:7-7713:218:51 name="@3::then_exit" piped=false
+                  arg: name-ref #619 7679:218:17-7682:218:20 name="ctx"
+                  arg: field-access #623 7684:218:22-7697:218:35 name="to_i!"
+                    target: index-access #622 7684:218:22-7691:218:29
+                      target: name-ref #620 7684:218:22-7688:218:26 name="args"
+                      index: literal #621 7689:218:27-7690:218:28 value=int:0
+                  arg: field-access #627 7699:218:37-7712:218:50 name="to_i!"
+                    target: index-access #626 7699:218:37-7706:218:44
+                      target: name-ref #624 7699:218:37-7703:218:41 name="args"
+                      index: literal #625 7704:218:42-7705:218:43 value=int:1
+          element: call #641 7727:220:5-7798:220:76 name="@3::step" piped=false
+            arg: literal #632 7732:220:10-7744:220:22 value=string:"stdout is:"
+            arg: block-lit #640 7746:220:24-7798:220:76
+              param: block-param #633 7750:220:28-7753:220:31 name="ctx"
+              param: block-param #634 7755:220:33-7759:220:37 name="args"
+              body: expr-stmt #639 7761:220:39-7794:220:72
+                value: call #638 7761:220:39-7794:220:72 name="@3::then_stdout" piped=false
+                  arg: name-ref #635 7773:220:51-7776:220:54 name="ctx"
+                  arg: call #637 7778:220:56-7793:220:71 name="@3::doc_string" piped=false
+                    arg: name-ref #636 7789:220:67-7792:220:70 name="ctx"
+          element: call #651 7804:221:5-7875:221:76 name="@3::step" piped=false
+            arg: literal #642 7809:221:10-7821:221:22 value=string:"stderr is:"
+            arg: block-lit #650 7823:221:24-7875:221:76
+              param: block-param #643 7827:221:28-7830:221:31 name="ctx"
+              param: block-param #644 7832:221:33-7836:221:37 name="args"
+              body: expr-stmt #649 7838:221:39-7871:221:72
+                value: call #648 7838:221:39-7871:221:72 name="@3::then_stderr" piped=false
+                  arg: name-ref #645 7850:221:51-7853:221:54 name="ctx"
+                  arg: call #647 7855:221:56-7870:221:71 name="@3::doc_string" piped=false
+                    arg: name-ref #646 7866:221:67-7869:221:70 name="ctx"
+    declaration: function-decl #824 8009:227:1-9536:270:1 name="@3::serve"
+      param: param #657 8019:227:11-8034:227:26 name="all"
+        type: type-ref #656 8024:227:16-8034:227:26 name="List"
+          arg: type-ref #655 8029:227:21-8033:227:25 name="@3::Step"
+      result: type-ref #658 8039:227:31-8043:227:35 name="Void"
+      body: binding #661 8046:228:3-8089:229:1 name="init"
+        value: call #660 8053:228:10-8088:228:45 name="Process.parent_read_line" piped=false
+          arg: call #659 8078:228:35-8087:228:44 name="@3::idle_ms" piped=false
+      body: if-stmt #669 8091:229:3-8132:232:1
+        branch: if-branch #668 8091:229:3-8126:231:1
+          condition: unary #664 8094:229:6-8106:229:18 op=not op-span=8094:229:6-8097:229:9
+            operand: field-access #663 8098:229:10-8106:229:18 name="ok?"
+              target: name-ref #662 8098:229:10-8102:229:14 name="init"
+          body: expr-stmt #667 8111:230:5-8126:231:1
+            value: call #666 8111:230:5-8125:230:19 name="System.exit" piped=false
+              arg: literal #665 8123:230:17-8124:230:18 value=int:0
+      body: binding #674 8134:232:3-8181:233:1 name="settings"
+        value: call #673 8145:232:14-8180:232:49 name="JSON.decode" piped=false
+          arg: field-access #671 8157:232:26-8169:232:38 name="unwrap!"
+            target: name-ref #670 8157:232:26-8161:232:30 name="init"
+          arg: type-expression #672 8171:232:40-8179:232:48 name="@3::Settings"
+      body: if-stmt #685 8183:233:3-8289:236:1
+        branch: if-branch #684 8183:233:3-8283:235:1
+          condition: unary #677 8186:233:6-8202:233:22 op=not op-span=8186:233:6-8189:233:9
+            operand: field-access #676 8190:233:10-8202:233:22 name="ok?"
+              target: name-ref #675 8190:233:10-8198:233:18 name="settings"
+          body: expr-stmt #683 8207:234:5-8283:235:1
+            value: call #682 8207:234:5-8282:234:80 name="@3::halt" piped=false
+              arg: literal #678 8212:234:10-8231:234:29 value=string:"RUNTIME-BDD-INFRA"
+              arg: interpolation #681 8233:234:31-8281:234:79
                 part: text "invalid scenario settings: "
-                part: field-access #681 8263:234:61-8279:234:77 name="message"
-                  target: name-ref #680 8263:234:61-8271:234:69 name="settings"
-      body: binding #691 8291:236:3-8322:237:1 name="empty"
-        type: type-ref #689 8298:236:10-8316:236:28 name="List"
-          arg: type-ref #688 8303:236:15-8315:236:27 name="List"
-            arg: type-ref #687 8308:236:20-8314:236:26 name="String"
-        value: list-lit #690 8319:236:31-8321:236:33
-      body: binding #709 8324:237:3-8487:247:1 name="blank"
-        value: construct #708 8332:237:11-8486:246:4 type="@3::StepLine"
-          arg: named-arg #693 8346:238:5-8354:238:13 name="index"
-            value: literal #692 8353:238:12-8354:238:13 value=int:0
-          arg: named-arg #695 8360:239:5-8373:239:18 name="definition"
-            value: literal #694 8372:239:17-8373:239:18 value=int:0
-          arg: named-arg #697 8379:240:5-8390:240:16 name="pattern"
-            value: literal #696 8388:240:14-8390:240:16 value=string:""
-          arg: named-arg #699 8396:241:5-8408:241:17 name="captures"
-            value: list-lit #698 8406:241:15-8408:241:17
-          arg: named-arg #701 8414:242:5-8428:242:19 name="has_doc"
-            value: literal #700 8423:242:14-8428:242:19 value=bool:false
-          arg: named-arg #703 8434:243:5-8441:243:12 name="doc"
-            value: literal #702 8439:243:10-8441:243:12 value=string:""
-          arg: named-arg #705 8447:244:5-8463:244:21 name="has_table"
-            value: literal #704 8458:244:16-8463:244:21 value=bool:false
-          arg: named-arg #707 8469:245:5-8481:245:17 name="table"
-            value: name-ref #706 8476:245:12-8481:245:17 name="empty"
-      body: binding #722 8489:247:3-8604:248:1 name="ctx"
-        value: construct #721 8495:247:9-8603:247:117 type="@3::Context"
-          arg: named-arg #720 8503:247:17-8602:247:116 name="scenario"
-            value: construct #719 8513:247:27-8602:247:116 type="@3::Scenario"
-              arg: named-arg #712 8522:247:36-8548:247:62 name="settings"
-                value: field-access #711 8532:247:46-8548:247:62 name="unwrap!"
-                  target: name-ref #710 8532:247:46-8540:247:54 name="settings"
-              arg: named-arg #714 8550:247:64-8559:247:73 name="state"
-                value: map-lit #713 8557:247:71-8559:247:73
-              arg: named-arg #716 8561:247:75-8572:247:86 name="step"
-                value: name-ref #715 8567:247:81-8572:247:86 name="blank"
-              arg: named-arg #718 8574:247:88-8601:247:115 name="program"
-                value: enum-constructor #717 8583:247:97-8601:247:115 enum="@3::Program" variant="NotStarted"
-      body: binding #725 8606:248:3-8649:249:1 name="line"
-        value: call #724 8613:248:10-8648:248:45 name="Process.parent_read_line" piped=false
-          arg: call #723 8638:248:35-8647:248:44 name="@3::idle_ms" piped=false
-      body: while-stmt #821 8651:249:3-9515:268:1
-        condition: field-access #727 8657:249:9-8665:249:17 name="ok?"
-          target: name-ref #726 8657:249:9-8661:249:13 name="line"
-        body: binding #732 8670:250:5-8714:251:1 name="found"
-          value: call #731 8678:250:13-8713:250:48 name="JSON.decode" piped=false
-            arg: field-access #729 8690:250:25-8702:250:37 name="unwrap!"
-              target: name-ref #728 8690:250:25-8694:250:29 name="line"
-            arg: type-expression #730 8704:250:39-8712:250:47 name="@3::StepLine"
-        body: if-stmt #743 8718:251:5-8814:254:1
-          branch: if-branch #742 8718:251:5-8806:253:1
-            condition: unary #735 8721:251:8-8734:251:21 op=not op-span=8721:251:8-8724:251:11
-              operand: field-access #734 8725:251:12-8734:251:21 name="ok?"
-                target: name-ref #733 8725:251:12-8730:251:17 name="found"
-            body: expr-stmt #741 8741:252:7-8806:253:1
-              value: call #740 8741:252:7-8805:252:71 name="@3::halt" piped=false
-                arg: literal #736 8746:252:12-8765:252:31 value=string:"RUNTIME-BDD-INFRA"
-                arg: interpolation #739 8767:252:33-8804:252:70
+                part: field-access #680 8263:234:61-8279:234:77 name="message"
+                  target: name-ref #679 8263:234:61-8271:234:69 name="settings"
+      body: binding #690 8291:236:3-8322:237:1 name="empty"
+        type: type-ref #688 8298:236:10-8316:236:28 name="List"
+          arg: type-ref #687 8303:236:15-8315:236:27 name="List"
+            arg: type-ref #686 8308:236:20-8314:236:26 name="String"
+        value: list-lit #689 8319:236:31-8321:236:33
+      body: binding #708 8324:237:3-8487:247:1 name="blank"
+        value: construct #707 8332:237:11-8486:246:4 type="@3::StepLine"
+          arg: named-arg #692 8346:238:5-8354:238:13 name="index"
+            value: literal #691 8353:238:12-8354:238:13 value=int:0
+          arg: named-arg #694 8360:239:5-8373:239:18 name="definition"
+            value: literal #693 8372:239:17-8373:239:18 value=int:0
+          arg: named-arg #696 8379:240:5-8390:240:16 name="pattern"
+            value: literal #695 8388:240:14-8390:240:16 value=string:""
+          arg: named-arg #698 8396:241:5-8408:241:17 name="captures"
+            value: list-lit #697 8406:241:15-8408:241:17
+          arg: named-arg #700 8414:242:5-8428:242:19 name="has_doc"
+            value: literal #699 8423:242:14-8428:242:19 value=bool:false
+          arg: named-arg #702 8434:243:5-8441:243:12 name="doc"
+            value: literal #701 8439:243:10-8441:243:12 value=string:""
+          arg: named-arg #704 8447:244:5-8463:244:21 name="has_table"
+            value: literal #703 8458:244:16-8463:244:21 value=bool:false
+          arg: named-arg #706 8469:245:5-8481:245:17 name="table"
+            value: name-ref #705 8476:245:12-8481:245:17 name="empty"
+      body: binding #721 8489:247:3-8604:248:1 name="ctx"
+        value: construct #720 8495:247:9-8603:247:117 type="@3::Context"
+          arg: named-arg #719 8503:247:17-8602:247:116 name="scenario"
+            value: construct #718 8513:247:27-8602:247:116 type="@3::Scenario"
+              arg: named-arg #711 8522:247:36-8548:247:62 name="settings"
+                value: field-access #710 8532:247:46-8548:247:62 name="unwrap!"
+                  target: name-ref #709 8532:247:46-8540:247:54 name="settings"
+              arg: named-arg #713 8550:247:64-8559:247:73 name="state"
+                value: map-lit #712 8557:247:71-8559:247:73
+              arg: named-arg #715 8561:247:75-8572:247:86 name="step"
+                value: name-ref #714 8567:247:81-8572:247:86 name="blank"
+              arg: named-arg #717 8574:247:88-8601:247:115 name="program"
+                value: enum-constructor #716 8583:247:97-8601:247:115 enum="@3::Program" variant="NotStarted"
+      body: binding #724 8606:248:3-8649:249:1 name="line"
+        value: call #723 8613:248:10-8648:248:45 name="Process.parent_read_line" piped=false
+          arg: call #722 8638:248:35-8647:248:44 name="@3::idle_ms" piped=false
+      body: while-stmt #820 8651:249:3-9515:268:1
+        condition: field-access #726 8657:249:9-8665:249:17 name="ok?"
+          target: name-ref #725 8657:249:9-8661:249:13 name="line"
+        body: binding #731 8670:250:5-8714:251:1 name="found"
+          value: call #730 8678:250:13-8713:250:48 name="JSON.decode" piped=false
+            arg: field-access #728 8690:250:25-8702:250:37 name="unwrap!"
+              target: name-ref #727 8690:250:25-8694:250:29 name="line"
+            arg: type-expression #729 8704:250:39-8712:250:47 name="@3::StepLine"
+        body: if-stmt #742 8718:251:5-8814:254:1
+          branch: if-branch #741 8718:251:5-8806:253:1
+            condition: unary #734 8721:251:8-8734:251:21 op=not op-span=8721:251:8-8724:251:11
+              operand: field-access #733 8725:251:12-8734:251:21 name="ok?"
+                target: name-ref #732 8725:251:12-8730:251:17 name="found"
+            body: expr-stmt #740 8741:252:7-8806:253:1
+              value: call #739 8741:252:7-8805:252:71 name="@3::halt" piped=false
+                arg: literal #735 8746:252:12-8765:252:31 value=string:"RUNTIME-BDD-INFRA"
+                arg: interpolation #738 8767:252:33-8804:252:70
                   part: text "invalid step line: "
-                  part: field-access #738 8789:252:55-8802:252:68 name="message"
-                    target: name-ref #737 8789:252:55-8794:252:60 name="found"
-        body: binding #746 8818:254:5-8842:255:1 name="current"
-          value: field-access #745 8828:254:15-8841:254:28 name="unwrap!"
-            target: name-ref #744 8828:254:15-8833:254:20 name="found"
-        body: if-stmt #773 8846:255:5-9072:258:1
-          branch: if-branch #772 8846:255:5-9064:257:1
-            condition: binary #765 8849:255:8-8959:255:118 op=or op-span=8906:255:65-8908:255:67
-              left: binary #756 8849:255:8-8905:255:64 op=or op-span=8872:255:31-8874:255:33
-                left: binary #750 8849:255:8-8871:255:30 op=less op-span=8868:255:27-8869:255:28
-                  left: field-access #748 8849:255:8-8867:255:26 name="definition"
-                    target: name-ref #747 8849:255:8-8856:255:15 name="current"
-                  right: literal #749 8870:255:29-8871:255:30 value=int:0
-                right: binary #755 8875:255:34-8905:255:64 op=greater-equal op-span=8894:255:53-8896:255:55
-                  left: field-access #752 8875:255:34-8893:255:52 name="definition"
-                    target: name-ref #751 8875:255:34-8882:255:41 name="current"
-                  right: field-access #754 8897:255:56-8905:255:64 name="size"
-                    target: name-ref #753 8897:255:56-8900:255:59 name="all"
-              right: binary #764 8909:255:68-8959:255:118 op=not-equal op-span=8941:255:100-8943:255:102
-                left: field-access #761 8909:255:68-8940:255:99 name="pattern"
-                  target: index-access #760 8909:255:68-8932:255:91
-                    target: name-ref #757 8909:255:68-8912:255:71 name="all"
-                    index: field-access #759 8913:255:72-8931:255:90 name="definition"
-                      target: name-ref #758 8913:255:72-8920:255:79 name="current"
-                right: field-access #763 8944:255:103-8959:255:118 name="pattern"
-                  target: name-ref #762 8944:255:103-8951:255:110 name="current"
-            body: expr-stmt #771 8966:256:7-9064:257:1
-              value: call #770 8966:256:7-9063:256:104 name="@3::halt" piped=false
-                arg: literal #766 8971:256:12-8990:256:31 value=string:"RUNTIME-BDD-INFRA"
-                arg: interpolation #769 8992:256:33-9062:256:103
+                  part: field-access #737 8789:252:55-8802:252:68 name="message"
+                    target: name-ref #736 8789:252:55-8794:252:60 name="found"
+        body: binding #745 8818:254:5-8842:255:1 name="current"
+          value: field-access #744 8828:254:15-8841:254:28 name="unwrap!"
+            target: name-ref #743 8828:254:15-8833:254:20 name="found"
+        body: if-stmt #772 8846:255:5-9072:258:1
+          branch: if-branch #771 8846:255:5-9064:257:1
+            condition: binary #764 8849:255:8-8959:255:118 op=or op-span=8906:255:65-8908:255:67
+              left: binary #755 8849:255:8-8905:255:64 op=or op-span=8872:255:31-8874:255:33
+                left: binary #749 8849:255:8-8871:255:30 op=less op-span=8868:255:27-8869:255:28
+                  left: field-access #747 8849:255:8-8867:255:26 name="definition"
+                    target: name-ref #746 8849:255:8-8856:255:15 name="current"
+                  right: literal #748 8870:255:29-8871:255:30 value=int:0
+                right: binary #754 8875:255:34-8905:255:64 op=greater-equal op-span=8894:255:53-8896:255:55
+                  left: field-access #751 8875:255:34-8893:255:52 name="definition"
+                    target: name-ref #750 8875:255:34-8882:255:41 name="current"
+                  right: field-access #753 8897:255:56-8905:255:64 name="size"
+                    target: name-ref #752 8897:255:56-8900:255:59 name="all"
+              right: binary #763 8909:255:68-8959:255:118 op=not-equal op-span=8941:255:100-8943:255:102
+                left: field-access #760 8909:255:68-8940:255:99 name="pattern"
+                  target: index-access #759 8909:255:68-8932:255:91
+                    target: name-ref #756 8909:255:68-8912:255:71 name="all"
+                    index: field-access #758 8913:255:72-8931:255:90 name="definition"
+                      target: name-ref #757 8913:255:72-8920:255:79 name="current"
+                right: field-access #762 8944:255:103-8959:255:118 name="pattern"
+                  target: name-ref #761 8944:255:103-8951:255:110 name="current"
+            body: expr-stmt #770 8966:256:7-9064:257:1
+              value: call #769 8966:256:7-9063:256:104 name="@3::halt" piped=false
+                arg: literal #765 8971:256:12-8990:256:31 value=string:"RUNTIME-BDD-INFRA"
+                arg: interpolation #768 8992:256:33-9062:256:103
                   part: text "the step program built a different list of steps: "
-                  part: field-access #768 9045:256:86-9060:256:101 name="pattern"
-                    target: name-ref #767 9045:256:86-9052:256:93 name="current"
-        body: binding #785 9076:258:5-9162:259:1 name="ctx"
-          value: invoke #784 9082:258:11-9161:258:90
-            target: field-access #778 9082:258:11-9113:258:42 name="handler"
-              target: index-access #777 9082:258:11-9105:258:34
-                target: name-ref #774 9082:258:11-9085:258:14 name="all"
-                index: field-access #776 9086:258:15-9104:258:33 name="definition"
-                  target: name-ref #775 9086:258:15-9093:258:22 name="current"
-            arg: call #781 9119:258:48-9142:258:71 name="@3::with_step" piped=false
-              arg: name-ref #779 9129:258:58-9132:258:61 name="ctx"
-              arg: name-ref #780 9134:258:63-9141:258:70 name="current"
-            arg: field-access #783 9144:258:73-9160:258:89 name="captures"
-              target: name-ref #782 9144:258:73-9151:258:80 name="current"
-        body: if-stmt #794 9166:259:5-9301:262:1
-          branch: if-branch #793 9166:259:5-9293:261:1
-            condition: binary #788 9169:259:8-9193:259:32 op=greater op-span=9190:259:29-9191:259:30
-              left: call #786 9169:259:8-9189:259:28 name="Task.pending_count" piped=false
-              right: literal #787 9192:259:31-9193:259:32 value=int:0
-            body: expr-stmt #792 9200:260:7-9293:261:1
-              value: call #791 9200:260:7-9292:260:99 name="@3::halt" piped=false
-                arg: literal #789 9205:260:12-9232:260:39 value=string:"RUNTIME-BDD-PENDING-TASKS"
-                arg: literal #790 9234:260:41-9291:260:98 value=string:"await pending tasks before returning from a BDD handler"
-        body: expr-stmt #796 9305:262:5-9319:263:1
-          value: call #795 9305:262:5-9318:262:18 name="@3::check_crash" piped=false
-        body: expr-stmt #799 9323:263:5-9334:264:1
-          value: call #798 9323:263:5-9333:263:15 name="@3::probe" piped=false
-            arg: name-ref #797 9329:263:11-9332:263:14 name="ctx"
-        body: binding #813 9338:264:5-9429:265:1 name="fields"
-          type: type-ref #802 9346:264:13-9363:264:30 name="Map"
-            arg: type-ref #800 9350:264:17-9356:264:23 name="String"
-            arg: type-ref #801 9358:264:25-9362:264:29 name="Json"
-          value: map-lit #812 9366:264:33-9428:264:95
-            entry: map-entry #806 9367:264:34-9392:264:59
-              key: literal #803 9367:264:34-9374:264:41 value=string:"event"
-              value: call #805 9376:264:43-9392:264:59 name="JSON.from" piped=false
-                arg: literal #804 9386:264:53-9391:264:58 value=string:"end"
-            entry: map-entry #811 9394:264:61-9427:264:94
-              key: literal #807 9394:264:61-9401:264:68 value=string:"index"
-              value: call #810 9403:264:70-9427:264:94 name="JSON.from" piped=false
-                arg: field-access #809 9413:264:80-9426:264:93 name="index"
-                  target: name-ref #808 9413:264:80-9420:264:87 name="current"
-        body: expr-stmt #817 9433:265:5-9462:266:1
-          value: call #816 9433:265:5-9461:265:33 name="@3::deliver" piped=false
-            arg: call #815 9441:265:13-9460:265:32 name="@3::record_text" piped=false
-              arg: name-ref #814 9453:265:25-9459:265:31 name="fields"
-        body: binding #820 9466:266:5-9509:267:1 name="line"
-          value: call #819 9473:266:12-9508:266:47 name="Process.parent_read_line" piped=false
-            arg: call #818 9498:266:37-9507:266:46 name="@3::idle_ms" piped=false
-      body: expr-stmt #824 9517:268:3-9532:269:1
-        value: call #823 9517:268:3-9531:268:17 name="System.exit" piped=false
-          arg: literal #822 9529:268:15-9530:268:16 value=int:0
-    declaration: function-decl #838 9537:271:1-9703:277:1 name="@3::check_tasks"
-      result: type-ref #826 9558:271:22-9562:271:26 name="Void"
-      body: if-stmt #835 9565:272:3-9683:275:1
-        branch: if-branch #834 9565:272:3-9677:274:1
-          condition: binary #829 9568:272:6-9592:272:30 op=greater op-span=9589:272:27-9590:272:28
-            left: call #827 9568:272:6-9588:272:26 name="Task.pending_count" piped=false
-            right: literal #828 9591:272:29-9592:272:30 value=int:0
-          body: expr-stmt #833 9597:273:5-9677:274:1
-            value: call #832 9597:273:5-9676:273:84 name="@3::halt" piped=false
-              arg: literal #830 9602:273:10-9629:273:37 value=string:"RUNTIME-BDD-PENDING-TASKS"
-              arg: literal #831 9631:273:39-9675:273:83 value=string:"await pending tasks before calling BDD.run"
-      body: expr-stmt #837 9685:275:3-9699:276:1
-        value: call #836 9685:275:3-9698:275:16 name="@3::check_crash" piped=false
-    declaration: function-decl #851 9704:278:1-9837:284:1 name="@3::check_crash"
-      result: type-ref #839 9725:278:22-9729:278:26 name="Void"
-      body: binding #841 9732:279:3-9764:280:1 name="crash"
-        value: call #840 9740:279:11-9763:279:34 name="Task.unobserved_crash" piped=false
-      body: if-stmt #850 9766:280:3-9833:283:1
-        branch: if-branch #849 9766:280:3-9827:282:1
-          condition: field-access #843 9769:280:6-9778:280:15 name="ok?"
-            target: name-ref #842 9769:280:6-9774:280:11 name="crash"
-          body: expr-stmt #848 9783:281:5-9827:282:1
-            value: call #847 9783:281:5-9826:281:48 name="@3::halt" piped=false
-              arg: literal #844 9788:281:10-9810:281:32 value=string:"RUNTIME-TASK-CRASHED"
-              arg: field-access #846 9812:281:34-9825:281:47 name="unwrap!"
-                target: name-ref #845 9812:281:34-9817:281:39 name="crash"
-    declaration: function-decl #883 9838:285:1-10148:295:1 name="@3::probe"
-      param: param #853 9848:285:11-9860:285:23 name="ctx"
-        type: type-ref #852 9853:285:16-9860:285:23 name="@3::Context"
-      result: type-ref #854 9865:285:28-9869:285:32 name="Void"
-      body: case-stmt #882 9872:286:3-10144:294:1
-        value: field-access #857 9877:286:8-9897:286:28 name="program"
-          target: field-access #856 9877:286:8-9889:286:20 name="scenario"
-            target: name-ref #855 9877:286:8-9880:286:11 name="ctx"
-        arm: case-arm #878 9902:287:5-10105:292:1
-          pattern: variant-pattern #858 9902:287:5-9920:287:23 enum="@3::Program" variant="Running" bindings=["p"]
-          body: binding #863 9930:288:7-9968:289:1 name="peek"
-            value: call #862 9937:288:14-9967:288:44 name="Process.read_bytes" piped=false
-              arg: name-ref #859 9956:288:33-9957:288:34 name="p"
-              arg: literal #860 9959:288:36-9960:288:37 value=int:0
-              arg: literal #861 9962:288:39-9966:288:43 value=int:1000
-          body: if-stmt #877 9974:289:7-10105:292:1
-            branch: if-branch #876 9974:289:7-10095:291:1
-              condition: binary #871 9977:289:10-10021:289:54 op=and op-span=9990:289:23-9993:289:26
-                left: unary #866 9977:289:10-9989:289:22 op=not op-span=9977:289:10-9980:289:13
-                  operand: field-access #865 9981:289:14-9989:289:22 name="ok?"
-                    target: name-ref #864 9981:289:14-9985:289:18 name="peek"
-                right: binary #870 9994:289:27-10021:289:54 op=equal op-span=10007:289:40-10009:289:42
-                  left: field-access #868 9994:289:27-10006:289:39 name="message"
-                    target: name-ref #867 9994:289:27-9998:289:31 name="peek"
-                  right: call #869 10010:289:43-10021:289:54 name="@3::over_text" piped=false
-              body: expr-stmt #875 10030:290:9-10095:291:1
-                value: call #874 10030:290:9-10094:290:73 name="@3::halt" piped=false
-                  arg: literal #872 10035:290:14-10061:290:40 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
-                  arg: literal #873 10063:290:42-10093:290:72 value=string:"program output exceeds 1 MiB"
-        arm: case-arm #881 10109:292:5-10138:293:1
-          pattern: variant-pattern #879 10109:292:5-10127:292:23 enum="@3::Program" variant="NotStarted" bindings=[]
-          body: return-stmt #880 10131:292:27-10138:293:1
-    declaration: function-decl #1034 10149:296:1-11453:328:1 name="@3::start"
-      param: param #885 10159:296:11-10171:296:23 name="ctx"
-        type: type-ref #884 10164:296:16-10171:296:23 name="@3::Context"
-      param: param #887 10173:296:25-10185:296:37 name="path"
-        type: type-ref #886 10179:296:31-10185:296:37 name="String"
-      result: type-ref #888 10190:296:42-10197:296:49 name="@3::Context"
-      body: binding #892 10200:297:3-10233:298:1 name="settings"
-        value: field-access #891 10211:297:14-10232:297:35 name="settings"
-          target: field-access #890 10211:297:14-10223:297:26 name="scenario"
-            target: name-ref #889 10211:297:14-10214:297:17 name="ctx"
-      body: binding #897 10235:298:3-10269:299:1 name="joined"
-        type: type-ref #894 10243:298:11-10257:298:25 name="Result"
-          arg: type-ref #893 10250:298:18-10256:298:24 name="String"
-        value: call #896 10260:298:28-10268:298:36 name="ok" piped=false
-          arg: name-ref #895 10263:298:31-10267:298:35 name="path"
-      body: if-stmt #909 10271:299:3-10352:302:1
-        branch: if-branch #908 10271:299:3-10346:301:1
-          condition: unary #901 10274:299:6-10299:299:31 op=not op-span=10274:299:6-10277:299:9
-            operand: method-call #900 10278:299:10-10299:299:31 name="start_with?"
-              target: name-ref #898 10278:299:10-10282:299:14 name="path"
-              arg: literal #899 10295:299:27-10298:299:30 value=string:"/"
-          body: binding #907 10304:300:5-10346:301:1 name="joined"
-            value: call #906 10313:300:14-10345:300:46 name="Path.join" piped=false
-              arg: list-lit #905 10323:300:24-10344:300:45
-                element: field-access #903 10324:300:25-10337:300:38 name="base"
-                  target: name-ref #902 10324:300:25-10332:300:33 name="settings"
-                element: name-ref #904 10339:300:40-10343:300:44 name="path"
-      body: binding #916 10354:302:3-10414:303:1 name="file"
-        value: method-call #915 10361:302:10-10413:302:62 name="unwrap_or"
-          target: call #913 10361:302:10-10397:302:46 name="Path.resolve" piped=false
-            arg: method-call #912 10374:302:23-10396:302:45 name="unwrap_or"
-              target: name-ref #910 10374:302:23-10380:302:29 name="joined"
-              arg: name-ref #911 10391:302:40-10395:302:44 name="path"
-          arg: name-ref #914 10408:302:57-10412:302:61 name="path"
-      body: binding #920 10416:303:3-10445:304:1 name="info"
-        value: call #919 10423:303:10-10444:303:31 name="File.stat" piped=false
-          arg: name-ref #917 10433:303:20-10437:303:24 name="file"
-          arg: literal #918 10439:303:26-10443:303:30 value=int:5000
-      body: if-stmt #939 10447:304:3-10598:307:1
-        branch: if-branch #938 10447:304:3-10592:306:1
-          condition: binary #933 10450:304:6-10522:304:78 op=or op-span=10492:304:48-10494:304:50
-            left: unary #927 10450:304:6-10491:304:47 op=not op-span=10450:304:6-10453:304:9
-              operand: binary #926 10455:304:11-10490:304:46 op=and op-span=10464:304:20-10467:304:23
-                left: field-access #922 10455:304:11-10463:304:19 name="ok?"
-                  target: name-ref #921 10455:304:11-10459:304:15 name="info"
-                right: method-call #925 10468:304:24-10490:304:46 name="end_with?"
-                  target: name-ref #923 10468:304:24-10472:304:28 name="file"
-                  arg: literal #924 10483:304:39-10489:304:45 value=string:".agc"
-            right: binary #932 10495:304:51-10522:304:78 op=not-equal op-span=10513:304:69-10515:304:71
-              left: field-access #930 10495:304:51-10512:304:68 name="kind"
-                target: field-access #929 10495:304:51-10507:304:63 name="unwrap!"
-                  target: name-ref #928 10495:304:51-10499:304:55 name="info"
-              right: literal #931 10516:304:72-10522:304:78 value=string:"file"
-          body: expr-stmt #937 10527:305:5-10592:306:1
-            value: call #936 10527:305:5-10591:305:69 name="@3::halt" piped=false
-              arg: literal #934 10532:305:10-10553:305:31 value=string:"RUNTIME-BDD-PROGRAM"
-              arg: literal #935 10555:305:33-10590:305:68 value=string:"expected an existing .agc program"
-      body: if-stmt #950 10600:307:3-10705:310:1
-        branch: if-branch #949 10600:307:3-10699:309:1
-          condition: binary #944 10603:307:6-10630:307:33 op=equal op-span=10626:307:29-10628:307:31
-            left: field-access #942 10603:307:6-10625:307:28 name="size"
-              target: field-access #941 10603:307:6-10620:307:23 name="agentica"
-                target: name-ref #940 10603:307:6-10611:307:14 name="settings"
-            right: literal #943 10629:307:32-10630:307:33 value=int:0
-          body: expr-stmt #948 10635:308:5-10699:309:1
-            value: call #947 10635:308:5-10698:308:68 name="@3::halt" piped=false
-              arg: literal #945 10640:308:10-10659:308:29 value=string:"RUNTIME-BDD-INFRA"
-              arg: literal #946 10661:308:31-10697:308:67 value=string:"Agentica executable is unavailable"
-      body: binding #954 10707:310:3-10732:311:1 name="flags"
-        type: type-ref #952 10714:310:10-10726:310:22 name="List"
-          arg: type-ref #951 10719:310:15-10725:310:21 name="String"
-        value: list-lit #953 10729:310:25-10731:310:27
-      body: if-stmt #961 10734:311:3-10790:314:1
-        branch: if-branch #960 10734:311:3-10784:313:1
-          condition: field-access #956 10737:311:6-10755:311:24 name="allow_run"
-            target: name-ref #955 10737:311:6-10745:311:14 name="settings"
-          body: binding #959 10760:312:5-10784:313:1 name="flags"
-            value: list-lit #958 10768:312:13-10783:312:28
-              element: literal #957 10769:312:14-10782:312:27 value=string:"--allow-run"
-      body: if-stmt #973 10792:314:3-10874:317:1
-        branch: if-branch #972 10792:314:3-10868:316:1
-          condition: field-access #963 10795:314:6-10810:314:21 name="seeded"
-            target: name-ref #962 10795:314:6-10803:314:14 name="settings"
-          body: binding #971 10815:315:5-10868:316:1 name="flags"
-            value: method-call #970 10823:315:13-10867:315:57 name="concat"
-              target: name-ref #964 10823:315:13-10828:315:18 name="flags"
-              arg: list-lit #969 10836:315:26-10866:315:56
-                element: literal #965 10837:315:27-10845:315:35 value=string:"--seed"
-                element: field-access #968 10847:315:37-10865:315:55 name="to_s"
-                  target: field-access #967 10847:315:37-10860:315:50 name="seed"
-                    target: name-ref #966 10847:315:37-10855:315:45 name="settings"
-      body: binding #985 10876:317:3-10964:318:1 name="args"
-        value: method-call #984 10883:317:10-10963:317:90 name="concat"
-          target: method-call #979 10883:317:10-10922:317:49 name="concat"
-            target: method-call #977 10883:317:10-10908:317:35 name="drop"
-              target: field-access #975 10883:317:10-10900:317:27 name="agentica"
-                target: name-ref #974 10883:317:10-10891:317:18 name="settings"
-              arg: literal #976 10906:317:33-10907:317:34 value=int:1
-            arg: name-ref #978 10916:317:43-10921:317:48 name="flags"
-          arg: list-lit #983 10930:317:57-10962:317:89
-            element: literal #980 10931:317:58-10944:317:71 value=string:"--max-steps"
-            element: literal #981 10946:317:73-10955:317:82 value=string:"1000000"
-            element: name-ref #982 10957:317:84-10961:317:88 name="file"
-      body: binding #995 10966:318:3-11049:319:1 name="spawned"
-        value: call #994 10976:318:13-11048:318:85 name="Process.spawn_captured" piped=false
-          arg: index-access #989 10999:318:36-11019:318:56
-            target: field-access #987 10999:318:36-11016:318:53 name="agentica"
-              target: name-ref #986 10999:318:36-11007:318:44 name="settings"
-            index: literal #988 11017:318:54-11018:318:55 value=int:0
-          arg: name-ref #990 11021:318:58-11025:318:62 name="args"
-          arg: field-access #992 11027:318:64-11040:318:77 name="base"
-            target: name-ref #991 11027:318:64-11035:318:72 name="settings"
-          arg: literal #993 11042:318:79-11047:318:84 value=int:30000
-      body: if-stmt #1015 11051:319:3-11261:325:1
-        branch: if-branch #1014 11051:319:3-11255:324:1
-          condition: unary #998 11054:319:6-11069:319:21 op=not op-span=11054:319:6-11057:319:9
-            operand: field-access #997 11058:319:10-11069:319:21 name="ok?"
-              target: name-ref #996 11058:319:10-11065:319:17 name="spawned"
-          body: if-stmt #1008 11074:320:5-11211:323:1
-            branch: if-branch #1007 11074:320:5-11203:322:1
-              condition: binary #1002 11077:320:8-11132:320:63 op=equal op-span=11093:320:24-11095:320:26
-                left: field-access #1000 11077:320:8-11092:320:23 name="message"
-                  target: name-ref #999 11077:320:8-11084:320:15 name="spawned"
-                right: literal #1001 11096:320:27-11132:320:63 value=string:"process: executable is unavailable"
-              body: expr-stmt #1006 11139:321:7-11203:322:1
-                value: call #1005 11139:321:7-11202:321:70 name="@3::halt" piped=false
-                  arg: literal #1003 11144:321:12-11163:321:31 value=string:"RUNTIME-BDD-INFRA"
-                  arg: literal #1004 11165:321:33-11201:321:69 value=string:"Agentica executable is unavailable"
-          body: expr-stmt #1013 11215:323:5-11255:324:1
-            value: call #1012 11215:323:5-11254:323:44 name="@3::halt" piped=false
-              arg: literal #1009 11220:323:10-11236:323:26 value=string:"RUNTIME-BDD-IO"
-              arg: field-access #1011 11238:323:28-11253:323:43 name="message"
-                target: name-ref #1010 11238:323:28-11245:323:35 name="spawned"
-      body: return-stmt #1033 11263:325:3-11449:327:1
-        value: construct #1032 11270:325:10-11448:326:80 type="@3::Context"
-          arg: named-arg #1031 11278:325:18-11447:326:79 name="scenario"
-            value: construct #1030 11288:325:28-11447:326:79 type="@3::Scenario"
-              arg: named-arg #1017 11297:325:37-11315:325:55 name="settings"
-                value: name-ref #1016 11307:325:47-11315:325:55 name="settings"
-              arg: named-arg #1021 11317:325:57-11342:325:82 name="state"
-                value: field-access #1020 11324:325:64-11342:325:82 name="state"
-                  target: field-access #1019 11324:325:64-11336:325:76 name="scenario"
-                    target: name-ref #1018 11324:325:64-11327:325:67 name="ctx"
-              arg: named-arg #1025 11344:325:84-11367:325:107 name="step"
-                value: field-access #1024 11350:325:90-11367:325:107 name="step"
-                  target: field-access #1023 11350:325:90-11362:325:102 name="scenario"
-                    target: name-ref #1022 11350:325:90-11353:325:93 name="ctx"
-              arg: named-arg #1029 11405:326:37-11446:326:78 name="program"
-                value: enum-constructor #1028 11414:326:46-11446:326:78 enum="@3::Program" variant="Running"
-                  arg: field-access #1027 11430:326:62-11445:326:77 name="unwrap!"
-                    target: name-ref #1026 11430:326:62-11437:326:69 name="spawned"
-    declaration: function-decl #1062 11454:329:1-11738:337:1 name="@3::program"
-      param: param #1036 11466:329:13-11478:329:25 name="ctx"
-        type: type-ref #1035 11471:329:18-11478:329:25 name="@3::Context"
-      result: type-ref #1037 11483:329:30-11490:329:37 name="Process"
-      body: binding #1042 11493:330:3-11568:331:1 name="found"
-        type: type-ref #1039 11500:330:10-11515:330:25 name="Result"
-          arg: type-ref #1038 11507:330:17-11514:330:24 name="Process"
-        value: call #1041 11518:330:28-11567:330:77 name="error" piped=false
-          arg: literal #1040 11524:330:34-11566:330:76 value=string:"start a program before using its streams"
-      body: case-stmt #1058 11570:331:3-11711:335:1
-        value: field-access #1045 11575:331:8-11595:331:28 name="program"
-          target: field-access #1044 11575:331:8-11587:331:20 name="scenario"
-            target: name-ref #1043 11575:331:8-11578:331:11 name="ctx"
-        arm: case-arm #1050 11600:332:5-11636:333:1
-          pattern: variant-pattern #1046 11600:332:5-11618:332:23 enum="@3::Program" variant="Running" bindings=["p"]
-          body: binding #1049 11622:332:27-11636:333:1 name="found"
-            value: call #1048 11630:332:35-11635:332:40 name="ok" piped=false
-              arg: name-ref #1047 11633:332:38-11634:332:39 name="p"
-        arm: case-arm #1057 11640:333:5-11705:334:1
-          pattern: variant-pattern #1051 11640:333:5-11658:333:23 enum="@3::Program" variant="NotStarted" bindings=[]
-          body: expr-stmt #1056 11662:333:27-11705:334:1
-            value: call #1055 11662:333:27-11704:333:69 name="@3::halt" piped=false
-              arg: literal #1052 11667:333:32-11688:333:53 value=string:"RUNTIME-BDD-CONTEXT"
-              arg: field-access #1054 11690:333:55-11703:333:68 name="message"
-                target: name-ref #1053 11690:333:55-11695:333:60 name="found"
-      body: return-stmt #1061 11713:335:3-11734:336:1
-        value: field-access #1060 11720:335:10-11733:335:23 name="unwrap!"
-          target: name-ref #1059 11720:335:10-11725:335:15 name="found"
-    declaration: function-decl #1096 11739:338:1-12014:346:1 name="@3::send"
-      param: param #1064 11748:338:10-11760:338:22 name="ctx"
-        type: type-ref #1063 11753:338:15-11760:338:22 name="@3::Context"
-      param: param #1066 11762:338:24-11774:338:36 name="text"
-        type: type-ref #1065 11768:338:30-11774:338:36 name="String"
-      result: type-ref #1067 11779:338:41-11786:338:48 name="@3::Context"
-      body: binding #1073 11789:339:3-11835:340:1 name="sent"
-        value: call #1072 11796:339:10-11834:339:48 name="Process.send" piped=false
-          arg: call #1069 11809:339:23-11821:339:35 name="@3::program" piped=false
-            arg: name-ref #1068 11817:339:31-11820:339:34 name="ctx"
-          arg: name-ref #1070 11823:339:37-11827:339:41 name="text"
-          arg: literal #1071 11829:339:43-11833:339:47 value=int:5000
-      body: if-stmt #1087 11837:340:3-11965:343:1
-        branch: if-branch #1086 11837:340:3-11959:342:1
-          condition: binary #1081 11840:340:6-11899:340:65 op=and op-span=11853:340:19-11856:340:22
-            left: unary #1076 11840:340:6-11852:340:18 op=not op-span=11840:340:6-11843:340:9
-              operand: field-access #1075 11844:340:10-11852:340:18 name="ok?"
-                target: name-ref #1074 11844:340:10-11848:340:14 name="sent"
-            right: binary #1080 11857:340:23-11899:340:65 op=equal op-span=11870:340:36-11872:340:38
-              left: field-access #1078 11857:340:23-11869:340:35 name="message"
-                target: name-ref #1077 11857:340:23-11861:340:27 name="sent"
-              right: literal #1079 11873:340:39-11899:340:65 value=string:"process: stdin is closed"
-          body: expr-stmt #1085 11904:341:5-11959:342:1
-            value: call #1084 11904:341:5-11958:341:59 name="@3::halt" piped=false
-              arg: literal #1082 11909:341:10-11930:341:31 value=string:"RUNTIME-BDD-CONTEXT"
-              arg: literal #1083 11932:341:33-11957:341:58 value=string:"stdin is already closed"
-      body: expr-stmt #1093 11967:343:3-11997:344:1
-        value: call #1092 11967:343:3-11996:343:32 name="@3::check" piped=false
-          arg: field-access #1089 11973:343:9-11981:343:17 name="ok?"
-            target: name-ref #1088 11973:343:9-11977:343:13 name="sent"
-          arg: field-access #1091 11983:343:19-11995:343:31 name="message"
-            target: name-ref #1090 11983:343:19-11987:343:23 name="sent"
-      body: return-stmt #1095 11999:344:3-12010:345:1
-        value: name-ref #1094 12006:344:10-12009:344:13 name="ctx"
-    declaration: function-decl #1135 12015:347:1-12355:357:1 name="@3::read_line"
-      param: param #1098 12029:347:15-12041:347:27 name="ctx"
-        type: type-ref #1097 12034:347:20-12041:347:27 name="@3::Context"
-      param: param #1100 12043:347:29-12058:347:44 name="timeout_ms"
-        type: type-ref #1099 12055:347:41-12058:347:44 name="Int"
-      result: type-ref #1101 12063:347:49-12069:347:55 name="String"
-      body: binding #1104 12072:348:3-12089:349:1 name="p"
-        value: call #1103 12076:348:7-12088:348:19 name="@3::program" piped=false
-          arg: name-ref #1102 12084:348:15-12087:348:18 name="ctx"
-      body: expr-stmt #1107 12091:349:3-12112:350:1
-        value: call #1106 12091:349:3-12111:349:23 name="@3::positive" piped=false
-          arg: name-ref #1105 12100:349:12-12110:349:22 name="timeout_ms"
-      body: binding #1111 12114:350:3-12154:351:1 name="line"
-        value: call #1110 12121:350:10-12153:350:42 name="Process.read_line" piped=false
-          arg: name-ref #1108 12139:350:28-12140:350:29 name="p"
-          arg: name-ref #1109 12142:350:31-12152:350:41 name="timeout_ms"
-      body: if-stmt #1125 12156:351:3-12297:354:1
-        branch: if-branch #1124 12156:351:3-12291:353:1
-          condition: binary #1119 12159:351:6-12215:351:62 op=and op-span=12172:351:19-12175:351:22
-            left: unary #1114 12159:351:6-12171:351:18 op=not op-span=12159:351:6-12162:351:9
-              operand: field-access #1113 12163:351:10-12171:351:18 name="ok?"
-                target: name-ref #1112 12163:351:10-12167:351:14 name="line"
-            right: binary #1118 12176:351:23-12215:351:62 op=equal op-span=12189:351:36-12191:351:38
-              left: field-access #1116 12176:351:23-12188:351:35 name="message"
-                target: name-ref #1115 12176:351:23-12180:351:27 name="line"
-              right: literal #1117 12192:351:39-12215:351:62 value=string:"process: end of input"
-          body: expr-stmt #1123 12220:352:5-12291:353:1
-            value: call #1122 12220:352:5-12290:352:75 name="@3::halt" piped=false
-              arg: literal #1120 12225:352:10-12248:352:33 value=string:"RUNTIME-BDD-ASSERTION"
-              arg: literal #1121 12250:352:35-12289:352:74 value=string:"stdout ended before the expected line"
-      body: expr-stmt #1131 12299:354:3-12329:355:1
-        value: call #1130 12299:354:3-12328:354:32 name="@3::check" piped=false
-          arg: field-access #1127 12305:354:9-12313:354:17 name="ok?"
-            target: name-ref #1126 12305:354:9-12309:354:13 name="line"
-          arg: field-access #1129 12315:354:19-12327:354:31 name="message"
-            target: name-ref #1128 12315:354:19-12319:354:23 name="line"
-      body: return-stmt #1134 12331:355:3-12351:356:1
-        value: field-access #1133 12338:355:10-12350:355:22 name="unwrap!"
-          target: name-ref #1132 12338:355:10-12342:355:14 name="line"
-    declaration: function-decl #1152 12356:358:1-12516:364:1 name="@3::exited"
-      param: param #1137 12367:358:12-12377:358:22 name="p"
-        type: type-ref #1136 12370:358:15-12377:358:22 name="Process"
-      result: type-ref #1138 12382:358:27-12389:358:34 name="Process"
-      body: if-stmt #1149 12392:359:3-12501:362:1
-        branch: if-branch #1148 12392:359:3-12495:361:1
-          condition: unary #1143 12395:359:6-12421:359:32 op=not op-span=12395:359:6-12398:359:9
-            operand: field-access #1142 12399:359:10-12421:359:32 name="ok?"
-              target: call #1141 12399:359:10-12417:359:28 name="Process.wait" piped=false
-                arg: name-ref #1139 12412:359:23-12413:359:24 name="p"
-                arg: literal #1140 12415:359:26-12416:359:27 value=int:1
-          body: expr-stmt #1147 12426:360:5-12495:361:1
-            value: call #1146 12426:360:5-12494:360:73 name="@3::halt" piped=false
-              arg: literal #1144 12431:360:10-12452:360:31 value=string:"RUNTIME-BDD-CONTEXT"
-              arg: literal #1145 12454:360:33-12493:360:72 value=string:"complete output requires program exit"
-      body: return-stmt #1151 12503:362:3-12512:363:1
-        value: name-ref #1150 12510:362:10-12511:362:11 name="p"
-    declaration: function-decl #1178 12517:365:1-12763:373:1 name="@3::finished"
-      param: param #1154 12530:365:14-12540:365:24 name="p"
-        type: type-ref #1153 12533:365:17-12540:365:24 name="Process"
-      result: type-ref #1155 12545:365:29-12558:365:42 name="ProcessOutput"
-      body: binding #1159 12561:366:3-12594:367:1 name="output"
-        value: call #1158 12570:366:12-12593:366:35 name="Process.output" piped=false
-          arg: name-ref #1156 12585:366:27-12586:366:28 name="p"
-          arg: literal #1157 12588:366:30-12592:366:34 value=int:5000
-      body: expr-stmt #1165 12596:367:3-12630:368:1
-        value: call #1164 12596:367:3-12629:367:36 name="@3::check" piped=false
-          arg: field-access #1161 12602:367:9-12612:367:19 name="ok?"
-            target: name-ref #1160 12602:367:9-12608:367:15 name="output"
-          arg: field-access #1163 12614:367:21-12628:367:35 name="message"
-            target: name-ref #1162 12614:367:21-12620:367:27 name="output"
-      body: if-stmt #1174 12632:368:3-12735:371:1
-        branch: if-branch #1173 12632:368:3-12729:370:1
-          condition: field-access #1168 12635:368:6-12659:368:30 name="truncated"
-            target: field-access #1167 12635:368:6-12649:368:20 name="unwrap!"
-              target: name-ref #1166 12635:368:6-12641:368:12 name="output"
-          body: expr-stmt #1172 12664:369:5-12729:370:1
-            value: call #1171 12664:369:5-12728:369:69 name="@3::halt" piped=false
-              arg: literal #1169 12669:369:10-12695:369:36 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
-              arg: literal #1170 12697:369:38-12727:369:68 value=string:"program output exceeds 1 MiB"
-      body: return-stmt #1177 12737:371:3-12759:372:1
-        value: field-access #1176 12744:371:10-12758:371:24 name="unwrap!"
-          target: name-ref #1175 12744:371:10-12750:371:16 name="output"
-    declaration: function-decl #1191 12764:374:1-12903:379:1 name="@3::positive"
-      param: param #1180 12777:374:14-12792:374:29 name="timeout_ms"
-        type: type-ref #1179 12789:374:26-12792:374:29 name="Int"
-      result: type-ref #1181 12797:374:34-12801:374:38 name="Void"
-      body: if-stmt #1190 12804:375:3-12899:378:1
-        branch: if-branch #1189 12804:375:3-12893:377:1
-          condition: binary #1184 12807:375:6-12822:375:21 op=less-equal op-span=12818:375:17-12820:375:19
-            left: name-ref #1182 12807:375:6-12817:375:16 name="timeout_ms"
-            right: literal #1183 12821:375:20-12822:375:21 value=int:0
-          body: expr-stmt #1188 12827:376:5-12893:377:1
-            value: call #1187 12827:376:5-12892:376:70 name="@3::halt" piped=false
-              arg: literal #1185 12832:376:10-12853:376:31 value=string:"RUNTIME-BDD-TIMEOUT"
-              arg: literal #1186 12855:376:33-12891:376:69 value=string:"timeout must be a positive integer"
-    declaration: function-decl #1226 12980:381:1-13356:392:1 name="@3::check"
-      param: param #1193 12990:381:11-13000:381:21 name="fine"
-        type: type-ref #1192 12996:381:17-13000:381:21 name="Bool"
-      param: param #1195 13002:381:23-13017:381:38 name="message"
-        type: type-ref #1194 13011:381:32-13017:381:38 name="String"
-      result: type-ref #1196 13022:381:43-13026:381:47 name="Void"
-      body: if-stmt #1200 13029:382:3-13054:385:1
-        branch: if-branch #1199 13029:382:3-13048:384:1
-          condition: name-ref #1197 13032:382:6-13036:382:10 name="fine"
-          body: return-stmt #1198 13041:383:5-13048:384:1
-      body: if-stmt #1221 13056:385:3-13318:390:1
-        branch: if-branch #1208 13056:385:3-13160:387:1
-          condition: binary #1203 13059:385:6-13100:385:47 op=equal op-span=13067:385:14-13069:385:16
-            left: name-ref #1201 13059:385:6-13066:385:13 name="message"
-            right: literal #1202 13070:385:17-13100:385:47 value=string:"network: operation timed out"
-          body: expr-stmt #1207 13105:386:5-13160:387:1
-            value: call #1206 13105:386:5-13159:386:59 name="@3::halt" piped=false
-              arg: literal #1204 13110:386:10-13131:386:31 value=string:"RUNTIME-BDD-TIMEOUT"
-              arg: literal #1205 13133:386:33-13158:386:58 value=string:"BDD operation timed out"
-        branch: if-branch #1220 13162:387:3-13312:389:1
-          condition: binary #1215 13168:387:9-13242:387:83 op=or op-span=13191:387:32-13193:387:34
-            left: binary #1211 13168:387:9-13190:387:31 op=equal op-span=13176:387:17-13178:387:19
-              left: name-ref #1209 13168:387:9-13175:387:16 name="message"
-              right: call #1210 13179:387:20-13190:387:31 name="@3::over_text" piped=false
-            right: binary #1214 13194:387:35-13242:387:83 op=equal op-span=13202:387:43-13204:387:45
-              left: name-ref #1212 13194:387:35-13201:387:42 name="message"
-              right: literal #1213 13205:387:46-13242:387:83 value=string:"process: line exceeds 1048576 bytes"
-          body: expr-stmt #1219 13247:388:5-13312:389:1
-            value: call #1218 13247:388:5-13311:388:69 name="@3::halt" piped=false
-              arg: literal #1216 13252:388:10-13278:388:36 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
-              arg: literal #1217 13280:388:38-13310:388:68 value=string:"program output exceeds 1 MiB"
-      body: expr-stmt #1225 13320:390:3-13352:391:1
-        value: call #1224 13320:390:3-13351:390:34 name="@3::halt" piped=false
-          arg: literal #1222 13325:390:8-13341:390:24 value=string:"RUNTIME-BDD-IO"
-          arg: name-ref #1223 13343:390:26-13350:390:33 name="message"
-    declaration: function-decl #1244 13357:393:1-13520:396:1 name="@3::compare_text"
-      param: param #1228 13374:393:18-13386:393:30 name="ctx"
-        type: type-ref #1227 13379:393:23-13386:393:30 name="@3::Context"
-      param: param #1230 13388:393:32-13402:393:46 name="actual"
-        type: type-ref #1229 13396:393:40-13402:393:46 name="String"
-      param: param #1232 13404:393:48-13420:393:64 name="expected"
-        type: type-ref #1231 13414:393:58-13420:393:64 name="String"
-      result: type-ref #1233 13425:393:69-13432:393:76 name="@3::Context"
-      body: return-stmt #1243 13435:394:3-13516:395:1
-        value: call #1242 13442:394:10-13515:394:83 name="@3::compare" piped=false
-          arg: name-ref #1234 13450:394:18-13453:394:21 name="ctx"
-          arg: call #1237 13455:394:23-13480:394:48 name="Test.eq" piped=false
-            arg: name-ref #1235 13463:394:31-13469:394:37 name="actual"
-            arg: name-ref #1236 13471:394:39-13479:394:47 name="expected"
-          arg: field-access #1239 13482:394:50-13498:394:66 name="inspect"
-            target: name-ref #1238 13482:394:50-13490:394:58 name="expected"
-          arg: field-access #1241 13500:394:68-13514:394:82 name="inspect"
-            target: name-ref #1240 13500:394:68-13506:394:74 name="actual"
-    declaration: function-decl #1295 13521:397:1-13957:411:1 name="@3::compare"
-      param: param #1246 13533:397:13-13545:397:25 name="ctx"
-        type: type-ref #1245 13538:397:18-13545:397:25 name="@3::Context"
-      param: param #1249 13547:397:27-13568:397:48 name="checked"
-        type: type-ref #1248 13556:397:36-13568:397:48 name="Result"
-          arg: type-ref #1247 13563:397:43-13567:397:47 name="Void"
-      param: param #1251 13570:397:50-13586:397:66 name="expected"
-        type: type-ref #1250 13580:397:60-13586:397:66 name="String"
-      param: param #1253 13588:397:68-13602:397:82 name="actual"
-        type: type-ref #1252 13596:397:76-13602:397:82 name="String"
-      result: type-ref #1254 13607:397:87-13614:397:94 name="@3::Context"
-      body: expr-stmt #1257 13617:398:3-13632:399:1
-        value: call #1256 13617:398:3-13631:398:17 name="@3::emit" piped=false
-          arg: literal #1255 13622:398:8-13630:398:16 value=string:"assert"
-      body: if-stmt #1292 13634:399:3-13940:409:1
-        branch: if-branch #1291 13634:399:3-13934:408:1
-          condition: unary #1260 13637:399:6-13652:399:21 op=not op-span=13637:399:6-13640:399:9
-            operand: field-access #1259 13641:399:10-13652:399:21 name="ok?"
-              target: name-ref #1258 13641:399:10-13648:399:17 name="checked"
-          body: binding #1287 13657:400:5-13915:407:1 name="fields"
-            type: type-ref #1263 13665:400:13-13682:400:30 name="Map"
-              arg: type-ref #1261 13669:400:17-13675:400:23 name="String"
-              arg: type-ref #1262 13677:400:25-13681:400:29 name="Json"
-            value: map-lit #1286 13685:400:33-13914:406:6
-              entry: map-entry #1267 13693:401:7-13719:401:33
-                key: literal #1264 13693:401:7-13700:401:14 value=string:"event"
-                value: call #1266 13702:401:16-13719:401:33 name="JSON.from" piped=false
-                  arg: literal #1265 13712:401:26-13718:401:32 value=string:"fail"
-              entry: map-entry #1271 13727:402:7-13769:402:49
-                key: literal #1268 13727:402:7-13733:402:13 value=string:"code"
-                value: call #1270 13735:402:15-13769:402:49 name="JSON.from" piped=false
-                  arg: literal #1269 13745:402:25-13768:402:48 value=string:"RUNTIME-BDD-ASSERTION"
-              entry: map-entry #1275 13777:403:7-13821:403:51
-                key: literal #1272 13777:403:7-13786:403:16 value=string:"message"
-                value: call #1274 13788:403:18-13821:403:51 name="JSON.from" piped=false
-                  arg: literal #1273 13798:403:28-13820:403:50 value=string:"BDD assertion failed"
-              entry: map-entry #1280 13829:404:7-13866:404:44
-                key: literal #1276 13829:404:7-13839:404:17 value=string:"expected"
-                value: call #1279 13841:404:19-13866:404:44 name="JSON.from" piped=false
-                  arg: call #1278 13851:404:29-13865:404:43 name="@3::clip" piped=false
-                    arg: name-ref #1277 13856:404:34-13864:404:42 name="expected"
-              entry: map-entry #1285 13874:405:7-13907:405:40
-                key: literal #1281 13874:405:7-13882:405:15 value=string:"actual"
-                value: call #1284 13884:405:17-13907:405:40 name="JSON.from" piped=false
-                  arg: call #1283 13894:405:27-13906:405:39 name="@3::clip" piped=false
-                    arg: name-ref #1282 13899:405:32-13905:405:38 name="actual"
-          body: expr-stmt #1290 13919:407:5-13934:408:1
-            value: call #1289 13919:407:5-13933:407:19 name="@3::finish" piped=false
-              arg: name-ref #1288 13926:407:12-13932:407:18 name="fields"
-      body: return-stmt #1294 13942:409:3-13953:410:1
-        value: name-ref #1293 13949:409:10-13952:409:13 name="ctx"
-    declaration: function-decl #1317 13958:412:1-14122:418:1 name="@3::clip"
-      param: param #1297 13967:412:10-13979:412:22 name="text"
-        type: type-ref #1296 13973:412:16-13979:412:22 name="String"
-      result: type-ref #1298 13984:412:27-13990:412:33 name="String"
-      body: if-stmt #1306 13993:413:3-14039:416:1
-        branch: if-branch #1305 13993:413:3-14033:415:1
-          condition: binary #1302 13996:413:6-14016:413:26 op=less-equal op-span=14008:413:18-14010:413:20
-            left: field-access #1300 13996:413:6-14007:413:17 name="length"
-              target: name-ref #1299 13996:413:6-14000:413:10 name="text"
-            right: literal #1301 14011:413:21-14016:413:26 value=int:65536
-          body: return-stmt #1304 14021:414:5-14033:415:1
-            value: name-ref #1303 14028:414:12-14032:414:16 name="text"
-      body: return-stmt #1316 14041:416:3-14118:417:1
-        value: interpolation #1315 14048:416:10-14117:416:79
-          part: method-call #1310 14051:416:13-14071:416:33 name="slice"
-            target: name-ref #1307 14051:416:13-14055:416:17 name="text"
-            arg: literal #1308 14062:416:24-14063:416:25 value=int:0
-            arg: literal #1309 14065:416:27-14070:416:32 value=int:65536
+                  part: field-access #767 9045:256:86-9060:256:101 name="pattern"
+                    target: name-ref #766 9045:256:86-9052:256:93 name="current"
+        body: binding #784 9076:258:5-9162:259:1 name="ctx"
+          value: invoke #783 9082:258:11-9161:258:90
+            target: field-access #777 9082:258:11-9113:258:42 name="handler"
+              target: index-access #776 9082:258:11-9105:258:34
+                target: name-ref #773 9082:258:11-9085:258:14 name="all"
+                index: field-access #775 9086:258:15-9104:258:33 name="definition"
+                  target: name-ref #774 9086:258:15-9093:258:22 name="current"
+            arg: call #780 9119:258:48-9142:258:71 name="@3::with_step" piped=false
+              arg: name-ref #778 9129:258:58-9132:258:61 name="ctx"
+              arg: name-ref #779 9134:258:63-9141:258:70 name="current"
+            arg: field-access #782 9144:258:73-9160:258:89 name="captures"
+              target: name-ref #781 9144:258:73-9151:258:80 name="current"
+        body: if-stmt #793 9166:259:5-9301:262:1
+          branch: if-branch #792 9166:259:5-9293:261:1
+            condition: binary #787 9169:259:8-9193:259:32 op=greater op-span=9190:259:29-9191:259:30
+              left: call #785 9169:259:8-9189:259:28 name="Task.pending_count" piped=false
+              right: literal #786 9192:259:31-9193:259:32 value=int:0
+            body: expr-stmt #791 9200:260:7-9293:261:1
+              value: call #790 9200:260:7-9292:260:99 name="@3::halt" piped=false
+                arg: literal #788 9205:260:12-9232:260:39 value=string:"RUNTIME-BDD-PENDING-TASKS"
+                arg: literal #789 9234:260:41-9291:260:98 value=string:"await pending tasks before returning from a BDD handler"
+        body: expr-stmt #795 9305:262:5-9319:263:1
+          value: call #794 9305:262:5-9318:262:18 name="@3::check_crash" piped=false
+        body: expr-stmt #798 9323:263:5-9334:264:1
+          value: call #797 9323:263:5-9333:263:15 name="@3::probe" piped=false
+            arg: name-ref #796 9329:263:11-9332:263:14 name="ctx"
+        body: binding #812 9338:264:5-9429:265:1 name="fields"
+          type: type-ref #801 9346:264:13-9363:264:30 name="Map"
+            arg: type-ref #799 9350:264:17-9356:264:23 name="String"
+            arg: type-ref #800 9358:264:25-9362:264:29 name="Json"
+          value: map-lit #811 9366:264:33-9428:264:95
+            entry: map-entry #805 9367:264:34-9392:264:59
+              key: literal #802 9367:264:34-9374:264:41 value=string:"event"
+              value: call #804 9376:264:43-9392:264:59 name="JSON.from" piped=false
+                arg: literal #803 9386:264:53-9391:264:58 value=string:"end"
+            entry: map-entry #810 9394:264:61-9427:264:94
+              key: literal #806 9394:264:61-9401:264:68 value=string:"index"
+              value: call #809 9403:264:70-9427:264:94 name="JSON.from" piped=false
+                arg: field-access #808 9413:264:80-9426:264:93 name="index"
+                  target: name-ref #807 9413:264:80-9420:264:87 name="current"
+        body: expr-stmt #816 9433:265:5-9462:266:1
+          value: call #815 9433:265:5-9461:265:33 name="@3::deliver" piped=false
+            arg: call #814 9441:265:13-9460:265:32 name="@3::record_text" piped=false
+              arg: name-ref #813 9453:265:25-9459:265:31 name="fields"
+        body: binding #819 9466:266:5-9509:267:1 name="line"
+          value: call #818 9473:266:12-9508:266:47 name="Process.parent_read_line" piped=false
+            arg: call #817 9498:266:37-9507:266:46 name="@3::idle_ms" piped=false
+      body: expr-stmt #823 9517:268:3-9532:269:1
+        value: call #822 9517:268:3-9531:268:17 name="System.exit" piped=false
+          arg: literal #821 9529:268:15-9530:268:16 value=int:0
+    declaration: function-decl #837 9537:271:1-9703:277:1 name="@3::check_tasks"
+      result: type-ref #825 9558:271:22-9562:271:26 name="Void"
+      body: if-stmt #834 9565:272:3-9683:275:1
+        branch: if-branch #833 9565:272:3-9677:274:1
+          condition: binary #828 9568:272:6-9592:272:30 op=greater op-span=9589:272:27-9590:272:28
+            left: call #826 9568:272:6-9588:272:26 name="Task.pending_count" piped=false
+            right: literal #827 9591:272:29-9592:272:30 value=int:0
+          body: expr-stmt #832 9597:273:5-9677:274:1
+            value: call #831 9597:273:5-9676:273:84 name="@3::halt" piped=false
+              arg: literal #829 9602:273:10-9629:273:37 value=string:"RUNTIME-BDD-PENDING-TASKS"
+              arg: literal #830 9631:273:39-9675:273:83 value=string:"await pending tasks before calling BDD.run"
+      body: expr-stmt #836 9685:275:3-9699:276:1
+        value: call #835 9685:275:3-9698:275:16 name="@3::check_crash" piped=false
+    declaration: function-decl #850 9704:278:1-9837:284:1 name="@3::check_crash"
+      result: type-ref #838 9725:278:22-9729:278:26 name="Void"
+      body: binding #840 9732:279:3-9764:280:1 name="crash"
+        value: call #839 9740:279:11-9763:279:34 name="Task.unobserved_crash" piped=false
+      body: if-stmt #849 9766:280:3-9833:283:1
+        branch: if-branch #848 9766:280:3-9827:282:1
+          condition: field-access #842 9769:280:6-9778:280:15 name="ok?"
+            target: name-ref #841 9769:280:6-9774:280:11 name="crash"
+          body: expr-stmt #847 9783:281:5-9827:282:1
+            value: call #846 9783:281:5-9826:281:48 name="@3::halt" piped=false
+              arg: literal #843 9788:281:10-9810:281:32 value=string:"RUNTIME-TASK-CRASHED"
+              arg: field-access #845 9812:281:34-9825:281:47 name="unwrap!"
+                target: name-ref #844 9812:281:34-9817:281:39 name="crash"
+    declaration: function-decl #882 9838:285:1-10148:295:1 name="@3::probe"
+      param: param #852 9848:285:11-9860:285:23 name="ctx"
+        type: type-ref #851 9853:285:16-9860:285:23 name="@3::Context"
+      result: type-ref #853 9865:285:28-9869:285:32 name="Void"
+      body: case-stmt #881 9872:286:3-10144:294:1
+        value: field-access #856 9877:286:8-9897:286:28 name="program"
+          target: field-access #855 9877:286:8-9889:286:20 name="scenario"
+            target: name-ref #854 9877:286:8-9880:286:11 name="ctx"
+        arm: case-arm #877 9902:287:5-10105:292:1
+          pattern: variant-pattern #857 9902:287:5-9920:287:23 enum="@3::Program" variant="Running" bindings=["p"]
+          body: binding #862 9930:288:7-9968:289:1 name="peek"
+            value: call #861 9937:288:14-9967:288:44 name="Process.read_bytes" piped=false
+              arg: name-ref #858 9956:288:33-9957:288:34 name="p"
+              arg: literal #859 9959:288:36-9960:288:37 value=int:0
+              arg: literal #860 9962:288:39-9966:288:43 value=int:1000
+          body: if-stmt #876 9974:289:7-10105:292:1
+            branch: if-branch #875 9974:289:7-10095:291:1
+              condition: binary #870 9977:289:10-10021:289:54 op=and op-span=9990:289:23-9993:289:26
+                left: unary #865 9977:289:10-9989:289:22 op=not op-span=9977:289:10-9980:289:13
+                  operand: field-access #864 9981:289:14-9989:289:22 name="ok?"
+                    target: name-ref #863 9981:289:14-9985:289:18 name="peek"
+                right: binary #869 9994:289:27-10021:289:54 op=equal op-span=10007:289:40-10009:289:42
+                  left: field-access #867 9994:289:27-10006:289:39 name="message"
+                    target: name-ref #866 9994:289:27-9998:289:31 name="peek"
+                  right: call #868 10010:289:43-10021:289:54 name="@3::over_text" piped=false
+              body: expr-stmt #874 10030:290:9-10095:291:1
+                value: call #873 10030:290:9-10094:290:73 name="@3::halt" piped=false
+                  arg: literal #871 10035:290:14-10061:290:40 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
+                  arg: literal #872 10063:290:42-10093:290:72 value=string:"program output exceeds 1 MiB"
+        arm: case-arm #880 10109:292:5-10138:293:1
+          pattern: variant-pattern #878 10109:292:5-10127:292:23 enum="@3::Program" variant="NotStarted" bindings=[]
+          body: return-stmt #879 10131:292:27-10138:293:1
+    declaration: function-decl #1033 10149:296:1-11453:328:1 name="@3::start"
+      param: param #884 10159:296:11-10171:296:23 name="ctx"
+        type: type-ref #883 10164:296:16-10171:296:23 name="@3::Context"
+      param: param #886 10173:296:25-10185:296:37 name="path"
+        type: type-ref #885 10179:296:31-10185:296:37 name="String"
+      result: type-ref #887 10190:296:42-10197:296:49 name="@3::Context"
+      body: binding #891 10200:297:3-10233:298:1 name="settings"
+        value: field-access #890 10211:297:14-10232:297:35 name="settings"
+          target: field-access #889 10211:297:14-10223:297:26 name="scenario"
+            target: name-ref #888 10211:297:14-10214:297:17 name="ctx"
+      body: binding #896 10235:298:3-10269:299:1 name="joined"
+        type: type-ref #893 10243:298:11-10257:298:25 name="Result"
+          arg: type-ref #892 10250:298:18-10256:298:24 name="String"
+        value: call #895 10260:298:28-10268:298:36 name="ok" piped=false
+          arg: name-ref #894 10263:298:31-10267:298:35 name="path"
+      body: if-stmt #908 10271:299:3-10352:302:1
+        branch: if-branch #907 10271:299:3-10346:301:1
+          condition: unary #900 10274:299:6-10299:299:31 op=not op-span=10274:299:6-10277:299:9
+            operand: method-call #899 10278:299:10-10299:299:31 name="start_with?"
+              target: name-ref #897 10278:299:10-10282:299:14 name="path"
+              arg: literal #898 10295:299:27-10298:299:30 value=string:"/"
+          body: binding #906 10304:300:5-10346:301:1 name="joined"
+            value: call #905 10313:300:14-10345:300:46 name="Path.join" piped=false
+              arg: list-lit #904 10323:300:24-10344:300:45
+                element: field-access #902 10324:300:25-10337:300:38 name="base"
+                  target: name-ref #901 10324:300:25-10332:300:33 name="settings"
+                element: name-ref #903 10339:300:40-10343:300:44 name="path"
+      body: binding #915 10354:302:3-10414:303:1 name="file"
+        value: method-call #914 10361:302:10-10413:302:62 name="unwrap_or"
+          target: call #912 10361:302:10-10397:302:46 name="Path.resolve" piped=false
+            arg: method-call #911 10374:302:23-10396:302:45 name="unwrap_or"
+              target: name-ref #909 10374:302:23-10380:302:29 name="joined"
+              arg: name-ref #910 10391:302:40-10395:302:44 name="path"
+          arg: name-ref #913 10408:302:57-10412:302:61 name="path"
+      body: binding #919 10416:303:3-10445:304:1 name="info"
+        value: call #918 10423:303:10-10444:303:31 name="File.stat" piped=false
+          arg: name-ref #916 10433:303:20-10437:303:24 name="file"
+          arg: literal #917 10439:303:26-10443:303:30 value=int:5000
+      body: if-stmt #938 10447:304:3-10598:307:1
+        branch: if-branch #937 10447:304:3-10592:306:1
+          condition: binary #932 10450:304:6-10522:304:78 op=or op-span=10492:304:48-10494:304:50
+            left: unary #926 10450:304:6-10491:304:47 op=not op-span=10450:304:6-10453:304:9
+              operand: binary #925 10455:304:11-10490:304:46 op=and op-span=10464:304:20-10467:304:23
+                left: field-access #921 10455:304:11-10463:304:19 name="ok?"
+                  target: name-ref #920 10455:304:11-10459:304:15 name="info"
+                right: method-call #924 10468:304:24-10490:304:46 name="end_with?"
+                  target: name-ref #922 10468:304:24-10472:304:28 name="file"
+                  arg: literal #923 10483:304:39-10489:304:45 value=string:".agc"
+            right: binary #931 10495:304:51-10522:304:78 op=not-equal op-span=10513:304:69-10515:304:71
+              left: field-access #929 10495:304:51-10512:304:68 name="kind"
+                target: field-access #928 10495:304:51-10507:304:63 name="unwrap!"
+                  target: name-ref #927 10495:304:51-10499:304:55 name="info"
+              right: literal #930 10516:304:72-10522:304:78 value=string:"file"
+          body: expr-stmt #936 10527:305:5-10592:306:1
+            value: call #935 10527:305:5-10591:305:69 name="@3::halt" piped=false
+              arg: literal #933 10532:305:10-10553:305:31 value=string:"RUNTIME-BDD-PROGRAM"
+              arg: literal #934 10555:305:33-10590:305:68 value=string:"expected an existing .agc program"
+      body: if-stmt #949 10600:307:3-10705:310:1
+        branch: if-branch #948 10600:307:3-10699:309:1
+          condition: binary #943 10603:307:6-10630:307:33 op=equal op-span=10626:307:29-10628:307:31
+            left: field-access #941 10603:307:6-10625:307:28 name="size"
+              target: field-access #940 10603:307:6-10620:307:23 name="agentica"
+                target: name-ref #939 10603:307:6-10611:307:14 name="settings"
+            right: literal #942 10629:307:32-10630:307:33 value=int:0
+          body: expr-stmt #947 10635:308:5-10699:309:1
+            value: call #946 10635:308:5-10698:308:68 name="@3::halt" piped=false
+              arg: literal #944 10640:308:10-10659:308:29 value=string:"RUNTIME-BDD-INFRA"
+              arg: literal #945 10661:308:31-10697:308:67 value=string:"Agentica executable is unavailable"
+      body: binding #953 10707:310:3-10732:311:1 name="flags"
+        type: type-ref #951 10714:310:10-10726:310:22 name="List"
+          arg: type-ref #950 10719:310:15-10725:310:21 name="String"
+        value: list-lit #952 10729:310:25-10731:310:27
+      body: if-stmt #960 10734:311:3-10790:314:1
+        branch: if-branch #959 10734:311:3-10784:313:1
+          condition: field-access #955 10737:311:6-10755:311:24 name="allow_run"
+            target: name-ref #954 10737:311:6-10745:311:14 name="settings"
+          body: binding #958 10760:312:5-10784:313:1 name="flags"
+            value: list-lit #957 10768:312:13-10783:312:28
+              element: literal #956 10769:312:14-10782:312:27 value=string:"--allow-run"
+      body: if-stmt #972 10792:314:3-10874:317:1
+        branch: if-branch #971 10792:314:3-10868:316:1
+          condition: field-access #962 10795:314:6-10810:314:21 name="seeded"
+            target: name-ref #961 10795:314:6-10803:314:14 name="settings"
+          body: binding #970 10815:315:5-10868:316:1 name="flags"
+            value: method-call #969 10823:315:13-10867:315:57 name="concat"
+              target: name-ref #963 10823:315:13-10828:315:18 name="flags"
+              arg: list-lit #968 10836:315:26-10866:315:56
+                element: literal #964 10837:315:27-10845:315:35 value=string:"--seed"
+                element: field-access #967 10847:315:37-10865:315:55 name="to_s"
+                  target: field-access #966 10847:315:37-10860:315:50 name="seed"
+                    target: name-ref #965 10847:315:37-10855:315:45 name="settings"
+      body: binding #984 10876:317:3-10964:318:1 name="args"
+        value: method-call #983 10883:317:10-10963:317:90 name="concat"
+          target: method-call #978 10883:317:10-10922:317:49 name="concat"
+            target: method-call #976 10883:317:10-10908:317:35 name="drop"
+              target: field-access #974 10883:317:10-10900:317:27 name="agentica"
+                target: name-ref #973 10883:317:10-10891:317:18 name="settings"
+              arg: literal #975 10906:317:33-10907:317:34 value=int:1
+            arg: name-ref #977 10916:317:43-10921:317:48 name="flags"
+          arg: list-lit #982 10930:317:57-10962:317:89
+            element: literal #979 10931:317:58-10944:317:71 value=string:"--max-steps"
+            element: literal #980 10946:317:73-10955:317:82 value=string:"1000000"
+            element: name-ref #981 10957:317:84-10961:317:88 name="file"
+      body: binding #994 10966:318:3-11049:319:1 name="spawned"
+        value: call #993 10976:318:13-11048:318:85 name="Process.spawn_captured" piped=false
+          arg: index-access #988 10999:318:36-11019:318:56
+            target: field-access #986 10999:318:36-11016:318:53 name="agentica"
+              target: name-ref #985 10999:318:36-11007:318:44 name="settings"
+            index: literal #987 11017:318:54-11018:318:55 value=int:0
+          arg: name-ref #989 11021:318:58-11025:318:62 name="args"
+          arg: field-access #991 11027:318:64-11040:318:77 name="base"
+            target: name-ref #990 11027:318:64-11035:318:72 name="settings"
+          arg: literal #992 11042:318:79-11047:318:84 value=int:30000
+      body: if-stmt #1014 11051:319:3-11261:325:1
+        branch: if-branch #1013 11051:319:3-11255:324:1
+          condition: unary #997 11054:319:6-11069:319:21 op=not op-span=11054:319:6-11057:319:9
+            operand: field-access #996 11058:319:10-11069:319:21 name="ok?"
+              target: name-ref #995 11058:319:10-11065:319:17 name="spawned"
+          body: if-stmt #1007 11074:320:5-11211:323:1
+            branch: if-branch #1006 11074:320:5-11203:322:1
+              condition: binary #1001 11077:320:8-11132:320:63 op=equal op-span=11093:320:24-11095:320:26
+                left: field-access #999 11077:320:8-11092:320:23 name="message"
+                  target: name-ref #998 11077:320:8-11084:320:15 name="spawned"
+                right: literal #1000 11096:320:27-11132:320:63 value=string:"process: executable is unavailable"
+              body: expr-stmt #1005 11139:321:7-11203:322:1
+                value: call #1004 11139:321:7-11202:321:70 name="@3::halt" piped=false
+                  arg: literal #1002 11144:321:12-11163:321:31 value=string:"RUNTIME-BDD-INFRA"
+                  arg: literal #1003 11165:321:33-11201:321:69 value=string:"Agentica executable is unavailable"
+          body: expr-stmt #1012 11215:323:5-11255:324:1
+            value: call #1011 11215:323:5-11254:323:44 name="@3::halt" piped=false
+              arg: literal #1008 11220:323:10-11236:323:26 value=string:"RUNTIME-BDD-IO"
+              arg: field-access #1010 11238:323:28-11253:323:43 name="message"
+                target: name-ref #1009 11238:323:28-11245:323:35 name="spawned"
+      body: return-stmt #1032 11263:325:3-11449:327:1
+        value: construct #1031 11270:325:10-11448:326:80 type="@3::Context"
+          arg: named-arg #1030 11278:325:18-11447:326:79 name="scenario"
+            value: construct #1029 11288:325:28-11447:326:79 type="@3::Scenario"
+              arg: named-arg #1016 11297:325:37-11315:325:55 name="settings"
+                value: name-ref #1015 11307:325:47-11315:325:55 name="settings"
+              arg: named-arg #1020 11317:325:57-11342:325:82 name="state"
+                value: field-access #1019 11324:325:64-11342:325:82 name="state"
+                  target: field-access #1018 11324:325:64-11336:325:76 name="scenario"
+                    target: name-ref #1017 11324:325:64-11327:325:67 name="ctx"
+              arg: named-arg #1024 11344:325:84-11367:325:107 name="step"
+                value: field-access #1023 11350:325:90-11367:325:107 name="step"
+                  target: field-access #1022 11350:325:90-11362:325:102 name="scenario"
+                    target: name-ref #1021 11350:325:90-11353:325:93 name="ctx"
+              arg: named-arg #1028 11405:326:37-11446:326:78 name="program"
+                value: enum-constructor #1027 11414:326:46-11446:326:78 enum="@3::Program" variant="Running"
+                  arg: field-access #1026 11430:326:62-11445:326:77 name="unwrap!"
+                    target: name-ref #1025 11430:326:62-11437:326:69 name="spawned"
+    declaration: function-decl #1061 11454:329:1-11738:337:1 name="@3::program"
+      param: param #1035 11466:329:13-11478:329:25 name="ctx"
+        type: type-ref #1034 11471:329:18-11478:329:25 name="@3::Context"
+      result: type-ref #1036 11483:329:30-11490:329:37 name="Process"
+      body: binding #1041 11493:330:3-11568:331:1 name="found"
+        type: type-ref #1038 11500:330:10-11515:330:25 name="Result"
+          arg: type-ref #1037 11507:330:17-11514:330:24 name="Process"
+        value: call #1040 11518:330:28-11567:330:77 name="error" piped=false
+          arg: literal #1039 11524:330:34-11566:330:76 value=string:"start a program before using its streams"
+      body: case-stmt #1057 11570:331:3-11711:335:1
+        value: field-access #1044 11575:331:8-11595:331:28 name="program"
+          target: field-access #1043 11575:331:8-11587:331:20 name="scenario"
+            target: name-ref #1042 11575:331:8-11578:331:11 name="ctx"
+        arm: case-arm #1049 11600:332:5-11636:333:1
+          pattern: variant-pattern #1045 11600:332:5-11618:332:23 enum="@3::Program" variant="Running" bindings=["p"]
+          body: binding #1048 11622:332:27-11636:333:1 name="found"
+            value: call #1047 11630:332:35-11635:332:40 name="ok" piped=false
+              arg: name-ref #1046 11633:332:38-11634:332:39 name="p"
+        arm: case-arm #1056 11640:333:5-11705:334:1
+          pattern: variant-pattern #1050 11640:333:5-11658:333:23 enum="@3::Program" variant="NotStarted" bindings=[]
+          body: expr-stmt #1055 11662:333:27-11705:334:1
+            value: call #1054 11662:333:27-11704:333:69 name="@3::halt" piped=false
+              arg: literal #1051 11667:333:32-11688:333:53 value=string:"RUNTIME-BDD-CONTEXT"
+              arg: field-access #1053 11690:333:55-11703:333:68 name="message"
+                target: name-ref #1052 11690:333:55-11695:333:60 name="found"
+      body: return-stmt #1060 11713:335:3-11734:336:1
+        value: field-access #1059 11720:335:10-11733:335:23 name="unwrap!"
+          target: name-ref #1058 11720:335:10-11725:335:15 name="found"
+    declaration: function-decl #1095 11739:338:1-12014:346:1 name="@3::send"
+      param: param #1063 11748:338:10-11760:338:22 name="ctx"
+        type: type-ref #1062 11753:338:15-11760:338:22 name="@3::Context"
+      param: param #1065 11762:338:24-11774:338:36 name="text"
+        type: type-ref #1064 11768:338:30-11774:338:36 name="String"
+      result: type-ref #1066 11779:338:41-11786:338:48 name="@3::Context"
+      body: binding #1072 11789:339:3-11835:340:1 name="sent"
+        value: call #1071 11796:339:10-11834:339:48 name="Process.send" piped=false
+          arg: call #1068 11809:339:23-11821:339:35 name="@3::program" piped=false
+            arg: name-ref #1067 11817:339:31-11820:339:34 name="ctx"
+          arg: name-ref #1069 11823:339:37-11827:339:41 name="text"
+          arg: literal #1070 11829:339:43-11833:339:47 value=int:5000
+      body: if-stmt #1086 11837:340:3-11965:343:1
+        branch: if-branch #1085 11837:340:3-11959:342:1
+          condition: binary #1080 11840:340:6-11899:340:65 op=and op-span=11853:340:19-11856:340:22
+            left: unary #1075 11840:340:6-11852:340:18 op=not op-span=11840:340:6-11843:340:9
+              operand: field-access #1074 11844:340:10-11852:340:18 name="ok?"
+                target: name-ref #1073 11844:340:10-11848:340:14 name="sent"
+            right: binary #1079 11857:340:23-11899:340:65 op=equal op-span=11870:340:36-11872:340:38
+              left: field-access #1077 11857:340:23-11869:340:35 name="message"
+                target: name-ref #1076 11857:340:23-11861:340:27 name="sent"
+              right: literal #1078 11873:340:39-11899:340:65 value=string:"process: stdin is closed"
+          body: expr-stmt #1084 11904:341:5-11959:342:1
+            value: call #1083 11904:341:5-11958:341:59 name="@3::halt" piped=false
+              arg: literal #1081 11909:341:10-11930:341:31 value=string:"RUNTIME-BDD-CONTEXT"
+              arg: literal #1082 11932:341:33-11957:341:58 value=string:"stdin is already closed"
+      body: expr-stmt #1092 11967:343:3-11997:344:1
+        value: call #1091 11967:343:3-11996:343:32 name="@3::check" piped=false
+          arg: field-access #1088 11973:343:9-11981:343:17 name="ok?"
+            target: name-ref #1087 11973:343:9-11977:343:13 name="sent"
+          arg: field-access #1090 11983:343:19-11995:343:31 name="message"
+            target: name-ref #1089 11983:343:19-11987:343:23 name="sent"
+      body: return-stmt #1094 11999:344:3-12010:345:1
+        value: name-ref #1093 12006:344:10-12009:344:13 name="ctx"
+    declaration: function-decl #1134 12015:347:1-12355:357:1 name="@3::read_line"
+      param: param #1097 12029:347:15-12041:347:27 name="ctx"
+        type: type-ref #1096 12034:347:20-12041:347:27 name="@3::Context"
+      param: param #1099 12043:347:29-12058:347:44 name="timeout_ms"
+        type: type-ref #1098 12055:347:41-12058:347:44 name="Int"
+      result: type-ref #1100 12063:347:49-12069:347:55 name="String"
+      body: binding #1103 12072:348:3-12089:349:1 name="p"
+        value: call #1102 12076:348:7-12088:348:19 name="@3::program" piped=false
+          arg: name-ref #1101 12084:348:15-12087:348:18 name="ctx"
+      body: expr-stmt #1106 12091:349:3-12112:350:1
+        value: call #1105 12091:349:3-12111:349:23 name="@3::positive" piped=false
+          arg: name-ref #1104 12100:349:12-12110:349:22 name="timeout_ms"
+      body: binding #1110 12114:350:3-12154:351:1 name="line"
+        value: call #1109 12121:350:10-12153:350:42 name="Process.read_line" piped=false
+          arg: name-ref #1107 12139:350:28-12140:350:29 name="p"
+          arg: name-ref #1108 12142:350:31-12152:350:41 name="timeout_ms"
+      body: if-stmt #1124 12156:351:3-12297:354:1
+        branch: if-branch #1123 12156:351:3-12291:353:1
+          condition: binary #1118 12159:351:6-12215:351:62 op=and op-span=12172:351:19-12175:351:22
+            left: unary #1113 12159:351:6-12171:351:18 op=not op-span=12159:351:6-12162:351:9
+              operand: field-access #1112 12163:351:10-12171:351:18 name="ok?"
+                target: name-ref #1111 12163:351:10-12167:351:14 name="line"
+            right: binary #1117 12176:351:23-12215:351:62 op=equal op-span=12189:351:36-12191:351:38
+              left: field-access #1115 12176:351:23-12188:351:35 name="message"
+                target: name-ref #1114 12176:351:23-12180:351:27 name="line"
+              right: literal #1116 12192:351:39-12215:351:62 value=string:"process: end of input"
+          body: expr-stmt #1122 12220:352:5-12291:353:1
+            value: call #1121 12220:352:5-12290:352:75 name="@3::halt" piped=false
+              arg: literal #1119 12225:352:10-12248:352:33 value=string:"RUNTIME-BDD-ASSERTION"
+              arg: literal #1120 12250:352:35-12289:352:74 value=string:"stdout ended before the expected line"
+      body: expr-stmt #1130 12299:354:3-12329:355:1
+        value: call #1129 12299:354:3-12328:354:32 name="@3::check" piped=false
+          arg: field-access #1126 12305:354:9-12313:354:17 name="ok?"
+            target: name-ref #1125 12305:354:9-12309:354:13 name="line"
+          arg: field-access #1128 12315:354:19-12327:354:31 name="message"
+            target: name-ref #1127 12315:354:19-12319:354:23 name="line"
+      body: return-stmt #1133 12331:355:3-12351:356:1
+        value: field-access #1132 12338:355:10-12350:355:22 name="unwrap!"
+          target: name-ref #1131 12338:355:10-12342:355:14 name="line"
+    declaration: function-decl #1151 12356:358:1-12516:364:1 name="@3::exited"
+      param: param #1136 12367:358:12-12377:358:22 name="p"
+        type: type-ref #1135 12370:358:15-12377:358:22 name="Process"
+      result: type-ref #1137 12382:358:27-12389:358:34 name="Process"
+      body: if-stmt #1148 12392:359:3-12501:362:1
+        branch: if-branch #1147 12392:359:3-12495:361:1
+          condition: unary #1142 12395:359:6-12421:359:32 op=not op-span=12395:359:6-12398:359:9
+            operand: field-access #1141 12399:359:10-12421:359:32 name="ok?"
+              target: call #1140 12399:359:10-12417:359:28 name="Process.wait" piped=false
+                arg: name-ref #1138 12412:359:23-12413:359:24 name="p"
+                arg: literal #1139 12415:359:26-12416:359:27 value=int:1
+          body: expr-stmt #1146 12426:360:5-12495:361:1
+            value: call #1145 12426:360:5-12494:360:73 name="@3::halt" piped=false
+              arg: literal #1143 12431:360:10-12452:360:31 value=string:"RUNTIME-BDD-CONTEXT"
+              arg: literal #1144 12454:360:33-12493:360:72 value=string:"complete output requires program exit"
+      body: return-stmt #1150 12503:362:3-12512:363:1
+        value: name-ref #1149 12510:362:10-12511:362:11 name="p"
+    declaration: function-decl #1177 12517:365:1-12763:373:1 name="@3::finished"
+      param: param #1153 12530:365:14-12540:365:24 name="p"
+        type: type-ref #1152 12533:365:17-12540:365:24 name="Process"
+      result: type-ref #1154 12545:365:29-12558:365:42 name="ProcessOutput"
+      body: binding #1158 12561:366:3-12594:367:1 name="output"
+        value: call #1157 12570:366:12-12593:366:35 name="Process.output" piped=false
+          arg: name-ref #1155 12585:366:27-12586:366:28 name="p"
+          arg: literal #1156 12588:366:30-12592:366:34 value=int:5000
+      body: expr-stmt #1164 12596:367:3-12630:368:1
+        value: call #1163 12596:367:3-12629:367:36 name="@3::check" piped=false
+          arg: field-access #1160 12602:367:9-12612:367:19 name="ok?"
+            target: name-ref #1159 12602:367:9-12608:367:15 name="output"
+          arg: field-access #1162 12614:367:21-12628:367:35 name="message"
+            target: name-ref #1161 12614:367:21-12620:367:27 name="output"
+      body: if-stmt #1173 12632:368:3-12735:371:1
+        branch: if-branch #1172 12632:368:3-12729:370:1
+          condition: field-access #1167 12635:368:6-12659:368:30 name="truncated"
+            target: field-access #1166 12635:368:6-12649:368:20 name="unwrap!"
+              target: name-ref #1165 12635:368:6-12641:368:12 name="output"
+          body: expr-stmt #1171 12664:369:5-12729:370:1
+            value: call #1170 12664:369:5-12728:369:69 name="@3::halt" piped=false
+              arg: literal #1168 12669:369:10-12695:369:36 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
+              arg: literal #1169 12697:369:38-12727:369:68 value=string:"program output exceeds 1 MiB"
+      body: return-stmt #1176 12737:371:3-12759:372:1
+        value: field-access #1175 12744:371:10-12758:371:24 name="unwrap!"
+          target: name-ref #1174 12744:371:10-12750:371:16 name="output"
+    declaration: function-decl #1190 12764:374:1-12903:379:1 name="@3::positive"
+      param: param #1179 12777:374:14-12792:374:29 name="timeout_ms"
+        type: type-ref #1178 12789:374:26-12792:374:29 name="Int"
+      result: type-ref #1180 12797:374:34-12801:374:38 name="Void"
+      body: if-stmt #1189 12804:375:3-12899:378:1
+        branch: if-branch #1188 12804:375:3-12893:377:1
+          condition: binary #1183 12807:375:6-12822:375:21 op=less-equal op-span=12818:375:17-12820:375:19
+            left: name-ref #1181 12807:375:6-12817:375:16 name="timeout_ms"
+            right: literal #1182 12821:375:20-12822:375:21 value=int:0
+          body: expr-stmt #1187 12827:376:5-12893:377:1
+            value: call #1186 12827:376:5-12892:376:70 name="@3::halt" piped=false
+              arg: literal #1184 12832:376:10-12853:376:31 value=string:"RUNTIME-BDD-TIMEOUT"
+              arg: literal #1185 12855:376:33-12891:376:69 value=string:"timeout must be a positive integer"
+    declaration: function-decl #1225 12980:381:1-13356:392:1 name="@3::check"
+      param: param #1192 12990:381:11-13000:381:21 name="fine"
+        type: type-ref #1191 12996:381:17-13000:381:21 name="Bool"
+      param: param #1194 13002:381:23-13017:381:38 name="message"
+        type: type-ref #1193 13011:381:32-13017:381:38 name="String"
+      result: type-ref #1195 13022:381:43-13026:381:47 name="Void"
+      body: if-stmt #1199 13029:382:3-13054:385:1
+        branch: if-branch #1198 13029:382:3-13048:384:1
+          condition: name-ref #1196 13032:382:6-13036:382:10 name="fine"
+          body: return-stmt #1197 13041:383:5-13048:384:1
+      body: if-stmt #1220 13056:385:3-13318:390:1
+        branch: if-branch #1207 13056:385:3-13160:387:1
+          condition: binary #1202 13059:385:6-13100:385:47 op=equal op-span=13067:385:14-13069:385:16
+            left: name-ref #1200 13059:385:6-13066:385:13 name="message"
+            right: literal #1201 13070:385:17-13100:385:47 value=string:"network: operation timed out"
+          body: expr-stmt #1206 13105:386:5-13160:387:1
+            value: call #1205 13105:386:5-13159:386:59 name="@3::halt" piped=false
+              arg: literal #1203 13110:386:10-13131:386:31 value=string:"RUNTIME-BDD-TIMEOUT"
+              arg: literal #1204 13133:386:33-13158:386:58 value=string:"BDD operation timed out"
+        branch: if-branch #1219 13162:387:3-13312:389:1
+          condition: binary #1214 13168:387:9-13242:387:83 op=or op-span=13191:387:32-13193:387:34
+            left: binary #1210 13168:387:9-13190:387:31 op=equal op-span=13176:387:17-13178:387:19
+              left: name-ref #1208 13168:387:9-13175:387:16 name="message"
+              right: call #1209 13179:387:20-13190:387:31 name="@3::over_text" piped=false
+            right: binary #1213 13194:387:35-13242:387:83 op=equal op-span=13202:387:43-13204:387:45
+              left: name-ref #1211 13194:387:35-13201:387:42 name="message"
+              right: literal #1212 13205:387:46-13242:387:83 value=string:"process: line exceeds 1048576 bytes"
+          body: expr-stmt #1218 13247:388:5-13312:389:1
+            value: call #1217 13247:388:5-13311:388:69 name="@3::halt" piped=false
+              arg: literal #1215 13252:388:10-13278:388:36 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
+              arg: literal #1216 13280:388:38-13310:388:68 value=string:"program output exceeds 1 MiB"
+      body: expr-stmt #1224 13320:390:3-13352:391:1
+        value: call #1223 13320:390:3-13351:390:34 name="@3::halt" piped=false
+          arg: literal #1221 13325:390:8-13341:390:24 value=string:"RUNTIME-BDD-IO"
+          arg: name-ref #1222 13343:390:26-13350:390:33 name="message"
+    declaration: function-decl #1243 13357:393:1-13520:396:1 name="@3::compare_text"
+      param: param #1227 13374:393:18-13386:393:30 name="ctx"
+        type: type-ref #1226 13379:393:23-13386:393:30 name="@3::Context"
+      param: param #1229 13388:393:32-13402:393:46 name="actual"
+        type: type-ref #1228 13396:393:40-13402:393:46 name="String"
+      param: param #1231 13404:393:48-13420:393:64 name="expected"
+        type: type-ref #1230 13414:393:58-13420:393:64 name="String"
+      result: type-ref #1232 13425:393:69-13432:393:76 name="@3::Context"
+      body: return-stmt #1242 13435:394:3-13516:395:1
+        value: call #1241 13442:394:10-13515:394:83 name="@3::compare" piped=false
+          arg: name-ref #1233 13450:394:18-13453:394:21 name="ctx"
+          arg: call #1236 13455:394:23-13480:394:48 name="Test.eq" piped=false
+            arg: name-ref #1234 13463:394:31-13469:394:37 name="actual"
+            arg: name-ref #1235 13471:394:39-13479:394:47 name="expected"
+          arg: field-access #1238 13482:394:50-13498:394:66 name="inspect"
+            target: name-ref #1237 13482:394:50-13490:394:58 name="expected"
+          arg: field-access #1240 13500:394:68-13514:394:82 name="inspect"
+            target: name-ref #1239 13500:394:68-13506:394:74 name="actual"
+    declaration: function-decl #1294 13521:397:1-13957:411:1 name="@3::compare"
+      param: param #1245 13533:397:13-13545:397:25 name="ctx"
+        type: type-ref #1244 13538:397:18-13545:397:25 name="@3::Context"
+      param: param #1248 13547:397:27-13568:397:48 name="checked"
+        type: type-ref #1247 13556:397:36-13568:397:48 name="Result"
+          arg: type-ref #1246 13563:397:43-13567:397:47 name="Void"
+      param: param #1250 13570:397:50-13586:397:66 name="expected"
+        type: type-ref #1249 13580:397:60-13586:397:66 name="String"
+      param: param #1252 13588:397:68-13602:397:82 name="actual"
+        type: type-ref #1251 13596:397:76-13602:397:82 name="String"
+      result: type-ref #1253 13607:397:87-13614:397:94 name="@3::Context"
+      body: expr-stmt #1256 13617:398:3-13632:399:1
+        value: call #1255 13617:398:3-13631:398:17 name="@3::emit" piped=false
+          arg: literal #1254 13622:398:8-13630:398:16 value=string:"assert"
+      body: if-stmt #1291 13634:399:3-13940:409:1
+        branch: if-branch #1290 13634:399:3-13934:408:1
+          condition: unary #1259 13637:399:6-13652:399:21 op=not op-span=13637:399:6-13640:399:9
+            operand: field-access #1258 13641:399:10-13652:399:21 name="ok?"
+              target: name-ref #1257 13641:399:10-13648:399:17 name="checked"
+          body: binding #1286 13657:400:5-13915:407:1 name="fields"
+            type: type-ref #1262 13665:400:13-13682:400:30 name="Map"
+              arg: type-ref #1260 13669:400:17-13675:400:23 name="String"
+              arg: type-ref #1261 13677:400:25-13681:400:29 name="Json"
+            value: map-lit #1285 13685:400:33-13914:406:6
+              entry: map-entry #1266 13693:401:7-13719:401:33
+                key: literal #1263 13693:401:7-13700:401:14 value=string:"event"
+                value: call #1265 13702:401:16-13719:401:33 name="JSON.from" piped=false
+                  arg: literal #1264 13712:401:26-13718:401:32 value=string:"fail"
+              entry: map-entry #1270 13727:402:7-13769:402:49
+                key: literal #1267 13727:402:7-13733:402:13 value=string:"code"
+                value: call #1269 13735:402:15-13769:402:49 name="JSON.from" piped=false
+                  arg: literal #1268 13745:402:25-13768:402:48 value=string:"RUNTIME-BDD-ASSERTION"
+              entry: map-entry #1274 13777:403:7-13821:403:51
+                key: literal #1271 13777:403:7-13786:403:16 value=string:"message"
+                value: call #1273 13788:403:18-13821:403:51 name="JSON.from" piped=false
+                  arg: literal #1272 13798:403:28-13820:403:50 value=string:"BDD assertion failed"
+              entry: map-entry #1279 13829:404:7-13866:404:44
+                key: literal #1275 13829:404:7-13839:404:17 value=string:"expected"
+                value: call #1278 13841:404:19-13866:404:44 name="JSON.from" piped=false
+                  arg: call #1277 13851:404:29-13865:404:43 name="@3::clip" piped=false
+                    arg: name-ref #1276 13856:404:34-13864:404:42 name="expected"
+              entry: map-entry #1284 13874:405:7-13907:405:40
+                key: literal #1280 13874:405:7-13882:405:15 value=string:"actual"
+                value: call #1283 13884:405:17-13907:405:40 name="JSON.from" piped=false
+                  arg: call #1282 13894:405:27-13906:405:39 name="@3::clip" piped=false
+                    arg: name-ref #1281 13899:405:32-13905:405:38 name="actual"
+          body: expr-stmt #1289 13919:407:5-13934:408:1
+            value: call #1288 13919:407:5-13933:407:19 name="@3::finish" piped=false
+              arg: name-ref #1287 13926:407:12-13932:407:18 name="fields"
+      body: return-stmt #1293 13942:409:3-13953:410:1
+        value: name-ref #1292 13949:409:10-13952:409:13 name="ctx"
+    declaration: function-decl #1316 13958:412:1-14122:418:1 name="@3::clip"
+      param: param #1296 13967:412:10-13979:412:22 name="text"
+        type: type-ref #1295 13973:412:16-13979:412:22 name="String"
+      result: type-ref #1297 13984:412:27-13990:412:33 name="String"
+      body: if-stmt #1305 13993:413:3-14039:416:1
+        branch: if-branch #1304 13993:413:3-14033:415:1
+          condition: binary #1301 13996:413:6-14016:413:26 op=less-equal op-span=14008:413:18-14010:413:20
+            left: field-access #1299 13996:413:6-14007:413:17 name="length"
+              target: name-ref #1298 13996:413:6-14000:413:10 name="text"
+            right: literal #1300 14011:413:21-14016:413:26 value=int:65536
+          body: return-stmt #1303 14021:414:5-14033:415:1
+            value: name-ref #1302 14028:414:12-14032:414:16 name="text"
+      body: return-stmt #1315 14041:416:3-14118:417:1
+        value: interpolation #1314 14048:416:10-14117:416:79
+          part: method-call #1309 14051:416:13-14071:416:33 name="slice"
+            target: name-ref #1306 14051:416:13-14055:416:17 name="text"
+            arg: literal #1307 14062:416:24-14063:416:25 value=int:0
+            arg: literal #1308 14065:416:27-14070:416:32 value=int:65536
           part: text "... ("
-          part: binary #1314 14079:416:41-14098:416:60 op=minus op-span=14091:416:53-14092:416:54
-            left: field-access #1312 14079:416:41-14090:416:52 name="length"
-              target: name-ref #1311 14079:416:41-14083:416:45 name="text"
-            right: literal #1313 14093:416:55-14098:416:60 value=int:65536
+          part: binary #1313 14079:416:41-14098:416:60 op=minus op-span=14091:416:53-14092:416:54
+            left: field-access #1311 14079:416:41-14090:416:52 name="length"
+              target: name-ref #1310 14079:416:41-14083:416:45 name="text"
+            right: literal #1312 14093:416:55-14098:416:60 value=int:65536
           part: text " more characters)"
-    declaration: function-decl #1343 14123:419:1-14369:423:1 name="@3::with_state"
-      param: param #1319 14138:419:16-14150:419:28 name="ctx"
-        type: type-ref #1318 14143:419:21-14150:419:28 name="@3::Context"
-      param: param #1323 14152:419:30-14176:419:54 name="state"
-        type: type-ref #1322 14159:419:37-14176:419:54 name="Map"
-          arg: type-ref #1320 14163:419:41-14169:419:47 name="String"
-          arg: type-ref #1321 14171:419:49-14175:419:53 name="Json"
-      result: type-ref #1324 14181:419:59-14188:419:66 name="@3::Context"
-      body: return-stmt #1342 14191:420:3-14365:422:1
-        value: construct #1341 14198:420:10-14364:421:68 type="@3::Context"
-          arg: named-arg #1340 14206:420:18-14363:421:67 name="scenario"
-            value: construct #1339 14216:420:28-14363:421:67 type="@3::Scenario"
-              arg: named-arg #1328 14225:420:37-14256:420:68 name="settings"
-                value: field-access #1327 14235:420:47-14256:420:68 name="settings"
-                  target: field-access #1326 14235:420:47-14247:420:59 name="scenario"
-                    target: name-ref #1325 14235:420:47-14238:420:50 name="ctx"
-              arg: named-arg #1330 14258:420:70-14270:420:82 name="state"
-                value: name-ref #1329 14265:420:77-14270:420:82 name="state"
-              arg: named-arg #1334 14272:420:84-14295:420:107 name="step"
-                value: field-access #1333 14278:420:90-14295:420:107 name="step"
-                  target: field-access #1332 14278:420:90-14290:420:102 name="scenario"
-                    target: name-ref #1331 14278:420:90-14281:420:93 name="ctx"
-              arg: named-arg #1338 14333:421:37-14362:421:66 name="program"
-                value: field-access #1337 14342:421:46-14362:421:66 name="program"
-                  target: field-access #1336 14342:421:46-14354:421:58 name="scenario"
-                    target: name-ref #1335 14342:421:46-14345:421:49 name="ctx"
-    declaration: function-decl #1367 14370:424:1-14611:428:1 name="@3::with_step"
-      param: param #1345 14384:424:15-14396:424:27 name="ctx"
-        type: type-ref #1344 14389:424:20-14396:424:27 name="@3::Context"
-      param: param #1347 14398:424:29-14415:424:46 name="current"
-        type: type-ref #1346 14407:424:38-14415:424:46 name="@3::StepLine"
-      result: type-ref #1348 14420:424:51-14427:424:58 name="@3::Context"
-      body: return-stmt #1366 14430:425:3-14607:427:1
-        value: construct #1365 14437:425:10-14606:426:68 type="@3::Context"
-          arg: named-arg #1364 14445:425:18-14605:426:67 name="scenario"
-            value: construct #1363 14455:425:28-14605:426:67 type="@3::Scenario"
-              arg: named-arg #1352 14464:425:37-14495:425:68 name="settings"
-                value: field-access #1351 14474:425:47-14495:425:68 name="settings"
-                  target: field-access #1350 14474:425:47-14486:425:59 name="scenario"
-                    target: name-ref #1349 14474:425:47-14477:425:50 name="ctx"
-              arg: named-arg #1356 14497:425:70-14522:425:95 name="state"
-                value: field-access #1355 14504:425:77-14522:425:95 name="state"
-                  target: field-access #1354 14504:425:77-14516:425:89 name="scenario"
-                    target: name-ref #1353 14504:425:77-14507:425:80 name="ctx"
-              arg: named-arg #1358 14524:425:97-14537:425:110 name="step"
-                value: name-ref #1357 14530:425:103-14537:425:110 name="current"
-              arg: named-arg #1362 14575:426:37-14604:426:66 name="program"
-                value: field-access #1361 14584:426:46-14604:426:66 name="program"
-                  target: field-access #1360 14584:426:46-14596:426:58 name="scenario"
-                    target: name-ref #1359 14584:426:46-14587:426:49 name="ctx"
-    declaration: function-decl #1393 14612:429:1-14796:433:1 name="@3::halt"
-      param: param #1369 14621:429:10-14633:429:22 name="code"
-        type: type-ref #1368 14627:429:16-14633:429:22 name="String"
-      param: param #1371 14635:429:24-14650:429:39 name="message"
-        type: type-ref #1370 14644:429:33-14650:429:39 name="String"
-      result: type-ref #1372 14655:429:44-14659:429:48 name="Void"
-      body: binding #1389 14662:430:3-14775:431:1 name="fields"
-        type: type-ref #1375 14670:430:11-14687:430:28 name="Map"
-          arg: type-ref #1373 14674:430:15-14680:430:21 name="String"
-          arg: type-ref #1374 14682:430:23-14686:430:27 name="Json"
-        value: map-lit #1388 14690:430:31-14774:430:115
-          entry: map-entry #1379 14691:430:32-14717:430:58
-            key: literal #1376 14691:430:32-14698:430:39 value=string:"event"
-            value: call #1378 14700:430:41-14717:430:58 name="JSON.from" piped=false
-              arg: literal #1377 14710:430:51-14716:430:57 value=string:"fail"
-          entry: map-entry #1383 14719:430:60-14742:430:83
-            key: literal #1380 14719:430:60-14725:430:66 value=string:"code"
-            value: call #1382 14727:430:68-14742:430:83 name="JSON.from" piped=false
-              arg: name-ref #1381 14737:430:78-14741:430:82 name="code"
-          entry: map-entry #1387 14744:430:85-14773:430:114
-            key: literal #1384 14744:430:85-14753:430:94 value=string:"message"
-            value: call #1386 14755:430:96-14773:430:114 name="JSON.from" piped=false
-              arg: name-ref #1385 14765:430:106-14772:430:113 name="message"
-      body: expr-stmt #1392 14777:431:3-14792:432:1
-        value: call #1391 14777:431:3-14791:431:17 name="@3::finish" piped=false
-          arg: name-ref #1390 14784:431:10-14790:431:16 name="fields"
-    declaration: function-decl #1406 14797:434:1-14895:438:1 name="@3::finish"
-      param: param #1397 14808:434:12-14833:434:37 name="fields"
-        type: type-ref #1396 14816:434:20-14833:434:37 name="Map"
-          arg: type-ref #1394 14820:434:24-14826:434:30 name="String"
-          arg: type-ref #1395 14828:434:32-14832:434:36 name="Json"
-      result: type-ref #1398 14838:434:42-14842:434:46 name="Void"
-      body: expr-stmt #1402 14845:435:3-14874:436:1
-        value: call #1401 14845:435:3-14873:435:31 name="@3::deliver" piped=false
-          arg: call #1400 14853:435:11-14872:435:30 name="@3::record_text" piped=false
-            arg: name-ref #1399 14865:435:23-14871:435:29 name="fields"
-      body: expr-stmt #1405 14876:436:3-14891:437:1
-        value: call #1404 14876:436:3-14890:436:17 name="System.exit" piped=false
-          arg: literal #1403 14888:436:15-14889:436:16 value=int:1
-    declaration: function-decl #1423 14896:439:1-15021:443:1 name="@3::emit"
-      param: param #1408 14905:439:10-14918:439:23 name="event"
-        type: type-ref #1407 14912:439:17-14918:439:23 name="String"
-      result: type-ref #1409 14923:439:28-14927:439:32 name="Void"
-      body: binding #1418 14930:440:3-14986:441:1 name="fields"
-        type: type-ref #1412 14938:440:11-14955:440:28 name="Map"
-          arg: type-ref #1410 14942:440:15-14948:440:21 name="String"
-          arg: type-ref #1411 14950:440:23-14954:440:27 name="Json"
-        value: map-lit #1417 14958:440:31-14985:440:58
-          entry: map-entry #1416 14959:440:32-14984:440:57
-            key: literal #1413 14959:440:32-14966:440:39 value=string:"event"
-            value: call #1415 14968:440:41-14984:440:57 name="JSON.from" piped=false
-              arg: name-ref #1414 14978:440:51-14983:440:56 name="event"
-      body: expr-stmt #1422 14988:441:3-15017:442:1
-        value: call #1421 14988:441:3-15016:441:31 name="@3::deliver" piped=false
-          arg: call #1420 14996:441:11-15015:441:30 name="@3::record_text" piped=false
-            arg: name-ref #1419 15008:441:23-15014:441:29 name="fields"
-    declaration: function-decl #1474 15022:444:1-15571:461:1 name="@3::deliver"
-      param: param #1425 15034:444:13-15046:444:25 name="text"
-        type: type-ref #1424 15040:444:19-15046:444:25 name="String"
-      result: type-ref #1426 15051:444:30-15055:444:34 name="Void"
-      body: expr-stmt #1428 15058:445:3-15069:446:1
-        value: call #1427 15058:445:3-15068:445:13 name="IO.flush" piped=false
-      body: binding #1432 15071:446:3-15115:447:1 name="sent"
-        value: call #1431 15078:446:10-15114:446:46 name="Process.parent_send" piped=false
-          arg: name-ref #1429 15098:446:30-15102:446:34 name="text"
-          arg: call #1430 15104:446:36-15113:446:45 name="@3::send_ms" piped=false
-      body: if-stmt #1473 15117:447:3-15567:460:1
-        branch: if-branch #1472 15117:447:3-15561:459:1
-          condition: unary #1435 15120:447:6-15132:447:18 op=not op-span=15120:447:6-15123:447:9
-            operand: field-access #1434 15124:447:10-15132:447:18 name="ok?"
-              target: name-ref #1433 15124:447:10-15128:447:14 name="sent"
-          body: if-stmt #1468 15137:448:5-15542:458:1
-            branch: if-branch #1462 15137:448:5-15449:455:1
-              condition: binary #1439 15140:448:8-15193:448:61 op=equal op-span=15153:448:21-15155:448:23
-                left: field-access #1437 15140:448:8-15152:448:20 name="message"
-                  target: name-ref #1436 15140:448:8-15144:448:12 name="sent"
-                right: literal #1438 15156:448:24-15193:448:61 value=string:"process: send exceeds 1048576 bytes"
-              body: binding #1456 15200:449:7-15391:454:1 name="fields"
-                type: type-ref #1442 15208:449:15-15225:449:32 name="Map"
-                  arg: type-ref #1440 15212:449:19-15218:449:25 name="String"
-                  arg: type-ref #1441 15220:449:27-15224:449:31 name="Json"
-                value: map-lit #1455 15228:449:35-15390:453:8
-                  entry: map-entry #1446 15238:450:9-15264:450:35
-                    key: literal #1443 15238:450:9-15245:450:16 value=string:"event"
-                    value: call #1445 15247:450:18-15264:450:35 name="JSON.from" piped=false
-                      arg: literal #1444 15257:450:28-15263:450:34 value=string:"fail"
-                  entry: map-entry #1450 15274:451:9-15319:451:54
-                    key: literal #1447 15274:451:9-15280:451:15 value=string:"code"
-                    value: call #1449 15282:451:17-15319:451:54 name="JSON.from" piped=false
-                      arg: literal #1448 15292:451:27-15318:451:53 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
-                  entry: map-entry #1454 15329:452:9-15381:452:61
-                    key: literal #1451 15329:452:9-15338:452:18 value=string:"message"
-                    value: call #1453 15340:452:20-15381:452:61 name="JSON.from" piped=false
-                      arg: literal #1452 15350:452:30-15380:452:60 value=string:"handler output exceeds 1 MiB"
-              body: expr-stmt #1461 15397:454:7-15449:455:1
-                value: call #1460 15397:454:7-15448:454:58 name="Process.parent_send" piped=false
-                  arg: call #1458 15417:454:27-15436:454:46 name="@3::record_text" piped=false
-                    arg: name-ref #1457 15429:454:39-15435:454:45 name="fields"
-                  arg: call #1459 15438:454:48-15447:454:57 name="@3::send_ms" piped=false
+    declaration: function-decl #1342 14123:419:1-14369:423:1 name="@3::with_state"
+      param: param #1318 14138:419:16-14150:419:28 name="ctx"
+        type: type-ref #1317 14143:419:21-14150:419:28 name="@3::Context"
+      param: param #1322 14152:419:30-14176:419:54 name="state"
+        type: type-ref #1321 14159:419:37-14176:419:54 name="Map"
+          arg: type-ref #1319 14163:419:41-14169:419:47 name="String"
+          arg: type-ref #1320 14171:419:49-14175:419:53 name="Json"
+      result: type-ref #1323 14181:419:59-14188:419:66 name="@3::Context"
+      body: return-stmt #1341 14191:420:3-14365:422:1
+        value: construct #1340 14198:420:10-14364:421:68 type="@3::Context"
+          arg: named-arg #1339 14206:420:18-14363:421:67 name="scenario"
+            value: construct #1338 14216:420:28-14363:421:67 type="@3::Scenario"
+              arg: named-arg #1327 14225:420:37-14256:420:68 name="settings"
+                value: field-access #1326 14235:420:47-14256:420:68 name="settings"
+                  target: field-access #1325 14235:420:47-14247:420:59 name="scenario"
+                    target: name-ref #1324 14235:420:47-14238:420:50 name="ctx"
+              arg: named-arg #1329 14258:420:70-14270:420:82 name="state"
+                value: name-ref #1328 14265:420:77-14270:420:82 name="state"
+              arg: named-arg #1333 14272:420:84-14295:420:107 name="step"
+                value: field-access #1332 14278:420:90-14295:420:107 name="step"
+                  target: field-access #1331 14278:420:90-14290:420:102 name="scenario"
+                    target: name-ref #1330 14278:420:90-14281:420:93 name="ctx"
+              arg: named-arg #1337 14333:421:37-14362:421:66 name="program"
+                value: field-access #1336 14342:421:46-14362:421:66 name="program"
+                  target: field-access #1335 14342:421:46-14354:421:58 name="scenario"
+                    target: name-ref #1334 14342:421:46-14345:421:49 name="ctx"
+    declaration: function-decl #1366 14370:424:1-14611:428:1 name="@3::with_step"
+      param: param #1344 14384:424:15-14396:424:27 name="ctx"
+        type: type-ref #1343 14389:424:20-14396:424:27 name="@3::Context"
+      param: param #1346 14398:424:29-14415:424:46 name="current"
+        type: type-ref #1345 14407:424:38-14415:424:46 name="@3::StepLine"
+      result: type-ref #1347 14420:424:51-14427:424:58 name="@3::Context"
+      body: return-stmt #1365 14430:425:3-14607:427:1
+        value: construct #1364 14437:425:10-14606:426:68 type="@3::Context"
+          arg: named-arg #1363 14445:425:18-14605:426:67 name="scenario"
+            value: construct #1362 14455:425:28-14605:426:67 type="@3::Scenario"
+              arg: named-arg #1351 14464:425:37-14495:425:68 name="settings"
+                value: field-access #1350 14474:425:47-14495:425:68 name="settings"
+                  target: field-access #1349 14474:425:47-14486:425:59 name="scenario"
+                    target: name-ref #1348 14474:425:47-14477:425:50 name="ctx"
+              arg: named-arg #1355 14497:425:70-14522:425:95 name="state"
+                value: field-access #1354 14504:425:77-14522:425:95 name="state"
+                  target: field-access #1353 14504:425:77-14516:425:89 name="scenario"
+                    target: name-ref #1352 14504:425:77-14507:425:80 name="ctx"
+              arg: named-arg #1357 14524:425:97-14537:425:110 name="step"
+                value: name-ref #1356 14530:425:103-14537:425:110 name="current"
+              arg: named-arg #1361 14575:426:37-14604:426:66 name="program"
+                value: field-access #1360 14584:426:46-14604:426:66 name="program"
+                  target: field-access #1359 14584:426:46-14596:426:58 name="scenario"
+                    target: name-ref #1358 14584:426:46-14587:426:49 name="ctx"
+    declaration: function-decl #1392 14612:429:1-14796:433:1 name="@3::halt"
+      param: param #1368 14621:429:10-14633:429:22 name="code"
+        type: type-ref #1367 14627:429:16-14633:429:22 name="String"
+      param: param #1370 14635:429:24-14650:429:39 name="message"
+        type: type-ref #1369 14644:429:33-14650:429:39 name="String"
+      result: type-ref #1371 14655:429:44-14659:429:48 name="Void"
+      body: binding #1388 14662:430:3-14775:431:1 name="fields"
+        type: type-ref #1374 14670:430:11-14687:430:28 name="Map"
+          arg: type-ref #1372 14674:430:15-14680:430:21 name="String"
+          arg: type-ref #1373 14682:430:23-14686:430:27 name="Json"
+        value: map-lit #1387 14690:430:31-14774:430:115
+          entry: map-entry #1378 14691:430:32-14717:430:58
+            key: literal #1375 14691:430:32-14698:430:39 value=string:"event"
+            value: call #1377 14700:430:41-14717:430:58 name="JSON.from" piped=false
+              arg: literal #1376 14710:430:51-14716:430:57 value=string:"fail"
+          entry: map-entry #1382 14719:430:60-14742:430:83
+            key: literal #1379 14719:430:60-14725:430:66 value=string:"code"
+            value: call #1381 14727:430:68-14742:430:83 name="JSON.from" piped=false
+              arg: name-ref #1380 14737:430:78-14741:430:82 name="code"
+          entry: map-entry #1386 14744:430:85-14773:430:114
+            key: literal #1383 14744:430:85-14753:430:94 value=string:"message"
+            value: call #1385 14755:430:96-14773:430:114 name="JSON.from" piped=false
+              arg: name-ref #1384 14765:430:106-14772:430:113 name="message"
+      body: expr-stmt #1391 14777:431:3-14792:432:1
+        value: call #1390 14777:431:3-14791:431:17 name="@3::finish" piped=false
+          arg: name-ref #1389 14784:431:10-14790:431:16 name="fields"
+    declaration: function-decl #1405 14797:434:1-14895:438:1 name="@3::finish"
+      param: param #1396 14808:434:12-14833:434:37 name="fields"
+        type: type-ref #1395 14816:434:20-14833:434:37 name="Map"
+          arg: type-ref #1393 14820:434:24-14826:434:30 name="String"
+          arg: type-ref #1394 14828:434:32-14832:434:36 name="Json"
+      result: type-ref #1397 14838:434:42-14842:434:46 name="Void"
+      body: expr-stmt #1401 14845:435:3-14874:436:1
+        value: call #1400 14845:435:3-14873:435:31 name="@3::deliver" piped=false
+          arg: call #1399 14853:435:11-14872:435:30 name="@3::record_text" piped=false
+            arg: name-ref #1398 14865:435:23-14871:435:29 name="fields"
+      body: expr-stmt #1404 14876:436:3-14891:437:1
+        value: call #1403 14876:436:3-14890:436:17 name="System.exit" piped=false
+          arg: literal #1402 14888:436:15-14889:436:16 value=int:1
+    declaration: function-decl #1422 14896:439:1-15021:443:1 name="@3::emit"
+      param: param #1407 14905:439:10-14918:439:23 name="event"
+        type: type-ref #1406 14912:439:17-14918:439:23 name="String"
+      result: type-ref #1408 14923:439:28-14927:439:32 name="Void"
+      body: binding #1417 14930:440:3-14986:441:1 name="fields"
+        type: type-ref #1411 14938:440:11-14955:440:28 name="Map"
+          arg: type-ref #1409 14942:440:15-14948:440:21 name="String"
+          arg: type-ref #1410 14950:440:23-14954:440:27 name="Json"
+        value: map-lit #1416 14958:440:31-14985:440:58
+          entry: map-entry #1415 14959:440:32-14984:440:57
+            key: literal #1412 14959:440:32-14966:440:39 value=string:"event"
+            value: call #1414 14968:440:41-14984:440:57 name="JSON.from" piped=false
+              arg: name-ref #1413 14978:440:51-14983:440:56 name="event"
+      body: expr-stmt #1421 14988:441:3-15017:442:1
+        value: call #1420 14988:441:3-15016:441:31 name="@3::deliver" piped=false
+          arg: call #1419 14996:441:11-15015:441:30 name="@3::record_text" piped=false
+            arg: name-ref #1418 15008:441:23-15014:441:29 name="fields"
+    declaration: function-decl #1473 15022:444:1-15571:461:1 name="@3::deliver"
+      param: param #1424 15034:444:13-15046:444:25 name="text"
+        type: type-ref #1423 15040:444:19-15046:444:25 name="String"
+      result: type-ref #1425 15051:444:30-15055:444:34 name="Void"
+      body: expr-stmt #1427 15058:445:3-15069:446:1
+        value: call #1426 15058:445:3-15068:445:13 name="IO.flush" piped=false
+      body: binding #1431 15071:446:3-15115:447:1 name="sent"
+        value: call #1430 15078:446:10-15114:446:46 name="Process.parent_send" piped=false
+          arg: name-ref #1428 15098:446:30-15102:446:34 name="text"
+          arg: call #1429 15104:446:36-15113:446:45 name="@3::send_ms" piped=false
+      body: if-stmt #1472 15117:447:3-15567:460:1
+        branch: if-branch #1471 15117:447:3-15561:459:1
+          condition: unary #1434 15120:447:6-15132:447:18 op=not op-span=15120:447:6-15123:447:9
+            operand: field-access #1433 15124:447:10-15132:447:18 name="ok?"
+              target: name-ref #1432 15124:447:10-15128:447:14 name="sent"
+          body: if-stmt #1467 15137:448:5-15542:458:1
+            branch: if-branch #1461 15137:448:5-15449:455:1
+              condition: binary #1438 15140:448:8-15193:448:61 op=equal op-span=15153:448:21-15155:448:23
+                left: field-access #1436 15140:448:8-15152:448:20 name="message"
+                  target: name-ref #1435 15140:448:8-15144:448:12 name="sent"
+                right: literal #1437 15156:448:24-15193:448:61 value=string:"process: send exceeds 1048576 bytes"
+              body: binding #1455 15200:449:7-15391:454:1 name="fields"
+                type: type-ref #1441 15208:449:15-15225:449:32 name="Map"
+                  arg: type-ref #1439 15212:449:19-15218:449:25 name="String"
+                  arg: type-ref #1440 15220:449:27-15224:449:31 name="Json"
+                value: map-lit #1454 15228:449:35-15390:453:8
+                  entry: map-entry #1445 15238:450:9-15264:450:35
+                    key: literal #1442 15238:450:9-15245:450:16 value=string:"event"
+                    value: call #1444 15247:450:18-15264:450:35 name="JSON.from" piped=false
+                      arg: literal #1443 15257:450:28-15263:450:34 value=string:"fail"
+                  entry: map-entry #1449 15274:451:9-15319:451:54
+                    key: literal #1446 15274:451:9-15280:451:15 value=string:"code"
+                    value: call #1448 15282:451:17-15319:451:54 name="JSON.from" piped=false
+                      arg: literal #1447 15292:451:27-15318:451:53 value=string:"RUNTIME-BDD-OUTPUT-LIMIT"
+                  entry: map-entry #1453 15329:452:9-15381:452:61
+                    key: literal #1450 15329:452:9-15338:452:18 value=string:"message"
+                    value: call #1452 15340:452:20-15381:452:61 name="JSON.from" piped=false
+                      arg: literal #1451 15350:452:30-15380:452:60 value=string:"handler output exceeds 1 MiB"
+              body: expr-stmt #1460 15397:454:7-15449:455:1
+                value: call #1459 15397:454:7-15448:454:58 name="Process.parent_send" piped=false
+                  arg: call #1457 15417:454:27-15436:454:46 name="@3::record_text" piped=false
+                    arg: name-ref #1456 15429:454:39-15435:454:45 name="fields"
+                  arg: call #1458 15438:454:48-15447:454:57 name="@3::send_ms" piped=false
             else:
-              body: expr-stmt #1467 15464:456:7-15534:457:1
-                value: call #1466 15464:456:7-15533:456:76 name="IO.warn" piped=false
-                  arg: interpolation #1465 15472:456:15-15532:456:75
+              body: expr-stmt #1466 15464:456:7-15534:457:1
+                value: call #1465 15464:456:7-15533:456:76 name="IO.warn" piped=false
+                  arg: interpolation #1464 15472:456:15-15532:456:75
                     part: text "BDD could not send a record to the runner: "
-                    part: field-access #1464 15518:456:61-15530:456:73 name="message"
-                      target: name-ref #1463 15518:456:61-15522:456:65 name="sent"
-          body: expr-stmt #1471 15546:458:5-15561:459:1
-            value: call #1470 15546:458:5-15560:458:19 name="System.exit" piped=false
-              arg: literal #1469 15558:458:17-15559:458:18 value=int:1
-    declaration: function-decl #1478 15572:462:1-15615:465:1 name="@3::idle_ms"
-      result: type-ref #1475 15589:462:18-15592:462:21 name="Int"
-      body: return-stmt #1477 15595:463:3-15611:464:1
-        value: literal #1476 15602:463:10-15610:463:18 value=int:86400000
-    declaration: function-decl #1482 15616:466:1-15655:469:1 name="@3::send_ms"
-      result: type-ref #1479 15633:466:18-15636:466:21 name="Int"
-      body: return-stmt #1481 15639:467:3-15651:468:1
-        value: literal #1480 15646:467:10-15650:467:14 value=int:5000
-    declaration: function-decl #1494 15656:470:1-15762:473:1 name="@3::record_text"
-      param: param #1486 15672:470:17-15697:470:42 name="fields"
-        type: type-ref #1485 15680:470:25-15697:470:42 name="Map"
-          arg: type-ref #1483 15684:470:29-15690:470:35 name="String"
-          arg: type-ref #1484 15692:470:37-15696:470:41 name="Json"
-      result: type-ref #1487 15702:470:47-15708:470:53 name="String"
-      body: return-stmt #1493 15711:471:3-15758:472:1
-        value: binary #1492 15718:471:10-15757:471:49 op=plus op-span=15751:471:43-15752:471:44
-          left: call #1490 15718:471:10-15750:471:42 name="JSON.encode" piped=false
-            arg: call #1489 15730:471:22-15749:471:41 name="JSON.object" piped=false
-              arg: name-ref #1488 15742:471:34-15748:471:40 name="fields"
-          right: literal #1491 15753:471:45-15757:471:49 value=string:"\n"
-    declaration: function-decl #1498 15763:474:1-15842:477:1 name="@3::over_text"
-      result: type-ref #1495 15782:474:20-15788:474:26 name="String"
-      body: return-stmt #1497 15791:475:3-15838:476:1
-        value: literal #1496 15798:475:10-15837:475:49 value=string:"process: output exceeds 1048576 bytes"
+                    part: field-access #1463 15518:456:61-15530:456:73 name="message"
+                      target: name-ref #1462 15518:456:61-15522:456:65 name="sent"
+          body: expr-stmt #1470 15546:458:5-15561:459:1
+            value: call #1469 15546:458:5-15560:458:19 name="System.exit" piped=false
+              arg: literal #1468 15558:458:17-15559:458:18 value=int:1
+    declaration: function-decl #1477 15572:462:1-15615:465:1 name="@3::idle_ms"
+      result: type-ref #1474 15589:462:18-15592:462:21 name="Int"
+      body: return-stmt #1476 15595:463:3-15611:464:1
+        value: literal #1475 15602:463:10-15610:463:18 value=int:86400000
+    declaration: function-decl #1481 15616:466:1-15655:469:1 name="@3::send_ms"
+      result: type-ref #1478 15633:466:18-15636:466:21 name="Int"
+      body: return-stmt #1480 15639:467:3-15651:468:1
+        value: literal #1479 15646:467:10-15650:467:14 value=int:5000
+    declaration: function-decl #1492 15656:470:1-15762:473:1 name="@3::record_text"
+      param: param #1485 15672:470:17-15697:470:42 name="fields"
+        type: type-ref #1484 15680:470:25-15697:470:42 name="Map"
+          arg: type-ref #1482 15684:470:29-15690:470:35 name="String"
+          arg: type-ref #1483 15692:470:37-15696:470:41 name="Json"
+      result: type-ref #1486 15702:470:47-15708:470:53 name="String"
+      body: return-stmt #1491 15711:471:3-15758:472:1
+        value: interpolation #1490 15718:471:10-15757:471:49
+          part: call #1489 15721:471:13-15753:471:45 name="JSON.encode" piped=false
+            arg: call #1488 15733:471:25-15752:471:44 name="JSON.object" piped=false
+              arg: name-ref #1487 15745:471:37-15751:471:43 name="fields"
+          part: text "\n"
+    declaration: function-decl #1496 15763:474:1-15842:477:1 name="@3::over_text"
+      result: type-ref #1493 15782:474:20-15788:474:26 name="String"
+      body: return-stmt #1495 15791:475:3-15838:476:1
+        value: literal #1494 15798:475:10-15837:475:49 value=string:"process: output exceeds 1048576 bytes"
   module "assertions.agc"
     declaration: function-decl #21 65:4:8-284:8:1 name="@4::verify"
       param: param #3 76:4:19-93:4:36 name="ctx"

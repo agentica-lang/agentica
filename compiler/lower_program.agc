@@ -91,7 +91,7 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
   for entry in enums
     user_types = user_types.put(entry.name, "Enum")
     for variant in entry.variants
-      variants = variants.put(entry.name + "." + variant.name, id)
+      variants = variants.put("#{entry.name}.#{variant.name}", id)
       id += 1
     end
   end

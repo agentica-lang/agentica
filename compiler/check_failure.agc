@@ -67,7 +67,7 @@ export def pack(found: Problem) -> String
   for label in found.labels
     fields = fields.concat([span_text(label.span), label.text])
   end
-  parts = fields.map do |field: String| field.length.to_s + "\n" + field end
+  parts = fields.map do |field: String| "#{field.length}\n#{field}" end
   return parts.join("")
 end
 

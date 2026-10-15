@@ -228,7 +228,7 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Result[T
         cx,
         st,
         "CHECK-MAP-KEY-TYPE",
-        "a Map key must be Int or String, found " + Types.to_text(key),
+        "a Map key must be Int or String, found #{Types.to_text(key)}",
         args[0].span,
       ),
     )
@@ -244,7 +244,7 @@ def resolve_set(cx: State.Cx, st: State.St, arg: Ast.TypeRef) -> Result[Types.Ty
         cx,
         st,
         "CHECK-SET-ELEMENT-TYPE",
-        "a Set element must be Int or String, found " + Types.to_text(element),
+        "a Set element must be Int or String, found #{Types.to_text(element)}",
         arg.span,
       ),
     )
@@ -264,14 +264,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: Ast.TypeRef) -> Result[Type
           cx,
           st,
           "CHECK-UNKNOWN-TYPE",
-          (
-            "enum " +
-            Types.display_name(name) +
-            " expects " +
-            parameters.size.to_s +
-            " type argument(s), found " +
-            ref.args.size.to_s
-          ),
+          "enum #{Types.display_name(name)} expects #{parameters.size} type argument(s), found #{ref.args.size}",
           ref.span,
         ),
       )
@@ -290,7 +283,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: Ast.TypeRef) -> Result[Type
       cx,
       st,
       "CHECK-UNKNOWN-TYPE",
-      "unknown type \"" + Types.display_name(name) + "\"",
+      "unknown type \"#{Types.display_name(name)}\"",
       ref.span,
       help,
     ),
@@ -337,7 +330,7 @@ end
 
 def nominal_data?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
   name = Types.name(type)
-  key = Types.tag(type) + ":" + name
+  key = "#{Types.tag(type)}:#{name}"
   for argument in Types.args(type)
     builtin_void = Types.is(argument, "Void") and cx.catalog.enums.has_key?(name)
     if !builtin_void and !data?(cx, argument, seen)

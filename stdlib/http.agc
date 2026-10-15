@@ -211,7 +211,7 @@ def parse_url(url: String) -> Result[Target]
   authority = String.slice(rest, 0, stop)
   target = rest_of(rest, stop)
   if not String.starts_with?(target, "/")
-    target = "/" + target
+    target = "/#{target}"
   end
   host = authority
   port_text = ""

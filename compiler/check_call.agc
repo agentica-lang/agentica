@@ -58,7 +58,7 @@ export def check_enum_constructor(
         cx,
         st,
         "CHECK-UNKNOWN-TYPE",
-        "unknown enum \"" + enum_name + "\"",
+        "unknown enum \"#{enum_name}\"",
         span,
         unknown_enum_help(enum_name),
       ),
@@ -72,28 +72,20 @@ export def check_enum_constructor(
         cx,
         st,
         "CHECK-UNKNOWN-VARIANT",
-        "enum \"" + T.display_name(enum_name) + "\" has no variant \"" + variant_name + "\"",
+        "enum \"#{T.display_name(enum_name)}\" has no variant \"#{variant_name}\"",
         span,
       ),
     )
   end
   count = args.size + named
   if count != payload.unwrap!.size
+    variant = "#{T.display_name(enum_name)}.#{variant_name}"
     return error(
       State.fail(
         cx,
         st,
         "CHECK-ARITY",
-        (
-          "variant " +
-          T.display_name(enum_name) +
-          "." +
-          variant_name +
-          " expects " +
-          payload.unwrap!.size.to_s +
-          " argument(s), found " +
-          count.to_s
-        ),
+        "variant #{variant} expects #{payload.unwrap!.size} argument(s), found #{count}",
         span,
       ),
     )
@@ -127,7 +119,7 @@ export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdat
         cx,
         target.st,
         "CHECK-UNKNOWN-METHOD",
-        T.to_text(target.type) + " has no method \"with\"",
+        "#{T.to_text(target.type)} has no method \"with\"",
         node.span,
         "with copies a struct with some fields changed; the value before .with must be a struct",
       ),
@@ -140,7 +132,7 @@ export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdat
         cx,
         target.st,
         "CHECK-IMPORT-NAME",
-        "\"" + T.display_name(name) + "\" is private to its module, so a value of it cannot be updated here",
+        "\"#{T.display_name(name)}\" is private to its module, so a value of it cannot be updated here",
         node.span,
         "export the struct from its module, or add a function there that makes the change",
       ),
@@ -222,7 +214,7 @@ def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.B
       cx,
       st,
       "CHECK-PIPE-METHOD",
-      "\"" + entry.name + "\" has a method form for " + kind + ", so it is not piped",
+      "\"#{entry.name}\" has a method form for #{kind}, so it is not piped",
       node.span,
       pipe_help(cx, node, method),
     ),
@@ -232,7 +224,7 @@ end
 # The method form of a piped call: receiver.method(arguments) do ... end.
 def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
   left = node.args[0]
-  receiver = "(" + extent_text(cx, left) + ")"
+  receiver = "(#{extent_text(cx, left)})"
   if simple_receiver?(left) and !piped?(left)
     receiver = extent_text(cx, left)
   end
@@ -246,12 +238,12 @@ def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
     end
     index += 1
   end
-  text = receiver + "." + method
+  text = "#{receiver}.#{method}"
   if plain.size > 0
-    text = text + "(" + plain.join(", ") + ")"
+    text = "#{text}(#{plain.join(", ")})"
   end
   if block
-    text = text + " do ... end"
+    text = "#{text} do ... end"
   end
   return text
 end
@@ -277,7 +269,7 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State
         cx,
         st,
         "CHECK-UNKNOWN-NAME",
-        "unknown function \"" + T.display_name(node.name) + "\"",
+        "unknown function \"#{T.display_name(node.name)}\"",
         node.span,
         unknown_function_help(cx, node.name),
       ),
@@ -299,8 +291,8 @@ end
 
 def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, signature: State.Signature) -> String
   name = T.display_name(node.name)
-  message = "\"" + name + "\" expects " + signature.params.size.to_s + " argument(s), found " + node.args.size.to_s
-  callee = name + "(" + T.list_text(signature.params) + ") -> " + T.to_text(signature.result)
+  message = "\"#{name}\" expects #{signature.params.size} argument(s), found #{node.args.size}"
+  callee = "#{name}(#{T.list_text(signature.params)}) -> #{T.to_text(signature.result)}"
   return State.fail_callee(cx, st, "CHECK-ARITY", message, node.span, callee)
 end
 
@@ -311,8 +303,8 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
     return help
   elsif name.starts_with?("Agent.")
     return (
-      "return values from tasks and combine them with reduce, or keep the state in one task that receives on a " +
-      "Channel"
+      "return values from tasks and combine them with reduce, " +
+      "or keep the state in one task that receives on a Channel"
     )
   elsif name.starts_with?("BDD.")
     return "import BDD from \"std/bdd\""
@@ -411,19 +403,13 @@ def finish_constructor(
 ) -> Result[State.Out]
   unresolved = definition.parameters.filter do |parameter: String| !substitutions.has_key?(parameter) end
   if unresolved.size > 0
+    variant = "#{T.display_name(definition.name)}.#{variant_name}"
     return error(
       State.fail(
         cx,
         st,
         "CHECK-ENUM-TYPE-INFERENCE",
-        (
-          "cannot infer enum type parameter(s) " +
-          unresolved.join(", ") +
-          " for " +
-          T.display_name(definition.name) +
-          "." +
-          variant_name
-        ),
+        "cannot infer enum type parameter(s) #{unresolved.join(", ")} for #{variant}",
         span,
       ),
     )
@@ -442,7 +428,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
         cx,
         st,
         "CHECK-UNKNOWN-TYPE",
-        "\"" + T.display_name(name) + "\" is not a declared struct",
+        "\"#{T.display_name(name)}\" is not a declared struct",
         node.span,
         Help.near(name, cx.structs.keys, []),
       ),
@@ -456,9 +442,9 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
           cx,
           checked.st,
           "CHECK-MISSING-FIELD",
-          "constructor \"" + T.display_name(name) + "\" is missing field \"" + field.name + "\"",
+          "constructor \"#{T.display_name(name)}\" is missing field \"#{field.name}\"",
           node.span,
-          "add \"" + field.name + ": ...\" with a value of type " + T.to_text(field.type),
+          "add \"#{field.name}: ...\" with a value of type #{T.to_text(field.type)}",
         ),
       )
     end
@@ -485,7 +471,7 @@ def check_named_fields(
           cx,
           current,
           "CHECK-UNKNOWN-FIELD",
-          "\"" + T.display_name(name) + "\" has no field \"" + arg.name + "\"",
+          "\"#{T.display_name(name)}\" has no field \"#{arg.name}\"",
           arg.span,
           Help.field_help(arg.name, fields),
         ),
@@ -493,7 +479,7 @@ def check_named_fields(
     end
     if seen.include?(arg.name)
       return error(
-        State.fail(cx, current, "CHECK-DUPLICATE-FIELD", "field \"" + arg.name + "\" is given twice", arg.span),
+        State.fail(cx, current, "CHECK-DUPLICATE-FIELD", "field \"#{arg.name}\" is given twice", arg.span),
       )
     end
     seen = seen.add(arg.name)

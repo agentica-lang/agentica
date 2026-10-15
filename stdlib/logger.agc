@@ -157,7 +157,7 @@ end
 export def format_text(event: LogEvent) -> String
   parts = [time_text(event.time_ms), level_name(event.level).upcase, message_token(event.message)]
   for key in event.fields.keys
-    parts = parts.push(field_token(key) + "=" + field_token(event.fields.get(key, "")))
+    parts = parts.push("#{field_token(key)}=#{field_token(event.fields.get(key, ""))}")
   end
   return parts.join(" ")
 end
@@ -214,10 +214,9 @@ export def time_text(ms: Int) -> String
   minute = rest % 3600000 / 60000
   second = rest % 60000 / 1000
   milli = rest % 1000
-  return (
-    "#{sign}#{pad(year, 4)}-#{pad(month, 2)}-#{pad(day, 2)}T" +
-    "#{pad(hour, 2)}:#{pad(minute, 2)}:#{pad(second, 2)}.#{pad(milli, 3)}Z"
-  )
+  date = "#{sign}#{pad(year, 4)}-#{pad(month, 2)}-#{pad(day, 2)}"
+  clock = "#{pad(hour, 2)}:#{pad(minute, 2)}:#{pad(second, 2)}.#{pad(milli, 3)}"
+  return "#{date}T#{clock}Z"
 end
 
 # The ranks are the order of LogLevel: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
@@ -276,7 +275,7 @@ end
 # JSON.encode(s) is the quoted, escaped text, so it equals "\"" + s + "\"" exactly when s has no quote, backslash
 # or control character (DEL included). The three line breaks above are not escaped by it, so they are checked apart.
 def plain?(text: String) -> Bool
-  return text.length > 0 and !text.contains?("=") and !line_break?(text) and JSON.encode(text) == "\"" + text + "\""
+  return text.length > 0 and !text.contains?("=") and !line_break?(text) and JSON.encode(text) == "\"#{text}\""
 end
 
 # JSON.encode leaves U+0085, U+2028 and U+2029 as they are, but splitlines() and some viewers break lines there.
@@ -314,7 +313,7 @@ end
 def pad(n: Int, width: Int) -> String
   text = n.to_s
   while text.length < width
-    text = "0" + text
+    text = "0#{text}"
   end
   return text
 end

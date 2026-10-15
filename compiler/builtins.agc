@@ -83,9 +83,9 @@ end
 ## The signature of one form.
 export def form_signature(form: Model.Builtin) -> String
   parameters = form.parameters.map do |parameter: Model.Named|
-    parameter.name + ": " + Types.to_text(parameter.type)
+    "#{parameter.name}: #{Types.to_text(parameter.type)}"
   end
-  return form.name + "(" + parameters.join(", ") + ") -> " + Types.to_text(form.result)
+  return "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
 end
 
 # The part of a builtin name before its first dot: the module.

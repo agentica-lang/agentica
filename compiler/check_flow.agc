@@ -13,7 +13,7 @@ end
 ## The help of CHECK-MISSING-RETURN: what is missing at the end of the body, or "".
 export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> String
   if !contains_return?(body)
-    return "add \"return <value>\" of type " + type_name + " at the end"
+    return "add \"return <value>\" of type #{type_name} at the end"
   elsif body.size == 0
     return ""
   end
@@ -23,9 +23,7 @@ export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> Strin
     Ast.Stmt.While(node) -> return loop_help(type_name)
     Ast.Stmt.For(node) -> return loop_help(type_name)
     Ast.Stmt.Case(node) -> return (
-      "every arm of the last \"case\" must end with return, or return " +
-      type_name +
-      " after it"
+      "every arm of the last \"case\" must end with return, or return #{type_name} after it"
     )
     _ -> return ""
   end
@@ -33,7 +31,7 @@ end
 
 ## The help of CHECK-MISSING-RETURN for a loop at the end of the body.
 export def loop_help(type_name: String) -> String
-  return "a loop does not count as a return; add \"return <value>\" of type " + type_name + " after it"
+  return "a loop does not count as a return; add \"return <value>\" of type #{type_name} after it"
 end
 
 ## The help of CHECK-CAPTURED-ASSIGNMENT: a for loop can assign.
@@ -48,26 +46,11 @@ export def captured_help(name: String, capture: State.Capture) -> String
     Ast.Optional.Absent -> path = path
   end
   if path != "" and path.length <= 40
-    return (
-      "blocks capture values; use a for loop, which can assign \"" +
-      name +
-      "\": for " +
-      element +
-      " in " +
-      path +
-      " ... end"
-    )
+    return "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in #{path} ... end"
   end
   return (
-    "blocks capture values; use a for loop, which can assign \"" +
-    name +
-    "\": for " +
-    element +
-    " in xs ... end, or build it with xs.reduce(" +
-    name +
-    ") do |acc, " +
-    element +
-    "| ... end"
+    "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in xs ... " +
+    "end, or build it with xs.reduce(#{name}) do |acc, #{element}| ... end"
   )
 end
 
@@ -117,14 +100,10 @@ end
 def if_help(node: Ast.IfStmt, type_name: String) -> String
   case node.else_body
     Ast.Optional.Present(body) -> return (
-      "every branch of the last \"if\" must end with return, or return " +
-      type_name +
-      " after it"
+      "every branch of the last \"if\" must end with return, or return #{type_name} after it"
     )
     Ast.Optional.Absent -> return (
-      "the last \"if\" has no \"else\"; add an \"else\" that returns " +
-      type_name +
-      ", or return after it"
+      "the last \"if\" has no \"else\"; add an \"else\" that returns #{type_name}, or return after it"
     )
   end
 end
@@ -144,5 +123,5 @@ def field_path(node: Ast.FieldAccess) -> String
   if target == ""
     return ""
   end
-  return target + "." + node.name
+  return "#{target}.#{node.name}"
 end
