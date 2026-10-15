@@ -293,9 +293,10 @@ jobs:
         run: make vm-layers
       - if: ${{ !cancelled() }}
         run: make vm-sanitize-build
-      - if: ${{ !cancelled() }}
-        run: make vm-sanitize-test
-      - name: Fixed point of the front end on the sanitizer VM and binary
+      - name: Fixed point of the front end on the sanitizer VM and binary (builds the dist/agentica-next that the next step tests)
         if: ${{ !cancelled() }}
         run: make fixed-point
+      - name: vm-sanitize-test, with tests/test_single_binary.py (the hand-off) on the sanitizer binary
+        if: ${{ !cancelled() }}
+        run: make vm-sanitize-test
       - run: make -j"$(nproc)" vm-gc-stress JOBS=4

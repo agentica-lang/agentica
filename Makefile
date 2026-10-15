@@ -14,6 +14,10 @@ NEXT_TESTS := tests tests/test_single_binary.py
 
 .PHONY: build build-tests bdd-driver test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz stage1 stage2 stage3 fixed-point agentica-next vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
+# A recipe that fails leaves no half-written target for the next make to take as up to date. The stages below also remove
+# their output before they write it, so a compiler that exits 0 without writing cannot pass for the previous file.
+.DELETE_ON_ERROR:
+
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
 
@@ -487,12 +491,15 @@ STAGE_RUN = dist/agentica-vm$(EXE) -- $< --version $(AGC_VERSION) --stdlib stdli
 
 $(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(wildcard src/*.rkt) | build
 	@mkdir -p $(STAGE_DIR)
+	rm -f $@
 	racket src/main.rkt compile $(FRONT_END_SRC) -o $@
 
 $(STAGE_DIR)/stage2.agcb: $(STAGE_DIR)/stage1.agcb $(STAGE_INPUTS) dist/agentica-vm$(EXE)
+	rm -f $@
 	$(STAGE_RUN)
 
 $(STAGE_DIR)/stage3.agcb: $(STAGE_DIR)/stage2.agcb $(STAGE_INPUTS) dist/agentica-vm$(EXE)
+	rm -f $@
 	$(STAGE_RUN)
 
 stage1: $(STAGE_DIR)/stage1.agcb
@@ -518,6 +525,7 @@ agentica-next: dist/agentica-next
 fixed-point: $(STAGE_DIR)/stage1.agcb $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage3.agcb dist/agentica-next
 	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage3.agcb || { echo "fixed point: stage2 and stage3 differ" >&2; exit 1; }
 	cmp $(STAGE_DIR)/stage1.agcb $(STAGE_DIR)/stage2.agcb || { echo "fixed point: Racket's stage1 and stage2 differ" >&2; exit 1; }
+	rm -f $(STAGE_DIR)/stage4.agcb
 	dist/agentica-next compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
 	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage4.agcb || { echo "fixed point: dist/agentica-next compiles another front end" >&2; exit 1; }
 
@@ -570,8 +578,9 @@ sweep-full: vm-diff-build
 
 # The Racket tests that run against the built VM (the ASan job runs them on the sanitizer VM)
 VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-stack-test.rkt
-# The unittest modules that do the same (make test-py runs them)
-VM_PY_TESTS = tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py tests/test_vm_trace.py
+# The unittest modules that do the same (make test-py runs them). tests/test_single_binary.py needs dist/agentica-next, which
+# make agentica-next (or make fixed-point) builds first; without it the module skips locally and fails in CI.
+VM_PY_TESTS = tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py tests/test_vm_trace.py
 SANITIZE_JOBS ?= 4
 
 vm-sanitize-build: build
