@@ -445,7 +445,7 @@ when the error is a TOML syntax error. AGENTS.md says codes carry a span, so
 
 `owner/sqlite-ac` in the example wraps the SQLite C library. A package like that
 needs native code, and the VM cannot load native code today: there is no FFI.
-§40 is an idea, and its FFI is a sketch (§40.3b). This design covers pure
+§40 is planned, and its FFI is a sketch (§40.3a). This design covers pure
 Agentica packages only.
 
 A native package is a separate topic, after §40. It needs more than an FFI. It

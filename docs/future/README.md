@@ -57,10 +57,12 @@ step 3 of 8d, are built; the rest is a note). Section 39 (semantic CLI for agent
 `agentica outline`, `symbol`, `refs` and `type-at`: questions about checked code
 answered as text or versioned JSON, with `QUERY-` codes; front end and CLI only,
 no LSP in this phase (a separate, unscheduled idea, §43), no language change.
-Section 40 (native code and FFI) is an idea outside the roadmap order: the JIT
-first (section 22), then an `extern def` FFI into native libraries behind an
-explicit flag when a library needs it, and AOT last; the JIT changes no
-language, and the FFI syntax is only a sketch.
+Section 40 (native code and FFI), decided by the owner on 2026-10-15: the FFI
+before the JIT, after the bootstrap. The FFI is an `extern def` into native
+libraries behind an explicit flag, with a native module header that declares
+three call kinds (§40.3.1); its first module waits for a library that asks for
+it. The JIT (section 22) comes next, and AOT last, only if measurements ask for
+it. The JIT changes no language, and the FFI syntax is only a sketch.
 
 Section 41 (dates and times) designs the calendar types `Date`, `TimeOfDay`,
 `NaiveDateTime` and `DateTime`, their conversions and their text, as native
@@ -123,7 +125,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 37 | Task crash isolation | [`37-task-crash-isolation.md`](37-task-crash-isolation.md) | Planned (roadmap phase 24, after 7i and 20b); semantics for the owner to review |
 | 38 | Value representation | [`38-value-representation.md`](38-value-representation.md) | Note, no change planned; revisit with 8d and the benchmarks (roadmap order rows 9 and 14) |
 | 39 | Semantic CLI for agents | [`39-semantic-cli.md`](39-semantic-cli.md) | Planned (roadmap phase 26, order step 7.2b) |
-| 40 | Native code and FFI | [`40-native-code.md`](40-native-code.md) | Idea, not in the roadmap order: the JIT (roadmap 9.1) first; FFI and AOT wait for a need or a measurement |
+| 40 | Native code and FFI | [`40-native-code.md`](40-native-code.md) | Decided by the owner on 2026-10-15: the FFI before the JIT (roadmap 9.1), after the bootstrap; AOT last, only if measurements ask for it |
 | 41 | Dates and times | [`41-dates-and-times.md`](41-dates-and-times.md) | Designed by the owner's scope of 2026-10-14; the types wait until after the bootstrap (§35, 41.13); `Time.monotonic_ns` may land earlier |
 | 42 | Sized numeric types | [`42-sized-numeric-types.md`](42-sized-numeric-types.md) | Designed by the owner's scope of 2026-10-14; implement after the bootstrap (§35) |
 | 43 | Language server (LSP) | [`43-language-server.md`](43-language-server.md) | Idea, not scheduled (the owner asked on 2026-10-15 to note it); reuses §39 and §32 |
