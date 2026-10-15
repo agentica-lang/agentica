@@ -83,6 +83,34 @@ Arrays and inline tables nest at most 256 levels, and a key (a table header or a
 ```agentica
 import Toml from "std/toml"
 
+def main() -> Void
+  pkg: Map[String, Toml.Value] = {"name": Toml.Value.Str("acme/text"), "deps": Toml.Value.Array([Toml.Value.Str("acme/lists")])}
+  root: Map[String, Toml.Value] = {}
+  root = root.put("package", Toml.Value.Array([Toml.Value.Table(pkg)]))
+  root = root.put("version", Toml.Value.Int(1))
+  text = Toml.encode(Toml.Value.Table(root)).unwrap!
+  puts(text)
+  puts(Toml.parse(text).ok?)
+end
+```
+
+```output
+version = 1
+
+[[package]]
+name = "acme/text"
+deps = ["acme/lists"]
+
+true
+```
+
+## Typed decoding
+
+`Toml.to_json` converts a value to `Json`: a `DateTime` becomes its string, and the other variants map to the matching JSON value. An integer stays an integer and a float stays a float, so `port = 8080.0` does not decode into an `Int` field. `inf` and `nan` have no JSON form, so a value that holds one is an error. Then `JSON.decode(JSON.encode(json), Config)` fills a struct, with the field paths in its errors.
+
+```agentica
+import Toml from "std/toml"
+
 struct Limits
   cpu: Int
 end
@@ -104,34 +132,6 @@ def main() -> Void
   puts(config.name)
   puts(config.limits.cpu)
   puts(load("name = \"web\"\nport = 8080.0\n[limits]\ncpu = 4\n").message)
-end
-```
-
-```output
-version = 1
-
-[[package]]
-name = "acme/text"
-deps = ["acme/lists"]
-
-true
-```
-
-## Typed decoding
-
-`Toml.to_json` converts a value to `Json`: a `DateTime` becomes its string, and the other variants map to the matching JSON value. An integer stays an integer and a float stays a float, so `port = 8080.0` does not decode into an `Int` field. `inf` and `nan` have no JSON form, so a value that holds one is an error. Then `JSON.decode(JSON.encode(json), Config)` fills a struct, with the field paths in its errors.
-
-```agentica
-import Toml from "std/toml"
-
-def main() -> Void
-  pkg: Map[String, Toml.Value] = {"name": Toml.Value.Str("acme/text"), "deps": Toml.Value.Array([Toml.Value.Str("acme/lists")])}
-  root: Map[String, Toml.Value] = {}
-  root = root.put("package", Toml.Value.Array([Toml.Value.Table(pkg)]))
-  root = root.put("version", Toml.Value.Int(1))
-  text = Toml.encode(Toml.Value.Table(root)).unwrap!
-  puts(text)
-  puts(Toml.parse(text).ok?)
 end
 ```
 
