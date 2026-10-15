@@ -57,7 +57,7 @@ def report(lines: List[Line]) -> Result[String]
 end
 
 def main() -> Void
-  lines = [Line(name: "pen", price: 3, quantity: 4), Line(name: "caf\u00e9", price: 12, quantity: 1)]
+  lines = [Line(name: "pen", price: 3, quantity: 4), Line(name: "café", price: 12, quantity: 1)]
   result = report(lines) # trailing comment
   case result
     ok(text) -> puts(text)
