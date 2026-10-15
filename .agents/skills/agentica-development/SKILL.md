@@ -9,7 +9,7 @@ A Racket front end compiles Agentica to bytecode for a C VM. The short repo
 tree is in `AGENTS.md`. This file says how to work and which reference to
 read; load only the references your change needs.
 
-`src/` is frozen (roadmap row 7.2.7): bug fixes and builtin-table rows only; language changes go into `compiler/` (`references/frontend.md`).
+By default `src/` is frozen (roadmap row 7.2.7): bug fixes and builtin-table rows only; language changes go into `compiler/` (`references/frontend.md`). They may be relaxed when following them costs more than it saves; the PR says which rule it relaxes and why.
 
 Read the active phase in `docs/roadmap/` before adding code. Build only what
 that phase asks for: no placeholder modules or empty nodes for later phases.
@@ -58,8 +58,8 @@ CI runs everything else (`references/ci.md`, "What CI runs").
 | Add | Location |
 | --- | --- |
 | keyword, operator, literal form | `compiler/lexer.agc` tables, with a golden case (`references/frontend.md`); `src/lexer.rkt` only for a bug fix, in the same PR |
-| AST node | frozen: waits for the parser port (35.4 step 2); then `compiler/` |
-| syntax form | frozen: waits for the parser port; `src/parser.rkt` only for a bug fix |
+| AST node | by default waits for the parser port (35.4 step 2); then `compiler/` |
+| syntax form | by default waits for the parser port; `src/parser.rkt` only for a bug fix |
 | diagnostic code | where the problem is found; prefix `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-` (`references/stages.md` lists them) |
 | builtin | `src/builtins.rkt` metadata, checker rule, `vm-builtins` in `src/lower.rkt`, C in `vm/`, a golden (`references/vm-builtins.md`) |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`) |

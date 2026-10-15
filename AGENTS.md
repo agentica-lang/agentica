@@ -64,11 +64,13 @@ phase 13).
 - Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
   `RUNTIME-`, `LOWER-`, `BYTECODE-`), and carry a source span. Tests assert
   the code (and the span when it matters), never message text.
-- The Racket front end in `src/` is frozen (roadmap row 7.2.7): no new syntax
-  and no new checker rules. Only bug fixes, and new rows in the
+- By default the Racket front end in `src/` is frozen (roadmap row 7.2.7): no
+  new syntax and no new checker rules. Only bug fixes, and new rows in the
   `src/builtins.rkt` table with the matching name in the `vm-builtins` list of
-  `src/lower.rkt`. Every later language change goes into `compiler/`. A bug fix in a ported
-  stage changes both front ends in the same PR.
+  `src/lower.rkt`. Every later language change goes into `compiler/`. A bug
+  fix in a ported stage changes both front ends in the same PR. They may be
+  relaxed when following them costs more than it saves; the PR says which
+  rule it relaxes and why.
 - Core grammar only (sections 4–6): user enums (the only user generics),
   `case`, file modules with explicit imports/exports, builtin `List[T]`,
   `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in `docs/future/`
