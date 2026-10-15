@@ -200,6 +200,18 @@ needs it.
   shared tables of `docs/future/13-ats.md` §13, must use locks and atomics. A
   table call does not yield, so it is atomic with N=1. Once N>1, each table call
   needs a lock, or a persistent structure installed with compare-and-swap.
+- **The Globals table** (module constants, `docs/future/44-module-constants.md`
+  §44.8) is the one place a loaded program is written (`agc_program.globals`).
+  The loader lets only the entry function write it, in code with no backward
+  jump, and refuses any call or closure of the entry in a file with slots. So
+  each slot is written at most once by the main task, before it tail-calls
+  `main`, and then only read: it needs no lock and no atomic once the other
+  schedulers start. The entry of a front-end file runs only pure builtins, so it
+  spawns no task. A hand-made entry could spawn a task before its last write, so
+  the multicore build must not run a second task on another scheduler until the
+  entry has handed over to `main` (its first `TAIL_CALL` or `RETURN`), or give
+  `GLOBAL` and `GLOBAL_SET` acquire and release order. At N=1 tasks interleave
+  on one thread and nothing is racy.
 - **Order of work.** First the tasks PR, on these split structures, with N=1.
   Then, if the gate opens, the multicore schedulers item: N>1 with the I/O
   thread and its inbox, the global run queue, Boehm threads, the TLS and HTTP

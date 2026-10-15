@@ -31,6 +31,11 @@ branch.
   below `registers`. The loader does not know the type of a register, so the
   receiver's struct type and field count are checked when the instruction runs
   (5.2).
+- **Globals**: the slot count is at most 65,535. Nothing else is read for the
+  section (a slot has no bytes, so the count cannot be checked against the bytes
+  left), and the array of slots is allocated through `load_alloc`, so the load
+  budget charges it. The slots start as zeroed memory, which means "never set"
+  (`GLOBAL` of one is `RUNTIME-INTERNAL`, 4.2).
 - **Functions**: `1 <= registers <= 65535` and `params + captures <= registers`.
   At least one instruction, and the last is `RETURN` or `JUMP`. Every opcode is
   known. Every register operand is below `registers`, including each window:
@@ -52,6 +57,16 @@ branch.
   instruction. `MAP` hashes at most 255 pairs per instruction, and longer
   literals are extended with `Map.put`.
 - **Entry**: exists, with no parameters or captures.
+- **Globals in code**: the slot of every `GLOBAL` and `GLOBAL_SET` is below the
+  count, so a count of 0 allows neither. When the count is above zero, only the
+  entry function may hold a `GLOBAL_SET`, a function with a `GLOBAL_SET` has no
+  backward jump (a jump whose target is not after it), and no `CALL`,
+  `TAIL_CALL` or `CLOSURE` names the entry, so nothing can run the entry again
+  and write a slot after `main` started. With a count of 0 these three rules do
+  not apply: the entry is `main`, which a program may call. The writes happen
+  once, before `main`, and the table is read-only after that, which keeps the
+  tasks of a future multicore scheduler free of races on it (§10.2.3 of
+  `10-io-multicore.md`, §16.7 of `16-architecture.md`).
 - **Closures**: `CALL_VALUE` checks its window. `CLOSURE` checks the function
   index and the window of its captures. `CALL` and `TAIL_CALL` may not name a
   function with captures, since only `CALL_VALUE` fills them. A `CALL_VALUE`
@@ -60,7 +75,7 @@ branch.
   (5.2), list, map and string bounds, and the register cap (6.1).
 
 `vm/tests/loader_test.c` checks each rule by its reason, and truncation at every
-byte of a file with a type table or an Updates section.
+byte of a file with a type table, an Updates section or Globals.
 
 ## 9. CLI and packaging
 

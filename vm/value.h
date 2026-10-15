@@ -15,12 +15,13 @@
 
 #include "trace.h"
 
-#define AGC_FORMAT_VERSION 4
+#define AGC_FORMAT_VERSION 5
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
 #define AGC_MAX_MAP_CHUNK 255u
 #define AGC_MAX_TYPES 65535u
+#define AGC_MAX_GLOBALS 65535u
 #define AGC_MAX_TYPE_DEPTH 1024u
 #define AGC_SCALAR_TEXT 48
 _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
@@ -153,6 +154,7 @@ typedef enum {
   AGC_OP_CALL_VALUE, AGC_OP_CLOSURE,
   AGC_OP_RANGE, AGC_OP_RANGE_BOUNDS,
   AGC_OP_STRUCT_WITH,
+  AGC_OP_GLOBAL, AGC_OP_GLOBAL_SET,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -269,7 +271,7 @@ typedef struct {
 
 typedef struct {
   uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
-  uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity, update_count;
+  uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity, update_count, global_count;
   agc_source *sources;
   agc_span *spans;
   agc_value *constants;
@@ -280,6 +282,18 @@ typedef struct {
   agc_update_def *updates;
   const agc_builtin **builtins;
   agc_function *functions;
+  /* The Globals slots (module constants, docs/future/44-module-constants.md
+     §44.8): global_count values in zeroed memory, so an unset slot has tag
+     AGC_T_VOID. The only part of a loaded program that a run writes. The
+     loader allows GLOBAL_SET only in the entry function, which can never run
+     twice and has no backward jump, so each write happens once, in straight
+     line, before main. After the entry tail-calls main the table is read-only
+     and needs no lock. A hand-made entry could spawn a task before its last
+     write, which only a multicore scheduler would turn into a race:
+     docs/vm/10-io-multicore.md §10.2.3 says what that build must do. The
+     table lives inside the program, allocated by the loader, so the collector
+     scans it as it scans constants. */
+  agc_value *globals;
 } agc_program;
 
 typedef struct {
