@@ -77,7 +77,7 @@ after them may run in parallel when needed and keep their relative order.
 | 8.1 | The rest of the VM layers (7l, `docs/future/21-vm-layers.md` §21: opcode helpers, builtin metadata flags, the callback-builtin protocol; the header split is row 7.2.1b); after the tasks PR, next to 7k | The prerequisites of the JIT |
 | 9 | Server measurement on the VM (7j), with the source → result runner (7g); it also reads the VM metrics of phase 18 (GC, run-queue delay, I/O) while the load runs | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
 | 11 | Decided by the owner on 2026-10-14: it comes right after step 9 and before the JIT (9.1), and decides with the numbers of step 9 (and the 6c pilot of step 7.2.2): multicore schedulers (7h item, gated). After step 9 the work stops so the owner reviews the next steps (a review point, not a gate on the JIT: 9.1 stays required and not gated). The front end is decided: self-hosting, in this table from row 7.2.7 on ([§35](../future/35-self-hosting.md)) | Build multicore only if the numbers ask for it |
-| 9.1 | JIT (7m, `docs/future/22-jit.md` §22): required, not gated; after 7l and 7j, independent of 7i and of the multicore decision | Hot functions run as native code with the same results |
+| 9.1 | JIT (7m, `docs/future/22-jit.md` §22): required, not gated; after 7l and 7j, independent of 7i and of the multicore decision. The FFI of [§40](../future/40-native-code.md) comes before it, by the owner's decision of 2026-10-15 | Hot functions run as native code with the same results |
 | 10 | Evaluation round: Agentica against typed Python on harder tasks (6c), the full round after the pilot of step 7.2.2, with the semantic CLI of phase 26 (§39.12). It waits until after the bootstrap (row 7.2.7), by the owner's decision of 2026-10-14 | Evidence on whether agents do better in Agentica than in typed Python |
 | 12 | Core data structures (phase 8): `Set[T]` and `Queue[T]` (may proceed in parallel with steps 6 to 11) | Write loops and algorithms the Ruby way, without workarounds |
 | 13 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
@@ -126,7 +126,8 @@ The owner set this order for the work after the bootstrap on 2026-10-15:
 Later, in no fixed order yet: the 6c evaluation round (row 10), the 44b to 44d
 table rewrites
 ([§44.12](../future/44-module-constants.md#4412-implementation-plan)), HTTP
-streaming (row 7.4) and `Task.map` (row 7.3).
+streaming (row 7.4), `Task.map` (row 7.3), and the FFI and native module header
+([§40](../future/40-native-code.md)), before the JIT (row 9.1).
 
 Designed, not scheduled: dates and times (§41,
 [`docs/future/41-dates-and-times.md`](../future/41-dates-and-times.md)).
