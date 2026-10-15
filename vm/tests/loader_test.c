@@ -2,6 +2,7 @@
  * One assert per loader rule: each case is a malformed input that must be
  * rejected. type_tables builds the Types section cases, make_updates the Updates
  * section and STRUCT_WITH, and pair_spec the Globals section and GLOBAL.
+ * source_root_tests covers agc_program_set_source_root.
  */
 #include "../core.h"
 
@@ -570,6 +571,57 @@ static void globals_tests(void) {
   assert(unset.kind == AGC_FAILED && strcmp(unset.code, "RUNTIME-INTERNAL") == 0);
   assert(strstr(unset.message, "before it was set"));
   assert(run_spec(pair_spec(read_set, 5, helper_code, 2, 2, 0), stdout).kind == AGC_DONE);
+}
+
+/* --source-root: relative names that are not under std/ go under the root; std/, absolute and empty-root cases stay. */
+static void source_root_tests(void) {
+  static const char *const names[] = {"main.agc", "std/queue.agc", "stdx.agc", "/abs/x.agc", "./std/helper.agc"};
+  static const struct {
+    const char *root;
+    const char *expected[5];
+  } cases[] = {
+    {"", {"main.agc", "std/queue.agc", "stdx.agc", "/abs/x.agc", "./std/helper.agc"}},
+    {"a", {"a/main.agc", "std/queue.agc", "a/stdx.agc", "/abs/x.agc", "a/std/helper.agc"}},
+    {"a/", {"a/main.agc", "std/queue.agc", "a/stdx.agc", "/abs/x.agc", "a/std/helper.agc"}},
+    {"/", {"/main.agc", "std/queue.agc", "/stdx.agc", "/abs/x.agc", "/std/helper.agc"}},
+    {"\xC3\xA9", {"\xC3\xA9/main.agc", "std/queue.agc", "\xC3\xA9/stdx.agc", "/abs/x.agc", "\xC3\xA9/std/helper.agc"}},
+  };
+  for (size_t c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+    agc_program p;
+    memset(&p, 0, sizeof p);
+    agc_source sources[5];
+    memset(sources, 0, sizeof sources);
+    for (size_t k = 0; k < 5; k++) {
+      size_t n = strlen(names[k]);
+      sources[k].name = agc_make_string(names[k], n, n);
+    }
+    p.sources = sources;
+    p.source_count = 5;
+    size_t root_chars;
+    assert(agc_utf8_chars((const uint8_t *)cases[c].root, strlen(cases[c].root), &root_chars));
+    assert(agc_program_set_source_root(&p, cases[c].root, root_chars));
+    for (size_t k = 0; k < 5; k++) {
+      const agc_string *name = sources[k].name;
+      size_t n = strlen(cases[c].expected[k]);
+      assert(name->bytes == n && memcmp(name->data, cases[c].expected[k], n) == 0);
+      size_t chars;
+      assert(agc_utf8_chars((const uint8_t *)name->data, name->bytes, &chars) && name->chars == chars);
+    }
+  }
+  /* A root that repeated over the sources passes the cap is refused, and no name changes. */
+  size_t big = ((size_t)1 << 26) / 3 + 1;
+  char *root = malloc(big + 1);
+  memset(root, 'r', big);
+  root[big] = '\0';
+  agc_program p;
+  memset(&p, 0, sizeof p);
+  agc_source sources[3];
+  for (size_t k = 0; k < 3; k++) sources[k].name = agc_make_string("m.agc", 5, 5);
+  p.sources = sources;
+  p.source_count = 3;
+  assert(!agc_program_set_source_root(&p, root, big));
+  assert(sources[0].name->bytes == 5);
+  free(root);
 }
 
 int main(void) {
@@ -1446,6 +1498,7 @@ int main(void) {
   free(updates.data);
 
   globals_tests();
+  source_root_tests();
 
   puts("loader tests passed");
   return 0;

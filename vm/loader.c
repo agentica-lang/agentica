@@ -608,3 +608,41 @@ bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, cha
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size) {
   return agc_load_traced(data, len, program, error, error_size, NULL);
 }
+
+/* Total bytes that the root may add to the source names. The loader's own budget covers the names as stored; a long
+ * root repeated over thousands of sources is not in it, so it gets its own cap. */
+#define SOURCE_ROOT_BUDGET ((size_t)1 << 26)
+
+/* A relative name that is not under std/ (those are the embedded standard modules, which have no folder). */
+static bool takes_root(const agc_string *name) {
+  if (name->bytes > 0 && name->data[0] == '/') return false;
+  return !(name->bytes >= 4 && memcmp(name->data, "std/", 4) == 0);
+}
+
+/* The front end writes a user file that sits in a std/ folder as "./std/NAME.agc", so it is told apart from a
+ * standard module. The "./" is dropped from the printed name. */
+static size_t dot_slash(const agc_string *name) { return name->bytes >= 2 && name->data[0] == '.' && name->data[1] == '/' ? 2 : 0; }
+
+bool agc_program_set_source_root(agc_program *program, const char *root, size_t root_chars) {
+  size_t root_bytes = strlen(root);
+  if (root_bytes == 0) return true;
+  size_t slash = root[root_bytes - 1] != '/' ? 1 : 0;
+  size_t joined_count = 0;
+  for (uint32_t i = 0; i < program->source_count; i++)
+    if (takes_root(program->sources[i].name)) joined_count++;
+  if (agc_size_mul(joined_count, agc_size_add(root_bytes, slash)) > SOURCE_ROOT_BUDGET) return false;
+  for (uint32_t i = 0; i < program->source_count; i++) {
+    const agc_string *name = program->sources[i].name;
+    if (!takes_root(name)) continue;
+    size_t skip = dot_slash(name);
+    size_t bytes = name->bytes - skip;
+    /* chars is kept exact although nothing reads it after the join: agc_string says it counts the characters. */
+    agc_string *joined = agc_new_string(agc_size_add(agc_size_add(root_bytes, slash), bytes),
+                                        agc_size_add(agc_size_add(root_chars, slash), name->chars - skip));
+    memcpy(joined->data, root, root_bytes);
+    if (slash) joined->data[root_bytes] = '/';
+    memcpy(joined->data + root_bytes + slash, name->data + skip, bytes);
+    program->sources[i].name = joined;
+  }
+  return true;
+}

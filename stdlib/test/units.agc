@@ -5,12 +5,14 @@
 import Report from "report"
 import Child from "child"
 
-## The options of a run: the VM path, the seed, the `--only` text and the timeout of each test in milliseconds.
+## The options of a run: the VM path, the seed, the `--only` text, the timeout of each test in milliseconds, and the
+## `--source-root` of the file's bytecode ("" for none), so a trace names the file as the report does.
 export struct Settings
   vm: String
   seed: Int
   only: String
   timeout_ms: Int
+  source_root: String
 end
 
 struct UnitTest
@@ -356,6 +358,18 @@ def joined(output: String, stderr: String) -> String
 end
 
 def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]
-  return ["--allow-run", "--json", "--max-steps", steps.to_s, "--seed", settings.seed.to_s, "--", bytecode,
-          "--agentica-test", mode]
+  return [
+    "--allow-run",
+    "--json",
+    "--max-steps",
+    steps.to_s,
+    "--seed",
+    settings.seed.to_s,
+    "--source-root",
+    settings.source_root,
+    "--",
+    bytecode,
+    "--agentica-test",
+    mode,
+  ]
 end

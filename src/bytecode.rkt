@@ -192,8 +192,10 @@
                    (intern-spans! (list (ir-function-span function))) code instr-spans))
     (define functions (map encode-function (ir-program-functions ir)))
     (bc-program (ir-program-span ir)
-                (for/list ([text-source (in-list sources)])
-                  (cons (source-name text-source) (source-text text-source)))
+                (for/list ([text-source (in-list sources)]
+                           [stored (in-list (stored-source-names
+                                             (source-span-source (ir-program-span ir)) sources))])
+                  (cons stored (source-text text-source)))
                 (list->vector (reverse spans))
                 (list->vector (reverse constants))
                 structs

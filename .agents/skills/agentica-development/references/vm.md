@@ -22,7 +22,7 @@ check #:types (src/checker.rkt)   eq? hash: expression node -> checked type
 lower         (src/lower.rkt)     checked program -> IR, or LOWER-UNSUPPORTED / LOWER-INTERNAL
 ir->bytecode  (src/bytecode.rkt)  IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL
 write-bytecode                    the versioned .agcb file (magic, format version, Agentica version)
-vm/main.c     dist/agentica-vm [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000)
+vm/main.c     dist/agentica-vm [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000)
 src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then the VM (LOWER-UNSUPPORTED exits 1)
 ```
 

@@ -34,6 +34,36 @@ export def join(base: String, rest: String) -> String
   return base + "/" + rest
 end
 
+## The path a file is stored under in the program and in the .agcb, and printed by the text forms: src/source.rkt,
+## stored-source-names. root_dir is the folder of the root file. A file inside it is its path from there, with no "./";
+## a file above it keeps the ".." parts ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a
+## std/ folder is "./std/NAME.agc". The bytes of an .agcb then do not depend on where the project lives.
+export def stored_name(root_dir: String, file: String) -> String
+  if root_dir == "" or !file.starts_with?("/")
+    return file
+  end
+  from = path_parts(root_dir)
+  to = path_parts(file)
+  shared = 0
+  while shared < from.size and shared < to.size and from[shared] == to[shared]
+    shared = shared + 1
+  end
+  out: List[String] = []
+  for index in shared...from.size
+    out = out.push("..")
+  end
+  for index in shared...to.size
+    out = out.push(to[index])
+  end
+  stored = out.join("/")
+  # A user file under a std/ folder must not look like a standard module (the VM puts --source-root before every name
+  # but those).
+  if stored.starts_with?("std/")
+    return "./" + stored
+  end
+  return stored
+end
+
 ## The file an import names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is
 ## CHECK-IMPORT-PATH with a help that shows the fix, written as the import line of decl (the alias form or the name
 ## list).
@@ -116,4 +146,9 @@ def without_extension(path: String) -> String
     return path
   end
   return path.slice(0, path.length - pieces[pieces.size - 1].length - 1)
+end
+
+# The parts of an absolute path, with no empty part.
+def path_parts(path: String) -> List[String]
+  return path.split("/").filter do |part| part != "" end
 end
