@@ -151,13 +151,10 @@ end
 
 ## Builds the plain text report, or the `--ai` text when `ai` is true. It has no final newline.
 export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
-  sums = totals(files)
+  tot = totals(files)
   chunks = files.map do |file| file_text(file, ai) end
-  last = (
-    "#{sums.passed} passed, #{sums.failed} failed, #{sums.not_executed} not executed, #{sums.file_errors} file " +
-    "errors"
-  )
-  if sums.exit_code != 0
+  last = "#{tot.passed} passed, #{tot.failed} failed, #{tot.not_executed} not executed, #{tot.file_errors} file errors"
+  if tot.exit_code != 0
     last = "#{last}, seed #{seed}"
   end
   return chunks.filter do |chunk| chunk != "" end.push(last).join("\n")

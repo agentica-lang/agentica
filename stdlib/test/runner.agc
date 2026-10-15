@@ -217,8 +217,9 @@ def list_steps(config: Config, where: Report.Span) -> Listing
     end
     return Listing.Broken(Report.error_at("RUNTIME-BDD-CONTEXT", "the step program did not call BDD.run", where))
   end
-  steps = records.filter do |record| Child.event_of(record) == "step" end
-  texts = steps.map do |record| Child.text_of(record, "pattern") end
+  texts = records.filter do |record|
+    Child.event_of(record) == "step"
+  end.map do |record| Child.text_of(record, "pattern") end
   case Match.compile(texts, where)
     Gherkin.Outcome.Done(patterns) -> return Listing.Ready(patterns)
     Gherkin.Outcome.Failed(problem) -> return Listing.Broken(from_diagnostic(problem))

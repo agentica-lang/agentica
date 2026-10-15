@@ -133,8 +133,9 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
     return broken(Report.error_at("RUNTIME-TEST-RUN", "the test file did not call Test.run", where), shown)
   end
   empty: Map[Int, UnitTest] = {}
-  tests = records.filter do |record| Child.event_of(record) == "test" end
-  listed = tests.reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
+  listed = records.filter do |record|
+    Child.event_of(record) == "test"
+  end.reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
     line = Child.int_of(record, "line")
     column = Child.int_of(record, "column")
     acc.put(acc.size, UnitTest(index: acc.size, name: Child.text_of(record, "name"),
@@ -241,8 +242,12 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
   Process.channel_close(p, 5000)
   output = Process.output(p, settings.timeout_ms)
   if not output.ok?
-    timeout = Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not exit after its last test", where)
-    return Ending(verdict: Report.Verdict.Fail(timeout), output: "")
+    return Ending(
+      verdict: Report.Verdict.Fail(
+        Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not exit after its last test", where),
+      ),
+      output: "",
+    )
   end
   found = output.unwrap!
   shown = Child.stderr_text(found.stderr)
@@ -270,8 +275,11 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
     return timed_out(settings, span)
   end
   if message == "process: line exceeds 1048576 bytes"
-    problem = Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "a line of test output exceeds 1 MiB", span)
-    return Failure(problem: problem, output: "", blame: true)
+    return Failure(
+      problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "a line of test output exceeds 1 MiB", span),
+      output: "",
+      blame: true,
+    )
   end
   if message == "process: output exceeds 1048576 bytes"
     return overflow(settings, p, deadline, span)
