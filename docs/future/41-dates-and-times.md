@@ -357,7 +357,7 @@ end
   The implementation PR can compare the two if the owner prefers libuv.
 - This is exception 1 of the std-first rule (the OS clock), so it is a C
   builtin. It is a new row of `src/builtins.rkt`, which the freeze allows
-  (41.13), and it is independent of the types, so it can land at any time.
+  (41.13), and it is independent of the types, so it landed first (#248).
 - Tests: a golden fixture `time-monotonic-ns.agc` checks that two readings do
   not go back, that `Task.sleep(20)` takes at least 15000000 ns, and that
   `Time.monotonic_ns() / 1000000` lies between two `Time.monotonic_ms()`
@@ -399,20 +399,20 @@ The parts land under different rules:
 |---|---|---|
 | Types, reserved names, the construction rule and its code | `compiler/` (the Agentica front end) | A checker change in the Agentica front end (§35), decided by the owner on 2026-10-15. Not a table row. |
 | `Time.*` functions (41.3 to 41.7) | `compiler/` (the Agentica catalog, §35.4), `vm/dates.c` | With the types, in the Agentica front end (§35): most of the functions return the new types, so their catalog rows wait for it. |
-| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin catalog, if §35 step 4 is done), `vm/numbers.c` | Independent of the types, so it may land at any time. After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
+| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin catalog, if §35 step 4 is done), `vm/numbers.c` | Independent of the types, so it landed first (#248). After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
 
 Most of the functions return the new types, so they cannot land before the
 types. The owner decided on 2026-10-15 that the types come after the Agentica
 front end (§35), where the same rules are written in Agentica, so the `Time.*`
-functions wait for it too. `Time.monotonic_ns` is the only part that may land
-earlier. The order table is not changed by this section; the roadmap's
+functions wait for it too. `Time.monotonic_ns` is the only part that landed
+earlier (#248). The order table is not changed by this section; the roadmap's
 "Designed, not scheduled" paragraph says where the types wait.
 
 ### 41.14 Files and docs of the implementation PR
 
 The two parts land in two PRs (41.10 and 41.13).
 
-The monotonic clock (41.10), which may land first:
+The monotonic clock (41.10), which landed first (#248):
 
 - `src/builtins.rkt`: one row next to the `Time` rows. `src/lower.rkt`: its
   `vm-builtins` name, or, if §35 step 4 is done, the Agentica builtin catalog

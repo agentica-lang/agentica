@@ -11,8 +11,10 @@ import subprocess
 import sys
 import time
 
-# The loop calls uv_update_time before it starts a timer, so a timer fires early
-# by under 1 ms of truncation, plus any lag of libuv's coarse clock.
+# Only the sleep floor needs a margin: the loop calls uv_update_time before it
+# starts a timer, so a timer fires early by under 1 ms of truncation, plus any
+# lag of libuv's coarse clock. The readings themselves lie strictly between the
+# peer's two readings.
 MARGIN_NS = 5_000_000
 SLEEP_NS = 20_000_000
 
@@ -36,7 +38,7 @@ def main():
     if len(lines) != 2 or not all(line.isdigit() for line in lines):
         fail("unexpected output: %r" % run.stdout)
     start, end = (int(line) for line in lines)
-    if not (before - MARGIN_NS <= start <= end <= after + MARGIN_NS):
+    if not (before <= start <= end <= after):
         fail("readings %d, %d are outside [%d, %d]" % (start, end, before, after))
     if end - start < SLEEP_NS - MARGIN_NS:
         fail("Task.sleep(20) took %d ns" % (end - start))

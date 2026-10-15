@@ -114,10 +114,7 @@ true
 Time.monotonic_ns() -> Int
 ```
 
-Nanoseconds from the same clock and the same unknown start as
-`Time.monotonic_ms`; they never go back. Use it for work too short for
-milliseconds. An `Int` holds about 292 years of nanoseconds, so the value does
-not overflow in practice.
+Nanoseconds from the same clock and the same unknown start as `Time.monotonic_ms`; they never go back. Use it for work too short for milliseconds. An `Int` holds about 292 years of nanoseconds, so the value does not overflow in practice.
 
 ```agentica
 def main() -> Void
