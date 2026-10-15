@@ -65,7 +65,8 @@ memory errors or undefined behavior, runs children only with its own
 `--allow-run`, and stops within `--max-steps`. The loader enforces the
 termination rules: every backward jump lands on a `STEP`, every function that
 calls starts with one, and a function without a leading `STEP` has at most 2
-instructions. A file that loads may still compute wrong values or end with
+instructions. A file with Globals slots may write them only in the entry
+function, which has no backward jump and is never called. A file that loads may still compute wrong values or end with
 `RUNTIME-INTERNAL`.
 
 ## Read next

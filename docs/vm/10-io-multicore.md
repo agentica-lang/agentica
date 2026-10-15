@@ -80,8 +80,10 @@ needs it.
   WOKEN, which only matter to a thread that can wake a task), and there are no
   stream locks, since one thread writes. With N>1 the fields go as follows
   (§16):
-  - Runtime, read-only after start-up: `program` (with its constants), `args`,
-    `cwd` (raw bytes, read by `agc_files_init`), `no_files`, and the config.
+  - Runtime, read-only after start-up: `program` (with its constants, except
+    the Globals table, which the entry writes before `main`, see "The Globals
+    table" below), `args`, `cwd` (raw bytes, read by `agc_files_init`),
+    `no_files`, and the config.
     Shared under rules: the atomic `steps_left` (10.2.1, Quotas), `outcome` (set
     once by a CAS, 6.2), and `out` and `err` (one lock per stream, see Output).
     Stdin (`in`, an `agc_input`) is a handle on the I/O loop (see I/O
@@ -200,6 +202,20 @@ needs it.
   shared tables of `docs/future/13-ats.md` §13, must use locks and atomics. A
   table call does not yield, so it is atomic with N=1. Once N>1, each table call
   needs a lock, or a persistent structure installed with compare-and-swap.
+- **The Globals table** (module constants, `docs/future/44-module-constants.md`
+  §44.8) is the one place a loaded program is written (`agc_program.globals`).
+  The loader lets only the entry function write it, in code with no backward
+  jump, and refuses any call or closure of the entry in a file with slots. So
+  each `GLOBAL_SET` runs at most once, in the main task, before it tail-calls
+  `main`, and then the table is only read: it needs no lock and no atomic once
+  the other schedulers start. The entry of a front-end file runs only pure
+  builtins, so it spawns no task. A hand-made entry could spawn a task before
+  its last write, so the multicore build must not run a second task on another
+  scheduler until the entry has handed over to `main` (its first `TAIL_CALL` or
+  `RETURN`), or publish the table with one release store of a flag that
+  `GLOBAL` reads with acquire (a slot is a 16-byte value, so per-slot ordering
+  would not stop a torn read). At N=1 tasks interleave on one thread and
+  nothing is racy.
 - **Order of work.** First the tasks PR, on these split structures, with N=1.
   Then, if the gate opens, the multicore schedulers item: N>1 with the I/O
   thread and its inbox, the global run queue, Boehm threads, the TLS and HTTP

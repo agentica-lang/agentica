@@ -76,7 +76,7 @@ commit, and with `racket src/main.rkt check` on small probe programs.
   checker's types reach lowering.
 - The `.agcb` type table has the kinds `INT`, `FLOAT`, `BOOL`, `STRING`, `LIST`,
   `MAP` and `STRUCT` (`AGC_TYPE_*` in `vm/value.h`). The loader rejects an
-  unknown kind (`load_types` in `vm/loader.c`), and the format version is 4
+  unknown kind (`load_types` in `vm/loader.c`), and the format version is 5
   (`src/bytecode.rkt:14`). Typed JSON uses these kinds (`vm/json_typed.c`).
 - A JSON integer beyond `Int` is kept as its text until it is extracted
   (`vm/json.c`, `AGC_JSON_BIG`). `JSON.int` extracts `Int` only.

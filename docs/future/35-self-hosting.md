@@ -37,7 +37,7 @@ Measured by the owner on master on 2026-10-13:
 - `src/main.rkt` compiles to a 0600 temporary `.agcb` and starts `agentica-vm`
   as a child. `agentica test` starts a runner VM written in Agentica
   (`docs/bdd.md`), so part of the tool is already Agentica.
-- An `.agcb` holds the format version (4), the Agentica version, and the path
+- An `.agcb` holds the format version (5), the Agentica version, and the path
   and full text of every source file (`write-program`, `src/bytecode.rkt:203`).
   The paths are absolute (`path->complete-path`, `src/modules.rkt:9,15,26`). The
   loader rejects a file built for another Agentica version (`vm/loader.c:402`).

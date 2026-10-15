@@ -11,7 +11,7 @@
 (struct bc-program (span sources spans constants structs types decodable enums updates builtins functions entry) #:transparent)
 (struct bc-function (name params captures registers span code spans) #:transparent)
 
-(define format-version 4)
+(define format-version 5)
 (define max-u16 65535)
 (define max-type-depth 1024)
 
@@ -27,7 +27,8 @@
     map map-get
     call-value closure
     range range-bounds
-    struct-with))
+    struct-with
+    global global-set))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -264,6 +265,9 @@
     (u32 out (car entry))
     (u32 out (length (cdr entry)))
     (for ([field (in-list (cdr entry))]) (u32 out field)))
+  ;; Globals: the slot count of the module constants (docs/future/44-module-constants.md 44.8).
+  ;; Nothing lowers constants yet, so it is always zero.
+  (u32 out 0)
   (u32 out (length (bc-program-builtins program)))
   (for ([entry (in-list (bc-program-builtins program))])
     (str out (car entry))
