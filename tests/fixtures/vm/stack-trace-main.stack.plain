@@ -1,4 +1,4 @@
-stack-trace-main.agc:3:11 error[RUNTIME-DIVISION-BY-ZERO]
+@fixtures/vm/stack-trace-main.agc:3:11 error[RUNTIME-DIVISION-BY-ZERO]
 division by zero
 
 3 |   puts(10 / (3 - 3))

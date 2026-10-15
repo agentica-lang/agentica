@@ -12,7 +12,7 @@ expected Int, found String
 
 When the checker knows the fix, the diagnostic ends with a `= help:` line.
 
-The file in a compile-time diagnostic is the entry file as written on the command line, and an imported file by its absolute path. The file in a runtime diagnostic and in each frame of its stack is the path stored in the bytecode: relative to the folder of the entry file (`main.agc`, `lib/util.agc`, `../shared/x.agc`), or `std/NAME.agc` for a standard module. So `agentica examples/hello.agc` reports a runtime error at `hello.agc:3:5`, and the same bytecode reports the same place wherever it was built.
+A compile-time diagnostic names the first file as you typed it and an imported file by its absolute path. A runtime diagnostic and the frames of its stack name each file as you can open it from the working directory: `agentica examples/hello.agc` reports `examples/hello.agc:3:5` and `examples/lib/util.agc:7:11`, and a standard module is `std/NAME.agc`. The bytecode stores each file relative to the folder of the first file (`hello.agc`, `lib/util.agc`, `../shared/x.agc`), so it is the same wherever the program was built; `agentica` puts the folder you typed before those names, and `agentica-vm` alone prints them as stored.
 
 `agentica --ai` and `agentica --json` print the same diagnostic as compact text, or as one JSON object. In `--json` mode, when a diagnostic ends the run, it is the last line of stderr, except that a warning about the flush of files or output (§6) can follow it when the end-of-run flush fails or runs out of time. Task crash lines (with `"task": true`), the unobserved-crash summary (`{"unobserved_crashes": N, "first": "..."}`) and the flush warning of §6 are not the run's diagnostic.
 

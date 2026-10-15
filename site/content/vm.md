@@ -12,7 +12,7 @@ For the reasons behind these choices, see [Design decisions](/design/).
 
 The `agentica` command has two parts. The front end, written in Racket, reads your program: the lexer, the parser, the module linker, the checker and the lowering step. It turns the checked program into bytecode, writes it to a private temporary `.agcb` file and starts `agentica-vm` on it. The VM runs every program; there is no other backend.
 
-You can also do the two steps yourself. `agentica compile file.agc -o file.agcb` writes the bytecode, and `agentica-vm -- file.agcb` runs it. The VM takes `--max-steps`, `--seed`, `--flush-timeout` (the variable `AGENTICA_FLUSH_TIMEOUT_MS` sets the same value), `--allow-run`, and `--ai` or `--json` before the `--`, and passes the words after the file to the program. A bytecode file runs only on the VM of the same Agentica version.
+You can also do the two steps yourself. `agentica compile file.agc -o file.agcb` writes the bytecode, and `agentica-vm -- file.agcb` runs it. The VM takes `--max-steps`, `--seed`, `--flush-timeout` (the variable `AGENTICA_FLUSH_TIMEOUT_MS` sets the same value), `--allow-run`, `--ai` or `--json`, and `--source-root DIR` (put `DIR/` before the file names that the bytecode stores, which are relative to the folder of the program's first file; `agentica` sets it so errors name files as you typed them) before the `--`, and passes the words after the file to the program. A bytecode file runs only on the VM of the same Agentica version.
 
 ## Inside the VM
 

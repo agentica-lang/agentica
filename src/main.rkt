@@ -283,6 +283,8 @@
               (if seed (list "--seed" (number->string seed)) '())
               (if flush-timeout (list "--flush-timeout" flush-timeout) '())
               (if allow-run? '("--allow-run") '())
+              (let ([root (source-root-option source-file)])
+                (if (equal? root "") '() (list "--source-root" root)))
               (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
     (define status
       (dynamic-wind

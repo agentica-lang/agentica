@@ -1,27 +1,27 @@
-stack-trace-mutual.agc:3:14 error[RUNTIME-DIVISION-BY-ZERO]
+@fixtures/vm/stack-trace-mutual.agc:3:14 error[RUNTIME-DIVISION-BY-ZERO]
 division by zero
 
 3 |     return 1 / n
   |              ^
   = stack, innermost first:
-    ping at stack-trace-mutual.agc:3:14
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:3:14
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
     ... 62 frames not shown ...
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
-    pong at stack-trace-mutual.agc:9:10
-    ping at stack-trace-mutual.agc:5:10
-    main at stack-trace-mutual.agc:13:8
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
+    pong at @fixtures/vm/stack-trace-mutual.agc:9:10
+    ping at @fixtures/vm/stack-trace-mutual.agc:5:10
+    main at @fixtures/vm/stack-trace-mutual.agc:13:8

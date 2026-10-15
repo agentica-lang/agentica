@@ -8,20 +8,20 @@
     "client: peek, echo ping",
     "error(\"network: end of input\")",
     "error(\"network: socket is closed\")",
-    "not the owner: task crashed: RUNTIME-HANDLE-NOT-OWNED at handle-spawn-owning.agc:21:33: the calling task does not own this handle, or it is closed",
+    "not the owner: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/handle-spawn-owning.agc:21:33: the calling task does not own this handle, or it is closed",
     "ok()",
     "ok(\"still mine\")",
-    "twice: task crashed: RUNTIME-HANDLE-NOT-OWNED at handle-spawn-owning.agc:27:28: the calling task does not own this handle, or it is closed",
-    "closed: task crashed: RUNTIME-HANDLE-NOT-OWNED at handle-spawn-owning.agc:33:28: the calling task does not own this handle, or it is closed",
+    "twice: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/handle-spawn-owning.agc:27:28: the calling task does not own this handle, or it is closed",
+    "closed: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/handle-spawn-owning.agc:33:28: the calling task does not own this handle, or it is closed",
     "ok(\"listener handed over\")",
     "ok(\"accepted\")",
     "error(\"network: listener is closed\")",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"handle-spawn-owning.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":39,\"line\":21},\"start\":{\"column\":33,\"line\":21}},\"spawned_at\":{\"column\":38,\"file\":\"handle-spawn-owning.agc\",\"line\":64},\"stack\":[{\"column\":33,\"file\":\"handle-spawn-owning.agc\",\"function\":\"give_away\",\"line\":21}],\"task\":true}",
-    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"handle-spawn-owning.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":34,\"line\":27},\"start\":{\"column\":28,\"line\":27}},\"spawned_at\":{\"column\":30,\"file\":\"handle-spawn-owning.agc\",\"line\":67},\"stack\":[{\"column\":28,\"file\":\"handle-spawn-owning.agc\",\"function\":\"give_twice\",\"line\":27}],\"task\":true}",
-    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"handle-spawn-owning.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":34,\"line\":33},\"start\":{\"column\":28,\"line\":33}},\"spawned_at\":{\"column\":31,\"file\":\"handle-spawn-owning.agc\",\"line\":72},\"stack\":[{\"column\":28,\"file\":\"handle-spawn-owning.agc\",\"function\":\"give_closed\",\"line\":33}],\"task\":true}",
+    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":39,\"line\":21},\"start\":{\"column\":33,\"line\":21}},\"spawned_at\":{\"column\":38,\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"line\":64},\"stack\":[{\"column\":33,\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"function\":\"give_away\",\"line\":21}],\"task\":true}",
+    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":34,\"line\":27},\"start\":{\"column\":28,\"line\":27}},\"spawned_at\":{\"column\":30,\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"line\":67},\"stack\":[{\"column\":28,\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"function\":\"give_twice\",\"line\":27}],\"task\":true}",
+    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":34,\"line\":33},\"start\":{\"column\":28,\"line\":33}},\"spawned_at\":{\"column\":31,\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"line\":72},\"stack\":[{\"column\":28,\"file\":\"@fixtures/vm/handle-spawn-owning.agc\",\"function\":\"give_closed\",\"line\":33}],\"task\":true}",
     ""
   ]
 }

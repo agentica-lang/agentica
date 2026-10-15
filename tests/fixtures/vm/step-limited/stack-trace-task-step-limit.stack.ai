@@ -2,9 +2,9 @@ check failed: 1 error
 
 [RUNTIME-STEP-LIMIT]
   message: execution step budget exhausted
-  at: stack-trace-task-step-limit.agc:3:5
+  at: @fixtures/vm/step-limited/stack-trace-task-step-limit.agc:3:5
   source: n += 1
   stack:
-    spin at stack-trace-task-step-limit.agc:3:5
-    worker at stack-trace-task-step-limit.agc:9:10
-    task spawned at stack-trace-task-step-limit.agc:13:10
+    spin at @fixtures/vm/step-limited/stack-trace-task-step-limit.agc:3:5
+    worker at @fixtures/vm/step-limited/stack-trace-task-step-limit.agc:9:10
+    task spawned at @fixtures/vm/step-limited/stack-trace-task-step-limit.agc:13:10

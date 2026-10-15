@@ -6,11 +6,11 @@
     "error(\"network: end of input\")",
     "ok(\"hello 100\")",
     "ok(\"hello\")",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at tcp-crash-echo.agc:8:11: division by zero\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/tcp-crash-echo.agc:8:11: division by zero\")",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"tcp-crash-echo.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":12,\"line\":8},\"start\":{\"column\":11,\"line\":8}},\"spawned_at\":{\"column\":13,\"file\":\"tcp-crash-echo.agc\",\"line\":26},\"stack\":[{\"column\":11,\"file\":\"tcp-crash-echo.agc\",\"function\":\"echo\",\"line\":8}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/tcp-crash-echo.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":12,\"line\":8},\"start\":{\"column\":11,\"line\":8}},\"spawned_at\":{\"column\":13,\"file\":\"@fixtures/vm/tcp-crash-echo.agc\",\"line\":26},\"stack\":[{\"column\":11,\"file\":\"@fixtures/vm/tcp-crash-echo.agc\",\"function\":\"echo\",\"line\":8}],\"task\":true}",
     ""
   ]
 }

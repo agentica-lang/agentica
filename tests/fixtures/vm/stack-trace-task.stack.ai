@@ -1,14 +1,14 @@
 [RUNTIME-DIVISION-BY-ZERO] in a task
   message: division by zero
-  at: stack-trace-task.agc:2:13
+  at: @fixtures/vm/stack-trace-task.agc:2:13
   source: return 10 / n
   stack:
-    inner at stack-trace-task.agc:2:13
-    worker at stack-trace-task.agc:7:10
-    task spawned at stack-trace-task.agc:12:10
+    inner at @fixtures/vm/stack-trace-task.agc:2:13
+    worker at @fixtures/vm/stack-trace-task.agc:7:10
+    task spawned at @fixtures/vm/stack-trace-task.agc:12:10
 check failed: 1 error
 
 [RUNTIME-TASK-CRASHED]
-  message: task crashed: RUNTIME-DIVISION-BY-ZERO at stack-trace-task.agc:2:13: division by zero
-  at: stack-trace-task.agc:13:8
+  message: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/stack-trace-task.agc:2:13: division by zero
+  at: @fixtures/vm/stack-trace-task.agc:13:8
   source: puts(Task.await(task))

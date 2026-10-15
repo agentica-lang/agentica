@@ -4,7 +4,6 @@ import Failure from "check_failure"
 import State from "check_state"
 import Checker from "checker"
 import Diag from "diagnostic"
-import Paths from "import_path"
 import Env from "link_env"
 import LinkText from "link_text"
 import Linker from "linker"
@@ -63,7 +62,7 @@ def problem_text(root_dir: String, problem: Failure.Problem) -> String
     labels = problem.labels.map do |label: Failure.Label| Text.span_text(label.span) + " " + Text.quote(label.text) end
     line = line + " labels=[" + labels.join(", ") + "]"
   end
-  return line + " file=" + Text.quote(Paths.stored_name(root_dir, problem.file))
+  return line + " file=" + Text.quote(LinkText.stored(root_dir, problem.file))
 end
 
 def note(label: String, text: String) -> String

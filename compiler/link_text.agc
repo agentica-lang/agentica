@@ -19,7 +19,7 @@ end
 export def ids_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) ->
-      lines = linked.modules.map do |module| "module " + Text.quote(Paths.stored_name(linked.root_dir, module.file)) + " first=" + module.first_id.to_s + " next=" + module.next_id.to_s end
+      lines = linked.modules.map do |module| "module " + Text.quote(module.name) + " first=" + module.first_id.to_s + " next=" + module.next_id.to_s end
       return lines.join("\n")
     Linker.Linking.Failed(failure) -> return failure_text(root_dir_of(path), failure)
   end
@@ -34,9 +34,21 @@ export def root_dir_of(path: String) -> String
   return ""
 end
 
+## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps links), so it is made canonical first, as the key of a loaded file is.
+export def stored(root_dir: String, file: String) -> String
+  if file.starts_with?("std/")
+    return file
+  end
+  real = Path.real(file)
+  if real.ok?
+    return Paths.stored_name(root_dir, real.unwrap!)
+  end
+  return Paths.stored_name(root_dir, file)
+end
+
 ## The ERROR line of a link failure, with the file it is in.
 export def failure_text(root_dir: String, failure: Failure.Failure) -> String
-  return Text.diagnostic_line(failure.diagnostic) + " file=" + Text.quote(Paths.stored_name(root_dir, failure.file))
+  return Text.diagnostic_line(failure.diagnostic) + " file=" + Text.quote(stored(root_dir, failure.file))
 end
 
 ## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).
@@ -45,14 +57,14 @@ export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List
   lines: List[String] = [ParseText.head(ParseText.Margin(indent: "", base: 0, notes: notes), "", "program", root.id, root.span, ParseText.text_attr(" module-doc=", root.module_doc))]
   for module in linked.modules
     if module.declarations.size > 0
-      lines = module_lines(lines, linked.root_dir, module, notes)
+      lines = module_lines(lines, module, notes)
     end
   end
   return lines
 end
 
-def module_lines(out: List[String], root_dir: String, module: Linker.LinkedModule, notes: Map[Int, String]) -> List[String]
-  lines = out.push("  module " + Text.quote(Paths.stored_name(root_dir, module.file)))
+def module_lines(out: List[String], module: Linker.LinkedModule, notes: Map[Int, String]) -> List[String]
+  lines = out.push("  module " + Text.quote(module.name))
   at = ParseText.Margin(indent: "    ", base: module.first_id, notes: notes)
   for decl in module.declarations
     lines = ParseText.print_decl(lines, at, "declaration", decl)

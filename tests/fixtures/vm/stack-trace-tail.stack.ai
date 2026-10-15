@@ -2,9 +2,9 @@ check failed: 1 error
 
 [RUNTIME-DIVISION-BY-ZERO]
   message: division by zero
-  at: stack-trace-tail.agc:2:13
+  at: @fixtures/vm/stack-trace-tail.agc:2:13
   source: return 10 / n
   stack:
-    leaf at stack-trace-tail.agc:2:13 (after a tail call)
-    run at stack-trace-tail.agc:10:10
-    main at stack-trace-tail.agc:14:8
+    leaf at @fixtures/vm/stack-trace-tail.agc:2:13 (after a tail call)
+    run at @fixtures/vm/stack-trace-tail.agc:10:10
+    main at @fixtures/vm/stack-trace-tail.agc:14:8

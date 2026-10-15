@@ -7,11 +7,11 @@
     "return: got 1",
     "return: got 2",
     "return: channel: closed, closed? true",
-    "crash: task crashed: RUNTIME-DIVISION-BY-ZERO at channel-owner-ends.agc:29:15: division by zero",
+    "crash: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-owner-ends.agc:29:15: division by zero",
     "crash: got 1",
     "crash: got 2",
     "crash: channel: closed, closed? true",
-    "cancel: task crashed: RUNTIME-DIVISION-BY-ZERO at channel-owner-ends.agc:42:15: division by zero",
+    "cancel: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-owner-ends.agc:42:15: division by zero",
     "cancel: got 1",
     "cancel: channel: closed, closed? true",
     "parked reader: got 7",
@@ -20,16 +20,16 @@
     "keeper: ok 0",
     "full: got 1",
     "full: channel: closed, closed? true",
-    "parked owner: task crashed: RUNTIME-DIVISION-BY-ZERO at channel-owner-ends.agc:53:15: division by zero",
+    "parked owner: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-owner-ends.agc:53:15: division by zero",
     "parked peer: channel: closed",
     "true",
     "0",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":29},\"start\":{\"column\":15,\"line\":29}},\"spawned_at\":{\"column\":30,\"file\":\"channel-owner-ends.agc\",\"line\":79},\"stack\":[{\"column\":15,\"file\":\"channel-owner-ends.agc\",\"function\":\"crashes\",\"line\":29}],\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":42},\"start\":{\"column\":15,\"line\":42}},\"spawned_at\":{\"column\":31,\"file\":\"channel-owner-ends.agc\",\"line\":83},\"stack\":[{\"column\":15,\"file\":\"channel-owner-ends.agc\",\"function\":\"abandons\",\"line\":42}],\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":53},\"start\":{\"column\":15,\"line\":53}},\"spawned_at\":{\"column\":37,\"file\":\"channel-owner-ends.agc\",\"line\":100},\"stack\":[{\"column\":15,\"file\":\"channel-owner-ends.agc\",\"function\":\"abandons_listener\",\"line\":53}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":29},\"start\":{\"column\":15,\"line\":29}},\"spawned_at\":{\"column\":30,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"line\":79},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"function\":\"crashes\",\"line\":29}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":42},\"start\":{\"column\":15,\"line\":42}},\"spawned_at\":{\"column\":31,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"line\":83},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"function\":\"abandons\",\"line\":42}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":53},\"start\":{\"column\":15,\"line\":53}},\"spawned_at\":{\"column\":37,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"line\":100},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"function\":\"abandons_listener\",\"line\":53}],\"task\":true}",
     ""
   ]
 }

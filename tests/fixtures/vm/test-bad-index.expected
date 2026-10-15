@@ -3,7 +3,7 @@
   "code": null,
   "steps": 6,
   "stdout": [
-    "channel> {\"code\":\"RUNTIME-BDD-INFRA\",\"event\":\"fail\",\"file\":\"test-bad-index.agc\",\"message\":\"invalid test index \\\"99\\\"\",\"range\":{\"end\":{\"column\":5,\"line\":6},\"start\":{\"column\":3,\"line\":2}}}",
+    "channel> {\"code\":\"RUNTIME-BDD-INFRA\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-bad-index.agc\",\"message\":\"invalid test index \\\"99\\\"\",\"range\":{\"end\":{\"column\":5,\"line\":6},\"start\":{\"column\":3,\"line\":2}}}",
     ""
   ],
   "stderr": []

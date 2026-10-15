@@ -81,12 +81,21 @@ byte of a file with a type table, an Updates section or Globals.
 
 - `agentica compile file.agc -o file.agcb` runs the front end and writes
   bytecode.
-- `agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] -- file.agcb [args...]`.
+- `agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]`.
   The option parser is hand written. It stops at the first non-option and honors
   `--`. Callers always pass `--` before the file, so an option after the file is
   a program argument. Option errors (a repeated option, an unknown switch, a
   missing or bad value, a bad `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and
   `--json` may both appear, and the last one wins.
+- `--source-root DIR` (once; DIR must be valid UTF-8, and "" does nothing) puts
+  `DIR/` before every source name of the program that is not `std/NAME.agc`,
+  once, right after the load, so diagnostics, stack traces, task crash lines and
+  test reports all print the joined name (the 256-byte cut of stack lines
+  applies to it). The `.agcb` stores names relative to the folder of the entry
+  file (4.6); `agentica` passes that folder as the user would type it, relative
+  to the working directory, unless the entry is in it. Without the option the
+  stored name prints. DIR is not normalized: an imported file above the root
+  prints as `DIR/../shared/x.agc`.
 - `--flush-timeout MS` sets the end-of-run wait for file close jobs and for the
   buffered output of stdout and stderr (10.2.2, End of run). The wait is always
   bounded: 30000 ms by default, and the environment variable

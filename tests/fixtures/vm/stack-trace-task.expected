@@ -7,7 +7,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"stack-trace-task.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":13,\"line\":2}},\"spawned_at\":{\"column\":10,\"file\":\"stack-trace-task.agc\",\"line\":12},\"stack\":[{\"column\":13,\"file\":\"stack-trace-task.agc\",\"function\":\"inner\",\"line\":2},{\"column\":10,\"file\":\"stack-trace-task.agc\",\"function\":\"worker\",\"line\":7}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/stack-trace-task.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":13,\"line\":2}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/stack-trace-task.agc\",\"line\":12},\"stack\":[{\"column\":13,\"file\":\"@fixtures/vm/stack-trace-task.agc\",\"function\":\"inner\",\"line\":2},{\"column\":10,\"file\":\"@fixtures/vm/stack-trace-task.agc\",\"function\":\"worker\",\"line\":7}],\"task\":true}",
     ""
   ]
 }

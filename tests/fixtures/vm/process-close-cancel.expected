@@ -9,7 +9,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"process-close-cancel.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":9},\"start\":{\"column\":16,\"line\":9}},\"spawned_at\":{\"column\":7,\"file\":\"process-close-cancel.agc\",\"line\":15},\"stack\":[{\"column\":16,\"file\":\"process-close-cancel.agc\",\"function\":\"parent\",\"line\":9}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-close-cancel.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":9},\"start\":{\"column\":16,\"line\":9}},\"spawned_at\":{\"column\":7,\"file\":\"@fixtures/vm/process-close-cancel.agc\",\"line\":15},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/process-close-cancel.agc\",\"function\":\"parent\",\"line\":9}],\"task\":true}",
     ""
   ]
 }

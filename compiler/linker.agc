@@ -9,7 +9,7 @@ import Modules from "modules"
 import Resolve from "resolve"
 import Rewrite from "rewrite"
 
-## One file of the linked program: its stored name (Paths.stored_name: the path from the root folder, which the bytecode keeps), its source text (for the help of the checker), its declarations with linked names and without exports, in the order of the file. first_id and next_id bound the node ids of the file (its imports and exports count too, so the declarations leave gaps).
+## One file of the linked program: its stored name (Paths.stored_name of the canonical key: the path from the root folder, which the bytecode keeps), its source text (for the help of the checker), its declarations with linked names and without exports, in the order of the file. first_id and next_id bound the node ids of the file (its imports and exports count too, so the declarations leave gaps).
 export struct LinkedModule
   key: String
   file: String
@@ -67,7 +67,7 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
     module = loaded.modules[key]
     cx = Resolve.Context(settings: settings, modules: loaded.modules, me: module, visible: visible_structs(module, loaded.modules))
     declarations = try Rewrite.rewrite_declarations(cx)
-    out = out.push(LinkedModule(key: key, file: module.file, name: Paths.stored_name(loaded.root_dir, module.file), prefix: module.prefix, first_id: module.first_id, next_id: Ast.next_free_id(module.program), text: module.text, declarations: declarations))
+    out = out.push(LinkedModule(key: key, file: module.file, name: Paths.stored_name(loaded.root_dir, key), prefix: module.prefix, first_id: module.first_id, next_id: Ast.next_free_id(module.program), text: module.text, declarations: declarations))
   end
   return ok(out)
 end

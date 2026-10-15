@@ -7,7 +7,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"task-sleep-negative.agc\",\"message\":\"sleep duration must be nonnegative\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":14,\"line\":2}},\"spawned_at\":{\"column\":14,\"file\":\"task-sleep-negative.agc\",\"line\":7},\"stack\":[{\"column\":14,\"file\":\"task-sleep-negative.agc\",\"function\":\"nap\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/task-sleep-negative.agc\",\"message\":\"sleep duration must be nonnegative\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":14,\"line\":2}},\"spawned_at\":{\"column\":14,\"file\":\"@fixtures/vm/task-sleep-negative.agc\",\"line\":7},\"stack\":[{\"column\":14,\"file\":\"@fixtures/vm/task-sleep-negative.agc\",\"function\":\"nap\",\"line\":2}],\"task\":true}",
     ""
   ]
 }

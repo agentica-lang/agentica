@@ -11,8 +11,6 @@ from tests.agentica_test import TESTS, TestCase, cli, report_cases, run, vm_envi
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
-# A runtime trace names a file by the path stored in the bytecode: relative to the folder of the entry file.
-HANDLERS_STORED = os.path.basename(HANDLERS)
 
 
 def code_of(item):
@@ -94,13 +92,13 @@ class Bdd(TestCase):
         assertion = results[0]["error"]
         self.assertEqual((assertion["file"], start_line(assertion)), (os.path.join(directory, "b.feature"), 3))
         crash = results[2]["error"]
-        self.assertEqual((crash["file"], start_line(crash)), (HANDLERS_STORED, 35))
+        self.assertEqual((crash["file"], start_line(crash)), (HANDLERS, 35))
         self.assertEqual(results[5]["error"]["actual"], '"missing definition"')
 
     def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(self):
         directory = self.suite({"crash.feature": "Feature: Crash\nScenario: runtime\nThen execution crashes\n"})
         feature = os.path.join(directory, "crash.feature")
-        place = HANDLERS_STORED + ":35:15"
+        place = HANDLERS + ":35:15"
         text = self.agentica_test(feature, "--steps", HANDLERS)
         self.assertEqual(text.code, 1)
         self.assertIn("[RUNTIME-DIVISION-BY-ZERO] division by zero\n  stack, innermost first:\n    crash at "

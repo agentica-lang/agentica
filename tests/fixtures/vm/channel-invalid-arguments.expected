@@ -3,21 +3,21 @@
   "code": null,
   "steps": 137,
   "stdout": [
-    "capacity 0: task crashed: RUNTIME-INVALID-COUNT at channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
+    "capacity 0: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
     "capacity 1: ok 1",
     "capacity 1048576: ok 1048576",
-    "capacity 1048577: task crashed: RUNTIME-INVALID-COUNT at channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
-    "capacity -5: task crashed: RUNTIME-INVALID-COUNT at channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
-    "send -1: task crashed: RUNTIME-INVALID-DURATION at channel-invalid-arguments.agc:8:14: channel timeout must be nonnegative",
-    "recv -1: task crashed: RUNTIME-INVALID-DURATION at channel-invalid-arguments.agc:14:11: channel timeout must be nonnegative",
+    "capacity 1048577: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
+    "capacity -5: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
+    "send -1: task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/channel-invalid-arguments.agc:8:14: channel timeout must be nonnegative",
+    "recv -1: task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/channel-invalid-arguments.agc:14:11: channel timeout must be nonnegative",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"spawned_at\":{\"column\":35,\"file\":\"channel-invalid-arguments.agc\",\"line\":26},\"stack\":[{\"column\":34,\"file\":\"channel-invalid-arguments.agc\",\"function\":\"make\",\"line\":2}],\"task\":true}",
-    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"spawned_at\":{\"column\":41,\"file\":\"channel-invalid-arguments.agc\",\"line\":29},\"stack\":[{\"column\":34,\"file\":\"channel-invalid-arguments.agc\",\"function\":\"make\",\"line\":2}],\"task\":true}",
-    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"spawned_at\":{\"column\":36,\"file\":\"channel-invalid-arguments.agc\",\"line\":30},\"stack\":[{\"column\":34,\"file\":\"channel-invalid-arguments.agc\",\"function\":\"make\",\"line\":2}],\"task\":true}",
-    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"channel-invalid-arguments.agc\",\"message\":\"channel timeout must be nonnegative\",\"range\":{\"end\":{\"column\":16,\"line\":8},\"start\":{\"column\":14,\"line\":8}},\"spawned_at\":{\"column\":32,\"file\":\"channel-invalid-arguments.agc\",\"line\":31},\"stack\":[{\"column\":14,\"file\":\"channel-invalid-arguments.agc\",\"function\":\"send_in\",\"line\":8}],\"task\":true}",
-    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"channel-invalid-arguments.agc\",\"message\":\"channel timeout must be nonnegative\",\"range\":{\"end\":{\"column\":13,\"line\":14},\"start\":{\"column\":11,\"line\":14}},\"spawned_at\":{\"column\":32,\"file\":\"channel-invalid-arguments.agc\",\"line\":32},\"stack\":[{\"column\":11,\"file\":\"channel-invalid-arguments.agc\",\"function\":\"recv_in\",\"line\":14}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"spawned_at\":{\"column\":35,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"line\":26},\"stack\":[{\"column\":34,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"function\":\"make\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"spawned_at\":{\"column\":41,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"line\":29},\"stack\":[{\"column\":34,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"function\":\"make\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"spawned_at\":{\"column\":36,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"line\":30},\"stack\":[{\"column\":34,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"function\":\"make\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel timeout must be nonnegative\",\"range\":{\"end\":{\"column\":16,\"line\":8},\"start\":{\"column\":14,\"line\":8}},\"spawned_at\":{\"column\":32,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"line\":31},\"stack\":[{\"column\":14,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"function\":\"send_in\",\"line\":8}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel timeout must be nonnegative\",\"range\":{\"end\":{\"column\":13,\"line\":14},\"start\":{\"column\":11,\"line\":14}},\"spawned_at\":{\"column\":32,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"line\":32},\"stack\":[{\"column\":11,\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"function\":\"recv_in\",\"line\":14}],\"task\":true}",
     ""
   ]
 }

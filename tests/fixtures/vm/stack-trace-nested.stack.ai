@@ -2,9 +2,9 @@ check failed: 1 error
 
 [RUNTIME-INDEX-OUT-OF-RANGE]
   message: index 5 is outside a list of length 3
-  at: stack-trace-nested.agc:2:13
+  at: @fixtures/vm/stack-trace-nested.agc:2:13
   source: return xs[i] + 1
   stack:
-    pick at stack-trace-nested.agc:2:13
-    load at stack-trace-nested.agc:6:10
-    main at stack-trace-nested.agc:11:8
+    pick at @fixtures/vm/stack-trace-nested.agc:2:13
+    load at @fixtures/vm/stack-trace-nested.agc:6:10
+    main at @fixtures/vm/stack-trace-nested.agc:11:8

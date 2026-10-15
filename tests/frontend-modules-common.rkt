@@ -59,8 +59,14 @@
         (substring text 0 (sub1 (string-length text)))
         text)))
 
+; The root file of a failure is named as given, links included, and the stored name is built from the canonical
+; file, as the key of every loaded file is.
 (define (display-path folder name)
-  (if (and folder (absolute-path? name)) (relative-source-name folder name) name))
+  (define canonical
+    (if (absolute-path? name)
+        (with-handlers ([exn:fail? (lambda (_) name)]) (path->string (normalize-path name)))
+        name))
+  (if (and folder (absolute-path? canonical)) (relative-source-name folder canonical) canonical))
 
 (define (file-name span)
   (source-name (source-span-source span)))

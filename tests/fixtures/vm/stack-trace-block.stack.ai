@@ -2,8 +2,8 @@ check failed: 1 error
 
 [RUNTIME-DIVISION-BY-ZERO]
   message: division by zero
-  at: stack-trace-block.agc:4:7
+  at: @fixtures/vm/stack-trace-block.agc:4:7
   source: 8 / x
   stack:
-    block at stack-trace-block.agc:4:7
-    main at stack-trace-block.agc:3:11
+    block at @fixtures/vm/stack-trace-block.agc:4:7
+    main at @fixtures/vm/stack-trace-block.agc:3:11

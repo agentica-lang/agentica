@@ -5,15 +5,15 @@
   "stdout": [
     "ok()",
     "ok()",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at channel-returned-order.agc:22:15: division by zero\")",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at channel-returned-order.agc:22:15: division by zero\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-returned-order.agc:22:15: division by zero\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-returned-order.agc:22:15: division by zero\")",
     "ok(1)",
     "ok(2)",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"channel-returned-order.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"spawned_at\":{\"column\":8,\"file\":\"channel-returned-order.agc\",\"line\":28},\"stack\":[{\"column\":15,\"file\":\"channel-returned-order.agc\",\"function\":\"parent\",\"line\":22}],\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"channel-returned-order.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"spawned_at\":{\"column\":8,\"file\":\"channel-returned-order.agc\",\"line\":29},\"stack\":[{\"column\":15,\"file\":\"channel-returned-order.agc\",\"function\":\"parent\",\"line\":22}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"spawned_at\":{\"column\":8,\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"line\":28},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"function\":\"parent\",\"line\":22}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"spawned_at\":{\"column\":8,\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"line\":29},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"function\":\"parent\",\"line\":22}],\"task\":true}",
     ""
   ]
 }

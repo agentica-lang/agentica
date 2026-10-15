@@ -36,16 +36,41 @@
       [(absolute-path? name) (relative-source-name folder name)]
       [else name])))
 
+;; The path of `name` from `folder`, both absolute. "." and ".." parts are
+;; folded first, so explode-path never yields 'up or 'same; any failure (a
+;; malformed path) keeps the name, so no exception leaves a stage.
 (define (relative-source-name folder name)
-  (define from (explode-path folder))
-  (define to (explode-path (string->path name)))
-  (define (common-length a b)
-    (if (and (pair? a) (pair? b) (equal? (car a) (car b)))
-        (add1 (common-length (cdr a) (cdr b)))
-        0))
-  (define shared (common-length from to))
-  (if (zero? shared)
-      name
-      (string-join (append (for/list ([_ (in-list (drop from shared))]) "..")
-                           (map path-element->string (drop to shared)))
-                   "/")))
+  (with-handlers ([exn:fail? (lambda (_) (if (path? name) (path->string name) name))])
+    (define from (explode-path (simplify-path folder #f)))
+    (define to (explode-path (simplify-path (if (path? name) name (string->path name)) #f)))
+    (define (common-length a b)
+      (if (and (pair? a) (pair? b) (equal? (car a) (car b)))
+          (add1 (common-length (cdr a) (cdr b)))
+          0))
+    (define shared (common-length from to))
+    (if (zero? shared)
+        (if (path? name) (path->string name) name)
+        (string-join (append (for/list ([_ (in-list (drop from shared))]) "..")
+                             (map path-element->string (drop to shared)))
+                     "/"))))
+
+;; The --source-root option of agentica-vm: the folder of the entry file as a
+;; user should type it, which the VM puts before the stored names it prints, so
+;; a runtime trace names a file the way a compile-time diagnostic does. It is
+;; relative to the working directory (built from the canonical folder, so the
+;; ".." names of an imported file stay right through symbolic links), or
+;; absolute when the entry was typed as an absolute path. "" when the entry is
+;; in the working directory.
+(provide source-root-option)
+
+(define (source-root-option entry)
+  (with-handlers ([exn:fail? (lambda (_) "")])
+    (define-values (folder _file _dir?) (split-path (normalize-path (path->complete-path entry))))
+    (define absolute (path->string (path->directory-path folder)))
+    (define text
+      (if (absolute-path? entry)
+          absolute
+          (relative-source-name (normalize-path (current-directory)) folder)))
+    (if (and (> (string-length text) 1) (string-suffix? text "/"))
+        (substring text 0 (sub1 (string-length text)))
+        text)))

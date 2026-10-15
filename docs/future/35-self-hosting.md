@@ -241,10 +241,21 @@ Notes:
     (Windows) stays absolute.
   - Compile-time diagnostics (plain, `--ai`, `--json`) print as before, from
     the front end's own source names: the entry file as written on the command
-    line, imported files by their canonical path. They are never stored. A
-    runtime diagnostic and its stack trace print the stored path, because the
-    VM reads only the `.agcb`: `agentica dir/main.agc` shows `main.agc:3:5`,
-    where it showed `dir/main.agc:3:5`.
+    line, imported files by their canonical path. They are never stored.
+  - Runtime diagnostics and stack traces read the stored names from the
+    `.agcb`, and `agentica` prints them as before for the entry file: it passes
+    `--source-root DIR` to the VM, where DIR is the folder of the entry file
+    seen from the working directory (built from the canonical folder, so `..`
+    names stay right through links; absolute when the entry was typed as an
+    absolute path; not passed when the entry is in the working directory).
+    The VM puts `DIR/` before every stored name that is not `std/NAME.agc`,
+    once, after the load (`vm/main.c`). So `agentica examples/hello.agc` shows
+    `examples/hello.agc:3:5`, as before, and an import shows
+    `examples/lib/util.agc` where it showed an absolute path.
+    `agentica test` passes the option for the step program and for each test
+    file too. `agentica-vm x.agcb` alone prints the stored names.
+  - The stored name of a file is built from its canonical path, so a link in
+    the way of the entry (a linked folder or file) changes nothing.
   - The text forms of `compiler/` print the stored path (`module "path"`,
     ` file="path"`), so the Racket oracle and the Agentica linker agree on
     the `..` case (`tests/frontend-modules-test.rkt`).

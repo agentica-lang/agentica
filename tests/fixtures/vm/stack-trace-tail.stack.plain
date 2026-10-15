@@ -1,9 +1,9 @@
-stack-trace-tail.agc:2:13 error[RUNTIME-DIVISION-BY-ZERO]
+@fixtures/vm/stack-trace-tail.agc:2:13 error[RUNTIME-DIVISION-BY-ZERO]
 division by zero
 
 2 |   return 10 / n
   |             ^
   = stack, innermost first:
-    leaf at stack-trace-tail.agc:2:13 (after a tail call)
-    run at stack-trace-tail.agc:10:10
-    main at stack-trace-tail.agc:14:8
+    leaf at @fixtures/vm/stack-trace-tail.agc:2:13 (after a tail call)
+    run at @fixtures/vm/stack-trace-tail.agc:10:10
+    main at @fixtures/vm/stack-trace-tail.agc:14:8

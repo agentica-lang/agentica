@@ -35,7 +35,7 @@
   (define bytecode (build-path work "program.agcb"))
   (compile-file (build-path fixtures (string-append name ".agc")) bytecode)
   (define result
-    (apply run-process vm-file #:timeout run-timeout (append extra options (list "--" (path->string bytecode)))))
+    (apply run-process vm-file #:timeout run-timeout (append extra options (list "--source-root" (path->string (path-only (simplify-path (build-path fixtures (string-append name ".agc"))))) "--" (path->string bytecode)))))
   (check-equal? (first result) 1 name)
   (string-replace (third result) fixtures-prefix "@fixtures/"))
 

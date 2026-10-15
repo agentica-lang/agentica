@@ -24,7 +24,7 @@
     "task 4: tick {\"worker\": \"12\", \"i\": \"2\"}",
     "task 7: about to crash {}",
     "boom handler for about to crash",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"logger-tasks.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":19,\"line\":47},\"start\":{\"column\":18,\"line\":47}},\"spawned_at\":{\"column\":13,\"file\":\"logger-tasks.agc\",\"line\":49},\"stack\":[{\"column\":18,\"file\":\"logger-tasks.agc\",\"function\":\"block\",\"line\":47},{\"column\":5,\"file\":\"std/logger.agc\",\"function\":\"dispatch\",\"line\":254},{\"column\":7,\"file\":\"std/logger.agc\",\"function\":\"err\",\"line\":78},{\"column\":3,\"file\":\"logger-tasks.agc\",\"function\":\"crasher\",\"line\":24}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/logger-tasks.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":19,\"line\":47},\"start\":{\"column\":18,\"line\":47}},\"spawned_at\":{\"column\":13,\"file\":\"@fixtures/vm/logger-tasks.agc\",\"line\":49},\"stack\":[{\"column\":18,\"file\":\"@fixtures/vm/logger-tasks.agc\",\"function\":\"block\",\"line\":47},{\"column\":5,\"file\":\"std/logger.agc\",\"function\":\"dispatch\",\"line\":254},{\"column\":7,\"file\":\"std/logger.agc\",\"function\":\"err\",\"line\":78},{\"column\":3,\"file\":\"@fixtures/vm/logger-tasks.agc\",\"function\":\"crasher\",\"line\":24}],\"task\":true}",
     "task 1: main goes on {}",
     "task 1: main logs an error {}",
     ""
