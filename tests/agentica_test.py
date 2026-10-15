@@ -100,8 +100,7 @@ class TestCase(unittest.TestCase):
     def make_suite(self, files, prefix="agentica-"):
         """A resolved temp dir holding the given files (name -> text); removed when the test ends."""
         directory = self.make_temp_dir(prefix).resolve()
-        for name, text in files.items():
-            (directory / name).write_text(text, encoding="utf-8")
+        write_files(directory, files)
         return directory
 
     def adopt(self, child):
@@ -336,6 +335,12 @@ def output_lines(text):
     if lines and lines[-1] == "":
         lines.pop()
     return lines
+
+
+def write_files(directory, files):
+    """Write each name -> text of `files` into `directory`, for a text that must name the directory first."""
+    for name, text in files.items():
+        (Path(directory) / name).write_text(text, encoding="utf-8")
 
 
 def report_cases(report):

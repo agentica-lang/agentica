@@ -13,7 +13,7 @@ import signal
 import time
 
 from tests.agentica_test import (TESTS, Child, TestCase, cli, process_alive, report_cases, run, slow, vm_environment,
-                                 wait_until)
+                                 wait_until, write_files)
 
 STREAM_SPEC = str(TESTS / "bdd" / "specs" / "json-lines.feature")
 
@@ -209,7 +209,9 @@ class BddIntegration(TestCase):
 
     @slow
     def test_programs_under_test_output_without_a_flush_wrong_output_the_output_limits_literal_input_and_the_working_directory(self):
-        directory = self.suite({
+        directory = self.suite({})
+        # The expected text names the directory, so the files are written after it exists.
+        write_files(directory, {
             "buffered.agc": BUFFERED_PROGRAM,
             "output.agc": OUTPUT_PROGRAM,
             "oversized.agc": 'def main() -> Void\n  puts(String.join(List.repeat("x", 1048576), ""))\nend\n',
