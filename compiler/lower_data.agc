@@ -150,11 +150,10 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
-# `target.with(f: v)`: the receiver goes to the first register of a window and the new values after it, in the order of
-# the struct's fields (the order of the update table of the bytecode), so one `struct-with` copies the receiver and
-# overwrites those fields. The receiver runs first, then the values in source order; the register a value lands in does
-# not depend on where it is written.
-## A struct update.
+## A struct update, `target.with(f: v)`: the receiver goes to the first register of a window and the new values after
+## it, in the order of the struct's fields (the order of the update table of the bytecode), so one `struct-with` copies
+## the receiver and overwrites those fields. The receiver runs first, then the values in source order; the register a
+## value lands in does not depend on where it is written.
 export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want: Int) -> Result[State.Out]
   span = node.span
   info = cx.structs[Types.name(State.type_of(cx, Ast.Expr.Update(node)))]

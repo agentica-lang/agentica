@@ -742,7 +742,7 @@ Notes:
   of `lower.agc`) on the deepest shapes and they still lower; with 8,000 the
   `if` chain overflows with `RUNTIME-STACK-OVERFLOW`, which shows that the burn
   works.
-- The Agentica lowering matches the Racket one on the 24 fixtures, the
+- The Agentica lowering matches the Racket one on the 26 fixtures, the
   examples, `tests/fixtures/vm/`, the `std/` modules and `compiler/` itself
   (the slow tier repeats all of them and the deep shapes). Same functions,
   registers, labels, spans, constants, structs and enums.

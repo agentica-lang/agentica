@@ -1,0 +1,1 @@
+ERROR CHECK-TYPE-MISMATCH 34:2:16-41:2:23 "expected Int, found String" "convert it with String.to_int!(...)" expected="Int" actual="String" signature="main() -> Void" file="error-check.agc"

@@ -3,9 +3,9 @@
 ## initialization order, `<start>` when the program has constant slots, then the blocks in the order they were found
 ## (docs/future/44-module-constants.md 44.7).
 ##
-## Recursion: lowering an expression or a statement takes at most about 6 VM frames for each level of the tree
-## (measured in the PR that added it), and the checker allows 1,000 levels (CHECK-TOO-DEEP), so it stays inside the
-## 10,000 frames of the VM. The scans that read the whole tree use a worklist and do not recurse.
+## Recursion: lowering an expression or a statement takes at most 3 VM frames for each level of the tree (most shapes
+## take 1 or 2, because many calls are tail calls), and the checker allows 1,000 levels (CHECK-TOO-DEEP), so it uses
+## about 3,000 of the 10,000 frames of the VM. The scans that read the whole tree use a worklist and do not recurse.
 
 import Ast from "ast"
 import Builtins from "builtins"
@@ -38,6 +38,13 @@ end
 struct LocatedConst
   file: String
   constant: Ast.ConstDecl
+end
+
+# The functions lowered so far, with the block functions their bodies made and the next free index of the table.
+struct Table
+  functions: List[Ir.Function]
+  blocks: Map[Int, Ir.Function]
+  block_count: Int
 end
 
 # What the scans of all the bodies give: one per function and constant, and the watched type names written anywhere,
@@ -80,7 +87,8 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
   tables = Program.build(catalog, decls, used, scanned.type_value)
   plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, checked.constants)
   start = plan.slots.size > 0
-  files = source_order(linked, functions, plan.kept, constants)
+  files_of = constant_files(constants)
+  files = source_order(linked, functions, plan.kept, files_of)
   index_of: Map[String, Int] = {}
   for file in files
     index_of = index_of.put(file, index_of.size)
@@ -111,31 +119,24 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
   if start
     table_size += 1
   end
-  built: List[Ir.Function] = []
-  blocks: Map[Int, Ir.Function] = {}
-  block_count = table_size
+  table = Table(functions: [], blocks: {}, block_count: table_size)
   for entry in functions
-    here = cx.with(file: entry.file, index: index_of[entry.file])
-    inner = Lowering.fresh(here.index, blocks, block_count)
     params = entry.function.params.map do |param: Ast.Param| param.name end
     function = entry.function
-    done = try Stmt.lower_function(here, inner, function.name, params, [], function.body, function.span, false)
-    built = built.push(done.function)
-    blocks = done.fx.blocks
-    block_count = done.fx.block_count
+    table = try add_function(
+      cx, table, entry.file, index_of[entry.file], function.name, params, function.body, function.span,
+    )
   end
   for entry in plan.kept
-    file = file_of_constant(constants, entry.name)
-    here = cx.with(file: file, index: index_of[file])
-    inner = Lowering.fresh(here.index, blocks, block_count)
+    file = files_of[entry.name]
     body = [Ast.Stmt.Return(Ast.Return(id: entry.id, value: Ast.Optional.Present(entry.value), span: entry.span))]
-    done = try Stmt.lower_function(here, inner, entry.name, [], [], body, entry.span, false)
-    built = built.push(done.function)
-    blocks = done.fx.blocks
-    block_count = done.fx.block_count
+    table = try add_function(cx, table, file, index_of[file], entry.name, [], body, entry.span)
   end
+  built = table.functions
+  blocks = table.blocks
+  block_count = table.block_count
   if start
-    built = built.push(start_function(linked.root.span, plan, constants, index_of, functions.size, main_index))
+    built = built.push(start_function(linked.root.span, plan, files_of, index_of, functions.size, main_index))
   end
   index = table_size
   while index < block_count
@@ -155,6 +156,21 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
     entry: entry,
     globals: plan.slots.size,
     span: linked.root.span
+  ))
+end
+
+# Lowers one function into a new table whose index is the next to fill, and adds the blocks it made.
+def add_function(
+  cx: Lowering.Cx, table: Table, file: String, index: Int, name: String, params: List[String], body: List[Ast.Stmt],
+  span: Source.Span
+) -> Result[Table]
+  here = cx.with(file: file, index: index)
+  inner = Lowering.fresh(index, table.blocks, table.block_count)
+  done = try Stmt.lower_function(here, inner, name, params, [], body, span, false)
+  return ok(Table(
+    functions: table.functions.push(done.function),
+    blocks: done.fx.blocks,
+    block_count: done.fx.block_count
   ))
 end
 
@@ -266,7 +282,7 @@ end
 # The files in the order src/lower.rkt first emits an instruction of each: the root, then the file of each function,
 # then of each kept constant.
 def source_order(
-  linked: Linker.Linked, functions: List[Located], kept: List[Ast.ConstDecl], constants: List[LocatedConst]
+  linked: Linker.Linked, functions: List[Located], kept: List[Ast.ConstDecl], files_of: Map[String, String]
 ) -> List[String]
   seen: Set[String] = Set.new([linked.modules[0].file])
   files: List[String] = [linked.modules[0].file]
@@ -277,7 +293,7 @@ def source_order(
     end
   end
   for decl in kept
-    file = file_of_constant(constants, decl.name)
+    file = files_of[decl.name]
     if !seen.include?(file)
       seen = seen.add(file)
       files = files.push(file)
@@ -286,13 +302,13 @@ def source_order(
   return files
 end
 
-def file_of_constant(constants: List[LocatedConst], name: String) -> String
+# The file each constant is declared in, by name.
+def constant_files(constants: List[LocatedConst]) -> Map[String, String]
+  files: Map[String, String] = {}
   for entry in constants
-    if entry.constant.name == name
-      return entry.file
-    end
+    files = files.put(entry.constant.name, entry.file)
   end
-  return ""
+  return files
 end
 
 # The source files in the order of files.
@@ -308,13 +324,13 @@ end
 # tail call of main. The loader wants a function to start with a step and to end with a return, so a `const` and a
 # `return` follow the tail call.
 def start_function(
-  span: Source.Span, plan: Const.Plan, constants: List[LocatedConst], index_of: Map[String, Int], declared: Int,
+  span: Source.Span, plan: Const.Plan, files_of: Map[String, String], index_of: Map[String, Int], declared: Int,
   main_index: Int
 ) -> Ir.Function
   body: List[Ir.Instr] = [Ir.instr("step", [], 0, [span])]
   offset = 0
   for decl in plan.kept
-    file = index_of[file_of_constant(constants, decl.name)]
+    file = index_of[files_of[decl.name]]
     body = body.push(Ir.instr("call", [0, declared + offset], file, [decl.span]))
     body = body.push(Ir.instr("global-set", [0, plan.slots[decl.name]], file, [decl.span]))
     offset += 1

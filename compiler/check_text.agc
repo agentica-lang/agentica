@@ -38,6 +38,10 @@ export def problem_text(root_dir: String, problem: Failure.Problem) -> String
   )
   if problem.labels.size > 0
     labels = problem.labels.map do |label: Failure.Label| Text.span_text(label.span) + " " + Text.quote(label.text) end
+    line = line + " labels=[" + labels.join(", ") + "]"
+  end
+  return line + " file=" + Text.quote(LinkText.stored(root_dir, problem.file))
+end
 
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
   case Checker.check(linked, settings.catalog)
