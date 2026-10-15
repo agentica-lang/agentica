@@ -96,11 +96,12 @@ py-test/%: FORCE
 	  exit $$status; \
 	else $(PYTHON) -m unittest $(call PY_MODULE,$*); fi
 
-# The tests that run the product command line, on dist/agentica alone (make test runs them too, with the rest): the
-# options, the diagnostics, the programs, `agentica test`, `agentica run`.
+# The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
+# diagnostics, the programs, `agentica test`, `agentica run`. test_single_binary.py compares with the Racket oracle, which
+# needs `build`: without it every run of racket src/main.rkt compiles the front end again. Step 8d-3 drops that.
 CLI_TESTS ?= tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
   tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
-test-cli: dist/agentica
+test-cli: build dist/agentica
 	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/dist/agentica" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
