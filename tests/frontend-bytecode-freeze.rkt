@@ -1,10 +1,11 @@
 #lang racket
 
 ; Freezes the live comparisons of tests/frontend-bytecode-test.rkt: the .agcb bytes of the Racket writer for the lowering
-; fixtures, examples/, tests/fixtures/vm/, every std/ module, the compiler, trees at the nesting limit and a program of 300
-; functions, the lines of the limit scenarios, and the opcode table. tests/test_frontend_bytecode.py compares the Agentica
-; writer with what is written here. Run by `make frontend-freeze`. A manifest line holds the hash of what a compile gives:
-; the line the runner prints and the hash of the file it writes (or `no file`).
+; fixtures, examples/, tests/fixtures/vm/, every std/ module, the compiler, trees at the nesting limit, a program of 300
+; functions, programs with spans past 65535, the lines of the limit scenarios, and the opcode table.
+; tests/test_frontend_bytecode.py compares the Agentica writer with what is written here. Run by `make frontend-freeze`.
+; A manifest line holds the hash of what a compile gives: the line the runner prints and the hash of the file it writes
+; (or `no file`).
 
 (require json
          "frontend-freeze-common.rkt"
@@ -65,6 +66,20 @@
                                               (cons (format "deep-~a" (car entry)) (cdr entry))))
                                       output-of)))))
 
+;; Programs with a line or a column past 65535, built as wide_span_programs in tests/frontend_cases.py: the Python test
+;; checks the hash of their text against the manifest.
+(define (write-wide-spans)
+  (call-with-temporary-folder
+   (lambda (dir)
+     (write-manifest "bytecode/wide-spans.sha256"
+                     (program-entries
+                      dir "wide"
+                      (list (cons "lines"
+                                  (string-append (make-string 65600 #\newline) "def main() -> Void\n  puts(\"x\")\nend\n"))
+                            (cons "columns"
+                                  (string-append "def main() -> Void\n  puts(\"" (make-string 65600 #\x) "\")\nend\n")))
+                      output-of)))))
+
 ;; The lines the Agentica fixture prints for its scenarios, as the Racket writer gives them.
 (define (write-limits)
   (define (lines constant)
@@ -107,4 +122,5 @@
   (write-limits)
   (write-corpus)
   (write-deep)
+  (write-wide-spans)
   (write-runs))

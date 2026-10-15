@@ -24,6 +24,7 @@ import argparse
 import difflib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -57,6 +58,13 @@ def run_stage(stage, fast_only):
         if log.exists():
             records = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line]
     return code, output, records
+
+
+def count_skips(output):
+    """(tests run, tests skipped) from the end of a unittest run, or (0, 0) when the summary is not there."""
+    ran = re.search(r"^Ran (\d+) tests? in ", output, re.MULTILINE)
+    skipped = re.search(r"^(?:OK|FAILED) \(.*\bskipped=(\d+)", output, re.MULTILINE)
+    return (int(ran.group(1)) if ran else 0, int(skipped.group(1)) if skipped else 0)
 
 
 def describe_entry(entry):
@@ -123,7 +131,15 @@ def main(arguments=None):
         for record in records:
             changed_files += 1
             print("\n".join(summarize(record, options.diff_lines)))
-        if not records:
+        ran, skipped = count_skips(output)
+        if skipped:
+            print("%d of %d tests were skipped (a tool the tests need is missing?); their goldens were not checked or "
+                  "rewritten" % (skipped, ran))
+        if ran and skipped == ran:
+            # An empty log would read as "nothing changed" while nothing ran, so this is a failure, not a clean stage.
+            failed = True
+            print("every test of %s was skipped, so this stage froze nothing" % stage)
+        elif not records:
             print("nothing changed")
         if code != 0:
             failed = True

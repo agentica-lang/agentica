@@ -82,3 +82,10 @@ class RefreezeTest(GoldenTestCase):
         for stage in refreeze.STAGES:
             self.assertTrue((Path(ROOT) / "tests" / ("test_frontend_%s.py" % stage)).exists(), stage)
         self.assertEqual(refreeze.parse_stages(["lexer,parser", "lexer"]), ["lexer", "parser"])
+
+    def test_a_stage_whose_tests_were_all_skipped_is_counted(self):
+        all_skipped = "sss\n" + "-" * 70 + "\nRan 3 tests in 0.001s\n\nOK (skipped=3)\n"
+        some_skipped = "Ran 5 tests in 1.0s\n\nFAILED (failures=1, skipped=2)\n"
+        self.assertEqual(refreeze.count_skips(all_skipped), (3, 3))
+        self.assertEqual(refreeze.count_skips(some_skipped), (5, 2))
+        self.assertEqual(refreeze.count_skips("Ran 4 tests in 1.0s\n\nOK\n"), (4, 0))

@@ -11,7 +11,7 @@ import json
 import re
 
 from tests.agentica_test import FIXTURES, ROOT, compile_agc, run_vm, slow, vm_environment
-from tests.frontend_cases import lower_deep_cases, lower_generated_program
+from tests.frontend_cases import lower_deep_cases, lower_generated_program, wide_span_programs
 from tests.frontend_support import FROZEN, StageTestCase, load_corpus, sections, sha256, write_files
 from tests.test_frontend_check import direct_files
 
@@ -155,6 +155,14 @@ class BytecodeFrozenTest(StageTestCase):
         self.assertTrue(any(re.match(r"ERROR CHECK-[A-Z-]+ ", line) for line in failures))
         self.assertTrue(any(line.startswith("ERROR CHECK-IMPORT-IO ") for line in failures))
         self.assertTrue(all(line.endswith("\nno file\n") for line in failures))
+
+    def test_spans_past_65535_are_written_with_the_bytes_of_the_racket_writer(self):
+        # A line or a column of 65536 or more takes the general branch of Bytes.u32 and of span_bytes, which the corpus
+        # never reaches. A file index of 65536 or more would need that many sources, which is not worth the time.
+        cases = wide_span_programs()
+        self.assertTrue(cases["lines"].count("\n") > 65535)
+        self.assertTrue(max(len(line) for line in cases["columns"].split("\n")) > 65535)
+        self.assert_manifest(self.compile_cases(cases, "wide"), "bytecode/wide-spans.sha256", cases)
 
     def test_the_vm_runs_the_agentica_file_as_it_runs_the_racket_file(self):
         files, paths = self.fast_paths()

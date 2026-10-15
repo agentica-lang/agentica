@@ -120,7 +120,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references
   testing.c       # Test builtins for unit tests (references/vm-tasks.md)
   fuzz.c          # agc_fuzz_one (references/vm-build.md)
   fuzz_main.c     # the mutation driver (references/vm-build.md)
-  tools/          # check-layers.sh and its self-test, gen-unicode.rkt, gen-embedded.sh (references/vm-build.md), refreeze.py (rewrites the frozen front-end goldens from the Agentica stages; references/frontend.md)
+  tools/          # check-layers.sh and its self-test, gen-unicode.rkt, gen-embedded.sh (references/vm-build.md)
   third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c with AGENTICA_GC=vendored (the Linux default links the system libgc)
   third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
   third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
@@ -216,6 +216,11 @@ stdlib/                 # std/ modules written in Agentica, embedded by src/stdl
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/bdd.md
   test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-channel record helpers, shared by unit tests and BDD
 examples/               # small programs per feature; examples/README.md lists them
+tools/
+  refreeze.py     # rewrites the frozen front-end goldens from the Agentica stages (references/frontend.md)
+  gen-lexer-unicode.rkt gen-builtins-data.rkt gen-check-tables.rkt  # generators of compiler/ tables (see the compiler/ entries)
+  agc-format.rkt  # shared by the generators: values and doc comments written within the [style] max_line_width
+  jscpd/          # the pinned copy-paste checker (make dup-check)
 docs/
   grammar.md   # index of the language grammar
   grammar/     # the language definition, one file per section; the source of truth

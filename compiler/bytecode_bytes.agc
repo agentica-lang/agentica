@@ -14,6 +14,9 @@ end
 
 ## The 4 bytes of a number in 0 .. 4294967295, low byte first.
 export def u32(number: Int) -> List[Int]
+  # The fast branch gives the same bytes as the general formula for 0 .. 65535 (the two high bytes are 0 there) and
+  # skips the arithmetic for them. Callers never pass a negative number (lines, columns, counts and ids are >= 0): a
+  # negative one would take the fast branch and give negative bytes.
   if number < 65536
     return [number % 256, number / 256, 0, 0]
   end
