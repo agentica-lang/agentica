@@ -4,10 +4,12 @@ Each case runs the CLI as a child (`agentica test --json ...`) and compares
 the JSON report: statuses, diagnostic codes, lines, and the text and --ai
 formats. tests/bdd/handlers.agc holds the shared step handlers.
 """
+import fcntl
 import json
 import os
+import unittest
 
-from tests.agentica_test import TESTS, TestCase, cli, report_cases, run, vm_environment
+from tests.agentica_test import ROOT, TESTS, TestCase, cli, report_cases, run, vm_binary, vm_environment
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
@@ -34,8 +36,8 @@ def main_running(*steps):
 
 
 class Bdd(TestCase):
-    def agentica_test(self, *args, env=None):
-        return run(cli() + ["test", *args], env=vm_environment(env))
+    def agentica_test(self, *args, env=None, cwd=None):
+        return run(cli() + ["test", *args], env=vm_environment(env), cwd=cwd)
 
     def json_test(self, *args):
         """Returns (exit code, parsed report); stderr must stay empty."""
@@ -237,10 +239,13 @@ class Bdd(TestCase):
         self.assertEqual(report["failed"], 1)
 
     def fake_vm(self, directory, script):
-        """A shell script that stands in for the VM (AGENTICA_VM) and prints the given stderr lines."""
+        """A shell script for AGENTICA_VM that is the VM of the runner only: it prints the given stderr lines when it
+        is asked to run the runner, and runs the real VM for anything else (the BDD driver is a program too)."""
         path = os.path.join(directory, "vm.sh")
         with open(path, "w") as vm:
-            vm.write("#!/bin/sh\n" + "".join("echo '%s' >&2\n" % line for line in script) + "exit 3\n")
+            vm.write("#!/bin/sh\ncase \"$*\" in\n*runner.agcb*)\n"
+                     + "".join("  echo '%s' >&2\n" % line for line in script)
+                     + "  exit 3 ;;\nesac\nexec '%s' \"$@\"\n" % vm_binary())
         os.chmod(path, 0o700)
         return {"AGENTICA_VM": path}
 
@@ -290,8 +295,92 @@ class Bdd(TestCase):
             status, report = self.json_test(*arguments)
             self.assertEqual(status, 2)
             self.assertEqual(file_error(report)["code"], "RUNTIME-BDD-INFRA")
+        # Without the VM nothing can run, not even the driver: a plain message, as `agentica file.agc` gives.
         for style in ("--json", "--ai"):
             result = self.agentica_test(style, path("a.feature"), env={"AGENTICA_VM": path("no-vm")})
             self.assertEqual(result.code, 2)
-            self.assertEqual(result.stderr, "")
-            self.assertRegex(result.stdout, "RUNTIME-BDD-INFRA")
+            self.assertEqual(result.stdout, "")
+            self.assertRegex(result.stderr, "cannot find the VM at .*no-vm")
+
+    def test_without_paths_specs_and_test_are_searched_and_the_empty_message_says_which_were_missing(self):
+        scratch = self.make_suite({"nothing.txt": ""}, "agentica-bdd-default-")
+        messages = []
+        for folder in (None, "specs"):
+            if folder:
+                os.mkdir(scratch / folder)
+            result = self.agentica_test("--json", cwd=scratch)
+            self.assertEqual(result.code, 1)
+            problem = file_error(json.loads(result.stdout))
+            self.assertEqual((problem["code"], problem["file"]), ("CHECK-BDD-EMPTY", str(scratch / "specs") + "/"))
+            messages.append(problem["message"])
+        self.assertEqual(messages, ["no .feature or *_test.agc files found: neither specs/ nor test/ exists",
+                                    "no .feature or *_test.agc files found"])
+
+    def test_a_report_of_several_mib_arrives_whole(self):
+        # The runner is a captured child, and a captured stream keeps 1 MiB: the report travels in a file instead.
+        names = ["case %d %s" % (number, "x" * 40000) for number in range(40)]
+        tests = ",\n".join('    Test.test("%s") do\n      Test.eq(1, 1)\n    end' % name for name in names)
+        directory = self.suite({"big_test.agc": "def main() -> Void\n  Test.run([\n%s,\n  ])\nend\n" % tests})
+        result = self.agentica_test("--json", directory)
+        self.assertEqual((result.code, result.stderr), (0, ""))
+        self.assertGreater(len(result.stdout), 1048576 + 400000)
+        report = json.loads(result.stdout)
+        self.assertEqual([item["name"] for item in report_cases(report)], names)
+
+    def test_a_later_run_removes_the_folders_of_ended_runs_and_keeps_live_linked_and_malformed_ones(self):
+        scratch = self.make_suite({"nothing.txt": ""}, "agentica-bdd-sweep-")
+        temporary = scratch / "tmp"
+        temporary.mkdir(0o700)
+        ended = temporary / "agentica-bdd-0123456789abcdef"
+        ended.mkdir()
+        (ended / "lock").write_text("")
+        (ended / "left.agcb").write_text("left behind")
+        live = temporary / "agentica-bdd-1123456789abcdef"
+        live.mkdir()
+        outside = scratch / "outside"
+        outside.mkdir()
+        (outside / "lock").write_text("keep")
+        os.symlink(outside, temporary / "agentica-bdd-fedcba9876543210")
+        (temporary / "agentica-bdd-00ff").mkdir()
+        (temporary / "agentica-bdd-new-0123").mkdir()
+        # A held lock is what tells a live run from an ended one.
+        with open(live / "lock", "w") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.agentica_test(scratch / "missing.feature", env={"TMPDIR": temporary}, cwd=scratch)
+        self.assertEqual(result.code, 2)
+        self.assertEqual(sorted(os.listdir(temporary)),
+                         ["agentica-bdd-00ff", "agentica-bdd-1123456789abcdef", "agentica-bdd-fedcba9876543210",
+                          "agentica-bdd-new-0123"])
+        self.assertEqual((outside / "lock").read_text(), "keep")
+
+    def test_the_temporary_directory_is_tmpdir_when_it_is_a_folder_else_a_system_one(self):
+        scratch = self.make_suite({"file": ""}, "agentica-bdd-tmpdir-")
+        os.mkdir(scratch / "empty")
+        for given in (scratch / "file", scratch / "missing", ""):
+            result = self.agentica_test("--json", scratch / "empty", env={"TMPDIR": given}, cwd=scratch)
+            self.assertEqual((result.code, json.loads(result.stdout)["files"][0]["error"]["code"]),
+                             (1, "CHECK-BDD-EMPTY"), str(given))
+        self.assertEqual(sorted(os.listdir(scratch)), ["empty", "file"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root can make folders anywhere")
+    def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error_that_names_it(self):
+        scratch = self.make_suite({"nothing.txt": ""}, "agentica-bdd-readonly-")
+        temporary = scratch / "tmp"
+        temporary.mkdir(0o500)
+        self.addCleanup(os.chmod, temporary, 0o700)
+        env = {"TMPDIR": temporary}
+        # The CLI cannot even write the driver's bytecode there, as for any program it runs.
+        result = self.agentica_test("--json", scratch / "missing.feature", env=env, cwd=scratch)
+        self.assertEqual((result.code, result.stdout), (2, ""))
+        self.assertRegex(result.stderr, "cannot write a temporary file in .*tmp")
+        # The driver on its own, as the CLI starts it, reports its failure to make a folder (16 tries) in the format
+        # of the report.
+        driver = ROOT / "dist" / "agentica-bdd-driver.agcb"
+        result = run([vm_binary(), "--allow-run", "--", driver, "--vm", vm_binary(), "--agentica", "agentica",
+                      "--style", "json", "--", scratch / "missing.feature"], env=vm_environment(env), cwd=scratch)
+        self.assertEqual((result.code, result.stderr), (2, ""))
+        problem = file_error(json.loads(result.stdout))
+        self.assertEqual(problem["code"], "RUNTIME-BDD-INFRA")
+        self.assertIn("cannot make a private directory in %s" % temporary, problem["message"])
+        self.assertIn("ermission denied", problem["message"])
+        self.assertEqual(os.listdir(temporary), [])
