@@ -1,0 +1,32 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 660258,
+  "stdout": [
+    "30",
+    "31",
+    "User(name: \"Ana\", age: 31, address: Address(city: \"Cusco\", zip: 1), tags: [], scores: {}, with: 0)",
+    "User(name: \"Ana\", age: 30, address: Address(city: \"Lima\", zip: 1), tags: [\"a\", \"b\"], scores: {}, with: 0)",
+    "Cusco",
+    "User(name: \"Zed\", age: 1, address: Address(city: \"Cusco\", zip: 1), tags: [], scores: {\"x\": 1}, with: 0)",
+    "0",
+    "5",
+    "eval receiver",
+    "eval age",
+    "eval tag",
+    "User(name: \"Beax\", age: 40, address: Address(city: \"Cusco\", zip: 1), tags: [\"1\"], scores: {}, with: 0)",
+    "1",
+    "30",
+    "User(name: \"Cy\", age: 2, address: Address(city: \"Cusco\", zip: 1), tags: [], scores: {}, with: 0)",
+    "[1, 2, 3]",
+    "[40, 41]",
+    "30000",
+    "449985000",
+    "30000",
+    "go",
+    "Ana",
+    "Dan",
+    ""
+  ],
+  "stderr": []
+}

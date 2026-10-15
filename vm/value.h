@@ -15,7 +15,7 @@
 
 #include "trace.h"
 
-#define AGC_FORMAT_VERSION 3
+#define AGC_FORMAT_VERSION 4
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
@@ -152,6 +152,7 @@ typedef enum {
   AGC_OP_MAP, AGC_OP_MAP_GET,
   AGC_OP_CALL_VALUE, AGC_OP_CLOSURE,
   AGC_OP_RANGE, AGC_OP_RANGE_BOUNDS,
+  AGC_OP_STRUCT_WITH,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -247,6 +248,14 @@ typedef struct {
   uint32_t *field_types;
 } agc_struct_def;
 
+/* One struct update (`value.with(...)`): the struct it applies to and the
+   fields it overwrites, strictly increasing and below that struct's field
+   count. The loader checks both, so STRUCT_WITH indexes without a bounds test. */
+typedef struct {
+  uint32_t type, count;
+  uint32_t *fields;
+} agc_update_def;
+
 typedef struct {
   agc_string *name;
   uint32_t first, count;
@@ -260,7 +269,7 @@ typedef struct {
 
 typedef struct {
   uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
-  uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity;
+  uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity, update_count;
   agc_source *sources;
   agc_span *spans;
   agc_value *constants;
@@ -268,6 +277,7 @@ typedef struct {
   agc_type *types;
   agc_enum_def *enums;
   agc_variant_def *variants;
+  agc_update_def *updates;
   const agc_builtin **builtins;
   agc_function *functions;
 } agc_program;

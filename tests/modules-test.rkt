@@ -306,6 +306,39 @@
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
        (check-regexp-match #rx"ok\\(value\\)" (diagnostic-help problem)))))
 
+  (test-case "a struct update follows the rules of construction across files"
+    ;; An exported struct can be updated by an importer; a module may update its own private structs.
+    (with-files
+     '(("lib.agc" . "export struct Box\n  label: String\n  size: Int\nend\n\nstruct Hidden\n  n: Int\nend\n\nexport def make() -> Box\n  return Box(label: \"a\", size: 1)\nend\n\nexport def grow(b: Box) -> Box\n  return b.with(size: b.size + 1)\nend\n\nexport def hidden() -> Hidden\n  return Hidden(n: 1).with(n: 2)\nend\n\n")
+       ("root.agc" . "import \"lib\" as Lib\n\ndef main() -> Void\n  b = Lib.make().with(label: \"b\")\n  puts(Lib.grow(b))\n  puts(Lib.hidden().n)\nend\n\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "Box(label: \"b\", size: 2)\n2\n")))
+    ;; A value of a struct the other module keeps private cannot be updated: the diagnostic of constructing it.
+    (with-files
+     '(("lib.agc" . "struct Hidden\n  n: Int\nend\n\nexport def hidden() -> Hidden\n  return Hidden(n: 1)\nend\n\n")
+       ("root.agc" . "import \"lib\" as Lib\n\ndef main() -> Void\n  h = Lib.hidden()\n  x = h.with(n: 2)\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 5)
+       (check-regexp-match #rx"private to its module" (diagnostic-message problem))))
+    ;; Importing a module that only passes the struct along is not enough: the importer needs the struct's own module.
+    (with-files
+     '(("a.agc" . "export struct P\n  n: Int\nend\n\n")
+       ("b.agc" . "import \"a\" as A\n\nexport def get() -> A.P\n  return A.P(n: 1)\nend\n\n")
+       ("root.agc" . "import \"b\" as B\n\ndef main() -> Void\n  x = B.get().with(n: 2)\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)))
+    ;; Alias.with(...) is a call of the module's function named with, not an update.
+    (with-files
+     '(("lib.agc" . "export def with(n: Int) -> Int\n  return n + 1\nend\n\n")
+       ("root.agc" . "import \"lib\" as Lib\n\ndef main() -> Void\n  puts(Lib.with(1))\nend\n\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "2\n"))))
+
   (test-case "cycles and dependency runtime failures retain original file spans"
     (with-files
      '(("root.agc" . "import \"a\" as A\ndef main() -> Void\nend\n\n")

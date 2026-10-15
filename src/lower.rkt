@@ -436,6 +436,7 @@
                          (if (named-arg? argument) (named-arg-value argument) argument))
                        span want)
            (lower-struct expression want))]
+      [(struct-update? expression) (lower-update expression want)]
       [(field-access? expression)
        (emit! 'step '() span)
        (define saved next)
@@ -651,6 +652,32 @@
                         (+ start (index-of fields (named-arg-name argument))))
       (set! next after))
     (emit! 'struct (list dst (if (null? fields) dst start) index) span)
+    (set! next (if want saved (add1 dst)))
+    dst)
+
+  ;; `target.with(f: v)`: the receiver goes to the first slot of a window and the new values after it,
+  ;; in the order of the struct's fields (the order the update table of the bytecode lists them), so
+  ;; one `struct-with` copies the receiver and overwrites those fields. The receiver runs first, then
+  ;; the values in source order; the slot a value lands in does not depend on where it is written.
+  (define (lower-update expression want)
+    (define span (struct-update-span expression))
+    (match-define (cons index fields) (hash-ref struct-info (cadr (static-type expression))))
+    (emit! 'step '() span)
+    (define saved next)
+    (define dst (target want))
+    (define window (alloc!))
+    (lower-expression (struct-update-target expression) window)
+    (define positions
+      (sort (for/list ([argument (in-list (struct-update-args expression))])
+              (index-of fields (named-arg-name argument)))
+            <))
+    (for ([_ (in-list positions)]) (alloc!))
+    (define after next)
+    (for ([argument (in-list (struct-update-args expression))])
+      (define rank (index-of positions (index-of fields (named-arg-name argument))))
+      (lower-expression (named-arg-value argument) (+ window 1 rank))
+      (set! next after))
+    (emit! 'struct-with (list dst window index positions) span)
     (set! next (if want saved (add1 dst)))
     dst)
 
@@ -979,7 +1006,8 @@
     [(and (memq op '(call tail-call closure)) (= index 1)) (format "fn~a" value)]
     [(and (eq? op 'call-value) (= index 1)) (format "~a" value)]
     [(and (memq op '(enum is-variant)) (= index 2)) (format "v~a" value)]
-    [(and (eq? op 'struct) (= index 2)) (format "s~a" value)]
+    [(and (memq op '(struct struct-with)) (= index 2)) (format "s~a" value)]
+    [(and (eq? op 'struct-with) (= index 3)) (format "[~a]" (string-join (map number->string value) " "))]
     [(and (memq op '(field payload)) (= index 2)) (format "~a" value)]
     [(and (memq op '(list map)) (= index 2)) (format "~a" value)]
     [(and (eq? op 'range) (= index 2)) (if (= value 1) "..." "..")]
