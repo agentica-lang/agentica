@@ -408,7 +408,7 @@
 
   (test-case "a wrong imported name suggests the closest export, never a private name"
     (for ([entry '(("  x = M.publc()\n" #rx"\"public\"")
-                   ("  x = M.Publik(a: 1)\n" #rx"\"Publik\"|\"Public\"")
+                   ("  x = M.Publik(a: 1)\n" #rx"\"Public\"")
                    ("  x: M.Publc = nil\n" #rx"\"Public\"")
                    ;; `hidden` and `Secret` exist but are private; `faraway` is not close to anything.
                    ("  x = M.hiden()\n" #f)
@@ -423,7 +423,15 @@
          (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 3)
          (if (cadr entry)
              (check-regexp-match (cadr entry) (diagnostic-help problem))
-             (check-false (diagnostic-help problem)))))))
+             (check-false (diagnostic-help problem))))))
+    ;; `ab` and `ac` are both one edit from `ad`; the tie goes to the smaller name.
+    (with-files
+     '(("module.agc" . "export def ac() -> Void\nend\n\nexport def ab() -> Void\nend\n\n")
+       ("root.agc" . "import \"module\" as M\ndef main() -> Void\n  M.ad()\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-regexp-match #rx"\"ab\"" (diagnostic-help problem)))))
 
   (test-case "the std/http and std/logger helps win over the generic suggestion, which works on std modules"
     (with-files
