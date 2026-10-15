@@ -315,7 +315,9 @@ class ModulesFrozenTest(StageTestCase):
     def test_corpus(self):
         directory = self.make_temp_dir()
         files = load_corpus("examples", "stdlib", "fixtures")
-        write_files(directory, files)
+        # tests/fixtures/frontend/limits/limits.agc imports ../../../../compiler/..., so the snapshot of compiler/ is
+        # written too, at the same place as in the repository, as the Racket writer had it. It is not a root.
+        write_files(directory, dict(files, **load_corpus("compiler")))
         outputs = self.link([(DEFAULT_ENV, path) for path in sorted(files)], directory)
         self.assert_manifest(outputs, "modules/corpus.sha256", files)
 
