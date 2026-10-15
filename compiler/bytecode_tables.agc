@@ -12,7 +12,7 @@ export FORMAT_VERSION = 5
 export MAX_TYPE_DEPTH = 1024
 
 ## The Agentica version the header names (src/version.rkt); the VM accepts only its own.
-export VERSION = "0.2.0"
+export VERSION = "0.3.0"
 
 ## The number of each opcode, in the order of `opcodes` in src/bytecode.rkt and `agc_opcode` in vm/value.h.
 export OPCODES = {

@@ -32,6 +32,7 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 
 ```sh
 make vm                                   # build dist/agentica-vm (git submodule update --init first)
+make bdd-driver                           # build dist/agentica-bdd-driver.agcb, what `agentica test` runs (make test does it)
 make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"  # .rkt: rackunit, .py: unittest
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
@@ -98,7 +99,7 @@ runs everything else (`references/ci.md`, "What CI runs").
 | `references/stages.md` | the token kinds, the diagnostic code list, the AST nodes, a module's public API (`source`, `lexer`, `parser`, `modules`, `checker`, `lower`, `bytecode`, `builtins`, `main`) |
 | `references/language-notes.md` | changing a core language rule: Result and `try`, collections, ranges, file modules, methods, interpolation, blocks, hints, enums, function values |
 | `references/library-notes.md` | changing a library area (stdio, JSON, tasks, TCP/TLS/HTTP, files and paths, processes, Int and Float bits, std/binary) or the comments and code style (line width, strings) of a `stdlib/` module |
-| `references/bdd.md` | `agentica test`: `src/bdd-driver.rkt`, `std/bdd`, `stdlib/test/`, step programs and their handler rules, unit test files |
+| `references/bdd.md` | `agentica test`: the driver `compiler/bdd.agc` and its hand-off `src/bdd-driver.rkt`, `std/bdd`, `stdlib/test/`, step programs and their handler rules, unit test files |
 | `references/vm.md` | any VM work: pipeline, layers, the rules every change keeps, and the index of the `vm-*.md` files |
 | `references/ci.md` | `.github/workflows/`, the Makefile, new VM files, peers or fixtures, jscpd, what CI runs, releases and `CHANGELOG.md` |
 | `references/site.md` | `site/`, or a language rule or builtin shown on a site page |
