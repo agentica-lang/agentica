@@ -17,7 +17,7 @@ or the part changes only VM code):
   under the freeze (row 7.2.7).
 
 No grammar change. 14c adds a `std/` module, the builtin record `LogEvent` and
-the builtin enum `LogLevel`, and a std-only builtin module of nine functions
+the builtin enum `LogLevel`, and a std-only builtin module of ten functions
 (`LogRegistry`); 14b changes only what the VM prints for a runtime diagnostic.
 
 ### 24.1 Today
@@ -210,7 +210,7 @@ reference to the registry, and only the Logger functions read or change it.
 `vm/` keeps its own rule that no `static` or global variable lives there, so the
 table is a field of the runtime (`docs/vm/10-io-multicore.md`). Its rules:
 
-- Nine native builtins in a std-only module, `LogRegistry`, read and write the
+- Ten native builtins in a std-only module, `LogRegistry`, read and write the
   table (below). None of them calls a handler. `Logger.log_meta` reads the
   handler list and calls each handler itself, in the logging task.
 - One scheduler runs today, so a table call does not interleave with another.
@@ -239,7 +239,7 @@ table is a field of the runtime (`docs/vm/10-io-multicore.md`). Its rules:
   add a handler function, and the flags need a change to `src/main.rkt` under
   the freeze.
 
-**Async handlers (planned, never the default).** A handler that is slow, such as
+**Async handlers (never the default).** A handler that is slow, such as
 one that writes a file or calls the network, can hand each event to a task that
 owns that work. The handler is a block that sends into a `Channel`. `main`
 starts the writer with `Task.spawn_owning`, so the writer owns the channel and
@@ -379,29 +379,34 @@ calendar, written in Agentica. With §41 it is
 `Time.format(Time.from_unix_ms(ms).unwrap!)`, one native call, and the log and
 the `Time` functions share one formatter.
 
-**Cost of a disabled call.** Each level function reads the level once and
-compares it once: `if LogRegistry.level() <= N`, where `N` is the rank of the
-level. The value `-1` (the default not yet installed) is below every threshold,
-so it takes the slow path, which installs the default and checks again. A
-disabled `debug` call is then one user call, one builtin read and one Int
-comparison. The rank of each level is a constant in the module. Agentica has no
-lazy arguments, so the message and any fields map are built before the call. A
-costly one goes inside `if Logger.enabled?(LogLevel.Debug)`, as in the example.
-Log calls are normal code, so they count against `--max-steps`. Measured by
+**Cost of a disabled call.** Each level function reads the floor once and
+compares it once: `if LogRegistry.floor() <= N`, where `N` is the rank of the
+level. The floor is the higher of the global level and the lowest handler rank
+(`LogRegistry.floor`, computed in C on each call; the tenth native function),
+so a call that no handler would accept is as cheap as a call below the global
+level. The value `-1` (the default not yet installed) is below every
+threshold, so it takes the slow path, which installs the default and checks
+the global level. A disabled `debug` call is then one user call, one builtin
+read and one Int comparison. The rank of each level is a constant in the
+module. Agentica has no lazy arguments, so the message and any fields map are
+built before the call. A costly one goes inside
+`if Logger.enabled?(LogLevel.Debug)`, as in the example. Log calls are normal
+code, so they count against `--max-steps`. Measured by
 `benchmarks/programs/logger-disabled.agc` (1,000,000 iterations, release VM, a
-loop with `total += i % 7`): the empty loop 176 ms, a loop that also calls an
-empty user function 244 ms, a loop that also calls a disabled `Logger.debug`
-358 ms. So a disabled call costs about 180 ms per million over the loop, an
-empty user call about 70 ms, and a builtin call about 70 ms: the target (a
-disabled call no more than an empty user call plus one builtin call) is met
-within the cost of the comparison and the `if`. Its Python twin, with
-`logging.debug` at level `INFO`, takes 283 ms against 82 ms for its loop.
+loop with `total += i % 7`): the empty loop 169 ms, a loop that also calls an
+empty user function 242 ms, a loop that also calls a `Logger.debug` below the
+global level 311 ms, and the same call with the global level at `debug` and
+only the `console` handler at `info` (no handler accepts it) 309 ms. So a
+disabled call costs about 140 ms per million over the loop, against about 70 ms
+for an empty user call: the target (no more than an empty user call plus one
+builtin call) is met. Its Python twin, with `logging.debug` at level `INFO`,
+takes 285 ms against 83 ms for its loop.
 
 **The freeze (row 7.2.7).** The Racket parts are data under row 7.2.7, which
 lists the same items:
 
-- nine rows in `src/builtins.rkt` for `LogRegistry`, each using an existing
-  checker rule tag or none, and their nine names in the `vm-builtins` list of
+- ten rows in `src/builtins.rkt` for `LogRegistry`, each using an existing
+  checker rule tag or none, and their ten names in the `vm-builtins` list of
   `src/lower.rkt`;
 - two entries in `src/builtin-types.rkt`: `LogEvent` in `builtin-records` and
   `LogLevel` in `builtin-enum-declarations`, and the name `LogEvent` in the
@@ -424,12 +429,15 @@ Not data: a new checker rule, tag or construction rule, and new syntax. The "did
 you mean" help for `CHECK-IMPORT-NAME` is not part of this PR. It is a separate
 small PR (D9) that only changes message text, which the freeze allows.
 
-**The stdlib registry and the VM table.** The nine native functions of
+**The stdlib registry and the VM table.** The ten native functions of
 `LogRegistry` are:
 
 ```text
 # -1 until the default is installed; then the global level's rank
 LogRegistry.level() -> Int
+# -1 until the default is installed; then the higher of the global level's
+# rank and the lowest handler rank (what a call must reach to find a handler)
+LogRegistry.floor() -> Int
 LogRegistry.set_level(rank: Int) -> Void
 # the lowest handler rank; 4 when no handler is attached
 LogRegistry.lowest() -> Int
@@ -458,7 +466,7 @@ decision above.
   formatters, `time_text`, the default install and the two built-in handlers.
   `LogEvent` and `LogLevel` are builtins, so the module declares neither. Every
   export has a `##` doc (`tests/stdlib-docs-test.rkt`).
-- `vm/builtin_tables.c`, `vm/services.h` and one new C file for the nine
+- `vm/builtin_tables.c`, `vm/services.h` and one new C file for the ten
   functions and the runtime field.
 - `src/builtin-types.rkt`, `src/builtins.rkt`, `src/lower.rkt`,
   `src/stdlib.rkt`, `src/checker.rkt` and `src/modules.rkt`: the data and the

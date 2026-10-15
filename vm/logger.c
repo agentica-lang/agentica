@@ -2,6 +2,8 @@
  * The LogRegistry builtins (agc_logger_builtins): the handler table and the
  * global level of std/logger, kept in vm->rt->log. None of them calls a
  * handler; stdlib/logger.agc does, in the task that logs. Service layer.
+ * The table is not locked: with tasks on several cores it needs a lock (the
+ * same one as the stderr buffer).
  * Design: docs/future/24-logging.md §24.2 and docs/vm/10-io-multicore.md §10.2.3.
  */
 #include "services.h"
@@ -31,6 +33,7 @@ static bool find(agc_vm *vm, const agc_string *name, size_t *at) {
   return false;
 }
 
+/* Only a detach needs the full scan: an append can only lower the minimum. */
 static void refresh_lowest(agc_log_registry *log) {
   int64_t lowest = AGC_LOG_NO_HANDLER;
   for (size_t i = 0; i < log->count; i++) {
@@ -51,13 +54,26 @@ static void append(agc_log_registry *log, agc_value name, int64_t rank, agc_valu
     log->cap = cap;
   }
   log->items[log->count++] = (agc_log_handler){name, handler, rank};
-  refresh_lowest(log);
+  if (rank < log->lowest) log->lowest = rank;
 }
 
 static agc_value builtin_level(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
   return agc_int(vm->rt->log.level);
+}
+
+/* The level a call needs to beat: -1 until the default is installed, then the
+ * higher of the global level and the lowest handler rank. A call below it
+ * reaches no handler, so a disabled call and a call that no handler accepts
+ * both cost one comparison. No handler gives AGC_LOG_NO_HANDLER, above every
+ * level. */
+static agc_value builtin_floor(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  const agc_log_registry *log = &vm->rt->log;
+  if (log->level < 0) return agc_int(-1);
+  return agc_int(log->level > log->lowest ? log->level : log->lowest);
 }
 
 static agc_value builtin_set_level(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -81,7 +97,8 @@ static agc_value builtin_install_default(agc_vm *vm, agc_value *args, uint32_t s
   (void)agc_as_fn(vm, args[0]);
   if (log->level != -1) return agc_void();
   agc_string *name = agc_make_string("console", 7, 7);
-  append(log, agc_string_value(name), DEFAULT_RANK, args[0]);
+  size_t at;
+  if (!find(vm, name, &at)) append(log, agc_string_value(name), DEFAULT_RANK, args[0]);
   log->level = DEFAULT_RANK;
   return agc_void();
 }
@@ -144,13 +161,14 @@ static agc_value builtin_task_id(agc_vm *vm, agc_value *args, uint32_t span) {
 
 const agc_builtin agc_logger_builtins[] = {
   {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"LogRegistry.set_level", 1, builtin_set_level, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"LogRegistry.install_default", 1, builtin_install_default, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.attach", 3, builtin_attach, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.detach", 1, builtin_detach, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.names", 0, builtin_names, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.handlers", 1, builtin_handlers, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"LogRegistry.attach", 3, builtin_attach, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"LogRegistry.detach", 1, builtin_detach, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"LogRegistry.names", 0, builtin_names, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"LogRegistry.handlers", 1, builtin_handlers, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"LogRegistry.task_id", 0, builtin_task_id, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 

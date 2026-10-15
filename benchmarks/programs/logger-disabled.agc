@@ -37,6 +37,16 @@ def main() -> Void
   end
   disabled = Time.monotonic_ms() - started
 
-  IO.warn("#{calls} iterations: empty loop #{empty} ms, empty user call #{user_call} ms, disabled Logger.debug #{disabled} ms")
+  Logger.set_level(LogLevel.Debug)
+  started = Time.monotonic_ms()
+  i = 0
+  while i < calls
+    Logger.debug("message")
+    total += i % 7
+    i += 1
+  end
+  unaccepted = Time.monotonic_ms() - started
+
+  IO.warn("#{calls} iterations: empty loop #{empty} ms, empty user call #{user_call} ms, disabled Logger.debug #{disabled} ms, debug that no handler accepts #{unaccepted} ms")
   puts("logger-disabled #{calls}: checksum #{total}")
 end

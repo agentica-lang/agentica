@@ -181,4 +181,4 @@ end
 - The handlers and the global level live in the VM and belong to one run. A child started with `Process.spawn` has its own.
 - There are no flags and no per-task metadata: pass `fields` on each call.
 - Default parameter values do not exist yet, so each level has two functions.
-- Log calls are normal code and count against `--max-steps`. A disabled call costs one function call, one builtin call and one comparison.
+- Log calls are normal code and count against `--max-steps`. A call below the global level, or one that no handler accepts, costs one function call, one builtin call and one comparison.

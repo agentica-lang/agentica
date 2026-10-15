@@ -90,7 +90,7 @@ needs it.
   - The `std/logger` registry (`log` in the runtime, built in `vm/logger.c`,
     `docs/future/24-logging.md` §24.2): the global level, the lowest handler
     rank and an array of (name, rank, handler) in the GC heap, reached only by
-    the nine `LogRegistry` builtins. It is the language's one piece of global
+    the ten `LogRegistry` builtins. It is the language's one piece of global
     mutable state and is a field of the runtime, not a `static`. With N>1 it
     needs a lock, the same lock as the stderr buffer; the multicore PR owns that
     change. `install_default` is one native call, so the check for level -1 and

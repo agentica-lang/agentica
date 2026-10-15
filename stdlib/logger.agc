@@ -66,12 +66,14 @@ def dispatch(level: LogLevel, rank: Int, message: String, fields: Map[String, St
   end
 end
 
-# A level function reads the level once and compares it once: -1 (the default not installed yet) is below every
-# threshold, so it takes the slow path, and a disabled call costs one user call, one builtin call and one comparison.
+# A level function reads the floor once and compares it once. The floor is the higher of the global level and the
+# lowest handler level, so a call that no handler would accept is as cheap as a disabled one: one user call, one
+# builtin call and one comparison. -1 (the default not installed yet) is below every threshold, so it takes the slow
+# path, where ready() installs the default and the real global level is checked.
 
 ## Logs a `debug` message.
 export def debug(message: String) -> Void
-  if LogRegistry.level() <= 0
+  if LogRegistry.floor() <= 0
     if ready() <= 0
       dispatch(LogLevel.Debug, 0, message, {})
     end
@@ -80,7 +82,7 @@ end
 
 ## Logs a `debug` message with fields.
 export def debug_meta(message: String, fields: Map[String, String]) -> Void
-  if LogRegistry.level() <= 0
+  if LogRegistry.floor() <= 0
     if ready() <= 0
       dispatch(LogLevel.Debug, 0, message, fields)
     end
@@ -89,7 +91,7 @@ end
 
 ## Logs an `info` message.
 export def info(message: String) -> Void
-  if LogRegistry.level() <= 1
+  if LogRegistry.floor() <= 1
     if ready() <= 1
       dispatch(LogLevel.Info, 1, message, {})
     end
@@ -98,7 +100,7 @@ end
 
 ## Logs an `info` message with fields.
 export def info_meta(message: String, fields: Map[String, String]) -> Void
-  if LogRegistry.level() <= 1
+  if LogRegistry.floor() <= 1
     if ready() <= 1
       dispatch(LogLevel.Info, 1, message, fields)
     end
@@ -107,7 +109,7 @@ end
 
 ## Logs a `warning` message.
 export def warning(message: String) -> Void
-  if LogRegistry.level() <= 2
+  if LogRegistry.floor() <= 2
     if ready() <= 2
       dispatch(LogLevel.Warning, 2, message, {})
     end
@@ -116,7 +118,7 @@ end
 
 ## Logs a `warning` message with fields.
 export def warning_meta(message: String, fields: Map[String, String]) -> Void
-  if LogRegistry.level() <= 2
+  if LogRegistry.floor() <= 2
     if ready() <= 2
       dispatch(LogLevel.Warning, 2, message, fields)
     end
@@ -125,7 +127,7 @@ end
 
 ## Logs an `error` message. The function is `err` because `error` is a reserved name; the output still says `error`.
 export def err(message: String) -> Void
-  if LogRegistry.level() <= 3
+  if LogRegistry.floor() <= 3
     if ready() <= 3
       dispatch(LogLevel.Error, 3, message, {})
     end
@@ -134,7 +136,7 @@ end
 
 ## Logs an `error` message with fields.
 export def err_meta(message: String, fields: Map[String, String]) -> Void
-  if LogRegistry.level() <= 3
+  if LogRegistry.floor() <= 3
     if ready() <= 3
       dispatch(LogLevel.Error, 3, message, fields)
     end
@@ -200,23 +202,33 @@ export def stderr_json(event: LogEvent) -> Void
 end
 
 # JSON.encode(s) is the quoted, escaped text, so it equals "\"" + s + "\"" exactly when s has no quote, backslash
-# or control character (DEL included).
+# or control character (DEL included). The three line breaks above are not escaped by it, so they are checked apart.
 def plain?(text: String) -> Bool
-  return text.length > 0 and !text.contains?("=") and JSON.encode(text) == "\"" + text + "\""
+  return text.length > 0 and !text.contains?("=") and !line_break?(text) and JSON.encode(text) == "\"" + text + "\""
+end
+
+# JSON.encode leaves U+0085, U+2028 and U+2029 as they are, but splitlines() and some viewers break lines there.
+# Escaping them keeps one event on one line.
+def one_line(text: String) -> String
+  return text.replace(String.from_code(133), "\\u0085").replace(String.from_code(8232), "\\u2028").replace(String.from_code(8233), "\\u2029")
+end
+
+def line_break?(text: String) -> Bool
+  return text.contains?(String.from_code(133)) or text.contains?(String.from_code(8232)) or text.contains?(String.from_code(8233))
 end
 
 def message_token(message: String) -> String
   if plain?(message) and !message.starts_with?(" ") and !message.ends_with?(" ")
     return message
   end
-  return JSON.encode(message)
+  return one_line(JSON.encode(message))
 end
 
 def field_token(text: String) -> String
   if plain?(text) and !text.contains?(" ")
     return text
   end
-  return JSON.encode(text)
+  return one_line(JSON.encode(text))
 end
 
 ## Returns the text line of an event: `TIME LEVEL MESSAGE key=value ...`, with the time in UTC.
@@ -231,16 +243,8 @@ end
 
 ## Returns the JSON line of an event: the keys `time`, `level`, `msg`, `fields` and `task`. The fields are nested, so a field named `level` never clashes with a fixed key.
 export def format_json(event: LogEvent) -> String
-  return JSON.encode(JsonLine(time: time_text(event.time_ms), level: level_name(event.level), msg: event.message,
-                              fields: event.fields, task: event.task))
-end
-
-def floor_div(a: Int, b: Int) -> Int
-  q = a / b
-  if q * b > a
-    return q - 1
-  end
-  return q
+  return one_line(JSON.encode(JsonLine(time: time_text(event.time_ms), level: level_name(event.level), msg: event.message,
+                                       fields: event.fields, task: event.task)))
 end
 
 def pad(n: Int, width: Int) -> String
@@ -254,11 +258,19 @@ end
 ## Returns milliseconds since the Unix epoch as UTC text, such as `2026-10-12T10:15:02.345Z`.
 ## A year outside 0 to 9999 is written with its sign and at least four digits.
 export def time_text(ms: Int) -> String
-  days = floor_div(ms, 86400000)
-  rest = ms - days * 86400000
+  # Floor division written so that no intermediate product leaves the Int range, even at Int.min.
+  days = ms / 86400000
+  rest = ms % 86400000
+  if rest < 0
+    days -= 1
+    rest += 86400000
+  end
   # Days to a calendar date by eras of 400 years, counted from 0000-03-01 so the leap day ends the year.
   z = days + 719468
-  era = floor_div(z, 146097)
+  era = z / 146097
+  if z % 146097 < 0
+    era -= 1
+  end
   doe = z - era * 146097
   yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
   doy = doe - (365 * yoe + yoe / 4 - yoe / 100)

@@ -217,7 +217,7 @@
                       "HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
                       "HttpWire.read_request" "HttpWire.write_response" "HttpWire.server" "HttpWire.accept"
                       "HttpWire.spawn" "HttpWire.close_server" "HttpWire.wait" "HttpWire.local_port"
-                      "LogRegistry.level" "LogRegistry.set_level" "LogRegistry.lowest"
+                      "LogRegistry.level" "LogRegistry.floor" "LogRegistry.set_level" "LogRegistry.lowest"
                       "LogRegistry.install_default" "LogRegistry.attach" "LogRegistry.detach"
                       "LogRegistry.names" "LogRegistry.handlers" "LogRegistry.task_id"
                       "Process.spawn_captured" "Process.output" "Task.pending_count"

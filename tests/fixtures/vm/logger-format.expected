@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 13878,
+  "steps": 15697,
   "stdout": [
     "2025-10-15T10:15:02.345Z ERROR to stdout k=v",
     "{\"time\":\"2025-10-15T10:15:02.345Z\",\"level\":\"error\",\"msg\":\"to stdout\",\"fields\":{\"k\":\"v\"},\"task\":7}",
@@ -36,6 +36,8 @@
     "{\"time\":\"2025-10-15T10:15:02.345Z\",\"level\":\"info\",\"msg\":\"tab\\there\",\"fields\":{},\"task\":7}",
     "2025-10-15T10:15:02.345Z INFO \"del\\u007fchar\"",
     "{\"time\":\"2025-10-15T10:15:02.345Z\",\"level\":\"info\",\"msg\":\"del\\u007fchar\",\"fields\":{},\"task\":7}",
+    "2025-10-15T10:15:02.345Z INFO \"next\\u0085line\\u2028and\\u2029more\" \"k\\u2028\"=\"v\\u0085\"",
+    "{\"time\":\"2025-10-15T10:15:02.345Z\",\"level\":\"info\",\"msg\":\"next\\u0085line\\u2028and\\u2029more\",\"fields\":{\"k\\u2028\":\"v\\u0085\"},\"task\":7}",
     "2025-10-15T10:15:02.345Z INFO café 世界",
     "{\"time\":\"2025-10-15T10:15:02.345Z\",\"level\":\"info\",\"msg\":\"café 世界\",\"fields\":{},\"task\":7}",
     "2025-10-15T10:15:02.345Z INFO fields in map order z=1 a=2 m=3",

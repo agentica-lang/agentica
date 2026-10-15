@@ -5,12 +5,6 @@
 
 (provide link-program load-program)
 
-(define std-only-imports
-  (hash "HttpWire" '("std/http" . "HTTP") "LogRegistry" '("std/logger" . "Logger")))
-
-(define (std-only-import module)
-  (hash-ref std-only-imports module))
-
 (define (file-span path)
   (source-span (source (path->string (path->complete-path path)) "")
                (source-position 0 1 1) (source-position 0 1 1)))
@@ -187,9 +181,13 @@
               (define declaration (hash-ref (hash-ref exports target) member #f))
               (unless declaration
                 (bail 'CHECK-IMPORT-NAME "unknown or private imported name" span
-                      #:help (and (equal? target "std/http.agc")
-                                  (memv (string->symbol member) '(respond begin write write_bytes finish))
-                                  "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))")))
+                      #:help (cond
+                               [(and (equal? target "std/http.agc")
+                                     (memv (string->symbol member) '(respond begin write write_bytes finish)))
+                                "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"]
+                               [(and (equal? target "std/logger.agc") (equal? member "error"))
+                                "the function for the error level is Logger.err; error is a reserved name"]
+                               [else #f])))
               (unless (case kind
                         [(type) (or (struct-decl? declaration) (enum-decl? declaration))]
                         [(enum) (enum-decl? declaration)]
@@ -198,7 +196,7 @@
               (identity target member)]
              [(and (std-only-name? name) (not (string? key)))
               (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span
-                    #:help (let ([import (std-only-import alias)])
+                    #:help (let ([import (hash-ref std-only-imports alias)])
                              (format "~a is internal to ~a; use import \"~a\" as ~a"
                                      alias (car import) (car import) (cdr import))))]
              ;; Unknown calls belong to the checker, including misspelled

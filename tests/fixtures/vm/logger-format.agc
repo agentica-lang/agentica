@@ -24,6 +24,7 @@ def main() -> Void
   show(event(LogLevel.Info, "two\nlines", none))
   show(event(LogLevel.Info, "tab\there", none))
   show(event(LogLevel.Info, "del" + String.from_code(127) + "char", none))
+  show(event(LogLevel.Info, "next" + String.from_code(133) + "line" + String.from_code(8232) + "and" + String.from_code(8233) + "more", {"k" + String.from_code(8232): "v" + String.from_code(133)}))
   show(event(LogLevel.Info, "café 世界", none))
   show(event(LogLevel.Info, "fields in map order", {"z": "1", "a": "2", "m": "3"}))
   show(event(LogLevel.Info, "keys that look like fixed keys", {"level": "x", "msg": "y", "time": "z", "task": "9"}))

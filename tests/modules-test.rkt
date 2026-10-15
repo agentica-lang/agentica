@@ -422,7 +422,9 @@
     (with-files
      '(("root.agc" . "import \"std/logger\" as Logger\ndef main() -> Void\n  Logger.error(\"x\")\nend\n\n"))
      (lambda (directory)
-       (check-equal? (diagnostic-code (checked (build-path directory "root.agc"))) 'CHECK-IMPORT-NAME)))
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-regexp-match #rx"Logger\\.err" (diagnostic-help problem))))
     (with-files
      '(("root.agc" . "import \"std/logger\" as Logger\ndef main() -> Void\n  Logger.err(\"x\")\n  level: LogLevel = Logger.level()\n  event = LogEvent(level: level, message: \"m\", fields: {}, time_ms: 0, task: 1)\n  Logger.stderr_text(event)\nend\n\n"))
      (lambda (directory)
