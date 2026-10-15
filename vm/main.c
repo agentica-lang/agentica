@@ -7,33 +7,21 @@
  * line, loads a .agcb file, runs it and maps the outcome to an exit code.
  * The design is in docs/vm/README.md.
  */
-#ifdef _WIN32
-#define _CRT_RAND_S
-#endif
 #include "core.h"
+#include "launch.h"
 #include "services.h"
 #include "tls.h"
 
 #include <errno.h>
 #include <fcntl.h>
-#include <signal.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <time.h>
-
-#ifdef __linux__
-#include <sys/prctl.h>
-#include <sys/random.h>
-#endif
 
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
 
 #define file_stat _fstat64
-#define TRACE_OPEN (_O_WRONLY | _O_APPEND | _O_CREAT | _O_NOINHERIT | _O_BINARY)
-#define TRACE_MODE (_S_IREAD | _S_IWRITE)
 
 typedef struct _stat64 file_info;
 
@@ -42,8 +30,6 @@ static wchar_t **wide_args; // NOLINT(cppcoreguidelines-avoid-non-const-global-v
 #include <unistd.h>
 
 #define file_stat fstat
-#define TRACE_OPEN (O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW)
-#define TRACE_MODE 0600
 
 typedef struct stat file_info;
 #endif
@@ -82,225 +68,6 @@ static void remove_input(int index, const char *path, const file_info *info) {
 }
 #endif
 
-#ifndef _WIN32
-static bool urandom_entropy(uint8_t *out, size_t len) {
-  int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
-  if (fd < 0) return false;
-  size_t done = 0;
-  while (done < len) {
-    ssize_t n = read(fd, out + done, len - done);
-    if (n < 0 && errno == EINTR) continue;
-    if (n <= 0) break;
-    done += (size_t)n;
-  }
-  close(fd);
-  return done == len;
-}
-#endif
-
-#ifdef __linux__
-static bool os_entropy(uint8_t *out, size_t len) {
-  size_t done = 0;
-  while (done < len) {
-    ssize_t n = getrandom(out + done, len - done, 0);
-    if (n < 0 && errno == EINTR) continue;
-    if (n <= 0) return urandom_entropy(out, len);
-    done += (size_t)n;
-  }
-  return true;
-}
-#elif defined(_WIN32)
-static bool os_entropy(uint8_t *out, size_t len) {
-  for (size_t k = 0; k < len; k++) {
-    unsigned int x;
-    if (rand_s(&x) != 0) return false;
-    out[k] = (uint8_t)x;
-  }
-  return true;
-}
-#else
-static bool os_entropy(uint8_t *out, size_t len) { return urandom_entropy(out, len); }
-#endif
-
-static uint64_t entropy_seed(void) {
-  uint8_t bytes[8];
-  if (!os_entropy(bytes, sizeof bytes)) {
-    struct timespec ts = {0};
-    if (timespec_get(&ts, TIME_UTC) != TIME_UTC) return 0;
-    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
-  }
-  uint64_t seed = 0;
-  for (unsigned k = 0; k < 8; k++) seed |= (uint64_t)bytes[k] << (8 * k);
-  return seed;
-}
-
-static void seed_map_hash(agc_vm *vm) {
-  uint8_t key[16];
-  if (!os_entropy(key, sizeof key)) return;
-  uint64_t k0 = 0, k1 = 0;
-  for (unsigned k = 0; k < 8; k++) {
-    k0 |= (uint64_t)key[k] << (8 * k);
-    k1 |= (uint64_t)key[8 + k] << (8 * k);
-  }
-  vm->rt->hash_key[0] = k0;
-  vm->rt->hash_key[1] = k1;
-}
-
-#ifdef __linux__
-static bool bind_to_driver(int64_t driver) {
-  signal(SIGTERM, SIG_DFL);
-  if (prctl(PR_SET_PDEATHSIG, SIGTERM) != 0) return false;
-  return (int64_t)getppid() == driver;
-}
-#else
-static bool bind_to_driver(int64_t driver) {
-  (void)driver;
-  return true;
-}
-#endif
-
-static bool flush_stream(FILE *stream) {
-  while (fflush(stream) != 0) {
-    if (errno != EINTR) return false;
-    clearerr(stream);
-  }
-  return true;
-}
-
-static void flush_files(agc_vm *vm) {
-  if (setjmp(vm->fail) == 0) {
-    agc_io_flush_files(vm);
-    return;
-  }
-  const agc_outcome *o = &vm->rt->outcome;
-  agc_notice notice;
-  agc_print_flush_failed(agc_notice_begin(&vm->rt->err, &notice), o->code, o->message, o->message_len, vm->rt->style);
-  agc_notice_end(&notice, AGC_NOTICE_FINAL);
-}
-
-static void print_outcome(agc_vm *vm, const agc_outcome *outcome, agc_notice_mode mode) {
-  agc_notice notice;
-  agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, outcome, vm->rt->style, false);
-  agc_notice_end(&notice, mode);
-}
-
-static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
-  if (setjmp(vm->fail) == 0) print_outcome(vm, outcome, AGC_NOTICE_KEPT);
-}
-
-/* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
-   then standard output and the files, then the exit. Nothing else is
-   drained: the OS frees descriptors and memory. */
-static int end_run(agc_vm *vm, agc_outcome outcome) {
-  agc_processes_stop(vm);
-  agc_io_children_stopped();
-  agc_io_goodbye(vm);
-  bool stdout_ok = flush_stream(stdout);
-  flush_stream(stderr);
-  if (outcome.kind == AGC_FAILED) announce_outcome(vm, &outcome);
-  flush_files(vm);
-  agc_files_close(vm);
-  stdout_ok = stdout_ok && !agc_output_failed(&vm->rt->out);
-  if (vm->rt->flush_expired) {
-    agc_notice notice;
-    agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->style);
-    agc_notice_end(&notice, AGC_NOTICE_FINAL);
-  }
-  const char *write_error = NULL;
-  if (outcome.kind != AGC_FAILED && !agc_io_stop_signal()) {
-    if (!stdout_ok || !flush_stream(stdout))
-      write_error = "cannot write to standard output";
-    else if (agc_output_failed(&vm->rt->err))
-      write_error = "cannot write to standard error";
-  }
-  if (write_error) {
-    outcome.kind = AGC_FAILED;
-    outcome.code = "RUNTIME-INTERNAL";
-    outcome.message = write_error;
-    outcome.message_len = strlen(outcome.message);
-    outcome.span = 0;
-    outcome.stack.shown = false;
-    print_outcome(vm, &outcome, AGC_NOTICE_FINAL);
-  }
-  int code = 0;
-  if (outcome.kind == AGC_FAILED) {
-    code = 1;
-  } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
-    code = (int)outcome.exit_code;
-  }
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, agc_io_stop_signal());
-  flush_stream(stdout);
-  flush_stream(stderr);
-#ifdef __linux__
-  sigset_t saved;
-  agc_io_block_stop(&saved);
-  int sig = agc_io_stop_signal();
-  if (sig) {
-    signal(sig, SIG_DFL);
-    pthread_sigmask(SIG_SETMASK, &saved, NULL);
-    raise(sig);
-  }
-  _exit(code);
-#else
-  return code;
-#endif
-}
-
-#ifdef _WIN32
-static int private_trace_fd(int fd) { return fd; }
-#else
-static int private_trace_fd(int fd) {
-  struct stat info;
-  if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != geteuid()) {
-    close(fd);
-    return -1;
-  }
-  if (fd > 2) return fd;
-  int moved = fcntl(fd, F_DUPFD_CLOEXEC, 3);
-  close(fd);
-  return moved;
-}
-#endif
-
-#ifdef __linux__
-static void fill_standard_fds(void) {
-  for (int fd = 0; fd <= 2; fd++) {
-    if (fcntl(fd, F_GETFD) != -1 || errno != EBADF) continue;
-    int opened = open("/dev/null", fd == 0 ? O_WRONLY : O_RDONLY);
-    if (opened < 0 || opened == fd) continue;
-    dup2(opened, fd);
-    close(opened);
-  }
-}
-#endif
-
-static void start_trace(agc_trace *trace) {
-  const char *names = getenv("AGENTICA_VM_TRACE");
-  const char *path = getenv("AGENTICA_VM_TRACE_FILE");
-  int fd = 2;
-  if (AGC_TRACE_BUILD && names && *names && path && *path) {
-    fd = open(path, TRACE_OPEN, TRACE_MODE);
-    if (fd >= 0) fd = private_trace_fd(fd);
-    if (fd < 0) {
-      agc_trace_message(2, "cannot open", path, strlen(path), false);
-      names = NULL;
-      fd = 2;
-    }
-  }
-  agc_trace_parse(trace, names, fd);
-}
-
-static agc_value program_args(int argc, char **argv, int first) {
-  size_t n = first < argc ? (size_t)(argc - first) : 0;
-  agc_list_builder b;
-  agc_list_builder_sized(&b, n);
-  for (size_t k = 0; k < n; k++) {
-    const char *arg = argv[(size_t)first + k];
-    agc_list_builder_push(&b, agc_string_value(agc_utf8_decode((const uint8_t *)arg, strlen(arg), "?", true)));
-  }
-  return agc_list_value(agc_list_builder_finish(&b));
-}
-
 static const char usage[] =
   "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] "
   "[--source-root DIR] -- <file.agcb> [args...]\n"
@@ -310,45 +77,6 @@ static const char usage[] =
 static int usage_error(void) {
   fputs(usage, stderr);
   return 2;
-}
-
-static bool once(bool *seen, const char *option) {
-  if (*seen) {
-    fprintf(stderr, "agentica-vm: the %s option can only be specified once\n", option);
-    return false;
-  }
-  *seen = true;
-  return true;
-}
-
-static bool parse_count(const char *text, int64_t *count) {
-  if (!*text) return false;
-  int64_t value = 0;
-  bool clamped = false;
-  for (const char *c = text; *c; c++) {
-    if (*c < '0' || *c > '9') return false;
-    if (!clamped && (__builtin_mul_overflow(value, 10, &value) || __builtin_add_overflow(value, *c - '0', &value)))
-      clamped = true;
-  }
-  if (clamped) value = INT64_MAX;
-  *count = value;
-  return true;
-}
-
-static bool parse_flush(const char *text, int64_t *ms) { return parse_count(text, ms) && *ms <= AGC_FLUSH_TIMEOUT_MAX_MS; }
-
-static bool parse_steps(const char *text, int64_t *steps) { return parse_count(text, steps) && *steps > 0; }
-
-static bool parse_seed(const char *text, uint32_t *seed) {
-  if (!*text) return false;
-  uint64_t value = 0;
-  for (const char *c = text; *c; c++) {
-    if (*c < '0' || *c > '9') return false;
-    value = value * 10 + (uint64_t)(*c - '0');
-    if (value > 2147483647u) return false;
-  }
-  *seed = (uint32_t)value;
-  return true;
 }
 
 static uint8_t *read_file(int index, const char *path, bool driven, size_t *len) {
@@ -361,179 +89,62 @@ static uint8_t *read_file(int index, const char *path, bool driven, size_t *len)
     return NULL;
   }
   if (driven) remove_input(index, path, &info);
-  size_t size = (size_t)info.st_size;
-  uint8_t *data = agc_alloc_atomic(size);
-  size_t done = 0;
-  while (done < size) {
-    ssize_t n = read(fd, data + done, size - done);
-    if (n < 0 && errno == EINTR) continue;
-    if (n <= 0) break;
-    done += (size_t)n;
-  }
-  close(fd);
-  if (done != size) return NULL;
-  *len = size;
+  uint8_t *data = agc_launch_read(fd, (size_t)info.st_size);
+  if (data) *len = (size_t)info.st_size;
   return data;
 }
 
+static void print_version(void) {
+  unsigned gc = agc_gc_version();
+  const char *uv = agc_uv_version();
+  const char *ssl = agc_tls_version();
+  const char *trace = AGC_TRACE_BUILD ? "" : ", trace off";
+  if (gc)
+    printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s%s%s%s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF,
+           agc_json_version(), uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "", ssl ? ssl : "", trace);
+  else
+    printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s%s%s%s%s%s)\n", AGC_VERSION, agc_json_version(),
+           uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "", ssl ? ssl : "", trace);
+}
+
 static int run(int argc, char **argv) {
-#ifdef SIGPIPE
-  signal(SIGPIPE, SIG_IGN);
-#endif
-  agc_init();
-  agc_file_ids inherited = agc_files_inherited();
-  int64_t max_steps = INT64_MAX;
-  agc_style style = AGC_STYLE_PLAIN;
-  int64_t driver = 0, flush_timeout = AGC_FLUSH_TIMEOUT_MS;
-  uint32_t seed = 0;
-  const char *source_root = "";
-  size_t source_root_chars = 0;
-  bool seen_root = false;
-  bool seen_flush = false, seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false, seen_seed = false, allow_run = false;
+  agc_launch launch;
+  agc_launch_init(&launch);
+  agc_launch_options options;
   int i = 1;
-  while (i < argc) {
-    const char *arg = argv[i];
-    if (strcmp(arg, "--") == 0) {
-      i++;
-      break;
-    }
-    if (strcmp(arg, "--version") == 0) {
-      unsigned gc = agc_gc_version();
-      const char *uv = agc_uv_version();
-      const char *ssl = agc_tls_version();
-      const char *trace = AGC_TRACE_BUILD ? "" : ", trace off";
-      if (gc)
-        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s%s%s%s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF,
-               gc & 0xFF, agc_json_version(), uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "",
-               ssl ? ssl : "", trace);
-      else
-        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s%s%s%s%s%s)\n", AGC_VERSION, agc_json_version(),
-               uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "", ssl ? ssl : "", trace);
-      return fflush(stdout) == 0 ? 0 : 1;
-    }
-    if (strcmp(arg, "--ai") == 0 || strcmp(arg, "--json") == 0) {
-      bool json = arg[2] == 'j';
-      if (!once(json ? &seen_json : &seen_ai, arg)) return 2;
-      style = json ? AGC_STYLE_JSON : AGC_STYLE_AI;
-      i++;
-      continue;
-    }
-    if (strcmp(arg, "--allow-run") == 0) {
-      if (!once(&allow_run, arg)) return 2;
-      i++;
-      continue;
-    }
-    if (strcmp(arg, "--max-steps") == 0) {
-      if (!once(&seen_steps, arg)) return 2;
-      if (i + 1 >= argc || !parse_steps(argv[i + 1], &max_steps)) {
-        fputs("agentica-vm: --max-steps needs a positive integer\n", stderr);
-        return 2;
-      }
-      i += 2;
-      continue;
-    }
-    if (strcmp(arg, "--seed") == 0) {
-      if (!once(&seen_seed, arg)) return 2;
-      if (i + 1 >= argc || !parse_seed(argv[i + 1], &seed)) {
-        fputs("agentica-vm: --seed needs an integer from 0 to 2147483647\n", stderr);
-        return 2;
-      }
-      i += 2;
-      continue;
-    }
-    if (strcmp(arg, "--flush-timeout") == 0) {
-      if (!once(&seen_flush, arg)) return 2;
-      if (i + 1 >= argc || !parse_flush(argv[i + 1], &flush_timeout)) {
-        fputs("agentica-vm: --flush-timeout needs an integer from 0 to 86400000\n", stderr);
-        return 2;
-      }
-      i += 2;
-      continue;
-    }
-    if (strcmp(arg, "--source-root") == 0) {
-      if (!once(&seen_root, arg)) return 2;
-      if (i + 1 >= argc || strcmp(argv[i + 1], "--") == 0 ||
-          !agc_utf8_chars((const uint8_t *)argv[i + 1], strlen(argv[i + 1]), &source_root_chars)) {
-        fputs("agentica-vm: --source-root needs a folder name in UTF-8\n", stderr);
-        return 2;
-      }
-      source_root = argv[i + 1];
-      i += 2;
-      continue;
-    }
-    if (strcmp(arg, "--driver-pid") == 0) {
-      if (!once(&seen_driver, arg)) return 2;
-      if (i + 1 >= argc || !parse_steps(argv[i + 1], &driver)) {
-        fputs("agentica-vm: --driver-pid needs a positive integer\n", stderr);
-        return 2;
-      }
-      i += 2;
-      continue;
-    }
-    if (arg[0] == '-' && arg[1] != '\0') {
-      fprintf(stderr, "agentica-vm: unknown option %s\n", arg);
-      return 2;
-    }
-    break;
+  agc_launch_status status = agc_launch_parse("agentica-vm", argc, argv, &i, &options);
+  if (status == AGC_LAUNCH_VERSION) {
+    print_version();
+    return fflush(stdout) == 0 ? 0 : 1;
   }
+  if (status == AGC_LAUNCH_BAD) return 2;
   if (i >= argc) return usage_error();
   const char *path = argv[i];
-  const char *flush_env = getenv("AGENTICA_FLUSH_TIMEOUT_MS");
-  int64_t env_timeout = 0;
-  if (flush_env && !parse_flush(flush_env, &env_timeout)) {
-    fputs("agentica-vm: AGENTICA_FLUSH_TIMEOUT_MS needs an integer from 0 to 86400000\n", stderr);
-    return 2;
-  }
-  if (flush_env && !seen_flush) flush_timeout = env_timeout;
+  if (!agc_launch_flush_env("agentica-vm", &options)) return 2;
 
-  if (seen_driver && !bind_to_driver(driver)) {
+  if (options.seen_driver && !agc_launch_bind(options.driver)) {
     fputs("agentica-vm: --driver-pid does not match the parent process\n", stderr);
     return 2;
   }
-  agc_trace trace;
-  start_trace(&trace);
+  agc_launch_trace(&launch);
   size_t len = 0;
-  uint8_t *data = read_file(i, path, seen_driver, &len);
+  uint8_t *data = read_file(i, path, options.seen_driver, &len);
   if (!data) {
     fprintf(stderr, "agentica-vm: cannot read %s\n", path);
     return 2;
   }
   agc_program *program = NULL;
   char error[160];
-  if (!agc_load_traced(data, len, &program, error, sizeof error, &trace)) {
+  if (!agc_load_traced(data, len, &program, error, sizeof error, &launch.trace)) {
     fprintf(stderr, "agentica-vm: invalid bytecode: %s\n", error);
     return 2;
   }
-  if (!agc_program_set_source_root(program, source_root, source_root_chars)) {
+  if (!agc_program_set_source_root(program, options.source_root, options.source_root_chars)) {
     fputs("agentica-vm: --source-root is too long for this program\n", stderr);
     return 2;
   }
-
-  bool own_uring_env = agc_io_init();
-  agc_vm *vm = agc_alloc(sizeof(agc_vm));
-  agc_vm_init(vm, program, stdout, stderr, max_steps);
-  vm->rt->trace = trace;
-  vm->rt->style = style;
-  vm->rt->flush_timeout = flush_timeout;
-  vm->rt->allow_run = allow_run;
-  vm->rt->drop_uring_env = own_uring_env;
-  vm->rt->inherited = inherited;
-  seed_map_hash(vm);
-  agc_files_init(vm);
-  const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");
-  vm->rt->no_turn_cost = no_turn_cost && strcmp(no_turn_cost, "1") == 0;
-  vm->rt->seed = seen_seed ? seed : entropy_seed();
-  agc_random_seed(&vm->main->random, vm->rt->seed);
-  vm->rt->args = program_args(argc, argv, i + 1);
-  agc_parent_take(vm);
-  agc_input_open(vm, 0, isatty(1));
-  const char *blocking_output = getenv("AGENTICA_VM_TEST_BLOCKING_OUTPUT");
-  if (!blocking_output || strcmp(blocking_output, "1") != 0) {
-    agc_output_open(vm, &vm->rt->out, 1);
-    agc_output_open(vm, &vm->rt->err, 2);
-  }
-  agc_io_watch_stop(vm, seen_driver ? driver : 0);
-  return end_run(vm, agc_vm_run(vm));
+  agc_vm *vm = agc_launch_vm(&launch, program, &options, agc_launch_args(argc, argv, i + 1), NULL);
+  agc_launch_end(vm, agc_vm_run(vm));
 }
 
 #ifdef _WIN32
@@ -555,10 +166,5 @@ int wmain(int argc, wchar_t **wide_argv) {
   return run(argc, argv);
 }
 #else
-int main(int argc, char **argv) {
-#ifdef __linux__
-  fill_standard_fds();
-#endif
-  return run(argc, argv);
-}
+int main(int argc, char **argv) { return run(argc, argv); }
 #endif

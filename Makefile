@@ -454,7 +454,7 @@ $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
 VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
 VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(GC_LINK) $(VM_LDFLAGS)
 
-dist/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK_LIBS) $(VM_STAMP)
+dist/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_OBJ)/launch.o $(VM_LINK_LIBS) $(VM_STAMP)
 	@mkdir -p dist
 	$(VM_LINK) $(VM_ENTRY)
 
@@ -481,7 +481,7 @@ vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)
 	$(FUZZ_CORPUS) tests/fixtures/vm/*.agc
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
-$(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK_LIBS) $(VM_STAMP)
+$(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_OBJ)/launch.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK) $(VM_ENTRY)
 
 vm-gc-stress: build

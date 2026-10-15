@@ -10,8 +10,8 @@ cd "$(dirname "$0")/.."
 core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c channel.c loop.c input.c output.c random.c loader.c builtins.c diag.c trace.c"
 services="strings.c numbers.c json.c json_typed.c files.c tree.c stream.c duplex.c process.c tcp.c http_fields.c http_client.c http_server.c logger.c testing.c front_end.c"
 adapters="tls_openssl.c http_pico.c http_body.c"
-driver="main.c builtin_tables.c fuzz.c fuzz_main.c"
-headers="value.h port.h core.h services.h net.h http_fields.h tls.h http_parse.h trace.h list_impl.h"
+driver="main.c launch.c agentica.c builtin_tables.c fuzz.c fuzz_main.c"
+headers="value.h port.h core.h services.h net.h http_fields.h tls.h http_parse.h trace.h list_impl.h launch.h embedded.h"
 memory="agc_alloc agc_alloc_atomic agc_size_add agc_size_mul agc_out_of_memory"
 inc='^\s*#\s*include\s*["<](\./)?'
 found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 1; }; [ "$s" -eq 0 ]; }
@@ -43,6 +43,8 @@ chain http_fields.h services.h http_parse.h
 chain tls.h
 chain http_parse.h
 chain trace.h
+chain launch.h port.h
+chain embedded.h
 if found -n "$inc(services|net|tls|http_parse|http_fields)\.h" $core; then bad "a core file includes a service or adapter header"; fi
 if found -n "${inc}core\.h" $services $adapters; then bad "a service or adapter includes core.h"; fi
 if found -n "$inc(port|services|net|http_fields)\.h" $adapters; then bad "an adapter includes the port or a service header"; fi
