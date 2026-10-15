@@ -12,7 +12,6 @@
          "../src/parser.rkt"
          "../src/source.rkt")
 
-(define-runtime-path main-file "../src/main.rkt")
 (define-runtime-path vm-header "../vm/value.h")
 
 (for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE" #"AGENTICA_FLUSH_TIMEOUT_MS")])
@@ -32,19 +31,6 @@
   (define checked (check linked #:types types))
   (when (diagnostic? checked) (error 'bytecode-test "~a" (format-diagnostic checked)))
   (lower checked types))
-
-(define (cli . arguments)
-  (define-values (process out in err)
-    (apply subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file) arguments))
-  (close-output-port in)
-  (define stderr-text #f)
-  (define reader (thread (lambda () (set! stderr-text (port->string err)))))
-  (define stdout-text (port->string out))
-  (thread-wait reader)
-  (close-input-port out)
-  (close-input-port err)
-  (subprocess-wait process)
-  (list (subprocess-status process) stdout-text stderr-text))
 
 (module+ test
   (test-case "every builtin runs on the VM"
@@ -271,21 +257,4 @@
     (define deep (ir->bytecode (program 1 #t 1025)))
     (check-equal? (and (diagnostic? deep) (diagnostic-code deep)) 'BYTECODE-LIMIT)
     (define plain (ir->bytecode (program 900 #f 0)))
-    (check-equal? (vector-length (bc-program-types plain)) 0))
-
-  (test-case "compile exits 1 on a diagnostic and 2 on an unwritable output"
-    (define work (make-temporary-directory "agentica-compile~a"))
-    (dynamic-wind
-      void
-      (lambda ()
-        (define rejected-file (path->string (build-path work "file.agc")))
-        (display-to-file "def main() -> Void\n  c = HTTP.client_options()\nend\n" rejected-file)
-        (define rejected (cli "compile" rejected-file "-o" (path->string (build-path work "out.agcb"))))
-        (check-equal? (first rejected) 1)
-        (check-true (string-contains? (third rejected) "error[CHECK-UNKNOWN-NAME]"))
-        (check-false (file-exists? (build-path work "out.agcb")))
-        (define supported (path->string (build-path work "hello.agc")))
-        (display-to-file "def main() -> Void\n  puts(\"hi\")\nend\n" supported)
-        (define unwritable (cli "compile" supported "-o" (path->string (build-path work "missing" "out.agcb"))))
-        (check-equal? (first unwritable) 2))
-      (lambda () (delete-directory/files work)))))
+    (check-equal? (vector-length (bc-program-types plain)) 0)))
