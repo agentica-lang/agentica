@@ -177,10 +177,11 @@ def reject(problem: Problems.Problem, settings: Env.Settings, file: String) -> V
     refuse(problem.message)
   end
   shown = problem
-  if is_root?(problem.file, file)
+  root = is_root?(problem.file, file)
+  if root
     shown = problem.with(file: file)
   end
-  IO.warn(Plain.format(shown, source_text(problem.file, settings)))
+  IO.warn(Plain.format(shown, source_text(problem.file, root, settings)))
   System.exit(1)
 end
 
@@ -192,12 +193,14 @@ def is_root?(named: String, typed: String) -> Bool
   return real.ok? and real.unwrap! == named
 end
 
-def source_text(file: String, settings: Env.Settings) -> String
-  text = text_of(SourceFile.read(file, Env.io_timeout()))
-  if text == "" and file.starts_with?("std/")
+# The text that the lines of a message come from. A std/ module is not a file of the working folder: it goes straight
+# to the provider of the settings (the stdlib/ folder or the binary), even when the folder has a std/ of its own. A
+# file with bytes that are not UTF-8 shows them as U+FFFD, as Racket does.
+def source_text(file: String, root: Bool, settings: Env.Settings) -> String
+  if !root and file.starts_with?("std/")
     return text_of(Resolve.read_source(settings, file))
   end
-  return text
+  return text_of(SourceFile.read_shown(file, Env.io_timeout()))
 end
 
 def text_of(read: SourceFile.Read) -> String
