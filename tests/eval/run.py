@@ -44,11 +44,11 @@ DEFAULT_IMAGE = "agentica-eval:local"
 
 
 def build() -> None:
-    subprocess.run(["make", "exe"], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["make"], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
     runtime = ROOT / "dist" / "runtime"
     shutil.rmtree(runtime, ignore_errors=True)
-    subprocess.run(["raco", "distribute", str(runtime), str(ROOT / "dist" / "agentica")], check=True)
-    shutil.copy2(ROOT / "dist" / "agentica-vm", runtime / "bin" / "agentica-vm")
+    (runtime / "bin").mkdir(parents=True)
+    shutil.copy2(ROOT / "dist" / "agentica", runtime / "bin" / "agentica")
 
 
 def clone_rootfs(template: Path, destination: Path) -> Path:
@@ -710,11 +710,11 @@ def main() -> int:
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--chroot-root", type=Path,
                         help="prepared minimal Firejail root filesystem; its glibc must run the host-built "
-                             "dist/agentica-vm (as new as the host's, or newer)")
+                             "dist/agentica (as new as the host's, or newer)")
     parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
                         help="pass one provider-auth environment variable to the agent; repeat as needed")
     parser.add_argument("--sandbox", choices=["docker", "firejail"], default="docker",
-                        help="firejail runs the host-built agentica-vm on the chroot's glibc")
+                        help="firejail runs the host-built agentica on the chroot's glibc")
     parser.add_argument("--image", default=DEFAULT_IMAGE, help="Docker image; the default is built when missing")
     parser.add_argument("--summarize", metavar="RESULTS_DIR")
     parser.add_argument("--check-references", action="store_true",
@@ -740,7 +740,7 @@ def main() -> int:
         validate_sandbox(args.chroot_root, args.agent, typed)
     if not args.no_build:
         build()
-    if not all((ROOT / "dist" / "runtime" / "bin" / name).is_file() for name in ("agentica", "agentica-vm")):
+    if not (ROOT / "dist" / "runtime" / "bin" / "agentica").is_file():
         raise SystemExit("dist/runtime is missing; rerun without --no-build")
     image_info: dict[str, str | None] = {"checker": None, "image_id": None}
     if args.sandbox == "docker":
