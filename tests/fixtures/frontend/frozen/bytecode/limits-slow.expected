@@ -1,0 +1,4 @@
+structs-ok ok 906481 9883663
+types-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many JSON field types for the VM
+updates-ok ok 1573038 165796840
+updates-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many struct updates for the VM

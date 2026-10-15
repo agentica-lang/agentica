@@ -1106,3 +1106,27 @@ in rackunit until phase 3.
   phase, so that release still has the rackunit live comparisons. The deletion
   of `src/*.rkt` and of the `raco distribute` steps follows the conditions of
   [§35.3](#353-bootstrap).
+  **Status: 8c is done** (2026-10-15). Every live comparison is frozen under
+  `tests/fixtures/frontend/frozen/` (`make frontend-freeze` writes it from the
+  Racket stages while they exist) and `tests/test_frontend_<stage>.py` compares
+  the Agentica stage with it: the fast cases are the fast-tier live
+  comparisons, the rest are `@slow`. The corpus is a snapshot taken at the
+  freeze, the inputs of the seeded Racket generators are checked in, and the
+  inputs that are a formula (too big to check in) are rebuilt by the Python
+  tests, which check the SHA-256 of each input. Agentica has no seeded random
+  generator, so the scripts that write inputs are Python, standard library
+  only. The rackunit files stay until 8d. Phase 2 is done too (PR #297, second
+  part): the Agentica output against the goldens of
+  `tests/fixtures/frontend/<stage>/` and the "every input has a golden" checks
+  moved from the rackunit files to the same Python modules, and each moved case
+  was removed from its rackunit file. The checks that read the Racket source
+  are frozen as small lists under `frozen/` (the Unicode ranges, the `std/`
+  registry, the checker tables, the `CHECK-` codes, the builtin rules,
+  `VM_BUILTINS`, the opcodes, the `Rule` enum) and compared by Python. The
+  accepted losses: the generated `compiler/builtins_data.agc` is not compared
+  with a fresh generation (the catalog golden prints the same data), and the
+  section fill of the bytecode corpus is read from the lowering goldens. After
+  the Racket stages are gone, `tools/refreeze.py` rewrites the goldens from the
+  Agentica stages and prints what changed. What 8d still removes: the
+  rackunit files, whose remaining cases are the Racket printer against its
+  goldens and the comparisons "while Racket exists".
