@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-EXPRESSION 17:1:18-29:1:30 "a block in a constant must be an argument of a builtin" "pass the block to a builtin such as map or reduce" file="constant-expression-block-outside.agc"

@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-NAME 8:1:9-12:1:13 "unknown or private imported name" "did you mean \"MAX\"?" file="root.agc"

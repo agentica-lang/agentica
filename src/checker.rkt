@@ -2,6 +2,7 @@
 
 (require "builtins.rkt" "builtin-types.rkt"
          "ast.rkt"
+         "constants.rkt"
          "diagnostic.rkt"
          "source.rkt")
 
@@ -332,10 +333,14 @@
        (block-returns? (case-arm-body arm)))]
     [else #f]))
 
-(define (check program #:types [types #f])
+(define (check program #:types [given-types #f])
+  ;; The constants pass reads the type of every expression back, so there is always a table.
+  (define types (or given-types (make-hasheq)))
   (define structs (hash-copy builtin-records))
   (define enums (make-hash (hash->list builtin-enums)))
   (define functions (make-hash))
+  ;; The type of each module constant by linked name, set in initialization order.
+  (define constant-types (make-hash))
   (define current-type-parameters '())
   (define scopes '())
   (define current-result 'Void)
@@ -606,6 +611,73 @@
            (bail 'CHECK-MAIN "main must take no parameters and return Void"
                  (function-decl-span main)))]))
 
+    ;; Module constants ------------------------------------------------------
+
+    ;; The rules of 44.5 on a checked initializer, children before the node, in source order. A `while`
+    ;; is refused before its body. A block is allowed only as an argument of a builtin.
+    (define (validate-constant! root)
+      (define (refuse! span what help) (bail 'CHECK-CONSTANT-EXPRESSION what span #:help help))
+      (define (builtin-of node)
+        (cond
+          [(call? node) (and (not (hash-has-key? functions (call-name node))) (builtin-ref (call-name node)))]
+          [(method-call? node) (let ([resolved (method-call-resolved node)]) (and (call? resolved) (builtin-ref (call-name resolved))))]
+          [(field-access? node) (let ([resolved (field-access-resolved node)]) (and (call? resolved) (builtin-ref (call-name resolved))))]
+          [else #f]))
+      (define (check-effects! node entry)
+        (unless (null? (builtin-effects entry))
+          (refuse! (node-span node)
+                   (format "a constant cannot call ~a, which has effects (~a)"
+                           (display-name (builtin-name entry))
+                           (string-join (map symbol->string (builtin-effects entry)) ", "))
+                   "a constant is built from literals, constructors and builtins without effects")))
+      (let visit ([node root] [block-allowed? #f])
+        (when (while-stmt? node)
+          (refuse! (node-span node) "a constant cannot use a while loop"
+                   "loop with for over a range or a collection, or use a builtin such as reduce"))
+        (when (and (block-lit? node) (not block-allowed?))
+          (refuse! (node-span node) "a block in a constant must be an argument of a builtin"
+                   "pass the block to a builtin such as map or reduce"))
+        (define entry (builtin-of node))
+        (for ([child (in-list (node-children node))])
+          (visit child (and entry #t)))
+        (cond
+          [(function-ref? node)
+           (refuse! (node-span node) "a constant cannot hold a function value"
+                    "a constant is built from literals, constructors and builtins")]
+          [(invoke? node)
+           (refuse! (node-span node) "a constant cannot call a function value"
+                    "a constant is built from literals, constructors and builtins")]
+          [(and (call? node) (not entry) (hash-has-key? functions (call-name node)))
+           (refuse! (node-span node)
+                    (format "a constant cannot call ~a, a function declared in the program" (display-name (call-name node)))
+                    "build the value from literals, constructors and builtins, or compute it in a function")]
+          [entry (check-effects! node entry)])
+        (define type (hash-ref types node #f))
+        (when (and type (not (and (block-lit? node) block-allowed?)) (not (data-type? type)))
+          (bail 'CHECK-CONSTANT-TYPE
+                (format "a constant expression must have a data type, found ~a" (type->string type))
+                (node-span node)
+                #:help (if (eq? type 'Void)
+                           "a constant's value must be data: write nil, not a Void call"
+                           "a constant holds numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data")))))
+
+    ;; Orders the constants (a cycle is CHECK-CONSTANT-CYCLE), then checks each initializer in that order
+    ;; with no locals in scope and records its type for the reads.
+    (define (check-constants!)
+      (define declarations (filter const-decl? (program-declarations program)))
+      (define-values (order cycle) (constant-order declarations))
+      (when cycle
+        (bail 'CHECK-CONSTANT-CYCLE "constants depend on each other in a cycle"
+              (const-ref-span (car cycle))
+              #:help (format "the cycle is ~a" (cycle-text (cdr cycle)))))
+      (for ([declaration (in-list order)])
+        (define annotation (const-decl-type declaration))
+        (define declared (and annotation (resolve-type annotation)))
+        (define value (const-decl-value declaration))
+        (define type (check-expression value declared))
+        (validate-constant! value)
+        (hash-set! constant-types (const-decl-name declaration) (or declared type))))
+
     ;; Expressions ----------------------------------------------------------
 
     ;; Runs thunk one level deeper, or is CHECK-TOO-DEEP at the span when the limit is reached.
@@ -627,6 +699,9 @@
            (bail 'CHECK-TYPE-MISMATCH "a type name is only valid as a JSON type argument"
                  (node-span expression)
                  #:help (hash-ref foreign-names (type-expression-name expression) #f))]
+          [(const-ref? expression)
+           (hash-ref constant-types (const-ref-name expression)
+                     (lambda () (bail 'CHECK-INTERNAL "constant read before it was checked" (const-ref-span expression))))]
           [(literal? expression)
            (when (and (exact-integer? (literal-value expression))
                       (> (literal-value expression) int-max))
@@ -1900,6 +1975,7 @@
     (register-enum-variants!)
     (register-functions!)
     (check-main!)
+    (check-constants!)
     (for ([declaration (in-list (program-declarations program))])
       (when (function-decl? declaration)
         (check-function declaration)))

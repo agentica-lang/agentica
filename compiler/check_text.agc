@@ -10,7 +10,7 @@ import Linker from "linker"
 import Text from "text"
 import T from "types"
 
-## The text form of checking the file at path: the linked program of link_text with the type of each checked expression added at the end of its line (` type=Int`, the types written by Types.debug_text) and, for a method call or a field access that names a builtin, ` resolved=` and what it became; or the ERROR line of the first failure. A failure of the checker has the notes of the diagnostic that are present, ` expected="..." actual="..." callee="..." signature="..." labels=[SPAN "text", ...]`, then ` file="path"`. tests/frontend-check-common.rkt prints the same text from the Racket checker.
+## The text form of checking the file at path: the linked program of link_text with the type of each checked expression added at the end of its line (and, when the program has constants, a last line `constant-order ["A","B"]` with the linked names in initialization order) (` type=Int`, the types written by Types.debug_text) and, for a method call or a field access that names a builtin, ` resolved=` and what it became; or the ERROR line of the first failure. A failure of the checker has the notes of the diagnostic that are present, ` expected="..." actual="..." callee="..." signature="..." labels=[SPAN "text", ...]`, then ` file="path"`. tests/frontend-check-common.rkt prints the same text from the Racket checker.
 export def check_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Failed(failure) -> return LinkText.failure_text(LinkText.root_dir_of(path), failure)
@@ -20,9 +20,18 @@ end
 
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
   case Checker.check(linked, settings.catalog)
-    Checker.Checking.Done(checked) -> return LinkText.program_lines(linked, notes_of(checked)).join("\n")
+    Checker.Checking.Done(checked) -> return LinkText.program_lines(linked, notes_of(checked)).concat(order_lines(checked)).join("\n")
     Checker.Checking.Failed(problem) -> return problem_text(linked.root_dir, problem)
   end
+end
+
+# The order the constants are initialized in, after the program, when there are constants.
+def order_lines(checked: Checker.Checked) -> List[String]
+  if checked.constants.size == 0
+    return []
+  end
+  names = checked.constants.map do |name: String| Text.quote(name) end
+  return ["constant-order [" + names.join(",") + "]"]
 end
 
 # The text added to the lines, by node id: the type, then the resolution.

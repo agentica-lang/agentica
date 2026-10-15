@@ -61,6 +61,7 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.Interpolation(found) -> return check_interpolation(cx, st, found)
     Ast.Expr.Index(found) -> return check_index(cx, st, found)
     Ast.Expr.TypeName(found) -> return check_type_name(cx, st, found)
+    Ast.Expr.ConstRef(found) -> return check_const_ref(cx, st, found)
   end
 end
 
@@ -95,6 +96,15 @@ def name_help(cx: State.Cx, st: State.St, name: String) -> String
     return guess
   end
   return Help.foreign(cx.help, name)
+end
+
+# A constant is read after its initializer was checked, because the constants are checked in dependency order.
+def check_const_ref(cx: State.Cx, st: State.St, node: Ast.ConstRef) -> Result[State.Out]
+  type = cx.constants.get(node.name)
+  if !type.ok?
+    return error(State.fail(cx, st, "CHECK-INTERNAL", "constant read before it was checked", node.span))
+  end
+  return ok(State.Out(st: st, type: type.unwrap!))
 end
 
 def check_type_name(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[State.Out]

@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-TYPE 45:2:24-59:2:38 "a constant expression must have a data type, found Channel[Int]" "a constant holds numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data" file="constant-type-closed.agc"

@@ -152,8 +152,8 @@ because the manager needs it and any program can use it.
 - **Datetimes (open question 11).** Recommended: `DateTime(String)` keeps the
   text exactly as written. A datetime and a string differ in TOML, and the
   encoder must write a datetime unquoted. Keeping the text makes the round trip
-  exact. When §41 adds date types, a conversion function reads the text, and
-  `to_json` turns it into a string. The value does not change.
+  exact. When §41 adds its date types, this variant splits into four, one for
+  each TOML kind (41.19), which is a breaking change of `std/toml`.
 - **Errors.** The error message starts with `line L, column C: ` and then says
   what was expected. Lines and columns count from 1, and a column counts
   characters. A `Result` error holds only a `String`
@@ -626,8 +626,9 @@ One line each, as possible later work:
     - Option A: an RFC 3339 string in `Text`. A datetime and a string look the
       same, so a round trip writes the datetime in quotes and changes the file.
     - Option B: `DateTime(String)`, which keeps the text as written.
-    - **Recommendation:** B. The text is exact, and §41 can add a conversion
-      later without a change to the value.
+    - **Recommendation:** B. The text is exact. When §41 lands, the date
+      variants change: TOML's four kinds get one variant each (41.19). That is
+      a breaking change of std/toml, and its design waits for §41.
 
 12. **The toml-test corpus.**
     - Option A: vendor it under `tests/fixtures/toml-test/` with its license

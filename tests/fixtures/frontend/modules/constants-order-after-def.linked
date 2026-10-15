@@ -1,0 +1,1 @@
+ERROR CHECK-DECL-ORDER 26:4:1-36:5:1 "declaration is out of order" "constants come right after the imports" file="root.agc"

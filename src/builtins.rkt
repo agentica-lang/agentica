@@ -1,6 +1,6 @@
 #lang racket
 
-(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean
+(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean closest-name
          std-only-modules std-only-imports std-only-name? public-builtin-names)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
@@ -288,6 +288,11 @@
   (car (or (regexp-match #rx"^@[0-9]+::" name) '(""))))
 
 (define (did-you-mean full-name candidates #:shared [shared '()])
+  (define near (closest-name full-name candidates #:shared shared))
+  (and near (format "did you mean \"~a\"?" near)))
+
+;; The candidate nearest to the name (by display name, from the same file), or #f when none is close.
+(define (closest-name full-name candidates #:shared [shared '()])
   (define prefix (name-prefix full-name))
   (define name (display-name full-name))
   (define limit (if (<= (string-length name) 4) 1 2))
@@ -305,7 +310,7 @@
             (define dx (edit-distance name x))
             (define dy (edit-distance name y))
             (or (< dx dy) (and (= dx dy) (string<? x y))))))
-  (and (pair? near) (format "did you mean \"~a\"?" (car near))))
+  (and (pair? near) (car near)))
 
 (define (single-signature entry)
   (format "~a(~a) -> ~a" (builtin-name entry)

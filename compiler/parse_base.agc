@@ -99,6 +99,23 @@ export def kind_at(e: Env, index: Int) -> String
   return e.tokens[e.size - 1].kind
 end
 
+## True for the name of a module constant: capitals, digits and `_`, starting with a capital, at least two characters (UPPER_SNAKE_CASE). The lexer makes every such name a type-name token; this tells it from a CamelCase type. src/ast.rkt has the same test (constant-name?).
+export def constant_name?(text: String) -> Bool
+  codes = text.split("").map do |character| String.code(character) end
+  if codes.size < 2 or codes[0] < 65 or codes[0] > 90
+    return false
+  end
+  index = 1
+  while index < codes.size
+    code = codes[index]
+    if !((code >= 65 and code <= 90) or (code >= 48 and code <= 57) or code == 95)
+      return false
+    end
+    index += 1
+  end
+  return true
+end
+
 ## The span from the start of the token at start to the end of the last token before pos, that is, the last consumed token.
 export def span_from(e: Env, start: Int, pos: Int) -> Source.Span
   return Source.Span(start: e.tokens[start].span.start, stop: e.tokens[pos - 1].span.stop)
@@ -408,6 +425,9 @@ def variant_help(enum_name: String, variant_name: String) -> String
 end
 
 def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
+  if !is_kind(e, pos + 1, "dot") and constant_name?(e.tokens[pos].lexeme)
+    return error(unexpected_help(e, pos + 1, "expected a dot between an enum and variant, found " + describe(e.tokens[pos + 1]), "a constant is not a pattern; compare with if"))
+  end
   cursor = try expect(e, pos + 1, "dot", "a dot between an enum and variant", false)
   after = try expect(e, cursor, "type-name", "a variant name", false)
   enum_name = e.tokens[pos].lexeme

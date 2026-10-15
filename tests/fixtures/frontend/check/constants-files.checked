@@ -1,0 +1,28 @@
+program #12 0:1:1-122:8:1
+  module "root.agc"
+    declaration: const-decl #4 43:3:1-64:4:1 name="DOUBLE"
+      value: binary #3 52:3:10-63:3:21 op=multiply op-span=60:3:18-61:3:19 type=Int
+        left: const-ref #1 52:3:10-59:3:17 name="@2::TOP" type=Int
+        right: literal #2 62:3:20-63:3:21 value=int:2 type=Int
+    declaration: function-decl #11 65:5:1-122:8:1 name="main"
+      result: type-ref #5 79:5:15-83:5:19 name="Void"
+      body: expr-stmt #10 86:6:3-118:7:1
+        value: call #9 86:6:3-117:6:34 name="puts" piped=false type=Void
+          arg: interpolation #8 91:6:8-116:6:33 type=String
+            part: const-ref #6 94:6:11-100:6:17 name="DOUBLE" type=Int
+            part: text " "
+            part: field-access #7 104:6:21-114:6:31 name="size" type=Int resolved=call("List.size", List(String))
+              target: const-ref #33 104:6:21-109:6:26 name="@2::NAMES" type=List(String)
+  module "lib.agc"
+    declaration: const-decl #4 27:3:1-49:4:1 name="@2::TOP"
+      value: binary #3 40:3:14-48:3:22 op=plus op-span=45:3:19-46:3:20 type=Int
+        left: const-ref #1 40:3:14-44:3:18 name="@3::BASE" type=Int
+        right: literal #2 47:3:21-48:3:22 value=int:1 type=Int
+    declaration: const-decl #8 49:4:1-75:5:1 name="@2::NAMES"
+      value: list-lit #7 64:4:16-74:4:26 type=List(String)
+        element: literal #5 65:4:17-68:4:20 value=string:"x" type=String
+        element: literal #6 70:4:22-73:4:25 value=string:"y" type=String
+  module "base.agc"
+    declaration: const-decl #1 0:1:1-17:2:1 name="@3::BASE"
+      value: literal #0 14:1:15-16:1:17 value=int:10 type=Int
+constant-order ["@3::BASE","@2::TOP","DOUBLE","@2::NAMES"]

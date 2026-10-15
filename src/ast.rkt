@@ -6,6 +6,7 @@
          (struct-out import-decl)
          (struct-out import-name)
          (struct-out export-decl)
+         (struct-out const-decl)
          (struct-out function-decl)
          (struct-out param)
          (struct-out struct-decl)
@@ -30,6 +31,7 @@
          (struct-out enum-constructor)
          (struct-out literal)
          (struct-out name-ref)
+         (struct-out const-ref)
          (struct-out call)
          (struct-out function-ref)
          (struct-out invoke)
@@ -50,6 +52,7 @@
          (struct-out try-expr)
          (struct-out unary)
          (struct-out binary)
+         constant-name?
          node-span)
 
 (struct program (declarations span docs module-doc) #:transparent)
@@ -58,6 +61,9 @@
 (struct import-decl (path alias names span) #:transparent)
 (struct import-name (name local span local-span) #:transparent)
 (struct export-decl (declaration span) #:transparent)
+;; A module constant (docs/future/44-module-constants.md): `[export] NAME[: Type] = value`. type is a
+;; type-ref or #f. The span starts at `export` when exported; the linker clears `exported`.
+(struct const-decl (name type value exported span) #:transparent)
 (struct function-decl (name params result body span) #:transparent)
 (struct param (name type span) #:transparent)
 (struct struct-decl (name fields span) #:transparent)
@@ -84,6 +90,9 @@
 
 (struct literal (value span) #:transparent)
 (struct name-ref (name span) #:transparent)
+;; The read of a module constant, made by the linker from `NAME` (name is the linked name) and
+;; as the receiver of a rewritten `NAME.method(...)` or `NAME.field`.
+(struct const-ref (name span) #:transparent)
 (struct call (name args span piped) #:transparent)
 (struct enum-constructor (enum-name variant-name args span) #:transparent)
 (struct function-ref (name span) #:transparent)
@@ -109,11 +118,17 @@
 (struct unary (op op-span operand span) #:transparent)
 (struct binary (op op-span left right span) #:transparent)
 
+;; The shape of a module constant's name: capitals, digits and `_`, starting with a capital, at least two
+;; characters. The lexer already makes it a type-name token; this tells it from a CamelCase type.
+(define (constant-name? text)
+  (regexp-match? #px"^[A-Z][A-Z0-9_]+$" text))
+
 (define (node-span node)
   (cond
     [(program? node) (program-span node)]
     [(import-decl? node) (import-decl-span node)]
     [(export-decl? node) (export-decl-span node)]
+    [(const-decl? node) (const-decl-span node)]
     [(function-decl? node) (function-decl-span node)]
     [(param? node) (param-span node)]
     [(struct-decl? node) (struct-decl-span node)]
@@ -137,6 +152,7 @@
     [(variant-pattern? node) (variant-pattern-span node)]
     [(literal? node) (literal-span node)]
     [(name-ref? node) (name-ref-span node)]
+    [(const-ref? node) (const-ref-span node)]
     [(call? node) (call-span node)]
     [(enum-constructor? node) (enum-constructor-span node)]
     [(function-ref? node) (function-ref-span node)]

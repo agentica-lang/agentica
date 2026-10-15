@@ -1,0 +1,65 @@
+program #63 0:1:1-407:24:1
+  declaration: const-decl #7 0:1:1-26:2:1 name="LEVELS"
+    value: map-lit #6 9:1:10-25:1:26
+      entry: map-entry #2 10:1:11-16:1:17
+        key: literal #0 10:1:11-13:1:14 value=string:"a"
+        value: literal #1 15:1:16-16:1:17 value=int:1
+      entry: map-entry #5 18:1:19-24:1:25
+        key: literal #3 18:1:19-21:1:22 value=string:"b"
+        value: literal #4 23:1:24-24:1:25 value=int:2
+  declaration: const-decl #12 26:2:1-57:3:1 name="KEYWORDS"
+    value: call #11 37:2:12-56:2:31 name="Set.new" piped=false
+      arg: list-lit #10 45:2:20-55:2:30
+        element: literal #8 46:2:21-49:2:24 value=string:"a"
+        element: literal #9 51:2:26-54:2:29 value=string:"b"
+  declaration: const-decl #16 57:3:1-83:4:1 name="CONFIG"
+    value: construct #15 66:3:10-82:3:26 type="Config"
+      arg: named-arg #14 73:3:17-81:3:25 name="port"
+        value: literal #13 79:3:23-81:3:25 value=int:80
+  declaration: struct-decl #19 84:5:1-114:8:1 name="Config"
+    field: field-decl #18 100:6:3-110:7:1 name="port"
+      type: type-ref #17 106:6:9-109:6:12 name="Int"
+  declaration: function-decl #62 115:9:1-407:24:1 name="main"
+    result: type-ref #20 129:9:15-133:9:19 name="Void"
+    body: expr-stmt #22 136:10:3-148:11:1
+      value: call #21 136:10:3-147:10:14 name="LEVELS.size" piped=false
+    body: expr-stmt #26 150:11:3-169:12:1
+      value: call #25 150:11:3-168:11:21 name="LEVELS.get" piped=false
+        arg: literal #23 161:11:14-164:11:17 value=string:"a"
+        arg: literal #24 166:11:19-167:11:20 value=int:0
+    body: expr-stmt #29 171:12:3-194:13:1
+      value: call #28 171:12:3-193:12:25 name="KEYWORDS.include?" piped=false
+        arg: literal #27 189:12:21-192:12:24 value=string:"a"
+    body: expr-stmt #36 196:13:3-241:16:1
+      value: call #35 196:13:3-240:15:6 name="KEYWORDS.each" piped=false
+        arg: block-lit #34 210:13:17-240:15:6
+          param: block-param #30 214:13:21-218:13:25 name="word"
+          body: expr-stmt #33 224:14:5-235:15:1
+            value: call #32 224:14:5-234:14:15 name="puts" piped=false
+              arg: name-ref #31 229:14:10-233:14:14 name="word"
+    body: expr-stmt #42 243:16:3-275:17:1
+      value: call #41 243:16:3-274:16:34 name="KEYWORDS.map" piped=false
+        arg: block-lit #40 256:16:16-274:16:34
+          param: block-param #37 260:16:20-264:16:24 name="word"
+          body: expr-stmt #39 266:16:26-270:16:30
+            value: name-ref #38 266:16:26-270:16:30 name="word"
+    body: expr-stmt #44 277:17:3-289:18:1
+      value: call #43 277:17:3-288:17:14 name="CONFIG.port" piped=false
+    body: expr-stmt #46 291:18:3-305:19:1
+      value: call #45 291:18:3-304:18:16 name="CONFIG.port" piped=false
+    body: binding #50 307:19:3-323:20:1 name="n"
+      value: index-access #49 311:19:7-322:19:18
+        target: type-expression #47 311:19:7-317:19:13 name="LEVELS"
+        index: literal #48 318:19:14-321:19:17 value=string:"a"
+    body: expr-stmt #55 325:20:3-350:21:1
+      value: call #54 325:20:3-349:20:27 name="puts" piped=false
+        arg: interpolation #53 330:20:8-348:20:26
+          part: type-expression #51 333:20:11-341:20:19 name="KEYWORDS"
+          part: text " "
+          part: name-ref #52 345:20:23-346:20:24 name="n"
+    body: expr-stmt #58 352:21:3-365:22:1
+      value: call #57 352:21:3-364:21:15 name="puts" piped=false
+        arg: type-expression #56 357:21:8-363:21:14 name="LEVELS"
+    body: binding #61 367:22:3-403:23:1 name="keys"
+      value: call #60 391:22:27-402:22:38 name="List.size" piped=true
+        arg: call #59 374:22:10-387:22:23 name="KEYWORDS.to_a" piped=false

@@ -1,0 +1,6 @@
+def main() -> Void
+end
+
+def helper() -> Void
+end
+LIMIT = 1

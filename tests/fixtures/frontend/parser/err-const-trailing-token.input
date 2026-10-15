@@ -1,0 +1,4 @@
+LIMIT = 1 2
+
+def main() -> Void
+end

@@ -1,0 +1,4 @@
+LIMIT = 1
+struct Point
+  x: Int
+end

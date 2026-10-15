@@ -1,0 +1,23 @@
+LEVELS = {"a": 1, "b": 2}
+KEYWORDS = Set.new(["a", "b"])
+CONFIG = Config(port: 80)
+
+struct Config
+  port: Int
+end
+
+def main() -> Void
+  LEVELS.size
+  LEVELS.get("a", 0)
+  KEYWORDS.include?("a")
+  KEYWORDS.each do |word|
+    puts(word)
+  end
+  KEYWORDS.map do |word| word end
+  CONFIG.port
+  CONFIG.port()
+  n = LEVELS["a"]
+  puts("#{KEYWORDS} #{n}")
+  puts(LEVELS)
+  keys = KEYWORDS.to_a |> List.size()
+end

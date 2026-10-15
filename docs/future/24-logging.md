@@ -378,8 +378,8 @@ stays in effect, because the level is no longer `-1`.
 into the text above (`2026-10-12T10:15:02.345Z`). It is exported so that
 programs and tests can use it. Until §41 lands it is integer arithmetic on the
 calendar, written in Agentica. With §41 it is
-`Time.format(Time.from_unix_ms(ms).unwrap!)`, one native call, and the log and
-the `Time` functions share one formatter.
+`Time.format(Time.from_unix_us(ms * 1000).unwrap!)`, one native call, and the
+log and the `Time` functions share one formatter.
 
 **Cost of a disabled call.** Each level function reads the floor once and
 compares it once: `if LogRegistry.floor() <= N`, where `N` is the rank of the
