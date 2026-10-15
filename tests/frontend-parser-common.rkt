@@ -137,6 +137,9 @@
     [(construct? node)
      (values "construct" (string-append " type=" (quote-text (construct-type-name node)))
              (kids "arg" (construct-args node)))]
+    [(struct-update? node)
+     (values "struct-update" ""
+             (cons (cons "target" (struct-update-target node)) (kids "arg" (struct-update-args node))))]
     [(list-lit? node) (values "list-lit" "" (kids "element" (list-lit-elements node)))]
     [(map-entry? node)
      (values "map-entry" "" (list (cons "key" (map-entry-key node)) (cons "value" (map-entry-value node))))]

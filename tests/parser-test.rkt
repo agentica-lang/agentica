@@ -346,6 +346,26 @@
     (check-true (list-lit? items))
     (check-equal? (length (list-lit-elements items)) 2))
 
+  (test-case "a struct update is .with( after a dot, with named arguments only"
+    (define update (parse-expr "ana.with(age: 31, name: \"Bea\",)"))
+    (check-true (struct-update? update))
+    (check-equal? (name-ref-name (struct-update-target update)) "ana")
+    (check-equal? (map named-arg-name (struct-update-args update)) '("age" "name"))
+    (check-equal? (source-position-column (source-span-start (struct-update-span update))) 7)
+    (check-equal? (source-position-column (source-span-end (struct-update-span update))) 38)
+    (define chained (parse-expr "ana.with(age: 1).with(name: \"Cy\").name"))
+    (check-true (struct-update? (field-access-target chained)))
+    (check-true (struct-update? (struct-update-target (field-access-target chained))))
+    ;; `with` is not reserved: a field read and a module call keep their meaning.
+    (check-true (field-access? (parse-expr "ana.with")))
+    (check-true (call? (parse-expr "Alias.with(1)")))
+    (check-true (method-call? (parse-expr "ana.within(1)")))
+    (for ([text '("ana.with()" "ana.with(31)" "ana.with(age)" "ana.with(age: 1, 2)" "ana.with(age?: 1)")])
+      (define problem (parse-text (format "def f() -> Void\n  x = ~a\nend\n\n" text)))
+      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN)
+      (check-regexp-match #rx"with\\(age: 31\\)" (diagnostic-help problem)))
+    (check-equal? (parse-code "def f() -> Void\n  x = a |> b.with(c: 1)\nend\n\n") 'PARSE-PIPE-TARGET))
+
   (test-case "type applications parse"
     (define program
       (parse-ok (string-append

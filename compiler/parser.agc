@@ -321,7 +321,14 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       inner = try Base.deepen(e, cursor, links)
       after_name = try Base.expect(e, cursor + 1, "name", "a field or method name", true)
       name = e.tokens[cursor + 1].lexeme
-      if e.tokens[after_name].kind == "left-paren"
+      if e.tokens[after_name].kind == "left-paren" and name == "with"
+        # `with` is only special before `(` after a dot; `x.with` still reads a field.
+        args = try parse_update_arguments(inner, after_name + 1, next_id)
+        close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
+        target = Ast.Expr.Update(Ast.StructUpdate(id: args.ids, target: target, args: args.nodes, span: Base.span_from(e, pos, close)))
+        cursor = close
+        next_id = args.ids + 1
+      elsif e.tokens[after_name].kind == "left-paren"
         args = try parse_expression_list(inner, after_name + 1, next_id, "right-paren")
         close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
         span = Base.span_from(e, pos, close)
@@ -485,6 +492,44 @@ def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt
     end
   end
   return ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
+end
+
+# The arguments of `.with(`: one or more name: value pairs, with `do` blocks allowed as in any call. A positional value or an empty list gets a help text, since the parser cannot know which field was meant.
+def parse_update_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt]
+  inner = Base.with_blocks(e, true)
+  nodes: List[Ast.NamedArg] = []
+  cursor = pos
+  next_id = ids
+  looping = true
+  while looping
+    colon = try expect_update_argument(inner, cursor)
+    value = try parse_expression(inner, colon, next_id)
+    nodes = nodes.push(Ast.NamedArg(id: value.ids, name: inner.tokens[cursor].lexeme, value: value.node, span: Base.span_from(inner, cursor, value.pos)))
+    cursor = value.pos
+    next_id = value.ids + 1
+    if inner.tokens[cursor].kind == "comma"
+      cursor += 1
+      if inner.tokens[cursor].kind == "right-paren"
+        looping = false
+      end
+    else
+      looping = false
+    end
+  end
+  return ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
+end
+
+# The position of the value after `name:` at pos; PARSE-UNEXPECTED-TOKEN with a help text for anything else (the Racket parser says the same).
+def expect_update_argument(e: Base.Env, pos: Int) -> Result[Int]
+  named = Base.plain_name?(e.tokens[pos])
+  if named and Base.kind_at(e, pos + 1) == "colon"
+    return ok(pos + 2)
+  end
+  help = "name each field to change, as in value.with(age: 31)"
+  if named
+    return error(Base.unexpected_help(e, pos + 1, "expected \":\" after the field name, found " + Base.describe(e.tokens[pos + 1]), help))
+  end
+  return error(Base.unexpected_help(e, pos, "expected a field name, found " + Base.describe(e.tokens[pos]), help))
 end
 
 def parse_list_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
