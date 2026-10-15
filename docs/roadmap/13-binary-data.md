@@ -47,7 +47,7 @@ in Agentica, and the bit operations are builtins under its exception 5.
   `tests/site-examples-test.rkt` checks). Tests (§23.7): the Python `struct`
   vectors checked in with their generator, round trips, error cases, both
   backends through the vm-diff fixtures, and the fixed-output check in
-  `tests/std-binary-test.rkt`.
+  `tests/test_std_binary.py`.
   - **Done.** `stdlib/binary.agc` (registered in `src/stdlib.rkt`) has the 18
     readers, the 18 writers, `concat`, `frame` and `read_frame_length`, with the
     signatures and the error order of §23.5. A reader checks the offset,
@@ -62,7 +62,7 @@ in Agentica, and the bit operations are builtins under its exception 5.
     errors, `concat`) and `std-binary-vectors`, which checks the 808 vectors of
     `tests/fixtures/vm/std-binary-vectors.stdin` that
     `tests/fixtures/std-binary-vectors.py` writes (Python `struct`, run by hand;
-    CI does not run Python for it); `tests/std-binary-test.rkt` for the fixed
+    CI does not run Python for it); `tests/test_std_binary.py` for the fixed
     output. There is no evaluator backend, so "both backends" is the VM in its
     three output formats, as for every golden.
 - Not in this phase: `Bytes` (`docs/future/12-data-structures.md` §12.5), which
