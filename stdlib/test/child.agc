@@ -55,6 +55,18 @@ export def int_of(record: Json, key: String) -> Int
   return 1
 end
 
+## Returns the diagnostic a crash record carries as `--json` writes it: the code, file, message, range and stack keys.
+export def diagnostic_of(record: Json) -> Json
+  fields: Map[String, Json] = {}
+  for key in ["code", "file", "message", "range", "spawned_at", "stack", "stack_omitted"]
+    found = JSON.get(record, key)
+    if found.ok?
+      fields = fields.put(key, found.unwrap!)
+    end
+  end
+  return JSON.object(fields)
+end
+
 ## Returns the string at `key` as a known detail, or an unknown one.
 export def detail_of(record: Json, key: String) -> Report.Detail
   found = JSON.get(record, key)

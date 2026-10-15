@@ -219,6 +219,7 @@ struct agc_task {
   uint32_t spawn_span;
   agc_value result;
   agc_string *crash, *crash_message;
+  agc_stack *crash_stack;
   const char *crash_code;
   uint32_t crash_span;
   agc_task *crash_next, *crash_prev, *quiet;
@@ -304,6 +305,7 @@ uint64_t agc_value_units(agc_value v);
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
 _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
 _Noreturn void agc_exit(agc_vm *vm, int64_t code);
+size_t agc_stack_members(const agc_program *program, const agc_stack *stack, agc_json_member out[3]);
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline);
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out);
 bool agc_drain(agc_vm *vm);

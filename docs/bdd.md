@@ -53,8 +53,11 @@ agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [-
   `scenarios`, `error` and `output`. Each test is a scenario with `steps: []` at
   its `Test.test` call. A test is `passed`, `failed`, or `not_executed` (after a
   test that ended the file's child VM).
-- **Text report.** `PASS`, `FAIL` or `NOT RUN`, then `file / name`. Only failed
-  tests have `output`: their stdout, plus stderr if their child VM died during
+- **Text report.** `PASS`, `FAIL` or `NOT RUN`, then `file / name`. A failure
+  that has a call stack (a runtime error in a test, or in a step handler) shows
+  it under the diagnostic: the line `  stack, innermost first:`, then one
+  line per frame (`name at file:line:column`). With `--ai` it is ` | stack `
+  and the frames joined by `; `. Only failed tests have `output`: their stdout, plus stderr if their child VM died during
   them, the last 64 Ki characters. Stdout printed by `main` before `Test.run`
   belongs to the first test.
 - **Summary line.** The text report ends with
@@ -338,7 +341,9 @@ that calls them can break the protocol, and nothing stops it.
   end of the channel. It runs each test in a new task, a child of the task that
   called `Test.run`, and sends `{"event":"pass"}` or a `fail` record: the
   `--json` diagnostic (`code`, `file`, `message`, `range`) with
-  `"event":"fail"`, plus `expected` and `actual` for an assertion. A line that
+  `"event":"fail"`, plus `expected` and `actual` for an assertion, and `stack`,
+  `stack_omitted` and `spawned_at` (as `--json` writes them) when the test's
+  task crashed with a runtime error. A line that
   is not a plain index, or not valid UTF-8, is a `fail` record with
   `RUNTIME-BDD-INFRA`, and exit 1.
 

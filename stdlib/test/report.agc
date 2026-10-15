@@ -21,7 +21,7 @@ export enum Detail
 end
 
 ## A failure: a code, a message and its place, and the expected and actual values when known.
-## `original` keeps the diagnostic object as `--json` wrote it, or JSON null for an error built from fields.
+## `original` keeps the diagnostic object as `--json` wrote it (with its `stack` keys, which the text report shows), or JSON null for an error built from fields.
 export struct Error
   code: String
   message: String
@@ -290,7 +290,7 @@ end
 def file_text(file: FileResult, ai: Bool) -> String
   head: List[String] = []
   case file.verdict
-    Verdict.Fail(problem) -> head = ["FAIL #{file.path}#{separator(ai)}#{summary(problem)}#{output_text(file.output, ai)}"]
+    Verdict.Fail(problem) -> head = ["FAIL #{file.path}#{separator(ai)}#{summary(problem, ai)}#{output_text(file.output, ai)}"]
     Verdict.Pass -> head = []
     Verdict.NotExecuted -> head = []
   end
@@ -306,7 +306,7 @@ def scenario_text(label: String, item: ScenarioResult, ai: Bool) -> String
   case item.verdict
     Verdict.Pass -> return "PASS #{label} / #{item.name}"
     Verdict.NotExecuted -> return "NOT RUN #{label} / #{item.name}"
-    Verdict.Fail(problem) -> return "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem)}#{output_text(item.output, ai)}"
+    Verdict.Fail(problem) -> return "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem, ai)}#{output_text(item.output, ai)}"
   end
 end
 
@@ -326,10 +326,62 @@ def output_text(output: String, ai: Bool) -> String
   return "\n" + output.split("\n").map do |line| "  #{line}" end.join("\n")
 end
 
-def summary(problem: Error) -> String
+def summary(problem: Error, ai: Bool) -> String
   span = problem.span
   head = "#{span.file}:#{span.line}:#{span.column} [#{problem.code}] #{problem.message}"
-  return head + detail_text("expected", problem.expected) + detail_text("actual", problem.actual)
+  return head + detail_text("expected", problem.expected) + detail_text("actual", problem.actual) + stack_text(problem, ai)
+end
+
+def stack_text(problem: Error, ai: Bool) -> String
+  lines = stack_lines(problem.original)
+  if lines.length == 0
+    return ""
+  elsif ai
+    return " | stack " + lines.join("; ")
+  end
+  return "\n  stack, innermost first:\n" + lines.map do |line| "    #{line}" end.join("\n")
+end
+
+def stack_lines(root: Json) -> List[String]
+  found = JSON.get(root, "stack")
+  if not found.ok?
+    return []
+  end
+  none: List[Json] = []
+  frames = JSON.list(found.unwrap!).unwrap_or(none)
+  omitted = int_at(root, "stack_omitted").unwrap_or(0)
+  lines: List[String] = []
+  for index in 0...frames.length
+    if omitted > 0 and index == 15
+      lines = lines.concat(["... #{omitted} frames not shown ..."])
+    end
+    lines = lines.concat([frame_line(frames[index])])
+  end
+  spawned = JSON.get(root, "spawned_at")
+  if spawned.ok?
+    lines = lines.concat(["task spawned at #{place_text(spawned.unwrap!)}"])
+  end
+  return lines
+end
+
+def frame_line(frame: Json) -> String
+  name = text_at(frame, "function").unwrap_or("?")
+  line = "#{name} at #{place_text(frame)}"
+  repeat = int_at(frame, "repeat").unwrap_or(1)
+  if repeat > 1
+    line = line + " (#{repeat} times)"
+  end
+  if JSON.get(frame, "tail").ok?
+    line = line + " (after a tail call)"
+  end
+  return line
+end
+
+def place_text(place: Json) -> String
+  file = text_at(place, "file").unwrap_or("?")
+  line = int_at(place, "line").unwrap_or(0)
+  column = int_at(place, "column").unwrap_or(0)
+  return "#{file}:#{line}:#{column}"
 end
 
 def detail_text(label: String, detail: Detail) -> String
