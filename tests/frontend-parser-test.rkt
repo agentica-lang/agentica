@@ -56,7 +56,7 @@
   '("def helper(a: Int, b: List[Map[String, Int]],) -> Result[Int]\n  return ok(a)\nend\n\n"
     "## Doc.\nstruct P\n  ## Field.\n  a: Int\n  b: Util.T\nend\n\n"
     "export enum E[T]\n  ## Variant.\n  A(T)\n  B(T, Int)\n  C\nend\n\n"
-    "import \"util\" as Util\n"
+    "import Util from \"util\"\n"
     "export def ready?() -> Bool\n  return true\nend\n\n"
     "enum Plain\n  A\nend\n\n"))
 

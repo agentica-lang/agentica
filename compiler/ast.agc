@@ -4,8 +4,8 @@
 ##
 ## Docs (`##` comments) are a field of the declaration, field or variant they document, not a table keyed by span.
 
-import "source" as Source
-import "types" as Types
+import Source from "source"
+import Types from "types"
 
 ## A value that may be absent; where src/ast.rkt uses #f.
 export enum Optional[T]
@@ -48,7 +48,7 @@ export enum Decl
   Enum(EnumDecl)
 end
 
-## An import: import Alias from "path" (alias is Present, names is empty; the old form import "path" as Alias gives the same node), or import {A, B as C} from "path" (alias is Absent, names has at least one entry).
+## An import: import Alias from "path" (alias is Present, names is empty), or import {A, B as C} from "path" (alias is Absent, names has at least one entry).
 export struct ImportDecl
   id: Int
   path: String

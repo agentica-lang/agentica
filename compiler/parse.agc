@@ -1,4 +1,4 @@
-import "parse_text" as ParseText
+import ParseText from "parse_text"
 
 # An argument `--first-id=N` sets the first node id of the files after it (the default is 0). The argument
 # `--continue` numbers each file from the next free id of the one before it (Ast.next_free_id).

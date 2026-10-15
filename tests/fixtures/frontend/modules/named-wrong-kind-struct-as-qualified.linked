@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 52:4:7-61:4:16 "unknown module alias" "\"Point\" is neither an import alias nor an enum of this file; import a module with import \"path\" as Point, or declare enum Point" file="root.agc"
+ERROR CHECK-IMPORT-NAME 52:4:7-61:4:16 "unknown module alias" "\"Point\" is neither an import alias nor an enum of this file; import a module with import Point from \"path\", or declare enum Point" file="root.agc"

@@ -35,7 +35,7 @@
         (copy-file (build-path dist-directory vm-name) (build-path relocated "bin" vm-name))
         (define program (build-path directory "program.agc"))
         (display-to-file
-         "import \"std/queue\" as Queue\ndef main() -> Void\n  q = Queue.push(Queue.new(), \"embedded\")\n  puts(Result.unwrap!(Queue.peek(q)))\nend\n\n"
+         "import Queue from \"std/queue\"\ndef main() -> Void\n  q = Queue.push(Queue.new(), \"embedded\")\n  puts(Result.unwrap!(Queue.peek(q)))\nend\n\n"
          program)
         (define out (open-output-string))
         (define err (open-output-string))

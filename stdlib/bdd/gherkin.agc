@@ -2,7 +2,7 @@
 ##
 ## It supports `Feature`, `Background`, `Scenario`, `Scenario Outline` with `Examples`, tags, Doc Strings and Data Tables, in English only.
 
-import "std/test/report" as Report
+import Report from "std/test/report"
 
 ## A problem in a feature file: a code, a message and its place.
 export struct Diagnostic

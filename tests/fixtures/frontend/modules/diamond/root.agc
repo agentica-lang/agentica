@@ -1,5 +1,5 @@
-import "left" as Left
-import "right" as Right
+import Left from "left"
+import Right from "right"
 def main() -> Void
   Left.go()
   Right.go()

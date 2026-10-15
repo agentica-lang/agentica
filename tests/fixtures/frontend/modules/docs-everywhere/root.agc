@@ -1,6 +1,6 @@
 ## Module doc of the root.
 
-import "lib" as Lib
+import Lib from "lib"
 
 ## A struct.
 struct S

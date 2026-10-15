@@ -58,7 +58,7 @@ line over 1 MiB, which also closes the socket.
 ## HTTP client (`std/http`)
 
 HTTP is a library written in Agentica. Import it with
-`import "std/http" as HTTP`; an `HTTP.` call without the import is
+`import HTTP from "std/http"`; an `HTTP.` call without the import is
 `CHECK-UNKNOWN-NAME` with a help that shows the import. It has a client
 (this section) and a server (the next one).
 
@@ -95,7 +95,7 @@ protocol and limit errors start with `http: `, and a timeout is
 and no gzip decoding.
 
 ```agentica
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def main() -> Void
   client = Result.unwrap!(HTTP.client(HTTP.client_options()))
@@ -126,7 +126,7 @@ HTTP.close_server(server: HttpServer) -> Void
 A handler takes the whole request and returns the whole response:
 
 ```agentica
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"

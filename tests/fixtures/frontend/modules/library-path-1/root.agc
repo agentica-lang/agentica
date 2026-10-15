@@ -1,4 +1,4 @@
-import "std//queue" as Q
+import Q from "std//queue"
 def main() -> Void
 end
 

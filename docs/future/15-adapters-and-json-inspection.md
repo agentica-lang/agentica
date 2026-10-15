@@ -143,7 +143,7 @@ end
   end
   ```
 
-  Callers write `import "users" as Users` and call
+  Callers write `import Users from "users"` and call
   `Users.load_user(dir, "ana")`; `valid_name?` stays hidden. A facade or adapter
   must check a name with an allow-list before it uses it in a path, as
   `valid_name?` does: the name is not empty and has only ASCII letters, digits,

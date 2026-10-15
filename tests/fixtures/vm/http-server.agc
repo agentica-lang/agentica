@@ -1,4 +1,4 @@
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def reply(status: Int, body: String) -> Result[HttpResponse]
   return ok(HttpResponse(status: status, headers: [Header(name: "X-Seen", value: "yes")], body: body))

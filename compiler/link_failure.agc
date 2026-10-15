@@ -1,8 +1,8 @@
 ## How the linker reports a failure. A Result error is a String, as in the parser, and `try` stops at the first one. The String holds the file the failure is in (a diagnostic has no file of its own in compiler/) and the packed diagnostic.
 
-import "diagnostic" as Diag
-import "parse_base" as Base
-import "source" as Source
+import Diag from "diagnostic"
+import Base from "parse_base"
+import Source from "source"
 
 ## Where a failure points: the file (a canonical path, or std/... for a standard module) and a span in it.
 export struct Site

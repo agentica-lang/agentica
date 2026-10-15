@@ -41,7 +41,7 @@ Checked at `099daa3`:
 ### 36.2 Shape
 
 ```agentica
-import "ports" as Ports
+import Ports from "ports"
 
 def main() -> Void
   Test.run([

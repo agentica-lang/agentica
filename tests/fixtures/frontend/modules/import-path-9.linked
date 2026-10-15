@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-PATH 84:4:1-111:5:1 "import paths name a module without an extension" "write import \"lib/util\" as Util to load lib/util.agc" file="root.agc"
+ERROR CHECK-IMPORT-PATH 84:4:1-113:5:1 "import paths name a module without an extension" "write import Util from \"lib/util\" to load lib/util.agc" file="root.agc"

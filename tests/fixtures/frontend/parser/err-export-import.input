@@ -1,1 +1,1 @@
-export import "a" as A
+export import A from "a"

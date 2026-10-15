@@ -1,4 +1,4 @@
-import "mid" as Mid
+import Mid from "mid"
 
 def main() -> Void
   m = Mid.make()

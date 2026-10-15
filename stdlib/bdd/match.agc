@@ -2,8 +2,8 @@
 ##
 ## A pattern is plain text with `{string}` and `{int}` placeholders.
 
-import "gherkin" as Gherkin
-import "std/test/report" as Report
+import Gherkin from "gherkin"
+import Report from "std/test/report"
 
 enum Capture
   IntCapture

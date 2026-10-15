@@ -1,2 +1,2 @@
-import "empty" as E
-import "deep" as Deep
+import E from "empty"
+import Deep from "deep"

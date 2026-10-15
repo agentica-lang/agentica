@@ -1,8 +1,8 @@
 ## The "did you mean" help of an unknown name: src/builtins.rkt (did-you-mean, edit-distance).
 
-import "ast" as Ast
-import "diagnostic" as Diag
-import "types" as Types
+import Ast from "ast"
+import Diag from "diagnostic"
+import Types from "types"
 
 ## The help text for the exported name closest to name, or Absent when none is close. A name of up to 4 characters may differ by 1 edit, a longer one by 2; the nearest wins, and the smaller name breaks a tie.
 export def did_you_mean(name: String, candidates: List[String]) -> Ast.Optional[String]

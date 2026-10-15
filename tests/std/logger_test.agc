@@ -1,4 +1,4 @@
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def reset() -> Void
   for name in Logger.handlers()

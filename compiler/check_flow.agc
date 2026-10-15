@@ -1,7 +1,7 @@
 ## What the statements of a body return (src/checker.rkt: block-returns?, missing-return-help, captured-assignment-help): whether every path ends in a return, and the help texts that depend only on the shape of the code.
 
-import "ast" as Ast
-import "check_state" as State
+import Ast from "ast"
+import State from "check_state"
 
 ## True when every path of the statements ends in a return.
 export def block_returns?(statements: List[Ast.Stmt]) -> Bool

@@ -8,8 +8,8 @@
 
 (define-runtime-path main-program "main.rkt")
 
-(define runner-root "import \"std/test/runner\" as Runner\n\ndef main() -> Void\n  Runner.main()\nend\n")
-(define default-steps "import \"std/bdd\" as BDD\n\ndef main() -> Void\n  BDD.run([])\nend\n")
+(define runner-root "import Runner from \"std/test/runner\"\n\ndef main() -> Void\n  Runner.main()\nend\n")
+(define default-steps "import BDD from \"std/bdd\"\n\ndef main() -> Void\n  BDD.run([])\nend\n")
 
 (define (agentica-command)
   (if (path? (variable-reference->module-source (#%variable-reference)))

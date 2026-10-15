@@ -1,4 +1,4 @@
-import "pkg/wire" as Wire
+import Wire from "pkg/wire"
 def main() -> Void
   Wire.go()
 end

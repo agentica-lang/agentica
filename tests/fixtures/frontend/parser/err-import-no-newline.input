@@ -1,2 +1,2 @@
-import "a" as A def main() -> Void
+import A from "a" def main() -> Void
 end

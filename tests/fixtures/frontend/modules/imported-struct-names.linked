@@ -1,47 +1,47 @@
-program #44 0:1:1-276:20:1
+program #44 0:1:1-280:20:1
   module "root.agc"
-    declaration: struct-decl #6 33:4:1-75:8:1 name="Both"
-      field: field-decl #3 47:5:3-58:6:1 name="a"
-        type: type-ref #2 50:5:6-57:5:13 name="@2::Point"
-      field: field-decl #5 60:6:3-71:7:1 name="b"
-        type: type-ref #4 63:6:6-70:6:13 name="@3::Point"
-    declaration: function-decl #43 76:9:1-275:19:1 name="main"
-      result: type-ref #7 90:9:15-94:9:19 name="Void"
-      body: expr-stmt #9 97:10:3-106:11:1
-        value: call #8 97:10:3-105:10:11 name="@2::show" piped=false
-      body: binding #13 108:11:3-126:12:1 name="p"
-        value: construct #12 112:11:7-125:11:20 type="@2::Point"
-          arg: named-arg #11 120:11:15-124:11:19 name="x"
-            value: literal #10 123:11:18-124:11:19 value=int:3
-      body: expr-stmt #16 128:12:3-136:13:1
-        value: call #15 128:12:3-135:12:10 name="puts" piped=false
-          arg: name-ref #14 133:12:8-134:12:9 name="p"
-      body: expr-stmt #22 138:13:3-166:14:1
-        value: call #21 138:13:3-165:13:30 name="puts" piped=false
-          arg: field-access #20 143:13:8-164:13:29 name="inspect"
-            target: construct #19 143:13:8-156:13:21 type="@3::Point"
-              arg: named-arg #18 151:13:16-155:13:20 name="y"
-                value: literal #17 154:13:19-155:13:20 value=int:4
-      body: expr-stmt #28 168:14:3-196:15:1
-        value: call #27 168:14:3-195:14:30 name="puts" piped=false
-          arg: field-access #26 173:14:8-194:14:29 name="to_s"
-            target: list-lit #25 173:14:8-189:14:24
-              element: enum-constructor #24 174:14:9-188:14:23 enum="@2::Shape" variant="Dot"
-                arg: name-ref #23 186:14:21-187:14:22 name="p"
-      body: expr-stmt #35 198:15:3-229:16:1
-        value: call #34 198:15:3-228:15:33 name="puts" piped=false
-          arg: map-lit #33 203:15:8-227:15:32
-            entry: map-entry #32 204:15:9-226:15:31
-              key: literal #29 204:15:9-207:15:12 value=string:"k"
-              value: call #31 209:15:14-226:15:31 name="ok" piped=false
-                arg: enum-constructor #30 212:15:17-225:15:30 enum="@2::Shape" variant="Empty"
-      body: expr-stmt #38 231:16:3-242:17:1
-        value: call #37 231:16:3-241:16:13 name="IO.warn" piped=false
-          arg: name-ref #36 239:16:11-240:16:12 name="p"
-      body: expr-stmt #42 244:17:3-271:18:1
-        value: call #41 244:17:3-270:17:29 name="IO.warn" piped=false
-          arg: call #40 252:17:11-269:17:28 name="JSON.schema" piped=false
-            arg: type-expression #39 264:17:23-268:17:27 name="Both"
+    declaration: struct-decl #6 37:4:1-79:8:1 name="Both"
+      field: field-decl #3 51:5:3-62:6:1 name="a"
+        type: type-ref #2 54:5:6-61:5:13 name="@2::Point"
+      field: field-decl #5 64:6:3-75:7:1 name="b"
+        type: type-ref #4 67:6:6-74:6:13 name="@3::Point"
+    declaration: function-decl #43 80:9:1-279:19:1 name="main"
+      result: type-ref #7 94:9:15-98:9:19 name="Void"
+      body: expr-stmt #9 101:10:3-110:11:1
+        value: call #8 101:10:3-109:10:11 name="@2::show" piped=false
+      body: binding #13 112:11:3-130:12:1 name="p"
+        value: construct #12 116:11:7-129:11:20 type="@2::Point"
+          arg: named-arg #11 124:11:15-128:11:19 name="x"
+            value: literal #10 127:11:18-128:11:19 value=int:3
+      body: expr-stmt #16 132:12:3-140:13:1
+        value: call #15 132:12:3-139:12:10 name="puts" piped=false
+          arg: name-ref #14 137:12:8-138:12:9 name="p"
+      body: expr-stmt #22 142:13:3-170:14:1
+        value: call #21 142:13:3-169:13:30 name="puts" piped=false
+          arg: field-access #20 147:13:8-168:13:29 name="inspect"
+            target: construct #19 147:13:8-160:13:21 type="@3::Point"
+              arg: named-arg #18 155:13:16-159:13:20 name="y"
+                value: literal #17 158:13:19-159:13:20 value=int:4
+      body: expr-stmt #28 172:14:3-200:15:1
+        value: call #27 172:14:3-199:14:30 name="puts" piped=false
+          arg: field-access #26 177:14:8-198:14:29 name="to_s"
+            target: list-lit #25 177:14:8-193:14:24
+              element: enum-constructor #24 178:14:9-192:14:23 enum="@2::Shape" variant="Dot"
+                arg: name-ref #23 190:14:21-191:14:22 name="p"
+      body: expr-stmt #35 202:15:3-233:16:1
+        value: call #34 202:15:3-232:15:33 name="puts" piped=false
+          arg: map-lit #33 207:15:8-231:15:32
+            entry: map-entry #32 208:15:9-230:15:31
+              key: literal #29 208:15:9-211:15:12 value=string:"k"
+              value: call #31 213:15:14-230:15:31 name="ok" piped=false
+                arg: enum-constructor #30 216:15:17-229:15:30 enum="@2::Shape" variant="Empty"
+      body: expr-stmt #38 235:16:3-246:17:1
+        value: call #37 235:16:3-245:16:13 name="IO.warn" piped=false
+          arg: name-ref #36 243:16:11-244:16:12 name="p"
+      body: expr-stmt #42 248:17:3-275:18:1
+        value: call #41 248:17:3-274:17:29 name="IO.warn" piped=false
+          arg: call #40 256:17:11-273:17:28 name="JSON.schema" piped=false
+            arg: type-expression #39 268:17:23-272:17:27 name="Both"
   module "a.agc"
     declaration: struct-decl #2 7:1:8-33:4:1 name="@2::Point"
       field: field-decl #1 22:2:3-29:3:1 name="x"

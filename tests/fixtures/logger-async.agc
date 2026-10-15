@@ -1,4 +1,4 @@
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def write_events(events: Channel[LogEvent]) -> Result[Void]
   while true

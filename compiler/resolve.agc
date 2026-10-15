@@ -2,14 +2,14 @@
 ##
 ## A name declared in the root file keeps its name; a name declared in another file gets the prefix of that file ("@2::"), so equal names of two files stay apart. A name through an import alias (Alias.name) becomes the prefixed name in the imported file, if that file exports it.
 
-import "declarations" as Declarations
-import "diagnostic" as Diag
-import "link_env" as Env
-import "link_failure" as Failure
-import "modules" as Modules
-import "resolve_import" as Resolve
-import "source" as Source
-import "suggest" as Suggest
+import Declarations from "declarations"
+import Diag from "diagnostic"
+import Env from "link_env"
+import Failure from "link_failure"
+import Modules from "modules"
+import Resolve from "resolve_import"
+import Source from "source"
+import Suggest from "suggest"
 
 ## What the linker knows while it rewrites one file: the settings, every module, the file itself, and the linked names of the user structs the file may update (StructUpdate.visible).
 export struct Context
@@ -96,21 +96,21 @@ end
 
 def std_only_failure(cx: Context, alias: String, member: String, span: Source.Span) -> String
   wrapper = cx.settings.catalog.std_only[alias]
-  help = alias + " is internal to " + wrapper.std_path + "; use import \"" + wrapper.std_path + "\" as " + wrapper.alias
+  help = alias + " is internal to " + wrapper.std_path + "; use import " + wrapper.alias + " from \"" + wrapper.std_path + "\""
   return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown function \"" + alias + "." + member + "\"", Failure.hint(help))
 end
 
 def alias_help(alias: String, hint: Bool) -> String
   if alias == "BDD"
-    return "import \"std/bdd\" as BDD"
+    return "import BDD from \"std/bdd\""
   elsif alias == "HTTP"
-    return "import \"std/http\" as HTTP"
+    return "import HTTP from \"std/http\""
   elsif alias == "Result"
     return "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"
   elsif hint
-    return "\"" + alias + "\" is neither an import alias nor an enum of this file; import a module with import \"path\" as " + alias + ", or declare enum " + alias
+    return "\"" + alias + "\" is neither an import alias nor an enum of this file; import a module with import " + alias + " from \"path\", or declare enum " + alias
   end
-  return "import a module with import \"path\" as " + alias
+  return "import a module with import " + alias + " from \"path\""
 end
 
 # A name bound by import {Name} from "path": the linked name of the export, if it is of the kind wanted. The import already checked that the module exports it.

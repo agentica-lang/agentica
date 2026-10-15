@@ -2,11 +2,11 @@
 ##
 ## `agentica test` compiles a small program that calls `main`. It reads its configuration, runs the feature files and test files, and prints the report.
 
-import "std/bdd/gherkin" as Gherkin
-import "std/bdd/match" as Match
-import "report" as Report
-import "child" as Child
-import "units" as Units
+import Gherkin from "std/bdd/gherkin"
+import Match from "std/bdd/match"
+import Report from "report"
+import Child from "child"
+import Units from "units"
 
 struct Config
   vm: String

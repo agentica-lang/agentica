@@ -142,7 +142,7 @@
         ; Racket reads such a file with replacement characters and goes on; File.read_text is strict (a
         ; documented difference, docs/future/35-self-hosting.md 35.9), so only the Agentica side is asserted.
         (test-case "an import with invalid UTF-8 is CHECK-IMPORT-IO, \"cannot read import\" (Agentica only)"
-          (define root (write-file (build-path work "utf8" "root.agc") "import \"./bad\" as Bad\n\ndef main() -> Void\nend\n"))
+          (define root (write-file (build-path work "utf8" "root.agc") "import Bad from \"./bad\"\n\ndef main() -> Void\nend\n"))
           (call-with-output-file (build-path work "utf8" "bad.agc") #:exists 'truncate/replace
             (lambda (out) (write-bytes (bytes 255 254 10) out)))
           (define output (hash-ref (run-linker bytecode (list (list default-env root))) root))
@@ -156,7 +156,7 @@
           (write-file (build-path home ".local" "share" "agentica" "lib" "homelib.agc") "export def answer() -> Int\n  return 42\nend\n")
           (define root
             (write-file (build-path work "home-root" "root.agc")
-                        "import \"pkg/homelib\" as Homelib\n\ndef main() -> Void\n  puts(Homelib.answer().to_s)\nend\n"))
+                        "import Homelib from \"pkg/homelib\"\n\ndef main() -> Void\n  puts(Homelib.answer().to_s)\nend\n"))
           (define env (hash "AGENTICA_PATH" "" "XDG_DATA_HOME" "relative/data" "HOME" (path->string home)))
           (define output (hash-ref (run-linker bytecode (list (list env root))) root))
           (check-false (regexp-match? #rx"^ERROR" output) output)
@@ -198,13 +198,13 @@
           (for ([n (in-range 3000)])
             (write-file (build-path chain (format "m~a.agc" n))
                         (if (< n 2999)
-                            (format "import \"m~a\" as Next\nexport def f~a() -> Int\n  return Next.f~a()\nend\n\n" (add1 n) n (add1 n))
+                            (format "import Next from \"m~a\"\nexport def f~a() -> Int\n  return Next.f~a()\nend\n\n" (add1 n) n (add1 n))
                             (format "export def f~a() -> Int\n  return 1\nend\n\n" n))))
           (define wide (build-path work "wide"))
           (for ([n (in-range 2000)])
             (write-file (build-path wide (format "w~a.agc" n)) (format "export def g~a() -> Int\n  return ~a\nend\n\n" n n)))
           (write-file (build-path wide "root.agc")
-                      (string-append (string-append* (for/list ([n (in-range 2000)]) (format "import \"w~a\" as W~a\n" n n)))
+                      (string-append (string-append* (for/list ([n (in-range 2000)]) (format "import W~a from \"w~a\"\n" n n)))
                                      "def main() -> Void\n  puts(W0.g0())\nend\n\n"))
           (define specs (list (list default-env (path->string (build-path chain "m0.agc")))
                               (list default-env (path->string (build-path wide "root.agc")))))
@@ -218,12 +218,12 @@
           (define cycle (build-path work "cycle"))
           (for ([n (in-range 1500)])
             (write-file (build-path cycle (format "c~a.agc" n))
-                        (format "import \"c~a\" as Next\n" (modulo (add1 n) 1500))))
+                        (format "import Next from \"c~a\"\n" (modulo (add1 n) 1500))))
           (define broken (build-path work "broken"))
           (for ([n (in-range 1500)])
             (write-file (build-path broken (format "b~a.agc" n))
                         (if (< n 1499)
-                            (format "import \"b~a\" as Next\nexport def f() -> Int\n  return Next.f()\nend\n\n" (add1 n))
+                            (format "import Next from \"b~a\"\nexport def f() -> Int\n  return Next.f()\nend\n\n" (add1 n))
                             "export def f() -> Int\n  return Nope.Thing\nend\n\n")))
           (define specs (list (list default-env (path->string (build-path cycle "c0.agc")))
                               (list default-env (path->string (build-path broken "b0.agc")))))
@@ -249,7 +249,7 @@
           (check-true (> (string-length filler) 1048576))
           (define root
             (write-file (build-path work "big" "root.agc")
-                        (string-append "import \"./big\" as Big\n\ndef main() -> Void\nend\n")))
+                        (string-append "import Big from \"./big\"\n\ndef main() -> Void\nend\n")))
           (write-file (build-path work "big" "big.agc") (string-append filler "export def one() -> Int\n  return 1\nend\n"))
           (define output (hash-ref (run-linker bytecode (list (list default-env root))) root))
           (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO [^ ]+ \"cannot read import\"" output)
@@ -268,7 +268,7 @@
 ; Copies of count fixture folders, each with one or two of its files mutated (a cut, a deletion, a snippet from
 ; the list of risky ones, a renamed alias or a changed declaration keyword), under dir.
 (define risky
-  '("import \"x\" as X\n" "export " "std/queue" "pkg/" "../" "Nope." "HttpWire." "Lib." "A." "M." ".Some(" "(a: 1)" "end\n"
+  '("import X from \"x\"\n" "export " "std/queue" "pkg/" "../" "Nope." "HttpWire." "Lib." "A." "M." ".Some(" "(a: 1)" "end\n"
     "\n\n" "def " "struct " "enum " "\"" "ok(" "Await." "LogLevel." "Result." " as " "import " "\\" ":" "//"))
 
 (define (mutate text)

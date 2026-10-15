@@ -10,7 +10,7 @@ Networking uses the normal expression syntax and lightweight tasks. The network 
 
 #### HTTP client and server (`std/http`)
 
-HTTP is the `std/http` library, imported with `import "std/http" as HTTP`; any alias works. It calls the internal module `HttpWire`, which no other module can name (`CHECK-UNKNOWN-NAME`). A complete program is in [`examples/http_server.agc`](../../examples/http_server.agc).
+HTTP is the `std/http` library, imported with `import HTTP from "std/http"`; any alias works. It calls the internal module `HttpWire`, which no other module can name (`CHECK-UNKNOWN-NAME`). A complete program is in [`examples/http_server.agc`](../../examples/http_server.agc).
 
 A client call is whole: it returns after the whole body, which must be valid UTF-8. One `timeout_ms` covers the whole call. Calls wait in FIFO order for one of the `max_connections` slots (at most 65536). `max_body_bytes` is at most 64 MiB. A call in flight when `close_client` runs fails with `http: client is closed`.
 
@@ -24,7 +24,7 @@ URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`, 
 
 ### Logging (`std/logger`)
 
-`std/logger` is imported with `import "std/logger" as Logger`. It calls the internal module `LogRegistry`, which no other module can name (`CHECK-UNKNOWN-NAME`). `LogLevel` and `LogEvent` are builtin types and their names are reserved in every program (`CHECK-REDEFINED-NAME`).
+`std/logger` is imported with `import Logger from "std/logger"`. It calls the internal module `LogRegistry`, which no other module can name (`CHECK-UNKNOWN-NAME`). `LogLevel` and `LogEvent` are builtin types and their names are reserved in every program (`CHECK-REDEFINED-NAME`).
 
 There are four levels, `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`. Each level has two functions: `Logger.debug(message)` and `Logger.debug_meta(message, fields)`, and the same for `info`, `warning` and `err` (the function for the last level is `err` because `error` is reserved; the output says `error`). `Logger.log(level, message)` and `Logger.log_meta(level, message, fields)` take the level as a value. Fields are a `Map[String, String]`.
 

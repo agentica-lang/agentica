@@ -215,7 +215,7 @@
     (define imports
       (filter import-decl?
               (program-declarations
-               (parse-ok "import \"old\" as Old\nimport New from \"new\"\nimport {\n  as as from,\n  Token,\n} from \"lexer\"\n"))))
+               (parse-ok "import Old from \"old\"\nimport New from \"new\"\nimport {\n  as as from,\n  Token,\n} from \"lexer\"\n"))))
     (check-equal? (map import-decl-alias imports) '("Old" "New" #f))
     (check-equal? (map (lambda (import) (null? (import-decl-names import))) imports) '(#t #t #f))
     (define names (import-decl-names (third imports)))
@@ -229,15 +229,19 @@
     (check-equal? (import-error "import {} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 9))
     (check-equal? (import-error "import {A as} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 13))
     (check-equal? (import-error "import Mod, {A} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 11))
-    (check-equal? (import-error "import {A} of \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 12)))
+    (check-equal? (import-error "import {A} of \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 12))
+    ; The path-first form of earlier versions: an error at the string, with the new form as help.
+    (define old-form (string-append "import \"a\"" " as A\n"))
+    (check-equal? (import-error old-form) '(PARSE-UNEXPECTED-TOKEN 8))
+    (check-regexp-match #rx"import Alias from" (diagnostic-help (parse-text old-form))))
 
   (test-case "declarations need a blank line after their end"
     (define problem (parse-text "struct A\n  n: Int\nend\ndef main() -> Void\nend\n\n"))
     (check-equal? (diagnostic-code problem) 'PARSE-MISSING-BLANK-LINE)
     (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 4)
-    (parse-ok "import \"a\" as A\ndef f() -> Void\nend\n# note\ndef main() -> Void\nend")
+    (parse-ok "import A from \"a\"\ndef f() -> Void\nend\n# note\ndef main() -> Void\nend")
     (check-equal? (parse-code "def f() -> Void\nend\nexport def main() -> Void\nend\n\n") 'PARSE-MISSING-BLANK-LINE)
-    (check-equal? (parse-code "enum E\n  A\nend\nimport \"a\" as A\n") 'PARSE-MISSING-BLANK-LINE)
+    (check-equal? (parse-code "enum E\n  A\nend\nimport A from \"a\"\n") 'PARSE-MISSING-BLANK-LINE)
     (check-equal? (parse-code "def f() -> Void\nend\nend\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-equal? (parse-code "def f() -> Void\nend\nputs(1)\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-regexp-match #rx"closes nothing" (diagnostic-help (parse-text "def f() -> Void\nend\nend\n")))
@@ -653,7 +657,7 @@
     (define only (parse-ok "## Only a module doc.\n\n"))
     (check-equal? (program-module-doc only) "Only a module doc.")
     (check-equal? (program-declarations only) '())
-    (define imported (parse-ok "## Module.\n\nimport \"a\" as A\n"))
+    (define imported (parse-ok "## Module.\n\nimport A from \"a\"\n"))
     (check-equal? (program-module-doc imported) "Module.")
     (define attached (parse-ok "## Not a module doc.\ndef main() -> Void\nend\n"))
     (check-false (program-module-doc attached))
@@ -666,9 +670,9 @@
                    (cons "def a() -> Void\nend\n\n## d\n# note\ndef b() -> Void\nend\n" '(4 1))
                    (cons "## d\n# note\n\ndef a() -> Void\nend\n" '(1 1))
                    (cons "## d\n## e\n# note\n\ndef a() -> Void\nend\n" '(1 1))
-                   (cons "import \"a\" as A\n## d\nimport \"b\" as B\n" '(2 1))
-                   (cons "## d\nimport \"a\" as A\n" '(1 1))
-                   (cons "import \"a\" as A\n\n## d\n\ndef a() -> Void\nend\n" '(3 1))
+                   (cons "import A from \"a\"\n## d\nimport B from \"b\"\n" '(2 1))
+                   (cons "## d\nimport A from \"a\"\n" '(1 1))
+                   (cons "import A from \"a\"\n\n## d\n\ndef a() -> Void\nend\n" '(3 1))
                    (cons "def main() -> Void\n  ## d\n  ## e\n  x = 1\nend\n" '(2 3))
                    (cons "def main() -> Void\n  x = 1\n  ## d\nend\n" '(3 3))
                    (cons "def main() -> Void\n  f(1,\n## d\n2)\nend\n" '(3 1))
@@ -699,7 +703,7 @@
     (check-equal? (docs-by-line blank-before) '((5 . "d")))
     (define comment-before (parse-ok "def a() -> Void\nend\n# note\n## d\ndef b() -> Void\nend\n"))
     (check-equal? (docs-by-line comment-before) '((5 . "d")))
-    (define after-import (parse-ok "import \"a\" as A\n## d\ndef b() -> Void\nend\n"))
+    (define after-import (parse-ok "import A from \"a\"\n## d\ndef b() -> Void\nend\n"))
     (check-equal? (docs-by-line after-import) '((3 . "d")))
     (check-equal? (problem-at "## d\ndef a() -> Void\nend\n## e\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 4 1)))
 

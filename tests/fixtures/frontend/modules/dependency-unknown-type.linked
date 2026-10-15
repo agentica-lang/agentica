@@ -1,7 +1,7 @@
-program #3 0:1:1-42:5:1
+program #3 0:1:1-44:5:1
   module "root.agc"
-    declaration: function-decl #2 18:2:1-41:4:1 name="main"
-      result: type-ref #1 32:2:15-36:2:19 name="Void"
+    declaration: function-decl #2 20:2:1-43:4:1 name="main"
+      result: type-ref #1 34:2:15-38:2:19 name="Void"
   module "bad.agc"
     declaration: struct-decl #2 0:1:1-26:4:1 name="@2::Point"
       field: field-decl #1 15:2:3-22:3:1 name="x"

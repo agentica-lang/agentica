@@ -1,4 +1,4 @@
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def worker(n: Int) -> Int
   Logger.info_meta("from worker", {"n": n.to_s})

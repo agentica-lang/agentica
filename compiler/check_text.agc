@@ -1,14 +1,14 @@
 ## The text form of a check, for tests. See check.agc.
 
-import "check_failure" as Failure
-import "check_state" as State
-import "checker" as Checker
-import "diagnostic" as Diag
-import "link_env" as Env
-import "link_text" as LinkText
-import "linker" as Linker
-import "text" as Text
-import "types" as T
+import Failure from "check_failure"
+import State from "check_state"
+import Checker from "checker"
+import Diag from "diagnostic"
+import Env from "link_env"
+import LinkText from "link_text"
+import Linker from "linker"
+import Text from "text"
+import T from "types"
 
 ## The text form of checking the file at path: the linked program of link_text with the type of each checked expression added at the end of its line (` type=Int`, the types written by Types.debug_text) and, for a method call or a field access that names a builtin, ` resolved=` and what it became; or the ERROR line of the first failure. A failure of the checker has the notes of the diagnostic that are present, ` expected="..." actual="..." callee="..." signature="..." labels=[SPAN "text", ...]`, then ` file="path"`. tests/frontend-check-common.rkt prints the same text from the Racket checker.
 export def check_text(path: String, settings: Env.Settings) -> String

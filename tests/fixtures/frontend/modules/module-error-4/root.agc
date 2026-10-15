@@ -1,4 +1,4 @@
-import "module" as JSON
+import JSON from "module"
 def main() -> Void
 end
 

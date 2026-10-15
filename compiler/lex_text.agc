@@ -1,7 +1,7 @@
-import "diagnostic" as Diag
-import "lexer" as Lexer
-import "text" as Text
-import "token" as Tokens
+import Diag from "diagnostic"
+import Lexer from "lexer"
+import Text from "text"
+import Tokens from "token"
 
 export def lex_text(text: String) -> String
   case Lexer.lex(text)

@@ -162,7 +162,7 @@
       ;; The import line a help text shows for a path (written as a string): the alias form, or the name list.
       (define (import-line written alias entries)
         (if alias
-            (format "import ~s as ~a" written alias)
+            (format "import ~a from ~s" alias written)
             (format "import {~a} from ~s"
                     (string-join (for/list ([entry (in-list entries)])
                                    (if (equal? (import-name-name entry) (import-name-local entry))
@@ -308,20 +308,20 @@
              [(and (std-only-name? name) (not (string? key)))
               (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span
                     #:help (let ([import (hash-ref std-only-imports alias)])
-                             (format "~a is internal to ~a; use import \"~a\" as ~a"
-                                     alias (car import) (car import) (cdr import))))]
+                             (format "~a is internal to ~a; use import ~a from \"~a\""
+                                     alias (car import) (cdr import) (car import))))]
              ;; Unknown calls belong to the checker, including misspelled
              ;; builtin module functions. Keep their stable diagnostic code.
              [(eq? kind 'function) name]
              [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span
                          #:help (cond
-                                  [(equal? alias "BDD") "import \"std/bdd\" as BDD"]
-                                  [(equal? alias "HTTP") "import \"std/http\" as HTTP"]
+                                  [(equal? alias "BDD") "import BDD from \"std/bdd\""]
+                                  [(equal? alias "HTTP") "import HTTP from \"std/http\""]
                                   [(equal? alias "Result")
                                    "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"]
                                   [variant-hint?
-                                   (format "\"~a\" is neither an import alias nor an enum of this file; import a module with import \"path\" as ~a, or declare enum ~a" alias alias alias)]
-                                  [else (format "import a module with import \"path\" as ~a" alias)]))])]
+                                   (format "\"~a\" is neither an import alias nor an enum of this file; import a module with import ~a from \"path\", or declare enum ~a" alias alias alias)]
+                                  [else (format "import a module with import ~a from \"path\"" alias)]))])]
           [(named-entry key name)
            => (lambda (entry)
                 (unless (right-kind? (hash-ref (hash-ref exports (car entry)) (cdr entry)) kind)

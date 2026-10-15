@@ -1,4 +1,4 @@
-import "calls" as C
+import C from "calls"
 
 def helpe() -> Int
   return 2

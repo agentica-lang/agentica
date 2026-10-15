@@ -1,4 +1,4 @@
-import "nope" as Nope
+import Nope from "nope"
 def main() -> Void
 end
 

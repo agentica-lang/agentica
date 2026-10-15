@@ -1,7 +1,7 @@
 # two comment lines keep the import off line 1
 # so the span is not the file start
 
-import ".agc" as Util
+import Util from ".agc"
 def main() -> Void
 end
 

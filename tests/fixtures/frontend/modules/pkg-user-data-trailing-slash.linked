@@ -1,10 +1,10 @@
-program #6 0:1:1-73:6:1
+program #6 0:1:1-75:6:1
   module "root.agc"
-    declaration: function-decl #5 28:2:1-72:5:1 name="main"
-      result: type-ref #1 42:2:15-46:2:19 name="Void"
-      body: expr-stmt #4 49:3:3-68:4:1
-        value: call #3 49:3:3-67:3:21 name="puts" piped=false
-          arg: call #2 54:3:8-66:3:20 name="@2::read" piped=false
+    declaration: function-decl #5 30:2:1-74:5:1 name="main"
+      result: type-ref #1 44:2:15-48:2:19 name="Void"
+      body: expr-stmt #4 51:3:3-70:4:1
+        value: call #3 51:3:3-69:3:21 name="puts" piped=false
+          arg: call #2 56:3:8-68:3:20 name="@2::read" piped=false
   module "data/agentica/lib/value.agc"
     declaration: function-decl #3 7:1:8-48:4:1 name="@2::read"
       result: type-ref #0 21:1:22-27:1:28 name="String"

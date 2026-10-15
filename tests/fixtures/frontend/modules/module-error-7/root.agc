@@ -1,4 +1,4 @@
-import "module" as Await
+import Await from "module"
 def main() -> Void
 end
 

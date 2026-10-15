@@ -1,4 +1,4 @@
-import "util" as Util
+import Util from "util"
 
 ## Doc line.
 def main() -> Void

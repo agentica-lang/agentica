@@ -241,7 +241,7 @@ END
             (for/list ([file (in-directory stdlib-folder)] #:when (path-has-extension? file #".agc"))
               (define name (path->string (path-replace-extension (find-relative-path (simplify-path stdlib-folder) (simplify-path file)) #"")))
               (write-file (build-path work "std" (string-append (string-replace name "/" "_") ".agc"))
-                          (format "import \"std/~a\" as Module\n\ndef main() -> Void\nend\n" name))))
+                          (format "import Module from \"std/~a\"\n\ndef main() -> Void\nend\n" name))))
           (define paths (append wrappers (agc-files-in "compiler")))
           (agentica-matches-racket (run-checker bytecode paths) paths))
 

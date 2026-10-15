@@ -1,7 +1,7 @@
 # two comment lines keep the import off line 1
 # so the span is not the file start
 
-import "/abs/x" as Util
+import Util from "/abs/x"
 def main() -> Void
 end
 

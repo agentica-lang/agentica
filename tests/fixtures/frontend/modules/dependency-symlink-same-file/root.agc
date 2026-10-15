@@ -1,5 +1,5 @@
-import "real" as A
-import "alias" as B
+import A from "real"
+import B from "alias"
 def main() -> Void
   A.go()
   B.go()

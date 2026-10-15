@@ -1,6 +1,6 @@
 ### File modules and imports
 
-Each file is a module. `import Models from "models"` loads `models.agc` and gives it the alias `Models`, and `import Util from "../lib/util"` loads `../lib/util.agc`. The path has no extension. A path ending in `.agc`, an empty path, a path ending in `/`, or a last part containing a dot (`"models.rb"`, `"."`, `".."`) is `CHECK-IMPORT-PATH`, so a module file name has no dot apart from `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`. The older form `import "models" as Models` is still accepted and means the same.
+Each file is a module. `import Models from "models"` loads `models.agc` and gives it the alias `Models`, and `import Util from "../lib/util"` loads `../lib/util.agc`. The path has no extension. A path ending in `.agc`, an empty path, a path ending in `/`, or a last part containing a dot (`"models.rb"`, `"."`, `".."`) is `CHECK-IMPORT-PATH`, so a module file name has no dot apart from `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`. Writing the path first, as earlier versions did, is `PARSE-UNEXPECTED-TOKEN` at the string, with the help `write import Alias from "path"`.
 
 Relative paths resolve from the importing file, not the working directory. Each file is linked once. Cycles are `CHECK-IMPORT-CYCLE`, missing or unreadable files are `CHECK-IMPORT-IO`, and invalid paths are `CHECK-IMPORT-PATH`; each is located at the import.
 
@@ -22,8 +22,8 @@ Only the root file supplies the executable `main() -> Void`; imported `main` fun
 
 #### Standard library and external libraries
 
-- `import "std/queue" as Queue` loads the standard library embedded at build time. Nothing needs to be installed, and local files or external roots cannot shadow it. Embedded modules may use relative imports inside `std/`.
-- `import "pkg/acme/tools" as Tools` searches for `acme/tools.agc` in order: `agc_libs/` beside the root program (not beside a dependency); the absolute roots in `AGENTICA_PATH` (`:`-separated, `;` on Windows), in order; `$XDG_DATA_HOME/agentica/lib/` (default `~/.local/share/agentica/lib/`; on Windows `%LOCALAPPDATA%/agentica/lib/`); then `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/` (none on Windows).
+- `import Queue from "std/queue"` loads the standard library embedded at build time. Nothing needs to be installed, and local files or external roots cannot shadow it. Embedded modules may use relative imports inside `std/`.
+- `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in order: `agc_libs/` beside the root program (not beside a dependency); the absolute roots in `AGENTICA_PATH` (`:`-separated, `;` on Windows), in order; `$XDG_DATA_HOME/agentica/lib/` (default `~/.local/share/agentica/lib/`; on Windows `%LOCALAPPDATA%/agentica/lib/`); then `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/` (none on Windows).
 
 The first existing file wins, and an error in that file does not fall back to another root. Empty `AGENTICA_PATH` entries are ignored; a relative entry is `CHECK-IMPORT-PATH`. Library paths use forward slashes and reject empty, `.`, `..`, backslash and colon components. After symlink resolution, the target must stay inside its root. These checks apply to namespaced imports only: imports are not a filesystem sandbox. A missing module is `CHECK-IMPORT-IO`. Diagnostics inside an embedded module name its source, such as `std/queue.agc`.
 

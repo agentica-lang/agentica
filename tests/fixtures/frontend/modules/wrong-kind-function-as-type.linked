@@ -1,1 +1,1 @@
-ERROR PARSE-UNEXPECTED-TOKEN 42:3:8-43:3:9 "expected an imported type name, found \"f\"" - file="root.agc"
+ERROR PARSE-UNEXPECTED-TOKEN 44:3:8-45:3:9 "expected an imported type name, found \"f\"" - file="root.agc"

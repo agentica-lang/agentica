@@ -2,8 +2,8 @@
 ##
 ## Two paragraphs.
 
-import "util" as Util
-import "shapes" as Shapes
+import Util from "util"
+import Shapes from "shapes"
 
 ## A point.
 struct Point

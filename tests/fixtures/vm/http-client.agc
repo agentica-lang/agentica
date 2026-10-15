@@ -1,4 +1,4 @@
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def head(socket: Socket, port: Int, seen: List[String]) -> List[String]
   line = Result.unwrap!(TCP.read_line(socket, 5000))

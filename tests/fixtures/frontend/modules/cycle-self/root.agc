@@ -1,4 +1,4 @@
-import "root" as Root
+import Root from "root"
 def main() -> Void
 end
 

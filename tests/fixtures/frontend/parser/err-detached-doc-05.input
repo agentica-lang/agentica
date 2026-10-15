@@ -1,3 +1,3 @@
-import "a" as A
+import A from "a"
 ## d
-import "b" as B
+import B from "b"

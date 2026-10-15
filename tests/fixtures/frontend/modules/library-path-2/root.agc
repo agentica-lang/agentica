@@ -1,4 +1,4 @@
-import "std/missing" as Q
+import Q from "std/missing"
 def main() -> Void
 end
 

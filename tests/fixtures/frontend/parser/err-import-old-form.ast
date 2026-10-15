@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 7:1:8-13:1:14 "expected a module alias or \"{\", found \"\\\"util\\\"\"" "write import Alias from \"path\""

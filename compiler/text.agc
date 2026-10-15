@@ -1,8 +1,8 @@
 ## Text helpers shared by the text forms of the lexer and the parser.
 
-import "diagnostic" as Diag
-import "source" as Source
-import "unicode" as Unicode
+import Diag from "diagnostic"
+import Source from "source"
+import Unicode from "unicode"
 
 ## A String as ASCII text between double quotes; every other character is written as \\u{HEX}.
 export def quote(text: String) -> String
