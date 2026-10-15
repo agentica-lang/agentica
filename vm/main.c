@@ -301,28 +301,10 @@ static agc_value program_args(int argc, char **argv, int first) {
   return agc_list_value(agc_list_builder_finish(&b));
 }
 
-/* The .agcb stores source names relative to the folder of the entry file. The front end passes that folder as
- * --source-root, as the user types it, and every name but a std/ one is printed under it. Joining once here keeps
- * the print sites of diag.c and testing.c untouched. */
-static void apply_source_root(agc_program *program, const char *root, size_t root_chars) {
-  size_t root_bytes = strlen(root);
-  size_t slash = root_bytes > 0 && root[root_bytes - 1] != '/' ? 1 : 0;
-  for (uint32_t i = 0; i < program->source_count; i++) {
-    const agc_string *name = program->sources[i].name;
-    if (name->bytes >= 4 && memcmp(name->data, "std/", 4) == 0) continue;
-    agc_string *joined = agc_new_string(agc_size_add(agc_size_add(root_bytes, slash), name->bytes),
-                                        agc_size_add(agc_size_add(root_chars, slash), name->chars));
-    memcpy(joined->data, root, root_bytes);
-    if (slash) joined->data[root_bytes] = '/';
-    memcpy(joined->data + root_bytes + slash, name->data, name->bytes);
-    program->sources[i].name = joined;
-  }
-}
-
 static const char usage[] =
   "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] "
   "[--source-root DIR] -- <file.agcb> [args...]\n"
-  "  --source-root DIR is put before each stored source name that is not std/NAME.agc, in diagnostics and reports\n"
+  "  --source-root DIR is put before each stored source name that is relative and does not start with std/, in diagnostics and reports\n"
   "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins, at most 86400000)\n";
 
 static int usage_error(void) {
@@ -470,7 +452,8 @@ static int run(int argc, char **argv) {
     }
     if (strcmp(arg, "--source-root") == 0) {
       if (!once(&seen_root, arg)) return 2;
-      if (i + 1 >= argc || !agc_utf8_chars((const uint8_t *)argv[i + 1], strlen(argv[i + 1]), &source_root_chars)) {
+      if (i + 1 >= argc || strcmp(argv[i + 1], "--") == 0 ||
+          !agc_utf8_chars((const uint8_t *)argv[i + 1], strlen(argv[i + 1]), &source_root_chars)) {
         fputs("agentica-vm: --source-root needs a folder name in UTF-8\n", stderr);
         return 2;
       }
@@ -521,7 +504,10 @@ static int run(int argc, char **argv) {
     fprintf(stderr, "agentica-vm: invalid bytecode: %s\n", error);
     return 2;
   }
-  apply_source_root(program, source_root, source_root_chars);
+  if (!agc_program_set_source_root(program, source_root, source_root_chars)) {
+    fputs("agentica-vm: invalid bytecode: file needs too much memory\n", stderr);
+    return 2;
+  }
 
   bool own_uring_env = agc_io_init();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));

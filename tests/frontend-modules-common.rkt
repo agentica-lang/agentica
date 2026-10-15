@@ -66,7 +66,7 @@
     (if (absolute-path? name)
         (with-handlers ([exn:fail? (lambda (_) name)]) (path->string (normalize-path name)))
         name))
-  (if (and folder (absolute-path? canonical)) (relative-source-name folder canonical) canonical))
+  (if (and folder (absolute-path? canonical)) (stored-relative-name folder canonical) canonical))
 
 (define (file-name span)
   (source-name (source-span-source span)))

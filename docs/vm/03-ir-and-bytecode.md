@@ -268,7 +268,7 @@ header and the entry.
 | Section | Entry |
 |---|---|
 | Header | magic `"AGCB"`, `u32` format version (5), `str` Agentica version (`src/version.rkt`) |
-| Sources | `str` name, `str` full text. The name is the path from the folder of the entry file (`main.agc`, `lib/util.agc`, `../shared/x.agc`) or `std/NAME.agc`, never an absolute path, so the bytes do not depend on where the program lives (§35.4). The VM prints it in diagnostics and stack traces, under `--source-root DIR` when given (§9). |
+| Sources | `str` name, `str` full text. The name is the path from the folder of the entry file (`main.agc`, `lib/util.agc`, `../shared/x.agc`) or `std/NAME.agc` (a user file under a `std/` folder is `./std/NAME.agc`), never an absolute path, so the bytes do not depend on where the program lives (§35.4). The VM prints it in diagnostics and stack traces, under `--source-root DIR` when given (§9). |
 | Spans | `u32` source, start line, start column, end line, end column. Span 0 is the program span. |
 | Constants | `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6 String), then `i64`, `f64` bits or `str` |
 | Structs | `str` display name, `u32` field count, each field's `str` name |

@@ -87,11 +87,16 @@ byte of a file with a type table, an Updates section or Globals.
   a program argument. Option errors (a repeated option, an unknown switch, a
   missing or bad value, a bad `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and
   `--json` may both appear, and the last one wins.
-- `--source-root DIR` (once; DIR must be valid UTF-8, and "" does nothing) puts
-  `DIR/` before every source name of the program that is not `std/NAME.agc`,
-  once, right after the load, so diagnostics, stack traces, task crash lines and
-  test reports all print the joined name (the 256-byte cut of stack lines
-  applies to it). The `.agcb` stores names relative to the folder of the entry
+- `--source-root DIR` (once; DIR must be valid UTF-8 and not `--`, and "" does
+  nothing; a bad DIR exits 2) puts `DIR/` before every source name of the
+  program that is relative and does not start with `std/`, once, right after
+  the load (`agc_program_set_source_root`), so diagnostics, stack traces, task
+  crash lines and test reports all print the joined name (the 256-byte cut of
+  stack lines applies to it). A name that starts with `std/` is a standard
+  module; the front end writes a user file under a `std/` folder as
+  `./std/NAME.agc`, which is joined with its `./` dropped. An absolute name is
+  left as it is. The bytes added over all names are capped at 64 MiB; past it
+  the VM exits 2 with `invalid bytecode: file needs too much memory`. The `.agcb` stores names relative to the folder of the entry
   file (4.6); `agentica` passes that folder as the user would type it, relative
   to the working directory, unless the entry is in it. Without the option the
   stored name prints. DIR is not normalized: an imported file above the root

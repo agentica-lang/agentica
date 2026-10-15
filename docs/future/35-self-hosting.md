@@ -232,7 +232,8 @@ Notes:
     same way.
   - A file inside the root is stored as its path from there, joined with `/`
     and with no `./` (`main.agc`, `lib/util.agc`). The entry file is its own
-    file name. A `std/` module keeps its `std/NAME.agc` key.
+    file name. A `std/` module keeps its `std/NAME.agc` key, and a user file
+    under a `std/` folder is `./std/NAME.agc`.
   - An import that goes above the root with `../` is allowed, as before, and
     keeps the `..` parts (`../shared/x.agc`). A `pkg/` library found outside
     the root (the user or system library folders) is stored the same way, so
@@ -248,10 +249,13 @@ Notes:
     seen from the working directory (built from the canonical folder, so `..`
     names stay right through links; absolute when the entry was typed as an
     absolute path; not passed when the entry is in the working directory).
-    The VM puts `DIR/` before every stored name that is not `std/NAME.agc`,
-    once, after the load (`vm/main.c`). So `agentica examples/hello.agc` shows
-    `examples/hello.agc:3:5`, as before, and an import shows
-    `examples/lib/util.agc` where it showed an absolute path.
+    The VM puts `DIR/` before every stored name that is relative and does not
+    start with `std/`, once, after the load (`agc_program_set_source_root` in
+    `vm/loader.c`); a user file under a `std/` folder is stored as
+    `./std/NAME.agc` so it is not taken for a standard module. So
+    `agentica examples/hello.agc` shows `examples/hello.agc:3:5`, as before,
+    and an import shows `examples/lib/util.agc` where it showed an absolute
+    path.
     `agentica test` passes the option for the step program and for each test
     file too. `agentica-vm x.agcb` alone prints the stored names.
   - The stored name of a file is built from its canonical path, so a link in

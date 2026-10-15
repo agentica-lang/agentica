@@ -17,10 +17,11 @@
 ;; A file inside it is stored as its path from there, joined with "/" and with
 ;; no "./" ("main.agc", "lib/util.agc"). A file above the root keeps the ".."
 ;; parts ("../shared/x.agc"). The entry file is its own file name. A std/ module
-;; keeps its std/NAME.agc key. Only a file on another drive (Windows) stays
+;; keeps its std/NAME.agc key; a user file whose path starts with std/ is
+;; "./std/NAME.agc". Only a file on another drive (Windows) stays
 ;; absolute. Imports are already canonical (modules.rkt), so the root is
 ;; canonicalized the same way (normalize-path resolves links) before comparing.
-(provide stored-source-names relative-source-name)
+(provide stored-source-names stored-relative-name relative-source-name)
 
 (define (stored-source-names root sources)
   (define root-name (source-name root))
@@ -33,8 +34,15 @@
     (define name (source-name text-source))
     (cond
       [(eq? text-source root) (path->string file)]
-      [(absolute-path? name) (relative-source-name folder name)]
+      [(absolute-path? name) (stored-relative-name folder name)]
       [else name])))
+
+;; The stored name of an imported file. A user file under a std/ folder of the
+;; project would look like a standard module (and the VM puts --source-root
+;; before every name but those), so it is written "./std/NAME.agc".
+(define (stored-relative-name folder name)
+  (define relative (relative-source-name folder name))
+  (if (string-prefix? relative "std/") (string-append "./" relative) relative))
 
 ;; The path of `name` from `folder`, both absolute. "." and ".." parts are
 ;; folded first, so explode-path never yields 'up or 'same; any failure (a

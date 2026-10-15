@@ -7,7 +7,7 @@ seen from the working directory) before it with `agentica-vm --source-root`.
 """
 import shutil
 
-from tests.agentica_test import TestCase, cli, compile_agc, run, run_vm, vm_environment
+from tests.agentica_test import TestCase, cli, compile_agc, run, run_vm, vm_binary, vm_environment
 
 MAIN = """import Util from "lib/util"
 import Shared from "../shared/x"
@@ -37,6 +37,23 @@ SHARED = """export def name() -> String
 end
 
 export def fail() -> Int
+  xs = [1]
+  return xs[3]
+end
+"""
+
+STD_MAIN = """import Helper from "./std/helper"
+import Other from "stdx"
+
+def main() -> Void
+  if System.args().size > 0
+    puts(Other.fail().to_s)
+  end
+  puts(Helper.fail().to_s)
+end
+"""
+
+STD_FAIL = """export def fail() -> Int
   xs = [1]
   return xs[3]
 end
@@ -141,6 +158,14 @@ class SourcePathsTest(TestCase):
         self.assertEqual(trace("--source-root", ""), trace())
         twice = run_vm(bytecode, "--source-root", "a", "--source-root", "b", env=vm_environment())
         self.assertEqual(twice.code, 2)
+        # A missing folder, "--" taken as the folder, and a folder that is not UTF-8 are usage errors.
+        env = vm_environment()
+        missing = run([vm_binary(), "--source-root"], env=env)
+        taken_dashes = run_vm(bytecode, "--source-root", "--", env=env)
+        not_utf8 = run_vm(bytecode, "--source-root", "\udcff", env=env)
+        for usage in (missing, taken_dashes, not_utf8):
+            self.assertEqual(usage.code, 2)
+            self.assertIn("--source-root needs a folder name in UTF-8", usage.stderr)
 
     def test_the_cli_prints_paths_as_seen_from_the_working_directory(self):
         base = self.project()
@@ -158,3 +183,23 @@ class SourcePathsTest(TestCase):
         (base / "linkapp").symlink_to(base / "app", target_is_directory=True)
         result = run(cli() + ["linkapp/main.agc"], cwd=base)
         self.assertIn("\n    boom at app/lib/util.agc:", result.stderr)
+
+    def test_a_user_std_folder_is_not_a_standard_module(self):
+        files = {"app/main.agc": STD_MAIN, "app/std/helper.agc": STD_FAIL, "app/stdx.agc": STD_FAIL}
+        first, second = self.project(files), self.project(files)
+        one = compile_agc(first / "app" / "main.agc", first / "one.agcb")
+        two = compile_agc(second / "app" / "main.agc", second / "two.agcb")
+        self.assertEqual(one.read_bytes(), two.read_bytes())
+        self.assertIn(b"./std/helper.agc", one.read_bytes())
+        # Stored as written; with a root the "./" goes away and the folder joins, as for any user file.
+        stored = run_vm(one, env=vm_environment())
+        self.assertTrue(stored.stderr.startswith("./std/helper.agc:"), stored.stderr)
+        rooted = run_vm(one, "--source-root", "app", env=vm_environment())
+        self.assertTrue(rooted.stderr.startswith("app/std/helper.agc:"), rooted.stderr)
+        self.assertIn("\n    main at app/main.agc:", rooted.stderr)
+        # stdx.agc only starts with "std": it is joined like any user file.
+        other = run_vm(one, "--source-root", "app", args=("x",), env=vm_environment())
+        self.assertTrue(other.stderr.startswith("app/stdx.agc:"), other.stderr)
+        # The CLI does the same from the working directory.
+        result = run(cli() + ["app/main.agc"], cwd=first)
+        self.assertTrue(result.stderr.startswith("app/std/helper.agc:"), result.stderr)
