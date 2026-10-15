@@ -76,15 +76,15 @@ def type_id(
       return ok(entry_of(inner.pool, 5, inner.id))
     Types.Type.Struct(name) ->
       if !struct_index.has_key?(name)
-        return error(unsupported(program, "the struct " + name + " in a JSON field type is not in the table"))
+        return error(unsupported(program, "the struct #{name} in a JSON field type is not in the table"))
       end
       return ok(entry_of(pool, 6, struct_index[name]))
-    _ -> return error(unsupported(program, "a JSON field type of " + Types.tag(type)))
+    _ -> return error(unsupported(program, "a JSON field type of #{Types.tag(type)}"))
   end
 end
 
 def entry_of(pool: Pool.Pool, tag: Int, number: Int) -> Pool.Interned
-  return Pool.intern(pool, tag.to_s + ":" + number.to_s, [tag].concat(Bytes.u32(number)))
+  return Pool.intern(pool, "#{tag}:#{number}", [tag].concat(Bytes.u32(number)))
 end
 
 def unsupported(program: Ir.Program, message: String) -> String

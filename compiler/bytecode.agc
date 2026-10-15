@@ -19,7 +19,7 @@ def main() -> Void
   for argument in System.args()
     if output_next
       output_next = false
-      puts("== " + root)
+      puts("== #{root}")
       puts(compile(root, argument, Env.settings(stdlib, env)))
     elsif argument == "-o"
       output_next = true
@@ -65,9 +65,9 @@ def write(root_dir: String, written: Writer.Written, output: String) -> String
     Writer.Written.Done(bytes) ->
       saved = save(output, bytes)
       if saved.ok?
-        return "wrote " + bytes.size.to_s + " bytes"
+        return "wrote #{bytes.size} bytes"
       end
-      return "cannot write " + output + ": " + saved.message
+      return "cannot write #{output}: #{saved.message}"
   end
 end
 

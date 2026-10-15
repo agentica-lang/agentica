@@ -131,7 +131,7 @@ end
 
 ## Sends `text` and a newline to the program's input.
 export def when_line(ctx: Context, text: String) -> Context
-  return send(ctx, text + "\n")
+  return send(ctx, "#{text}\n")
 end
 
 ## Sends `text` to the program's input as it is.
@@ -468,7 +468,7 @@ def send_ms() -> Int
 end
 
 def record_text(fields: Map[String, Json]) -> String
-  return JSON.encode(JSON.object(fields)) + "\n"
+  return "#{JSON.encode(JSON.object(fields))}\n"
 end
 
 def over_text() -> String

@@ -149,7 +149,7 @@ def cycle_failure(cx: State.Cx, st: State.St, entries: List[Entry], stack: List[
     "CHECK-CONSTANT-CYCLE",
     "constants depend on each other in a cycle",
     read.span,
-    "the cycle is " + around.join(" -> "),
+    "the cycle is #{around.join(" -> ")}",
   )
 end
 
@@ -288,7 +288,7 @@ def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Ast.Optional[
             cx,
             st,
             span,
-            "a constant cannot call " + T.display_name(found.name) + ", a function declared in the program",
+            "a constant cannot call #{T.display_name(found.name)}, a function declared in the program",
             "build the value from literals, constructors and builtins, or compute it in a function",
           ),
         )
@@ -307,13 +307,7 @@ def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Ast.Opt
             cx,
             st,
             span,
-            (
-              "a constant cannot call " +
-              T.display_name(found.name) +
-              ", which has effects (" +
-              found.effects.join(", ") +
-              ")"
-            ),
+            "a constant cannot call #{T.display_name(found.name)}, which has effects (#{found.effects.join(", ")})",
             "a constant is built from literals, constructors and builtins without effects",
           ),
         )
@@ -338,7 +332,7 @@ def check_data(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: 
           cx,
           st,
           "CHECK-CONSTANT-TYPE",
-          "a constant expression must have a data type, found " + T.to_text(type),
+          "a constant expression must have a data type, found #{T.to_text(type)}",
           Ast.expr_span(expr),
           data_help(type),
         ),
@@ -351,8 +345,8 @@ def data_help(type: T.Type) -> String
     return "a constant's value must be data: write nil, not a Void call"
   end
   return (
-    "a constant holds numbers, text, collections, structs and enums of those; functions, tasks, channels and " +
-    "handles are not data"
+    "a constant holds numbers, text, collections, structs and enums of those; " +
+    "functions, tasks, channels and handles are not data"
   )
 end
 

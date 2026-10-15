@@ -42,7 +42,7 @@ end
 ## ` file="path"` added.
 export def problem_text(root_dir: String, problem: Failure.Problem) -> String
   shown = Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help)
-  return Text.diagnostic_line(shown) + " file=" + Text.quote(Paths.stored_file(root_dir, problem.file))
+  return "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(root_dir, problem.file))}"
 end
 
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
@@ -72,12 +72,12 @@ def lowered_text(linked: Linker.Linked, lowered: Lowering.Lowered) -> String
 end
 
 def program_lines(root_dir: String, program: Ir.Program) -> List[String]
-  head = "program " + span_text(0, program.span) + " entry=" + program.entry.to_s
-  lines: List[String] = [head + " globals=" + program.globals.to_s]
+  head = "program #{span_text(0, program.span)} entry=#{program.entry}"
+  lines: List[String] = ["#{head} globals=#{program.globals}"]
   index = 0
   for source in program.sources
     shown = Text.quote(Paths.stored_file(root_dir, source.file))
-    lines = lines.push("source " + index.to_s + " " + shown + " chars=" + source.text.length.to_s)
+    lines = lines.push("source #{index} #{shown} chars=#{source.text.length}")
     index += 1
   end
   index = 0
@@ -89,10 +89,10 @@ def program_lines(root_dir: String, program: Ir.Program) -> List[String]
   for entry in program.enums
     names = ""
     for variant in entry.variants
-      names = names + " v" + id.to_s + "=" + Text.quote(variant.name) + "/" + variant.size.to_s
+      names = "#{names} v#{id}=#{Text.quote(variant.name)}/#{variant.size}"
       id += 1
     end
-    lines = lines.push("enum " + Text.quote(entry.name) + names)
+    lines = lines.push("enum #{Text.quote(entry.name)}#{names}")
   end
   index = 0
   for function in program.functions
@@ -104,24 +104,24 @@ end
 
 def struct_line(index: Int, entry: Ir.StructDef) -> String
   fields = entry.fields.map do |field: String| Text.quote(field) end.join(",")
-  line = "struct s" + index.to_s + " " + Text.quote(entry.name) + " [" + fields + "]"
+  line = "struct s#{index} #{Text.quote(entry.name)} [#{fields}]"
   if entry.decodable
     types = entry.types.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
-    line = line + " types=[" + types + "]"
+    line = "#{line} types=[#{types}]"
   end
   return line
 end
 
 def function_lines(out: List[String], index: Int, function: Ir.Function, entry: Bool) -> List[String]
-  head = "fn" + index.to_s + " " + Text.quote(function.name) + " params=" + function.params.to_s
-  head = head + " captures=" + function.captures.to_s + " slots=" + function.slots.to_s
+  head = "fn#{index} #{Text.quote(function.name)} params=#{function.params}"
+  head = "#{head} captures=#{function.captures} slots=#{function.slots}"
   if entry
-    head = head + " entry"
+    head = "#{head} entry"
   end
-  lines = out.push(head + " @ " + span_text(function.file, function.span))
+  lines = out.push("#{head} @ #{span_text(function.file, function.span)}")
   for instr in function.body
     if instr.op == "label"
-      lines = lines.push("  L" + instr.args[0].to_s + ":")
+      lines = lines.push("  L#{instr.args[0]}:")
     else
       lines = lines.push(instr_line(instr))
     end
@@ -130,21 +130,21 @@ def function_lines(out: List[String], index: Int, function: Ir.Function, entry: 
 end
 
 def instr_line(instr: Ir.Instr) -> String
-  text = "    " + instr.op
+  text = "    #{instr.op}"
   shown = instr.args.size
   if instr.op == "struct-with"
     shown = 4
   end
   at = 0
   while at < shown
-    text = text + " " + arg_text(instr, at)
+    text = "#{text} #{arg_text(instr, at)}"
     at += 1
   end
   if instr.op == "const"
-    text = text + " " + imm_text(instr.imm)
+    text = "#{text} #{imm_text(instr.imm)}"
   end
   spans = instr.spans.map do |span: Source.Span| span_text(instr.file, span) end
-  return text + " @ " + spans.join(" ")
+  return "#{text} @ #{spans.join(" ")}"
 end
 
 # One argument of an instruction, by the op: labels, functions, structs, variants and globals have their own prefix.
@@ -153,20 +153,20 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
   value = instr.args[at]
   if instr.op == "call-builtin"
     if at == 0
-      return "r" + value.to_s + " " + Text.quote(instr.name)
+      return "r#{value} #{Text.quote(instr.name)}"
     end
     return value.to_s
   end
   if (op == "jump" and at == 0) or ((op == "jump-if-false" or op == "jump-if-true") and at == 1)
-    return "L" + value.to_s
+    return "L#{value}"
   elsif (op == "call" or op == "tail-call" or op == "closure") and at == 1
-    return "fn" + value.to_s
+    return "fn#{value}"
   elsif (op == "global" or op == "global-set") and at == 1
-    return "g" + value.to_s
+    return "g#{value}"
   elsif (op == "enum" or op == "is-variant") and at == 2
-    return "v" + value.to_s
+    return "v#{value}"
   elsif (op == "struct" or op == "struct-with") and at == 2
-    return "s" + value.to_s
+    return "s#{value}"
   elsif op == "struct-with" and at == 3
     return "[" + instr.args.drop(3).map do |position: Int| position.to_s end.join(" ") + "]"
   elsif (op == "field" or op == "payload" or op == "list" or op == "map") and at == 2
@@ -179,7 +179,7 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
     end
     return ".."
   end
-  return "r" + value.to_s
+  return "r#{value}"
 end
 
 def imm_text(imm: Ir.Imm) -> String
@@ -187,8 +187,8 @@ def imm_text(imm: Ir.Imm) -> String
     Ir.Imm.Void -> return "void"
     Ir.Imm.Nil -> return "nil"
     Ir.Imm.Bool(flag) -> return flag.to_s
-    Ir.Imm.Int(number) -> return "int:" + number.to_s
-    Ir.Imm.Float(number) -> return "float:bits:" + Float.to_bits(number).to_s
+    Ir.Imm.Int(number) -> return "int:#{number}"
+    Ir.Imm.Float(number) -> return "float:bits:#{Float.to_bits(number)}"
     Ir.Imm.Text(text) -> return Text.quote(text)
   end
 end

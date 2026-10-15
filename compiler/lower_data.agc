@@ -108,7 +108,7 @@ export def lower_enum(
   made = State.target(fx, want)
   fx = made.fx
   dst = made.slot
-  id = cx.variants[enum_name + "." + variant_name]
+  id = cx.variants["#{enum_name}.#{variant_name}"]
   start = fx.next
   for arg in args
     fx = State.alloc(fx)

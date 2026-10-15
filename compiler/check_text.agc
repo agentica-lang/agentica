@@ -38,10 +38,10 @@ export def problem_text(root_dir: String, problem: Failure.Problem) -> String
     note(" signature=", problem.signature)
   )
   if problem.labels.size > 0
-    labels = problem.labels.map do |label: Failure.Label| Text.span_text(label.span) + " " + Text.quote(label.text) end
-    line = line + " labels=[" + labels.join(", ") + "]"
+    labels = problem.labels.map do |label: Failure.Label| "#{Text.span_text(label.span)} #{Text.quote(label.text)}" end
+    line = "#{line} labels=[#{labels.join(", ")}]"
   end
-  return line + " file=" + Text.quote(Paths.stored_file(root_dir, problem.file))
+  return "#{line} file=#{Text.quote(Paths.stored_file(root_dir, problem.file))}"
 end
 
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
@@ -59,7 +59,7 @@ def order_lines(checked: Checker.Checked) -> List[String]
     return []
   end
   names = checked.constants.map do |name: String| Text.quote(name) end
-  return ["constant-order [" + names.join(",") + "]"]
+  return ["constant-order [#{names.join(",")}]"]
 end
 
 # The text added to the lines, by node id: the type, then the resolution.
@@ -68,7 +68,7 @@ def notes_of(checked: Checker.Checked) -> Map[Int, String]
   index = 0
   while index < checked.types.size
     if !T.unknown?(checked.types[index])
-      notes = notes.put(index, " type=" + T.debug_text(checked.types[index]))
+      notes = notes.put(index, " type=#{T.debug_text(checked.types[index])}")
     end
     index += 1
   end
@@ -78,17 +78,17 @@ def notes_of(checked: Checker.Checked) -> Map[Int, String]
     if before.ok?
       text = before.unwrap!
     end
-    notes = notes.put(id, text + " resolved=" + resolved_text(checked.resolved[id]))
+    notes = notes.put(id, "#{text} resolved=#{resolved_text(checked.resolved[id])}")
   end
   return notes
 end
 
 def resolved_text(resolved: State.Resolved) -> String
   case resolved
-    State.Resolved.Self(type) -> return "self(" + T.debug_text(type) + ")"
-    State.Resolved.Text(type) -> return "text(" + T.debug_text(type) + ")"
-    State.Resolved.Inspect(type) -> return "inspect(" + T.debug_text(type) + ")"
-    State.Resolved.Call(name, type) -> return "call(" + Text.quote(name) + ", " + T.debug_text(type) + ")"
+    State.Resolved.Self(type) -> return "self(#{T.debug_text(type)})"
+    State.Resolved.Text(type) -> return "text(#{T.debug_text(type)})"
+    State.Resolved.Inspect(type) -> return "inspect(#{T.debug_text(type)})"
+    State.Resolved.Call(name, type) -> return "call(#{Text.quote(name)}, #{T.debug_text(type)})"
   end
 end
 

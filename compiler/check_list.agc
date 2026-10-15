@@ -39,7 +39,7 @@ def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
         cx,
         target.st,
         "CHECK-TYPE-MISMATCH",
-        "List.sort needs List[Int], List[Float] or List[String], found " + T.to_text(target.type),
+        "List.sort needs List[Int], List[Float] or List[String], found #{T.to_text(target.type)}",
         Ast.expr_span(site.args[0]),
       ),
     )

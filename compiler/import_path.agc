@@ -31,7 +31,7 @@ export def join(base: String, rest: String) -> String
   if base.ends_with?("/")
     return base + rest
   end
-  return base + "/" + rest
+  return "#{base}/#{rest}"
 end
 
 ## The path a file is stored under in the program and in the .agcb, and printed by the text forms: src/source.rkt,
@@ -59,7 +59,7 @@ export def stored_name(root_dir: String, file: String) -> String
   # A user file under a std/ folder must not look like a standard module (the VM puts --source-root before every name
   # but those).
   if stored.starts_with?("std/")
-    return "./" + stored
+    return "./#{stored}"
   end
   return stored
 end
@@ -89,13 +89,13 @@ export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[Strin
   end
   guess = without_extension(path)
   if module_name?(path)
-    return ok(path + ".agc")
+    return ok("#{path}.agc")
   elsif has_stem and module_name?(stem)
     return error(
       refuse(
         site,
         "import paths name a module without the .agc extension",
-        "write " + Declarations.import_line(Unicode.written_text(stem), decl),
+        "write #{Declarations.import_line(Unicode.written_text(stem), decl)}",
       ),
     )
   elsif last_part(path) == "" or last_part(path) == "." or last_part(path) == ".."
@@ -103,7 +103,7 @@ export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[Strin
       refuse(
         site,
         "import paths name a module file",
-        "write " + Declarations.import_line("\"models\"", decl) + " to load models.agc",
+        "write #{Declarations.import_line("\"models\"", decl)} to load models.agc",
       ),
     )
   elsif module_name?(guess)
@@ -111,7 +111,7 @@ export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[Strin
       refuse(
         site,
         "import paths name a module without an extension",
-        "write " + Declarations.import_line(Unicode.written_text(guess), decl) + " to load " + guess + ".agc",
+        "write #{Declarations.import_line(Unicode.written_text(guess), decl)} to load #{guess}.agc",
       ),
     )
   end

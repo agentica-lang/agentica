@@ -116,6 +116,7 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
 
 - Lines are at most 119 characters, comments included (`stdlib/agentica.toml`),
   checked by `tests/test_style_line_width.py`.
+- Wrap a long string with interpolation and a few sentence-sized pieces, never one piece per line.
 - Give the module a `##` doc block (its first block, followed by a blank
   line), and give every exported `def`, `struct` and `enum` you add or touch
   one, as `stdlib/queue.agc` does; do not add docs to code you do not touch.

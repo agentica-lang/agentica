@@ -20,7 +20,7 @@ export def did_you_mean_among(
   shared: List[String],
 ) -> Ast.Optional[String]
   case closest_among(full_name, candidates, shared)
-    Ast.Optional.Present(name) -> return Ast.Optional.Present("did you mean \"" + name + "\"?")
+    Ast.Optional.Present(name) -> return Ast.Optional.Present("did you mean \"#{name}\"?")
     Ast.Optional.Absent -> return Ast.Optional.Absent
   end
 end
@@ -63,9 +63,9 @@ export def unknown_import_help(
   case closest_among(member, exports.keys, [])
     Ast.Optional.Present(name) ->
       if via_alias and Declarations.constant?(exports[name])
-        return Diag.Help.Hint("did you mean \"import {" + name + "}\"?")
+        return Diag.Help.Hint("did you mean \"import {#{name}}\"?")
       end
-      return Diag.Help.Hint("did you mean \"" + name + "\"?")
+      return Diag.Help.Hint("did you mean \"#{name}\"?")
     Ast.Optional.Absent -> return Diag.Help.NoHelp
   end
 end

@@ -41,7 +41,7 @@ export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Sour
         cx,
         st,
         "CHECK-TYPE-MISMATCH",
-        T.to_text(type) + " has no to_s, so it cannot be printed or interpolated",
+        "#{T.to_text(type)} has no to_s, so it cannot be printed or interpolated",
         span,
         (
           "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, Results, " +
@@ -56,7 +56,8 @@ end
 # CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form.
 def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> String
   counts = [entry].concat(entry.alternatives).map do |form: Model.Builtin| form.parameters.size.to_s end
-  message = "\"" + entry.name + "\" expects " + counts.join(" or ") + " argument(s), found " + node.args.size.to_s
+  expected = counts.join(" or ")
+  message = "\"#{entry.name}\" expects #{expected} argument(s), found #{node.args.size}"
   base = Failure.problem(cx.file, st.signature, "CHECK-ARITY", message, node.span, State.hint_of(""))
   return Failure.pack(base.with(callee: Builtins.signature(entry)))
 end
@@ -75,7 +76,7 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
             cx,
             st,
             "CHECK-BLOCK-TARGET",
-            "\"" + form.name + "\" does not take a block: its last parameter is not a function",
+            "\"#{form.name}\" does not take a block: its last parameter is not a function",
             block.span,
             "a block is only allowed when the last parameter is a function (Fn[...])",
           ),
@@ -195,7 +196,7 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
         cx,
         out.st,
         "CHECK-NOT-ENCODABLE",
-        "cannot JSON.encode " + T.to_text(out.type) + " or its nested types",
+        "cannot JSON.encode #{T.to_text(out.type)} or its nested types",
         Ast.expr_span(site.args[0]),
       ),
     )
@@ -219,11 +220,11 @@ def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
         cx,
         wanted.st,
         "CHECK-TYPE-MISMATCH",
-        "Test.eq needs a type with equality, found " + T.to_text(actual.type),
+        "Test.eq needs a type with equality, found #{T.to_text(actual.type)}",
         Ast.expr_span(site.args[0]),
         (
-          "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, sets, Results, structs and " +
-          "enums of those"
+          "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, sets, Results, " +
+          "structs and enums of those"
         ),
       ),
     )

@@ -9,7 +9,7 @@ import Source from "source"
 ## BYTECODE-LIMIT: the program has too many of something for the format. file is the index of the source that the span
 ## is in.
 export def limit(program: Ir.Program, file: Int, what: String, span: Source.Span) -> String
-  message = "the program has too many " + what + " for the VM"
+  message = "the program has too many #{what} for the VM"
   found = Failure.problem(program.sources[file].file, "", "BYTECODE-LIMIT", message, span, Diag.Help.NoHelp)
   return Failure.pack(found)
 end

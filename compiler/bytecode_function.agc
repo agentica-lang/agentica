@@ -50,7 +50,7 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
       next
     end
     if !OPCODES.has_key?(op)
-      return error(Failure.internal(program, "unknown opcode " + op))
+      return error(Failure.internal(program, "unknown opcode #{op}"))
     end
     args = instr.args
     run = 1
@@ -65,7 +65,7 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
     wide = false
     generic = false
     if NEEDS.has_key?(op) and args.size < NEEDS[op]
-      return error(Failure.internal(program, op + " has " + args.size.to_s + " operands, not " + NEEDS[op].to_s))
+      return error(Failure.internal(program, "#{op} has #{args.size} operands, not #{NEEDS[op]}"))
     end
     if op == "const"
       a = args[0]
@@ -81,7 +81,8 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
       a = args[0]
       b = args[1]
       positions = args.drop(3)
-      key = args[2].to_s + ":" + positions.map do |position: Int| position.to_s end.join(",")
+      fields = positions.map do |position: Int| position.to_s end.join(",")
+      key = "#{args[2]}:#{fields}"
       if updates.index.has_key?(key)
         c = updates.index[key]
       else
@@ -98,7 +99,7 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
     elsif op == "call-builtin"
       a = args[0]
       wide = true
-      key = args[1].to_s + ":" + instr.name
+      key = "#{args[1]}:#{instr.name}"
       if builtins.index.has_key?(key)
         index = builtins.index[key]
       else
@@ -113,7 +114,7 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
         label = args[1]
       end
       if !labels.has_key?(label)
-        return error(Failure.internal(program, "the function " + function.name + " jumps to a missing label"))
+        return error(Failure.internal(program, "the function #{function.name} jumps to a missing label"))
       end
       index = labels[label]
     elsif WIDE_OPS.include?(op)
@@ -136,7 +137,7 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
     end
     if wide
       if index < 0
-        return error(Failure.internal(program, "a negative index in " + op))
+        return error(Failure.internal(program, "a negative index in #{op}"))
       end
       b = index % 65536
       c = index / 65536
@@ -146,14 +147,14 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
       words = [OPCODES[op], 0]
       for arg in args
         if arg < 0 or arg > MAX_U16
-          return error(Failure.internal(program, "an operand of " + op + " does not fit in 16 bits"))
+          return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
         end
         words = words.concat(Bytes.u16(arg))
       end
       code = code.concat(words)
     else
       if a < 0 or a > MAX_U16 or b < 0 or b > MAX_U16 or c < 0 or c > MAX_U16
-        return error(Failure.internal(program, "an operand of " + op + " does not fit in 16 bits"))
+        return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
       end
       code = code.concat([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
     end
@@ -223,10 +224,10 @@ def constant_key(imm: Ir.Imm) -> String
   case imm
     Ir.Imm.Void -> return "v"
     Ir.Imm.Nil -> return "n"
-    Ir.Imm.Bool(flag) -> return "b" + flag.to_s
-    Ir.Imm.Int(number) -> return "i" + number.to_s
-    Ir.Imm.Float(number) -> return "f" + Float.to_bits(number).to_s
-    Ir.Imm.Text(text) -> return "s" + text
+    Ir.Imm.Bool(flag) -> return "b#{flag}"
+    Ir.Imm.Int(number) -> return "i#{number}"
+    Ir.Imm.Float(number) -> return "f#{Float.to_bits(number)}"
+    Ir.Imm.Text(text) -> return "s#{text}"
   end
 end
 
