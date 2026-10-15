@@ -174,9 +174,12 @@ The PR rewrites the others so that they use only the binary:
 - `vm-latency-test.rkt`, `vm-trace-test.rkt` and `bdd-integration.rkt` run
   `racket src/main.rkt` as a child. They run the binary instead.
 
-Replacing rackunit itself is a separate decision: the test suite stays on Racket
-until the owner chooses its replacement, because the choice changes the test
-rule in `AGENTS.md`.
+Under [§35.10](#3510-tests-move-to-python-unittest), the files that phases 1
+and 2 have not moved yet become `unittest` modules in that PR.
+
+Replacing rackunit is decided: Python `unittest`, standard library only, in
+phases that run beside steps 4 to 8. The step-8 PR is the last phase of
+[§35.10](#3510-tests-move-to-python-unittest).
 
 ### 35.4 Stages to port
 
@@ -530,3 +533,104 @@ linker already needed (the name tables) and the checker needs for every call;
   method tables, the foreign-name help texts and the rules of the checker
   (`method-aliases`, `foreign-names`, the `case` on `builtin-rule`) go with the
   checker in 4b.
+
+### 35.10 Tests move to Python unittest
+
+**Status:** planned, decided by the owner on 2026-10-15. The roadmap row 7.2.9
+([`docs/roadmap/README.md`](../roadmap/README.md)) tracks it. The migration
+starts now, in phases. It runs beside steps 4 to 8 of
+[§35.4](#354-stages-to-port) and [§44](44-module-constants.md).
+
+The suite is rackunit: 51 `.rkt` files in `tests/` (43 named `*-test.rkt`, the
+rest helpers and integration tests), about 11,800 lines. Most of it runs the
+binary, reads its output and compares it with a golden or a peer. The Python
+standard library does that well (`subprocess`, `difflib`, `socket`,
+`tempfile`), and the translation is close to line by line. The repo already has
+19 Python peers in `tests/fixtures/` and two `unittest` modules in
+`tests/eval/`. `unittest` is part of the standard library, so the tests add no
+package, no lock file and no install step.
+
+`AGENTS.md` keeps its rule of standard library only, with no test frameworks.
+Only the list of frameworks changes: rackunit and Python `unittest` during the
+migration, and `unittest` alone at the end.
+
+Considered and rejected:
+
+- Keeping Racket as a test-only reference: a second implementation that falls
+  behind every language change.
+- C: about twice the migration work.
+- Zig: pre-1.0, and it breaks between versions.
+- Rust and OCaml: new heavy toolchains.
+- Agentica-only tests as the base: they stay for the stdlib and for user
+  programs through `agentica test`, but not as the base.
+- pytest with pytest-xdist: it adds packages to pin and install for what
+  `make -j` and `unittest` already do; adopt it later only if a real need shows
+  up.
+
+**The harness.** The tests are black-box. A test runs the `agentica` CLI
+(`dist/agentica` today, which starts `agentica-vm`; the single binary after
+step 8), runs `agentica-vm` directly when it checks the VM alone, and runs the
+stage programs of `compiler/` while they exist. It compares the output with a
+golden or a peer: tokens, AST text, linked text, diagnostics (code and span,
+never message text), `.agcb` bytes, CLI exit codes, stdout and stderr.
+
+- A small helper module under `tests/py/` holds what the test modules share:
+  the binary paths, the environment variables that exist today
+  (`AGENTICA_VM_BINARY`, `AGENTICA_REQUIRE_VM`, `AGENTICA_FIXTURES`,
+  `AGENTICA_SWEEP`), process runs with timeouts, golden comparison with
+  `difflib`, temporary directories that are removed after the run, and servers
+  on port 0.
+- Programs are compiled by the product CLI (`agentica compile`), never by a
+  Racket module loaded into the test process. Today the rackunit helpers load
+  `src/` in process (`vm-diff-common.rkt`, `cli-in-process.rkt`), so each
+  migrated area stops using them.
+- Peers (Node, Python, curl) stay standard library only, as they are today. A
+  peer runs as its own child process.
+- The translation is mechanical. `check-equal?` becomes `assertEqual`, a
+  `test-case` becomes a test method, and `(module+ slow ...)` becomes cases
+  that are skipped unless `AGENTICA_SLOW=1` is set.
+- A missing VM follows the rule of `AGENTS.md` as it does today: a local run
+  skips it visibly, and CI fails when `AGENTICA_REQUIRE_VM=1`.
+- Parallel runs come from make: `make -j$(JOBS)` over the test modules, one
+  target per module, as `raco test -j` does today. Each module runs in its own
+  process with its own temporary directory and port 0, so the order does not
+  matter. A stdlib runner is added only if make cannot express a case.
+- `make test` runs the `.rkt` files of `TESTS` with `raco`, and the modules of
+  `tests/py/` with `python3 -m unittest`. `make test-slow` sets
+  `AGENTICA_SLOW=1` and runs both slow tiers. `make test TESTS=...` selects
+  files of either kind.
+
+A test lives in one framework only. Each area PR deletes the `.rkt` files it
+replaces, and the docs that name a moved file change in the same PR. Finding
+them: search `docs`, `.agents` and `AGENTS.md` for `rackunit`, `raco test` and
+`-test.rkt`. The CI targets keep working in every PR.
+
+**Phases.**
+
+- **Phase 0** (a code PR, starting now; its status is in roadmap row 7.2.9):
+  the helper module and the make targets above, the change to the `AGENTS.md`
+  rule and to the development skill (`.agents/skills/agentica-development`),
+  and one small area as the proof: `tests/std-binary-test.rkt` (36 lines),
+  which moves to `unittest` and compiles its programs with `agentica compile`
+  instead of the Racket modules that `vm-diff-common.rkt` loads.
+- **Phase 1:** areas that do not need the Racket front end as an oracle: VM and
+  runtime fixtures, network and process tests, BDD, and CLI. One area per PR.
+  Tests that go through `cli-in-process.rkt` run the product binary as a child
+  instead, with the same output. A test that calls a front-end module directly
+  waits for phase 2.
+- **Phase 2:** the golden parts of the front-end tests move to `unittest`: the
+  Agentica output compared with the goldens in `tests/fixtures/frontend/`. The
+  live comparisons with the Racket stages stay in rackunit until phase 3. A file
+  with both kinds is split, and each case keeps one framework.
+- **Phase 3,** with the step-8 PR. Before that PR, every live comparison (corpus
+  files, generated inputs, the large inputs of the slow tier) is frozen into a
+  golden, so no coverage is lost. Generated inputs are checked in as fixture
+  files or, when they are too big for that, a seeded stdlib script writes them
+  and the golden records their SHA-256. The PR then removes the rackunit files,
+  every make target that calls `raco`, and the CI steps that use those targets.
+  The test suite no longer needs Racket. The fixed-point check of
+  [§35.3](#353-bootstrap) runs in CI from the committed `stage0`. The release
+  cut that [§35.4](#354-stages-to-port) requires before the step-8 PR is taken
+  from the commit before this phase, so it still has the rackunit suite. The
+  deletion of `src/*.rkt` and of the `raco distribute` steps follows the
+  conditions of [§35.3](#353-bootstrap).
