@@ -213,6 +213,7 @@
                     ("Float.from_bits32" ((bits Int)) Float #f "Float.from_bits32" () "Read 32 bits as a binary32 and widen it exactly; bits outside 0 to 4294967295 halt.")
                     ("Time.now_ms" () Int #f "Time.now_ms" (clock) "Read wall-clock milliseconds since the Unix epoch; may jump.")
                     ("Time.monotonic_ms" () Int #f "Time.monotonic_ms" (clock) "Read milliseconds from an arbitrary origin that never goes backward; use for durations.")
+                    ("Time.monotonic_ns" () Int #f "Time.monotonic_ns" (clock) "Read nanoseconds from the clock of Time.monotonic_ms; same origin, never goes backward; use for short durations.")
                     ("Random.int" ((min Int) (max Int)) Int #f "Random.int" (random) "Pick a uniform Int in min..max inclusive; min > max halts.")
                     ("Random.float" () Float #f "Random.float" (random) "Pick a uniform Float in 0.0 up to, but not including, 1.0.")
                     ("ok" ((value T)) (Result T) ok "ok" () "Construct a successful Result.")

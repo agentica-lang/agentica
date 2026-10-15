@@ -3,7 +3,7 @@
 **Status:** designed, not scheduled. The owner's scope of 2026-10-14 is in this
 section, and the roadmap order table does not place it. Its types are checker
 changes, so they come after the Agentica front end (41.13), as the owner decided
-on 2026-10-15. `Time.monotonic_ns` (41.10) is independent and may land earlier.
+on 2026-10-15. `Time.monotonic_ns` (41.10) is independent and has landed.
 It is VM-only and adds no grammar syntax: new builtin types and new functions of
 the existing `Time` module. Every name here is a proposal for the owner to
 review.
@@ -341,7 +341,7 @@ end
   `Time.now()`, or a difference of two `DateTime` values. The wall clock can
   jump, so the difference can be negative or wrong. `Time.ms_between` is for
   calendar differences (days until a due date), not for how long code runs.
-- The proposal adds `Time.monotonic_ns() -> Int`: nanoseconds from an arbitrary
+- `Time.monotonic_ns() -> Int` (landed): nanoseconds from an arbitrary
   origin that never goes backward. It reads the same clock as
   `Time.monotonic_ms`, with the same code: `clock_gettime(CLOCK_MONOTONIC)` on
   POSIX and `QueryPerformanceCounter` on Windows. On Windows it splits the
