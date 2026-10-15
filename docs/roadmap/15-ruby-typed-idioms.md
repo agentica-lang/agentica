@@ -35,17 +35,18 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   `references/modules.md`, `site/content/tour/modules.md`.
 - [x] 15c Struct update `value.with(field: x)` (§25.3), **built early** on the
   owner's decision of 2026-10-15, before the bootstrap (it relaxes the freeze of
-  row 7.2.7), because `compiler/` uses immutable struct updates. Both parsers (a `struct-update` node, `Update` in
-  `compiler/ast.agc`), the checker (`CHECK-UNKNOWN-METHOD` for a receiver that
-  is not a struct, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`,
-  `CHECK-TYPE-MISMATCH`, and `CHECK-IMPORT-NAME` for a struct that its module
-  keeps private, through a `visible` predicate of the linker), and one new
-  opcode, `STRUCT_WITH` (bytecode format version 4, an Updates section checked
-  by the loader), which beat a constructor call by 15% to 34% on structs of 4 to
-  16 fields (`docs/vm-benchmarks.md`). The ban on `Fn` fields named `with` comes
-  here, in advance, so that 10a stays non-breaking; the ban on a type-parameter
-  field named `with` is in 10c. Breaking change: an `Fn` field named `with`
-  becomes `CHECK-REDEFINED-NAME`. Docs: `grammar.md`, the programming skill, the
+  row 7.2.7), because `compiler/` uses immutable struct updates. Both parsers (a
+  `struct-update` node, `Update` in `compiler/ast.agc`), the checker
+  (`CHECK-UNKNOWN-METHOD` for a receiver that is not a struct,
+  `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-TYPE-MISMATCH`, and
+  `CHECK-IMPORT-NAME` for a struct that its module keeps private, through a
+  `visible` predicate of the linker), and one new opcode, `STRUCT_WITH`
+  (bytecode format version 4, an Updates section checked by the loader), which
+  beat a constructor call by 15% to 34% on structs of 4 to 16 fields
+  (`docs/vm-benchmarks.md`). The ban on `Fn` fields named `with` comes here, in
+  advance, so that 10a stays non-breaking; the ban on a type-parameter field
+  named `with` is in 10c. Breaking change: an `Fn` field named `with` becomes
+  `CHECK-REDEFINED-NAME`. Docs: `grammar.md`, the programming skill, the
   development skill, `site/content/tour/structs.md`. The checker and modules
   ports (§35.4 steps 3 and 4) carry it.
 - [ ] 15d Value equality for structs, enums, lists, maps and Results (§25.4):

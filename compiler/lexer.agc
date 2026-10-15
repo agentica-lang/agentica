@@ -69,7 +69,6 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
   size = input.size
   tokens: List[Tokens.Token] = []
   delimiters: List[Frame] = []
-  open_strings = 0
   index = 0
   line = 1
   line_start = 0
@@ -84,7 +83,7 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
       CharClass.Blank -> index = skip_blanks(codes, size, index)
       CharClass.Newline ->
         start = Source.position(index, line, line_start)
-        case after_newline(input, delimiters, open_strings, index, code, start)
+        case after_newline(input, delimiters, index, code, start)
           Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
           Diag.Outcome.Done(next) ->
             if statement_level?(delimiters)
@@ -122,12 +121,10 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
           Diag.Outcome.Done(piece) ->
             if code == 125
               delimiters = pop(delimiters)
-              open_strings -= 1
             end
             tokens = tokens.push(piece_token(input, piece, index, line, line_start))
             if piece.opens
               delimiters = delimiters.push(Frame(kind: "#", start: piece.start))
-              open_strings += 1
             end
             index = piece.next
         end
@@ -191,13 +188,15 @@ def finish(input: Input, tokens: List[Tokens.Token], delimiters: List[Frame], he
 end
 
 # Checks the line break at `index` and returns the offset after it. A CR must
-# come with its LF, and a line break cannot sit inside a string interpolation.
-def after_newline(input: Input, delimiters: List[Frame], open_strings: Int, index: Int, code: Int, start: Source.Position) -> Diag.Outcome[Int]
+# come with its LF, and a line break cannot sit inside a string interpolation
+# (any `#` frame on the stack: only string pieces push or pop them).
+def after_newline(input: Input, delimiters: List[Frame], index: Int, code: Int, start: Source.Position) -> Diag.Outcome[Int]
   if code == 13 and at(input.codes, input.size, index + 1) != 10
     return Diag.Outcome.Failed(Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp))
   end
-  if open_strings > 0
-    return Diag.Outcome.Failed(unterminated(delimiters[innermost(delimiters, true)].start, start))
+  inside = innermost(delimiters, true)
+  if inside >= 0
+    return Diag.Outcome.Failed(unterminated(delimiters[inside].start, start))
   end
   if code == 13
     return Diag.Outcome.Done(index + 2)

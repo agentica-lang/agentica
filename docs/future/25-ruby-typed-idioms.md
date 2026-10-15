@@ -286,8 +286,9 @@ alias); a golden fixture. **Docs:** `grammar.md` ("File modules and imports":
 
 Implemented in 15c: the rules are in `grammar.md` ("Structs and lists"). This
 section keeps the design notes. The owner moved it before the bootstrap
-(2026-10-15), because `compiler/` uses immutable struct updates. It relaxes the freeze of row 7.2.7 (it adds syntax to both
-parsers and rules to the checker), and the checker port carries it.
+(2026-10-15), because `compiler/` uses immutable struct updates. It relaxes the
+freeze of row 7.2.7 (it adds syntax to both parsers and rules to the checker),
+and the checker port carries it.
 
 Like Ruby's `Data#with`: a copy of a struct with some fields changed. The
 original is unchanged.
