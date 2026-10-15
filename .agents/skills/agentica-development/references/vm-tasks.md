@@ -13,60 +13,78 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 | `vm/testing.c` | The `Test` builtins for unit tests, such as `Test.test`. |
 
 - `vm/task.c`
-  - the scheduler (`docs/vm/10-io-scheduler.md` §10.2.1, "As built"):
-    `agc_vm_run` (setjmp, FIFO run queue, one turn per task, `uv_run` NOWAIT
-    after each turn and ONCE when idle, the stall check), `agc_task_wake`,
-    `agc_task_park`, task cancellation (20b, `docs/vm/10-io-scheduler.md`
-    §10.2.1: each task has `parent` and a `children` list; a task that ends
-    moves its running children to its parent; `agc_task_cancel` cancels a task
-    and its descendants, children first: it leaves the run queue, detaches its
-    job, leaves lock, await and stdin FIFOs and ends; the running task only gets
-    `cancelled` and `vm->yield`, so it stops after the current builtin and the
-    scheduler ends it; `Task.await` on a cancelled task halts with
-    `RUNTIME-TASK-CANCELLED` at the call; `vm/tests/task_cancel_test.c` runs
-    hand-built bytecode with test builtins on the real scheduler; 17c adds the
-    timed await cases there: a waiter cancelled while it waits leaves the
-    target's waiters and closes its timer, and the timer firing first or the
-    target ending first gives `TimedOut` or `Done` with the other side cleaned
-    up), task crashes (phase 24, `docs/vm/10-io-scheduler.md` §10.2.1,
-    "Crashes": one `setjmp` per turn in `run_turn`, `fatal` picks what still
-    ends the run (`main`, an exit, `RUNTIME-STEP-LIMIT`, `RUNTIME-INTERNAL`),
-    `crash` stores and prints the crash, unlinks the task, cancels its
-    descendants and calls `finish_task`; the unobserved summary when `main`
-    returns), handle ownership (24b: `finish_task` is the one end of every task,
-    whether it returns, crashes or is cancelled, and it first calls
-    `agc_close_owned(vm, t)`, which closes the handles on the task's own `owned`
-    list, each by its resource's `close`; `agc_own` in `vm/loop.c` puts a handle
-    on the list of `vm->task`, `agc_unregister` takes it off, `agc_hand_over`
-    moves it; nothing is given to the parent; a regular-file (pool) close job
-    counts on the ending task in `closing`, a polled FIFO or pipe close does
-    not, and `agc_task_join` keeps parking awaiters, new ones too, until
-    `agc_task_close_done` has run for each counted job), and the `Task` builtins
-    (`agc_task_builtins`: spawn with a per-task `Random` split
-    (`agc_task_spawn_seeded`) and no move, `Task.spawn_owning` through
-    `agc_task_spawn_owning` (the port function that also `HttpWire.spawn` calls:
-    it fails with `RUNTIME-HANDLE-NOT-OWNED` at the handle argument before it
-    makes the task, then spawns, seeds and hands the handle over), two await
-    entries with a FIFO of waiters and retry (`agc_task_join`: clear `awaiting`,
-    or enqueue on the target's waiters and park with retry; `Test.run` waits
-    with it too; `Task.await` halts with `RUNTIME-TASK-CRASHED` or
-    `RUNTIME-TASK-CANCELLED`, `Task.await_result`, picked by lowering for a
-    `Result`, returns the error; each has a second arity with a timeout (17c):
-    `await_timeout` shares `outcome` with `await_task`, rejects `timeout <= 0`
-    with `RUNTIME-INVALID-DURATION` at `span + 2`, returns at once with
-    `Await.Done` for a task that has ended (`await_done`, the shared value of
-    `await_timed_out` for the other variant), and otherwise stores
-    `await_deadline` in the caller on the first call, runs no cycle check
-    (`awaits_caller` stops at a task whose `await_deadline` is set, so a timed
-    waiter is not an edge of the plain walk), joins the target's waiters and
-    starts an `agc_wait_io` timer job before it parks with retry; the first wake
-    wins: the target's end finishes the job on the retry, and a fired timer
-    takes the caller off the target's waiters (`leave_target`), clears the
-    deadline and returns `Await.TimedOut` without touching the target), sleep as
-    a timer job, `sleep(0)` and fuzz sleeps yield, `pending_count` from
-    `pending_tasks`, tasks made minus tasks done minus `main`: it counts ready,
-    running and parked tasks, not tasks that returned or crashed (even unawaited
-    ones), `unobserved_crash`)
+  - the scheduler (`docs/vm/10-io-scheduler.md` §10.2.1, "As built")
+    - `agc_vm_run` (
+      - setjmp, FIFO run queue, one turn per task, `uv_run` NOWAIT after each
+        turn and ONCE when idle, the stall check)
+    - `agc_task_wake`, `agc_task_park`, task cancellation (
+      - 20b, `docs/vm/10-io-scheduler.md` §10.2.1: each task has `parent` and a
+        `children` list
+      - a task that ends moves its running children to its parent
+      - `agc_task_cancel` cancels a task and its descendants, children first: it
+        leaves the run queue, detaches its job, leaves lock, await and stdin
+        FIFOs and ends
+      - the running task only gets `cancelled` and `vm->yield`, so it stops
+        after the current builtin and the scheduler ends it
+      - `Task.await` on a cancelled task halts with `RUNTIME-TASK-CANCELLED` at
+        the call
+      - `vm/tests/task_cancel_test.c` runs hand-built bytecode with test
+        builtins on the real scheduler
+      - 17c adds the timed await cases there: a waiter cancelled while it waits
+        leaves the target's waiters and closes its timer, and the timer firing
+        first or the target ending first gives `TimedOut` or `Done` with the
+        other side cleaned up)
+    - task crashes (
+      - phase 24, `docs/vm/10-io-scheduler.md` §10.2.1, "Crashes": one `setjmp`
+        per turn in `run_turn`, `fatal` picks what still ends the run (`main`,
+        an exit, `RUNTIME-STEP-LIMIT`, `RUNTIME-INTERNAL`), `crash` stores and
+        prints the crash, unlinks the task, cancels its descendants and calls
+        `finish_task`
+      - the unobserved summary when `main` returns)
+    - handle ownership (
+      - 24b: `finish_task` is the one end of every task, whether it returns,
+        crashes or is cancelled, and it first calls `agc_close_owned(vm, t)`,
+        which closes the handles on the task's own `owned` list, each by its
+        resource's `close`
+      - `agc_own` in `vm/loop.c` puts a handle on the list of `vm->task`,
+        `agc_unregister` takes it off, `agc_hand_over` moves it
+      - nothing is given to the parent
+      - a regular-file (pool) close job counts on the ending task in `closing`,
+        a polled FIFO or pipe close does not, and `agc_task_join` keeps parking
+        awaiters, new ones too, until `agc_task_close_done` has run for each
+        counted job)
+    - and the `Task` builtins (
+      - `agc_task_builtins`: spawn with a per-task `Random` split (
+        - `agc_task_spawn_seeded`)
+      - and no move, `Task.spawn_owning` through `agc_task_spawn_owning` (
+        - the port function that also `HttpWire.spawn` calls: it fails with
+          `RUNTIME-HANDLE-NOT-OWNED` at the handle argument before it makes the
+          task, then spawns, seeds and hands the handle over)
+      - two await entries with a FIFO of waiters and retry (
+        - `agc_task_join`: clear `awaiting`, or enqueue on the target's waiters
+          and park with retry
+        - `Test.run` waits with it too
+        - `Task.await` halts with `RUNTIME-TASK-CRASHED` or
+          `RUNTIME-TASK-CANCELLED`, `Task.await_result`, picked by lowering for
+          a `Result`, returns the error
+        - each has a second arity with a timeout (17c): `await_timeout` shares
+          `outcome` with `await_task`, rejects `timeout <= 0` with
+          `RUNTIME-INVALID-DURATION` at `span + 2`, returns at once with
+          `Await.Done` for a task that has ended (`await_done`, the shared value
+          of `await_timed_out` for the other variant), and otherwise stores
+          `await_deadline` in the caller on the first call, runs no cycle check
+          (`awaits_caller` stops at a task whose `await_deadline` is set, so a
+          timed waiter is not an edge of the plain walk), joins the target's
+          waiters and starts an `agc_wait_io` timer job before it parks with
+          retry
+        - the first wake wins: the target's end finishes the job on the retry,
+          and a fired timer takes the caller off the target's waiters
+          (`leave_target`), clears the deadline and returns `Await.TimedOut`
+          without touching the target)
+      - sleep as a timer job, `sleep(0)` and fuzz sleeps yield, `pending_count`
+        from `pending_tasks`, tasks made minus tasks done minus `main`: it
+        counts ready, running and parked tasks, not tasks that returned or
+        crashed (even unawaited ones), `unobserved_crash`)
   - `agc_task_spawn` (shared by `Task.spawn` and `Test.run`; the child inherits
     its parent's `test`), `agc_task_observe`
   - a crash keeps `crash_code`, `crash_message` and `crash_span` for `Test.run`,

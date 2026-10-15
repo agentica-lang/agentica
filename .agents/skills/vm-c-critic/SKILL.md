@@ -129,17 +129,19 @@ handles. A second way for any of them is a finding.
 - Hot paths are `agc_run_turn` in `vm/interp.c`, `CALL` and `TAIL_CALL`,
   `LIST_GET` and the arithmetic opcodes. Look for new branches, calls, frame
   growth or allocation on them. Keep hot-path flags plain `bool`s, not
-  bit-fields (PR #225 adds a `bool tail` to the frame).
+  bit-fields. PR #225 kept a plain `bool tail` in the frame (commit daa8dc9).
 - Look for allocation per item where a bulk path exists, and for O(n) work
   where the design promises O(1) or O(log n). Check builders, slices and
   copies.
-- Performance: claim a speed change only with numbers. When a PR claims one,
-  compare a small release build with master: a master VM in a scratch worktree
-  (`git worktree add <scratch>/base origin/<base>`, then `git submodule update
-  --init` there), alternate the runs, take the median of three, and remember
-  that the same binary can move 20-35 % with code layout alone. Compare peak RSS
-  too (`/usr/bin/time -v`) when memory is the claim. Otherwise leave timing to
-  CI.
+- Performance: claim a speed change only with numbers. When a PR claims one, a
+  small comparison against master is optional and short: one release build of
+  master in a scratch worktree (`git worktree add <scratch>/base origin/<base>`,
+  then `git submodule update --init vm/third_party/bdwgc vm/third_party/libuv
+  vm/third_party/yyjson vm/third_party/picohttpparser`; the default build uses
+  the system OpenSSL) and one of the PR, alternate the runs, take the median of
+  three, and remember that the same binary can move 20-35 % with code layout
+  alone. Compare peak RSS too (`/usr/bin/time -v`) when memory is the claim.
+  Otherwise skip timing.
 
 ### Simplicity and architecture
 
@@ -151,13 +153,14 @@ handles. A second way for any of them is a finding.
   OpenSSL or private headers such as `list_impl.h`. An exemption added to
   `vm/tools/check-layers.sh` needs a reason, and an exact path, not a bare
   basename glob.
-- C style: types at the top of the file, no prototypes of `static`
-  functions, no mutable globals or file-scope statics, and no value-driven
-  recursion. Follow `references/vm-c.md`: every C file starts with a header
-  comment (3 to 8 lines for a source file, 1 to 4 for a C test), and other
-  comments say why. CI already checks part of this style: `make vm-lint`
-  (clang-tidy) and `tests/vm-style-test.rkt` (types at the top, no prototypes
-  of `static` functions). Exported names start with `agc_`.
+- C style: types at the top of the file, no prototypes of `static` functions, no
+  mutable globals or file-scope statics, and no value-driven recursion. Follow
+  the development skill's `references/vm-c.md`: every C file starts with a
+  header comment (3 to 8 lines for a source file, 1 to 4 for a C test), and
+  other comments say why. CI checks part of this style: `make vm-lint`
+  (clang-tidy) and `tests/vm-style-test.rkt`, which checks types at the top, no
+  prototypes of `static` functions and the file header size. Exported names
+  start with `agc_`.
 - Duplication: flag the clones you see and suggest a shared helper; CI runs
   `make dup-check`. Never fix a clone by adding it to the baseline.
 - Builtin tables: a C test may index a table by position. For example,
@@ -197,7 +200,8 @@ builds. Exit 124 means a timeout: retry once, then report it.
   development skill's `references/vm-build.md`).
 - A single C test under ASan (`make build/vm/sanitize/<name>-test SANITIZE=1`)
   or under gc-stress (`make build/vm/gcstress/<name>-test GC_STRESS=1`) only to
-  prove a concrete bug. Never build the whole VM with a sanitizer or gc-stress.
+  prove a concrete bug. Never `make vm SANITIZE=1` or `GC_STRESS=1`, or the
+  `vm-sanitize-*` and `vm-gc-stress` targets.
 - Never run the full `make test`, full golden or vm-diff sweeps,
   `make vm-sanitize-test`, fuzzing or `make smoke`. Run localized tests, for
   example `make test TESTS="tests/vm-stdout-test.rkt"`. CI covers the rest.

@@ -37,11 +37,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    implementation key, not the written name: `puts` and `IO.puts` both
    import `"puts"`.
 2. `vm/builtins.c`: add the entry under that key and arity.
-3. Add a fixture to `tests/fixtures/vm/` for the happy path and for each runtime
-code or span the builtin can raise; add a loader assert if the import rules
-change. The fixture sidecars (`.stdin`, `.args`, `.env` and `.channel`) are
-described under the golden harness in `references/vm-build.md`.
-
+3. Add a fixture to `tests/fixtures/vm/` for the happy path and for each
+   runtime code or span the builtin can raise; add a loader assert if the import
+   rules change. The fixture sidecars (`.stdin`, `.args`, `.env` and `.channel`)
+   are described under the golden harness in `references/vm-build.md`.
 4. A blocking builtin (7h) checks its arguments, fills a `malloc`'d
    request (no GC pointers; strings through `agc_cstr` or a `malloc`'d
    copy), and calls `agc_io_start` with an `agc_io_kind`: `work` runs in

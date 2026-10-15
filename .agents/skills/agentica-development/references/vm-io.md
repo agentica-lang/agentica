@@ -17,77 +17,103 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - the event loop and the resource registry (`docs/vm/10-io-scheduler.md`
     §10.2.2), with `vm/stream.c`, `vm/process.c`, `vm/tcp.c` and
     `vm/http_client.c` the only files that include `uv.h` (`vm/http_server.c`
-    reaches libuv only through `vm/net.h` and jobs): `agc_io_init` (the
-    `UV_USE_IO_URING=0` setenv at start-up; returns whether it set it),
-    `agc_io_uv` (the scheduler's `uv_loop_t`, for handle code), `agc_io_ready`
-    (completes an `external` job from a libuv callback),
-    `agc_register`/`agc_unregister` (GC `agc_resource` objects owning `malloc`
-    memory; a job keeps its registry slot index, fixed when an entry moves),
-    `agc_io_start` (one `uv_queue_work` job plus an optional timer per blocking
-    call; a kind without `work` is a timer only; parks the current task through
-    `r->task` and `task->parked`), `agc_io_poll` (`uv_run` NOWAIT or ONCE, then
-    the ready list of finished jobs wakes their tasks; a non-empty ready list is
-    drained even when the loop has nothing alive, and makes the run NOWAIT),
-    `agc_io_finish` (the request's `done` or `expired` half when the parked task
-    runs again; it first releases a handle the request held, handing it to the
-    head waiter as `next_owner`), `agc_io_detach` (20b: the job of a cancelled
-    task is detached; it ends between turns when the drain meets it, runs `done`
-    and drops the result (closing a new handle in it, except a process:
-    `process.c` sets `keep_detached` on its resource), never `expired`, so it
-    never closes a task's handle; a kind's optional `cancel(vm, data, context,
-    deadline)` half, refused on pool kinds, may end it early through `drop`,
-    also when its timer fired before the cancel; a queued job is never swept),
-    `agc_io_detached` (phase 24: a job with no task from the start, for a
-    crashed task's file close), `agc_io_extend` (20c: restart a job's own timer
-    once, so `read_request`'s deadline counts from the request's first byte),
-    handle ownership (24b: `agc_own` records a handle's owner and close and puts
-    it on the owner task's list (`owned_prev` and `owned_next` in the resource,
-    `owned` in the task), `agc_unregister` takes it off, `agc_owned_of` finds
-    the owned resource of a handle value, `agc_hand_over` moves it to another
-    task, `agc_close_owned(vm, t)` closes what a task still owns when it ends),
-    `close_pending` runs a file's pending close after the job that held it
+    reaches libuv only through `vm/net.h` and jobs)
+    - `agc_io_init` (
+      - the `UV_USE_IO_URING=0` setenv at start-up
+      - returns whether it set it)
+    - `agc_io_uv` (
+      - the scheduler's `uv_loop_t`, for handle code)
+    - `agc_io_ready` (
+      - completes an `external` job from a libuv callback)
+    - `agc_register`/`agc_unregister` (
+      - GC `agc_resource` objects owning `malloc` memory
+      - a job keeps its registry slot index, fixed when an entry moves)
+    - `agc_io_start` (
+      - one `uv_queue_work` job plus an optional timer per blocking call
+      - a kind without `work` is a timer only
+      - parks the current task through `r->task` and `task->parked`)
+    - `agc_io_poll` (
+      - `uv_run` NOWAIT or ONCE, then the ready list of finished jobs wakes
+        their tasks
+      - a non-empty ready list is drained even when the loop has nothing alive,
+        and makes the run NOWAIT)
+    - `agc_io_finish` (
+      - the request's `done` or `expired` half when the parked task runs again
+      - it first releases a handle the request held, handing it to the head
+        waiter as `next_owner`)
+    - `agc_io_detach` (
+      - 20b: the job of a cancelled task is detached
+      - it ends between turns when the drain meets it, runs `done` and drops the
+        result (closing a new handle in it, except a process: `process.c` sets
+        `keep_detached` on its resource), never `expired`, so it never closes a
+        task's handle
+      - a kind's optional `cancel(vm, data, context, deadline)` half, refused on
+        pool kinds, may end it early through `drop`, also when its timer fired
+        before the cancel
+      - a queued job is never swept)
+    - `agc_io_detached` (phase 24: a job with no task from the start, for a
+      crashed task's file close), `agc_io_extend` (20c: restart a job's own
+      timer once, so `read_request`'s deadline counts from the request's first
+      byte), handle ownership (24b: `agc_own` records a handle's owner and close
+      and puts it on the owner task's list (`owned_prev` and `owned_next` in the
+      resource, `owned` in the task), `agc_unregister` takes it off,
+      `agc_owned_of` finds the owned resource of a handle value, `agc_hand_over`
+      moves it to another task, `agc_close_owned(vm, t)` closes what a task
+      still owns when it ends), `close_pending` runs a file's pending close
+      after the job that held it
   - `agc_own` sets no owner outside a turn
-  - at the end `close_files` starts the same close job for every open file
-    (`agc_resource.pool_close`) and `finish_flushes` waits for all of them with
-    `uv_run` ONCE until the flush-limit deadline timer (30000 ms,
-    `--flush-timeout` or `AGENTICA_FLUSH_TIMEOUT_MS`), setting
-    `rt->flush_expired` for `vm/main.c`'s warning line), `agc_handle_leave` (a
-    cancelled lock waiter leaves the FIFO; a cancelled `next_owner` passes the
-    lock on), `agc_handle_wait` (the per-handle FIFO lock: take it as
-    `next_owner` or when free, else queue and park with retry on a timer-only
-    job at the task's own deadline; a `closing` handle lets every caller
-    through, so the builtin returns its closed error), the one exit path
-    (`docs/vm/10-io-scheduler.md` §10.2.2 "End of run"; `end_run` in
-    `vm/main.c`: `agc_processes_stop` kills the children,
-    `agc_io_children_stopped` acts on a second signal recorded meanwhile,
-    `agc_io_goodbye` calls each resource's `goodbye` hook (TCP: one TLS
-    `close_notify` by `uv_try_write`), stdout and stderr flush (retried on
-    `EINTR`), `agc_io_flush_files` closes the files and waits for their flush
-    jobs until the flush limit under a fresh `setjmp`, then `_exit`, or the stop
-    signal raised again with the stop signals blocked for the last read; nothing
-    else is joined or drained), stop signals (`agc_io_watch_stop`: a `sigaction`
-    handler for `SIGINT`/`SIGTERM`/`SIGHUP`, not for one inherited as ignored,
-    and a `SIGALRM` backstop, installed and armed only when a second signal is
-    recorded; the one global `stop`, marked `NOLINT`, holds lock-free atomics
-    (first signal, a second one, `held` until the children are stopped), the
-    driver pid and an unreferenced `uv_async_t` that wakes the loop;
-    `check_stop` in `vm/task.c` ends the run between turns, before a wait and
-    before a stall error, through `agc_stop` in `vm/interp.c`, which `agc_write`
-    and `agc_flush` also call on `EINTR`; a second signal ends the VM at once,
-    except while `held`; a driven VM whose driver is gone takes that path on its
-    first signal), `agc_poller_*` (a `malloc`'d `uv_poll_t` that owns a
-    descriptor that can wait forever: open (returns the libuv error), wait
-    readable or writable with a callback, pause, close, which closes the
-    descriptor), `agc_real_path` (`Path.real`: `uv_fs_realpath` without a
-    callback, so it runs on the calling pool thread; it returns a `malloc`'d
-    string, or NULL and the errno; `files.c` includes no libuv header),
-    `agc_io_start_then` (a pool job's `more` step, run on the loop thread after
-    its work, may keep the job waiting on the loop until `agc_io_ready`; the
-    job's `on_loop` flag then makes its `expired` and end-of-run paths treat it
-    like an `external` job), `agc_io_close` (only for in-process harnesses, the
-    fuzzer and the C tests: flush the files, then close handles and timers and
-    free the loop; the process guard's release kills children; false while a job
-    is stuck in the OS)
+  - at the end `close_files` starts the same close job for every open file (
+    - `agc_resource.pool_close`)
+    - and `finish_flushes` waits for all of them with `uv_run` ONCE until the
+      flush-limit deadline timer (
+      - 30000 ms, `--flush-timeout` or `AGENTICA_FLUSH_TIMEOUT_MS`)
+    - setting `rt->flush_expired` for `vm/main.c`'s warning line),
+      `agc_handle_leave` (
+      - a cancelled lock waiter leaves the FIFO
+      - a cancelled `next_owner` passes the lock on)
+    - `agc_handle_wait` (
+      - the per-handle FIFO lock: take it as `next_owner` or when free, else
+        queue and park with retry on a timer-only job at the task's own deadline
+      - a `closing` handle lets every caller through, so the builtin returns its
+        closed error)
+    - the one exit path (
+      - `docs/vm/10-io-scheduler.md` §10.2.2 "End of run"
+      - `end_run` in `vm/main.c`: `agc_processes_stop` kills the children,
+        `agc_io_children_stopped` acts on a second signal recorded meanwhile,
+        `agc_io_goodbye` calls each resource's `goodbye` hook (TCP: one TLS
+        `close_notify` by `uv_try_write`), stdout and stderr flush (retried on
+        `EINTR`), `agc_io_flush_files` closes the files and waits for their
+        flush jobs until the flush limit under a fresh `setjmp`, then `_exit`,
+        or the stop signal raised again with the stop signals blocked for the
+        last read
+      - nothing else is joined or drained)
+    - stop signals (
+      - `agc_io_watch_stop`: a `sigaction` handler for
+        `SIGINT`/`SIGTERM`/`SIGHUP`, not for one inherited as ignored, and a
+        `SIGALRM` backstop, installed and armed only when a second signal is
+        recorded
+      - the one global `stop`, marked `NOLINT`, holds lock-free atomics (first
+        signal, a second one, `held` until the children are stopped), the driver
+        pid and an unreferenced `uv_async_t` that wakes the loop
+      - `check_stop` in `vm/task.c` ends the run between turns, before a wait
+        and before a stall error, through `agc_stop` in `vm/interp.c`, which
+        `agc_write` and `agc_flush` also call on `EINTR`
+      - a second signal ends the VM at once, except while `held`
+      - a driven VM whose driver is gone takes that path on its first signal)
+    - `agc_poller_*` (a `malloc`'d `uv_poll_t` that owns a descriptor that can
+      wait forever: open (returns the libuv error), wait readable or writable
+      with a callback, pause, close, which closes the descriptor),
+    - `agc_real_path` (`Path.real`: `uv_fs_realpath` without a callback, so it
+      runs on the calling pool thread; it returns a `malloc`'d string, or NULL
+      and the errno; `files.c` includes no libuv header), `agc_io_start_then` (a
+      pool job's `more` step, run on the loop thread after its work, may keep
+      the job waiting on the loop until `agc_io_ready`; the job's `on_loop` flag
+      then makes its `expired` and end-of-run paths treat it like an `external`
+      job),
+    - `agc_io_close` (only for in-process harnesses, the fuzzer and the C tests:
+      flush the files, then close handles and timers and free the loop; the
+      process guard's release kills children; false while a job is stuck in the
+      OS)
   - resources have a `kind` (native or job)
   - non-Linux builds get stubs
   - `drain` counts the jobs that are ready when it starts and pops one at a
@@ -96,37 +122,49 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - jobs readied while it runs wait for the next drain
 - `vm/files.c`
   - the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, Linux only;
-    `docs/vm/02-reference-behavior.md` §2.8): argument checks in the evaluator's
-    order (for a handle: arguments and timeout, then the lock, then open and
-    mode), host paths (raw `getcwd` bytes read at start-up by `agc_files_init`,
-    `/` when it fails, + `/` collapsing), `malloc`'d `op` requests whose `work`
-    half runs in the libuv pool, Racket's messages (contract forms cut at 256
-    characters, `strerror_l` in the message locale, the byte string form for
-    invalid UTF-8), `FileHandle` state with its read buffer or its 4096-byte
-    write buffer (Racket's rule: append when it fits, else write pending and new
-    bytes together; flush, close and the end of run write it), the one waiting
-    rule (`probe`: after an `O_NONBLOCK` open, `fstat` plus an `epoll_ctl`
-    probe; regular files, block devices and devices epoll refuses with `EPERM`
-    go to the pool, set blocking; any other probe error, or a failed
-    `agc_poller_open`, is the call's error; pipes, FIFOs, terminals and other
-    pollable devices stay non-blocking on an `agc_poller`: `start` tries `step`
-    on the loop thread, then parks on `poll_io`, an `external` kind, whose
-    poller callback (`ready`) repeats `step`; whole-file calls get there through
-    `agc_io_start_then`'s `more`; `stop` is the `cancel` half, which
-    `cancellable` in `vm/loop.c` calls only in the loop phase; `ready` repeats
-    the step on a hang-up, so a reader that left gives `EPIPE`; a timed-out
-    close drops the bytes it already sent; a close sends the buffer only for a
-    writable state, so closing a read FIFO that still holds read-ahead lines is
-    `ok()`; the end-of-run flush of a polled file is a detached `poll_close_io`
-    job; `close_file` makes the owner-end close job hold the handle as its
-    context, and `closed` stores an error result on the handle, wakes the lock
-    waiters and calls `agc_task_close_done` for the ending task, so `File.close`
-    on a closing handle waits for the lock and returns that result),
-    `private_pipe` refusing, as not a regular file, a path that reopens a pipe
-    the VM made (one open in the VM that is not in `rt->inherited`, the pipes
-    `agc_files_inherited` found at start-up, before libuv and the trace file;
-    reading libuv's signal lock pipe once stole its token and deadlocked the
-    next `uv_signal_*` call with every signal blocked)
+    `docs/vm/02-reference-behavior.md` §2.8)
+    - argument checks in the evaluator's order (
+      - for a handle: arguments and timeout, then the lock, then open and mode)
+    - host paths (
+      - raw `getcwd` bytes read at start-up by `agc_files_init`, `/` when it
+        fails, + `/` collapsing)
+    - `malloc`'d `op` requests whose `work` half runs in the libuv pool,
+      Racket's messages (
+      - contract forms cut at 256 characters, `strerror_l` in the message
+        locale, the byte string form for invalid UTF-8)
+    - `FileHandle` state with its read buffer or its 4096-byte write buffer (
+      - Racket's rule: append when it fits, else write pending and new bytes
+        together
+      - flush, close and the end of run write it)
+    - the one waiting rule (
+      - `probe`: after an `O_NONBLOCK` open, `fstat` plus an `epoll_ctl` probe
+      - regular files, block devices and devices epoll refuses with `EPERM` go
+        to the pool, set blocking
+      - any other probe error, or a failed `agc_poller_open`, is the call's
+        error
+      - pipes, FIFOs, terminals and other pollable devices stay non-blocking on
+        an `agc_poller`: `start` tries `step` on the loop thread, then parks on
+        `poll_io`, an `external` kind, whose poller callback (`ready`) repeats
+        `step`
+      - whole-file calls get there through `agc_io_start_then`'s `more`
+      - `stop` is the `cancel` half, which `cancellable` in `vm/loop.c` calls
+        only in the loop phase
+      - `ready` repeats the step on a hang-up, so a reader that left gives
+        `EPIPE`
+      - a timed-out close drops the bytes it already sent
+      - a close sends the buffer only for a writable state, so closing a read
+        FIFO that still holds read-ahead lines is `ok()`
+      - the end-of-run flush of a polled file is a detached `poll_close_io` job
+      - `close_file` makes the owner-end close job hold the handle as its
+        context, and `closed` stores an error result on the handle, wakes the
+        lock waiters and calls `agc_task_close_done` for the ending task, so
+        `File.close` on a closing handle waits for the lock and returns that
+        result)
+    - `private_pipe` refusing, as not a regular file, a path that reopens a pipe
+      the VM made (one open in the VM that is not in `rt->inherited`, the pipes
+      `agc_files_inherited` found at start-up, before libuv and the trace file;
+      reading libuv's signal lock pipe once stole its token and deadlocked the
+      next `uv_signal_*` call with every signal blocked)
   - inherited pipes (`bash <(...)`, a piped stdin through `/dev/stdin`, stdout
     and stderr through `/dev/stdout`, `/dev/stderr` and `/proc/self/fd/1` and
     `2`) stay reachable
@@ -207,35 +245,41 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Design notes
 
-- **libuv (7h, in: loop, files and tasks)**: `docs/vm/10-io-scheduler.md` §10.2.2 describes the
-  loop with its run queue; only the scheduler (`vm/task.c`, through `agc_io_poll`) calls
-  `uv_run`, and libuv callbacks only set flags (tasks will also queue the
-  task). N=1 today; the design target (`docs/vm/16-architecture.md` §16, rules per
-  thread in `docs/vm/10-io-multicore.md` §10.2.3, gated in the roadmap order on the server
-  measurement, decided right after it) is N scheduler threads that pull from
-  one global run queue and one I/O thread, the main thread, with the only libuv
-  loop, built on split structures (read-only runtime; global run queue; the
-  loop and its inbox on the I/O thread, and the registry there or shared
-  under a lock, which is open in §16.11; per-scheduler turn counter;
-  per-task stack, registers and frame). Once tasks land, a
-  builtin or opcode whose work grows with its input sets a turn cost
-  (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins); it is taken from the turn only, never
-  from `steps_left`, so it never changes how `--max-steps` stops a program. Only the
-  thread that owns the loop calls `uv_run` on it (the scheduler with N=1, the I/O thread with N>1). New code adds no
-  mutable `static` or global variable in `vm/` (the exceptions are listed
-  in `docs/vm/10-io-multicore.md` §10.2.3); state goes in the runtime, scheduler or task
-  struct, and lazy init uses `pthread_once` or runs at start-up.
-  Handles and requests are `malloc`'d and must stay owned until their
-  `uv_close` callback: either the GC object that owns one stays in its
-  scheduler's resource registry until then, or the `malloc`'d native
-  state counts its pending close callbacks (and its users) and frees
-  itself only when both reach zero. With such a count, `close` may
-  unregister the resource at once, as `Process.close` and `TCP.close`
-  do: the native state outlives the handle. The VM's own exit path frees
-  nothing (`_exit`); `agc_io_close`, for the in-process harnesses, runs
-  `uv_run` NOWAIT so the callbacks still fire there.
-  Request buffers stay owned by the request until its callback. All
-  handles and descriptors are non-inheritable.
+- **libuv (7h, in: loop, files and tasks)**
+  - `docs/vm/10-io-scheduler.md` §10.2.2 describes the loop with its run queue
+  - only the scheduler (`vm/task.c`, through `agc_io_poll`) calls `uv_run`, and
+    libuv callbacks only set flags (tasks will also queue the task).
+  - N=1 today
+  - the design target (`docs/vm/16-architecture.md` §16, rules per thread in
+    `docs/vm/10-io-multicore.md` §10.2.3, gated in the roadmap order on the
+    server measurement, decided right after it) is N scheduler threads that pull
+    from one global run queue and one I/O thread, the main thread, with the only
+    libuv loop, built on split structures (read-only runtime; global run queue;
+    the loop and its inbox on the I/O thread, and the registry there or shared
+    under a lock, which is open in §16.11; per-scheduler turn counter; per-task
+    stack, registers and frame).
+  - Once tasks land, a builtin or opcode whose work grows with its input sets a
+    turn cost (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins)
+  - it is taken from the turn only, never from `steps_left`, so it never changes
+    how `--max-steps` stops a program.
+  - Only the thread that owns the loop calls `uv_run` on it (the scheduler with
+    N=1, the I/O thread with N>1).
+  - New code adds no mutable `static` or global variable in `vm/` (the
+    exceptions are listed in `docs/vm/10-io-multicore.md` §10.2.3)
+  - state goes in the runtime, scheduler or task struct, and lazy init uses
+    `pthread_once` or runs at start-up.
+  - Handles and requests are `malloc`'d and must stay owned until their
+    `uv_close` callback: either the GC object that owns one stays in its
+    scheduler's resource registry until then, or the `malloc`'d native state
+    counts its pending close callbacks (and its users) and frees itself only
+    when both reach zero.
+  - With such a count, `close` may unregister the resource at once, as
+    `Process.close` and `TCP.close` do: the native state outlives the handle.
+  - The VM's own exit path frees nothing (`_exit`)
+  - `agc_io_close`, for the in-process harnesses, runs `uv_run` NOWAIT so the
+    callbacks still fire there.
+  - Request buffers stay owned by the request until its callback.
+  - All handles and descriptors are non-inheritable.
 - **Limits**: the 1 MiB per-call reads, HTTP framing limits and the other
   caps in the `docs/vm/10-io-processes.md` limits table stay as documented.
 

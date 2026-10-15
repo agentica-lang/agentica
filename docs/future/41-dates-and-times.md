@@ -447,7 +447,8 @@ Agentica front end:
   (new), with its row in the "When to read a reference" table of `SKILL.md`;
   `references/builtins.md` (the other `Time` lines) and
   `references/diagnostics.md`. Development skill:
-  `.agents/skills/agentica-development/references/vm.md` (the builtin list).
+  `.agents/skills/agentica-development/references/vm-builtins.md` (the builtin
+  list).
 - Site: `site/content/library/text-and-data/dates-and-times.md` (new, with
   runnable examples).
 - `CHANGELOG.md` under `## [Unreleased]`: the new functions, and **Breaking:**

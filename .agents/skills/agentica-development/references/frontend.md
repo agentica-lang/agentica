@@ -43,7 +43,7 @@ By default, under the freeze, these recipes name `src/` files. New syntax and ne
 2. Add the AST node if no existing node fits.
 3. Write a parse function and call it from the right place: `parse-statement` for statements, `parse-primary` for expressions, `parse-program` for declarations.
 4. Add one valid test and one rejection test asserting the diagnostic code.
-5. Run `make test TESTS="tests/<stage>-test.rkt"` and `make smoke`.
+5. Run `make test TESTS="tests/<stage>-test.rkt"` and the affected example.
 
 ### Add a diagnostic code
 

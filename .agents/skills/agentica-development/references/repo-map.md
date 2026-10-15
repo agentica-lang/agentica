@@ -118,7 +118,7 @@ tests/            # rackunit files; the lists of references/vm-tests.md say whic
   vm-diff-common.rkt  # the golden harness: fixtures, sidecars, sweeps (references/vm-build.md)
   vm-diff-{1..8}-test.rkt  # shards of the golden tests (references/vm-build.md)
   vm-latency-test.rkt  # the latency check (references/vm-tasks.md)
-  vm-style-test.rkt  # no late type or static prototype in vm/*.c (references/vm-c.md)
+  vm-style-test.rkt  # types at the top, no static prototypes, header size (references/vm-c.md)
   vm-trace-test.rkt  # traced runs keep exit code, stdout and stderr (references/vm-builtins.md)
   vm-tcp-test.rkt  # the VM TCP builtins against Node peers (references/vm-tests.md)
   vm-http-test.rkt  # std/http against independent peers (references/vm-tests.md)
@@ -140,6 +140,8 @@ tests/            # rackunit files; the lists of references/vm-tests.md say whic
   unit-test-test.rkt  # agentica test on *_test.agc files (references/bdd.md)
   std/            # *_test.agc unit tests of the std/ modules
   fixtures/       # golden fixtures and independent Node.js and Python peers
+  bdd/            # feature specs and step handlers run by make test-bdd (references/bdd.md)
+  eval/           # agent evaluation runner, not part of make test (references/bench-eval.md)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
   queue.agc http.agc binary.agc    # std/queue, std/http, std/binary
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)

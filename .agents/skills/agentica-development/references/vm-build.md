@@ -2,7 +2,7 @@
 
 Make targets, the third-party submodules, sanitizers, fuzzing and portability.
 
-Read first: `references/vm.md` and `references/vm-c.md`.
+Read first: `references/vm.md`.
 
 ## Commands
 
@@ -120,16 +120,15 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   and `.args` to the VM):
   - `.stdin`: raw bytes fed to the program's stdin (`.gitattributes` marks them
     binary so CRLF survives).
-  - -
   - `.args`: a Racket list of strings (read with `file->value`) passed as
     program arguments; `"@tmp"` becomes a fresh empty directory per run, and
     that path is turned back into `@tmp` in the output before the comparison;
     `"@fixtures/x"` the path `tests/fixtures/x`. File fixtures (`files-*`) use
-    `@tmp` and long timeouts, and never touch paths outside it. -
+    `@tmp` and long timeouts, and never touch paths outside it.
   - `.env`: a Racket list of `("NAME" . "value")` string pairs (read with
     `file->value`) added to the environment of every VM run of the fixture
     (`system-env.env`); a program reads only the names it lists and never prints
-    the whole environment. -
+    the whole environment.
   - `.channel`: the golden run goes through `tests/fixtures/channel-run.py`
     (Python 3, needed in CI). The wrapper opens a socket pair, hands one end to
     the VM as fd 3 with `AGENTICA_CHANNEL=3`, sends the first line of the file

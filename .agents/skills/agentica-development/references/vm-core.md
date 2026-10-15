@@ -1,7 +1,6 @@
 # VM core files: values, lists, maps, text, interpreter, loader, JSON, diagnostics
 
-What each core file owns, then the gotchas of the core. Layers:
-`references/vm.md`.
+What each core file owns, then the gotchas of the core.
 
 Read first: `references/vm.md` and `references/vm-c.md`.
 

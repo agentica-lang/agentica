@@ -41,10 +41,9 @@ make dup-check                            # jscpd: a new copy fails CI; share a 
 make site                                 # before merging a site change
 ```
 
-Run the stage tests the change touches and a smoke run of the affected
-examples. `make test` and `make smoke` build the VM first, and one stage's
-tests run alone with `raco test tests/<stage>-test.rkt`. CI runs everything
-else (`references/ci.md`, "What CI runs").
+Run the stage tests the change touches (`make test TESTS=...`, which builds the
+VM first) and run the affected example with `racket src/main.rkt`. CI runs
+everything else (`references/ci.md`, "What CI runs").
 
 ## Stage contract
 
@@ -83,8 +82,7 @@ else (`references/ci.md`, "What CI runs").
   `docs/vm/16-architecture.md`.
 - No new `vm/` subsystem without a demonstrated use case
   (`docs/vm/14-core-invariants.md` 14.6).
-- Details: `references/vm.md`, then the file its "Read next" table names; every
-  C edit also reads `references/vm-c.md`.
+- Details: `references/vm.md`, then the file its "Read next" table names.
 
 ## When to read a reference
 
