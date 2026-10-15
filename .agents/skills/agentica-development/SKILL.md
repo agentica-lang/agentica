@@ -32,7 +32,7 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 
 ```sh
 make vm                                   # build dist/agentica-vm (git submodule update --init first)
-make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"  # only the tests the change touches (.rkt: rackunit, .py: unittest)
+make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"  # .rkt: rackunit, .py: unittest
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
 make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
@@ -46,8 +46,8 @@ VM first) and run the affected example with `racket src/main.rkt`. Two tiers:
 put fast cases in `(module+ test ...)` (rackunit) or in a `tests/test_<area>.py`
 module (unittest, `references/ci.md`) and slow ones (live corpus, generated
 inputs, stress) in `(module+ slow ...)` or marked `@slow`. Locally run only the
-fast tier; CI runs the slow tier with `make test-slow` after `make test`. CI runs everything
-else (`references/ci.md`, "What CI runs").
+fast tier; CI runs the slow tier with `make test-slow` after `make test`. CI
+runs everything else (`references/ci.md`, "What CI runs").
 
 ## Stage contract
 

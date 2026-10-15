@@ -35,12 +35,27 @@ def slow(item):
     return item
 
 
+def _method_is_slow(cls, name):
+    return bool(getattr(getattr(cls, name), "agentica_slow", False) or getattr(cls, "agentica_slow", False))
+
+
 class TestCase(unittest.TestCase):
-    """A TestCase that honors the tiers; derive from it instead of unittest's."""
+    """A TestCase that honors the tiers; derive from it instead of unittest's.
+
+    A case of the other tier is skipped before its setUp, and a class with no
+    case in the running tier is skipped before its setUpClass. A class that
+    defines setUpClass must call super().setUpClass() first. setUpModule and
+    module-level code run in both tiers: keep them cheap.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        names = [name for name in dir(cls) if name.startswith(unittest.TestLoader.testMethodPrefix)]
+        if not any(_method_is_slow(cls, name) == SLOW for name in names):
+            raise unittest.SkipTest("no cases in this tier")
 
     def _is_slow(self):
-        method = getattr(self, self._testMethodName)
-        return getattr(method, "agentica_slow", False) or getattr(type(self), "agentica_slow", False)
+        return _method_is_slow(type(self), self._testMethodName)
 
     def run(self, result=None):
         # Skipping before setUp keeps the other tier's fixtures from being built.
@@ -63,7 +78,11 @@ def vm_binary():
     override = os.environ.get("AGENTICA_VM_BINARY")
     path = (ROOT / override) if override else ROOT / "dist" / "agentica-vm"
     if not path.is_file():
-        raise RuntimeError("the VM is not built (%s): run make vm" % path)
+        message = "the VM is not built (%s): run make vm" % path
+        # CI fails when a tool is missing; a local run skips (AGENTS.md). AGENTICA_REQUIRE_VM is the flag of the Racket tests.
+        if os.environ.get("CI") or os.environ.get("AGENTICA_REQUIRE_VM"):
+            raise RuntimeError(message)
+        raise unittest.SkipTest(message)
     return path
 
 
@@ -73,26 +92,39 @@ def cli():
     return [executable] if executable else ["racket", str(ROOT / "src" / "main.rkt")]
 
 
-def run(argv, input=None, timeout=RUN_TIMEOUT, cwd=None, env=None):
+def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None):
     """Run a command and return Result(code, stdout, stderr), both streams as text.
 
-    A command that outlives `timeout` seconds is killed with its whole process
-    group (a VM may have children) and the call raises AssertionError with
-    what it had printed, so a hang fails one test instead of the whole run.
+    The command runs in its own session so that the whole process group can be
+    killed (a VM may have children). The group is killed when the command
+    outlives `timeout` seconds (AssertionError with what it had printed, so a
+    hang fails one test) and on any interruption of the wait, Ctrl-C included:
+    the new session no longer receives the terminal's SIGINT by itself.
     """
     process = subprocess.Popen(
         [str(part) for part in argv],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         cwd=cwd, env=env, start_new_session=True)
-    data = input.encode() if isinstance(input, str) else input
+    data = stdin.encode() if isinstance(stdin, str) else stdin
     try:
         out, err = process.communicate(data, timeout=timeout)
     except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
-        out, err = process.communicate()
+        out, err = _kill_and_collect(process)
         raise AssertionError("timed out after %ss: %s\nstdout: %s\nstderr: %s" % (
             timeout, argv, out.decode(errors="replace"), err.decode(errors="replace")))
+    except BaseException:
+        _kill_and_collect(process)
+        raise
     return Result(process.returncode, out.decode(errors="replace"), err.decode(errors="replace"))
+
+
+def _kill_and_collect(process):
+    # Called before the process is reaped, so its pid (the group id) cannot belong to anyone else yet.
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    return process.communicate()
 
 
 def compile_agc(source, output):

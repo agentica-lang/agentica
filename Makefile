@@ -13,36 +13,47 @@ version:
 build:
 	$(RACO) make src/main.rkt
 
-# Two frameworks side by side while the tests move from rackunit to Python unittest (docs/future/35-self-hosting.md):
-# a .rkt file in TESTS goes to raco test, a tests/test_<area>.py file to unittest, and a directory (the default,
-# tests/) to both. A test lives in one framework only.
+# Two frameworks side by side while the tests move from rackunit to Python unittest (docs/future/35-self-hosting.md
+# section 35.10, references/ci.md): a .rkt file in TESTS goes to raco test, a tests/test_<area>.py file to unittest, and a
+# directory (the default, tests/) to both. A test lives in one framework only.
 # All tests, in parallel:      make test
 # A subset:                    make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt tests/test_vm_bits.py"
 # More or fewer workers:       make test JOBS=8
 PYTHON ?= python3
 RKT_TESTS = $(filter-out %.py,$(TESTS))
-PY_TESTS = $(sort $(foreach t,$(TESTS),$(if $(filter %/,$(t)),$(wildcard $(t)test_*.py),$(filter %.py,$(t)))))
+# TESTS without a leading ./ or a trailing /. A directory contributes its own test_*.py files, not those of subdirectories
+# (tests/eval/test_*.py are not unittest modules for this runner).
+TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
+PY_FILES = $(filter %.py,$(TESTS_NORM))
+PY_TESTS = $(sort $(PY_FILES) $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py)))
+# A .py path outside tests/test_<area>.py would build a wrong module name below
+PY_BAD = $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
+PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a tests/test_<area>.py file))
 # tests/test_x.py -> tests.test_x (run from the repository root, so tests/agentica_test.py imports as tests.agentica_test)
 PY_MODULE = $(subst /,.,$(patsubst %.py,%,$(1)))
 RKT_FLAGS ?=
 
-# -k: the unittest run still happens when the rackunit run fails, so one run shows every failure
+# -k: the unittest run still happens when the rackunit run fails, so one run shows every failure.
+# AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
 test: build vm
-	@$(MAKE) --no-print-directory -k test-rkt test-py
+	@: $(PY_CHECK)
+	@$(MAKE) --no-print-directory -k test-rkt test-py AGENTICA_TEST_SLOW=
 
 # The slow tier: the (module+ slow ...) cases of the .rkt files and the @slow cases of the .py files
 # (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after make test; a local run does not.
 # A .rkt file without a slow submodule is skipped; with the flag a .py file runs only its @slow cases.
 test-slow: build vm
+	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py RKT_FLAGS="--submodule slow --no-run-if-absent" AGENTICA_TEST_SLOW=1
 
 test-rkt:
 	@test -z "$(RKT_TESTS)" || $(RACO) test $(RKT_FLAGS) -j $(JOBS) $(RKT_TESTS)
 
-# One unittest process per module, run by make itself: -j gives the workers, -O keeps each module's output together,
-# -k runs the other modules after a failure. A failing module shows its unittest report and a make error line.
+# One unittest process per module, run by make itself: -j gives the workers, -O (GNU make 4.0 or newer) keeps each
+# module's output together, -k runs the other modules after a failure. A failing module shows its unittest report and a make error line.
 # CI (CI is set) fails when Python is missing; a local run reports a skip, like the Racket tests do for their peers.
 test-py:
+	@: $(PY_CHECK)
 	@if [ -n "$(PY_TESTS)" ]; then \
 	  if ! command -v $(PYTHON) >/dev/null 2>&1; then \
 	    test -z "$$CI" || { echo "$(PYTHON) is required in CI" >&2; exit 1; }; \

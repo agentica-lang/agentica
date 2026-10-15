@@ -17,23 +17,31 @@ ELF checks, `make exe`, `raco distribute`, the archive). A new check in
 comment), then a step that calls it. Targets that are not obvious:
 
 - `test` and `test-slow` run two frameworks side by side while the tests move
-  from rackunit to Python `unittest` (a test lives in one only). `TESTS` is a
-  list of `.rkt` files (to `raco test`), `tests/test_<area>.py` files (to
-  unittest) or directories (the default `tests/` is both). Each Python module
-  runs in its own process (`python3 -m unittest tests.test_<area>` from the
-  root), run by make itself: `make -k -O -j$(JOBS)` over `py-test/<file>`
-  targets, so a failure shows that module's report and the other modules still
-  run. Python is the standard library only (CI runs the Debian runner's
-  `python3`, printed by the `python3 --version` steps; use only features of
-  Python 3.10); the helpers are `tests/agentica_test.py` (paths, the VM binary,
-  the CLI, `run` with a timeout, `compile_agc`, `make_temp_dir`, `@slow`).
-  Without `python3`, `CI` set fails the run and a local run reports a skip.
+  from rackunit to Python `unittest` (a test lives in one only; design in
+  `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of `.rkt` files
+  (to `raco test`), `tests/test_<area>.py` files (to unittest) or directories
+  (the default `tests/` is both). A leading `./` and a trailing `/` are
+  ignored; a `.py` path that is not `tests/test_<area>.py` fails with a message.
+  A directory adds its own `test_*.py` files and is not searched recursively on
+  purpose: `tests/eval/test_*.py` are not modules for this runner.
+- Each Python module runs in its own process (`python3 -m unittest
+  tests.test_<area>` from the root), run by make itself: `make -k -O -j$(JOBS)`
+  over `py-test/<file>` targets, so a failure shows that module's report and
+  the other modules still run. `-O` needs GNU make 4.0 or newer (macOS ships
+  3.81; Linux only for now). Python is the standard library only (CI runs the
+  Debian runner's `python3`, printed by the `python3 --version` steps; use only
+  features of Python 3.10); the helpers are `tests/agentica_test.py` (paths,
+  the VM binary, the CLI, `run` with a timeout, `compile_agc`,
+  `make_temp_dir`, `@slow`). Without `python3`, `CI` set fails the run and a
+  local run reports a skip; a missing VM binary does the same for a test.
 - `test-slow` runs the `slow` submodule of the rackunit files (`raco test
   --submodule slow`) and the `@slow` cases of the Python modules
   (`AGENTICA_TEST_SLOW=1`; with the flag the fast cases of a Python module are
-  skipped, like the rackunit `test` submodule). Fast cases go in `(module+ test
-  ...)` or are unmarked, slow ones (live corpus, generated inputs, stress) in
-  `(module+ slow ...)` or marked `@slow`; local runs use only the fast tier.
+  skipped, like the rackunit `test` submodule). `make test` sets the flag to
+  empty, so a stray `AGENTICA_TEST_SLOW=1` in the environment does not turn it
+  into a slow run. Fast cases go in `(module+ test ...)` or are unmarked, slow
+  ones (live corpus, generated inputs, stress) in `(module+ slow ...)` or
+  marked `@slow`; local runs use only the fast tier.
 - `build` (`raco make src/main.rkt`) and `vm` run before `make test` and
   `make smoke`, and `make test` then starts its Racket test workers in parallel.
 - `build-tests` compiles every test module; `test-ci` runs `make test
@@ -71,7 +79,8 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them), `make test` with the process and module tests on `dist/agentica`
   (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make test-slow` (the
-  `(module+ slow ...)` and `@slow` cases of the test files; a file without one is skipped),
+  `(module+ slow ...)` and `@slow` cases of the test files; a file without one
+  is skipped),
   `make vm-latency` alone after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
   check (the last step that builds), and then `make dup-check` (it runs even
   when an earlier step fails, so a clone or an npm outage does not hide the
