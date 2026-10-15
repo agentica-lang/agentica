@@ -68,7 +68,9 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
 
 /* Ends a run: the children are stopped, output and files are flushed, a diagnostic is printed. It returns the exit
  * status without leaving the process; the hand-off from the front end to the program uses it to retire the front
- * end. A failed write of standard output or error turns the outcome into a failure. */
+ * end. *OUTCOME is rewritten when a write of standard output or error failed (and no stop signal ended the run): it
+ * becomes AGC_FAILED with RUNTIME-INTERNAL and the message "cannot write to standard output" (or error), which is
+ * printed, and the status is 1. A caller that decides from the outcome afterwards must read the rewritten one. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome);
 
 /* The last step of a process: raises the stop signal that ended the run, if any, or exits with CODE. */

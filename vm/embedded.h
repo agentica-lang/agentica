@@ -1,6 +1,6 @@
 /*
  * The data that the single binary carries: the compiled front end and the
- * std/ sources. make generates embedded.S, which .incbin's the files and
+ * std/ sources. make generates embedded.s, which .incbin's the files and
  * defines these two symbols; agentica.c is the only reader. Driver header.
  * Design: docs/future/35-self-hosting.md §35.6 and docs/vm/08-loader-and-cli.md.
  */

@@ -186,6 +186,11 @@ typedef struct {
   size_t len;
 } agc_std_source;
 
+/* The most words the front end may hand over. A run takes a handful of options; the arguments of a process are bounded
+ * by what the system lets it start with, far below the second number. The caps keep the counts inside an int. */
+#define AGC_FRONT_END_MAX_OPTIONS 64
+#define AGC_FRONT_END_MAX_ARGUMENTS 1048576
+
 /* What the front end (the compiler that the binary loads from its own data) shares with the driver: the std/ sources
  * it may read, and the hand-off of the program it compiled. The driver owns it and points the front end's runtime at
  * it; a user program runs in a runtime without one. The hand-off fields are GC memory the driver reads after the

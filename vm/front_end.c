@@ -39,13 +39,16 @@ static char **copy_words(agc_vm *vm, const agc_list *list, const char *what, agc
   return words;
 }
 
-/* The program must not be larger than a file the loader would take (AGC_MAX_FILE_BYTES), so the hand-off cannot
- * make the driver allocate more than a compiled file ever does. */
+/* The program must not be larger than a file the loader would take (AGC_MAX_FILE_BYTES), and the words are capped
+ * (AGC_FRONT_END_MAX_OPTIONS, AGC_FRONT_END_MAX_ARGUMENTS), so the hand-off cannot make the driver allocate more than a
+ * compiled file and a process's arguments ever do, and the driver can count the words in an int. */
 static agc_value builtin_hand_off(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_front_end *fe = guarded(vm, span);
   const agc_list *program = agc_as_list(vm, args[0]);
   const agc_list *options = agc_as_list(vm, args[1]);
   const agc_list *arguments = agc_as_list(vm, args[2]);
+  if (agc_list_len(options) > AGC_FRONT_END_MAX_OPTIONS) return agc_error_value("too many options");
+  if (agc_list_len(arguments) > AGC_FRONT_END_MAX_ARGUMENTS) return agc_error_value("too many arguments");
   uint8_t *bytes = agc_byte_list(vm, program, AGC_MAX_FILE_BYTES);
   if (!bytes) return agc_error_value("the program is not a list of bytes, or it is too large");
   agc_value refused = agc_void();

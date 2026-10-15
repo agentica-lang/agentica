@@ -4,6 +4,8 @@
 # The files are named relative to the directory the assembler runs in (the repository root). The index uses only
 # differences between labels of one section, which the assembler turns into constants, so the binary needs no relocations
 # for it. The layout is the one that vm/embedded.h describes.
+# Each .incbin is preceded by a comment with the SHA-256 of the file: a cache keyed on the text of this file (zig cc's
+# object cache, ccache) sees a new key when the front end or a std/ source changes, which it cannot see through .incbin.
 set -eu
 front_end="${1:?usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE}"
 stdlib="${2:?}"
@@ -13,6 +15,7 @@ for f in "$front_end" "$stdlib" "$modules"; do
     *[!A-Za-z0-9_./-]*|'') echo "gen-embedded: $f is not a plain path" >&2; exit 1 ;;
   esac
 done
+digest() { sha256sum "$1" | cut -d ' ' -f 1; }
 names="$(sed '/^$/d' "$modules")"
 for name in $names; do
   case "$name" in
@@ -27,10 +30,12 @@ printf '\t.balign 16\n'
 printf '\t.globl agc_embedded_data\n'
 printf '\t.type agc_embedded_data, %%object\n'
 printf 'agc_embedded_data:\n'
+printf '/* sha256 %s %s */\n' "$(digest "$front_end")" "$front_end"
 printf '.Lfront_end:\n\t.incbin "%s"\n.Lfront_end_end:\n' "$front_end"
 k=0
 for name in $names; do
   printf '.Lpath%d:\n\t.asciz "%s"\n' "$k" "$name"
+  printf '/* sha256 %s %s/%s */\n' "$(digest "$stdlib/$name")" "$stdlib" "$name"
   printf '.Ltext%d:\n\t.incbin "%s/%s"\n.Ltext%d_end:\n' "$k" "$stdlib" "$name" "$k"
   k=$((k + 1))
 done
