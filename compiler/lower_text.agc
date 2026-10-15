@@ -45,6 +45,11 @@ export def problem_text(root_dir: String, problem: Failure.Problem) -> String
   return "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(root_dir, problem.file))}"
 end
 
+## The text form of a lowered program: what `agentica --dump-ir` prints.
+export def program_text(root_dir: String, program: Ir.Program) -> String
+  return program_lines(root_dir, program).join("\n")
+end
+
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
   case Checker.check(linked, settings.catalog)
     Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
@@ -67,7 +72,7 @@ end
 def lowered_text(linked: Linker.Linked, lowered: Lowering.Lowered) -> String
   case lowered
     Lowering.Lowered.Failed(problem) -> return problem_text(linked.root_dir, problem)
-    Lowering.Lowered.Done(program) -> return program_lines(linked.root_dir, program).join("\n")
+    Lowering.Lowered.Done(program) -> return program_text(linked.root_dir, program)
   end
 end
 

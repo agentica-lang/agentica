@@ -12,7 +12,7 @@ How `agentica test` works: the driver (`compiler/bdd.agc`, `src/bdd-driver.rkt`)
   - it writes a private 0600 copy of `dist/agentica-bdd-driver.agcb`
     (`find-bdd-driver`; `make bdd-driver` builds it from `compiler/bdd.agc`) in
     the temporary directory, runs it on the VM as `--allow-run --driver-pid
-    PID -- COPY --vm VM --style S [--allow-run] [--seed N] --test-timeout-ms N
+    PID -- COPY --vm VM --version V --style S [--allow-run] [--seed N] --test-timeout-ms N
     --agentica WORD... -- [--steps FILE]... ARGUMENTS` (a VM with
     `--driver-pid` reads only a private file and deletes it), sends the
     embedded `std/` sources on its stdin as `{"files": [{"path", "text"}]}`,
@@ -24,6 +24,12 @@ How `agentica test` works: the driver (`compiler/bdd.agc`, `src/bdd-driver.rkt`)
   - the tests that need a fake runner VM set `AGENTICA_VM` to a script that runs
     the real VM unless it is asked for `runner.agcb` (`fake_vm` in
     `tests/test_bdd.py`), since the driver runs on that VM too.
+- The Agentica command line (`compiler/cli.agc`, step 8a) does not go through the
+  hand-off: `test` calls `Driver.run_with(options, settings)` in its own process,
+  with the settings of the command line in place of the `std/` sources on stdin,
+  so `AGENTICA_VM` runs only the runner and the programs under test there. In the
+  single binary `test` answers status 2 until step 8d (the front end runs without
+  `--allow-run`). `make test-cli` runs this file on it.
 - `compiler/bdd.agc` (the driver, over `compiler/bdd_*.agc`; `bdd_options.agc`
   reads the arguments, usage errors included)
   - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the

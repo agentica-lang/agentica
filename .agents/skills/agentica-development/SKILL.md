@@ -33,6 +33,7 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 ```sh
 make vm                                   # build dist/agentica-vm (git submodule update --init first)
 make bdd-driver                           # build dist/agentica-bdd-driver.agcb, what `agentica test` runs (make test does it)
+make cli                                  # build dist/agentica-cli.agcb, the command line in Agentica (make test does it); make test-cli runs the CLI tests on it
 make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"  # .rkt: rackunit, .py: unittest
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test

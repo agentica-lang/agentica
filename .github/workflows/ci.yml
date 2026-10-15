@@ -168,7 +168,7 @@ jobs:
                   trace=true ;;
               esac
               case "$f" in
-                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/test_vm_diff_*|tests/vm_diff_support.py|tests/test_vm_trace.py|tests/test_vm_tcp.py|tests/fixtures/tcp-peer.js|tests/test_vm_tls.py|tests/fixtures/tls-peer.js|tests/fixtures/tls-peer.py|tests/fixtures/tls/*|tests/test_vm_http.py|tests/fixtures/http-*|tests/test_vm_test_protocol.py|tests/fixtures/test-protocol-peer.*|tests/test_vm_child_channel.py|tests/fixtures/child-channel*|tests/fixtures/child_channel.py|tests/fixtures/channel-run.py|tests/test_vm_stop.py|tests/fixtures/stop-peer.py|tests/test_vm_channel.py|tests/fixtures/channel-peer.py|tests/test_vm_stdout.py|tests/fixtures/stdout-peer.py|tests/test_vm_logger.py|tests/fixtures/logger-peer.*|tests/test_vm_monotonic.py|tests/fixtures/monotonic-peer.*|tests/test_vm_file_lines.py|tests/fixtures/lines-peer.py|tests/test_vm_os.py|tests/test_vm_stack.py|tests/agentica_test.py|stdlib/*|src/stdlib.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
+                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|VERSION|tests/test_vm_diff_*|tests/vm_diff_support.py|tests/test_vm_trace.py|tests/test_vm_tcp.py|tests/fixtures/tcp-peer.js|tests/test_vm_tls.py|tests/fixtures/tls-peer.js|tests/fixtures/tls-peer.py|tests/fixtures/tls/*|tests/test_vm_http.py|tests/fixtures/http-*|tests/test_vm_test_protocol.py|tests/fixtures/test-protocol-peer.*|tests/test_vm_child_channel.py|tests/fixtures/child-channel*|tests/fixtures/child_channel.py|tests/fixtures/channel-run.py|tests/test_vm_stop.py|tests/fixtures/stop-peer.py|tests/test_vm_channel.py|tests/fixtures/channel-peer.py|tests/test_vm_stdout.py|tests/fixtures/stdout-peer.py|tests/test_vm_logger.py|tests/fixtures/logger-peer.*|tests/test_vm_monotonic.py|tests/fixtures/monotonic-peer.*|tests/test_vm_file_lines.py|tests/fixtures/lines-peer.py|tests/test_vm_os.py|tests/test_vm_stack.py|tests/agentica_test.py|stdlib/*|src/stdlib.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
                   vm=true ;;
               esac
             done <<< "$files"
@@ -220,6 +220,8 @@ jobs:
         run: make test-ci
       - name: Fixed point of the front end (stage2 == stage3, Racket's stage1 == stage2, the single binary compiles stage2)
         run: make fixed-point
+      - name: The product command line tests on the Agentica command line and on the single binary (step 8a)
+        run: make test-cli
       - name: Slow tests
         run: make test-slow
       - run: make vm-latency

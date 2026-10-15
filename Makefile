@@ -3,8 +3,10 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
-EXE_INPUTS := $(wildcard src/*.rkt stdlib/MODULES stdlib/*.agc stdlib/*/*.agc)
+EXE_INPUTS := $(wildcard src/*.rkt stdlib/MODULES stdlib/*.agc stdlib/*/*.agc) VERSION
 BDD_DRIVER_INPUTS := $(wildcard compiler/*.agc src/*.rkt)
+CLI_INPUTS := $(BDD_DRIVER_INPUTS) VERSION
+
 # The single binary (docs/future/35-self-hosting.md, 35.6) is built beside dist/agentica-vm; Linux only for now. The tests
 # that need it (the whole suite, or tests/test_single_binary.py) build it first.
 ifeq ($(shell uname -s),Linux)
@@ -12,14 +14,15 @@ AGC_NEXT := dist/agentica-next
 endif
 NEXT_TESTS := tests tests/test_single_binary.py
 
-.PHONY: build build-tests bdd-driver test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens frontend-freeze frontend-snapshot bench eval-references version vm vm-test vm-latency vm-fuzz stage1 stage2 stage3 fixed-point agentica-next vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests bdd-driver cli test test-slow test-rkt test-py test-cli test-exe test-ci test-distribution exe clean test-bdd smoke goldens frontend-freeze frontend-snapshot bench eval-references version vm vm-test vm-latency vm-fuzz stage1 stage2 stage3 fixed-point agentica-next vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 # A recipe that fails leaves no half-written target for the next make to take as up to date. The stages below also remove
 # their output before they write it, so a compiler that exits 0 without writing cannot pass for the previous file.
 .DELETE_ON_ERROR:
 
+# The version is the one line of the VERSION file (src/version.rkt embeds it when it is compiled, C gets it as AGC_VERSION).
 version:
-	@racket -e '(require "src/version.rkt") (display version)'
+	@printf '%s' '$(AGC_VERSION)'
 
 build:
 	$(RACO) make src/main.rkt
@@ -49,14 +52,14 @@ RKT_FLAGS ?=
 
 # -k: the unittest run still happens when the rackunit run fails, so one run shows every failure.
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
-test: build vm bdd-driver $(NEXT_PREREQ)
+test: build vm bdd-driver cli $(NEXT_PREREQ)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py AGENTICA_TEST_SLOW=
 
 # The slow tier: the (module+ slow ...) cases of the .rkt files and the @slow cases of the .py files
 # (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after make test; a local run does not.
 # A .rkt file without a slow submodule is skipped; with the flag a .py file runs only its @slow cases.
-test-slow: build vm bdd-driver $(NEXT_PREREQ)
+test-slow: build vm bdd-driver cli $(NEXT_PREREQ)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py RKT_FLAGS="--submodule slow --no-run-if-absent" AGENTICA_TEST_SLOW=1
 
@@ -103,6 +106,22 @@ dist/agentica-bdd-driver.agcb: $(BDD_DRIVER_INPUTS) | build
 	racket src/main.rkt compile compiler/bdd.agc -o $@
 
 bdd-driver: dist/agentica-bdd-driver.agcb
+
+# The command line in Agentica (compiler/cli_main.agc, docs/future/35-self-hosting.md, step 8a): not the default yet.
+# tests/agentica-agcb runs it on the VM like the `agentica` command; make test-cli runs the CLI tests through it.
+dist/agentica-cli.agcb: $(CLI_INPUTS) | build
+	mkdir -p dist
+	racket src/main.rkt compile compiler/cli_main.agc -o $@
+
+cli: dist/agentica-cli.agcb
+
+# The tests that run the product command line, run on the Agentica one (the same exit codes, stdout and stderr): as an
+# ordinary program on the VM (tests/agentica-agcb), and as the single binary, which cannot start `agentica test` yet.
+CLI_TESTS ?= tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
+  tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py
+test-cli: build vm bdd-driver cli $(AGC_NEXT)
+	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/tests/agentica-agcb" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
+	$(if $(AGC_NEXT),AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(AGC_NEXT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=)
 
 dist/agentica: $(EXE_INPUTS) | build vm bdd-driver
 	mkdir -p dist
@@ -230,7 +249,7 @@ site-serve: site-sass
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
 # make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1, no libuv off Linux)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
-AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
+AGC_VERSION := $(shell cat VERSION)
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
 PICO_DIR := vm/third_party/picohttpparser
@@ -512,7 +531,7 @@ STAGE_DIR := build/stage
 FRONT_END_SRC := compiler/front_end.agc
 STD_NAMES := $(shell cat stdlib/MODULES)
 STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
-STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES)
+STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES) VERSION
 # The VM runs a stage as: PROGRAM --version V --stdlib DIR -- WORDS (compiler/front_end_inputs.agc)
 STAGE_RUN = dist/agentica-vm$(EXE) -- $< --version $(AGC_VERSION) --stdlib stdlib -- compile $(FRONT_END_SRC) -o $@
 

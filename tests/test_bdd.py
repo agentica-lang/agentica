@@ -9,7 +9,8 @@ import json
 import os
 import unittest
 
-from tests.agentica_test import ROOT, TESTS, TestCase, cli, report_cases, run, vm_binary, vm_environment
+from tests.agentica_test import (ROOT, TESTS, TestCase, agentica_version, cli, cli_is_agentica, cli_runs_tests,
+                                 report_cases, run, vm_binary, vm_environment)
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
@@ -35,6 +36,7 @@ def main_running(*steps):
     return "def main() -> Void\n  BDD.run([\n%s\n  ])\nend\n" % ",\n".join("    " + step for step in steps)
 
 
+@unittest.skipUnless(cli_runs_tests(), "the single binary cannot start the test runner yet (step 8d)")
 class Bdd(TestCase):
     def agentica_test(self, *args, env=None, cwd=None):
         return run(cli() + ["test", *args], env=vm_environment(env), cwd=cwd)
@@ -249,6 +251,7 @@ class Bdd(TestCase):
         os.chmod(path, 0o700)
         return {"AGENTICA_VM": path}
 
+    @unittest.skipIf(cli_is_agentica(), "the Agentica command line runs the driver in its own process")
     def test_a_driver_that_crashes_is_status_2_with_the_error_on_stderr_not_a_failed_test_run(self):
         directory = self.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
         path = os.path.join(directory, "vm.sh")
@@ -393,15 +396,22 @@ class Bdd(TestCase):
         temporary.mkdir(0o500)
         self.addCleanup(os.chmod, temporary, 0o700)
         env = {"TMPDIR": temporary}
-        # The CLI cannot even write the driver's bytecode there, as for any program it runs.
         result = self.agentica_test("--json", scratch / "missing.feature", env=env, cwd=scratch)
-        self.assertEqual((result.code, result.stdout), (2, ""))
-        self.assertRegex(result.stderr, "cannot write a temporary file in .*tmp")
+        if cli_is_agentica():
+            # The Agentica command line has no copy of the driver to write: the driver reports it, as below.
+            self.assertEqual((result.code, result.stderr), (2, ""))
+            self.assertIn("cannot make a private directory in %s" % temporary,
+                          file_error(json.loads(result.stdout))["message"])
+        else:
+            # The CLI cannot even write the driver's bytecode there, as for any program it runs.
+            self.assertEqual((result.code, result.stdout), (2, ""))
+            self.assertRegex(result.stderr, "cannot write a temporary file in .*tmp")
         # The driver on its own, as the CLI starts it, reports its failure to make a folder (16 tries) in the format
         # of the report.
         driver = ROOT / "dist" / "agentica-bdd-driver.agcb"
-        result = run([vm_binary(), "--allow-run", "--", driver, "--vm", vm_binary(), "--agentica", "agentica",
-                      "--style", "json", "--", scratch / "missing.feature"], env=vm_environment(env), cwd=scratch)
+        result = run([vm_binary(), "--allow-run", "--", driver, "--vm", vm_binary(), "--version", agentica_version(),
+                      "--agentica", "agentica", "--style", "json", "--", scratch / "missing.feature"],
+                     env=vm_environment(env), cwd=scratch)
         self.assertEqual((result.code, result.stderr), (2, ""))
         problem = file_error(json.loads(result.stdout))
         self.assertEqual(problem["code"], "RUNTIME-BDD-INFRA")

@@ -9,7 +9,6 @@ step of CI (the test job and the sanitizer job), where it compiles compiler/ thr
 """
 import os
 import random
-import re
 import struct
 
 from tests.agentica_test import (FIXTURES, ROOT, TestCase, cli, compile_agc, require, run, run_vm, scaled,
@@ -42,11 +41,13 @@ SPAWN = (
 STD_SOURCE = 'def main() -> Void\n  puts(FrontEnd.std_source("queue.agc").ok?)\nend\n'
 HAND_OFF = "def main() -> Void\n  puts(FrontEnd.hand_off([1], [], []).ok?)\nend\n"
 BROKEN_STD = '\nexport def broken() -> Int\n  return "text"\nend\n'
+INTERLEAVED = (
+    'def main() -> Void\n  for i in 0...6\n    puts("out #{i}")\n    IO.warn("err #{i}")\n  end\nend\n')
 USES_STD = 'import Queue from "std/queue"\n\ndef main() -> Void\n  puts("unused")\nend\n'
 
 
 def version():
-    return re.search(r'\(define version "([^"]+)"\)', (ROOT / "src" / "version.rkt").read_text()).group(1)
+    return (ROOT / "VERSION").read_text().strip()
 
 
 def next_binary():
@@ -107,8 +108,17 @@ class SingleBinary(TestCase):
             ["exit.agc"], ["index.agc"], ["type.agc"], ["./type.agc"], ["syntax.agc"], ["main.agc"], ["missing.agc"],
             ["bad.agc"], ["big_bad.agc"], ["--version"], ["--max-steps", "0", "exit.agc"], ["--bogus", "exit.agc"],
             ["compile", "type.agc", "-o", "out.agcb"],
+            # The usage errors of step 8a: a missing option value, a repeated flag, a long --seed, the usage text.
+            ["--max-steps"], ["--seed"], ["--seed", "1", "--seed", "2", "exit.agc"], ["--allow-run", "--allow-run"],
+            ["--seed", "00000000001", "exit.agc"], ["--seed", "2147483648", "exit.agc"], [], ["compile"],
+            ["compile", "type.agc"], ["-h"],
+            # The commands and the forms of a diagnostic that step 8a added.
+            ["check", "exit.agc"], ["check", "type.agc"], ["--ai", "check", "type.agc"],
+            ["--json", "check", "type.agc"], ["--json", "main.agc"], ["--ai", "index.agc"], ["help", "String.split"],
+            ["--json", "help", "String.split"],
         ]
-        for words in cases + [[str(ROOT / "examples" / name)] for name in ("hello.agc", "queue.agc", "json-modules.agc")]:
+        examples = [[str(ROOT / "examples" / name)] for name in ("hello.agc", "queue.agc", "json-modules.agc")]
+        for words in cases + examples:
             with self.subTest(words=words):
                 got = self.agentica(*words, cwd=directory, timeout=scaled(30))
                 self.assertEqual(got, self.racket(*words, cwd=directory))
@@ -117,6 +127,25 @@ class SingleBinary(TestCase):
         shown = self.agentica("bad.agc", cwd=directory).stderr
         self.assertIn("1 | \ufffd\ufffd\n", shown)
         self.assertIn("50001 | \ufffd\ufffd\n", self.agentica("big_bad.agc", cwd=directory).stderr)
+
+    def test_the_output_and_the_errors_of_a_program_keep_their_order_in_one_stream(self):
+        """With 2>&1 the program writes both streams to one pipe; the binary leaves them as the program wrote them."""
+        directory = self.make_suite({"mixed.agc": INTERLEAVED})
+        merged = ["sh", "-c", 'exec "$@" 2>&1', "sh"]
+        got = run(merged + [str(self.binary), "mixed.agc"], cwd=directory, env=vm_environment())
+        expected = run(merged + cli() + ["mixed.agc"], cwd=directory, env=vm_environment())
+        self.assertEqual((got.code, got.stdout), (0, "".join("out %d\nerr %d\n" % (i, i) for i in range(6))))
+        self.assertEqual(got, expected)
+
+    def test_the_test_command_is_refused_with_status_2_until_step_8d(self):
+        """The front end runs without --allow-run, so it cannot start the test runner; the answer is one fixed line."""
+        line = ("agentica: the test command is not in the single binary yet: it cannot start the test runner "
+                "(step 8d)\n")
+        directory = self.make_suite({"main.agc": EXIT_THREE})
+        for words in (["test", "x"], ["--json", "test", "x"]):
+            with self.subTest(words=words):
+                got = self.agentica(*words, cwd=directory)
+                self.assertEqual((got.code, got.stdout, got.stderr), (2, "", line))
 
     def test_compile_writes_the_bytes_of_the_racket_front_end(self):
         work = self.make_temp_dir()

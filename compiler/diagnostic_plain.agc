@@ -35,15 +35,8 @@ export def format(problem: Problems.Problem, text: String) -> String
   return "#{head}\n#{problem.message}\n\n#{body.join("\n")}#{help_line(problem.help, width)}"
 end
 
-def help_line(help: Diag.Help, width: Int) -> String
-  case help
-    Diag.Help.Hint(text) -> return "\n#{spaces(width)} = help: #{text}"
-    Diag.Help.NoHelp -> return ""
-  end
-end
-
-# The text of a line (1-based), without one carriage return at its end; empty outside the file.
-def line_text(lines: List[String], number: Int) -> String
+## The text of a line (1-based), without one carriage return at its end; empty outside the file.
+export def line_text(lines: List[String], number: Int) -> String
   if number < 1 or number > lines.size
     return ""
   end
@@ -52,6 +45,13 @@ def line_text(lines: List[String], number: Int) -> String
     return text.slice(0, text.length - 1)
   end
   return text
+end
+
+def help_line(help: Diag.Help, width: Int) -> String
+  case help
+    Diag.Help.Hint(text) -> return "\n#{spaces(width)} = help: #{text}"
+    Diag.Help.NoHelp -> return ""
+  end
 end
 
 def mark(span: Source.Span, character: String, note: String, noted: Bool, lines: List[String]) -> Mark

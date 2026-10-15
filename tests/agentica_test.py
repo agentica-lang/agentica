@@ -201,6 +201,11 @@ class TestCase(unittest.TestCase):
         return compile_agc(source, self.make_temp_dir() / (source.stem + ".agcb"))
 
 
+def agentica_version():
+    """The Agentica version: the one line of the VERSION file."""
+    return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+
+
 def vm_binary():
     """dist/agentica-vm, or AGENTICA_VM_BINARY like the Racket tests. `make test` builds it first."""
     override = os.environ.get("AGENTICA_VM_BINARY")
@@ -243,6 +248,22 @@ def cli():
     """The command that runs Agentica programs: the executable of AGENTICA_TEST_EXECUTABLE, else the Racket front end."""
     executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
     return [executable] if executable else ["racket", str(ROOT / "src" / "main.rkt")]
+
+
+# The script that runs the Agentica command line (compiler/cli_main.agc) on the VM like the `agentica` command.
+AGCB_CLI = TESTS / "agentica-agcb"
+
+
+def cli_runs_tests():
+    """False for the single binary (dist/agentica-next): its front end cannot start the test runner before 8d."""
+    executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
+    return not (executable and Path(executable).name == "agentica-next")
+
+
+def cli_is_agentica():
+    """True when cli() is the command line written in Agentica (make test-cli), which is not the default yet."""
+    executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
+    return bool(executable) and Path(executable).resolve() == AGCB_CLI.resolve()
 
 
 def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=None, stderr_to=None):

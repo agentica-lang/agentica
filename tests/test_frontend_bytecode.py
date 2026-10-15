@@ -22,10 +22,9 @@ TABLES = ROOT / "compiler" / "bytecode_tables.agc"
 FORMAT_VERSION = 5
 
 # The Agentica version of the header is an input of the writer (the front end gets it from its caller, 35.3), so the
-# runs below pass it with --version=V. The released version still lives in src/version.rkt; step 8a moves it to a plain
-# file. The frozen manifests hash the file without it.
-VERSION = re.search(r'\(define version "([^"]+)"\)',
-                    (ROOT / "src" / "version.rkt").read_text(encoding="utf-8")).group(1)
+# runs below pass it with --version=V. It is the one line of the VERSION file. The frozen manifests hash the file
+# without it.
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
 def lower_fixture_paths(files):

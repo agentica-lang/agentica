@@ -23,6 +23,16 @@ comment), then a step that calls it. Targets that are not obvious:
   when `compiler/*.agc` or `src/*.rkt` change, and `release.yml` copies it into
   the archive's `bin/` next to `agentica-vm`. Without it `agentica test` exits 2
   with "cannot find the BDD driver"; a test run by hand needs `make bdd-driver`.
+- `cli` builds `dist/agentica-cli.agcb`: `compiler/cli_main.agc` compiled by the
+  Racket front end, the command line in Agentica (§35.4 step 8a, not the
+  default). `tests/agentica-agcb` runs it on the VM like the `agentica` command;
+  `make test-cli` runs the tests of the product command line
+  (`CLI_TESTS`) with `AGENTICA_TEST_EXECUTABLE` set to it and then to
+  `dist/agentica-next` (the single binary carries the same command line, but
+  its `test` is not there yet: those cases skip), and
+  `tests/test_cli_parity.py` (run by `make test`) compares both with the Racket
+  one. `test` and `test-slow` depend on it. The `test` job of `ci.yml` runs
+  `make test-cli` after the fixed point.
 - `test` and `test-slow` run two frameworks side by side while the tests move
   from rackunit to Python `unittest` (a test lives in one only; design in
   `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of `.rkt` files
@@ -194,7 +204,7 @@ The first steps of the `test` job (the `changes` step, checkout with
 (`git diff HEAD^1 HEAD`) and publish the result as job outputs. It runs `vm-sanitizers` only when the VM,
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
-- `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
+- `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`, `VERSION`,
   `src/stdlib.rkt` (the registry that embeds the `std/` modules, from
   `stdlib/MODULES`);
 - `tests/test_vm_diff_*`, `tests/vm_diff_support.py`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
@@ -305,19 +315,24 @@ CHANGELOG rules are under "Tags, versions and CHANGELOG" below.
 
 ### Tags, versions and CHANGELOG
 
-- `src/version.rkt` is the single source of the version: `make version` prints
-  it and `agentica --version` reports it. Keep it in sync with the Git tag.
+- The `VERSION` file at the repository root (one line, no `v`) is the single
+  source of the version. `make version` prints it and the Makefile passes it to
+  C as `AGC_VERSION`; `src/version.rkt` embeds it when it is compiled (so
+  `raco exe` and `raco distribute` carry it and need no file at run time) and
+  `agentica --version` reports it. The Agentica front end takes it as an input
+  (`Settings.version`; `--version V` in the arguments of `compiler/front_end.agc`
+  and `compiler/cli_main.agc`), and writes it into each `.agcb` header. Keep it in sync with the Git tag.
 - Every PR with a user-visible change adds a short entry under `## [Unreleased]`
   in `CHANGELOG.md` (Added, Changed, Removed or Fixed; start a change that
   breaks programs or CLI use with `**Breaking:**`; add the PR number).
   Internal-only work (CI, refactors, docs) needs none. A release PR renames
   `[Unreleased]` to `## [X.Y.Z] - DATE`, leaves an empty `[Unreleased]` above
-  it, bumps `src/version.rkt` and fixes the compare links at the bottom.
+  it, bumps `VERSION` and fixes the compare links at the bottom.
 - Every minor or patch bump is tagged, and the tag pushed, right away after its
   PR merges. The bump commit and the annotated tag message are both `release
   version <tag>`, for example `git tag -a 0.2.0 -m "release version 0.2.0"`.
 - Tag releases with the bare version (`0.2.0`, no `v` prefix).
-  `.github/workflows/release.yml` validates the tag against `src/version.rkt`,
+  `.github/workflows/release.yml` validates the tag against `VERSION`,
   builds `dist/agentica`, packages a `raco distribute` bundle with `LICENSE`,
   `NOTICE` and, in `licenses/racket/`, Racket's license files (from its share
   directory) and Chez Scheme's `NOTICE` (checked in at

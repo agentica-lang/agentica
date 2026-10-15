@@ -18,6 +18,7 @@ import SourceRoot from "bdd_source_root"
 import DiagnosticJson from "diagnostic_json"
 import Paths from "import_path"
 import Env from "link_env"
+import Pipeline from "pipeline"
 
 # The runner is a program of two lines, and the step program a program of one call when no --steps is given.
 RUNNER_ROOT = "import Runner from \"std/test/runner\"\n\ndef main() -> Void\n  Runner.main()\nend\n"
@@ -47,8 +48,26 @@ struct Steps
   given: Bool
 end
 
-## Runs `agentica test` for the options and says how it ended.
+# Where the std/ sources of the programs the driver compiles come from.
+enum Std
+  # The caller (src/bdd-driver.rkt) sends them on stdin; they are installed in the run directory.
+  Stdin
+  # The settings of the caller, which has a provider of its own (the front end's `test` command).
+  Given(Env.Settings)
+end
+
+## Runs `agentica test` for the options and says how it ended. The `std/` sources come on stdin.
 export def run(options: Opts.Options) -> Report.Ending
+  return start(options, Std.Stdin)
+end
+
+## The same, with the settings of the caller (its version and its provider of the `std/` sources), when the driver runs
+## inside the front end and has no stdin of its own to read them from.
+export def run_with(options: Opts.Options, settings: Env.Settings) -> Report.Ending
+  return start(options, Std.Given(settings))
+end
+
+def start(options: Opts.Options, std: Std) -> Report.Ending
   if options.steps.size > 1
     return Report.usage("one --steps program; import the other files from it", options)
   end
@@ -67,28 +86,28 @@ export def run(options: Opts.Options) -> Report.Ending
   end
   run_directory = claimed.unwrap!
   RunDir.sweep(temporary.unwrap!, run_directory)
-  ending = inside(run_directory.path, options, temporary.unwrap!)
+  ending = inside(run_directory.path, options, std, temporary.unwrap!)
   RunDir.release(run_directory)
   return ending
 end
 
-# The run in its directory. The std/ sources are written first, and the runner compiled before anything else: its
-# failure is a bug of the installation. The programs name the Agentica version of the VM that will run them.
-def inside(directory: String, options: Opts.Options, temporary: String) -> Report.Ending
-  installed = install_std_sources(directory)
-  if !installed.ok?
-    return Report.infrastructure(installed.message, temporary, options)
+# The run in its directory. The std/ sources are written first when they come on stdin, and the runner compiled before
+# anything else: its failure is a bug of the installation. The programs name the version the caller gave.
+def inside(directory: String, options: Opts.Options, std: Std, temporary: String) -> Report.Ending
+  settings = Env.settings("#{directory}/std", Env.process_env()).with(version: options.version)
+  case std
+    Std.Stdin ->
+      installed = install_std_sources(directory)
+      if !installed.ok?
+        return Report.infrastructure(installed.message, temporary, options)
+      end
+    Std.Given(given) -> settings = given
   end
-  version = Runner.vm_version(options.vm)
-  if !version.ok?
-    return Report.infrastructure(version.message, options.vm, options)
-  end
-  settings = Env.settings("#{directory}/std", Env.process_env()).with(version: version.unwrap!)
   case compile_runner(directory, settings)
-    Compile.Compiled.Rejected(problem) ->
+    Pipeline.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"
       return Report.infrastructure(message, options.vm, options)
-    Compile.Compiled.Bytes(bytes) ->
+    Pipeline.Compiled.Bytes(bytes) ->
       ran = prepare_and_run(directory, options, settings, bytes)
       if !ran.ok?
         return Report.infrastructure(ran.message, temporary, options)
@@ -109,11 +128,11 @@ def install_std_sources(directory: String) -> Result[Void]
   return ok()
 end
 
-def compile_runner(directory: String, settings: Env.Settings) -> Compile.Compiled
+def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compiled
   source = "#{directory}/runner.agc"
   written = write_text(source, RUNNER_ROOT)
   if !written.ok?
-    return Compile.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
+    return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
   end
   return Compile.file(source, settings, "cannot read the runner")
 end
@@ -180,7 +199,7 @@ end
 def compile_steps(directory: String, options: Opts.Options, settings: Env.Settings) -> Result[Steps]
   source = "#{directory}/steps.agc"
   root = ""
-  compiled = Compile.Compiled.Bytes([])
+  compiled = Pipeline.Compiled.Bytes([])
   if options.steps.size == 0
     try write_text(source, DEFAULT_STEPS)
     compiled = Compile.file(source, settings, "cannot read the step program #{source}")
@@ -192,10 +211,10 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
   bytecode = "#{directory}/steps.agcb"
   given = options.steps.size > 0
   case compiled
-    Compile.Compiled.Rejected(problem) ->
+    Pipeline.Compiled.Rejected(problem) ->
       error_text = JSON.encode(DiagnosticJson.json(problem))
       return ok(Steps(bytecode: bytecode, source: source, root: root, failure: error_text, given: given))
-    Compile.Compiled.Bytes(bytes) ->
+    Pipeline.Compiled.Bytes(bytes) ->
       try write_bytes(bytecode, bytes)
       return ok(Steps(bytecode: bytecode, source: source, root: root, failure: "", given: given))
   end
@@ -223,8 +242,8 @@ end
 def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings) -> Result[Discover.Entry]
   front_end = ""
   case Compile.file(entry.path, settings, "cannot read the test file #{entry.path}")
-    Compile.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
-    Compile.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
+    Pipeline.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
+    Pipeline.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
   end
   return ok(entry.with(bytecode: output, source_root: SourceRoot.option(entry.path), front_end: front_end))
 end
