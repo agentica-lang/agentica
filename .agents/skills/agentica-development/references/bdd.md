@@ -114,8 +114,8 @@ How `agentica test` works: `src/bdd-driver.rkt`, `std/bdd`, the runner in `stdli
     summary) and `stderr_text` (drops only lines of the VM's exact shapes,
     re-encoded and compared, and keeps the last 64 Ki characters).
   - Tests: `tests/unit-test-test.rkt` with `tests/fixtures/unit/` (outcomes,
-    captured output, exit, timeout and no child left after it, names, `--only`
-    and its usage errors, the seed, forged records, list-phase errors in
+    captured output, a stack cut after 15 frames (`deep_test.agc`), exit,
+    timeout and no child left after it, names, `--only` and its usage errors, the seed, forged records, list-phase errors in
     `lists/`, the output limits, step programs in `steps/`, a mixed folder, the
     default `test/`), the golden `test-child` (`record_for`, the stderr shapes)
     and the `std/` unit tests in `tests/std/`.
