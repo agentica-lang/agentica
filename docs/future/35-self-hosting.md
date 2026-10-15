@@ -175,7 +175,8 @@ stage0 from Racket. It changes no test: the test rewrite is done before it, in
 `tests/*.rkt` files require `src/` modules directly (16 of the 43 `*-test.rkt`).
 The per-file rewrites that this section used to list (`cli-in-process.rkt`,
 `compile-file` in `vm-diff-common.rkt`, the site examples, the latency and trace
-tests, `bdd-integration.rkt`) are phase 1 and 2 work there.
+tests, `bdd-integration.rkt`, now `tests/test_bdd_integration.py`) are phase 1
+and 2 work there.
 
 Replacing rackunit is decided: Python `unittest`, standard library only, in
 phases that run beside steps 4 to 8
@@ -201,7 +202,7 @@ goldens stay.
 | 4 | **Done** except module constants (4a, the builtin catalog as Agentica data, PR #258; 4b, the checker, PR #263; the constants of §44 follow, below): Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). It must also carry module constants (§44, roadmap row 7.2.8): the order, `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE` and the `CHECK-DECL-ORDER` rank of constants; the new import forms of §44.2 (`import Mod from "path"`, `import {A, B} from "path"`) are parser and linker changes that land in `src/` and `compiler/` together (44a0), and the checker sees no import, but one help text of `src/checker.rkt` shows the old form and the checker port carries the new text. Decided for deep trees (35.9): the linker of step 3 handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that, so both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and statements (one level for each, so it bounds the depth of the tree they recurse on; a diagnostic change in both front ends, made in 4b). |
 | 5 | Lowering (`src/lower.rkt`) | The IR in the form `--dump-ir` prints, or the `LOWER-` diagnostic |
 | 6 | Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal |
-| 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/bdd-test.rkt`, `tests/bdd-integration.rkt`) |
+| 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`) |
 | 8 | CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
 
 Notes:
@@ -757,9 +758,13 @@ in rackunit until phase 3.
   waits for phase 2. Done: the small VM runtime tests (PR #264, 2026-10-15:
   monotonic clock, logger, test protocol, channel, child channel and the C
   style check, 13 cases), then the network tests (PR #266: TCP, HTTP and TLS,
-  19 cases) and the VM I/O tests (PR #267: stdout, stop signals and
-  `File.each_line`, 35 cases). `tests/vm-stack-test.rkt` stays, because
-  `make goldens` writes its sidecars.
+  19 cases), the VM I/O tests (PR #267: stdout, stop signals and
+  `File.each_line`, 35 cases) and the process, BDD and BDD integration tests
+  (PR #269: 26 fast cases and 5 slow ones, which run the CLI as a child).
+  `tests/vm-stack-test.rkt` stays, because `make goldens` writes its sidecars.
+  `tests/unit-test-test.rkt` waits for phase 2: it calls
+  `run-agentica-test` of `src/bdd-driver.rkt` to set a test timeout that the CLI
+  has no flag for.
 - **Phase 2:** the golden parts of the front-end tests move to `unittest`: the
   Agentica output compared with the goldens in `tests/fixtures/frontend/`. The
   live comparisons with the Racket stages stay in rackunit until phase 3. A file
