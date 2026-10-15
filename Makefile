@@ -12,7 +12,7 @@ AGC_NEXT := dist/agentica-next
 endif
 NEXT_TESTS := tests tests/test_single_binary.py
 
-.PHONY: build build-tests bdd-driver test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz stage1 stage2 stage3 fixed-point agentica-next vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests bdd-driver test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens frontend-freeze frontend-snapshot bench eval-references version vm vm-test vm-latency vm-fuzz stage1 stage2 stage3 fixed-point agentica-next vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 # A recipe that fails leaves no half-written target for the next make to take as up to date. The stages below also remove
 # their output before they write it, so a compiler that exits 0 without writing cannot pass for the previous file.
@@ -144,6 +144,20 @@ goldens: build vm
 	test -n "$(FIXTURES)" || racket tests/frontend-modules-common.rkt
 	test -n "$(FIXTURES)" || racket tests/frontend-catalog-common.rkt
 	test -n "$(FIXTURES)" || racket tests/frontend-check-common.rkt
+
+# The Racket stages once more: writes what they print for the inputs of tests/fixtures/frontend/frozen/ (the live
+# comparisons of the tests/frontend-*-test.rkt slow tiers, frozen for tests/test_frontend_*.py). Needs Racket, so it ends with
+# the Racket stages (docs/future/35-self-hosting.md 35.10, phase 3). Slow (about five minutes); one stage or some:
+#   make frontend-freeze FREEZE_STAGES="lexer parser"
+FREEZE_STAGES ?= lexer parser modules check lower bytecode catalog
+frontend-freeze: build vm
+	for stage in $(FREEZE_STAGES); do racket tests/frontend-$$stage-freeze.rkt || exit 1; done
+
+# Takes the snapshot of examples/, stdlib/, tests/fixtures/, compiler/, the cases of tests/checker-test.rkt and the site
+# programs that the frozen comparisons run on. Run it once to make a freeze, not with every change of those folders: the
+# snapshot is a fixed set of inputs.
+frontend-snapshot: build
+	racket tests/frontend-freeze-corpus.rkt
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
 vm-golden-check: build vm

@@ -7,13 +7,10 @@
          racket/runtime-path
          "frontend-lower-common.rkt"
          "frontend-corpus-common.rkt"
-         "vm-diff-common.rkt"
-         "../src/bytecode.rkt"
-         "../src/lower.rkt")
+         "vm-diff-common.rkt")
 
 (define-runtime-path root "..")
 (define-runtime-path entry "../compiler/lower.agc")
-(define-runtime-path tables "../compiler/lower_tables.agc")
 (define-runtime-path stdlib-folder "../stdlib")
 (define-runtime-path checker-cases "checker-test.rkt")
 
@@ -43,38 +40,8 @@
   (for ([path (in-list paths)])
     (check-equal? (hash-ref outputs path #f) (string-append (lower-text path) "\n") path)))
 
-; The names of the VM_BUILTINS constant of compiler/lower_tables.agc: the strings between its brackets.
-(define (agentica-vm-builtins)
-  (define text (file->string tables))
-  (define at (car (regexp-match-positions #rx"VM_BUILTINS = Set.new\\(\\[" text)))
-  (define end (car (regexp-match-positions #rx"\n\\]\\)" text (cdr at))))
-  (map cadr (regexp-match* #rx"\"([^\"]+)\"" (substring text (cdr at) (car end)) #:match-select values)))
-
 (module+ test
   (define inputs (lower-inputs))
-
-  (test-case "VM_BUILTINS of compiler/lower_tables.agc is vm-builtins of src/lower.rkt"
-    (check-equal? (sort (agentica-vm-builtins) string<?) (sort vm-builtins string<?)))
-
-  (test-case "every fixture has a golden and no golden is left over"
-    (define expected (sort (map (lambda (input) (path->string (file-name-from-path (lower-golden input)))) inputs) string<?))
-    (define found
-      (sort (for/list ([file (in-list (directory-list (path-only (lower-golden (car inputs)))))]
-                       #:when (path-has-extension? file #".ir"))
-              (path->string file))
-            string<?))
-    (check-equal? found expected))
-
-  (test-case "the fixtures lower an instruction of every opcode of the bytecode"
-    (define seen (string-append* (map golden inputs)))
-    (for ([op (in-list opcodes)])
-      (check-true (regexp-match? (regexp (format "(?m:^    ~a( |$))" op)) seen) (symbol->string op))))
-
-  (test-case "the fixtures cover chunked literals, decodable structs, constants and the start function"
-    (define seen (string-append* (map golden inputs)))
-    (for ([needle (in-list '("\"List.concat\"" "\"Map.put\"" " types=[" "\"<start>\"" "\"Task.await_result\""
-                             "tail-call" "struct-with" "global-set" "call-value" "range-bounds"))])
-      (check-true (string-contains? seen needle) needle)))
 
   (test-case "the Racket printer matches its goldens"
     (for ([input (in-list inputs)])
@@ -83,11 +50,6 @@
   (when (vm-built? "frontend lower tests")
     (with-bytecode
       (lambda (work bytecode)
-        (test-case "the Agentica lowering matches the goldens on the VM"
-          (define outputs (texts-by-path bytecode (map input-path inputs)))
-          (for ([input (in-list inputs)])
-            (check-equal? (hash-ref outputs (input-path input) #f) (golden input) (lower-input-name input))))
-
         (test-case "while Racket exists: the Agentica lowering matches the Racket lowering on examples/"
           (define paths (agc-files-in "examples"))
           (check-true (> (length paths) 20))

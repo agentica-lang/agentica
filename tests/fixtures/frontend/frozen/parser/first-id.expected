@@ -1,0 +1,309 @@
+program #1300 0:1:1-2295:114:1 module-doc="A small inventory module used to exercise the parser."
+  declaration: import-decl #1000 58:3:1-82:4:1 path="util" alias="Util"
+  declaration: struct-decl #1007 104:6:1-163:11:1 name="Item" doc="One stocked item."
+    field: field-decl #1002 118:7:3-131:8:1 name="name"
+      type: type-ref #1001 124:7:9-130:7:15 name="String"
+    field: field-decl #1004 133:8:3-144:9:1 name="count"
+      type: type-ref #1003 140:8:10-143:8:13 name="Int"
+    field: field-decl #1006 146:9:3-159:10:1 name="price"
+      type: type-ref #1005 153:9:10-158:9:15 name="Float"
+  declaration: export-decl #1012 193:13:1-234:17:1 doc="What a lookup can return."
+    declaration: enum-decl #1011 200:13:8-234:17:1 name="Found" type-parameters=["T"]
+      variant: enum-variant #1009 216:14:3-223:15:1 name="Hit"
+        payload: type-ref #1008 220:14:7-221:14:8 name="T"
+      variant: enum-variant #1010 225:15:3-230:16:1 name="Miss"
+  declaration: function-decl #1033 235:18:1-404:26:1 name="find"
+    param: param #1015 244:18:10-261:18:27 name="items"
+      type: type-ref #1014 251:18:17-261:18:27 name="List"
+        arg: type-ref #1013 256:18:22-260:18:26 name="Item"
+    param: param #1017 263:18:29-275:18:41 name="name"
+      type: type-ref #1016 269:18:35-275:18:41 name="String"
+    result: type-ref #1019 280:18:46-291:18:57 name="Found"
+      arg: type-ref #1018 286:18:52-290:18:56 name="Item"
+    body: for-stmt #1030 294:19:3-380:24:1 variable="item"
+      iterable: name-ref #1020 306:19:15-311:19:20 name="items"
+      body: if-stmt #1029 316:20:5-374:23:1
+        branch: if-branch #1028 316:20:5-366:22:1
+          condition: binary #1024 319:20:8-336:20:25 op=equal op-span=329:20:18-331:20:20
+            left: field-access #1022 319:20:8-328:20:17 name="name"
+              target: name-ref #1021 319:20:8-323:20:12 name="item"
+            right: name-ref #1023 332:20:21-336:20:25 name="name"
+          body: return-stmt #1027 343:21:7-366:22:1
+            value: enum-constructor #1026 350:21:14-365:21:29 enum="Found" variant="Hit"
+              arg: name-ref #1025 360:21:24-364:21:28 name="item"
+    body: return-stmt #1032 382:24:3-400:25:1
+      value: type-expression #1031 389:24:10-399:24:20 name="Found.Miss"
+  declaration: function-decl #1053 405:27:1-538:34:1 name="total"
+    param: param #1036 415:27:11-432:27:28 name="items"
+      type: type-ref #1035 422:27:18-432:27:28 name="List"
+        arg: type-ref #1034 427:27:23-431:27:27 name="Item"
+    result: type-ref #1037 437:27:33-442:27:38 name="Float"
+    body: binding #1039 445:28:3-455:29:1 name="sum"
+      value: literal #1038 451:28:9-454:28:12 value=float:bits:0
+    body: for-stmt #1050 457:29:3-521:32:1 variable="item"
+      iterable: name-ref #1040 469:29:15-474:29:20 name="items"
+      body: binding #1049 479:30:5-515:31:1 name="sum"
+        value: binary #1048 479:30:5-515:31:1 op=plus op-span=483:30:9-485:30:11
+          left: name-ref #1041 479:30:5-482:30:8 name="sum"
+          right: binary #1047 486:30:12-514:30:40 op=multiply op-span=502:30:28-503:30:29
+            left: field-access #1044 486:30:12-501:30:27 name="to_f"
+              target: field-access #1043 486:30:12-496:30:22 name="count"
+                target: name-ref #1042 486:30:12-490:30:16 name="item"
+            right: field-access #1046 504:30:30-514:30:40 name="price"
+              target: name-ref #1045 504:30:30-508:30:34 name="item"
+    body: return-stmt #1052 523:32:3-534:33:1
+      value: name-ref #1051 530:32:10-533:32:13 name="sum"
+  declaration: function-decl #1072 539:35:1-700:41:1 name="describe"
+    param: param #1056 552:35:14-570:35:32 name="found"
+      type: type-ref #1055 559:35:21-570:35:32 name="Found"
+        arg: type-ref #1054 565:35:27-569:35:31 name="Item"
+    result: type-ref #1057 575:35:37-581:35:43 name="String"
+    body: case-stmt #1071 584:36:3-696:40:1
+      value: name-ref #1058 589:36:8-594:36:13 name="found"
+      arm: case-arm #1066 599:37:5-655:38:1
+        pattern: variant-pattern #1059 599:37:5-614:37:20 enum="Found" variant="Hit" bindings=["item"]
+        body: return-stmt #1065 618:37:24-655:38:1
+          value: interpolation #1064 625:37:31-654:37:60
+            part: field-access #1061 628:37:34-637:37:43 name="name"
+              target: name-ref #1060 628:37:34-632:37:38 name="item"
+            part: text ": "
+            part: field-access #1063 642:37:48-652:37:58 name="count"
+              target: name-ref #1062 642:37:48-646:37:52 name="item"
+      arm: case-arm #1070 659:38:5-690:39:1
+        pattern: variant-pattern #1067 659:38:5-669:38:15 enum="Found" variant="Miss" bindings=[]
+        body: return-stmt #1069 673:38:19-690:39:1
+          value: literal #1068 680:38:26-689:38:35 value=string:"missing"
+  declaration: function-decl #1110 701:42:1-938:51:1 name="restock"
+    param: param #1075 713:42:13-730:42:30 name="items"
+      type: type-ref #1074 720:42:20-730:42:30 name="List"
+        arg: type-ref #1073 725:42:25-729:42:29 name="Item"
+    param: param #1077 732:42:32-743:42:43 name="amount"
+      type: type-ref #1076 740:42:40-743:42:43 name="Int"
+    result: type-ref #1079 748:42:48-758:42:58 name="List"
+      arg: type-ref #1078 753:42:53-757:42:57 name="Item"
+    body: return-stmt #1109 761:43:3-934:50:1
+      value: method-call #1108 768:43:10-933:49:6 name="map"
+        target: name-ref #1080 768:43:10-773:43:15 name="items"
+        arg: block-lit #1107 778:43:20-933:49:6
+          param: block-param #1081 782:43:24-786:43:28 name="item"
+          body: if-stmt #1106 792:44:5-928:49:1
+            branch: if-branch #1103 792:44:5-900:46:1
+              condition: binary #1089 795:44:8-824:44:37 op=and op-span=810:44:23-813:44:26
+                left: binary #1085 795:44:8-809:44:22 op=less op-span=806:44:19-807:44:20
+                  left: field-access #1083 795:44:8-805:44:18 name="count"
+                    target: name-ref #1082 795:44:8-799:44:12 name="item"
+                  right: literal #1084 808:44:21-809:44:22 value=int:5
+                right: binary #1088 814:44:27-824:44:37 op=greater op-span=821:44:34-822:44:35
+                  left: name-ref #1086 814:44:27-820:44:33 name="amount"
+                  right: literal #1087 823:44:36-824:44:37 value=int:0
+              body: expr-stmt #1102 831:45:7-900:46:1
+                value: construct #1101 831:45:7-899:45:75 type="Item"
+                  arg: named-arg #1092 836:45:12-851:45:27 name="name"
+                    value: field-access #1091 842:45:18-851:45:27 name="name"
+                      target: name-ref #1090 842:45:18-846:45:22 name="item"
+                  arg: named-arg #1097 853:45:29-879:45:55 name="count"
+                    value: binary #1096 860:45:36-879:45:55 op=plus op-span=871:45:47-872:45:48
+                      left: field-access #1094 860:45:36-870:45:46 name="count"
+                        target: name-ref #1093 860:45:36-864:45:40 name="item"
+                      right: name-ref #1095 873:45:49-879:45:55 name="amount"
+                  arg: named-arg #1100 881:45:57-898:45:74 name="price"
+                    value: field-access #1099 888:45:64-898:45:74 name="price"
+                      target: name-ref #1098 888:45:64-892:45:68 name="item"
+            else:
+              body: expr-stmt #1105 915:47:7-920:48:1
+                value: name-ref #1104 915:47:7-919:47:11 name="item"
+  declaration: function-decl #1131 939:52:1-1091:59:1 name="parse_count"
+    param: param #1112 955:52:17-967:52:29 name="text"
+      type: type-ref #1111 961:52:23-967:52:29 name="String"
+    result: type-ref #1114 972:52:34-983:52:45 name="Result"
+      arg: type-ref #1113 979:52:41-982:52:44 name="Int"
+    body: binding #1118 986:53:3-1008:54:1 name="count"
+      value: try-expr #1117 994:53:11-1007:53:24
+        operand: field-access #1116 998:53:15-1007:53:24 name="to_i"
+          target: name-ref #1115 998:53:15-1002:53:19 name="text"
+    body: if-stmt #1127 1010:54:3-1068:57:1
+      branch: if-branch #1126 1010:54:3-1062:56:1
+        condition: binary #1121 1013:54:6-1022:54:15 op=less op-span=1019:54:12-1020:54:13
+          left: name-ref #1119 1013:54:6-1018:54:11 name="count"
+          right: literal #1120 1021:54:14-1022:54:15 value=int:0
+        body: return-stmt #1125 1027:55:5-1062:56:1
+          value: call #1124 1034:55:12-1061:55:39 name="error" piped=false
+            arg: interpolation #1123 1040:55:18-1060:55:38
+              part: text "negative: "
+              part: name-ref #1122 1053:55:31-1058:55:36 name="count"
+    body: return-stmt #1130 1070:57:3-1087:58:1
+      value: call #1129 1077:57:10-1086:57:19 name="ok" piped=false
+        arg: name-ref #1128 1080:57:13-1085:57:18 name="count"
+  declaration: function-decl #1162 1092:60:1-1331:68:1 name="report"
+    param: param #1134 1103:60:12-1120:60:29 name="items"
+      type: type-ref #1133 1110:60:19-1120:60:29 name="List"
+        arg: type-ref #1132 1115:60:24-1119:60:28 name="Item"
+    param: param #1136 1122:60:31-1135:60:44 name="title"
+      type: type-ref #1135 1129:60:38-1135:60:44 name="String"
+    result: type-ref #1137 1140:60:49-1146:60:55 name="String"
+    body: binding #1141 1149:61:3-1174:62:1 name="lines"
+      type: type-ref #1139 1156:61:10-1168:61:22 name="List"
+        arg: type-ref #1138 1161:61:15-1167:61:21 name="String"
+      value: list-lit #1140 1171:61:25-1173:61:27
+    body: for-stmt #1155 1176:62:3-1286:66:1 variable="item"
+      iterable: name-ref #1142 1188:62:15-1193:62:20 name="items"
+      body: binding #1150 1198:63:5-1251:64:1 name="line"
+        value: interpolation #1149 1205:63:12-1250:63:57
+          part: field-access #1144 1208:63:15-1217:63:24 name="name"
+            target: name-ref #1143 1208:63:15-1212:63:19 name="item"
+          part: text " x"
+          part: field-access #1146 1222:63:29-1232:63:39 name="count"
+            target: name-ref #1145 1222:63:29-1226:63:33 name="item"
+          part: text " @ "
+          part: field-access #1148 1238:63:45-1248:63:55 name="price"
+            target: name-ref #1147 1238:63:45-1242:63:49 name="item"
+      body: binding #1154 1255:64:5-1280:65:1 name="lines"
+        value: method-call #1153 1263:64:13-1279:64:29 name="push"
+          target: name-ref #1151 1263:64:13-1268:64:18 name="lines"
+          arg: name-ref #1152 1274:64:24-1278:64:28 name="line"
+    body: return-stmt #1161 1288:66:3-1327:67:1
+      value: interpolation #1160 1295:66:10-1326:66:41
+        part: name-ref #1156 1298:66:13-1303:66:18 name="title"
+        part: text "\n"
+        part: method-call #1159 1308:66:23-1324:66:39 name="join"
+          target: name-ref #1157 1308:66:23-1313:66:28 name="lines"
+          arg: literal #1158 1319:66:34-1323:66:38 value=string:"\n"
+  declaration: function-decl #1193 1332:69:1-1619:82:1 name="cheapest"
+    param: param #1165 1345:69:14-1362:69:31 name="items"
+      type: type-ref #1164 1352:69:21-1362:69:31 name="List"
+        arg: type-ref #1163 1357:69:26-1361:69:30 name="Item"
+    result: type-ref #1167 1367:69:36-1378:69:47 name="Found"
+      arg: type-ref #1166 1373:69:42-1377:69:46 name="Item"
+    body: binding #1169 1381:70:3-1399:71:1 name="best"
+      value: type-expression #1168 1388:70:10-1398:70:20 name="Found.Miss"
+    body: for-stmt #1190 1401:71:3-1601:80:1 variable="item"
+      iterable: name-ref #1170 1413:71:15-1418:71:20 name="items"
+      body: case-stmt #1189 1423:72:5-1595:79:1
+        value: name-ref #1171 1428:72:10-1432:72:14 name="best"
+        arm: case-arm #1176 1439:73:7-1476:74:1
+          pattern: variant-pattern #1172 1439:73:7-1449:73:17 enum="Found" variant="Miss" bindings=[]
+          body: binding #1175 1453:73:21-1476:74:1 name="best"
+            value: enum-constructor #1174 1460:73:28-1475:73:43 enum="Found" variant="Hit"
+              arg: name-ref #1173 1470:73:38-1474:73:42 name="item"
+        arm: case-arm #1188 1482:74:7-1587:78:1
+          pattern: variant-pattern #1177 1482:74:7-1500:74:25 enum="Found" variant="Hit" bindings=["current"]
+          body: if-stmt #1187 1512:75:9-1587:78:1
+            branch: if-branch #1186 1512:75:9-1575:77:1
+              condition: binary #1182 1515:75:12-1541:75:38 op=less op-span=1526:75:23-1527:75:24
+                left: field-access #1179 1515:75:12-1525:75:22 name="price"
+                  target: name-ref #1178 1515:75:12-1519:75:16 name="item"
+                right: field-access #1181 1528:75:25-1541:75:38 name="price"
+                  target: name-ref #1180 1528:75:25-1535:75:32 name="current"
+              body: binding #1185 1552:76:11-1575:77:1 name="best"
+                value: enum-constructor #1184 1559:76:18-1574:76:33 enum="Found" variant="Hit"
+                  arg: name-ref #1183 1569:76:28-1573:76:32 name="item"
+    body: return-stmt #1192 1603:80:3-1615:81:1
+      value: name-ref #1191 1610:80:10-1614:80:14 name="best"
+  declaration: function-decl #1216 1620:83:1-1803:90:1 name="histogram"
+    param: param #1196 1634:83:15-1651:83:32 name="items"
+      type: type-ref #1195 1641:83:22-1651:83:32 name="List"
+        arg: type-ref #1194 1646:83:27-1650:83:31 name="Item"
+    result: type-ref #1199 1656:83:37-1672:83:53 name="Map"
+      arg: type-ref #1197 1660:83:41-1666:83:47 name="String"
+      arg: type-ref #1198 1668:83:49-1671:83:52 name="Int"
+    body: binding #1204 1675:84:3-1705:85:1 name="counts"
+      type: type-ref #1202 1683:84:11-1699:84:27 name="Map"
+        arg: type-ref #1200 1687:84:15-1693:84:21 name="String"
+        arg: type-ref #1201 1695:84:23-1698:84:26 name="Int"
+      value: map-lit #1203 1702:84:30-1704:84:32
+    body: for-stmt #1213 1707:85:3-1783:88:1 variable="item"
+      iterable: name-ref #1205 1719:85:15-1724:85:20 name="items"
+      body: binding #1212 1729:86:5-1777:87:1 name="counts"
+        value: call #1211 1738:86:14-1776:86:52 name="Map.put" piped=false
+          arg: name-ref #1206 1746:86:22-1752:86:28 name="counts"
+          arg: field-access #1208 1754:86:30-1763:86:39 name="name"
+            target: name-ref #1207 1754:86:30-1758:86:34 name="item"
+          arg: field-access #1210 1765:86:41-1775:86:51 name="count"
+            target: name-ref #1209 1765:86:41-1769:86:45 name="item"
+    body: return-stmt #1215 1785:88:3-1799:89:1
+      value: name-ref #1214 1792:88:10-1798:88:16 name="counts"
+  declaration: function-decl #1299 1804:91:1-2295:114:1 name="main"
+    result: type-ref #1217 1818:91:15-1822:91:19 name="Void"
+    body: binding #1235 1825:92:3-1944:96:1 name="items"
+      type: type-ref #1219 1832:92:10-1842:92:20 name="List"
+        arg: type-ref #1218 1837:92:15-1841:92:19 name="Item"
+      value: list-lit #1234 1845:92:23-1943:95:4
+        element: construct #1226 1851:93:5-1890:93:44 type="Item"
+          arg: named-arg #1221 1856:93:10-1867:93:21 name="name"
+            value: literal #1220 1862:93:16-1867:93:21 value=string:"pen"
+          arg: named-arg #1223 1869:93:23-1877:93:31 name="count"
+            value: literal #1222 1876:93:30-1877:93:31 value=int:3
+          arg: named-arg #1225 1879:93:33-1889:93:43 name="price"
+            value: literal #1224 1886:93:40-1889:93:43 value=float:bits:4609434218613702656
+        element: construct #1233 1896:94:5-1938:94:47 type="Item"
+          arg: named-arg #1228 1901:94:10-1913:94:22 name="name"
+            value: literal #1227 1907:94:16-1913:94:22 value=string:"book"
+          arg: named-arg #1230 1915:94:24-1924:94:33 name="count"
+            value: literal #1229 1922:94:31-1924:94:33 value=int:12
+          arg: named-arg #1232 1926:94:35-1937:94:46 name="price"
+            value: literal #1231 1933:94:42-1937:94:46 value=float:bits:4621813488089437307
+    body: binding #1243 1946:96:3-1977:97:1 name="stock"
+      value: map-lit #1242 1954:96:11-1976:96:33
+        entry: map-entry #1238 1955:96:12-1963:96:20
+          key: literal #1236 1955:96:12-1960:96:17 value=string:"pen"
+          value: literal #1237 1962:96:19-1963:96:20 value=int:3
+        entry: map-entry #1241 1965:96:22-1975:96:32
+          key: literal #1239 1965:96:22-1971:96:28 value=string:"book"
+          value: literal #1240 1973:96:30-1975:96:32 value=int:12
+    body: expr-stmt #1249 1979:97:3-2014:98:1
+      value: call #1248 1979:97:3-2013:97:37 name="puts" piped=false
+        arg: call #1247 1984:97:8-2012:97:36 name="describe" piped=false
+          arg: call #1246 1993:97:17-2011:97:35 name="find" piped=false
+            arg: name-ref #1244 1998:97:22-2003:97:27 name="items"
+            arg: literal #1245 2005:97:29-2010:97:34 value=string:"pen"
+    body: expr-stmt #1254 2016:98:3-2046:99:1
+      value: call #1253 2016:98:3-2045:98:32 name="puts" piped=false
+        arg: interpolation #1252 2021:98:8-2044:98:31
+          part: text "total "
+          part: call #1251 2030:98:17-2042:98:29 name="total" piped=false
+            arg: name-ref #1250 2036:98:23-2041:98:28 name="items"
+    body: binding #1259 2048:99:3-2091:100:1 name="better"
+      value: call #1258 2079:99:34-2090:99:45 name="List.size" piped=true
+        arg: call #1257 2057:99:12-2075:99:30 name="restock" piped=false
+          arg: name-ref #1255 2065:99:20-2070:99:25 name="items"
+          arg: literal #1256 2072:99:27-2074:99:29 value=int:10
+    body: binding #1261 2093:100:3-2099:101:1 name="n"
+      value: literal #1260 2097:100:7-2098:100:8 value=int:0
+    body: while-stmt #1270 2101:101:3-2139:105:1
+      condition: binary #1264 2107:101:9-2112:101:14 op=less op-span=2109:101:11-2110:101:12
+        left: name-ref #1262 2107:101:9-2108:101:10 name="n"
+        right: literal #1263 2111:101:13-2112:101:14 value=int:3
+      body: binding #1268 2117:102:5-2124:103:1 name="n"
+        value: binary #1267 2117:102:5-2124:103:1 op=plus op-span=2119:102:7-2121:102:9
+          left: name-ref #1265 2117:102:5-2118:102:6 name="n"
+          right: literal #1266 2122:102:10-2123:102:11 value=int:1
+      body: loop-control #1269 2128:103:5-2132:103:9 kind=next
+    body: case-stmt #1284 2141:105:3-2226:109:1
+      value: call #1272 2146:105:8-2163:105:25 name="parse_count" piped=false
+        arg: literal #1271 2158:105:20-2162:105:24 value=string:"x7"
+      arm: case-arm #1278 2168:106:5-2196:107:1
+        pattern: variant-pattern #1273 2168:106:5-2173:106:10 enum="Result" variant="Ok" bindings=["c"]
+        body: expr-stmt #1277 2177:106:14-2196:107:1
+          value: call #1276 2177:106:14-2195:106:32 name="puts" piped=false
+            arg: interpolation #1275 2182:106:19-2194:106:31
+              part: text "count "
+              part: name-ref #1274 2191:106:28-2192:106:29 name="c"
+      arm: case-arm #1283 2200:107:5-2220:108:1
+        pattern: variant-pattern #1279 2200:107:5-2208:107:13 enum="Result" variant="Err" bindings=["m"]
+        body: expr-stmt #1282 2212:107:17-2220:108:1
+          value: call #1281 2212:107:17-2219:107:24 name="puts" piped=false
+            arg: name-ref #1280 2217:107:22-2218:107:23 name="m"
+    body: expr-stmt #1291 2228:109:3-2256:110:1
+      value: call #1290 2228:109:3-2255:109:30 name="puts" piped=false
+        arg: binary #1289 2233:109:8-2254:109:29 op=plus op-span=2246:109:21-2247:109:22
+          left: index-access #1287 2233:109:8-2245:109:20
+            target: name-ref #1285 2233:109:8-2238:109:13 name="stock"
+            index: literal #1286 2239:109:14-2244:109:19 value=string:"pen"
+          right: name-ref #1288 2248:109:23-2254:109:29 name="better"
+    body: for-stmt #1298 2258:110:3-2291:113:1 variable="i"
+      iterable: binary #1294 2267:110:12-2272:110:17 op=dot-dot-dot op-span=2268:110:13-2271:110:16
+        left: literal #1292 2267:110:12-2268:110:13 value=int:0
+        right: name-ref #1293 2271:110:16-2272:110:17 name="n"
+      body: expr-stmt #1297 2277:111:5-2285:112:1
+        value: call #1296 2277:111:5-2284:111:12 name="puts" piped=false
+          arg: name-ref #1295 2282:111:10-2283:111:11 name="i"

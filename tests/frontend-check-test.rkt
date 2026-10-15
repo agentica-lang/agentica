@@ -4,19 +4,17 @@
          racket/runtime-path
          "frontend-check-common.rkt"
          "frontend-corpus-common.rkt"
-         "vm-diff-common.rkt"
-         "../src/builtins.rkt"
-         "../tools/gen-builtins-data.rkt"
-         "../tools/gen-check-tables.rkt")
+         "vm-diff-common.rkt")
 
 (define-runtime-path root "..")
 (define-runtime-path entry "../compiler/check.agc")
-(define-runtime-path tables "../compiler/check_tables.agc")
 (define-runtime-path stdlib-folder "../stdlib")
-(define-runtime-path checker-source "../src/checker.rkt")
 (define-runtime-path checker-cases "checker-test.rkt")
 
 (define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
+
+; Read by the writers of the frozen comparisons (tests/frontend-check-freeze.rkt and the ones after it).
+(provide checker-case-programs mutated-programs deep-cases generated-program)
 
 ; Runs compiler/check.agc once over the paths and gives the text of each by its path.
 (define (run-checker bytecode paths #:timeout [timeout 600])
@@ -38,54 +36,13 @@
   (display-to-file text path #:exists 'truncate/replace)
   (path->string path))
 
-; The codes the Racket checker has and no program can reach: CHECK-INTERNAL guards an impossible node,
-; CHECK-MODULE-CONTEXT a program that still has imports (the linker removes them) and CHECK-BLOCK-TYPE a
-; block with no expected type (a block is only parsed after a call, whose parameter gives the type).
-(define unreachable-codes '("CHECK-INTERNAL" "CHECK-MODULE-CONTEXT" "CHECK-BLOCK-TYPE"))
-
 (module+ test
   (define inputs (check-inputs))
-
-  (test-case "compiler/check_tables.agc is the method tables of src/checker.rkt"
-    (unless (equal? (file->string tables) (check-tables-source))
-      (fail "compiler/check_tables.agc is out of date: run racket tools/gen-check-tables.rkt")))
-
-  (test-case "every fixture has a golden and no golden is left over"
-    (define expected (sort (map (lambda (input) (path->string (file-name-from-path (check-golden input)))) inputs) string<?))
-    (define found
-      (sort (for/list ([file (in-list (directory-list (path-only (check-golden (car inputs)))))]
-                       #:when (path-has-extension? file #".checked"))
-              (path->string file))
-            string<?))
-    (check-equal? found expected))
-
-  (test-case "the fixtures end in every CHECK- diagnostic the checker can give"
-    (define codes (remove-duplicates (regexp-match* #rx"CHECK-[A-Z-]+" (file->string checker-source))))
-    (define seen (string-append* (map golden inputs)))
-    (for ([code (in-list codes)] #:unless (member code unreachable-codes))
-      (check-true (string-contains? seen (string-append "ERROR " code " ")) code)))
-
-  (test-case "the fixtures check a call of a builtin of every rule of the builtin table"
-    (define seen (string-append* (map golden inputs)))
-    (define used
-      (append (map cadr (regexp-match* #rx"name=\"([^\"]+)\" piped" seen #:match-select values))
-              (map cadr (regexp-match* #rx"resolved=call\\(\"([^\"]+)\"" seen #:match-select values))))
-    (define covered (remove-duplicates (for/list ([name (in-list used)] #:when (hash-ref builtins name #f))
-                                         (rule-variant (builtin-rule (hash-ref builtins name))))))
-    (define all (remove-duplicates (for/list ([entry (in-hash-values builtins)]) (rule-variant (builtin-rule entry)))))
-    (check-equal? (sort (remove* covered all) string<?) '()))
 
   (test-case "the Racket printer matches its goldens"
     (for ([input (in-list inputs)])
       (check-equal? (string-append (check-text (check-input-root input)) "\n") (golden input) (check-input-name input))))
-
-  (when (vm-built? "frontend check tests")
-    (with-bytecode
-      (lambda (work bytecode)
-        (test-case "the Agentica checker matches the goldens on the VM: types, resolutions and diagnostics"
-          (define outputs (run-checker bytecode (map input-path inputs)))
-          (for ([input (in-list inputs)])
-            (check-equal? (hash-ref outputs (input-path input) #f) (golden input) (check-input-name input))))))))
+)
 
 ; The programs of the cases of tests/checker-test.rkt, in the order they are checked there. The cases run when
 ; the test submodule is first instantiated, so the programs are collected once and kept: a second call would
