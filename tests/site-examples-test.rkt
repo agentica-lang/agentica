@@ -152,19 +152,23 @@
       (check-page page counts)))
   counts)
 
-;; Fast tier: the start page and two tour pages (module files, run and
-;; rejected programs). The whole site runs in the slow tier, which the
-;; site-examples workflow also runs (make test-slow).
-(define smoke-pages '("getting-started.md" "tour/modules.md" "tour/results-and-try.md"))
+;; Fast tier: the start page, two tour pages (module files, run and rejected
+;; programs) and the BDD page (an input block). The whole site runs in the slow
+;; tier, which the site-examples workflow also runs (make test-slow).
+(define smoke-pages
+  '("getting-started.md" "tour/modules.md" "tour/results-and-try.md" "library/testing/bdd.md"))
 
 (module+ test
-  (define counts
-    (check-pages (for/list ([page (in-list (site-pages))]
-                            #:when (member (path->string (find-relative-path (simplify-path content-dir) page))
-                                           smoke-pages))
-                   page)))
-  (check-true (> (hash-ref counts 'run 0) 0) "the smoke pages should have run examples")
-  (check-true (> (hash-ref counts 'module 0) 0) "the smoke pages should have module files"))
+  (define pages
+    (for/list ([page (in-list (site-pages))]
+               #:when (member (path->string (find-relative-path (simplify-path content-dir) page))
+                              smoke-pages))
+      page))
+  (define counts (check-pages pages))
+  (test-case "the smoke pages exist and have examples"
+    (check-equal? (length pages) (length smoke-pages))
+    (check-true (> (hash-ref counts 'run 0) 0) "the smoke pages should have run examples")
+    (check-true (> (hash-ref counts 'module 0) 0) "the smoke pages should have module files")))
 
 (module+ slow
   (define counts (check-pages (site-pages)))

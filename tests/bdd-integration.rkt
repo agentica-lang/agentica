@@ -155,38 +155,6 @@
        (check-equal? (map details (list (first (cases report)) (third (cases report))))
                      '(("\"incorrect\"" "\"actual\\n\"") ("{\"a\":1,\"b\":3}" "{\"a\":1,\"b\":\"3\"}"))))))
 
-  (test-case "a handler that prints for ever fails at the output limit, long before the scenario deadline"
-    (with-suite
-     `(("steps.agc" . ,(string-append
-                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
-                        "  BDD.run([BDD.step(\"the handler prints for ever\") do |ctx, args|\n"
-                        "    chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
-                        "    while true\n      puts(chunk)\n      Task.sleep(5)\n    end\n"
-                        "    ctx\n  end])\nend\n"))
-       ("endless.feature" . "Feature: Endless\nScenario: endless\nGiven the handler prints for ever\n"))
-     (lambda (directory)
-       (define started (current-inexact-milliseconds))
-       (define report (json-test (in directory "endless.feature") "--steps" (in directory "steps.agc")))
-       (check-true (< (- (current-inexact-milliseconds) started) 15000))
-       (check-equal? (codes report) '("RUNTIME-BDD-OUTPUT-LIMIT")))))
-
-  (test-case "a step program that prints for ever while it lists its steps fails at the output limit"
-    (with-suite
-     `(("steps.agc" . ,(string-append
-                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
-                        "  chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
-                        "  while true\n    puts(chunk)\n    Task.sleep(5)\n  end\n"
-                        "  BDD.run([])\nend\n"))
-       ("listing.feature" . "Feature: Listing\nScenario: never runs\nGiven something\n"))
-     (lambda (directory)
-       (define started (current-inexact-milliseconds))
-       (define report (json-test (in directory "listing.feature") "--steps" (in directory "steps.agc")))
-       (check-true (< (- (current-inexact-milliseconds) started) 15000))
-       (check-equal? (for/list ([file (in-list (hash-ref report 'files))])
-                       (define problem (hash-ref file 'error))
-                       (list (hash-ref file 'kind) (and (hash? problem) (hash-ref problem 'code))))
-                     '(("steps" "RUNTIME-BDD-OUTPUT-LIMIT"))))))
-
   (test-case "a failed scenario leaves no process of its program behind"
     (with-suite
      `(("holder.agc" . ,holder-program)
@@ -228,9 +196,42 @@
        (file-or-directory-permissions temporary #o2775)
        (check-equal? (status-and-code) '(2 "RUNTIME-BDD-INFRA"))))))
 
-;; Large sizes (1 MiB outputs, floods) and a killed driver with its process tree; the
-;; smoke case above keeps the same paths in the fast tier.
+;; Large sizes (1 MiB outputs, floods), output limits reached by endless prints (15 s
+;; deadlines) and a killed driver with its process tree; the smoke case keeps the
+;; other paths in the fast tier.
 (module+ slow
+  (test-case "a handler that prints for ever fails at the output limit, long before the scenario deadline"
+    (with-suite
+     `(("steps.agc" . ,(string-append
+                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "  BDD.run([BDD.step(\"the handler prints for ever\") do |ctx, args|\n"
+                        "    chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
+                        "    while true\n      puts(chunk)\n      Task.sleep(5)\n    end\n"
+                        "    ctx\n  end])\nend\n"))
+       ("endless.feature" . "Feature: Endless\nScenario: endless\nGiven the handler prints for ever\n"))
+     (lambda (directory)
+       (define started (current-inexact-milliseconds))
+       (define report (json-test (in directory "endless.feature") "--steps" (in directory "steps.agc")))
+       (check-true (< (- (current-inexact-milliseconds) started) 15000))
+       (check-equal? (codes report) '("RUNTIME-BDD-OUTPUT-LIMIT")))))
+
+  (test-case "a step program that prints for ever while it lists its steps fails at the output limit"
+    (with-suite
+     `(("steps.agc" . ,(string-append
+                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "  chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
+                        "  while true\n    puts(chunk)\n    Task.sleep(5)\n  end\n"
+                        "  BDD.run([])\nend\n"))
+       ("listing.feature" . "Feature: Listing\nScenario: never runs\nGiven something\n"))
+     (lambda (directory)
+       (define started (current-inexact-milliseconds))
+       (define report (json-test (in directory "listing.feature") "--steps" (in directory "steps.agc")))
+       (check-true (< (- (current-inexact-milliseconds) started) 15000))
+       (check-equal? (for/list ([file (in-list (hash-ref report 'files))])
+                       (define problem (hash-ref file 'error))
+                       (list (hash-ref file 'kind) (and (hash? problem) (hash-ref problem 'code))))
+                     '(("steps" "RUNTIME-BDD-OUTPUT-LIMIT"))))))
+
   (test-case "programs under test: output without a flush, wrong output, the output limits, literal input and the working directory"
     (with-suite
      `(("buffered.agc" . ,buffered-program)
