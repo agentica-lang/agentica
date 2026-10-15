@@ -46,7 +46,7 @@ export def deeper(at: Margin) -> Margin
   return at.with(indent: at.indent + "  ")
 end
 
-# The first line of a node. The root has no role.
+## The first line of a node: the indent, the role if there is one (the root has none), the kind, the id relative to the margin, the span and the attributes.
 export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Span, attrs: String) -> String
   label = ""
   if role != ""
@@ -55,6 +55,7 @@ export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Sp
   return at.indent + label + kind + " #" + (id - at.base).to_s + " " + Text.span_text(span) + attrs
 end
 
+## The label followed by the quoted text of an optional string, or the empty string when it is absent.
 export def text_attr(label: String, doc: Ast.Optional[String]) -> String
   case doc
     Ast.Optional.Present(text) -> return label + Text.quote(text)
@@ -62,6 +63,7 @@ export def text_attr(label: String, doc: Ast.Optional[String]) -> String
   end
 end
 
+## Prints a declaration and everything under it, one line per node, after the lines already in out.
 export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Decl) -> List[String]
   child = deeper(at)
   case decl
@@ -220,6 +222,13 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
       lines = out.push(head(at, role, "struct-update", node.id, node.span, visible_attr(node.visible)))
       lines = print_expr(lines, child, "target", node.target)
       return print_named_args(lines, child, node.args)
+    _ -> return print_container_expr(out, at, role, expr)
+  end
+end
+
+def print_container_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> List[String]
+  child = deeper(at)
+  case expr
     Ast.Expr.ListLit(node) ->
       lines = out.push(head(at, role, "list-lit", node.id, node.span, ""))
       return print_exprs(lines, child, "element", node.elements)
@@ -262,6 +271,8 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
       lines = out.push(head(at, role, "binary", node.id, node.span, op_attrs(node.op, node.op_span)))
       lines = print_expr(lines, child, "left", node.left)
       return print_expr(lines, child, "right", node.right)
+    # print_expr handles every other variant before it calls this one.
+    _ -> return out
   end
 end
 
