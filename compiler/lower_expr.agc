@@ -93,10 +93,10 @@ export def lower_call(
   end
   builtin = key != "" and VM_BUILTINS.include?(key)
   if form.ok? and !builtin
-    return error(Lowering.unsupported(cx, "the builtin " + node.name, span))
+    return error(Lowering.unsupported(cx, "the builtin #{node.name}", span))
   end
   if !builtin and !cx.functions.has_key?(node.name)
-    return error(Lowering.unsupported(cx, "the call to " + node.name, span))
+    return error(Lowering.unsupported(cx, "the call to #{node.name}", span))
   end
   if !checked
     expr = Ast.Expr.Call(node)
@@ -188,7 +188,7 @@ def lower_const_read(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ConstRef, want:
   made = Lowering.target(fx, want)
   read = cx.reads.get(node.name)
   if !read.ok?
-    return error(Lowering.internal(cx, "lower: constant " + node.name + " has no slot", node.span))
+    return error(Lowering.internal(cx, "lower: constant #{node.name} has no slot", node.span))
   end
   case read.unwrap!
     Lowering.Read.Literal(value) -> fx = Lowering.emit_const(made.fx, made.slot, value, node.span)
@@ -200,7 +200,7 @@ end
 # A type name as a value (JSON.decode(Person, text)): the name as a string, for a struct the VM can decode.
 def lower_type_name(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TypeName, want: Int) -> Result[Lowering.Out]
   if !cx.json_structs.include?(node.name)
-    return error(Lowering.unsupported(cx, "the type " + Types.display_name(node.name), node.span))
+    return error(Lowering.unsupported(cx, "the type #{Types.display_name(node.name)}", node.span))
   end
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
