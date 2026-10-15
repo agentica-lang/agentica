@@ -87,6 +87,14 @@ needs it.
     Stdin (`in`, an `agc_input`) is a handle on the I/O loop (see I/O
     ownership).
   - Shared: the global run queue (§16.3).
+  - The `std/logger` registry (`log` in the runtime, built in `vm/logger.c`,
+    `docs/future/24-logging.md` §24.2): the global level, the lowest handler
+    rank and an array of (name, rank, handler) in the GC heap, reached only by
+    the ten `LogRegistry` builtins. It is the language's one piece of global
+    mutable state and is a field of the runtime, not a `static`. With N>1 it
+    needs a lock, the same lock as the stderr buffer; the multicore PR owns that
+    change. `install_default` is one native call, so the check for level -1 and
+    the writes cannot interleave with another task.
   - I/O thread: the loop, the inbox (§16.4) and the resource registry. Whether
     the registry is owned by the I/O thread or shared under a lock is open
     (§16.11).

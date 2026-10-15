@@ -1,7 +1,7 @@
 #lang racket
 
 (provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean
-         std-only-modules std-only-name? public-builtin-names)
+         std-only-modules std-only-imports std-only-name? public-builtin-names)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
 (struct builtin (name parameters result rule implementation effects description
@@ -102,6 +102,16 @@
                     ("HttpWire.close_server" ((server HttpServer)) Void #f "HttpWire.close_server" (network) "Internal to std/http: close the listener and cancel the server's tasks.")
                     ("HttpWire.wait" ((server HttpServer)) (Result Void) #f "HttpWire.wait" (network) "Internal to std/http: wait until the server is closed.")
                     ("HttpWire.local_port" ((server HttpServer)) Int #f "HttpWire.local_port" (network) "Internal to std/http: the server's listening port.")
+                    ("LogRegistry.level" () Int #f "LogRegistry.level" (logging) "Internal to std/logger: the global level's rank, or -1 until the default handler is installed.")
+                    ("LogRegistry.floor" () Int #f "LogRegistry.floor" (logging) "Internal to std/logger: -1 until the default handler is installed, then the higher of the global level's rank and the lowest handler rank; a call below it reaches no handler.")
+                    ("LogRegistry.set_level" ((rank Int)) Void #f "LogRegistry.set_level" (logging) "Internal to std/logger: set the global level's rank.")
+                    ("LogRegistry.lowest" () Int #f "LogRegistry.lowest" (logging) "Internal to std/logger: the lowest rank of the attached handlers, or 4 when none is attached.")
+                    ("LogRegistry.install_default" ((handler (Fn (Struct "LogEvent") Void))) Void #f "LogRegistry.install_default" (logging) "Internal to std/logger: while the level is -1, attach the console handler at info and set the level to info, in one step.")
+                    ("LogRegistry.attach" ((name String) (rank Int) (handler (Fn (Struct "LogEvent") Void))) (Result Void) #f "LogRegistry.attach" (logging) "Internal to std/logger: attach a named handler at a rank; a name in use is an error.")
+                    ("LogRegistry.detach" ((name String)) (Result Void) #f "LogRegistry.detach" (logging) "Internal to std/logger: detach a named handler; a name not in use is an error.")
+                    ("LogRegistry.names" () (List String) #f "LogRegistry.names" (logging) "Internal to std/logger: the names of the attached handlers, in attach order.")
+                    ("LogRegistry.handlers" ((rank Int)) (List (Fn (Struct "LogEvent") Void)) #f "LogRegistry.handlers" (logging) "Internal to std/logger: the handlers whose rank is at or below the given rank, in attach order.")
+                    ("LogRegistry.task_id" () Int #f "LogRegistry.task_id" (logging) "Internal to std/logger: the running task's number.")
                     ("IO.puts" ((value T)) Void show "puts" (stdout) "Write a value and a newline; non-String values print as in interpolation.")
                     ("IO.print" ((value T)) Void show "IO.print" (stdout) "Write a value without a newline; non-String values print as in interpolation.")
                     ("IO.warn" ((value T)) Void show "IO.warn" (stderr) "Write a value and a newline to stderr; non-String values print as in interpolation.")
@@ -228,7 +238,11 @@
                       'V 'map-get-default "Map.get" '() (builtin-description entry)))))
     (values (car row) entry)))
 
-(define std-only-modules '("HttpWire"))
+;; Each std-only module with the std module that wraps it and the alias its help shows.
+(define std-only-imports
+  (hash "HttpWire" '("std/http" . "HTTP") "LogRegistry" '("std/logger" . "Logger")))
+
+(define std-only-modules (sort (hash-keys std-only-imports) string<?))
 
 (define (std-only-name? name)
   (for/or ([module (in-list std-only-modules)])

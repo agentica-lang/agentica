@@ -109,6 +109,8 @@ extern const agc_builtin agc_http_builtins[];
 extern const size_t agc_http_builtin_count;
 extern const agc_builtin agc_http_server_builtins[];
 extern const size_t agc_http_server_builtin_count;
+extern const agc_builtin agc_logger_builtins[];
+extern const size_t agc_logger_builtin_count;
 extern const agc_builtin agc_test_builtins[];
 extern const size_t agc_test_builtin_count;
 

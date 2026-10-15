@@ -20,6 +20,8 @@ The grammar determines what can be written. The rules below determine which prog
 | `Fn[A, ..., R]` | Function value; the last type is its return, the others are its parameters |
 | `Task[R]` | Opaque lightweight task with one result type |
 | `Await[T]` | Builtin enum of a timed `Task.await`: `Await.Done(value)` or `Await.TimedOut`; matched with `case` like a user enum |
+| `LogLevel` | Builtin enum of `std/logger`: `LogLevel.Debug`, `LogLevel.Info`, `LogLevel.Warning` and `LogLevel.Error`, in that order; matched with `case` like a user enum |
+| `LogEvent` | Builtin record of `std/logger` that a log handler receives: `level: LogLevel`, `message: String`, `fields: Map[String, String]`, `time_ms: Int` and `task: Int`; it is not JSON-decodable |
 | `Channel[T]` | Opaque bounded queue of `T` values that tasks send into and receive from |
 | `Enum[T, ...]` | User-declared nominal sum type |
 | Declared struct | Nominal type with typed, immutable fields |

@@ -167,7 +167,7 @@ def coordinate(sources: Sources) -> Void
 end
 ```
 
-State that several tasks update belongs to one owner task that receives messages on a channel and keeps the state in local variables. Others send it requests. There is no shared mutable state (the one planned exception, not built yet, is the `std/logger` registry: only the Logger functions reach it, and a program never holds a reference to it, unlike an `Agent`). There is no `Agent`, `Mutex`, `Thread`, `SizedQueue`, `Enumerator`, `Fiber` or lazy stream:
+State that several tasks update belongs to one owner task that receives messages on a channel and keeps the state in local variables. Others send it requests. There is no shared mutable state (the one exception is the `std/logger` registry: only the Logger functions reach it, and a program never holds a reference to it, unlike an `Agent`). There is no `Agent`, `Mutex`, `Thread`, `SizedQueue`, `Enumerator`, `Fiber` or lazy stream:
 
 ```ruby
 def count(inbox: Channel[Int]) -> Int

@@ -35,7 +35,8 @@ Read this for the exact rule behind a checker error or a core question that SKIL
 | `Await[T]` | builtin enum from `Task.await(task, timeout_ms)`: `Await.Done(value)` or `Await.TimedOut`; reserved name; see `tasks.md` |
 | `Channel[T]` | opaque bounded queue between tasks (VM only); see `tasks.md` |
 | network handles | opaque `Socket`, `Listener`, `HttpClient`, `HttpServer` |
-| builtin records | `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions`, `FileInfo`, `ProcessOutput` |
+| `LogLevel` | builtin enum of `std/logger`: `LogLevel.Debug`, `Info`, `Warning`, `Error`; reserved name; see `logger.md` |
+| builtin records | `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `LogEvent` |
 | `Name` | a struct you declare; fields are typed and immutable |
 
 `Option[T]` is not builtin; declare it as an enum if you need it. Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.

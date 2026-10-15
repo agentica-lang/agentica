@@ -24,10 +24,13 @@
 
 (define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener HttpClient HttpServer TestCase))
 
+(define (enum-field? type)
+  (and (pair? type) (eq? (car type) 'Enum)))
+
 (define builtin-structs
-  (for/list ([name (in-list '("FileInfo" "Header" "HttpRequest" "HttpResponse" "HttpClientOptions" "HttpServerOptions" "ProcessOutput"))])
+  (for/list ([name (in-list '("FileInfo" "Header" "HttpRequest" "HttpResponse" "HttpClientOptions" "HttpServerOptions" "ProcessOutput" "LogEvent"))])
     (define fields (hash-ref builtin-records name))
-    (ir-struct name (map car fields) (map cdr fields))))
+    (ir-struct name (map car fields) (and (not (ormap enum-field? (map cdr fields))) (map cdr fields)))))
 
 (define builtin-struct-needs (hash "HttpResponse" '("Header") "HttpRequest" '("Header")))
 
@@ -120,7 +123,7 @@
 (define (decodable-structs structs)
   (define names (append (map struct-decl-name structs) (map ir-struct-name builtin-structs)))
   (define candidates
-    (for*/fold ([table (for/hash ([entry (in-list builtin-structs)])
+    (for*/fold ([table (for/hash ([entry (in-list builtin-structs)] #:when (ir-struct-types entry))
                          (values (ir-struct-name entry) (ir-struct-types entry)))])
                ([declaration (in-list structs)]
                 [types (in-value (for/list ([field (in-list (struct-decl-fields declaration))])
@@ -214,6 +217,9 @@
                       "HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
                       "HttpWire.read_request" "HttpWire.write_response" "HttpWire.server" "HttpWire.accept"
                       "HttpWire.spawn" "HttpWire.close_server" "HttpWire.wait" "HttpWire.local_port"
+                      "LogRegistry.level" "LogRegistry.floor" "LogRegistry.set_level" "LogRegistry.lowest"
+                      "LogRegistry.install_default" "LogRegistry.attach" "LogRegistry.detach"
+                      "LogRegistry.names" "LogRegistry.handlers" "LogRegistry.task_id"
                       "Process.spawn_captured" "Process.output" "Task.pending_count"
                       "Process.spawn_channel" "Process.channel_read_line" "Process.channel_send" "Process.channel_close"
                       "Process.read_available" "Process.parent_read_line" "Process.parent_send"
