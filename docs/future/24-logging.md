@@ -413,9 +413,9 @@ lists the same items:
   module of the name: `std/http` for `HttpWire`, `std/logger` for `LogRegistry`
   (a message fix, which row 7.2.7 allows).
 
-Not data: a new checker rule, tag or construction rule, and new syntax. The
-`CHECK-IMPORT-NAME` "did you mean" help is a new checker message with its own
-logic, so it is a separate small PR, before row 7.2.7 (D9), not part of this PR.
+Not data: a new checker rule, tag or construction rule, and new syntax. The "did
+you mean" help for `CHECK-IMPORT-NAME` is not part of this PR. It is a separate
+small PR (D9) that only changes message text, which the freeze allows.
 
 **The stdlib registry and the VM table.** The nine native functions of
 `LogRegistry` are:
@@ -526,8 +526,8 @@ state them as the plan.
   `--log-level` flag can come later.
 - **D8 The freeze.** The data list in "The freeze" above. `std/logger` may land
   before, during or after row 7.2.7.
-- **D9 "Did you mean" help.** A separate small PR, not part of 14c, before row
-  7.2.7.
+- **D9 "Did you mean" help.** A separate small PR, not part of 14c, that only
+  changes the message text of `CHECK-IMPORT-NAME`, which the freeze allows.
 - **D10 The `task` field.** In the event and in JSON lines, not in the text
   form.
 
