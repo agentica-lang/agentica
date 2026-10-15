@@ -2,7 +2,7 @@
 
 **Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator
 (order 7.2): 25.1 (defaults, front end only) as order row 7.5a, deferred until
-after the bootstrap (row 7.2.7), before `std/log`; 25.2 to 25.5, 25.9 and 25.10
+after the bootstrap (row 7.2.7); 25.2 to 25.5, 25.9 and 25.10
 at order step 7.6, after the strict diagnostics of [section
 26](26-strict-diagnostics.md#26-strict-diagnostics); and the prelude part, 25.6
 and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved
@@ -169,11 +169,12 @@ constant load, an empty list or map, or an `enum` instruction for a nullary enum
 variant). Every call in the bytecode passes all its arguments, so the bytecode
 and the VM do not change.
 
-**`std/log`:** this item lands first, as order row 7.5a (deferred until after
-the bootstrap), before `std/log` ([section 24](24-logging.md#242-stdlog), 14c).
-It is front-end only, so it is small. `std/log` then ships with
-`def info(message: String, fields: Map[String, String] = {}) -> Void` and never
-has separate `_with` functions.
+**`std/logger`:** this item does not block it. Until this item lands,
+the logger has two functions per level (`info` and `info_meta`, [section
+24.2](24-logging.md#242-stdlogger)). When it lands, `std/logger` drops its
+`_meta` functions, and each level function takes an optional `fields`
+parameter with the default `{}`. That is a breaking change, which the owner
+accepts, since the language has no outside users.
 
 **Tests:** parsing and spans; each code; `each_line("a.txt", 50)` with no block,
 which passes `50` to `f` and gives `CHECK-TYPE-MISMATCH`, not `CHECK-ARITY`;
@@ -239,7 +240,7 @@ the checker cannot reject a hand-written wrapper, as with `with`.
 - The alias must be an import of this file: otherwise `CHECK-IMPORT-NAME` with
   the help "unknown module alias", decided in the linker. The name must be
   exported by that module (`CHECK-IMPORT-NAME`, with the "did you mean" help
-  that 14c adds).
+  that §24.2 proposes).
 - Re-exports are resolved after the file's imports are visited. Today the
   linker's `visit` fills a module's exports before it visits its imports, so
   this changes the order: the plain exports are filled first, the imports are
