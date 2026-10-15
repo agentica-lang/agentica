@@ -45,7 +45,7 @@ builtins too (§24.2, "Types").
   `attach`, `detach`, `handlers`, the built-in handlers `stderr_text` and
   `stderr_json`, the formatters, the default `console` handler and `time_text`);
   the builtin record `LogEvent` and the builtin enum `LogLevel` in
-  `src/builtin-types.rkt`; the std-only registry `LogRegistry` (ten native
+  `src/builtin-types.rkt`; the std-only registry `LogRegistry` (nine native
   functions on the VM runtime, rows in `src/builtins.rkt`, names in
   `vm-builtins` and `std-only-modules`, and its reserved name in
   `src/checker.rkt`); one line in `src/stdlib.rkt`; and the std-only help in
@@ -61,8 +61,9 @@ builtins too (§24.2, "Types").
   the VM notes on the runtime field, and the CHANGELOG entry. Its Racket parts
   are data under the freeze (§24.2, "The freeze"), so the PR may land before,
   during or after row 7.2.7. The registry exception and the freeze are the
-  owner's decisions of §24.2. The PR does not start until the open question of
-  §24.2 (the type of `LogEvent.level`) is decided.
+  owner's decisions of §24.2. Its two-line change in `src/lower.rkt` for the
+  enum field of `LogEvent` relaxes that list for those lines, and the PR says so
+  and why (§24.2, "Decided").
 
 **Done when:** a VM developer can trace the scheduler, I/O, processes and TLS
 without editing C; a runtime error shows its call stack; and the site page's

@@ -1187,10 +1187,10 @@ Each of these is decided; it gets a help that names the Agentica form.
   `Agent.update` and `Agent.get`, Ruby's `Concurrent::AtomicFixnum`, or a
   counter that blocks change.
   - Shared mutable state, which the language does not have: values are
-    immutable. The planned exceptions are the shared table of §13 (on demand,
-    with atomic calls) and the `std/logger` registry (§24.2), which only the
-    Logger functions reach. Unlike an `Agent`, the registry is not a value that
-    programs hold: a program never gets a reference to it.
+    immutable. The one planned exception is the `std/logger` registry (§24.2),
+    which only the Logger functions reach; the shared table of §13 waits until a
+    program needs it, with atomic calls. Unlike an `Agent`, the registry is not
+    a value that programs hold: a program never gets a reference to it.
   - A second way to accumulate: in one task, `reduce` or a loop variable; across
     tasks, each task returns its part (`Task.await`, `Task.map`) and the caller
     combines the parts with `reduce`; state that lives while tasks run belongs

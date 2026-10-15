@@ -1,8 +1,8 @@
 ## 24. Logging and debugging
 
-**Status:** planned (roadmap phase 14). Three parts, each its own small PR, all
-on the VM only (the evaluator is gone by then, or the part changes only VM
-code):
+**Status:** partly built (14a, 14b); 14c planned (roadmap phase 14). Three
+parts, each its own small PR, all on the VM only (the evaluator is gone by then,
+or the part changes only VM code):
 
 - 14a, **VM tracing** (24.4): a developer tool inside `agentica-vm`, not a
   language feature. It comes right after 7h processes and before TCP and TLS, to
@@ -17,7 +17,7 @@ code):
   under the freeze (row 7.2.7).
 
 No grammar change. 14c adds a `std/` module, the builtin record `LogEvent` and
-the builtin enum `LogLevel`, and a std-only builtin module of ten functions
+the builtin enum `LogLevel`, and a std-only builtin module of nine functions
 (`LogRegistry`); 14b changes only what the VM prints for a runtime diagnostic.
 
 ### 24.1 Today
@@ -178,6 +178,9 @@ move into `std/logger`; that would rename them for callers.
 - C: a new generic checker rule for the registry. Rejected: the freeze (row
   7.2.7) forbids new checker rules, so it would wait for the Agentica checker
   (§35, step 4).
+- A `String` level (the level's name). Rejected: a misspelled level name
+  compiles silently.
+- An `Int` level (the rank). Rejected: the numbers read badly in a handler.
 
 **Handlers.** A handler is a named function (`&Logger.stderr_json`) or a block
 given to `attach`, which follows the call as the block rule requires. Handlers
@@ -209,7 +212,7 @@ reference to the registry, and only the Logger functions read or change it.
 `vm/` keeps its own rule that no `static` or global variable lives there, so the
 table is a field of the runtime (`docs/vm/10-io-multicore.md`). Its rules:
 
-- Ten native builtins in a std-only module, `LogRegistry`, read and write the
+- Nine native builtins in a std-only module, `LogRegistry`, read and write the
   table (below). None of them calls a handler. `Logger.log_meta` reads the
   handler list and calls each handler itself, in the logging task.
 - One scheduler runs today, so a table call does not interleave with another.
@@ -319,14 +322,13 @@ builtin that sets the global level at start-up. It is future work and not in v1
 
 **Default console handler.** The first call of any `Logger` function installs
 `console`: `stderr_text` at level `info`, as if the program had attached it. It
-is an ordinary handler, so `detach("console")` removes it. The install is one
-native call, `LogRegistry.install_default(&Logger.stderr_text)`, which attaches
-the entry and sets the installed flag, but only when the flag is not set yet.
-Each entry point checks `LogRegistry.installed()` first, so only the first call
-passes the function value (D3). The native call checks the flag and attaches in
-one step with no yield, so two tasks that make their first calls together
-install it once. A later `detach("console")` stays in effect, because the flag
-stays set. The global level starts at `info`.
+is an ordinary handler, so `detach("console")` removes it. Until that install,
+`LogRegistry.level()` returns `-1`. Each entry point reads the level first; on
+`-1` it calls `LogRegistry.install_default(&Logger.stderr_text)` and reads the
+level again (D3). That native call checks for `-1` and only then attaches the
+entry and sets the level to `info`, in one step with no yield. So two tasks that
+make their first calls together install it once, and a later `detach("console")`
+stays in effect, because the level is no longer `-1`.
 
 **Built-in handlers and formatters.**
 
@@ -375,33 +377,38 @@ calendar, written in Agentica. With §41 it is
 `Time.format(Time.from_unix_ms(ms).unwrap!)`, one native call, and the log and
 the `Time` functions share one formatter.
 
-**Cost of a disabled call.** Each level function compares the threshold before
-it calls the shared code. A disabled `debug` call is then one user call, one
-builtin read (`LogRegistry.level()`), and one Int comparison. The rank of each
-level is a constant in the module. Agentica has no lazy arguments, so the
-message and any fields map are built before the call. A costly one goes inside
-`if Logger.enabled?(LogLevel.Debug)`, as in the example. Plan for the PR, not
-measured here: a benchmark in `benchmarks/` with 1,000,000 disabled `debug`
-calls, against an empty loop and against a loop that calls an empty user
-function. The PR description records the times. The target is a disabled call no
-more than an empty user call plus one builtin call. Log calls are normal code,
-so they count against `--max-steps`.
+**Cost of a disabled call.** Each level function reads the level once and
+compares the threshold before it calls the shared code. A disabled `debug` call
+is then one user call, one builtin read (`LogRegistry.level()`), and two Int
+comparisons: the check for `-1` (the default not yet installed) and the
+threshold. The rank of each level is a constant in the module. Agentica has no
+lazy arguments, so the message and any fields map are built before the call. A
+costly one goes inside `if Logger.enabled?(LogLevel.Debug)`, as in the example.
+Plan for the PR, not measured here: a benchmark in `benchmarks/` with 1,000,000
+disabled `debug` calls, against an empty loop and against a loop that calls an
+empty user function. The PR description records the times. The target is a
+disabled call no more than an empty user call plus one builtin call. Log calls
+are normal code, so they count against `--max-steps`.
 
 **The freeze (row 7.2.7).** The Racket parts are data under row 7.2.7, which
 lists the same items:
 
-- ten rows in `src/builtins.rkt` for `LogRegistry`, using no checker rule tag,
-  and their ten names in the `vm-builtins` list of `src/lower.rkt`;
+- nine rows in `src/builtins.rkt` for `LogRegistry`, each using an existing
+  checker rule tag or none, and their nine names in the `vm-builtins` list of
+  `src/lower.rkt`;
 - two entries in `src/builtin-types.rkt`: `LogEvent` in `builtin-records` and
   `LogLevel` in `builtin-enum-declarations`, and the name `LogEvent` in the
-  record list of `src/lower.rkt` (`builtin-structs`), which names the records it
-  emits;
+  record list of `src/lower.rkt` (`builtin-structs`). Their types are data once
+  the checker, lowering and bytecode writer handle them; the enum field of
+  `LogEvent` needs the two-line change in `src/lower.rkt` decided below, which
+  relaxes this list for those lines;
 - one line in `src/stdlib.rkt` that registers `std/logger`;
 - `LogRegistry` in `std-only-modules` in `src/builtins.rkt`, so user code cannot
   call it (`CHECK-UNKNOWN-NAME`, with a help that names the `std/logger`
   import);
 - `LogRegistry` in the reserved type names of `src/checker.rkt`, as `HttpWire`
-  is;
+  is. `LogEvent` and `LogLevel` are reserved by their builtin entries
+  (`src/checker.rkt` lines 12 to 14), so nothing is added by hand for them;
 - the std-only help in `src/modules.rkt`, generalized so that it names the std
   module of the name: `std/http` for `HttpWire`, `std/logger` for `LogRegistry`
   (a message fix, which row 7.2.7 allows).
@@ -410,19 +417,22 @@ Not data: a new checker rule, tag or construction rule, and new syntax. The
 `CHECK-IMPORT-NAME` "did you mean" help is a new checker message with its own
 logic, so it is a separate small PR, before row 7.2.7 (D9), not part of this PR.
 
-**The stdlib registry and the VM table.** The ten native functions of
+**The stdlib registry and the VM table.** The nine native functions of
 `LogRegistry` are:
 
 ```text
-LogRegistry.level() -> Int                         # the global level's rank
+# -1 until the default is installed; then the global level's rank
+LogRegistry.level() -> Int
 LogRegistry.set_level(rank: Int) -> Void
-LogRegistry.lowest() -> Int                        # the lowest handler rank; 4 when none
-LogRegistry.installed() -> Bool                    # the default console is installed
-LogRegistry.install_default(handler: Fn[LogEvent, Void]) -> Void   # once: attaches "console" at info
+# the lowest handler rank; 4 when no handler is attached
+LogRegistry.lowest() -> Int
+# only while the level is -1: attaches "console" at info, sets info
+LogRegistry.install_default(handler: Fn[LogEvent, Void]) -> Void
 LogRegistry.attach(name: String, rank: Int, handler: Fn[LogEvent, Void]) -> Result[Void]
 LogRegistry.detach(name: String) -> Result[Void]
 LogRegistry.names() -> List[String]                # in attach order
-LogRegistry.handlers(rank: Int) -> List[Fn[LogEvent, Void]]   # handlers at or below rank, in order
+# handlers at or below the rank, in attach order
+LogRegistry.handlers(rank: Int) -> List[Fn[LogEvent, Void]]
 LogRegistry.task_id() -> Int                       # the running task's number
 ```
 
@@ -441,7 +451,7 @@ decision above.
   formatters, `time_text`, the default install and the two built-in handlers.
   `LogEvent` and `LogLevel` are builtins, so the module declares neither. Every
   export has a `##` doc (`tests/stdlib-docs-test.rkt`).
-- `vm/builtin_tables.c`, `vm/services.h` and one new C file for the ten
+- `vm/builtin_tables.c`, `vm/services.h` and one new C file for the nine
   functions and the runtime field.
 - `src/builtin-types.rkt`, `src/builtins.rkt`, `src/lower.rkt`,
   `src/stdlib.rkt`, `src/checker.rkt` and `src/modules.rkt`: the data and the
@@ -467,10 +477,10 @@ the diagnostic code):
   the workers log again with no output. A task whose handler halts crashes
   alone, and `main` goes on. Lines from several tasks are each whole, and their
   `task` values match the spawn order.
-- The registry is shared by the tests of one file, which run one at a time in
-  one VM (`docs/future/36-unit-tests.md` §36.6). A test that attaches a handler
-  or sets a level restores both before it ends; the runner does not reset the
-  registry.
+- The tests that change the registry live in one file of their own, because the
+  registry is shared by the tests of a file, which run one at a time in one VM
+  (`docs/future/36-unit-tests.md` §36.6). Each restores the registry before it
+  ends.
 - The async example runs end to end: the file holds every event in order, and it
   is complete when `main` returns, because `main` awaits the writer.
 - A run with no setup prints one line on stderr whose time matches the format (a
@@ -488,14 +498,21 @@ state them as the plan.
 
 - **Handler types.** `LogEvent` is a builtin record and `LogLevel` a builtin
   enum, and handlers have type `Fn[LogEvent, Void]` (see "Types").
+- **Level field.** `LogEvent.level` is the `LogLevel` enum (decided on
+  2026-10-15). The two-line change in `src/lower.rkt` gives a builtin struct
+  with an enum field no JSON types (`types` `#f`, as for a user struct that
+  cannot be decoded), and `decodable-structs` skips such a struct. With that
+  change the program compiles, with no bytecode or VM change. The change relaxes
+  the data list of row 7.2.7 for those lines, and the 14c PR states that and
+  why.
 - **Handler table.** The first global state of the language, held by the VM
   runtime and limited to the registry (see "Decided: the handler table ...").
 - **Async handlers.** An option, never the default (see "Async handlers").
 - **Channel-only logger.** Rejected (see "Alternatives for the global state").
 - **Calls.** Two functions per level until default parameter values land; the
   `_meta` functions then go away (see "Calls and names").
-- **Enabled check.** `enabled?` is true only if some attached handler would
-  accept the level (see "Two thresholds").
+- **Enabled check.** `enabled?(level)` is true only if the level is at or above
+  the global level and some attached handler accepts it (see "Two thresholds").
 - **D1 Metadata per task.** Left out of v1. A task slot can come later.
 - **D2 Levels.** Four: debug, info, warning and error.
 - **D3 Default console handler.** Installed by the first call of a `Logger`
@@ -513,19 +530,6 @@ state them as the plan.
   7.2.7.
 - **D10 The `task` field.** In the event and in JSON lines, not in the text
   form.
-
-**Open for the owner, before 14c.** The type of the `level` field. The text
-types it as `LogLevel`. The bytecode writer (`src/bytecode.rkt`, `type!`)
-encodes the field types of every builtin record it emits, and it has no clause
-for an enum type. So a program that uses `LogEvent` fails with
-`BYTECODE-INTERNAL`, even one that names `LogLevel` too (checked on a stand-in
-module). A `String` or an `Int` field compiles. Keeping the enum needs two
-changes outside the data list of row 7.2.7: a bytecode change for enum fields,
-and a `lower.rkt` change, because a program that names `LogEvent` but not
-`LogLevel` would also need the enum in the bytecode (`used-builtin-enums` does
-not look at record fields). The owner chooses: those changes, or a field of
-type `Int` (the rank) or `String` (the level's name). Until this is decided, the
-14c PR does not start.
 
 ### 24.3 Stack traces on runtime errors
 

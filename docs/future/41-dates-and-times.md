@@ -38,7 +38,7 @@ reasons:
   reasons above decide this section.
 
 The exception is new and is not yet in the roadmap rule. When the types land,
-the rule gets a sixth item: calendar types and their conversions, which need a
+the rule gets a new item: calendar types and their conversions, which need a
 builtin type. This section does not edit the rule text.
 
 ### 41.2 Types
