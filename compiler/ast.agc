@@ -285,12 +285,13 @@ export struct Call
   span: Source.Span
 end
 
-## Enum.Variant(args), also through a module alias.
+## Enum.Variant(args), also through a module alias. named is empty from the parser. The linker fills it, and leaves args empty, for a call written with names such as Enum.Variant(x: 1), which the parser reads as a Construct; the checker refuses it (variants take positional arguments).
 export struct EnumConstructor
   id: Int
   enum_name: String
   variant_name: String
   args: List[Expr]
+  named: List[NamedArg]
   span: Source.Span
 end
 

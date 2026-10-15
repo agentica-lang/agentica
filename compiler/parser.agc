@@ -624,7 +624,7 @@ def construct_node(e: Base.Env, start: Int, name: String, args: List[Ast.NamedAr
 end
 
 def enum_constructor_node(e: Base.Env, start: Int, enum_name: String, variant_name: String, args: Base.ExprsAt, cursor: Int) -> Result[Base.ExprAt]
-  node = Ast.Expr.EnumConstructor(Ast.EnumConstructor(id: args.ids, enum_name: enum_name, variant_name: variant_name, args: args.nodes, span: Base.span_from(e, start, cursor)))
+  node = Ast.Expr.EnumConstructor(Ast.EnumConstructor(id: args.ids, enum_name: enum_name, variant_name: variant_name, args: args.nodes, named: [], span: Base.span_from(e, start, cursor)))
   return expr_at(node, cursor, args.ids)
 end
 
