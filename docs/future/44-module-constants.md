@@ -4,8 +4,9 @@
 and wanted before the bootstrap, so the Agentica front end (`compiler/`) can
 use them. It relaxes the freeze of the Racket front end (row 7.2.7,
 [§35](35-self-hosting.md)) in both front ends, as `Set[T]` (8b) and
-`value.with(...)` (15c) did. This section is the design; the implementation
-PRs are listed in 44.11.
+`value.with(...)` (15c) did. The same owner decision of 2026-10-15 changes
+the import syntax (44.2), which lands first. This section is the design; the
+implementation PRs are listed in 44.12.
 
 ### 44.1 Goal
 
@@ -35,7 +36,170 @@ struct built once and passed to every call (the lexer's `Input`, the linker's
 
 Constants fix both: one value per run, read where it is needed.
 
-### 44.2 Syntax
+### 44.2 Imports
+
+The owner decided on 2026-10-15 to change the import syntax together with
+constants, and to land it first (44a0). Constants, functions, structs and enums
+read best when a file can name what it uses. Two changes, and one thing that
+stays. A constant of another module is reached only through a named import
+(decision 3 below).
+
+```ebnf
+import_decl = "import", ( TYPE_NAME | name_list ), "from", STRING, NL ;
+name_list = "{", import_name, { ",", import_name }, [ "," ], "}" ;
+import_name = NAME | TYPE_NAME ;
+```
+
+```ruby
+import Lexer from "compiler/lexer"
+import {MAX_DEPTH, Token, lex} from "compiler/lexer"
+```
+
+1. **The alias form changes.** `import Mod from "path"` replaces
+   `import "path" as Mod`. This is breaking: the old form is
+   `PARSE-UNEXPECTED-TOKEN` at the string, with the help "write
+   `import Alias from "path"`". The alias is a `TYPE_NAME`, as today. The path
+   rules do not change (relative, `std/`, `pkg/`, no extension, the
+   `CHECK-IMPORT-*` codes).
+2. **Named imports.** `import {A, B} from "path"` brings the exported names `A`
+   and `B` into the file, to be used bare, for everything a module can export:
+   functions (`lex(text)`, `&lex`, `x |> lex()`), structs (`Token(...)`, the
+   type `Token`, `Token` in a signature), enums (`Color.Red`, `Color.Red(x)`,
+   the type `Color` and `Color[T]`, and `Color.Red` in a `case` pattern) and
+   constants (`MAX_DEPTH`, and after 44a2). Variants are not imported on their
+   own: import the enum. A list may span lines (it is inside braces), may end
+   with a comma, and may not be empty.
+3. **`Mod.name` stays for functions, structs and enums, and is not valid for
+   constants.** A module imported with an alias is used as before: `Mod.f()`,
+   `Mod.Token(...)`, `Mod.Color.Red`. Both import forms work in one file. A
+   module imported only by names has no alias, so `Mod.` is not available for
+   it. A constant is never written `Mod.MAX_DEPTH`: the file must import it,
+   `import {MAX_DEPTH} from "x"`, and then write `MAX_DEPTH`. The module may
+   also offer a getter, `export def max_depth() -> Int`, which is read like any
+   function.
+
+**Decisions.**
+
+- **`from` is a contextual word, not a keyword.** `compiler/lexer.agc` has
+  parameters named `from` (`scan_doc`, `skip_blanks`, `skip_in`,
+  `skip_until`), and a keyword would break them. The parser reads `from` as an
+  ordinary name token whose text is `from`, right after the alias or the closing
+  brace, as `as` is read today ("`as` is contextual in imports").
+- **One line does one thing.** `import Mod, {A} from "x"` is not accepted.
+  Two lines with the same path are allowed (`import Mod from "x"` and
+  `import {A} from "x"`): the file is loaded once, and today's linker already
+  accepts two aliases for one path. Reason: one way to write each thing, and a
+  smaller grammar; the cost is one extra line.
+- **A named import acts as a declaration of this file.** It takes the same
+  place in the name table as a `def`, `struct`, `enum` or constant that the file
+  declares, and it is checked the same way:
+  - against a declaration of this file with the same name, against an import
+    alias, against another named import (also in the same list, and also the
+    same name from the same module twice), against a builtin function name
+    (`puts`, `ok`) and against a reserved type name (`Int`, `JSON`, `Set`):
+    `CHECK-REDEFINED-NAME`, located at the imported name in the braces (the
+    later of the two, in file order). No new code.
+  - A local variable or parameter named like an imported function behaves as
+    for a function of the file: nothing new.
+- **Unknown or private names:** `CHECK-IMPORT-NAME` at the name in the braces
+  ("unknown or private imported name"), with the did-you-mean help over the
+  module's exports only (the help `Mod.nme` gets today). A path that cannot be
+  loaded is still `CHECK-IMPORT-IO`, `-PATH` or `-CYCLE` at the import.
+- **Std-only modules are unchanged.** `HttpWire` and `LogRegistry` are reserved
+  names that only `std/` may call, so they can be neither an alias nor an
+  imported name (`CHECK-REDEFINED-NAME`), and their help text now says
+  `import HTTP from "std/http"`. A named import from a `std/` module works as
+  from any module.
+- **`Mod.NAME` on a constant** is `CHECK-IMPORT-NAME`, located at the
+  expression `Mod.NAME`, when the module exports the constant: no new code,
+  because the problem is the same as for a name the alias does not offer. The
+  message says that a constant is read by name, not through the alias, and the
+  help shows the line to write, with the path as it was written in the alias
+  import: `import {NAME} from "path"`, and then `NAME`; a second line says that
+  the module can export a function instead. If the module has no such export,
+  the usual unknown-or-private message and did-you-mean apply (the suggestion
+  list holds the exports of the module; a constant is suggested only as
+  `import {NAME}`). `Mod.NAME.method(...)` is a parse error today (a type name
+  must follow the second dot); it keeps `PARSE-UNEXPECTED-TOKEN` and gains the
+  same help.
+- **`CHECK-DECL-ORDER` does not change.** A named import is an import: imports
+  come first.
+- **Re-exports stay out of scope** (§25, 15b). An imported name is not
+  exported; `export` still cannot precede `import`. Unused names are not
+  reported: that is `CHECK-UNUSED-IMPORT` of §26.
+- **A bare imported function needs parentheses**, as a local function does:
+  the rule that drops them is for module functions reached through an alias
+  (`Util.reset`).
+
+**Why not `Mod.NAME` (the Elixir rule).** In Elixir a module attribute
+(`@attr`) is read only inside the module that sets it, and there is no
+`Mod.@attr`: another module calls a function (`Mod.attr()`) or defines its own
+attribute. The owner chose the same line, for two reasons that hold here. A
+dot form would make a constant look like a zero-argument module function
+(`Util.reset` already drops its parentheses, so `Mod.MAX` and `Mod.max` would
+read alike) and like state of the module. And a named import binds the name
+in the file that uses it, so the reader of a file sees at the top which
+constants it depends on, and the compiler checks that the module exports it.
+Python's `mod.FOO` is the other model and is not followed.
+
+**How the linker names them.** The parse rules do not change for uses:
+`NAME` and `Alias.NAME` already parse as a `type-expression` (the second is
+then `CHECK-IMPORT-NAME` when it names a constant, as above), `Token(...)` as a
+`construct`, `lex(text)` as a `call`, `Color.Red` as a `type-expression` and
+`Color.Red(x)` as an enum value. The only parser change is `import-decl`. The
+linker, which already turns `Enum.Variant` of a local enum into an enum value,
+does the rest. Each file gets a table `named`: name to the file that exports it
+(built where the aliases are, with the checks above). Then:
+
+- a name without a dot that is in `named` is renamed to the linked name of the
+  declaration in its file (`@2::lex`), exactly the name the declaration has in
+  the linked program, wherever the name is written: a type, a `construct`, a
+  `call`, a function reference `&lex`, an enum in a type, a pattern or an enum
+  value;
+- the same check on the kind that the qualified form makes applies: a name used
+  as a function must be a function, as a type a struct or enum, and a wrong kind
+  is `CHECK-TYPE-MISMATCH`, as for `Mod.name` today;
+- `Color.Red` and `Color.Red(x)` with `Color` in `named` as an enum become the
+  enum value of the linked enum, as `Mod.Color.Red` does;
+- `NAME.method(...)` and `NAME.size` with `NAME` in `named` as a constant
+  become a method call on the constant (44.3);
+- the checks come before the rewrite, so an unknown or private name is reported
+  at the import, not at the first use.
+
+**The privacy rule of `.with`.** The rule is: a file may update its own structs
+and the exported structs of the modules it imports. A module imported by name
+counts as imported, with all its exported structs, not only the ones named:
+the file could add an alias import of the same module and construct any of
+them, so naming adds no protection. In `src/modules.rkt` the `constructible`
+set is built from the targets of aliases and of `named`; in `compiler/`
+`Modules.Module` gets the targets of its named imports and `visible_structs`
+(`compiler/linker.agc`) takes both. The text form of the linker keeps printing
+the sorted `visible` list.
+
+**What changes in the front ends (44a0).** `import-decl` (`src/ast.rkt`,
+`compiler/ast.agc`) has `path`, an `alias` (or none) and a list of imported
+names with their spans; exactly one of alias and names is present. Parsers:
+`src/parser.rkt` (`parse-program`) and `compiler/parser.agc` (the import
+parser). Text forms of the parser and linker goldens print the new shape
+(`alias=` or `names=[...]`). Linkers: `src/modules.rkt` and
+`compiler/modules.agc`, `declarations.agc`, `resolve.agc`, `rewrite.agc`. The
+checker does not see imports (the linker rewrote them), so the checker port
+carries nothing for them, but the help texts that name the import form change
+in `src/modules.rkt`, in `compiler/` and in goldens that hold messages.
+
+**The migration.** One script, not committed (the PR text records the regular
+expression), rewrites every occurrence in the repository: `.agc` files in
+`stdlib/`, `compiler/`, `examples/`, `tests/` (the VM and front-end fixtures,
+`tests/std`, `tests/eval`), `benchmarks/`, `site/content/`,
+the skills, `docs/` and `README` files, and the program texts inside Racket and
+other test sources (escaped quotes, `src/bdd-driver.rkt`). At the time of
+writing: 541 occurrences in 299 files. It works on bytes, so `.input` files keep
+their bytes and line endings. The new form is two characters longer, so every
+span in the goldens moves: `make goldens` rewrites them and the diff is
+reviewed. After the script, `rg 'import\s+\\?"[^"]*\\?"\s+as'` finds nothing.
+The CHANGELOG entry is marked `**Breaking:**`.
+
+### 44.3 Syntax
 
 A constant is a declaration at the top level of a file, Ruby style:
 
@@ -65,28 +229,29 @@ constant_decl = [ DOC, NL ], [ "export" ], CONST_NAME, [ ":", type ],
   (as imports do). A blank line is needed before the next `struct`, `enum` or
   `def` and after any other declaration (`PARSE-MISSING-BLANK-LINE`).
 
-**Reading a constant.** `NAME` in its own file, `Alias.NAME` from an importing
-file. Both are expressions, so everything that works on a value works on them:
-`KEYWORDS.include?(word)`, `LEVELS.get(kind, 0)`, `CLASSES[code]`,
-`"#{LIMIT}"`, `Lexer.KEYWORDS.size`.
+**Reading a constant.** `NAME`, in the file that declares it, or in a file
+that imports it by name (`import {NAME} from "path"`, 44.2). `Mod.NAME` is not
+a form: see 44.2. It is an expression, so everything that works on a value
+works on it: `KEYWORDS.include?(word)`, `LEVELS.get(kind, 0)`, `CLASSES[code]`,
+`"#{LIMIT}"`.
 
 How the parser sees these forms matters, because a constant looks like a type
 or a module (`Models.User`, `JSON.decode`):
 
-- `NAME` and `Alias.NAME` already parse as a `type-expression` (the node that
-  holds a bare type name, a nullary variant such as `CharClass.Other`, or a JSON
-  type argument). No change.
+- `NAME` already parses as a `type-expression` (the node that holds a bare type
+  name, a nullary variant such as `CharClass.Other`, or a JSON type argument).
+  No change.
 - `NAME.method(args)` and `NAME.size` parse today as a module call
   `call "NAME.method"`, which is also what `JSON.parse(x)` is. The parser cannot
   tell them apart, because an import alias may also be all capitals
-  (`import "std/http" as HTTP`). The linker decides: a name that is a constant
-  of the file and not an alias or builtin module turns the call into the same
-  method call that `xs.size` gives, with the constant as the receiver. This is
-  how the linker already turns `Enum.Variant` into an enum value.
-- `Alias.NAME.method(args)` fails today (`Alias.TypeName` followed by `.` wants
-  a variant name). The parser change: after `Alias.TYPE_NAME` and a `.`, a
-  lowercase name starts a method call on the constant `Alias.NAME`. A type name
-  after the second dot is still a variant.
+  (`import HTTP from "std/http"`). The linker decides: a name that is a constant
+  of the file (declared or imported by name) and not an alias or builtin module
+  turns the call into the same method call that `xs.size` gives, with the
+  constant as the receiver. This is how the linker already turns
+  `Enum.Variant` into an enum value.
+
+No parser change is needed for reads: the only parser change of this part is
+the declaration (44.7).
 
 Local variables, parameters, block parameters and `for` variables are
 lowercase names, and a constant is never lowercase, so **a local can never
@@ -98,49 +263,50 @@ syntax assigns to one.
 
 **Not in the syntax.** Case patterns (`case x` with `LIMIT -> ...`): patterns
 are literals and variants, and a constant would make them depend on values
-(decided against for v1, 44.13). Default parameter values do not exist yet
+(decided against for v1, 44.14). Default parameter values do not exist yet
 (row 7.5a); when they land, a constant is a valid default, because it is a
 value fixed for the run. No `static`, `const` or `final` keyword and no
 `@name` form: the capitals are the marker. No module state: a constant never
 changes, so "no module state" in `docs/grammar/05b-modules.md` stays true
 (44a2 words it "no mutable module state").
 
-### 44.3 Semantics
+### 44.4 Semantics
 
 - **Scope.** A constant belongs to its file. It is visible in the whole file,
-  before and after its line. `export` makes `Alias.NAME` work in a file that
-  imports this one; without it, `Alias.NAME` is `CHECK-IMPORT-NAME` ("unknown
-  or private imported name", with the did-you-mean help, which lists only
-  exports). Imports still cannot be re-exported.
+  before and after its line. `export` lets a file that imports this one name
+  it in `import {NAME} from "path"`; without it, that import is
+  `CHECK-IMPORT-NAME` ("unknown or private imported name", with the
+  did-you-mean help, which lists only exports). Imports still cannot be
+  re-exported.
 - **One namespace with types.** A constant cannot have the name of a struct, an
   enum, an import alias, a builtin or a reserved type name:
   `CHECK-REDEFINED-NAME`. Two constants of one file with one name are the same
   error.
 - **Order of evaluation.** The initializers run once, before `main`, in
-  dependency order (44.6, "Order"). A constant may use constants of its own file
+  dependency order (44.7, "Order"). A constant may use constants of its own file
   and of imported files. Cycles are `CHECK-CONSTANT-CYCLE`. Imports cannot form
   a cycle (`CHECK-IMPORT-CYCLE`), so a cycle is always inside one file.
 - **Types.** A constant has one type, known from the initializer and the
   annotation. The type must be fully known (no unresolved `[]`) and made of data
-  types only (44.4). Constants are not generic.
+  types only (44.5). Constants are not generic.
 - **Values are immutable and shared.** Lists, maps, sets and structs are
   persistent values in Agentica. `KEYWORDS.add("x")` gives a new set and leaves
   `KEYWORDS` unchanged, and no copy is made to protect it. All tasks read the
   same value. The initializers finish before `main` starts, so no task is
   running while a constant is being set.
 - **Errors in an initializer.** The checker proves an initializer has no
-  effects and ends (44.4), but not that it succeeds. `[1, 2][5]`, `1 / 0`,
+  effects and ends (44.5), but not that it succeeds. `[1, 2][5]`, `1 / 0`,
   `"x".to_i!` and an `Int` overflow are runtime errors, with the usual
   `RUNTIME-*` code, the span of the expression and the stack trace, and they
   stop the program before `main` runs and before it prints anything. They are
   the same on every run, so the first run finds them. `agentica check` does not
   run initializers and does not find them.
 - **Unused constants.** A constant that no function and no other kept constant
-  reads is not set and not even emitted (44.6). The checker still checks it.
+  reads is not set and not even emitted (44.7). The checker still checks it.
 - **`agentica test` and the BDD driver** load the same bytecode, so a constant
   is set at the start of each test child as in any program.
 
-### 44.4 Value rules
+### 44.5 Value rules
 
 The goal says "fixed at compile time". The design keeps what can be fixed in the
 bytecode there, and does the rest once at load. Two kinds of constant:
@@ -153,7 +319,7 @@ bytecode there, and does the rest once at load. Two kinds of constant:
 2. **Every other constant** (a collection, a struct, an operation, a call of a
    builtin) is **a constant expression**: the bytecode holds the code of the
    initializer, the VM runs it once at load, and every read afterwards is one
-   table access (44.7).
+   table access (44.8).
 
 **What a constant expression may contain.** The rule is a list of what is
 allowed, so a new language form is out until someone adds it:
@@ -163,13 +329,13 @@ allowed, so a new language form is out until someone adds it:
   builtin records and enums.
 - Unary and binary operators, field access, indexing, `==` and the rest of
   the operators on their usual types.
-- Reading another constant (same file or `Alias.NAME`).
+- Reading another constant (of the same file, or imported by name).
 - Calls of builtins whose row in the builtin catalog has **no effects**
   (`effects: []` in `src/builtins.rkt`), as functions or methods: `Set.new`,
   `List.map`, `List.reduce`, `List.concat`, `Map.put`, `Range.to_a`,
   `String.split`, `String.code`, `Int.bit_and`, `Float.from_bits`, and the
-  rest of the 108 effect-free rows (the count in
-  `compiler/builtins_data.agc` of the step-4a PR).
+  rest of the effect-free rows (`effects: []` in about half of the 210 rows
+  of `compiler/builtins_data.agc`).
 - Block literals (`do |x| ... end`) passed to those builtins. The body may use
   assignments, `if`, `case`, `for`, `break`, `next` and `return`, and the same
   expressions and calls, and nothing else.
@@ -211,7 +377,7 @@ row that has a non-data type in its signature (today `Channel.new`,
 on a purity and termination analysis of the call graph (recursion, higher
 order calls through `Fn`, mutual recursion across files), which has to be
 written twice, in Racket and in Agentica, and then kept equal. The tables of
-`compiler/` do not need it (44.8): where a table is built by a helper
+`compiler/` do not need it (44.9): where a table is built by a helper
 function today, the helper's logic fits a block or becomes data. If a real use
 appears, the smallest safe addition is a call of a user function that the
 checker proves has no `while`, no recursion and calls only builtins and
@@ -223,10 +389,10 @@ in `src/` (Racket) and a third time in `compiler/` (Agentica), and keeping the
 three equal. The project rule is the opposite: the VM is the one semantics
 ("New features are VM-only"). The cost is that a runtime error in an initializer
 shows when the program starts and not when it is compiled, and that
-loading builds the values. 44.9 measures the second. Question 1 (44.13) asks
+loading builds the values. 44.10 measures the second. Question 1 (44.14) asks
 the owner to confirm.
 
-### 44.5 Diagnostics
+### 44.6 Diagnostics
 
 New codes, stable, with the span of the form named:
 
@@ -235,32 +401,32 @@ New codes, stable, with the span of the form named:
 - `CHECK-CONSTANT-CYCLE`: a constant reads itself, directly or through other
   constants. Span: the reference that closes the cycle; the help lists
   `A -> B -> A`.
-- `CHECK-CONSTANT-EXPRESSION`: the initializer uses a form that 44.4 does not
+- `CHECK-CONSTANT-EXPRESSION`: the initializer uses a form that 44.5 does not
   allow. Span: that form.
 - `CHECK-CONSTANT-TYPE`: an expression of the initializer has a type that is
   not a data type. Span: that expression.
 
 Reused codes: `CHECK-REDEFINED-NAME` (duplicate or reserved name),
-`CHECK-DECL-ORDER` (44.6), `CHECK-IMPORT-NAME` (a private or unknown
-`Alias.NAME`), `CHECK-TYPE-MISMATCH` (annotation or use), `CHECK-EMPTY-SET-TYPE`
-and the other empty-collection codes (`NAME = []` without a type), and
-`CHECK-UNKNOWN-NAME` for an unknown `NAME` with the did-you-mean help over the
-constants in scope. `CHECK-INT-RANGE` and the rest of the expression rules
-apply inside initializers as everywhere. `PARSE-TOO-DEEP` counts initializers
-too.
+`CHECK-DECL-ORDER` (44.7), `CHECK-IMPORT-NAME` (a private or unknown name in an
+import list, and `Mod.NAME` on a constant, 44.2), `CHECK-TYPE-MISMATCH`
+(annotation or use), `CHECK-EMPTY-SET-TYPE` and the other empty-collection codes
+(`NAME = []` without a type), and `CHECK-UNKNOWN-NAME` for an unknown `NAME`
+with the did-you-mean help over the constants in scope. `CHECK-INT-RANGE` and
+the rest of the expression rules apply inside initializers as everywhere.
+`PARSE-TOO-DEEP` counts initializers too.
 
 Cycle detection: depth-first over the constants in linked order, following
 references in source order; the first reference that reaches a constant already
 on the path is the error. Both checkers do exactly this, so they agree on the
 span.
 
-### 44.6 Front end
+### 44.7 Front end
 
 **Parser (both).** `ast.rkt` and `compiler/ast.agc` get one declaration node
 (`const-decl`: name, optional type, value, `exported`, span; docs as for other
 declarations). `parse-program` accepts a `TYPE_NAME` token followed by `=` or
-`:` where it accepts `def`, `struct` and `enum`. The `Alias.NAME.method` change
-of 44.2 is in `parse-construct`. The depth rule counts the initializer. The
+`:` where it accepts `def`, `struct` and `enum`. That is the whole parser
+change. The depth rule counts the initializer. The
 text forms of the parser goldens print `const` nodes (the line of a declaration,
 then `type:` and `value:` children), with `export` as for other declarations.
 
@@ -269,7 +435,7 @@ then `struct` and `enum`, then `export def`, then `def`. Constants come right
 after the imports because a reader looks for the tables of a file first, as in
 Ruby and Python, and because they are data, not code. The order is a style
 rule, as it is now: a constant may use a struct or enum declared below it
-(`ClassRange(...)` in 44.8). The help text for a constant out of place says
+(`ClassRange(...)` in 44.9). The help text for a constant out of place says
 "constants come right after the imports". The rank function lives in
 `src/modules.rkt` (`declaration-order-error`) and in
 `compiler/declarations.agc`.
@@ -277,7 +443,8 @@ rule, as it is now: a constant may use a struct or enum declared below it
 **Linker (both).** `modules.rkt`/`modules.agc` collect constants as a kind of
 declaration, exported or not, in the same name table as types and functions
 (`Declarations.Kind` gets `Constant`). The rewrite turns a `type-expression`
-or a qualified `call` that names a constant into a new node
+or a `call` `NAME.method` that names a constant of the file (declared or
+imported by name, 44.2) into a new node
 `const-ref` with the linked name (`@2::NAME` for a file with prefix `@2::`;
 the root file has no prefix, as now). It rewrites the `const-decl` name the
 same way. A name that is neither a constant nor a type keeps today's path, so
@@ -289,7 +456,7 @@ no existing program changes meaning. `const-ref` has an `id` in
 1. Collect struct and enum declarations and function signatures as now.
 2. Order the constants (below), check cycles, then check each initializer
    in that order against its annotation, in an environment with no locals, and
-   record the constant's type. Apply the 44.4 rules while walking the
+   record the constant's type. Apply the 44.5 rules while walking the
    initializer: forms, builtin effects, data types.
 3. Check function bodies. A `const-ref` has the recorded type.
 
@@ -301,7 +468,7 @@ types, and lowering reads it (it does not sort again).
 
 **Lowering (Racket now; step 5 later).**
 
-- A literal constant (44.4, kind 1) is replaced by its literal at each read.
+- A literal constant (44.5, kind 1) is replaced by its literal at each read.
 - Every other constant that is read by a function, or by a constant that is
   read, becomes a function with no parameters named by its linked name, whose
   body is `return <initializer>`. The existing code that lowers a function body
@@ -316,7 +483,7 @@ types, and lowering reads it (it does not sort again).
 - Constants nobody reads, and constants read only by other unread constants,
   are dropped.
 
-### 44.7 Bytecode and VM
+### 44.8 Bytecode and VM
 
 **Format version 5.** Version 4 is `STRUCT_WITH` (15c). Two things change the
 layout, so the version goes to 5:
@@ -361,16 +528,16 @@ constant, then `<start>`. The call depth limit (10,000) sees one frame for each.
 **Bytes.** Programs without constants differ from today only in the version
 number. Programs with constants differ only by the new section, the two
 opcodes, the functions and `<start>`. The Racket writer and the Agentica writer
-(step 6) must give the same bytes, which the order of 44.6 guarantees.
+(step 6) must give the same bytes, which the order of 44.7 guarantees.
 
 **The `docs/vm` pages that change** (in 44a1): `03-ir-and-bytecode.md` (4.2
 opcodes, 4.6 table and the version in the header row and the last bullet),
 `08-loader-and-cli.md` (header check and new rejections).
 
-### 44.8 The tables of `compiler/`, rewritten
+### 44.9 The tables of `compiler/`, rewritten
 
 The test the design must pass: the real tables of `compiler/` fit. Every
-example below uses only what 44.4 allows. The snippets use forms the current
+example below uses only what 44.5 allows. The snippets use forms the current
 Racket front end already accepts (the expressions were checked with
 `racket src/main.rkt check` inside functions; the constant line is the only
 new syntax).
@@ -410,7 +577,7 @@ NAME_CODES = Set.new(
 
 The character classes are the table that a literal cannot hold well:
 `char_classes()` loops over 0..127 and calls `classify`, a user function. Under
-44.4 the same table is data plus a fold, with no user function:
+44.5 the same table is data plus a fold, with no user function:
 
 ```ruby
 struct ClassRange
@@ -507,43 +674,19 @@ export GRAPHIC_RANGES = [
 The generator (`tools/gen-lexer-unicode.rkt`) changes its output header and
 one line; the fast test that compares the generated file stays.
 
-**The linker (`compiler/link_env.agc`, `compiler/module_names.agc`).**
-`Settings` carries four tables that never change (`reserved`, `bare_builtins`,
-`builtin_enums`, `std_only`) beside the two real inputs (the `stdlib/` folder
-and the environment). The generated file becomes constants and `Settings`
-keeps the inputs:
-
-```ruby
-# module_names.agc (generated by tools/gen-module-names.rkt)
-export RESERVED_TYPE_NAMES = Set.new(["Await", "Bool", "Channel", "Dir", ...])
-export BARE_BUILTIN_NAMES = Set.new(["error", "gets", "gets!", "ok", ...])
-export BUILTIN_ENUM_NAMES = Set.new(["Await", "LogLevel"])
-export STD_ONLY: Map[String, StdOnly] = {
-  "HttpWire": StdOnly(std_path: "std/http", alias: "HTTP"),
-  "LogRegistry": StdOnly(std_path: "std/logger", alias: "Logger")
-}
-```
-
-```ruby
-# link_env.agc
-export IO_TIMEOUT_MS = 10000
-
-export struct Settings
-  stdlib: String
-  env: Env
-end
-```
-
-`std_only_modules()`, `io_timeout()` and the table fields are gone; every
-function that took `settings` only for a table reads the constant, and the
-ones that need the folder or the environment keep the parameter.
-
-**The builtin catalog (the step-4a PR, `compiler/builtins_data.agc` and
-`compiler/builtins.agc`).** The generated rows are constructor calls and
-literals, which is exactly the allowed set (the rows use `Model.Builtin(...)`,
-`Types.Type.List(...)`, `Model.Rule.Plain`, and so on). The six helper
-functions `rows_1()` ... `rows_6()` exist to keep each literal small; they
-become constants, and the lookup tables become folds over them:
+**The linker and the builtin catalog (step 4a, merged in PR #258).**
+`Settings` (`compiler/link_env.agc`) holds the two real inputs of a link (the
+`stdlib/` folder and the environment) and a `Builtins.Catalog`, which
+`settings()` builds with `Builtins.catalog()` (210 rows, 2.6 ms) and which every
+function that resolves a name reads through `cx.settings.catalog`. The catalog
+is not an input: it is a table of the program. The generated rows are
+constructor calls and literals, which is exactly the allowed set
+(`Model.Builtin(...)`, `Types.Type.List(...)`, `Model.Rule.Plain`, and so on).
+`builtins_data.agc` keeps its rows in six functions `rows_1()` ... `rows_6()`
+of at most 40 rows, because of the 60-line limit of the style rule
+(`tools/gen-builtins-data.rkt`). A constant is not a function, so that limit
+does not apply to it. The generator keeps six literals all the same, because
+one expression is lowered into one frame, which has a register limit:
 
 ```ruby
 # builtins_data.agc (generated by tools/gen-builtins-data.rkt)
@@ -556,6 +699,7 @@ export ROWS = ROWS_1.concat(ROWS_2).concat(ROWS_3).concat(ROWS_4)
   .concat(ROWS_5).concat(ROWS_6)
 export RECORDS: List[Model.Record] = [ Model.Record(name: "FileInfo", ...) ]
 export ENUMS: List[Model.EnumDef] = [ ... ]
+export RESERVED_TYPE_NAMES = ["Await", "Bool", "Channel", ...]
 export STD_ONLY_IMPORTS: Map[String, List[String]] = {
   "HttpWire": ["std/http", "HTTP"], "LogRegistry": ["std/logger", "Logger"]
 }
@@ -574,18 +718,33 @@ export PUBLIC_NAMES = ENTRIES.keys.filter do |name|
 end
 ```
 
-(`module_of` is a user function, so it is written inline in the block.)
-`lookup(catalog, name)`, `ref(catalog, ...)` and `std_only_name?(catalog, ...)`
-lose their `catalog` parameter, and so does every checker function that
-threads it. The step-4b/4c checker is written against constants from the
-start (44.12).
+(`module_of` is a user function, so it is written inline in the block. The
+other tables of `Catalog` (`bare_names`, `records`, `enums`, `opaque`,
+`handles`, `reserved`, `std_only`) are written the same way.) `Settings` loses
+`catalog`:
+
+```ruby
+# link_env.agc
+export IO_TIMEOUT_MS = 10000
+
+export struct Settings
+  stdlib: String
+  env: Env
+end
+```
+
+`settings()` stops building anything. `lookup(catalog, name)`,
+`ref(catalog, ...)` and `std_only_name?(catalog, ...)` lose their `catalog`
+parameter, and so does every function that threads `cx.settings.catalog`
+(`resolve.agc`, `rewrite.agc`, `modules.agc`) and the checker of 4b and 4c.
+`io_timeout()` becomes `IO_TIMEOUT_MS`.
 
 What the examples show about the rules: every table was a literal, a
 constructor call or a `reduce`/`filter` over another table, and the one place
 that needed more than builtins (`char_classes`) became data. Nothing needed a
 user function.
 
-### 44.9 Cost model
+### 44.10 Cost model
 
 - **A read** is `GLOBAL a i`: one bounds-checked array access and a copy of a
   16-byte value (a pointer for a collection). It is not a call and builds
@@ -595,13 +754,13 @@ user function.
   once per `lex` call (one per imported file) or once per `graphic?` call.
 - **Start-up.** The cost is the sum of the initializers of the kept constants,
   paid before `main`. For the lexer, parser and linker tables it is a few
-  thousand instructions. The big one is the builtin catalog (about 190 rows of
-  nested constructors): the checker builds the same value today, in
+  thousand instructions. The big one is the builtin catalog (210 rows of nested
+  constructors, 2.6 ms today): the linker builds the same value today, in
   `catalog()`, and so the cost moves and does not grow. Row 8.3 (VM start-up
   cost) has a target of the order of 6 ms for the whole VM; 44d measures the
   compiler's start before and after and records the numbers in the PR. The
-  pruning of unread constants keeps `import "std/http"` from paying for
-  tables it does not use.
+  pruning of unread constants keeps `import HTTP from "std/http"` from
+  paying for tables it does not use.
 - **Memory.** Kept constants live for the whole run. Collections are shared by
   structure; nothing is copied on a read or a `put`.
 - **If start-up shows up in the numbers**, a later PR (44e, gated by that
@@ -612,7 +771,7 @@ user function.
   would not change. It is not planned until a number asks for it, because it
   adds a value decoder to the loader, which is hostile-input code.
 
-### 44.10 Alternatives considered
+### 44.11 Alternatives considered
 
 - **Literals only (option A).** No evaluation at all: scalars, and list, map
   and set literals. It cannot hold the lexer's tables: `Set.new(...)` is a
@@ -620,48 +779,85 @@ user function.
   constructors. A literal map of 100 entries for the classes would be
   unreadable. Rejected: it does not express the tables.
 - **Compile-time evaluation in both front ends.** Needs the semantics of every
-  allowed builtin in `src/`, in `compiler/` and in the VM (44.4). Rejected;
+  allowed builtin in `src/`, in `compiler/` and in the VM (44.5). Rejected;
   the load-time design gives the same program behavior with one
   implementation.
 - **Lazy initialization (first read).** Saves start-up for rarely read
   constants. Rejected: errors would appear in the middle of a run, a read would
   need a check and a branch, and tasks could race on the first read.
 - **Calls of user functions.** Powerful (`char_classes()` stays as it is) and
-  rejected for v1 (44.4). It stays open (question 4).
+  rejected for v1 (44.5). It stays open (question 4).
 - **Module attributes `@name` like Elixir.** A new sigil and a new token. The
   capitals already mark a constant and need no lexer change.
 - **A `const` keyword.** One more reserved word for what the name already says.
 - **A struct of tables passed to every function (today).** The cost in 44.1.
 
-### 44.11 Implementation plan
+### 44.12 Implementation plan
 
-Small PRs, in this order. Each updates its own tests, goldens and docs (the
-rules of `AGENTS.md`: language rules in `docs/grammar/`, the site page and the
-programming skill together; the user-visible change in `CHANGELOG.md` under
-`## [Unreleased]`).
+Small PRs. 44a0 comes first. 44a1 touches only `vm/` and the bytecode writer, so
+it can run at the same time as 4b and 4c. 44a2 follows 44a0. Each updates its
+own tests, goldens and docs (the rules of `AGENTS.md`: language rules in
+`docs/grammar/`, the site page and the programming skill together; the
+user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
 
-1. **44a1: VM and writer, no language change.** Bytecode format 5: the Globals
+1. **44a0: imports, both front ends** (44.2). No constants yet. The parsers
+   (`src/parser.rkt`, `src/ast.rkt`; `compiler/parser.agc`, `ast.agc`,
+   `parse_text.agc`) read `import Mod from "path"` and
+   `import {A, B} from "path"` and reject the old form with a help. The linkers
+   (`src/modules.rkt`; `compiler/modules.agc`, `declarations.agc`,
+   `resolve.agc`, `rewrite.agc`, `linker.agc`) keep the `named` table, apply the
+   collision, `CHECK-IMPORT-NAME` and kind checks, rename bare names, and
+   extend the `.with` privacy set. The help texts that show the import form
+   change (`src/modules.rkt`, `compiler/`). The migration script runs over the
+   whole repository, and `make goldens` rewrites the goldens (the spans move).
+   Tests: parser goldens (the alias form, a name list, a multi-line list, a
+   trailing comma, an empty list, the old form, `from` as a parameter name);
+   linker fixture folders (a function, a struct, an enum and its variants and
+   patterns imported by name; `.with` on a struct of a module imported by name;
+   each collision of 44.2; an unknown and a private name with the did-you-mean
+   help; two lines with one path; a std-only help text); a VM fixture that uses
+   named imports; the round trip of the linked text form. Docs, all in this PR:
+   - `docs/grammar/05-syntax.md` (the `import_decl` rule) and
+     `05b-modules.md` (both forms, `Mod.name`, collisions, the examples), and
+     `07-diagnostics.md` (the help rows that show the import). One line per
+     paragraph.
+   - The Hugo site: `site/content/tour/modules.md` and every page whose code
+     uses an import (the migration covers them). Run `make site` before the
+     merge.
+   - The `agentica-programming` skill: the import form in the core rules of
+     `SKILL.md` (keep it near 2,000 tokens) and `references/modules.md`.
+   - The `agentica-development` skill: `references/frontend.md` (the import
+     forms, the linker's `named` table) and `stages.md` if it lists the
+     `import-decl` node.
+   - `CHANGELOG.md`: an entry under `## [Unreleased]` marked `**Breaking:**`.
+
+   The PR states which rule it relaxes (the freeze, row 7.2.7: a syntax change
+   in both parsers and both linkers) and why (the owner's decision of
+   2026-10-15). It does not touch the checker, which never sees imports, and it
+   does not depend on 4b.
+2. **44a1: VM and writer, no language change.** Bytecode format 5: the Globals
    section (a count), `GLOBAL` and `GLOBAL_SET` (`agc_opcode` in `vm/value.h`
    and `opcodes` in `src/bytecode.rkt`, same order), loader checks and
-   run-time behavior (44.7), `docs/vm/03` and `08`. The Racket writer emits
+   run-time behavior (44.8), `docs/vm/03` and `08`. The Racket writer emits
    version 5 and a zero count; the front ends do not use the feature yet. Tests:
    the C tests build `.agcb` files by hand (valid use, slot out of range,
    `GLOBAL_SET` outside the entry, unset read, count over the limit); all
    existing goldens still pass; `make vm-test`. A C change, so the
    `vm-c-critic` review applies. This is the "new format" step of 35.3 done
    before anything uses it.
-2. **44a2: the language, both front ends.** `src/lexer.rkt`: no change.
+3. **44a2: the language, both front ends.** `src/lexer.rkt`: no change.
    `src/parser.rkt`, `src/ast.rkt`; `src/modules.rkt` (collect, rank in
    `declaration-order-error`, rewrite to `const-ref`); `src/checker.rkt`
    (order, cycle, forms, types, `const-ref`); `src/lower.rkt` and
    `src/bytecode.rkt` (literals, functions, `<start>`, slot reads). In
    `compiler/`: `ast.agc`, `parse_base.agc`/`parser.agc`, `parse_text.agc`,
    `declarations.agc`, `modules.agc`, `resolve.agc`, `rewrite.agc`,
-   `link_text.agc`. Tests: parser goldens (`const-*` valid files, one `err-*`
-   per site, `PARSE-CONSTANT-NAME`, the `Alias.NAME.method` form), linker
-   goldens (a fixture folder with an exported and a private constant, an
-   `Alias.NAME`, a name clash, a bad order), checker tests in
-   `tests/checker-test.rkt` (each rule of 44.4 and 44.5 with its code and
+   `link_text.agc`, and the Agentica checker if 4b has merged (44.13). Tests:
+   parser goldens (`const-*` valid files, one `err-*`
+   per site, `PARSE-CONSTANT-NAME`), linker goldens (a fixture folder with an
+   exported and a private constant, a named import of a constant, `Mod.NAME`
+   on a constant, a name clash, a bad order), checker tests in
+   `tests/checker-test.rkt` (each rule of 44.5 and 44.6 with its code and
    span, the effect-list audit), VM fixtures in `tests/fixtures/vm/` with
    `.expected` (use, dependency order across two files, a constant of structs
    and enums, a runtime error in an initializer, an unread constant that would
@@ -669,10 +865,11 @@ programming skill together; the user-visible change in `CHANGELOG.md` under
    links again to the same output. Docs, all in this PR (owner request of
    2026-10-15):
    - `docs/grammar/`: `05-syntax.md` (the constant rule and the new
-     declaration order), `05b-modules.md` (`export NAME`, `Alias.NAME`, and
-     "no mutable module state"), `06-semantics.md` (evaluation, types, the
-     value rules), `07-diagnostics.md` (the four new codes and the new
-     `CHECK-DECL-ORDER` help). One line per paragraph.
+     declaration order), `05b-modules.md` (`export NAME`, importing a
+     constant by name, `Mod.NAME` not valid, and "no mutable module state"),
+     `06-semantics.md` (evaluation, types, the value rules),
+     `07-diagnostics.md` (the four new codes and the new `CHECK-DECL-ORDER`
+     help). One line per paragraph.
    - The Hugo site: the tour page for modules
      (`site/content/tour/modules.md`) or a new tour page for constants, plus
      the diagnostics page if the site lists codes. Run `make site` before
@@ -681,67 +878,79 @@ programming skill together; the user-visible change in `CHANGELOG.md` under
      `SKILL.md` (keep it near 2,000 tokens), the detail in
      `references/language.md`, and in `references/performance.md` the advice
      "build a table once as a module constant, not in a function that runs
-     per call". That file comes from the `docs/perf-guide` branch; if it has
-     not merged when 44a2 is ready, 44a2 waits for it or adds the paragraph to
-     the PR that creates it.
-   - The `agentica-development` skill: `references/frontend.md` says that
-     `compiler/` keeps its tables as module constants (and lists constants
-     among the relaxations of the freeze), `stages.md` (the nodes, codes and
-     the order), `vm-lowering.md` (the opcodes and the section).
+     per call" (the file exists since PR #257; its "Lookup tables" section is
+     the place), and `references/modules.md` for the constant import.
+   - - The `agentica-development` skill: `references/frontend.md` says that
+     `compiler/` keeps its tables as module constants (it also lists constants
+     and the import forms of 44a0 among the relaxations of the freeze),
+     `stages.md` (the nodes, codes and the order), `vm-lowering.md` (the opcodes
+     and the section).
    - `examples/constants.agc` with its README row, roadmap row 7.2.7 ("Relaxed
      so far") and row 7.2.8 ticked, and `CHANGELOG.md`.
 
    The PR states which rule it relaxes (the freeze, row 7.2.7) and why (the
    owner's decision of 2026-10-15 and this section).
-3. **44b: the lexer.** `compiler/lexer.agc` as in 44.8. The goldens do not
+4. **44b: the lexer.** `compiler/lexer.agc` as in 44.9. The goldens do not
    change. Measure the lexer before and after (the same program over
    `compiler/`), and put the numbers in the PR.
-4. **44c: the parser and unicode.** `NESTING_LIMIT`, `LEVELS`,
+5. **44c: the parser and unicode.** `NESTING_LIMIT`, `LEVELS`,
    `COMPOUND_OPERATORS`, `LITERAL_KINDS`, `GRAPHIC_RANGES` and the generator
    change. Goldens unchanged.
-5. **44d: the linker and the catalog.** `module_names.agc`, `link_env.agc`
-   (`Settings`), `tools/gen-module-names.rkt`, and, if the step-4a PR (#258) has
-   merged, `builtins_data.agc`, `builtins.agc` and
-   `tools/gen-builtins-data.rkt` (otherwise 4a is rebased onto 44d's style, or
-   44d follows 4a). Goldens unchanged. Start-up numbers in the PR.
-6. **44e (only if 44d's numbers ask for it): static data for literal
-   constants** (44.9).
+6. **44d: the linker and the catalog.** `link_env.agc` (`Settings`),
+   `builtins_data.agc`, `builtins.agc`, `tools/gen-builtins-data.rkt`, and the
+   functions that read `cx.settings.catalog` (`resolve.agc`, `rewrite.agc`,
+   `modules.agc`). Goldens unchanged. Start-up numbers in the PR.
+7. **44e (only if 44d's numbers ask for it): static data for literal
+   constants** (44.10).
 
 44b to 44d are independent of each other after 44a2. Each deletes the zero-
 argument functions and threaded structs it replaces and no other code.
 
-### 44.12 Interaction with §35
+### 44.13 Interaction with §35
 
-- **The freeze.** Row 7.2.7 allows only bug fixes and data. 44a1 and 44a2
-  relax it, like `Set[T]` (8b) and `.with` (15c): new syntax in both parsers,
-  new checker rules, a lowering change and a bytecode change. The owner
-  decided on 2026-10-15 (row 7.2.8). This is the last relaxation planned
-  before the bootstrap.
-- **Order against the port.** Step 3 is done and step 4a (PR #258, the builtin
-  catalog as data) is open. 35.7 says no language change touches a stage while
-  its port is open; steps 4b and 4c have not started. So 44a1 and 44a2 land
-  between 4a and 4b, and the checker port starts from a `src/checker.rkt`
-  that already has constants, which is the rule of `Set[T]` and `.with`
-  again ("the checker port carries it"). If the owner prefers the other order,
-  4b would port the checker and 44a2 would change both checkers in one PR
-  (the bug-fix rule). Question 5.
+- **The freeze.** Row 7.2.7 allows only bug fixes and data. 44a0 (the import
+  syntax) and 44a1 and 44a2 (constants) relax it, like `Set[T]` (8b) and
+  `.with` (15c): new syntax in both parsers and both linkers, new checker
+  rules, a lowering change and a bytecode change. The owner decided on
+  2026-10-15 (row 7.2.8). This is the last relaxation planned before the
+  bootstrap.
+- **Where the port stands.** Step 4a (PR #258, the builtin catalog as data) and
+  the performance guide (PR #257) are merged on master. Step 4b has started,
+  in parallel with this design. 35.7 says no language change touches a stage
+  while its port is open, so the rule for these PRs is the one of the
+  bug-fix case:
+  - 44a1 changes `vm/` and `src/bytecode.rkt` only (no ported stage), so it
+    goes in parallel with 4b and 4c.
+  - 44a0 changes the parsers and the linkers, which are ported (steps 2 and 3),
+    so it changes `src/` and `compiler/` together. The checker never sees an
+    import, so the checker port is not affected.
+  - 44a2 adds checker rules. It changes whichever checker exists when it lands.
+    If 4b has merged, 44a2 changes `src/checker.rkt` and the Agentica checker
+    in the same PR (the rule for a change in a ported stage). If 4b has not
+    merged, 44a2 changes `src/checker.rkt` and 4b carries the rules when it
+    merges master (the rule of `Set[T]` and `.with`: "the checker port carries
+    it"). Whichever PR lands second ports the change; the goldens catch a miss.
+  Question 5 asks the owner to confirm.
 - **What each ported step carries.**
-  - Step 2 (parser, done): 44a2 changes `compiler/parser.agc`, `ast.agc` and
-    the golden printer in the same PR as `src/parser.rkt`.
-  - Step 3 (modules, done): 44a2 changes the `compiler/` linker and
-    `src/modules.rkt` together: the constant kind, `CHECK-DECL-ORDER` with
-    the constant rank, the `const-ref` rewrite, `CHECK-IMPORT-NAME` and
-    `CHECK-REDEFINED-NAME` for constants.
-  - Step 4 (checker, 4b/4c): carries 44.4 and 44.5 completely:
-    `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE`,
-    the order, the data-type rule, the effect check from the catalog, the
-    type of `const-ref`, and `check` returning the order. It reads the builtin
-    effects from the catalog constants (44.8).
+  - Step 2 (parser, done): 44a0 changes the import node and parser, and 44a2
+    the declaration node and parser, in `compiler/parser.agc`, `ast.agc` and
+    the golden printer, in the same PRs as `src/parser.rkt`.
+  - Step 3 (modules, done): 44a0 changes the `compiler/` linker and
+    `src/modules.rkt` together (named imports, collisions, `named` table,
+    `.with` privacy). 44a2 adds the constant kind, `CHECK-DECL-ORDER` with the
+    constant rank, the `const-ref` rewrite, and `CHECK-IMPORT-NAME` for
+    `Mod.NAME`.
+  - Step 4 (checker, 4b/4c): carries 44.5 and 44.6: `CHECK-CONSTANT-CYCLE`,
+    `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE`, the order, the data-type
+    rule, the effect check from the catalog, the type of `const-ref`, and
+    `check` returning the order. It reads the builtin effects from the catalog
+    (44.9). Nothing of 44a0.
   - Step 5 (lowering) carries literal inlining, constant functions, pruning,
     `<start>` and `GLOBAL` reads.
   - Step 6 (bytecode writer) carries the Globals section, version 5 and the
     two opcodes, and must equal the Racket bytes.
-  - Steps 7 and 8 do not change.
+  - Steps 7 and 8 do not change (their help texts use the new import form
+    through the migration of 44a0).
 - **stage0.** There is no `stage0` yet, and `compiler/` is compiled by Racket
   (35.3), so 44b to 44d can use constants as soon as 44a2 merges, with no
   two-step refresh. The first `stage0` is made by a compiler that already uses
@@ -749,11 +958,11 @@ argument functions and threaded structs it replaces and no other code.
   `.agcb` format" case of 35.3 applies once `stage0` exists).
 - **35.4, step 4** gets one sentence that points here (changed in this PR).
 
-### 44.13 Open questions for the owner
+### 44.14 Open questions for the owner
 
 1. **Evaluate at load, not at compile time.** The values of constants other
    than plain literals are computed by the VM once before `main` and not folded
-   by the compiler (44.4). The visible differences: a runtime error in an
+   by the compiler (44.5). The visible differences: a runtime error in an
    initializer shows at start, and `agentica check` does not run it.
    *Recommendation:* load time, because folding would put the semantics of the
    builtins in three places; plain literals are inlined and so are in the
@@ -766,7 +975,11 @@ argument functions and threaded structs it replaces and no other code.
    local bindings; the checker knows the type, and `agentica outline` (§39)
    shows it.
 4. **Calls of user functions in an initializer.** *Recommendation:* no in v1
-   (44.4). Revisit after 44d with the list of tables that still need a helper.
-5. **Order against the checker port.** *Recommendation:* 44a1 and 44a2 land
-   after 4a and before 4b, so the Agentica checker is written once, with
-   constants.
+   (44.5). Revisit after 44d with the list of tables that still need a helper.
+5. **Order against the checker port.** 4b has started. *Recommendation:*
+   44a1 in parallel with 4b; 44a0 as soon as it is ready (it does not touch
+   the checker); 44a2 right after 44a0, changing whichever checker exists, so
+   the first PR to land in each pair ports the change of the other.
+6. **One line for both import forms** (`import Mod, {A} from "x"`).
+   *Recommendation:* no (44.2); two lines with one path are allowed. One way to
+   write each thing, and a smaller grammar.
