@@ -153,6 +153,30 @@
           (for ([input (in-list inputs)])
             (check-equal? (hash-ref outputs (parser-input-path input) #f) (golden input) (parser-input-name input))))
 
+        (test-case "chains, prefix operators and nested chains are legal at the limit and refused one past it"
+          ; The trees of the legal cases print about 1 MB each, so they are checked here and not kept as goldens.
+          (define shapes
+            (list (list "mixed" 998 (lambda (n) (function-body (string-append "  y = x * x" (repeat " + x" n) "\n"))))
+                  (list "prefix" 998 (lambda (n) (function-body (string-append "  y = " (repeat "- " n) "x\n"))))
+                  (list "field" 998 (lambda (n) (function-body (string-append "  y = x" (repeat ".b" n) "\n"))))
+                  (list "method" 997 (lambda (n) (function-body (string-append "  y = x" (repeat ".f(1)" n) "\n"))))
+                  (list "nested" 988
+                        (lambda (n)
+                          (function-body (string-append "  y = x + (x + (x + (x + (x + (x" (repeat " + x" n) ")))))\n"))))))
+          (define cases
+            (for*/list ([shape (in-list shapes)] [n (in-list (list (second shape) (add1 (second shape))))])
+              (define text ((third shape) n))
+              (list (first shape) n text (write-case work (format "limit-~a-~a.agc" (first shape) n) text))))
+          (define outputs (run-parser bytecode (map fourth cases)))
+          (for ([entry (in-list cases)])
+            (define legal? (= (second entry) (second (assoc (first entry) shapes))))
+            (define label (format "~a ~a" (first entry) (second entry)))
+            (define agentica (hash-ref outputs (fourth entry)))
+            (define racket (parser-text (third entry)))
+            (check-equal? (regexp-match? #rx"^program " agentica) legal? label)
+            (check-equal? (regexp-match? #rx"^program " racket) legal? label)
+            (unless legal? (check-equal? agentica (string-append racket "\n") label))))
+
         (test-case "the first node id can be chosen, so modules can share one numbering"
           (define path "tests/fixtures/frontend/parser/synthetic.input")
           (define shifted (run-parser bytecode (list "--first-id=1000" path)))
