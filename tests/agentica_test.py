@@ -122,6 +122,11 @@ class TestCase(unittest.TestCase):
         return compile_agc(source, self.make_temp_dir() / (source.stem + ".agcb"))
 
 
+def agentica_version():
+    """The Agentica version: the one line of the VERSION file."""
+    return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+
+
 def vm_binary():
     """dist/agentica-vm, or AGENTICA_VM_BINARY like the Racket tests. `make test` builds it first."""
     override = os.environ.get("AGENTICA_VM_BINARY")

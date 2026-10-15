@@ -18,6 +18,7 @@ import SourceRoot from "bdd_source_root"
 import DiagnosticJson from "diagnostic_json"
 import Paths from "import_path"
 import Env from "link_env"
+import Pipeline from "pipeline"
 
 # The runner is a program of two lines, and the step program a program of one call when no --steps is given.
 RUNNER_ROOT = "import Runner from \"std/test/runner\"\n\ndef main() -> Void\n  Runner.main()\nend\n"
@@ -72,19 +73,23 @@ export def run(options: Opts.Options) -> Report.Ending
   return ending
 end
 
-# The run in its directory. The std/ sources are written first, and the runner compiled before anything else: its
-# failure is a bug of the installation.
+# The run in its directory. The std/ sources are written first (unless the caller names a stdlib/ folder), and the
+# runner compiled before anything else: its failure is a bug of the installation.
 def inside(directory: String, options: Opts.Options, temporary: String) -> Report.Ending
-  installed = install_std_sources(directory)
-  if !installed.ok?
-    return Report.infrastructure(installed.message, temporary, options)
+  stdlib = options.stdlib
+  if stdlib == ""
+    installed = install_std_sources(directory)
+    if !installed.ok?
+      return Report.infrastructure(installed.message, temporary, options)
+    end
+    stdlib = "#{directory}/std"
   end
-  settings = Env.settings("#{directory}/std", Env.process_env())
-  case compile_runner(directory, settings)
-    Compile.Compiled.Rejected(problem) ->
+  settings = Env.settings(stdlib, Env.process_env())
+  case compile_runner(options.version, directory, settings)
+    Pipeline.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"
       return Report.infrastructure(message, options.vm, options)
-    Compile.Compiled.Bytes(bytes) ->
+    Pipeline.Compiled.Bytes(bytes) ->
       ran = prepare_and_run(directory, options, settings, bytes)
       if !ran.ok?
         return Report.infrastructure(ran.message, temporary, options)
@@ -105,13 +110,13 @@ def install_std_sources(directory: String) -> Result[Void]
   return ok()
 end
 
-def compile_runner(directory: String, settings: Env.Settings) -> Compile.Compiled
+def compile_runner(version: String, directory: String, settings: Env.Settings) -> Pipeline.Compiled
   source = "#{directory}/runner.agc"
   written = write_text(source, RUNNER_ROOT)
   if !written.ok?
-    return Compile.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
+    return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
   end
-  return Compile.file(source, settings, "cannot read the runner")
+  return Compile.file(version, source, settings, "cannot read the runner")
 end
 
 # Compiles the step program and the tests, writes the files the runner reads, runs it and reads its report. An error
@@ -128,7 +133,7 @@ def prepare_and_run(
       found.ok? and found.unwrap!.kind == "directory"
     end
   end
-  entries = try compile_tests(Discover.discover(given), directory, settings)
+  entries = try compile_tests(Discover.discover(given), directory, options.version, settings)
   config = Runner.Config(
     vm: options.vm,
     steps_bytecode: steps.bytecode,
@@ -176,22 +181,22 @@ end
 def compile_steps(directory: String, options: Opts.Options, settings: Env.Settings) -> Result[Steps]
   source = "#{directory}/steps.agc"
   root = ""
-  compiled = Compile.Compiled.Bytes([])
+  compiled = Pipeline.Compiled.Bytes([])
   if options.steps.size == 0
     try write_text(source, DEFAULT_STEPS)
-    compiled = Compile.file(source, settings, "cannot read the step program #{source}")
+    compiled = Compile.file(options.version, source, settings, "cannot read the step program #{source}")
   else
     source = Path.resolve(options.steps[0]).unwrap_or(options.steps[0])
     root = SourceRoot.option(options.steps[0])
-    compiled = Compile.file(source, settings, "cannot read the step program #{options.steps[0]}")
+    compiled = Compile.file(options.version, source, settings, "cannot read the step program #{options.steps[0]}")
   end
   bytecode = "#{directory}/steps.agcb"
   given = options.steps.size > 0
   case compiled
-    Compile.Compiled.Rejected(problem) ->
+    Pipeline.Compiled.Rejected(problem) ->
       error_text = JSON.encode(DiagnosticJson.json(problem))
       return ok(Steps(bytecode: bytecode, source: source, root: root, failure: error_text, given: given))
-    Compile.Compiled.Bytes(bytes) ->
+    Pipeline.Compiled.Bytes(bytes) ->
       try write_bytes(bytecode, bytes)
       return ok(Steps(bytecode: bytecode, source: source, root: root, failure: "", given: given))
   end
@@ -201,13 +206,13 @@ end
 # `front_end` for the runner to report, and writes nothing. The other entries (feature files and problems) are not
 # compiled.
 def compile_tests(
-  entries: List[Discover.Entry], directory: String, settings: Env.Settings
+  entries: List[Discover.Entry], directory: String, version: String, settings: Env.Settings
 ) -> Result[List[Discover.Entry]]
   out: List[Discover.Entry] = []
   index = 0
   for entry in entries
     if entry.kind == "tests" and entry.problem == ""
-      out = out.push(try compile_test(entry, "#{directory}/test-#{index}.agcb", settings))
+      out = out.push(try compile_test(entry, "#{directory}/test-#{index}.agcb", version, settings))
     else
       out = out.push(entry)
     end
@@ -216,11 +221,13 @@ def compile_tests(
   return ok(out)
 end
 
-def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings) -> Result[Discover.Entry]
+def compile_test(
+  entry: Discover.Entry, output: String, version: String, settings: Env.Settings
+) -> Result[Discover.Entry]
   front_end = ""
-  case Compile.file(entry.path, settings, "cannot read the test file #{entry.path}")
-    Compile.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
-    Compile.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
+  case Compile.file(version, entry.path, settings, "cannot read the test file #{entry.path}")
+    Pipeline.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
+    Pipeline.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
   end
   return ok(entry.with(bytecode: output, source_root: SourceRoot.option(entry.path), front_end: front_end))
 end

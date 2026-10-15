@@ -44,7 +44,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             [[ "$GITHUB_REF_NAME" == "$version" ]] || {
-              echo "Tag $GITHUB_REF_NAME must match src/version.rkt version $version" >&2
+              echo "Tag $GITHUB_REF_NAME must match the VERSION file $version" >&2
               exit 1
             }
           fi

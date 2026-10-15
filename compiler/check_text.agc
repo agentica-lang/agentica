@@ -44,11 +44,14 @@ export def problem_text(root_dir: String, problem: Failure.Problem) -> String
   return "#{line} file=#{Text.quote(Paths.stored_file(root_dir, problem.file))}"
 end
 
+## The text form of a program that checked: what `agentica --dump` prints.
+export def program_text(linked: Linker.Linked, checked: Checker.Checked) -> String
+  return LinkText.program_lines(linked, notes_of(checked)).concat(order_lines(checked)).join("\n")
+end
+
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
   case Checker.check(linked, settings.catalog)
-    Checker.Checking.Done(checked) ->
-      lines = LinkText.program_lines(linked, notes_of(checked)).concat(order_lines(checked))
-      return lines.join("\n")
+    Checker.Checking.Done(checked) -> return program_text(linked, checked)
     Checker.Checking.Failed(problem) -> return problem_text(linked.root_dir, problem)
   end
 end

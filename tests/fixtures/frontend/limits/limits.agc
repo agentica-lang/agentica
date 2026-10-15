@@ -20,20 +20,27 @@ SCENARIOS = [
 
 SLOW_SCENARIOS = ["structs-ok", "types-over", "updates-ok", "updates-over"]
 
+# The Agentica version of the header comes as `--version=V`: the writer takes it as an input, so the sizes and
+# checksums match the Racket writer's only when the test gives the version of the VERSION file.
 def main() -> Void
   names = SCENARIOS
-  if System.args().any? do |argument: String| argument == "slow" end
-    names = SLOW_SCENARIOS
+  version = ""
+  for argument in System.args()
+    if argument == "slow"
+      names = SLOW_SCENARIOS
+    elsif argument.starts_with?("--version=")
+      version = argument.slice(10, argument.length - 10)
+    end
   end
   for name in names
-    puts("#{name} #{describe(scenario(name))}")
+    puts("#{name} #{describe(version, scenario(name))}")
   end
 end
 
 # What writing a program gives, in one line: the size and a checksum of the bytes, or the code and place of the
 # problem (and the message of a BYTECODE-LIMIT, which is fixed).
-def describe(program: Ir.Program) -> String
-  case Writer.write("", program)
+def describe(version: String, program: Ir.Program) -> String
+  case Writer.write(version, "", program)
     Writer.Written.Done(bytes) -> return "ok #{bytes.size} #{checksum(bytes)}"
     Writer.Written.Failed(problem) ->
       line = "ERROR #{problem.code} #{place(problem.span)} file=#{problem.file}"

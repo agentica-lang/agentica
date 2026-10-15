@@ -9,7 +9,8 @@ import json
 import os
 import unittest
 
-from tests.agentica_test import ROOT, TESTS, TestCase, cli, report_cases, run, vm_binary, vm_environment
+from tests.agentica_test import (ROOT, TESTS, TestCase, agentica_version, cli, report_cases, run, vm_binary,
+                                 vm_environment)
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
@@ -400,8 +401,8 @@ class Bdd(TestCase):
         # The driver on its own, as the CLI starts it, reports its failure to make a folder (16 tries) in the format
         # of the report.
         driver = ROOT / "dist" / "agentica-bdd-driver.agcb"
-        result = run([vm_binary(), "--allow-run", "--", driver, "--vm", vm_binary(), "--agentica", "agentica",
-                      "--style", "json", "--", scratch / "missing.feature"], env=vm_environment(env), cwd=scratch)
+        result = run([vm_binary(), "--allow-run", "--", driver, "--vm", vm_binary(), "--version", agentica_version(),
+                      "--agentica", "agentica", "--style", "json", "--", scratch / "missing.feature"], env=vm_environment(env), cwd=scratch)
         self.assertEqual((result.code, result.stderr), (2, ""))
         problem = file_error(json.loads(result.stdout))
         self.assertEqual(problem["code"], "RUNTIME-BDD-INFRA")

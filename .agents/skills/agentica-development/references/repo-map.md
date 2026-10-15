@@ -17,7 +17,7 @@ src/
   modules.rkt     # import linking: std/, pkg/ and relative files, aliases, exports, cycles; runs before check
   stdlib.rkt      # std/ Agentica sources embedded at compile time
   builtin-types.rkt # opaque handle types, builtin record layouts (Header, HttpResponse, FileInfo, ...), builtin enums (Await) and the `list-type?`, `map-type?`, `set-type?` shape tests shared by the checker and the lowering
-  version.rkt     # the version string
+  version.rkt     # the version string, read from the VERSION file at compile time
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
   bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
   bdd-driver.rkt  # agentica test, the hand-off only: starts dist/agentica-bdd-driver.agcb (compiler/bdd.agc) on the VM with --driver-pid, sends it the embedded std/ sources on stdin, returns its stdout and exit code

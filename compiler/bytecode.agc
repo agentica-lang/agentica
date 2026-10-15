@@ -10,9 +10,11 @@ import LowerText from "lower_text"
 # `agentica compiler/bytecode.agc [flags] ROOT -o OUT ...` links, checks, lowers and writes each ROOT file to the .agcb
 # file OUT, and prints `== ROOT`, then `wrote N bytes` or the ERROR line of the first failure (those of lower.agc, and
 # BYTECODE- ones). No file is written for a failure. The flags are those of link.agc and apply to the roots after them:
-# `--stdlib=DIR` (the default is stdlib), `--agentica-path=V`, `--xdg-data-home=V` and `--home=V`.
+# `--stdlib=DIR` (the default is stdlib), `--agentica-path=V`, `--xdg-data-home=V` and `--home=V`, and `--version=V`,
+# the Agentica version of the header (the VERSION file; there is no default).
 def main() -> Void
   stdlib = "stdlib"
+  version = ""
   env = Env.process_env()
   root = ""
   output_next = false
@@ -20,9 +22,11 @@ def main() -> Void
     if output_next
       output_next = false
       puts("== #{root}")
-      puts(compile(root, argument, Env.settings(stdlib, env)))
+      puts(compile(root, argument, version, Env.settings(stdlib, env)))
     elsif argument == "-o"
       output_next = true
+    elsif argument.starts_with?("--version=")
+      version = argument.slice(10, argument.length - 10)
     elsif argument.starts_with?("--stdlib=")
       stdlib = argument.slice(9, argument.length - 9)
     elsif argument.starts_with?("--agentica-path=")
@@ -38,24 +42,26 @@ def main() -> Void
 end
 
 # Compiles the file at path into the file at output, and says what happened in one line.
-def compile(path: String, output: String, settings: Env.Settings) -> String
+def compile(path: String, output: String, version: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Failed(failure) -> return LinkText.failure_text(LinkText.root_dir_of(path), failure)
-    Linker.Linking.Done(linked) -> return check(linked, output, settings)
+    Linker.Linking.Done(linked) -> return check(linked, output, version, settings)
   end
 end
 
-def check(linked: Linker.Linked, output: String, settings: Env.Settings) -> String
+def check(linked: Linker.Linked, output: String, version: String, settings: Env.Settings) -> String
   case Checker.check(linked, settings.catalog)
     Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
-    Checker.Checking.Done(checked) -> return lower(linked, Lowering.lower(linked, checked, settings.catalog), output)
+    Checker.Checking.Done(checked) ->
+      return lower(linked, Lowering.lower(linked, checked, settings.catalog), output, version)
   end
 end
 
-def lower(linked: Linker.Linked, lowered: Lowering.Lowered, output: String) -> String
+def lower(linked: Linker.Linked, lowered: Lowering.Lowered, output: String, version: String) -> String
   case lowered
     Lowering.Lowered.Failed(problem) -> return LowerText.problem_text(linked.root_dir, problem)
-    Lowering.Lowered.Done(program) -> return write(linked.root_dir, Writer.write(linked.root_dir, program), output)
+    Lowering.Lowered.Done(program) ->
+      return write(linked.root_dir, Writer.write(version, linked.root_dir, program), output)
   end
 end
 

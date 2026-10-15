@@ -8,8 +8,9 @@ BDD_DRIVER_INPUTS := $(wildcard compiler/*.agc src/*.rkt)
 
 .PHONY: build build-tests bdd-driver test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
+# The version is the one line of the VERSION file (src/version.rkt embeds it when it is compiled, C gets it as AGC_VERSION).
 version:
-	@racket -e '(require "src/version.rkt") (display version)'
+	@printf '%s' '$(AGC_VERSION)'
 
 build:
 	$(RACO) make src/main.rkt
@@ -192,7 +193,7 @@ site-serve: site-sass
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
 # make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1, no libuv off Linux)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
-AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
+AGC_VERSION := $(shell cat VERSION)
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
 PICO_DIR := vm/third_party/picohttpparser

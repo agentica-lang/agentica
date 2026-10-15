@@ -9,7 +9,7 @@
 ;; compiled on a run.
 
 (require file/sha1 json racket/os racket/random racket/runtime-path
-         "stdlib.rkt" "vm-launch.rkt")
+         "stdlib.rkt" "version.rkt" "vm-launch.rkt")
 
 (provide run-agentica-test find-bdd-driver)
 
@@ -115,6 +115,7 @@
           (lambda ()
             (run-driver vm copy
                         (append (list "--vm" (path->string vm)
+                                      "--version" version
                                       "--style" (symbol->string style)
                                       "--test-timeout-ms" (number->string test-timeout-ms))
                                 (if allow-run? '("--allow-run") '())

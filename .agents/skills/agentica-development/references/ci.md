@@ -162,7 +162,7 @@ The first steps of the `test` job (the `changes` step, checkout with
 (`git diff HEAD^1 HEAD`) and publish the result as job outputs. It runs `vm-sanitizers` only when the VM,
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
-- `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
+- `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`, `VERSION`,
   `src/stdlib.rkt` (the registry that embeds the `std/` modules);
 - `tests/vm-diff-*`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
@@ -269,19 +269,24 @@ under "Tags, versions and CHANGELOG" below.
 
 ### Tags, versions and CHANGELOG
 
-- `src/version.rkt` is the single source of the version: `make version` prints
-  it and `agentica --version` reports it. Keep it in sync with the Git tag.
+- The `VERSION` file at the repository root (one line, no `v`) is the single
+  source of the version. `make version` prints it and the Makefile passes it to
+  C as `AGC_VERSION`; `src/version.rkt` embeds it when it is compiled (so
+  `raco exe` and `raco distribute` carry it and need no file at run time) and
+  `agentica --version` reports it. The Agentica front end takes it as an input
+  (the arguments of `compiler/cli_main.agc`), and writes it into each `.agcb`
+  header. Keep it in sync with the Git tag.
 - Every PR with a user-visible change adds a short entry under `## [Unreleased]`
   in `CHANGELOG.md` (Added, Changed, Removed or Fixed; start a change that
   breaks programs or CLI use with `**Breaking:**`; add the PR number).
   Internal-only work (CI, refactors, docs) needs none. A release PR renames
   `[Unreleased]` to `## [X.Y.Z] - DATE`, leaves an empty `[Unreleased]` above
-  it, bumps `src/version.rkt` and fixes the compare links at the bottom.
+  it, bumps `VERSION` and fixes the compare links at the bottom.
 - Every minor or patch bump is tagged, and the tag pushed, right away after its
   PR merges. The bump commit and the annotated tag message are both `release
   version <tag>`, for example `git tag -a 0.2.0 -m "release version 0.2.0"`.
 - Tag releases with the bare version (`0.2.0`, no `v` prefix).
-  `.github/workflows/release.yml` validates the tag against `src/version.rkt`,
+  `.github/workflows/release.yml` validates the tag against `VERSION`,
   builds `dist/agentica`, packages a `raco distribute` bundle with `LICENSE`,
   `NOTICE` and, in `licenses/racket/`, Racket's license files (from its share
   directory) and Chez Scheme's `NOTICE` (checked in at
