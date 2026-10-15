@@ -66,7 +66,7 @@ everything else (`references/ci.md`, "What CI runs").
 | builtin | `src/builtins.rkt` metadata, checker rule, the `vm-builtins` table in `src/lower.rkt`, C in `vm/`, a golden (`references/vm-builtins.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | pipeline stage | `src/<stage>.rkt`, wired in `src/main.rkt`, `tests/<stage>-test.rkt` |
-| `std/` module | `stdlib/<name>.agc`, registered in `src/stdlib.rkt`, a doc on the module and every export |
+| `std/` module | `stdlib/<name>.agc`, registered in `src/stdlib.rkt`, a doc on the module and every export, comments as `references/library-notes.md` says |
 | test | `tests/<stage>-test.rkt` (rackunit); VM behavior: a fixture in `tests/fixtures/vm/` with its `.expected` |
 | language rule | `docs/grammar/`, the site page, and the programming skill (`.agents/skills/agentica-programming/`) |
 
@@ -89,10 +89,10 @@ everything else (`references/ci.md`, "What CI runs").
 | Read | When |
 |---|---|
 | `references/repo-map.md` | finding which file in `src/`, `vm/`, `tests/` or `stdlib/` owns something |
-| `references/frontend.md` | editing `src/*.rkt` or `compiler/`: the freeze, the Agentica lexer and its goldens, recipes (keyword, AST node, syntax, diagnostic, stage, tests), Racket gotchas, stray `NL` tokens, reading a failure |
+| `references/frontend.md` | editing `src/*.rkt` or `compiler/`: the freeze, the Agentica lexer and its goldens, recipes (keyword, AST node, syntax, diagnostic, stage, tests), Racket gotchas, stray `NL` tokens, reading a failure, comments in `compiler/`, `src/` and `tests/` |
 | `references/stages.md` | the token kinds, the diagnostic code list, the AST nodes, a module's public API (`source`, `lexer`, `parser`, `modules`, `checker`, `lower`, `bytecode`, `builtins`, `main`) |
 | `references/language-notes.md` | changing a core language rule: Result and `try`, collections, ranges, file modules, methods, interpolation, blocks, hints, enums, function values |
-| `references/library-notes.md` | changing a library area: stdio, JSON, tasks, TCP/TLS/HTTP, files and paths, processes, Int and Float bits, std/binary |
+| `references/library-notes.md` | changing a library area (stdio, JSON, tasks, TCP/TLS/HTTP, files and paths, processes, Int and Float bits, std/binary) or the comments of a `stdlib/` module |
 | `references/bdd.md` | `agentica test`: `src/bdd-driver.rkt`, `std/bdd`, `stdlib/test/`, step programs and their handler rules, unit test files |
 | `references/vm.md` | any VM work: pipeline, layers, the rules every change keeps, and the index of the `vm-*.md` files |
 | `references/ci.md` | `.github/workflows/`, the Makefile, new VM files, peers or fixtures, jscpd, what CI runs, releases and `CHANGELOG.md` |
