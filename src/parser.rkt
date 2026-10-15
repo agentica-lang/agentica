@@ -586,6 +586,11 @@
          (literal-pattern (- (token-value number)) (span-from start))]
         [(type-name)
          (define first (advance!))
+         (when (and (not (kind? 'dot)) (constant-name? (token-lexeme first)))
+           (bail 'PARSE-UNEXPECTED-TOKEN
+                 (format "expected a dot between an enum and variant, found ~a" (describe (current)))
+                 (current)
+                 #:help "a constant is not a pattern; compare with if"))
          (expect 'dot "a dot between an enum and variant")
          (define second (expect 'type-name "a variant name"))
          (define enum-name (token-lexeme first))
@@ -1111,11 +1116,16 @@
          (define arguments (parse-named-arguments))
          (expect 'right-paren "\")\"")
          (construct (token-lexeme name) arguments (span-from name))]
-        ;; `NAME.with(...)` updates a constant of a struct type: the postfix loop reads the `.with`.
-        [(and (kind? 'dot) (constant-name? (token-lexeme name))
-              (let ([member (peek-token 1)])
-                (and (eq? (token-kind member) 'name) (equal? (token-lexeme member) "with")
-                     (eq? (token-kind (peek-token 2)) 'left-paren))))
+        ;; `NAME.with(field: x)` updates a constant of a struct type: the postfix loop reads the `.with`. A call
+        ;; has no named arguments, so `field:` after the parenthesis tells it from `Alias.with(1)`, a call of
+        ;; a function called `with` through an alias that is written in capitals; the linker decides the rest.
+        [(and (kind? 'dot)
+              (equal? (token-lexeme (peek-token 1)) "with")
+              (eq? (token-kind (peek-token 1)) 'name)
+              (eq? (token-kind (peek-token 2)) 'left-paren)
+              (eq? (token-kind (peek-token 3)) 'name)
+              (eq? (token-kind (peek-token 4)) 'colon)
+              (constant-name? (token-lexeme name)))
          (type-expression (token-lexeme name) (token-span name))]
         [(kind? 'dot)
          (advance!)

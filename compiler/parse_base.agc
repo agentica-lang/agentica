@@ -425,6 +425,9 @@ def variant_help(enum_name: String, variant_name: String) -> String
 end
 
 def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
+  if !is_kind(e, pos + 1, "dot") and constant_name?(e.tokens[pos].lexeme)
+    return error(unexpected_help(e, pos + 1, "expected a dot between an enum and variant, found " + describe(e.tokens[pos + 1]), "a constant is not a pattern; compare with if"))
+  end
   cursor = try expect(e, pos + 1, "dot", "a dot between an enum and variant", false)
   after = try expect(e, cursor, "type-name", "a variant name", false)
   enum_name = e.tokens[pos].lexeme

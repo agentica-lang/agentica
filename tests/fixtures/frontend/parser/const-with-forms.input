@@ -1,0 +1,5 @@
+def main() -> Void
+  a = CONFIG.with(port: 81)
+  b = UI.with(1)
+  c = CONFIG.with(port: 1).port
+end

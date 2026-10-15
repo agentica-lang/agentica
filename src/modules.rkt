@@ -194,7 +194,7 @@
                                        (format "~a as ~a" (import-name-name entry) (import-name-local entry))))
                                  ", ")
                     written)))
-;; A struct or an enum is renamed to a type name (a capital first letter), a function to a
+      ;; A struct or an enum is renamed to a type name (a capital first letter), a function to a
       ;; lowercase one, a constant to another constant name; the lexer tells the first two apart by
       ;; that letter.
       (define (type-name? text) (char<=? #\A (string-ref text 0) #\Z))
@@ -332,6 +332,21 @@
                 (and (const-decl? (hash-ref (hash-ref exports (car entry)) (cdr entry)))
                      (identity (car entry) (cdr entry))))]
           [else #f]))
+      ;; The constants a file can read, by the name it writes: its own, declared above or below, and the
+      ;; constants it imports by name.
+      (define (visible-constants key)
+        (append
+         (for/list ([(name declaration) (in-hash (hash-ref locals key))] #:when (const-decl? declaration)) name)
+         (for/list ([(local entry) (in-hash (hash-ref named-imports key))]
+                    #:when (const-decl? (hash-ref (hash-ref exports (car entry)) (cdr entry))))
+           local)))
+      ;; A name in capitals that no declaration, import or reserved type owns: a constant that does not exist.
+      (define (unknown-constant? key name)
+        (and (constant-name? name)
+             (not (member name reserved-type-names))
+             (not (hash-has-key? (hash-ref locals key) name))
+             (not (named-entry key name))
+             (not (hash-has-key? (hash-ref imports key) name))))
       (define (named-enum? key name)
         (define entry (named-entry key name))
         (and entry (enum-decl? (hash-ref (hash-ref exports (car entry)) (cdr entry)))))
@@ -398,6 +413,9 @@
               (enum-constructor (car parts) (cadr parts) '() span)]
              [(and (= (length parts) 1) (constant-identity key name))
               => (lambda (linked) (const-ref linked span))]
+             [(and (= (length parts) 1) (unknown-constant? key name))
+              (bail 'CHECK-UNKNOWN-NAME (format "unknown name ~s" name) span
+                    #:help (did-you-mean name '() #:shared (visible-constants key)))]
              [else (type-expression (resolve key name 'type span #:variant-hint? #t) span)])]
           [(function-decl name params result body span)
            (function-decl (identity key name) (walks params) (walk result) (walks body) span)]

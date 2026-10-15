@@ -61,6 +61,21 @@ fruit drink
 
 A constant is a value, so everything that works on a value works on it: `PRICES.get(...)`, `PRICES["tea"]`, `FRUITS.size`, `"#{PRICES}"`. A constant may read another one, declared above or below it. A loop (`A` reads `B` and `B` reads `A`) is `CHECK-CONSTANT-CYCLE`.
 
+## When a constant is built
+
+A literal such as `WIDTH = 8` is part of the program. Any other constant is built once, before `main` starts, and only if some function that `main` can reach reads it. A constant that nothing reads never runs, so it can never fail. If an initializer fails, the program stops before `main` prints anything:
+
+```agentica {expect="RUNTIME-INDEX-OUT-OF-RANGE"}
+BAD = [1][5]
+
+def main() -> Void
+  puts("never printed")
+  puts(BAD)
+end
+```
+
+The stack trace names `BAD`.
+
 ## What a constant may hold
 
 The value is built from literals, lists, maps, sets, struct and enum values, operators, other constants and builtins that have no effects (`Set.new`, `map`, `reduce`, `keys` and the rest). A call of one of your own functions, a function value, a `while` loop and a builtin that reads or writes the world are `CHECK-CONSTANT-EXPRESSION`:

@@ -149,11 +149,11 @@
         [else
          (hash-set! reached name #t)
          (define-values (constant-names function-names) (reads-of (hash-ref function-by-name name)))
-         (set! reached-reads (append reached-reads constant-names))
+         (set! reached-reads (append (reverse constant-names) reached-reads))
          (loop (append function-names (cdr pending)))])))
   ;; The constants those functions keep, then the ones those constants read.
   (define kept-set (make-hash))
-  (let loop ([pending (non-literal reached-reads)])
+  (let loop ([pending (non-literal (reverse reached-reads))])
     (unless (null? pending)
       (define name (car pending))
       (cond

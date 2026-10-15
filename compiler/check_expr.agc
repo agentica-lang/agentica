@@ -9,7 +9,6 @@ import Rules from "check_rules"
 import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
-import Base from "parse_base"
 import T from "types"
 
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
@@ -99,11 +98,6 @@ def name_help(cx: State.Cx, st: State.St, name: String) -> String
   return Help.foreign(cx.help, name)
 end
 
-# A name in capitals that no struct, enum or reserved type owns is a constant that does not exist.
-def unknown_constant?(cx: State.Cx, name: String) -> Bool
-  return Base.constant_name?(T.display_name(name)) and !cx.catalog.reserved.include?(name) and !cx.structs.has_key?(name) and !cx.enums.has_key?(name)
-end
-
 # A constant is read after its initializer was checked, because the constants are checked in dependency order.
 def check_const_ref(cx: State.Cx, st: State.St, node: Ast.ConstRef) -> Result[State.Out]
   type = cx.constants.get(node.name)
@@ -114,9 +108,6 @@ def check_const_ref(cx: State.Cx, st: State.St, node: Ast.ConstRef) -> Result[St
 end
 
 def check_type_name(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[State.Out]
-  if unknown_constant?(cx, node.name)
-    return error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-NAME", "unknown name \"" + T.display_name(node.name) + "\"", node.span, Help.near(node.name, cx.constants.keys, [])))
-  end
   return error(State.fail_maybe(cx, st, "CHECK-TYPE-MISMATCH", "a type name is only valid as a JSON type argument", node.span, Help.foreign(cx.help, node.name)))
 end
 

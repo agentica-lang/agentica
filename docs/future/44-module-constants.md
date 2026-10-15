@@ -565,8 +565,12 @@ no existing program changes meaning. `const-ref` has an `id` in
 constants its initializer reads, in the order of their start offsets in the
 source, then emit it. A constant
 that is already emitted is skipped. This order is deterministic, so both
-front ends and both bytecode writers agree. `check` returns it with the
-types, and lowering reads it (it does not sort again).
+front ends and both bytecode writers agree. The order is shared code
+(`constant-order` in `src/constants.rkt`, `compiler/check_const.agc`), not an
+output of `check`: the Racket `check` keeps its API and returns the program, and
+the lowering calls `constant-order` on the linked program. The Agentica
+`Checked` has a `constants` list with the order, and the check text ends with
+a `constant-order [...]` line when the program has constants.
 
 **Lowering (Racket now; step 5 later).**
 
@@ -594,11 +598,18 @@ decides what to initialize from the call graph:
   name, whose body is `return <initializer>`. The existing code that lowers a
   function body lowers it, blocks and all. Its spans are those of the
   constant's source.
-- If there is at least one kept constant, lowering adds a function `<start>`
-  with no parameters: for each kept constant, in order, `CALL` its function and
-  `GLOBAL_SET` the result into its slot; then a tail call of `main`. `<start>`
-  is the entry of the file. With no kept constants there is no `<start>` and
-  the entry is `main`.
+- If the Globals count is above zero (some emitted function reads a
+  constant that has a slot), lowering adds a function `<start>` with no
+  parameters: for each kept constant, in order, `CALL` its function and
+  `GLOBAL_SET` the result into its slot; then a tail call of `main`.
+  `<start>` is the entry of the file. It also exists when no constant is kept,
+  for example when the only reader of a slot is a function that `main` never
+  reaches: the loader rejects a `CALL` of the entry when the count is above
+  zero, so with the entry `main` such a program could not have a `main` that
+  calls itself. `<start>` then only tail-calls `main`. `<start>` starts with a
+  `STEP` and ends with a `RETURN` after the tail call, as the loader wants of
+  every function. With a count of zero there is no `<start>` and the entry is
+  `main`.
 - A read of a constant that has a slot is `GLOBAL a i`.
 - *Function table, for byte equality.* The functions are, in this order: the
   declared functions in program order (as now), the kept constants' functions

@@ -1,0 +1,9 @@
+LIMIT = 3
+
+def main() -> Void
+  x = 3
+  case x
+    LIMIT -> puts("limit")
+    _ -> puts("other")
+  end
+end

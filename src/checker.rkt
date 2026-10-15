@@ -613,13 +613,6 @@
 
     ;; Module constants ------------------------------------------------------
 
-    ;; A name in capitals that no struct, enum or reserved type owns: a constant that does not exist.
-    (define (unknown-constant-name? name)
-      (and (constant-name? (display-name name))
-           (not (member name reserved-type-names))
-           (not (hash-has-key? structs name))
-           (not (hash-has-key? enums name))))
-
     ;; The rules of 44.5 on a checked initializer, children before the node, in source order. A `while`
     ;; is refused before its body. A block is allowed only as an argument of a builtin.
     (define (validate-constant! root)
@@ -664,7 +657,9 @@
           (bail 'CHECK-CONSTANT-TYPE
                 (format "a constant expression must have a data type, found ~a" (type->string type))
                 (node-span node)
-                #:help "a constant holds numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data"))))
+                #:help (if (eq? type 'Void)
+                           "a constant's value must be data: write nil, not a Void call"
+                           "a constant holds numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data")))))
 
     ;; Orders the constants (a cycle is CHECK-CONSTANT-CYCLE), then checks each initializer in that order
     ;; with no locals in scope and records its type for the reads.
@@ -700,11 +695,6 @@
     (define (check-expression-here expression expected completion?)
       (define actual
         (cond
-          [(and (type-expression? expression) (unknown-constant-name? (type-expression-name expression)))
-           (bail 'CHECK-UNKNOWN-NAME
-                 (format "unknown name \"~a\"" (display-name (type-expression-name expression)))
-                 (node-span expression)
-                 #:help (did-you-mean (type-expression-name expression) (hash-keys constant-types)))]
           [(type-expression? expression)
            (bail 'CHECK-TYPE-MISMATCH "a type name is only valid as a JSON type argument"
                  (node-span expression)

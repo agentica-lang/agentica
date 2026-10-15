@@ -1,0 +1,1 @@
+ERROR CHECK-UNKNOWN-NAME 60:4:8-64:4:12 "unknown name \"LIMT\"" "did you mean \"LIMIT\"?" file="root.agc"
