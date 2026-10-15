@@ -1,21 +1,34 @@
-## The "did you mean" help of an unknown imported name: src/builtins.rkt (did-you-mean, edit-distance) for plain names.
+## The "did you mean" help of an unknown name: src/builtins.rkt (did-you-mean, edit-distance).
 
 import "ast" as Ast
+import "types" as Types
 
 ## The help text for the exported name closest to name, or Absent when none is close. A name of up to 4 characters may differ by 1 edit, a longer one by 2; the nearest wins, and the smaller name breaks a tie.
 export def did_you_mean(name: String, candidates: List[String]) -> Ast.Optional[String]
+  return did_you_mean_among(name, candidates, [])
+end
+
+## did_you_mean for the names of a linked program (src/builtins.rkt, did-you-mean). A linked name starts with "@N::", the prefix of its file; only the candidates of the same file are offered, and without their prefix. shared are extra candidates that have no prefix, such as the builtin names.
+export def did_you_mean_among(full_name: String, candidates: List[String], shared: List[String]) -> Ast.Optional[String]
+  prefix = file_prefix(full_name)
+  name = Types.display_name(full_name)
   limit = 2
   if name.length <= 4
     limit = 1
   end
-  # sort_by is stable, so sorting the names first makes the distance ties go to the smaller name.
-  ordered = candidates.sort.sort_by do |candidate: String| edit_distance(name, candidate) end
-  for candidate in ordered
-    if candidate != name and edit_distance(name, candidate) <= limit
-      return Ast.Optional.Present("did you mean \"" + candidate + "\"?")
+  pool: List[String] = []
+  for candidate in candidates
+    if file_prefix(candidate) == prefix
+      pool = pool.push(Types.display_name(candidate))
     end
   end
-  return Ast.Optional.Absent
+  return nearest(name, pool.concat(shared).sort, limit)
+end
+
+## The "@N::" a linked name starts with, or "".
+export def file_prefix(name: String) -> String
+  shown = Types.display_name(name)
+  return name.slice(0, name.length - shown.length)
 end
 
 ## The number of single-character edits (insert, delete, replace) from a to b.
@@ -23,6 +36,25 @@ export def edit_distance(a: String, b: String) -> Int
   right = b.split("")
   first: List[Int] = (0..right.size).to_a
   return last_row(a.split(""), right, 1, first)
+end
+
+# The candidates are sorted, so the first one at the smallest distance is the smaller name of a tie. A candidate whose length differs by more than the limit cannot be near, which skips most of the table.
+def nearest(name: String, ordered: List[String], limit: Int) -> Ast.Optional[String]
+  best = ""
+  best_distance = limit + 1
+  for candidate in ordered
+    if candidate != name and close_in_length?(candidate, name, limit)
+      distance = edit_distance(name, candidate)
+      if distance < best_distance
+        best = candidate
+        best_distance = distance
+      end
+    end
+  end
+  if best_distance > limit
+    return Ast.Optional.Absent
+  end
+  return Ast.Optional.Present("did you mean \"" + best + "\"?")
 end
 
 # One row of the table per character of the left word; the answer is the end of the last row.
@@ -55,4 +87,8 @@ def smallest(a: Int, b: Int, c: Int) -> Int
     least = c
   end
   return least
+end
+
+def close_in_length?(a: String, b: String, limit: Int) -> Bool
+  return a.length - b.length <= limit and b.length - a.length <= limit
 end
