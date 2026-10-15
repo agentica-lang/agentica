@@ -76,6 +76,7 @@ goldens: build vm
 	test -n "$(FIXTURES)" || racket tests/frontend-lexer-common.rkt
 	test -n "$(FIXTURES)" || racket tests/frontend-parser-common.rkt
 	test -n "$(FIXTURES)" || racket tests/frontend-modules-common.rkt
+	test -n "$(FIXTURES)" || racket tests/frontend-catalog-common.rkt
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
 vm-golden-check: build vm
