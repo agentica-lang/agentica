@@ -32,7 +32,8 @@ Read before writing or reviewing C in `vm/`.
   `*/` lines do not count): what the file is, its main functions or builtin
   family, its layer, and where its design lives in `docs/vm/`, as `vm/main.c`
   does. A C test's header is 1 to 4 lines on what it tests. A legal header may
-  come before it.
+  come before it. *Checked* by `tests/vm-style-test.rkt` (3 to 8 lines of text
+  for a source file, 1 to 4 for a C test, the generated file skipped).
 - Apart from the headers, the default is no comment. Add one only where the
   code's complexity justifies it, and make it say why, not what: an
   invariant, a subtle ownership or lifetime rule, a protocol, OpenSSL or libuv
