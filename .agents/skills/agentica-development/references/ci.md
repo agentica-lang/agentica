@@ -96,7 +96,13 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 - `test`: first the `changes` step (below), then `make -j vm vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them), `make test` with the process and module tests on `dist/agentica`
-  (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make test-slow` (the
+  (`AGENTICA_TEST_EXECUTABLE`) running alongside it (`make test` of the whole
+  suite, or of `tests/test_single_binary.py`, first builds `dist/agentica-next`
+  and the bootstrap stages it embeds), `make fixed-point` (stage2 == stage3,
+  Racket's stage1 == stage2, and the single binary compiling the front end to
+  stage2 again; about 15 s after `make test` built the first two stages, as a
+  step of its own so a failure shows alone and costs no second checkout and VM
+  build), `make test-slow` (the
   `(module+ slow ...)` and `@slow` cases of the test files; a file without one
   is skipped),
   `make vm-latency` alone after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
@@ -114,7 +120,9 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 - `vm-sanitizers` (`needs: test`, and it still runs when `test` fails):
   `make vm-lint`, one `make -j vm vm-test vm-fuzz`, `make vm-layers` (on the
   sanitizer objects; the job installs ripgrep if `rg` is missing), the ASan golden,
-  bytecode, trace, TCP and TLS tests, and the GC stress build. The TCP tests need
+  bytecode, trace, TCP and TLS tests, `make fixed-point` on the sanitizer VM and
+  binary (about 75 s and 1.8 GB: the VM has no GC then), and the GC stress build
+  (which does not run the fixed point: it collects every 64 allocations). The TCP tests need
   Node; the TLS tests need Node and Python 3. Both PR jobs set
   `AGENTICA_SWEEP=sampled`, so their golden and GC-stress runs sample the
   `--max-steps` sweep with a seed from `GITHUB_SHA`; a failure prints
@@ -163,7 +171,8 @@ The first steps of the `test` job (the `changes` step, checkout with
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
 - `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
-  `src/stdlib.rkt` (the registry that embeds the `std/` modules);
+  `src/stdlib.rkt` (the registry that embeds the `std/` modules, from
+  `stdlib/MODULES`);
 - `tests/vm-diff-*`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,

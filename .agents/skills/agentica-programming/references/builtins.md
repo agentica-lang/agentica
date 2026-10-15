@@ -39,6 +39,7 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
 - `IO.flush` flushes stdout, not stderr. On Linux, a print is copied into a 64 KiB buffer per stream and written as the reader takes it, so output reaches a pipe without `IO.flush`. Stdout and stderr to the same file keep the order of the calls. `IO.flush` returns once the buffer is in the pipe, so it can wait for a slow reader. On other systems, output does not auto-flush. For stdio protocols, write one compact JSON message per line, flush after each response, and send logs to `IO.warn`.
 - `System.env` needs no flag. A value that is not UTF-8 is decoded with U+FFFD for each bad byte. The home directory is `System.env("HOME")`. There is no call that lists the variables. `AGENTICA_CHANNEL` and a `UV_USE_IO_URING` the VM set itself are hidden. A child from `Process.spawn` also does not get `AGENTICA_VM_METRICS` or `AGENTICA_VM_METRICS_FILE`, but `System.env` shows them to you.
 - `System.pid` needs no flag. Pass it to a VM you start with `--driver-pid`: that VM checks that its parent is this process.
+- `FrontEnd.hand_off` and `FrontEnd.std_source` are for the compiler's own front end. Do not call them: any other program halts with `RUNTIME-FRONT-END-ONLY`.
 - `Time` and `Random` are reserved module names. `Random` has one generator per run, seeded from the OS unless `--seed N` is given (`agentica --seed N program.agc`, N in `0 .. 2147483647`). Each task has its own generator, split at spawn. The generator is not for secrets.
 
 ```ruby

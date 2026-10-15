@@ -82,16 +82,16 @@ so zeroed registers are valid values.
   §24.3). `agc_fail` and `agc_fail_text` call `agc_stack_capture` (`vm/diag.c`)
   before the `longjmp`, only while a task runs (`vm->in_turn`). It walks the
   frames of `vm->task` from the innermost one, skips the native frames, merges
-  neighbouring frames with the same function, place and tail flag, and keeps
-  the 15 innermost and the 5 outermost lines in `outcome.stack`, a fixed array:
-  it allocates nothing, so it cannot fail, and it reads at most the frames of
-  one task (the depth is capped at 10000), twice. The place of the innermost
-  frame is the span of the error; the place of a caller is the span of the
-  instruction at its saved `pc - 1`, read through the function's own span table
-  with `pc` clamped to the code. A function index or span index that is out
-  of range (a hand-built program; the loader checks them) drops the frame or
-  uses span 0, so a hostile `.agcb` cannot make the walk read out of bounds.
-  The outcome is printed later, by `vm/main.c` at the end of the run or by the
+  neighbouring frames with the same function, place and tail flag, and keeps the
+  15 innermost and the 5 outermost lines in `outcome.stack`, a fixed array: it
+  allocates nothing, so it cannot fail, and it reads at most the frames of one
+  task (the depth is capped at 10000), twice. The place of the innermost frame
+  is the span of the error; the place of a caller is the span of the instruction
+  at its saved `pc - 1`, read through the function's own span table with `pc`
+  clamped to the code. A function index or span index that is out of range (a
+  hand-built program; the loader checks them) drops the frame or uses span 0, so
+  a hostile `.agcb` cannot make the walk read out of bounds. The outcome is
+  printed later, by the driver (`vm/launch.c`) at the end of the run or by the
   scheduler for the crash of a task other than `main`, when the failing task may
   be finished and its frames freed, so the lines are copied at the failure.
 - `steps_left` is an atomic `int64_t`: the limit, or `INT64_MAX` without one.
@@ -103,16 +103,17 @@ so zeroed registers are valid values.
 
 - A runtime diagnostic always ends the run. `agc_fail(vm, code, message, span)`
   records it and `longjmp`s to the `setjmp` in `agc_vm_run`, which runs cleanup
-  and returns an outcome (done, exit code or diagnostic) to `vm/main.c`. Only
-  `main.c` prints and exits. `System.exit` takes the same path.
+  and returns an outcome (done, exit code or diagnostic) to the driver. Only the
+  driver (`main.c`, `agentica.c` and `launch.c`) prints and exits. `System.exit`
+  takes the same path.
 - `agc_fail` is called only from interpreter and builtin code on the VM's own C
   stack, never from a libuv or OpenSSL callback. Non-GC resources are registered
   before any call that can fail. Locals that live across `setjmp` are
   `volatile`.
-- Cleanup is one exit path (`end_run` in `vm/main.c`, 10.2.2): kill and reap the
-  children, flush stdout, stderr and the files, then `_exit`. It runs on a
-  normal end, on `System.exit`, on a diagnostic, on the step limit and on
-  `SIGINT`, `SIGTERM` and `SIGHUP`. After a stop signal the VM ends by that
+- Cleanup is one exit path (`agc_launch_settle` in `vm/launch.c`, 10.2.2): kill
+  and reap the children, flush stdout, stderr and the files, then `_exit`. It
+  runs on a normal end, on `System.exit`, on a diagnostic, on the step limit and
+  on `SIGINT`, `SIGTERM` and `SIGHUP`. After a stop signal the VM ends by that
   signal. A second stop signal ends it at once, but only after the children are
   stopped. The out-of-memory and GC abort exits (6.3) and `SIGKILL` run no
   cleanup.

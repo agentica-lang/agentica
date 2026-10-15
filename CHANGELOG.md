@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The single binary, beside today's files** (§35.3 and §35.6, step 8b). `make agentica-next` links `dist/agentica-next`: the VM with the Agentica front end (`compiler/front_end.agc`, compiled to `stage2`) and the `std/` sources inside. `agentica-next FILE.agc [ARGS...]` compiles in memory and runs the program in a new runtime, so `--max-steps`, `--seed`, `--flush-timeout` and `--allow-run` reach only the program; `agentica-next compile FILE.agc -o OUT.agcb` writes the same bytes as `agentica`. `check`, `help`, `doc`, `test`, `--ai` and `--json` come with step 8a. It is not the default and is not in the release archive. `make fixed-point` builds the stages and checks that stage2 and stage3 are equal byte for byte, that Racket's stage1 equals stage2, and that the binary compiles its own front end to stage2; CI runs it. The new builtins `FrontEnd.hand_off` and `FrontEnd.std_source` are for that front end only: any other program that calls them stops with `RUNTIME-FRONT-END-ONLY`. The list of `std/` modules is now `stdlib/MODULES`, and the bytecode writer takes the Agentica version as an input.
+
 ## [0.3.0] - 2026-10-15
 
 ### Added
