@@ -32,9 +32,9 @@ program, never beside a dependency (05b, line 26).
 Two parts of the design already fit packages. The unused-import rule of §26 has
 no exception for `pkg/` libraries
 ([`26-strict-diagnostics.md`](26-strict-diagnostics.md), line 156), so packages
-get it too. The `.agcb` file stores absolute source paths today (§35.1), and
-§35.4 asks for paths relative to the project root before step 6. No one has
-defined that root yet. §45.5 does.
+get it too. The `.agcb` file stores absolute source paths today (§35.1). PR
+#273 (in flight) makes project files relative to the entry file's folder, which
+§35.4 asks for before step 6. Package files are stored differently (45.8).
 
 ### 45.2 Goals
 
@@ -111,14 +111,15 @@ Today's `pkg/` roots stay for now. See 45.14 question 2.
 ### 45.4 The TOML parser: `std/toml` (phase 45-0)
 
 Decided by the owner on 2026-10-15: the manifest and the lock are TOML, and
-`decode` returns the enum `Toml.Value`. The parser is its own std module,
+`parse` returns the enum `Toml.Value`. The parser is its own std module,
 because the manager needs it and any program can use it.
 
 - **Where it lives.** `stdlib/toml.agc`, embedded as `std/toml`, imported as
   `import Toml from "std/toml"`. It is pure Agentica, like `std/binary` and
   `std/bdd/gherkin`, so it follows the rule "std first" (roadmap, "New library
-  features: std first"). The only change in `src/` is one line in the module
-  registry of `src/stdlib.rkt`, which row 7.2.7 allows. There is no parser,
+  features: std first"). The only changes in `src/` are one line in the module
+  registry of `src/stdlib.rkt` and the std list in the `src/main.rkt` help
+  text. Row 7.2.7 allows both, as data and messages. There is no parser,
   checker or VM change. So the module can land before the bootstrap (§35 step
   8): the Racket front end compiles it like any other std module.
 - **Scope.** All of TOML 1.0: basic, literal and multi-line strings with
@@ -157,13 +158,18 @@ because the manager needs it and any program can use it.
   what was expected. Lines and columns count from 1, and a column counts
   characters. A `Result` error holds only a `String`
   ([`06-semantics.md`](../grammar/06-semantics.md)), so the position is in the
-  text. The module never halts. A nesting deeper than its limit is an error
-  too. The manager reads a manifest with `File.read_text`, so a manifest is
-  subject to its 1 MiB limit. The manager turns the position into the
+  text. The module never halts. A nesting deeper than 1,000 levels is an error,
+  the same limit as `PARSE-TOO-DEEP`, and 45-0 confirms it against the VM's
+  call depth. The manager reads a manifest with `File.read_text`, so a manifest
+  is subject to its 1 MiB limit. The manager turns the position into the
   diagnostic of 45.9.
-- **Encoder.** `Toml.encode` writes a whole document, so the root must be a
-  `Table`. A non-table root is an error. It validates the Datetime text, and it
-  quotes keys that are not bare. Arrays of tables are written as `[[name]]`.
+- **Encoder.** `Toml.encode(value) -> Result[String]` writes a whole document,
+  so the root must be a `Table`. A non-table root is an error. It validates the
+  Datetime text, and it quotes keys that are not bare. Within each table, plain
+  keys and inline values come first, then sub-tables, then arrays of tables. So
+  `version = 1` stays at the top of the lock, whatever the insertion order. An
+  array of tables is written as `[[name]]` only when every item is a table. Any
+  other array, including one that mixes tables and scalars, is written inline.
   Keys come out in Map insertion order. The lock writer builds each
   `[[package]]` table in the fixed order of 45.6, so the encoder does no sorting
   of its own. The encoder covers every variant, not only the lock's subset,
@@ -173,11 +179,11 @@ because the manager needs it and any program can use it.
 
 ### 45.5 Manifest `agentica.toml`
 
-The manifest is `agentica.toml`, at the project root. The project root is the
-nearest directory above the entry file that holds `agentica.toml`. Source paths
-are written relative to that root, which is what §35.4 asks for. For a package,
-the project root is the root of its repository. Without a manifest there is no
-project root in this sense, and today's rules hold unchanged.
+The manifest is `agentica.toml`. Its directory is the manifest directory:
+`agentica.lock` and `agc_libs/` sit beside it. For a package, that is the root
+of its repository. Without a manifest, nothing changes. Stored paths of project
+files follow PR #273 (the entry file's folder, §35.4). Packages, vendored ones
+included, use the logical path of 45.8.
 
 ```toml
 name = "acme/notes"
@@ -281,9 +287,11 @@ requires = ["gitlab.com/team/json-tools@0.4.1"]
   no name re-resolves every direct dependency, and recomputes MVS over the whole
   graph, so transitive versions can move too.
 - **Majors.** A key has one major. A tag of a higher major under a key whose
-  locked major is 1 is not a candidate for `add` or `update`. A minimum of
-  another major for the same key is `PKG-MAJOR-CONFLICT`: two majors of one key
-  cannot be in one build. How a v2 gets its key is open (45.14 question 3).
+  locked major is 1 is not a candidate for `add` or `update`. An `add` of a key
+  with no locked major takes the newest tag, whatever its major, and that major
+  is locked from then on. A minimum of another major for the same key is
+  `PKG-MAJOR-CONFLICT`: two majors of one key cannot be in one build. How a v2
+  gets its key is open (45.14 question 3).
 - **A moved tag.** When the commit of a fetched tag is not the commit in the
   lock, the fetch fails with `PKG-TAG-MOVED`. The lock is never changed
   silently.
@@ -301,9 +309,16 @@ requires = ["gitlab.com/team/json-tools@0.4.1"]
   The tag is peeled to its commit, and that commit must equal the lock's
   `commit`. The files are then read from that commit's tree with `git ls-tree`
   and `git cat-file`, so the package's `.gitattributes` has no effect on the
-  bytes. Two `.agc` paths that differ only in case (`A.agc` and `a.agc`) are
+  bytes. Two copied `.agc` paths that differ only in case, in a file name or a
+  folder name (`A.agc` and `a.agc`, or `Util/x.agc` and `util/y.agc`), are
   refused at fetch (`PKG-PATH-COLLISION`), so the package works on
   case-insensitive file systems too.
+- **Manifest.** At fetch, the package's `agentica.toml` is read from the commit
+  tree (`git cat-file`), not from a working tree. Its `name` is checked against
+  the key (`PKG-NAME-MISMATCH`), and its `[dependencies]` become the `requires`
+  of the package when `add` or `update` writes the lock (45.6). The manifest is
+  not copied or hashed. A symlink or gitlink among the copied `.agc` files is
+  refused (`PKG-SYMLINK`).
 - **Hash check.** The hash of 45.6 must match the lock, or the fetch fails with
   `PKG-HASH-MISMATCH`.
 - **Cache.** The files go to
@@ -315,23 +330,23 @@ requires = ["gitlab.com/team/json-tools@0.4.1"]
   success, because another process filled it first. A mismatch is
   `PKG-HASH-MISMATCH`, and nothing is overwritten. The folder is read-only after
   the fill.
-- **Stored paths.** A package file has a logical path, not its cache path:
+- **Stored paths.** Project files are stored as PR #273 (in flight) defines:
+  relative to the entry file's folder, as §35.4 asks. Package files live in the
+  cache, outside any project. A path relative to the entry file would depend on
+  how deep that file is, so a package file is stored under its logical path:
   `<key>@<version>/path/in/repo.agc`, for example
   `owner/sqlite-ac@1.2.3/sqlite.agc`. The `.agcb` stores that path, so its bytes
-  do not depend on the machine's cache folder. §35.4 wants paths relative to
-  the project root, but package files live in the cache, outside it. PR #273
-  (in flight) makes stored paths relative to the entry file's folder. So a
-  `pkg/` library outside the root would depend on how deep the entry file is.
-  For packages, 45a replaces that with the logical path.
+  do not depend on the machine's cache folder. Vendored packages use the same
+  path. 45a implements this for packages.
 - **Only `.agc` files** are used. Other files in a package are not copied.
 - **A build never fetches.** Only `add`, `install`, `update` and `vendor` run
   git.
 
 **Vendoring.** `agentica vendor` copies every locked package into
 `agc_libs/<key>/`, for example `agc_libs/owner/sqlite-ac/` and
-`agc_libs/gitlab.com/team/json-tools/`. `agc_libs/` sits beside `agentica.toml`
-when a manifest exists (45.14 question 9). The command fills missing cache
-entries first, as `install` does. A CI job with no network then builds from the
+`agc_libs/gitlab.com/team/json-tools/`. The `agc_libs/` location follows
+question 9 (recommended: beside `agentica.toml` when a manifest exists). The
+command fills missing cache entries first, as `install` does. A CI job with no network then builds from the
 vendored files, and the hash check proves they are the locked ones. The build
 looks in `agc_libs/<key>/` first and in the cache second. A vendored copy whose
 hash does not match is an error, never a silent fallback. The `pkg/` search
@@ -382,9 +397,14 @@ Errors use stable codes. The prefix is proposed in 45.14 question 4.
 - `PKG-TAG-MOVED`: the tag now points to another commit than the lock says.
 - `PKG-HASH-MISMATCH`: a file, the listing or a cache folder does not match the
   lock.
-- `PKG-PATH-COLLISION`: two `.agc` paths differ only in case (45.8).
+- `PKG-PATH-COLLISION`: two copied `.agc` paths differ only in case, in a file
+  or folder name (45.8).
 - `PKG-NAME-MISMATCH`: a package's `name` differs from its key.
 - `PKG-SYMLINK`: a symlink or gitlink is among the copied `.agc` files (45.6).
+- `CHECK-IMPORT-PATH`: the path is not valid. It also covers `github.com/...`,
+  a `../` that leaves a package root, an import into a hidden folder or
+  `agc_libs/` of a package, and a bare `owner/repo` that is a declared key
+  (45.3).
 - `CHECK-IMPORT-AMBIGUOUS`: an import matches both a declared package and a
   relative file or folder (45.3).
 - `CHECK-IMPORT-PACKAGE`: an import matches a declared package that is not in
@@ -457,6 +477,8 @@ binaries with hashes in the lock. A build step would break "no code at install"
      file gives `CHECK-IMPORT-AMBIGUOUS`.
   4. Offline: with the cache filled and no `git` on `PATH`, a build still
      succeeds. This proves that a build never fetches.
+  5. Import paths: a `../` that leaves a package root, and an import into a
+     hidden folder or `agc_libs/` of a package, give `CHECK-IMPORT-PATH`.
 
 ### 45.12 Phases
 
@@ -571,13 +593,13 @@ One line each, as possible later work:
    - Option B: the user passes `--allow-run` to the package commands.
    - **Recommendation:** A.
 
-9. **Where `agc_libs/` sits when a manifest exists.** Decided: B.
+9. **Where `agc_libs/` sits when a manifest exists.** Recommendation: B.
    - Option A: beside the root program, as today.
    - Option B: beside `agentica.toml` when a manifest exists, and beside the
      root program otherwise, as today. The vendored paths are not reachable
      through `pkg/` (45.8).
 
-10. **The shape of `decode`.** Decided by the owner on 2026-10-15: B.
+10. **The shape of `parse`.** Decided by the owner on 2026-10-15: B.
     - Option A: a `JSON` value, reusing the JSON builtins (`JSON.get`,
       `JSON.at`, `JSON.string`). This works, but a `Json` value cannot be
       matched with `case`, and TOML's own types are lost. An integer and a float
