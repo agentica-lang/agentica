@@ -2,8 +2,8 @@
 
 **Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator
 (order 7.2): 25.1 (defaults, front end only) as order row 7.5a, deferred until
-after the bootstrap (row 7.2.7); 25.2 to 25.5, 25.9 and 25.10
-at order step 7.6, after the strict diagnostics of [section
+after the bootstrap (row 7.2.7); 25.2 to 25.5, 25.9 and 25.10 at order step 7.6,
+after the strict diagnostics of [section
 26](26-strict-diagnostics.md#26-strict-diagnostics); and the prelude part, 25.6
 and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved
 to Part C. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists
@@ -128,10 +128,11 @@ diagnostic for one that is not allowed.
   Anything else is `CHECK-DEFAULT-ORDER` at the parameter without a default.
 - **A default is a constant:** an `Int`, `Float` or `String` literal (a minus
   sign allowed before a number; no `#{...}` in the string), `true`, `false`,
-  `nil`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, or
-  `Log.Level.Info` through an import alias). Anything else (a call, a variable,
-  `&name`, a struct, an interpolated string) is `CHECK-DEFAULT-VALUE` at the
-  expression, with a help that says to make the parameter required.
+  `nil`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `LogLevel.Info`
+  for a builtin enum, or `Models.Level.Info` through an import alias). Anything
+  else (a call, a variable, `&name`, a struct, an interpolated string) is
+  `CHECK-DEFAULT-VALUE` at the expression, with a help that says to make the
+  parameter required.
 - **Its type** is checked against the parameter type, like an initializer: `[]`
   and `{}` take the parameter type as their expected type, and a mismatch is
   `CHECK-TYPE-MISMATCH` at the default.
@@ -158,7 +159,7 @@ diagnostic for one that is not allowed.
   The builtin catalog keeps its few arity overloads (`Map.get`, `HTTP.client`,
   `ok`/`ok()`, and the 4-argument `File.open` of 25.9).
 
-**Linker:** a default such as `Level.Info` (or `Log.Level.Info` through an
+**Linker:** a default such as `Level.Info` (or `Models.Level.Info` through an
 alias) is resolved in the module that declares the function, by the linker like
 any other name there, before `lower.rkt` copies it to a call site in another
 module; so the copy never depends on the caller's aliases.

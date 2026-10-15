@@ -38,8 +38,10 @@ wait without stopping the task, and a task cannot be cancelled by the program.
 
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms):
 one way to do each thing (its Principle and its test), values stay immutable
-with no shared mutable state, types stay static, and the users are LLM agents,
-who do best with one obvious form and an error whose help shows it.
+with no shared mutable state (the one planned exception is the `std/logger`
+registry, which only the Logger functions reach; §24.2), types stay static, and
+the users are LLM agents, who do best with one obvious form and an error whose
+help shows it.
 
 **Primitives in C, helpers in Agentica.** The concurrency primitives are a small
 set of C builtins: `Task.spawn`, `Task.await`, `Task.sleep`, `Channel` (27.2)
@@ -1185,8 +1187,10 @@ Each of these is decided; it gets a help that names the Agentica form.
   `Agent.update` and `Agent.get`, Ruby's `Concurrent::AtomicFixnum`, or a
   counter that blocks change.
   - Shared mutable state, which the language does not have: values are
-    immutable, and the only planned exception is the shared table of §13, on
-    demand, with atomic calls.
+    immutable. The planned exceptions are the shared table of §13 (on demand,
+    with atomic calls) and the `std/logger` registry (§24.2), which only the
+    Logger functions reach. Unlike an `Agent`, the registry is not a value that
+    programs hold: a program never gets a reference to it.
   - A second way to accumulate: in one task, `reduce` or a loop variable; across
     tasks, each task returns its part (`Task.await`, `Task.map`) and the caller
     combines the parts with `reduce`; state that lives while tasks run belongs
@@ -1201,8 +1205,10 @@ Each of these is decided; it gets a help that names the Agentica form.
     Added by 17b.
 - **Public locks and threads:** `Mutex`, `Monitor`, `ConditionVariable`,
   semaphores, `Thread.new`, Ruby's `SizedQueue`.
-  - With no shared mutable state there is nothing to lock; a lock held across a
-    wait is also the classic deadlock, and agents get lock order wrong.
+  - With no shared mutable state there is nothing to lock (the `std/logger`
+    registry is the one planned exception, and only the Logger functions read
+    it); a lock held across a wait is also the classic deadlock, and agents get
+    lock order wrong.
   - `Thread` is `Task`, and `SizedQueue` (a bounded, blocking queue) is
     `Channel`.
   - Help (today `CHECK-UNKNOWN-NAME`): `Thread.new` shows `Task.spawn(&f, arg)`;

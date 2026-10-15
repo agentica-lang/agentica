@@ -13,12 +13,12 @@ code):
   It needs no default parameter values (row 7.5a, which stays after the
   bootstrap) and no command-line flags. Its handler table is the first global
   state of the language, held by the VM runtime and limited to that registry
-  (24.2). Its registration and its builtin rows are data under the freeze (row
-  7.2.7).
+  (24.2). Its registration, its builtin rows and its two builtin types are data
+  under the freeze (row 7.2.7).
 
-No grammar change. 14c adds a `std/` module and a std-only builtin module of
-seven functions (`LogRegistry`); 14b changes only what the VM prints for a
-runtime diagnostic.
+No grammar change. 14c adds a `std/` module, the builtin record `LogEvent` and
+the builtin enum `LogLevel`, and a std-only builtin module of ten functions
+(`LogRegistry`); 14b changes only what the VM prints for a runtime diagnostic.
 
 ### 24.1 Today
 
@@ -38,9 +38,9 @@ Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
   `docs/vm/10-io-processes.md` §10.4).
 - `System.env(name)` reads one environment variable and gives a `Result` (row
   7.2.6). There is no call that lists all of them.
-- A runtime diagnostic has one span and no call stack, in all three formats. A
-  failure inside `pick`, called from `load`, called from `main`, shows only the
-  line in `pick`.
+- At 2e6da77 a runtime diagnostic had one span and no call stack, in all three
+  formats: a failure inside `pick`, called from `load`, called from `main`,
+  showed only the line in `pick`. Section 24.3 (14b) adds the call stack.
 - A tail call (`return f(...)`) replaces the caller's frame
   (`docs/vm/05-values-execution-builtins.md` §6.1), so 20,000 nested tail calls
   run and fail later with the frame of the last call only.
@@ -50,8 +50,8 @@ Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
   has file, line and column. Linked names look like `@2::push` for a function
   from an imported file, and blocks are named `block@file.agc:10:15`.
 - `error` is a reserved name: a module cannot declare `def error`
-  (`CHECK-REDEFINED-NAME`), so a log module cannot have `Log.error`. A wrong
-  imported name (`Log.error` when the module has no `error`) is
+  (`CHECK-REDEFINED-NAME`), so a log module cannot have `Logger.error`. A wrong
+  imported name (`Logger.error` when the module has no `error`) is
   `CHECK-IMPORT-NAME` with no "did you mean" help.
 - `JSON.encode` of a `Map[String, String]` keeps the map's order and escapes
   `"`, `\` and control characters; non-ASCII text stays as it is. `JSON.encode`
@@ -79,16 +79,16 @@ def expensive_dump() -> String
 end
 
 def main() -> Void
-  Logger.set_level(Logger.Level.Debug)
-  Logger.detach("console")
-  Logger.attach("console", Logger.Level.Info, &Logger.stderr_json)
-  Logger.attach("audit", Logger.Level.Warning) do |event|
+  Logger.set_level(LogLevel.Debug)
+  _ = Logger.detach("console")
+  _ = Logger.attach("console", LogLevel.Info, &Logger.stderr_json)
+  _ = Logger.attach("audit", LogLevel.Warning) do |event|
     IO.warn("audit: #{event.message}")
   end
 
   Logger.info_meta("request done", {"path": "/items", "status": "200"})
   Logger.debug("not shown at the console level")
-  if Logger.enabled?(Logger.Level.Debug)
+  if Logger.enabled?(LogLevel.Debug)
     Logger.debug_meta("state", {"dump": expensive_dump()})
   end
   Logger.err("cannot open the cache")
@@ -114,52 +114,83 @@ Logger.warning(message: String) -> Void
 Logger.warning_meta(message: String, fields: Map[String, String]) -> Void
 Logger.err(message: String) -> Void
 Logger.err_meta(message: String, fields: Map[String, String]) -> Void
-Logger.log(level: Level, message: String) -> Void
-Logger.log_meta(level: Level, message: String, fields: Map[String, String]) -> Void
-Logger.enabled?(level: Level) -> Bool
-Logger.level() -> Level
-Logger.set_level(level: Level) -> Void
-Logger.attach(name: String, level: Level, handler: Fn[Event, Void]) -> Result[Void]
+Logger.log(level: LogLevel, message: String) -> Void
+Logger.log_meta(level: LogLevel, message: String, fields: Map[String, String]) -> Void
+Logger.enabled?(level: LogLevel) -> Bool
+Logger.level() -> LogLevel
+Logger.set_level(level: LogLevel) -> Void
+Logger.attach(name: String, level: LogLevel, handler: Fn[LogEvent, Void]) -> Result[Void]
 Logger.detach(name: String) -> Result[Void]
 Logger.handlers() -> List[String]
-Logger.stderr_text(event: Event) -> Void
-Logger.stderr_json(event: Event) -> Void
-Logger.format_text(event: Event) -> String
-Logger.format_json(event: Event) -> String
+Logger.stderr_text(event: LogEvent) -> Void
+Logger.stderr_json(event: LogEvent) -> Void
+Logger.format_text(event: LogEvent) -> String
+Logger.format_json(event: LogEvent) -> String
 Logger.time_text(ms: Int) -> String
 
-export enum Level                     # debug < info < warning < error
-export struct Event                   # what a handler receives
-  level: Level
+LogLevel                              # builtin enum: Debug < Info < Warning < Error
+LogEvent                              # builtin record: what a handler receives
+  level: LogLevel
   message: String
   fields: Map[String, String]
   time_ms: Int                        # Time.now_ms() when the event is made
   task: Int                           # the VM task number (main is 1)
-end
 ```
 
 **Levels.** There are four, in this order: `debug`, `info`, `warning` and
-`error`. Elixir has eight. The other four (notice, critical, alert, emergency)
-only add names, and every variant is a `case` arm that user code must list or
-cover with `_`, so a level added later would break matches. The function for the
-last level is `err`, because `error` is a reserved name: a module that declares
-`def error` is `CHECK-REDEFINED-NAME` (24.1). The output still says `error`.
-`warning` is Elixir's name. `IO.warn` keeps its own name.
+`error`, the variants `LogLevel.Debug`, `LogLevel.Info`, `LogLevel.Warning` and
+`LogLevel.Error`. Elixir has eight. The other four (notice, critical, alert,
+emergency) only add names, and every variant is a `case` arm that user code must
+list or cover with `_`, so a level added later would break matches. The function
+for the last level is `err`, because `error` is a reserved name: a module that
+declares `def error` is `CHECK-REDEFINED-NAME` (24.1). The output still says
+`error`. `warning` is Elixir's name. `IO.warn` keeps its own name.
 
 **Two thresholds.** The global level (`set_level`, `info` by default) is checked
 first, by every call. Each handler has its own level and gets an event only when
 the event is at or above it. With the global level at `debug` and a console
 handler at `info`, a `debug` call writes nothing to the console.
 
-**Handlers.** A handler has type `Fn[Event, Void]`. It is a named function
-(`&Logger.stderr_json`) or a block given to `attach`, which follows the call as
-the block rule requires. Handlers run in attach order, synchronously, in the
-task that makes the event. A line is written by the time its log call returns,
-so nothing waits in a queue and nothing is lost when a task crashes or `main`
-returns. Attach and detach take effect for the next event. An event takes its
-list of handlers when it is made, so a handler that detaches another does not
-change the list of the event in progress. `attach` with a name in use, and
-`detach` with a name not in use, return `error(...)`; they do not halt.
+`enabled?(level)` is true only if some attached handler would accept that level:
+the level is at or above the global level, and at or above the lowest level of
+the attached handlers. The registry keeps that lowest level
+(`LogRegistry.lowest` in the table below; a level above `error` when no handler
+is attached). With the global level at `debug` and handlers at `info` and
+`warning`, `enabled?(LogLevel.Debug)` is false, so the guard in the example
+skips the dump. The global level alone does not decide it.
+
+**Types.** `LogEvent` and `LogLevel` are builtins, not declared in `std/logger`
+(decided on 2026-10-15). `LogEvent` is a builtin record, an entry in
+`builtin-records` in `src/builtin-types.rkt`, like `HttpRequest`. `LogLevel` is
+a builtin enum, an entry in `builtin-enum-declarations`, like `Await`. Handlers
+have type `Fn[LogEvent, Void]`, and the `LogRegistry` rows use the same concrete
+types, so no type variable is needed. Both names are reserved in every program:
+a program that declares a struct or an enum with either name gets
+`CHECK-REDEFINED-NAME`. This is a small breaking change for a program that
+already uses either name. Once the checker is in Agentica (§35), the two could
+move into `std/logger`; that would rename them for callers.
+
+**Rejected options for the handler types.**
+
+- B: a registry typed `Fn[Map[String, String], Void]` or `Fn[Json, Void]`, with
+  a conversion in `logger.agc`. Rejected: every event is converted on the hot
+  path, and the types are weaker.
+- C: a new generic checker rule for the registry. Rejected: the freeze (row
+  7.2.7) forbids new checker rules, so it would wait for the Agentica checker
+  (§35, step 4).
+
+**Handlers.** A handler is a named function (`&Logger.stderr_json`) or a block
+given to `attach`, which follows the call as the block rule requires. Handlers
+run in attach order, synchronously, in the task that makes the event. A line is
+written by the time its log call returns, so nothing waits in a queue and
+nothing is lost when a task crashes or `main` returns. Attach and detach take
+effect for the next event. An event takes its list of handlers when it is made,
+so a handler that detaches another does not change the list of the event in
+progress. `attach` with a name in use, and `detach` with a name not in use,
+return `error(...)`; they do not halt. A handler stays attached after the task
+that attached it ends. A handler that captures a handle (a file, a socket) finds
+it closed when the task that opened the handle ends
+(`docs/grammar/06c-tasks-and-tests.md`).
 
 **Failures.** A handler's runtime error is the error of the task that made the
 event: that task crashes, or the run ends when the task is `main`, as for any
@@ -173,11 +204,12 @@ never change, and the language has no module state or global variables
 global level are kept by the VM runtime, next to the task counter (`vm->rt`),
 not by any Agentica value. This is the first global mutable state in the
 language, and it is limited to this registry. No other module, value or builtin
-gets it. `vm/` keeps its own rule that no `static` or global variable lives
-there, so the table is a field of the runtime (`docs/vm/10-io-multicore.md`).
-Its rules:
+gets it. It differs from the `Agent` rejected in §27: a program never holds a
+reference to the registry, and only the Logger functions read or change it.
+`vm/` keeps its own rule that no `static` or global variable lives there, so the
+table is a field of the runtime (`docs/vm/10-io-multicore.md`). Its rules:
 
-- Seven native builtins in a std-only module, `LogRegistry`, read and write the
+- Ten native builtins in a std-only module, `LogRegistry`, read and write the
   table (below). None of them calls a handler. `Logger.log_meta` reads the
   handler list and calls each handler itself, in the logging task.
 - One scheduler runs today, so a table call does not interleave with another.
@@ -219,12 +251,15 @@ are lost. A full channel makes the send wait up to its timeout, and then the
 send returns an error that the handler decides about. The example drops the
 event. If the writer crashes first, its owned channel closes by itself, later
 sends return an error at once, and `Task.await(writer)` returns that error for a
-`Result` task.
+`Result` task. An event that another task made before the detach can reach the
+channel after `close`; its `send` then returns an error, which the example
+drops. A program that must keep those events waits for those tasks before it
+closes the channel.
 
 ```agentica
 import "std/logger" as Logger
 
-def write_events(events: Channel[Logger.Event]) -> Result[Void]
+def write_events(events: Channel[LogEvent]) -> Result[Void]
   while true
     case events.recv(1000)
       ok(event) ->
@@ -239,13 +274,13 @@ def write_events(events: Channel[Logger.Event]) -> Result[Void]
 end
 
 def main() -> Void
-  events: Channel[Logger.Event] = Channel.new(64)
+  events: Channel[LogEvent] = Channel.new(64)
   writer = Task.spawn_owning(&write_events, events)
-  Logger.attach("file", Logger.Level.Info) do |event|
-    events.send(event, 1000)
+  _ = Logger.attach("file", LogLevel.Info) do |event|
+    _ = events.send(event, 1000)
   end
   Logger.info("server started")
-  Logger.detach("file")
+  _ = Logger.detach("file")
   events.close
   done = Task.await(writer)
   if !done.ok?
@@ -267,7 +302,7 @@ lands, the API becomes `info(msg, fields = {})`. That is a breaking change,
 which the owner accepts, because the language has no outside users. The `_meta`
 functions then go away.
 
-**Metadata.** Left out of v1 (owner decision D1 below). Elixir's
+**Metadata.** Left out of v1 (D1 below). Elixir's
 `Logger.metadata/1` is per process: the context that every later call of the
 process carries. Agentica has no task-local storage, so v1 passes `fields` on
 each call. A later minimal form would be one `Map[String, String]` slot in each
@@ -284,24 +319,31 @@ builtin that sets the global level at start-up. It is future work and not in v1
 
 **Default console handler.** The first call of any `Logger` function installs
 `console`: `stderr_text` at level `info`, as if the program had attached it. It
-is an ordinary handler, so `detach("console")` removes it. The registry reports
-its level as `-1` until this install happens, and each entry point checks that
-first, so only the first call pays for the install (D3).
+is an ordinary handler, so `detach("console")` removes it. The install is one
+native call, `LogRegistry.install_default(&Logger.stderr_text)`, which attaches
+the entry and sets the installed flag, but only when the flag is not set yet.
+Each entry point checks `LogRegistry.installed()` first, so only the first call
+passes the function value (D3). The native call checks the flag and attaches in
+one step with no yield, so two tasks that make their first calls together
+install it once. A later `detach("console")` stays in effect, because the flag
+stays set. The global level starts at `info`.
 
 **Built-in handlers and formatters.**
 
 - `stderr_text(event)` writes `format_text(event)`, and `stderr_json(event)`
   writes `format_json(event)`. Each makes one `IO.warn` call, so each line is
   one write (24.1: `IO.warn` copies the text and the newline together).
-- `format_text` and `format_json` are pure functions from `Event` to `String`. A
-  custom formatter has that shape, and a custom handler calls it. There is no
-  formatter registry: a handler is the formatter and the sink together.
+- `format_text` and `format_json` are pure functions from `LogEvent` to
+  `String`. A custom formatter has that shape, and a custom handler calls it.
+  There is no formatter registry: a handler is the formatter and the sink
+  together.
 - No built-in file handler (D6). A block that appends one line per event does
-  the job: `File.append_text(path, Logger.format_json(event) + "\n", 1000)`. It
-  opens and closes the file for every line. A built-in file handler would keep a
-  `FileHandle` in the table, and a handle belongs to the task that opened it and
-  is closed when that task ends (`docs/grammar/06c-tasks-and-tests.md`).
-  Rotation is not planned (24.5).
+  the job: `_ = File.append_text(path, Logger.format_json(event) + "\n", 1000)`.
+  It opens and closes the file for every line, and the `_ =` drops a write
+  error; a program that must stop on one writes its own handler. A built-in file
+  handler would keep a `FileHandle` in the table, and a handle belongs to the
+  task that opened it and is closed when that task ends
+  (`docs/grammar/06c-tasks-and-tests.md`). Rotation is not planned (24.5).
 
 **Formats.** Both write one line per event.
 
@@ -338,55 +380,72 @@ it calls the shared code. A disabled `debug` call is then one user call, one
 builtin read (`LogRegistry.level()`), and one Int comparison. The rank of each
 level is a constant in the module. Agentica has no lazy arguments, so the
 message and any fields map are built before the call. A costly one goes inside
-`if Logger.enabled?(Logger.Level.Debug)`, as in the example. Plan for the PR,
-not measured here: a benchmark in `benchmarks/` with 1,000,000 disabled `debug`
+`if Logger.enabled?(LogLevel.Debug)`, as in the example. Plan for the PR, not
+measured here: a benchmark in `benchmarks/` with 1,000,000 disabled `debug`
 calls, against an empty loop and against a loop that calls an empty user
 function. The PR description records the times. The target is a disabled call no
 more than an empty user call plus one builtin call. Log calls are normal code,
 so they count against `--max-steps`.
 
-**The freeze (row 7.2.7).** The Racket parts are three data edits. One line in
-`src/stdlib.rkt` registers `std/logger`. Seven rows in `src/builtins.rkt`
-declare `LogRegistry`, and `LogRegistry` joins `std-only-modules` beside
-`HttpWire`, so user code cannot call it (`CHECK-UNKNOWN-NAME`, with a help that
-names the `std/logger` import). The names go in `vm-builtins` in
-`src/lower.rkt`. The `vm-builtins` list is data after the freeze, as the owner
-accepted on 2026-10-14, and the `stdlib.rkt` line is the same kind of data: a
-source file, not syntax or a checker rule (D8). The table cannot name the event
-type, so the registry functions take a type variable `A` for the handler's
-argument. Only `stdlib/logger.agc` calls them, and it always uses `Event`. The
-std-only rule keeps other callers out, and the table does not check this.
+**The freeze (row 7.2.7).** The Racket parts are data under row 7.2.7, which
+lists the same items:
 
-The `CHECK-IMPORT-NAME` "did you mean" help is a checker message, not data, so
-it is not part of this PR (D9).
+- ten rows in `src/builtins.rkt` for `LogRegistry`, using no checker rule tag,
+  and their ten names in the `vm-builtins` list of `src/lower.rkt`;
+- two entries in `src/builtin-types.rkt`: `LogEvent` in `builtin-records` and
+  `LogLevel` in `builtin-enum-declarations`, and the name `LogEvent` in the
+  record list of `src/lower.rkt` (`builtin-structs`), which names the records it
+  emits;
+- one line in `src/stdlib.rkt` that registers `std/logger`;
+- `LogRegistry` in `std-only-modules` in `src/builtins.rkt`, so user code cannot
+  call it (`CHECK-UNKNOWN-NAME`, with a help that names the `std/logger`
+  import);
+- `LogRegistry` in the reserved type names of `src/checker.rkt`, as `HttpWire`
+  is;
+- the std-only help in `src/modules.rkt`, generalized so that it names the std
+  module of the name: `std/http` for `HttpWire`, `std/logger` for `LogRegistry`
+  (a message fix, which row 7.2.7 allows).
 
-**The stdlib registry and the VM table.** The seven native functions of
+Not data: a new checker rule, tag or construction rule, and new syntax. The
+`CHECK-IMPORT-NAME` "did you mean" help is a new checker message with its own
+logic, so it is a separate small PR, before row 7.2.7 (D9), not part of this PR.
+
+**The stdlib registry and the VM table.** The ten native functions of
 `LogRegistry` are:
 
 ```text
-LogRegistry.level() -> Int                         # -1 until the default is installed
+LogRegistry.level() -> Int                         # the global level's rank
 LogRegistry.set_level(rank: Int) -> Void
-LogRegistry.attach(name: String, rank: Int, handler: Fn[A, Void]) -> Result[Void]
+LogRegistry.lowest() -> Int                        # the lowest handler rank; 4 when none
+LogRegistry.installed() -> Bool                    # the default console is installed
+LogRegistry.install_default(handler: Fn[LogEvent, Void]) -> Void   # once: attaches "console" at info
+LogRegistry.attach(name: String, rank: Int, handler: Fn[LogEvent, Void]) -> Result[Void]
 LogRegistry.detach(name: String) -> Result[Void]
 LogRegistry.names() -> List[String]                # in attach order
-LogRegistry.handlers(rank: Int) -> List[Fn[A, Void]]   # handlers at or below rank, in order
+LogRegistry.handlers(rank: Int) -> List[Fn[LogEvent, Void]]   # handlers at or below rank, in order
 LogRegistry.task_id() -> Int                       # the running task's number
 ```
 
-`handlers(rank)` returns the handlers whose own level is at or below the event's
-rank. The VM adds one table for them in `vm/builtin_tables.c`, with an extern in
-`vm/services.h`, as every library does, and the functions live in one C file.
-Their storage is the runtime field of the decision above.
+A rank is a level's position: `debug` 0, `info` 1, `warning` 2, `error` 3. The
+registry keeps the lowest rank of its attached handlers and updates it on each
+attach and detach; `lowest` is the input of `enabled?` with the global level
+(see "Two thresholds"). `handlers(rank)` returns the handlers whose own level is
+at or below the event's rank. The VM adds one table for them in
+`vm/builtin_tables.c`, with an extern in `vm/services.h`, as every library does,
+and the functions live in one C file. Their storage is the runtime field of the
+decision above.
 
 **Implementation (where the code goes).**
 
-- `stdlib/logger.agc`: the enum, the struct, the level functions, `log`,
-  `log_meta`, `enabled?`, the formatters, `time_text`, the default install and
-  the two built-in handlers. Every export has a `##` doc
-  (`tests/stdlib-docs-test.rkt`).
-- `vm/builtin_tables.c`, `vm/services.h` and one new C file for the seven
+- `stdlib/logger.agc`: the level functions, `log`, `log_meta`, `enabled?`, the
+  formatters, `time_text`, the default install and the two built-in handlers.
+  `LogEvent` and `LogLevel` are builtins, so the module declares neither. Every
+  export has a `##` doc (`tests/stdlib-docs-test.rkt`).
+- `vm/builtin_tables.c`, `vm/services.h` and one new C file for the ten
   functions and the runtime field.
-- `src/stdlib.rkt`, `src/builtins.rkt` and `src/lower.rkt`: the data above.
+- `src/builtin-types.rkt`, `src/builtins.rkt`, `src/lower.rkt`,
+  `src/stdlib.rkt`, `src/checker.rkt` and `src/modules.rkt`: the data and the
+  help above.
 - Tests: `tests/vm-logger-test.rkt`, goldens under
   `tests/fixtures/vm/logger-*.agc`, and a Python peer,
   `tests/fixtures/logger-peer.py`.
@@ -403,11 +462,15 @@ the diagnostic code):
   level and each handler level, both formats, and messages and fields that need
   quoting (space, `=`, `"`, `\`, newline, empty, non-ASCII, DEL), field order,
   and a field named `level`, `msg`, `time` or `task`. The formatter tests build
-  `Event` values with fixed `time_ms`, so no clock is involved.
+  `LogEvent` values with fixed `time_ms`, so no clock is involved.
 - Tasks: `main` attaches a handler, workers log in loops, `main` detaches, and
   the workers log again with no output. A task whose handler halts crashes
   alone, and `main` goes on. Lines from several tasks are each whole, and their
   `task` values match the spawn order.
+- The registry is shared by the tests of one file, which run one at a time in
+  one VM (`docs/future/36-unit-tests.md` §36.6). A test that attaches a handler
+  or sets a level restores both before it ends; the runner does not reset the
+  registry.
 - The async example runs end to end: the file holds every event in order, and it
   is complete when `main` returns, because `main` awaits the writer.
 - A run with no setup prints one line on stderr whose time matches the format (a
@@ -420,40 +483,49 @@ the diagnostic code):
 - Hermetic: no network, and the async example writes to a path that the test
   passes in.
 
-**Decisions for the owner.** Decided on 2026-10-15 and written above: the
-handler table as the first global state (its limits and rules), async handlers
-as an option and never the default, the channel-only logger rejected, and
-default parameter values after the bootstrap with two functions per level. The
-open choices, with my recommendation first:
+**Decided (2026-10-15).** The owner decided these points. The sections above
+state them as the plan.
 
-- **D1 Metadata per task.** Recommended: leave it out of v1. Alternative: a task
-  slot now, one builtin and no inheritance at spawn.
-- **D2 Levels.** Recommended: the four above. Alternative: Elixir's eight, which
-  adds names that user `case` arms must cover.
-- **D3 Default console handler.** Recommended: installed by the first call. The
-  alternative is no default, so the program must attach one.
-- **D4 Handler errors.** Recommended: no catch. A handler's error is the error
-  of the logging task, so a crash shows where it happened. The alternative
-  catches the error and detaches the handler, which needs `Fn[Event,
-  Result[Void]]`.
-- **D5 Re-entrancy.** Recommended: no guard in v1. A handler that logs recurses
-  until `RUNTIME-STACK-OVERFLOW`. The alternative is a per-task guard, which
-  needs the slot of D1.
-- **D6 File output.** Recommended: the block recipe, with no built-in file
-  handler. The alternative is a built-in handler, which keeps its handle in the
-  main task.
-- **D7 Flags.** Recommended: no `--log-*` flags in v1, configuration in code,
-  and the optional `--log-level` flag later. This replaces the flags of the
-  earlier draft of this section.
-- **D8 The freeze.** Recommended: accept that the `src/stdlib.rkt` line, the
-  `LogRegistry` rows and the `vm-builtins` names are data after row 7.2.7, so
-  `std/logger` may land before, during or after the freeze. The alternative is
-  to land it before the freeze only.
-- **D9 "Did you mean" help.** Recommended: a separate small PR before row 7.2.7,
-  since it is a message and not a rule. The alternative is the Agentica checker
-  after the bootstrap (§35).
-- **D10 The `task` field.** Recommended: in the event and in JSON lines, not in
-  the text form. The alternative is to leave it out.
+- **Handler types.** `LogEvent` is a builtin record and `LogLevel` a builtin
+  enum, and handlers have type `Fn[LogEvent, Void]` (see "Types").
+- **Handler table.** The first global state of the language, held by the VM
+  runtime and limited to the registry (see "Decided: the handler table ...").
+- **Async handlers.** An option, never the default (see "Async handlers").
+- **Channel-only logger.** Rejected (see "Alternatives for the global state").
+- **Calls.** Two functions per level until default parameter values land; the
+  `_meta` functions then go away (see "Calls and names").
+- **Enabled check.** `enabled?` is true only if some attached handler would
+  accept the level (see "Two thresholds").
+- **D1 Metadata per task.** Left out of v1. A task slot can come later.
+- **D2 Levels.** Four: debug, info, warning and error.
+- **D3 Default console handler.** Installed by the first call of a `Logger`
+  function.
+- **D4 Handler errors.** Not caught. A handler's error is the error of the
+  logging task.
+- **D5 Re-entrancy.** No guard in v1. A handler that logs recurses until
+  `RUNTIME-STACK-OVERFLOW`.
+- **D6 File output.** The block recipe, with no built-in file handler.
+- **D7 Flags.** No `--log-*` flags in v1; configuration is in code. An optional
+  `--log-level` flag can come later.
+- **D8 The freeze.** The data list in "The freeze" above. `std/logger` may land
+  before, during or after row 7.2.7.
+- **D9 "Did you mean" help.** A separate small PR, not part of 14c, before row
+  7.2.7.
+- **D10 The `task` field.** In the event and in JSON lines, not in the text
+  form.
+
+**Open for the owner, before 14c.** The type of the `level` field. The text
+types it as `LogLevel`. The bytecode writer (`src/bytecode.rkt`, `type!`)
+encodes the field types of every builtin record it emits, and it has no clause
+for an enum type. So a program that uses `LogEvent` fails with
+`BYTECODE-INTERNAL`, even one that names `LogLevel` too (checked on a stand-in
+module). A `String` or an `Int` field compiles. Keeping the enum needs two
+changes outside the data list of row 7.2.7: a bytecode change for enum fields,
+and a `lower.rkt` change, because a program that names `LogEvent` but not
+`LogLevel` would also need the enum in the bytecode (`used-builtin-enums` does
+not look at record fields). The owner chooses: those changes, or a field of
+type `Int` (the rank) or `String` (the level's name). Until this is decided, the
+14c PR does not start.
 
 ### 24.3 Stack traces on runtime errors
 
@@ -660,16 +732,16 @@ the id of the task that owns the group, since a group has no id of its own.
 are written in decimal. A text value (a path, a function name, a kind) is
 written as it is, unless it is empty or contains a space, `=`, `"`, `\`, a
 control character or a byte that is not valid UTF-8: then it is written in its
-JSON form, quoted and escaped, the same rule as the fields of `std/log` (24.2),
-with each invalid UTF-8 byte written as `\u00XX`. `agc_trace_emit` formats
-numbers with `vsnprintf`, and text values go through a small escaper into the
-same buffer; an `agc_string` is passed as its bytes and byte length (`%.*s` when
-it needs no escaping), since it is not NUL-terminated. Each line is formatted
-into a 512-byte buffer on the C stack (longer lines are cut and end with `...`)
-and written with one `write(2)` to the trace descriptor, never through the
-`FILE *` stderr, so it does not touch the stdio buffer. A failed trace write is
-ignored: it never ends the run (unlike `agc_write`, which fails with
-`RUNTIME-INTERNAL`).
+JSON form, quoted and escaped, the same rule as the fields of `std/logger`
+(24.2), with each invalid UTF-8 byte written as `\u00XX`. `agc_trace_emit`
+formats numbers with `vsnprintf`, and text values go through a small escaper
+into the same buffer; an `agc_string` is passed as its bytes and byte length
+(`%.*s` when it needs no escaping), since it is not NUL-terminated. Each line is
+formatted into a 512-byte buffer on the C stack (longer lines are cut and end
+with `...`) and written with one `write(2)` to the trace descriptor, never
+through the `FILE *` stderr, so it does not touch the stdio buffer. A failed
+trace write is ignored: it never ends the run (unlike `agc_write`, which fails
+with `RUNTIME-INTERNAL`).
 
 One write keeps a trace line whole against other whole-line writers. On stderr
 that is not enough to keep it apart from everything: the VM forwards a
@@ -699,8 +771,9 @@ stderr (none when they go to a file):
   task gets an id from `_Atomic uint64_t next_task_id` in the runtime, with
   `atomic_fetch_add` at spawn, so it stays safe with N schedulers (`main` is 1).
   Ids are given whether tracing is on or not, one atomic add per spawn, so a
-  task's id never depends on which categories are on. They are for trace lines
-  only; programs never see them.
+  task's id never depends on which categories are on. The same ids are the
+  `task` numbers of log events (24.2), so a handler reads a task's number from
+  `event.task`.
 - **Signals:** nothing traces from a real signal handler (the out-of-memory and
   GC abort handlers of `docs/vm/05-values-execution-builtins.md` §6.3, or any
   `sigaction` handler); those paths may call only `write(2)` with a fixed text,

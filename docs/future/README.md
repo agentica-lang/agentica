@@ -93,7 +93,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 21 | VM layers | [`21-vm-layers.md`](21-vm-layers.md) | Planned (roadmap 7l) |
 | 22 | JIT | [`22-jit.md`](22-jit.md) | Required (roadmap 7m) |
 | 23 | Binary data | [`23-binary-data.md`](23-binary-data.md) | Done (roadmap phase 13) |
-| 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Planned (roadmap phase 14; `std/logger`, §24.2, is 14c) |
+| 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Partly built (14a, 14b); 14c planned |
 | 25 | Ruby typed idioms | [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md) | Part A planned (roadmap phase 15); Part B to evaluate later; Part C decided against |
 | 26 | Strict diagnostics | [`26-strict-diagnostics.md`](26-strict-diagnostics.md) | Planned (roadmap phase 16) |
 | 27 | Iteration and concurrent collections | [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md) | Channels (17b) and `Task.await` with a timeout (17c) built; `Task.map` planned (roadmap phase 17); `File.each_line` built (17d), `Stream[T]` planned (17e); generators and shared state decided against |
