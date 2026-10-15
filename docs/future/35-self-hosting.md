@@ -195,7 +195,7 @@ goldens stay.
 | 1 | **Done** (PR #237): Lexer (`src/lexer.rkt`, with `source.rkt`, `token.rkt` and the diagnostic data of `diagnostic.rkt`) | Tokens as text lines (kind, value, span), or the one `LEX-` diagnostic |
 | 2 | **Done** (PR #245): Parser (`src/parser.rkt`, `ast.rkt`) | The AST in a stable text form, or the `PARSE-` diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree, so step 2 adds a printer with the same output on both sides (`tests/frontend-parser-common.rkt`) |
 | 3 | **Done** (PR #254): Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution, or the first `CHECK-IMPORT-*`, `CHECK-DECL-ORDER` or `CHECK-REDEFINED-NAME` diagnostic with its file. Needs the environment and real-path builtins (35.5). It carries the privacy rule of `value.with(...)` (roadmap 15c) as data: each linked module lists the user structs it may update, and the text form prints the list on every update. The text form is `tests/frontend-modules-common.rkt` (Racket) and `compiler/link.agc` (Agentica) |
-| 4 | **In progress:** 4a, the builtin catalog (`builtins.rkt`, `builtin-types.rkt`) as Agentica data, is **Done** (PR #258); 4b and 4c, the checker. Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). Open decision for deep trees: the linker of step 3 already handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that (35.9), so the checker either walks with a stack of its own or both parsers get a `PARSE-` tree-depth limit (a diagnostic change in both front ends in one PR); decide it before the checker is written. |
+| 4 | **Done** (4a, the builtin catalog as Agentica data, PR #258; 4b, the checker, PR #PRNUM): Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). Decided for deep trees (35.9): the linker of step 3 handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that, so both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and statements (one level for each, so it bounds the depth of the tree they recurse on; a diagnostic change in both front ends, made in 4b). |
 | 5 | Lowering (`src/lower.rkt`) | The IR in the form `--dump-ir` prints, or the `LOWER-` diagnostic |
 | 6 | Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal |
 | 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/bdd-test.rkt`, `tests/bdd-integration.rkt`) |
@@ -209,7 +209,10 @@ Notes:
   node (the development skill's `references/vm.md`, "Pipeline and files").
   Agentica has no object identity, and a `Map` key is an `Int` or a `String`, so
   the parser gives each node an `Int` id in step 2, and lowering looks types up
-  by id.
+  by id. The Agentica checker (4b) keeps them in a `List[Type]` indexed by id
+  (the ids are dense; `Unknown` marks a node with no type), and what a method
+  call resolved to in a `Map[Int, Resolved]` (the `resolved` field and the
+  synthetic nodes of `src/checker.rkt`, see the 4b status).
 - The builtin catalog (`src/builtins.rkt`, `src/builtin-types.rkt`) moves to
   Agentica data in step 4 (4a, done: `compiler/builtins_data.agc`, generated
   from the Racket tables). It remains the one description of the builtins, and
@@ -256,7 +259,7 @@ Notes:
 | Write binary `.agcb` output | Known, ready | Agentica has no byte type: `Bytes` is deferred (§12.5, §23.1), and bytes are `List[Int]`, written with `File.write_bytes` (1 MiB per call). An `Int` as 8 two's-complement bytes and a `Float` as its IEEE bits are `std/binary` (§23: `Binary.write_i64_be`, `Binary.write_f64_le`, `Binary.concat`), built on the `Int` and `Float` bit builtins; phase 13 (row 7.2.4 of the order) is done. To check: a 2 MB `.agcb` as `List[Int]` is 32 MB of values; if that is too slow or too big for the start-up target, `Bytes` becomes a prerequisite. |
 | Process spawning for the BDD driver | Partly known | `Process.spawn_captured` exists (21a), and the environment builtin above reads `AGENTICA_VM` and `TMPDIR`. To check, one by one: a child environment without `AGENTICA_VM_METRICS*`, a private 0700 temporary directory with an `flock`'d lock, the `TMPDIR` mode check, an `lstat`-like builtin, the process's own PID, file modes for 0600 writes, and builtins that delete a file and remove a directory tree (`src/bdd-driver.rkt`). Each missing one is an OS builtin (exception 1). The path of the binary itself comes from C as an argument. |
 | Handing the program to the VM | Known, missing | `agentica file.agc` must run the compiled program without a temporary file. A new builtin returns the bytes to C. C frees the front end's runtime and loads the program in a new one, so the user program never sees the compiler's heap or tasks, and `--max-steps`, `--seed` and `--allow-run` apply only to it. A second builtin reads an embedded `std/` source. Both are guarded in C at run time: they fail unless the running program is the embedded front end, which C knows because it loaded that program itself (from its own data, or from `--front-end`, 35.3). A linker rule like the std-only `HttpWire` check cannot work here, because `compiler/` is not in `stdlib/`. |
-| Call depth | To check | The VM stops at call depth 10,000 (`RUNTIME-STACK-OVERFLOW`, `docs/vm/05-values-execution-builtins.md` §6.1). A recursive-descent parser or checker on deeply nested input can reach it where Racket does not. Use explicit stacks on the deep paths, or add a `PARSE-` nesting limit (a diagnostic change, decided in step 2). **Decided in step 2:** both parsers stop with `PARSE-TOO-DEEP` past 1,000 levels (up to about 8 VM frames per level, 1.25 times the limit at the tightest). It bounds the parser's calls, not the depth of its tree (see 35.9). |
+| Call depth | To check | The VM stops at call depth 10,000 (`RUNTIME-STACK-OVERFLOW`, `docs/vm/05-values-execution-builtins.md` §6.1). A recursive-descent parser or checker on deeply nested input can reach it where Racket does not. Use explicit stacks on the deep paths, or add a `PARSE-` nesting limit (a diagnostic change, decided in step 2). **Decided in step 2:** both parsers stop with `PARSE-TOO-DEEP` past 1,000 levels (up to about 8 VM frames per level, 1.25 times the limit at the tightest). It bounds the parser's calls, not the depth of its tree (see 35.9). **Decided in step 4:** both checkers stop with `CHECK-TOO-DEEP` past 1,000 levels of expressions and statements, which bounds the depth of the tree (3 to 4 VM frames per level in the checker, so at most about 4,000 frames). |
 | Speed | To check | The VM must run the front end on the largest corpus file within the start-up target (35.2), including loading and validating the embedded `.agcb`. The JIT (7m) is not required if the numbers hold. Compiling `compiler/` itself is a build step and has no target, but its time is recorded. |
 | Stack traces | Known, planned | A crash inside the compiler must show where it happened in `compiler/`. 14b (row 7.2.5 of the order, before the freeze) gives runtime errors a stack trace. |
 
@@ -397,11 +400,10 @@ goldens are in `tests/fixtures/frontend/parser/`. Notes:
   The limit bounds the parser's calls, not the depth of the tree: the right
   operand of the first link of a chain hangs below the whole chain, so nested
   chains give deeper trees (1,990 levels for two nested chains, 89,000 for
-  100). The checker of step 4 must not assume the tree is less than 1,000
-  levels deep; it needs an explicit stack or its own depth check on the
-  deep paths. The text printer of `compiler/parse.agc` is a test tool with
-  the same caveat: it overflows the VM stack on very tall legal trees (30
-  nested chains).
+  100). The checker of step 4 does not assume the tree is less than 1,000
+  levels deep: it has its own limit, `CHECK-TOO-DEEP` (see the 4b status). The
+  text printer of `compiler/parse.agc` is a test tool with the same caveat: it
+  overflows the VM stack on very tall legal trees (30 nested chains).
 - Measured on `stdlib/bdd/gherkin.agc` (4,354 tokens): the Agentica parser
   takes 15 ms on the VM after the 37 ms of the lexer, so the front end so far
   uses 53 ms of the 100 ms budget of `check`. Printing the tree takes 28 ms
@@ -458,8 +460,8 @@ language or VM change. Notes for the next steps:
   handles trees up to about 9,900 levels and fails with
   `RUNTIME-STACK-OVERFLOW` near 10,800 (12 chains of 900 links nested in the
   right operand of each first link). The parser accepts such files (35.9, step
-  2), and Racket links them. The checker of step 4 has the same limit unless it
-  uses a stack of its own.
+  2), and Racket links them. The checker of step 4 refuses a tree deeper than
+  1,000 levels (`CHECK-TOO-DEEP`), so later passes never see one.
 - Differences from Racket. A source file over 1 MiB, or with invalid UTF-8,
   cannot be read (`File.read_text`, see the open item of 35.4 for step 8) and
   is `CHECK-IMPORT-IO` "cannot read import". The message of the root file's own
@@ -530,3 +532,92 @@ linker already needed (the name tables) and the checker needs for every call;
   method tables, the foreign-name help texts and the rules of the checker
   (`method-aliases`, `foreign-names`, the `case` on `builtin-rule`) go with the
   checker in 4b.
+
+Status on 2026-10-15 (PR #PRNUM): step 4 is done; 4b is the whole checker, so
+there is no 4c. `compiler/` holds `check_register.agc` (the declarations),
+`check_stmt.agc` (functions, blocks, statements and `case`), `check_expr.agc`
+(expressions), `check_call.agc` and `check_method.agc` (calls, enum
+constructors, struct construction and update, methods and fields), the rules of
+the builtins in `check_rules.agc`, `check_list.agc` and
+`check_collections.agc`, the helps in `check_help.agc` and `check_names.agc`,
+the state in `check_state.agc`, `check_types.agc` and `check_failure.agc`,
+`check_flow.agc` and `check_unused.agc`, and `checker.agc` with the entry
+`check.agc` (3,760 lines of Agentica for the 1,900 of `src/checker.rkt`). The
+text form is the linked program of step 3 with ` type=T` at the end of the line
+of each expression and block and ` resolved=...` on a method call or field
+access that names a builtin; a failure prints the diagnostic line and its notes
+(`expected`, `actual`, `callee`, `signature`, `labels`) and the file. Goldens
+are in `tests/fixtures/frontend/check/` (57 fixtures, one for every reachable
+`CHECK-` code and every rule of the builtin table);
+`tests/frontend-check-common.rkt` prints the Racket text. Notes:
+
+- The state is an immutable `Cx` (the declarations, the catalog, the help
+  tables, the text of each file) and a threaded `St` (types, resolutions, names
+  in scope, result type, loop depth, the block being checked, the nesting
+  depth). The names in scope are one persistent `Map`: a scope is a snapshot,
+  closing a scope puts the snapshot back, and nothing is deleted (a `Map`
+  delete is O(n)). A binding records the depth it was introduced at, which
+  answers `CHECK-CAPTURED-ASSIGNMENT` (a block cannot assign a name whose depth
+  is at or below the depth where the block began). The cycle between
+  expressions and statements goes through one function field of `Cx`
+  (`expression`), because a module cannot import a module that imports it.
+- A failure is a packed `Problem` in the `Result` error, so `try` stops at the
+  first diagnostic. `Type.Unknown` is the expected type when there is none
+  (`#f` in Racket).
+- The mutated fields of `src/checker.rkt` become data. A method call or field
+  access that names a builtin is recorded by node id as `Resolved`: `Self(T)`
+  (`to_s` on a String), `Text(T)` (`to_s`, an interpolation), `Inspect(T)` or
+  `Call(name, T)`, each with the type of the receiver. Racket keeps these as the
+  `resolved` field of the node: a typed-target for `Self`, an `interpolation`
+  for `Text`, an `inspection` for `Inspect` and a call whose first argument is
+  the receiver for `Call`. Lowering (step 5) reads the list of types and the
+  `Resolved` map. The call that checks a builtin method takes the receiver as an
+  already checked argument, a `TypedTarget` expression the parser never makes.
+- `compiler/check_tables.agc` is generated by `tools/gen-check-tables.rkt` from
+  the tables in `src/checker.rkt` (`method-modules`, `method-aliases`, the
+  foreign-name helps); a fast test fails when it is out of date.
+- `CHECK-TOO-DEEP` is new in both checkers (a diagnostic change that relaxes the
+  freeze of row 7.2.7: without it a legal program could reach the VM call limit
+  in the Agentica checker, and in the later passes). Each expression and
+  statement being checked is one level; the node that would be the 1,001st gets
+  the diagnostic (help: split the code into smaller functions or simpler
+  expressions). The checker needs 3 to 4 VM frames per level (a chain of `+`,
+  `-x`, `!x`: 4; method chains, calls, lists, interpolations and `if`
+  statements: 3; a block inside a block: about 6 for each block), measured by
+  burning frames before the check and finding the depth that still passes. So
+  the limit costs at most about 4,000 of the 10,000 frames, and a later pass
+  that recurses on the tree can use up to about 9 frames per level (6 if the
+  limit were 1,500).
+- The Racket checker had a crash in `unify-type!`: a generic enum where another
+  generic enum was expected (`Wrap.Holder(Other.Item(1))` where `Box[T]` is
+  wanted) compared the enum names as types and raised a Racket exception. It is
+  now `CHECK-TYPE-MISMATCH` in both, with a test.
+- `CHECK-BLOCK-TYPE`, `CHECK-INTERNAL` and `CHECK-MODULE-CONTEXT` cannot be
+  reached from source (a block follows a call that gives its parameter types;
+  the other two guard impossible nodes), so no fixture ends in them.
+- Measured on the VM (best of 5, the check alone, after the link): the wrapper
+  of `stdlib/bdd/gherkin.agc` (2 files, 32,000 characters) 33 ms and 16 MB of
+  RSS for the whole process, link included (98 ms to lex, parse and link it);
+  `stdlib/test/runner.agc` as `std/test/runner` (76,000 characters) 78 ms; a
+  generated program of 1,000 functions (630,000 characters, 25,000 lines) 1.2 s,
+  and 200 functions take a fifth of that, so it is close to linear. Racket
+  checks the same in 6 ms, 13 ms and 0.15 s.
+  So the lexer, parser, linker and checker together take about 131 ms on
+  gherkin, over the 100 ms budget of 35.2; the checker is a quarter of it.
+- Where a table or a loop made a difference: the types in a `List` indexed by
+  node id instead of a `Map` keyed by id took the check of the generated program
+  from 1.83 s to 1.24 s (a `Map.put` costs about 5 us at 5,000 entries and a
+  `List.set` about 1.6 us in the same loop), runner 103 ms to 78 ms and gherkin
+  38 ms to 33 ms. One `.with` instead of three per expression made no
+  measurable difference (a `.with` of the 10-field state costs 0.3 us). The
+  method tables, the help tables and the catalog are built once (under 1 ms),
+  never per lookup.
+- The Agentica checker matches the Racket checker on the 530 programs of
+  `tests/checker-test.rkt`, the 24 files of `examples/`, the 235 of
+  `tests/fixtures/vm/`, every `std/` module, `compiler/` itself, the 57
+  fixtures, trees around the limit and a generated program, and on 5,200 mutated
+  programs in a one-time run (the slow tier repeats 1,500; the fast tier has the
+  fixtures). Same codes,
+  spans, messages, helps and notes, and the same types.
+- Not done: module constants (`NAME = expr` at top level, section 44) land in
+  `src/checker.rkt` in a later PR, and the port carries them then.

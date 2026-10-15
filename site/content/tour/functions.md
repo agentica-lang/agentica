@@ -108,7 +108,7 @@ end
 
 A call that is the whole value of a `return`, such as `return factorial(n - 1)` to your own function, reuses the caller's frame and does not count toward the limit of 10000 nested calls. A call inside a bigger expression, such as `return 1 + f(n - 1)`, does count toward that limit, and a call of a builtin uses no frame.
 
-The source text has its own limit: code nested more than 1,000 levels deep (parentheses, blocks, `if` statements, or a chain of more than about 1,000 operators or `.` calls) is refused with `PARSE-TOO-DEEP` before it runs.
+The source text has its own limit: code nested more than 1,000 levels deep (parentheses, blocks, `if` statements, or a chain of more than about 1,000 operators or `.` calls) is refused with `PARSE-TOO-DEEP` before it runs. The type check has a second limit on the depth of the tree (1,000 levels of expressions and statements, `CHECK-TOO-DEEP`), which a deeply nested chain of operators can pass the first one and reach.
 
 ## Many results
 
