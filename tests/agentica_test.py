@@ -138,6 +138,12 @@ def _missing(message):
     raise unittest.SkipTest(message)
 
 
+def require(condition, message):
+    """Like tool() for a need that is not an executable (a Python module or version): a skip locally, a failure in CI."""
+    if not condition:
+        _missing(message)
+
+
 def optional_tool(name):
     """Like tool(), but None when it is missing locally (a part of a test is left out); still a failure in CI."""
     try:

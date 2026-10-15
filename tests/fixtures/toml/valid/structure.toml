@@ -1,0 +1,64 @@
+# keys
+bare-key_1 = 1
+"quoted key" = 2
+'literal key' = 3
+"" = 4
+"dotted.inside" = 5
+127.0.0.1 = 6
+"ʎǝʞ" = 7
+a . b . c = 8
+site."google.com" = true
+fruit.apple.color = "red"
+fruit.apple.taste.sweet = true
+
+[fruit.apple.texture]
+smooth = true
+
+[fruit.banana]
+color = "yellow"
+
+# a super table defined after its sub tables
+[x.y.z.w]
+deep = 1
+
+[x]
+top = 1
+
+[x.y]
+mid = 2
+
+[empty]
+
+[empty.inner]
+
+[ spaced . header ]
+k = 1
+
+["quoted header"."and.dot"]
+k = 2
+
+[[servers]]
+name = "alpha"
+ip = "10.0.0.1"
+
+[servers.limits]
+cpu = 4
+
+[[servers.disks]]
+dev = "a"
+
+[[servers.disks]]
+dev = "b"
+
+[[servers]]
+
+[[servers]]
+name = "gamma"
+tags = { env = "prod", zone.id = 3 }
+
+[inline]
+point = { x = 1, y = 2 }
+nested = { a = { b = { c = [1, { d = 2 }] } } }
+empty = {}
+dotted = { a.b.c = 1, a.b.d = 2, e = 3 }
+array_of_inline = [ { name = "a" }, { name = "b", extra = [1, 2] } ]

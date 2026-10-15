@@ -1,0 +1,17 @@
+[project]
+name = "demo"
+version = "0.1.0"
+authors = ["Ana <ana@example.com>", "Luis"]
+entry = "src/main.agc"
+private = false
+
+[dependencies]
+"acme/text" = "1.0"
+"acme/lists" = { version = "0.3", optional = true }
+
+[dependencies.local]
+path = "../local"
+
+[tool.format]
+width = 100
+ratio = 0.75
