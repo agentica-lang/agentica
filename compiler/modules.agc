@@ -19,6 +19,7 @@ export struct Module
   file: String
   prefix: String
   first_id: Int
+  text: String
   program: Ast.Program
   names: Map[String, Declarations.Kind]
   public: Map[String, Declarations.Kind]
@@ -68,7 +69,7 @@ export def load(root: String, settings: Env.Settings) -> Result[Loaded]
     return error(Failure.fail_at(Failure.Site(file: file, span: program.span), "CHECK-IMPORT-IO", key.message, Diag.Help.NoHelp))
   end
   empty = Walk(stack: [], seen: {}, done: {}, order: [], next_id: 0, root_dir: Paths.directory_of(key.unwrap!))
-  walk = try enter(settings, empty, key.unwrap!, file, program, 0)
+  walk = try enter(settings, empty, key.unwrap!, file, text.unwrap!, program, 0)
   finished = try run(settings, walk)
   return ok(Loaded(order: finished.order, modules: finished.done, root_dir: finished.root_dir))
 end
@@ -141,11 +142,11 @@ def load_file(settings: Env.Settings, walk: Walk, key: String, site: Failure.Sit
     return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read import", Diag.Help.NoHelp))
   end
   program = try parse_source(key, text.unwrap!, walk.next_id)
-  return enter(settings, walk, key, key, program, walk.next_id)
+  return enter(settings, walk, key, key, text.unwrap!, program, walk.next_id)
 end
 
 # Registers a parsed file: the declaration order, then the declared names, then it goes on the stack with the imports to read.
-def enter(settings: Env.Settings, walk: Walk, key: String, file: String, program: Ast.Program, first_id: Int) -> Result[Walk]
+def enter(settings: Env.Settings, walk: Walk, key: String, file: String, text: String, program: Ast.Program, first_id: Int) -> Result[Walk]
   try Declarations.check_order(file, program.declarations)
   collected = try collect(settings, file, program.declarations)
   count = walk.seen.size + 1
@@ -153,7 +154,7 @@ def enter(settings: Env.Settings, walk: Walk, key: String, file: String, program
   if walk.order.size == 0
     prefix = ""
   end
-  module = Module(key: key, file: file, prefix: prefix, first_id: first_id, program: program, names: collected.names, public: collected.public, aliases: {})
+  module = Module(key: key, file: file, prefix: prefix, first_id: first_id, text: text, program: program, names: collected.names, public: collected.public, aliases: {})
   frame = Frame(module: module, aliases: {}, imports: Declarations.imports_of(program.declarations), next: 0)
   return ok(walk.with(stack: walk.stack.push(frame), seen: walk.seen.put(key, 1), order: walk.order.push(key), next_id: Ast.next_free_id(program)))
 end
