@@ -1,0 +1,21 @@
+empty = []
+ints = [ 1, 2, 3 ]
+trailing = [ 1, 2, ]
+mixed = [ 1, "two", 3.0, true, 1979-05-27, [4], { five = 5 } ]
+nested = [ [ 1, 2 ], [ "a", "b" ], [ [ ] ] ]
+multiline = [
+  "one",   # comment after a value
+  # a comment line
+  "two",
+
+  "three"
+]
+strings = [ "a, b", 'c]d', """e
+f""", '''g
+h''' ]
+tight=[1,2,[3,4],{a=[5,6]}]
+comment_before_close = [
+  1,
+  2
+  # last
+]

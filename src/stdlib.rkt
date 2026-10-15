@@ -19,6 +19,7 @@
         "std/http.agc" (embed-source "http.agc")
         "std/logger.agc" (embed-source "logger.agc")
         "std/binary.agc" (embed-source "binary.agc")
+        "std/toml.agc" (embed-source "toml.agc")
         "std/bdd.agc" (embed-source "bdd.agc")
         "std/bdd/gherkin.agc" (embed-source "bdd/gherkin.agc")
         "std/bdd/match.agc" (embed-source "bdd/match.agc")
