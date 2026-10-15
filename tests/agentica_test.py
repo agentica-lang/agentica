@@ -171,6 +171,16 @@ def cli():
     return [executable] if executable else ["racket", str(ROOT / "src" / "main.rkt")]
 
 
+# The script that runs the Agentica command line (compiler/cli_main.agc) on the VM like the `agentica` command.
+AGCB_CLI = TESTS / "agentica-agcb"
+
+
+def cli_is_agentica():
+    """True when cli() is the command line written in Agentica (make test-cli), which is not the default yet."""
+    executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
+    return bool(executable) and Path(executable).resolve() == AGCB_CLI.resolve()
+
+
 def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=None, stderr_to=None):
     """Run a command and return Result(code, stdout, stderr), both streams as text.
 
