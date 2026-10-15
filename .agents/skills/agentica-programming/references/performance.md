@@ -1,9 +1,10 @@
 # Performance
 
-Measured facts for fast `.agc` code. Each number has a tag: `[PR #255]` is
-the PR body (final head 6ac7a80, not merged yet), `[bench]` is the VM
-benchmark notes, `[measured]` is one run on the release VM on 2026-10-15,
-unless a run count is given. Times are milliseconds unless stated.
+Measured costs for fast `.agc` code. The figures were run on the release VM
+on 2026-10-15, one run each unless a count is given. Tags such as `[PR #255]`
+and `[bench]` only name where a figure was first published (the merged PR's
+description, `docs/vm-benchmarks.md`); the figures stand in this text. Times
+are wall milliseconds unless stated.
 
 Time a piece of code inside the program:
 
@@ -15,12 +16,17 @@ ms = (Time.monotonic_ns() - start) / 1000000
 
 ## Lookup tables
 
-Build a `Set` or `Map` once per call, then test with `include?` or `get`,
-instead of a chain of comparisons. The lexer rewrite of PR #255 (tables and
-a `while` loop) cut time by 13% to 32% against master: 1 MB of strings 1,241
-to 910; 1 MB of identifiers 1,127 to 771; 1 MB of mixed source 1,918 to
-1,664; gherkin (18.5 KB) 33.4 to 29.2. A `Set` test per character cost about
-250 ns against about 680 ns for the old `name_char?` chain.
+Build a `Set` or `Map` once per call, then test it with `include?` or `get`,
+instead of a chain of comparisons. On 900,000 characters, a `Set[String]` test
+took 185 ms against 400 ms for an `or` chain of five comparisons, and a
+`Set[Int]` test took 205 ms against 305 ms [measured, three runs].
+
+The lexer rewrite of PR #255 cut time by 13% to 32% against master. That gain
+is the whole rewrite (tables and a `while` loop), not the tables alone: 1 MB of
+strings 1,241 to 910; 1 MB of identifiers 1,127 to 771; 1 MB of mixed source
+1,918 to 1,664; gherkin (18.5 KB) 33.4 to 29.2 [PR #255]. The old
+`name_char?` chain cost about 680 ns per character, against 250 ns for a
+`Set` loop [PR #255].
 
 ```ruby
 def count_vowels(text: String) -> Int
@@ -35,47 +41,29 @@ def count_vowels(text: String) -> Int
 end
 ```
 
-Character codes: for one pass over a text, `String.code(text.at(i))` is
-enough. On 1M ASCII characters [measured, two runs]: building the codes once
-with `text.split("").map do |c| String.code(c) end` took 129 to 134 ms; a
-`while` over `codes[i]` took 163 to 165 ms; a `while` with
+For one pass over a text, `String.code(text.at(i))` is enough. On 1M ASCII
+characters [measured, two runs]: building the codes once with
+`codes = text.split("").map do |c| String.code(c) end` took 129 to 134 ms;
+a `while` over `codes[i]` took 163 to 165 ms; a `while` with
 `String.code(text.at(j))` took 283 ms. One build plus one indexed pass (about
-295 ms) costs about the same as one `at` pass, so keep the list when you scan
-the same text twice or move back and forth in it, as `compiler/lexer.agc`
-does.
+295 ms) costs about what one `at` pass costs, so keep the list when you scan
+the same text twice or move back and forth in it.
 
-## Loops and recursion
+## Loops
 
-- Use a `while` over an index with mutable locals for a hot loop. On the
-  same lexer tables it took about 3% to 6% less time than a `step(state)`
-  tail-call loop with `.with` (29.2 vs 31.0 ms, 1,664 vs 1,741, 910 vs 939,
-  771 vs 815) [PR #255].
-- A call replaces the caller's frame only when it is `return f(...)` to a
-  user function. Mutual recursion works that way: `is_even(1000000)`,
-  where each function ends in `return` of the other, ran [measured].
-
-```ruby
-def is_even(n: Int) -> Bool
-  if n == 0
-    return true
-  end
-  return is_odd(n - 1)
-end
-```
-
-- Any other call takes a frame, and a task may nest 10,000 calls. Non-tail
-  `return 1 + count_down(n - 1)` ran at depth 9,000 and failed with
-  `RUNTIME-STACK-OVERFLOW` at 20,000 [measured]. A builtin call is not a
-  tail call either [docs/grammar/06b-builtins.md].
-- The parsers stop at 1,000 levels with `PARSE-TOO-DEEP` (`src/parser.rkt`,
-  `compiler/parse_base.agc`). A pass that recurses on a tree manages about
-  9,900 levels and fails near 10,800 [docs/future/35-self-hosting.md]. For
-  deeper input, loop with a `List` as an explicit stack.
+- A `while` over an index with mutable locals is faster than a `step(state)`
+  tail-call loop with `.with`. On the same lexer tables, `while` took about 3%
+  to 6% less time (29.2 against 31.0 ms, 1,664 against 1,741, 910 against 939,
+  771 against 815) [PR #255].
+- Mutual tail calls also run to depth 1,000,000 when each function ends in
+  `return` of the other [measured].
 
 ## Struct updates
 
-`value.with(field: x)` copies the struct in one instruction. Time for 1M
-updates in a `while` loop, in ms (so also ns per update) [bench]:
+`value.with(field: x)` copies the struct in one instruction, and a constructor
+call writes every field. Wall time for 1,000,000 updates in a `while` loop, in
+ms [bench]. An empty loop takes about 110 ms of each row, and the percentages
+below are of the totals.
 
 | Struct and update | Constructor | `.with` |
 |---|---:|---:|
@@ -85,31 +73,24 @@ updates in a `while` loop, in ms (so also ns per update) [bench]:
 | 16 fields, 1 changed | 567 | 373 |
 | 8 fields, `step(s.with(...))` tail call | 570 | 485 |
 
-Use `.with` for structs of 4 or more fields; for 2 fields `.with` is about 8%
-slower than the constructor [bench]. `.with` of 2 of 6 fields costs about
-220 ns against about 55 ns for a function call [PR #255], so do it once per
-token or node, not per character.
+`.with` takes about 8% longer than the constructor for 2 fields, and 15% to
+34% less time for 4 to 16 fields, so use it from 4 fields up. It copies every
+field, so do it once per token or node, not once per character.
 
-## Collections
+## Collections and strings
 
-Costs as documented in [docs/grammar/06b-builtins.md] and
-[docs/grammar/06-semantics.md]:
-
-- `xs = xs.push(x)` takes near constant time, so n pushes are O(n).
-- `concat` is O(b) only when the right list has at most 32 items; otherwise
-  it is O(a + b). Do not `concat` a large list inside a loop.
-- `xs[i]`, `List.at` and `List.set` take O(log32 n): at most four steps at
-  a million items.
-- `reverse`, `take` and `drop` are O(n) in the size of the result.
-- `Map.put` and `Map.get` take O(log32 n). `Set.include?` and `Set.add`
-  take effectively constant time. `Map.delete` and `Set.delete` are O(n),
-  so deleting in a loop is O(n²).
-- `Set.new` of 1M Ints took 10.9 s [measured, one run]. Most builtins run to
-  the end of their turn: the scheduler switches tasks only between callbacks
-  of the resumable ones (`map`, `filter`, `reduce`, `each`, `any?`, `all?`,
-  `sort_by`), never inside the rest [docs/vm/10-io-scheduler.md]. Keep sets
-  that size out of code other tasks wait on.
+- `Map` and `Set` lookups and inserts (`get`, `put`, `include?`, `add`) take
+  effectively constant time: both are one 32-way HAMT.
+- `Set.new` costs about 7 to 10 µs per element, and the cost rises with size:
+  100,000 items took 0.69 s, 200,000 1.18 s, 400,000 3.05 s and 1,000,000
+  10.3 s [measured, one run each]. One `include?` in a loop costs about 0.2 µs,
+  so each element of a `Set.new` costs 30 to 50 lookups. Build a large set
+  once and keep it.
+- A builtin runs to the end of its turn, except the resumable ones (`map`,
+  `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`), so a 10-second
+  `Set.new` stalls every other task [docs/vm/10-io-scheduler.md]. Keep big
+  builds out of code that other tasks wait on.
 - `String.at` and `String.slice` count characters. On ASCII text each is
-  O(1). On text with multi-byte characters each call walks from the nearest
-  of the start, the end or the last position used [vm/strings.c], so forward
-  scans are cheap and random access can cost O(n).
+  O(1). On text with multi-byte characters each call walks from the nearest of
+  the start, the end or the last position used [vm/strings.c], so a forward
+  scan is cheap and a random access can cost O(n).
