@@ -44,33 +44,37 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
   end
   body = function.body
   labels = label_pcs(body)
+  # The constant, update and builtin pools travel in state. The span pool is a local of its own: operands never read
+  # state.spans, so it is stored back once, after the loop.
   state = tables
+  span_pool = tables.spans
   code: List[Int] = []
   refs: List[Int] = []
   count = 0
   at = 0
   while at < body.size
     instr = body[at]
-    if instr.op == "label"
+    op = instr.op
+    if op == "label"
       at += 1
       next
     end
     run = 1
-    if instr.op == "step"
+    if op == "step"
       run = step_run_end(body, at) - at
     end
     found = try operands(program, function, labels, state, instr, run)
     state = found.tables
     words = try instr_words(program, instr, found)
     code = code.concat(words)
-    interned = Spans.intern_instrs(state.spans, run_instrs(body, at, run))
-    state = state.with(spans: interned.pool)
+    interned = Spans.intern_run(span_pool, body, at, run)
+    span_pool = interned.pool
     refs = refs.concat(Bytes.u32(interned.id))
     count += 1
     at += run
   end
   # The span of the function comes after those of its instructions.
-  own = Spans.intern_one(state.spans, function.file, function.span)
+  own = Spans.intern_one(span_pool, function.file, function.span)
   head = Bytes.string(function.name).concat(Bytes.u32(function.params)).concat(Bytes.u32(function.captures))
   head = head.concat(Bytes.u32(function.slots)).concat(Bytes.u32(own.id)).concat(Bytes.u32(count))
   return ok(Encoded(tables: state.with(spans: own.pool), parts: [head, code, refs]))
@@ -242,18 +246,6 @@ def label_pcs(body: List[Ir.Instr]) -> Map[Int, Int]
     end
   end
   return labels
-end
-
-# The instructions a written instruction stands for: itself, or a run of steps.
-def run_instrs(body: List[Ir.Instr], at: Int, run: Int) -> List[Ir.Instr]
-  if run == 1
-    return [body[at]]
-  end
-  found: List[Ir.Instr] = []
-  for offset in 0...run
-    found = found.push(body[at + offset])
-  end
-  return found
 end
 
 # The text that stands for a constant in the table: two constants are one entry when this is the same. The tag keeps
