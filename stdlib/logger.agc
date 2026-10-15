@@ -282,9 +282,10 @@ end
 # JSON.encode leaves U+0085, U+2028 and U+2029 as they are, but splitlines() and some viewers break lines there.
 # Escaping them keeps one event on one line.
 def one_line(text: String) -> String
-  return text.replace(String.from_code(133), "\\u0085").replace(String.from_code(8232), "\\u2028").replace(
-    String.from_code(8233),
-    "\\u2029",
+  return (
+    text.replace(String.from_code(133), "\\u0085")
+      .replace(String.from_code(8232), "\\u2028")
+      .replace(String.from_code(8233), "\\u2029")
   )
 end
 

@@ -292,11 +292,12 @@ end
 # parse-multiplicative in src/parser.rkt. It parses the operators of level minimum and above, left to right. The
 # operand on the right of a level L operator is parsed with minimum L + 1, so operators of one level group to the left.
 # Equality and comparison do not chain: a second operator of the same level is PARSE-CHAINED-COMPARISON at that
-# operator. Every binary node starts at the first token of the whole expression, as in the Racket parser. Nesting
-# limit: src/parser.rkt has one loop per level, and in each loop the right operand of the k-th operator starts from the
-# nesting of the loop plus k. Here one loop serves all levels, so run counts the operators of the current level in a
-# row (the levels never rise inside the loop, because the right operand of a level L operator takes everything above L)
-# and operand_env is the context for the right operand. Equality and comparison do not chain, so they add nothing.
+# operator. Every binary node starts at the first token of the whole expression, as in the Racket parser.
+# Nesting limit: src/parser.rkt has one loop per level, and in each loop the right operand of the k-th operator starts
+# from the nesting of the loop plus k. Here one loop serves all levels, so run counts the operators of the current
+# level in a row (the levels never rise inside the loop, because the right operand of a level L operator takes
+# everything above L) and operand_env is the context for the right operand. Equality and comparison do not chain, so
+# they add nothing.
 def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.ExprAt]
   first = try parse_unary(e, pos, ids)
   left = first.node

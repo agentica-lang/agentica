@@ -97,14 +97,23 @@ export def from_json(text: String) -> Result[Error]
   range = try JSON.get(root, "range")
   start = try JSON.get(range, "start")
   stop = try JSON.get(range, "end")
-  span = Span(file: try text_at(root, "file"), line: try int_at(start, "line"), column: try int_at(start, "column"),
-                      end_column: try int_at(stop, "column"))
-  return ok(Error(code: try text_at(root, "code"), message: try text_at(root, "message"), span: span,
-                  end_line: try int_at(stop, "line"), expected: detail_at(root, "expected"), actual: detail_at(
-                    root,
-                    "actual",
-                  ),
-                  original: root))
+  span = Span(
+    file: try text_at(root, "file"),
+    line: try int_at(start, "line"),
+    column: try int_at(start, "column"),
+    end_column: try int_at(stop, "column"),
+  )
+  return ok(
+    Error(
+      code: try text_at(root, "code"),
+      message: try text_at(root, "message"),
+      span: span,
+      end_line: try int_at(stop, "line"),
+      expected: detail_at(root, "expected"),
+      actual: detail_at(root, "actual"),
+      original: root,
+    ),
+  )
 end
 
 ## Adds `actual` to an error built from fields. An error from `from_json` is returned unchanged, since its kept object
