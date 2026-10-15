@@ -473,7 +473,7 @@ decision above.
 - `src/builtin-types.rkt`, `src/builtins.rkt`, `src/lower.rkt`,
   `src/stdlib.rkt`, `src/checker.rkt` and `src/modules.rkt`: the data and the
   help above.
-- Tests: `tests/vm-logger-test.rkt`, goldens under
+- Tests: `tests/test_vm_logger.py`, goldens under
   `tests/fixtures/vm/logger-*.agc`, the registry tests in
   `tests/std/logger_test.agc`, and a Python peer,
   `tests/fixtures/logger-peer.py`.

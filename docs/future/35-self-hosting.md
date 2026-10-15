@@ -534,12 +534,12 @@ linker already needed (the name tables) and the checker needs for every call;
   (`method-aliases`, `foreign-names`, the `case` on `builtin-rule`) go with the
   checker in 4b.
 
-Status on 2026-10-15 (PR #263): step 4 is done except module constants; 4b
-is the whole checker, so there is no 4c. `compiler/` holds `check_register.agc` (the declarations),
-`check_stmt.agc` (functions, blocks, statements and `case`), `check_expr.agc`
-(expressions), `check_call.agc` and `check_method.agc` (calls, enum
-constructors, struct construction and update, methods and fields), the rules of
-the builtins in `check_rules.agc`, `check_list.agc` and
+Status on 2026-10-15 (PR #263): step 4 is done except module constants; 4b is
+the whole checker, so there is no 4c. `compiler/` holds `check_register.agc`
+(the declarations), `check_stmt.agc` (functions, blocks, statements and `case`),
+`check_expr.agc` (expressions), `check_call.agc` and `check_method.agc` (calls,
+enum constructors, struct construction and update, methods and fields), the
+rules of the builtins in `check_rules.agc`, `check_list.agc` and
 `check_collections.agc`, the helps in `check_help.agc` and `check_names.agc`,
 the state in `check_state.agc`, `check_types.agc` and `check_failure.agc`,
 `check_flow.agc` and `check_unused.agc`, and `checker.agc` with the entry
@@ -727,7 +727,10 @@ in rackunit until phase 3.
   runtime fixtures, network and process tests, BDD, and CLI. One area per PR.
   Tests that go through `cli-in-process.rkt` run the product CLI as a child
   instead, with the same output. A test that calls a front-end module directly
-  waits for phase 2.
+  waits for phase 2. Done: the small VM runtime tests (PR #264, 2026-10-15:
+  monotonic clock, logger, test protocol, channel, child channel and the C
+  style check, 13 cases). `tests/vm-stack-test.rkt` stays, because
+  `make goldens` writes its sidecars.
 - **Phase 2:** the golden parts of the front-end tests move to `unittest`: the
   Agentica output compared with the goldens in `tests/fixtures/frontend/`. The
   live comparisons with the Racket stages stay in rackunit until phase 3. A file

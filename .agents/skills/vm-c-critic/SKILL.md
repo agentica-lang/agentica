@@ -162,7 +162,7 @@ handles. A second way for any of them is a finding.
   commented-out code, as a Nit. Ask for a short `/* */` comment as a Nit where
   complex code gives no reason (an invariant, a GC or ownership rule, a
   protocol quirk, a hostile-input check). CI checks part of this style:
-  `make vm-lint` (clang-tidy) and `tests/vm-style-test.rkt`, which checks types
+  `make vm-lint` (clang-tidy) and `tests/test_vm_style.py`, which checks types
   at the top, no prototypes of `static` functions and the file header size.
   Exported names start with `agc_`.
 - Duplication: flag the clones you see and suggest a shared helper; CI runs

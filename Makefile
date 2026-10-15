@@ -496,14 +496,20 @@ sweep-full: vm-diff-build
 	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
 # The Racket tests that run against the built VM (the ASan job runs them on the sanitizer VM)
-VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-child-channel-test.rkt tests/vm-stop-test.rkt tests/vm-channel-test.rkt tests/vm-stdout-test.rkt tests/vm-file-lines-test.rkt tests/vm-stack-test.rkt
+VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-stop-test.rkt tests/vm-stdout-test.rkt tests/vm-file-lines-test.rkt tests/vm-stack-test.rkt
+# The unittest modules that do the same (make test-py runs them)
+VM_PY_TESTS = tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py
 SANITIZE_JOBS ?= 4
 
 vm-sanitize-build: build
 	$(RACO) make -j $(JOBS) $(VM_RKT_TESTS)
 
+# Both runs happen, so one job shows the failures of both frameworks
 vm-sanitize-test: vm-sanitize-build
-	$(RACO) test -j $(SANITIZE_JOBS) $(VM_RKT_TESTS)
+	@status=0; \
+	  $(RACO) test -j $(SANITIZE_JOBS) $(VM_RKT_TESTS) || status=1; \
+	  $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS) || status=1; \
+	  exit $$status
 
 # Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's
 vendored-check:
