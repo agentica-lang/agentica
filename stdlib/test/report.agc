@@ -352,8 +352,8 @@ def stack_lines(root: Json) -> List[String]
   omitted = int_at(root, "stack_omitted").unwrap_or(0)
   lines: List[String] = []
   for index in 0...frames.length
-    if omitted > 0 and index == 15
-      lines = lines.concat(["... #{omitted} frames not shown ..."])
+    if omitted > 0 and index == stack_head()
+      lines = lines.concat([not_shown(omitted)])
     end
     lines = lines.concat([frame_line(frames[index])])
   end
@@ -362,6 +362,18 @@ def stack_lines(root: Json) -> List[String]
     lines = lines.concat(["task spawned at #{place_text(spawned.unwrap!)}"])
   end
   return lines
+end
+
+## The frames the VM shows before a cut stack's gap: AGC_STACK_HEAD in vm/port.h.
+def stack_head() -> Int
+  return 15
+end
+
+def not_shown(omitted: Int) -> String
+  if omitted == 1
+    return "... 1 frame not shown ..."
+  end
+  return "... #{omitted} frames not shown ..."
 end
 
 def frame_line(frame: Json) -> String

@@ -55,11 +55,11 @@ agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [-
   test that ended the file's child VM).
 - **Text report.** `PASS`, `FAIL` or `NOT RUN`, then `file / name`. A failure
   that has a call stack (a runtime error in a test, or in a step handler) shows
-  it under the diagnostic: the line `  stack, innermost first:`, then one
-  line per frame (`name at file:line:column`). With `--ai` it is ` | stack `
-  and the frames joined by `; `. Only failed tests have `output`: their stdout, plus stderr if their child VM died during
-  them, the last 64 Ki characters. Stdout printed by `main` before `Test.run`
-  belongs to the first test.
+  it under the diagnostic: the line `  stack, innermost first:`, then one line
+  per frame (`name at file:line:column`). With `--ai` it is ` | stack ` and the
+  frames joined by `; `. Only failed tests have `output`: their stdout, plus
+  stderr if their child VM died during them, the last 64 Ki characters. Stdout
+  printed by `main` before `Test.run` belongs to the first test.
 - **Summary line.** The text report ends with
   `N passed, M failed, K not executed, F file errors`, and `, seed S` is added
   when the run fails.

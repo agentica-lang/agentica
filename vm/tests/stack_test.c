@@ -117,6 +117,19 @@ static void check_text(char *got, const char *want) {
   free(got);
 }
 
+static void json_agrees(agc_vm *vm, const fixture *f, const agc_outcome *o) {
+  agc_json_member *m = agc_alloc(3 * sizeof(agc_json_member));
+  size_t n = agc_stack_members(&f->program, &o->stack, m);
+  agc_string *built = agc_json_encode(vm, agc_json_object(m, n), 0);
+  assert(built->bytes > 2);
+  char *text = render(f, o, AGC_STYLE_JSON, false);
+  size_t len = strlen(text);
+  assert(len > built->bytes + 1 && text[len - 2] != ',' && strcmp(text + len - 2, "}\n") == 0);
+  assert(memcmp(text + len - 2 - (built->bytes - 2), built->data + 1, built->bytes - 2) == 0);
+  assert(text[len - 2 - (built->bytes - 2) - 1] == ',');
+  free(text);
+}
+
 static void alone(void) {
   fixture *f = build();
   agc_vm vm;
@@ -150,6 +163,7 @@ static void alone(void) {
   o = failure(span_at(F_PUSH, 1));
   agc_stack_capture(&vm, &o);
   assert(o.stack.shown && o.stack.count == 1 && o.stack.spawned && o.stack.spawn_span == span_at(F_MAIN, 2));
+  json_agrees(&vm, f, &o);
   check_text(render(f, &o, AGC_STYLE_PLAIN, true),
              "t.agc:1:5 error[RUNTIME-TEST] in a task\n"
              "boom\n"
@@ -178,6 +192,7 @@ static void nested(void) {
   assert(o.stack.lines[0].function == F_BREAK && o.stack.lines[0].span == o.span && o.stack.lines[0].tail);
   assert(o.stack.lines[1].function == F_PUSH && o.stack.lines[1].span == span_at(F_PUSH, 3));
   assert(o.stack.lines[2].function == F_MAIN && o.stack.lines[2].span == span_at(F_MAIN, 2));
+  json_agrees(&vm, f, &o);
   check_text(render(f, &o, AGC_STYLE_AI, false),
              "check failed: 1 error\n"
              "\n"
@@ -215,6 +230,7 @@ static void repeats(void) {
   assert(o.stack.lines[1].repeat == 2 && o.stack.lines[1].tail && o.stack.lines[1].span == span_at(F_WALK, 3));
   assert(o.stack.lines[2].repeat == 5 && !o.stack.lines[2].tail);
   assert(o.stack.lines[3].repeat == 1 && o.stack.lines[3].function == F_MAIN);
+  json_agrees(&vm, f, &o);
   char *text = render(f, &o, AGC_STYLE_JSON, false);
   assert(strstr(text, "\"line\":1,\"repeat\":2,\"tail\":true}"));
   assert(strstr(text, "\"line\":1,\"repeat\":5}"));
@@ -242,6 +258,7 @@ static void cap(uint32_t depth, uint32_t omitted) {
   agc_stack_capture(&vm, &o);
   assert(o.stack.shown && o.stack.count == AGC_STACK_HEAD + AGC_STACK_TAIL && o.stack.head == AGC_STACK_HEAD);
   assert(o.stack.omitted == omitted);
+  json_agrees(&vm, f, &o);
   for (uint32_t i = 0; i < AGC_STACK_TAIL; i++) {
     const agc_frame *at = &t->frames[AGC_STACK_TAIL - 1 - i];
     assert(o.stack.lines[AGC_STACK_HEAD + i].function == at->function);
@@ -335,13 +352,16 @@ static void names(void) {
   agc_vm vm;
   begin(&vm, f, NULL);
   agc_task *t = vm.main;
-  frames(t, 4);
+  f->fns[F_WALK].name = agc_make_string("caf\xC3\xA9\x7f\t", 7, 6);
+  frames(t, 5);
   frame(t, 0, F_SPARE, 1, false);
   frame(t, 1, F_PUSH, 1, false);
   frame(t, 2, F_BLOCK, 1, false);
   frame(t, 3, F_BREAK, 1, false);
-  agc_outcome o = failure(span_at(F_BREAK, 1));
+  frame(t, 4, F_WALK, 1, false);
+  agc_outcome o = failure(span_at(F_WALK, 1));
   agc_stack_capture(&vm, &o);
+  json_agrees(&vm, f, &o);
   char *text = render(f, &o, AGC_STYLE_PLAIN, false);
   assert(strstr(text, "    a\\nb at t.agc:1:17\n    block at t.agc:1:9\n    push at t.agc:1:5\n    @7:: at t.agc:1:21\n"));
   free(text);
@@ -366,6 +386,7 @@ static void long_names(void) {
   frame(t, 1, F_WALK, 1, false);
   agc_outcome o = failure(span_at(F_WALK, 1));
   agc_stack_capture(&vm, &o);
+  json_agrees(&vm, f, &o);
 
   char cut_function[300], cut_path[300];
   memset(cut_function, 'a', 255);
