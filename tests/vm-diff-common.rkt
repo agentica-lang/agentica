@@ -14,6 +14,7 @@
          "../src/lower.rkt"
          "../src/modules.rkt"
          "../src/parser.rkt"
+         "../src/source-file.rkt"
          "../src/source.rkt")
 
 (provide shard-count
@@ -103,7 +104,9 @@
 
 (define (front-end path #:types [types #f])
   (define name (path->string path))
-  (define tokens (lex (source name (file->string path))))
+  (define text (read-source-file path name))
+  (when (diagnostic? text) (error 'vm-diff "~a" (format-diagnostic text)))
+  (define tokens (lex (source name text)))
   (define tree (if (diagnostic? tokens) tokens (parse tokens)))
   (define linked (if (diagnostic? tree) tree (link-program tree name)))
   (define checked (if (diagnostic? linked) linked (check linked #:types types)))

@@ -58,8 +58,8 @@
 
 ;; Lexes `depth` nested `if x` lines under a step budget instead of a clock, so
 ;; the check is deterministic on a loaded runner. The linear lexer costs about
-;; 1,050 steps per line and the budget allows 3,000. A scan of the whole frame
-;; stack per line costs about 37,000 per line at depth 4,000 and fails it.
+;; 1,000 steps per line and the budget allows 3,000, so a scan of the whole frame
+;; stack per line fails it.
 (define steps-per-line 3000)
 
 (define (check-nested-linear bytecode work depth)

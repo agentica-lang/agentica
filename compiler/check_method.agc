@@ -148,6 +148,8 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
     )
   elsif T.is(target, "Struct")
     return struct_help(cx, target, name)
+  elsif name == "with"
+    return "with copies a struct with some fields changed; the value before .with must be a struct"
   elsif kind != ""
     return kind_help(cx, target, kind, name)
   elsif CheckTypes.data?(cx, target, [])
@@ -164,6 +166,8 @@ def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
     return "structs have no methods; call #{name}(...) with the struct as an argument"
   elsif field.ok? and T.is(field.unwrap!.type, "Fn")
     return "#{name} is a function field; call it with .#{name}.call(...)"
+  elsif name == "with"
+    return "with needs the fields to change, as in .with(field: value); #{Help.field_help(name, fields)}"
   end
   return "structs have no methods; #{Help.field_help(name, fields)}"
 end

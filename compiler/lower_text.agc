@@ -162,7 +162,8 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
   elsif (op == "struct" or op == "struct-with") and at == 2
     return "s#{value}"
   elsif op == "struct-with" and at == 3
-    return "[" + instr.args.drop(3).map do |position: Int| position.to_s end.join(" ") + "]"
+    positions = instr.args.drop(3).map do |position: Int| position.to_s end.join(" ")
+    return "[#{positions}]"
   elsif (op == "field" or op == "payload" or op == "list" or op == "map") and at == 2
     return value.to_s
   elsif op == "call-value" and at == 1

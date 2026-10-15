@@ -38,8 +38,10 @@
 
 (define (check-against-racket outputs paths)
   (for ([path (in-list paths)])
-    (define text (file->string (path->complete-path path root)))
-    (check-equal? (hash-ref outputs path #f) (string-append (parser-text text) "\n") path)))
+    (define text (read-source-file (path->complete-path path root) path))
+    (check-pred string? text path)
+    (when (string? text)
+      (check-equal? (hash-ref outputs path #f) (string-append (parser-text text) "\n") path))))
 
 (define snippets
   '("x = 1" "x = a + b * c" "y = f(x, 1)" "z = xs.map do |v| v + 1 end" "puts(\"a#{x}b\")" "x += 2"
