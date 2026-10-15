@@ -3,9 +3,10 @@
 **Status:** designed, not scheduled. The owner's scope of 2026-10-14 is in this
 section, and the roadmap order table does not place it. Its types are checker
 changes, so they come after the Agentica front end (41.13), as the owner decided
-on 2026-10-15. It is VM-only and adds no grammar syntax: new builtin types and
-new functions of the existing `Time` module. Every name here is a proposal for
-the owner to review.
+on 2026-10-15. `Time.monotonic_ns` (41.10) is independent and may land earlier.
+It is VM-only and adds no grammar syntax: new builtin types and new functions of
+the existing `Time` module. Every name here is a proposal for the owner to
+review.
 
 Programs compute with dates and times: a due date, the timestamp of a log line
 (§24), an expiry, a time from a JSON API. Today a program has `Time.now_ms()`
@@ -88,8 +89,9 @@ types with accessor functions, as `Process` is (`dt.hour` is what programs
 expect from a record, as `FileInfo` shows).
 
 Records have no equality (`==` on a struct is `CHECK-TYPE-MISMATCH`,
-`docs/grammar/06-semantics.md`), so use `Time.compare`. `puts(dt)` prints the
-struct form, so use `Time.format` for text.
+`docs/grammar/06-semantics.md`), so use `Time.compare`, `Time.compare_naive` or
+`Time.compare_date`. `puts(dt)` prints the struct form, so use `Time.format` for
+text.
 
 ### 41.3 Constructors
 
@@ -106,9 +108,11 @@ Time.assume_offset(value: NaiveDateTime, offset_minutes: Int)
 ```
 
 - Checks: year 1 to 9999; month 1 to 12; day valid for the month and year (leap
-  years included); hour 0 to 23; minute 0 to 59; second 0 to 59 (no 60, 41.8);
-  millisecond 0 to 999; `offset_minutes` from -1439 to 1439, which is the range
-  of `±hh:mm` with `hh` up to 23 and `mm` up to 59.
+  years included); hour 0 to 23; minute 0 to 59; second 0 to 59 (a second 60 is
+  `leap second not supported`, 41.8); millisecond 0 to 999; `offset_minutes`
+  from -1439 to 1439, which is the range of `±hh:mm` with `hh` up to 23 and
+  `mm` up to 59. The fields give the local reading, which must be in years 1
+  to 9999 at any offset (41.8).
 - Errors are `error(...)` with a message, for example `month 13 is not in 1 ..
   12` or `day 30 is not valid for month 2 of year 2026`. A bad value from input
   is an error the program handles, as `String.to_int` does. `Result.unwrap!`
@@ -137,7 +141,7 @@ Time.now() -> DateTime
 - `to_unix` is `to_unix_ms` divided by 1000, rounded toward minus infinity:
   `to_unix(from_unix_ms(-1))` is `-1`, and `from_unix(-1)` is 23:59:59 of
   1969-12-31 (the same second). `to_unix_ms` cannot fail, since the range is
-  about 2.5e14 ms of the 9.2e18 an Int holds.
+  about 2.5e14 ms of the 9.2e18 an Int holds (§42.4).
 - `Time.now()` is `from_unix_ms(Time.now_ms())`. If the clock is outside years 1
   to 9999 it halts with `RUNTIME-INTERNAL` ("cannot read the clock"), as
   `Time.now_ms` does for a clock it cannot read. That does not happen on a real
@@ -211,7 +215,9 @@ Parse decisions:
   third are truncated, not rounded: rounding can carry into the next second or
   day. Inputs with six or nine digits (microseconds or nanoseconds, from many
   systems) must not fail, and truncation keeps them valid.
-- `-00:00` is read as offset 0. It is the same instant.
+- `-00:00` is read as offset 0. It is the same instant. RFC 3339 section 4.3
+  uses `-00:00` for an unknown local offset, and that is lost here: the text
+  reads as `+00:00`. This is a chosen loss.
 - Rejected: `+0200` (no colon), offsets with `hh` above 23 or `mm` above 59,
   second `60` (41.8), trailing text, empty text, and a `.` with no digits.
 - `parse_date` reads `YYYY-MM-DD` only.
@@ -232,6 +238,7 @@ Time.ms_between(from: DateTime, to: DateTime) -> Int
 Time.ms_between_naive(from: NaiveDateTime, to: NaiveDateTime) -> Int
 Time.compare(a: DateTime, b: DateTime) -> Int
 Time.compare_naive(a: NaiveDateTime, b: NaiveDateTime) -> Int
+Time.compare_date(a: Date, b: Date) -> Int
 Time.date_of(value: DateTime) -> Date
 Time.date_of_naive(value: NaiveDateTime) -> Date
 Time.weekday(value: Date) -> Int
@@ -240,8 +247,12 @@ Time.days_in_month(year: Int, month: Int) -> Result[Int]
 Time.leap_year?(year: Int) -> Bool
 ```
 
-- Naming: functions of `Date` and `DateTime` have plain names, and functions of
-  `NaiveDateTime` end in `_naive`. Each name has one meaning.
+- Naming: a function of `DateTime` has the plain name. A function that exists
+  for another type too takes that type's suffix: `_naive` for `NaiveDateTime`,
+  `_date` for `Date`. So `format`, `format_naive` and `format_date`; `compare`,
+  `compare_naive` and `compare_date`; `date_of` and `date_of_naive`. A function
+  that exists for one type keeps its plain name, as `add_days`, `days_between`,
+  `weekday` and `day_of_year` do for `Date`. Each name has one meaning.
 - `add_ms` adds to the instant and keeps the offset, so the reading moves.
   `add_days` adds calendar days to a `Date`.
 - Differences are `to - from`, positive when `to` is later, for `days_between`
@@ -250,14 +261,15 @@ Time.leap_year?(year: Int) -> Bool
   The naive one is the difference of readings, which is exact because there are
   no DST changes with fixed offsets.
 - `compare` returns -1, 0 or 1 by instant. Two values with one instant and
-  different offsets compare equal, as in Python.
+  different offsets compare equal, as in Python. `compare_naive` compares
+  readings and `compare_date` compares days; both give -1, 0 or 1.
 - `weekday` is ISO: 1 is Monday, 7 is Sunday. 2026-10-14 is 3, a Wednesday.
 - `day_of_year` is 1 to 366. 2026-10-14 is 287.
 - `days_in_month` is an error for a month outside 1 to 12 or a year outside 1 to
   9999. `leap_year?` is the proleptic rule for any Int year.
 - `add_days` and `add_ms` check the argument against the range before they add,
   so an Int argument near the top of the range gives `error(...)`, not
-  `RUNTIME-INTEGER-OVERFLOW`.
+  `RUNTIME-INTEGER-OVERFLOW`. The result must be in range too (41.8).
 
 Not in v1: `add_months` and `add_years` (41.16).
 
@@ -267,17 +279,26 @@ Not in v1: `add_months` and `add_years` (41.16).
   year, as in Python's `datetime`, so the Python vectors (41.15) need no model
   of history.
 - Years are 1 to 9999, four digits, as in ISO 8601. Year 0 and negative years
-  are not dates. The earliest value is `0001-01-01T00:00:00Z`, which is
-  `-62135596800000` ms, and the latest is `9999-12-31T23:59:59.999Z`, which is
-  `253402300799999` ms.
+  are not dates. The bounds are on the local reading: every `Date`,
+  `NaiveDateTime` and `DateTime` has its reading in years 1 to 9999, whatever
+  its offset. In UTC, `0001-01-01T00:00:00Z` is `-62135596800000` ms and
+  `9999-12-31T23:59:59.999Z` is `253402300799999` ms. The Unix functions give an
+  error outside those two instants, since their results are in UTC.
+- Every operation that returns a value checks that the result's reading is in
+  years 1 to 9999: `add_ms`, `add_days`, `with_offset`, `to_utc`, `from_unix`
+  and `from_unix_ms`. The check runs before the addition, so it cannot overflow.
+  `assume_offset` and `naive_of` keep the reading, so they need no check.
 - Unix time has no leap seconds, as in POSIX: each day has 86400 seconds. Second
-  `60` is rejected by `naive`, `datetime` and `parse`. Leap seconds need a table
-  of dates, which is as much work as the zone data of 41.16.
+  `60` is rejected by `naive`, `datetime` and `parse`, with the message
+  `leap second not supported`. This is a chosen loss: a leap second cannot be
+  kept, because Unix time has none, and a table of leap seconds is as much work
+  as the zone data of 41.16.
 - Precision is milliseconds. `Time.now_ms` and `Time.monotonic_ms` are in
   milliseconds, and so is `std/logger`. Nanoseconds would not fit an Int over
   the whole range: the latest value is about 2.5e20 ns since 1970, and an Int
-  holds 9.2e18, so Unix nanoseconds overflow after the year 2262. Microseconds
-  would fit, but no clock or caller reads them, so they add a field for nothing.
+  holds 9.2e18 (`Int` is 64 bits on every target, §42.4), so Unix nanoseconds
+  overflow after the year 2262. Microseconds would fit, but no clock or caller
+  reads them, so they add a field for nothing.
 - Offsets are fixed. There is no daylight saving time, so every day of a fixed
   offset is 86400000 ms.
 
@@ -324,20 +345,20 @@ end
   milliseconds.
 - Why not `uv_hrtime`: `numbers.c` reads the OS clock directly for
   `monotonic_ms`, and a second clock path would let the two builtins disagree.
-  The libuv submodule is not checked out in this worktree, so its implementation
-  was not checked here. The implementation PR can compare the two if the owner
-  prefers libuv.
+  The implementation PR can compare the two if the owner prefers libuv.
 - This is exception 1 of the std-first rule (the OS clock), so it is a C
   builtin. It is a new row of `src/builtins.rkt`, which the freeze allows
   (41.13), and it is independent of the types, so it can land at any time.
 - Tests: a golden fixture `time-monotonic-ns.agc` checks that two readings do
-  not go back, that `Task.sleep(5)` takes at least 5000000 ns, and that
+  not go back, that `Task.sleep(20)` takes at least 15000000 ns, and that
   `Time.monotonic_ns() / 1000000` lies between two `Time.monotonic_ms()`
   readings taken around it, which checks the unit and the shared clock. The
   independent counterpart is `tests/fixtures/monotonic-peer.py` (Python,
   standard library): it runs the program on Linux, where both read
   `CLOCK_MONOTONIC`, and checks that its reading lies between two
-  `time.monotonic_ns()` readings taken around the run.
+  `time.monotonic_ns()` readings taken around the run. The margin is 5 ms:
+  libuv's timers count whole milliseconds of a loop clock that can lag the
+  monotonic clock, so a timer may fire up to about 2 ms early.
 - No `elapsed` helper. The helper would be `Time.monotonic_ms() - start` with a
   name, and it would hide which clock it reads. The existing code
   (`stdlib/test/runner.agc`) writes the subtraction, and it stays that way.
@@ -366,8 +387,8 @@ The parts land under different rules:
 
 | Part | Files | Rule |
 |---|---|---|
-| Types, reserved names, the construction rule and its code | `src/builtin-types.rkt`, `src/checker.rkt`, `src/lower.rkt` (`builtin-structs`) | A checker change in the Agentica front end (§35), decided by the owner on 2026-10-15. Not a table row. |
-| `Time.*` functions (41.3 to 41.7) | `src/builtins.rkt` rows, `src/lower.rkt` (`vm-builtins`), `vm/dates.c` | With the types, in the Agentica front end (§35): most of the functions return the new types, so their rows and their `vm-builtins` names wait for it. |
+| Types, reserved names, the construction rule and its code | `compiler/` (the Agentica front end) | A checker change in the Agentica front end (§35), decided by the owner on 2026-10-15. Not a table row. |
+| `Time.*` functions (41.3 to 41.7) | `compiler/` (the Agentica catalog, §35.4), `vm/dates.c` | With the types, in the Agentica front end (§35): most of the functions return the new types, so their catalog rows wait for it. |
 | `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt`, `vm/numbers.c` | Independent of the types, so it may land at any time. After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
 
 Most of the functions return the new types, so they cannot land before the
@@ -379,30 +400,46 @@ earlier. The order table is not changed by this section; the roadmap's
 
 ### 41.14 Files and docs of the implementation PR
 
-- `src/builtin-types.rkt`: the three records. `src/checker.rkt`: the reserved
-  names come from `builtin-records`, and the construction rule with
-  `CHECK-NOT-CONSTRUCTIBLE`. `src/lower.rkt`: the `builtin-structs` entries and
-  the `vm-builtins` names.
-- `src/builtins.rkt`: one row per `Time.*` function, next to the `Time` rows.
+The two parts land in two PRs (41.10 and 41.13).
+
+The monotonic clock (41.10), which may land first:
+
+- `src/builtins.rkt`: one row next to the `Time` rows. `src/lower.rkt`: its
+  `vm-builtins` name. `vm/numbers.c`: the builtin.
+- `docs/grammar/06b-builtins.md`: `Time.monotonic_ns` next to
+  `Time.monotonic_ms` (the `Time` line).
+- Programming skill: the `Time` line of the `builtins.md` reference of the
+  `agentica-programming` skill.
+- Site: `site/content/library/io-and-system/system.md` (a `Time.monotonic_ns`
+  section).
+- `CHANGELOG.md` under `## [Unreleased]`.
+- Tests: the golden `time-monotonic-ns.agc` and its peer
+  `tests/fixtures/monotonic-peer.py`.
+
+The types and the `Time.*` functions, after the bootstrap (41.13), in the
+Agentica front end:
+
+- `compiler/`: the three records, the reserved names, the construction rule and
+  its code `CHECK-NOT-CONSTRUCTIBLE`, and the `Time.*` rows of the Agentica
+  catalog (§35.4, step 4).
 - `vm/dates.c` (new): the civil-date algorithms, the text and the builtins, with
-  their own table, registered as the other tables are. `vm/numbers.c`:
-  `Time.monotonic_ns`.
+  their own table, registered as the other tables are.
 - Grammar: `docs/grammar/04-lexical.md` (reserved builtin names),
   `docs/grammar/06b-builtins.md` (the records, the `Time` functions and the
   construction rule), `docs/grammar/07-diagnostics.md` (the new code).
 - Programming skill: `.agents/skills/agentica-programming/references/dates.md`
   (new), with its row in the "When to read a reference" table of `SKILL.md`;
-  `references/builtins.md` (the `Time` lines) and `references/diagnostics.md`.
-  Development skill: `.agents/skills/agentica-development/references/vm.md` (the
-  builtin list).
+  `references/builtins.md` (the other `Time` lines) and
+  `references/diagnostics.md`. Development skill:
+  `.agents/skills/agentica-development/references/vm.md` (the builtin list).
 - Site: `site/content/library/text-and-data/dates-and-times.md` (new, with
-  runnable examples), and `site/content/library/io-and-system/system.md` (a
-  `Time.monotonic_ns` section).
+  runnable examples).
 - `CHANGELOG.md` under `## [Unreleased]`: the new functions, and **Breaking:**
   for the reserved names.
-- When the feature lands: its text moves to the grammar and the site, and §41 is
-  deleted from `docs/future/`, following the working rule of
-  `docs/future/README.md`.
+
+When the feature lands: its text moves to the grammar and the site, and §41 is
+deleted from `docs/future/`, following the working rule of
+`docs/future/README.md`.
 
 ### 41.15 Tests
 
@@ -417,32 +454,39 @@ it and has a golden `dates-vectors.expected`. The vectors:
   and the invalid 1900-02-29 and 2100-02-29; every month end of years 1, 4, 100,
   400, 1900, 2000, 2026 and 9999; every day of 1899 to 1901 and of 9998 to 9999.
 - Offsets: -1439, -720, 0, 840 (+14:00) and 1439 minutes, each with a reading,
-  both ways.
+  both ways. The two edge readings of 41.8 with offsets: 0001-01-01T00:00:00 at
+  +1439 and 9999-12-31T23:59:59.999 at -1439. Their UTC readings are out of
+  range, so `with_offset(dt, 0)` is an error for each.
 - Fractions: `.000`, `.999`, and six and nine digits (truncated to
   milliseconds).
 - Text: `format` and `parse` of the vectors, with `Z` and `+02:00`, and
   lowercase `t` and `z`.
 - Calendar queries (`weekday`, `day_of_year`, `days_in_month`, `leap_year?`) for
-  the same dates, and `add_days` and `days_between` for seeded random pairs.
+  the same dates, and `add_days`, `days_between` and `compare_date` for seeded
+  random pairs.
 
 The fixture checks every vector in both directions, prints one line for each
 mismatch, and then prints `N vectors ok`.
 
 Round trips, in the same fixture: `parse(format(dt))` gives back `dt` for every
 vector without extra fraction digits; `from_unix_ms(to_unix_ms(dt))` equals
-`with_offset(dt, 0)`; `parse_naive(format_naive(n))` gives back `n`;
-`add_days(a, days_between(a, b))` gives `b`.
+`with_offset(dt, 0)` when that is ok, and is an error exactly when it is;
+`parse_naive(format_naive(n))` gives back `n`; `add_days(a, days_between(a, b))`
+gives `b`.
 
 Errors: `dates-errors.agc` (golden) prints the message of every error for fixed
 bad inputs: months 0 and 13, day 31 of April, 2100-02-29, years 0 and 10000,
 hour 24, minute 60, second 60, millisecond 1000, offsets 1440 and -1440, and an
 out-of-range `from_unix_ms`. It also covers the parse errors of 41.6 (no offset
 in `parse`, an offset in `parse_naive`, a space for `T`, `+0200`, `:60`,
-trailing text, empty text, a `.` with no digits), and it prints the accepted
-bounds 0001-01-01 and 9999-12-31.
+trailing text, empty text, a `.` with no digits), the message of second 60
+(`leap second not supported`), and the results that leave the range (`add_ms`
+past 9999-12-31, and the edge readings of the offsets bullet). It prints the
+accepted bounds 0001-01-01 and 9999-12-31.
 
-Checker (`tests/checker-test.rkt`, rackunit, asserting codes and spans): a user
-`struct Date` gives `CHECK-REDEFINED-NAME`; `Date(...)` gives
+Checker (the goldens of the Agentica front end, against `agentica check --json`,
+as 42.13 says, since the Racket checker is frozen; each asserts the code and the
+span): a user `struct Date` gives `CHECK-REDEFINED-NAME`; `Date(...)` gives
 `CHECK-NOT-CONSTRUCTIBLE`; `Time.compare` with a naive and an aware argument
 gives `CHECK-TYPE-MISMATCH`.
 
@@ -475,3 +519,29 @@ The vectors fixture may be slow under the `--max-steps` sweep; if so, it goes in
   returns either kind (41.6), and `format_offset` (use `with_offset` and then
   `format`).
 
+### 41.18 JSON
+
+Without a rule, `JSON.decode` would build a `DateTime` from an object's fields
+with none of the checks of 41.3, since a nested builtin record decodes as a
+struct (`docs/grammar/06b-builtins.md`). `JSON.encode` would write an object,
+not an RFC 3339 or ISO 8601 text. There are two options, and the owner has not
+chosen.
+
+- **B (recommended).** `JSON.encode` writes a field of type `Date`,
+  `NaiveDateTime` or `DateTime` as a JSON string: the text of
+  `Time.format_date`, `Time.format_naive` or `Time.format` (41.6). `JSON.decode`
+  reads such a field with `Time.parse_date`, `Time.parse_naive` or `Time.parse`,
+  so the checks of 41.3 and 41.6 run, and an error names the field path, as the
+  other decode errors do. `JSON.schema` gives a string for each of the three.
+  Reason: the text is the form that other systems write, and the checks run
+  where the text comes in.
+- **A (alternative).** In v1, a field of one of the three types is
+  `CHECK-NOT-DECODABLE` for `JSON.decode` and `CHECK-NOT-ENCODABLE` for
+  `JSON.encode`, as Results and other nested types already are
+  (`docs/grammar/06b-builtins.md`). A program converts the value with
+  `Time.format` and `Time.parse` itself. Reason: nothing to design for v1; the
+  cost is one conversion in each program that reads or writes a date.
+
+### 41.19 Questions for the owner
+
+- **JSON (41.18).** Option A or option B for v1. Recommendation: B.

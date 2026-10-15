@@ -2,13 +2,14 @@
 
 Specified in [`docs/future/32-doc-comments.md` section
 32](../future/32-doc-comments.md#32-doc-comments). Phase 22 is front end only:
-the lexer, the parser and the CLI. It does not change lowering or the VM. It
-comes after 7i, HTTP 20b, task crash isolation ([phase
+the lexer, the parser and the CLI. It does not change lowering or the VM. Part
+22a comes after 7i, HTTP 20b, task crash isolation ([phase
 24](24-task-crash-isolation.md)), unit tests ([phase 25](25-unit-tests.md)) and
 HTTP 20c (order step 7.2.1), and after the evaluation pilot (order step 7.2.2),
-at order step 7.2a (§32.7). The semantic CLI ([phase 26](26-semantic-cli.md))
-comes after it and reuses its `src/docs.rkt`. It has two PRs. Each one has its
-own tests and docs.
+at order step 7.2a (§32.7). Part 22b (`agentica doc`) waits until after the
+bootstrap (row 22b of the [roadmap](README.md)). The semantic CLI ([phase
+26](26-semantic-cli.md)) comes after 22b and reuses its `src/docs.rkt`. It has
+two PRs. Each one has its own tests and docs.
 
 - [x] **22a: `##` doc comments (§32.2 to §32.4).**
   - **Lexer** (`src/lexer.rkt`): one `DOC` token per doc block, with its text
@@ -77,6 +78,7 @@ own tests and docs.
     - `site/content/getting-started.md` (the commands);
     - the development skill.
 
-**Done when:** every `stdlib/*.agc` has a module doc and a doc on every export,
-`agentica doc std/http` prints its API, and the doc tests of 22a and 22b pass.
+**Done when:** for 22a, every `stdlib/*.agc` has a module doc and a doc on every
+export, and the doc tests of 22a pass. For 22b, `agentica doc std/http` prints
+its API, and the doc tests of 22b pass.
 Doctests, generated site pages and editor hover stay in §32.8.

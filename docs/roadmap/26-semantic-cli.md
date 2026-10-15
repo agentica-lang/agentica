@@ -4,13 +4,13 @@ Specified in [`docs/future/39-semantic-cli.md` section
 39](../future/39-semantic-cli.md#39-semantic-cli-for-agents). Phase 26 adds four
 commands that answer questions about the code, JSON first: `agentica outline`,
 `agentica symbol`, `agentica refs` and `agentica type-at`. It is front end and
-CLI only: no language change, nothing in lowering or the VM. It comes after doc
-comments ([phase 22](22-doc-comments.md), whose `src/docs.rkt` it reuses) and
+CLI only: no language change, nothing in lowering or the VM. It comes after row
+22b of [phase 22](22-doc-comments.md), whose `src/docs.rkt` it reuses, and after
 digit separators ([phase 23](23-digit-separators.md)), at order step 7.2b of the
-[roadmap](README.md), deferred until after the bootstrap (after row 7.2.7),
-because it extends the Racket front end, and before the full 6c round (order
-step 10), which measures it (§39.12). It has three PRs. Each one has its own
-tests and docs.
+[roadmap](README.md). It waits until after the bootstrap and after row 22b,
+because it extends the Racket front end, and it comes before the full 6c round
+(order step 10), which measures it (§39.12). It has three PRs. Each one has its
+own tests and docs.
 
 - [ ] **26a: `agentica outline` (§39.3, §39.5, §39.6).**
   - **CLI:** `agentica outline FILE [--ai|--json]`, `FILE` a source file or a

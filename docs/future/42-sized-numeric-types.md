@@ -38,6 +38,7 @@ rules that keep them safe for agents to write.
 | Storage | `agc_value` items in steps 1 to 3; typed storage in step 4, if measured |
 | Phasing | 1 integers, 2 Float32, 3 binary API, 4 storage (gated) |
 | Freeze | Starts after step 8 of §35.4; nothing in `src/` changes |
+| Int and Float width | 64 bits on every target (§42.4, §42.16) |
 
 ### 42.2 Today
 
@@ -45,8 +46,8 @@ The facts below were checked in `docs/grammar/`, in `src/` and `vm/` at this
 commit, and with `racket src/main.rkt check` on small probe programs.
 
 - `Int` is signed 64-bit. Overflow in `+`, `-`, `*`, unary `-` and `MIN / -1`
-  halts with `RUNTIME-INTEGER-OVERFLOW` (`vm/interp.c:555`, `:568`, `:574`;
-  `docs/grammar/06-semantics.md`).
+  halts with `RUNTIME-INTEGER-OVERFLOW` (the integer cases of `agc_run_turn` in
+  `vm/interp.c`; `docs/grammar/06-semantics.md`).
 - `Float` is IEEE binary64. A float literal is digits, a `.` and digits, with no
   exponent (`docs/grammar/04-lexical.md`). A float literal of 401 digits checks
   today (probe). The value it runs with is not checked here, so §42.5 settles
@@ -59,32 +60,33 @@ commit, and with `racket src/main.rkt check` on small probe programs.
 - There is no implicit numeric conversion. `2 * 1.5`, `1 == 1.0`, `x: Float =
   1`, `[1.0, 2]` and a `Range` of Floats are all `CHECK-TYPE-MISMATCH` (probes).
 - `Map` keys are `Int` or `String`. Any other key is `CHECK-MAP-KEY-TYPE`
-  (`src/checker.rkt:418`; probe with `Map[Float, Int]`).
+  (the map key check in `src/checker.rkt`; probe with `Map[Float, Int]`).
 - The checker's method aliases map `s.to_i` to `String.to_int`, `n.to_f` to
   `Float.from_int`, `n.to_s` to `String.from_int` and `x.to_i!` to
   `Float.to_int!` (`src/checker.rkt:49-57`).
-- `check-binary` checks both operands with no expected type
-  (`src/checker.rkt:706-712`). Literal typing from the other operand needs a
-  change there.
+- `check-binary` in `src/checker.rkt` checks both operands with no expected
+  type. Literal typing from the other operand needs a change there.
 - A `List[Int]` item is an `agc_value`, which is 16 bytes (`vm/value.h`,
   `vm/list_impl.h`). So a byte in a `List[Int]` costs 16 bytes, not one. §38.1
-  says there are 20 tags; the enum has 23 values today (`vm/value.h:25-27`).
-- The VM already picks typed opcodes from static types: `AGC_OP_ADD_I`
-  (`vm/value.h:114`) and `AGC_OP_ADD_F` are separate opcodes. The checker's
-  types reach lowering.
+  says there are 20 tags; the enum has 23 values today (the tag enum of
+  `vm/value.h`).
+- The VM already picks typed opcodes from static types: `AGC_OP_ADD_I` (the
+  opcode list of `vm/value.h`) and `AGC_OP_ADD_F` are separate opcodes. The
+  checker's types reach lowering.
 - The `.agcb` type table has the kinds `INT`, `FLOAT`, `BOOL`, `STRING`, `LIST`,
-  `MAP` and `STRUCT` (`vm/value.h:207`). The loader rejects an unknown kind
-  (`vm/loader.c:311-320`), and the format version is 3 (`src/bytecode.rkt:14`).
-  Typed JSON uses these kinds (`vm/json_typed.c`).
+  `MAP` and `STRUCT` (`AGC_TYPE_*` in `vm/value.h`). The loader rejects an
+  unknown kind (`load_types` in `vm/loader.c`), and the format version is 3
+  (`src/bytecode.rkt:14`). Typed JSON uses these kinds (`vm/json_typed.c`).
 - A JSON integer beyond `Int` is kept as its text until it is extracted
   (`vm/json.c`, `AGC_JSON_BIG`). `JSON.int` extracts `Int` only.
-- Float text is `agc_float_text` (`vm/value.c:643`). It tries 15 to 17 digits
+- Float text is `agc_float_text` (`vm/value.c`). It tries 15 to 17 digits
   and keeps the first that reads back to the same double, then strips trailing
   zeros. JSON encoding uses it too.
 - A user `struct Int8` checks today (probe). So reserving the new names is a
   breaking change (§42.15).
-- Equality and map keys test the tag: `vm/equal.c:68`, `vm/map.c:66` and `:79`
-  (`AGC_T_INT`). Nine references to `AGC_T_INT` exist in `vm/` (rg).
+- Equality and map keys test the tag: `expand` in `vm/equal.c`, and
+  `agc_key_hash` and `key_equal` in `vm/map.c` (`AGC_T_INT`). Nine uses of
+  `AGC_T_INT` exist in `vm/` outside its definition (rg).
 
 ### 42.3 Motivation, and what it costs
 
@@ -145,7 +147,8 @@ conversion.
   are the same type, not a second one. Reason: `String.length`, `Random.int`,
   `JSON.int` and every other builtin return `Int`, and a second 64-bit type
   would make each of them a conversion. Messages print the canonical `Int` and
-  `Float`.
+  `Float`. The alias holds only while `Int` is 64 bits on every target (§42.1,
+  §42.16).
 - **`Int` and `Float` stay the default spellings** in the cheat sheet, the
   examples and the builtin signatures. Reason: agents learn one name for the
   common case, and the new names are for the cases that need a width.
@@ -173,6 +176,19 @@ conversion.
   the same rule, since its `_` is only visual (§33). For `b + 1`, the
   checker checks `b` first and then checks the literal with `b`'s type as the
   expected type (the existing code is `check-binary`, `src/checker.rkt:706`).
+- **Operators, calls and sign (recommended; open owner question, §42.17).** A
+  literal on either side of an operator takes the type of the other operand: the
+  checker checks the operand that is not a literal first, then types the
+  literal with its type, so `2 * b` and `0 < b` work as `b + 1` does. When both
+  operands are literals, the expected type of the whole expression flows into
+  both: `x: UInt8 = 1 + 2` types `1` and `2` as `UInt8`. In a call with a type
+  variable, the argument that fixes the variable types the literal arguments:
+  `List.append(bytes, 1)` types `1` as `UInt8` when `bytes` is a `List[UInt8]`.
+  A `-` before an integer literal folds into the literal, so `-5` is one literal
+  with the value -5: `x: UInt8 = -5` is `CHECK-INT-RANGE` at the literal's span,
+  and `x: Int8 = -128` is in range. Reason: without folding, `-128` could not be
+  an `Int8`, since `128` is out of range. The unary minus of a variable stays
+  `CHECK-TYPE-MISMATCH` (42.7).
 - **No suffixes (recommended).** `200u8` and `1.5f32` are not written. Reason:
   context covers every case a suffix would, a suffix is a second spelling, and
   the lexer rejects `200u8` today.
@@ -196,7 +212,9 @@ conversion.
   decimal text, and the VM rounds it to binary32 once, when the program loads,
   with a correctly rounded `strtof`. Reason: the Agentica front end cannot round
   decimal text exactly, and rounding through binary64 first can give the wrong
-  binary32 in a tie (the same reason as §42.9).
+  binary32 in a tie (the same reason as §42.9). The text is a new constant kind
+  of `.agcb` (§42.11). The implementation PR tests `strtof` against exact
+  rounding on every release target, the Windows UCRT included.
 - **No integer literal becomes a `Float`.** `x: Float = 1` stays
   `CHECK-TYPE-MISMATCH`. Reason: that is today's rule (§6); contextual typing
   applies to sized integers and to float literals, not to the change of kind.
@@ -227,7 +245,7 @@ conversion.
 | Int to Int8, Int16, Int32, UInt8, UInt16, UInt32, UInt64 | Result; `!` halts; `wrap_` wraps |
 | A lossless widening between sized types (for example UInt8 to UInt16, Int8 to Int32) | plain method on the source (`x.to_uint16`) |
 | Any integer to Float, through `to_float` | plain (rounds to nearest) |
-| Any integer to Float32, through `to_float32` | plain (rounds to nearest, ties to even) |
+| Any integer to Float32, through `to_float32` | plain (rounds once, from the 64-bit integer, to nearest, ties to even; §42.9) |
 | Float32 to Float | plain (exact) |
 | Float to any integer type | Result; `!` halts; no wrap form |
 | Float to Float32 | plain (rounds; overflow gives an infinity of the same sign, as `Float.to_bits32` does, §23.3) |
@@ -240,8 +258,8 @@ conversion.
   against about 60 with the `Int` hub, and the widenings are the only pairs that
   are plain.
 - **Float to integer.** The bang and Result forms follow `Float.to_int` and
-  `Float.to_int!` (`vm/numbers.c:35-38`): truncation toward zero, NaN and
-  infinity give `RUNTIME-INVALID-NUMBER`, and a value out of range gives
+  `Float.to_int!` (`float_to_int` in `vm/numbers.c`): truncation toward zero,
+  NaN and infinity give `RUNTIME-INVALID-NUMBER`, and a value out of range gives
   `RUNTIME-INTEGER-OVERFLOW`. Reason: the same codes for the same meaning. There
   is no wrap form for floats, since a wrapped float has no clear meaning.
 - **Text parsers (step 1: none for sized types).** A program parses with
@@ -329,8 +347,9 @@ conversion.
 - **JSON schema.** `minimum` and `maximum` for each type. The `UInt64` maximum
   is 18446744073709551615.
 - **`JSON.int` and `JSON.kind`.** `JSON.int` stays `Int` only. A sized extractor
-  such as `JSON.uint64` is later (§42.16). §15's `JsonBigInt(String)` already
-  gives a value beyond `Int` as its text.
+  such as `JSON.uint64` is later (§42.16). §15 plans `JsonBigInt(String)` for a
+  value beyond `Int`, as its text; the JSON parser keeps that text today
+  (`AGC_JSON_BIG`).
 - **CBOR.** A `UInt64` is CBOR major type 0 with the full 64-bit value. §16 maps
   `Int` only today, so it gains one row per type when CBOR lands. This design
   does not change §16.
@@ -362,7 +381,15 @@ conversion.
   at 15 digits, which is right for doubles, because every decimal of 15 digits
   or fewer reads back through a double. For binary32 the new routine starts at 1
   digit, stops at 9, and checks each candidate by rounding it to binary32.
-  Reason: that is the shortest form, and it is what a reader expects.
+  Reason: that is the shortest form, and it is what a reader expects. An
+  infinity or NaN prints as `Float` does: `+inf.0`, `-inf.0` or `+nan.0`.
+- **Conversion from `Int` (recommended).** An integer is rounded to binary32
+  once, from its 64-bit value: C converts the `int64_t` straight to `float`, not
+  through a `double`. Through a `double` the result can be wrong.
+  `9007199791611905` (2^53 + 2^29 + 1) gives `9007200328482816.0` when rounded
+  once and `9007199254740992.0` through a double, and `2^60 + 2^36 + 1` gives
+  `1.1529216420458004e18` against `1.152921504606847e18`. The vectors of step 2
+  test both.
 - **JSON (recommended).** Encoding uses the same shortest text. Decoding uses a
   correctly rounded `strtof` (glibc's rounds the decimal once), not `strtod`
   followed by a cast, because the cast rounds a second time. Reason: the double
@@ -467,16 +494,22 @@ With (C), the operations are:
   rest.
 - **Bit, wrap and conversion operations are C builtins**, rows in `vm/numbers.c`
   with a row in the catalog. They are not opcodes.
+- **Generic comparison.** `List.sort`, `List.sort_by` and the other generic
+  paths compare by tag. A `UInt64` value compares as unsigned, so
+  `18446744073709551615` sorts after `1`, as `UInt64` comparisons do (§42.7).
 - **Hot path.** The `Int` code is unchanged. A sized operation adds one compare
   and branch. This is an estimate and is not measured. The benchmark rule of
   §38.7 applies: `make bench` (roadmap 7g) runs an integer loop before and after
   step 1, and the numbers go in `docs/vm-benchmarks.md`.
 - **Opcodes are appended.** New opcodes at the end of the list do not change the
   encoding of existing `.agcb` files, and the loader rejects only opcodes it
-  does not know (`vm/loader.c:279`). So they do not change the format version.
+  does not know (its `unknown opcode` check). So they do not change the format
+  version.
 - **Type-table kinds change the format.** Sized struct fields in typed JSON need
-  new type-table kinds (`vm/value.h:207`), and the loader rejects an unknown
-  kind (`vm/loader.c:311-320`). So the format goes to version 4. The writer of
+  new type-table kinds (`AGC_TYPE_*` in `vm/value.h`), and the loader rejects
+  an unknown kind (`load_types` in `vm/loader.c`). A `Float32` literal needs a
+  new constant kind that holds its decimal text (§42.5): the binary64 constant
+  kind would round twice. So the format goes to version 4. The writer of
   the Agentica compiler emits version 4, and the steps of §35.3 ("New `.agcb`
   format") apply: the old `stage0` compiles the new compiler, which then
   compiles itself. The Racket writer is not changed, since it is frozen.
@@ -488,8 +521,11 @@ With (C), the operations are:
 - **Step 4, gated by measurement.** Typed storage stores a list of a scalar type
   with its element width: 1 byte for `Int8` and `UInt8`, 2 bytes for the 16-bit
   types, 4 bytes for the 32-bit types and `Float32`, and 8 bytes for `Int`,
-  `UInt64` and `Float`. The static type gives the width, so no tag is stored per
-  item. A read rebuilds the `agc_value` from the static type (§38.6, item 1).
+  `UInt64` and `Float`. No tag is stored per item. The list header holds the
+  element kind, so the paths that have no static type (`inspect`, `to_s`,
+  `JSON.encode`, `List.sort` and equality, §42.11) read the width from the list,
+  as they read a tag today. A read rebuilds the `agc_value` from the element
+  kind (§38.6, item 1).
 - **Why not earlier.** It touches every container that holds values, and the
   persistent vector of 8d (done before the bootstrap) would need typed leaves.
   §38.7 says to change the value layout only when a measurement says so. The
@@ -529,15 +565,19 @@ independent Python peer, with the standard library only.
   covers: edge values of each type (the smallest, the largest, zero, one, minus
   one); each operation on those values; each bit method and count (0, 1, width -
   1, width, 63, 64); each conversion, including the plain and Result forms;
-  `UInt64` values above 2^63. The header of the file says how it was made. CI
-  never runs Python for this.
+  `UInt64` values above 2^63, and `UInt64` lists sorted in unsigned order. The
+  header of the file says how it was made. CI never runs Python for this.
 - **Float32 vectors.** The generator computes the exact result of each operation
   with `fractions.Fraction` and rounds it to binary32 with integer arithmetic.
   It does not use the double-rounding argument, so it is independent of §42.9.
   It also covers ties near 1.0, the largest finite value and the tie above it,
-  subnormal ties, overflow to infinity, and the shortest printing, which the
-  generator computes with its own loop over 1 to 9 digits and a `struct` round
-  trip, not `repr`.
+  subnormal ties, overflow to infinity, the Int-to-Float32 cases of §42.9
+  (`9007199791611905` and `2^60 + 2^36 + 1`), and the shortest printing. The
+  shortest printing tries each candidate of 1 to 9 digits and checks it with
+  exact `Fraction` arithmetic: the candidate, as an exact decimal, must round to
+  the value under the rule above, ties to even. It does not round through a
+  `double` or call `struct`, so it repeats neither the double rounding of §42.9
+  nor the C loop, and it does not use `repr`.
 - **Round trips.** `to_uint8` then `to_int` gives back the value; `read` of
   `write` gives back the value for each type (step 3); `strtof` of the printed
   text gives back the Float32; `wrap_` of a value in range gives that value.
@@ -634,15 +674,24 @@ Not planned:
 - **An unsigned `Int`.** `Int` stays signed, and `UInt64` covers the range above
   it.
 - **A target-dependent `Int` width.** The owner confirmed that `Int` and
-  `Float` stay 64-bit by default. The VM stores them as C `int64_t` and
-  `double`, which C provides on 32-bit CPUs too, so a program gives the same
-  results on every target. A build option for a 32-bit `Int` would make the
-  same program overflow on one target and not on another, and `.agcb` files
-  would not move between them. The owner noted that a 32-bit option for old
-  architectures could be revisited if one is ever a target; none is planned.
+  `Float` stay 64-bit on every target. A 32-bit option is only a note: the owner
+  noted that it could be revisited if an old 32-bit architecture ever becomes a
+  target; none is planned.
+  - Design rationale (the author's, not the owner's): the VM stores `Int` as C
+    `int64_t` and `Float` as `double`, which C provides on 32-bit CPUs too. A
+    32-bit build must compute `Float` in hardware double (SSE2 on x86, VFP on
+    ARM), since x87 extended precision gives other results. A build option for a
+    32-bit `Int` would make the same program overflow on one target and not on
+    another, and `.agcb` files would not move between them.
 
 ### 42.17 Questions for the owner
 
+- **Literal typing (42.5, "Operators, calls and sign").** Adopt the rule as
+  written: a literal on either side of an operator takes the other operand's
+  type; a literal expression takes the expected type into both operands; a type
+  variable of a call is fixed by its other arguments; and a `-` folds into an
+  integer literal, so `x: UInt8 = -5` is `CHECK-INT-RANGE`. Recommendation:
+  adopt it.
 - **`Float.to_bits` return type.** Keep `Int` (signed bit pattern, as in §23.3),
   or change to `UInt64` in step 3? Recommendation: change it in step 3, with the
   other bit builtins, so one type holds a 64-bit pattern. This is breaking, and

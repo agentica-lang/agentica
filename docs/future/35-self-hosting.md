@@ -260,7 +260,8 @@ Notes:
   35.3), and every `stdlib/` source with an index of path, offset and length.
   The list of `std/` modules moves from `src/stdlib.rkt` to a plain file that
   the Makefile reads. The `std/` modules stay as source, because the front end
-  compiles imports from source and `agentica doc` prints them (§32.5).
+  compiles imports from source, and `agentica doc` (row 22b, after the
+  bootstrap) prints them (§32.5).
 - **Linking.** As the release does today (the development skill's
   `references/ci.md`, "Release"): a pinned `zig cc` against glibc 2.28, checked
   with `objdump -T`, with Boehm GC, libuv, OpenSSL, yyjson and picohttpparser

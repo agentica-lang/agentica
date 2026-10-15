@@ -1,8 +1,8 @@
 ## 32. Doc comments
 
 **Status:** 22a is built (§32.2 to §32.4: the `##` syntax, the parser side table
-and the `std/` docs); 22b (§32.5, §32.6) is planned (roadmap [phase
-22](../roadmap/22-doc-comments.md)). Decided on 2026-10-12: Agentica gets
+and the `std/` docs); 22b (§32.5, §32.6) waits until after the bootstrap
+(roadmap [row 22b](../roadmap/README.md)). Decided on 2026-10-12: Agentica gets
 documentation comments written as `##` lines, in the style of Rust's `///`, so
 that a later tool can generate documentation from the code. Phase 22 is front
 end only. It comes after 7i, HTTP 20b, task crash isolation (§37), unit tests
@@ -200,14 +200,15 @@ end
 
 - **Front end only.** Doc comments change only the lexer, the parser and the
   CLI, and the AST keeps its shape (§32.4).
-- **When.** Decided by the user on 2026-10-13: 22a and 22b come after 7i, at
+- **When.** Decided by the user on 2026-10-13: 22a comes after 7i, at
   roadmap order step 7.2a: after order step 7.2.1 (HTTP 20b, task crash
   isolation (§37), unit tests (§36), then HTTP 20c, which also took what was
   left of 20d; placed there by the owner on 2026-10-13) and after the evaluation
   pilot (order step 7.2.2, added by the owner on 2026-10-13), and before digit
   separators (§33) and before `Task.map` (order step 7.3); channels come
-  earlier, at row 7.2.1e. They are no longer an exception to "new features are
-  VM-only and come after 7i".
+  earlier, at row 7.2.1e. 22a is no longer an exception to "new features are
+  VM-only and come after 7i". 22b waits until after the bootstrap (decided by
+  the owner on 2026-10-15, roadmap row 22b).
   - `stdlib/http.agc` (HTTP 20a and 20c) is documented in 22a.
 - **How the VM is affected.** It runs programs with doc comments as before,
   because docs never reach it.

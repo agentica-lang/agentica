@@ -106,6 +106,8 @@ end
 120
 ```
 
+A call inside a larger expression, such as `return 1 + f(n - 1)`, and a call of a builtin are not tail calls: each one keeps its frame and counts toward the limit of 10000 nested calls.
+
 ## Many results
 
 A function returns one value. To give back several, return a
