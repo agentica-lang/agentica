@@ -108,6 +108,11 @@ It has no row in this table. It would reuse the §39 commands and the §32 doc
 comments, so it can only start after them (and is easiest on the self-hosted
 front end of §35).
 
+Design, not scheduled: signals ([§46](../future/46-signals.md)). It has no row
+in this table. Its VM parts (46a and 46b) are C code and builtin table rows,
+so they could land before the bootstrap, as row 7.2.7 allows. They need no new
+syntax. The compiler catalog gets the same rows before the bootstrap.
+
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
 diagnostics, behavior tests, grammar, and the self-contained programming
