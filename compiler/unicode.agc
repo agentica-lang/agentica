@@ -1,17 +1,5 @@
 import "unicode_table" as Table
 
-def search(ranges: List[Int], code: Int, low: Int, high: Int) -> Bool
-  while low < high
-    middle = (low + high) / 2
-    if ranges[middle * 2 + 1] < code
-      low = middle + 1
-    else
-      high = middle
-    end
-  end
-  return low * 2 < ranges.size and ranges[low * 2] <= code
-end
-
 export def graphic?(code: Int) -> Bool
   ranges = Table.graphic_ranges()
   return search(ranges, code, 0, ranges.size / 2)
@@ -55,6 +43,29 @@ export def written(code: Int) -> String
   end
 end
 
+## A String as Racket writes it (`write`): quotes, with \\a \\b \\t \\n \\v \\f \\r \\e, \\" and \\\\, and \\uXXXX or \\UXXXXXXXX for characters that are neither graphic nor blank.
+export def written_text(text: String) -> String
+  ranges = Table.graphic_ranges()
+  parts: List[String] = ["\""]
+  for character in text.split("")
+    parts = parts.push(written_character(ranges, String.code(character), character))
+  end
+  parts = parts.push("\"")
+  return parts.join("")
+end
+
+def search(ranges: List[Int], code: Int, low: Int, high: Int) -> Bool
+  while low < high
+    middle = (low + high) / 2
+    if ranges[middle * 2 + 1] < code
+      low = middle + 1
+    else
+      high = middle
+    end
+  end
+  return low * 2 < ranges.size and ranges[low * 2] <= code
+end
+
 def blank?(code: Int) -> Bool
   return code == 32 or code == 160 or code == 5760 or (code >= 8192 and code <= 8202) or code == 8239 or code == 8287 or code == 12288
 end
@@ -80,15 +91,4 @@ def written_character(ranges: List[Int], code: Int, character: String) -> String
       end
       return "\\U" + hex(code, 8)
   end
-end
-
-## A String as Racket writes it (`write`): quotes, with \\a \\b \\t \\n \\v \\f \\r \\e, \\" and \\\\, and \\uXXXX or \\UXXXXXXXX for characters that are neither graphic nor blank.
-export def written_text(text: String) -> String
-  ranges = Table.graphic_ranges()
-  parts: List[String] = ["\""]
-  for character in text.split("")
-    parts = parts.push(written_character(ranges, String.code(character), character))
-  end
-  parts = parts.push("\"")
-  return parts.join("")
 end

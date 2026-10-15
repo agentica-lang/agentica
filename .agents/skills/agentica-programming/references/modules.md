@@ -3,6 +3,7 @@
 Each file is a module. `import "models" as Models` loads `models.agc`; `"../lib/util"` loads `../lib/util.agc`. Paths never include the extension (`import "models.agc"` is `CHECK-IMPORT-PATH`, and so are an empty path, a path ending in `/`, or a last part with a dot such as `"models.rb"`). So a module file name has no dot except `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
 
 - Relative paths resolve from the importing file, not the working directory.
+- Every file, imported ones included, keeps the order: `import`s, then `struct` and `enum`, then `export def`, then private `def`. An imported file out of order is `CHECK-DECL-ORDER`, located in that file.
 - Canonical paths identify files, and each file is linked once. A cycle is `CHECK-IMPORT-CYCLE`; a missing or unreadable import is `CHECK-IMPORT-IO`; an invalid path is `CHECK-IMPORT-PATH`. Each is reported at the import.
 
 ## Exports and names

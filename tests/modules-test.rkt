@@ -52,7 +52,7 @@
 
   (test-case "blocks in an imported file call that file's private helpers and types"
     (with-files
-     '(("lib.agc" . "struct Pair\n  n: Int\nend\n\ndef twice(n: Int) -> Int\n  return n * 2\nend\n\nexport def doubled(xs: List[Int]) -> List[Int]\n  pairs = xs.map do |x| Pair(n: twice(x)) end\n  return pairs.map do |p: Pair| p.n end\nend\n\n")
+     '(("lib.agc" . "struct Pair\n  n: Int\nend\n\nexport def doubled(xs: List[Int]) -> List[Int]\n  pairs = xs.map do |x| Pair(n: twice(x)) end\n  return pairs.map do |p: Pair| p.n end\nend\n\ndef twice(n: Int) -> Int\n  return n * 2\nend\n\n")
        ("root.agc" . "import \"lib\" as Lib\ndef main() -> Void\n  IO.inspect(Lib.doubled([1, 2]))\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
@@ -60,7 +60,7 @@
 
   (test-case "interpolation in an imported function reaches that file's private helpers"
     (with-files
-     '(("lib.agc" . "def twice(n: Int) -> Int\n  return n * 2\nend\n\nexport def label(n: Int) -> String\n  return \"n=#{twice(n)}\"\nend\n\n")
+     '(("lib.agc" . "export def label(n: Int) -> String\n  return \"n=#{twice(n)}\"\nend\n\ndef twice(n: Int) -> Int\n  return n * 2\nend\n\n")
        ("root.agc" . "import \"lib\" as Lib\ndef main() -> Void\n  puts(Lib.label(3))\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
@@ -167,8 +167,8 @@
 
   (test-case "private helpers and same names in different modules stay separate"
     (with-files
-     '(("a.agc" . "def helper(n: Int) -> Int\n  return n + 1\nend\n\nexport def apply(n: Int) -> Int\n  return helper(n)\nend\n\n")
-       ("b.agc" . "def helper(n: Int) -> Int\n  return n + 10\nend\n\nexport def apply(n: Int) -> Int\n  return helper(n)\nend\n\n")
+     '(("a.agc" . "export def apply(n: Int) -> Int\n  return helper(n)\nend\n\ndef helper(n: Int) -> Int\n  return n + 1\nend\n\n")
+       ("b.agc" . "export def apply(n: Int) -> Int\n  return helper(n)\nend\n\ndef helper(n: Int) -> Int\n  return n + 10\nend\n\n")
        ("root.agc" . "import \"a\" as A\nimport \"b\" as B\ndef main() -> Void\n  IO.inspect(List.map([1, 2], &A.apply))\n  IO.inspect(List.map([1, 2], &B.apply))\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
@@ -210,7 +210,7 @@
        (check-false (regexp-match? #rx"@" (diagnostic-callee arity)))))
     (with-files
      '(("bad.agc" . "struct Point\n  x: Int\nend\n\nstruct Pair\n  p: Pont\nend\n\n")
-       ("calls.agc" . "def helper() -> Int\n  return 1\nend\n\nexport def go() -> Int\n  return helpr()\nend\n\n")
+       ("calls.agc" . "export def go() -> Int\n  return helpr()\nend\n\ndef helper() -> Int\n  return 1\nend\n\n")
        ("types.agc" . "import \"bad\" as B\ndef main() -> Void\nend\n\n")
        ("funcs.agc" . "import \"calls\" as C\n\ndef helpe() -> Int\n  return 2\nend\n\ndef main() -> Void\n  n = C.go()\nend\n\n"))
      (lambda (directory)
@@ -245,7 +245,7 @@
              ("" "  x = IO.nope()\n" CHECK-UNKNOWN-NAME)
              ("" "  x: Missing.Value = 1\n" CHECK-IMPORT-NAME))])
       (with-files
-       (list (cons "module.agc" "struct Secret\n  value: Int\nend\n\ndef hidden() -> Void\nend\n\nexport struct Public\nend\n\n")
+       (list (cons "module.agc" "struct Secret\n  value: Int\nend\n\nexport struct Public\nend\n\ndef hidden() -> Void\nend\n\n")
              (cons "root.agc" (string-append (car entry) "def main() -> Void\n" (cadr entry) "end\n\n")))
        (lambda (directory)
          (define problem (checked (build-path directory "root.agc")))
@@ -270,7 +270,7 @@
                    ("" #f))])
       (with-files
        (list (cons "lib/util.agc" "export def read() -> String\n  return \"util\"\nend\n\n")
-             (cons "root.agc" (format "def helper() -> Void\nend\n\nimport ~s as Util\ndef main() -> Void\nend\n\n" (car entry))))
+             (cons "root.agc" (format "# two comment lines keep the import off line 1\n# so the span is not the file start\n\nimport ~s as Util\ndef main() -> Void\nend\n\n" (car entry))))
        (lambda (directory)
          (define problem (checked (build-path directory "root.agc")))
          (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-PATH)
@@ -416,7 +416,7 @@
                    ("  x = M.Secret(value: 1)\n" #f)
                    ("  x = M.faraway()\n" #f))])
       (with-files
-       (list (cons "module.agc" "struct Secret\n  value: Int\nend\n\ndef hidden() -> Void\nend\n\nexport def public() -> Void\nend\n\nexport struct Public\n  a: Int\nend\n\n")
+       (list (cons "module.agc" "struct Secret\n  value: Int\nend\n\nexport struct Public\n  a: Int\nend\n\nexport def public() -> Void\nend\n\ndef hidden() -> Void\nend\n\n")
              (cons "root.agc" (string-append "import \"module\" as M\ndef main() -> Void\n" (car entry) "end\n\n")))
        (lambda (directory)
          (define problem (checked (build-path directory "root.agc")))
@@ -514,3 +514,59 @@
       (close-input-port errors)
       (check-equal? (subprocess-status process) 2 (format "~a" arguments))
       (check-equal? text (format "agentica: unknown builtin ~a\n" (cadr arguments))))))
+
+(module+ test
+  (define (order-problem files)
+    (with-files files
+      (lambda (directory)
+        (define problem (checked (build-path directory "root.agc")))
+        (and (diagnostic? problem)
+             (let ([span (diagnostic-span problem)])
+               (list (diagnostic-code problem)
+                     (path->string (file-name-from-path (source-name (source-span-source span))))
+                     (source-position-line (source-span-start span))
+                     (source-position-column (source-span-start span))))))))
+
+  (test-case "a type after a function is out of order, at the type"
+    (check-equal?
+     (order-problem '(("root.agc" . "def main() -> Void\nend\n\nstruct Late\n  n: Int\nend\n\n")))
+     '(CHECK-DECL-ORDER "root.agc" 4 1)))
+
+  (test-case "a private function before an exported one is out of order, at the export"
+    (check-equal?
+     (order-problem '(("root.agc" . "def helper() -> Void\nend\n\nexport def api() -> Void\nend\n\n")))
+     '(CHECK-DECL-ORDER "root.agc" 4 1))
+    (check-equal?
+     (order-problem '(("root.agc" . "def helper() -> Void\nend\n\nexport struct Late\nend\n\n")))
+     '(CHECK-DECL-ORDER "root.agc" 4 1)))
+
+  (test-case "a private enum after a function is out of order, at the enum"
+    (check-equal?
+     (order-problem '(("root.agc" . "def main() -> Void\nend\n\nenum Late\n  A\nend\n\n")))
+     '(CHECK-DECL-ORDER "root.agc" 4 1)))
+
+  (test-case "an import after a declaration is out of order"
+    (check-equal?
+     (order-problem '(("lib.agc" . "export def go() -> Void\nend\n\n")
+                      ("root.agc" . "struct Early\nend\n\nimport \"lib\" as Lib\n")))
+     '(CHECK-DECL-ORDER "root.agc" 4 1)))
+
+  (test-case "types in any order, then exports, then private functions, check clean"
+    (with-files
+     '(("lib.agc" . "export def go() -> Void\nend\n\n")
+       ("root.agc" . "## Module doc.\n\nimport \"lib\" as Lib\nimport \"std/queue\" as Queue\n\nexport enum Kind\n  A\nend\n\nstruct Box\n  n: Int\nend\n\nexport struct Pair\n  n: Int\nend\n\nenum Hidden\n  B\nend\n\nexport def api() -> Void\n  Lib.go()\n  helper()\nend\n\ndef helper() -> Void\nend\n\ndef main() -> Void\nend\n\n"))
+     (lambda (directory)
+       (check-false (diagnostic? (checked (build-path directory "root.agc")))))))
+
+  (test-case "an imported module is checked too, and the diagnostic names its file"
+    (check-equal?
+     (order-problem '(("lib.agc" . "def helper() -> Void\nend\n\nexport def go() -> Void\nend\n\n")
+                      ("root.agc" . "import \"lib\" as Lib\ndef main() -> Void\n  Lib.go()\nend\n\n")))
+     '(CHECK-DECL-ORDER "lib.agc" 4 1)))
+
+  (test-case "embedded std modules follow the rule, so importing them never trips it"
+    (for ([name '("std/http" "std/logger" "std/binary" "std/queue")])
+      (with-files
+       (list (cons "root.agc" (format "import ~s as M\ndef main() -> Void\nend\n\n" name)))
+       (lambda (directory)
+         (check-false (diagnostic? (checked (build-path directory "root.agc"))) name))))))

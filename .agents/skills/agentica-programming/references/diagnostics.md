@@ -58,6 +58,7 @@ Each line is a function and the place it runs: the error for the first, the call
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
 | `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE` | a `Set` element type that is not `Int` or `String`; `Set.new([])` with no expected type: annotate it, `s: Set[Int] = Set.new([])` |
 | `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` | Missing/unreadable import, invalid path (including a path with `.agc` or another extension), cycle, or unknown/private imported name; for a misspelled name the help suggests the closest export (`did you mean "name"?`) |
+| `CHECK-DECL-ORDER` | a declaration out of the file order (imports, `struct`/`enum`, `export def`, `def`): a type after a function, a private `def` before an `export def`, an `import` after a declaration; move it to its group |
 | `CHECK-MODULE-CONTEXT` | Raw import/export declarations need module resolution before checking |
 | `CHECK-NOT-DECODABLE` | JSON.decode/schema target is not a struct or contains unsupported field types |
 | `CHECK-NOT-ENCODABLE` | JSON.encode on a type with unsupported nested values or Int-keyed maps |

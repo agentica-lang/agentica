@@ -28,19 +28,6 @@ export def client(options: HttpClientOptions) -> Result[HttpClient]
   return HttpWire.client(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes, options.ca_file)
 end
 
-def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int) -> Result[Void]
-  if timeout_ms <= 0 or idle_timeout_ms <= 0 or max_connections <= 0 or max_body_bytes <= 0
-    return error("http: every option must be positive")
-  end
-  if max_connections > 65536
-    return error("http: max_connections must be at most 65536")
-  end
-  if max_body_bytes > 67108864
-    return error("http: max_body_bytes must be at most 67108864")
-  end
-  return ok()
-end
-
 ## Closes the client and its connections. A call still in flight fails.
 export def close_client(pool: HttpClient) -> Void
   HttpWire.close_client(pool)
@@ -73,6 +60,54 @@ export def header_values(headers: List[Header], name: String) -> List[String]
     end
   end
   return found
+end
+
+## Returns the default server options: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB bodies.
+export def server_options() -> HttpServerOptions
+  return HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)
+end
+
+## Starts an HTTP server on `host` and `port` and returns at once; it serves in the background. `handler` takes the whole request and returns the whole response.
+## Port 0 picks a free port, which `local_port` returns. The server closes when the task that called `listen` ends.
+export def listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+  try check_options(options.request_timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  listener = try TCP.listen(host, port)
+  return ok(start(listener, handler, options))
+end
+
+## Like `listen`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`.
+export def listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+  try check_options(options.request_timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  listener = try TLS.listen(host, port, cert_file, key_file)
+  return ok(start(listener, handler, options))
+end
+
+## Returns the port the server listens on.
+export def local_port(server: HttpServer) -> Int
+  return HttpWire.local_port(server)
+end
+
+## Waits until the server is closed, then returns `ok()`.
+export def wait(server: HttpServer) -> Result[Void]
+  return HttpWire.wait(server)
+end
+
+## Stops accepting, closes every connection and cancels the running handlers. Calling it again does nothing.
+export def close_server(server: HttpServer) -> Void
+  HttpWire.close_server(server)
+end
+
+def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int) -> Result[Void]
+  if timeout_ms <= 0 or idle_timeout_ms <= 0 or max_connections <= 0 or max_body_bytes <= 0
+    return error("http: every option must be positive")
+  end
+  if max_connections > 65536
+    return error("http: max_connections must be at most 65536")
+  end
+  if max_body_bytes > 67108864
+    return error("http: max_body_bytes must be at most 67108864")
+  end
+  return ok()
 end
 
 def first_of(text: String, part: String) -> Int
@@ -171,41 +206,6 @@ def parse_url(url: String) -> Result[Target]
     return error("http: the port must be 1..65535")
   end
   return ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
-end
-
-## Returns the default server options: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB bodies.
-export def server_options() -> HttpServerOptions
-  return HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)
-end
-
-## Starts an HTTP server on `host` and `port` and returns at once; it serves in the background. `handler` takes the whole request and returns the whole response.
-## Port 0 picks a free port, which `local_port` returns. The server closes when the task that called `listen` ends.
-export def listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
-  try check_options(options.request_timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
-  listener = try TCP.listen(host, port)
-  return ok(start(listener, handler, options))
-end
-
-## Like `listen`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`.
-export def listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
-  try check_options(options.request_timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
-  listener = try TLS.listen(host, port, cert_file, key_file)
-  return ok(start(listener, handler, options))
-end
-
-## Returns the port the server listens on.
-export def local_port(server: HttpServer) -> Int
-  return HttpWire.local_port(server)
-end
-
-## Waits until the server is closed, then returns `ok()`.
-export def wait(server: HttpServer) -> Result[Void]
-  return HttpWire.wait(server)
-end
-
-## Stops accepting, closes every connection and cancels the running handlers. Calling it again does nothing.
-export def close_server(server: HttpServer) -> Void
-  HttpWire.close_server(server)
 end
 
 def start(listener: Listener, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> HttpServer

@@ -6,6 +6,8 @@ Relative paths resolve from the importing file, not the working directory. Each 
 
 Only `export struct`, `export enum` and `export def` are visible outside the file. Use `Models.User` in annotations and JSON type arguments, `Models.User(name: "Ana")` to construct, `Models.greet(user)` to call, `&Models.greet` for a function value, `Models.Option[T]` as an enum type, and `Models.Option.Some(value)` for a variant. Local names stay unqualified. Import aliases are uppercase and cannot collide with declarations, other aliases or builtin names. Imports cannot be re-exported. Exported signatures may mention private types, but importers cannot name or construct them.
 
+Every file keeps the declaration order of section 5: imports, then types, then `export def`, then private `def`. An imported file out of order is `CHECK-DECL-ORDER`, located in that file.
+
 Only the root file supplies the executable `main() -> Void`; imported `main` functions do not run. Imported calls and tasks share the program's step budget and resource ownership. The CLI and `agentica test` use the same loader. There are no wildcard imports, package registry, module state, nested modules or receiver attachment. `as` is contextual in imports, not reserved.
 
 #### Standard library and external libraries

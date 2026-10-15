@@ -3,6 +3,13 @@ import "lexer" as Lexer
 import "text" as Text
 import "token" as Tokens
 
+export def lex_text(text: String) -> String
+  case Lexer.lex(text)
+    Diag.Outcome.Done(tokens) -> return tokens.map do |token| token_line(token) end.join("\n")
+    Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
+  end
+end
+
 def value_text(token: Tokens.Token) -> String
   case token.value
     Tokens.Value.NoValue -> return "-"
@@ -20,11 +27,4 @@ end
 
 def token_line(token: Tokens.Token) -> String
   return token.kind + " " + Text.span_text(token.span) + " " + Text.quote(token.lexeme) + " " + value_text(token)
-end
-
-export def lex_text(text: String) -> String
-  case Lexer.lex(text)
-    Diag.Outcome.Done(tokens) -> return tokens.map do |token| token_line(token) end.join("\n")
-    Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
-  end
 end

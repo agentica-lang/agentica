@@ -1,14 +1,14 @@
+struct Flood
+  socket: Socket
+  chunk: String
+end
+
 def hold(socket: Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 
 def wait_accept(listener: Listener) -> Bool
   return Result.ok?(TCP.accept(listener, 60000))
-end
-
-struct Flood
-  socket: Socket
-  chunk: String
 end
 
 def flood(job: Flood) -> Result[Void]
