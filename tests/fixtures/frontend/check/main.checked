@@ -1,0 +1,1 @@
+ERROR CHECK-MAIN 0:1:1-29:3:1 "main must take no parameters and return Void" - file="main.agc"

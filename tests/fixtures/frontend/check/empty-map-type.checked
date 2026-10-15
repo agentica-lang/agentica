@@ -1,0 +1,1 @@
+ERROR CHECK-EMPTY-MAP-TYPE 25:2:7-27:2:9 "an empty map needs an expected type, for example \"Map[String, Int]\"" "annotate the variable: m: Map[String, Int] = {}; a parameter, a field or a function result also gives the type" signature="main() -> Void" file="empty-map-type.agc"

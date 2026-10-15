@@ -1,0 +1,68 @@
+program #40 0:1:1-297:13:1
+  module "root.agc"
+    declaration: function-decl #39 83:4:1-297:13:1 name="main"
+      result: type-ref #2 97:4:15-101:4:19 name="Void"
+      body: binding #9 104:5:3-131:6:1 name="p"
+        value: construct #8 108:5:7-130:5:29 type="@2::Point" type=Struct(@2::Point)
+          arg: named-arg #5 111:5:10-123:5:22 name="x"
+            value: call #4 114:5:13-123:5:22 name="@2::double" piped=false type=Int
+              arg: literal #3 121:5:20-122:5:21 value=int:2 type=Int
+          arg: named-arg #7 125:5:24-129:5:28 name="y"
+            value: literal #6 128:5:27-129:5:28 value=int:3 type=Int
+      body: binding #13 133:6:3-173:7:1 name="shape"
+        value: enum-constructor #12 141:6:11-172:6:42 enum="@2::Shape" variant="Line" type=Enum(@2::Shape, [])
+          arg: name-ref #10 151:6:21-152:6:22 name="p" type=Struct(@2::Point)
+          arg: call #11 154:6:24-171:6:41 name="@2::origin" piped=false type=Struct(@2::Point)
+      body: binding #18 175:7:3-196:8:1 name="moved"
+        value: struct-update #17 183:7:11-195:7:23 visible=["@2::Point"] type=Struct(@2::Point)
+          target: name-ref #14 183:7:11-184:7:12 name="p" type=Struct(@2::Point)
+          arg: named-arg #16 190:7:18-194:7:22 name="x"
+            value: literal #15 193:7:21-194:7:22 value=int:5 type=Int
+      body: case-stmt #38 198:8:3-293:12:1
+        value: name-ref #19 203:8:8-208:8:13 name="shape" type=Enum(@2::Shape, [])
+        arm: case-arm #25 213:9:5-238:10:1
+          pattern: variant-pattern #20 213:9:5-224:9:16 enum="@2::Shape" variant="Dot" bindings=["d"]
+          body: expr-stmt #24 228:9:20-238:10:1
+            value: call #23 228:9:20-237:9:29 name="puts" piped=false type=Void
+              arg: field-access #22 233:9:25-236:9:28 name="x" type=Int
+                target: name-ref #21 233:9:25-234:9:26 name="d" type=Struct(@2::Point)
+        arm: case-arm #37 242:10:5-287:11:1
+          pattern: variant-pattern #26 242:10:5-257:10:20 enum="@2::Shape" variant="Line" bindings=["a","b"]
+          body: expr-stmt #36 261:10:24-287:11:1
+            value: call #35 261:10:24-286:10:49 name="puts" piped=false type=Void
+              arg: binary #34 266:10:29-285:10:48 op=plus op-span=276:10:39-277:10:40 type=Int
+                left: binary #31 266:10:29-275:10:38 op=plus op-span=270:10:33-271:10:34 type=Int
+                  left: field-access #28 266:10:29-269:10:32 name="x" type=Int
+                    target: name-ref #27 266:10:29-267:10:30 name="a" type=Struct(@2::Point)
+                  right: field-access #30 272:10:35-275:10:38 name="y" type=Int
+                    target: name-ref #29 272:10:35-273:10:36 name="b" type=Struct(@2::Point)
+                right: field-access #33 278:10:41-285:10:48 name="x" type=Int
+                  target: name-ref #32 278:10:41-283:10:46 name="moved" type=Struct(@2::Point)
+  module "lib.agc"
+    declaration: struct-decl #4 7:1:8-42:5:1 name="@2::Point"
+      field: field-decl #1 22:2:3-29:3:1 name="x"
+        type: type-ref #0 25:2:6-28:2:9 name="Int"
+      field: field-decl #3 31:3:3-38:4:1 name="y"
+        type: type-ref #2 34:3:6-37:3:9 name="Int"
+    declaration: enum-decl #11 50:6:8-99:10:1 name="@2::Shape" type-parameters=[]
+      variant: enum-variant #7 63:7:3-74:8:1 name="Dot"
+        payload: type-ref #6 67:7:7-72:7:12 name="@2::Point"
+      variant: enum-variant #10 76:8:3-95:9:1 name="Line"
+        payload: type-ref #8 81:8:8-86:8:13 name="@2::Point"
+        payload: type-ref #9 88:8:15-93:8:20 name="@2::Point"
+    declaration: function-decl #20 107:11:8-152:14:1 name="@2::double"
+      param: param #14 118:11:19-124:11:25 name="n"
+        type: type-ref #13 121:11:22-124:11:25 name="Int"
+      result: type-ref #15 129:11:30-132:11:33 name="Int"
+      body: return-stmt #19 135:12:3-148:13:1
+        value: binary #18 142:12:10-147:12:15 op=multiply op-span=144:12:12-145:12:13 type=Int
+          left: name-ref #16 142:12:10-143:12:11 name="n" type=Int
+          right: literal #17 146:12:14-147:12:15 value=int:2 type=Int
+    declaration: function-decl #29 160:15:8-213:18:1 name="@2::origin"
+      result: type-ref #22 176:15:24-181:15:29 name="@2::Point"
+      body: return-stmt #28 184:16:3-209:17:1
+        value: construct #27 191:16:10-208:16:27 type="@2::Point" type=Struct(@2::Point)
+          arg: named-arg #24 197:16:16-201:16:20 name="x"
+            value: literal #23 200:16:19-201:16:20 value=int:0 type=Int
+          arg: named-arg #26 203:16:22-207:16:26 name="y"
+            value: literal #25 206:16:25-207:16:26 value=int:0 type=Int

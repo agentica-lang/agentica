@@ -1,0 +1,1 @@
+ERROR CHECK-TRY-CONTEXT 25:2:7-34:2:16 "try requires a function returning Result" "return Result[T] from this function, or handle the Result explicitly" signature="main() -> Void" file="try-context.agc"

@@ -10,7 +10,7 @@ import "text" as Text
 ## The text form of linking the file at path: the linked program, or the ERROR line of the first failure. The first line is `program #id span`, the root's module doc as ` module-doc="..."`. Each file that declares something follows as `module "path"`, with its declarations (without export, names linked) one level deeper, in the node text form of parse_text with ids that start at 0 inside the file. The path is relative to the folder of the root file, or absolute outside it, or std/NAME.agc. A failure is the lexer's ERROR line with ` file="path"` added. tests/frontend-modules-common.rkt prints the same text from the Racket program.
 export def link_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
-    Linker.Linking.Done(linked) -> return program_text(linked).join("\n")
+    Linker.Linking.Done(linked) -> return program_lines(linked, {}).join("\n")
     Linker.Linking.Failed(failure) -> return failure_text(root_dir_of(path), failure)
   end
 end
@@ -26,7 +26,7 @@ export def ids_text(path: String, settings: Env.Settings) -> String
 end
 
 # The folder of the canonical root file, "" when the file cannot be resolved.
-def root_dir_of(path: String) -> String
+export def root_dir_of(path: String) -> String
   real = Path.real(path)
   if real.ok?
     return Paths.directory_of(real.unwrap!)
@@ -34,7 +34,8 @@ def root_dir_of(path: String) -> String
   return ""
 end
 
-def display(root_dir: String, file: String) -> String
+## The path of a file as the text forms print it: relative to the folder of the root file when it is inside.
+export def display(root_dir: String, file: String) -> String
   prefix = Paths.join(root_dir, "")
   if root_dir != "" and file.starts_with?(prefix)
     return file.slice(prefix.length, file.length - prefix.length)
@@ -42,24 +43,26 @@ def display(root_dir: String, file: String) -> String
   return file
 end
 
-def failure_text(root_dir: String, failure: Failure.Failure) -> String
+## The ERROR line of a link failure, with the file it is in.
+export def failure_text(root_dir: String, failure: Failure.Failure) -> String
   return Text.diagnostic_line(failure.diagnostic) + " file=" + Text.quote(display(root_dir, failure.file))
 end
 
-def program_text(linked: Linker.Linked) -> List[String]
+## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).
+export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List[String]
   root = linked.root
-  lines: List[String] = [ParseText.head(ParseText.Margin(indent: "", base: 0), "", "program", root.id, root.span, ParseText.text_attr(" module-doc=", root.module_doc))]
+  lines: List[String] = [ParseText.head(ParseText.Margin(indent: "", base: 0, notes: notes), "", "program", root.id, root.span, ParseText.text_attr(" module-doc=", root.module_doc))]
   for module in linked.modules
     if module.declarations.size > 0
-      lines = module_lines(lines, linked.root_dir, module)
+      lines = module_lines(lines, linked.root_dir, module, notes)
     end
   end
   return lines
 end
 
-def module_lines(out: List[String], root_dir: String, module: Linker.LinkedModule) -> List[String]
+def module_lines(out: List[String], root_dir: String, module: Linker.LinkedModule, notes: Map[Int, String]) -> List[String]
   lines = out.push("  module " + Text.quote(display(root_dir, module.file)))
-  at = ParseText.Margin(indent: "    ", base: module.first_id)
+  at = ParseText.Margin(indent: "    ", base: module.first_id, notes: notes)
   for decl in module.declarations
     lines = ParseText.print_decl(lines, at, "declaration", decl)
   end

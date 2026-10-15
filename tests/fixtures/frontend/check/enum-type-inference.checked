@@ -1,0 +1,1 @@
+ERROR CHECK-ENUM-TYPE-INFERENCE 51:6:7-63:6:19 "cannot infer enum type parameter(s) T for Empty.None" - signature="main() -> Void" file="enum-type-inference.agc"

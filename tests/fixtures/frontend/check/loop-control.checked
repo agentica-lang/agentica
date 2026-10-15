@@ -1,0 +1,1 @@
+ERROR CHECK-LOOP-CONTROL 21:2:3-26:2:8 "break is only valid inside while or for" "use it inside while or for; a function cannot break its caller's loop, so return a value and test it there" signature="main() -> Void" file="loop-control.agc"

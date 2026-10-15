@@ -1,0 +1,81 @@
+program #78 0:1:1-468:17:1
+  module "valid-10.agc"
+    declaration: function-decl #77 0:1:1-467:16:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: binding #5 21:2:3-53:3:1 name="seen"
+        type: type-ref #2 27:2:9-38:2:20 name="Set"
+          arg: type-ref #1 31:2:13-37:2:19 name="String"
+        value: call #4 41:2:23-52:2:34 name="Set.new" piped=false type=Set(String)
+          arg: list-lit #3 49:2:31-51:2:33 type=List(String)
+      body: binding #11 55:3:3-85:4:1 name="seen"
+        value: method-call #10 62:3:10-84:3:32 name="add" type=Set(String) resolved=call("Set.add", Set(String))
+          target: method-call #8 62:3:10-75:3:23 name="add" type=Set(String) resolved=call("Set.add", Set(String))
+            target: name-ref #6 62:3:10-66:3:14 name="seen" type=Set(String)
+            arg: literal #7 71:3:19-74:3:22 value=string:"a" type=String
+          arg: literal #9 80:3:28-83:3:31 value=string:"b" type=String
+      body: binding #17 87:4:3-113:5:1 name="nums"
+        value: call #16 94:4:10-112:4:28 name="Set.new" piped=false type=Set(Int)
+          arg: list-lit #15 102:4:18-111:4:27 type=List(Int)
+            element: literal #12 103:4:19-104:4:20 value=int:1 type=Int
+            element: literal #13 106:4:22-107:4:23 value=int:2 type=Int
+            element: literal #14 109:4:25-110:4:26 value=int:2 type=Int
+      body: binding #24 115:5:3-149:6:1 name="other"
+        type: type-ref #19 122:5:10-130:5:18 name="Set"
+          arg: type-ref #18 126:5:14-129:5:17 name="Int"
+        value: call #23 133:5:21-148:5:36 name="Set.new" piped=false type=Set(Int)
+          arg: list-lit #22 141:5:29-147:5:35 type=List(Int)
+            element: literal #20 142:5:30-143:5:31 value=int:2 type=Int
+            element: literal #21 145:5:33-146:5:34 value=int:3 type=Int
+      body: binding #36 151:6:3-231:7:1 name="both"
+        type: type-ref #26 157:6:9-165:6:17 name="Set"
+          arg: type-ref #25 161:6:13-164:6:16 name="Int"
+        value: method-call #35 168:6:20-230:6:82 name="difference" type=Set(Int) resolved=call("Set.difference", Set(Int))
+          target: method-call #31 168:6:20-205:6:57 name="intersection" type=Set(Int) resolved=call("Set.intersection", Set(Int))
+            target: method-call #29 168:6:20-185:6:37 name="union" type=Set(Int) resolved=call("Set.union", Set(Int))
+              target: name-ref #27 168:6:20-172:6:24 name="nums" type=Set(Int)
+              arg: name-ref #28 179:6:31-184:6:36 name="other" type=Set(Int)
+            arg: name-ref #30 199:6:51-204:6:56 name="other" type=Set(Int)
+          arg: call #34 217:6:69-229:6:81 name="Set.new" piped=false type=Set(Int)
+            arg: list-lit #33 225:6:77-228:6:80 type=List(Int)
+              element: literal #32 226:6:78-227:6:79 value=int:3 type=Int
+      body: binding #40 233:7:3-252:8:1 name="n"
+        type: type-ref #37 236:7:6-239:7:9 name="Int"
+        value: field-access #39 242:7:12-251:7:21 name="size" type=Int resolved=call("Set.size", Set(String))
+          target: name-ref #38 242:7:12-246:7:16 name="seen" type=Set(String)
+      body: binding #52 254:8:3-319:9:1 name="e"
+        type: type-ref #41 257:8:6-261:8:10 name="Bool"
+        value: binary #51 264:8:13-318:8:67 op=or op-span=296:8:45-298:8:47 type=Bool
+          left: binary #47 264:8:13-295:8:44 op=or op-span=276:8:25-278:8:27 type=Bool
+            left: field-access #43 264:8:13-275:8:24 name="empty?" type=Bool resolved=call("Set.empty?", Set(Int))
+              target: name-ref #42 264:8:13-268:8:17 name="nums" type=Set(Int)
+            right: method-call #46 279:8:28-295:8:44 name="include?" type=Bool resolved=call("Set.include?", Set(Int))
+              target: name-ref #44 279:8:28-283:8:32 name="nums" type=Set(Int)
+              arg: literal #45 293:8:42-294:8:43 value=int:1 type=Int
+          right: method-call #50 299:8:48-318:8:67 name="subset?" type=Bool resolved=call("Set.subset?", Set(Int))
+            target: name-ref #48 299:8:48-303:8:52 name="nums" type=Set(Int)
+            arg: name-ref #49 312:8:61-317:8:66 name="other" type=Set(Int)
+      body: binding #59 321:9:3-362:10:1 name="xs"
+        type: type-ref #54 325:9:7-334:9:16 name="List"
+          arg: type-ref #53 330:9:12-333:9:15 name="Int"
+        value: call #58 337:9:19-361:9:43 name="Set.to_a" piped=false type=List(Int)
+          arg: method-call #57 346:9:28-360:9:42 name="delete" type=Set(Int) resolved=call("Set.delete", Set(Int))
+            target: name-ref #55 346:9:28-350:9:32 name="nums" type=Set(Int)
+            arg: literal #56 358:9:40-359:9:41 value=int:1 type=Int
+      body: for-stmt #66 364:10:3-402:13:1 variable="x"
+        iterable: name-ref #60 373:10:12-377:10:16 name="seen" type=Set(String)
+        body: expr-stmt #65 382:11:5-396:12:1
+          value: call #64 382:11:5-395:11:18 name="puts" piped=false type=Void
+            arg: binary #63 387:11:10-394:11:17 op=plus op-span=389:11:12-390:11:13 type=String
+              left: name-ref #61 387:11:10-388:11:11 name="x" type=String
+              right: literal #62 391:11:14-394:11:17 value=string:"!" type=String
+      body: expr-stmt #72 404:13:3-436:14:1
+        value: call #71 404:13:3-435:13:34 name="puts" piped=false type=Void
+          arg: interpolation #70 409:13:8-434:13:33 type=String
+            part: name-ref #67 412:13:11-416:13:15 name="nums" type=Set(Int)
+            part: text " "
+            part: field-access #69 420:13:19-432:13:31 name="inspect" type=String resolved=inspect(Set(String))
+              target: name-ref #68 420:13:19-424:13:23 name="seen" type=Set(String)
+      body: binding #76 438:14:3-463:15:1 name="r"
+        value: call #75 442:14:7-462:14:27 name="Test.eq" piped=false type=Result(Void)
+          arg: name-ref #73 450:14:15-454:14:19 name="nums" type=Set(Int)
+          arg: name-ref #74 456:14:21-461:14:26 name="other" type=Set(Int)

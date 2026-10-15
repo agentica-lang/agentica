@@ -1,0 +1,117 @@
+program #115 0:1:1-983:56:1
+  module "valid-1.agc"
+    declaration: struct-decl #2 0:1:1-32:4:1 name="Job"
+      field: field-decl #1 13:2:3-28:3:1 name="socket"
+        type: type-ref #0 21:2:11-27:2:17 name="Socket"
+    declaration: struct-decl #6 33:5:1-72:8:1 name="Crate"
+      field: field-decl #5 48:6:3-68:7:1 name="inbox"
+        type: type-ref #4 55:6:10-67:6:22 name="Channel"
+          arg: type-ref #3 63:6:18-66:6:21 name="Int"
+    declaration: function-decl #15 73:9:1-137:12:1 name="feed"
+      param: param #9 82:9:10-101:9:29 name="inbox"
+        type: type-ref #8 89:9:17-101:9:29 name="Channel"
+          arg: type-ref #7 97:9:25-100:9:28 name="Int"
+      result: type-ref #11 106:9:34-117:9:45 name="Result"
+        arg: type-ref #10 113:9:41-116:9:44 name="Int"
+      body: return-stmt #14 120:10:3-133:11:1
+        value: call #13 127:10:10-132:10:15 name="ok" piped=false type=Result(Int)
+          arg: literal #12 130:10:13-131:10:14 value=int:1 type=Int
+    declaration: function-decl #19 138:13:1-170:15:1 name="crate"
+      param: param #17 148:13:11-156:13:19 name="c"
+        type: type-ref #16 151:13:14-156:13:19 name="Crate"
+      result: type-ref #18 161:13:24-165:13:28 name="Void"
+    declaration: function-decl #25 171:16:1-214:19:1 name="identity"
+      param: param #21 184:16:14-190:16:20 name="n"
+        type: type-ref #20 187:16:17-190:16:20 name="Int"
+      result: type-ref #22 195:16:25-198:16:28 name="Int"
+      body: return-stmt #24 201:17:3-210:18:1
+        value: name-ref #23 208:17:10-209:17:11 name="n" type=Int
+    declaration: function-decl #34 215:20:1-298:23:1 name="serve"
+      param: param #27 225:20:11-239:20:25 name="socket"
+        type: type-ref #26 233:20:19-239:20:25 name="Socket"
+      result: type-ref #29 244:20:30-258:20:44 name="Result"
+        arg: type-ref #28 251:20:37-257:20:43 name="String"
+      body: return-stmt #33 261:21:3-294:22:1
+        value: call #32 268:21:10-293:21:35 name="TCP.read_line" piped=false type=Result(String)
+          arg: name-ref #30 282:21:24-288:21:30 name="socket" type=Opaque(Socket)
+          arg: literal #31 290:21:32-292:21:34 value=int:10 type=Int
+    declaration: function-decl #38 299:24:1-338:26:1 name="edit"
+      param: param #36 308:24:10-324:24:26 name="file"
+        type: type-ref #35 314:24:16-324:24:26 name="FileHandle"
+      result: type-ref #37 329:24:31-333:24:35 name="Void"
+    declaration: function-decl #42 339:27:1-373:29:1 name="watch"
+      param: param #40 349:27:11-359:27:21 name="p"
+        type: type-ref #39 352:27:14-359:27:21 name="Process"
+      result: type-ref #41 364:27:26-368:27:30 name="Void"
+    declaration: function-decl #46 374:30:1-414:32:1 name="accept_one"
+      param: param #44 389:30:16-400:30:27 name="l"
+        type: type-ref #43 392:30:19-400:30:27 name="Listener"
+      result: type-ref #45 405:30:32-409:30:36 name="Void"
+    declaration: function-decl #50 415:33:1-451:35:1 name="host"
+      param: param #48 424:33:10-437:33:23 name="s"
+        type: type-ref #47 427:33:13-437:33:23 name="HttpServer"
+      result: type-ref #49 442:33:28-446:33:32 name="Void"
+    declaration: function-decl #54 452:36:1-493:38:1 name="pool"
+      param: param #52 461:36:10-479:36:28 name="client"
+        type: type-ref #51 469:36:18-479:36:28 name="HttpClient"
+      result: type-ref #53 484:36:33-488:36:37 name="Void"
+    declaration: function-decl #58 494:39:1-522:41:1 name="job"
+      param: param #56 502:39:9-508:39:15 name="j"
+        type: type-ref #55 505:39:12-508:39:15 name="Job"
+      result: type-ref #57 513:39:20-517:39:24 name="Void"
+    declaration: function-decl #63 523:42:1-567:44:1 name="many"
+      param: param #61 532:42:10-553:42:31 name="sockets"
+        type: type-ref #60 541:42:19-553:42:31 name="List"
+          arg: type-ref #59 546:42:24-552:42:30 name="Socket"
+      result: type-ref #62 558:42:36-562:42:40 name="Void"
+    declaration: function-decl #114 568:45:1-982:55:1 name="main"
+      result: type-ref #64 582:45:15-586:45:19 name="Void"
+      body: binding #70 589:46:3-638:47:1 name="socket"
+        value: field-access #69 598:46:12-637:46:51 name="unwrap!" type=Opaque(Socket) resolved=call("Result.unwrap!", Result(Opaque(Socket)))
+          target: call #68 598:46:12-629:46:43 name="TCP.connect" piped=false type=Result(Opaque(Socket))
+            arg: literal #65 610:46:24-621:46:35 value=string:"127.0.0.1" type=String
+            arg: literal #66 623:46:37-624:46:38 value=int:1 type=Int
+            arg: literal #67 626:46:40-628:46:42 value=int:10 type=Int
+      body: binding #77 640:47:3-700:48:1 name="t"
+        type: type-ref #73 643:47:6-663:47:26 name="Task"
+          arg: type-ref #72 648:47:11-662:47:25 name="Result"
+            arg: type-ref #71 655:47:18-661:47:24 name="String"
+        value: call #76 666:47:29-699:47:62 name="Task.spawn_owning" piped=false type=Task(Result(String))
+          arg: function-ref #74 684:47:47-690:47:53 name="serve" type=Fn([Opaque(Socket)], Result(String))
+          arg: name-ref #75 692:47:55-698:47:61 name="socket" type=Opaque(Socket)
+      body: expr-stmt #80 702:48:3-716:49:1
+        value: call #79 702:48:3-715:48:16 name="Task.await" piped=false type=Result(String)
+          arg: name-ref #78 713:48:14-714:48:15 name="t" type=Task(Result(String))
+      body: expr-stmt #88 718:49:3-779:50:1
+        value: call #87 718:49:3-778:49:63 name="Task.spawn_owning" piped=false type=Task(Void)
+          arg: function-ref #81 736:49:21-741:49:26 name="edit" type=Fn([Opaque(FileHandle)], Void)
+          arg: field-access #86 743:49:28-777:49:62 name="unwrap!" type=Opaque(FileHandle) resolved=call("Result.unwrap!", Result(Opaque(FileHandle)))
+            target: call #85 743:49:28-769:49:54 name="File.open" piped=false type=Result(Opaque(FileHandle))
+              arg: literal #82 753:49:38-756:49:41 value=string:"x" type=String
+              arg: literal #83 758:49:43-764:49:49 value=string:"read" type=String
+              arg: literal #84 766:49:51-768:49:53 value=int:10 type=Int
+      body: expr-stmt #96 781:50:3-843:51:1
+        value: call #95 781:50:3-842:50:64 name="Task.spawn_owning" piped=false type=Task(Void)
+          arg: function-ref #89 799:50:21-805:50:27 name="watch" type=Fn([Opaque(Process)], Void)
+          arg: field-access #94 807:50:29-841:50:63 name="unwrap!" type=Opaque(Process) resolved=call("Result.unwrap!", Result(Opaque(Process)))
+            target: call #93 807:50:29-833:50:55 name="Process.spawn" piped=false type=Result(Opaque(Process))
+              arg: literal #90 821:50:43-824:50:46 value=string:"x" type=String
+              arg: list-lit #91 826:50:48-828:50:50 type=List(String)
+              arg: literal #92 830:50:52-832:50:54 value=int:10 type=Int
+      body: binding #101 845:51:3-879:52:1 name="ch"
+        type: type-ref #98 849:51:7-861:51:19 name="Channel"
+          arg: type-ref #97 857:51:15-860:51:18 name="Int"
+        value: call #100 864:51:22-878:51:36 name="Channel.new" piped=false type=Channel(Int)
+          arg: literal #99 876:51:34-877:51:35 value=int:4 type=Int
+      body: binding #108 881:52:3-935:53:1 name="fed"
+        type: type-ref #104 886:52:8-903:52:25 name="Task"
+          arg: type-ref #103 891:52:13-902:52:24 name="Result"
+            arg: type-ref #102 898:52:20-901:52:23 name="Int"
+        value: call #107 906:52:28-934:52:56 name="Task.spawn_owning" piped=false type=Task(Result(Int))
+          arg: function-ref #105 924:52:46-929:52:51 name="feed" type=Fn([Channel(Int)], Result(Int))
+          arg: name-ref #106 931:52:53-933:52:55 name="ch" type=Channel(Int)
+      body: expr-stmt #113 937:53:3-978:54:1
+        value: call #112 937:53:3-977:53:43 name="Task.spawn_owning" piped=false type=Task(Result(Int))
+          arg: function-ref #109 955:53:21-960:53:26 name="feed" type=Fn([Channel(Int)], Result(Int))
+          arg: call #111 962:53:28-976:53:42 name="Channel.new" piped=false type=Channel(Int)
+            arg: literal #110 974:53:40-975:53:41 value=int:2 type=Int

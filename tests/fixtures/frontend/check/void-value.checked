@@ -1,0 +1,1 @@
+ERROR CHECK-VOID-VALUE 28:2:10-37:2:19 "a Void call has no value; use it as a statement" - signature="main() -> Void" file="void-value.agc"

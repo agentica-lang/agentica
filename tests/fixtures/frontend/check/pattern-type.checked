@@ -1,0 +1,1 @@
+ERROR CHECK-PATTERN-TYPE 38:3:5-39:3:6 "literal pattern has type Int, but case value has type Bool" - signature="main() -> Void" file="pattern-type.agc"

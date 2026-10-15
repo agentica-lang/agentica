@@ -81,6 +81,13 @@ field, so do it once per token or node, not once per character.
 
 - `Map` and `Set` lookups and inserts (`get`, `put`, `include?`, `add`) take
   effectively constant time: both are one 32-way HAMT.
+- A table keyed by dense `Int` ids (node ids, indexes) is faster as a `List`
+  indexed by id (`List.repeat` once, then `set` and `[]`) than as a `Map[Int, T]`:
+  `List.set` took about 1.6 µs and `Map.put` about 5 µs at 5,000 entries, and
+  keeping the types of a checker in a list instead of a map took a 630,000
+  character program from 1.83 s to 1.24 s and `std/bdd/gherkin` from 38 to
+  33 ms [measured under load, with other jobs running]. `List.repeat` halts
+  above 1,048,576 items, so build a bigger list from several repeats.
 - `Set.new` costs about 7 to 10 µs per element, and the cost rises with size:
   100,000 items took 0.69 s, 200,000 1.18 s, 400,000 3.05 s and 1,000,000
   10.3 s [measured, one run each]. One `include?` in a loop costs about 0.2 µs,

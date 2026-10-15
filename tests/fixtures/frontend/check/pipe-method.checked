@@ -1,0 +1,1 @@
+ERROR CHECK-PIPE-METHOD 38:2:20-53:2:35 "\"String.length\" has a method form for String, so it is not piped" "(\"a\" + \"b\").length" signature="main() -> Void" file="pipe-method.agc"

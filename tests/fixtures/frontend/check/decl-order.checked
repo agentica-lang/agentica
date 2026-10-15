@@ -1,0 +1,1 @@
+ERROR CHECK-DECL-ORDER 45:5:1-105:9:1 "declaration is out of order" "structs and enums come before functions" file="decl-order.agc"

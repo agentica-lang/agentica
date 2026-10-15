@@ -22,7 +22,12 @@
          (struct-out module-input)
          module-golden
          write-module-goldens
-         stdlib-folder)
+         stdlib-folder
+         linked-lines
+         failure-line
+         root-folder
+         with-env
+         file-name)
 
 ; dir is the fixture folder, root its root file, env the environment variables of the pkg/ search.
 (struct module-input (name dir root env))
@@ -108,7 +113,7 @@
 (define (offsets span)
   (cons (source-position-offset (source-span-start span)) (source-position-offset (source-span-end span))))
 
-(define (module-lines! emit! root-folder name declarations orig)
+(define (module-lines! emit! root-folder name declarations orig notes-of)
   (define ids (make-hasheq))
   (define docs (make-hasheq))
   (unless (= (length declarations) (length (original-declarations orig)))
@@ -120,9 +125,11 @@
   (for ([declaration (in-list declarations)])
     (emit-tree! emit! declaration "declaration" "    "
                 (lambda (node) (hash-ref ids node))
-                (lambda (node) (hash-ref docs node #f)))))
+                (lambda (node) (hash-ref docs node #f))
+                #:notes notes-of)))
 
-(define (linked-lines linked root-name folder)
+; notes-of gives the text added at the end of the line of a node.
+(define (linked-lines linked root-name folder [notes-of (lambda (node) "")])
   (define originals (make-hash))
   (define (original-of name) (hash-ref! originals name (lambda () (parse-original name))))
   (define root-original (original-of root-name))
@@ -138,7 +145,7 @@
                   (for/list ([declaration (in-list (program-declarations linked))] #:when (struct-decl? declaration))
                     (struct-decl-name declaration))])
     (for ([group (in-list (group-by-file (program-declarations linked)))])
-      (module-lines! emit! folder (car group) (cdr group) (original-of (car group)))))
+      (module-lines! emit! folder (car group) (cdr group) (original-of (car group)) notes-of)))
   (reverse out))
 
 (define (failure-line folder problem)

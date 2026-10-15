@@ -8,7 +8,13 @@
          "../src/parser.rkt"
          "../src/source.rkt")
 
+; Called with the text of every program the cases check: the front-end corpus test of the Agentica checker
+; (tests/frontend-check-test.rkt) collects them to check the same programs with both checkers.
+(define current-text-sink (make-parameter void))
+(provide current-text-sink)
+
 (define (check-text text)
+  ((current-text-sink) text)
   (define parsed (parse (lex (source "test.agc" text))))
   (if (diagnostic? parsed)
       (error 'checker-test "parse failed for ~s: ~a" text (format-diagnostic parsed))
@@ -1263,4 +1269,34 @@
 
   (test-case "a block after a piped call does not make it a plain call"
     (check-equal? (check-code (main-with "  xs = [1, 2]\n  ys = (xs |> List.map()) do |v: Int| v end"))
-                  'CHECK-PIPE-METHOD)))
+                  'CHECK-PIPE-METHOD))
+
+  ; A chain of l links has a tree l levels deep, and the parser counts the right operand of the first link
+  ; only as one more level, so nested chains build trees deeper than the parser's own limit.
+  (test-case "expressions and statements nest at most 1000 levels, else CHECK-TOO-DEEP at the node that goes past"
+    (define (links count) (string-append* (make-list count " + x")))
+    (define (chain count) (main-with (string-append "  x = 1\n  y = x" (links count) "\n  puts(y)")))
+    (check-ok (chain 997))
+    (check-ok (chain 998))
+    (define (nested-chains levels length)
+      (for/fold ([text "x"]) ([_ (in-range levels)])
+        (string-append "x + (" text ")" (links length))))
+    (define deep (check-text (main-with (string-append "  x = 1\n  y = " (nested-chains 3 500) "\n  puts(y)"))))
+    (check-equal? (diagnostic-code deep) 'CHECK-TOO-DEEP)
+    (check-equal? (diagnostic-message deep) "nesting is deeper than 1000 levels")
+    (check-regexp-match #rx"^x " (span-slice deep))
+    (check-equal? (diagnostic-help deep) "split the code into smaller functions or simpler expressions")
+    (define nested-ifs
+      (string-append (string-append* (make-list 300 "  if x == 1\n"))
+                     "  y = " (nested-chains 2 500) "\n"
+                     (string-append* (make-list 300 "  end\n"))))
+    (check-equal? (check-code (main-with (string-append "  x = 1\n" nested-ifs))) 'CHECK-TOO-DEEP))
+
+  (test-case "a generic enum where another generic enum is expected is CHECK-TYPE-MISMATCH"
+    (define declarations
+      "enum Box[T]\n  Full(T)\nend\n\nenum Other[T]\n  Item(T)\nend\n\nenum Wrap[T]\n  Holder(Box[T])\nend\n\n")
+    (define mismatch
+      (check-text (string-append declarations (main-with "  w = Wrap.Holder(Other.Item(1))"))))
+    (check-equal? (diagnostic-code mismatch) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (diagnostic-message mismatch) "expected Box[T], found Other[Int]")
+    (check-ok (string-append declarations (main-with "  w = Wrap.Holder(Box.Full(1))")))))

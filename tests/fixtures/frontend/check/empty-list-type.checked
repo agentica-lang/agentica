@@ -1,0 +1,1 @@
+ERROR CHECK-EMPTY-LIST-TYPE 26:2:8-28:2:10 "an empty list needs an expected type, for example \"List[Int]\"" "annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type" signature="main() -> Void" file="empty-list-type.agc"

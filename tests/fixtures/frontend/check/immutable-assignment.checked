@@ -1,0 +1,1 @@
+ERROR CHECK-IMMUTABLE-ASSIGNMENT 38:3:5-44:4:1 "\"i\" cannot be assigned" "\"for\" variables cannot be assigned; copy the value to a new name" signature="main() -> Void" file="immutable-assignment.agc"

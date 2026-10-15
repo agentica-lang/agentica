@@ -1,0 +1,136 @@
+program #134 0:1:1-754:36:1
+  module "valid-4.agc"
+    declaration: struct-decl #2 0:1:1-31:4:1 name="Item"
+      field: field-decl #1 14:2:3-27:3:1 name="name"
+        type: type-ref #0 20:2:9-26:2:15 name="String"
+    declaration: function-decl #127 32:5:1-709:31:1 name="main"
+      result: type-ref #3 46:5:15-50:5:19 name="Void"
+      body: binding #5 53:6:3-65:7:1 name="s"
+        value: literal #4 57:6:7-64:6:14 value=string:" a b " type=String
+      body: binding #9 67:7:3-85:8:1 name="n"
+        type: type-ref #6 70:7:6-73:7:9 name="Int"
+        value: field-access #8 76:7:12-84:7:20 name="length" type=Int resolved=call("String.length", String)
+          target: name-ref #7 76:7:12-77:7:13 name="s" type=String
+      body: binding #13 87:8:3-103:9:1 name="m"
+        type: type-ref #10 90:8:6-93:8:9 name="Int"
+        value: field-access #12 96:8:12-102:8:18 name="size" type=Int resolved=call("String.length", String)
+          target: name-ref #11 96:8:12-97:8:13 name="s" type=String
+      body: binding #20 105:9:3-146:10:1 name="parts"
+        type: type-ref #15 112:9:10-124:9:22 name="List"
+          arg: type-ref #14 117:9:15-123:9:21 name="String"
+        value: method-call #19 127:9:25-145:9:43 name="split" type=List(String) resolved=call("String.split", String)
+          target: field-access #17 127:9:25-134:9:32 name="strip" type=String resolved=call("String.trim", String)
+            target: name-ref #16 127:9:25-128:9:26 name="s" type=String
+          arg: literal #18 141:9:39-144:9:42 value=string:" " type=String
+      body: binding #25 148:10:3-181:11:1 name="joined"
+        type: type-ref #21 156:10:11-162:10:17 name="String"
+        value: method-call #24 165:10:20-180:10:35 name="join" type=String resolved=call("String.join", List(String))
+          target: name-ref #22 165:10:20-170:10:25 name="parts" type=List(String)
+          arg: literal #23 176:10:31-179:10:34 value=string:"," type=String
+      body: binding #30 183:11:3-207:12:1 name="i"
+        type: type-ref #27 186:11:6-197:11:17 name="Result"
+          arg: type-ref #26 193:11:13-196:11:16 name="Int"
+        value: field-access #29 200:11:20-206:11:26 name="to_i" type=Result(Int) resolved=call("String.to_int", String)
+          target: name-ref #28 200:11:20-201:11:21 name="s" type=String
+      body: binding #34 209:12:3-228:13:1 name="j"
+        type: type-ref #31 212:12:6-215:12:9 name="Int"
+        value: field-access #33 218:12:12-227:12:21 name="to_i!" type=Int resolved=call("String.to_int!", String)
+          target: literal #32 218:12:12-221:12:15 value=string:"4" type=String
+      body: binding #39 230:13:3-256:14:1 name="f"
+        type: type-ref #36 233:13:6-246:13:19 name="Result"
+          arg: type-ref #35 240:13:13-245:13:18 name="Float"
+        value: field-access #38 249:13:22-255:13:28 name="to_f" type=Result(Float) resolved=call("String.to_float", String)
+          target: name-ref #37 249:13:22-250:13:23 name="s" type=String
+      body: binding #52 258:14:3-326:15:1 name="b"
+        type: type-ref #40 261:14:6-265:14:10 name="Bool"
+        value: binary #51 268:14:13-325:14:70 op=and op-span=306:14:51-308:14:53 type=Bool
+          left: binary #47 268:14:13-305:14:50 op=and op-span=284:14:29-286:14:31 type=Bool
+            left: method-call #43 268:14:13-283:14:28 name="include?" type=Bool resolved=call("String.contains?", String)
+              target: name-ref #41 268:14:13-269:14:14 name="s" type=String
+              arg: literal #42 279:14:24-282:14:27 value=string:"a" type=String
+            right: method-call #46 287:14:32-305:14:50 name="start_with?" type=Bool resolved=call("String.starts_with?", String)
+              target: name-ref #44 287:14:32-288:14:33 name="s" type=String
+              arg: literal #45 301:14:46-304:14:49 value=string:" " type=String
+          right: method-call #50 309:14:54-325:14:70 name="end_with?" type=Bool resolved=call("String.ends_with?", String)
+            target: name-ref #48 309:14:54-310:14:55 name="s" type=String
+            arg: literal #49 321:14:66-324:14:69 value=string:" " type=String
+      body: binding #56 328:15:3-347:16:1 name="t"
+        type: type-ref #53 331:15:6-337:15:12 name="String"
+        value: field-access #55 340:15:15-346:15:21 name="to_s" type=String resolved=self(String)
+          target: name-ref #54 340:15:15-341:15:16 name="s" type=String
+      body: binding #59 349:16:3-358:17:1 name="xs"
+        value: list-lit #58 354:16:8-357:16:11 type=List(Int)
+          element: literal #57 355:16:9-356:16:10 value=int:1 type=Int
+      body: binding #63 360:17:3-376:18:1 name="xs"
+        value: method-call #62 365:17:8-375:17:18 name="push" type=List(Int) resolved=call("List.append", List(Int))
+          target: name-ref #60 365:17:8-367:17:10 name="xs" type=List(Int)
+          arg: literal #61 373:17:16-374:17:17 value=int:2 type=Int
+      body: binding #70 378:18:3-407:19:1 name="k"
+        type: type-ref #64 381:18:6-384:18:9 name="Int"
+        value: binary #69 387:18:12-406:18:31 op=plus op-span=397:18:22-398:18:23 type=Int
+          left: field-access #66 387:18:12-396:18:21 name="length" type=Int resolved=call("List.size", List(Int))
+            target: name-ref #65 387:18:12-389:18:14 name="xs" type=List(Int)
+          right: field-access #68 399:18:24-406:18:31 name="size" type=Int resolved=call("List.size", List(Int))
+            target: name-ref #67 399:18:24-401:18:26 name="xs" type=List(Int)
+      body: binding #76 409:19:3-443:20:1 name="ys"
+        type: type-ref #72 413:19:7-422:19:16 name="List"
+          arg: type-ref #71 418:19:12-421:19:15 name="Int"
+        value: method-call #75 425:19:19-442:19:36 name="map" type=List(Int) resolved=call("List.map", List(Int))
+          target: name-ref #73 425:19:19-427:19:21 name="xs" type=List(Int)
+          arg: function-ref #74 432:19:26-441:19:35 name="identity" type=Fn([Int], Int)
+      body: binding #83 445:20:3-478:21:1 name="text"
+        type: type-ref #77 451:20:9-457:20:15 name="String"
+        value: binary #82 460:20:18-477:20:35 op=plus op-span=467:20:25-468:20:26 type=String
+          left: field-access #79 460:20:18-466:20:24 name="to_s" type=String resolved=call("String.from_int", Int)
+            target: literal #78 460:20:18-461:20:19 value=int:7 type=Int
+          right: field-access #81 469:20:27-477:20:35 name="to_s" type=String resolved=call("String.from_float", Float)
+            target: literal #80 469:20:27-472:20:30 value=float:bits:4612811918334230528 type=Float
+      body: binding #87 480:21:3-498:22:1 name="g"
+        type: type-ref #84 483:21:6-488:21:11 name="Float"
+        value: field-access #86 491:21:14-497:21:20 name="to_f" type=Float resolved=call("Float.from_int", Int)
+          target: literal #85 491:21:14-492:21:15 value=int:7 type=Int
+      body: binding #92 500:22:3-526:23:1 name="h"
+        type: type-ref #89 503:22:6-514:22:17 name="Result"
+          arg: type-ref #88 510:22:13-513:22:16 name="Int"
+        value: field-access #91 517:22:20-525:22:28 name="to_i" type=Result(Int) resolved=call("Float.to_int", Float)
+          target: literal #90 517:22:20-520:22:23 value=float:bits:4612811918334230528 type=Float
+      body: binding #97 528:23:3-543:24:1 name="map"
+        value: map-lit #96 534:23:9-542:23:17 type=Map(String, Int)
+          entry: map-entry #95 535:23:10-541:23:16
+            key: literal #93 535:23:10-538:23:13 value=string:"a" type=String
+            value: literal #94 540:23:15-541:23:16 value=int:1 type=Int
+      body: binding #102 545:24:3-575:25:1 name="has"
+        type: type-ref #98 550:24:8-554:24:12 name="Bool"
+        value: method-call #101 557:24:15-574:24:32 name="has_key?" type=Bool resolved=call("Map.has_key?", Map(String, Int))
+          target: name-ref #99 557:24:15-560:24:18 name="map" type=Map(String, Int)
+          arg: literal #100 570:24:28-573:24:31 value=string:"a" type=String
+      body: binding #108 577:25:3-602:26:1 name="v"
+        type: type-ref #103 580:25:6-583:25:9 name="Int"
+        value: method-call #107 586:25:12-601:25:27 name="get" type=Int resolved=call("Map.get", Map(String, Int))
+          target: name-ref #104 586:25:12-589:25:15 name="map" type=Map(String, Int)
+          arg: literal #105 594:25:20-597:25:23 value=string:"b" type=String
+          arg: literal #106 599:25:25-600:25:26 value=int:0 type=Int
+      body: binding #113 604:26:3-627:27:1 name="r"
+        type: type-ref #110 607:26:6-618:26:17 name="Result"
+          arg: type-ref #109 614:26:13-617:26:16 name="Int"
+        value: call #112 621:26:20-626:26:25 name="ok" piped=false type=Result(Int)
+          arg: literal #111 624:26:23-625:26:24 value=int:1 type=Int
+      body: binding #117 629:27:3-648:28:1 name="good"
+        type: type-ref #114 635:27:9-639:27:13 name="Bool"
+        value: field-access #116 642:27:16-647:27:21 name="ok?" type=Bool resolved=call("Result.ok?", Result(Int))
+          target: name-ref #115 642:27:16-643:27:17 name="r" type=Result(Int)
+      body: binding #121 650:28:3-673:29:1 name="item"
+        value: construct #120 657:28:10-672:28:25 type="Item" type=Struct(Item)
+          arg: named-arg #119 662:28:15-671:28:24 name="name"
+            value: literal #118 668:28:21-671:28:24 value=string:"x" type=String
+      body: binding #126 675:29:3-705:30:1 name="up"
+        type: type-ref #122 679:29:7-685:29:13 name="String"
+        value: field-access #125 688:29:16-704:29:32 name="upcase" type=String resolved=call("String.upcase", String)
+          target: field-access #124 688:29:16-697:29:25 name="name" type=String
+            target: name-ref #123 688:29:16-692:29:20 name="item" type=Struct(Item)
+    declaration: function-decl #133 710:32:1-753:35:1 name="identity"
+      param: param #129 723:32:14-729:32:20 name="n"
+        type: type-ref #128 726:32:17-729:32:20 name="Int"
+      result: type-ref #130 734:32:25-737:32:28 name="Int"
+      body: return-stmt #132 740:33:3-749:34:1
+        value: name-ref #131 747:33:10-748:33:11 name="n" type=Int

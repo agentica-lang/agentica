@@ -7,7 +7,8 @@
          (only-in "../src/checker.rkt" reserved-type-names)
          (only-in "../tools/gen-builtins-data.rkt" rule-variant))
 
-(provide catalog-text
+(provide debug-type
+         catalog-text
          catalog-probes
          catalog-golden
          write-catalog-golden)

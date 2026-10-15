@@ -1,0 +1,66 @@
+program #64 0:1:1-530:16:1
+  module "valid-8.agc"
+    declaration: function-decl #63 0:1:1-529:15:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: binding #4 21:2:3-52:3:1 name="a"
+        type: type-ref #1 24:2:6-27:2:9 name="Int"
+        value: call #3 30:2:12-51:2:33 name="String.length" piped=false type=Int
+          arg: literal #2 44:2:26-50:2:32 value=string:"hola" type=String
+      body: binding #9 54:3:3-100:4:1 name="b"
+        type: type-ref #5 57:3:6-63:3:12 name="String"
+        value: call #8 66:3:15-99:3:48 name="String.upcase" piped=false type=String
+          arg: call #7 80:3:29-98:3:47 name="String.trim" piped=false type=String
+            arg: literal #6 92:3:41-97:3:46 value=string:" x " type=String
+      body: binding #15 102:4:3-145:5:1 name="c"
+        type: type-ref #11 105:4:6-117:4:18 name="List"
+          arg: type-ref #10 110:4:11-116:4:17 name="String"
+        value: call #14 120:4:21-144:4:45 name="String.split" piped=false type=List(String)
+          arg: literal #12 133:4:34-138:4:39 value=string:"a,b" type=String
+          arg: literal #13 140:4:41-143:4:44 value=string:"," type=String
+      body: binding #20 147:5:3-179:6:1 name="d"
+        type: type-ref #16 150:5:6-156:5:12 name="String"
+        value: call #19 159:5:15-178:5:34 name="String.join" piped=false type=String
+          arg: name-ref #17 171:5:27-172:5:28 name="c" type=List(String)
+          arg: literal #18 174:5:30-177:5:33 value=string:"-" type=String
+      body: binding #25 181:6:3-222:7:1 name="e"
+        type: type-ref #21 184:6:6-188:6:10 name="Bool"
+        value: call #24 191:6:13-221:6:43 name="String.contains?" piped=false type=Bool
+          arg: literal #22 208:6:30-214:6:36 value=string:"hola" type=String
+          arg: literal #23 216:6:38-220:6:42 value=string:"ol" type=String
+      body: binding #30 224:7:3-268:8:1 name="f"
+        type: type-ref #26 227:7:6-231:7:10 name="Bool"
+        value: call #29 234:7:13-267:7:46 name="String.starts_with?" piped=false type=Bool
+          arg: literal #27 254:7:33-260:7:39 value=string:"hola" type=String
+          arg: literal #28 262:7:41-266:7:45 value=string:"ho" type=String
+      body: binding #35 270:8:3-312:9:1 name="g"
+        type: type-ref #31 273:8:6-277:8:10 name="Bool"
+        value: call #34 280:8:13-311:8:44 name="String.ends_with?" piped=false type=Bool
+          arg: literal #32 298:8:31-304:8:37 value=string:"hola" type=String
+          arg: literal #33 306:8:39-310:8:43 value=string:"la" type=String
+      body: binding #41 314:9:3-358:10:1 name="h"
+        type: type-ref #36 317:9:6-323:9:12 name="String"
+        value: call #40 326:9:15-357:9:46 name="String.replace" piped=false type=String
+          arg: literal #37 341:9:30-346:9:35 value=string:"aXb" type=String
+          arg: literal #38 348:9:37-351:9:40 value=string:"X" type=String
+          arg: literal #39 353:9:42-356:9:45 value=string:"-" type=String
+      body: binding #47 360:10:3-399:11:1 name="i"
+        type: type-ref #42 363:10:6-369:10:12 name="String"
+        value: call #46 372:10:15-398:10:41 name="String.slice" piped=false type=String
+          arg: literal #43 385:10:28-391:10:34 value=string:"hola" type=String
+          arg: literal #44 393:10:36-394:10:37 value=int:1 type=Int
+          arg: literal #45 396:10:39-397:10:40 value=int:2 type=Int
+      body: binding #54 401:11:3-457:12:1 name="j"
+        type: type-ref #48 404:11:6-410:11:12 name="String"
+        value: binary #53 413:11:15-456:11:58 op=plus op-span=432:11:34-433:11:35 type=String
+          left: call #50 413:11:15-431:11:33 name="String.from_int" piped=false type=String
+            arg: literal #49 429:11:31-430:11:32 value=int:3 type=Int
+          right: call #52 434:11:36-456:11:58 name="String.from_float" piped=false type=String
+            arg: literal #51 452:11:54-455:11:57 value=float:bits:4609434218613702656 type=Float
+      body: binding #58 459:12:3-488:13:1 name="k"
+        type: type-ref #55 462:12:6-465:12:9 name="Int"
+        value: call #57 468:12:12-487:12:31 name="String.to_int!" piped=false type=Int
+          arg: literal #56 483:12:27-486:12:30 value=string:"3" type=String
+      body: binding #62 490:13:3-525:14:1 name="l"
+        type: type-ref #59 493:13:6-498:13:11 name="Float"
+        value: call #61 501:13:14-524:13:37 name="String.to_float!" piped=false type=Float
+          arg: literal #60 518:13:31-523:13:36 value=string:"1.5" type=String

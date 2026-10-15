@@ -1,0 +1,1 @@
+ERROR CHECK-TYPE-MISMATCH 25:2:7-26:2:8 "\"not\" (or \"!\") expects Bool, found Int" - signature="main() -> Void" file="type-mismatch.agc"

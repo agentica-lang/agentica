@@ -1,0 +1,1 @@
+ERROR CHECK-SHADOWED-NAME 46:3:20-47:3:21 "\"x\" is already visible; Agentica does not allow shadowing" "assign to it with \"x = value\" instead of introducing it again, or choose another name" signature="main() -> Void" file="shadowed-name.agc"
