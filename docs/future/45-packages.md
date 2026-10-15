@@ -215,13 +215,15 @@ max_line_width = 119
   - `max_line_width` is the longest line allowed, in characters (Unicode code
     points, not bytes). It counts every line, comments and doc comments
     included. With no `max_line_width` there is no limit. A line over it is an
-    error, never a warning (section 26). The proposed code is
-    `CHECK-LINE-TOO-LONG`, at the first character past the limit (a proposal,
-    not decided). The rule covers every `.agc` file under the folder that holds
-    that `agentica.toml`.
+    error, never a warning (section 26). `agentica check` reports it as
+    `CHECK-LINE-TOO-LONG`, at the first character past the limit (proposed in
+    §47.2 and owned by phase 28, 47c; the owner confirms the code). The rule
+    covers every `.agc` file under the folder that holds that `agentica.toml`.
+    `agentica fmt` does not enforce it: a line it cannot break stays long.
   - Today `compiler/agentica.toml` and `stdlib/agentica.toml` set it to 119, and
-    `tests/test_style_line_width.py` enforces it. `agentica check` will read
-    `[style]` after step 8 of 35.4, with `std/toml`, and the test can go then.
+    `tests/test_style_line_width.py` enforces it. `agentica check` reads
+    `[style]` after step 8 of 35.4, with `std/toml`, and phase 28 (47c) moves
+    the check there and removes the test.
     The manager accepts `[style]` and its known keys, and an unknown style key
     is `PKG-MANIFEST-INVALID` like any other unknown key.
 - An unknown key, a bad key or a bad version is `PKG-MANIFEST-INVALID`. The
