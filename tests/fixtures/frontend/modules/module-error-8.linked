@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-PATH 0:1:1-25:2:1 "import paths name a module without an extension" "write import \"module\" as M to load module.agc" file="root.agc"

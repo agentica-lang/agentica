@@ -1,0 +1,11 @@
+program #6 0:1:1-49:6:1
+  module "root.agc"
+    declaration: function-decl #5 16:2:1-48:5:1 name="main"
+      result: type-ref #1 30:2:15-34:2:19 name="Void"
+      body: expr-stmt #4 37:3:3-44:4:1
+        value: enum-constructor #3 37:3:3-43:3:9 enum="A" variant="P"
+          arg: literal #2 41:3:7-42:3:8 value=int:1
+  module "a.agc"
+    declaration: struct-decl #2 7:1:8-29:4:1 name="@2::P"
+      field: field-decl #1 18:2:3-25:3:1 name="x"
+        type: type-ref #0 21:2:6-24:2:9 name="Int"

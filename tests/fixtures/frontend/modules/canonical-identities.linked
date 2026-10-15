@@ -1,0 +1,43 @@
+program #19 0:1:1-250:10:1
+  module "root.agc"
+    declaration: function-decl #18 110:4:1-249:9:1 name="main"
+      result: type-ref #3 124:4:15-128:4:19 name="Void"
+      body: binding #7 131:5:3-168:6:1 name="value"
+        type: type-ref #4 138:5:10-150:5:22 name="@2::Value"
+        value: call #6 153:5:25-167:5:39 name="@3::make" piped=false
+          arg: literal #5 164:5:36-166:5:38 value=int:42
+      body: expr-stmt #11 170:6:3-200:7:1
+        value: call #10 170:6:3-199:6:32 name="IO.inspect" piped=false
+          arg: call #9 181:6:14-198:6:31 name="@2::read" piped=false
+            arg: name-ref #8 192:6:25-197:6:30 name="value"
+      body: expr-stmt #17 202:7:3-245:8:1
+        value: call #16 202:7:3-244:7:45 name="IO.inspect" piped=false
+          arg: call #15 213:7:14-243:7:44 name="@2::read" piped=false
+            arg: construct #14 225:7:26-242:7:43 type="@2::Value"
+              arg: named-arg #13 237:7:38-241:7:42 name="n"
+                value: literal #12 240:7:41-241:7:42 value=int:7
+  module "library/models.agc"
+    declaration: struct-decl #2 7:1:8-33:4:1 name="@2::Value"
+      field: field-decl #1 22:2:3-29:3:1 name="n"
+        type: type-ref #0 25:2:6-28:2:9 name="Int"
+    declaration: function-decl #10 41:5:8-92:8:1 name="@2::read"
+      param: param #5 50:5:17-62:5:29 name="value"
+        type: type-ref #4 57:5:24-62:5:29 name="@2::Value"
+      result: type-ref #6 67:5:34-70:5:37 name="Int"
+      body: return-stmt #9 73:6:3-88:7:1
+        value: field-access #8 80:6:10-87:6:17 name="n"
+          target: name-ref #7 80:6:10-85:6:15 name="value"
+    declaration: function-decl #16 93:9:1-139:12:1 name="@2::main"
+      result: type-ref #12 107:9:15-111:9:19 name="Void"
+      body: expr-stmt #15 114:10:3-135:11:1
+        value: call #14 114:10:3-134:10:23 name="puts" piped=false
+          arg: literal #13 119:10:8-133:10:22 value=string:"must not run"
+  module "library/outer.agc"
+    declaration: function-decl #8 33:2:8-98:5:1 name="@3::make"
+      param: param #2 42:2:17-48:2:23 name="n"
+        type: type-ref #1 45:2:20-48:2:23 name="Int"
+      result: type-ref #3 53:2:28-65:2:40 name="@2::Value"
+      body: return-stmt #7 68:3:3-94:4:1
+        value: construct #6 75:3:10-93:3:28 type="@2::Value"
+          arg: named-arg #5 88:3:23-92:3:27 name="n"
+            value: name-ref #4 91:3:26-92:3:27 name="n"

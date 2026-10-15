@@ -1,0 +1,11 @@
+program #3 0:1:1-42:5:1
+  module "root.agc"
+    declaration: function-decl #2 18:2:1-41:4:1 name="main"
+      result: type-ref #1 32:2:15-36:2:19 name="Void"
+  module "bad.agc"
+    declaration: struct-decl #2 0:1:1-26:4:1 name="@2::Point"
+      field: field-decl #1 15:2:3-22:3:1 name="x"
+        type: type-ref #0 18:2:6-21:2:9 name="Int"
+    declaration: struct-decl #5 27:5:1-53:8:1 name="@2::Pair"
+      field: field-decl #4 41:6:3-49:7:1 name="p"
+        type: type-ref #3 44:6:6-48:6:10 name="@2::Pont"
