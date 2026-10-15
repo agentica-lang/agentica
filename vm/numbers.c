@@ -166,19 +166,43 @@ static agc_value builtin_now_ms(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int(floor_ms((int64_t)ts.tv_sec, ts.tv_nsec));
 }
 
-static agc_value builtin_monotonic_ms(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)args;
+/*
+ * One read of the monotonic clock, shared by monotonic_ms and monotonic_ns so
+ * they cannot disagree. It gives whole seconds and a remainder under 10^9 ns.
+ * Windows splits the counter before it scales: count * 10^9 overflows an Int
+ * after about 15 minutes of uptime at the usual 10 MHz frequency, while
+ * (count % frequency) * 10^9 stays small.
+ */
+static void read_monotonic(agc_vm *vm, uint32_t span, int64_t *seconds, int64_t *nanoseconds) {
 #ifdef _WIN32
   LARGE_INTEGER count, frequency;
   if (!QueryPerformanceCounter(&count) || !QueryPerformanceFrequency(&frequency))
     agc_fail(vm, "RUNTIME-INTERNAL", "cannot read the clock", span);
-  return agc_int(floor_ms(count.QuadPart / frequency.QuadPart,
-                          (count.QuadPart % frequency.QuadPart) * 1000000000 / frequency.QuadPart));
+  *seconds = count.QuadPart / frequency.QuadPart;
+  *nanoseconds = (count.QuadPart % frequency.QuadPart) * 1000000000 / frequency.QuadPart;
 #else
   struct timespec ts;
   if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) agc_fail(vm, "RUNTIME-INTERNAL", "cannot read the clock", span);
-  return agc_int(floor_ms((int64_t)ts.tv_sec, ts.tv_nsec));
+  *seconds = (int64_t)ts.tv_sec;
+  *nanoseconds = ts.tv_nsec;
 #endif
+}
+
+static agc_value builtin_monotonic_ms(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  int64_t seconds, nanoseconds;
+  read_monotonic(vm, span, &seconds, &nanoseconds);
+  return agc_int(floor_ms(seconds, nanoseconds));
+}
+
+static agc_value builtin_monotonic_ns(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  int64_t seconds, nanoseconds, total;
+  read_monotonic(vm, span, &seconds, &nanoseconds);
+  /* An Int holds about 292 years of nanoseconds from the clock's origin; the checks keep a wrong clock from being UB. */
+  if (__builtin_mul_overflow(seconds, INT64_C(1000000000), &total) || __builtin_add_overflow(total, nanoseconds, &total))
+    agc_fail(vm, "RUNTIME-INTERNAL", "the clock is out of range", span);
+  return agc_int(total);
 }
 
 const agc_builtin agc_number_builtins[] = {
@@ -198,6 +222,7 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Time.now_ms", 0, builtin_now_ms, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Time.monotonic_ms", 0, builtin_monotonic_ms, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Time.monotonic_ns", 0, builtin_monotonic_ns, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Random.float", 0, builtin_random_float, AGC_NATIVE_NONE, AGC_COST_NONE},
 };

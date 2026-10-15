@@ -93,8 +93,7 @@ Designed, not scheduled: dates and times (§41,
 [`docs/future/41-dates-and-times.md`](../future/41-dates-and-times.md)).
 It has no row in this table. Its builtin types are checker changes, so they
 come after the Agentica front end (§41.13), as the owner decided on 2026-10-15.
-Its `Time.monotonic_ns` part is independent and may land before the rest, at any
-time (§41.10).
+Its `Time.monotonic_ns` part is independent and has landed (§41.10).
 
 Designed, not scheduled: sized numeric types (§42,
 [`docs/future/42-sized-numeric-types.md`](../future/42-sized-numeric-types.md)).
