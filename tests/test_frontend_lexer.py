@@ -2,9 +2,9 @@
 
 tests/frontend-lexer-test.rkt compares the two live. This module compares the Agentica lexer with what the Racket
 lexer printed once for the same inputs (`make frontend-freeze`, tests/frontend-lexer-freeze.rkt), so the comparison
-survives the Racket front end (the cases that compare with the goldens in fixtures/frontend/lexer/ moved here
-from the rackunit file, and so did the check of the Unicode table): the corpus (examples/, stdlib/ and tests/fixtures/vm/ as they were at the freeze), 300
-generated inputs, deeply nested files and a file with invalid UTF-8.
+survives the Racket front end (the cases that compare with the goldens in fixtures/frontend/lexer/ moved here from
+the rackunit file, and so did the check of the Unicode table): the corpus (examples/, stdlib/ and tests/fixtures/vm/
+as they were at the freeze), 300 generated inputs, deeply nested files and a file with invalid UTF-8.
 """
 import re
 
