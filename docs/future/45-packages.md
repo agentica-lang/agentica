@@ -346,8 +346,9 @@ requires = ["gitlab.com/team/json-tools@0.4.1"]
 `agc_libs/<key>/`, for example `agc_libs/owner/sqlite-ac/` and
 `agc_libs/gitlab.com/team/json-tools/`. The `agc_libs/` location follows
 question 9 (recommended: beside `agentica.toml` when a manifest exists). The
-command fills missing cache entries first, as `install` does. A CI job with no network then builds from the
-vendored files, and the hash check proves they are the locked ones. The build
+command fills missing cache entries first, as `install` does. A CI job with no
+network then builds from the vendored files, and the hash check proves they are
+the locked ones. The build
 looks in `agc_libs/<key>/` first and in the cache second. A vendored copy whose
 hash does not match is an error, never a silent fallback. The `pkg/` search
 skips these package folders, so a vendored copy is reached only through its
