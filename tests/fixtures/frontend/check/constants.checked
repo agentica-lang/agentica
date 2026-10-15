@@ -1,0 +1,125 @@
+program #111 0:1:1-653:35:1
+  module "constants.agc"
+    declaration: const-decl #3 0:1:1-17:2:1 name="LIMIT"
+      value: binary #2 8:1:9-16:1:17 op=multiply op-span=13:1:14-14:1:15 type=Int
+        left: const-ref #0 8:1:9-12:1:13 name="SIZE" type=Int
+        right: literal #1 15:1:16-16:1:17 value=int:2 type=Int
+    declaration: const-decl #5 17:2:1-26:3:1 name="SIZE"
+      value: literal #4 24:2:8-25:2:9 value=int:8 type=Int
+    declaration: const-decl #9 26:3:1-53:4:1 name="GREETING"
+      value: binary #8 37:3:12-52:3:27 op=plus op-span=46:3:21-47:3:22 type=String
+        left: literal #6 37:3:12-45:3:20 value=string:"hello " type=String
+        right: const-ref #7 48:3:23-52:3:27 name="NAME" type=String
+    declaration: const-decl #11 53:4:1-68:5:1 name="NAME"
+      value: literal #10 60:4:8-67:4:15 value=string:"world" type=String
+    declaration: const-decl #16 68:5:1-97:6:1 name="EMPTY"
+      type: type-ref #14 75:5:8-91:5:24 name="Map"
+        arg: type-ref #12 79:5:12-85:5:18 name="String"
+        arg: type-ref #13 87:5:20-90:5:23 name="Int"
+      value: map-lit #15 94:5:27-96:5:29 type=Map(String, Int)
+    declaration: const-decl #20 97:6:1-116:7:1 name="WORDS"
+      value: list-lit #19 105:6:9-115:6:19 type=List(String)
+        element: literal #17 106:6:10-109:6:13 value=string:"a" type=String
+        element: literal #18 111:6:15-114:6:18 value=string:"b" type=String
+    declaration: const-decl #28 116:7:1-158:8:1 name="LOUD"
+      value: method-call #27 123:7:8-157:7:42 name="map" type=List(String) resolved=call("List.map", List(String))
+        target: const-ref #139 123:7:8-128:7:13 name="WORDS" type=List(String)
+        arg: block-lit #26 133:7:18-157:7:42 type=Fn([String], String)
+          param: block-param #21 137:7:22-141:7:26 name="word"
+          body: expr-stmt #25 143:7:28-153:7:38
+            value: binary #24 143:7:28-153:7:38 op=plus op-span=148:7:33-149:7:34 type=String
+              left: name-ref #22 143:7:28-147:7:32 name="word" type=String
+              right: literal #23 150:7:35-153:7:38 value=string:"!" type=String
+    declaration: const-decl #42 158:8:1-210:9:1 name="TOTAL"
+      value: method-call #41 166:8:9-209:8:52 name="reduce" type=Int resolved=call("List.reduce", List(Int))
+        target: list-lit #32 166:8:9-175:8:18 type=List(Int)
+          element: literal #29 167:8:10-168:8:11 value=int:1 type=Int
+          element: literal #30 170:8:13-171:8:14 value=int:2 type=Int
+          element: literal #31 173:8:16-174:8:17 value=int:3 type=Int
+        arg: literal #33 183:8:26-184:8:27 value=int:0 type=Int
+        arg: block-lit #40 186:8:29-209:8:52 type=Fn([Int, Int], Int)
+          param: block-param #34 190:8:33-193:8:36 name="sum"
+          param: block-param #35 195:8:38-196:8:39 name="n"
+          body: expr-stmt #39 198:8:41-205:8:48
+            value: binary #38 198:8:41-205:8:48 op=plus op-span=202:8:45-203:8:46 type=Int
+              left: name-ref #36 198:8:41-201:8:44 name="sum" type=Int
+              right: name-ref #37 204:8:47-205:8:48 name="n" type=Int
+    declaration: const-decl #45 210:9:1-236:10:1 name="KEYWORDS"
+      value: call #44 221:9:12-235:9:26 name="Set.new" piped=false type=Set(String)
+        arg: const-ref #43 229:9:20-234:9:25 name="WORDS" type=List(String)
+    declaration: const-decl #53 236:10:1-266:11:1 name="LEVELS"
+      value: map-lit #52 245:10:10-265:10:30 type=Map(String, Int)
+        entry: map-entry #48 246:10:11-252:10:17
+          key: literal #46 246:10:11-249:10:14 value=string:"a" type=String
+          value: literal #47 251:10:16-252:10:17 value=int:1 type=Int
+        entry: map-entry #51 254:10:19-264:10:29
+          key: literal #49 254:10:19-257:10:22 value=string:"b" type=String
+          value: const-ref #50 259:10:24-264:10:29 name="LIMIT" type=Int
+    declaration: const-decl #59 266:11:1-293:12:1 name="ORIGIN"
+      value: construct #58 275:11:10-292:11:27 type="Point" type=Struct(Point)
+        arg: named-arg #55 281:11:16-285:11:20 name="x"
+          value: literal #54 284:11:19-285:11:20 value=int:0 type=Int
+        arg: named-arg #57 287:11:22-291:11:26 name="y"
+          value: literal #56 290:11:25-291:11:26 value=int:0 type=Int
+    declaration: const-decl #64 293:12:1-323:13:1 name="MOVED"
+      value: struct-update #63 301:12:9-322:12:30 visible=["Point"] type=Struct(Point)
+        target: const-ref #60 301:12:9-307:12:15 name="ORIGIN" type=Struct(Point)
+        arg: named-arg #62 313:12:21-321:12:29 name="x"
+          value: const-ref #61 316:12:24-321:12:29 name="LIMIT" type=Int
+    declaration: const-decl #66 323:13:1-341:14:1 name="FIRST"
+      value: enum-constructor #65 331:13:9-340:13:18 enum="Color" variant="Red" type=Enum(Color, [])
+    declaration: const-decl #68 341:14:1-360:15:1 name="SHOWN"
+      value: field-access #67 349:14:9-359:14:19 name="to_s" type=String resolved=text(Enum(Color, []))
+        target: const-ref #179 349:14:9-354:14:14 name="FIRST" type=Enum(Color, [])
+    declaration: const-decl #71 360:15:1-379:16:1 name="RATIO"
+      type: type-ref #69 367:15:8-372:15:13 name="Float"
+      value: literal #70 375:15:16-378:15:19 value=float:bits:4609434218613702656 type=Float
+    declaration: struct-decl #76 380:17:1-415:21:1 name="Point"
+      field: field-decl #73 395:18:3-402:19:1 name="x"
+        type: type-ref #72 398:18:6-401:18:9 name="Int"
+      field: field-decl #75 404:19:3-411:20:1 name="y"
+        type: type-ref #74 407:19:6-410:19:9 name="Int"
+    declaration: enum-decl #79 416:22:1-445:26:1 name="Color" type-parameters=[]
+      variant: enum-variant #77 429:23:3-433:24:1 name="Red"
+      variant: enum-variant #78 435:24:3-441:25:1 name="Green"
+    declaration: function-decl #110 446:27:1-653:35:1 name="main"
+      result: type-ref #80 460:27:15-464:27:19 name="Void"
+      body: expr-stmt #89 467:28:3-531:29:1
+        value: call #88 467:28:3-530:28:66 name="puts" piped=false type=Void
+          arg: interpolation #87 472:28:8-529:28:65 type=String
+            part: const-ref #81 475:28:11-483:28:19 name="GREETING" type=String
+            part: text " "
+            part: const-ref #82 487:28:23-492:28:28 name="LIMIT" type=Int
+            part: text " "
+            part: const-ref #83 496:28:32-500:28:36 name="LOUD" type=List(String)
+            part: text " "
+            part: const-ref #84 504:28:40-509:28:45 name="TOTAL" type=Int
+            part: text " "
+            part: const-ref #85 513:28:49-518:28:54 name="SHOWN" type=String
+            part: text " "
+            part: const-ref #86 522:28:58-527:28:63 name="RATIO" type=Float
+      body: expr-stmt #93 533:29:3-562:30:1
+        value: call #92 533:29:3-561:29:31 name="puts" piped=false type=Void
+          arg: method-call #91 538:29:8-560:29:30 name="include?" type=Bool resolved=call("Set.include?", Set(String))
+            target: const-ref #203 538:29:8-546:29:16 name="KEYWORDS" type=Set(String)
+            arg: literal #90 556:29:26-559:29:29 value=string:"a" type=String
+      body: expr-stmt #102 564:30:3-605:31:1
+        value: call #101 564:30:3-604:30:43 name="puts" piped=false type=Void
+          arg: binary #100 569:30:8-603:30:42 op=plus op-span=594:30:33-595:30:34 type=Int
+            left: binary #98 569:30:8-593:30:32 op=plus op-span=581:30:20-582:30:21 type=Int
+              left: index-access #96 569:30:8-580:30:19 type=Int
+                target: const-ref #94 569:30:8-575:30:14 name="LEVELS" type=Map(String, Int)
+                index: literal #95 576:30:15-579:30:18 value=string:"b" type=String
+              right: field-access #97 583:30:22-593:30:32 name="size" type=Int resolved=call("Map.size", Map(String, Int))
+                target: const-ref #209 583:30:22-588:30:27 name="EMPTY" type=Map(String, Int)
+            right: field-access #99 596:30:35-603:30:42 name="x" type=Int
+              target: const-ref #211 596:30:35-601:30:40 name="MOVED" type=Struct(Point)
+      body: expr-stmt #109 607:31:3-649:34:1
+        value: method-call #108 607:31:3-648:33:6 name="each" type=Void resolved=call("List.each", List(String))
+          target: const-ref #220 607:31:3-612:31:8 name="WORDS" type=List(String)
+          arg: block-lit #107 618:31:14-648:33:6 type=Fn([String], Void)
+            param: block-param #103 622:31:18-626:31:22 name="word"
+            body: expr-stmt #106 632:32:5-643:33:1
+              value: call #105 632:32:5-642:32:15 name="puts" piped=false type=Void
+                arg: name-ref #104 637:32:10-641:32:14 name="word" type=String
+constant-order ["SIZE","LIMIT","NAME","GREETING","EMPTY","WORDS","LOUD","TOTAL","KEYWORDS","LEVELS","ORIGIN","MOVED","FIRST","SHOWN","RATIO"]

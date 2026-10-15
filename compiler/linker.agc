@@ -19,11 +19,12 @@ export struct LinkedModule
   declarations: List[Ast.Decl]
 end
 
-## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, and the files with the root first, each file before the files its imports read.
+## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with the root first, each file before the files its imports read, and ids, the number of node ids the checker must make room for: the ids of the parser, and as many again when a file declares a constant, because the linker gives the receiver of a rewritten NAME.method(...) the id of the call plus the number of ids of the program (Rewrite.rewrite_constant_member).
 export struct Linked
   root: Ast.Program
   root_dir: String
   modules: List[LinkedModule]
+  ids: Int
 end
 
 ## The result of linking: the program, or the first failure.
@@ -54,16 +55,31 @@ def finish(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
   files = rewrite_all(loaded, settings)
   if files.ok?
     root = loaded.modules[loaded.order[0]].program
-    return Linking.Done(Linked(root: root, root_dir: loaded.root_dir, modules: files.unwrap!))
+    return Linking.Done(Linked(root: root, root_dir: loaded.root_dir, modules: files.unwrap!, ids: id_count(loaded)))
   end
   return Linking.Failed(Failure.unpack_failure(files.message))
 end
 
+# The files are numbered one after the other in the order of loaded.order, so the last one ends the ids of the parser.
+def parser_ids(loaded: Modules.Loaded) -> Int
+  return Ast.next_free_id(loaded.modules[loaded.order[loaded.order.size - 1]].program)
+end
+
+def id_count(loaded: Modules.Loaded) -> Int
+  for key in loaded.order
+    if loaded.modules[key].names.values.any? do |kind| Declarations.constant?(kind) end
+      return parser_ids(loaded) * 2
+    end
+  end
+  return parser_ids(loaded)
+end
+
 def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[LinkedModule]]
   out: List[LinkedModule] = []
+  ids = parser_ids(loaded)
   for key in loaded.order
     module = loaded.modules[key]
-    cx = Resolve.Context(settings: settings, modules: loaded.modules, me: module, visible: visible_structs(module, loaded.modules))
+    cx = Resolve.Context(settings: settings, modules: loaded.modules, me: module, visible: visible_structs(module, loaded.modules), ids: ids)
     declarations = try Rewrite.rewrite_declarations(cx)
     out = out.push(LinkedModule(key: key, file: module.file, prefix: module.prefix, first_id: module.first_id, next_id: Ast.next_free_id(module.program), text: module.text, declarations: declarations))
   end

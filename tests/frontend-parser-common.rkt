@@ -91,6 +91,10 @@
              '())]
     [(export-decl? node)
      (values "export-decl" (doc-attr) (list (cons "declaration" (export-decl-declaration node))))]
+    [(const-decl? node)
+     (values "const-decl"
+             (string-append (name-attr (const-decl-name node)) (if (const-decl-exported node) " exported=true" "") (doc-attr))
+             (append (optional "type" (const-decl-type node)) (list (cons "value" (const-decl-value node)))))]
     [(function-decl? node)
      (values "function-decl" (string-append (name-attr (function-decl-name node)) (doc-attr))
              (append (kids "param" (function-decl-params node))
@@ -155,6 +159,7 @@
              '())]
     [(literal? node) (values "literal" (string-append " value=" (value-text (literal-value node))) '())]
     [(name-ref? node) (values "name-ref" (name-attr (name-ref-name node)) '())]
+    [(const-ref? node) (values "const-ref" (name-attr (const-ref-name node)) '())]
     [(call? node)
      (values "call" (format "~a piped=~a" (name-attr (call-name node)) (if (call-piped node) "true" "false"))
              (kids "arg" (call-args node)))]

@@ -90,6 +90,14 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         lines = print_field(lines, child, field)
       end
       return lines
+    Ast.Decl.Constant(node) ->
+      exported = ""
+      if node.exported
+        exported = " exported=true"
+      end
+      lines = out.push(head(at, role, "const-decl", node.id, node.span, name_attr(node.name) + exported + doc_attr(node.doc)))
+      lines = print_optional_type(lines, child, "type", node.type)
+      return print_expr(lines, child, "value", node.value)
     Ast.Decl.Enum(node) ->
       parameters = node.type_parameters.map do |name| Text.quote(name) end
       lines = out.push(head(at, role, "enum-decl", node.id, node.span, name_attr(node.name) + " type-parameters=" + list_text(parameters) + doc_attr(node.doc)))
@@ -212,6 +220,7 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
     Ast.Expr.Literal(node) -> return out.push(head(at, role, "literal", node.id, node.span, " value=" + value_text(node.value)))
     Ast.Expr.Name(node) -> return out.push(head(at, role, "name-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.TypeName(node) -> return out.push(head(at, role, "type-expression", node.id, node.span, name_attr(node.name)))
+    Ast.Expr.ConstRef(node) -> return out.push(head(at, role, "const-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.FunctionRef(node) -> return out.push(head(at, role, "function-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.Call(node) -> return print_call_like(out, at, role, "call", node.id, node.span, name_attr(node.name) + " piped=" + node.piped.to_s, node.args)
     Ast.Expr.EnumConstructor(node) ->

@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-TYPE 7:1:8-35:3:4 "a constant expression must have a data type, found TestCase" "a constant holds numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data" file="constant-type-test-case.agc"

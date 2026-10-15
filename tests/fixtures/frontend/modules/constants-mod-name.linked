@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-NAME 49:4:8-56:4:15 "a constant is read by its name, not through the module alias" "write import {MAX} from \"lib\", then use MAX\nor let the module export a function and call it as Lib.name()" file="root.agc"

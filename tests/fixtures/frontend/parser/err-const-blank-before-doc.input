@@ -1,0 +1,4 @@
+LIMIT = 1
+## A function.
+def main() -> Void
+end

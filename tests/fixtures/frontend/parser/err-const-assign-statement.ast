@@ -1,0 +1,1 @@
+ERROR PARSE-INVALID-ASSIGNMENT-TARGET 27:2:9-28:2:10 "the core only assigns to a plain name" "constants are set at the top level and never change"

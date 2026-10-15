@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-EXPRESSION 24:2:3-52:5:1 "a constant cannot use a while loop" "loop with for over a range or a collection, or use a builtin such as reduce" file="constant-expression-while.agc"

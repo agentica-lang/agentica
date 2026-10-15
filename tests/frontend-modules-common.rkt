@@ -99,28 +99,35 @@
         (cons (list name declaration) groups))))
 
 ; The linker rewrites every node into a new one of the same shape, so a rewritten node takes the id and the
-; doc of the node of the original tree at the same place.
-(define (pair-nodes! ids docs rewritten old-root orig)
+; doc of the node of the original tree at the same place. One shape changes: NAME.x on a constant is a call
+; in the original tree and a field access or method call on a read of the constant in the linked one. The call
+; keeps its id, and the read takes the id of the call plus total, the number of ids of the program
+; (compiler/linker.agc, Linked.ids).
+(define (pair-nodes! ids docs rewritten old-root orig total)
   (let walk ([new rewritten] [old old-root])
     (hash-set! ids new (hash-ref (original-ids orig) old))
     (hash-set! docs new (hash-ref (original-docs orig) (offsets (node-span old)) #f))
     (define new-children (node-children new))
     (define old-children (node-children old))
-    (unless (= (length new-children) (length old-children))
+    (define receiver? (and (call? old) (or (field-access? new) (method-call? new)) (const-ref? (car new-children))))
+    (when receiver?
+      (hash-set! ids (car new-children) (+ total (hash-ref (original-ids orig) old))))
+    (define new-rest (if receiver? (cdr new-children) new-children))
+    (unless (= (length new-rest) (length old-children))
       (error 'link-text "a rewritten node changed shape: ~s" new))
-    (for-each walk new-children old-children)))
+    (for-each walk new-rest old-children)))
 
 (define (offsets span)
   (cons (source-position-offset (source-span-start span)) (source-position-offset (source-span-end span))))
 
-(define (module-lines! emit! root-folder name declarations orig notes-of)
+(define (module-lines! emit! root-folder name declarations orig notes-of total)
   (define ids (make-hasheq))
   (define docs (make-hasheq))
   (unless (= (length declarations) (length (original-declarations orig)))
     (error 'link-text "~a: ~a declarations linked, ~a parsed" name (length declarations)
            (length (original-declarations orig))))
   (for ([new (in-list declarations)] [old (in-list (original-declarations orig))])
-    (pair-nodes! ids docs new old orig))
+    (pair-nodes! ids docs new old orig total))
   (emit! (string-append "  module " (quote-text (display-path root-folder name))))
   (for ([declaration (in-list declarations)])
     (emit-tree! emit! declaration "declaration" "    "
@@ -128,12 +135,14 @@
                 (lambda (node) (hash-ref docs node #f))
                 #:notes notes-of)))
 
-; notes-of gives the text added at the end of the line of a node.
-(define (linked-lines linked root-name folder [notes-of (lambda (node) "")])
+; notes-of gives the text added at the end of the line of a node. files are the names of the files the linker
+; read, in order (the box load-program fills): their node counts add up to total.
+(define (linked-lines linked root-name folder [notes-of (lambda (node) "")] #:files [files '()])
   (define originals (make-hash))
   (define (original-of name) (hash-ref! originals name (lambda () (parse-original name))))
   (define root-original (original-of root-name))
   (define out '())
+  (define total (for/sum ([size (in-list (module-sizes files))]) (cdr size)))
   (define (emit! line) (set! out (cons line out)))
   (emit! (format "program #~a ~a~a"
                  (hash-ref (original-ids root-original) (original-program root-original))
@@ -145,7 +154,7 @@
                   (for/list ([declaration (in-list (program-declarations linked))] #:when (struct-decl? declaration))
                     (struct-decl-name declaration))])
     (for ([group (in-list (group-by-file (program-declarations linked)))])
-      (module-lines! emit! folder (car group) (cdr group) (original-of (car group)) notes-of)))
+      (module-lines! emit! folder (car group) (cdr group) (original-of (car group)) notes-of total)))
   (reverse out))
 
 (define (failure-line folder problem)
@@ -158,10 +167,12 @@
   (with-env env
     (lambda ()
       (define folder (root-folder root-path))
-      (define linked (load-program root-path))
+      (define files (box '()))
+      (define linked (load-program root-path #:files files))
       (if (diagnostic? linked)
           (failure-line folder linked)
-          (string-join (linked-lines linked (path->string (path->complete-path root-path)) folder) "\n")))))
+          (string-join (linked-lines linked (path->string (path->complete-path root-path)) folder #:files (unbox files))
+                       "\n")))))
 
 ; The number of nodes of each file, by the name of the file as the linker names it: what the first and
 ; next ids of `link.agc --ids` must add up to.

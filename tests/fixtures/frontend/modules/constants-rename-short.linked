@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-RENAME 15:1:16-16:1:17 "the new name does not follow the case rule of the imported name" "a constant is renamed to another constant name, in capitals with underscores" file="root.agc"

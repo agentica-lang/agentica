@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-RENAME 18:1:19-24:1:25 "the new name does not follow the case rule of the imported name" "a function is renamed to another lowercase name" file="root.agc"

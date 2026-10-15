@@ -2,9 +2,11 @@
 
 (require (except-in rackunit check)
          "../src/ast.rkt"
+         "../src/builtins.rkt"
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
          "../src/lexer.rkt"
+         "../src/modules.rkt"
          "../src/parser.rkt"
          "../src/source.rkt")
 
@@ -19,6 +21,16 @@
   (if (diagnostic? parsed)
       (error 'checker-test "parse failed for ~s: ~a" text (format-diagnostic parsed))
       (check parsed)))
+
+; Linking rewrites the reads of module constants (and checks the order of the declarations), so the
+; programs with constants go through it, as they do in the pipeline.
+(define (check-linked text)
+  ((current-text-sink) text)
+  (define parsed (parse (lex (source "test.agc" text))))
+  (when (diagnostic? parsed)
+    (error 'checker-test "parse failed for ~s: ~a" text (format-diagnostic parsed)))
+  (define linked (link-program parsed (string->path "test.agc")))
+  (if (diagnostic? linked) linked (check linked)))
 
 (define (check-ok text)
   (define result (check-text text))
@@ -1291,6 +1303,87 @@
                      "  y = " (nested-chains 2 500) "\n"
                      (string-append* (make-list 300 "  end\n"))))
     (check-equal? (check-code (main-with (string-append "  x = 1\n" nested-ifs))) 'CHECK-TOO-DEEP))
+
+  (test-case "module constants take the values of 44.5 and nothing else, each refusal at the node that breaks the rule"
+    (define (constants-main constants) (string-append constants "\n\n" (main-with "  puts(1)")))
+    (define (refused constants)
+      (define found (check-linked (constants-main constants)))
+      (unless (diagnostic? found) (error 'checker-test "expected a diagnostic for ~s" constants))
+      found)
+    (define (refusal-code constants) (diagnostic-code (refused constants)))
+    (define (refusal-slice constants) (span-slice (refused constants)))
+    (define helper "def make() -> Int\n  return 1\nend\n\n")
+    (define (after-helper constants) (string-append constants "\n\n" helper (main-with "  puts(1)")))
+    (check-true (not (diagnostic? (check-linked
+      (constants-main (string-append "SIZE = LIMIT * 2\nLIMIT = 4\nWORDS = [\"a\", \"b\"]\n"
+                                     "LOUD = WORDS.map do |word| word + \"!\" end\nSET = Set.new(WORDS)\n"
+                                     "TABLE = {\"a\": SIZE}\nPOINT = Point(x: 1)\nMOVED = POINT.with(x: SIZE)\n"
+                                     "FIRST = Color.Red\nLINES = WORDS.join(\",\")\n\n"
+                                     "struct Point\n  x: Int\nend\n\nenum Color\n  Red\nend"))))))
+    ;; A call of a function of the program, even inside a block, and a function value.
+    (define (refused-after-helper constants)
+      (define found (check-linked (after-helper constants)))
+      (unless (diagnostic? found) (error 'checker-test "expected a diagnostic for ~s" constants))
+      found)
+    (check-equal? (diagnostic-code (refused-after-helper "VALUE = make()")) 'CHECK-CONSTANT-EXPRESSION)
+    (check-equal? (span-slice (refused-after-helper "VALUE = make()")) "make()")
+    (check-equal? (span-slice (refused-after-helper "VALUE = [1].map do |n| n + make() end")) "make()")
+    (check-equal? (diagnostic-code (refused-after-helper "HOOK = &make")) 'CHECK-CONSTANT-EXPRESSION)
+    (check-equal? (span-slice (refused-after-helper "HOOK = &make")) "&make")
+    (check-equal? (span-slice (refused-after-helper "VALUE = &make.call()")) "&make")
+    ;; A while loop in a block, a builtin with effects, a block that is not the argument of a builtin.
+    (check-equal? (refusal-code "VALUE = [1].map do |n|\n  while false\n    n = 2\n  end\n  n\nend") 'CHECK-CONSTANT-EXPRESSION)
+    (check-regexp-match #rx"^while false" (refusal-slice "VALUE = [1].map do |n|\n  while false\n    n = 2\n  end\n  n\nend"))
+    (check-equal? (refusal-slice "LINE = IO.gets!()") "IO.gets!()")
+    (check-equal? (refusal-code "LINE = [1].map do |n| IO.gets!() end") 'CHECK-CONSTANT-EXPRESSION)
+    (check-equal? (refusal-slice "TOTAL = [1].reduce(0) do |sum, n|\n  puts(n)\n  sum\nend") "puts(n)")
+    ;; Values that are not data. A builtin with no effects can still make or take a value that is not data,
+    ;; so the checker judges the types, not only the effect list. This audit walks the catalog: every
+    ;; effect-free row whose result or non-Fn parameter is not data needs a case below, and each case must
+    ;; be refused in an initializer. A new such row fails the audit until someone adds its case.
+    (define (data-shape? type)
+      (cond
+        [(memq type '(Int Float Bool String Nil Json Range Void)) #t]
+        [(and (symbol? type) (memq type '(Process FileHandle Socket Listener HttpClient HttpServer TestCase))) #f]
+        [(symbol? type) #t]
+        [(memq (car type) '(Channel Task Fn Await)) #f]
+        [(memq (car type) '(List Set Result)) (data-shape? (cadr type))]
+        [(eq? (car type) 'Map) (and (data-shape? (cadr type)) (data-shape? (caddr type)))]
+        [else #t]))
+    (define not-data-rows
+      (sort
+       (for*/list ([entry (in-hash-values builtins)]
+                   [variant (in-list (cons entry (builtin-alternatives entry)))]
+                   #:when (null? (builtin-effects variant))
+                   #:unless (and (data-shape? (builtin-result variant))
+                                 (for/and ([parameter (in-list (builtin-parameters variant))])
+                                   (or (and (pair? (cadr parameter)) (eq? (car (cadr parameter)) 'Fn))
+                                       (data-shape? (cadr parameter))))))
+         (builtin-name variant))
+       string<?))
+    (define cases
+      (hash "Channel.new" "JOBS: Channel[Int] = Channel.new(1)"
+            "Channel.closed?" "JOBS: Channel[Int] = Channel.new(1)\nOPEN = Channel.closed?(JOBS)"
+            "Test.test" "CASE = Test.test(\"x\") do\n  ok()\nend"))
+    (check-equal? not-data-rows (sort (hash-keys cases) string<?))
+    (for ([(name constants) (in-hash cases)])
+      (check-equal? (refusal-code constants) 'CHECK-CONSTANT-TYPE name))
+    (check-equal? (refusal-slice "JOBS: Channel[Int] = Channel.new(1)") "Channel.new(1)")
+    (check-equal? (refusal-slice "CASE = Test.test(\"x\") do\n  ok()\nend") "Test.test(\"x\") do\n  ok()\nend")
+    ;; Cycles are reported at the read that closes them.
+    (check-equal? (refusal-code "LIMIT = LIMIT + 1") 'CHECK-CONSTANT-CYCLE)
+    (check-equal? (refusal-slice "LIMIT = LIMIT + 1") "LIMIT")
+    (check-equal? (diagnostic-help (refused "FIRST = SECOND + 1\nSECOND = FIRST + 1")) "the cycle is FIRST -> SECOND -> FIRST")
+    (check-equal? (refusal-slice "FIRST = SECOND + 1\nSECOND = FIRST + 1") "FIRST")
+    ;; An unknown name suggests the closest constant above it.
+    (check-equal? (refusal-code "SIZE = 1\nLIMIT = SIZ + 1") 'CHECK-UNKNOWN-NAME)
+    (check-equal? (diagnostic-help (refused "SIZE = 1\nLIMIT = SIZ + 1")) "did you mean \"SIZE\"?")
+    ;; The nesting limit applies to an initializer: the parser's limit is passed by nesting chains.
+    (define (links count) (string-append* (make-list count " + 1")))
+    (define (nested-sum levels length)
+      (for/fold ([text "1"]) ([_ (in-range levels)])
+        (string-append "1 + (" text ")" (links length))))
+    (check-equal? (refusal-code (string-append "TOTAL = " (nested-sum 3 500))) 'CHECK-TOO-DEEP))
 
   (test-case "a generic enum where another generic enum is expected is CHECK-TYPE-MISMATCH"
     (define declarations

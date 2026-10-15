@@ -1,0 +1,1 @@
+ERROR CHECK-UNKNOWN-NAME 8:1:9-11:1:12 "unknown name \"SIZ\"" "did you mean \"SIZE\"?" file="root.agc"

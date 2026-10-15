@@ -255,6 +255,8 @@
     (with-handlers ([exn:fail? (lambda (failure)
                                  (diagnostic 'LOWER-INTERNAL (exn-message failure)
                                              (program-span program)))])
+      (for ([declaration (in-list (program-declarations program))] #:when (const-decl? declaration))
+        (unsupported "module constants" (const-decl-span declaration)))
       (define declarations
         (for/list ([declaration (in-list (program-declarations program))]
                    #:when (function-decl? declaration))

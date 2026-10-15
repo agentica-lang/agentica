@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-EXPRESSION 10:1:11-17:1:18 "a constant cannot hold a function value" "a constant is built from literals, constructors and builtins" file="constant-expression-invoke.agc"

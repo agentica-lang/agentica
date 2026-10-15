@@ -8,6 +8,7 @@
          "../src/diagnostic.rkt"
          "../src/lexer.rkt"
          "../src/lower.rkt"
+         "../src/modules.rkt"
          "../src/parser.rkt"
          "../src/source.rkt")
 
@@ -171,6 +172,20 @@
     (check-equal? updates '(0 0 1))
     (check-false (member (index-of opcodes 'field)
                          (for/list ([instr (in-vector (bc-function-code main))]) (first instr)))))
+
+  (test-case "a program with a module constant is LOWER-UNSUPPORTED at the first constant until the lowering lands"
+    (define text "SIZE = 4\nLIMIT = SIZE * 2\n\ndef main() -> Void\n  puts(LIMIT)\nend\n")
+    (define linked (link-program (parse (lex (source "test.agc" text))) (string->path "test.agc")))
+    (define types (make-hasheq))
+    (define checked (check linked #:types types))
+    (check-false (diagnostic? checked))
+    (define lowered (lower checked types))
+    (check-equal? (diagnostic-code lowered) 'LOWER-UNSUPPORTED)
+    (define span (diagnostic-span lowered))
+    (check-equal? (substring text
+                             (source-position-offset (source-span-start span))
+                             (source-position-offset (source-span-end span)))
+                  "SIZE = 4\n"))
 
   (test-case "opcode numbers match vm/value.h"
     (define names

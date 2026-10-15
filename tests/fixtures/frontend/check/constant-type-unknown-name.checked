@@ -1,0 +1,1 @@
+ERROR CHECK-UNKNOWN-NAME 8:1:9-12:1:13 "unknown name \"SIZE\"" - file="constant-type-unknown-name.agc"

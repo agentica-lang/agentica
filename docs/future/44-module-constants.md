@@ -565,8 +565,12 @@ no existing program changes meaning. `const-ref` has an `id` in
 constants its initializer reads, in the order of their start offsets in the
 source, then emit it. A constant
 that is already emitted is skipped. This order is deterministic, so both
-front ends and both bytecode writers agree. `check` returns it with the
-types, and lowering reads it (it does not sort again).
+front ends and both bytecode writers agree. The order is shared code
+(`constant-order` in `src/constants.rkt`, `compiler/check_const.agc`), not an
+output of `check`: the Racket `check` keeps its API and returns the program, and
+the lowering calls `constant-order` on the linked program. The Agentica
+`Checked` has a `constants` list with the order, and the check text ends with
+a `constant-order [...]` line when the program has constants.
 
 **Lowering (Racket now; step 5 later).**
 
