@@ -58,6 +58,10 @@ export def builtin_rows() -> List[Model.Builtin]
   rows = rows.concat(rows_49())
   rows = rows.concat(rows_50())
   rows = rows.concat(rows_51())
+  rows = rows.concat(rows_52())
+  rows = rows.concat(rows_53())
+  rows = rows.concat(rows_54())
+  rows = rows.concat(rows_55())
   return rows
 end
 
@@ -70,6 +74,9 @@ export def records() -> List[Model.Record]
         Model.Named(name: "kind", type: Types.Type.String),
         Model.Named(name: "size_bytes", type: Types.Type.Int),
         Model.Named(name: "modified_seconds", type: Types.Type.Int),
+        Model.Named(name: "mode", type: Types.Type.Int),
+        Model.Named(name: "user_id", type: Types.Type.Int),
+        Model.Named(name: "group_id", type: Types.Type.Int),
       ],
     ),
     Model.Record(
@@ -329,6 +336,19 @@ end
 def rows_3() -> List[Model.Builtin]
   return [
     Model.Builtin(
+      name: "Dir.mkdir_private",
+      parameters: [
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Dir.mkdir_private",
+      effects: ["filesystem"],
+      description: "Create one directory with mode 0700; an existing path or a missing parent is an error; VM only.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "File.append_text",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
@@ -355,6 +375,11 @@ def rows_3() -> List[Model.Builtin]
       description: "Flush and close a file handle idempotently.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_4() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "File.each_line",
       parameters: [
@@ -373,11 +398,6 @@ def rows_3() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
-  ]
-end
-
-def rows_4() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "File.flush",
       parameters: [
@@ -392,6 +412,24 @@ def rows_4() -> List[Model.Builtin]
       alternatives: [],
     ),
     Model.Builtin(
+      name: "File.lstat",
+      parameters: [
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Struct("FileInfo")),
+      rule: Model.Rule.Plain,
+      implementation: "File.lstat",
+      effects: ["filesystem"],
+      description: "Like File.stat, but a symbolic link is described itself and has kind \"link\"; VM only.",
+      alternatives: [],
+    ),
+  ]
+end
+
+def rows_5() -> List[Model.Builtin]
+  return [
+    Model.Builtin(
       name: "File.open",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
@@ -402,7 +440,10 @@ def rows_4() -> List[Model.Builtin]
       rule: Model.Rule.Plain,
       implementation: "File.open",
       effects: ["filesystem"],
-      description: "Open a regular file for read, write, or append with a deadline.",
+      description: (
+        "Open a regular file for read, write, append or create_private with a deadline; create_private makes a new " +
+        "file with mode 0600 and fails when the path exists."
+      ),
       alternatives: [],
     ),
     Model.Builtin(
@@ -435,7 +476,7 @@ def rows_4() -> List[Model.Builtin]
   ]
 end
 
-def rows_5() -> List[Model.Builtin]
+def rows_6() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "File.read_text",
@@ -460,9 +501,33 @@ def rows_5() -> List[Model.Builtin]
       rule: Model.Rule.Plain,
       implementation: "File.stat",
       effects: ["filesystem"],
-      description: "Return the kind, byte size, and modification time.",
+      description: (
+        "Return the kind, byte size, modification time, permission bits and owner of a file, following symbolic " +
+        "links."
+      ),
       alternatives: [],
     ),
+    Model.Builtin(
+      name: "File.try_lock",
+      parameters: [
+        Model.Named(name: "handle", type: Types.Type.Opaque("FileHandle")),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Bool),
+      rule: Model.Rule.Plain,
+      implementation: "File.try_lock",
+      effects: ["filesystem"],
+      description: (
+        "Take an exclusive lock on the open regular file without waiting: ok(true) when taken, ok(false) when " +
+        "another handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
+      ),
+      alternatives: [],
+    ),
+  ]
+end
+
+def rows_7() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "File.write",
       parameters: [
@@ -491,11 +556,6 @@ def rows_5() -> List[Model.Builtin]
       description: "Write bytes 0..255, at most 1 MiB per call.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_6() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "File.write_text",
       parameters: [
@@ -520,6 +580,11 @@ def rows_6() -> List[Model.Builtin]
       description: "Read the 64 bits of an Int as a binary64 Float; any NaN pattern gives NaN.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_8() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Float.from_bits32",
       parameters: [Model.Named(name: "bits", type: Types.Type.Int)],
@@ -550,11 +615,6 @@ def rows_6() -> List[Model.Builtin]
       description: "The 64 IEEE 754 binary64 bits as an Int; every NaN gives the canonical 9221120237041090560.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_7() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Float.to_bits32",
       parameters: [Model.Named(name: "x", type: Types.Type.Float)],
@@ -578,6 +638,11 @@ def rows_7() -> List[Model.Builtin]
       description: "Truncate toward zero; NaN, infinity or overflow return an error.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_9() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Float.to_int!",
       parameters: [Model.Named(name: "x", type: Types.Type.Float)],
@@ -598,11 +663,6 @@ def rows_7() -> List[Model.Builtin]
       description: "Internal to std/http: wait for a free slot and the next connection.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_8() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "HttpWire.client",
       parameters: [
@@ -629,6 +689,11 @@ def rows_8() -> List[Model.Builtin]
       description: "Internal to std/http: close a client and its connections.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_10() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "HttpWire.close_server",
       parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
@@ -658,11 +723,6 @@ def rows_8() -> List[Model.Builtin]
       description: "Internal to std/http: send one whole request and read the whole response.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_9() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "HttpWire.local_port",
       parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
@@ -688,6 +748,11 @@ def rows_9() -> List[Model.Builtin]
       description: "Internal to std/http: read one whole request, answering protocol errors itself.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_11() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "HttpWire.server",
       parameters: [
@@ -716,11 +781,6 @@ def rows_9() -> List[Model.Builtin]
       description: "Internal to std/http: run a connection task in the server's group.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_10() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "HttpWire.wait",
       parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
@@ -731,6 +791,11 @@ def rows_10() -> List[Model.Builtin]
       description: "Internal to std/http: wait until the server is closed.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_12() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "HttpWire.write_response",
       parameters: [
@@ -769,11 +834,6 @@ def rows_10() -> List[Model.Builtin]
       description: "Flush buffered standard output.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_11() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "IO.gets",
       parameters: [],
@@ -784,6 +844,11 @@ def rows_11() -> List[Model.Builtin]
       description: "Read a line as a Result; EOF is an error value.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_13() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "IO.gets!",
       parameters: [],
@@ -824,11 +889,6 @@ def rows_11() -> List[Model.Builtin]
       description: "Write a value and a newline; non-String values print as in interpolation.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_12() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "IO.read",
       parameters: [],
@@ -839,6 +899,11 @@ def rows_12() -> List[Model.Builtin]
       description: "Read all remaining text until EOF.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_14() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "IO.read_bytes",
       parameters: [Model.Named(name: "count", type: Types.Type.Int)],
@@ -879,11 +944,6 @@ def rows_12() -> List[Model.Builtin]
       description: "Flip every bit; the same as -1 - a.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_13() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Int.bit_or",
       parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "b", type: Types.Type.Int)],
@@ -894,6 +954,11 @@ def rows_13() -> List[Model.Builtin]
       description: "Bitwise or of the 64-bit two's complement forms.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_15() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Int.bit_xor",
       parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "b", type: Types.Type.Int)],
@@ -931,11 +996,6 @@ def rows_13() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
-  ]
-end
-
-def rows_14() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Int.shift_right",
       parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
@@ -948,6 +1008,11 @@ def rows_14() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
+  ]
+end
+
+def rows_16() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Int.shift_right_unsigned",
       parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
@@ -985,11 +1050,6 @@ def rows_14() -> List[Model.Builtin]
       description: "Call f with from up to to; nothing when to < from.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_15() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "JSON.array",
       parameters: [Model.Named(name: "items", type: Types.Type.List(Types.Type.Json))],
@@ -1000,6 +1060,11 @@ def rows_15() -> List[Model.Builtin]
       description: "Build a JSON array from JSON values.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_17() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "JSON.at",
       parameters: [Model.Named(name: "j", type: Types.Type.Json), Model.Named(name: "index", type: Types.Type.Int)],
@@ -1043,11 +1108,6 @@ def rows_15() -> List[Model.Builtin]
       description: "Encode JSON-compatible values; halt on non-finite Float values.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_16() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "JSON.float",
       parameters: [Model.Named(name: "j", type: Types.Type.Json)],
@@ -1058,6 +1118,11 @@ def rows_16() -> List[Model.Builtin]
       description: "Extract a finite Float from a JSON number; wrong kind or overflow returns an error.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_18() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "JSON.from",
       parameters: [Model.Named(name: "value", type: Types.Type.Var("T"))],
@@ -1098,11 +1163,6 @@ def rows_16() -> List[Model.Builtin]
       description: "Extract an array as a list of opaque JSON values; wrong kind returns an error.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_17() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "JSON.null",
       parameters: [],
@@ -1113,6 +1173,11 @@ def rows_17() -> List[Model.Builtin]
       description: "Return JSON null.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_19() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "JSON.null?",
       parameters: [Model.Named(name: "value", type: Types.Type.Json)],
@@ -1153,11 +1218,6 @@ def rows_17() -> List[Model.Builtin]
       description: "Describe a decodable struct with JSON Schema.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_18() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "JSON.string",
       parameters: [Model.Named(name: "j", type: Types.Type.Json)],
@@ -1168,6 +1228,11 @@ def rows_18() -> List[Model.Builtin]
       description: "Extract a JSON string; wrong kind returns an error.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_20() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "List.all?",
       parameters: [
@@ -1207,11 +1272,6 @@ def rows_18() -> List[Model.Builtin]
       description: "Return a new list with this value appended; near constant time.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_19() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "List.at",
       parameters: [
@@ -1225,6 +1285,11 @@ def rows_19() -> List[Model.Builtin]
       description: "Read a zero-based index; invalid indexes halt; O(log32 n).",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_21() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "List.concat",
       parameters: [
@@ -1267,11 +1332,6 @@ def rows_19() -> List[Model.Builtin]
       description: "Call f on each element in order; returns nothing.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_20() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "List.filter",
       parameters: [
@@ -1285,6 +1345,11 @@ def rows_20() -> List[Model.Builtin]
       description: "Keep elements whose predicate is true, in order; O(n).",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_22() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "List.map",
       parameters: [
@@ -1325,11 +1390,6 @@ def rows_20() -> List[Model.Builtin]
       description: "Repeat a value 0..1048576 times; invalid counts halt; O(n).",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_21() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "List.reverse",
       parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("T")))],
@@ -1340,6 +1400,11 @@ def rows_21() -> List[Model.Builtin]
       description: "Return a reversed list; O(n).",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_23() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "List.set",
       parameters: [
@@ -1374,11 +1439,6 @@ def rows_21() -> List[Model.Builtin]
       description: "Stable ascending sort of Int, Float or String; NaN goes last; O(n log n).",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_22() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "List.sort_by",
       parameters: [
@@ -1392,6 +1452,11 @@ def rows_22() -> List[Model.Builtin]
       description: "Stable ascending sort by an Int, Float or String key; one key call per element.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_24() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "List.take",
       parameters: [
@@ -1429,11 +1494,6 @@ def rows_22() -> List[Model.Builtin]
       description: "Internal to std/logger: detach a named handler; a name not in use is an error.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_23() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "LogRegistry.floor",
       parameters: [],
@@ -1447,6 +1507,11 @@ def rows_23() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
+  ]
+end
+
+def rows_25() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "LogRegistry.handlers",
       parameters: [Model.Named(name: "rank", type: Types.Type.Int)],
@@ -1482,11 +1547,6 @@ def rows_23() -> List[Model.Builtin]
       description: "Internal to std/logger: the global level's rank, or -1 until the default handler is installed.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_24() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "LogRegistry.lowest",
       parameters: [],
@@ -1507,6 +1567,11 @@ def rows_24() -> List[Model.Builtin]
       description: "Internal to std/logger: the names of the attached handlers, in attach order.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_26() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "LogRegistry.set_level",
       parameters: [Model.Named(name: "rank", type: Types.Type.Int)],
@@ -1543,7 +1608,7 @@ def rows_24() -> List[Model.Builtin]
   ]
 end
 
-def rows_25() -> List[Model.Builtin]
+def rows_27() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Map.get",
@@ -1599,7 +1664,7 @@ def rows_25() -> List[Model.Builtin]
   ]
 end
 
-def rows_26() -> List[Model.Builtin]
+def rows_28() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Map.put",
@@ -1658,7 +1723,7 @@ def rows_26() -> List[Model.Builtin]
   ]
 end
 
-def rows_27() -> List[Model.Builtin]
+def rows_29() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Path.real",
@@ -1671,6 +1736,39 @@ def rows_27() -> List[Model.Builtin]
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Path.remove",
+      parameters: [
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Path.remove",
+      effects: ["filesystem"],
+      description: (
+        "Delete a file, a symbolic link (the link itself) or a directory with everything in it, never following a " +
+        "link; a missing path is ok; refuses /, . and ..; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Path.rename",
+      parameters: [
+        Model.Named(name: "from", type: Types.Type.String),
+        Model.Named(name: "to", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Path.rename",
+      effects: ["filesystem"],
+      description: (
+        "Rename a file, a symbolic link (moved as a link) or a directory to a path that does not exist yet, " +
+        "atomically (renameat2 with RENAME_NOREPLACE); an existing target is an error, never replaced; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Path.resolve",
       parameters: [Model.Named(name: "path", type: Types.Type.String)],
       result: Types.Type.Result(Types.Type.String),
@@ -1680,6 +1778,11 @@ def rows_27() -> List[Model.Builtin]
       description: "Return a lexical absolute path without resolving symlinks.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_30() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.channel_close",
       parameters: [
@@ -1706,11 +1809,6 @@ def rows_27() -> List[Model.Builtin]
       description: "Read one line the child wrote on its parent channel; end of input is an error.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_28() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Process.channel_send",
       parameters: [
@@ -1735,6 +1833,11 @@ def rows_28() -> List[Model.Builtin]
       description: "Kill and reap the child and close its streams idempotently.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_31() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.close_stdin",
       parameters: [
@@ -1761,11 +1864,6 @@ def rows_28() -> List[Model.Builtin]
       description: "Wait for both captured streams to end; return unread stdout, all stderr and the truncated mark.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_29() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Process.parent_read_line",
       parameters: [Model.Named(name: "timeout_ms", type: Types.Type.Int)],
@@ -1791,6 +1889,11 @@ def rows_29() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
+  ]
+end
+
+def rows_32() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.read_available",
       parameters: [
@@ -1821,11 +1924,6 @@ def rows_29() -> List[Model.Builtin]
       description: "Read count bytes or fewer at EOF; count is 0..1048576.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_30() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Process.read_line",
       parameters: [
@@ -1839,6 +1937,11 @@ def rows_30() -> List[Model.Builtin]
       description: "Read a bounded UTF-8 line; empty EOF is an error.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_33() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.send",
       parameters: [
@@ -1884,7 +1987,7 @@ def rows_30() -> List[Model.Builtin]
   ]
 end
 
-def rows_31() -> List[Model.Builtin]
+def rows_34() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Process.spawn_captured",
@@ -1944,7 +2047,7 @@ def rows_31() -> List[Model.Builtin]
   ]
 end
 
-def rows_32() -> List[Model.Builtin]
+def rows_35() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Random.int",
@@ -1995,7 +2098,7 @@ def rows_32() -> List[Model.Builtin]
   ]
 end
 
-def rows_33() -> List[Model.Builtin]
+def rows_36() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Range.last",
@@ -2050,7 +2153,7 @@ def rows_33() -> List[Model.Builtin]
   ]
 end
 
-def rows_34() -> List[Model.Builtin]
+def rows_37() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Result.unwrap!",
@@ -2104,7 +2207,7 @@ def rows_34() -> List[Model.Builtin]
   ]
 end
 
-def rows_35() -> List[Model.Builtin]
+def rows_38() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Set.difference",
@@ -2158,7 +2261,7 @@ def rows_35() -> List[Model.Builtin]
   ]
 end
 
-def rows_36() -> List[Model.Builtin]
+def rows_39() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Set.new",
@@ -2209,7 +2312,7 @@ def rows_36() -> List[Model.Builtin]
   ]
 end
 
-def rows_37() -> List[Model.Builtin]
+def rows_40() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "Set.union",
@@ -2260,7 +2363,7 @@ def rows_37() -> List[Model.Builtin]
   ]
 end
 
-def rows_38() -> List[Model.Builtin]
+def rows_41() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "String.downcase",
@@ -2318,7 +2421,7 @@ def rows_38() -> List[Model.Builtin]
   ]
 end
 
-def rows_39() -> List[Model.Builtin]
+def rows_42() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "String.from_int",
@@ -2369,7 +2472,7 @@ def rows_39() -> List[Model.Builtin]
   ]
 end
 
-def rows_40() -> List[Model.Builtin]
+def rows_43() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "String.replace",
@@ -2425,7 +2528,7 @@ def rows_40() -> List[Model.Builtin]
   ]
 end
 
-def rows_41() -> List[Model.Builtin]
+def rows_44() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "String.starts_with?",
@@ -2483,7 +2586,7 @@ def rows_41() -> List[Model.Builtin]
   ]
 end
 
-def rows_42() -> List[Model.Builtin]
+def rows_45() -> List[Model.Builtin]
   return [
     Model.Builtin(
       name: "String.trim",
@@ -2541,8 +2644,18 @@ def rows_42() -> List[Model.Builtin]
   ]
 end
 
-def rows_43() -> List[Model.Builtin]
+def rows_46() -> List[Model.Builtin]
   return [
+    Model.Builtin(
+      name: "System.pid",
+      parameters: [],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "System.pid",
+      effects: ["process"],
+      description: "Return the process id of this program; VM only.",
+      alternatives: [],
+    ),
     Model.Builtin(
       name: "TCP.accept",
       parameters: [
@@ -2576,6 +2689,11 @@ def rows_43() -> List[Model.Builtin]
       description: "Close a listener idempotently.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_47() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "TCP.connect",
       parameters: [
@@ -2590,11 +2708,6 @@ def rows_43() -> List[Model.Builtin]
       description: "Connect to a TCP peer within a deadline.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_44() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "TCP.listen",
       parameters: [
@@ -2631,6 +2744,11 @@ def rows_44() -> List[Model.Builtin]
       description: "Read a bounded UTF-8 line, removing its terminator.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_48() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "TCP.recv_bytes",
       parameters: [
@@ -2645,11 +2763,6 @@ def rows_44() -> List[Model.Builtin]
       description: "Read available bytes; an empty list indicates EOF.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_45() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "TCP.send",
       parameters: [
@@ -2678,6 +2791,11 @@ def rows_45() -> List[Model.Builtin]
       description: "Send bytes 0..255 and flush, at most 1 MiB per call.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_49() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "TLS.connect",
       parameters: [
@@ -2693,11 +2811,6 @@ def rows_45() -> List[Model.Builtin]
       description: "Connect with certificate and hostname verification; empty CA uses system trust.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_46() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "TLS.listen",
       parameters: [
@@ -2713,6 +2826,11 @@ def rows_46() -> List[Model.Builtin]
       description: "Listen with a PEM certificate chain and private key.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_50() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Task.await",
       parameters: [Model.Named(name: "task", type: Types.Type.Task(Types.Type.Var("R")))],
@@ -2753,11 +2871,6 @@ def rows_46() -> List[Model.Builtin]
       description: "Count the tasks of this run that have not ended, not counting main; VM only.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_47() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Task.sleep",
       parameters: [Model.Named(name: "milliseconds", type: Types.Type.Int)],
@@ -2768,6 +2881,11 @@ def rows_47() -> List[Model.Builtin]
       description: "Suspend this task for nonnegative milliseconds; zero yields execution.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_51() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Task.spawn",
       parameters: [
@@ -2807,11 +2925,6 @@ def rows_47() -> List[Model.Builtin]
       description: "Return the text of the first task crash no await has observed, or an error.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_48() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Test.assert",
       parameters: [
@@ -2825,6 +2938,11 @@ def rows_48() -> List[Model.Builtin]
       description: "Check a condition; a failure with message is recorded on the test.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_52() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Test.eq",
       parameters: [
@@ -2860,11 +2978,6 @@ def rows_48() -> List[Model.Builtin]
       description: "Check that a Result is ok; a failure is recorded on the test.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_49() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Test.run",
       parameters: [Model.Named(name: "tests", type: Types.Type.List(Types.Type.Opaque("TestCase")))],
@@ -2875,6 +2988,11 @@ def rows_49() -> List[Model.Builtin]
       description: "Serve agentica test: list the tests or run each in its own task; never returns.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_53() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Test.test",
       parameters: [
@@ -2911,11 +3029,6 @@ def rows_49() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
-  ]
-end
-
-def rows_50() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Time.now_ms",
       parameters: [],
@@ -2926,6 +3039,11 @@ def rows_50() -> List[Model.Builtin]
       description: "Read wall-clock milliseconds since the Unix epoch; may jump.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_54() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "error",
       parameters: [Model.Named(name: "message", type: Types.Type.String)],
@@ -2956,11 +3074,6 @@ def rows_50() -> List[Model.Builtin]
       description: "Read a line; halt at EOF.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_51() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "ok",
       parameters: [Model.Named(name: "value", type: Types.Type.Var("T"))],
@@ -2982,6 +3095,11 @@ def rows_51() -> List[Model.Builtin]
         ),
       ],
     ),
+  ]
+end
+
+def rows_55() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "print",
       parameters: [Model.Named(name: "value", type: Types.Type.Var("T"))],

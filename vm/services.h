@@ -28,6 +28,11 @@ typedef enum { AGC_NUMBER_OK, AGC_NUMBER_INVALID, AGC_NUMBER_OVERFLOW } agc_numb
 
 #define AGC_NOT_FOUND SIZE_MAX
 
+/* agc_remove_tree returns 0, an errno, or one of these. */
+#define AGC_TREE_TOO_DEEP (-1)
+#define AGC_TREE_REFUSED (-2)
+#define AGC_TREE_MAX_DEPTH 128
+
 size_t agc_utf8_encode(uint32_t cp, char out[4]);
 size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index);
 size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from);
@@ -51,6 +56,9 @@ void agc_files_close(agc_vm *vm);
 char *agc_host_path(agc_vm *vm, const agc_string *s);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
+bool agc_tree_refused(const char *path);
+/* Removes the tree at path; on a failure inside it, *failed is a malloc'd path of the entry that failed, else NULL. */
+int agc_remove_tree(const char *path, char **failed);
 #ifdef __linux__
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 #endif

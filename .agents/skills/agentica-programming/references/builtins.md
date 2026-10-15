@@ -24,6 +24,7 @@ IO.eof?() -> Bool                       # peeks one byte; may block; not a readi
 System.args() -> List[String]
 System.exit(code: Int) -> Void
 System.env(name: String) -> Result[String]   # error if unset or the name is empty, has = or NUL; ok("") if set empty
+System.pid() -> Int                     # the process id of this program (VM only)
 Time.now_ms() -> Int                    # wall clock, Unix ms; may jump
 Time.monotonic_ms() -> Int              # never goes backward; use it for durations
 Time.monotonic_ns() -> Int              # same clock in nanoseconds; same origin as monotonic_ms
@@ -36,7 +37,8 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
 - `String.from_bytes` decodes strictly. A byte read can split a UTF-8 character, so decode complete sequences only, and switch to text reads only at character boundaries.
 - `IO.eof?` does not consume a byte and does not wait for a whole UTF-8 character. Reads have no timeout; step budgets do not interrupt blocking input.
 - `IO.flush` flushes stdout, not stderr. On Linux, a print is copied into a 64 KiB buffer per stream and written as the reader takes it, so output reaches a pipe without `IO.flush`. Stdout and stderr to the same file keep the order of the calls. `IO.flush` returns once the buffer is in the pipe, so it can wait for a slow reader. On other systems, output does not auto-flush. For stdio protocols, write one compact JSON message per line, flush after each response, and send logs to `IO.warn`.
-- `System.env` needs no flag. A value that is not UTF-8 is decoded with U+FFFD for each bad byte. The home directory is `System.env("HOME")`. There is no call that lists the variables. `AGENTICA_CHANNEL` and a `UV_USE_IO_URING` the VM set itself are hidden.
+- `System.env` needs no flag. A value that is not UTF-8 is decoded with U+FFFD for each bad byte. The home directory is `System.env("HOME")`. There is no call that lists the variables. `AGENTICA_CHANNEL` and a `UV_USE_IO_URING` the VM set itself are hidden. A child from `Process.spawn` also does not get `AGENTICA_VM_METRICS` or `AGENTICA_VM_METRICS_FILE`, but `System.env` shows them to you.
+- `System.pid` needs no flag. Pass it to a VM you start with `--driver-pid`: that VM checks that its parent is this process.
 - `Time` and `Random` are reserved module names. `Random` has one generator per run, seeded from the OS unless `--seed N` is given (`agentica --seed N program.agc`, N in `0 .. 2147483647`). Each task has its own generator, split at spawn. The generator is not for secrets.
 
 ```ruby

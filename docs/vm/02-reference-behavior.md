@@ -104,6 +104,9 @@ is not repeated here; read the file.
   by the same rule that strips them from a child's environment
   (`AGENTICA_CHANNEL` and, when the VM set it, `UV_USE_IO_URING`). It needs no
   flag, and `--allow-run` is for starting programs only.
+- `System.pid()` is `getpid()` of the VM process. It needs no flag. The VM's
+  `--driver-pid` option compares its argument with the VM's parent, so a program
+  that starts a VM with `--driver-pid` passes `System.pid()`.
 - `String.code` needs exactly one code point and `String.from_code` a Unicode
   scalar value, else `RUNTIME-INVALID-CHARACTER` at the argument span (the
   receiver for `s.code`). `at` fails with `RUNTIME-INDEX-OUT-OF-RANGE` at the
@@ -250,7 +253,70 @@ Every failure is an error value. The checks run in this order:
   `File.read_line` strips LF or CRLF and fails after 1 MiB without a LF.
   `File.read_bytes` reads until `max_bytes` or EOF.
 - `File.stat` of a missing path gives an error without a kind. A directory's
-  size is 0. `modified_seconds` is the modification time in seconds.
+  size is 0. `modified_seconds` is the modification time in seconds. `mode` is
+  `st_mode & 07777` (permission bits with setuid, setgid and sticky), `user_id`
+  and `group_id` are `st_uid` and `st_gid`.
+- `File.lstat` is `lstat`: a symbolic link is described itself, with `kind`
+  `"link"`, the length of its text as `size_bytes`, and its own mode, owner and
+  modification time. Every other path gives what `File.stat` gives. A missing
+  path, a link loop in the parent path and a bad argument give the errors of
+  `File.stat`.
+- `File.open` mode `create_private` is `open` with `O_WRONLY | O_CREAT |
+  O_EXCL | O_NOFOLLOW` and mode 0600 (less where the umask clears bits). Any
+  existing entry, a dangling link included, is an error, and a link is never
+  followed. The handle is write-only and otherwise like a `write` handle.
+- `File.try_lock(handle, timeout_ms)` is `flock(LOCK_EX | LOCK_NB)` on the
+  handle's descriptor, in a pool job, after the handle's own lock wait.
+  `ok(true)` means the lock is taken (taking it again on the same handle is
+  `ok(true)`), `ok(false)` that another open file description, in this process
+  or another, holds it; any other `flock` failure is `filesystem: cannot lock
+  file` with the OS error text. The lock lasts until the handle closes
+  (`File.close`, the end of its task, the end of the run) or the process ends.
+  Descriptors are close-on-exec, so a child never keeps it. Only a regular
+  file locks: the job calls `fstat` first, and a pipe, a FIFO or a device
+  (`/dev/null` takes `flock` too, with nothing to contend for) is
+  `filesystem: only a regular file can be locked`. `LOCK_NB` never blocks, so
+  there is no `EINTR` loop. There is no unlock call and no waiting lock.
+- `Dir.mkdir_private` is one `mkdir` with mode 0700 (less where the umask clears
+  bits). It makes no parents and an existing path is an error
+  (`make-directory: cannot make directory`).
+- `Path.remove(path, timeout_ms)` removes what is at the path without ever
+  following a link, in a pool job. `unlink` goes first: it takes a file or a
+  symbolic link itself, and a missing path (`ENOENT`) is `ok()`, as with
+  `unlink(missing_ok=True)`. Any other `unlink` error is reported, `ENOTDIR`
+  for `file/child` included: that is on purpose, because `link/` (a trailing
+  slash on a link) gives the same error and must never report `ok()`. Only
+  `EISDIR` starts the tree walk, `agc_remove_tree` (`vm/tree.c`): the root is
+  opened with `openat(O_NOFOLLOW | O_DIRECTORY)`, so a trailing slash on a link
+  is an error and not a follow, and every entry below is deleted with
+  `unlinkat` on its directory's descriptor, so a link inside the tree is
+  removed as a link and its target is never touched. The walk keeps an explicit
+  stack of at most 128 open levels (`filesystem: directory tree is deeper than
+  128 levels`, the tree partly removed) and reads a directory again while its
+  last pass removed something, since POSIX leaves the entries after an unlinked
+  one unspecified. An `ENOENT` from `unlinkat` (someone else removed the entry,
+  or a file system lists names it cannot remove) is not progress, so a pass that
+  removed nothing ends the walk with `ENOTEMPTY`; `EINTR` is repeated. The walk
+  crosses mount points, as `rm -rf`, Python's `rmtree` and Racket's
+  `delete-directory/files` do. A path whose last component (trailing slashes
+  ignored) is empty, `.` or `..` is refused before anything opens
+  (`filesystem: refusing to remove /, . or ..`): the check is the pure
+  function `agc_tree_refused`, which `agc_remove_tree` calls first, so a test
+  can try the names that must never be removed without removing anything. Any
+  other failure is `filesystem: cannot remove path` with the OS error text and
+  the path: for a failure inside the tree, the path of the entry (or of the
+  directory) that failed, not the root. A timeout gives the timeout error, but
+  the pool job is not stopped (14.3): the removal runs to its end.
+- `Path.rename(from, to, timeout_ms)` is one `renameat2(AT_FDCWD, from,
+  AT_FDCWD, to, RENAME_NOREPLACE)` in a pool job (`_GNU_SOURCE` is defined in
+  `files.c` for the declaration). It never replaces: an existing `to`, an empty
+  directory included, is `EEXIST`, and it is atomic, so of several processes
+  that race for one name exactly one wins. `rename` never follows a final link,
+  so a link moves as a link. The error is `filesystem: cannot rename path` with
+  `from`, `to` and the OS error text. A file system that does not know
+  `RENAME_NOREPLACE` answers `EINVAL` and the call reports it; there is no
+  fallback with a check first, which would be a race. The driver uses it to
+  give a run directory its final name after the lock inside it is taken.
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by
   code point. `Dir.mkdir` creates missing parents with mode 0777; an existing
   directory or file is not an error.

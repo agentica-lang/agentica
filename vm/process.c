@@ -1,7 +1,7 @@
 /*
- * The Process builtins and System.env (Linux only): spawning and watching
- * child processes, their pipes, and the environment entries that the VM keeps
- * for itself. Service layer. Design: docs/vm/10-io-processes.md §10.4.
+ * The Process builtins, System.env and System.pid (Linux only): spawning and
+ * watching child processes, their pipes, and the environment entries that the VM
+ * keeps for itself. Service layer. Design: docs/vm/10-io-processes.md §10.4.
  */
 #include "services.h"
 
@@ -23,6 +23,8 @@
 #define GRACE_MS 1000
 #define URING_ENV "UV_USE_IO_URING="
 #define CHANNEL_PREFIX AGC_CHANNEL_ENV "="
+#define METRICS_ENV "AGENTICA_VM_METRICS="
+#define METRICS_FILE_ENV "AGENTICA_VM_METRICS_FILE="
 #define DRAIN_LIMIT ((size_t)2097152)
 #define STDIO_SLOTS 4
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
@@ -622,6 +624,13 @@ static bool own_env(bool drop_uring, const char *entry) {
   return uring || strncmp(entry, CHANNEL_PREFIX, sizeof CHANNEL_PREFIX - 1) == 0;
 }
 
+/* One VM owns the metrics port and file (docs/future/28-vm-metrics.md 28.5): a child VM, or a runner the BDD
+   driver starts, would fight for them. Each name is matched with its "=", so the first never catches the second. */
+static bool metrics_env(const char *entry) {
+  return strncmp(entry, METRICS_ENV, sizeof METRICS_ENV - 1) == 0 ||
+         strncmp(entry, METRICS_FILE_ENV, sizeof METRICS_FILE_ENV - 1) == 0;
+}
+
 static char **child_env(bool drop_uring, char *marker) {
   char **host = host_env();
   size_t n = 0;
@@ -630,7 +639,7 @@ static char **child_env(bool drop_uring, char *marker) {
   if (!env) agc_out_of_memory();
   size_t kept = 0;
   for (size_t k = 0; k < n; k++)
-    if (!own_env(drop_uring, host[k])) env[kept++] = host[k];
+    if (!own_env(drop_uring, host[k]) && !metrics_env(host[k])) env[kept++] = host[k];
   if (marker) env[kept] = marker;
   return env;
 }
@@ -1043,6 +1052,13 @@ static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_error_value("system: environment variable is not set");
 }
 
+static agc_value builtin_pid(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)vm;
+  (void)args;
+  (void)span;
+  return agc_int((int64_t)getpid());
+}
+
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
@@ -1060,6 +1076,7 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"System.pid", 0, builtin_pid, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];

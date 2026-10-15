@@ -10,6 +10,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 |---|---|
 | `vm/loop.c` | The libuv event loop and the resource registry. Details below. |
 | `vm/files.c` | The `File`, `Dir` and `Path` builtins (Linux only). Details below. |
+| `vm/tree.c` | `agc_tree_refused` (the pure test of the names never removed) and `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with `O_NOFOLLOW`, `unlinkat`, an explicit stack of at most 128 levels, no VM state. |
 | `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux a pipe, FIFO, terminal or socket stdin is read on the loop (`watch_stdin`: a pipe or terminal reopened through `/proc/self/fd/N` with `O_NONBLOCK` so the inherited description keeps its flags, a socket read with `MSG_DONTWAIT`; an `agc_poller` and an `external` job), any other stdin by one pool job; the job's `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; non-Linux keeps a blocking read |
 | `vm/output.c` | The writer of stdout and stderr, with a buffer and a waiting queue per stream. |
 
@@ -178,6 +179,29 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     here, `owns_st` saying which request frees the state (open, close, or a
     handle request after its timeout), `Path.join` and `Path.resolve` as pure
     string code
+  - the owner-only and lock builtins of the BDD driver port (`docs/future/35-self-hosting.md`
+    §35.5, step 7a), all pool jobs in `work`:
+    - `File.open(path, "create_private")` is `OP_OPEN_CREATE`, which
+      `open_for` handles first with `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW`
+      and mode 0600, then goes the way of `write`
+    - `File.lstat` is `OP_LSTAT`, sharing `work_stat` with `OP_STAT`, and
+      `FileInfo` has `mode`, `user_id` and `group_id` after `modified_seconds`
+    - `Dir.mkdir_private` is one `mkdir(0700)` (`OP_MKDIR_PRIVATE`, the
+      `FS_MKDIR` error)
+    - `File.try_lock` (`OP_TRY_LOCK`) is `flock(LOCK_EX | LOCK_NB)` on the
+      handle's `st->fd` after the handle's own lock wait (`blocked`); `open_state`
+      is `usable` without the direction check; a handle with a poller (pipe,
+      FIFO) is refused at once, and any other kind that `fstat` in the job says
+      is not a regular file (a device) is `FS_NOT_LOCKABLE`; `done` returns
+      `ok(true)` or `ok(false)`
+    - `Path.remove` (`OP_REMOVE`): `unlink` (repeated on `EINTR`), a missing
+      path is success, and `EISDIR` calls `agc_remove_tree` (`vm/tree.c`), whose
+      negative returns `AGC_TREE_TOO_DEEP` and `AGC_TREE_REFUSED` become
+      `FS_TREE_DEEP` and `FS_REFUSED`; a failure inside the tree comes with the
+      path of the failed entry (`failed`), which replaces `o->path` in the error
+    - `Path.rename` (`OP_RENAME`): `renameat2` with `RENAME_NOREPLACE`;
+      `files.c` defines `_GNU_SOURCE` for it; the second path is `op.to`; the
+      error is `FS_RENAME` with both paths
   - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_real_path`, the job
     has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`, `filesystem:
     cannot resolve path` with the path and the OS error text, and the result is

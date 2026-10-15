@@ -15,22 +15,30 @@ File.read_text(path: String, timeout_ms: Int) -> Result[String]
 File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
+File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo]
+File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
 Dir.list(path: String, timeout_ms: Int) -> Result[List[String]]
 Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void]
+Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void]
 Path.cwd() -> Result[String]
 Path.join(parts: List[String]) -> Result[String]
 Path.resolve(path: String) -> Result[String]
 Path.real(path: String) -> Result[String]
+Path.remove(path: String, timeout_ms: Int) -> Result[Void]
+Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 ```
 
 ## Opening and reading
 
 - Operations accept regular files, symlinks to them, and FIFOs, pipes, and devices that can wait (their calls wait on the event loop). They reject directories, a missing path for a read, and a path that reopens a pipe the VM made for itself (`/proc/self/fd/N`, `/dev/fd/N`). Pipes the VM received at start (stdin, stdout, stderr, or `bash <(...)`) stay readable through `/dev/stdout`, `/proc/self/fd/1`, and the like; only the descriptor the VM writes its own stdout or stderr through is refused.
-- Modes: `read` needs an existing path that is not a directory; `write` creates or truncates; `append` creates or appends.
+- Modes: `read` needs an existing path that is not a directory; `write` creates or truncates; `append` creates or appends; `create_private` creates a new write-only file with mode 0600 and fails if the path exists (a dangling link too; it never follows a link).
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are limited to 1 MiB. `read_bytes` takes 1..1048576 bytes and returns `ok([])` at EOF. Bytes are 0..255.
 - `read_line` removes LF or CRLF and accepts a final unterminated line. EOF before any line, or invalid UTF-8, is an error.
-- `File.stat` follows symlinks and returns `FileInfo(kind: String, size_bytes: Int, modified_seconds: Int)`; directory sizes are zero.
-- `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates parents and succeeds if the directory exists.
+- `File.stat` follows symlinks and returns `FileInfo(kind: String, size_bytes: Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int)`; directory sizes are zero; `mode` is the permission bits with setuid, setgid and sticky (384 is `rw-------`). `File.lstat` is the same without following a final symlink: `kind` is `"link"`.
+- `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates parents and succeeds if the directory exists. `Dir.mkdir_private` makes one directory with mode 0700 and fails if the path exists or the parent is missing.
+- `File.try_lock(handle, ms)` takes an exclusive lock on an open file without waiting: `ok(true)` if taken, `ok(false)` if another handle or process holds it. Only a regular file can be locked (a pipe, FIFO or device such as `/dev/null` is an error). It ends when the handle is closed or the program ends; children do not keep it. There is no unlock call.
+- `Path.remove` deletes a file, a symlink itself, or a directory with all it holds, never following a symlink (a link inside is removed as a link). A missing path is `ok()`. It refuses a path that ends in `/`, `.` or `..` (also `dir/..`) and trees deeper than 128 levels. `"link/"` with a trailing slash and `"file/child"` are errors (`Not a directory`) on purpose, so `"link/"` never reports `ok()`. A failure inside the tree names the entry that failed, and what went before stays removed. It crosses mount points like `rm -rf`. A timeout gives an error but does not stop a removal that is running.
+- `Path.rename(from, to, ms)` moves a file, a symlink (as a link) or a directory to a path that does not exist, atomically: an existing target, even an empty directory, is an error and is never replaced, so racing programs get one winner. Both paths must be on one file system.
 - `Path.join` uses host path rules. `Path.resolve` makes a lexical absolute path without resolving symlinks. `Path.real` resolves every symlink like POSIX `realpath`: the path must exist (else an error), a relative path starts at the current directory, and it has no timeout argument.
 - `File.read_text` of a pipe reads to EOF. A FIFO with no writer gives EOF; opening one for writing with no reader is an error.
 

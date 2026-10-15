@@ -70,13 +70,30 @@ end
 File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
 ```
 
-Gives a `FileInfo` with `kind` (such as `"file"` or `"directory"`),
-`size_bytes` and `modified_seconds`.
+Gives a `FileInfo` with `kind` (`"file"` or `"directory"`), `size_bytes`, `modified_seconds`, `mode` and the owner as `user_id` and `group_id`. A symbolic link is followed. `mode` is the permission bits as an `Int`, with the setuid, setgid and sticky bits included: a file with mode `rw-------` has `mode` 384 (octal 600).
 
 ```agentica {mode="check"}
 def main() -> Void
   info = File.stat("notes.txt", 1000).unwrap!
-  puts("#{info.kind}: #{info.size_bytes} bytes")
+  puts("#{info.kind}: #{info.size_bytes} bytes, mode #{info.mode}")
+end
+```
+
+## File.lstat
+
+```text
+File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo]
+```
+
+Like `File.stat`, but a symbolic link is not followed: its `kind` is `"link"`, `size_bytes` is the length of the text of the link, and the other fields are the link's own. Use it to tell a link from the file or directory it names, then `File.stat` to see what it names. VM only.
+
+```agentica {mode="check"}
+def main() -> Void
+  info = File.lstat("current", 1000).unwrap!
+  if info.kind == "link"
+    target = File.stat("current", 1000).unwrap!
+    puts("a link to a #{target.kind}")
+  end
 end
 ```
 
@@ -87,7 +104,7 @@ File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
 File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 ```
 
-Opens a file for streaming. The mode is `"read"`, `"write"` (create or empty the file) or `"append"`. `close` writes pending data; closing twice is fine. A file belongs to the task that opened it, and it is closed, with its data written, when that task ends, and `Task.await` of that task returns after the data of a regular file is written, so a parent that awaits a helper reads everything the helper wrote to one. The await does not wait for a flush to a FIFO or a pipe. A file that a helper task opens and returns through `Task.await` is closed when the helper ends. A `close` on a file that is being closed because its task ended waits for that close and returns its result.
+Opens a file for streaming. The mode is `"read"`, `"write"` (create or empty the file), `"append"` or `"create_private"` (VM only). `"create_private"` makes a new file that only you can read and write (mode 0600, less where the umask clears bits) and opens it for writing; it fails when the path already exists, including a link that points nowhere, and it never follows a link, so another user cannot make it write somewhere else. `close` writes pending data; closing twice is fine. A file belongs to the task that opened it, and it is closed, with its data written, when that task ends, and `Task.await` of that task returns after the data of a regular file is written, so a parent that awaits a helper reads everything the helper wrote to one. The await does not wait for a flush to a FIFO or a pipe. A file that a helper task opens and returns through `Task.await` is closed when the helper ends. A `close` on a file that is being closed because its task ended waits for that close and returns its result.
 
 Open files are closed when the program ends, and the run waits until their pending data is written. It also waits until the output of `puts` and `IO.warn` has reached the pipe or file, so a slow reader gets everything. The wait is always limited, to 30 seconds by default. `agentica --flush-timeout MS app.agc` or the environment variable `AGENTICA_FLUSH_TIMEOUT_MS` sets it, and the flag wins over the variable. When time runs out, the run ends with the same exit code and prints one line on stderr saying that file data may not be written, so a write to a FIFO that nobody reads cannot keep the program from ending for ever. The same happens when the program is stopped with `SIGINT`, `SIGTERM` or `SIGHUP`: running child programs are stopped first, then the files are written, then the program ends by that signal. After a signal the run does not wait for a reader of standard output or standard error. A second signal ends it at once, once the child programs are stopped. Under `agentica`, Ctrl-C reaches the program directly; `agentica` waits 2 seconds for it to end before it sends `SIGTERM`, and 2 more before it kills it.
 
@@ -123,6 +140,26 @@ end
 
 def main() -> Void
   puts(save_lines("list.txt", ["a", "b"]))
+end
+```
+
+## File.try_lock
+
+```text
+File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
+```
+
+Takes an exclusive lock on the open file without waiting: `ok(true)` when it is yours (also when you already had it on this handle), and `ok(false)` when another handle or another process holds it. The lock belongs to the open file, so it ends when the handle is closed, when the task that opened it ends, or when the program ends, even if it is killed. A program started with `Process.spawn` does not keep it. The lock stops only code that also asks for it. Any handle mode works, and a read handle can lock too. Only a regular file can be locked: a pipe, a FIFO or a device (such as `/dev/null`) is an error. There is no unlock call: close the handle. VM only.
+
+```agentica {mode="check"}
+def main() -> Void
+  file = File.open("app.lock", "append", 1000).unwrap!
+  if File.try_lock(file, 1000).unwrap!
+    puts("running alone")
+  else
+    puts("another copy is running")
+  end
+  closed = File.close(file, 1000)
 end
 ```
 
@@ -225,6 +262,24 @@ def main() -> Void
 end
 ```
 
+## Dir.mkdir_private
+
+```text
+Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void]
+```
+
+Creates one directory that only you can enter (mode 0700, less where the umask clears bits). Unlike `Dir.mkdir` it makes no parents, and a path that already exists is an error, so a success means the directory is new and yours. Use it for a scratch directory in a shared place such as `/tmp`. VM only.
+
+```agentica {mode="check"}
+def main() -> Void
+  name = "/tmp/app-#{Random.int(0, 999999999)}"
+  case Dir.mkdir_private(name, 1000)
+    ok(_) -> puts("made #{name}")
+    error(message) -> IO.warn("cannot make it: #{message}")
+  end
+end
+```
+
 ## Path.join
 
 ```text
@@ -278,4 +333,35 @@ end
 ```output
 ok("/")
 false
+```
+
+## Path.remove
+
+```text
+Path.remove(path: String, timeout_ms: Int) -> Result[Void]
+```
+
+Deletes what is at the path: a file, a symbolic link, or a directory with everything in it. It never follows a symbolic link. A link given as the path is deleted itself, a link inside a directory is deleted as a link, and what it names is left alone. A path that is not there is `ok()`. It refuses `/`, `.` and `..` (and a path that ends in one of them, such as `dir/..`), and a tree more than 128 levels deep, which it leaves partly deleted. A link with a trailing slash (`"link/"`) is an error, and so is a path under a file (`"file/child"`): both are `Not a directory`, on purpose, so that `"link/"` never reports `ok()`. When a call fails, what it already deleted stays deleted, and the error names the path or, for a failure inside the tree, the entry that failed, with the system error. It deletes across mount points, as `rm -rf` does. A timeout gives an error but does not stop a removal that has started: it runs on until it ends. VM only.
+
+```agentica {mode="check"}
+def main() -> Void
+  puts(Path.remove("build", 5000))
+  puts(Path.remove("old.log", 1000))
+end
+```
+
+## Path.rename
+
+```text
+Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
+```
+
+Renames a file, a symbolic link or a directory to a path that does not exist yet, in one step. It never replaces anything: when `to` exists, even as an empty directory, the call is an error and nothing changes, so two programs that race for a name have exactly one winner. A symbolic link is moved as a link, and what it names is left alone. Both paths must be on the same file system, and a file system that cannot refuse to replace (some network file systems) gives an error. VM only.
+
+```agentica {mode="check"}
+def main() -> Void
+  made = Dir.mkdir_private("/tmp/job-new", 1000)
+  claimed = Path.rename("/tmp/job-new", "/tmp/job", 1000)
+  puts(claimed.ok?)
+end
 ```

@@ -422,7 +422,10 @@ No `uv_signal_t` watcher is added (46.3.2).
 The program below is the `Supervisor` and the `main` flow of the gh-runner
 script, in the proposed API. It does not compile today. `Signal`,
 `Signal.channel`, `Signal.Term`, `Process.spawn_group`, `Process.signal_group`,
-`System.signal`, `Path.remove` and `File.copy` do not exist yet. Constants are
+`System.signal` and `File.copy` do not exist yet. `Path.remove` does: it came
+with the OS builtins of the BDD driver port (§35.5, step 7a), as
+`Path.remove(path, timeout_ms)`, which deletes a file, a link or a directory
+tree without following links and treats a missing path as `ok()`. Constants are
 functions until module constants (§44) land.
 
 The mapping from Python is short. `handle_signal` becomes `first_signal`. It
@@ -439,7 +442,7 @@ import HTTP from "std/http"
 import Logger from "std/logger"
 
 # Proposed API (46a, 46b): Signal, Signal.channel, Process.spawn_group,
-# Process.signal_group, System.signal, Path.remove and File.copy.
+# Process.signal_group, System.signal and File.copy. Path.remove exists.
 # Constants are functions until module constants (§44) land.
 
 struct Settings
@@ -855,11 +858,11 @@ signal work, so they go to their own change.
 | Signal a listener by pid | missing | `System.signal` through a pidfd (46.3.7) |
 | Wait for exit with a deadline | exists | `Process.wait(p, ms)` returns `error("network: operation timed out")` on a timeout and keeps the child. The example repeats the wait. |
 | Path: exists check | partly | `File.stat(path, t).ok?`. It follows symlinks and has no `exists?`. |
-| Path: unlink | missing | Proposed as `Path.remove` (separate change). A missing path is `ok`, as with `unlink(missing_ok=True)`. |
-| Path: rmtree | missing | `Path.remove` covers it, recursively and without following links. |
+| Path: unlink | exists | `Path.remove(path, ms)` (§35.5, step 7a). A missing path is `ok`, as with `unlink(missing_ok=True)`. A link is removed itself. |
+| Path: rmtree | exists | `Path.remove` covers it, recursively and without following links (`vm/tree.c`). It refuses `/`, `.` and `..`, and trees deeper than 128 levels. |
 | Path: copy2 that keeps the mode | missing | `read_text` and `write_text` lose the mode and are text-only. Credential files need their mode. Proposed as `File.copy` (separate change). |
 | Path: mkdir -p | exists | `Dir.mkdir` creates parents. |
-| Path: iterdir with is_dir and is_symlink | partly | `Dir.list` gives names. `File.stat` follows links, so a link is not seen as a link. |
+| Path: iterdir with is_dir and is_symlink | exists | `Dir.list` gives names. `File.lstat` (§35.5, step 7a) does not follow a link and gives `kind` `"link"`; `File.stat` follows it. |
 | Path: os.access (writable) | missing | The example runs `sudo chown` every time. A probe write is the workaround. Out of scope. |
 | HTTP POST with headers and TLS | exists | `HTTP.post`. System CA certificates by default. |
 | JSON token parse | exists | `JSON.parse`, `JSON.get`, `JSON.string`. |
@@ -942,11 +945,11 @@ are the default-path cases.
 - **46d: graceful HTTP stop.** A drain in `std/http`: stop accepting, and wait
   for the handlers to finish, up to a deadline. It is a separate change in
   Agentica code, and it does not need the VM work of 46a or 46b in full.
-- **Separate changes, outside §46:** `Path.remove`, `File.copy` that keeps the
-  mode, a kind check that does not follow links, and `System.hostname`. Reaping
-  orphans as PID 1 is also separate (46.8, question 10). The BDD driver
-  work of §35 step 7 (its first part adds OS builtins) may add some of these.
-  Check master before starting, and do not add one twice.
+- **Separate changes, outside §46:** `File.copy` that keeps the mode, and
+  `System.hostname`. Reaping orphans as PID 1 is also separate (46.8, question
+  10). Two of the others are done, in the OS builtins of §35.5 (step 7a):
+  `Path.remove`, and the kind check that does not follow links, which is
+  `File.lstat`.
 
 The bootstrap question. The compiler catalog exists (§35 step 4, PR #258).
 `compiler/builtins_data.agc` is generated from `src/builtins.rkt` and

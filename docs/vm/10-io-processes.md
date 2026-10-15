@@ -128,7 +128,11 @@ none of them (the VM has `_WIN32` paths): the channel is Linux only.
   that spawns without the pipe never passes an inherited marker on, and a
   grandchild sees neither the marker nor descriptor 3 unless its own parent
   opened a channel for it. `System.env` hides the same entries from the
-  program (`own_env` in `vm/process.c` decides for both).
+  program (`own_env` in `vm/process.c` decides for both). `AGENTICA_VM_METRICS`
+  and `AGENTICA_VM_METRICS_FILE` are also removed from a child's environment
+  (`metrics_env`, matched with their `=`), so a child VM or a BDD runner never
+  fights for the metrics port or file (`docs/future/28-vm-metrics.md` §28.5);
+  `System.env` still shows them to the program.
 - **Child start.** `agc_parent_take` runs in `main.c` before the program does.
   If `AGENTICA_CHANNEL` is `3` and `fstat(3)` says socket or FIFO and
   `fcntl(F_GETFL)` says it is open for both reading and writing (an anonymous

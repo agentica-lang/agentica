@@ -65,7 +65,25 @@ vi
 false
 ```
 
-The VM hides the variables it keeps for itself: `AGENTICA_CHANNEL`, and `UV_USE_IO_URING` when the VM set it. A program started with `Process.spawn` does not get them either.
+The VM hides the variables it keeps for itself: `AGENTICA_CHANNEL`, and `UV_USE_IO_URING` when the VM set it. A program started with `Process.spawn` does not get them either. It also does not get `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE`, which are reserved for the metrics of the VM (a later phase); `System.env` still shows them to your program.
+
+## System.pid
+
+```text
+System.pid() -> Int
+```
+
+The process id of the running program. It needs no flag. Pass it when you start a VM with `--driver-pid`, which makes that VM check that its parent is this program.
+
+```agentica
+def main() -> Void
+  puts(System.pid() > 0)
+end
+```
+
+```output
+true
+```
 
 ## Time.now_ms
 

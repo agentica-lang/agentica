@@ -491,6 +491,12 @@ newline.
 - **Children.** `Process.spawn` removes `AGENTICA_VM_METRICS` and
   `AGENTICA_VM_METRICS_FILE` from the environment a child inherits, as the VM
   already edits a child's environment for `UV_USE_IO_URING` (`drop_uring_env`).
+  The removal is done, with its test (`metrics_env` in `child_env`,
+  `vm/process.c`; `tests/test_vm_os.py`), in the OS builtins of the BDD driver
+  port (§35.5 of `docs/future/35-self-hosting.md`, step 7a), because the driver
+  port can no longer edit the runner's environment. It is a breaking change for
+  a program that passed these variables to a child on purpose. The text below
+  is the rule it follows.
   `child_env()` in `vm/process.c` becomes `child_env(bool drop_uring)` and runs
   when `drop_uring_env` is set or either metrics variable is present. It removes
   `UV_USE_IO_URING=` only when `drop_uring` is true (the VM set it itself; a

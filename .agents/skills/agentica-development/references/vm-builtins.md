@@ -9,7 +9,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 1. `src/lower.rkt`: let the call through the builtin check (today only the
    `vm-builtins` keys `puts`, `IO.print`, `IO.warn`, `IO.inspect`,
    `IO.gets`, `IO.gets!`, `IO.read`, `IO.read_bytes`, `IO.flush`,
-   `IO.eof?`, `System.args`, `System.exit`, `System.env`, `String.from_int`,
+   `IO.eof?`, `System.args`, `System.exit`, `System.env`, `System.pid`, `String.from_int`,
    `String.from_float`, `ok` (arities 0 and 1), `error`, `Result.ok?`,
    `Result.unwrap!`, `Result.unwrap_or`, `Result.message`, the callback
    builtins `List.map`, `List.filter`, `List.reduce`, `List.each`,

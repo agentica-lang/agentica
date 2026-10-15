@@ -167,6 +167,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/test_vm_logger.py`, `tests/fixtures/logger-peer.*`,
   `tests/test_vm_monotonic.py`, `tests/fixtures/monotonic-peer.*`,
   `tests/test_vm_file_lines.py`, `tests/fixtures/lines-peer.py`,
+  `tests/test_vm_os.py`,
   `tests/vm-stack-test.rkt`, `tests/agentica_test.py` (the helper of the
   unittest modules),
   `tests/test_vm_test_protocol.py`, `tests/fixtures/test-protocol-peer.*`,
