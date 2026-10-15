@@ -347,6 +347,55 @@ static void names(void) {
   free(text);
 }
 
+static void long_names(void) {
+  fixture *f = build();
+  char function[512], path[512], want[2048];
+  memset(function, 'a', 255);
+  memcpy(function + 255, "\xC3\xA9", 2);
+  memset(function + 257, 'b', 40);
+  function[297] = '\0';
+  memset(path, 'p', 300);
+  memcpy(path + 300, ".agc", 5);
+  f->fns[F_WALK].name = agc_make_string(function, 297, 297);
+  f->source.name = agc_make_string(path, 304, 304);
+  agc_vm vm;
+  begin(&vm, f, NULL);
+  agc_task *t = vm.main;
+  frames(t, 2);
+  frame(t, 0, F_MAIN, 2, false);
+  frame(t, 1, F_WALK, 1, false);
+  agc_outcome o = failure(span_at(F_WALK, 1));
+  agc_stack_capture(&vm, &o);
+
+  char cut_function[300], cut_path[300];
+  memset(cut_function, 'a', 255);
+  strcpy(cut_function + 255, "...");
+  memset(cut_path, 'p', 256);
+  strcpy(cut_path + 256, "...");
+
+  char *text = render(f, &o, AGC_STYLE_PLAIN, false);
+  snprintf(want, sizeof want, "    %s at %s:1:13\n    main at %s:1:2\n", cut_function, cut_path, cut_path);
+  assert(strstr(text, want));
+  free(text);
+  text = render(f, &o, AGC_STYLE_AI, false);
+  assert(strstr(text, want));
+  free(text);
+  text = render(f, &o, AGC_STYLE_JSON, false);
+  snprintf(want, sizeof want, "{\"column\":13,\"file\":\"%s\",\"function\":\"%s\",\"line\":1}", cut_path,
+           cut_function);
+  assert(strstr(text, want));
+  free(text);
+
+  memset(function, 'a', 256);
+  f->fns[F_WALK].name = agc_make_string(function, 256, 256);
+  f->source.name = agc_make_string("t.agc", 5, 5);
+  text = render(f, &o, AGC_STYLE_PLAIN, false);
+  function[256] = '\0';
+  snprintf(want, sizeof want, "    %s at t.agc:1:13\n", function);
+  assert(strstr(text, want));
+  free(text);
+}
+
 int main(void) {
   alone();
   nested();
@@ -356,5 +405,6 @@ int main(void) {
   exact();
   hostile();
   names();
+  long_names();
   return 0;
 }

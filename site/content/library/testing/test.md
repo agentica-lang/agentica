@@ -51,7 +51,7 @@ Serves the test runner and never returns. Call it from `main` itself: in any oth
 
 A test fails, in this order, with:
 
-- the crash of its task (`RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-UNWRAP-ERROR`, ...), at the place of the crash;
+- the crash of its task (`RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-UNWRAP-ERROR`, ...), at the place of the crash; the report shows the call stack of the crash under the diagnostic (`stack` in `--json`), as a halt in a normal program does;
 - its first failed assertion (`RUNTIME-TEST-ASSERTION`), at that assertion, with its expected and actual values;
 - the `error(message)` its block returned (`RUNTIME-TEST-ERROR`), at the test;
 - tasks it started and left running (`RUNTIME-TEST-PENDING-TASKS`); they are stopped before the next test;

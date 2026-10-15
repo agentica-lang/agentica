@@ -160,7 +160,9 @@ is not repeated here; read the file.
   without the linker's `@N::` prefix, and every function made from a block is
   `block`. Names, files and the message are written as raw bytes in plain and
   `--ai`, except that a line break in a name or a file is written as `\n` or
-  `\r`, so a stack line is always one line.
+  `\r`, so a stack line is always one line. A function name or a file path
+  longer than 256 bytes is cut there, at a character boundary, and ends with
+  `...` in all three formats; the first line of the diagnostic is not cut.
 - The stack is shown for every `RUNTIME-` diagnostic raised while a task runs
   (the step limit and the stack overflow too, and the crash line of a task) when
   that task has more than one frame or is not `main`. It is not shown for

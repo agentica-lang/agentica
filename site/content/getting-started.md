@@ -138,7 +138,7 @@ index 5 is outside a list of length 3
     main at nested.agc:11:8
 ```
 
-Each line is a function and the place where it was running: the error for the first line, and the call it waits on for the others. A block shows as `block`. A frame that a tail call replaced is gone, and the frame left ends with `(after a tail call)`. A recursion that repeats the same call is one line with a count, such as `walk at tree.agc:9:12 (9998 times)`. After that, at most 20 lines show: the 15 innermost, a line `... 312 frames not shown ...`, and the 5 outermost. The stack of a task ends with `task spawned at file:line:column`, the place of its `Task.spawn` call. With `--ai` the same lines come under `stack:`, and with `--json` they are the `stack` array of the object, plus `stack_omitted` and, for a task, `spawned_at`.
+Each line is a function and the place where it was running: the error for the first line, and the call it waits on for the others. A block shows as `block`. A frame that a tail call replaced is gone, and the frame left ends with `(after a tail call)`. A recursion that repeats the same call is one line with a count, such as `walk at tree.agc:9:12 (9998 times)`. After that, at most 20 lines show: the 15 innermost, a line `... 312 frames not shown ...`, and the 5 outermost. The stack of a task ends with `task spawned at file:line:column`, the place of its `Task.spawn` call. A function name or file path longer than 256 bytes is cut there, at a character boundary, and ends with `...`. With `--ai` the same lines come under `stack:`, and with `--json` they are the `stack` array of the object, plus `stack_omitted` and, for a task, `spawned_at`.
 
 ## Look up a builtin
 

@@ -269,9 +269,13 @@ def record_error(record: Json) -> Report.Error
   stop = JSON.get(range, "end").unwrap_or(JSON.null())
   span = Report.Span(file: Child.text_of(record, "file"), line: Child.int_of(start, "line"), column: Child.int_of(start, "column"),
                      end_column: Child.int_of(stop, "column"))
+  original = JSON.null()
+  if JSON.get(record, "stack").ok?
+    original = Child.diagnostic_of(record)
+  end
   return Report.Error(code: Child.text_of(record, "code"), message: Child.text_of(record, "message"), span: span,
                       end_line: Child.int_of(stop, "line"), expected: Child.detail_of(record, "expected"),
-                      actual: Child.detail_of(record, "actual"), original: JSON.null())
+                      actual: Child.detail_of(record, "actual"), original: original)
 end
 
 def scenario(item: UnitTest, duration_ms: Int, verdict: Report.Verdict, output: String) -> Report.ScenarioResult
