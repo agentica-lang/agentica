@@ -1,0 +1,170 @@
+program #169 0:1:1-1139:50:1
+  declaration: function-decl #168 0:1:1-1139:50:1 name="main"
+    result: type-ref #0 14:1:15-18:1:19 name="Void"
+    body: case-stmt #7 21:2:3-60:5:1
+      value: name-ref #1 26:2:8-31:2:13 name="value"
+      arm: case-arm #6 36:3:5-54:4:1
+        pattern: wildcard-pattern #2 36:3:5-37:3:6
+        body: expr-stmt #5 41:3:10-54:4:1
+          value: call #4 41:3:10-53:3:22 name="puts" piped=false
+            arg: literal #3 46:3:15-52:3:21 value=string:"wild"
+    body: case-stmt #89 62:5:3-597:23:1
+      value: name-ref #8 67:5:8-72:5:13 name="value"
+      arm: case-arm #13 77:6:5-94:7:1
+        pattern: literal-pattern #9 77:6:5-78:6:6 value=int:1
+        body: expr-stmt #12 82:6:10-94:7:1
+          value: call #11 82:6:10-93:6:21 name="puts" piped=false
+            arg: literal #10 87:6:15-92:6:20 value=string:"int"
+      arm: case-arm #18 98:7:5-121:8:1
+        pattern: literal-pattern #14 98:7:5-100:7:7 value=int:-2
+        body: expr-stmt #17 104:7:11-121:8:1
+          value: call #16 104:7:11-120:7:27 name="puts" piped=false
+            arg: literal #15 109:7:16-119:7:26 value=string:"negative"
+      arm: case-arm #23 125:8:5-160:9:1
+        pattern: literal-pattern #19 125:8:5-144:8:24 value=int:9223372036854775807
+        body: expr-stmt #22 148:8:28-160:9:1
+          value: call #21 148:8:28-159:8:39 name="puts" piped=false
+            arg: literal #20 153:8:33-158:8:38 value=string:"max"
+      arm: case-arm #28 164:9:5-200:10:1
+        pattern: literal-pattern #24 164:9:5-183:9:24 value=int:9223372036854775808
+        body: expr-stmt #27 187:9:28-200:10:1
+          value: call #26 187:9:28-199:9:40 name="puts" piped=false
+            arg: literal #25 192:9:33-198:9:39 value=string:"huge"
+      arm: case-arm #33 204:10:5-240:11:1
+        pattern: literal-pattern #29 204:10:5-224:10:25 value=int:-9223372036854775808
+        body: expr-stmt #32 228:10:29-240:11:1
+          value: call #31 228:10:29-239:10:40 name="puts" piped=false
+            arg: literal #30 233:10:34-238:10:39 value=string:"min"
+      arm: case-arm #38 244:11:5-282:12:1
+        pattern: literal-pattern #34 244:11:5-264:11:25 value=int:-9223372036854775809
+        body: expr-stmt #37 268:11:29-282:12:1
+          value: call #36 268:11:29-281:11:42 name="puts" piped=false
+            arg: literal #35 273:11:34-280:11:41 value=string:"below"
+      arm: case-arm #43 286:12:5-341:13:1
+        pattern: literal-pattern #39 286:12:5-325:12:44 value=int:340282366920938463463374607431768211456
+        body: expr-stmt #42 329:12:48-341:13:1
+          value: call #41 329:12:48-340:12:59 name="puts" piped=false
+            arg: literal #40 334:12:53-339:12:58 value=string:"big"
+      arm: case-arm #48 345:13:5-366:14:1
+        pattern: literal-pattern #44 345:13:5-348:13:8 value=float:bits:4609434218613702656
+        body: expr-stmt #47 352:13:12-366:14:1
+          value: call #46 352:13:12-365:13:25 name="puts" piped=false
+            arg: literal #45 357:13:17-364:13:24 value=string:"float"
+      arm: case-arm #53 370:14:5-400:15:1
+        pattern: literal-pattern #49 370:14:5-374:14:9 value=float:bits:-9223372036854775808
+        body: expr-stmt #52 378:14:13-400:15:1
+          value: call #51 378:14:13-399:14:34 name="puts" piped=false
+            arg: literal #50 383:14:18-398:14:33 value=string:"negative zero"
+      arm: case-arm #58 404:15:5-435:16:1
+        pattern: literal-pattern #54 404:15:5-408:15:9 value=float:bits:-4610560118520545280
+        body: expr-stmt #57 412:15:13-435:16:1
+          value: call #56 412:15:13-434:15:35 name="puts" piped=false
+            arg: literal #55 417:15:18-433:15:34 value=string:"negative float"
+      arm: case-arm #63 439:16:5-464:17:1
+        pattern: literal-pattern #59 439:16:5-445:16:11 value=string:"text"
+        body: expr-stmt #62 449:16:15-464:17:1
+          value: call #61 449:16:15-463:16:29 name="puts" piped=false
+            arg: literal #60 454:16:20-462:16:28 value=string:"string"
+      arm: case-arm #68 468:17:5-494:18:1
+        pattern: literal-pattern #64 468:17:5-474:17:11 value=string:"caf\u{E9}"
+        body: expr-stmt #67 478:17:15-494:18:1
+          value: call #66 478:17:15-493:17:30 name="puts" piped=false
+            arg: literal #65 483:17:20-492:17:29 value=string:"unicode"
+      arm: case-arm #73 498:18:5-519:19:1
+        pattern: literal-pattern #69 498:18:5-502:18:9 value=bool:true
+        body: expr-stmt #72 506:18:13-519:19:1
+          value: call #71 506:18:13-518:18:25 name="puts" piped=false
+            arg: literal #70 511:18:18-517:18:24 value=string:"true"
+      arm: case-arm #78 523:19:5-546:20:1
+        pattern: literal-pattern #74 523:19:5-528:19:10 value=bool:false
+        body: expr-stmt #77 532:19:14-546:20:1
+          value: call #76 532:19:14-545:19:27 name="puts" piped=false
+            arg: literal #75 537:19:19-544:19:26 value=string:"false"
+      arm: case-arm #83 550:20:5-569:21:1
+        pattern: literal-pattern #79 550:20:5-553:20:8 value=nil
+        body: expr-stmt #82 557:20:12-569:21:1
+          value: call #81 557:20:12-568:20:23 name="puts" piped=false
+            arg: literal #80 562:20:17-567:20:22 value=string:"nil"
+      arm: case-arm #88 573:21:5-591:22:1
+        pattern: wildcard-pattern #84 573:21:5-574:21:6
+        body: expr-stmt #87 578:21:10-591:22:1
+          value: call #86 578:21:10-590:21:22 name="puts" piped=false
+            arg: literal #85 583:21:15-589:21:21 value=string:"rest"
+    body: case-stmt #101 599:23:3-664:27:1
+      value: name-ref #90 604:23:8-610:23:14 name="result"
+      arm: case-arm #95 615:24:5-632:25:1
+        pattern: variant-pattern #91 615:24:5-620:24:10 enum="Result" variant="Ok" bindings=["v"]
+        body: expr-stmt #94 624:24:14-632:25:1
+          value: call #93 624:24:14-631:24:21 name="puts" piped=false
+            arg: name-ref #92 629:24:19-630:24:20 name="v"
+      arm: case-arm #100 636:25:5-658:26:1
+        pattern: variant-pattern #96 636:25:5-644:25:13 enum="Result" variant="Err" bindings=[-]
+        body: expr-stmt #99 648:25:17-658:26:1
+          value: call #98 648:25:17-657:25:26 name="puts" piped=false
+            arg: literal #97 653:25:22-656:25:25 value=string:"e"
+    body: case-stmt #113 666:27:3-743:31:1
+      value: name-ref #102 671:27:8-677:27:14 name="result"
+      arm: case-arm #107 682:28:5-701:29:1
+        pattern: variant-pattern #103 682:28:5-687:28:10 enum="Result" variant="Ok" bindings=[-]
+        body: expr-stmt #106 691:28:14-701:29:1
+          value: call #105 691:28:14-700:28:23 name="puts" piped=false
+            arg: literal #104 696:28:19-699:28:22 value=string:"v"
+      arm: case-arm #112 705:29:5-737:30:1
+        pattern: variant-pattern #108 705:29:5-719:29:19 enum="Result" variant="Err" bindings=["message"]
+        body: expr-stmt #111 723:29:23-737:30:1
+          value: call #110 723:29:23-736:29:36 name="puts" piped=false
+            arg: name-ref #109 728:29:28-735:29:35 name="message"
+    body: case-stmt #125 745:31:3-820:35:1
+      value: name-ref #114 750:31:8-756:31:14 name="result"
+      arm: case-arm #119 761:32:5-785:33:1
+        pattern: variant-pattern #115 761:32:5-773:32:17 enum="Result" variant="Ok" bindings=["v"]
+        body: expr-stmt #118 777:32:21-785:33:1
+          value: call #117 777:32:21-784:32:28 name="puts" piped=false
+            arg: name-ref #116 782:32:26-783:32:27 name="v"
+      arm: case-arm #124 789:33:5-814:34:1
+        pattern: variant-pattern #120 789:33:5-802:33:18 enum="Result" variant="Err" bindings=["m"]
+        body: expr-stmt #123 806:33:22-814:34:1
+          value: call #122 806:33:22-813:33:29 name="puts" piped=false
+            arg: name-ref #121 811:33:27-812:33:28 name="m"
+    body: case-stmt #137 822:35:3-904:39:1
+      value: name-ref #126 827:35:8-833:35:14 name="waited"
+      arm: case-arm #131 838:36:5-863:37:1
+        pattern: variant-pattern #127 838:36:5-851:36:18 enum="Await" variant="Done" bindings=["v"]
+        body: expr-stmt #130 855:36:22-863:37:1
+          value: call #129 855:36:22-862:36:29 name="puts" piped=false
+            arg: name-ref #128 860:36:27-861:36:28 name="v"
+      arm: case-arm #136 867:37:5-898:38:1
+        pattern: variant-pattern #132 867:37:5-881:37:19 enum="Await" variant="TimedOut" bindings=[]
+        body: expr-stmt #135 885:37:23-898:38:1
+          value: call #134 885:37:23-897:37:35 name="puts" piped=false
+            arg: literal #133 890:37:28-896:37:34 value=string:"late"
+    body: case-stmt #167 906:39:3-1135:49:1
+      value: name-ref #138 911:39:8-917:39:14 name="choice"
+      arm: case-arm #143 922:40:5-949:41:1
+        pattern: variant-pattern #139 922:40:5-937:40:20 enum="Choice" variant="First" bindings=["a"]
+        body: expr-stmt #142 941:40:24-949:41:1
+          value: call #141 941:40:24-948:40:31 name="puts" piped=false
+            arg: name-ref #140 946:40:29-947:40:30 name="a"
+      arm: case-arm #148 953:41:5-984:42:1
+        pattern: variant-pattern #144 953:41:5-972:41:24 enum="Choice" variant="Second" bindings=["a",-]
+        body: expr-stmt #147 976:41:28-984:42:1
+          value: call #146 976:41:28-983:41:35 name="puts" piped=false
+            arg: name-ref #145 981:41:33-982:41:34 name="a"
+      arm: case-arm #156 988:42:5-1043:45:1
+        pattern: variant-pattern #149 988:42:5-1000:42:17 enum="Choice" variant="Third" bindings=[]
+        body: expr-stmt #152 1010:43:7-1024:44:1
+          value: call #151 1010:43:7-1023:43:20 name="puts" piped=false
+            arg: literal #150 1015:43:12-1022:43:19 value=string:"third"
+        body: expr-stmt #155 1030:44:7-1043:45:1
+          value: call #154 1030:44:7-1042:44:19 name="puts" piped=false
+            arg: literal #153 1035:44:12-1041:44:18 value=string:"more"
+      arm: case-arm #161 1047:45:5-1087:46:1
+        pattern: variant-pattern #157 1047:45:5-1068:45:26 enum="Util.Choice" variant="Fourth" bindings=[-]
+        body: expr-stmt #160 1072:45:30-1087:46:1
+          value: call #159 1072:45:30-1086:45:44 name="puts" piped=false
+            arg: literal #158 1077:45:35-1085:45:43 value=string:"fourth"
+      arm: case-arm #166 1091:46:5-1129:48:1
+        pattern: variant-pattern #162 1091:46:5-1111:46:25 enum="Util.Choice" variant="First" bindings=["a"]
+        body: expr-stmt #165 1121:47:7-1129:48:1
+          value: call #164 1121:47:7-1128:47:14 name="puts" piped=false
+            arg: name-ref #163 1126:47:12-1127:47:13 name="a"

@@ -1,0 +1,3 @@
+import "a" as A
+## d
+import "b" as B

@@ -1,0 +1,4 @@
+def main() -> Void
+  f() *= 2
+end
+

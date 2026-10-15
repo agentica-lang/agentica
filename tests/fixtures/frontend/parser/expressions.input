@@ -1,0 +1,82 @@
+def main() -> Void
+  a = 1
+  b = 9223372036854775807
+  c = 9223372036854775808
+  d = 123456789012345678901234567890
+  e = 3.25
+  f = 0.1
+  g = 1_000_000
+  h = "text \"quoted\" \\ \n \t \# café 世界"
+  i = true
+  j = false
+  k = nil
+  l = a + b * c - d / e % f
+  m = not i and j or k
+  n = !i && j || k
+  o = -a + - - b
+  p = a == b
+  q = a != b
+  r = a < b
+  s = a <= b
+  t = a > b
+  u = a >= b
+  v = a < b == c < d
+  w = 1..5
+  x = 0...n + 1
+  y = a or b..c
+  z = (1..5).to_a
+  list = [1, 2, 3,]
+  empty: List[Int] = []
+  nested = [[1], [2, 3]]
+  pairs = {"a": 1, "b": 2,}
+  none: Map[String, Int] = {}
+  indexed = list[0]
+  lookup = pairs["a"]
+  chained = list[0].to_s.length
+  field = point.x.y
+  point = Point(x: 1, y: 2,)
+  unit = Empty()
+  called = add(1, 2)
+  empty_call = main()
+  method = list.map(f)
+  invoked = handlers["double"].call(21)
+  invoked_plain = f.call
+  ref = &add
+  qualified_ref = &Util.helper
+  qualified = Util.helper(1)
+  bare_module = Util.reset
+  bare_gets = gets
+  bang = gets!
+  both = IO.gets!
+  type_only = Foo
+  imported_type = Util.Tag
+  variant = Option.Some(3)
+  nullary = Option.None
+  nullary_call = Option.None()
+  imported_variant = Util.Option.Some(1, 2)
+  imported_nullary = Util.Option.None
+  imported_struct = Util.Point(x: 1)
+  imported_empty = Util.Point()
+  imported_enum_call = Util.Choice(1)
+  result_ok = Result.Ok(1)
+  result_err = Result.Err("bad")
+  text = "a#{a}b#{b + 1}#{c}"
+  only = "#{a}"
+  nested_text = "x#{"y#{a}z"}w"
+  tried = try parse(text)
+  tried_sum = try ok(1) + 2
+  piped = a |> f(1, 2)
+  piped_chain = a |> f() |> g(1) |> Util.h()
+  piped_try = a |> try f(1) |> try g()
+  piped_sum = a + 1 |> f()
+  piped_compare = x |> f() == y
+  piped_lines = (x
+    |> f()
+    |> g())
+  piped_block = xs |> each_pair() do |a, b|
+    puts(a)
+  end
+  grouped = (a + b) * c
+  parenthesized_call = (f(1))
+  piped_parenthesized = a |> (f(1))
+end

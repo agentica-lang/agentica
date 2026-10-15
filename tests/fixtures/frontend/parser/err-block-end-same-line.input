@@ -1,0 +1,6 @@
+def main() -> Void
+  xs.each do |x|
+    if x
+      puts(x) end
+  end
+end

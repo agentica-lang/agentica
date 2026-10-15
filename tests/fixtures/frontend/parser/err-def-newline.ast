@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 19:1:20-23:1:24 "expected a newline after the function signature, found \"puts\"" -

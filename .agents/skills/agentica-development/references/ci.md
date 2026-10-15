@@ -16,6 +16,10 @@ ELF checks, `make exe`, `raco distribute`, the archive). A new check in
 `ci.yml` or `sweep.yml` gets a target first (in `.PHONY` and with a one-line
 comment), then a step that calls it. Targets that are not obvious:
 
+- `test-slow` runs the `slow` submodule of the test files (`raco test
+  --submodule slow`). Fast cases go in `(module+ test ...)`, slow ones (live
+  corpus, generated inputs, stress) in `(module+ slow ...)`; local runs use only
+  the fast tier.
 - `build` (`raco make src/main.rkt`) and `vm` run before `make test` and
   `make smoke`, and `make test` then starts its Racket test workers in parallel.
 - `build-tests` compiles every test module; `test-ci` runs `make test
@@ -52,8 +56,9 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 - `test`: first the `changes` step (below), then `make -j vm vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them), `make test` with the process and module tests on `dist/agentica`
-  (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make vm-latency` alone
-  after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
+  (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make test-slow` (the
+  `(module+ slow ...)` cases of the test files; a file without one is skipped),
+  `make vm-latency` alone after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
   check (the last step that builds), and then `make dup-check` (it runs even
   when an earlier step fails, so a clone or an npm outage does not hide the
   test results). `make test` runs with `JOBS=6` beside the two executable-test

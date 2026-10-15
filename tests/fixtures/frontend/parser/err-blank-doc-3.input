@@ -1,0 +1,6 @@
+struct S
+  a: Int
+end
+## d
+struct T
+end

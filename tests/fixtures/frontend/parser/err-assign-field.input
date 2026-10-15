@@ -1,0 +1,4 @@
+def f() -> Void
+  x.y = 1
+end
+

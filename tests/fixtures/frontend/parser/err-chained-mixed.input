@@ -1,0 +1,4 @@
+def f() -> Void
+  x = a < b == c == d
+end
+

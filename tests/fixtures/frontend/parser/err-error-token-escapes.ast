@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 27:2:9-38:2:20 "expected a newline after the statement, found \"\\\"a\\\\tb\\\\#{x}\\\"\"" -

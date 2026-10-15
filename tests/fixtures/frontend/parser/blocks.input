@@ -1,0 +1,37 @@
+def main() -> Void
+  xs.each do |x|
+    puts(x)
+  end
+  ys = xs.map do |x, y: Int|
+    x
+  end
+  zs = List.reduce(xs, 0) do |a, b| a + b end
+  nothing = f() do
+    return 1
+  end
+  field_block = xs.each do |x| puts(x) end
+  twice = f(1) do |a| a end do |b| b end
+  after_paren = (f(1)) do |a| a end
+  access_block = obj.field do |a| a end
+  module_block = Util.start do
+    puts("started")
+  end
+  nested = xs.map do |x|
+    x.map do |y|
+      y.map do |z| z end
+    end
+  end
+  maps = xs.map do |x| {"k": x} end
+  scrutinee = case_value(xs.map do |x| x end)
+  case (xs.map do |x| x end) do
+    _ -> puts("b")
+  end
+  while (xs.any? do |x| x end) do
+    puts("c")
+  end
+  for item in (xs.filter do |x| x end)
+    puts(item)
+  end
+  chained = xs.map do |x| x end.size
+  indexed = xs.map do |x| x end[0]
+end

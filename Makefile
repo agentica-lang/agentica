@@ -5,7 +5,7 @@ unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
 EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
 
-.PHONY: build build-tests test test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests test test-slow test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -18,6 +18,11 @@ build:
 # More or fewer workers:       make test JOBS=8
 test: build vm
 	$(RACO) test -j $(JOBS) $(TESTS)
+
+# The slow tier: the (module+ slow ...) cases of the test files. CI runs it after make test; a local run does not.
+# A file without a slow submodule is skipped.
+test-slow: build vm
+	$(RACO) test --submodule slow --no-run-if-absent -j $(JOBS) $(TESTS)
 
 dist/agentica: $(EXE_INPUTS) | build vm
 	mkdir -p dist
@@ -69,6 +74,7 @@ goldens: build vm
 	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-diff-common.rkt
 	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-stack-test.rkt
 	test -n "$(FIXTURES)" || racket tests/frontend-lexer-common.rkt
+	test -n "$(FIXTURES)" || racket tests/frontend-parser-common.rkt
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
 vm-golden-check: build vm

@@ -1,0 +1,4 @@
+def main() -> Void
+  for x xs
+  end
+end

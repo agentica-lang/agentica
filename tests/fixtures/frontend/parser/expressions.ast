@@ -1,0 +1,316 @@
+program #309 0:1:1-1897:83:1
+  declaration: function-decl #308 0:1:1-1897:83:1 name="main"
+    result: type-ref #0 14:1:15-18:1:19 name="Void"
+    body: binding #2 21:2:3-27:3:1 name="a"
+      value: literal #1 25:2:7-26:2:8 value=int:1
+    body: binding #4 29:3:3-53:4:1 name="b"
+      value: literal #3 33:3:7-52:3:26 value=int:9223372036854775807
+    body: binding #6 55:4:3-79:5:1 name="c"
+      value: literal #5 59:4:7-78:4:26 value=int:9223372036854775808
+    body: binding #8 81:5:3-116:6:1 name="d"
+      value: literal #7 85:5:7-115:5:37 value=int:123456789012345678901234567890
+    body: binding #10 118:6:3-127:7:1 name="e"
+      value: literal #9 122:6:7-126:6:11 value=float:bits:4614500768194494464
+    body: binding #12 129:7:3-137:8:1 name="f"
+      value: literal #11 133:7:7-136:7:10 value=float:bits:4591870180066957722
+    body: binding #14 139:8:3-153:9:1 name="g"
+      value: literal #13 143:8:7-152:8:16 value=int:1000000
+    body: binding #16 155:9:3-197:10:1 name="h"
+      value: literal #15 159:9:7-196:9:44 value=string:"text \"quoted\" \\ \n \t # caf\u{E9} \u{4E16}\u{754C}"
+    body: binding #18 199:10:3-208:11:1 name="i"
+      value: literal #17 203:10:7-207:10:11 value=bool:true
+    body: binding #20 210:11:3-220:12:1 name="j"
+      value: literal #19 214:11:7-219:11:12 value=bool:false
+    body: binding #22 222:12:3-230:13:1 name="k"
+      value: literal #21 226:12:7-229:12:10 value=nil
+    body: binding #34 232:13:3-258:14:1 name="l"
+      value: binary #33 236:13:7-257:13:28 op=minus op-span=246:13:17-247:13:18
+        left: binary #27 236:13:7-245:13:16 op=plus op-span=238:13:9-239:13:10
+          left: name-ref #23 236:13:7-237:13:8 name="a"
+          right: binary #26 240:13:11-245:13:16 op=multiply op-span=242:13:13-243:13:14
+            left: name-ref #24 240:13:11-241:13:12 name="b"
+            right: name-ref #25 244:13:15-245:13:16 name="c"
+        right: binary #32 248:13:19-257:13:28 op=modulo op-span=254:13:25-255:13:26
+          left: binary #30 248:13:19-253:13:24 op=divide op-span=250:13:21-251:13:22
+            left: name-ref #28 248:13:19-249:13:20 name="d"
+            right: name-ref #29 252:13:23-253:13:24 name="e"
+          right: name-ref #31 256:13:27-257:13:28 name="f"
+    body: binding #41 260:14:3-281:15:1 name="m"
+      value: binary #40 264:14:7-280:14:23 op=or op-span=276:14:19-278:14:21
+        left: binary #38 264:14:7-275:14:18 op=and op-span=270:14:13-273:14:16
+          left: unary #36 264:14:7-269:14:12 op=not op-span=264:14:7-267:14:10
+            operand: name-ref #35 268:14:11-269:14:12 name="i"
+          right: name-ref #37 274:14:17-275:14:18 name="j"
+        right: name-ref #39 279:14:22-280:14:23 name="k"
+    body: binding #48 283:15:3-300:16:1 name="n"
+      value: binary #47 287:15:7-299:15:19 op=or op-span=295:15:15-297:15:17
+        left: binary #45 287:15:7-294:15:14 op=and op-span=290:15:10-292:15:12
+          left: unary #43 287:15:7-289:15:9 op=not op-span=287:15:7-288:15:8
+            operand: name-ref #42 288:15:8-289:15:9 name="i"
+          right: name-ref #44 293:15:13-294:15:14 name="j"
+        right: name-ref #46 298:15:18-299:15:19 name="k"
+    body: binding #55 302:16:3-317:17:1 name="o"
+      value: binary #54 306:16:7-316:16:17 op=plus op-span=309:16:10-310:16:11
+        left: unary #50 306:16:7-308:16:9 op=minus op-span=306:16:7-307:16:8
+          operand: name-ref #49 307:16:8-308:16:9 name="a"
+        right: unary #53 311:16:12-316:16:17 op=minus op-span=311:16:12-312:16:13
+          operand: unary #52 313:16:14-316:16:17 op=minus op-span=313:16:14-314:16:15
+            operand: name-ref #51 315:16:16-316:16:17 name="b"
+    body: binding #59 319:17:3-330:18:1 name="p"
+      value: binary #58 323:17:7-329:17:13 op=equal op-span=325:17:9-327:17:11
+        left: name-ref #56 323:17:7-324:17:8 name="a"
+        right: name-ref #57 328:17:12-329:17:13 name="b"
+    body: binding #63 332:18:3-343:19:1 name="q"
+      value: binary #62 336:18:7-342:18:13 op=not-equal op-span=338:18:9-340:18:11
+        left: name-ref #60 336:18:7-337:18:8 name="a"
+        right: name-ref #61 341:18:12-342:18:13 name="b"
+    body: binding #67 345:19:3-355:20:1 name="r"
+      value: binary #66 349:19:7-354:19:12 op=less op-span=351:19:9-352:19:10
+        left: name-ref #64 349:19:7-350:19:8 name="a"
+        right: name-ref #65 353:19:11-354:19:12 name="b"
+    body: binding #71 357:20:3-368:21:1 name="s"
+      value: binary #70 361:20:7-367:20:13 op=less-equal op-span=363:20:9-365:20:11
+        left: name-ref #68 361:20:7-362:20:8 name="a"
+        right: name-ref #69 366:20:12-367:20:13 name="b"
+    body: binding #75 370:21:3-380:22:1 name="t"
+      value: binary #74 374:21:7-379:21:12 op=greater op-span=376:21:9-377:21:10
+        left: name-ref #72 374:21:7-375:21:8 name="a"
+        right: name-ref #73 378:21:11-379:21:12 name="b"
+    body: binding #79 382:22:3-393:23:1 name="u"
+      value: binary #78 386:22:7-392:22:13 op=greater-equal op-span=388:22:9-390:22:11
+        left: name-ref #76 386:22:7-387:22:8 name="a"
+        right: name-ref #77 391:22:12-392:22:13 name="b"
+    body: binding #87 395:23:3-414:24:1 name="v"
+      value: binary #86 399:23:7-413:23:21 op=equal op-span=405:23:13-407:23:15
+        left: binary #82 399:23:7-404:23:12 op=less op-span=401:23:9-402:23:10
+          left: name-ref #80 399:23:7-400:23:8 name="a"
+          right: name-ref #81 403:23:11-404:23:12 name="b"
+        right: binary #85 408:23:16-413:23:21 op=less op-span=410:23:18-411:23:19
+          left: name-ref #83 408:23:16-409:23:17 name="c"
+          right: name-ref #84 412:23:20-413:23:21 name="d"
+    body: binding #91 416:24:3-425:25:1 name="w"
+      value: binary #90 420:24:7-424:24:11 op=dot-dot op-span=421:24:8-423:24:10
+        left: literal #88 420:24:7-421:24:8 value=int:1
+        right: literal #89 423:24:10-424:24:11 value=int:5
+    body: binding #97 427:25:3-441:26:1 name="x"
+      value: binary #96 431:25:7-440:25:16 op=dot-dot-dot op-span=432:25:8-435:25:11
+        left: literal #92 431:25:7-432:25:8 value=int:0
+        right: binary #95 435:25:11-440:25:16 op=plus op-span=437:25:13-438:25:14
+          left: name-ref #93 435:25:11-436:25:12 name="n"
+          right: literal #94 439:25:15-440:25:16 value=int:1
+    body: binding #103 443:26:3-457:27:1 name="y"
+      value: binary #102 447:26:7-456:26:16 op=dot-dot op-span=453:26:13-455:26:15
+        left: binary #100 447:26:7-453:26:13 op=or op-span=449:26:9-451:26:11
+          left: name-ref #98 447:26:7-448:26:8 name="a"
+          right: name-ref #99 452:26:12-453:26:13 name="b"
+        right: name-ref #101 455:26:15-456:26:16 name="c"
+    body: binding #108 459:27:3-475:28:1 name="z"
+      value: field-access #107 463:27:7-474:27:18 name="to_a"
+        target: binary #106 464:27:8-468:27:12 op=dot-dot op-span=465:27:9-467:27:11
+          left: literal #104 464:27:8-465:27:9 value=int:1
+          right: literal #105 467:27:11-468:27:12 value=int:5
+    body: binding #113 477:28:3-495:29:1 name="list"
+      value: list-lit #112 484:28:10-494:28:20
+        element: literal #109 485:28:11-486:28:12 value=int:1
+        element: literal #110 488:28:14-489:28:15 value=int:2
+        element: literal #111 491:28:17-492:28:18 value=int:3
+    body: binding #117 497:29:3-519:30:1 name="empty"
+      type: type-ref #115 504:29:10-513:29:19 name="List"
+        arg: type-ref #114 509:29:15-512:29:18 name="Int"
+      value: list-lit #116 516:29:22-518:29:24
+    body: binding #124 521:30:3-544:31:1 name="nested"
+      value: list-lit #123 530:30:12-543:30:25
+        element: list-lit #119 531:30:13-534:30:16
+          element: literal #118 532:30:14-533:30:15 value=int:1
+        element: list-lit #122 536:30:18-542:30:24
+          element: literal #120 537:30:19-538:30:20 value=int:2
+          element: literal #121 540:30:22-541:30:23 value=int:3
+    body: binding #132 546:31:3-572:32:1 name="pairs"
+      value: map-lit #131 554:31:11-571:31:28
+        entry: map-entry #127 555:31:12-561:31:18
+          key: literal #125 555:31:12-558:31:15 value=string:"a"
+          value: literal #126 560:31:17-561:31:18 value=int:1
+        entry: map-entry #130 563:31:20-569:31:26
+          key: literal #128 563:31:20-566:31:23 value=string:"b"
+          value: literal #129 568:31:25-569:31:26 value=int:2
+    body: binding #137 574:32:3-602:33:1 name="none"
+      type: type-ref #135 580:32:9-596:32:25 name="Map"
+        arg: type-ref #133 584:32:13-590:32:19 name="String"
+        arg: type-ref #134 592:32:21-595:32:24 name="Int"
+      value: map-lit #136 599:32:28-601:32:30
+    body: binding #141 604:33:3-622:34:1 name="indexed"
+      value: index-access #140 614:33:13-621:33:20
+        target: name-ref #138 614:33:13-618:33:17 name="list"
+        index: literal #139 619:33:18-620:33:19 value=int:0
+    body: binding #145 624:34:3-644:35:1 name="lookup"
+      value: index-access #144 633:34:12-643:34:22
+        target: name-ref #142 633:34:12-638:34:17 name="pairs"
+        index: literal #143 639:34:18-642:34:21 value=string:"a"
+    body: binding #151 646:35:3-676:36:1 name="chained"
+      value: field-access #150 656:35:13-675:35:32 name="length"
+        target: field-access #149 656:35:13-668:35:25 name="to_s"
+          target: index-access #148 656:35:13-663:35:20
+            target: name-ref #146 656:35:13-660:35:17 name="list"
+            index: literal #147 661:35:18-662:35:19 value=int:0
+    body: binding #155 678:36:3-696:37:1 name="field"
+      value: field-access #154 686:36:11-695:36:20 name="y"
+        target: field-access #153 686:36:11-693:36:18 name="x"
+          target: name-ref #152 686:36:11-691:36:16 name="point"
+    body: binding #161 698:37:3-725:38:1 name="point"
+      value: construct #160 706:37:11-724:37:29 type="Point"
+        arg: named-arg #157 712:37:17-716:37:21 name="x"
+          value: literal #156 715:37:20-716:37:21 value=int:1
+        arg: named-arg #159 718:37:23-722:37:27 name="y"
+          value: literal #158 721:37:26-722:37:27 value=int:2
+    body: binding #163 727:38:3-742:39:1 name="unit"
+      value: construct #162 734:38:10-741:38:17 type="Empty"
+    body: binding #167 744:39:3-763:40:1 name="called"
+      value: call #166 753:39:12-762:39:21 name="add" piped=false
+        arg: literal #164 757:39:16-758:39:17 value=int:1
+        arg: literal #165 760:39:19-761:39:20 value=int:2
+    body: binding #169 765:40:3-785:41:1 name="empty_call"
+      value: call #168 778:40:16-784:40:22 name="main" piped=false
+    body: binding #173 787:41:3-808:42:1 name="method"
+      value: method-call #172 796:41:12-807:41:23 name="map"
+        target: name-ref #170 796:41:12-800:41:16 name="list"
+        arg: name-ref #171 805:41:21-806:41:22 name="f"
+    body: binding #179 810:42:3-848:43:1 name="invoked"
+      value: invoke #178 820:42:13-847:42:40
+        target: index-access #176 820:42:13-838:42:31
+          target: name-ref #174 820:42:13-828:42:21 name="handlers"
+          index: literal #175 829:42:22-837:42:30 value=string:"double"
+        arg: literal #177 844:42:37-846:42:39 value=int:21
+    body: binding #182 850:43:3-873:44:1 name="invoked_plain"
+      value: field-access #181 866:43:19-872:43:25 name="call"
+        target: name-ref #180 866:43:19-867:43:20 name="f"
+    body: binding #184 875:44:3-886:45:1 name="ref"
+      value: function-ref #183 881:44:9-885:44:13 name="add"
+    body: binding #186 888:45:3-917:46:1 name="qualified_ref"
+      value: function-ref #185 904:45:19-916:45:31 name="Util.helper"
+    body: binding #189 919:46:3-946:47:1 name="qualified"
+      value: call #188 931:46:15-945:46:29 name="Util.helper" piped=false
+        arg: literal #187 943:46:27-944:46:28 value=int:1
+    body: binding #191 948:47:3-973:48:1 name="bare_module"
+      value: call #190 962:47:17-972:47:27 name="Util.reset" piped=false
+    body: binding #193 975:48:3-992:49:1 name="bare_gets"
+      value: call #192 987:48:15-991:48:19 name="gets" piped=false
+    body: binding #195 994:49:3-1007:50:1 name="bang"
+      value: call #194 1001:49:10-1006:49:15 name="gets!" piped=false
+    body: binding #197 1009:50:3-1025:51:1 name="both"
+      value: call #196 1016:50:10-1024:50:18 name="IO.gets!" piped=false
+    body: binding #199 1027:51:3-1043:52:1 name="type_only"
+      value: type-expression #198 1039:51:15-1042:51:18 name="Foo"
+    body: binding #201 1045:52:3-1070:53:1 name="imported_type"
+      value: type-expression #200 1061:52:19-1069:52:27 name="Util.Tag"
+    body: binding #204 1072:53:3-1097:54:1 name="variant"
+      value: enum-constructor #203 1082:53:13-1096:53:27 enum="Option" variant="Some"
+        arg: literal #202 1094:53:25-1095:53:26 value=int:3
+    body: binding #206 1099:54:3-1121:55:1 name="nullary"
+      value: type-expression #205 1109:54:13-1120:54:24 name="Option.None"
+    body: binding #208 1123:55:3-1152:56:1 name="nullary_call"
+      value: construct #207 1138:55:18-1151:55:31 type="Option.None"
+    body: binding #212 1154:56:3-1196:57:1 name="imported_variant"
+      value: enum-constructor #211 1173:56:22-1195:56:44 enum="Util.Option" variant="Some"
+        arg: literal #209 1190:56:39-1191:56:40 value=int:1
+        arg: literal #210 1193:56:42-1194:56:43 value=int:2
+    body: binding #214 1198:57:3-1234:58:1 name="imported_nullary"
+      value: enum-constructor #213 1217:57:22-1233:57:38 enum="Util.Option" variant="None"
+    body: binding #218 1236:58:3-1271:59:1 name="imported_struct"
+      value: construct #217 1254:58:21-1270:58:37 type="Util.Point"
+        arg: named-arg #216 1265:58:32-1269:58:36 name="x"
+          value: literal #215 1268:58:35-1269:58:36 value=int:1
+    body: binding #220 1273:59:3-1303:60:1 name="imported_empty"
+      value: construct #219 1290:59:20-1302:59:32 type="Util.Point"
+    body: binding #223 1305:60:3-1341:61:1 name="imported_enum_call"
+      value: enum-constructor #222 1326:60:24-1340:60:38 enum="Util" variant="Choice"
+        arg: literal #221 1338:60:36-1339:60:37 value=int:1
+    body: binding #226 1343:61:3-1368:62:1 name="result_ok"
+      value: call #225 1355:61:15-1367:61:27 name="ok" piped=false
+        arg: literal #224 1365:61:25-1366:61:26 value=int:1
+    body: binding #229 1370:62:3-1401:63:1 name="result_err"
+      value: call #228 1383:62:16-1400:62:33 name="error" piped=false
+        arg: literal #227 1394:62:27-1399:62:32 value=string:"bad"
+    body: binding #236 1403:63:3-1431:64:1 name="text"
+      value: interpolation #235 1410:63:10-1430:63:30
+        part: text "a"
+        part: name-ref #230 1414:63:14-1415:63:15 name="a"
+        part: text "b"
+        part: binary #233 1419:63:19-1424:63:24 op=plus op-span=1421:63:21-1422:63:22
+          left: name-ref #231 1419:63:19-1420:63:20 name="b"
+          right: literal #232 1423:63:23-1424:63:24 value=int:1
+        part: name-ref #234 1427:63:27-1428:63:28 name="c"
+    body: binding #239 1433:64:3-1447:65:1 name="only"
+      value: interpolation #238 1440:64:10-1446:64:16
+        part: name-ref #237 1443:64:13-1444:64:14 name="a"
+    body: binding #243 1449:65:3-1479:66:1 name="nested_text"
+      value: interpolation #242 1463:65:17-1478:65:32
+        part: text "x"
+        part: interpolation #241 1467:65:21-1475:65:29
+          part: text "y"
+          part: name-ref #240 1471:65:25-1472:65:26 name="a"
+          part: text "z"
+        part: text "w"
+    body: binding #247 1481:66:3-1505:67:1 name="tried"
+      value: try-expr #246 1489:66:11-1504:66:26
+        operand: call #245 1493:66:15-1504:66:26 name="parse" piped=false
+          arg: name-ref #244 1499:66:21-1503:66:25 name="text"
+    body: binding #253 1507:67:3-1533:68:1 name="tried_sum"
+      value: binary #252 1519:67:15-1532:67:28 op=plus op-span=1529:67:25-1530:67:26
+        left: try-expr #250 1519:67:15-1528:67:24
+          operand: call #249 1523:67:19-1528:67:24 name="ok" piped=false
+            arg: literal #248 1526:67:22-1527:67:23 value=int:1
+        right: literal #251 1531:67:27-1532:67:28 value=int:2
+    body: binding #258 1535:68:3-1556:69:1 name="piped"
+      value: call #257 1548:68:16-1555:68:23 name="f" piped=true
+        arg: name-ref #254 1543:68:11-1544:68:12 name="a"
+        arg: literal #255 1550:68:18-1551:68:19 value=int:1
+        arg: literal #256 1553:68:21-1554:68:22 value=int:2
+    body: binding #264 1558:69:3-1601:70:1 name="piped_chain"
+      value: call #263 1592:69:37-1600:69:45 name="Util.h" piped=true
+        arg: call #262 1584:69:29-1588:69:33 name="g" piped=true
+          arg: call #260 1577:69:22-1580:69:25 name="f" piped=true
+            arg: name-ref #259 1572:69:17-1573:69:18 name="a"
+          arg: literal #261 1586:69:31-1587:69:32 value=int:1
+    body: binding #271 1603:70:3-1640:71:1 name="piped_try"
+      value: try-expr #270 1632:70:32-1639:70:39
+        operand: call #269 1636:70:36-1639:70:39 name="g" piped=true
+          arg: try-expr #268 1620:70:20-1628:70:28
+            operand: call #267 1624:70:24-1628:70:28 name="f" piped=true
+              arg: name-ref #265 1615:70:15-1616:70:16 name="a"
+              arg: literal #266 1626:70:26-1627:70:27 value=int:1
+    body: binding #276 1642:71:3-1667:72:1 name="piped_sum"
+      value: call #275 1663:71:24-1666:71:27 name="f" piped=true
+        arg: binary #274 1654:71:15-1659:71:20 op=plus op-span=1656:71:17-1657:71:18
+          left: name-ref #272 1654:71:15-1655:71:16 name="a"
+          right: literal #273 1658:71:19-1659:71:20 value=int:1
+    body: binding #281 1669:72:3-1699:73:1 name="piped_compare"
+      value: binary #280 1685:72:19-1698:72:32 op=equal op-span=1694:72:28-1696:72:30
+        left: call #278 1690:72:24-1693:72:27 name="f" piped=true
+          arg: name-ref #277 1685:72:19-1686:72:20 name="x"
+        right: name-ref #279 1697:72:31-1698:72:32 name="y"
+    body: binding #285 1701:73:3-1741:76:1 name="piped_lines"
+      value: call #284 1736:75:8-1739:75:11 name="g" piped=true
+        arg: call #283 1725:74:8-1728:74:11 name="f" piped=true
+          arg: name-ref #282 1716:73:18-1717:73:19 name="x"
+    body: binding #294 1743:76:3-1803:79:1 name="piped_block"
+      value: call #293 1763:76:23-1802:78:6 name="each_pair" piped=true
+        arg: name-ref #286 1757:76:17-1759:76:19 name="xs"
+        arg: block-lit #292 1775:76:35-1802:78:6
+          param: block-param #287 1779:76:39-1780:76:40 name="a"
+          param: block-param #288 1782:76:42-1783:76:43 name="b"
+          body: expr-stmt #291 1789:77:5-1797:78:1
+            value: call #290 1789:77:5-1796:77:12 name="puts" piped=false
+              arg: name-ref #289 1794:77:10-1795:77:11 name="a"
+    body: binding #300 1805:79:3-1827:80:1 name="grouped"
+      value: binary #299 1815:79:13-1826:79:24 op=multiply op-span=1823:79:21-1824:79:22
+        left: binary #297 1816:79:14-1821:79:19 op=plus op-span=1818:79:16-1819:79:17
+          left: name-ref #295 1816:79:14-1817:79:15 name="a"
+          right: name-ref #296 1820:79:18-1821:79:19 name="b"
+        right: name-ref #298 1825:79:23-1826:79:24 name="c"
+    body: binding #303 1829:80:3-1857:81:1 name="parenthesized_call"
+      value: call #302 1851:80:25-1855:80:29 name="f" piped=false
+        arg: literal #301 1853:80:27-1854:80:28 value=int:1
+    body: binding #307 1859:81:3-1893:82:1 name="piped_parenthesized"
+      value: call #306 1887:81:31-1891:81:35 name="f" piped=true
+        arg: name-ref #304 1881:81:25-1882:81:26 name="a"
+        arg: literal #305 1889:81:33-1890:81:34 value=int:1

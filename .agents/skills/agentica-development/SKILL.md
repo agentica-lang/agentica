@@ -42,8 +42,11 @@ make site                                 # before merging a site change
 ```
 
 Run the stage tests the change touches (`make test TESTS=...`, which builds the
-VM first) and run the affected example with `racket src/main.rkt`. CI runs
-everything else (`references/ci.md`, "What CI runs").
+VM first) and run the affected example with `racket src/main.rkt`. Two tiers:
+put fast cases in `(module+ test ...)` and slow ones (live corpus, generated
+inputs, stress) in `(module+ slow ...)`. Locally run only the fast tier; CI
+runs the slow tier with `make test-slow` after `make test`. CI runs everything
+else (`references/ci.md`, "What CI runs").
 
 ## Stage contract
 

@@ -1,0 +1,41 @@
+# A comment that is not a doc.
+
+## Documented module.
+
+## A doc on a function.
+export def one() -> Void
+end
+
+## A struct.
+struct S
+  ## A field.
+  a: Int
+  # not a doc
+  b: Int
+  ## Another.
+  c: Int
+end
+
+## An enum.
+enum E
+  ## A variant.
+  A(Int)
+  B
+  ## Last variant.
+  C
+end
+
+## An exported struct.
+export struct T
+  ## Only field.
+  a: Int
+end
+
+## An exported enum.
+export enum U
+  A
+end
+
+def plain() -> Void
+  x = 1 ## trailing
+end

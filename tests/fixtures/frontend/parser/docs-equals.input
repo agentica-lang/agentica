@@ -1,0 +1,5 @@
+## mod doc= x
+
+## A doc= with doc= inside.
+def main() -> Void
+end

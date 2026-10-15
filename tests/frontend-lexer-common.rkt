@@ -7,12 +7,29 @@
          "../src/token.rkt")
 
 (provide lexer-text
+         quote-text
+         span-text
+         float-bits
+         diagnostic-line
          lexer-inputs
          (struct-out lexer-input)
          golden-file
-         write-lexer-goldens)
+         write-lexer-goldens
+         call-with-bytecode)
 
 (struct lexer-input (name path))
+
+; Compiles the entry program with compile (compile-file of vm-diff-common.rkt, which this file does not load)
+; into a temporary folder, calls (proc folder bytecode-path) and deletes the folder.
+(define (call-with-bytecode compile entry proc)
+  (define work (make-temporary-directory "agentica-frontend~a"))
+  (dynamic-wind
+    void
+    (lambda ()
+      (define bytecode (build-path work "entry.agcb"))
+      (compile entry bytecode)
+      (proc work bytecode))
+    (lambda () (delete-directory/files work))))
 
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/frontend/lexer")
@@ -44,7 +61,7 @@
   (string-append (position-text (source-span-start span)) "-" (position-text (source-span-end span))))
 
 (define (float-bits value)
-  (integer-bytes->integer (real->floating-point-bytes value 8) #f))
+  (integer-bytes->integer (real->floating-point-bytes value 8) #t))
 
 (define (value-text tok)
   (define value (token-value tok))

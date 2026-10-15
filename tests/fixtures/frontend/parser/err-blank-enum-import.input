@@ -1,0 +1,4 @@
+enum E
+  A
+end
+import "a" as A

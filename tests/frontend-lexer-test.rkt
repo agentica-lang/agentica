@@ -55,6 +55,8 @@
     (define text (file->string (path->complete-path path root)))
     (check-equal? (hash-ref outputs path #f) (string-append (lexer-text text) "\n") path)))
 
+(define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
+
 (module+ test
   (define inputs (lexer-inputs))
 
@@ -78,24 +80,24 @@
       (fail "compiler/unicode_table.agc is out of date: run racket tools/gen-lexer-unicode.rkt")))
 
   (when (vm-built? "frontend lexer tests")
-    (define work (make-temporary-directory "agentica-frontend~a"))
-    (dynamic-wind
-      void
-      (lambda ()
-        (define bytecode (build-path work "lex.agcb"))
-        (compile-file entry bytecode)
-        (define golden-paths (map lexer-input-path inputs))
+    (with-bytecode
+      (lambda (work bytecode)
+        (define outputs (run-lexer bytecode (map lexer-input-path inputs)))
+        (test-case "the Agentica lexer matches the goldens on the VM"
+          (for ([input (in-list inputs)])
+            (check-equal? (hash-ref outputs (lexer-input-path input) #f) (golden input) (lexer-input-name input))))))))
+
+(module+ slow
+  (when (vm-built? "frontend lexer tests")
+    (with-bytecode
+      (lambda (work bytecode)
         (define live-paths (racket-files '("examples" "stdlib" "tests/fixtures/vm")))
         (define generated-paths
           (for/list ([text (in-list (generated-cases))] [n (in-naturals)])
             (define path (path->string (build-path work (format "case-~a.agc" n))))
             (display-to-file text path)
             path))
-        (define outputs (run-lexer bytecode (append golden-paths live-paths generated-paths)))
-
-        (test-case "the Agentica lexer matches the goldens on the VM"
-          (for ([input (in-list inputs)])
-            (check-equal? (hash-ref outputs (lexer-input-path input) #f) (golden input) (lexer-input-name input))))
+        (define outputs (run-lexer bytecode (append live-paths generated-paths)))
 
         (test-case "while Racket exists: the Agentica lexer matches the Racket lexer on examples/, stdlib/ and tests/fixtures/vm/"
           (check-against-racket outputs live-paths))
@@ -109,5 +111,4 @@
           (define started (current-inexact-milliseconds))
           (define nested (run-lexer bytecode (list path)))
           (check-true (< (- (current-inexact-milliseconds) started) 5000))
-          (check-against-racket nested (list path))))
-      (lambda () (delete-directory/files work)))))
+          (check-against-racket nested (list path)))))))

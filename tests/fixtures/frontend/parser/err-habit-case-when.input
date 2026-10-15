@@ -1,0 +1,6 @@
+def main() -> Void
+  case x
+    when 1
+      puts("a")
+  end
+end

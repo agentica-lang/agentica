@@ -1,0 +1,4 @@
+def f() -> Int
+  return a < b < c
+end
+

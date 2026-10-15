@@ -1,0 +1,1 @@
+ERROR PARSE-INVALID-ASSIGNMENT-TARGET 23:2:8-24:2:9 "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, Map.put(map, key, value))" -
