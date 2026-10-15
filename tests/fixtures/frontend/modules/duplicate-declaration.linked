@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 29:4:8-31:4:10 "expected a struct name, found \"go\"" - file="root.agc"

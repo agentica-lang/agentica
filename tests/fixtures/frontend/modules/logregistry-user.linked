@@ -1,0 +1,1 @@
+ERROR CHECK-UNKNOWN-NAME 25:2:7-44:2:26 "unknown function \"LogRegistry.level\"" "LogRegistry is internal to std/logger; use import \"std/logger\" as Logger" file="root.agc"

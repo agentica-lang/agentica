@@ -10,6 +10,15 @@
 
 (provide parser-text
          parser-inputs
+         part-text?
+         pseudo?
+         pseudo-label
+         pseudo-children
+         part-text-text
+         shape
+         node-children
+         number-tree
+         emit-tree!
          (struct-out parser-input)
          golden-file
          write-parser-goldens)
@@ -42,9 +51,11 @@
 (define (op-attrs op op-span)
   (format " op=~a op-span=~a" op (span-text op-span)))
 
-(define (shape node docs)
+; The kind, attributes and children of a node. doc-of gives the doc text of a node or #f; the text form
+; prints it where the node has one.
+(define (shape node doc-of)
   (define (doc-attr)
-    (define text (hash-ref docs (node-span node) #f))
+    (define text (doc-of node))
     (if text (string-append " doc=" (quote-text text)) ""))
   (cond
     [(program? node)
@@ -165,31 +176,36 @@
     [(type-expression? node) (values "type-expression" (name-attr (type-expression-name node)) '())]
     [else (error 'parser-text "unexpected node ~s" node)]))
 
-(define (number-nodes root docs first-id)
+; The nodes below a node in source order, without the text parts of an interpolation.
+(define (node-children node)
+  (define-values (kind attrs children) (shape node (lambda (_) #f)))
+  (let visit ([children children])
+    (append*
+     (for/list ([child (in-list children)])
+       (define item (cdr child))
+       (cond
+         [(pseudo? item) (visit (pseudo-children item))]
+         [(part-text? item) '()]
+         [else (list item)])))))
+
+; The id of every node of a tree, in post-order from first-id: a node comes after its children and the
+; root has the last id.
+(define (number-tree root first-id)
   (define ids (make-hasheq))
   (define counter first-id)
   (let walk ([node root])
-    (define-values (kind attrs children) (shape node docs))
-    (let visit ([children children])
-      (for ([child (in-list children)])
-        (define item (cdr child))
-        (cond
-          [(pseudo? item) (visit (pseudo-children item))]
-          [(part-text? item) (void)]
-          [else (walk item)])))
+    (for-each walk (node-children node))
     (hash-set! ids node counter)
     (set! counter (add1 counter)))
   ids)
 
-(define (program-lines program first-id)
-  (define docs (program-docs program))
-  (define ids (number-nodes program docs first-id))
-  (define out '())
-  (define (emit! line) (set! out (cons line out)))
-  (let walk ([node program] [role #f] [indent ""])
-    (define-values (kind attrs children) (shape node docs))
+; Calls (emit! line) for a node and the nodes below it, one line each, in the text form. id-of and doc-of
+; give the id and the doc of a node.
+(define (emit-tree! emit! node role indent id-of doc-of)
+  (let walk ([node node] [role role] [indent indent])
+    (define-values (kind attrs children) (shape node doc-of))
     (emit! (format "~a~a~a #~a ~a~a" indent (if role (string-append role ": ") "") kind
-                   (hash-ref ids node) (span-text (node-span node)) attrs))
+                   (id-of node) (span-text (node-span node)) attrs))
     (let visit ([children children] [indent (string-append indent "  ")])
       (for ([child (in-list children)])
         (define item (cdr child))
@@ -198,7 +214,15 @@
            (emit! (string-append indent (pseudo-label item)))
            (visit (pseudo-children item) (string-append indent "  "))]
           [(part-text? item) (emit! (string-append indent "part: text " (quote-text (part-text-text item))))]
-          [else (walk item (car child) indent)]))))
+          [else (walk item (car child) indent)])))))
+
+(define (program-lines program first-id)
+  (define docs (program-docs program))
+  (define ids (number-tree program first-id))
+  (define out '())
+  (emit-tree! (lambda (line) (set! out (cons line out))) program #f ""
+              (lambda (node) (hash-ref ids node))
+              (lambda (node) (hash-ref docs (node-span node) #f)))
   (reverse out))
 
 (define (parser-text text #:first-id [first-id 0])

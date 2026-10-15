@@ -1,0 +1,1 @@
+ERROR CHECK-DECL-ORDER 21:4:1-48:6:1 "declaration is out of order" "exported functions come before private functions" file="a.agc"

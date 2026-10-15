@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-PATH 0:1:1-28:2:1 "library path escapes its root" - file="root.agc"

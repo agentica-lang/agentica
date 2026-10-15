@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-PATH 84:4:1-107:5:1 "a module file name has no dot apart from .agc" "rename the file so its name has no dot apart from .agc" file="root.agc"
