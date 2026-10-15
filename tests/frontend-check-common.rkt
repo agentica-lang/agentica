@@ -15,6 +15,7 @@
          "frontend-modules-common.rkt")
 
 (provide check-text
+         check-failure-line
          check-inputs
          check-golden
          write-check-goldens

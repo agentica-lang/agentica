@@ -1,0 +1,146 @@
+program 0:1:1-31:1 entry=3 globals=0
+source 0 "results.agc" chars=508
+fn0 "parse" params=1 captures=0 slots=4 @ 0:1:1-8:1
+    step @ 0:2:3-3:1
+    step @ 0:2:7-2:22
+    step @ 0:2:11-2:22
+    step @ 0:2:11-2:15
+    move r2 r0 @ 0:2:11-2:15
+    call-builtin r2 "String.to_int" 1 @ 0:2:11-2:22 0:2:11-2:15
+    try r1 r2 @ 0:2:7-2:22
+    step @ 0:3:3-6:1
+    step @ 0:3:6-3:11
+    step @ 0:3:6-3:7
+    step @ 0:3:10-3:11
+    const r3 int:0 @ 0:3:10-3:11
+    lt-i r2 r1 r3 @ 0:3:8-3:9
+    jump-if-false r2 L1 @ 0:3:6-3:11
+    step @ 0:4:5-5:1
+    step @ 0:4:12-4:29
+    step @ 0:4:18-4:28
+    const r2 "negative" @ 0:4:18-4:28
+    call-builtin r2 "error" 1 @ 0:4:12-4:29 0:4:18-4:28
+    return r2 @ 0:4:5-5:1
+  L1:
+  L0:
+    step @ 0:6:3-7:1
+    step @ 0:6:10-6:15
+    step @ 0:6:13-6:14
+    move r2 r1 @ 0:6:13-6:14
+    call-builtin r2 "ok" 1 @ 0:6:10-6:15 0:6:13-6:14
+    return r2 @ 0:6:3-7:1
+    const r2 void @ 0:1:1-8:1
+    return r2 @ 0:1:1-8:1
+fn1 "twice" params=1 captures=0 slots=5 @ 0:9:1-14:1
+    step @ 0:10:3-11:1
+    step @ 0:10:7-10:22
+    step @ 0:10:11-10:22
+    step @ 0:10:17-10:21
+    move r2 r0 @ 0:10:17-10:21
+    call r2 fn0 @ 0:10:11-10:22
+    try r1 r2 @ 0:10:7-10:22
+    step @ 0:11:3-12:1
+    step @ 0:11:7-11:28
+    step @ 0:11:11-11:28
+    step @ 0:11:17-11:27
+    step @ 0:11:17-11:21
+    step @ 0:11:24-11:27
+    const r4 "0" @ 0:11:24-11:27
+    concat r3 r0 r4 @ 0:11:22-11:23
+    call r3 fn0 @ 0:11:11-11:28
+    try r2 r3 @ 0:11:7-11:28
+    step @ 0:12:3-13:1
+    step @ 0:12:10-12:19
+    step @ 0:12:13-12:18
+    step @ 0:12:13-12:14
+    step @ 0:12:17-12:18
+    add-i r3 r1 r2 @ 0:12:15-12:16
+    call-builtin r3 "ok" 1 @ 0:12:10-12:19 0:12:13-12:18
+    return r3 @ 0:12:3-13:1
+    const r3 void @ 0:9:1-14:1
+    return r3 @ 0:9:1-14:1
+fn2 "run" params=0 captures=0 slots=2 @ 0:15:1-19:1
+    step @ 0:16:3-17:1
+    step @ 0:16:3-16:17
+    step @ 0:16:7-16:17
+    step @ 0:16:13-16:16
+    const r1 "1" @ 0:16:13-16:16
+    call r1 fn1 @ 0:16:7-16:17
+    try r0 r1 @ 0:16:3-16:17
+    step @ 0:17:3-18:1
+    step @ 0:17:10-17:14
+    call-builtin r0 "ok" 0 @ 0:17:10-17:14
+    return r0 @ 0:17:3-18:1
+    const r0 void @ 0:15:1-19:1
+    return r0 @ 0:15:1-19:1
+fn3 "main" params=0 captures=0 slots=4 entry @ 0:20:1-31:1
+    step @ 0:21:3-22:1
+    step @ 0:21:7-21:17
+    step @ 0:21:13-21:16
+    const r1 "5" @ 0:21:13-21:16
+    call r1 fn1 @ 0:21:7-21:17
+    move r0 r1 @ 0:21:7-21:17
+    step @ 0:22:3-23:1
+    step @ 0:22:3-22:14
+    step @ 0:22:8-22:13
+    step @ 0:22:8-22:9
+    move r2 r0 @ 0:22:8-22:9
+    call-builtin r2 "Result.ok?" 1 @ 0:22:8-22:13 0:22:8-22:9
+    move r1 r2 @ 0:22:8-22:13
+    call-builtin r1 "puts" 1 @ 0:22:3-22:14 0:22:8-22:13
+    step @ 0:23:3-24:1
+    step @ 0:23:3-23:23
+    step @ 0:23:8-23:22
+    step @ 0:23:8-23:9
+    move r2 r0 @ 0:23:8-23:9
+    step @ 0:23:20-23:21
+    const r3 int:0 @ 0:23:20-23:21
+    call-builtin r2 "Result.unwrap_or" 2 @ 0:23:8-23:22 0:23:8-23:9 0:23:20-23:21
+    move r1 r2 @ 0:23:8-23:22
+    call-builtin r1 "puts" 1 @ 0:23:3-23:23 0:23:8-23:22
+    step @ 0:24:3-25:1
+    step @ 0:24:3-24:35
+    step @ 0:24:8-24:34
+    step @ 0:24:23-24:33
+    step @ 0:24:29-24:32
+    const r3 "x" @ 0:24:29-24:32
+    call r3 fn0 @ 0:24:23-24:33
+    move r2 r3 @ 0:24:23-24:33
+    call-builtin r2 "Result.message" 1 @ 0:24:8-24:34 0:24:23-24:33
+    move r1 r2 @ 0:24:8-24:34
+    call-builtin r1 "puts" 1 @ 0:24:3-24:35 0:24:8-24:34
+    step @ 0:25:3-26:1
+    step @ 0:25:3-25:27
+    step @ 0:25:8-25:26
+    step @ 0:25:8-25:18
+    step @ 0:25:14-25:17
+    const r3 "7" @ 0:25:14-25:17
+    call r3 fn0 @ 0:25:8-25:18
+    move r2 r3 @ 0:25:8-25:18
+    call-builtin r2 "Result.unwrap!" 1 @ 0:25:8-25:26 0:25:8-25:18
+    move r1 r2 @ 0:25:8-25:26
+    call-builtin r1 "puts" 1 @ 0:25:3-25:27 0:25:8-25:26
+    step @ 0:26:3-30:1
+    step @ 0:26:8-26:13
+    call r1 fn2 @ 0:26:8-26:13
+    is-ok r2 r1 @ 0:27:5-27:10
+    jump-if-false r2 L1 @ 0:27:5-27:10
+    step @ 0:27:14-28:1
+    step @ 0:27:14-27:24
+    step @ 0:27:19-27:23
+    const r2 "ok" @ 0:27:19-27:23
+    call-builtin r2 "puts" 1 @ 0:27:14-27:24 0:27:19-27:23
+    jump L0 @ 0:26:3-30:1
+  L1:
+    is-ok r2 r1 @ 0:28:5-28:13
+    jump-if-true r2 L2 @ 0:28:5-28:13
+    result-value r2 r1 @ 0:28:5-28:13
+    step @ 0:28:17-29:1
+    step @ 0:28:17-28:24
+    step @ 0:28:22-28:23
+    move r3 r2 @ 0:28:22-28:23
+    call-builtin r3 "puts" 1 @ 0:28:17-28:24 0:28:22-28:23
+  L2:
+  L0:
+    const r1 void @ 0:20:1-31:1
+    return r1 @ 0:20:1-31:1

@@ -24,6 +24,25 @@ export def check_text(path: String, settings: Env.Settings) -> String
   end
 end
 
+## The ERROR line of a failure of the checker, with its notes and the file (relative to the folder of the root).
+export def problem_text(root_dir: String, problem: Failure.Problem) -> String
+  line = Text.diagnostic_line(
+    Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help),
+  )
+  line = (
+    line +
+    note(" expected=", problem.expected) +
+    note(" actual=", problem.actual) +
+    note(" callee=", problem.callee) +
+    note(" signature=", problem.signature)
+  )
+  if problem.labels.size > 0
+    labels = problem.labels.map do |label: Failure.Label| Text.span_text(label.span) + " " + Text.quote(label.text) end
+    line = line + " labels=[" + labels.join(", ") + "]"
+  end
+  return line + " file=" + Text.quote(LinkText.stored(root_dir, problem.file))
+end
+
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
   case Checker.check(linked, settings.catalog)
     Checker.Checking.Done(checked) ->
@@ -70,24 +89,6 @@ def resolved_text(resolved: State.Resolved) -> String
     State.Resolved.Inspect(type) -> return "inspect(" + T.debug_text(type) + ")"
     State.Resolved.Call(name, type) -> return "call(" + Text.quote(name) + ", " + T.debug_text(type) + ")"
   end
-end
-
-def problem_text(root_dir: String, problem: Failure.Problem) -> String
-  line = Text.diagnostic_line(
-    Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help),
-  )
-  line = (
-    line +
-    note(" expected=", problem.expected) +
-    note(" actual=", problem.actual) +
-    note(" callee=", problem.callee) +
-    note(" signature=", problem.signature)
-  )
-  if problem.labels.size > 0
-    labels = problem.labels.map do |label: Failure.Label| Text.span_text(label.span) + " " + Text.quote(label.text) end
-    line = line + " labels=[" + labels.join(", ") + "]"
-  end
-  return line + " file=" + Text.quote(LinkText.stored(root_dir, problem.file))
 end
 
 def note(label: String, text: String) -> String

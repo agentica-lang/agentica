@@ -1,0 +1,127 @@
+program 0:1:1-36:1 entry=5 globals=0
+source 0 "tail-calls.agc" chars=454
+fn0 "count" params=2 captures=0 slots=5 @ 0:1:1-7:1
+    step @ 0:2:3-5:1
+    step @ 0:2:6-2:12
+    step @ 0:2:6-2:7
+    step @ 0:2:11-2:12
+    const r3 int:0 @ 0:2:11-2:12
+    eq r2 r0 r3 @ 0:2:8-2:10
+    jump-if-false r2 L1 @ 0:2:6-2:12
+    step @ 0:3:5-4:1
+    step @ 0:3:12-3:15
+    return r1 @ 0:3:5-4:1
+  L1:
+  L0:
+    step @ 0:5:3-6:1
+    step @ 0:5:10-5:31
+    step @ 0:5:16-5:21
+    step @ 0:5:16-5:17
+    step @ 0:5:20-5:21
+    const r3 int:1 @ 0:5:20-5:21
+    sub-i r2 r0 r3 @ 0:5:18-5:19
+    step @ 0:5:23-5:30
+    step @ 0:5:23-5:26
+    step @ 0:5:29-5:30
+    const r4 int:1 @ 0:5:29-5:30
+    add-i r3 r1 r4 @ 0:5:27-5:28
+    tail-call r2 fn0 @ 0:5:10-5:31
+    const r2 void @ 0:1:1-7:1
+    return r2 @ 0:1:1-7:1
+fn1 "even" params=1 captures=0 slots=3 @ 0:8:1-14:1
+    step @ 0:9:3-12:1
+    step @ 0:9:6-9:12
+    step @ 0:9:6-9:7
+    step @ 0:9:11-9:12
+    const r2 int:0 @ 0:9:11-9:12
+    eq r1 r0 r2 @ 0:9:8-9:10
+    jump-if-false r1 L1 @ 0:9:6-9:12
+    step @ 0:10:5-11:1
+    step @ 0:10:12-10:16
+    const r1 true @ 0:10:12-10:16
+    return r1 @ 0:10:5-11:1
+  L1:
+  L0:
+    step @ 0:12:3-13:1
+    step @ 0:12:10-12:20
+    step @ 0:12:14-12:19
+    step @ 0:12:14-12:15
+    step @ 0:12:18-12:19
+    const r2 int:1 @ 0:12:18-12:19
+    sub-i r1 r0 r2 @ 0:12:16-12:17
+    tail-call r1 fn2 @ 0:12:10-12:20
+    const r1 void @ 0:8:1-14:1
+    return r1 @ 0:8:1-14:1
+fn2 "odd" params=1 captures=0 slots=3 @ 0:15:1-21:1
+    step @ 0:16:3-19:1
+    step @ 0:16:6-16:12
+    step @ 0:16:6-16:7
+    step @ 0:16:11-16:12
+    const r2 int:0 @ 0:16:11-16:12
+    eq r1 r0 r2 @ 0:16:8-16:10
+    jump-if-false r1 L1 @ 0:16:6-16:12
+    step @ 0:17:5-18:1
+    step @ 0:17:12-17:17
+    const r1 false @ 0:17:12-17:17
+    return r1 @ 0:17:5-18:1
+  L1:
+  L0:
+    step @ 0:19:3-20:1
+    step @ 0:19:10-19:21
+    step @ 0:19:15-19:20
+    step @ 0:19:15-19:16
+    step @ 0:19:19-19:20
+    const r2 int:1 @ 0:19:19-19:20
+    sub-i r1 r0 r2 @ 0:19:17-19:18
+    tail-call r1 fn1 @ 0:19:10-19:21
+    const r1 void @ 0:15:1-21:1
+    return r1 @ 0:15:1-21:1
+fn3 "nothing" params=0 captures=0 slots=1 @ 0:22:1-25:1
+    step @ 0:23:3-24:1
+    const r0 void @ 0:23:3-24:1
+    return r0 @ 0:23:3-24:1
+    const r0 void @ 0:22:1-25:1
+    return r0 @ 0:22:1-25:1
+fn4 "forward" params=0 captures=0 slots=1 @ 0:26:1-29:1
+    step @ 0:27:3-28:1
+    step @ 0:27:10-27:19
+    tail-call r0 fn3 @ 0:27:10-27:19
+    const r0 void @ 0:26:1-29:1
+    return r0 @ 0:26:1-29:1
+fn5 "main" params=0 captures=0 slots=4 entry @ 0:30:1-36:1
+    step @ 0:31:3-32:1
+    step @ 0:31:3-31:23
+    step @ 0:31:8-31:22
+    step @ 0:31:14-31:18
+    const r1 int:1000 @ 0:31:14-31:18
+    step @ 0:31:20-31:21
+    const r2 int:0 @ 0:31:20-31:21
+    call r1 fn0 @ 0:31:8-31:22
+    move r0 r1 @ 0:31:8-31:22
+    call-builtin r0 "puts" 1 @ 0:31:3-31:23 0:31:8-31:22
+    step @ 0:32:3-33:1
+    step @ 0:32:3-32:17
+    step @ 0:32:8-32:16
+    step @ 0:32:13-32:15
+    const r1 int:10 @ 0:32:13-32:15
+    call r1 fn1 @ 0:32:8-32:16
+    move r0 r1 @ 0:32:8-32:16
+    call-builtin r0 "puts" 1 @ 0:32:3-32:17 0:32:8-32:16
+    step @ 0:33:3-34:1
+    step @ 0:33:3-33:12
+    call r0 fn4 @ 0:33:3-33:12
+    step @ 0:34:3-35:1
+    step @ 0:34:3-34:24
+    step @ 0:34:8-34:23
+    step @ 0:34:8-34:9
+    const r1 int:1 @ 0:34:8-34:9
+    step @ 0:34:12-34:23
+    step @ 0:34:18-34:19
+    const r2 int:3 @ 0:34:18-34:19
+    step @ 0:34:21-34:22
+    const r3 int:0 @ 0:34:21-34:22
+    call r2 fn0 @ 0:34:12-34:23
+    add-i r0 r1 r2 @ 0:34:10-34:11
+    call-builtin r0 "puts" 1 @ 0:34:3-34:24 0:34:8-34:23
+    const r0 void @ 0:30:1-36:1
+    return r0 @ 0:30:1-36:1
