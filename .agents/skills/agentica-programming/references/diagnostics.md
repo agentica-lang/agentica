@@ -52,10 +52,11 @@ Each line is a function and the place it runs: the error for the first, the call
 | `CHECK-TRY-CONTEXT` | try in a function not returning Result |
 | `CHECK-MISSING-RETURN` | a path without `return` in a non-`Void` function; the help names the missing `else`, loop or `case` arm |
 | `CHECK-MAIN` | missing or wrong `main` |
-| `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | index on a non-list/map (a String uses `s.at(i)` or `s.slice(start, length)`), `for` over something that is not a list or a range |
+| `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | index on a non-list/map (a String uses `s.at(i)` or `s.slice(start, length)`), `for` over something that is not a list, a set or a range |
 | `CHECK-UNKNOWN-VARIANT`, `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE` | unknown enum variant, named arguments to a variant, generic enum type not known from payloads or context |
 | `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`, `CHECK-UNREACHABLE-CASE-ARM` | a pattern that does not fit the value, a `case` missing variants or `_`, an arm already covered |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
+| `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE` | a `Set` element type that is not `Int` or `String`; `Set.new([])` with no expected type: annotate it, `s: Set[Int] = Set.new([])` |
 | `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` | Missing/unreadable import, invalid path (including a path with `.agc` or another extension), cycle, or unknown/private imported name; for a misspelled name the help suggests the closest export (`did you mean "name"?`) |
 | `CHECK-DECL-ORDER` | a declaration out of the file order (imports, `struct`/`enum`, `export def`, `def`): a type after a function, a private `def` before an `export def`, an `import` after a declaration; move it to its group |
 | `CHECK-MODULE-CONTEXT` | Raw import/export declarations need module resolution before checking |

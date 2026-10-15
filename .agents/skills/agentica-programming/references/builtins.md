@@ -151,6 +151,26 @@ Map.delete(map: Map[K, V], key: K) -> Map[K, V]          # absent keys are ignor
 - Lookup, `has_key?`, and `put` are effectively constant time (a persistent 32-way HAMT); updates share unchanged storage. `m[key]` on a missing key is `RUNTIME-KEY-NOT-FOUND`.
 - `false` and `nil` are present values. Deleting keeps the order of the rest; re-inserting puts a key at the end.
 
+## Set
+
+```text
+Set.new(items: List[T]) -> Set[T]                        # T is Int or String; repeated items dropped, the first keeps its place
+Set.add(set: Set[T], value: T) -> Set[T]                 # a member leaves the set unchanged
+Set.delete(set: Set[T], value: T) -> Set[T]              # a missing element is ignored; O(n)
+Set.include?(set: Set[T], value: T) -> Bool
+Set.size(set: Set[T]) -> Int                             # O(1)
+Set.empty?(set: Set[T]) -> Bool
+Set.to_a(set: Set[T]) -> List[T]                         # first-insertion order; O(n)
+Set.union(a: Set[T], b: Set[T]) -> Set[T]                # a's elements, then b's that a lacks
+Set.intersection(a: Set[T], b: Set[T]) -> Set[T]         # in a's order
+Set.difference(a: Set[T], b: Set[T]) -> Set[T]           # in a's order
+Set.subset?(a: Set[T], b: Set[T]) -> Bool                # every element of a is in b
+```
+
+- Sets are immutable like maps: `seen = seen.add(x)`; a bare `seen.add(x)` is `CHECK-UNUSED-VALUE`. Membership and `add` are effectively constant time (the map HAMT). Re-adding a deleted element puts it at the end.
+- `Set.new([])` needs an expected type: `seen: Set[Int] = Set.new([])` (`CHECK-EMPTY-SET-TYPE`). A `Set[Float]` or `Set[List[Int]]` is `CHECK-SET-ELEMENT-TYPE`.
+- `for x in set` visits the elements in order. `puts(set)` prints `Set[1, 2]`. There is no `==`, no index (`s[0]` is `CHECK-NOT-INDEXABLE`) and no JSON encoding; `Test.eq` compares two sets in any order.
+
 ## Range
 
 ```text
@@ -190,6 +210,7 @@ The rules for `ok`, `error`, `try`, and Void are in `language.md`.
 | `String` | `String` |
 | `List[T]` | `List` |
 | `Map[K, V]` | `Map` |
+| `Set[T]` | `Set` (`add`, `delete`, `include?`, `size`, `empty?`, `to_a`, `union`, `intersection`, `difference`, `subset?`) |
 | `Float` | `Float` |
 | `Result[T]` | `Result` |
 | `Json` | `JSON` |
@@ -222,7 +243,7 @@ Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A negativ
 
 ## to_s and inspect
 
-- Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and lists, maps, Results, structs, and enums built from those. `x.to_s` is the text `"#{x}"` gives: a String as it is, a `Json` as its JSON text, anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`, `Shape.Box(1, 2)`). Inside a list or Result, `Json` shows as `<Json>`, so `puts(JSON.parse(s))` prints `ok(<Json>)`.
+- Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and lists, maps, sets, Results, structs, and enums built from those. `x.to_s` is the text `"#{x}"` gives: a String as it is, a `Json` as its JSON text, anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`, `Shape.Box(1, 2)`). Inside a list or Result, `Json` shows as `<Json>`, so `puts(JSON.parse(s))` prints `ok(<Json>)`.
 - Functions, tasks, and resource handles (sockets, files, processes, HTTP values) have no `to_s`. Printing or interpolating one is `CHECK-TYPE-MISMATCH`; `.to_s` on one is `CHECK-UNKNOWN-METHOD`.
 - `nil.to_s` is `"nil"`; `puts([1, 2])` writes `[1, 2]`. A struct field named `to_s` is read as the field.
 - `x.inspect` is the `IO.inspect` form as a String. It differs from `to_s` for strings, which keep their quotes (`"a".inspect` is the quoted text), and for `Json`, which gives `<Json>`. The debug form is for display, not guaranteed to be valid source.
@@ -231,4 +252,4 @@ Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A negativ
 
 - Values never change, so a method never changes its receiver. A builtin without effects whose non-Void result is ignored is `CHECK-UNUSED-VALUE`. `!`-suffixed functions and builtins that take a function are exempt.
 - A `?` or `!` suffix belongs to a function name, even with a space before `(`. `a!=b` is `a != b`. Variables, parameters, and fields cannot take those suffixes. By convention `?` means Bool and `!` halts on failure.
-- Build lists with literals, `List.append`, `List.repeat`, and `List.concat`; change one element with `List.set`. Change maps with `Map.put` and `Map.delete`. These leave the original unchanged.
+- Build lists with literals, `List.append`, `List.repeat`, and `List.concat`; change one element with `List.set`. Change maps with `Map.put` and `Map.delete`, and sets with `Set.add` and `Set.delete`. These leave the original unchanged.

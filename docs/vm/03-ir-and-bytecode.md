@@ -45,6 +45,7 @@ typed op still checks its tags at run time (4.2).
 | `for x in a..b`, `a...b` | No `Range` value. The counter `i` starts at `a`, `last` is `b`. The test `le-i` (`lt-i` for `...`) runs before the body. For `...`, `last` is `b - 1` (`sub-i`, after the nonempty test; b is above a, so no overflow). The loop top is a `step` with the `for` span, one per iteration. After the body (the target of `next`) the loop compares `i` with `last` and only then adds 1, so a range ending at the largest Int never overflows. |
 | `for x in r` (a `Range` value) | `range-bounds` once into the counter, `last` and non-empty flag, then the same loop. Assigning `r` in the body does not change the loop. |
 | `a..b`, `a...b` as a value | `step`, then `range dst w kind` (kind 0 for `..`, 1 for `...`). |
+| `for x in s` (a `Set` value) | `call-builtin Set.to_a` on the hidden slot, then the loop of `for x in xs` over the list. The set is read once, so assigning `s` in the body does not change the loop. |
 | `for x in xs` | The iterable goes into a hidden slot (a `move`, even for a local, since the body may assign it). Hidden index, length and one. The body starts with the `step` of its first statement, then `list-get`. The backward jump lands on a `STEP`. `next` jumps to the increment, `break` past the test. An empty body charges nothing. |
 | Functions | One IR function each. Falling off the end returns Void. |
 | Calls | A builtin gives `call-builtin` (including the higher-order `List` functions, 4.3). A user function gives `call`, or `tail-call` when it is the value of a `return`. |

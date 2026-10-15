@@ -12,8 +12,8 @@ time a program computes them.
 
 - The 128 one-character ASCII strings and the empty string `""`.
 - The empty list `[]` and the empty map `{}`.
-- The empty `Set` once `Set[T]` lands (8b, §12.2). Sets do not exist yet; the
-  set PR adds its entry to the table.
+- The empty `Set` (8b, §12.2). A set is an `agc_map` under another tag, so the
+  empty set is one `agc_map` with no table, shared like `empty_map`.
 
 Ints are not part of this. An `agc_value` (`vm/value.h:29-32`) holds `Int`,
 `Float`, `Bool` and `nil` inline in 16 bytes and never allocates them, so a
@@ -41,23 +41,25 @@ Checked at `5fb7ed7`:
 ### 34.2 Design
 
 **The table.** `agc_runtime` gets `agc_string *chars[128]`, `empty_string`,
-`empty_list` and `empty_map`. `agc_vm_init` (`vm/interp.c:64`) fills them before
-any task runs. The 129 strings can share one `GC_MALLOC_ATOMIC` block (24 bytes
-each). Cost: about 3 KB for the strings, 48 bytes for the empty list and map, 1
-KB of pointers in the runtime, and 131 or fewer small allocations at start-up
-(microseconds; the VM starts in about 1 ms).
+`empty_list`, `empty_map` and `empty_set`. `agc_vm_init` (`vm/interp.c:64`)
+fills them before any task runs. The 129 strings can share one
+`GC_MALLOC_ATOMIC` block (24 bytes each). Cost: about 3 KB for the strings, 72
+bytes for the empty list, map and set, 1 KB of pointers in the runtime, and 132
+or fewer small allocations at start-up (microseconds; the VM starts in about 1
+ms).
 
 **The constructors.** `agc_new_string`, `agc_new_list` and `agc_new_map` stay as
 they are: builders fill and grow the objects they return. New helpers in
 `vm/value.c` return the shared object or fall back to them:
 `agc_small_string(vm, data, bytes, chars)` (shared when `bytes == 0`, or
-`bytes == 1` and the byte is below 0x80), `agc_empty_list(vm)` and
-`agc_empty_map(vm)`. The paths that switch to them:
+`bytes == 1` and the byte is below 0x80), `agc_empty_list(vm)`,
+`agc_empty_map(vm)` and `agc_empty_set(vm)`. The paths that switch to them:
 
 | Value | Paths |
 |---|---|
 | One-character or empty String | `split("")` `vm/strings.c:304`; `split` parts `vm/strings.c:131`; `trim` `:291`; `slice` `:421`; `at` `:440`; `from_code` `:469`; `join` of `[]` `:328`; `Result.message` of `ok` `vm/builtins.c:317`; empty input `vm/input.c:247`; JSON strings and keys `vm/json.c:170`, `:180`; `to_s` of a digit `vm/text.c:290` |
 | `[]` | `LIST` with no items `vm/interp.c:552`; `filter`, `map`, `sort_by` with no result `vm/interp.c:341`; `take` `vm/builtins.c:200`; `drop` `:206`; `concat` `:134`; `repeat` `:187`; `reverse` `:212`; `Map.keys`, `values` `:237`; `Range.to_a` `:344`; `sort` `vm/interp.c:274`; JSON arrays `vm/json.c:138` |
+| `Set.new([])` | `Set.new` with no items, `Set.delete` of the last element, and an `intersection` or `difference` with no element left (`builtin_set_new`, `builtin_set_delete`, `set_filter` in `vm/builtins.c`); the VM has no empty-set literal. |
 | `{}` | `MAP` `vm/interp.c:566` (also as the start of a non-empty literal: `agc_map_put` never writes its input); `Map.delete` of the last key `vm/map.c:273`; typed JSON maps `vm/json_typed.c:93` |
 
 Other paths may keep allocating: nothing depends on sharing, so coverage can

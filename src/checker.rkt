@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "Channel" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "LogRegistry" "Time" "Random" "Range" "Test")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "Channel" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "LogRegistry" "Time" "Random" "Range" "Set" "Test")
           (map symbol->string opaque-types) (hash-keys builtin-records) (hash-keys builtin-enums)))
 
 (define (result-type? type)
@@ -22,14 +22,8 @@
 (define (primitive-type? type)
   (memq type '(Int Float Bool String Nil)))
 
-(define (list-type? type)
-  (and (pair? type) (eq? (car type) 'List)))
-
 (define (channel-type? type)
   (and (pair? type) (eq? (car type) 'Channel)))
-
-(define (map-type? type)
-  (and (pair? type) (eq? (car type) 'Map)))
 
 (define (key-type? type)
   (memq type '(Int String)))
@@ -41,7 +35,7 @@
   (and (pair? type) (eq? (car type) 'Enum)))
 
 (define method-modules
-  (hasheq 'String "String" 'List "List" 'Map "Map" 'Float "Float" 'Result "Result" 'Json "JSON"
+  (hasheq 'String "String" 'List "List" 'Map "Map" 'Set "Set" 'Float "Float" 'Result "Result" 'Json "JSON"
           'Int "Int" 'Range "Range" 'Channel "Channel"))
 
 (define method-aliases
@@ -113,7 +107,7 @@
   (if (pair? type) (car type) type))
 
 (define (receiver-kind type)
-  (and (memq (type-head type) '(String List Map Float Result Json Int Range Channel))
+  (and (memq (type-head type) '(String List Map Set Float Result Json Int Range Channel))
        (type-head type)))
 
 (define (catalog-method kind name)
@@ -176,6 +170,7 @@
         "Hash.new" "use a map literal with a type: m: Map[String, Int] = {}"
         "Map.new" "use a map literal with a type: m: Map[String, Int] = {}"
         "Map.empty" "use a map literal with a type: m: Map[String, Int] = {}"
+        "Set.empty" "write Set.new([]) where the type is known: seen: Set[Int] = Set.new([])"
         "Array.new" "use a list literal with a type: xs: List[Int] = []"
         "List.new" "use a list literal with a type: xs: List[Int] = []"
         "List.empty" "use a list literal with a type: xs: List[Int] = []"
@@ -227,6 +222,11 @@
         (cons 'String "digit?") digit-help
         (cons 'String "numeric?") digit-help
         (cons 'String "is_numeric") digit-help
+        (cons 'Set "contains?") "use s.include?(x)"
+        (cons 'Set "member?") "use s.include?(x)"
+        (cons 'Set "has?") "use s.include?(x)"
+        (cons 'Set "push") "sets are immutable; use s.add(x) and assign the result: s = s.add(x)"
+        (cons 'Set "remove") "use s.delete(x) and assign the result: s = s.delete(x)"
         (cons 'String "error?") "error? is not a String method; only a Result has ok? and message (!r.ok? tests for an error)"))
 
 (define (foreign-method-help kind name)
@@ -420,6 +420,13 @@
                  (format "a Map key must be Int or String, found ~a" (type->string key))
                  (type-ref-span (car arguments))))
          (list 'Map key (resolve-type (cadr arguments)))]
+        [(and (string=? name "Set") (= (length arguments) 1))
+         (define element (resolve-type (car arguments)))
+         (unless (key-type? element)
+           (bail 'CHECK-SET-ELEMENT-TYPE
+                 (format "a Set element must be Int or String, found ~a" (type->string element))
+                 (type-ref-span (car arguments))))
+         (list 'Set element)]
         [(hash-has-key? enums name)
          (define parameters (car (hash-ref enums name)))
          (unless (= (length parameters) (length arguments))
@@ -437,7 +444,7 @@
                #:help (or (hash-ref foreign-names name #f)
                           (did-you-mean name
                                     (append (hash-keys structs) (hash-keys enums))
-                                    #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task" "Channel" "Range")
+                                    #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Set" "Result" "Json" "Fn" "Task" "Channel" "Range")
                                                      (map symbol->string opaque-types)))))]))
 
     ;; Scopes ---------------------------------------------------------------
@@ -784,7 +791,9 @@
            (bail 'CHECK-TYPE-MISMATCH
                  (format "equality is only defined for primitive values and ranges, found ~a"
                          (type->string left))
-                 span))
+                 span
+                 #:help (and (set-type? left)
+                             "two sets are equal when each is a subset of the other: a.subset?(b) and b.subset?(a)")))
          'Bool]
         [(and or)
          (unless (and (eq? left 'Bool) (eq? right 'Bool))
@@ -813,6 +822,7 @@
         [(or (primitive-type? type) (memq type '(Json Range)) (type-variable? type)) #t]
         [(list-type? type) (data-type? (cadr type) seen)]
         [(map-type? type) (and (data-type? (cadr type) seen) (data-type? (caddr type) seen))]
+        [(set-type? type) #t]
         [(result-type? type) (or (eq? (cadr type) 'Void) (data-type? (cadr type) seen))]
         [(or (struct-type? type) (enum-type? type))
          (define key (cons (car type) (cadr type)))
@@ -834,7 +844,7 @@
         (bail 'CHECK-TYPE-MISMATCH
               (format "~a has no to_s, so it cannot be printed or interpolated" (type->string type))
               span
-              #:help "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, Results, structs and enums of those")))
+              #:help "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, Results, structs and enums of those")))
 
     (define (decodable-type? type [seen '()])
       (cond
@@ -879,6 +889,10 @@
       (define (map-argument [context #f])
         (define type (check-expression (car arguments) context))
         (unless (map-type? type) (mismatch! '(Map K V) type (node-span (car arguments))))
+        type)
+      (define (set-argument [context #f])
+        (define type (check-expression (car arguments) context))
+        (unless (set-type? type) (mismatch! '(Set T) type (node-span (car arguments))))
         type)
       (define (list-argument [context #f])
         (define type (check-expression (car arguments) context))
@@ -973,6 +987,37 @@
          (check-expression (cadr arguments) (cadr target))
          (check-expression (caddr arguments) (caddr target))
          target]
+        [(set-new)
+         (define items (car arguments))
+         (define context (and (set-type? expected) (list 'List (cadr expected))))
+         (when (and (empty-list? items) (not context))
+           (when expected (mismatch! expected '(Set T) span))
+           (bail 'CHECK-EMPTY-SET-TYPE "an empty set needs an expected type, for example \"Set[Int]\"" span
+                 #:help "annotate the variable: seen: Set[Int] = Set.new([]); a parameter, a field or a function result also gives the type"))
+         (define element (cadr (list-argument context)))
+         (unless (key-type? element)
+           (bail 'CHECK-SET-ELEMENT-TYPE
+                 (format "a Set element must be Int or String, found ~a" (type->string element))
+                 (node-span items)))
+         (list 'Set element)]
+        [(set-add)
+         (define target (set-argument (and (set-type? expected) expected)))
+         (check-expression (cadr arguments) (cadr target))
+         target]
+        [(set-include)
+         (define target (set-argument))
+         (check-expression (cadr arguments) (cadr target))
+         'Bool]
+        [(set-query) (set-argument) (builtin-result selected)]
+        [(set-to-a) (list 'List (cadr (set-argument)))]
+        [(set-combine)
+         (define target (set-argument (and (set-type? expected) expected)))
+         (check-expression (cadr arguments) target)
+         target]
+        [(set-subset)
+         (define target (set-argument))
+         (check-expression (cadr arguments) target)
+         'Bool]
         [(list-size) (list-argument) 'Int]
         [(list-reverse) (list-argument (and (list-type? expected) expected))]
         [(list-sort)
@@ -1123,7 +1168,7 @@
            (bail 'CHECK-TYPE-MISMATCH
                  (format "Test.eq needs a type with equality, found ~a" (type->string actual))
                  (node-span (car arguments))
-                 #:help "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, Results, structs and enums of those"))
+                 #:help "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, sets, Results, structs and enums of those"))
          '(Result Void)]
         [(test-result) (result-argument) '(Result Void)]
         [(result-ok) (result-argument) 'Bool]
@@ -1371,7 +1416,7 @@
                        [(and (memq expression range-chain) (resolve-method 'Range name))
                         (format "a method call on a range needs parentheses: (a..b).~a" name)]
                        [(member name '("to_s" "inspect"))
-                        "only data values have to_s and inspect: numbers, Bool, String, nil, Json, ranges, and lists, maps, Results, structs and enums of those"]
+                        "only data values have to_s and inspect: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, Results, structs and enums of those"]
                        [(and (struct-type? target) (hash-ref functions name #f))
                         (format "structs have no methods; call ~a(...) with the struct as an argument" name)]
                        [(and (struct-type? target)
@@ -1537,6 +1582,7 @@
                         [(result-type? target)
                          "unwrap the Result first: r.unwrap!, try r inside a function that returns Result, or case r"]
                         [(struct-type? target) "read a field with .name"]
+                        [(set-type? target) "sets have no positions: s.include?(x) tests membership, s.to_a gives a list in insertion order"]
                         [else #f]))]))
 
     ;; Statements -----------------------------------------------------------
@@ -1749,9 +1795,9 @@
 
     (define (check-for statement)
       (define iterable (check-expression (for-stmt-iterable statement) #f))
-      (unless (or (list-type? iterable) (eq? iterable 'Range))
+      (unless (or (list-type? iterable) (set-type? iterable) (eq? iterable 'Range))
         (bail 'CHECK-NOT-A-LIST
-              (format "\"for\" iterates over a list or a range, found ~a" (type->string iterable))
+              (format "\"for\" iterates over a list, a set or a range, found ~a" (type->string iterable))
               (for-stmt-span statement)))
       (push-scope!)
       (introduce! (for-stmt-var statement) (if (eq? iterable 'Range) 'Int (cadr iterable))

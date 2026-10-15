@@ -1,6 +1,7 @@
 /*
  * The HAMT: 20,000 keys, order, replacement, persistence, full hash
- * collisions, delete down to an empty map, and deep nesting.
+ * collisions, add that leaves a member alone (and the Set text), delete down to
+ * an empty map, and deep nesting.
  */
 #include "../core.h"
 
@@ -75,6 +76,29 @@ int main(void) {
   assert(!agc_map_get_hash(&vm, collide, same, agc_int(40), &missing));
   assert(!agc_map_get_hash(&vm, collide, same ^ (1ULL << 63), agc_int(1), &missing));
 
+  /* agc_map_add_hash returns the map itself for a member, at any depth and in a collision node, and adds like put otherwise. */
+  agc_value nothing = agc_nil();
+  agc_value member = agc_int(5 * 7919 - 50000);
+  assert(agc_map_add_hash(&vm, m, agc_key_hash(&vm, member), member, nothing) == m);
+  assert(agc_map_add_hash(&vm, collide, same, agc_int(7), nothing) == collide);
+  agc_map *collide_plus = agc_map_add_hash(&vm, collide, same, agc_int(77), nothing);
+  assert(collide_plus != collide && collide_plus->size == 41 && collide->size == 40);
+  assert(agc_map_add_hash(&vm, collide_plus, same, agc_int(77), nothing) == collide_plus);
+  assert(agc_as_int(&vm, agc_map_keys(&vm, collide_plus, 0)[40]) == 77);
+  agc_value fresh = agc_int(1);
+  agc_map *m_plus = agc_map_add_hash(&vm, m, agc_key_hash(&vm, fresh), fresh, nothing);
+  assert(m_plus != m && m_plus->size == m->size + 1 && m->size == (size_t)n);
+  assert(agc_map_get(&vm, m_plus, fresh, &missing) && agc_is(missing, AGC_T_NIL) && !agc_map_get(&vm, m, fresh, &missing));
+  assert(get_int(m_plus, agc_int(-50000)) == 0);
+  assert(agc_map_add_hash(&vm, agc_new_map(), 9, fresh, nothing)->size == 1);
+
+  agc_map *members = agc_new_map();
+  members = agc_map_add_hash(&vm, members, agc_key_hash(&vm, text("b")), text("b"), nothing);
+  members = agc_map_add_hash(&vm, members, agc_key_hash(&vm, agc_int(3)), agc_int(3), nothing);
+  assert(agc_map_add_hash(&vm, members, agc_key_hash(&vm, text("b")), text("b"), nothing) == members);
+  debug_is(agc_set_value(members), "Set[\"b\", 3]");
+  debug_is(agc_set_value(agc_new_map()), "Set[]");
+
   agc_map *prefix = agc_new_map();
   for (int64_t k = 0; k < 16; k++)
     prefix = agc_map_put_hash(&vm, prefix, ((uint64_t)k << 60) | 0x0aaaaaaaaaaaaaaaULL, agc_int(k), agc_int(k + 100));
@@ -88,6 +112,27 @@ int main(void) {
   assert(!agc_map_get_hash(&vm, prefix, 0x1aaaaaaaaaaaaaaaULL, agc_int(0), &missing));
   agc_value *prefix_keys = agc_map_keys(&vm, prefix, 0);
   assert(agc_as_int(&vm, prefix_keys[0]) == 0 && agc_as_int(&vm, prefix_keys[16]) == 99);
+
+  /* agc_map_add_hash on the long shared prefixes: a member returns the map itself (a leaf at the end of the chain, a
+     collision node, a leaf at the root); a new key adds where its hash leaves the chain or joins a leaf with its own hash. */
+  const uint64_t tail = 0x0aaaaaaaaaaaaaaaULL;
+  assert(agc_map_add_hash(&vm, prefix, ((uint64_t)9 << 60) | tail, agc_int(9), agc_int(555)) == prefix);
+  assert(agc_map_add_hash(&vm, prefix, tail, agc_int(99), agc_int(555)) == prefix);
+  assert(agc_map_add_hash(&vm, prefix, 0, agc_int(-1), agc_int(555)) == prefix);
+  assert(agc_map_add_hash(&vm, prefix, 1ULL << 63, agc_int(-2), agc_int(555)) == prefix);
+  uint64_t branch = ((uint64_t)3 << 60) | (tail ^ (1ULL << 59));
+  agc_map *branched = agc_map_add_hash(&vm, prefix, branch, agc_int(200), agc_int(555));
+  assert(branched != prefix && branched->size == 20 && prefix->size == 19);
+  assert(get_hashed(branched, branch, 200) == 555 && !agc_map_get_hash(&vm, prefix, branch, agc_int(200), &missing));
+  assert(agc_map_add_hash(&vm, branched, branch, agc_int(200), agc_int(1)) == branched);
+  uint64_t twin = ((uint64_t)7 << 60) | tail;
+  agc_map *twinned = agc_map_add_hash(&vm, branched, twin, agc_int(201), agc_int(556));
+  assert(twinned != branched && twinned->size == 21 && branched->size == 20);
+  assert(get_hashed(twinned, twin, 201) == 556 && get_hashed(twinned, twin, 7) == 107 && get_hashed(twinned, branch, 200) == 555);
+  assert(agc_map_add_hash(&vm, twinned, twin, agc_int(201), agc_int(1)) == twinned);
+  agc_value *twin_keys = agc_map_keys(&vm, twinned, 0);
+  assert(agc_as_int(&vm, twin_keys[19]) == 200 && agc_as_int(&vm, twin_keys[20]) == 201);
+  for (int64_t k = 0; k < 16; k++) assert(get_hashed(twinned, ((uint64_t)k << 60) | tail, k) == k + 100);
 
   const int64_t few = 2000;
   agc_map *removed = agc_new_map();

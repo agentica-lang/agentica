@@ -101,8 +101,9 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
         end
       end
       lexeme = text.slice(first, index - first)
-      kind = keywords.get(lexeme, "")
-      if kind == ""
+      # A keyword's token kind is its own text, so the table only answers membership.
+      kind = lexeme
+      if !keywords.include?(lexeme)
         kind = "name"
         if code >= 65 and code <= 90
           kind = "type-name"
@@ -193,13 +194,11 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
   return Diag.Outcome.Failed(unterminated(Source.position(0, 1, 0), Source.position(0, 1, 0)))
 end
 
-def keyword_table() -> Map[String, String]
-  return {
-    "import": "import", "export": "export", "def": "def", "struct": "struct", "enum": "enum",
-    "case": "case", "do": "do", "end": "end", "if": "if", "elsif": "elsif", "else": "else",
-    "while": "while", "for": "for", "in": "in", "return": "return", "try": "try",
-    "true": "true", "false": "false", "nil": "nil", "and": "and", "or": "or", "not": "not"
-  }
+def keyword_table() -> Set[String]
+  return Set.new([
+    "import", "export", "def", "struct", "enum", "case", "do", "end", "if", "elsif", "else",
+    "while", "for", "in", "return", "try", "true", "false", "nil", "and", "or", "not"
+  ])
 end
 
 def operator_table() -> Map[String, String]

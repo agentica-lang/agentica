@@ -60,8 +60,8 @@ Notes on the choices:
 - **`input.c`, `output.c` and `builtins.c` are core.** stdin's waiters and the
   waiters of stdout and stderr are lists the scheduler owns (§14.1), and
   `agc_task_cancel` takes a task out of them (`task.c:129`). `builtins.c` holds
-  the `IO`, `System`, `List`, `Map`, `Result` and `Range` builtins over core
-  values, and `agc_find_builtin`, which the loader calls.
+  the `IO`, `System`, `List`, `Map`, `Set`, `Result` and `Range` builtins over
+  core values, and `agc_find_builtin`, which the loader calls.
 - **`stream.c` is a service.** It is the kit the stream services share
   (`agc_inbuf_*`, `agc_stream_lock`, `agc_stream_write`); only `duplex.c`,
   `process.c`, `tcp.c` and `http_client.c` use it.

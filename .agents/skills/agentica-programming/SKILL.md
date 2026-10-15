@@ -76,7 +76,7 @@ end
 
 Common Ruby forms that work: `s.length`, `s.strip`, `s.split(" ")`, `s.upcase`, `s.include?("x")`, `s.to_i` (a Result), `s.to_i!`, `n.to_s`, `n.to_f`, `xs.size`, `xs.push(v)`, `xs.sort`, `xs.join(",")` (a `List[String]`), `m.keys`, `m.put(k, v)`, `m.get(k)` (a Result), `(1..3).to_a`, `n.times do |i| ... end`. The full list is in `references/builtins.md`.
 
-Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`, `Map[K, V]` (K is `Int` or `String`), `Result[T]`, `Range`, `Json`, `Fn[A, ..., R]`, `Task[R]`, `Await[T]`, `Channel[T]`, `Process`, and your own `struct` and `enum` names. Type names start with an uppercase letter; variables, functions, and fields start with a lowercase letter or `_`. Details: `references/language.md`.
+Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`, `Map[K, V]` (K is `Int` or `String`), `Set[T]` (T is `Int` or `String`: `Set.new([1, 2])`, `s.add(x)`, `s.include?(x)`), `Result[T]`, `Range`, `Json`, `Fn[A, ..., R]`, `Task[R]`, `Await[T]`, `Channel[T]`, `Process`, and your own `struct` and `enum` names. Type names start with an uppercase letter; variables, functions, and fields start with a lowercase letter or `_`. Details: `references/language.md`.
 
 ## Rules agents break
 
@@ -89,10 +89,10 @@ Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]
 - No implicit Int/Float: `2 * 1.5` is `CHECK-TYPE-MISMATCH`. Convert with `n.to_f`, `Float.from_int(n)`, `x.to_i!`, or `Float.to_int!(x)`. `7 / 2` is `3`.
 - `==` works only on Int, Float, Bool, String, Nil (same type on both sides) and ranges. Compare enums and structs with `case` or a field. Comparisons do not chain: write `a < b and b < c`.
 - `if` and `while` need a Bool: `if 1` is an error. `!` binds tightly: `!(a >= b)`.
-- Empty `[]` and `{}` need a type from an annotation, a parameter, a field, or the return type: `m: Map[String, Int] = {}`.
+- Empty `[]`, `{}` and `Set.new([])` need a type from an annotation, a parameter, a field, or the return type: `m: Map[String, Int] = {}`.
 - A non-Void function must `return` on every path. A loop does not count, so put a `return` after `while true`.
 - `case` on Int, Float, String, Bool, or Nil needs a final `_` arm. On an enum, list every variant or add `_`.
-- `for` takes a List or a Range. `0...n` excludes n; `1..n` includes it. There is no `range(n)`.
+- `for` takes a List, a Set or a Range. `0...n` excludes n; `1..n` includes it. There is no `range(n)`.
 - Result: `ok(v)` and `error(msg)` need an expected Result type: `r: Result[Int] = error("bad")` (a bare `r = error("bad")` is `CHECK-RESULT-TYPE`). `try` needs a Result operand (`try text.to_i`, not `try text.to_i!`) and a Result-returning function. `"x".to_i` is a Result, not `0`.
 - A timed `Task.await(task, timeout_ms)` returns `Await[R]` (`Await.Done(value)` or `Await.TimedOut`), not `R`; `timeout_ms` must be above 0, and the timeout does not cancel the task.
 - `Void` is only a function result or a completion. `v = puts("x")` is `CHECK-VOID-VALUE`.
@@ -109,7 +109,7 @@ Read only the files the task needs:
 | Read | When the program |
 |---|---|
 | [references/language.md](references/language.md) | hits a checker error about an operator, type, Void, pattern, block, method, or Result, or needs a core rule this file does not state |
-| [references/builtins.md](references/builtins.md) | calls a builtin not in the cheat sheet, or needs an exact signature for `String`, `List`, `Map`, `Range`, `Int`, `Float`, `IO`, `System` (arguments, environment), `Time`, or `Random` |
+| [references/builtins.md](references/builtins.md) | calls a builtin not in the cheat sheet, or needs an exact signature for `String`, `List`, `Map`, `Set`, `Range`, `Int`, `Float`, `IO`, `System` (arguments, environment), `Time`, or `Random` |
 | [references/examples.md](references/examples.md) | needs a complete program to start from |
 | [references/modules.md](references/modules.md) | spans several files, or imports `std/` or `pkg/` modules |
 | [references/json.md](references/json.md) | reads or writes JSON |

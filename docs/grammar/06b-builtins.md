@@ -1,6 +1,6 @@
 ### Methods on builtin types
 
-`receiver.name(args)` calls a builtin whose first parameter has the receiver's type. The checker picks the module from the static type (`String`, `List`, `Map`, `Float`, `Result`, `Range`, `Int`, and `Json` through `JSON`); there is no dynamic dispatch. `s.trim` is `String.trim(s)`, but `"a".from_int` is not a method. Without parentheses, `receiver.name` on a non-struct value is a method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field. Structs and enums have no methods.
+`receiver.name(args)` calls a builtin whose first parameter has the receiver's type. The checker picks the module from the static type (`String`, `List`, `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, and `Json` through `JSON`); there is no dynamic dispatch. `s.trim` is `String.trim(s)`, but `"a".from_int` is not a method. Without parentheses, `receiver.name` on a non-struct value is a method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field. Structs and enums have no methods.
 
 Ruby aliases are the module functions named in the library pages: `size`, `length`, `strip`, `include?`, `start_with?`, `end_with?`, `push`, `join`, `to_f`, and `to_s` and `inspect` on any data value. Two differ from Ruby: `to_i` and `to_f` on text return a `Result` (`"abc".to_i` is an error, not `0`), and `to_i!` and `to_f!` halt on bad text. An unknown method is `CHECK-UNKNOWN-METHOD`.
 
@@ -10,7 +10,7 @@ Values are immutable: a method never changes its receiver, so `xs.push(2)` retur
 
 ### Minimal builtin functions
 
-`puts(value)` writes the value's `to_s` and a newline; `print` writes without one. `gets` and `gets!` are `IO.gets` and `IO.gets!`, and may drop their parentheses (`line = gets!.strip`). `Map` and `List` are builtin modules whose generic functions the checker treats specially. Signatures are in [`library/data-structures/list.md`](../../site/content/library/data-structures/list.md) and [`library/data-structures/map.md`](../../site/content/library/data-structures/map.md).
+`puts(value)` writes the value's `to_s` and a newline; `print` writes without one. `gets` and `gets!` are `IO.gets` and `IO.gets!`, and may drop their parentheses (`line = gets!.strip`). `Map`, `Set` and `List` are builtin modules whose generic functions the checker treats specially. Signatures are in [`library/data-structures/list.md`](../../site/content/library/data-structures/list.md), [`library/data-structures/map.md`](../../site/content/library/data-structures/map.md) and [`library/data-structures/set.md`](../../site/content/library/data-structures/set.md).
 
 Callbacks (`List.map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`) take a block, `&name` or a function variable. Each runs once per element, left to right, under the caller's budget. Parameter and return types must match exactly, and a `map` callback returns data, not Void. Annotated block parameters let an empty list or an empty `reduce` initial value infer its type. `List.any?` and `List.all?` stop at the first deciding element.
 
@@ -24,6 +24,7 @@ Collection operations preserve their inputs. Costs exclude callback work.
 - `List.sort` and `List.sort_by` sort ascending. Elements, or the keys from `sort_by` (computed once per element, left to right), must be `Int`, `Float` or `String`; otherwise `CHECK-TYPE-MISMATCH`. The sort is stable. Strings compare by code point, so `"B"` is before `"a"`. NaN goes last. O(n log n), plus key calls.
 - `Map.get` with two arguments gives `ok(value)` or `error(message)`. With three, the default is always evaluated; `false` and `nil` are present values.
 - `Map.delete` ignores absent keys and keeps the order of the rest; a key put back later goes to the end. It is O(n). `Map.values` follows the `Map.keys` order.
+- `Set.new` keeps the first of repeated items. `Set.add` of a member and `Set.delete` of a missing element give the same set. `Set.delete` is O(n) like `Map.delete`; `Set.include?` and `Set.add` take effectively constant time.
 
 Expected types flow into these operations for empty collections and Results.
 

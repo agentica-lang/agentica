@@ -31,6 +31,12 @@ What the checker enforces and the VM keeps for each core language area: Result a
 - `a..b` / `a...b` are `binary` nodes with op `'dot-dot` / `'dot-dot-dot`, parsed by `parse-range` above `parse-or` (one operator, no chaining). The checker type is the symbol `'Range` (in `reserved-type-names`, printable, `==` allowed, not encodable). `for` over a Range binds an `Int`. `Range` and `Int` are method modules, so `r.size` is `Range.size(r)` and `3.times` is `Int.times(3, f)`; the catalog rows use the generic `#f` rule (a block gets its `Fn[Int, Void]` from the parameter).
 - VM: see `references/vm-lowering.md` (counter loops, `RANGE`/`RANGE_BOUNDS`, counting native frames).
 
+## Sets (phase 8b)
+
+- `Set[T]` is the checker type `(list 'Set T)` with `T` `Int` or `String` (`resolve-type` gives `CHECK-SET-ELEMENT-TYPE`; `Set` is in `reserved-type-names`). Printable (`data-type?`), not encodable, no `==`; `Test.eq` accepts it. `Set` is a method module (`method-modules`, `receiver-kind`), so `s.add(x)` is `Set.add(s, x)`. The catalog rows carry rules (`set-new`, `set-add` for add and delete, `set-include`, `set-query`, `set-to-a`, `set-combine`, `set-subset`) because their generic types need the expected type: `Set.new([])` with none is `CHECK-EMPTY-SET-TYPE`, and the first argument of `add`, `delete`, `union`, `intersection` and `difference` takes the expected set type.
+- The owner relaxed the freeze of row 7.2.7 for this item, since `compiler/` uses `Set` and has no checker yet; the step-4 port of the checker must handle `Set[T]` (`docs/future/35-self-hosting.md`).
+- `for x in set` lowers to `Set.to_a` into the hidden list slot and then the list loop (`src/lower.rkt`). The VM keeps a set as an `agc_map` with nil values under `AGC_T_SET` (`references/vm-core.md`).
+
 ## File modules
 
 - modules.rkt checks the declaration order of each file (`CHECK-DECL-ORDER`: imports, structs and enums, `export def`, `def`) when it visits it, before linking, so the root, imported files, `std/` modules and BDD files all follow it. The checker never sees it: the linked program has lost the file boundaries. `compiler/` files and every new `.agc` keep the order.

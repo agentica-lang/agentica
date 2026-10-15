@@ -350,6 +350,46 @@ slices lists of ints: 1.5 times faster and 40% less peak memory.
 - Instruction dispatch and Int arithmetic are the first candidates for the next
   speed item (roadmap 7g).
 
+## Sets (8b)
+
+`Set[T]` is a map with nil values (`vm/map.c`), so it shares the HAMT, and a
+member of a set costs the same as a key of a map. The numbers are from the PR of
+roadmap 8b on a release build (`make vm`), 8 cores, Linux, a quiet host.
+
+`sets` (`benchmarks/programs/sets.agc`, twin `benchmarks/python/sets.py`; the
+twin keeps first-insertion order with a `dict`): 5 rounds of 6,000 `add` over
+1,009 values, 6,000 `include?`, 336 `delete` calls, and a `union`,
+`intersection` and `difference` with a 500-element set, then a `for` over the
+result. Median of 7 runs, size 1: 0.101 s on the VM and 0.041 s in CPython, 6.1
+MB peak (`maps`, the same shape of work, in the same run: 0.160 s against 0.033
+s). At size 10, 0.854 s against 0.170 s.
+
+The operation cost against the map call that does the same work is measured by a
+throwaway program (not committed) that adds 100,000 distinct keys, then looks up
+400,000 keys with 40,002 hits, one structure per VM run so that the collector
+sees the same heap; ns per call, rounds two and three of three (the first round
+pays for the heap growth):
+
+| Operation | Map | Set |
+|---|---:|---:|
+| Int keys, `put` / `add` | 4,200 to 4,750 | 3,800 to 4,770 |
+| Int keys, `has_key?` / `include?` | 466 to 474 | 493 to 526 |
+| String keys, `put` / `add` | 5,050 to 5,340 | 5,270 to 5,730 |
+| String keys, `has_key?` / `include?` | 922 to 950 | 912 to 995 |
+
+`Set.add` of a member allocates nothing (`agc_map_add_hash` returns the same
+map), while `Map.put` of an existing key copies its path. A first version that
+looked the key up before the `put` made `add` 10% to 35% slower than `put` when
+every key was new; the single pass removed that cost.
+
+`intersection` and `difference` first count the elements they keep with lookups
+only, and return the first set itself when none is dropped. On a 300,000-element
+set this took 3,455 ms when it built a copy that nothing needed; the count pass
+takes about 150 ms (an `intersection` of two equal sets) or 19 ms (a `difference`
+with an empty set). When half the elements go, the second pass builds the
+result: about 1.8 s for 150,000 puts. `Test.eq` and `subset?` on two equal
+sets of 300,000 take about 145 ms.
+
 ## HTTP sanity check
 
 `benchmarks/http_bench.py` is not a CI gate. It needs Python 3.10 or newer,

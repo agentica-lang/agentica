@@ -28,6 +28,7 @@ Read this for the exact rule behind a checker error or a core question that SKIL
 | `Process` | opaque child process; inspect prints `<Process>` |
 | `List[T]` | homogeneous, immutable, indexed from 0 |
 | `Map[K, V]` | homogeneous, immutable; `K` is `Int` or `String`; keeps insertion order |
+| `Set[T]` | distinct values, immutable; `T` is `Int` or `String` (`CHECK-SET-ELEMENT-TYPE` otherwise); keeps first-insertion order; prints as `Set[1, 2]`; no `==`, not JSON-encodable |
 | `Result[T]` | `ok(value)` or `error(message)`; the error is always String; exactly one type argument |
 | `Range` | `a..b` (includes `b`) or `a...b` (excludes it) over `Int`; prints as `1..5` |
 | `Json` | opaque JSON value; use `JSON` functions to access it |
@@ -78,7 +79,7 @@ end
 - The first assignment to a name creates it in the current block. Later assignments change its value, never its type. An annotation is allowed only on creation (`total: Float = 0.5`).
 - `x += e`, `-=`, `*=`, `/=`, `%=` mean `x = x op e`; `x` must already exist.
 - A name created in a block is not visible after that block's `end`. A new variable cannot reuse a name visible in an outer scope (no shadowing).
-- `for item in items` binds a read-only variable; it cannot be assigned. `for` takes a `List[T]` or a `Range`, iterates without building a list, and runs zero times for an empty or reversed range. Write `0...n`, `n.times`, `a.upto(b)`, or `a.downto(b)`; a `for` over a range never counts down.
+- `for item in items` binds a read-only variable; it cannot be assigned. `for` takes a `List[T]`, a `Set[T]` (in first-insertion order) or a `Range`, and runs zero times for an empty or reversed range; a range is never built as a list. Write `0...n`, `n.times`, `a.upto(b)`, or `a.downto(b)`; a `for` over a range never counts down.
 - `case value` ... `end` is a statement. Arms are `pattern -> block`; a short arm may hold one simple statement on the arrow line (`1 -> puts("one")`). A `do` after the value is allowed but not needed. Bindings are local to their arm.
 - Patterns are primitive literals, `_`, or qualified enum variants with one binding or `_` per payload position. Nested patterns and guards are not supported.
 - Enum cases cover every variant or use `_`. A non-enum case, including `Bool` and `Nil`, requires a final top-level `_`. Duplicate or unreachable arms are checker errors.
@@ -91,7 +92,7 @@ end
 - Literals: `42`, `3.14`, `1_000` (a `_` between digits is only visual; a trailing, double or dot-side `_` is `LEX-INVALID-NUMBER`), `"text"` (escapes `\" \\ \# \n \r \t`), `true`, `false`, `nil`. A minus sign is an operator, not part of the literal.
 - Interpolation: `"total: #{n + 1}"` is a `String`. Strings go in as is, `Json` as its JSON text, other data values in their `IO.inspect` form. Keep the expression on one line; `\#{` is literal text. `case` patterns and `import` paths take plain strings only.
 - Lists `[1, 2, 3]`; maps `{"a": 1, "b": 2}`. A repeated key keeps the last value at its first position, and `Map.put` on an existing key also keeps that position.
-- `[]` and `{}` need a known type (annotation, parameter, field, or function result). A non-empty list needs one element type.
+- `[]`, `{}` and `Set.new([])` need a known type (annotation, parameter, field, or function result): `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`, `CHECK-EMPTY-SET-TYPE`. A non-empty list needs one element type.
 - Struct construction uses every field exactly once, named, in any order: `User(name: "Ana", age: 25)`.
 - Enum variants are qualified by their type. Payload variants take positional arguments (`Option.Some("hi")`); nullary variants take `Option.None` or `Option.None()`. Generic arguments come from payloads and expected types; a nullary generic variant needs expected-type context.
 - Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing takes O(log32 n) time (at most four steps for a million items); `for` visits the items in order.
@@ -115,7 +116,7 @@ Operators, from highest to lowest precedence:
 - `+ - * /` take two numbers of the same type; there is no implicit conversion. `+` also joins two Strings.
 - `/` on Int truncates toward zero. `%` takes two Ints. A zero divisor is a runtime error, also for Float.
 - `< <= > >=` take two numbers of the same type. Comparisons do not chain.
-- `==` and `!=` take two values of the same primitive type (Int, Float, Bool, String, Nil), or two ranges. Lists, maps, structs, Results, Json, and Fn values cannot be compared.
+- `==` and `!=` take two values of the same primitive type (Int, Float, Bool, String, Nil), or two ranges. Lists, maps, sets, structs, Results, Json, and Fn values cannot be compared (two sets are equal when `a.subset?(b) and b.subset?(a)`).
 - `&&`, `||`, `!` take Bool and short-circuit; `and`, `or`, `not` are the same operators. `!` binds tightly, so write `!(a >= b)`. A `!` right after a name is part of the name (`read!`).
 - Operands are evaluated left to right.
 - `x |> f(a)` means `f(x, a)`. The right side must be a call with parentheses (`f(a)`, `Alias.f(a)`), optionally after `try`; pipes group to the left (`x |> f() |> g()` is `g(f(x))`). A builtin with a method form is written with `.`; see `PARSE-PIPE-TARGET` and `CHECK-PIPE-METHOD` in `diagnostics.md`.

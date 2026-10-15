@@ -47,6 +47,15 @@ static bool push_map(agc_vm *vm, pair_stack *s, const agc_map *x, const agc_map 
   return true;
 }
 
+/* Elements are Ints or Strings, so no pair is pushed: equal sets have the same
+   size and every element of x is in y, in any order. Each element costs a
+   lookup, so the walk is charged its size up front. */
+static bool set_equal(agc_vm *vm, const agc_map *x, const agc_map *y) {
+  if (x->size != y->size) return false;
+  agc_charge(vm, x->size);
+  return agc_set_subset(vm, x, y);
+}
+
 static bool push_items(pair_stack *s, const agc_value *x, const agc_value *y, size_t n) {
   for (size_t k = 0; k < n; k++) push(s, x[k], y[k]);
   return true;
@@ -81,6 +90,7 @@ static bool expand(agc_vm *vm, pair_stack *s, agc_value a, agc_value b, uint32_t
       return agc_list_len(x) == agc_list_len(y) && push_list(s, x, y);
     }
     case AGC_T_MAP: return push_map(vm, s, agc_as_map(vm, a), agc_as_map(vm, b));
+    case AGC_T_SET: return set_equal(vm, agc_as_set(vm, a), agc_as_set(vm, b));
     case AGC_T_STRUCT: {
       const agc_struct *x = agc_as_struct(vm, a), *y = agc_as_struct(vm, b);
       return x->type == y->type && x->n == y->n && push_items(s, x->fields, y->fields, x->n);
