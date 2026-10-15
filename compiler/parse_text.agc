@@ -7,6 +7,12 @@ import "parser" as Parser
 import "source" as Source
 import "text" as Text
 
+## The text form of a parse and the first node id the next file can use (first_id again when the parse failed).
+export struct Printed
+  text: String
+  next_id: Int
+end
+
 ## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node per line: `role: kind #id span attributes`, children indented by two spaces. tests/frontend-parser-common.rkt prints the same text from the Racket tree.
 export def parse_text(text: String) -> String
   return parse_text_from(text, 0)
@@ -14,12 +20,17 @@ end
 
 ## Like parse_text, with the ids of the nodes starting at first_id.
 export def parse_text_from(text: String, first_id: Int) -> String
+  return print_from(text, first_id).text
+end
+
+## Like parse_text_from, and also gives Ast.next_free_id of the Program, so the next file can continue the numbering.
+export def print_from(text: String, first_id: Int) -> Printed
   case Lexer.lex(text)
-    Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
+    Diag.Outcome.Failed(problem) -> return Printed(text: Text.diagnostic_line(problem), next_id: first_id)
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, first_id)
-        Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
-        Diag.Outcome.Done(program) -> return print_program(program).join("\n")
+        Diag.Outcome.Failed(problem) -> return Printed(text: Text.diagnostic_line(problem), next_id: first_id)
+        Diag.Outcome.Done(program) -> return Printed(text: print_program(program).join("\n"), next_id: Ast.next_free_id(program))
       end
   end
 end

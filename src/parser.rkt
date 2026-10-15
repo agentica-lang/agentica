@@ -97,7 +97,7 @@
             (current)
             #:help "split the code into smaller functions or simpler expressions"))
 
-;; One counter bounds the calls of the parser and the depth of the tree: a statement, an expression,
+    ;; One counter bounds the calls of the parser, not the depth of the tree: a statement, an expression,
     ;; a prefix operator and a type count one level, and so does each link of a chain (a + b + c, a.b.c).
     ;; Everything parsed after the k-th link of a chain (its right operand, arguments, index or block)
     ;; starts from the level the chain started at plus k. A loop that makes links restores the level when it ends.

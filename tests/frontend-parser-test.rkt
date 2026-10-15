@@ -180,15 +180,24 @@
             (define label (format "~a ~a" (first entry) (second entry)))
             (define agentica (hash-ref outputs (fourth entry)))
             (define racket (parser-text (third entry)))
-            (check-equal? (regexp-match? #rx"^program " agentica) legal? label)
             (check-equal? (regexp-match? #rx"^program " racket) legal? label)
-            (unless legal? (check-equal? agentica (string-append racket "\n") label))))
+            (check-equal? agentica (string-append racket "\n") label)))
 
         (test-case "the first node id can be chosen, so modules can share one numbering"
           (define path "tests/fixtures/frontend/parser/synthetic.input")
           (define shifted (run-parser bytecode (list "--first-id=1000" path)))
           (check-equal? (hash-ref shifted path #f) (string-append (parser-text (read-text path) #:first-id 1000) "\n"))
-          (check-true (string-contains? (hash-ref shifted path) " #1000 ")))))))
+          (check-true (string-contains? (hash-ref shifted path) " #1000 ")))
+
+        (test-case "a second file continues the numbering from Ast.next_free_id of the first"
+          (define first-path "tests/fixtures/frontend/parser/hello.input")
+          (define second-path "tests/fixtures/frontend/parser/synthetic.input")
+          (define continued (run-parser bytecode (list "--continue" first-path second-path)))
+          (define first-text (parser-text (read-text first-path)))
+          (define first-program-id (string->number (cadr (regexp-match #rx"^program #([0-9]+) " first-text))))
+          (check-equal? (hash-ref continued first-path) (string-append first-text "\n"))
+          (check-equal? (hash-ref continued second-path)
+                        (string-append (parser-text (read-text second-path) #:first-id (add1 first-program-id)) "\n")))))))
 
 (module+ slow
   (when (vm-built? "frontend parser tests")
