@@ -121,8 +121,10 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   `make vm-lint`, one `make -j vm vm-test vm-fuzz`, `make vm-layers` (on the
   sanitizer objects; the job installs ripgrep if `rg` is missing), the ASan golden,
   bytecode, trace, TCP and TLS tests, `make fixed-point` on the sanitizer VM and
-  binary (about 75 s and 1.8 GB: the VM has no GC then), and the GC stress build
-  (which does not run the fixed point: it collects every 64 allocations). The TCP tests need
+  binary (about 75 s and 1.8 GB: the VM has no GC then; it runs before
+  `vm-sanitize-test`, whose `tests/test_single_binary.py` needs the sanitizer
+  `dist/agentica-next` that it built), and the GC stress build (which does not
+  run the fixed point: it collects every 64 allocations). The TCP tests need
   Node; the TLS tests need Node and Python 3. Both PR jobs set
   `AGENTICA_SWEEP=sampled`, so their golden and GC-stress runs sample the
   `--max-steps` sweep with a seed from `GITHUB_SHA`; a failure prints
@@ -273,8 +275,11 @@ NEEDED `libgc` (in the build and in the unpacked archive). It ships the VM in th
 `licenses/`. Its test steps are targets: `make vm-diff-test` runs the golden
 tests on the release VM (`AGENTICA_VM_BINARY=dist/agentica-vm`, with the
 full sweep), and `make test-distribution` runs the distributed-executable
-test. The tags, the version, the Racket bundle and the CHANGELOG rules are
-under "Tags, versions and CHANGELOG" below.
+test. A step builds the single binary with the same toolchain (`make fixed-point
+CCACHE=`, glibc floor and static libraries checked as for the VM) and runs
+`examples/hello.agc` and `examples/queue.agc` with it; the archive does not
+carry it yet (step 8d ships it). The tags, the version, the Racket bundle and the
+CHANGELOG rules are under "Tags, versions and CHANGELOG" below.
 
 ### Tags, versions and CHANGELOG
 

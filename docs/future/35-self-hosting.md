@@ -115,15 +115,21 @@ the binary runs as its front end. Its `main` reads the inputs
 (`compiler/front_end_cli.agc`), the one module that 8a replaces with the full
 CLI; the C side does not change. The contract:
 
-- **Arguments:** `--version V [--stdlib DIR] -- WORDS...`. `V` is required: the
-  Agentica version that the writer puts in every `.agcb` header
+- **Arguments:** `--version V [--stdlib DIR] [--self PATH] -- WORDS...`. `V` is
+  required: the Agentica version that the writer puts in every `.agcb` header
   (`Writer.write(root_dir, program, version)` refuses an empty one; there is no
   `VERSION` constant in `compiler/`). Without `--stdlib` the `std/` sources come
   from the binary (`FrontEnd.std_source`); with it, from the files of `DIR`.
-  `WORDS` are what the user typed after `agentica`, unchanged, so a user flag
-  can never be taken for an input. The binary builds this list itself (it
-  passes its own `AGC_VERSION`); `make` builds it for the bootstrap stages,
-  which run on `agentica-vm` with `--stdlib stdlib`.
+  `PATH` is the path of the running binary (`Settings.self_path`, empty when
+  the front end runs on `agentica-vm`), for a command that starts the binary
+  again: 8d's `test` runs the test runner with `Process.spawn_captured` of
+  `self_path`. C passes the target of `/proc/self/exe`, or `argv[0]` without
+  `/proc`. `WORDS` are what the user typed after `agentica`, unchanged, so a
+  user flag can never be taken for an input. The binary builds this list itself
+  (it passes its own `AGC_VERSION` and path); `make` builds it for the
+  bootstrap stages, which run on `agentica-vm` with `--stdlib stdlib`. C itself
+  answers a lone `agentica --version`, before it opens a trace file or starts
+  any front end.
 - **Exit status:** 0 for success; 1 for a problem in the user's program (the
   plain diagnostic of `format-diagnostic`, on stderr, with the root file named
   as the user typed it and imported files by their canonical paths, as
@@ -140,15 +146,25 @@ CLI; the C side does not change. The contract:
   [--flush-timeout MS] FILE.agc [ARGS...]` (compile in memory and hand the
   program to C to run), `compile FILE.agc -o OUT.agcb`, and `--version`.
   `check`, `doc`, `help` and `test` answer exit 2 and "not in this front end
-  yet" until 8a. `--ai` and `--json` are 8a's too.
+  yet" until 8a. `--ai` and `--json` are 8a's too. The usage errors of this
+  front end are its own and differ from the Racket CLI in a few places: a
+  missing option value (`--max-steps` last), a repeated flag, a `--seed` of
+  more than ten digits and the short usage text. They are 8a's to make equal
+  (8a is the CLI), so no test pins them in 8b; the tests compare a bad value, an
+  unknown switch, a missing file, a program that does not compile and
+  `--version`.
 - **The hand-off:** `FrontEnd.hand_off(program, options, arguments)` takes the
   bytes of the program (`List[Int]`), the VM option words (`--max-steps N`,
   `--seed N`, `--flush-timeout MS`, `--allow-run`, `--source-root DIR`, `--ai`,
-  `--json`, as `agentica-vm` takes them) and the program's arguments. It ends
-  the front end's run and does not return, except with an error when a byte is
-  not 0 to 255 or a word has a character 0. The front end checks the options
-  (their messages are the Racket CLI's); C checks them again and refuses a bad
-  one with exit 2.
+  `--json`, as `agentica-vm` takes them, each once; `--driver-pid` is refused,
+  because only the process that started the binary can name itself) and the
+  program's arguments. It ends the front end's run and does not return, except
+  with an error when a byte is not 0 to 255, a word has a character 0, or there
+  are more than 64 options or 1,048,576 arguments. The front end checks the
+  options (their messages are the Racket CLI's); C checks them again and refuses
+  a bad one with exit 2. A front end is trusted with them: one that is loaded
+  with `--front-end` can hand over `--allow-run`, so the flag is for the build
+  and the tests only.
 
 **How `make` builds it.** In 8b the stages are make targets, built in
 `build/stage/` (`make stage1`, `stage2`, `stage3`). Racket compiles
@@ -563,8 +579,13 @@ Other choices of the port:
   relocation (the layout is in `vm/embedded.h`). `make` compiles it with the
   VM's compiler and not through `ccache`, which cannot see the files that
   `.incbin` reads; a change of `stage2` or of a `stdlib/` file relinks the
-  binary. It is tried with gcc and clang here; the `zig cc` release link is not
-  built by 8b (the release does not build `dist/agentica-next` yet).
+  binary. Each `.incbin` has a comment with the SHA-256 of its file in the
+  generated text, so a cache keyed on that text (the `zig cc` object cache)
+  sees a changed front end. It is tried with gcc and clang here. `release.yml`
+  builds it with the release toolchain (`zig cc`, glibc 2.28) by running `make
+  fixed-point`, checks the glibc symbol versions and the static libraries, and
+  runs `examples/hello.agc` and `examples/queue.agc` with it, without shipping
+  it; step 8d ships it.
 - **Linking.** As the release does today (the development skill's
   `references/ci.md`, "Release"): a pinned `zig cc` against glibc 2.28, checked
   with `objdump -T`, with Boehm GC, libuv, OpenSSL, yyjson and picohttpparser
@@ -596,8 +617,11 @@ Other choices of the port:
   runs, and a VM bug can miscompile it, which then hides in stage0. Every VM PR
   runs the self-compile and the fixed point, also under the `vm-sanitizers` job
   (ASan and GC stress). 8b wires the fixed point into the `test` job and into
-  the ASan part of `vm-sanitizers` (about 75 s there, 1.8 GB of memory); the
-  GC-stress build is not run on it, because it collects every 64 allocations. A
+  the ASan part of `vm-sanitizers` (about 75 s there, 1.8 GB of memory), where
+  `vm-sanitize-test` then runs `tests/test_single_binary.py` on the sanitizer
+  binary (the hand-off). The fixed point is a CI step and not a test, so it runs
+  once. The GC-stress build is not run on it, because it collects every 64
+  allocations. A
   stage0 refresh is its own PR; a VM change that needs one follows the two steps
   of 35.3.
 - **Debugging the compiler on the VM.** A compiler bug looks like a runtime

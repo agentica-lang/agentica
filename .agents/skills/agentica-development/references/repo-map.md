@@ -188,7 +188,8 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   vm-stack-test.rkt  # stack-trace stderr in the three formats (references/vm-tests.md)
   test_vm_file_lines.py  # unittest: File.each_line on the VM (references/vm-tests.md)
   test_vm_os.py   # unittest: the OS builtins of the BDD driver port, with real contention between VMs (references/vm-tests.md)
-  test_single_binary.py  # unittest: dist/agentica-next against the Racket CLI, the guarded FrontEnd builtins, the options of the hand-off, --front-end with fixtures/single-binary/front.agc; slow: make fixed-point (references/vm-tests.md)
+  test_single_binary.py  # unittest: dist/agentica-next against the Racket CLI, the guarded FrontEnd builtins, the options of the hand-off, --front-end with fixtures/single-binary/front.agc (references/vm-tests.md); the fixed point is a CI step, not a test
+  test_stdlib_modules.py  # unittest: stdlib/MODULES names each stdlib/ source once (no binary needed)
   test_vm_test_protocol.py  # unittest: a Python peer plays a test runner over the child channel (references/vm-tests.md)
   test_vm_child_channel.py  # unittest: the child channel on its own, against Python peers (references/vm-tests.md)
   test_vm_tls.py  # unittest: the VM TLS builtins against independent peers (references/vm-tests.md)
