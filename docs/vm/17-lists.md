@@ -383,7 +383,7 @@ Rules: `AGENTS.md` (`rackunit` for Racket; C tests are plain-assert files in
   `list-at-index`, `list-set-index`, `list-take-count`, `list-drop-count`,
   `list-repeat-count`, `list-repeat-negative`, `index-out-of-range`,
   `sort-by-error`, `ranges`, `range-to-a-count`, `json-*`, `std-queue` and
-  `test-list`; `tests/examples-test.rkt`; `tests/site-examples-test.rkt` (the
+  `test-list`; `tests/test_examples.py`; `tests/site-examples-test.rkt` (the
   site list page runs); `tests/bytecode-test.rkt` (opcode order and builtin
   names, unchanged); `tests/unit-test-test.rkt` with `tests/std/*_test.agc`;
   `tests/test_bdd.py`; `tests/test_vm_latency.py` (run alone).

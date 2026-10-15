@@ -130,7 +130,7 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   checker-test.rkt  # ranges, JSON contracts and other checker rules (references/stages.md)
   modules-test.rkt  # import linking, visibility, cross-file diagnostics (references/language-notes.md)
   diagnostic-test.rkt  # excerpt and caret format (references/stages.md)
-  examples-test.rkt  # examples/*.agc, rejected fragments, CLI exit codes; slow: every malformed input of the algorithm examples (references/stages.md)
+  test_examples.py  # unittest: examples/*.agc, rejected fragments, CLI exit codes; slow: every malformed input of the algorithm examples (references/stages.md)
   bytecode-test.rkt  # step merging, opcode list vs vm/value.h, every builtin on the VM (references/vm-lowering.md)
   frontend-lexer-common.rkt  # the lexer text form and goldens (references/frontend.md)
   frontend-lexer-test.rkt  # the Racket and Agentica lexers against the goldens (references/frontend.md)
