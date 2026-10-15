@@ -4,6 +4,7 @@
          racket/runtime-path
          "frontend-lexer-common.rkt"
          "vm-diff-common.rkt"
+         "../src/source-file.rkt"
          "../tools/gen-lexer-unicode.rkt")
 
 (define-runtime-path root "..")
@@ -100,6 +101,14 @@
           (for ([input (in-list inputs)])
             (check-equal? (hash-ref outputs (lexer-input-path input) #f) (golden input) (lexer-input-name input))))
 
+        ; The file is read by compiler/source_file.agc before the lexer sees it (the linker test covers the details).
+        (test-case "a file with invalid UTF-8 is LEX-INVALID-UTF8 at the first bad byte, as in Racket"
+          (define path (path->string (build-path work "invalid.agc")))
+          (call-with-output-file path (lambda (out) (write-bytes #"# caf\303\251\ndef \377\n" out)))
+          (define racket (read-source-file path path))
+          (check-equal? (hash-ref (run-lexer bytecode (list path)) path)
+                        (string-append (diagnostic-line racket) "\n"))
+          (check-regexp-match #rx"^ERROR LEX-INVALID-UTF8 11:2:5-12:2:6 " (diagnostic-line racket)))
         (test-case "a deeply nested file lexes in a linear number of steps"
           (check-nested-linear bytecode work 4000))))))
 

@@ -2,7 +2,7 @@
 
 (require file/sha1 json racket/os racket/random racket/runtime-path
          "bytecode.rkt" "checker.rkt" "diagnostic.rkt" "lexer.rkt" "lower.rkt"
-         "modules.rkt" "parser.rkt" "source.rkt" "vm-launch.rkt")
+         "modules.rkt" "parser.rkt" "source.rkt" "source-file.rkt" "vm-launch.rkt")
 
 (provide run-agentica-test bdd-usage-report)
 
@@ -105,11 +105,13 @@
       [(not (and (equal? (hash-ref entry 'kind) "tests") (equal? (hash-ref entry 'problem) "")))
        (hash-set* entry 'bytecode "" 'source_root "" 'front_end "")]
       [else
-       (define text (with-handlers ([exn:fail? (lambda (_) #f)]) (file->string path)))
+       (define text (with-handlers ([exn:fail? (lambda (_) #f)]) (read-source-file path path)))
        (define compiled
-         (if text
-             (compile-text path text)
-             (diagnostic 'RUNTIME-BDD-INFRA (format "cannot read the test file ~a" path) (first-line-span path))))
+         (cond
+           [(not text)
+            (diagnostic 'RUNTIME-BDD-INFRA (format "cannot read the test file ~a" path) (first-line-span path))]
+           [(diagnostic? text) text]
+           [else (compile-text path text)]))
        (define output (build-path directory (format "test-~a.agcb" index)))
        (unless (diagnostic? compiled) (write-private output compiled))
        (hash-set* entry 'bytecode (path->string output)
@@ -187,10 +189,12 @@
      (define file (path->string (path->complete-path path)))
      (define text
        (with-handlers ([exn:fail? (lambda (_) #f)])
-         (file->string file)))
-     (if text
-         (compile-text file text)
-         (diagnostic 'RUNTIME-BDD-INFRA (format "cannot read the step program ~a" path) (first-line-span file)))]))
+         (read-source-file file file)))
+     (cond
+       [(not text)
+        (diagnostic 'RUNTIME-BDD-INFRA (format "cannot read the step program ~a" path) (first-line-span file))]
+       [(diagnostic? text) text]
+       [else (compile-text file text)])]))
 
 (define (write-private path data)
   (call-with-output-file path #:exists 'error #:permissions #o600

@@ -145,6 +145,17 @@ class Bdd(TestCase):
         self.assertEqual(file_error(crashed)["code"], "RUNTIME-TASK-CRASHED")
         self.assertEqual(report_cases(crashed), [])
 
+    def test_a_step_program_with_invalid_utf8_is_one_file_error_at_the_bad_byte(self):
+        directory = self.suite({"steps.feature": "Feature: Steps\nScenario: small\nThen 3 is small\n"})
+        steps = os.path.join(directory, "bad.agc")
+        with open(steps, "wb") as out:
+            out.write(b"# caf\xc3\xa9\ndef main() -> Void\n  puts(\"\xff\")\nend\n")
+        status, report = self.json_test(os.path.join(directory, "steps.feature"), "--steps", steps)
+        self.assertEqual(status, 1)
+        problem = file_error(report)
+        self.assertEqual(problem["code"], "LEX-INVALID-UTF8")
+        self.assertEqual(problem["range"]["start"], {"line": 3, "column": 9})
+
     def test_blocks_capture_ambiguous_steps_fail_and_a_bad_step_program_is_one_file_error_with_no_scenario_run(self):
         feature = ("Feature: Steps\nScenario: small\nThen 3 is small\nScenario: big\nThen 9 is small\n"
                    "Scenario: ambiguous\nThen value is 1\n")
