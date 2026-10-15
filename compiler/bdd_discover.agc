@@ -1,5 +1,5 @@
-## Finding the test files of a BDD run (src/bdd-driver.rkt, discover): the files named on the command line, and the
-## `.feature` and `_test.agc` files under the folders named there. Problems come back as entries too, so the report
+## Finding the test files of a BDD run: the files named on the command line, and the `.feature` and `_test.agc` files
+## under the folders named there. Problems come back as entries too, so the report
 ## shows them next to the files that run.
 
 import {IO_TIMEOUT} from "bdd_files"

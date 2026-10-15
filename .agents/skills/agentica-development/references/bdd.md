@@ -9,14 +9,16 @@ How `agentica test` works: the driver (`compiler/bdd.agc`, `src/bdd-driver.rkt`)
 - `src/bdd-driver.rkt` (`run-agentica-test arguments step-files #:style
   #:allow-run #:seed #:vm [#:test-timeout-ms]`, returns `(values code text)`) is
   only the hand-off (§35.4 step 7)
-  - it writes a private 0600 copy of `dist/agentica-bdd-driver.agcb` (`find-bdd-driver`;
-    `make bdd-driver` builds it from `compiler/bdd.agc`) in the temporary
-    directory, runs it on the VM as `--allow-run --driver-pid PID -- COPY
-    --vm VM --style S [--allow-run] [--seed N] --test-timeout-ms N --agentica
-    WORD... -- [--steps FILE]... ARGUMENTS` (a VM with `--driver-pid` reads only
-    a private file and deletes it), sends the embedded `std/` sources on its
-    stdin as `{"files": [{"path", "text"}]}`, and returns its stdout and exit
-    code; its stderr is shown at once
+  - it writes a private 0600 copy of `dist/agentica-bdd-driver.agcb`
+    (`find-bdd-driver`; `make bdd-driver` builds it from `compiler/bdd.agc`) in
+    the temporary directory, runs it on the VM as `--allow-run --driver-pid
+    PID -- COPY --vm VM --style S [--allow-run] [--seed N] --test-timeout-ms N
+    --agentica WORD... -- [--steps FILE]... ARGUMENTS` (a VM with
+    `--driver-pid` reads only a private file and deletes it), sends the
+    embedded `std/` sources on its stdin as `{"files": [{"path", "text"}]}`,
+    and returns its stdout and exit code; its stderr is shown at once; a
+    driver that stops on a runtime error prints nothing, and that is exit 2,
+    not 1 ("the tests failed")
   - a missing VM, a missing driver or a temporary directory it cannot write is a
     plain message on stderr and exit 2, as for `agentica file.agc`
   - the tests that need a fake runner VM set `AGENTICA_VM` to a script that runs
@@ -26,14 +28,17 @@ How `agentica test` works: the driver (`compiler/bdd.agc`, `src/bdd-driver.rkt`)
   reads the arguments, usage errors included)
   - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the
     temporary directory (`TMPDIR` if it is a folder, else `/var/tmp`,
-    `/usr/tmp`, `/tmp`; the hex is 16 bytes of `/dev/urandom`; 16 tries), refuses
+    `/usr/tmp`, `/tmp`; the hex is 16 bytes of `/dev/urandom`; 16 tries),
+    refuses
     a `TMPDIR` without the sticky bit that others can write to, or that its
     group can write to unless it has the user's uid and gid and no setgid bit
     (the user-private-group case), locks the dir's `lock` file exclusively for
     the whole run, then renames the dir to `agentica-bdd-<other hex>` with
     `Path.rename`, which never replaces, so the sweep never sees an unlocked
     new dir; then it removes the dirs of the same user whose `lock` it can take,
-    left by a killed driver (links and dirs without `lock` are left alone)
+    left by a killed driver (links and dirs without `lock` are left alone);
+    an `agentica-bdd-new-<hex>` with a free `lock` goes too, once its mtime
+    is over an hour old (a live run is in that state only for a moment)
   - it writes the `std/` sources into `std/` of the run dir, compiles the
     step program (or a default `BDD.run([])` one) and a tiny root that calls
     `Runner.main()` (`bdd_compile.agc`: the Agentica pipeline from a file to

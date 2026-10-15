@@ -1,5 +1,5 @@
-## The files of a BDD run (src/bdd-driver.rkt, write-private): new files that only the owner can read, written in
-## pieces because one write takes at most 1 MiB.
+## The files of a BDD run: new files that only the owner can read, written in pieces because one write takes at
+## most 1 MiB.
 
 ## The deadline, in milliseconds, of each file system call of the driver.
 export IO_TIMEOUT = 10000

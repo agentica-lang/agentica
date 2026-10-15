@@ -1,5 +1,5 @@
-## The reports that the driver writes itself, as one file error (src/bdd-driver.rkt, one-error-report): a usage error
-## and an infrastructure error. The reports of the tests come from the runner (stdlib/test/runner.agc).
+## The reports that the driver writes itself, as one file error: a usage error and an infrastructure error. The
+## reports of the tests come from the runner (stdlib/test/runner.agc).
 
 import Opts from "bdd_options"
 import Problems from "check_failure"

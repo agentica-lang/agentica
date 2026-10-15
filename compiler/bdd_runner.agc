@@ -1,4 +1,4 @@
-## Starting the BDD runner and reading what it reports (src/bdd-driver.rkt, run-runner).
+## Starting the BDD runner and reading what it reports.
 ##
 ## The runner (stdlib/test/runner.agc) is a program of its own, run by the same VM as a captured child. It reads the
 ## configuration file, runs the tests and writes its report to a file of the run directory. It does not print the

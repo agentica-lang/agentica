@@ -1,4 +1,4 @@
-## The directory of a BDD run (src/bdd-driver.rkt): a private folder in the temporary directory that holds the compiled
+## The directory of a BDD run: a private folder in the temporary directory that holds the compiled
 ## runner, the test programs, the configuration and the report, and a locked file that says the run is alive.
 ##
 ## A run takes its folder in this order, so no other run can ever find it half made:
@@ -9,13 +9,16 @@
 ##    the run, also when the run is killed.
 ## 3. `Path.rename` gives it its final name `agentica-bdd-HEX`, and never replaces a name that is taken.
 ##
-## The sweep looks only at final names, so it never meets a folder without a lock. A final name whose lock can be taken
-## belongs to a run that has ended, and the sweep removes it.
+## The sweep looks at final names, so it never meets a folder without a lock. A final name whose lock can be taken
+## belongs to a run that has ended, and the sweep removes it. A run killed between steps 1 and 3 leaves an
+## `agentica-bdd-new-HEX`; the sweep removes it too, on the same checks, but only when it has not changed for an hour,
+## because a run that is alive is in step 1 or 2 for a moment and has no lock held yet.
 
 import {IO_TIMEOUT} from "bdd_files"
 
 # How many names a run tries before it gives up: a name can be taken, and a hostile user could take names on purpose.
 ATTEMPTS = 16
+STALE_NEW_SECONDS = 3600
 DIGITS = "0123456789abcdef"
 
 ## A claimed run directory: its final path, and the open lock file. The lock is released when the handle is closed.
@@ -24,21 +27,27 @@ export struct Run
   lock: FileHandle
 end
 
-## The temporary directory: TMPDIR when it names a directory, else the first of /var/tmp, /usr/tmp and /tmp that is
-## one (the choice of Racket's `find-system-path 'temp-dir`, which the Racket driver used).
-export def temporary_directory() -> Result[String]
+## The places that can hold the temporary directory, best first: TMPDIR when it is set, then /var/tmp, /usr/tmp and
+## /tmp (the choice of Racket's `find-system-path 'temp-dir`, which the Racket driver used).
+export def temporary_candidates() -> List[String]
   candidates: List[String] = []
   from_environment = System.env("TMPDIR")
   if from_environment.ok?
     candidates = candidates.push(from_environment.unwrap!)
   end
-  for path in candidates.concat(["/var/tmp", "/usr/tmp", "/tmp"])
+  return candidates.concat(["/var/tmp", "/usr/tmp", "/tmp"])
+end
+
+## The temporary directory: the first of `temporary_candidates()` that is a directory.
+export def temporary_directory() -> Result[String]
+  candidates = temporary_candidates()
+  for path in candidates
     info = File.stat(path, IO_TIMEOUT)
     if info.ok? and info.unwrap!.kind == "directory"
       return ok(path)
     end
   end
-  return error("no temporary directory: TMPDIR is not a directory, and neither are /var/tmp, /usr/tmp and /tmp")
+  return error("no temporary directory: none of #{candidates.join(", ")} is a directory")
 end
 
 ## Makes the run directory in `temporary`, locked and under its final name. Nothing is left behind on a failure.
@@ -57,9 +66,9 @@ export def release(run: Run) -> Void
   File.close(run.lock, IO_TIMEOUT)
 end
 
-## Removes the run directories of runs that have ended: the folders named `agentica-bdd-HEX` in `temporary`, made by
-## the user of `own` (a folder of another user is never touched), that have a `lock` file nobody holds. `own` is not
-## removed. A folder that cannot be inspected or removed stays.
+## Removes the run directories of runs that have ended: the folders named `agentica-bdd-HEX` in `temporary`, and the
+## old ones named `agentica-bdd-new-HEX`, made by the user of `own` (a folder of another user is never touched), that
+## have a `lock` file nobody holds. `own` is not removed. A folder that cannot be inspected or removed stays.
 export def sweep(temporary: String, own: Run) -> Void
   owner = File.lstat(own.path, IO_TIMEOUT)
   names = Dir.list(temporary, IO_TIMEOUT)
@@ -67,9 +76,20 @@ export def sweep(temporary: String, own: Run) -> Void
     return
   end
   for name in names.unwrap!
-    path = Path.join([temporary, name]).unwrap_or(name)
-    if run_name?(name) and path != own.path
-      held = abandoned(path, owner.unwrap!.user_id)
+    joined = Path.join([temporary, name])
+    if !joined.ok?
+      next
+    end
+    path = joined.unwrap!
+    # The minimum age in seconds of the folder to remove, or -1 for a name that is not a run directory.
+    age = -1
+    if hex_name?(name, "agentica-bdd-") and path != own.path
+      age = 0
+    elsif hex_name?(name, "agentica-bdd-new-")
+      age = STALE_NEW_SECONDS
+    end
+    if age >= 0
+      held = abandoned(path, owner.unwrap!.user_id, age)
       if held.ok?
         Path.remove(path, IO_TIMEOUT)
         File.close(held.unwrap!, IO_TIMEOUT)
@@ -161,12 +181,13 @@ def shared_and_not_sticky?(temporary: String, own: String) -> Result[Bool]
   return ok(others_write or (group_write and !ours_alone))
 end
 
-# `agentica-bdd-` and then hexadecimal digits only (the final name of a run; `agentica-bdd-new-` is a run being made).
-def run_name?(name: String) -> Bool
-  if !name.starts_with?("agentica-bdd-") or name.length == 13
+# The prefix and then hexadecimal digits only. `agentica-bdd-` is the final name of a run, `agentica-bdd-new-` a run
+# being made (the "n" of "new" is not a digit, so the first never matches the second).
+def hex_name?(name: String, prefix: String) -> Bool
+  if !name.starts_with?(prefix) or name.length == prefix.length
     return false
   end
-  for digit in name.slice(13, name.length - 13).split("")
+  for digit in name.slice(prefix.length, name.length - prefix.length).split("")
     if !DIGITS.contains?(digit)
       return false
     end
@@ -175,14 +196,17 @@ def run_name?(name: String) -> Bool
 end
 
 # The lock of a folder that may belong to a run that ended: ok(handle) when the folder is a real folder (not a link) of
-# `owner` with a real `lock` file whose lock this call took. The handle keeps the folder from being claimed by another
-# sweep until it is closed. A lock held by a live run is an error.
-def abandoned(path: String, owner: Int) -> Result[FileHandle]
+# `owner` with a real `lock` file whose lock this call took, and not changed in the last `age` seconds. The handle
+# keeps the folder from being claimed by another sweep until it is closed. A lock held by a live run is an error.
+def abandoned(path: String, owner: Int, age: Int) -> Result[FileHandle]
   folder = try File.lstat(path, IO_TIMEOUT)
   lock_path = try Path.join([path, "lock"])
   lock_info = try File.lstat(lock_path, IO_TIMEOUT)
   if folder.kind != "directory" or folder.user_id != owner or lock_info.kind != "file"
     return error("not a run directory")
+  end
+  if age > 0 and Time.now_ms() / 1000 - folder.modified_seconds < age
+    return error("too new to be abandoned")
   end
   lock = try File.open(lock_path, "read", IO_TIMEOUT)
   taken = File.try_lock(lock, IO_TIMEOUT)

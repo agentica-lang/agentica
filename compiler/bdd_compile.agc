@@ -1,5 +1,5 @@
-## Compiling a program for the BDD driver: the front end of `agentica compile`, from a file to the bytes of its .agcb
-## (compile-text in src/bdd-driver.rkt), with the first problem of any stage as one Problem.
+## Compiling a program for the BDD driver: the Agentica front end from a file to the bytes of its .agcb (link, check,
+## lower, write), with the first problem of any stage as one Problem.
 
 import {IO_TIMEOUT} from "bdd_files"
 import Report from "bdd_report"

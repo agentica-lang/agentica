@@ -1,4 +1,4 @@
-## The BDD driver: what `agentica test` does before and after the runner (src/bdd-driver.rkt). It finds the test files,
+## The BDD driver: what `agentica test` does before and after the runner. It finds the test files,
 ## compiles the runner, the step program and each test file into a private run directory, writes the configuration,
 ## starts the runner on the VM and prints its report. The runner (stdlib/test/runner.agc) runs the scenarios and the
 ## tests.
@@ -59,7 +59,7 @@ export def run(options: Opts.Options) -> Report.Ending
   end
   temporary = RunDir.temporary_directory()
   if !temporary.ok?
-    return Report.infrastructure(temporary.message, "/tmp", options)
+    return Report.infrastructure(temporary.message, RunDir.temporary_candidates()[0], options)
   end
   claimed = RunDir.claim(temporary.unwrap!)
   if !claimed.ok?

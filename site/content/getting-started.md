@@ -19,9 +19,9 @@ git submodule update --init
 make exe
 ```
 
-This writes `dist/agentica` and the VM next to it, `dist/agentica-vm`. A default source build links the system OpenSSL, so `dist/` runs only on machines that have it; the release archive is portable, since its VM has OpenSSL built in. Put that directory on your `PATH`, or call the command by its full path. You can also skip `make exe`: after `make vm`, `racket src/main.rkt file.agc` does the same as `agentica file.agc`, with the VM from `dist/`.
+This writes `dist/agentica` and the VM next to it, `dist/agentica-vm`, and `dist/agentica-bdd-driver.agcb`, the program that `agentica test` runs. A default source build links the system OpenSSL, so `dist/` runs only on machines that have it; the release archive is portable, since its VM has OpenSSL built in. Put that directory on your `PATH`, or call the command by its full path. You can also skip `make exe`: after `make vm`, `racket src/main.rkt file.agc` does the same as `agentica file.agc`, with the VM from `dist/`.
 
-The release archive for Linux x86-64 needs none of these tools: it bundles Racket and `agentica-vm`, and runs on glibc 2.28 or newer.
+The release archive for Linux x86-64 needs none of these tools: it bundles Racket and `agentica-vm`, and runs on glibc 2.28 or newer. `agentica-bdd-driver.agcb`, the program that `agentica test` runs, sits next to the binary in `bin/`.
 
 ## Hello, world
 

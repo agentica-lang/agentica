@@ -228,12 +228,14 @@ then no scenario runs.
   `SIGTERM`, then `SIGKILL` after one second. An interrupted run (Ctrl-C,
   `SIGTERM`) stops its children, but its temporary directory may stay until the
   next `agentica test` removes it, because the VM does not unwind (the Racket
-  driver always removed it; `docs/future/35-self-hosting.md` §35.5, until signals,
-  §46). On Linux the runner also ends, and stops its children, when the driver
-  is killed with `SIGKILL` (see
+  driver always removed it; `docs/future/35-self-hosting.md` §35.5, until
+  signals, §46). On Linux the runner also ends, and stops its children, when
+  the driver is killed with `SIGKILL` (see
   [`vm/10-io-processes.md`](vm/10-io-processes.md) §10.4).
 - **Temporary directory.** Each run holds an exclusive lock on a `lock` file. A
   later `agentica test` removes a same-user directory whose lock it can take.
+  A run killed while it makes its directory leaves `agentica-bdd-new-HEX`; the
+  sweep removes it too, once it is an hour old and its lock is free.
   Without `flock`, the run fails with `RUNTIME-BDD-INFRA` (exit 2), and so does
   a temporary directory that other users can write without the sticky bit; set
   `TMPDIR` to a private folder.
@@ -244,7 +246,8 @@ then no scenario runs.
 ## How a run works
 
 ```text
-agentica test [PATH...] [--steps FILE]   (the driver, compiler/bdd.agc, on the VM)
+agentica test [PATH...] [--steps FILE]
+  (the driver, compiler/bdd.agc, runs on the VM)
   compiles std/test/runner (embedded) and the step program to .agcb files
   in a private temporary directory, then runs the runner on the VM:
     1. list child:    steps.agcb --agentica-bdd list   -> the patterns, in order (channel)

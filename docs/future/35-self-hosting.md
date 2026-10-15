@@ -415,6 +415,15 @@ existed:
   SIGKILL, which the Racket driver also left behind. `--driver-pid` ties the
   driver's VM to `main.rkt` and the runner to the driver, so killing `main.rkt`
   still stops everything.
+  Two small windows stay. A run killed between `Dir.mkdir_private` and the
+  lock leaves `agentica-bdd-new-HEX` (the Racket driver left it too): the sweep
+  removes such a directory when it passes the same checks as a final one (a
+  directory of the user, with a real `lock` file whose lock it can take) and
+  its mtime is over an hour old, so it never races a live run that is between
+  `mkdir` and the lock. And a driver killed with SIGKILL before its VM has
+  loaded the private copy of the driver's bytecode leaves that copy in the
+  temporary directory; nothing sweeps it. Both are known gaps, closed with the
+  stop hook of §46.
 - **(e) The temporary directory.** `System.env("TMPDIR")` and `File.stat`, as
   Racket's `find-system-path 'temp-dir`: `TMPDIR` if it is a directory (a
   relative one is kept as given), else the first directory among `/var/tmp`,
@@ -430,6 +439,10 @@ Other choices of the port:
   does. The Racket driver printed an infrastructure report in the chosen
   format. The same for the driver file and for a `TMPDIR` that `main.rkt` cannot
   write (`cannot write a temporary file in DIR`).
+- **A driver that crashes.** A runtime error in the driver itself (a bug)
+  ends its VM with status 1 and prints nothing on stdout, which would look like
+  "the tests failed". `main.rkt` turns that case (no stdout, status not 0) into
+  status 2; the error stays on stderr.
 - **Tests of `agentica test` with a fake VM.** `AGENTICA_VM` now names the VM
   that runs the driver too; a test that wants a fake runner VM makes a script
   that runs the real VM unless it is asked for `runner.agcb`.

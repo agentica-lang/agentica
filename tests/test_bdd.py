@@ -249,6 +249,18 @@ class Bdd(TestCase):
         os.chmod(path, 0o700)
         return {"AGENTICA_VM": path}
 
+    def test_a_driver_that_crashes_is_status_2_with_the_error_on_stderr_not_a_failed_test_run(self):
+        directory = self.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
+        path = os.path.join(directory, "vm.sh")
+        with open(path, "w") as vm:
+            # The step limit stops the driver (the program), not the runner it starts.
+            vm.write("#!/bin/sh\ncase \"$*\" in\n*runner.agcb*) exec '%s' \"$@\" ;;\nesac\n"
+                     "exec '%s' --max-steps 50 \"$@\"\n" % (vm_binary(), vm_binary()))
+        os.chmod(path, 0o700)
+        result = self.agentica_test(os.path.join(directory, "a.feature"), env={"AGENTICA_VM": path})
+        self.assertEqual((result.code, result.stdout), (2, ""))
+        self.assertIn("RUNTIME-STEP-LIMIT", result.stderr)
+
     def test_a_crashed_runner_is_reported_with_the_error_not_the_last_stack_frame(self):
         directory = self.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
         env = self.fake_vm(directory, [
@@ -343,6 +355,17 @@ class Bdd(TestCase):
         os.symlink(outside, temporary / "agentica-bdd-fedcba9876543210")
         (temporary / "agentica-bdd-00ff").mkdir()
         (temporary / "agentica-bdd-new-0123").mkdir()
+        # A run killed while it made its folder leaves a `new-` one: it goes only when it is old and has a free lock.
+        stale = temporary / "agentica-bdd-new-aaaa"
+        stale.mkdir()
+        (stale / "lock").write_text("")
+        os.utime(stale, (1, 1))
+        fresh = temporary / "agentica-bdd-new-bbbb"
+        fresh.mkdir()
+        (fresh / "lock").write_text("")
+        old_without_lock = temporary / "agentica-bdd-new-cccc"
+        old_without_lock.mkdir()
+        os.utime(old_without_lock, (1, 1))
         # A held lock is what tells a live run from an ended one.
         with open(live / "lock", "w") as held:
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -350,7 +373,8 @@ class Bdd(TestCase):
         self.assertEqual(result.code, 2)
         self.assertEqual(sorted(os.listdir(temporary)),
                          ["agentica-bdd-00ff", "agentica-bdd-1123456789abcdef", "agentica-bdd-fedcba9876543210",
-                          "agentica-bdd-new-0123"])
+                          "agentica-bdd-new-0123", "agentica-bdd-new-bbbb",
+                          "agentica-bdd-new-cccc"])
         self.assertEqual((outside / "lock").read_text(), "keep")
 
     def test_the_temporary_directory_is_tmpdir_when_it_is_a_folder_else_a_system_one(self):

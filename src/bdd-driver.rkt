@@ -81,7 +81,11 @@
          (subprocess-wait process)
          (thread-wait out-reader)
          (thread-wait err-reader)
-         (values (subprocess-status process) (bytes->string/utf-8 (get-output-bytes out) (integer->char #xFFFD))))))
+         (define status (subprocess-status process))
+         (define text (bytes->string/utf-8 (get-output-bytes out) (integer->char #xFFFD)))
+         ;; A driver that ran always printed a report or a usage message. A VM that stopped on a runtime error of the
+         ;; driver (status 1) printed nothing, and must not look like "the tests failed": that is status 2.
+         (values (if (and (equal? text "") (not (eqv? status 0))) 2 status) text))))
     (lambda ()
       (kill-thread sender)
       (with-handlers ([exn:fail? void]) (close-output-port stdin))

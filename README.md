@@ -15,7 +15,8 @@ git submodule update --init
 make exe
 ```
 
-This writes `dist/agentica` and `dist/agentica-vm`.
+This writes `dist/agentica` and `dist/agentica-vm`, and next to them
+`dist/agentica-bdd-driver.agcb`, the program that `agentica test` runs.
 
 ## Hello world
 
