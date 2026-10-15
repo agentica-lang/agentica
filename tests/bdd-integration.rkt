@@ -72,6 +72,26 @@
 (define (doc text)
   (string-append "  \"\"\"\n  " text "\n  \"\"\"\n"))
 
+(define buffered-program "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  line = IO.gets!()\nend\n")
+(define output-program "def main() -> Void\n  puts(\"actual\")\n  IO.warn(\"warning\")\n  System.exit(3)\nend\n")
+(define json-program "def main() -> Void\n  puts(\"{\\\"b\\\": \\\"3\\\", \\\"a\\\": 1}\")\nend\n")
+
+;; Scenarios of the smoke case (test tier) and of the full case (slow tier).
+(define wrong-stdout-scenario
+  (string-append
+   "Scenario: wrong stdout\nGiven the Agentica program \"output.agc\"\n"
+   "Then the program exits with code 3 within 5000 milliseconds\nAnd stdout is:\n" (doc "incorrect")))
+
+(define literal-input-scenario
+  (string-append
+   "Scenario: literal input and EOF\nGiven the Agentica program \"buffered.agc\"\nWhen I send input:\n" (doc "hello")
+   "When I close stdin\nAnd I close stdin\nThen the program exits with code 1 within 5000 milliseconds\nAnd stdout is:\n" (doc "hello\n")))
+
+(define json-mismatch-scenario
+  (string-append
+   "Scenario: JSON mismatch\nGiven the Agentica program \"json.agc\"\n"
+   "Then I receive a JSON line within 5000 milliseconds:\n" (doc "{\"a\": 1, \"b\": 3}")))
+
 (module+ test
   (test-case "live JSON replies arrive before EOF and recover after errors"
     (define report (json-test (path->string stream-spec)))
@@ -114,64 +134,26 @@
        (check-true (hash-ref drawn 'ok))
        (check-true (exact-nonnegative-integer? (hash-ref drawn 'seed))))))
 
-  (test-case "programs under test: output without a flush, wrong output, the output limits, literal input and the working directory"
+  (test-case "programs under test: wrong output, literal input and a JSON line mismatch"
     (with-suite
-     `(("buffered.agc" . "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  line = IO.gets!()\nend\n")
-       ("output.agc" . "def main() -> Void\n  puts(\"actual\")\n  IO.warn(\"warning\")\n  System.exit(3)\nend\n")
-       ("oversized.agc" . "def main() -> Void\n  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\nend\n")
-       ("flood.agc" . "def main() -> Void\n  IO.warn(String.join(List.repeat(\"x\", 1048576), \"\"))\n  line = IO.gets()\nend\n")
-       ("where.agc" . "def main() -> Void\n  puts(Path.cwd().unwrap!)\nend\n")
-       ("json.agc" . "def main() -> Void\n  puts(\"{\\\"b\\\": \\\"3\\\", \\\"a\\\": 1}\")\nend\n")
-       ("quotes.agc" . "def main() -> Void\n  puts(String.join(List.repeat(\"\\\"\", 300000), \"\"))\nend\n")
-       ("steps.agc" . ,(string-append
-                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
-                        "  BDD.run([BDD.step(\"the handler floods stdout\") do |ctx, args|\n"
-                        "    puts(String.join(List.repeat(String.join(List.repeat(\"x\", 1000), \"\"), 1100), \"\\n\"))\n"
-                        "    ctx\n  end,\n"
-                        "  BDD.step(\"the handler fails with a huge message\") do |ctx, args|\n"
-                        "    BDD.assert(ctx, false, String.join(List.repeat(\"xxxxxxxxxx\", 110000), \"\"))\n"
-                        "  end])\nend\n"))
-       ("lifecycle.feature" . "Feature: Lifecycle\n"))
+     `(("buffered.agc" . ,buffered-program)
+       ("output.agc" . ,output-program)
+       ("json.agc" . ,json-program)
+       ("smoke.feature" . "Feature: Smoke\n"))
      (lambda (directory)
        (display-to-file
         (string-append
-         "Scenario: output without a flush\nGiven the Agentica program \"buffered.agc\"\n"
-         "When I send the line \"hello\"\nThen I receive the line \"hello\" within 1000 milliseconds\n"
-         "Scenario: wrong stdout\nGiven the Agentica program \"output.agc\"\n"
-         "Then the program exits with code 3 within 5000 milliseconds\nAnd stdout is:\n" (doc "incorrect")
-         "Scenario: wrong stderr\nGiven the Agentica program \"output.agc\"\n"
-         "Then the program exits with code 3 within 5000 milliseconds\nAnd stderr is:\n" (doc "incorrect")
-         "Scenario: wrong code\nGiven the Agentica program \"output.agc\"\nThen the program exits with code 0 within 5000 milliseconds\n"
-         "Scenario: output limit\nGiven the Agentica program \"oversized.agc\"\nThen the program exits with code 0 within 5000 milliseconds\n"
-         "Scenario: stderr flood\nGiven the Agentica program \"flood.agc\"\nThen I receive the line \"never\" within 5000 milliseconds\n"
-         "Scenario: literal input and EOF\nGiven the Agentica program \"buffered.agc\"\nWhen I send input:\n" (doc "hello")
-         "When I close stdin\nAnd I close stdin\nThen the program exits with code 1 within 5000 milliseconds\nAnd stdout is:\n" (doc "hello\n")
-         "Scenario: working directory\nGiven the Agentica program \"where.agc\"\nThen I receive the line \"" (path->string (path->directory-path directory))
-         "\" within 5000 milliseconds\n"
-         "Scenario: later\nGiven the Agentica program \"output.agc\"\nThen the program exits with code 3 within 5000 milliseconds\n"
-         "And stdout is:\n" (doc "actual\n") "And stderr is:\n" (doc "warning\n")
-         "Scenario: handler flood\nGiven the handler floods stdout\n"
-         "Scenario: step line over 1 MiB\nGiven the Agentica program \"output.agc\"\nWhen I send input:\n" (doc (make-string 600000 #\"))
-         "Scenario: JSON mismatch\nGiven the Agentica program \"json.agc\"\n"
-         "Then I receive a JSON line within 5000 milliseconds:\n" (doc "{\"a\": 1, \"b\": 3}")
-         "Scenario: long mismatch\nGiven the Agentica program \"quotes.agc\"\n"
-         "Then the program exits with code 0 within 5000 milliseconds\nAnd stdout is:\n" (doc "x")
-         "Scenario: record over 1 MiB\nGiven the handler fails with a huge message\n")
-        (build-path directory "lifecycle.feature") #:exists 'append)
-       (define report (json-test (in directory "lifecycle.feature") "--steps" (in directory "steps.agc")))
-       (check-equal? (codes report)
-                     '(#f "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
-                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f
-                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
-                       "RUNTIME-BDD-OUTPUT-LIMIT"))
+         wrong-stdout-scenario
+         literal-input-scenario
+         json-mismatch-scenario)
+        (build-path directory "smoke.feature") #:exists 'append)
+       (define report (json-test (in directory "smoke.feature")))
+       (check-equal? (codes report) '("RUNTIME-BDD-ASSERTION" #f "RUNTIME-BDD-ASSERTION"))
        (define (details item)
          (define problem (hash-ref item 'error))
          (list (hash-ref problem 'expected) (hash-ref problem 'actual)))
-       (check-equal? (map details (list (second (cases report)) (fourth (cases report)) (list-ref (cases report) 11)))
-                     '(("\"incorrect\"" "\"actual\\n\"") ("0" "3") ("{\"a\":1,\"b\":3}" "{\"a\":1,\"b\":\"3\"}")))
-       (define long (cadr (details (list-ref (cases report) 12))))
-       (check-equal? (string-length long) (+ 65536 (string-length "... (534468 more characters)")))
-       (check-true (string-suffix? long "\\... (534468 more characters)")))))
+       (check-equal? (map details (list (first (cases report)) (third (cases report))))
+                     '(("\"incorrect\"" "\"actual\\n\"") ("{\"a\":1,\"b\":3}" "{\"a\":1,\"b\":\"3\"}"))))))
 
   (test-case "a handler that prints for ever fails at the output limit, long before the scenario deadline"
     (with-suite
@@ -205,15 +187,6 @@
                        (list (hash-ref file 'kind) (and (hash? problem) (hash-ref problem 'code))))
                      '(("steps" "RUNTIME-BDD-OUTPUT-LIMIT"))))))
 
-  (test-case "a JSON line of a few hundred KB fits the step budget"
-    (define items (make-list 30000 "abcdefghij"))
-    (with-suite
-     `(("big.agc" . "def main() -> Void\n  puts(JSON.encode(JSON.from(List.repeat(\"abcdefghij\", 30000))))\nend\n")
-       ("big.feature" . ,(string-append "Feature: Big\nScenario: big line\nGiven the Agentica program \"big.agc\"\n"
-                                        "Then I receive a JSON line within 5000 milliseconds:\n" (doc (jsexpr->string items)))))
-     (lambda (directory)
-       (check-true (hash-ref (json-test (in directory "big.feature")) 'ok)))))
-
   (test-case "a failed scenario leaves no process of its program behind"
     (with-suite
      `(("holder.agc" . ,holder-program)
@@ -225,6 +198,103 @@
        (check-equal? (codes report) '("RUNTIME-BDD-TIMEOUT"))
        (define pid (string-trim (file->string (build-path directory "pid.txt"))))
        (check-true (gone? pid) pid))))
+
+  (test-case "a temporary directory others can write to without the sticky bit is refused"
+    (with-suite
+     '()
+     (lambda (directory)
+       (define temporary (build-path directory "shared"))
+       (make-directory temporary)
+       (define environment (environment-variables-copy (current-environment-variables)))
+       (environment-variables-set! environment #"TMPDIR" (path->bytes temporary))
+       (define (status-and-code)
+         (define-values (process output input errors)
+           (parameterize ([current-environment-variables environment])
+             (start-cli (list "test" "--json" (path->string directory)))))
+         (close-output-port input)
+         (define drained (thread (lambda () (port->string errors))))
+         (define report (string->jsexpr (port->string output)))
+         (thread-wait drained)
+         (close-input-port output)
+         (close-input-port errors)
+         (subprocess-wait process)
+         (list (subprocess-status process) (hash-ref (hash-ref (car (hash-ref report 'files)) 'error) 'code)))
+       (file-or-directory-permissions temporary #o777)
+       (check-equal? (status-and-code) '(2 "RUNTIME-BDD-INFRA"))
+       (file-or-directory-permissions temporary #o1777)
+       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
+       (file-or-directory-permissions temporary #o775)
+       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
+       (file-or-directory-permissions temporary #o2775)
+       (check-equal? (status-and-code) '(2 "RUNTIME-BDD-INFRA"))))))
+
+;; Large sizes (1 MiB outputs, floods) and a killed driver with its process tree; the
+;; smoke case above keeps the same paths in the fast tier.
+(module+ slow
+  (test-case "programs under test: output without a flush, wrong output, the output limits, literal input and the working directory"
+    (with-suite
+     `(("buffered.agc" . ,buffered-program)
+       ("output.agc" . ,output-program)
+       ("oversized.agc" . "def main() -> Void\n  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\nend\n")
+       ("flood.agc" . "def main() -> Void\n  IO.warn(String.join(List.repeat(\"x\", 1048576), \"\"))\n  line = IO.gets()\nend\n")
+       ("where.agc" . "def main() -> Void\n  puts(Path.cwd().unwrap!)\nend\n")
+       ("json.agc" . ,json-program)
+       ("quotes.agc" . "def main() -> Void\n  puts(String.join(List.repeat(\"\\\"\", 300000), \"\"))\nend\n")
+       ("steps.agc" . ,(string-append
+                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "  BDD.run([BDD.step(\"the handler floods stdout\") do |ctx, args|\n"
+                        "    puts(String.join(List.repeat(String.join(List.repeat(\"x\", 1000), \"\"), 1100), \"\\n\"))\n"
+                        "    ctx\n  end,\n"
+                        "  BDD.step(\"the handler fails with a huge message\") do |ctx, args|\n"
+                        "    BDD.assert(ctx, false, String.join(List.repeat(\"xxxxxxxxxx\", 110000), \"\"))\n"
+                        "  end])\nend\n"))
+       ("lifecycle.feature" . "Feature: Lifecycle\n"))
+     (lambda (directory)
+       (display-to-file
+        (string-append
+         "Scenario: output without a flush\nGiven the Agentica program \"buffered.agc\"\n"
+         "When I send the line \"hello\"\nThen I receive the line \"hello\" within 1000 milliseconds\n"
+         wrong-stdout-scenario
+         "Scenario: wrong stderr\nGiven the Agentica program \"output.agc\"\n"
+         "Then the program exits with code 3 within 5000 milliseconds\nAnd stderr is:\n" (doc "incorrect")
+         "Scenario: wrong code\nGiven the Agentica program \"output.agc\"\nThen the program exits with code 0 within 5000 milliseconds\n"
+         "Scenario: output limit\nGiven the Agentica program \"oversized.agc\"\nThen the program exits with code 0 within 5000 milliseconds\n"
+         "Scenario: stderr flood\nGiven the Agentica program \"flood.agc\"\nThen I receive the line \"never\" within 5000 milliseconds\n"
+         literal-input-scenario
+         "Scenario: working directory\nGiven the Agentica program \"where.agc\"\nThen I receive the line \"" (path->string (path->directory-path directory))
+         "\" within 5000 milliseconds\n"
+         "Scenario: later\nGiven the Agentica program \"output.agc\"\nThen the program exits with code 3 within 5000 milliseconds\n"
+         "And stdout is:\n" (doc "actual\n") "And stderr is:\n" (doc "warning\n")
+         "Scenario: handler flood\nGiven the handler floods stdout\n"
+         "Scenario: step line over 1 MiB\nGiven the Agentica program \"output.agc\"\nWhen I send input:\n" (doc (make-string 600000 #\"))
+         json-mismatch-scenario
+         "Scenario: long mismatch\nGiven the Agentica program \"quotes.agc\"\n"
+         "Then the program exits with code 0 within 5000 milliseconds\nAnd stdout is:\n" (doc "x")
+         "Scenario: record over 1 MiB\nGiven the handler fails with a huge message\n")
+        (build-path directory "lifecycle.feature") #:exists 'append)
+       (define report (json-test (in directory "lifecycle.feature") "--steps" (in directory "steps.agc")))
+       (check-equal? (codes report)
+                     '(#f "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
+                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f
+                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
+                       "RUNTIME-BDD-OUTPUT-LIMIT"))
+       (define (details item)
+         (define problem (hash-ref item 'error))
+         (list (hash-ref problem 'expected) (hash-ref problem 'actual)))
+       (check-equal? (map details (list (second (cases report)) (fourth (cases report)) (list-ref (cases report) 11)))
+                     '(("\"incorrect\"" "\"actual\\n\"") ("0" "3") ("{\"a\":1,\"b\":3}" "{\"a\":1,\"b\":\"3\"}")))
+       (define long (cadr (details (list-ref (cases report) 12))))
+       (check-equal? (string-length long) (+ 65536 (string-length "... (534468 more characters)")))
+       (check-true (string-suffix? long "\\... (534468 more characters)")))))
+
+  (test-case "a JSON line of a few hundred KB fits the step budget"
+    (define items (make-list 30000 "abcdefghij"))
+    (with-suite
+     `(("big.agc" . "def main() -> Void\n  puts(JSON.encode(JSON.from(List.repeat(\"abcdefghij\", 30000))))\nend\n")
+       ("big.feature" . ,(string-append "Feature: Big\nScenario: big line\nGiven the Agentica program \"big.agc\"\n"
+                                        "Then I receive a JSON line within 5000 milliseconds:\n" (doc (jsexpr->string items)))))
+     (lambda (directory)
+       (check-true (hash-ref (json-test (in directory "big.feature")) 'ok)))))
 
   (test-case "killing the driver stops the runner, the scenario VM and the program, and a later run removes its folder"
     (with-suite
@@ -272,33 +342,4 @@
        (close-output-port held)
        (check-equal? (map path->string (directory-list temporary))
                      '("agentica-bdd-00ff" "agentica-bdd-0123456789abcdef" "agentica-bdd-fedcba9876543210"))
-       (check-equal? (file->string (build-path outside "lock")) "keep"))))
-
-  (test-case "a temporary directory others can write to without the sticky bit is refused"
-    (with-suite
-     '()
-     (lambda (directory)
-       (define temporary (build-path directory "shared"))
-       (make-directory temporary)
-       (define environment (environment-variables-copy (current-environment-variables)))
-       (environment-variables-set! environment #"TMPDIR" (path->bytes temporary))
-       (define (status-and-code)
-         (define-values (process output input errors)
-           (parameterize ([current-environment-variables environment])
-             (start-cli (list "test" "--json" (path->string directory)))))
-         (close-output-port input)
-         (define drained (thread (lambda () (port->string errors))))
-         (define report (string->jsexpr (port->string output)))
-         (thread-wait drained)
-         (close-input-port output)
-         (close-input-port errors)
-         (subprocess-wait process)
-         (list (subprocess-status process) (hash-ref (hash-ref (car (hash-ref report 'files)) 'error) 'code)))
-       (file-or-directory-permissions temporary #o777)
-       (check-equal? (status-and-code) '(2 "RUNTIME-BDD-INFRA"))
-       (file-or-directory-permissions temporary #o1777)
-       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
-       (file-or-directory-permissions temporary #o775)
-       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
-       (file-or-directory-permissions temporary #o2775)
-       (check-equal? (status-and-code) '(2 "RUNTIME-BDD-INFRA"))))))
+       (check-equal? (file->string (build-path outside "lock")) "keep")))))

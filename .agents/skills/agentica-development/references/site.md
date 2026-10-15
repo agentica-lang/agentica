@@ -92,9 +92,10 @@ rule that a site page shows.
 Every `agentica` code block in `site/content` must be a complete program.
 `tests/site-examples-test.rkt` checks each one and runs it (stdin from an
 optional `input` block right after it), and compares stdout with the
-`output` block that follows. `make test` runs it.
-`.github/workflows/site-examples.yml` runs it alone on pull requests that
-change only `site/content` (CI skips those).
+`output` block that follows. `make test` runs three pages as a smoke; the
+whole site runs in the slow tier (`make test-slow`).
+`.github/workflows/site-examples.yml` runs the slow tier of this file alone on
+pull requests that change only `site/content` (CI skips those).
 
 Fence attributes:
 
