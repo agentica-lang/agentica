@@ -1,6 +1,9 @@
-/* The HttpWire server builtins, called only by stdlib/http.agc: reading one
-   whole request, writing one whole response, and the HttpServer task group
-   (docs/vm/10-io-http.md §10.7.2). */
+/*
+ * The HttpWire server builtins (Linux only), called only by stdlib/http.agc:
+ * reading one whole request, writing one whole response, and the HttpServer
+ * task group (server, accept, spawn, close_server, wait and local_port).
+ * Service layer. Design: docs/vm/10-io-http.md §10.7.2.
+ */
 #include "http_fields.h"
 #include "net.h"
 

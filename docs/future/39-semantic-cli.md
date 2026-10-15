@@ -330,12 +330,11 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
 
 ### 39.10 Order
 
-- Order step 7.2b of the [roadmap](../roadmap/README.md): after doc comments
-  (phase 22) and digit separators (phase 23), before iteration and concurrent
-  collections (row 7.3). Front end and CLI only, VM-only in the sense of the
+- Order step 7.2b of the [roadmap](../roadmap/README.md): after row 22b
+  (`agentica doc`, phase 22), before iteration and concurrent collections
+  (row 7.3). Front end and CLI only, VM-only in the sense of the
   roadmap rule (no Racket twin of anything; nothing to run).
-- After phase 22, so `outline` uses `src/docs.rkt` (22b) and shows doc
-  summaries.
+- After row 22b, so `outline` uses `src/docs.rkt` and shows doc summaries.
 - Before the full 6c round (order step 10), so it can measure the commands
   (§39.12). The 6c pilot (order step 7.2.2) comes before it and does not have
   them.

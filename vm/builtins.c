@@ -1,8 +1,8 @@
 /*
- * The core builtins (IO, System, List, Map, Result and Range), agc_find_builtin
- * over the table of every library, and the lookup of builtin structs and enum
- * variants by name in a program. Core layer. Design:
- * docs/vm/05-values-execution-builtins.md §7.
+ * The core builtins (IO, System, List, Map, Result and Range, with a few Int
+ * and String helpers), agc_find_builtin over the table of every library, and
+ * the lookup of builtin structs and enum variants by name in a program. Core
+ * layer. Design: docs/vm/05-values-execution-builtins.md §7.
  */
 #include "core.h"
 

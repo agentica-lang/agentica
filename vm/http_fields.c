@@ -1,5 +1,9 @@
-/* Header fields and message bytes shared by the HTTP client and server
-   (docs/vm/10-io-http.md §10.7). */
+/*
+ * Header fields and message bytes that the HTTP client and server share: the
+ * byte buffer (agc_http_put), the header writer with its checks, the kept
+ * fields and their List[Header], and the connection-close checks. Service
+ * layer. Design: docs/vm/10-io-http.md §10.7.
+ */
 #include "http_fields.h"
 
 #include <stdio.h>
