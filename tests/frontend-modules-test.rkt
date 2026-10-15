@@ -164,6 +164,16 @@
           (check-true (> (length specs) 100))
           (agentica-matches-racket (run-linker bytecode specs) specs))
 
+        (test-case "while Racket exists: the Agentica linker matches the Racket linker on 300 mutated fixtures"
+          (define specs
+            (for/list ([dir (in-list (mutated-fixtures work 300))])
+              (list default-env (path->string (build-path dir "root.agc")))))
+          (define outputs (run-linker bytecode specs))
+          (agentica-matches-racket outputs specs)
+          (define errors
+            (for/sum ([spec (in-list specs)]) (if (regexp-match? #rx"^ERROR" (hash-ref outputs (second spec))) 1 0)))
+          (check-true (< 30 errors 290) (format "~a of 300 mutated fixtures are errors" errors)))
+
         (test-case "a chain of 3000 files and a file importing 2000 files link, with one numbering of ids"
           (define chain (build-path work "chain"))
           (for ([n (in-range 3000)])
@@ -224,6 +234,44 @@
           (define outputs (run-linker bytecode (list (list default-env path))))
           (check-true (< (- (current-inexact-milliseconds) started) 60000))
           (agentica-matches-racket outputs (list (list default-env path))))))))
+
+; Copies of count fixture folders, each with one or two of its files mutated (a cut, a deletion, a snippet from
+; the list of risky ones, a renamed alias or a changed declaration keyword), under dir.
+(define risky
+  '("import \"x\" as X\n" "export " "std/queue" "pkg/" "../" "Nope." "HttpWire." "Lib." "A." "M." ".Some(" "(a: 1)" "end\n"
+    "\n\n" "def " "struct " "enum " "\"" "ok(" "Await." "LogLevel." "Result." " as " "import " "\\" ":" "//"))
+
+(define (mutate text)
+  (define size (string-length text))
+  (define at (if (zero? size) 0 (random (add1 size))))
+  (define (pick items) (list-ref items (random (length items))))
+  (case (random 5)
+    [(0) (substring text 0 at)]
+    [(1) (if (< at size) (string-append (substring text 0 at) (substring text (min size (+ at 1 (random 5))))) text)]
+    [(2) (string-append (substring text 0 at) (pick risky) (substring text at))]
+    [(3) (string-replace text (pick '("Lib" "A" "M" "Util" "Q" "Next")) (pick '("Lib" "A" "Header" "Zed" "M" "Util")) #:all? #f)]
+    [else (string-replace text (pick '("export def" "def " "struct " "import ")) (pick '("export struct" "def " "enum " "import ")) #:all? #f)]))
+
+(define (mutated-fixtures dir count)
+  (parameterize ([current-pseudo-random-generator (make-pseudo-random-generator)])
+    (random-seed 254)
+    ; The dangling link cannot be copied, and the pkg fixtures need their environment.
+    (define sources
+      (for/list ([input (in-list (module-inputs))]
+                 #:unless (member (module-input-name input) '("dependency-dangling-link")))
+        (module-input-dir input)))
+    (for/list ([n (in-range count)])
+      (define target (build-path dir "mutated" (format "case-~a" n)))
+      (make-parent-directory* target)
+      (copy-directory/files (list-ref sources (random (length sources))) target)
+      (define files
+        (for/list ([file (in-directory target)]
+                   #:when (and (file-exists? file) (not (link-exists? file)) (path-has-extension? file #".agc")))
+          file))
+      (for ([_ (in-range (add1 (random 2)))] #:when (pair? files))
+        (define file (list-ref files (random (length files))))
+        (display-to-file (mutate (file->string file)) file #:exists 'truncate/replace))
+      target)))
 
 ; The programs in the code blocks of the site's pages.
 (define (site-programs)

@@ -1,6 +1,5 @@
 ## The text form of a link, for tests. See link.agc.
 
-import "ast" as Ast
 import "import_path" as Paths
 import "link_env" as Env
 import "link_failure" as Failure
