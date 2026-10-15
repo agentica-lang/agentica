@@ -198,23 +198,26 @@ export def time_text(ms: Int) -> String
   yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
   doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
   shifted = (5 * doy + 2) / 153
-  dd = doy - (153 * shifted + 2) / 5 + 1
-  mon = shifted + 3
-  yr = yoe + era * 400
+  day = doy - (153 * shifted + 2) / 5 + 1
+  month = shifted + 3
+  year = yoe + era * 400
   if shifted >= 10
-    mon = shifted - 9
-    yr += 1
+    month = shifted - 9
+    year += 1
   end
-  sg = ""
-  if yr < 0
-    sg = "-"
-    yr = 0 - yr
+  sign = ""
+  if year < 0
+    sign = "-"
+    year = 0 - year
   end
-  hr = rest / 3600000
-  min = rest % 3600000 / 60000
-  sec = rest % 60000 / 1000
-  mil = rest % 1000
-  return "#{sg}#{pad(yr, 4)}-#{pad(mon, 2)}-#{pad(dd, 2)}T#{pad(hr, 2)}:#{pad(min, 2)}:#{pad(sec, 2)}.#{pad(mil, 3)}Z"
+  hour = rest / 3600000
+  minute = rest % 3600000 / 60000
+  second = rest % 60000 / 1000
+  milli = rest % 1000
+  return (
+    "#{sign}#{pad(year, 4)}-#{pad(month, 2)}-#{pad(day, 2)}T" +
+    "#{pad(hour, 2)}:#{pad(minute, 2)}:#{pad(second, 2)}.#{pad(milli, 3)}Z"
+  )
 end
 
 # The ranks are the order of LogLevel: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,

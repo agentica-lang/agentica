@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 7776,
+  "steps": 7804,
   "stdout": [
     "no files: exit 1",
     "0 passed, 0 failed, 0 not executed, 0 file errors, seed 7",
