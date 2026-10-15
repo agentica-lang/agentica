@@ -81,6 +81,57 @@
   (display-to-file text path #:exists 'truncate/replace)
   (path->string path))
 
+(define (write-bytes-file path data)
+  (make-parent-directory* path)
+  (call-with-output-file path #:exists 'truncate/replace (lambda (out) (write-bytes data out)))
+  (path->string path))
+
+; compiler/source_file.agc reads 262144 bytes at a time. These cases put a character, or the start of an invalid
+; sequence, across the edges of the reads.
+(define read-size 262144)
+
+(define (ascii count) (make-bytes count (char->integer #\a)))
+
+; A comment that is a little over 1 MiB, with a 4-, 3-, 2- and 4-byte character each cut by a read edge.
+(define (big-comment)
+  (define (filler to-offset so-far) (ascii (- to-offset so-far)))
+  (define pieces
+    (list #"# " (filler (- read-size 1) 2) (string->bytes/utf-8 "\U1F600")
+          (filler (- (* 2 read-size) 2) (+ read-size 3)) (string->bytes/utf-8 "\u65E5")
+          (filler (- (* 3 read-size) 1) (+ (* 2 read-size) 1)) (string->bytes/utf-8 "\u00E9")
+          (filler (- (* 4 read-size) 3) (+ (* 3 read-size) 1)) (string->bytes/utf-8 "\U1F600")
+          (ascii 100) #"\n"))
+  (apply bytes-append pieces))
+
+; Cases of invalid UTF-8: (name valid-prefix bad-bytes suffix). The span must start at the first byte of the bad
+; sequence, counted in the characters of the prefix, which Racket's own decoder counts here.
+(define invalid-utf8-cases
+  (let ([prefix (string->bytes/utf-8 "# \u00E9\u65E5\U1F600\ndef main() -> Void\n  puts(\"\u00E9")]
+        [suffix #"\")\nend\n"])
+    (list (list "a continuation byte alone" prefix #"\x80" suffix)
+          (list "CRLF and a tab before the bad byte (CR and tab are one column, only LF starts a line)"
+                #"# a\r\n\tx = \"\t" #"\xFF" #"\"\r\n")
+          (list "a byte that never occurs" prefix #"\xFF" suffix)
+          (list "a lead byte above F4" prefix #"\xF5" suffix)
+          (list "an overlong two-byte form" prefix #"\xC0\x80" suffix)
+          (list "an overlong three-byte form" prefix #"\xE0\x80\x80" suffix)
+          (list "an overlong four-byte form" prefix #"\xF0\x80\x80\x80" suffix)
+          (list "a surrogate" prefix #"\xED\xA0\x80" suffix)
+          (list "a code point above U+10FFFF" prefix #"\xF4\x90\x80\x80" suffix)
+          (list "a sequence cut short by an ASCII byte" prefix #"\xE2\x82" suffix)
+          (list "a two-byte lead before a quote" prefix #"\xC3" suffix)
+          (list "a truncated sequence at the end of the file" (bytes-append prefix #"\")\n") #"\xE2\x82" #"")
+          (list "a lone lead byte at the end of the file" (bytes-append prefix #"\")\n") #"\xC3" #"")
+          (list "a bad byte after the first read" (bytes-append #"# " (ascii (+ read-size 10)) #"\n# \xC3\xA9\n") #"\xFF" suffix)
+          (list "a sequence whose first two bytes end the first read" (bytes-append #"# " (ascii (- read-size 4))) #"\xE2\x82" #"a\n")
+          (list "a lead byte cut off by the first read" (bytes-append #"# " (ascii (- read-size 3))) #"\xE2" #"\x82a\n"))))
+
+(define (expected-position prefix)
+  (define text (bytes->string/utf-8 prefix))
+  (define lines (string-split text "\n" #:trim? #f))
+  (define column (add1 (string-length (last lines))))
+  (format "~a:~a:~a-~a:~a:~a" (string-length text) (length lines) column (add1 (string-length text)) (length lines) (add1 column)))
+
 (module+ test
   (define inputs (module-inputs))
 
@@ -162,14 +213,52 @@
           (check-regexp-match #rx"\n  module \"../shared/x.agc\"\n" output)
           (check-equal? output (string-append (link-text root #:env default-env) "\n")))
 
-        ; Racket reads such a file with replacement characters and goes on; File.read_text is strict (a
-        ; documented difference, docs/future/35-self-hosting.md 35.9), so only the Agentica side is asserted.
-        (test-case "an import with invalid UTF-8 is CHECK-IMPORT-IO, \"cannot read import\" (Agentica only)"
-          (define root (write-file (build-path work "utf8" "root.agc") "import Bad from \"./bad\"\n\ndef main() -> Void\nend\n"))
-          (call-with-output-file (build-path work "utf8" "bad.agc") #:exists 'truncate/replace
-            (lambda (out) (write-bytes (bytes 255 254 10) out)))
+        (test-case "invalid UTF-8 in the root file or in an import is LEX-INVALID-UTF8 at its first bad byte, the same on both sides"
+          (define specs
+            (append*
+             (for/list ([entry (in-list invalid-utf8-cases)] [n (in-naturals)])
+               (match-define (list name prefix bad suffix) entry)
+               (define content (bytes-append prefix bad suffix))
+               (define as-root (write-bytes-file (build-path work "utf8" (format "root-~a" n) "root.agc") content))
+               (define as-import
+                 (begin
+                   (write-bytes-file (build-path work "utf8" (format "import-~a" n) "bad.agc") content)
+                   (write-file (build-path work "utf8" (format "import-~a" n) "root.agc")
+                               "import Bad from \"./bad\"\n\ndef main() -> Void\nend\n")))
+               (list (list default-env as-root) (list default-env as-import)))))
+          (define outputs (run-linker bytecode specs))
+          (for ([entry (in-list invalid-utf8-cases)] [n (in-naturals)])
+            (match-define (list name prefix _ _) entry)
+            (define span (expected-position prefix))
+            (for ([label (in-list '("root" "import"))] [spec (in-list (list-tail specs (* 2 n)))])
+              (define path (second spec))
+              (define output (hash-ref outputs path))
+              (check-equal? output (string-append (link-text path) "\n") (format "~a, ~a" name label))
+              (check-regexp-match (regexp (string-append "^ERROR LEX-INVALID-UTF8 " span " \"source file is not valid UTF-8\" ")) output)
+              (check-regexp-match (if (equal? label "root") #rx"file=\"root.agc\"\n?$" #rx"file=\"bad.agc\"\n?$") output))))
+
+        (test-case "a source file that cannot be read as an import is CHECK-IMPORT-IO, \"cannot read import\", on both sides"
+          (define root (write-file (build-path work "unreadable" "root.agc") "import Bad from \"./bad\"\n\ndef main() -> Void\nend\n"))
+          (make-directory* (build-path work "unreadable" "bad.agc"))
           (define output (hash-ref (run-linker bytecode (list (list default-env root))) root))
-          (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO [^ ]+ \"cannot read import\"" output))
+          (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO [^ ]+ \"cannot read import\"" output)
+          (check-equal? output (string-append (link-text root) "\n")))
+
+        (test-case "a valid source file over 1 MiB links, as the root and as an import, with characters cut by the reads"
+          (define comment (big-comment))
+          (check-true (> (bytes-length comment) 1048576))
+          (define program #"def main() -> Void\n  puts(\"big\")\nend\n")
+          (define as-root (write-bytes-file (build-path work "big" "alone" "root.agc") (bytes-append comment program)))
+          (write-bytes-file (build-path work "big" "imported" "big.agc")
+                            (bytes-append comment #"export def one() -> Int\n  return 1\nend\n"))
+          (define as-import
+            (write-file (build-path work "big" "imported" "root.agc")
+                        "import Big from \"./big\"\n\ndef main() -> Void\n  puts(Big.one().to_s)\nend\n"))
+          (define specs (list (list default-env as-root) (list default-env as-import)))
+          (define outputs (run-linker bytecode specs))
+          (for ([spec (in-list specs)])
+            (check-false (regexp-match? #rx"^ERROR" (hash-ref outputs (second spec))) (second spec)))
+          (agentica-matches-racket outputs specs))
 
         ; Racket's find-system-path ignores a replaced environment, so the HOME-based user root cannot be
         ; compared with Racket in a hermetic way: the Agentica linker is given --home and no usable
@@ -266,17 +355,6 @@
             (if (regexp-match? #rx"^ERROR" racket)
                 (check-equal? output (string-append racket "\n") (car entry))
                 (check-id-ranges (path->string (path-only (second spec))) (id-ranges output) (car entry)))))
-
-        (test-case "a source file over 1 MiB is CHECK-IMPORT-IO in Agentica (File.read_text limit), and links in Racket"
-          (define filler (string-append* (make-list 30000 "# padding padding padding padding padding\n")))
-          (check-true (> (string-length filler) 1048576))
-          (define root
-            (write-file (build-path work "big" "root.agc")
-                        (string-append "import Big from \"./big\"\n\ndef main() -> Void\nend\n")))
-          (write-file (build-path work "big" "big.agc") (string-append filler "export def one() -> Int\n  return 1\nend\n"))
-          (define output (hash-ref (run-linker bytecode (list (list default-env root))) root))
-          (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO [^ ]+ \"cannot read import\"" output)
-          (check-false (regexp-match? #rx"^ERROR" (link-text root))))
 
         (test-case "a file of 2000 declarations links in linear time"
           (define path

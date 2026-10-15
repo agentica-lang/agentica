@@ -1,4 +1,6 @@
 import ParseText from "parse_text"
+import SourceFile from "source_file"
+import Text from "text"
 
 # An argument `--first-id=N` sets the first node id of the files after it (the default is 0). The argument
 # `--continue` numbers each file from the next free id of the one before it (Ast.next_free_id).
@@ -15,15 +17,15 @@ def main() -> Void
       next
     end
     puts("== #{path}")
-    read = File.read_text(path, 10000)
-    if read.ok?
-      printed = ParseText.print_from(read.unwrap!, first_id)
-      puts(printed.text)
-      if continuing
-        first_id = printed.next_id
-      end
-    else
-      puts("!! #{read.message}")
+    case SourceFile.read(path, 10000)
+      SourceFile.Read.Text(text) ->
+        printed = ParseText.print_from(text, first_id)
+        puts(printed.text)
+        if continuing
+          first_id = printed.next_id
+        end
+      SourceFile.Read.Invalid(at) -> puts(Text.diagnostic_line(SourceFile.invalid_utf8(at)))
+      SourceFile.Read.Unreadable(message) -> puts("!! #{message}")
     end
   end
 end
