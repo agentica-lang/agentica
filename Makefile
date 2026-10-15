@@ -496,9 +496,9 @@ sweep-full: vm-diff-build
 	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
 # The Racket tests that run against the built VM (the ASan job runs them on the sanitizer VM)
-VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-stop-test.rkt tests/vm-stdout-test.rkt tests/vm-file-lines-test.rkt tests/vm-stack-test.rkt
+VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-stop-test.rkt tests/vm-stdout-test.rkt tests/vm-file-lines-test.rkt tests/vm-stack-test.rkt
 # The unittest modules that do the same (make test-py runs them)
-VM_PY_TESTS = tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py
+VM_PY_TESTS = tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py
 SANITIZE_JOBS ?= 4
 
 vm-sanitize-build: build
@@ -519,8 +519,8 @@ vendored-check:
 	  build/vm/release/agentica-vm --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored VM does not report OpenSSL $$ossl" >&2; exit 1; }
 
 # vendored-check, then the TLS and HTTP tests on that binary
-vendored-test: vendored-check
-	AGENTICA_VM_BINARY=build/vm/release/agentica-vm $(RACO) test -j 2 tests/vm-tls-test.rkt tests/vm-http-test.rkt
+vendored-test: vendored-check build
+	AGENTICA_VM_BINARY=build/vm/release/agentica-vm $(MAKE) --no-print-directory test-py JOBS=2 TESTS="tests/test_vm_tls.py tests/test_vm_http.py"
 
 vm-unicode:
 	racket vm/tools/gen-unicode.rkt vm/unicode_data.c

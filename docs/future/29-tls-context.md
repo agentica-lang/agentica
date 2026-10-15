@@ -216,7 +216,7 @@ Phase 19a changes, in one PR:
   says so).
 - The PR migrates every program in the repository that uses TLS or HTTPS: the
   `tls-*` and `http-*` golden fixtures (`tests/fixtures/vm/`),
-  `tests/vm-tls-test.rkt` and `tests/vm-http-test.rkt` (the files the TLS
+  `tests/test_vm_tls.py` and `tests/test_vm_http.py` (the files the TLS
   catch-up PR and phase 20 add), any example under `examples/`, the runnable
   blocks of `site/content/library/io-and-system/network.md`, and the programming
   skill's `references/network.md`.
@@ -317,7 +317,7 @@ existing context.
   results. `RUNTIME-TLS-CONTEXT-ROLE` for a server context in `TLS.connect`, a
   client context in `TLS.listen`, and a non-empty `host` in a server-side
   `TLS.upgrade`, each at its argument span.
-- `tests/vm-tls-test.rkt`: independent Python `ssl` peers on port 0 (standard
+- `tests/test_vm_tls.py`: independent Python `ssl` peers on port 0 (standard
   library only): a wrong hostname, a self-signed server without `ca_file`, a
   `ca_file` that excludes system roots (the cases of §10.3), a STARTTLS exchange
   where Python plays the SMTP-like server and the VM the client, and the

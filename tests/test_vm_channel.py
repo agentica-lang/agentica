@@ -3,15 +3,8 @@
 The program listens on port 0 and prints the port; an independent Python peer
 connects six clients, and the loop of the workers ends when the channel closes.
 """
-import os
-import queue
-import signal
-import subprocess
-import threading
+from tests.agentica_test import FIXTURES, PYTHON, WAIT_SECONDS, TestCase, run, start_vm
 
-from tests.agentica_test import FIXTURES, PYTHON, TestCase, compile_agc, run, vm_binary
-
-WAIT_SECONDS = 30
 CLIENTS = 6
 
 PROGRAM = """\
@@ -60,40 +53,9 @@ end
 
 class VmChannel(TestCase):
     def test_socket_handed_to_a_worker_is_served_and_the_loop_ends_when_the_channel_closes(self):
-        work = self.make_temp_dir("agentica-vm-channel-")
-        source = work / "pool.agc"
-        source.write_text(PROGRAM)
-        bytecode = compile_agc(source, work / "pool.agcb")
-        # The VM runs beside the peer, so it is a child process that is read line by line.
-        # Its own session lets stop() kill it and anything it spawned; try/finally rather than addCleanup,
-        # because cleanups do not run on KeyboardInterrupt and the VM would outlive the test run.
-        vm = subprocess.Popen([str(vm_binary()), "--", str(bytecode)], stdin=subprocess.DEVNULL,
-                              stdout=subprocess.PIPE, text=True, start_new_session=True)
-        try:
-            self.check_pool(vm)
-        finally:
-            self.stop(vm)
-
-    def check_pool(self, vm):
-        output = queue.Queue()
-
-        def read_lines():
-            for line in vm.stdout:
-                output.put(line)
-            output.put(None)  # end of output: a VM that died at start must not make next_line wait
-
-        threading.Thread(target=read_lines, daemon=True).start()
-
-        def next_line():
-            try:
-                line = output.get(timeout=WAIT_SECONDS)
-            except queue.Empty:
-                raise AssertionError("no line within %s s" % WAIT_SECONDS)
-            if line is None:
-                raise AssertionError("VM exited: %r" % vm.poll())
-            return line.rstrip("\n")
-
-        port = int(next_line())
+        # The VM runs beside the peer, so it is a Child read line by line.
+        vm = self.adopt(start_vm(self.compile_text(PROGRAM, "pool")))
+        port = int(vm.next_line())
         self.assertGreater(port, 0)
         peer = run([PYTHON, FIXTURES / "channel-peer.py", port, CLIENTS], timeout=WAIT_SECONDS)
         self.assertEqual(peer.code, 0, peer.stderr)
@@ -101,12 +63,5 @@ class VmChannel(TestCase):
         self.assertEqual(len(replies), CLIENTS)
         for i, line in enumerate(replies):
             self.assertRegex(line, r"\A%d worker [012] got msg %d\Z" % (i, i))
-        self.assertEqual(next_line(), "handled 6")
-        self.assertEqual(vm.wait(timeout=WAIT_SECONDS), 0, "the program ends")
-
-    @staticmethod
-    def stop(process):
-        if process.poll() is None:
-            os.killpg(process.pid, signal.SIGKILL)
-        process.wait()
-        process.stdout.close()
+        self.assertEqual(vm.next_line(), "handled 6")
+        self.assertEqual(vm.wait(), 0, "the program ends")

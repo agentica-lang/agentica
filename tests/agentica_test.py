@@ -6,11 +6,13 @@ this module imports as `tests.agentica_test`). Keep this file small: add a
 helper here only when a second test module needs it.
 """
 import os
+import queue
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from collections import namedtuple
 from pathlib import Path
@@ -29,6 +31,19 @@ RUN_TIMEOUT = 60
 # `test` and `slow` submodules: with the flag only @slow cases run, without it
 # the @slow cases are skipped.
 SLOW = os.environ.get("AGENTICA_TEST_SLOW", "") not in ("", "0")
+
+# Time limit of one line or one exit of a Child.
+WAIT_SECONDS = 30
+
+def _terminate(signum, frame):
+    raise KeyboardInterrupt
+
+
+# Children live in their own sessions, so a SIGTERM or SIGHUP to the test process (timeout, a closing terminal) does not
+# reach them. Turning those signals into KeyboardInterrupt runs the cleanups like Ctrl-C does, which stop the children.
+if threading.current_thread() is threading.main_thread():
+    signal.signal(signal.SIGTERM, _terminate)
+    signal.signal(signal.SIGHUP, _terminate)
 
 Result = namedtuple("Result", "code stdout stderr")
 
@@ -68,13 +83,31 @@ class TestCase(unittest.TestCase):
             result.addSkip(self, "slow tier only" if self._is_slow() else "fast tier only")
             result.stopTest(self)
             return result
-        return super().run(result)
+        try:
+            return super().run(result)
+        except KeyboardInterrupt:
+            # unittest skips the cleanups on Ctrl-C; they stop the children and remove the temp dirs.
+            self.doCleanups()
+            raise
 
     def make_temp_dir(self, prefix="agentica-"):
         """A fresh directory, removed when the test ends (also after a failure)."""
         path = Path(tempfile.mkdtemp(prefix=prefix))
         self.addCleanup(shutil.rmtree, path, ignore_errors=True)
         return path
+
+    def adopt(self, child):
+        """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
+        self.addCleanup(child.stop)
+        return child
+
+    def compile_text(self, text, name="program"):
+        """Compile Agentica source text into a temp dir (one per test, removed after it); return the bytecode path."""
+        if not hasattr(self, "_work"):
+            self._work = self.make_temp_dir()
+        source = self._work / (name + ".agc")
+        source.write_text(text, encoding="utf-8")
+        return compile_agc(source, self._work / (name + ".agcb"))
 
     def compile_fixture(self, source):
         """Compile a .agc file into a fresh temp dir (removed after the test) and return the bytecode path."""
@@ -87,11 +120,30 @@ def vm_binary():
     override = os.environ.get("AGENTICA_VM_BINARY")
     path = (ROOT / override) if override else ROOT / "dist" / "agentica-vm"
     if not path.is_file():
-        message = "the VM is not built (%s): run make vm" % path
-        # CI fails when a tool is missing; a local run skips (AGENTS.md). AGENTICA_REQUIRE_VM is the flag of the Racket tests.
-        if os.environ.get("CI") or os.environ.get("AGENTICA_REQUIRE_VM"):
-            raise RuntimeError(message)
-        raise unittest.SkipTest(message)
+        _missing("the VM is not built (%s): run make vm" % path)
+    return path
+
+
+def _missing(message):
+    """CI fails when a tool is missing; a local run skips (AGENTS.md). AGENTICA_REQUIRE_VM is the flag of the Racket tests."""
+    if os.environ.get("CI") or os.environ.get("AGENTICA_REQUIRE_VM"):
+        raise RuntimeError(message)
+    raise unittest.SkipTest(message)
+
+
+def optional_tool(name):
+    """Like tool(), but None when it is missing locally (a part of a test is left out); still a failure in CI."""
+    try:
+        return tool(name)
+    except unittest.SkipTest:
+        return None
+
+
+def tool(name):
+    """The path of an executable that a test needs (node), or a skip (a failure in CI)."""
+    path = shutil.which(name)
+    if path is None:
+        _missing("%s is required (not found on PATH)" % name)
     return path
 
 
@@ -147,3 +199,122 @@ def compile_agc(source, output):
 def run_vm(bytecode, *flags, args=(), **options):
     """Run `dist/agentica-vm [flags] -- bytecode [args]`; options go to run()."""
     return run([vm_binary(), *flags, "--", bytecode, *args], **options)
+
+
+# The tests do not read these from their own environment: a trace or a trust store set by the caller would change
+# the output of the programs they compare.
+_VM_UNSET = ("AGENTICA_VM_TRACE", "AGENTICA_VM_TRACE_FILE", "AGENTICA_FLUSH_TIMEOUT_MS", "SSL_CERT_FILE", "SSL_CERT_DIR")
+
+
+def vm_environment(extra=None):
+    """The environment of a VM run: UTF-8 locale, the caller's trace and trust settings removed.
+
+    `extra` maps names to values; a value of None removes the name.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in _VM_UNSET}
+    env.update(LC_ALL="C.UTF-8", LANG="C.UTF-8")
+    env.pop("LC_MESSAGES", None)
+    for key, value in (extra or {}).items():
+        if value is None:
+            env.pop(key, None)
+        else:
+            env[key] = str(value)
+    return env
+
+
+class Child:
+    """A process that runs beside the test: a peer or a VM that is read line by line.
+
+    It has its own session, so stop() kills its process group (the child and what it spawned) while the child is still alive;
+    a group left by a child that already exited is not reached.
+    Hand it to TestCase.adopt(), so that a failed assertion, Ctrl-C or SIGTERM
+    leaves nothing behind. stdout is read by a thread, so
+    next_line() has a time limit and a child that exits is reported at once.
+    """
+
+    def __init__(self, argv, env=None, cwd=None, stdin=False, capture_stderr=False):
+        """stdin=True gives a pipe (close_stdin() ends it), else /dev/null; stderr is the test's own unless captured."""
+        self.argv = [str(part) for part in argv]
+        self.process = subprocess.Popen(
+            self.argv, stdin=subprocess.PIPE if stdin else subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE if capture_stderr else None, env=env, cwd=cwd, start_new_session=True)
+        self._lines = queue.Queue()
+        self._stderr = []
+        self._threads = [threading.Thread(target=self._read_stdout, daemon=True)]
+        if capture_stderr:
+            self._threads.append(threading.Thread(target=self._read_stderr, daemon=True))
+        for thread in self._threads:
+            thread.start()
+
+    def _read_stdout(self):
+        for raw in iter(self.process.stdout.readline, b""):
+            self._lines.put(raw.decode(errors="replace"))
+        self._lines.put(None)  # end of output: a child that died at start must not make next_line wait
+
+    def _read_stderr(self):
+        self._stderr.extend(raw.decode(errors="replace") for raw in iter(self.process.stderr.readline, b""))
+
+    def next_line(self, timeout=WAIT_SECONDS):
+        """The next line of stdout without its newline; AssertionError if none comes in time or the output ended."""
+        try:
+            line = self._lines.get(timeout=timeout)
+        except queue.Empty:
+            raise AssertionError("no line within %s s from %s" % (timeout, self.argv))
+        if line is None:
+            self._lines.put(None)
+            raise AssertionError("%s ended its output (exit %r)" % (self.argv, self.process.poll()))
+        return line.rstrip("\n")
+
+    def close_stdin(self):
+        self.process.stdin.close()
+
+    def wait(self, timeout=WAIT_SECONDS):
+        """Wait for the exit and return the exit code; AssertionError if it does not exit in time."""
+        try:
+            code = self.process.wait(timeout)
+        except subprocess.TimeoutExpired:
+            raise AssertionError("%s did not finish within %s s" % (self.argv, timeout))
+        for thread in self._threads:
+            thread.join(5)
+        return code
+
+    def stderr_text(self):
+        """What the child wrote to stderr (capture_stderr=True; call after wait())."""
+        return "".join(self._stderr)
+
+    def stop(self):
+        if self.process.poll() is None:
+            try:
+                os.killpg(self.process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        self.process.wait()
+        for thread in self._threads:
+            thread.join(5)
+        for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
+            if stream is not None:
+                stream.close()
+
+
+def start_vm(bytecode, *args, env=None, **options):
+    """Start `dist/agentica-vm -- bytecode [args]` as a Child (stderr captured), with vm_environment()."""
+    return Child([vm_binary(), "--", bytecode, *args], env=vm_environment(env), capture_stderr=True, **options)
+
+
+def output_lines(text):
+    """The lines of a peer's or program's output; only \\n separates them (splitlines also splits on other control characters)."""
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def check_lines(case, text, expected, message):
+    """One output line per expectation: a string is equal, ("prefix", text) is a prefix."""
+    lines = output_lines(text)
+    case.assertEqual(len(lines), len(expected), message + "\n" + text)
+    for line, want in zip(lines, expected):
+        if isinstance(want, str):
+            case.assertEqual(line, want, message)
+        else:
+            case.assertTrue(line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1]))

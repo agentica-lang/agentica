@@ -88,7 +88,7 @@ the server).
   fixtures that fetch from a server written over `TCP` in the same program (GET,
   POST, keep-alive reuse, `Connection: close`, chunked and close-delimited
   bodies, a body over the limit, a non-UTF-8 body, a bad URL, option checks); in
-  `tests/vm-http-test.rkt`, Python `http.server.ThreadingHTTPServer`, an HTTPS
+  `tests/test_vm_http.py`, Python `http.server.ThreadingHTTPServer`, an HTTPS
   server with Python's `ssl` and `tests/fixtures/tls/`, a slow server and the
   timeout, `max_connections` waits, a server that answers 413 early to a large
   upload, and the client-side hostile responses of §10.6 from a raw peer;
@@ -100,7 +100,7 @@ the server).
   never ran. Add picohttpparser to `.gitmodules` and the release's license
   files; it is under `vm/`, which the `vm-sanitizers` path list of
   `.github/workflows/ci.yml` already covers, so that list gets
-  `tests/vm-http-test.rkt`, its peer fixtures (`tests/fixtures/http-*`) and
+  `tests/test_vm_http.py`, its peer fixtures (`tests/fixtures/http-*`) and
   `stdlib/http.agc`. `HttpWire` joins `reserved-type-names`
   (`src/checker.rkt:13`). Docs: `docs/grammar.md` (the `std/http` client part
   with its status line: the builtin `HTTP` stays the way to write HTTP programs
@@ -166,7 +166,7 @@ the server).
   `HTTP.close_server` and then prints: that line never prints and its client
   sees the connection close with no response, a task left running by a handler
   that returned is cancelled by `close_server`, `wait` after `close_server`,
-  `main` returning while handlers run); in `tests/vm-http-test.rkt`, every
+  `main` returning while handlers run); in `tests/test_vm_http.py`, every
   hostile request of §10.6 from a Python raw-socket peer (status and close),
   `Expect: 100-continue` with a `Content-Length` over the limit (413 and no
   `100 Continue` seen first), Python `http.client` and Node `http` clients
@@ -234,7 +234,7 @@ the server).
   `CHECK-UNKNOWN-NAME` with a help that shows it; `examples/http_get.agc` uses
   `std/http`, `examples/http_server.agc` was removed until 20c;
   `tests/http-test.rkt` went (its client cases are goldens and
-  `tests/vm-http-test.rkt` cases; its server cases return with 20c's tests); the
+  `tests/test_vm_http.py` cases; its server cases return with 20c's tests); the
   20a fixtures and tests import `std/http` as `HTTP`; `docs/grammar.md`, the
   site, both skills, `README.md`, `AGENTS.md` and `docs/vm/` were updated. The
   server hints, the performance check and the 7h tick moved to 20c.
@@ -247,7 +247,7 @@ the server).
   path, and ends with `ok()` or the error; a reader that closes the channel
   stops it, and the connection is closed, never pooled. Tests: golden fixtures
   (a body larger than `max_body_bytes` read in pieces, the reader closing early,
-  `done` after a clean end); in `tests/vm-http-test.rkt`, a Node `http` server
+  `done` after a clean end); in `tests/test_vm_http.py`, a Node `http` server
   that sends a slow chunked body and one that resets mid-body (`done` gives the
   error; a raw reset may use Node `net`). Docs: `docs/grammar.md`,
   `references/network.md` (the one-form-per-job table of §30.11),
@@ -258,7 +258,7 @@ the server).
   `length` is the exact byte count or -1 for chunked; a body that ends short or
   long is an `error`; the response is whole. C gets the chunked encoder back for
   requests (`HttpWire` upload primitives). Tests: golden fixtures (fixed length,
-  chunked, a wrong length), and Node `http` servers in `tests/vm-http-test.rkt`
+  chunked, a wrong length), and Node `http` servers in `tests/test_vm_http.py`
   that read the chunked upload and one that answers early (no Python server:
   `http.server` does not decode chunked request bodies). Docs: as 20e, CHANGELOG
   ("Added").
@@ -272,7 +272,7 @@ the server).
   (`idle_timeout_ms`), and closes the channel when it leaves, so the feeder
   stops. Tests: golden fixtures (an SSE route next to a `HTTP.whole` route, a
   feeder that ends with an error, a client that leaves), and in
-  `tests/vm-http-test.rkt` a Node `http` client that disconnects mid-stream and
+  `tests/test_vm_http.py` a Node `http` client that disconnects mid-stream and
   a Python `http.client` reading an SSE stream piece by piece (it decodes
   chunked responses itself, so it is a second independent client). Docs: as 20e,
   with the SSE pattern in `references/network.md`, CHANGELOG ("Added").

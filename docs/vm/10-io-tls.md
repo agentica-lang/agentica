@@ -74,7 +74,7 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
 - **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against each
   other, covering the handshake, `close_notify`, raw EOF, every verify error and
   the load errors. The goldens `tls-echo` and `tls-errors` are their own peers.
-  `tests/vm-tls-test.rkt` covers the rest against Node
+  `tests/test_vm_tls.py` covers the rest against Node
   (`tests/fixtures/tls-peer.js`) and Python (`tests/fixtures/tls-peer.py`): EOF
   with and without `close_notify`, the 1 MiB limit, every verify error on both
   sides, timeouts, and system trust through `SSL_CERT_FILE`. The certificates in

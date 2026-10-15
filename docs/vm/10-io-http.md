@@ -48,7 +48,7 @@ channels (10.7). The rules of this section are fixed by the hostile-case tests
   always carry `Content-Length`, and requests are never chunked.
 - Tests target the adapter interface, so a replacement parser must pass the same
   tests: the C unit test `vm/tests/http_parse_test.c`, and the socket cases of
-  `tests/vm-http-test.rkt`, sent by Python raw-socket peers
+  `tests/test_vm_http.py`, sent by Python raw-socket peers
   (`tests/fixtures/http-peer.py`, `tests/fixtures/http-server-peer.py`).
 
 #### 10.6.1 As built (20a)
@@ -305,10 +305,10 @@ and a body that is not UTF-8. A connection that fails is never pooled.
   flight. Fixtures that depend on a timeout go in the Racket test, since goldens
   record step counts.
 - **The hostile cases of 10.6** run against the VM server, sent by a Python
-  raw-socket peer (`tests/vm-http-test.rkt`, standard library only), and check
+  raw-socket peer (`tests/test_vm_http.py`, standard library only), and check
   the status code and the close. The C unit test (`vm/tests/http_parse_test.c`)
   covers the same list at the adapter.
-- **Interop on port 0** (`tests/vm-http-test.rkt`, standard library only): the
+- **Interop on port 0** (`tests/test_vm_http.py`, standard library only): the
   VM client against Python's `http.server` and against an HTTPS server made with
   Python's `ssl` and the CA of `tests/fixtures/tls/`; the VM server against
   Python's `http.client` and Node's `http`, including chunked uploads,
