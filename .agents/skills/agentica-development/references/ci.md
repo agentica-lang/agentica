@@ -40,6 +40,12 @@ comment), then a step that calls it. Targets that are not obvious:
   purpose: `tests/eval/test_*.py` are not modules for this runner. `PY_ALONE`
   in the Makefile (`tests/test_vm_latency.py`) lists modules that a directory
   does not pick up: they run when named, as `make vm-latency` does.
+- `frontend-freeze` and `frontend-snapshot` are not CI steps: they rewrite the
+  frozen Racket outputs and the snapshot of the corpus that
+  `tests/test_frontend_<stage>.py` compare the Agentica stages with
+  (`references/frontend.md`, "Frozen comparisons"). They need Racket and go away
+  with the Racket stages; `tools/refreeze.py` (Python, no Racket) rewrites the
+  same goldens from the Agentica stages and is not a CI step either.
 - Each Python module runs in its own process (`python3 -m unittest
   tests.test_<area>` from the root), run by make itself: `make -k -O -j$(JOBS)`
   over `py-test/<file>` targets, so a failure shows that module's report and
@@ -103,7 +109,13 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 - `test`: first the `changes` step (below), then `make -j vm vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them), `make test` with the process and module tests on `dist/agentica`
-  (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make test-slow` (the
+  (`AGENTICA_TEST_EXECUTABLE`) running alongside it (`make test` of the whole
+  suite, or of `tests/test_single_binary.py`, first builds `dist/agentica-next`
+  and the bootstrap stages it embeds), `make fixed-point` (stage2 == stage3,
+  Racket's stage1 == stage2, and the single binary compiling the front end to
+  stage2 again; about 15 s after `make test` built the first two stages, as a
+  step of its own so a failure shows alone and costs no second checkout and VM
+  build), `make test-slow` (the
   `(module+ slow ...)` and `@slow` cases of the test files; a file without one
   is skipped),
   `make vm-latency` alone after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
@@ -121,7 +133,11 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 - `vm-sanitizers` (`needs: test`, and it still runs when `test` fails):
   `make vm-lint`, one `make -j vm vm-test vm-fuzz`, `make vm-layers` (on the
   sanitizer objects; the job installs ripgrep if `rg` is missing), the ASan golden,
-  bytecode, trace, TCP and TLS tests, and the GC stress build. The TCP tests need
+  bytecode, trace, TCP and TLS tests, `make fixed-point` on the sanitizer VM and
+  binary (about 75 s and 1.8 GB: the VM has no GC then; it runs before
+  `vm-sanitize-test`, whose `tests/test_single_binary.py` needs the sanitizer
+  `dist/agentica-next` that it built), and the GC stress build (which does not
+  run the fixed point: it collects every 64 allocations). The TCP tests need
   Node; the TLS tests need Node and Python 3. Both PR jobs set
   `AGENTICA_SWEEP=sampled`, so their golden and GC-stress runs sample the
   `--max-steps` sweep with a seed from `GITHUB_SHA`; a failure prints
@@ -170,7 +186,8 @@ The first steps of the `test` job (the `changes` step, checkout with
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
 - `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`, `VERSION`,
-  `src/stdlib.rkt` (the registry that embeds the `std/` modules);
+  `src/stdlib.rkt` (the registry that embeds the `std/` modules, from
+  `stdlib/MODULES`);
 - `tests/vm-diff-*`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
@@ -271,8 +288,11 @@ NEEDED `libgc` (in the build and in the unpacked archive). It ships the VM in th
 `licenses/`. Its test steps are targets: `make vm-diff-test` runs the golden
 tests on the release VM (`AGENTICA_VM_BINARY=dist/agentica-vm`, with the
 full sweep), and `make test-distribution` runs the distributed-executable
-test. The tags, the version, the Racket bundle and the CHANGELOG rules are
-under "Tags, versions and CHANGELOG" below.
+test. A step builds the single binary with the same toolchain (`make fixed-point
+CCACHE=`, glibc floor and static libraries checked as for the VM) and runs
+`examples/hello.agc` and `examples/queue.agc` with it; the archive does not
+carry it yet (step 8d ships it). The tags, the version, the Racket bundle and the
+CHANGELOG rules are under "Tags, versions and CHANGELOG" below.
 
 ### Tags, versions and CHANGELOG
 

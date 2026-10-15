@@ -1,6 +1,7 @@
 import Cli from "cli"
 import Host from "cli_host"
 import Spawn from "cli_spawn"
+import Env from "link_env"
 
 # `agentica-vm --allow-run -- cli_main.agcb OPTIONS -- ARGUMENTS...` is `agentica ARGUMENTS...` as an ordinary run of
 # the Agentica front end (docs/future/35-self-hosting.md, step 8a), not the default yet. The options are what the
@@ -40,12 +41,9 @@ def main() -> Void
   command = [
     vm, "--allow-run", "--", program, "--version", version, "--stdlib", stdlib, "--vm", vm, "--program", program, "--",
   ]
-  chosen = System.env("AGENTICA_VM")
-  if chosen.ok? and chosen.unwrap! != ""
-    vm = Path.resolve(chosen.unwrap!).unwrap_or(chosen.unwrap!)
-  end
-  host = Host.Host(stdlib: stdlib, vm: vm, command: command)
-  System.exit(Cli.run(arguments, version, host, &Spawn.hand_off))
+  host = Host.Host(vm: Host.chosen_vm(vm), command: command, no_tests: "")
+  settings = Env.settings(stdlib, Env.process_env()).with(version: version)
+  System.exit(Cli.run(settings, arguments, host, &Spawn.hand_off))
 end
 
 def fail(message: String) -> Void

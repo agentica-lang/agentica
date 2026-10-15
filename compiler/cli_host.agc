@@ -10,12 +10,33 @@ export struct Launch
   arguments: List[String]
 end
 
-## The places a run reads from and runs in. `stdlib` is the folder of the `std/` sources (the provider of an ordinary
-## run). `vm` is the VM binary: the hand-off of an ordinary run starts it on the program, and `agentica test` starts
-## runners and the programs under test on it. `command` is for `agentica test` too: the words that run this front end
-## again (the programs under test start `agentica` themselves). The single binary needs neither.
+## The processes a run starts. `vm` is the VM binary: the hand-off of an ordinary run starts it on the program, and
+## `agentica test` starts runners and the programs under test on it. `command` is for `agentica test` too: the words
+## that run this front end again (the programs under test start `agentica` themselves). `no_tests` is "" when `test`
+## can run, else the reason it cannot, which the command prints. The std/ sources are not here: they are the provider
+## of the `Settings` (a folder, or the single binary).
 export struct Host
-  stdlib: String
   vm: String
   command: List[String]
+  no_tests: String
+end
+
+## The VM to use: the one the environment variable AGENTICA_VM names when it is set and not empty, else `default`. As
+## Racket's `path->complete-path` does, a relative path gets the working folder in front and nothing else changes (a
+## `..` or a link stays), so a message names the VM as Racket's does.
+export def chosen_vm(default: String) -> String
+  chosen = System.env("AGENTICA_VM")
+  if !chosen.ok? or chosen.unwrap! == ""
+    return default
+  elsif chosen.unwrap!.starts_with?("/")
+    return chosen.unwrap!
+  end
+  folder = Path.cwd()
+  if !folder.ok?
+    return chosen.unwrap!
+  end
+  if folder.unwrap!.ends_with?("/")
+    return "#{folder.unwrap!}#{chosen.unwrap!}"
+  end
+  return "#{folder.unwrap!}/#{chosen.unwrap!}"
 end

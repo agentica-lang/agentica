@@ -29,23 +29,24 @@ export def hand_off(host: Host.Host, launch: Host.Launch) -> Int
   end
   temporary = RunDir.temporary_directory()
   if !temporary.ok?
-    IO.warn("agentica: cannot write a temporary file in #{RunDir.temporary_candidates()[0]}")
+    IO.warn(unwritable(RunDir.temporary_candidates()[0]))
     return 2
   end
   name = RunDir.random_hex()
   if !name.ok?
-    IO.warn("agentica: cannot write a temporary file in #{temporary.unwrap!}")
+    IO.warn(unwritable(temporary.unwrap!))
     return 2
   end
   path = "#{temporary.unwrap!}/agentica-#{name.unwrap!}.agcb"
   written = write_bytes(path, launch.bytes)
   if !written.ok?
     Path.remove(path, IO_TIMEOUT)
-    IO.warn("agentica: cannot write a temporary file in #{temporary.unwrap!}")
+    IO.warn(unwritable(temporary.unwrap!))
     return 2
   end
   status = run(vm, path, launch)
   Path.remove(path, IO_TIMEOUT)
+  # `run` answers -1 (an exit status is never negative) when the VM could not be started or waited for.
   if status < 0
     IO.warn("agentica: cannot run the VM at #{vm}")
     return 2
@@ -62,6 +63,15 @@ end
 ## The line printed when there is no VM to run anything with.
 export def missing_text(vm: String) -> String
   return "agentica: cannot find the VM at #{vm}; run make vm or set AGENTICA_VM"
+end
+
+# The line printed when the temporary directory cannot take the program's file. Racket names the directory with a
+# slash at its end, so this does too.
+def unwritable(directory: String) -> String
+  if directory.ends_with?("/")
+    return "agentica: cannot write a temporary file in #{directory}"
+  end
+  return "agentica: cannot write a temporary file in #{directory}/"
 end
 
 # Starts the VM on the file and passes the streams through until it ends. It gives the exit status, or -1 when the VM

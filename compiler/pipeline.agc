@@ -62,19 +62,19 @@ export def check_file(path: String, settings: Env.Settings) -> Front
   end
 end
 
-## Lowers a checked program and writes its bytes. `version` is the Agentica version of the header.
-export def build(version: String, front: Checked, settings: Env.Settings) -> Compiled
+## Lowers a checked program and writes its bytes. The header names `settings.version`.
+export def build(front: Checked, settings: Env.Settings) -> Compiled
   case Lowering.lower(front.linked, front.checked, settings.catalog)
     Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
-    Lowering.Lowered.Done(program) -> return write(Writer.write(version, front.linked.root_dir, program))
+    Lowering.Lowered.Done(program) -> return write(Writer.write(front.linked.root_dir, program, settings.version))
   end
 end
 
 ## Compiles the file at `path` to the bytes of its .agcb.
-export def compile(version: String, path: String, settings: Env.Settings) -> Compiled
+export def compile(path: String, settings: Env.Settings) -> Compiled
   case check_file(path, settings)
     Front.Rejected(problem) -> return Compiled.Rejected(problem)
-    Front.Done(front) -> return build(version, front, settings)
+    Front.Done(front) -> return build(front, settings)
   end
 end
 

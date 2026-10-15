@@ -181,6 +181,7 @@
 
 (define vm-builtins '("puts" "IO.print" "IO.warn" "IO.inspect" "IO.gets" "IO.gets!" "IO.read"
                       "IO.read_bytes" "IO.flush" "IO.eof?" "System.args" "System.exit" "System.env" "System.pid"
+                      "FrontEnd.hand_off" "FrontEnd.std_source"
                       "String.from_int" "String.from_float" "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"
                       "List.map" "List.filter" "List.reduce" "List.each" "List.any?" "List.all?" "List.sort_by"
                       "Range.size" "Range.to_a" "Range.include?" "Range.each" "Range.first" "Range.last"

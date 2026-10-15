@@ -20,8 +20,8 @@ SCENARIOS = [
 
 SLOW_SCENARIOS = ["structs-ok", "types-over", "updates-ok", "updates-over"]
 
-# The Agentica version of the header comes as `--version=V`: the writer takes it as an input, so the sizes and
-# checksums match the Racket writer's only when the test gives the version of the VERSION file.
+# `--version=V` names the Agentica version of the header; the writer takes it as an input, and the output leaves it
+# out (see header_size), so any version gives the same lines.
 def main() -> Void
   names = SCENARIOS
   version = ""
@@ -33,15 +33,17 @@ def main() -> Void
     end
   end
   for name in names
-    puts("#{name} #{describe(version, scenario(name))}")
+    puts("#{name} #{describe(scenario(name), version)}")
   end
 end
 
 # What writing a program gives, in one line: the size and a checksum of the bytes, or the code and place of the
 # problem (and the message of a BYTECODE-LIMIT, which is fixed).
-def describe(version: String, program: Ir.Program) -> String
-  case Writer.write(version, "", program)
-    Writer.Written.Done(bytes) -> return "ok #{bytes.size} #{checksum(bytes)}"
+def describe(program: Ir.Program, version: String) -> String
+  case Writer.write("", program, version)
+    Writer.Written.Done(bytes) ->
+      body = bytes.drop(header_size(bytes))
+      return "ok #{body.size} #{checksum(body)}"
     Writer.Written.Failed(problem) ->
       line = "ERROR #{problem.code} #{place(problem.span)} file=#{problem.file}"
       if problem.code == "BYTECODE-LIMIT"
@@ -53,6 +55,12 @@ end
 
 def place(span: Source.Span) -> String
   return "#{span.start.line}:#{span.start.column}-#{span.stop.line}:#{span.stop.column}"
+end
+
+# The header ends with the Agentica version (magic, format version, then the length of the version and its bytes), so
+# the size and the checksum above leave it out: a release does not change them.
+def header_size(bytes: List[Int]) -> Int
+  return 12 + bytes[8] + bytes[9] * 256 + bytes[10] * 65536 + bytes[11] * 16777216
 end
 
 def checksum(bytes: List[Int]) -> Int

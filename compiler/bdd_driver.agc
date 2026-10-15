@@ -48,8 +48,26 @@ struct Steps
   given: Bool
 end
 
-## Runs `agentica test` for the options and says how it ended.
+# Where the std/ sources of the programs the driver compiles come from.
+enum Std
+  # The caller (src/bdd-driver.rkt) sends them on stdin; they are installed in the run directory.
+  Stdin
+  # The settings of the caller, which has a provider of its own (the front end's `test` command).
+  Given(Env.Settings)
+end
+
+## Runs `agentica test` for the options and says how it ended. The `std/` sources come on stdin.
 export def run(options: Opts.Options) -> Report.Ending
+  return start(options, Std.Stdin)
+end
+
+## The same, with the settings of the caller (its version and its provider of the `std/` sources), when the driver runs
+## inside the front end and has no stdin of its own to read them from.
+export def run_with(options: Opts.Options, settings: Env.Settings) -> Report.Ending
+  return start(options, Std.Given(settings))
+end
+
+def start(options: Opts.Options, std: Std) -> Report.Ending
   if options.steps.size > 1
     return Report.usage("one --steps program; import the other files from it", options)
   end
@@ -68,24 +86,24 @@ export def run(options: Opts.Options) -> Report.Ending
   end
   run_directory = claimed.unwrap!
   RunDir.sweep(temporary.unwrap!, run_directory)
-  ending = inside(run_directory.path, options, temporary.unwrap!)
+  ending = inside(run_directory.path, options, std, temporary.unwrap!)
   RunDir.release(run_directory)
   return ending
 end
 
-# The run in its directory. The std/ sources are written first (unless the caller names a stdlib/ folder), and the
-# runner compiled before anything else: its failure is a bug of the installation.
-def inside(directory: String, options: Opts.Options, temporary: String) -> Report.Ending
-  stdlib = options.stdlib
-  if stdlib == ""
-    installed = install_std_sources(directory)
-    if !installed.ok?
-      return Report.infrastructure(installed.message, temporary, options)
-    end
-    stdlib = "#{directory}/std"
+# The run in its directory. The std/ sources are written first when they come on stdin, and the runner compiled before
+# anything else: its failure is a bug of the installation. The programs name the version the caller gave.
+def inside(directory: String, options: Opts.Options, std: Std, temporary: String) -> Report.Ending
+  settings = Env.settings("#{directory}/std", Env.process_env()).with(version: options.version)
+  case std
+    Std.Stdin ->
+      installed = install_std_sources(directory)
+      if !installed.ok?
+        return Report.infrastructure(installed.message, temporary, options)
+      end
+    Std.Given(given) -> settings = given
   end
-  settings = Env.settings(stdlib, Env.process_env())
-  case compile_runner(options.version, directory, settings)
+  case compile_runner(directory, settings)
     Pipeline.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"
       return Report.infrastructure(message, options.vm, options)
@@ -110,13 +128,13 @@ def install_std_sources(directory: String) -> Result[Void]
   return ok()
 end
 
-def compile_runner(version: String, directory: String, settings: Env.Settings) -> Pipeline.Compiled
+def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compiled
   source = "#{directory}/runner.agc"
   written = write_text(source, RUNNER_ROOT)
   if !written.ok?
     return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
   end
-  return Compile.file(version, source, settings, "cannot read the runner")
+  return Compile.file(source, settings, "cannot read the runner")
 end
 
 # Compiles the step program and the tests, writes the files the runner reads, runs it and reads its report. An error
@@ -133,7 +151,7 @@ def prepare_and_run(
       found.ok? and found.unwrap!.kind == "directory"
     end
   end
-  entries = try compile_tests(Discover.discover(given), directory, options.version, settings)
+  entries = try compile_tests(Discover.discover(given), directory, settings)
   config = Runner.Config(
     vm: options.vm,
     steps_bytecode: steps.bytecode,
@@ -184,11 +202,11 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
   compiled = Pipeline.Compiled.Bytes([])
   if options.steps.size == 0
     try write_text(source, DEFAULT_STEPS)
-    compiled = Compile.file(options.version, source, settings, "cannot read the step program #{source}")
+    compiled = Compile.file(source, settings, "cannot read the step program #{source}")
   else
     source = Path.resolve(options.steps[0]).unwrap_or(options.steps[0])
     root = SourceRoot.option(options.steps[0])
-    compiled = Compile.file(options.version, source, settings, "cannot read the step program #{options.steps[0]}")
+    compiled = Compile.file(source, settings, "cannot read the step program #{options.steps[0]}")
   end
   bytecode = "#{directory}/steps.agcb"
   given = options.steps.size > 0
@@ -206,13 +224,13 @@ end
 # `front_end` for the runner to report, and writes nothing. The other entries (feature files and problems) are not
 # compiled.
 def compile_tests(
-  entries: List[Discover.Entry], directory: String, version: String, settings: Env.Settings
+  entries: List[Discover.Entry], directory: String, settings: Env.Settings
 ) -> Result[List[Discover.Entry]]
   out: List[Discover.Entry] = []
   index = 0
   for entry in entries
     if entry.kind == "tests" and entry.problem == ""
-      out = out.push(try compile_test(entry, "#{directory}/test-#{index}.agcb", version, settings))
+      out = out.push(try compile_test(entry, "#{directory}/test-#{index}.agcb", settings))
     else
       out = out.push(entry)
     end
@@ -221,11 +239,9 @@ def compile_tests(
   return ok(out)
 end
 
-def compile_test(
-  entry: Discover.Entry, output: String, version: String, settings: Env.Settings
-) -> Result[Discover.Entry]
+def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings) -> Result[Discover.Entry]
   front_end = ""
-  case Compile.file(version, entry.path, settings, "cannot read the test file #{entry.path}")
+  case Compile.file(entry.path, settings, "cannot read the test file #{entry.path}")
     Pipeline.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
     Pipeline.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
   end

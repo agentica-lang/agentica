@@ -250,7 +250,7 @@ class Bdd(TestCase):
         os.chmod(path, 0o700)
         return {"AGENTICA_VM": path}
 
-    @unittest.skipIf(cli_is_agentica(), "the Agentica command line runs the driver in its own process, not on AGENTICA_VM")
+    @unittest.skipIf(cli_is_agentica(), "the Agentica command line runs the driver in its own process")
     def test_a_driver_that_crashes_is_status_2_with_the_error_on_stderr_not_a_failed_test_run(self):
         directory = self.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
         path = os.path.join(directory, "vm.sh")
@@ -409,7 +409,8 @@ class Bdd(TestCase):
         # of the report.
         driver = ROOT / "dist" / "agentica-bdd-driver.agcb"
         result = run([vm_binary(), "--allow-run", "--", driver, "--vm", vm_binary(), "--version", agentica_version(),
-                      "--agentica", "agentica", "--style", "json", "--", scratch / "missing.feature"], env=vm_environment(env), cwd=scratch)
+                      "--agentica", "agentica", "--style", "json", "--", scratch / "missing.feature"],
+                     env=vm_environment(env), cwd=scratch)
         self.assertEqual((result.code, result.stderr), (2, ""))
         problem = file_error(json.loads(result.stdout))
         self.assertEqual(problem["code"], "RUNTIME-BDD-INFRA")

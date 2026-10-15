@@ -5,7 +5,6 @@
 ## the file (`concat` of two large lists would copy again and again). The bytes of a character that a chunk cuts in
 ## two wait in `carry` for the next chunk.
 
-import Binary from "std/binary"
 import Diag from "diagnostic"
 import Source from "source"
 
@@ -19,14 +18,15 @@ end
 
 ## Reads the file at `path`.
 export def read(path: String, timeout_ms: Int) -> Read
-  opened = File.open(path, "read", timeout_ms)
-  if !opened.ok?
-    return Read.Unreadable(opened.message)
-  end
-  handle = opened.unwrap!
-  result = read_chunks(handle, timeout_ms)
-  File.close(handle, timeout_ms)
-  return result
+  return read_as(path, timeout_ms, false)
+end
+
+## Reads the file at `path` to show lines of it in a message: the text with U+FFFD in place of each byte that is not
+## part of a valid sequence, as Racket's `bytes->string/utf-8` does with that character (src/source-file.rkt keeps the
+## text of an invalid file that way for its diagnostic). The result is never Invalid. The time is linear in the size of
+## the file, bad bytes or not.
+export def read_shown(path: String, timeout_ms: Int) -> Read
+  return read_as(path, timeout_ms, true)
 end
 
 ## The LEX-INVALID-UTF8 diagnostic for the invalid byte at `at`: a span of length 1 that starts there. Racket has
@@ -37,18 +37,18 @@ export def invalid_utf8(at: Source.Position) -> Diag.Diagnostic
   return Diag.fail("LEX-INVALID-UTF8", "source file is not valid UTF-8", Source.Span(start: at, stop: stop), help)
 end
 
-## The text of the file at `path` to show a line of it in a diagnostic: the text, as `read` gives it, or for a file
-## that is not UTF-8 the text with U+FFFD in place of each byte that does not start a valid sequence (the rule of
-## Racket's decoder, which src/source-file.rkt uses for the same purpose); "" for a file that cannot be read.
-export def display_text(path: String, timeout_ms: Int) -> String
-  case read(path, timeout_ms)
-    Read.Text(text) -> return text
-    Read.Unreadable(_) -> return ""
-    Read.Invalid(_) -> return lossy(all_bytes(path, timeout_ms))
+def read_as(path: String, timeout_ms: Int, shown: Bool) -> Read
+  opened = File.open(path, "read", timeout_ms)
+  if !opened.ok?
+    return Read.Unreadable(opened.message)
   end
+  handle = opened.unwrap!
+  result = read_chunks(handle, timeout_ms, shown)
+  File.close(handle, timeout_ms)
+  return result
 end
 
-def read_chunks(handle: FileHandle, timeout_ms: Int) -> Read
+def read_chunks(handle: FileHandle, timeout_ms: Int, shown: Bool) -> Read
   parts: List[String] = []
   carry: List[Int] = []
   finished = false
@@ -67,12 +67,37 @@ def read_chunks(handle: FileHandle, timeout_ms: Int) -> Read
     head = data.take(cut)
     carry = data.drop(cut)
     decoded = String.from_bytes(head)
-    if !decoded.ok?
+    if decoded.ok?
+      parts = parts.push(decoded.unwrap!)
+    elsif shown
+      parts = parts.push(replace_invalid(head))
+    else
       return Read.Invalid(error_position(parts, head))
     end
-    parts = parts.push(decoded.unwrap!)
   end
   return Read.Text(parts.join(""))
+end
+
+# The text of `data` with U+FFFD (the bytes 239, 191, 189) for each byte at which no valid sequence starts, and
+# decoding going on at the next byte: the rule of Racket's decoder with an error character. One pass over the bytes
+# that builds the bytes of the result with pushes (near constant time each), then one decoding. Cutting `data` into
+# pieces with take and drop would copy the rest of it at every bad byte.
+def replace_invalid(data: List[Int]) -> String
+  out: List[Int] = []
+  at = 0
+  while at < data.size
+    width = sequence_width(data, at)
+    if width == 0
+      out = out.concat([239, 191, 189])
+      at += 1
+    else
+      for k in 0...width
+        out = out.push(data[at + k])
+      end
+      at += width
+    end
+  end
+  return String.from_bytes(out).unwrap!
 end
 
 # How many leading bytes of `data` end on a character boundary. A lead byte in the last three bytes whose
@@ -196,49 +221,4 @@ def sequence_width(data: List[Int], at: Int) -> Int
     return 0
   end
   return width
-end
-
-# Every byte of the file, or none when it cannot be read.
-def all_bytes(path: String, timeout_ms: Int) -> List[Int]
-  opened = File.open(path, "read", timeout_ms)
-  if !opened.ok?
-    return []
-  end
-  handle = opened.unwrap!
-  chunks: List[List[Int]] = []
-  finished = false
-  while !finished
-    got = File.read_bytes(handle, 262144, timeout_ms)
-    if !got.ok? or got.unwrap!.size == 0
-      finished = true
-    else
-      chunks = chunks.push(got.unwrap!)
-    end
-  end
-  File.close(handle, timeout_ms)
-  return Binary.concat(chunks)
-end
-
-# The text of the bytes with U+FFFD for each byte that starts no valid sequence.
-def lossy(data: List[Int]) -> String
-  parts: List[String] = []
-  run_start = 0
-  at = 0
-  while at < data.size
-    width = sequence_width(data, at)
-    if width == 0
-      parts = parts.push(decoded(data.drop(run_start).take(at - run_start)))
-      parts = parts.push(String.from_code(65533))
-      at += 1
-      run_start = at
-    else
-      at += width
-    end
-  end
-  parts = parts.push(decoded(data.drop(run_start)))
-  return parts.join("")
-end
-
-def decoded(bytes: List[Int]) -> String
-  return String.from_bytes(bytes).unwrap_or("")
 end

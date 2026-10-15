@@ -60,7 +60,7 @@ macOS branches are not linted while those platforms are paused.
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
 stack. `System.exit` calls `agc_exit`, which records `AGC_EXITED` and the
-code and `longjmp`s the same way. Only `vm/main.c` prints and exits: it
+code and `longjmp`s the same way. Only the driver (`vm/launch.c`, with `main.c` and `agentica.c`) prints and exits: it
 flushes stdout and maps the code (1..255 as is, anything else 0, like
 Racket's exit handler). SIGPIPE is ignored and every write is checked.
 

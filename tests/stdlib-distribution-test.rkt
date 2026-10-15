@@ -4,6 +4,7 @@
 
 (define-runtime-path source-directory "../src")
 (define-runtime-path library-directory "../stdlib")
+(define-runtime-path version-file "../VERSION")
 (define vm-name (if (eq? (system-type 'os) 'windows) "agentica-vm.exe" "agentica-vm"))
 (define-runtime-path dist-directory "../dist")
 
@@ -19,6 +20,8 @@
         (make-directory checkout)
         (copy-directory/files source-directory (build-path checkout "src"))
         (copy-directory/files library-directory (build-path checkout "stdlib"))
+        ;; src/version.rkt embeds this file when it is compiled.
+        (copy-file version-file (build-path checkout "VERSION"))
         ;; Recompile against this checkout, not copied bytecode/dependency paths.
         (delete-directory/files (build-path checkout "src" "compiled") #:must-exist? #f)
         (define raco (find-executable-path "raco"))

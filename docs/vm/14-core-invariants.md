@@ -148,25 +148,26 @@ FIFO nobody reads, or a test child that gets `PR_SET_PDEATHSIG`'s SIGTERM,
 before the children are stopped waits for step 1, so children are never left
 behind.
 
-As built (`end_run` in `vm/main.c`, §10.2.2 "End of run" and "Stop signals"):
-`main`'s return, `System.exit`, a diagnostic, the step limit and the first stop
-signal all reach `end_run`. It kills the children, sends one non-blocking TLS
-`close_notify` per finished TLS session (sockets and `HttpClient` connections),
-flushes the blocking stdout and stderr, queues the diagnostic of a failed run on
-stderr, closes the files and waits for their flush jobs and for the output
-buffers of stdout and stderr (within the flush limit; once a stop signal is set,
-one non-blocking write per stream and no more wait for stdout and stderr),
-prints what is only known after the wait without blocking (the flush-timeout
-warning, a write-error diagnostic; text that a stuck stderr pipe will not take
-is dropped), and ends with `_exit`, or with the stop signal raised again. A
-second stop signal before the children are stopped is recorded and acted on
-right after, and an `alarm` bounds that at 3 seconds. A driven VM whose driver
-is gone takes the immediate path on its first signal. `agc_io_close` is only for
-the in-process harnesses. Children are reaped by libuv's exit callback, never by
-`waitpid` or a sleep, and step 1 runs the loop for the exits (§10.4 Close; row
-7.2.1d, first part, done). The streams on the loop drain inside the file flush,
-so the flush limit bounds them; the blocking fallbacks of §14.1 are the only
-unbounded write left.
+As built (`agc_launch_settle` of `vm/launch.c`, §10.2.2 "End of run" and "Stop
+signals"): `main`'s return, `System.exit`, a diagnostic, the step limit and the
+first stop signal all reach `agc_launch_settle`. It kills the children, sends
+one non-blocking TLS `close_notify` per finished TLS session (sockets and
+`HttpClient` connections), flushes the blocking stdout and stderr, queues the
+diagnostic of a failed run on stderr, closes the files and waits for their flush
+jobs and for the output buffers of stdout and stderr (within the flush limit;
+once a stop signal is set, one non-blocking write per stream and no more wait
+for stdout and stderr), prints what is only known after the wait without
+blocking (the flush-timeout warning, a write-error diagnostic; text that a stuck
+stderr pipe will not take is dropped), and ends with `_exit`, or with the stop
+signal raised again. A second stop signal before the children are stopped is
+recorded and acted on right after, and an `alarm` bounds that at 3 seconds. A
+driven VM whose driver is gone takes the immediate path on its first signal.
+`agc_io_close` is only for the in-process harnesses and for the single binary,
+which closes the front end's loop before it runs the program in a new runtime.
+Children are reaped by libuv's exit callback, never by `waitpid` or a sleep, and
+step 1 runs the loop for the exits (§10.4 Close; row 7.2.1d, first part, done).
+The streams on the loop drain inside the file flush, so the flush limit bounds
+them; the blocking fallbacks of §14.1 are the only unbounded write left.
 
 Known exceptions, outside the exit path: the out-of-memory and GC abort handlers
 end with `_Exit(70)` and run none of these steps (§6.3), and `SIGKILL` runs none

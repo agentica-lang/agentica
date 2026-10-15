@@ -4,15 +4,13 @@
 ## the driver `DRIVER_OPTIONS -- ARGUMENTS`. The driver options say what only the front end knows: `--vm PATH` (the VM
 ## that runs the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
 ## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`, `--allow-run`,
-## `--seed N`, `--test-timeout-ms N` and `--stdlib DIR` (a stdlib/ folder to link against; without it the `std/`
-## sources come on stdin, bdd_driver.agc). ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
+## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
 ## `--only TEXT`, `--json`, `--ai` and `--allow-run`.
 
 ## Everything a run needs.
 export struct Options
   vm: String
   version: String
-  stdlib: String
   agentica: List[String]
   style: String
   allow_run: Bool
@@ -37,7 +35,6 @@ export def parse(arguments: List[String]) -> Parsed
   options = Options(
     vm: "",
     version: "",
-    stdlib: "",
     agentica: [],
     style: "plain",
     allow_run: false,
@@ -77,8 +74,6 @@ def option(options: Options, name: String, value: String) -> Options
     return options.with(vm: value)
   elsif name == "--version"
     return options.with(version: value)
-  elsif name == "--stdlib"
-    return options.with(stdlib: value)
   elsif name == "--agentica"
     return options.with(agentica: options.agentica.push(value))
   elsif name == "--style"

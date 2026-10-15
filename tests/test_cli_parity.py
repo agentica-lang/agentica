@@ -1,18 +1,23 @@
-"""The command line written in Agentica (compiler/cli_main.agc, run by tests/agentica-agcb) against the Racket one.
+"""The command line written in Agentica against the Racket one, in its two homes.
 
-Each case runs the same arguments through both and compares the exit code, stdout and stderr, byte for byte. The cases
-cover every command and option of src/main.rkt, and the three forms of a diagnostic (plain, --ai, --json) for the
-stages that can fail. The differences that are on purpose are listed in DELIBERATE (docs/future/35-self-hosting.md,
-35.4, "Step 8a status") and checked on their own.
+AgcbParity runs it as an ordinary program (compiler/cli_main.agc, run on the VM by tests/agentica-agcb); BinaryParity
+runs it in the single binary (compiler/front_end_cli.agc in dist/agentica-next). Each case runs the same arguments
+through the Racket command line and the other one, and compares the exit code, stdout and stderr, byte for byte. The
+cases cover every command and option of src/main.rkt, and the three forms of a diagnostic (plain, --ai, --json) for
+the stages that can fail. The differences that are on purpose (docs/future/35-self-hosting.md, 35.4, "Step 8a
+status") are checked on their own: the dump flags, and the version.
 """
 import os
+import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from tests.agentica_test import AGCB_CLI, ROOT, TestCase, agentica_version, require, run, slow, tool, vm_environment
+from tests.agentica_test import (
+    AGCB_CLI, ROOT, TestCase, agentica_version, require, run, slow, tool, vm_environment)
 
 CLI_PROGRAM = ROOT / "dist" / "agentica-cli.agcb"
+BINARY = ROOT / "dist" / "agentica-next"
 RACKET_CLI = ["racket", str(ROOT / "src" / "main.rkt")]
 JOBS = 6
 
@@ -20,7 +25,8 @@ FILES = {
     "ok.agc": 'def main() -> Void\n  puts("ok")\nend\n',
     "args.agc": (
         'def main() -> Void\n  puts(System.args().join("|"))\n  IO.warn("to stderr")\n  name = IO.gets()\n'
-        '  if name.ok?\n    puts("hello #{name.unwrap!}")\n  end\n  print("rest=#{IO.read()}")\n  System.exit(3)\nend\n'),
+        '  if name.ok?\n    puts("hello #{name.unwrap!}")\n  end\n  print("rest=#{IO.read()}")\n'
+        '  System.exit(3)\nend\n'),
     "loop.agc": "def main() -> Void\n  while true\n  end\nend\n",
     "divide.agc": "def main() -> Void\n  puts(1 / 0)\nend\n",
     "lex.agc": 'def main() -> Void\n  puts("unterminated)\nend\n',
@@ -38,7 +44,8 @@ FILES = {
     "std_error.agc": 'import Queue from "std/queue"\n\ndef main() -> Void\n  puts(Queue.nope())\nend\n',
     "lib/util.agc": (
         "export def boom(n: Int) -> Int\n  return n / 0\nend\n\nexport def bad() -> Int\n  return \"s\"\nend\n"),
-    "sub/boom.agc": 'import Util from "../lib/util"\n\ndef main() -> Void\n  puts("start")\n  puts(Util.boom(1))\nend\n',
+    "sub/boom.agc": (
+        'import Util from "../lib/util"\n\ndef main() -> Void\n  puts("start")\n  puts(Util.boom(1))\nend\n'),
     "sub/bad.agc": 'import Util from "../lib/util"\n\ndef main() -> Void\n  puts(Util.bad())\nend\n',
 }
 
@@ -48,16 +55,16 @@ BINARY_FILES = {"invalid.agc": b'def main() -> Void\n  puts("a\xff\xe2\x82b")\ne
 # What the stages and the runtime can say about a program, run in the three forms of a diagnostic.
 PROGRAMS = ["ok.agc", "lex.agc", "parse.agc", "tab.agc", "crlf.agc", "unicode.agc", "multiline.agc", "labels.agc",
             "twice.agc", "helped.agc", "missing_import.agc", "std_error.agc", "sub/bad.agc", "sub/boom.agc",
-            "invalid.agc", "divide.agc", "absent.agc"]
+            "invalid.agc", "big_invalid.agc", "divide.agc", "absent.agc"]
 
 BUILTINS = ["String.split", "ok", "Task.await", "Map.get", "File.open", "Process.spawn_captured", "JSON.decode"]
-ALSO_BUILTINS = ["print", "puts", "error", "gets", "gets!", "Set.new", "List.map", "Channel.new", "Test.eq", "TCP.connect",
-                 "TLS.connect", "Time.now_ms", "Random.int", "Path.real", "Dir.list", "System.args", "IO.read_bytes"]
+LISTING = "(require (file \"%s\")) (for-each displayln (public-builtin-names))" % (ROOT / "src" / "builtins.rkt")
 
 # Arguments with no file: the options, their mistakes and the help.
 OPTIONS = [
     ["--version"], ["-h"], ["--help"], ["-hx"], ["-xh"], ["-ab", "c"], ["--foo"], ["+x"], ["-"], ["+"], [],
-    ["check"], ["compile"], ["help"], ["--json", "help"], ["help", "--json"], ["help", "Nope"], ["help", "Strin.split"],
+    ["check"], ["compile"], ["help"], ["--json", "help"], ["help", "--json"], ["help", "Nope"],
+    ["help", "Strin.split"],
     ["help", "a", "b", "c"], ["help", "HttpWire.client"],
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
     ["--max-steps=5", "ok.agc"], ["--seed", "2147483648", "ok.agc"], ["--seed", "007", "ok.agc"],
@@ -72,13 +79,17 @@ OPTIONS = [
 ]
 
 
-class CliParity(TestCase):
+class Parity:
+    """The cases, for the command line in `agentica`; the two classes below say which one it is."""
+
+    agentica = None
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         tool("racket")
-        require(CLI_PROGRAM.is_file(), "the Agentica command line is not built (%s): run make cli" % CLI_PROGRAM)
         require((ROOT / "dist" / "agentica-vm").is_file(), "the VM is not built: run make vm")
+        cls.prepare()
         cls.directory = tempfile.TemporaryDirectory(prefix="agentica-parity-")
         cls.addClassCleanup(cls.directory.cleanup)
         cls.work = Path(cls.directory.name).resolve()
@@ -88,17 +99,19 @@ class CliParity(TestCase):
             path.write_text(text, encoding="utf-8")
         for name, data in BINARY_FILES.items():
             (cls.work / name).write_bytes(data)
+        # A large file with bytes that are not UTF-8: showing its line must take time linear in its size.
+        (cls.work / "big_invalid.agc").write_bytes(b"x = 1\n" * 20000 + b"\xff\xfe\n" + bytes(range(256)) * 400)
 
-    def both(self, arguments, stdin=b"", cwd=None, outputs=()):
-        """The results of the Racket and the Agentica command line for the same arguments, run side by side.
+    def both(self, arguments, stdin=b"", cwd=None, outputs=(), env=None):
+        """The results of the Racket and the Agentica command line for the same arguments, run one after the other.
 
         `outputs` are files the command writes (relative to cwd); their bytes are returned too, and removed after each
         run so the second command does not find the first one's file."""
         cwd = cwd or self.work
         results = []
-        for command in (RACKET_CLI, [str(AGCB_CLI)]):
+        for command in (RACKET_CLI, self.agentica):
             result = run(command + [str(argument) for argument in arguments], stdin=stdin, cwd=cwd,
-                         env=vm_environment())
+                         env=vm_environment(env))
             files = []
             for name in outputs:
                 path = Path(cwd) / name
@@ -172,8 +185,10 @@ class CliParity(TestCase):
         self.assertEqual(self.parallel(cases), "")
 
     @slow
-    def test_help_for_every_builtin_in_both_forms(self):
-        cases = [(["help", name] + flag, {}) for name in BUILTINS + ALSO_BUILTINS for flag in ([], ["--json"])]
+    def test_help_for_every_public_builtin_in_both_forms(self):
+        names = run(["racket", "-l", "racket/base", "-e", LISTING]).stdout.split()
+        self.assertGreater(len(names), 150)
+        cases = [(["help", name] + flag, {}) for name in names for flag in ([], ["--json"])]
         self.assertEqual(self.parallel(cases), "")
 
     def test_the_dump_flags_print_the_program_in_the_text_forms_of_compiler(self):
@@ -188,6 +203,48 @@ class CliParity(TestCase):
             self.assertSame([flag, "tab.agc"])
 
     def test_the_version_is_the_version_file(self):
-        result = run([str(AGCB_CLI), "--version"], env=vm_environment())
+        result = run(self.agentica + ["--version"], env=vm_environment())
         self.assertEqual(result, (0, agentica_version() + "\n", ""))
-        self.assertTrue(os.access(AGCB_CLI, os.X_OK))
+
+
+class AgcbParity(Parity, TestCase):
+    """The ordinary program: compiler/cli_main.agc on agentica-vm, started by tests/agentica-agcb."""
+
+    @classmethod
+    def prepare(cls):
+        require(CLI_PROGRAM.is_file(), "the Agentica command line is not built (%s): run make cli" % CLI_PROGRAM)
+        cls.agentica = [str(AGCB_CLI)]
+        require(os.access(AGCB_CLI, os.X_OK), "%s is not executable" % AGCB_CLI)
+
+    def test_a_temporary_folder_that_cannot_be_written_and_a_missing_vm_are_named_as_racket_names_them(self):
+        """These are the messages of the hand-off through a file; the single binary writes none and needs no VM."""
+        folder = self.work / "readonly"
+        folder.mkdir(exist_ok=True)
+        folder.chmod(0o555)
+        self.addCleanup(folder.chmod, 0o755)
+        require(not os.access(folder, os.W_OK), "this user can write in a read-only folder")
+        cases = [(["ok.agc"], {"env": {"TMPDIR": str(folder) + suffix}}) for suffix in ("", "/", "//")]
+        cases += [(["ok.agc"], {"env": {"AGENTICA_VM": path}}) for path in ("missing-vm", "../nope/../vm", "/nope/vm")]
+        self.assertEqual(self.parallel(cases), "")
+
+
+class BinaryParity(Parity, TestCase):
+    """The single binary: the same command line as the front end it carries, with the hand-off to C."""
+
+    @classmethod
+    def prepare(cls):
+        require(BINARY.is_file(), "the single binary is not built (%s): run make agentica-next" % BINARY)
+        cls.agentica = [str(BINARY)]
+
+    def test_both_streams_of_a_program_keep_their_order_in_one_pipe(self):
+        """The program writes to the real streams, so `2>&1` interleaves them as the program wrote them."""
+        (self.work / "mixed.agc").write_text(
+            'def main() -> Void\n  for i in 0...20\n    puts("out #{i}")\n    IO.warn("err #{i}")\n  end\nend\n')
+        results = []
+        for command in (RACKET_CLI, self.agentica):
+            merged = subprocess.run(
+                ["sh", "-c", 'exec "$@" 2>&1', "sh"] + command + ["mixed.agc"], cwd=self.work, env=vm_environment(),
+                stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, timeout=60)
+            results.append((merged.returncode, merged.stdout))
+        self.assertEqual(results[1], results[0])
+        self.assertEqual(results[1][1], b"".join(b"out %d\nerr %d\n" % (i, i) for i in range(20)))

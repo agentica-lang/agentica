@@ -6,18 +6,28 @@ import Diag from "diagnostic"
 import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
+import SourceFile from "source_file"
 
 ## True for the key of a standard module, which no canonical path can look like.
 export def embedded?(key: String) -> Bool
   return !key.starts_with?("/")
 end
 
-## The file that holds a module, for reading: the file itself, or the file of a std/ module in the stdlib/ folder.
-export def source_path(settings: Env.Settings, key: String) -> String
-  if embedded?(key)
-    return Paths.join(settings.stdlib, key.slice(4, key.length - 4))
+## Reads the source of the module with this key: a file, or a std/ module from the provider of the settings (a
+## stdlib/ folder, or the copy that the binary carries).
+export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
+  if !embedded?(key)
+    return SourceFile.read(key, Env.io_timeout())
   end
-  return key
+  case settings.std
+    Env.StdProvider.Folder(folder) -> return SourceFile.read(Paths.join(folder, std_path(key)), Env.io_timeout())
+    Env.StdProvider.Embedded ->
+      text = FrontEnd.std_source(std_path(key))
+      if text.ok?
+        return SourceFile.Read.Text(text.unwrap!)
+      end
+      return SourceFile.Read.Unreadable(text.message)
+  end
 end
 
 ## The key of the module that the import path file (already ending in .agc) names, found from the module with key.
@@ -41,6 +51,11 @@ export def resolve_import(
   return relative(key, file, site)
 end
 
+# The path of the source of a std/ module under stdlib/: the key without its std/.
+def std_path(key: String) -> String
+  return key.slice(4, key.length - 4)
+end
+
 def io_failure(site: Failure.Site, message: String) -> String
   return Failure.fail_at(site, "CHECK-IMPORT-IO", message, Diag.Help.NoHelp)
 end
@@ -55,13 +70,21 @@ def directory?(path: String) -> Bool
   return info.ok? and info.unwrap!.kind == "directory"
 end
 
-# The registry of src/stdlib.rkt is the files of the stdlib/ folder (a test checks that they are the same list).
+# A std/ module exists when the provider has its source. The registry of src/stdlib.rkt is stdlib/MODULES, which the
+# binary embeds and which lists the files of the stdlib/ folder (a test checks that they are the same list).
 def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
   try Paths.validate_library_path(file, site)
-  if !file?(source_path(settings, file))
+  if !std_exists?(settings, file)
     return error(io_failure(site, "unknown standard library module"))
   end
   return ok(file)
+end
+
+def std_exists?(settings: Env.Settings, file: String) -> Bool
+  case settings.std
+    Env.StdProvider.Folder(folder) -> return file?(Paths.join(folder, std_path(file)))
+    Env.StdProvider.Embedded -> return FrontEnd.std_source(std_path(file)).ok?
+  end
 end
 
 def library(settings: Env.Settings, root_dir: String, file: String, site: Failure.Site) -> Result[String]

@@ -317,6 +317,7 @@ size_t agc_size_mul(size_t a, size_t b);
 void agc_out_of_memory(void);
 unsigned agc_gc_version(void);
 bool agc_gc_stats(agc_gc_info *info);
+void agc_gc_collect(void);
 
 agc_value agc_void(void);
 agc_value agc_nil(void);

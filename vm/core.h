@@ -36,6 +36,12 @@ bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *erro
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
                      const agc_trace *trace);
 
+/* Loads the front end that the binary carries or that --front-end names: the same checks as agc_load_traced except
+ * that the Agentica version in the header may differ (the file format version must still match). It is not for user
+ * programs: only the driver of the single binary calls it. */
+bool agc_load_front_end(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
+                        const agc_trace *trace);
+
 /* Puts "root/" before every source name of a freshly loaded program that is relative and does not start with "std/"
  * (those are the embedded standard modules). A leading "./" of a joined name is dropped, not only in "./std/NAME.agc":
  * the root "r" turns "./x.agc" into "r/x.agc". No "/" is added when the root already ends in one, and an empty root

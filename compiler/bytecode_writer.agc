@@ -26,18 +26,21 @@ export enum Written
   Failed(Problems.Problem)
 end
 
-## Writes the program. `version` is the Agentica version the header names (the VM loads only its own), an input of the
-## front end and not a constant of the compiler (docs/future/35-self-hosting.md, 35.3). root_dir is the folder of the
-## root file, which the stored names of the sources are relative to.
-export def write(version: String, root_dir: String, program: Ir.Program) -> Written
-  result = build(version, root_dir, program)
+## Writes the program. root_dir is the folder of the root file, which the stored names of the sources are relative to.
+## version is the Agentica version that the header names; the VM loads the file only when it is its own, so an empty
+## one is BYTECODE-INTERNAL.
+export def write(root_dir: String, program: Ir.Program, version: String) -> Written
+  if version == ""
+    return Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty")))
+  end
+  result = build(root_dir, program, version)
   if result.ok?
     return Written.Done(result.unwrap!)
   end
   return Written.Failed(Problems.unpack(result.message))
 end
 
-def build(version: String, root_dir: String, program: Ir.Program) -> Result[List[Int]]
+def build(root_dir: String, program: Ir.Program, version: String) -> Result[List[Int]]
   try check_limits(program)
   struct_index: Map[String, Int] = {}
   at = 0
