@@ -93,8 +93,16 @@
           (for ([input (in-list inputs)])
             (check-equal? (hash-ref outputs (input-path input) #f) (golden input) (check-input-name input))))))))
 
-; The programs of the cases of tests/checker-test.rkt, in the order they are checked there.
+; The programs of the cases of tests/checker-test.rkt, in the order they are checked there. The cases run when
+; the test submodule is first instantiated, so the programs are collected once and kept: a second call would
+; find the module instantiated and collect nothing.
+(define collected-programs #f)
+
 (define (checker-case-programs)
+  (unless collected-programs (set! collected-programs (collect-checker-case-programs)))
+  collected-programs)
+
+(define (collect-checker-case-programs)
   (define found '())
   (define seen (make-hash))
   (define sink (dynamic-require checker-cases 'current-text-sink))
@@ -129,6 +137,7 @@
        (string-append (substring text 0 (car span)) (list-ref pool (random (length pool))) (substring text (cdr span)))])))
 
 (define (mutated-programs programs count)
+  (when (null? programs) (error 'mutated-programs "no programs to mutate"))
   (parameterize ([current-pseudo-random-generator (make-pseudo-random-generator)])
     (random-seed 258)
     (for/list ([_ (in-range count)])
