@@ -130,6 +130,8 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 44 | Module constants and imports | [`44-module-constants.md`](44-module-constants.md) | Planned (roadmap row 7.2.8): new import forms (`import Mod from "path"`, `import {A} from "path"`) first, then module constants; before the bootstrap, by the owner's decision of 2026-10-15; relaxes the freeze of row 7.2.7 |
 | 45 | Packages | [`45-packages.md`](45-packages.md) | Design, not scheduled; decided by the owner on 2026-10-15: `std/toml` first (45-0, may land before the bootstrap), TOML manifest and lock, `Toml.Value` decode, `owner/repo` imports; the manager waits for after the bootstrap (§35 step 8); asked by the owner on 2026-10-15 |
 | 46 | Signals | [`46-signals.md`](46-signals.md) | Scheduled on 2026-10-15, after the bootstrap (phase 27, [`docs/roadmap/27-signals.md`](../roadmap/27-signals.md)): catch TERM and INT for a safe shutdown, forward signals to children, signal a process group; 46a and 46b (VM code and builtin table rows) may come earlier |
+| 47 | Code formatter (`agentica fmt`) | [`47-formatter.md`](47-formatter.md) | Deferred until after the bootstrap (§35 step 8, roadmap row 7.9, phase 28), decided by the owner on 2026-10-15; 47d waits for the LSP (§43) |
+| 48 | Regular expressions | [`48-regex.md`](48-regex.md) | Decided by the owner on 2026-10-15; deferred until after the bootstrap (roadmap row 7.10, phase 29): `std/regex` in Agentica first, then the regex literal `/pattern/flags` |
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no Racket
 twin ([roadmap
