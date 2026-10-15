@@ -1,0 +1,7 @@
+# café 你好 😀 comment
+x = "café 你好 😀" + "naïve"
+## doc éè 🚀
+## more   text
+y = "é#{x}你😀#{y}é" z
+"\#é"
+w = 1

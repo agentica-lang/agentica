@@ -64,9 +64,11 @@ test-distribution: build vm
 	$(RACO) test tests/stdlib-distribution-test.rkt
 
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
+# Without FIXTURES it also rewrites the front-end goldens of tests/fixtures/frontend/ from the Racket stages
 goldens: build vm
 	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-diff-common.rkt
 	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-stack-test.rkt
+	test -n "$(FIXTURES)" || racket tests/frontend-lexer-common.rkt
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
 vm-golden-check: build vm

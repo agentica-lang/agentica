@@ -1,0 +1,8 @@
+"" "a" "plain # text" "## text"
+"quote: \" slash: \\ hash: \# nl: \n cr: \r tab: \t"
+"\#{x}" "a\#{b}c"
+"a#{b}c#{d}e"
+"#{x}" "#{x}#{y}" "#{"#{1}"}"
+"#{ {"k": 1}["k"] }" "x#{f(1, 2)}y#{[1, 2]}z"
+"a#{n + {"k": 1}["k"]}b#{"q"}c\#{d}"
+x = "a" + "b" # trailing

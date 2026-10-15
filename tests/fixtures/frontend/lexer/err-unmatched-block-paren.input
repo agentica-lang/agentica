@@ -1,0 +1,3 @@
+f(xs.map do |x|
+  x
+)

@@ -1,0 +1,5 @@
+x _x _1 x1 X Xy X_1 Type_Name _
+ready? save! empty? a!=b a!= b a! =b
+valid?(x) String.contains?(s, p) to_int!("1")
+end? end! do? nil? true! not! if? else? def?
+Type!x
