@@ -99,11 +99,12 @@ import {lex as lex_text, Token as Tok} from "compiler/lexer"
     alias, against another named import (also in the same list, and also the
     same name from the same module twice), against a builtin function name
     (`puts`, `ok`) and against a reserved type name (`Int`, `JSON`, `Set`):
-    `CHECK-REDEFINED-NAME`, located at the imported name in the braces. Imports
-    come first in a file, so a clash with a declaration is reported at the
-    import (as an alias clash is today: the linker collects the declarations
-    before it reads the imports), and a clash between two imports at the later
-    one. No new code.
+    `CHECK-REDEFINED-NAME`, located at the name in the braces (the name after
+    `as` for a rename, since the clash is on the local name). The linker
+    collects the declarations before it reads the imports, so a clash with a
+    declaration is found when its import is read, and a clash between two
+    imports at the later one; an alias is also checked against the names
+    imported before it. No new code.
   - A local variable or parameter named like an imported function behaves as
     for a function of the file: nothing new.
 - **Unknown or private names:** `CHECK-IMPORT-NAME` at the name in the braces

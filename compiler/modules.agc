@@ -138,11 +138,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   if alias != ""
     aliases = aliases.put(alias, target)
   end
-  moved = frame.with(aliases: aliases, next: frame.next + 1)
-  if decl.names.size > 0
-    moved = frame.with(aliases: aliases, pending: target)
-  end
-  with_frame = replace_top(walk, moved)
+  with_frame = replace_top(walk, after_read(frame, aliases, target, decl))
   state = walk.seen.get(target, -1)
   if state == 1
     return error(Failure.fail_at(site, "CHECK-IMPORT-CYCLE", "import cycle", Diag.Help.NoHelp))
@@ -150,6 +146,14 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
     return ok(with_frame)
   end
   return load_file(settings, with_frame, target, site)
+end
+
+# An alias import is done once read; a name list waits for its file (pending).
+def after_read(frame: Frame, aliases: Map[String, String], target: String, decl: Ast.ImportDecl) -> Frame
+  if decl.names.size == 0
+    return frame.with(aliases: aliases, next: frame.next + 1)
+  end
+  return frame.with(aliases: aliases, pending: target)
 end
 
 # The names of the import at next, once its file is loaded: each must be an export, keep the case rule of its kind, and join the names of the file like a declaration. The first problem is reported, in the order of the list.

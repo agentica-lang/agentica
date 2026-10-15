@@ -1,1 +1,1 @@
-ERROR PARSE-UNEXPECTED-TOKEN 11:1:12-12:1:13 "expected from, found \",\"" -
+ERROR PARSE-UNEXPECTED-TOKEN 11:1:12-12:1:13 "expected from, found \",\"" "write the alias and the names on two import lines"

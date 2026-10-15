@@ -1400,7 +1400,11 @@ end
 
 # import Alias from "path"
 def parse_import_alias(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
-  after_from = try expect_word(e, pos + 2, "from")
+  mixed = ""
+  if Base.kind_at(e, pos + 2) == "comma"
+    mixed = "write the alias and the names on two import lines"
+  end
+  after_from = try expect_word(e, pos + 2, "from", mixed)
   after_path = try Base.expect(e, after_from, "string", "an import path", false)
   stop = try Base.expect(e, after_path, "NL", "a newline after import", false)
   alias = Ast.Optional.Present(e.tokens[pos + 1].lexeme)
@@ -1411,19 +1415,23 @@ end
 # import {A, B as C} from "path"
 def parse_import_names(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   listed = try parse_import_list(e, pos + 2)
-  after_from = try expect_word(e, listed.pos, "from")
+  after_from = try expect_word(e, listed.pos, "from", "")
   after_path = try Base.expect(e, after_from, "string", "an import path", false)
   stop = try Base.expect(e, after_path, "NL", "a newline after import", false)
   node = Ast.Decl.Import(Ast.ImportDecl(id: ids, path: Base.token_text(e.tokens[after_from]), alias: Ast.Optional.Absent, names: listed.nodes, span: Base.span_from(e, pos, stop)))
   return decl_at(node, stop, ids)
 end
 
-# The position after the name token with this text (from, as).
-def expect_word(e: Base.Env, at: Int, word: String) -> Result[Int]
+# The position after the name token with this text (from, as). help is "" for none.
+def expect_word(e: Base.Env, at: Int, word: String, help: String) -> Result[Int]
   if e.tokens[at].kind == "name" and e.tokens[at].lexeme == word
     return ok(at + 1)
   end
-  return error(Base.found(e, at, word))
+  message = "expected " + word + ", found " + Base.describe(e.tokens[at])
+  if help == ""
+    return error(Base.unexpected(e, at, message))
+  end
+  return error(Base.unexpected_help(e, at, message, help))
 end
 
 # The entries after "{": one or more, a trailing comma allowed, then "}".
@@ -1449,7 +1457,8 @@ def parse_import_list(e: Base.Env, at: Int) -> Result[ImportNamesAt]
       cursor += 1
       looping = false
     else
-      return error(Base.found(e, cursor, "\",\" or \"}\""))
+      message = "expected \",\" or \"}\", found " + Base.describe(e.tokens[cursor])
+      return error(Base.unexpected_help(e, cursor, message, "separate names with commas: import {a, b} from \"path\""))
     end
   end
   return ok(ImportNamesAt(nodes: nodes, pos: cursor))

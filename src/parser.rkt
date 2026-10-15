@@ -200,7 +200,7 @@
       (cond
         [(kind? 'type-name)
          (define alias (advance!))
-         (expect-word "from")
+         (expect-word "from" (and (kind? 'comma) "write the alias and the names on two import lines"))
          (define path (expect 'string "an import path"))
          (expect 'NL "a newline after import")
          (import-decl (token-value path) (token-lexeme alias) '() (span-from begin))]
@@ -220,12 +220,13 @@
          (expect 'NL "a newline after import")
          (import-decl (token-value path) (token-lexeme alias) '() (span-from begin))]))
 
-    (define (expect-word word)
+    (define (expect-word word [help #f])
       (if (and (kind? 'name) (equal? (token-lexeme (current)) word))
           (advance!)
           (bail 'PARSE-UNEXPECTED-TOKEN
                 (format "expected ~a, found ~a" word (describe (current)))
-                (current))))
+                (current)
+                #:help help)))
 
     ;; The list after "{": one or more entries, a trailing comma allowed, then "}".
     (define (parse-import-names)
@@ -244,7 +245,8 @@
           [(kind? 'right-brace) (advance!) (reverse acc)]
           [else (bail 'PARSE-UNEXPECTED-TOKEN
                       (format "expected \",\" or \"}\", found ~a" (describe (current)))
-                      (current))])))
+                      (current)
+                      #:help "separate names with commas: import {a, b} from \"path\"")])))
 
     ;; An exported name, then optionally `as` and the local name. The original always comes first,
     ;; so `{as}` imports a function called as.
