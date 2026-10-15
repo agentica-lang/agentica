@@ -261,11 +261,14 @@ def rewrite_block(cx: Resolve.Context, node: Ast.BlockLit) -> Result[Ast.Expr]
   return ok(Ast.Expr.BlockLit(node.with(params: params, body: body)))
 end
 
-# Enum.Variant, written without parentheses, is a variant of an enum of this file or a builtin one; any other name is a type.
+# Enum.Variant, written without parentheses, is a variant of an enum of this file, one imported by name or a builtin one; any other name is a type.
 def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Expr]
   parts = node.name.split(".")
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
     return ok(variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], [], node.span))
+  elsif parts.size == 2 and Resolve.named_enum?(cx, parts[0])
+    enum_name = try Resolve.resolve(cx, parts[0], Resolve.Want.Enum, node.span, false)
+    return ok(variant(node.id, enum_name, parts[1], [], [], node.span))
   elsif parts.size == 2 and cx.settings.catalog.enums.has_key?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], [], node.span))
   end
@@ -282,6 +285,9 @@ def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Ex
   parts = node.type_name.split(".")
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
     return ok(variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], try rewrite_named(cx, node.args), node.span))
+  elsif parts.size == 2 and Resolve.named_enum?(cx, parts[0])
+    enum_name = try Resolve.resolve(cx, parts[0], Resolve.Want.Enum, node.span, false)
+    return ok(variant(node.id, enum_name, parts[1], [], try rewrite_named(cx, node.args), node.span))
   elsif parts.size == 2 and cx.settings.catalog.enums.has_key?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], try rewrite_named(cx, node.args), node.span))
   elsif parts.size == 3 and exported_enum?(cx, parts[0], parts[1])

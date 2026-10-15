@@ -106,6 +106,70 @@ end
 banned: spam
 ```
 
+## Import names
+
+`import Alias from "path"` is the same as `import "path" as Alias`. To skip the alias, list the exported names you want in braces and use them bare:
+
+```agentica
+import {Square, area} from "shapes"
+
+def main() -> Void
+  s = Square(side: 3)
+  puts(area(s))
+end
+```
+
+```output
+9
+```
+
+This works for functions, structs and enums. For an enum, import the enum, not its variants: its values and patterns keep the enum name in front.
+
+```agentica
+import {Status} from "status"
+
+def show(s: Status) -> String
+  case s
+    Status.Active -> return "active"
+    Status.Banned(why) -> return "banned: #{why}"
+  end
+end
+
+def main() -> Void
+  puts(show(Status.Banned("spam")))
+end
+```
+
+```output
+banned: spam
+```
+
+An entry may rename with `as`. The new name keeps the case rule of what it names: types stay capitalized and functions stay lowercase (`CHECK-IMPORT-RENAME` otherwise). Renaming lets two modules that export the same name both be imported, and shortens long names:
+
+```agentica
+import {Square as Box, area as box_area} from "shapes"
+
+def main() -> Void
+  puts(box_area(Box(side: 4)))
+end
+```
+
+```output
+16
+```
+
+A name the module does not export, or keeps private, is an error at the import:
+
+```agentica {expect="CHECK-IMPORT-NAME"}
+import {Square, secret} from "shapes"
+
+def main() -> Void
+  puts(secret())
+end
+```
+
+An imported name cannot be the name of a declaration in the file, of an alias, of another imported name or of a builtin (`CHECK-REDEFINED-NAME`). Two lines may import from the same path, one with an alias and one with names, but one line does only one of the two. A module imported only by names has no alias.
+
 Only the root file needs `main`. Imported files have no top-level code, so
 importing a file never runs anything.
 

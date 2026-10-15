@@ -67,7 +67,7 @@ end
 export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Decl) -> List[String]
   child = deeper(at)
   case decl
-    Ast.Decl.Import(node) -> return out.push(head(at, role, "import-decl", node.id, node.span, " path=" + Text.quote(node.path) + " alias=" + Text.quote(node.alias)))
+    Ast.Decl.Import(node) -> return out.push(head(at, role, "import-decl", node.id, node.span, import_attrs(node)))
     Ast.Decl.Export(node) ->
       lines = out.push(head(at, role, "export-decl", node.id, node.span, doc_attr(node.doc)))
       return print_decl(lines, child, "declaration", node.declaration)
@@ -372,4 +372,22 @@ def print_program(program: Ast.Program) -> List[String]
     lines = print_decl(lines, Margin(indent: "  ", base: 0), "declaration", decl)
   end
   return lines
+end
+
+# ` path="x" alias="Mod"`, or ` path="x" names=[...]` with each name and its span, and `as` with the local name for a rename.
+def import_attrs(node: Ast.ImportDecl) -> String
+  case node.alias
+    Ast.Optional.Present(alias) -> return " path=" + Text.quote(node.path) + " alias=" + Text.quote(alias)
+    Ast.Optional.Absent ->
+      texts = node.names.map do |entry| import_name_text(entry) end
+      return " path=" + Text.quote(node.path) + " names=[" + texts.join(",") + "]"
+  end
+end
+
+def import_name_text(entry: Ast.ImportName) -> String
+  text = Text.quote(entry.name) + "@" + Text.span_text(entry.span)
+  if entry.local != entry.name
+    text += " as " + Text.quote(entry.local) + "@" + Text.span_text(entry.local_span)
+  end
+  return text
 end

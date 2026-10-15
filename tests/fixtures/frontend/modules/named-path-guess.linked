@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-PATH 0:1:1-27:2:1 "import paths name a module without an extension" "write import {lex} from \"lib\" to load lib.agc" file="root.agc"

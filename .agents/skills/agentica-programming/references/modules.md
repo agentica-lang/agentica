@@ -1,6 +1,6 @@
 # File modules and imports
 
-Each file is a module. `import "models" as Models` loads `models.agc`; `"../lib/util"` loads `../lib/util.agc`. Paths never include the extension (`import "models.agc"` is `CHECK-IMPORT-PATH`, and so are an empty path, a path ending in `/`, or a last part with a dot such as `"models.rb"`). So a module file name has no dot except `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
+Each file is a module. `import Models from "models"` loads `models.agc` and names it `Models`; `import Util from "../lib/util"` loads `../lib/util.agc`. The older form `import "models" as Models` still works and means the same. Paths never include the extension (`import "models.agc"` is `CHECK-IMPORT-PATH`, and so are an empty path, a path ending in `/`, or a last part with a dot such as `"models.rb"`). So a module file name has no dot except `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
 
 - Relative paths resolve from the importing file, not the working directory.
 - Every file, imported ones included, keeps the order: `import`s, then `struct` and `enum`, then `export def`, then private `def`. An imported file out of order is `CHECK-DECL-ORDER`, located in that file.
@@ -13,14 +13,25 @@ Each file is a module. `import "models" as Models` loads `models.agc`; `"../lib/
 - Use `Models.User` in annotations and JSON type arguments, `Models.User(name: "Ana")` to construct, `Models.greet(user)` to call, and `&Models.greet` for a callback.
 - Imported enums: `Models.Option[T]` as a type, `Models.Option.Some(value)` to build, and `Models.Option.Some(item)` in a pattern.
 - Local names stay unqualified inside their own file.
-- Alias names are uppercase and cannot collide with declarations, other aliases, or builtin names. Imports cannot be re-exported.
+- Alias names are uppercase and cannot collide with declarations, other aliases, imported names, or builtin names. Imports cannot be re-exported.
 - An exported signature may mention private types, but importers cannot name or build them.
+
+## Importing names
+
+`import {User, greet} from "models"` brings exported names into the file, used bare: `User` as a type, `User(name: "Ana")`, `greet(user)`, `user |> greet()`, `&greet`, and for an enum `Option` the type `Option[T]`, `Option.None`, `Option.Some(value)` and `Option.Some(item)` in a pattern. Variants are not imported on their own: import the enum. A bare function still needs parentheses.
+
+- An entry may rename: `import {greet as hello, User as Account} from "models"` binds `hello` and `Account`. Use it when two modules export the same name or a name is long. The new name keeps the case rule of what it names: a struct or enum becomes a capitalized name and a function a lowercase one, else `CHECK-IMPORT-RENAME` at the new name. The original name is not bound by a rename. `{greet as hello, greet as hi}` is allowed.
+- The list may span lines, may end with a comma, and may not be empty. `from` and `as` are not reserved words: `{as}` imports a function called `as`.
+- One line does one thing: `import Models, {User} from "models"` is a parse error. Write two lines; two lines with the same path load the file once. A module imported only by names has no alias, so `Models.` is not available for it.
+- An imported name joins the names of the file. It cannot equal a declaration, an alias, another imported name (also the same name from the same module twice), a builtin function (`puts`, `ok`) or a reserved type (`Int`, `JSON`, `HttpWire`): `CHECK-REDEFINED-NAME` at the name (at the new name of a rename).
+- A name the module does not export, or keeps private, is `CHECK-IMPORT-NAME` at the name in the braces, with a `did you mean` help over the exports. It is reported at the import, before any use.
+- A module imported by names counts as imported for `value.with(...)`: the file may update every exported struct of it.
 
 ## Running
 
 Only the root file's `def main() -> Void` runs; imported `main` functions never run. Linking keeps source spans and distinct module identities. Imported calls and tasks share the program's execution budget and resource ownership. `agentica check`, `agentica FILE`, `agentica --dump`, and `agentica test` use the same loader.
 
-There are no wildcard imports, package registry, module state, nested module blocks, or receiver attachment. `as` is contextual in imports, not reserved.
+There are no wildcard imports, package registry, module state, nested module blocks, or receiver attachment. `as` and `from` are contextual in imports, not reserved.
 
 ## Standard library and external libraries
 

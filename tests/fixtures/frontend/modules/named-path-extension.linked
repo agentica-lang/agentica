@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-PATH 0:1:1-40:2:1 "import paths name a module without the .agc extension" "write import {lex, Point as P} from \"lib\"" file="root.agc"

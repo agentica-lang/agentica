@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-RENAME 17:1:18-22:1:23 "the new name does not follow the case rule of the imported name" "a struct is renamed to another type name, which starts with a capital letter" file="root.agc"
