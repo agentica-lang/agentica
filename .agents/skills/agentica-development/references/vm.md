@@ -81,5 +81,5 @@ function, which has no backward jump and is never called. A file that loads may 
 | `references/vm-net.md` | processes, the child channel, streams, TCP, TLS (OpenSSL), the HTTP client and server |
 | `references/vm-lowering.md` | `src/lower.rkt`, `src/bytecode.rkt`, a new form or opcode, linked programs, closures, ranges, Results, tail calls |
 | `references/vm-builtins.md` | adding or changing a C builtin (`vm-builtins` in `src/lower.rkt`, the tables) or a trace point |
-| `references/vm-build.md` | make targets, the golden harness (`tests/vm-diff-common.rkt`, `make goldens`, the step-limit sweep), submodules (bdwgc, yyjson, libuv, picohttpparser, OpenSSL), sanitizers, fuzzing, portability |
-| `references/vm-tests.md` | which C test (`vm/tests/`) or Racket peer test (`tests/vm-*-test.rkt`) covers a file, and the sweep cost rule |
+| `references/vm-build.md` | make targets, the golden harness (`tests/vm_diff_support.py`, `make goldens`, the step-limit sweep), submodules (bdwgc, yyjson, libuv, picohttpparser, OpenSSL), sanitizers, fuzzing, portability |
+| `references/vm-tests.md` | which C test (`vm/tests/`) or unittest module (`tests/test_vm_*.py`) covers a file, and the sweep cost rule |

@@ -144,7 +144,7 @@ is not repeated here; read the file.
 - A runtime diagnostic carries a code, a message and a span, and the call stack
   of the failing task when there is one to show (6.1). Only the code is
   contract; the stack lines have fixed expected text in
-  `tests/vm-stack-test.rkt`.
+  `tests/test_vm_stack.py`.
 - Plain format: the diagnostic as usual. `--ai` prints `check failed: 1 error`,
   a blank line, `[CODE]`, `  message: `, `  at: file:line:column` and
   `  source: ` with the source line trimmed of space, `\t`, `\n`, `\f` and `\r`

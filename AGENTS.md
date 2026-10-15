@@ -22,7 +22,7 @@ vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, 
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
 stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner)
-tests/              rackunit: <stage>-test.rkt, vm-*-test.rkt; unittest: test_<area>.py
+tests/              rackunit: <stage>-test.rkt and frontend-*-test.rkt; unittest: test_<area>.py
                     (agentica_test.py is the shared helper); fixtures/ (goldens, Node/Python peers)
 examples/           small programs per feature (README.md lists them)
 docs/

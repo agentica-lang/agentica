@@ -2,7 +2,7 @@ RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
-VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
+VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 EXE_INPUTS := $(wildcard src/*.rkt stdlib/MODULES stdlib/*.agc stdlib/*/*.agc) VERSION
 BDD_DRIVER_INPUTS := $(wildcard compiler/*.agc src/*.rkt)
 CLI_INPUTS := $(BDD_DRIVER_INPUTS) VERSION
@@ -146,15 +146,15 @@ test-exe: build vm dist/agentica
 test-ci: build vm dist/agentica
 	+MAKE='$(MAKE)' tests/test-ci.sh
 
-# The distributed executable still finds its std/ modules after its build checkout is gone
-test-distribution: build vm
-	$(RACO) test tests/stdlib-distribution-test.rkt
+# The built executable, copied away from the checkout with the VM beside it, still imports its std/ modules
+test-distribution: dist/agentica
+	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/dist/agentica $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
 
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
 # Without FIXTURES it also rewrites the front-end goldens of tests/fixtures/frontend/ from the Racket stages
 goldens: build vm
-	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-diff-common.rkt
-	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-stack-test.rkt
+	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support
+	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.test_vm_stack
 	test -n "$(FIXTURES)" || racket tests/frontend-lexer-common.rkt
 	test -n "$(FIXTURES)" || racket tests/frontend-parser-common.rkt
 	test -n "$(FIXTURES)" || racket tests/frontend-modules-common.rkt
@@ -177,8 +177,7 @@ frontend-snapshot: build
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
 vm-golden-check: build vm
-	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-diff-common.rkt check
-	AGENTICA_FIXTURES="$(FIXTURES)" $(RACO) test tests/vm-stack-test.rkt
+	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support check
 
 JSCPD ?= tools/jscpd/node_modules/.bin/jscpd
 
@@ -571,13 +570,13 @@ vm-test: $(VM_TESTS)
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
 
-FUZZ_CORPUS = racket -e '(require (file "tests/vm-diff-common.rkt") racket/path)' \
-  -e '(for ([f (current-command-line-arguments)]) (compile-file (string->path f) (build-path "$(VM_BUILD)/corpus" (path-replace-extension (file-name-from-path f) \#".agcb"))))'
+# The corpus is every fixture compiled by the CLI, JOBS at a time
+FUZZ_CORPUS = printf '%s\n' tests/fixtures/vm/*.agc | xargs -P $(JOBS) -I{} sh -c \
+  'racket src/main.rkt compile "$$1" -o "$(VM_BUILD)/corpus/$$(basename "$$1" .agc).agcb"' sh {}
 
 vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)
 	@mkdir -p $(VM_BUILD)/corpus
-	$(RACO) make tests/vm-diff-common.rkt
-	$(FUZZ_CORPUS) tests/fixtures/vm/*.agc
+	$(FUZZ_CORPUS)
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
 $(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_OBJ)/launch.o $(VM_LINK_LIBS) $(VM_STAMP)
@@ -586,42 +585,35 @@ $(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o
 vm-gc-stress: build
 	$(MAKE) build/vm/gcstress/agentica-vm$(EXE) vm-test GC_STRESS=1 SANITIZE=0
 	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} \
-	  $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
+	  $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
 # Build the VM and its C tests with the trace points compiled out, and check that --version says so
 vm-trace-off:
 	$(MAKE) -j$(JOBS) vm vm-test TRACE=0
 	dist/agentica-vm$(EXE) --version | grep -q 'trace off'
 
-# The golden tests (tests/vm-diff-*-test.rkt): compile them, then run them on the VM that is built
-# (AGENTICA_VM_BINARY names another one)
+# The golden tests (tests/test_vm_diff_*.py) run on the VM that is built (AGENTICA_VM_BINARY names another one); the CLI
+# that compiles the fixtures is Racket's, built here.
 vm-diff-build: build vm
-	$(RACO) make -j $(JOBS) $(VM_DIFF_TESTS)
 
 # vm-diff-test and vm-sanitize-* do not depend on vm on purpose: they test the VM that an earlier step built.
 vm-diff-test: build
-	$(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
+	@$(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
 # The golden tests with the full --max-steps sweep (weekly in CI)
 sweep-full: vm-diff-build
-	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
+	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
-# The Racket tests that run against the built VM (the ASan job runs them on the sanitizer VM)
-VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-stack-test.rkt
-# The unittest modules that do the same (make test-py runs them). tests/test_single_binary.py needs dist/agentica-next, which
-# make agentica-next (or make fixed-point) builds first; without it the module skips locally and fails in CI.
-VM_PY_TESTS = tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py tests/test_vm_trace.py
+# The unittest modules that run against the built VM (make test-py runs them; the ASan job runs them on the sanitizer VM).
+# tests/test_single_binary.py needs dist/agentica-next, which make agentica-next (or make fixed-point) builds first; without it
+# the module skips locally and fails in CI.
+VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py tests/test_vm_trace.py
 SANITIZE_JOBS ?= 4
 
 vm-sanitize-build: build
-	$(RACO) make -j $(JOBS) $(VM_RKT_TESTS)
 
-# Both runs happen, so one job shows the failures of both frameworks
 vm-sanitize-test: vm-sanitize-build
-	@status=0; \
-	  $(RACO) test -j $(SANITIZE_JOBS) $(VM_RKT_TESTS) || status=1; \
-	  $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS) || status=1; \
-	  exit $$status
+	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS)
 
 # Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's
 vendored-check:

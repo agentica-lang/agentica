@@ -90,7 +90,7 @@ rule that a site page shows.
 ## Examples are tests
 
 Every `agentica` code block in `site/content` must be a complete program.
-`tests/site-examples-test.rkt` checks each one and runs it (stdin from an
+`tests/test_site_examples.py` checks each one and runs it with the CLI (stdin from an
 optional `input` block right after it), and compares stdout with the
 `output` block that follows. `make test` runs three pages as a smoke; the
 whole site runs in the slow tier (`make test-slow`).

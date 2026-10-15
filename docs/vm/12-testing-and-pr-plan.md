@@ -2,8 +2,8 @@
 
 ### 12.1 Tests
 
-- **Goldens.** `tests/vm-diff-*-test.rkt` (eight shards of
-  `tests/vm-diff-common.rkt`) run each fixture of `tests/fixtures/vm/` on
+- **Goldens.** `tests/test_vm_diff_*.py` (eight shards of
+  `tests/vm_diff_support.py`) run each fixture of `tests/fixtures/vm/` on
   `dist/agentica-vm` with `--json`. They compare the exit code, stdout, the
   program's own stderr and the diagnostic code with the golden
   `<name>.expected`. A golden is JSON: `exit`, `code` (a string or `null`),
