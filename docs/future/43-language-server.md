@@ -15,6 +15,7 @@ Editors would show what the checker already knows, without a shell round trip:
 - go to definition and find references, across modules;
 - hover text, from the `##` doc comments of §32;
 - the outline of a file;
+- formatting of a whole document, with the printer of §47 (phase 28, 47d);
 - completion, later, once the rest works.
 
 ### 43.2 What it builds on
