@@ -171,13 +171,31 @@
         (hash-set env name (string-replace value "@/" (string-append absolute "/"))))
       default-env))
 
-; A fixture is a folder with a root.agc, the other files it imports, and an optional fixture.env of NAME=VALUE
-; lines for the pkg/ search (@/ stands for the folder of the fixture).
+; A fixture is a folder with a root.agc, the other files it imports, an optional fixture.env of NAME=VALUE
+; lines for the pkg/ search (@/ stands for the folder of the fixture) and an optional fixture.links.
 (define (module-inputs)
+  (define scratch (make-temporary-directory "agentica-modules~a"))
+  (plumber-add-flush! (current-plumber) (lambda (_) (when (directory-exists? scratch) (delete-directory/files scratch))))
   (for/list ([dir (in-list (sort (directory-list fixtures #:build? #t) path<?))]
              #:when (directory-exists? dir))
     (define name (path->string (file-name-from-path dir)))
-    (module-input name dir (build-path dir "root.agc") (fixture-env dir))))
+    (define used (with-links dir (build-path scratch name)))
+    (module-input name used (build-path used "root.agc") (fixture-env used))))
+
+; Symbolic links are not kept in the repository (a checkout may drop or copy them): a fixture lists them in
+; fixture.links as `LINK TARGET` lines, and a fixture that has the file is copied to the scratch folder with
+; its links made there. Other fixtures are used where they are.
+(define (with-links dir copy)
+  (define listing (build-path dir "fixture.links"))
+  (cond
+    [(file-exists? listing)
+     (copy-directory/files dir copy)
+     (for ([line (in-list (file->lines listing))] #:unless (string=? line ""))
+       (match-define (list link target) (string-split line " "))
+       (make-parent-directory* (build-path copy link))
+       (make-file-or-directory-link target (build-path copy link)))
+     copy]
+    [else dir]))
 
 (define (module-golden input)
   (build-path fixtures (string-append (module-input-name input) ".linked")))

@@ -38,8 +38,10 @@
 (define (golden input)
   (file->string (module-golden input)))
 
+; Absolute: a fixture with links is copied outside the repository, and Racket names the root file of a
+; failure by the path as given.
 (define (input-path input)
-  (relative-path (module-input-root input)))
+  (path->string (simplify-path (module-input-root input))))
 
 (define (agentica-matches-racket outputs specs)
   (for ([spec (in-list specs)])
@@ -154,7 +156,7 @@
 
         (test-case "while Racket exists: the Agentica linker matches the Racket linker on the fixtures, live"
           (define specs
-            (for/list ([input (in-list (module-inputs))]) (list (module-input-env input) (relative-path (module-input-root input)))))
+            (for/list ([input (in-list (module-inputs))]) (list (module-input-env input) (input-path input))))
           (agentica-matches-racket (run-linker bytecode specs) specs))
 
         (test-case "while Racket exists: the Agentica linker matches the Racket linker on the programs of the site"
@@ -255,15 +257,11 @@
 (define (mutated-fixtures dir count)
   (parameterize ([current-pseudo-random-generator (make-pseudo-random-generator)])
     (random-seed 254)
-    ; The dangling link cannot be copied, and the pkg fixtures need their environment.
-    (define sources
-      (for/list ([input (in-list (module-inputs))]
-                 #:unless (member (module-input-name input) '("dependency-dangling-link")))
-        (module-input-dir input)))
+    (define sources (map module-input-dir (module-inputs)))
     (for/list ([n (in-range count)])
       (define target (build-path dir "mutated" (format "case-~a" n)))
       (make-parent-directory* target)
-      (copy-directory/files (list-ref sources (random (length sources))) target)
+      (copy-directory/files (list-ref sources (random (length sources))) target #:preserve-links? #t)
       (define files
         (for/list ([file (in-directory target)]
                    #:when (and (file-exists? file) (not (link-exists? file)) (path-has-extension? file #".agc")))
