@@ -1,0 +1,17 @@
+program #6 0:1:1-73:6:1
+  module "root.agc"
+    declaration: function-decl #5 28:2:1-72:5:1 name="main"
+      result: type-ref #1 42:2:15-46:2:19 name="Void"
+      body: expr-stmt #4 49:3:3-68:4:1
+        value: call #3 49:3:3-67:3:21 name="puts" piped=false
+          arg: call #2 54:3:8-66:3:20 name="@2::read" piped=false
+  module "app/inner.agc"
+    declaration: function-decl #4 36:2:8-82:5:1 name="@2::read"
+      result: type-ref #1 50:2:22-56:2:28 name="String"
+      body: return-stmt #3 59:3:3-78:4:1
+        value: call #2 66:3:10-77:3:21 name="@3::read" piped=false
+  module "lib/util.agc"
+    declaration: function-decl #3 7:1:8-48:4:1 name="@3::read"
+      result: type-ref #0 21:1:22-27:1:28 name="String"
+      body: return-stmt #2 30:2:3-44:3:1
+        value: literal #1 37:2:10-43:2:16 value=string:"util"

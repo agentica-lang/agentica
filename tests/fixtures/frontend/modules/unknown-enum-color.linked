@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-NAME 25:2:7-34:2:16 "unknown module alias" "\"Color\" is neither an import alias nor an enum of this file; import a module with import \"path\" as Color, or declare enum Color" file="root.agc"

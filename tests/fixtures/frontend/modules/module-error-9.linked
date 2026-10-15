@@ -1,0 +1,7 @@
+program #5 0:1:1-47:5:1
+  module "root.agc"
+    declaration: function-decl #4 0:1:1-46:4:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: binding #3 21:2:3-42:3:1 name="x"
+        value: call #2 25:2:7-41:2:23 name="String.nope" piped=false
+          arg: literal #1 37:2:19-40:2:22 value=string:"a"

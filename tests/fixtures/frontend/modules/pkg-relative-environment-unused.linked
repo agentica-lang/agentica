@@ -1,0 +1,4 @@
+program #2 0:1:1-24:4:1
+  module "root.agc"
+    declaration: function-decl #1 0:1:1-23:3:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"

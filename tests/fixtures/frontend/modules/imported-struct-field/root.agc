@@ -1,0 +1,5 @@
+import "a" as A
+def main() -> Void
+  n = A.Point(x: 1).z
+end
+

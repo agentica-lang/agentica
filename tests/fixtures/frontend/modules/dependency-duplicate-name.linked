@@ -1,0 +1,1 @@
+ERROR CHECK-REDEFINED-NAME 29:4:1-57:6:1 "duplicate or reserved declaration" - file="lib.agc"

@@ -1,0 +1,26 @@
+program #7 0:1:1-65:6:1
+  module "root.agc"
+    declaration: function-decl #6 20:2:1-64:5:1 name="main"
+      result: type-ref #1 34:2:15-38:2:19 name="Void"
+      body: expr-stmt #5 41:3:3-60:4:1
+        value: call #4 41:3:3-59:3:21 name="puts" piped=false
+          arg: call #3 46:3:8-58:3:20 name="@2::label" piped=false
+            arg: literal #2 56:3:18-57:3:19 value=int:3
+  module "lib.agc"
+    declaration: function-decl #7 7:1:8-64:4:1 name="@2::label"
+      param: param #1 17:1:18-23:1:24 name="n"
+        type: type-ref #0 20:1:21-23:1:24 name="Int"
+      result: type-ref #2 28:1:29-34:1:35 name="String"
+      body: return-stmt #6 37:2:3-60:3:1
+        value: interpolation #5 44:2:10-59:2:25
+          part: text "n="
+          part: call #4 49:2:15-57:2:23 name="@2::twice" piped=false
+            arg: name-ref #3 55:2:21-56:2:22 name="n"
+    declaration: function-decl #16 65:5:1-109:8:1 name="@2::twice"
+      param: param #10 75:5:11-81:5:17 name="n"
+        type: type-ref #9 78:5:14-81:5:17 name="Int"
+      result: type-ref #11 86:5:22-89:5:25 name="Int"
+      body: return-stmt #15 92:6:3-105:7:1
+        value: binary #14 99:6:10-104:6:15 op=multiply op-span=101:6:12-102:6:13
+          left: name-ref #12 99:6:10-100:6:11 name="n"
+          right: literal #13 103:6:14-104:6:15 value=int:2

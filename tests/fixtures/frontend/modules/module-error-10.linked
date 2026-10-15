@@ -1,0 +1,7 @@
+program #5 0:1:1-41:5:1
+  module "root.agc"
+    declaration: function-decl #4 0:1:1-40:4:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: binding #3 21:2:3-36:3:1 name="x"
+        value: call #2 25:2:7-35:2:17 name="Mpa.put" piped=false
+          arg: literal #1 33:2:15-34:2:16 value=int:1

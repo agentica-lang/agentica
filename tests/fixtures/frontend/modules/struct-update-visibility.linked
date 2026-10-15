@@ -1,0 +1,54 @@
+program #28 0:1:1-193:13:1
+  module "root.agc"
+    declaration: struct-decl #3 21:3:1-47:6:1 name="Local"
+      field: field-decl #2 36:4:3-43:5:1 name="n"
+        type: type-ref #1 39:4:6-42:4:9 name="Int"
+    declaration: function-decl #27 48:7:1-192:12:1 name="main"
+      result: type-ref #4 62:7:15-66:7:19 name="Void"
+      body: binding #9 69:8:3-95:9:1 name="a"
+        value: struct-update #8 73:8:7-94:8:28 visible=["@2::Pub","Local"]
+          target: call #5 73:8:7-83:8:17 name="@2::make" piped=false
+          arg: named-arg #7 89:8:23-93:8:27 name="n"
+            value: literal #6 92:8:26-93:8:27 value=int:5
+      body: binding #17 97:9:3-135:10:1 name="b"
+        value: struct-update #16 101:9:7-134:9:40 visible=["@2::Pub","Local"]
+          target: construct #12 101:9:7-112:9:18 type="Local"
+            arg: named-arg #11 107:9:13-111:9:17 name="n"
+              value: literal #10 110:9:16-111:9:17 value=int:1
+          arg: named-arg #15 118:9:24-133:9:39 name="n"
+            value: field-access #14 121:9:27-133:9:39 name="n"
+              target: call #13 121:9:27-131:9:37 name="@2::make" piped=false
+      body: binding #26 137:10:3-188:11:1 name="c"
+        value: struct-update #25 141:10:7-187:10:53 visible=["@2::Pub","Local"]
+          target: construct #22 141:10:7-170:10:36 type="Header"
+            arg: named-arg #19 148:10:14-157:10:23 name="name"
+              value: literal #18 154:10:20-157:10:23 value=string:"a"
+            arg: named-arg #21 159:10:25-169:10:35 name="value"
+              value: literal #20 166:10:32-169:10:35 value=string:"b"
+          arg: named-arg #24 176:10:42-186:10:52 name="value"
+            value: literal #23 183:10:49-186:10:52 value=string:"c"
+  module "lib.agc"
+    declaration: struct-decl #2 7:1:8-31:4:1 name="@2::Pub"
+      field: field-decl #1 20:2:3-27:3:1 name="n"
+        type: type-ref #0 23:2:6-26:2:9 name="Int"
+    declaration: struct-decl #6 32:5:1-57:8:1 name="@2::Priv"
+      field: field-decl #5 46:6:3-53:7:1 name="n"
+        type: type-ref #4 49:6:6-52:6:9 name="Int"
+    declaration: function-decl #15 65:9:8-117:12:1 name="@2::make"
+      result: type-ref #7 79:9:22-82:9:25 name="@2::Pub"
+      body: return-stmt #14 85:10:3-113:11:1
+        value: struct-update #13 92:10:10-112:10:30 visible=["@2::Priv","@2::Pub"]
+          target: construct #10 92:10:10-101:10:19 type="@2::Pub"
+            arg: named-arg #9 96:10:14-100:10:18 name="n"
+              value: literal #8 99:10:17-100:10:18 value=int:1
+          arg: named-arg #12 107:10:25-111:10:29 name="n"
+            value: literal #11 110:10:28-111:10:29 value=int:2
+    declaration: function-decl #25 118:13:1-171:16:1 name="@2::inner"
+      param: param #18 128:13:11-135:13:18 name="p"
+        type: type-ref #17 131:13:14-135:13:18 name="@2::Priv"
+      result: type-ref #19 140:13:23-144:13:27 name="@2::Priv"
+      body: return-stmt #24 147:14:3-167:15:1
+        value: struct-update #23 154:14:10-166:14:22 visible=["@2::Priv","@2::Pub"]
+          target: name-ref #20 154:14:10-155:14:11 name="p"
+          arg: named-arg #22 161:14:17-165:14:21 name="n"
+            value: literal #21 164:14:20-165:14:21 value=int:3

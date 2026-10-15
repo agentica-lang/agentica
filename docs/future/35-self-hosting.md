@@ -194,8 +194,8 @@ goldens stay.
 |---|---|---|
 | 1 | **Done** (PR #237): Lexer (`src/lexer.rkt`, with `source.rkt`, `token.rkt` and the diagnostic data of `diagnostic.rkt`) | Tokens as text lines (kind, value, span), or the one `LEX-` diagnostic |
 | 2 | **Done** (PR #245): Parser (`src/parser.rkt`, `ast.rkt`) | The AST in a stable text form, or the `PARSE-` diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree, so step 2 adds a printer with the same output on both sides (`tests/frontend-parser-common.rkt`) |
-| 3 | Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution. Needs the environment and real-path builtins (35.5). It must also carry the privacy rule of `value.with(...)` (roadmap 15c): a struct can be updated in a file only if it is one of the file's own structs or an exported struct of a module the file imports directly (`CHECK-IMPORT-NAME` otherwise; builtin records are always allowed). In `src/` the linker stores this as a `visible` predicate, a Racket closure in the `struct-update` node, which cannot cross into `compiler/`. The port must turn it into data the checker port reads, for example the visible structs of each module |
-| 4 | Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4) |
+| 3 | **Done** (PR #254): Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution, or the first `CHECK-IMPORT-*`, `CHECK-DECL-ORDER` or `CHECK-REDEFINED-NAME` diagnostic with its file. Needs the environment and real-path builtins (35.5). It carries the privacy rule of `value.with(...)` (roadmap 15c) as data: each linked module lists the user structs it may update, and the text form prints the list on every update. The text form is `tests/frontend-modules-common.rkt` (Racket) and `compiler/link.agc` (Agentica) |
+| 4 | Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). Open decision for deep trees: the linker of step 3 already handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that (35.9), so the checker either walks with a stack of its own or both parsers get a `PARSE-` tree-depth limit (a diagnostic change in both front ends in one PR); decide it before the checker is written. |
 | 5 | Lowering (`src/lower.rkt`) | The IR in the form `--dump-ir` prints, or the `LOWER-` diagnostic |
 | 6 | Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal |
 | 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/bdd-test.rkt`, `tests/bdd-integration.rkt`) |
@@ -437,3 +437,76 @@ goldens are in `tests/fixtures/frontend/parser/`. Notes:
 - The Agentica parser matches the Racket parser on the 285 files of
   `examples/`, `stdlib/` and `tests/fixtures/vm/`, on 300 generated inputs and
   on the 245 goldens.
+
+Status on 2026-10-15 (PR #254): step 3 is done. `compiler/` also holds the
+module loader and linker (`modules.agc`, `resolve_import.agc`, `resolve.agc`,
+`rewrite.agc`, `linker.agc`, with `declarations.agc`, `import_path.agc`,
+`suggest.agc`, `link_env.agc` and `link_failure.agc`) and an entry program,
+`link.agc`, that prints the linked program; the goldens are 157 fixture folders
+in `tests/fixtures/frontend/modules/` (a folder with a `root.agc`, the files it
+imports and an optional `fixture.env`, plus `NAME.linked`). The port needed no
+language or VM change. Notes for the next steps:
+
+- `Linker.link_file(path, settings)` gives `Linking.Done(Linked)` or
+  `Linking.Failed(Failure)`. `Linked.modules` lists the files, root first, each
+  file before the files its imports read; a file's declarations are rewritten
+  (names get the prefix of their file, `@2::name`; the root keeps its names) and
+  lose their `export`. `Linker.program(linked)` is the flat `Program` that the
+  checker reads, with the id, span and module doc of the root. A `Failure` has
+  the `file` the diagnostic is in, because a `Span` has no file in `compiler/`.
+- Settings are explicit: the `stdlib/` folder (a `std/NAME` import is the file
+  `stdlib/NAME.agc`) and the three environment variables (`Env`). The std
+  registry of `src/stdlib.rkt` and the folder must list the same files; a test
+  checks it. The tables the linker takes from `builtins.rkt` and
+  `checker.rkt` (reserved type names, bare builtin names, builtin enums,
+  std-only modules) are `compiler/module_names.agc`, generated by
+  `tools/gen-module-names.rkt` and checked by the same test. Step 4 replaces
+  them with the builtin catalog.
+- The privacy rule of `value.with(...)` is data: the linker sets
+  `StructUpdate.visible` to the sorted linked names of the user structs the
+  file may update (its own and the exported structs of the files it imports
+  directly; builtin records are always allowed and not listed). Step 4 refuses
+  an update of any other user struct (`CHECK-IMPORT-NAME`). The text form
+  prints it as ` visible=[...]`; Racket gets the list by calling the predicate
+  on every user struct of the program.
+- Node ids are one numbering: the root is parsed from 0 and each file from the
+  next free id of the file read before it, in the order Racket reads files. A
+  file takes ids for its imports and exports too, so the linked declarations
+  leave gaps. `link.agc --ids` prints the range of each file.
+- A call `Enum.Variant(x: 1)` is a `Construct` for the parser; the linker turns
+  it into an `EnumConstructor` whose `named` list holds the arguments (`args`
+  is empty), as Racket does with `named-arg` nodes. The checker refuses it
+  (`CHECK-ENUM-POSITIONAL-ARGS`).
+- The loader keeps its own stack, so a chain of 3,000 files or a file with
+  2,000 imports uses no VM call depth. The rewrite recurses on the tree: about
+  one VM call per level (`rewrite_expr` tail-calls `rewrite_compound`), so it
+  handles trees up to about 9,900 levels and fails with
+  `RUNTIME-STACK-OVERFLOW` near 10,800 (12 chains of 900 links nested in the
+  right operand of each first link). The parser accepts such files (35.9, step
+  2), and Racket links them. The checker of step 4 has the same limit unless it
+  uses a stack of its own.
+- Differences from Racket. A source file over 1 MiB, or with invalid UTF-8,
+  cannot be read (`File.read_text`, see the open item of 35.4 for step 8) and
+  is `CHECK-IMPORT-IO` "cannot read import". The message of the root file's own
+  read error is the system's text, so it differs, and the golden comparison
+  skips it. An unset `HOME` leaves the user library folder out of the `pkg/`
+  search (Racket asks the system for the home folder). `Path.real` fails on a
+  missing file where `normalize-path` accepts a missing last part, so the
+  loader checks the folder first and a missing file is "cannot read import" at
+  once, with the same code and span. For the same reason a symbolic link to a
+  missing folder (a dangling link used as a folder part of an import) is
+  "cannot read import" in Agentica where Racket says "cannot resolve import",
+  again with the same code and span. The tests pin the Agentica side of the
+  invalid UTF-8 case (the fast tier) and of the 1 MiB limit (the slow tier);
+  the `HOME` user root is tested in the fast tier on the Agentica side only,
+  because Racket's `find-system-path` ignores a replaced environment.
+- Measured on `stdlib/bdd/gherkin.agc` (575 lines, 2 files with
+  `std/test/report`): 0.12 s and 11.7 MB of RSS as a process, 0.04 s of that
+  for loading the second file. On `stdlib/test/runner.agc` (7 files, 3,598
+  lines, 9,400 nodes): 0.29 s and 16.4 MB. The loop is the lexer and parser;
+  rewriting the trees costs little. Nothing is quadratic.
+- The Agentica linker matches the Racket linker on the 157 fixtures (which
+  include every input of `tests/modules-test.rkt` that links files), the 322
+  files of `examples/`, `stdlib/` and `tests/fixtures/`, the 307 programs of the
+  site, and the large inputs of the slow tier (chains of 3,000 files, 2,000
+  imports, cycles, and deep trees).

@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-NAME 42:3:3-50:3:11 "unknown or private imported name" - file="a.agc"

@@ -1,0 +1,42 @@
+program #36 0:1:1-271:21:1
+  module "root.agc"
+    declaration: enum-decl #4 22:3:1-57:7:1 name="Command" type-parameters=[]
+      variant: enum-variant #1 37:4:3-42:5:1 name="Show"
+      variant: enum-variant #3 44:5:3-53:6:1 name="Add"
+        payload: type-ref #2 48:5:7-51:5:10 name="Int"
+    declaration: function-decl #35 58:8:1-270:20:1 name="main"
+      result: type-ref #5 72:8:15-76:8:19 name="Void"
+      body: binding #7 79:9:3-96:10:1 name="c"
+        value: enum-constructor #6 83:9:7-95:9:19 enum="Command" variant="Show"
+      body: case-stmt #20 98:10:3-179:14:1
+        value: name-ref #8 103:10:8-104:10:9 name="c"
+        arm: case-arm #13 109:11:5-138:12:1
+          pattern: variant-pattern #9 109:11:5-121:11:17 enum="Command" variant="Show" bindings=[]
+          body: expr-stmt #12 125:11:21-138:12:1
+            value: call #11 125:11:21-137:11:33 name="puts" piped=false
+              arg: literal #10 130:11:26-136:11:32 value=string:"show"
+        arm: case-arm #19 142:12:5-173:13:1
+          pattern: variant-pattern #14 142:12:5-156:12:19 enum="Command" variant="Add" bindings=["n"]
+          body: expr-stmt #18 160:12:23-173:13:1
+            value: call #17 160:12:23-172:12:35 name="puts" piped=false
+              arg: field-access #16 165:12:28-171:12:34 name="to_s"
+                target: name-ref #15 165:12:28-166:12:29 name="n"
+      body: binding #22 181:14:3-197:15:1 name="s"
+        value: enum-constructor #21 185:14:7-196:14:18 enum="@2::Shape" variant="Dot"
+      body: case-stmt #34 199:15:3-266:19:1
+        value: name-ref #23 204:15:8-205:15:9 name="s"
+        arm: case-arm #28 210:16:5-237:17:1
+          pattern: variant-pattern #24 210:16:5-221:16:16 enum="@2::Shape" variant="Dot" bindings=[]
+          body: expr-stmt #27 225:16:20-237:17:1
+            value: call #26 225:16:20-236:16:31 name="puts" piped=false
+              arg: literal #25 230:16:25-235:16:30 value=string:"dot"
+        arm: case-arm #33 241:17:5-260:18:1
+          pattern: wildcard-pattern #29 241:17:5-242:17:6
+          body: expr-stmt #32 246:17:10-260:18:1
+            value: call #31 246:17:10-259:17:23 name="puts" piped=false
+              arg: literal #30 251:17:15-258:17:22 value=string:"other"
+  module "shapes.agc"
+    declaration: enum-decl #3 7:1:8-39:5:1 name="@2::Shape" type-parameters=[]
+      variant: enum-variant #0 20:2:3-24:3:1 name="Dot"
+      variant: enum-variant #2 26:3:3-35:4:1 name="Box"
+        payload: type-ref #1 30:3:7-33:3:10 name="Int"
