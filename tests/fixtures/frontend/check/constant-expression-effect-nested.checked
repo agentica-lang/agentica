@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-EXPRESSION 28:1:29-38:1:39 "a constant cannot call IO.gets!, which has effects (stdin)" "a constant is built from literals, constructors and builtins without effects" file="constant-expression-effect-nested.agc"

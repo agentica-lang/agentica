@@ -6,6 +6,7 @@
 (require racket/runtime-path
          "../src/ast.rkt"
          "../src/checker.rkt"
+         "../src/constants.rkt"
          "../src/diagnostic.rkt"
          "../src/modules.rkt"
          "../src/source.rkt"
@@ -71,7 +72,8 @@
   (with-env env
     (lambda ()
       (define folder (root-folder root-path))
-      (define linked (load-program root-path))
+      (define files (box '()))
+      (define linked (load-program root-path #:files files))
       (cond
         [(diagnostic? linked) (failure-line folder linked)]
         [else
@@ -79,8 +81,17 @@
          (define checked (check linked #:types types))
          (if (diagnostic? checked)
              (check-failure-line folder checked)
-             (string-join (linked-lines linked (path->string (path->complete-path root-path)) folder (notes-of types))
+             (string-join (append (linked-lines linked (path->string (path->complete-path root-path)) folder
+                                                (notes-of types) #:files (unbox files))
+                                  (order-lines linked))
                           "\n"))]))))
+
+; The order the constants are initialized in, after the program, when there are constants.
+(define (order-lines linked)
+  (define-values (order cycle) (constant-order (filter const-decl? (program-declarations linked))))
+  (if (null? order)
+      '()
+      (list (format "constant-order [~a]" (string-join (map (lambda (declaration) (quote-text (const-decl-name declaration))) order) ",")))))
 
 ; A fixture is a NAME.agc file, or a folder NAME with a root.agc (for the programs that import files).
 (define (check-inputs)

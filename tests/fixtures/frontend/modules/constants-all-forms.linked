@@ -1,0 +1,93 @@
+program #79 0:1:1-522:33:1
+  module "root.agc"
+    declaration: const-decl #7 0:1:1-26:2:1 name="LEVELS"
+      value: map-lit #6 9:1:10-25:1:26
+        entry: map-entry #2 10:1:11-16:1:17
+          key: literal #0 10:1:11-13:1:14 value=string:"a"
+          value: literal #1 15:1:16-16:1:17 value=int:1
+        entry: map-entry #5 18:1:19-24:1:25
+          key: literal #3 18:1:19-21:1:22 value=string:"b"
+          value: literal #4 23:1:24-24:1:25 value=int:2
+    declaration: const-decl #12 26:2:1-57:3:1 name="KEYWORDS"
+      value: call #11 37:2:12-56:2:31 name="Set.new" piped=false
+        arg: list-lit #10 45:2:20-55:2:30
+          element: literal #8 46:2:21-49:2:24 value=string:"a"
+          element: literal #9 51:2:26-54:2:29 value=string:"b"
+    declaration: const-decl #14 57:3:1-77:4:1 name="DEFAULT"
+      value: enum-constructor #13 67:3:11-76:3:20 enum="Color" variant="Red"
+    declaration: const-decl #16 77:4:1-98:5:1 name="SHOWN"
+      value: field-access #15 85:4:9-97:4:21 name="to_s"
+        target: const-ref #95 85:4:9-92:4:16 name="DEFAULT"
+    declaration: const-decl #20 98:5:1-124:6:1 name="CONFIG"
+      value: construct #19 107:5:10-123:5:26 type="Config"
+        arg: named-arg #18 114:5:17-122:5:25 name="port"
+          value: literal #17 120:5:23-122:5:25 value=int:80
+    declaration: enum-decl #23 125:7:1-154:11:1 name="Color" type-parameters=[]
+      variant: enum-variant #21 138:8:3-142:9:1 name="Red"
+      variant: enum-variant #22 144:9:3-150:10:1 name="Green"
+    declaration: struct-decl #26 155:12:1-185:15:1 name="Config"
+      field: field-decl #25 171:13:3-181:14:1 name="port"
+        type: type-ref #24 177:13:9-180:13:12 name="Int"
+    declaration: function-decl #78 186:16:1-522:33:1 name="main"
+      result: type-ref #27 200:16:15-204:16:19 name="Void"
+      body: expr-stmt #29 207:17:3-219:18:1
+        value: field-access #28 207:17:3-218:17:14 name="size"
+          target: const-ref #108 207:17:3-213:17:9 name="LEVELS"
+      body: expr-stmt #33 221:18:3-240:19:1
+        value: method-call #32 221:18:3-239:18:21 name="get"
+          target: const-ref #112 221:18:3-227:18:9 name="LEVELS"
+          arg: literal #30 232:18:14-235:18:17 value=string:"a"
+          arg: literal #31 237:18:19-238:18:20 value=int:0
+      body: expr-stmt #36 242:19:3-265:20:1
+        value: method-call #35 242:19:3-264:19:25 name="include?"
+          target: const-ref #115 242:19:3-250:19:11 name="KEYWORDS"
+          arg: literal #34 260:19:21-263:19:24 value=string:"a"
+      body: expr-stmt #43 267:20:3-312:23:1
+        value: method-call #42 267:20:3-311:22:6 name="each"
+          target: const-ref #122 267:20:3-275:20:11 name="KEYWORDS"
+          arg: block-lit #41 281:20:17-311:22:6
+            param: block-param #37 285:20:21-289:20:25 name="word"
+            body: expr-stmt #40 295:21:5-306:22:1
+              value: call #39 295:21:5-305:21:15 name="puts" piped=false
+                arg: name-ref #38 300:21:10-304:21:14 name="word"
+      body: expr-stmt #49 314:23:3-346:24:1
+        value: method-call #48 314:23:3-345:23:34 name="map"
+          target: const-ref #128 314:23:3-322:23:11 name="KEYWORDS"
+          arg: block-lit #47 327:23:16-345:23:34
+            param: block-param #44 331:23:20-335:23:24 name="word"
+            body: expr-stmt #46 337:23:26-341:23:30
+              value: name-ref #45 337:23:26-341:23:30 name="word"
+      body: expr-stmt #51 348:24:3-364:25:1
+        value: method-call #50 348:24:3-363:24:18 name="to_a"
+          target: const-ref #130 348:24:3-356:24:11 name="KEYWORDS"
+      body: expr-stmt #53 366:25:3-378:26:1
+        value: field-access #52 366:25:3-377:25:14 name="port"
+          target: const-ref #132 366:25:3-372:25:9 name="CONFIG"
+      body: expr-stmt #55 380:26:3-394:27:1
+        value: method-call #54 380:26:3-393:26:16 name="port"
+          target: const-ref #134 380:26:3-386:26:9 name="CONFIG"
+      body: binding #59 396:27:3-412:28:1 name="n"
+        value: index-access #58 400:27:7-411:27:18
+          target: const-ref #56 400:27:7-406:27:13 name="LEVELS"
+          index: literal #57 407:27:14-410:27:17 value=string:"a"
+      body: binding #63 414:28:3-439:29:1 name="m"
+        value: method-call #62 425:28:14-438:28:27 name="get"
+          target: const-ref #142 425:28:14-431:28:20 name="LEVELS"
+          arg: literal #60 418:28:7-421:28:10 value=string:"a"
+          arg: literal #61 436:28:25-437:28:26 value=int:0
+      body: expr-stmt #69 441:29:3-475:30:1
+        value: call #68 441:29:3-474:29:36 name="puts" piped=false
+          arg: interpolation #67 446:29:8-473:29:35
+            part: const-ref #64 449:29:11-457:29:19 name="KEYWORDS"
+            part: text " "
+            part: name-ref #65 461:29:23-462:29:24 name="n"
+            part: text " "
+            part: const-ref #66 466:29:28-471:29:33 name="SHOWN"
+      body: expr-stmt #72 477:30:3-490:31:1
+        value: call #71 477:30:3-489:30:15 name="puts" piped=false
+          arg: const-ref #70 482:30:8-488:30:14 name="LEVELS"
+      body: binding #77 492:31:3-518:32:1 name="c"
+        value: struct-update #76 496:31:7-517:31:28 visible=["Config"]
+          target: const-ref #73 496:31:7-502:31:13 name="CONFIG"
+          arg: named-arg #75 508:31:19-516:31:27 name="port"
+            value: literal #74 514:31:25-516:31:27 value=int:81

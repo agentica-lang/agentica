@@ -31,6 +31,7 @@ export struct Module
   names: Map[String, Declarations.Kind]
   public: Map[String, Declarations.Kind]
   aliases: Map[String, String]
+  paths: Map[String, String]
   named: Map[String, Named]
 end
 
@@ -41,10 +42,11 @@ export struct Loaded
   root_dir: String
 end
 
-# A file whose imports are being read: the module so far (its aliases and named imports are filled in as imports are read), and the index of the next import to read. pending is the key of the file that the import at next names while its names wait to be checked: they need the exports of that file, so they are checked once it is loaded, as src/modules.rkt checks them after visit. "" when no import waits.
+# A file whose imports are being read: the module so far (its aliases, the paths written for them and named imports are filled in as imports are read), and the index of the next import to read. pending is the key of the file that the import at next names while its names wait to be checked: they need the exports of that file, so they are checked once it is loaded, as src/modules.rkt checks them after visit. "" when no import waits.
 struct Frame
   module: Module
   aliases: Map[String, String]
+  paths: Map[String, String]
   named: Map[String, Named]
   imports: List[Ast.ImportDecl]
   next: Int
@@ -121,7 +123,7 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
 end
 
 def finish(walk: Walk, frame: Frame) -> Walk
-  module = frame.module.with(aliases: frame.aliases, named: frame.named)
+  module = frame.module.with(aliases: frame.aliases, paths: frame.paths, named: frame.named)
   return walk.with(stack: walk.stack.take(walk.stack.size - 1), seen: walk.seen.put(module.key, 0), done: walk.done.put(module.key, module))
 end
 
@@ -131,6 +133,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   site = Failure.Site(file: module.file, span: decl.span)
   alias = Declarations.alias_of(decl)
   aliases = frame.aliases
+  paths = frame.paths
   if alias != "" and (aliases.has_key?(alias) or module.names.has_key?(alias) or frame.named.has_key?(alias) or settings.catalog.reserved.include?(alias))
     return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", Diag.Help.NoHelp))
   end
@@ -138,8 +141,9 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   target = try Resolve.resolve_import(settings, walk.root_dir, module.key, file, site)
   if alias != ""
     aliases = aliases.put(alias, target)
+    paths = paths.put(alias, decl.path)
   end
-  with_frame = replace_top(walk, after_read(frame, aliases, target, decl))
+  with_frame = replace_top(walk, after_read(frame.with(paths: paths), aliases, target, decl))
   state = walk.seen.get(target, -1)
   if state == 1
     return error(Failure.fail_at(site, "CHECK-IMPORT-CYCLE", "import cycle", Diag.Help.NoHelp))
@@ -170,11 +174,11 @@ end
 def bind_name(settings: Env.Settings, frame: Frame, target: Module, entry: Ast.ImportName, named: Map[String, Named]) -> Result[Map[String, Named]]
   file = frame.module.file
   if !target.public.has_key?(entry.name)
-    return error(Failure.fail_at(Failure.Site(file: file, span: entry.span), "CHECK-IMPORT-NAME", "unknown or private imported name", Suggest.unknown_import_help(target.key, target.public.keys, entry.name)))
+    return error(Failure.fail_at(Failure.Site(file: file, span: entry.span), "CHECK-IMPORT-NAME", "unknown or private imported name", Suggest.unknown_import_help(target.key, target.public, entry.name, false)))
   end
   kind = target.public[entry.name]
   at_local = Failure.Site(file: file, span: entry.local_span)
-  if Declarations.type_name?(entry.local) == Declarations.function?(kind)
+  if !rename_ok?(entry.local, kind)
     return error(Failure.fail_at(at_local, "CHECK-IMPORT-RENAME", "the new name does not follow the case rule of the imported name", Failure.hint(rename_help(kind))))
   end
   taken = frame.module.names.has_key?(entry.local) or frame.aliases.has_key?(entry.local) or named.has_key?(entry.local)
@@ -184,10 +188,21 @@ def bind_name(settings: Env.Settings, frame: Frame, target: Module, entry: Ast.I
   return ok(named.put(entry.local, Named(target: target.key, name: entry.name)))
 end
 
+# A struct or an enum is renamed to a type name (a capital first letter), a function to a lowercase one, a constant to another constant name.
+def rename_ok?(local: String, kind: Declarations.Kind) -> Bool
+  if Declarations.constant?(kind)
+    return Declarations.constant_name?(local)
+  elsif Declarations.function?(kind)
+    return !Declarations.type_name?(local)
+  end
+  return Declarations.type_name?(local)
+end
+
 def rename_help(kind: Declarations.Kind) -> String
   case kind
     Declarations.Kind.Struct -> return "a struct is renamed to another type name, which starts with a capital letter"
     Declarations.Kind.Enum -> return "an enum is renamed to another type name, which starts with a capital letter"
+    Declarations.Kind.Constant -> return "a constant is renamed to another constant name, in capitals with underscores"
     _ -> return "a function is renamed to another lowercase name"
   end
 end
@@ -214,8 +229,8 @@ def enter(settings: Env.Settings, walk: Walk, key: String, file: String, text: S
   if walk.order.size == 0
     prefix = ""
   end
-  module = Module(key: key, file: file, prefix: prefix, first_id: first_id, text: text, program: program, names: collected.names, public: collected.public, aliases: {}, named: {})
-  frame = Frame(module: module, aliases: {}, named: {}, imports: Declarations.imports_of(program.declarations), next: 0, pending: "")
+  module = Module(key: key, file: file, prefix: prefix, first_id: first_id, text: text, program: program, names: collected.names, public: collected.public, aliases: {}, paths: {}, named: {})
+  frame = Frame(module: module, aliases: {}, paths: {}, named: {}, imports: Declarations.imports_of(program.declarations), next: 0, pending: "")
   return ok(walk.with(stack: walk.stack.push(frame), seen: walk.seen.put(key, 1), order: walk.order.push(key), next_id: Ast.next_free_id(program)))
 end
 

@@ -9,6 +9,7 @@ import "check_rules" as Rules
 import "check_state" as State
 import "check_stmt" as Statements
 import "check_types" as CheckTypes
+import "parse_base" as Base
 import "types" as T
 
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
@@ -61,6 +62,7 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.Interpolation(found) -> return check_interpolation(cx, st, found)
     Ast.Expr.Index(found) -> return check_index(cx, st, found)
     Ast.Expr.TypeName(found) -> return check_type_name(cx, st, found)
+    Ast.Expr.ConstRef(found) -> return check_const_ref(cx, st, found)
   end
 end
 
@@ -97,7 +99,24 @@ def name_help(cx: State.Cx, st: State.St, name: String) -> String
   return Help.foreign(cx.help, name)
 end
 
+# A name in capitals that no struct, enum or reserved type owns is a constant that does not exist.
+def unknown_constant?(cx: State.Cx, name: String) -> Bool
+  return Base.constant_name?(T.display_name(name)) and !cx.catalog.reserved.include?(name) and !cx.structs.has_key?(name) and !cx.enums.has_key?(name)
+end
+
+# A constant is read after its initializer was checked, because the constants are checked in dependency order.
+def check_const_ref(cx: State.Cx, st: State.St, node: Ast.ConstRef) -> Result[State.Out]
+  type = cx.constants.get(node.name)
+  if !type.ok?
+    return error(State.fail(cx, st, "CHECK-INTERNAL", "constant read before it was checked", node.span))
+  end
+  return ok(State.Out(st: st, type: type.unwrap!))
+end
+
 def check_type_name(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[State.Out]
+  if unknown_constant?(cx, node.name)
+    return error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-NAME", "unknown name \"" + T.display_name(node.name) + "\"", node.span, Help.near(node.name, cx.constants.keys, [])))
+  end
   return error(State.fail_maybe(cx, st, "CHECK-TYPE-MISMATCH", "a type name is only valid as a JSON type argument", node.span, Help.foreign(cx.help, node.name)))
 end
 

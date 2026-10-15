@@ -5,20 +5,31 @@
 
 (provide link-program load-program)
 
-;; Style rule, no meaning for evaluation: imports, then structs and enums, then
-;; exported functions, then private functions. Returns the diagnostic for the
+;; The span of the first `length` characters of a node that starts with a constant's name: the receiver
+;; of a rewritten NAME.method(...) is the name alone.
+(define (name-span span length)
+  (define start (source-span-start span))
+  (source-span (source-span-source span)
+               start
+               (source-position (+ (source-position-offset start) length)
+                                (source-position-line start)
+                                (+ (source-position-column start) length))))
+
+;; Style rule, no meaning for evaluation: imports, then constants, then structs and
+;; enums, then exported functions, then private functions. Returns the diagnostic for the
 ;; first declaration that comes after a later group, or #f.
 (define (declaration-order-error declarations)
   (define (rank wrapped)
     (cond
       [(import-decl? wrapped) 0]
-      [(or (struct-decl? wrapped) (enum-decl? wrapped)) 1]
+      [(const-decl? wrapped) 1]
+      [(or (struct-decl? wrapped) (enum-decl? wrapped)) 2]
       [(and (export-decl? wrapped)
             (let ([inner (export-decl-declaration wrapped)])
               (or (struct-decl? inner) (enum-decl? inner))))
-       1]
-      [(export-decl? wrapped) 2]
-      [else 3]))
+       2]
+      [(export-decl? wrapped) 3]
+      [else 4]))
   (let loop ([remaining declarations] [highest 0])
     (cond
       [(null? remaining) #f]
@@ -28,8 +39,9 @@
                    "declaration is out of order"
                    (node-span wrapped)
                    #:help (case (rank wrapped)
-                            [(0) "imports come first, before any struct, enum or function"]
-                            [(1) "structs and enums come before functions"]
+                            [(0) "imports come first, before any constant, struct, enum or function"]
+                            [(1) "constants come right after the imports"]
+                            [(2) "structs and enums come before functions"]
                             [else "exported functions come before private functions"]))]
       [else (loop (cdr remaining) (max highest (rank (car remaining))))])))
 
@@ -37,16 +49,18 @@
   (source-span (source (path->string (path->complete-path path)) "")
                (source-position 0 1 1) (source-position 0 1 1)))
 
-(define (load-program path)
+(define (load-program path #:files [files #f])
   (with-handlers ([exn:fail? (lambda (failure)
                              (diagnostic 'CHECK-IMPORT-IO (exn-message failure) (file-span path)))])
     (define tokens (lex (source (path->string (path->complete-path path)) (file->string path))))
     (define parsed (if (diagnostic? tokens) tokens (parse tokens)))
-    (if (diagnostic? parsed) parsed (link-program parsed path))))
+    (if (diagnostic? parsed) parsed (link-program parsed path #:files files))))
 
 ;; Linking gives every dependency its own identities, but keeps root names for
 ;; CLI/BDD entrypoints. No evaluation occurs here; spans stay in original files.
-(define (link-program root root-path)
+;; files is #f or a box that receives the names of the files read, in order, for the tests
+;; that number the nodes of a program as the Agentica linker does.
+(define (link-program root root-path #:files [files #f])
   (with-handlers ([exn:fail? (lambda (failure)
                              (diagnostic 'CHECK-IMPORT-IO (exn-message failure) (program-span root)))])
     (let/ec failed
@@ -138,6 +152,7 @@
       (define trees (make-hash))
       (define prefixes (make-hash))
       (define imports (make-hash))
+      (define import-paths (make-hash))
       (define named-imports (make-hash))
       (define locals (make-hash))
       (define exports (make-hash))
@@ -149,16 +164,25 @@
         (cond
           [(struct-decl? declaration) (struct-decl-name declaration)]
           [(enum-decl? declaration) (enum-decl-name declaration)]
+          [(const-decl? declaration) (const-decl-name declaration)]
           [else (function-decl-name declaration)]))
-      ;; Only exports are candidates, so a private name is never suggested.
-      (define (unknown-name-help target member)
+      (define (exported? wrapped)
+        (or (export-decl? wrapped) (and (const-decl? wrapped) (const-decl-exported wrapped))))
+      ;; Only exports are candidates, so a private name is never suggested. Through an alias
+      ;; (Mod.nme) a constant is suggested as the import that reads it.
+      (define (unknown-name-help target member #:alias? [alias? #f])
         (cond
           [(and (equal? target "std/http.agc")
                 (memv (string->symbol member) '(respond begin write write_bytes finish)))
            "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"]
           [(and (equal? target "std/logger.agc") (equal? member "error"))
            "the function for the error level is Logger.err; error is a reserved name"]
-          [else (did-you-mean member (hash-keys (hash-ref exports target)))]))
+          [else
+           (define public (hash-ref exports target))
+           (define near (closest-name member (hash-keys public)))
+           (and near
+                (format "did you mean \"~a\"?"
+                        (if (and alias? (const-decl? (hash-ref public near))) (format "import {~a}" near) near)))]))
       ;; The import line a help text shows for a path (written as a string): the alias form, or the name list.
       (define (import-line written alias entries)
         (if alias
@@ -170,13 +194,20 @@
                                        (format "~a as ~a" (import-name-name entry) (import-name-local entry))))
                                  ", ")
                     written)))
-      ;; A struct or an enum is renamed to a type name (a capital first letter), a function to a
-      ;; lowercase one; the lexer tells the two apart by that letter.
+;; A struct or an enum is renamed to a type name (a capital first letter), a function to a
+      ;; lowercase one, a constant to another constant name; the lexer tells the first two apart by
+      ;; that letter.
       (define (type-name? text) (char<=? #\A (string-ref text 0) #\Z))
+      (define (rename-ok? local declaration)
+        (cond
+          [(const-decl? declaration) (constant-name? local)]
+          [(function-decl? declaration) (not (type-name? local))]
+          [else (type-name? local)]))
       (define (rename-help declaration)
         (cond
           [(struct-decl? declaration) "a struct is renamed to another type name, which starts with a capital letter"]
           [(enum-decl? declaration) "an enum is renamed to another type name, which starts with a capital letter"]
+          [(const-decl? declaration) "a constant is renamed to another constant name, in capitals with underscores"]
           [else "a function is renamed to another lowercase name"]))
       ;; One entry of an import list: the name must be an export, the new name must keep the case
       ;; rule of its kind, and the local name joins the file's names like a declaration. A name
@@ -188,7 +219,7 @@
         (unless declaration
           (bail 'CHECK-IMPORT-NAME "unknown or private imported name" (import-name-span entry)
                 #:help (unknown-name-help target original)))
-        (unless (eq? (type-name? local) (not (function-decl? declaration)))
+        (unless (rename-ok? local declaration)
           (bail 'CHECK-IMPORT-RENAME "the new name does not follow the case rule of the imported name"
                 (import-name-local-span entry) #:help (rename-help declaration)))
         (when (or (hash-has-key? names local) (hash-has-key? aliases local) (hash-has-key? named local)
@@ -207,6 +238,7 @@
           (define names (make-hash))
           (define public (make-hash))
           (define aliases (make-hash))
+          (define paths (make-hash))
           (define named (make-hash))
           (for ([wrapped (in-list (program-declarations tree))])
             (define declaration (unwrap wrapped))
@@ -216,10 +248,11 @@
                         (member name reserved-type-names))
                 (bail 'CHECK-REDEFINED-NAME "duplicate or reserved declaration" (node-span wrapped)))
               (hash-set! names name declaration)
-              (when (export-decl? wrapped) (hash-set! public name declaration))))
+              (when (exported? wrapped) (hash-set! public name declaration))))
           (hash-set! locals key names)
           (hash-set! exports key public)
           (hash-set! imports key aliases)
+          (hash-set! import-paths key paths)
           (hash-set! named-imports key named)
           (for ([declaration (in-list (program-declarations tree))] #:when (import-decl? declaration))
             (define alias (import-decl-alias declaration))
@@ -234,7 +267,9 @@
             (define target
               (with-handlers ([exn:fail? (lambda (_) (bail 'CHECK-IMPORT-IO "cannot resolve import" span))])
                 (resolve-import key file span)))
-            (when alias (hash-set! aliases alias target))
+            (when alias
+              (hash-set! aliases alias target)
+              (hash-set! paths alias path))
             (cond
               [(member target active) (bail 'CHECK-IMPORT-CYCLE "import cycle" span)]
               [(hash-has-key? trees target) (void)]
@@ -251,6 +286,7 @@
               (bind-imported-name! target entry names aliases named)))
           (set! active (cdr active))))
       (visit root-key root (program-span root))
+      (when files (set-box! files (map module-name (reverse order))))
       (define (identity key name) (string-append (hash-ref prefixes key) name))
       ;; The linked names of every struct a user module declares. A struct outside this table is a
       ;; builtin record, which every module may build.
@@ -286,6 +322,16 @@
           [else (function-decl? declaration)]))
       ;; The module and original name behind a name imported by name into this file, or #f.
       (define (named-entry key name) (hash-ref (hash-ref named-imports key) name #f))
+      ;; The linked name of the constant that `name` reads in file `key` (declared there or imported by
+      ;; name), or #f.
+      (define (constant-identity key name)
+        (cond
+          [(const-decl? (hash-ref (hash-ref locals key) name #f)) (identity key name)]
+          [(named-entry key name)
+           => (lambda (entry)
+                (and (const-decl? (hash-ref (hash-ref exports (car entry)) (cdr entry)))
+                     (identity (car entry) (cdr entry))))]
+          [else #f]))
       (define (named-enum? key name)
         (define entry (named-entry key name))
         (and entry (enum-decl? (hash-ref (hash-ref exports (car entry)) (cdr entry)))))
@@ -301,7 +347,11 @@
               (define declaration (hash-ref (hash-ref exports target) member #f))
               (unless declaration
                 (bail 'CHECK-IMPORT-NAME "unknown or private imported name" span
-                      #:help (unknown-name-help target member)))
+                      #:help (unknown-name-help target member #:alias? #t)))
+              (when (const-decl? declaration)
+                (bail 'CHECK-IMPORT-NAME "a constant is read by its name, not through the module alias" span
+                      #:help (format "write import {~a} from ~s, then use ~a\nor let the module export a function and call it as ~a.name()"
+                                     member (hash-ref (hash-ref import-paths key) alias) member alias)))
               (unless (right-kind? declaration kind)
                 (bail 'CHECK-TYPE-MISMATCH "wrong kind of imported declaration" span))
               (identity target member)]
@@ -346,10 +396,14 @@
               (enum-constructor (resolve key (car parts) 'enum span) (cadr parts) '() span)]
              [(and (= (length parts) 2) (hash-has-key? builtin-enums (car parts)))
               (enum-constructor (car parts) (cadr parts) '() span)]
+             [(and (= (length parts) 1) (constant-identity key name))
+              => (lambda (linked) (const-ref linked span))]
              [else (type-expression (resolve key name 'type span #:variant-hint? #t) span)])]
           [(function-decl name params result body span)
            (function-decl (identity key name) (walks params) (walk result) (walks body) span)]
           [(struct-decl name fields span) (struct-decl (identity key name) (walks fields) span)]
+          [(const-decl name type value _ span)
+           (const-decl (identity key name) (and type (walk type)) (walk value) #f span)]
           [(enum-decl name parameters variants span)
            (define (rewrite-enum-type node)
              (match node
@@ -374,7 +428,17 @@
           [(param name type span) (param name (walk type) span)]
           [(field-decl name type span) (field-decl name (walk type) span)]
           [(call name args span piped)
-           (call (resolve key name 'function span) (walks args) span piped)]
+           (define parts (string-split name "."))
+           (define constant (and (= (length parts) 2) (constant-identity key (car parts))))
+           (cond
+             ;; NAME.x on a constant: a field access when written with no parentheses and no arguments (a
+             ;; block is an argument), a method call otherwise (docs/future/44-module-constants.md 44.3).
+             [constant
+              (define receiver (const-ref constant (name-span span (string-length (car parts)))))
+              (if (and (null? args) (not (parenthesized-call? node)))
+                  (field-access receiver (cadr parts) span)
+                  (method-call receiver (cadr parts) (walks args) span))]
+             [else (call (resolve key name 'function span) (walks args) span piped)])]
           [(function-ref name span) (function-ref (resolve key name 'function span) span)]
           [(construct name args span)
            (define parts (string-split name "."))

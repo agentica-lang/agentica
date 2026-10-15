@@ -1,0 +1,1 @@
+ERROR CHECK-VOID-VALUE 10:1:11-31:1:32 "a Void call has no value; use it as a statement" - file="constant-void-value.agc"

@@ -1,1 +1,1 @@
-ERROR PARSE-TOP-LEVEL-STATEMENT 20:3:1-24:3:5 "expected a top-level declaration (def, struct, enum, or import), found \"puts\"" "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import and export"
+ERROR PARSE-TOP-LEVEL-STATEMENT 20:3:1-24:3:5 "expected a top-level declaration (def, struct, enum, constant, or import), found \"puts\"" "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import, export and constants (NAME = value)"

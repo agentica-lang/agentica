@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-EXPRESSION 30:1:31-36:1:37 "a constant cannot call make, a function declared in the program" "build the value from literals, constructors and builtins, or compute it in a function" file="constant-expression-call-nested.agc"

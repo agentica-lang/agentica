@@ -99,6 +99,23 @@ export def kind_at(e: Env, index: Int) -> String
   return e.tokens[e.size - 1].kind
 end
 
+## True for the name of a module constant: capitals, digits and `_`, starting with a capital, at least two characters (UPPER_SNAKE_CASE). The lexer makes every such name a type-name token; this tells it from a CamelCase type. src/ast.rkt has the same test (constant-name?).
+export def constant_name?(text: String) -> Bool
+  codes = text.split("").map do |character| String.code(character) end
+  if codes.size < 2 or codes[0] < 65 or codes[0] > 90
+    return false
+  end
+  index = 1
+  while index < codes.size
+    code = codes[index]
+    if !((code >= 65 and code <= 90) or (code >= 48 and code <= 57) or code == 95)
+      return false
+    end
+    index += 1
+  end
+  return true
+end
+
 ## The span from the start of the token at start to the end of the last token before pos, that is, the last consumed token.
 export def span_from(e: Env, start: Int, pos: Int) -> Source.Span
   return Source.Span(start: e.tokens[start].span.start, stop: e.tokens[pos - 1].span.stop)

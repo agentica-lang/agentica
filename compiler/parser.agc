@@ -747,6 +747,12 @@ def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   return call_node(e, pos, name + "." + member.lexeme, args.nodes, parenthesized, args.ids, cursor)
 end
 
+# NAME.with(...) updates a constant of a struct type: the postfix loop reads the .with.
+def updates_constant?(e: Base.Env, name: Tokens.Token, dot: Int) -> Bool
+  member = e.tokens[dot + 1]
+  return Base.constant_name?(name.lexeme) and member.kind == "name" and member.lexeme == "with" and e.tokens[dot + 2].kind == "left-paren"
+end
+
 def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   name = e.tokens[pos]
   after = pos + 1
@@ -756,6 +762,9 @@ def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return construct_node(e, pos, name.lexeme, named.nodes, named.ids, close)
   end
   if e.tokens[after].kind == "dot"
+    if updates_constant?(e, name, after)
+      return expr_at(Ast.Expr.TypeName(Ast.TypeName(id: ids, name: name.lexeme, span: name.span)), after, ids)
+    end
     if e.tokens[after + 1].kind == "type-name"
       return parse_qualified_member(e, pos, ids)
     end
@@ -938,6 +947,18 @@ def assignment_message(node: Ast.Expr) -> String
   end
 end
 
+# A constant written as the target of an assignment inside a function.
+def assignment_help(node: Ast.Expr) -> Diag.Help
+  case node
+    Ast.Expr.TypeName(found) ->
+      if Base.constant_name?(found.name)
+        return Base.hint("constants are set at the top level and never change")
+      end
+      return Diag.Help.NoHelp
+    _ -> return Diag.Help.NoHelp
+  end
+end
+
 def keyword_message(name: String) -> String
   if name == "break" or name == "next"
     return "\"" + name + "\" stands alone on its line"
@@ -964,7 +985,7 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
   value = try parse_expression(e, pos, ids)
   following = e.tokens[value.pos].kind
   if following == "assign" or compound_operator(following) != ""
-    return error(Base.bail(e, value.pos, "PARSE-INVALID-ASSIGNMENT-TARGET", assignment_message(value.node), Diag.Help.NoHelp))
+    return error(Base.bail(e, value.pos, "PARSE-INVALID-ASSIGNMENT-TARGET", assignment_message(value.node), assignment_help(value.node)))
   end
   if name_target?(value.node)
     name = target_name(value.node)
@@ -1233,7 +1254,7 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
   if member == "variant"
     return kind == "type-name"
   end
-  return kind == "def" or kind == "struct" or kind == "enum" or kind == "export"
+  return kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, pos)
 end
 
 def doc_block(token: Tokens.Token) -> Tokens.DocBlock
@@ -1345,11 +1366,88 @@ def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   if kind == "enum"
     return parse_enum_decl(e, pos, ids, absent)
   end
-  return error(Base.unexpected(e, pos, "export requires def, struct, or enum"))
+  return error(Base.unexpected(e, pos, "export requires def, struct, enum, or a constant"))
+end
+
+# A constant starts with a type-name token followed by `=` or `:` (docs/future/44-module-constants.md 44.3). The name is checked when it is parsed, so `Limit = 1` is PARSE-CONSTANT-NAME and not a statement.
+def constant_start?(e: Base.Env, at: Int) -> Bool
+  following = Base.kind_at(e, at + 1)
+  return Base.kind_at(e, at) == "type-name" and (following == "assign" or following == "colon")
+end
+
+# Whether the declaration after the doc block and the `export` that may start at `at` is a constant: the blank line rule lets constants follow each other.
+def constant_follows?(e: Base.Env, at: Int) -> Bool
+  cursor = at
+  if Base.kind_at(e, cursor) == "DOC"
+    cursor += 2
+  end
+  if Base.kind_at(e, cursor) == "export"
+    cursor += 1
+  end
+  return constant_start?(e, cursor)
+end
+
+# The name in UPPER_SNAKE_CASE for a CamelCase one (MaxDepth is MAX_DEPTH), or "" when the result is still not a constant name (a single letter).
+def constant_suggestion(text: String) -> String
+  letters = text.split("")
+  out: List[String] = []
+  index = 0
+  while index < letters.size
+    code = String.code(letters[index])
+    if index > 0 and code >= 65 and code <= 90
+      before = String.code(letters[index - 1])
+      if (before >= 97 and before <= 122) or (before >= 48 and before <= 57)
+        out = out.push("_")
+      end
+    end
+    out = out.push(letters[index])
+    index += 1
+  end
+  snake = out.join("").upcase
+  if Base.constant_name?(snake)
+    return snake
+  end
+  return ""
+end
+
+def constant_name_help(text: String) -> String
+  suggestion = constant_suggestion(text)
+  if suggestion == ""
+    return "write constant names in capitals with underscores, at least two characters, such as LIMIT"
+  end
+  return "write constant names in capitals with underscores: use " + suggestion
+end
+
+# [export] NAME[: Type] = value. name_at is the name token, start the first token (the export, or the name).
+def parse_constant_decl(e: Base.Env, name_at: Int, start: Int, ids: Int, doc: Ast.Optional[String], exported: Bool) -> Result[DeclAt]
+  name = e.tokens[name_at].lexeme
+  if !Base.constant_name?(name)
+    return error(Base.bail(e, name_at, "PARSE-CONSTANT-NAME", "\"" + name + "\" is not a constant name", Base.hint(constant_name_help(name))))
+  end
+  type: Ast.Optional[Ast.TypeRef] = Ast.Optional.Absent
+  cursor = name_at + 1
+  next_id = ids
+  if e.tokens[cursor].kind == "colon"
+    parsed = try Base.parse_type(e, cursor + 1, next_id)
+    type = Ast.Optional.Present(parsed.node)
+    cursor = parsed.pos
+    next_id = parsed.ids
+  end
+  assign = try Base.expect(e, cursor, "assign", "\"=\"", false)
+  value = try parse_expression(e, assign, next_id)
+  stop = try expect_statement_end(e, value.pos, "a newline after the statement")
+  node = Ast.Decl.Constant(Ast.ConstDecl(id: value.ids, name: name, type: type, value: value.node, exported: exported, doc: doc, span: Base.span_from(e, start, stop)))
+  return decl_at(node, stop, value.ids)
 end
 
 def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
   kind = e.tokens[pos].kind
+  if kind == "export" and constant_start?(e, pos + 1)
+    return parse_constant_decl(e, pos + 1, pos, ids, doc, true)
+  end
+  if constant_start?(e, pos)
+    return parse_constant_decl(e, pos, pos, ids, doc, false)
+  end
   if kind == "export"
     parsed = try parse_exportable(e, pos + 1, ids)
     node = Ast.Decl.Export(Ast.ExportDecl(id: parsed.ids, declaration: parsed.node, doc: doc, span: Base.span_from(e, pos, parsed.pos)))
@@ -1364,8 +1462,9 @@ def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]
   return parse_enum_decl(e, pos, ids, doc)
 end
 
-def declaration_start?(kind: String) -> Bool
-  return kind == "def" or kind == "struct" or kind == "enum" or kind == "export"
+def declaration_start?(e: Base.Env, at: Int) -> Bool
+  kind = e.tokens[at].kind
+  return kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, at)
 end
 
 def top_level_help(kind: String) -> String
@@ -1375,7 +1474,7 @@ def top_level_help(kind: String) -> String
   if kind == "else" or kind == "elsif"
     return "this else has no matching if"
   end
-  return "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import and export"
+  return "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import, export and constants (NAME = value)"
 end
 
 # The three import forms. `import "path" as Alias` is the old alias form, kept until 44a0-2. `from` and `as` are plain name tokens read by their text, so a parameter or a function called `from` or `as` still works (src/parser.rkt, parse-import).
@@ -1490,17 +1589,19 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
   declarations: List[Ast.Decl] = []
   module_doc: Ast.Optional[String] = Ast.Optional.Absent
   after_declaration = false
+  after_constant = false
   cursor = 0
   next_id = first_id
   looping = true
   while looping
     kind = e.tokens[cursor].kind
-    if after_declaration and (declaration_start?(kind) or kind == "import" or kind == "DOC")
+    if after_declaration and (declaration_start?(e, cursor) or kind == "import" or kind == "DOC") and !(after_constant and constant_follows?(e, cursor))
       return error(Base.bail(e, cursor, "PARSE-MISSING-BLANK-LINE", "expected a blank line after the end of a declaration", Diag.Help.NoHelp))
     end
     cursor = Base.skip_newlines(e, cursor)
     kind = e.tokens[cursor].kind
     after_declaration = false
+    after_constant = false
     if kind == "EOF"
       looping = false
     elsif kind == "DOC" and declarations.size == 0 and doc_block(e.tokens[cursor]).next == "blank" and module_doc_absent?(module_doc)
@@ -1511,18 +1612,26 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
       next_id = parsed.ids
-    elsif declaration_start?(kind) or kind == "DOC"
+    elsif declaration_start?(e, cursor) or kind == "DOC"
       taken = try documented(e, cursor, "declaration")
       parsed = try parse_declaration(e, taken.pos, next_id, taken.doc)
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
       next_id = parsed.ids
       after_declaration = true
+      after_constant = constant?(parsed.node)
     else
-      return error(Base.bail(e, cursor, "PARSE-TOP-LEVEL-STATEMENT", "expected a top-level declaration (def, struct, enum, or import), found " + Base.describe(e.tokens[cursor]), Base.hint(top_level_help(kind))))
+      return error(Base.bail(e, cursor, "PARSE-TOP-LEVEL-STATEMENT", "expected a top-level declaration (def, struct, enum, constant, or import), found " + Base.describe(e.tokens[cursor]), Base.hint(top_level_help(kind))))
     end
   end
   return ok(Ast.Program(id: next_id, declarations: declarations, module_doc: module_doc, span: Base.span_from(e, 0, cursor)))
+end
+
+def constant?(decl: Ast.Decl) -> Bool
+  case decl
+    Ast.Decl.Constant(node) -> return true
+    _ -> return false
+  end
 end
 
 def module_doc_absent?(doc: Ast.Optional[String]) -> Bool

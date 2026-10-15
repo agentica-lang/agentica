@@ -46,6 +46,7 @@ export enum Decl
   Function(FunctionDecl)
   Struct(StructDecl)
   Enum(EnumDecl)
+  Constant(ConstDecl)
 end
 
 ## An import: import Alias from "path" (alias is Present, names is empty; the old form import "path" as Alias gives the same node), or import {A, B as C} from "path" (alias is Absent, names has at least one entry).
@@ -69,6 +70,17 @@ end
 export struct ExportDecl
   id: Int
   declaration: Decl
+  doc: Optional[String]
+  span: Source.Span
+end
+
+## A module constant: [export] NAME[: Type] = value (docs/future/44-module-constants.md). Unlike the other declarations it is not wrapped by an ExportDecl: exported says whether `export` was written, and the span starts at it. The linker clears exported.
+export struct ConstDecl
+  id: Int
+  name: String
+  type: Optional[TypeRef]
+  value: Expr
+  exported: Bool
   doc: Optional[String]
   span: Source.Span
 end
@@ -271,6 +283,7 @@ export enum Expr
   Binary(Binary)
   TypeName(TypeName)
   Typed(TypedTarget)
+  ConstRef(ConstRef)
 end
 
 ## A number, string, true, false or nil.
@@ -456,6 +469,13 @@ export struct TypeName
   span: Source.Span
 end
 
+## The read of a module constant, made by the linker from NAME (name is the linked name), and the receiver of a rewritten NAME.method(...) or NAME.field. A receiver made from a call has the id total + the id of the call, where total is the number of ids of the program, so it does not clash with a node of the parser (see Linker.Linked.ids).
+export struct ConstRef
+  id: Int
+  name: String
+  span: Source.Span
+end
+
 ## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method checks it as the first argument without checking it twice (src/ast.rkt: typed-target). The parser never makes it. id and span are those of the receiver.
 export struct TypedTarget
   id: Int
@@ -487,6 +507,7 @@ export def expr_id(expr: Expr) -> Int
     Expr.Binary(node) -> return node.id
     Expr.TypeName(node) -> return node.id
     Expr.Typed(node) -> return node.id
+    Expr.ConstRef(node) -> return node.id
   end
 end
 
@@ -513,6 +534,7 @@ export def expr_span(expr: Expr) -> Source.Span
     Expr.Binary(node) -> return node.span
     Expr.TypeName(node) -> return node.span
     Expr.Typed(node) -> return node.span
+    Expr.ConstRef(node) -> return node.span
   end
 end
 

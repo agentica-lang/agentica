@@ -1,7 +1,8 @@
-## The type checker (src/checker.rkt, `check`): takes a linked program and gives the type of every expression and the resolution of every method call, or the first problem. The declarations are registered first (enums, structs, variants, functions, main), then each function is checked in program order, file by file.
+## The type checker (src/checker.rkt, `check`): takes a linked program and gives the type of every expression and the resolution of every method call, or the first problem. The declarations are registered first (enums, structs, variants, functions, main), then the module constants are ordered and checked, then each function is checked in program order, file by file.
 
 import "ast" as Ast
 import "builtins" as Builtins
+import "check_const" as Constants
 import "check_expr" as Expr
 import "check_failure" as Failure
 import "check_help" as Help
@@ -11,10 +12,11 @@ import "check_stmt" as Statements
 import "linker" as Linker
 import "types" as T
 
-## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that has none: node ids are dense, so a list is faster than a Map to write and read), and what each method call or field access resolved to, by node id (lower.rkt reads them).
+## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that has none: node ids are dense, so a list is faster than a Map to write and read), what each method call or field access resolved to, by node id (lower.rkt reads them), and the linked names of the module constants in initialization order (the lowering reads that too, and does not order them again).
 export struct Checked
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]
+  constants: List[String]
 end
 
 ## The result of checking: the types, or the first problem.
@@ -53,13 +55,16 @@ def start(linked: Linker.Linked, catalog: Builtins.Catalog) -> State.Cx
   for module in linked.modules
     texts = texts.put(module.file, module.text)
   end
-  return State.Cx(catalog: catalog, help: Help.tables(), structs: catalog.records, enums: catalog.enums, functions: {}, type_params: [], file: linked.modules[0].file, texts: texts, expression: &Expr.check_expression)
+  return State.Cx(catalog: catalog, help: Help.tables(), structs: catalog.records, enums: catalog.enums, functions: {}, constants: {}, type_params: [], file: linked.modules[0].file, texts: texts, expression: &Expr.check_expression)
 end
 
 def run(linked: Linker.Linked, catalog: Builtins.Catalog) -> Result[Checked]
   cx = try Register.register(start(linked, catalog), linked.modules)
   try Register.check_main(cx, linked.modules, linked.root.span)
   st = State.fresh().with(types: no_types(ids_of(linked), max_repeat()))
+  done = try Constants.check_all(cx, st, linked.modules)
+  cx = done.cx
+  st = done.st
   for module in linked.modules
     here = cx.with(file: module.file)
     for decl in module.declarations
@@ -69,12 +74,12 @@ def run(linked: Linker.Linked, catalog: Builtins.Catalog) -> Result[Checked]
       end
     end
   end
-  return ok(Checked(types: st.types, resolved: st.resolved))
+  return ok(Checked(types: st.types, resolved: st.resolved, constants: done.order))
 end
 
-# The number of node ids of the program: the files are numbered one after the other, so the last one ends it.
+# The number of node ids of the program, with the room the linker took for the receivers of constants (Linked.ids).
 def ids_of(linked: Linker.Linked) -> Int
-  return linked.modules[linked.modules.size - 1].next_id
+  return linked.ids
 end
 
 # List.repeat halts above this count (RUNTIME-INVALID-COUNT), and a program of about 5.7 MB of source has more node ids.

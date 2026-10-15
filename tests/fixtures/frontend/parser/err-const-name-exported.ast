@@ -1,0 +1,1 @@
+ERROR PARSE-CONSTANT-NAME 7:1:8-12:1:13 "\"Limit\" is not a constant name" "write constant names in capitals with underscores: use LIMIT"

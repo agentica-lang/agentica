@@ -1,0 +1,1 @@
+export MAX = 2

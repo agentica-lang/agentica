@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-CYCLE 43:3:12-47:3:16 "constants depend on each other in a cycle" "the cycle is HEAD -> MIDDLE -> TAIL -> HEAD" file="constant-cycle-three.agc"

@@ -1,1 +1,1 @@
-ERROR PARSE-TOP-LEVEL-STATEMENT 20:3:1-23:3:4 "expected a top-level declaration (def, struct, enum, or import), found \"end\"" "this end closes nothing: each def, if, while, for, case, struct, enum and do block needs exactly one end"
+ERROR PARSE-TOP-LEVEL-STATEMENT 20:3:1-23:3:4 "expected a top-level declaration (def, struct, enum, constant, or import), found \"end\"" "this end closes nothing: each def, if, while, for, case, struct, enum and do block needs exactly one end"

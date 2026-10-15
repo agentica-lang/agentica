@@ -43,13 +43,14 @@ export struct Signature
   result: Types.Type
 end
 
-## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's; functions the program's. type_params are the type parameters in scope (only while the variants of a generic enum are registered). file is the file of the declaration being checked, texts the source of every file by name. expression checks an expression: the cycle between expressions and statements goes through this field (check_expr.agc puts its own function here), because a module cannot import one that imports it.
+## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's; functions the program's; constants the type of each module constant by linked name, which grows as the initializers are checked in order. type_params are the type parameters in scope (only while the variants of a generic enum are registered). file is the file of the declaration being checked, texts the source of every file by name. expression checks an expression: the cycle between expressions and statements goes through this field (check_expr.agc puts its own function here), because a module cannot import one that imports it.
 export struct Cx
   catalog: Builtins.Catalog
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
   enums: Map[String, Model.EnumDef]
   functions: Map[String, Signature]
+  constants: Map[String, Types.Type]
   type_params: List[String]
   file: String
   texts: Map[String, String]

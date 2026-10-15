@@ -4,12 +4,14 @@ import "ast" as Ast
 import "diagnostic" as Diag
 import "link_failure" as Failure
 import "source" as Source
+import Base from "parse_base"
 
 ## What a top-level declaration is.
 export enum Kind
   Struct
   Enum
   Function
+  Constant
   Import
 end
 
@@ -29,15 +31,17 @@ export def span_of(decl: Ast.Decl) -> Source.Span
     Ast.Decl.Function(node) -> return node.span
     Ast.Decl.Struct(node) -> return node.span
     Ast.Decl.Enum(node) -> return node.span
+    Ast.Decl.Constant(node) -> return node.span
   end
 end
 
-## The name a struct, enum or function declares; "" for an import.
+## The name a struct, enum, function or constant declares; "" for an import.
 export def name_of(decl: Ast.Decl) -> String
   case unwrap(decl)
     Ast.Decl.Function(node) -> return node.name
     Ast.Decl.Struct(node) -> return node.name
     Ast.Decl.Enum(node) -> return node.name
+    Ast.Decl.Constant(node) -> return node.name
     _ -> return ""
   end
 end
@@ -48,6 +52,7 @@ export def kind_of(decl: Ast.Decl) -> Kind
     Ast.Decl.Function(node) -> return Kind.Function
     Ast.Decl.Struct(node) -> return Kind.Struct
     Ast.Decl.Enum(node) -> return Kind.Enum
+    Ast.Decl.Constant(node) -> return Kind.Constant
     _ -> return Kind.Import
   end
 end
@@ -76,6 +81,14 @@ export def enum?(kind: Kind) -> Bool
   end
 end
 
+## True for a constant.
+export def constant?(kind: Kind) -> Bool
+  case kind
+    Kind.Constant -> return true
+    _ -> return false
+  end
+end
+
 ## True for an import.
 export def import?(kind: Kind) -> Bool
   case kind
@@ -84,10 +97,11 @@ export def import?(kind: Kind) -> Bool
   end
 end
 
-## True for an export.
+## True for an export, or a constant written with export.
 export def exported?(decl: Ast.Decl) -> Bool
   case decl
     Ast.Decl.Export(node) -> return true
+    Ast.Decl.Constant(node) -> return node.exported
     _ -> return false
   end
 end
@@ -115,6 +129,11 @@ export def type_name?(name: String) -> Bool
   return "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(name.slice(0, 1))
 end
 
+## True for the name of a constant: capitals, digits and `_`, starting with a capital, at least two characters.
+export def constant_name?(name: String) -> Bool
+  return Base.constant_name?(name)
+end
+
 ## The imports of a file, in order.
 export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
   found: List[Ast.ImportDecl] = []
@@ -127,7 +146,7 @@ export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
   return found
 end
 
-## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then struct and enum (exported or not), then export def, then def. The span is that of the declaration out of place; the help names the group it belongs to. This is a style rule with no meaning for evaluation (src/modules.rkt, declaration-order-error).
+## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then constants, then struct and enum (exported or not), then export def, then def. The span is that of the declaration out of place; the help names the group it belongs to. This is a style rule with no meaning for evaluation (src/modules.rkt, declaration-order-error).
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
   highest = 0
   for decl in declarations
@@ -146,22 +165,24 @@ end
 def rank(decl: Ast.Decl) -> Int
   case decl
     Ast.Decl.Import(node) -> return 0
-    Ast.Decl.Struct(node) -> return 1
-    Ast.Decl.Enum(node) -> return 1
+    Ast.Decl.Constant(node) -> return 1
+    Ast.Decl.Struct(node) -> return 2
+    Ast.Decl.Enum(node) -> return 2
     Ast.Decl.Export(node) ->
       case node.declaration
-        Ast.Decl.Struct(inner) -> return 1
-        Ast.Decl.Enum(inner) -> return 1
-        _ -> return 2
+        Ast.Decl.Struct(inner) -> return 2
+        Ast.Decl.Enum(inner) -> return 2
+        _ -> return 3
       end
-    Ast.Decl.Function(node) -> return 3
+    Ast.Decl.Function(node) -> return 4
   end
 end
 
 def order_help(group: Int) -> String
   case group
-    0 -> return "imports come first, before any struct, enum or function"
-    1 -> return "structs and enums come before functions"
+    0 -> return "imports come first, before any constant, struct, enum or function"
+    1 -> return "constants come right after the imports"
+    2 -> return "structs and enums come before functions"
     _ -> return "exported functions come before private functions"
   end
 end

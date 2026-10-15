@@ -5,7 +5,7 @@
          "source.rkt"
          "token.rkt")
 
-(provide parse)
+(provide parse parenthesized-call?)
 
 (define compound-operators
   (hasheq 'plus-assign 'plus 'minus-assign 'minus 'multiply-assign 'multiply
@@ -13,12 +13,19 @@
 
 (define nesting-limit 1000)
 
+;; The calls written with parentheses. The linker reads it for `NAME.x`, which is a field access without
+;; parentheses and a method call with them (docs/future/44-module-constants.md 44.3). Weak, so a node that
+;; nobody holds does not keep an entry.
+(define parenthesized-calls (make-weak-hasheq))
+
+(define (parenthesized-call? node)
+  (hash-ref parenthesized-calls node #f))
+
 (define (parse tokens)
   (define toks (list->vector tokens))
   (define count (vector-length toks))
   (define pos 0)
   (define last-consumed #f)
-  (define parenthesized-calls (make-weak-hasheq))
 
   (define (current)
     (if (< pos count) (vector-ref toks pos) (vector-ref toks (sub1 count))))
@@ -175,22 +182,65 @@
             member)
           (parse-member)))
 
+    ;; A constant starts with a type-name token followed by `=` or `:` (docs/future/44-module-constants.md 44.3).
+    ;; The name is checked when it is parsed, so `Limit = 1` is PARSE-CONSTANT-NAME and not a statement.
+    (define (constant-start-at? distance)
+      (and (eq? (token-kind (peek-token distance)) 'type-name)
+           (memq (token-kind (peek-token (add1 distance))) '(assign colon))
+           #t))
+
     (define (declaration-start?)
-      (ormap kind? '(def struct enum export)))
+      (or (ormap kind? '(def struct enum export)) (constant-start-at? 0)))
+
+    ;; Whether the declaration after the current token (past its doc block and `export`) is a constant: the
+    ;; blank line rule lets constants follow each other.
+    (define (constant-follows?)
+      (define after-doc (if (kind? 'DOC) 2 0))
+      (constant-start-at? (if (eq? (token-kind (peek-token after-doc)) 'export) (add1 after-doc) after-doc)))
 
     (define (parse-declaration)
       (cond
         [(kind? 'export)
          (define begin (advance!))
-         (define declaration
-           (cond [(kind? 'def) (parse-function-decl)]
-                 [(kind? 'struct) (parse-struct-decl)]
-                 [(kind? 'enum) (parse-enum-decl)]
-                 [else (bail 'PARSE-UNEXPECTED-TOKEN "export requires def, struct, or enum" (current))]))
-         (export-decl declaration (span-from begin))]
+         (cond
+           [(constant-start-at? 0) (parse-constant-decl begin #t)]
+           [else
+            (define declaration
+              (cond [(kind? 'def) (parse-function-decl)]
+                    [(kind? 'struct) (parse-struct-decl)]
+                    [(kind? 'enum) (parse-enum-decl)]
+                    [else (bail 'PARSE-UNEXPECTED-TOKEN "export requires def, struct, enum, or a constant" (current))]))
+            (export-decl declaration (span-from begin))])]
         [(kind? 'def) (parse-function-decl)]
         [(kind? 'struct) (parse-struct-decl)]
+        [(constant-start-at? 0) (parse-constant-decl (current) #f)]
         [else (parse-enum-decl)]))
+
+    ;; The name in UPPER_SNAKE_CASE for a CamelCase one (MaxDepth -> MAX_DEPTH), or #f when the result is
+    ;; still not a constant name (a single letter).
+    (define (constant-suggestion text)
+      (define snake (string-upcase (regexp-replace* #px"([a-z0-9])([A-Z])" text "\\1_\\2")))
+      (and (constant-name? snake) snake))
+
+    ;; [export] NAME[: Type] = value, on one line (or inside brackets or a block, as a binding).
+    (define (parse-constant-decl start exported?)
+      (define name (expect 'type-name "a constant name"))
+      (unless (constant-name? (token-lexeme name))
+        (define suggestion (constant-suggestion (token-lexeme name)))
+        (bail 'PARSE-CONSTANT-NAME
+              (format "~s is not a constant name" (token-lexeme name))
+              name
+              #:help (if suggestion
+                         (format "write constant names in capitals with underscores: use ~a" suggestion)
+                         "write constant names in capitals with underscores, at least two characters, such as LIMIT")))
+      (define type
+        (if (kind? 'colon)
+            (begin (advance!) (parse-type))
+            #f))
+      (expect 'assign "\"=\"")
+      (define value (parse-expression))
+      (expect-statement-end "a newline after the statement")
+      (const-decl (token-lexeme name) type value exported? (span-from start)))
 
     ;; The three import forms. `import "path" as Alias` is the old alias form, kept until 44a0-2.
     ;; `from` and `as` are plain name tokens that this parser reads by their text, so a parameter
@@ -275,7 +325,8 @@
         (let loop ([acc '()])
           (when (and (pair? acc)
                      (not (import-decl? (car acc)))
-                     (ormap kind? '(def struct enum export import DOC)))
+                     (or (ormap kind? '(def struct enum export import DOC)) (constant-start-at? 0))
+                     (not (and (const-decl? (car acc)) (constant-follows?))))
             (bail 'PARSE-MISSING-BLANK-LINE
                   "expected a blank line after the end of a declaration"
                   (current)))
@@ -293,13 +344,13 @@
              (loop (cons (parse-documented parse-declaration declaration-start?) acc))]
             [else
              (bail 'PARSE-TOP-LEVEL-STATEMENT
-                   (format "expected a top-level declaration (def, struct, enum, or import), found ~a"
+                   (format "expected a top-level declaration (def, struct, enum, constant, or import), found ~a"
                            (describe (current)))
                    (current)
                    #:help (case (token-kind (current))
                             [(end) "this end closes nothing: each def, if, while, for, case, struct, enum and do block needs exactly one end"]
                             [(else elsif) "this else has no matching if"]
-                            [else "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import and export"]))])))
+                            [else "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import, export and constants (NAME = value)"]))])))
       (program declarations (span-from start) (make-immutable-hash docs) module-doc))
 
     (define (parse-function-decl)
@@ -647,7 +698,9 @@
                  (if (index-access? value)
                      "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, Map.put(map, key, value))"
                      "the core only assigns to a plain name")
-                 (current)))
+                 (current)
+                 #:help (and (type-expression? value) (constant-name? (type-expression-name value))
+                             "constants are set at the top level and never change")))
          (when (and (name-ref? value) (member (name-ref-name value) '("elif" "elseif")))
            (bail 'PARSE-UNEXPECTED-TOKEN
                  (format "\"~a\" is not a keyword" (name-ref-name value))
@@ -1061,6 +1114,12 @@
          (define arguments (parse-named-arguments))
          (expect 'right-paren "\")\"")
          (construct (token-lexeme name) arguments (span-from name))]
+        ;; `NAME.with(...)` updates a constant of a struct type: the postfix loop reads the `.with`.
+        [(and (kind? 'dot) (constant-name? (token-lexeme name))
+              (let ([member (peek-token 1)])
+                (and (eq? (token-kind member) 'name) (equal? (token-lexeme member) "with")
+                     (eq? (token-kind (peek-token 2)) 'left-paren))))
+         (type-expression (token-lexeme name) (token-span name))]
         [(kind? 'dot)
          (advance!)
          (cond

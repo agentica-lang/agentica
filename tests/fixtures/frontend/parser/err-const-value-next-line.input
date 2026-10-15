@@ -1,0 +1,5 @@
+LIMIT =
+  3
+
+def main() -> Void
+end

@@ -1,0 +1,1 @@
+ERROR CHECK-IMPORT-NAME 52:4:7-61:4:16 "a constant is read by its name, not through the module alias" "write import {NAMES} from \"sub/lib\", then use NAMES\nor let the module export a function and call it as Lib.name()" file="root.agc"

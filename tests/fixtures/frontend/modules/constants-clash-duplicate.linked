@@ -1,0 +1,1 @@
+ERROR CHECK-REDEFINED-NAME 10:2:1-20:3:1 "duplicate or reserved declaration" - file="root.agc"

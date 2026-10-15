@@ -23,6 +23,7 @@ def rewrite_decl(cx: Resolve.Context, decl: Ast.Decl) -> Result[Ast.Decl]
     Ast.Decl.Function(node) -> return rewrite_function(cx, node)
     Ast.Decl.Struct(node) -> return rewrite_struct(cx, node)
     Ast.Decl.Enum(node) -> return rewrite_enum(cx, node)
+    Ast.Decl.Constant(node) -> return rewrite_constant(cx, node)
     _ -> return ok(decl)
   end
 end
@@ -35,6 +36,13 @@ def rewrite_function(cx: Resolve.Context, node: Ast.FunctionDecl) -> Result[Ast.
   result = try rewrite_type(cx, node.result)
   body = try rewrite_stmts(cx, node.body)
   return ok(Ast.Decl.Function(node.with(name: Resolve.identity(cx, node.name), params: params, result: result, body: body)))
+end
+
+# A constant keeps its place, takes its linked name and loses its export (the linked program has no exports).
+def rewrite_constant(cx: Resolve.Context, node: Ast.ConstDecl) -> Result[Ast.Decl]
+  type = try rewrite_optional_type(cx, node.type)
+  value = try rewrite_expr(cx, node.value)
+  return ok(Ast.Decl.Constant(node.with(name: Resolve.identity(cx, node.name), type: type, value: value, exported: false)))
 end
 
 def rewrite_struct(cx: Resolve.Context, node: Ast.StructDecl) -> Result[Ast.Decl]
@@ -181,10 +189,7 @@ def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.Literal(node) -> return ok(expr)
     Ast.Expr.Name(node) -> return ok(expr)
     Ast.Expr.TypeName(node) -> return rewrite_type_name(cx, node)
-    Ast.Expr.Call(node) ->
-      name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
-      args = try rewrite_exprs(cx, node.args)
-      return ok(Ast.Expr.Call(node.with(name: name, args: args)))
+    Ast.Expr.Call(node) -> return rewrite_call(cx, node)
     Ast.Expr.EnumConstructor(node) ->
       name = try Resolve.resolve(cx, node.enum_name, Resolve.Want.Enum, node.span, false)
       args = try rewrite_exprs(cx, node.args)
@@ -195,6 +200,28 @@ def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.Construct(node) -> return rewrite_construct(cx, node)
     _ -> return rewrite_compound(cx, expr)
   end
+end
+
+def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
+  parts = node.name.split(".")
+  if parts.size == 2 and Resolve.constant_identity(cx, parts[0]) != ""
+    return rewrite_constant_member(cx, node, Resolve.constant_identity(cx, parts[0]), parts[0].length, parts[1])
+  end
+  name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
+  args = try rewrite_exprs(cx, node.args)
+  return ok(Ast.Expr.Call(node.with(name: name, args: args)))
+end
+
+# NAME.x on a constant: a field access when written with no parentheses and no arguments (a block is an argument), a method call otherwise (docs/future/44-module-constants.md 44.3). The receiver is the name alone, with an id past the ids of the program, since the call has only one.
+def rewrite_constant_member(cx: Resolve.Context, node: Ast.Call, linked: String, length: Int, member: String) -> Result[Ast.Expr]
+  start = node.span.start
+  stop = Source.Position(offset: start.offset + length, line: start.line, column: start.column + length)
+  receiver = Ast.Expr.ConstRef(Ast.ConstRef(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)))
+  if node.args.size == 0 and !node.parenthesized
+    return ok(Ast.Expr.FieldAccess(Ast.FieldAccess(id: node.id, target: receiver, name: member, span: node.span)))
+  end
+  args = try rewrite_exprs(cx, node.args)
+  return ok(Ast.Expr.MethodCall(Ast.MethodCall(id: node.id, target: receiver, name: member, args: args, span: node.span)))
 end
 
 # The expressions that only rewrite their parts, in the order of their fields.
@@ -261,7 +288,7 @@ def rewrite_block(cx: Resolve.Context, node: Ast.BlockLit) -> Result[Ast.Expr]
   return ok(Ast.Expr.BlockLit(node.with(params: params, body: body)))
 end
 
-# Enum.Variant, written without parentheses, is a variant of an enum of this file, one imported by name or a builtin one; any other name is a type.
+# Enum.Variant, written without parentheses, is a variant of an enum of this file, one imported by name or a builtin one; a name that is a constant of this file is a read of it; any other name is a type.
 def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Expr]
   parts = node.name.split(".")
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
@@ -271,6 +298,10 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
     return ok(variant(node.id, enum_name, parts[1], [], [], node.span))
   elsif parts.size == 2 and cx.settings.catalog.enums.has_key?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], [], node.span))
+  end
+  constant = Resolve.constant_identity(cx, node.name)
+  if parts.size == 1 and constant != ""
+    return ok(Ast.Expr.ConstRef(Ast.ConstRef(id: node.id, name: constant, span: node.span)))
   end
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Type, node.span, true)
   return ok(Ast.Expr.TypeName(node.with(name: name)))
