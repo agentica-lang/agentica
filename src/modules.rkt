@@ -82,7 +82,7 @@
                     (or (member part '("" "." ".."))
                         (regexp-match? #rx":" part))))
           (bail 'CHECK-IMPORT-PATH "invalid library path" span)))
-      (define (module-file path alias span)
+      (define (module-file path line span)
         (define (last-part text) (car (regexp-match #rx"[^/]*$" text)))
         (define (module-name? text)
           (define name (last-part text))
@@ -94,13 +94,13 @@
           [(module-name? path) (string-append path ".agc")]
           [(and stem (module-name? stem))
            (bail 'CHECK-IMPORT-PATH "import paths name a module without the .agc extension" span
-                 #:help (format "write import ~s as ~a" stem alias))]
+                 #:help (format "write ~a" (line stem)))]
           [(member (last-part path) '("" "." ".."))
            (bail 'CHECK-IMPORT-PATH "import paths name a module file" span
-                 #:help (format "write import \"models\" as ~a to load models.agc" alias))]
+                 #:help (format "write ~a to load models.agc" (line "models")))]
           [(module-name? guess)
            (bail 'CHECK-IMPORT-PATH "import paths name a module without an extension" span
-                 #:help (format "write import ~s as ~a to load ~a.agc" guess alias guess))]
+                 #:help (format "write ~a to load ~a.agc" (line guess) guess))]
           [else
            (bail 'CHECK-IMPORT-PATH "a module file name has no dot apart from .agc" span
                  #:help "rename the file so its name has no dot apart from .agc")]))
@@ -138,6 +138,7 @@
       (define trees (make-hash))
       (define prefixes (make-hash))
       (define imports (make-hash))
+      (define named-imports (make-hash))
       (define locals (make-hash))
       (define exports (make-hash))
       (define order '())
@@ -149,6 +150,51 @@
           [(struct-decl? declaration) (struct-decl-name declaration)]
           [(enum-decl? declaration) (enum-decl-name declaration)]
           [else (function-decl-name declaration)]))
+      ;; Only exports are candidates, so a private name is never suggested.
+      (define (unknown-name-help target member)
+        (cond
+          [(and (equal? target "std/http.agc")
+                (memv (string->symbol member) '(respond begin write write_bytes finish)))
+           "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"]
+          [(and (equal? target "std/logger.agc") (equal? member "error"))
+           "the function for the error level is Logger.err; error is a reserved name"]
+          [else (did-you-mean member (hash-keys (hash-ref exports target)))]))
+      ;; The import line a help text shows for a path (written as a string): the alias form, or the name list.
+      (define (import-line written alias entries)
+        (if alias
+            (format "import ~s as ~a" written alias)
+            (format "import {~a} from ~s"
+                    (string-join (for/list ([entry (in-list entries)])
+                                   (if (equal? (import-name-name entry) (import-name-local entry))
+                                       (import-name-name entry)
+                                       (format "~a as ~a" (import-name-name entry) (import-name-local entry))))
+                                 ", ")
+                    written)))
+      ;; A struct or an enum is renamed to a type name (a capital first letter), a function to a
+      ;; lowercase one; the lexer tells the two apart by that letter.
+      (define (type-name? text) (char<=? #\A (string-ref text 0) #\Z))
+      (define (rename-help declaration)
+        (cond
+          [(struct-decl? declaration) "a struct is renamed to another type name, which starts with a capital letter"]
+          [(enum-decl? declaration) "an enum is renamed to another type name, which starts with a capital letter"]
+          [else "a function is renamed to another lowercase name"]))
+      ;; One entry of an import list: the name must be an export, the new name must keep the case
+      ;; rule of its kind, and the local name joins the file's names like a declaration. A name
+      ;; imported twice, or clashing with anything else, is CHECK-REDEFINED-NAME at the local name.
+      (define (bind-imported-name! target entry names aliases named)
+        (define original (import-name-name entry))
+        (define local (import-name-local entry))
+        (define declaration (hash-ref (hash-ref exports target) original #f))
+        (unless declaration
+          (bail 'CHECK-IMPORT-NAME "unknown or private imported name" (import-name-span entry)
+                #:help (unknown-name-help target original)))
+        (unless (eq? (type-name? local) (not (function-decl? declaration)))
+          (bail 'CHECK-IMPORT-RENAME "the new name does not follow the case rule of the imported name"
+                (import-name-local-span entry) #:help (rename-help declaration)))
+        (when (or (hash-has-key? names local) (hash-has-key? aliases local) (hash-has-key? named local)
+                  (builtin-ref local) (member local reserved-type-names))
+          (bail 'CHECK-REDEFINED-NAME "duplicate or reserved imported name" (import-name-local-span entry)))
+        (hash-set! named local (cons target original)))
       (define (visit key tree where)
         (when (member key active) (bail 'CHECK-IMPORT-CYCLE "import cycle" where))
         (unless (hash-has-key? trees key)
@@ -161,6 +207,7 @@
           (define names (make-hash))
           (define public (make-hash))
           (define aliases (make-hash))
+          (define named (make-hash))
           (for ([wrapped (in-list (program-declarations tree))])
             (define declaration (unwrap wrapped))
             (unless (import-decl? declaration)
@@ -173,18 +220,21 @@
           (hash-set! locals key names)
           (hash-set! exports key public)
           (hash-set! imports key aliases)
+          (hash-set! named-imports key named)
           (for ([declaration (in-list (program-declarations tree))] #:when (import-decl? declaration))
             (define alias (import-decl-alias declaration))
+            (define entries (import-decl-names declaration))
             (define path (import-decl-path declaration))
             (define span (node-span declaration))
-            (when (or (hash-has-key? aliases alias) (hash-has-key? names alias)
-                      (member alias reserved-type-names))
+            (when (and alias
+                       (or (hash-has-key? aliases alias) (hash-has-key? names alias)
+                           (hash-has-key? named alias) (member alias reserved-type-names)))
               (bail 'CHECK-REDEFINED-NAME "duplicate or reserved import alias" span))
-            (define file (module-file path alias span))
+            (define file (module-file path (lambda (written) (import-line written alias entries)) span))
             (define target
               (with-handlers ([exn:fail? (lambda (_) (bail 'CHECK-IMPORT-IO "cannot resolve import" span))])
                 (resolve-import key file span)))
-            (hash-set! aliases alias target)
+            (when alias (hash-set! aliases alias target))
             (cond
               [(member target active) (bail 'CHECK-IMPORT-CYCLE "import cycle" span)]
               [(hash-has-key? trees target) (void)]
@@ -195,7 +245,10 @@
                (when (diagnostic? tokens) (failed tokens))
                (define parsed (parse tokens))
                (when (diagnostic? parsed) (failed parsed))
-               (visit target parsed span)]))
+               (visit target parsed span)])
+            ;; The names are checked once the module is loaded, because they need its exports.
+            (for ([entry (in-list entries)])
+              (bind-imported-name! target entry names aliases named)))
           (set! active (cdr active))))
       (visit root-key root (program-span root))
       (define (identity key name) (string-append (hash-ref prefixes key) name))
@@ -218,11 +271,24 @@
                         (for/list ([(name declaration) (in-hash (hash-ref locals key))]
                                    #:when (struct-decl? declaration))
                           (identity key name))
-                        (for*/list ([target (in-hash-values (hash-ref imports key))]
+                        ;; A module imported by name counts as imported, with all its exported structs:
+                        ;; an alias import of the same module would allow them too.
+                        (for*/list ([target (in-list (append (hash-values (hash-ref imports key))
+                                                             (map car (hash-values (hash-ref named-imports key)))))]
                                     [(name declaration) (in-hash (hash-ref exports target))]
                                     #:when (struct-decl? declaration))
                           (identity target name))))
                      (lambda (name) (or (not (hash-ref user-structs name #f)) (and (member name allowed) #t))))))
+      (define (right-kind? declaration kind)
+        (case kind
+          [(type) (or (struct-decl? declaration) (enum-decl? declaration))]
+          [(enum) (enum-decl? declaration)]
+          [else (function-decl? declaration)]))
+      ;; The module and original name behind a name imported by name into this file, or #f.
+      (define (named-entry key name) (hash-ref (hash-ref named-imports key) name #f))
+      (define (named-enum? key name)
+        (define entry (named-entry key name))
+        (and entry (enum-decl? (hash-ref (hash-ref exports (car entry)) (cdr entry)))))
       (define (resolve key name kind span #:variant-hint? [variant-hint? #f])
         (define parts (string-split name "."))
         (cond
@@ -235,18 +301,8 @@
               (define declaration (hash-ref (hash-ref exports target) member #f))
               (unless declaration
                 (bail 'CHECK-IMPORT-NAME "unknown or private imported name" span
-                      #:help (cond
-                               [(and (equal? target "std/http.agc")
-                                     (memv (string->symbol member) '(respond begin write write_bytes finish)))
-                                "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"]
-                               [(and (equal? target "std/logger.agc") (equal? member "error"))
-                                "the function for the error level is Logger.err; error is a reserved name"]
-                               ;; Only exports are candidates, so a private name is never suggested.
-                               [else (did-you-mean member (hash-keys (hash-ref exports target)))])))
-              (unless (case kind
-                        [(type) (or (struct-decl? declaration) (enum-decl? declaration))]
-                        [(enum) (enum-decl? declaration)]
-                        [else (function-decl? declaration)])
+                      #:help (unknown-name-help target member)))
+              (unless (right-kind? declaration kind)
                 (bail 'CHECK-TYPE-MISMATCH "wrong kind of imported declaration" span))
               (identity target member)]
              [(and (std-only-name? name) (not (string? key)))
@@ -266,6 +322,11 @@
                                   [variant-hint?
                                    (format "\"~a\" is neither an import alias nor an enum of this file; import a module with import \"path\" as ~a, or declare enum ~a" alias alias alias)]
                                   [else (format "import a module with import \"path\" as ~a" alias)]))])]
+          [(named-entry key name)
+           => (lambda (entry)
+                (unless (right-kind? (hash-ref (hash-ref exports (car entry)) (cdr entry)) kind)
+                  (bail 'CHECK-TYPE-MISMATCH "wrong kind of imported declaration" span))
+                (identity (car entry) (cdr entry)))]
           [(and (eq? kind 'type) (member name reserved-type-names)) name]
           [(and (eq? kind 'enum) (or (string=? name "Result") (hash-has-key? builtin-enums name))) name]
           [(and (eq? kind 'function) (builtin-ref name)) name]
@@ -281,6 +342,8 @@
              [(and (= (length parts) 2)
                    (enum-decl? (hash-ref (hash-ref locals key) (car parts) #f)))
               (enum-constructor (identity key (car parts)) (cadr parts) '() span)]
+             [(and (= (length parts) 2) (named-enum? key (car parts)))
+              (enum-constructor (resolve key (car parts) 'enum span) (cadr parts) '() span)]
              [(and (= (length parts) 2) (hash-has-key? builtin-enums (car parts)))
               (enum-constructor (car parts) (cadr parts) '() span)]
              [else (type-expression (resolve key name 'type span #:variant-hint? #t) span)])]
@@ -320,6 +383,8 @@
              [(and (= (length parts) 2)
                    (enum-decl? (hash-ref (hash-ref locals key) (car parts) #f)))
               (enum-constructor (identity key (car parts)) (cadr parts) (walks args) span)]
+             [(and (= (length parts) 2) (named-enum? key (car parts)))
+              (enum-constructor (resolve key (car parts) 'enum span) (cadr parts) (walks args) span)]
              [(and (= (length parts) 2) (hash-has-key? builtin-enums (car parts)))
               (enum-constructor (car parts) (cadr parts) (walks args) span)]
              [(and (= (length parts) 3)

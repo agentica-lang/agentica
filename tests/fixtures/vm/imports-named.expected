@@ -1,0 +1,25 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 275,
+  "stdout": [
+    "home at at Point(x: 1, y: 2)",
+    "dot 5",
+    "nothing",
+    "both at at Point(x: 0, y: 0)",
+    "at Point(x: 0, y: 0)",
+    "true",
+    "4x3",
+    "1x3",
+    "12",
+    "tight",
+    "loose by 2",
+    "loose by 8",
+    "12",
+    "[12, 6]",
+    "[\"4x3\", \"2x3\"]",
+    "12",
+    ""
+  ],
+  "stderr": []
+}

@@ -2,7 +2,6 @@
 ##
 ## A name declared in the root file keeps its name; a name declared in another file gets the prefix of that file ("@2::"), so equal names of two files stay apart. A name through an import alias (Alias.name) becomes the prefixed name in the imported file, if that file exports it.
 
-import "ast" as Ast
 import "declarations" as Declarations
 import "diagnostic" as Diag
 import "link_env" as Env
@@ -33,6 +32,9 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
   if parts.size == 2
     return qualified(cx, parts[0], parts[1], want, span, hint)
   end
+  if cx.me.named.has_key?(name)
+    return imported_by_name(cx, cx.me.named[name], want, span)
+  end
   if builtin_name?(cx, name, want)
     return ok(name)
   end
@@ -47,6 +49,11 @@ end
 ## True when the module exports an enum with this name.
 export def exports_enum?(module: Modules.Module, name: String) -> Bool
   return module.public.has_key?(name) and Declarations.enum?(module.public[name])
+end
+
+## True when the file imports an enum by name under this name.
+export def named_enum?(cx: Context, name: String) -> Bool
+  return cx.me.named.has_key?(name) and exports_enum?(cx.modules[cx.me.named[name].target], cx.me.named[name].name)
 end
 
 ## The name in the linked program of a declaration of the file.
@@ -106,10 +113,19 @@ def alias_help(alias: String, hint: Bool) -> String
   return "import a module with import \"path\" as " + alias
 end
 
+# A name bound by import {Name} from "path": the linked name of the export, if it is of the kind wanted. The import already checked that the module exports it.
+def imported_by_name(cx: Context, entry: Modules.Named, want: Want, span: Source.Span) -> Result[String]
+  target = cx.modules[entry.target]
+  if !right_kind?(target.public[entry.name], want)
+    return error(Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp))
+  end
+  return ok(target.prefix + entry.name)
+end
+
 # Only exports are candidates, so a private name is never suggested.
 def imported(cx: Context, target: Modules.Module, member: String, want: Want, span: Source.Span) -> Result[String]
   if !target.public.has_key?(member)
-    return error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", "unknown or private imported name", unknown_help(target, member)))
+    return error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", "unknown or private imported name", Suggest.unknown_import_help(target.key, target.public.keys, member)))
   end
   if !right_kind?(target.public[member], want)
     return error(Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp))
@@ -122,18 +138,5 @@ def right_kind?(kind: Declarations.Kind, want: Want) -> Bool
     Want.Type -> return Declarations.struct?(kind) or Declarations.enum?(kind)
     Want.Enum -> return Declarations.enum?(kind)
     Want.Function -> return Declarations.function?(kind)
-  end
-end
-
-def unknown_help(target: Modules.Module, member: String) -> Diag.Help
-  removed = ["respond", "begin", "write", "write_bytes", "finish"].any? do |name| name == member end
-  if target.key == "std/http.agc" and removed
-    return Failure.hint("a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))")
-  elsif target.key == "std/logger.agc" and member == "error"
-    return Failure.hint("the function for the error level is Logger.err; error is a reserved name")
-  end
-  case Suggest.did_you_mean(member, target.public.keys)
-    Ast.Optional.Present(text) -> return Failure.hint(text)
-    Ast.Optional.Absent -> return Diag.Help.NoHelp
   end
 end

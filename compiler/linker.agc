@@ -70,11 +70,14 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
   return ok(out)
 end
 
-# A file may update its own structs and the exported structs of the files it imports (the privacy rule of `.with`, the `visible` predicate of src/modules.rkt as data).
+# A file may update its own structs and the exported structs of the files it imports (the privacy rule of `.with`, the `visible` predicate of src/modules.rkt as data). A file imported by name counts as imported, with all its exported structs: an alias import of it would allow them too.
 def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]) -> List[String]
   names = structs_of(module.prefix, module.names)
   for target in module.aliases.values
     names = names.concat(structs_of(modules[target].prefix, modules[target].public))
+  end
+  for entry in module.named.values
+    names = names.concat(structs_of(modules[entry.target].prefix, modules[entry.target].public))
   end
   return Set.new(names).to_a.sort
 end

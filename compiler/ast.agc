@@ -48,12 +48,21 @@ export enum Decl
   Enum(EnumDecl)
 end
 
-## import "path" as Alias.
+## An import: import Alias from "path" (alias is Present, names is empty; the old form import "path" as Alias gives the same node), or import {A, B as C} from "path" (alias is Absent, names has at least one entry).
 export struct ImportDecl
   id: Int
   path: String
-  alias: String
+  alias: Optional[String]
+  names: List[ImportName]
   span: Source.Span
+end
+
+## One entry of an import list: the exported name, the name this file binds (the same without `as`), and the span of each (equal without `as`). It has no id: it is part of its ImportDecl.
+export struct ImportName
+  name: String
+  local: String
+  span: Source.Span
+  local_span: Source.Span
 end
 
 ## export before a def, struct or enum; its doc is the doc of the declaration.

@@ -1,5 +1,7 @@
 ## The import path rules of src/modules.rkt that need no file system: the module file name, the std/ and pkg/ path check, and the path helpers.
 
+import "ast" as Ast
+import "declarations" as Declarations
 import "diagnostic" as Diag
 import "link_failure" as Failure
 import "unicode" as Unicode
@@ -30,8 +32,9 @@ export def join(base: String, rest: String) -> String
   return base + "/" + rest
 end
 
-## The file an import path names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is CHECK-IMPORT-PATH with a help that shows the fix.
-export def module_file(path: String, alias: String, site: Failure.Site) -> Result[String]
+## The file an import names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is CHECK-IMPORT-PATH with a help that shows the fix, written as the import line of decl (the alias form or the name list).
+export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[String]
+  path = decl.path
   stem = ""
   has_stem = path.ends_with?(".agc")
   if has_stem
@@ -41,11 +44,11 @@ export def module_file(path: String, alias: String, site: Failure.Site) -> Resul
   if module_name?(path)
     return ok(path + ".agc")
   elsif has_stem and module_name?(stem)
-    return error(refuse(site, "import paths name a module without the .agc extension", "write import " + Unicode.written_text(stem) + " as " + alias))
+    return error(refuse(site, "import paths name a module without the .agc extension", "write " + Declarations.import_line(Unicode.written_text(stem), decl)))
   elsif last_part(path) == "" or last_part(path) == "." or last_part(path) == ".."
-    return error(refuse(site, "import paths name a module file", "write import \"models\" as " + alias + " to load models.agc"))
+    return error(refuse(site, "import paths name a module file", "write " + Declarations.import_line("\"models\"", decl) + " to load models.agc"))
   elsif module_name?(guess)
-    return error(refuse(site, "import paths name a module without an extension", "write import " + Unicode.written_text(guess) + " as " + alias + " to load " + guess + ".agc"))
+    return error(refuse(site, "import paths name a module without an extension", "write " + Declarations.import_line(Unicode.written_text(guess), decl) + " to load " + guess + ".agc"))
   end
   return error(refuse(site, "a module file name has no dot apart from .agc", "rename the file so its name has no dot apart from .agc"))
 end

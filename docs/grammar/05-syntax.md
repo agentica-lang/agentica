@@ -10,7 +10,10 @@ module_doc       = DOC, NL, NL ;
 declaration      = import_decl
                  | [ DOC, NL ], ( function_decl | struct_decl | enum_decl
                  | "export", ( function_decl | struct_decl | enum_decl ) ) ;
-import_decl      = "import", STRING, "as", TYPE_NAME, NL ;
+import_decl      = "import", ( TYPE_NAME | name_list ), "from", STRING, NL
+                 | "import", STRING, "as", TYPE_NAME, NL ;
+name_list        = "{", import_name, { ",", import_name }, [ "," ], "}" ;
+import_name      = ( NAME | TYPE_NAME ), [ "as", ( NAME | TYPE_NAME ) ] ;
 
 function_decl    = "def", NAME, "(", [ parameters ], ")",
                    "->", type, NL, block, "end", NL ;
@@ -29,6 +32,8 @@ variant_decl     = [ DOC, NL ], TYPE_NAME, [ "(", type, { ",", type }, ")" ], NL
 qualified_type   = TYPE_NAME, [ ".", TYPE_NAME ] ;
 type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
+
+An import is one of three forms. `import Util from "util"` gives the file the alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names into the file, each with an optional new name after `as`, and the list may span lines, may end with a comma, and may not be empty. `import "util" as Util` is the older alias form; it still works and means the same as `import Util from "util"`. `from` and `as` are not reserved words: the parser reads them by their text at those two places, so a parameter or a function called `from` or `as` still works, and `{as}` imports a function called `as`. One line does one thing: `import Util, {area} from "util"` is `PARSE-UNEXPECTED-TOKEN` at the comma. What each form means is in section 5b.
 
 A function, struct or enum declaration, exported or not, needs a blank line before the next declaration; a line with only a comment counts, but a doc line does not, because it belongs to the declaration after it: the blank line goes before the doc block. Otherwise `PARSE-MISSING-BLANK-LINE` is reported at the next declaration, or at the first line of its doc block. Imports may follow each other directly, but an import after a declaration also needs the blank line. Other text after a declaration's `end` is `PARSE-TOP-LEVEL-STATEMENT`.
 

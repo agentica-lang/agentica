@@ -44,19 +44,26 @@ Measured by the owner on master on 2026-10-13:
 
 ### 35.2 Goal and success criteria
 
-The work is done when all of these hold:
+The work is done when these hold (the fast start below is a target, not a
+condition):
 
 - **One file.** The release archive has one executable, `bin/agentica`, and no
   `runtime/` directory. It needs only glibc (2.28 or newer), as `agentica-vm`
   does today (35.6).
-- **Fast start.** `agentica check examples/hello.agc` takes at most 30 ms of
-  wall time and at most 30 MB of peak RSS.
-  `agentica check stdlib/bdd/gherkin.agc`, the largest file in the corpus today
-  (575 lines), takes at most 100 ms. To measure them, extend the start-up check
-  of `benchmarks/run.py` (`startup()`, which times `hello.agc` today;
-  `make bench`) with these two commands, and record the numbers and the baseline
-  machine in `docs/vm-benchmarks.md`. The targets hold on that machine. CI does
-  not gate on time, because CI machines are noisy.
+- **Fast start (a target, not a condition).** `agentica check
+  examples/hello.agc` should take at most 30 ms of wall time and at most 30 MB
+  of peak RSS. `agentica check stdlib/bdd/gherkin.agc`, the largest file in the
+  corpus today (575 lines), should take at most 100 ms. The owner decided on
+  2026-10-15 that the bootstrap (steps 5 to 8) goes ahead even if the Agentica
+  front end is slower than Racket: these numbers are not a condition for "the
+  work is done" or for step 8. They are targets that are measured and tracked
+  after the bootstrap, and optimisation comes after it. Candidates: the cost of
+  VM calls and of `.with`, a VM profiler, module constants (section 44), and
+  the JIT of roadmap row 9.1. To measure them, extend the start-up check of
+  `benchmarks/run.py` (`startup()`, which times `hello.agc` today; `make
+  bench`) with these two commands, and record the numbers and the baseline
+  machine in `docs/vm-benchmarks.md`. CI does not gate on time, because CI
+  machines are noisy.
 - **Same results.** Every golden fixture and every test passes with no
   `make goldens` diff.
 - **Same diagnostics.** The same code and the same span for every diagnostic in
@@ -541,7 +548,7 @@ text form is the linked program of step 3 with ` type=T` at the end of the line
 of each expression and block and ` resolved=...` on a method call or field
 access that names a builtin; a failure prints the diagnostic line and its notes
 (`expected`, `actual`, `callee`, `signature`, `labels`) and the file. Goldens
-are in `tests/fixtures/frontend/check/` (57 fixtures, one for every reachable
+are in `tests/fixtures/frontend/check/` (58 fixtures, one for every reachable
 `CHECK-` code and every rule of the builtin table);
 `tests/frontend-check-common.rkt` prints the Racket text. Notes:
 
@@ -597,7 +604,10 @@ are in `tests/fixtures/frontend/check/` (57 fixtures, one for every reachable
   and 200 functions take a fifth of that, so it is close to linear. Racket
   checks the same in 6 ms, 13 ms and 0.15 s.
   So the lexer, parser, linker and checker together take about 131 ms on
-  gherkin, over the 100 ms budget of 35.2; the checker is a quarter of it.
+  gherkin, over the 100 ms target of 35.2; the checker is a quarter of it. The
+  target is not a condition (35.2): the bootstrap goes ahead and the speed is
+  tracked after it. These numbers were measured while other agents were loading
+  the machine, so a re-measure on a quiet machine is planned.
 - Where a table or a loop made a difference: the types in a `List` indexed by
   node id instead of a `Map` keyed by id took the check of the generated program
   from 1.83 s to 1.24 s (a `Map.put` costs about 5 us at 5,000 entries and a
@@ -608,7 +618,7 @@ are in `tests/fixtures/frontend/check/` (57 fixtures, one for every reachable
   never per lookup.
 - The Agentica checker matches the Racket checker on the 530 programs of
   `tests/checker-test.rkt`, the 24 files of `examples/`, the 235 of
-  `tests/fixtures/vm/`, every `std/` module, `compiler/` itself, the 57
+  `tests/fixtures/vm/`, every `std/` module, `compiler/` itself, the 58
   fixtures, trees around the limit and a generated program, and on 5,200 mutated
   programs in a one-time run (the slow tier repeats 1,500; the fast tier has the
   fixtures). Same codes,

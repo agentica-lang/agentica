@@ -92,6 +92,29 @@ export def exported?(decl: Ast.Decl) -> Bool
   end
 end
 
+## The text of the import line a help shows, for the path as written (quoted): the alias form as the file wrote it, or the name list.
+export def import_line(written: String, decl: Ast.ImportDecl) -> String
+  case decl.alias
+    Ast.Optional.Present(alias) -> return "import " + written + " as " + alias
+    Ast.Optional.Absent ->
+      pieces = decl.names.map do |entry| entry_text(entry) end
+      return "import {" + pieces.join(", ") + "} from " + written
+  end
+end
+
+## The alias of an import, or "" for an import list (an alias is never empty).
+export def alias_of(decl: Ast.ImportDecl) -> String
+  case decl.alias
+    Ast.Optional.Present(alias) -> return alias
+    Ast.Optional.Absent -> return ""
+  end
+end
+
+## True when the name starts with a capital letter, as a TYPE_NAME token does: the case rule that tells a type from a function.
+export def type_name?(name: String) -> Bool
+  return "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(name.slice(0, 1))
+end
+
 ## The imports of a file, in order.
 export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
   found: List[Ast.ImportDecl] = []
@@ -141,4 +164,11 @@ def order_help(group: Int) -> String
     1 -> return "structs and enums come before functions"
     _ -> return "exported functions come before private functions"
   end
+end
+
+def entry_text(entry: Ast.ImportName) -> String
+  if entry.name == entry.local
+    return entry.name
+  end
+  return entry.name + " as " + entry.local
 end

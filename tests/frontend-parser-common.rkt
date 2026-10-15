@@ -47,6 +47,14 @@
     [(eq? value 'nil) "nil"]
     [else (error 'parser-text "unexpected literal value ~s" value)]))
 
+;  An imported name with its span, and `as` with the local name and its span for a rename.
+(define (import-name-text entry)
+  (define original (format "~a@~a" (quote-text (import-name-name entry)) (span-text (import-name-span entry))))
+  (if (equal? (import-name-name entry) (import-name-local entry))
+      original
+      (format "~a as ~a@~a" original (quote-text (import-name-local entry))
+              (span-text (import-name-local-span entry)))))
+
 (define (name-attr name) (string-append " name=" (quote-text name)))
 
 (define (op-attrs op op-span)
@@ -76,7 +84,10 @@
              (kids "declaration" (program-declarations node)))]
     [(import-decl? node)
      (values "import-decl"
-             (format " path=~a alias=~a" (quote-text (import-decl-path node)) (quote-text (import-decl-alias node)))
+             (if (import-decl-alias node)
+                 (format " path=~a alias=~a" (quote-text (import-decl-path node)) (quote-text (import-decl-alias node)))
+                 (format " path=~a names=[~a]" (quote-text (import-decl-path node))
+                         (string-join (map import-name-text (import-decl-names node)) ",")))
              '())]
     [(export-decl? node)
      (values "export-decl" (doc-attr) (list (cons "declaration" (export-decl-declaration node))))]

@@ -1,0 +1,5 @@
+program #4 0:1:1-83:6:1
+  declaration: import-decl #0 0:1:1-24:2:1 path="util" alias="Util"
+  declaration: import-decl #1 24:2:1-59:3:1 path="compiler/lexer" alias="Lexer"
+  declaration: function-decl #3 60:4:1-83:6:1 name="main"
+    result: type-ref #2 74:4:15-78:4:19 name="Void"
