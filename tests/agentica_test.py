@@ -153,7 +153,7 @@ def cli():
     return [executable] if executable else ["racket", str(ROOT / "src" / "main.rkt")]
 
 
-def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None):
+def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=None, stderr_to=None):
     """Run a command and return Result(code, stdout, stderr), both streams as text.
 
     The command runs in its own session so that the whole process group can be
@@ -162,21 +162,28 @@ def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None):
     hang fails one test) and on any interruption of the wait, Ctrl-C included:
     the new session no longer receives the terminal's SIGINT by itself.
     """
-    process = subprocess.Popen(
-        [str(part) for part in argv],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        cwd=cwd, env=env, start_new_session=True)
-    data = stdin.encode() if isinstance(stdin, str) else stdin
+    # A stream sent to a file (stdout_to, stderr_to: a path such as /dev/full, opened for writing) is not captured: "".
+    files = [open(path, "wb") if path is not None else None for path in (stdout_to, stderr_to)]
     try:
-        out, err = process.communicate(data, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        out, err = _kill_and_collect(process)
-        raise AssertionError("timed out after %ss: %s\nstdout: %s\nstderr: %s" % (
-            timeout, argv, out.decode(errors="replace"), err.decode(errors="replace")))
-    except BaseException:
-        _kill_and_collect(process)
-        raise
-    return Result(process.returncode, out.decode(errors="replace"), err.decode(errors="replace"))
+        process = subprocess.Popen(
+            [str(part) for part in argv],
+            stdin=subprocess.PIPE, stdout=files[0] or subprocess.PIPE, stderr=files[1] or subprocess.PIPE,
+            cwd=cwd, env=env, start_new_session=True)
+        data = stdin.encode() if isinstance(stdin, str) else stdin
+        try:
+            out, err = process.communicate(data, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            out, err = _kill_and_collect(process)
+            raise AssertionError("timed out after %ss: %s\nstdout: %s\nstderr: %s" % (
+                timeout, argv, (out or b"").decode(errors="replace"), (err or b"").decode(errors="replace")))
+        except BaseException:
+            _kill_and_collect(process)
+            raise
+    finally:
+        for file in files:
+            if file is not None:
+                file.close()
+    return Result(process.returncode, (out or b"").decode(errors="replace"), (err or b"").decode(errors="replace"))
 
 
 def _kill_and_collect(process):
@@ -232,15 +239,19 @@ class Child:
     next_line() has a time limit and a child that exits is reported at once.
     """
 
-    def __init__(self, argv, env=None, cwd=None, stdin=False, capture_stderr=False):
-        """stdin=True gives a pipe (close_stdin() ends it), else /dev/null; stderr is the test's own unless captured."""
+    def __init__(self, argv, env=None, cwd=None, stdin=False, capture_stderr=False, read_stdout=True):
+        """stdin=True gives a pipe (close_stdin() ends it), else /dev/null; stderr is the test's own unless captured.
+
+        read_stdout=False leaves the stdout pipe unread, for tests of a full pipe: the test reads process.stdout itself.
+        """
         self.argv = [str(part) for part in argv]
         self.process = subprocess.Popen(
             self.argv, stdin=subprocess.PIPE if stdin else subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE if capture_stderr else None, env=env, cwd=cwd, start_new_session=True)
         self._lines = queue.Queue()
+        self._error_lines = queue.Queue()
         self._stderr = []
-        self._threads = [threading.Thread(target=self._read_stdout, daemon=True)]
+        self._threads = [threading.Thread(target=self._read_stdout, daemon=True)] if read_stdout else []
         if capture_stderr:
             self._threads.append(threading.Thread(target=self._read_stderr, daemon=True))
         for thread in self._threads:
@@ -252,7 +263,17 @@ class Child:
         self._lines.put(None)  # end of output: a child that died at start must not make next_line wait
 
     def _read_stderr(self):
-        self._stderr.extend(raw.decode(errors="replace") for raw in iter(self.process.stderr.readline, b""))
+        for raw in iter(self.process.stderr.readline, b""):
+            line = raw.decode(errors="replace")
+            self._stderr.append(line)
+            self._error_lines.put(line)
+
+    def next_stderr_line(self, timeout=WAIT_SECONDS):
+        """The next line of captured stderr without its newline; AssertionError if none comes in time."""
+        try:
+            return self._error_lines.get(timeout=timeout).rstrip("\n")
+        except queue.Empty:
+            raise AssertionError("no stderr line within %s s from %s" % (timeout, self.argv))
 
     def next_line(self, timeout=WAIT_SECONDS):
         """The next line of stdout without its newline; AssertionError if none comes in time or the output ended."""
@@ -296,9 +317,9 @@ class Child:
                 stream.close()
 
 
-def start_vm(bytecode, *args, env=None, **options):
-    """Start `dist/agentica-vm -- bytecode [args]` as a Child (stderr captured), with vm_environment()."""
-    return Child([vm_binary(), "--", bytecode, *args], env=vm_environment(env), capture_stderr=True, **options)
+def start_vm(bytecode, *args, flags=(), env=None, **options):
+    """Start `dist/agentica-vm [flags] -- bytecode [args]` as a Child (stderr captured), with vm_environment()."""
+    return Child([vm_binary(), *flags, "--", bytecode, *args], env=vm_environment(env), capture_stderr=True, **options)
 
 
 def output_lines(text):

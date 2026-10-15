@@ -272,7 +272,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - keep that when adding new ways into the libuv pool.
   - Boehm's marker threads do not block them, so the stop handler may run on any
     thread: it only uses lock-free atomics and async-signal-safe calls.
-  - The signal tests in `tests/vm-stop-test.rkt` (with
+  - The signal tests in `tests/test_vm_stop.py` (with
     `tests/fixtures/stop-peer.py`: a FIFO filled so a flush cannot end, a dying
     driver, an inherited pipe) and `tests/vm-diff-common.rkt` signal the driver
     and the VM with libc `kill` through the FFI and bound every wait.

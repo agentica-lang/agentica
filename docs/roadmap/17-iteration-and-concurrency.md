@@ -219,7 +219,7 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   last expression changes from `CHECK-VOID-VALUE` to this, and the help shows
   for any mismatch with an expected `Result`, such as `x: Result[Int] = 5`).
   Four golden fixtures (`file-each-line`, `-stop`, `-limits`, `-crash`),
-  `vm/tests/each_line_test.c`, a checker test, `tests/vm-file-lines-test.rkt`
+  `vm/tests/each_line_test.c`, a checker test, `tests/test_vm_file_lines.py`
   with `tests/fixtures/lines-peer.py`, and the files page of the site. The
   inferred-`T` form of `try` in a block is not built: no builtin needs it yet,
   so 17a (`Task.map`) or 15i (`File.open` block) adds it with its first test. A
