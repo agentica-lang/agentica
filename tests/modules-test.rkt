@@ -322,7 +322,7 @@
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
        (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 5)
-       (check-regexp-match #rx"private to its module" (diagnostic-message problem))))
+       (check-equal? (source-position-column (source-span-start (diagnostic-span problem))) 7)))
     ;; Importing a module that only passes the struct along is not enough: the importer needs the struct's own module.
     (with-files
      '(("a.agc" . "export struct P\n  n: Int\nend\n\n")

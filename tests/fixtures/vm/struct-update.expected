@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 660258,
+  "steps": 660308,
   "stdout": [
     "30",
     "31",
@@ -15,6 +15,11 @@
     "eval age",
     "eval tag",
     "User(name: \"Beax\", age: 40, address: Address(city: \"Cusco\", zip: 1), tags: [\"1\"], scores: {}, with: 0)",
+    "eval receiver",
+    "eval with",
+    "eval scores",
+    "eval age",
+    "User(name: \"Ana\", age: 1, address: Address(city: \"Cusco\", zip: 1), tags: [], scores: {\"k\": 2}, with: 3)",
     "1",
     "30",
     "User(name: \"Cy\", age: 2, address: Address(city: \"Cusco\", zip: 1), tags: [], scores: {}, with: 0)",

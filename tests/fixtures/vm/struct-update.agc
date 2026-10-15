@@ -67,6 +67,10 @@ def main() -> Void
   mixed = traced_user().with(age: trace("age", 40), name: "Bea" + "x", tags: [trace("tag", 1).to_s])
   puts(mixed)
 
+  # The values run in the order they are written, not in the order of the struct's fields (age, scores, with).
+  reversed_order = traced_user().with(with: trace("with", 3), scores: {"k": trace("scores", 2)}, age: trace("age", 1))
+  puts(reversed_order)
+
   # Values read the receiver as it was before the update.
   swapped = ana.with(age: ana.address.zip, address: Address(city: "Quito", zip: ana.age))
   puts(swapped.age)
