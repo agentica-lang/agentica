@@ -1,6 +1,6 @@
 ## 28. VM metrics
 
-**Status:** planned (roadmap phase 18). A tool inside `agentica-vm` for
+**Status:** planned (roadmap phase 18). A tool inside the VM (`agentica run`) for
 operators, like VM tracing (§24.4) is for VM developers: the VM exports numbers
 about itself (the GC, tasks, the scheduler, I/O, processes, TCP) in the
 Prometheus text format, so Prometheus can scrape them and Grafana can graph
@@ -45,7 +45,7 @@ Checked at `12df0f8`:
   start and done, poll, process spawn and exit, and, with PR #106, `tcp_accept`,
   `tcp_connected`, `tcp_connect_error`, `tcp_accept_error`). Each costs one test
   of the trace mask when tracing is off (`AGC_TRACE_ON`, `vm/trace.h`).
-  `make vm TRACE=0` compiles them out.
+  `make TRACE=0` compiles them out.
 - I/O job kinds are named in their `agc_io_kind`: `file`, `lock`, `process`,
   `sleep`, `stdin` (and `tcp` with PR #106). `lock` jobs are the timers of tasks
   waiting for a handle's lock or on a channel, not I/O; `trace_finish`
@@ -105,7 +105,7 @@ The same rules as tracing (§24.4), plus one about cost:
    - With metrics off, the cost is zero: derived metrics need no code between
      scrapes, and hooks share the trace tests, so the turn path and the event
      paths have the same tests as today (the one new test runs only after an
-     idle wait, 28.4). With `make vm METRICS=0`, the metrics code is not
+     idle wait, 28.4). With `make METRICS=0`, the metrics code is not
      compiled at all.
 5. **Lazy start of hooks.** Decided: the enabled-only hooks start at the first
    request for a snapshot, not at start-up. With the endpoint that is the first
@@ -509,7 +509,7 @@ newline.
   parent's file. `Process.spawn` has no environment parameter
   (`src/builtins.rkt`: command, arguments, timeout), so a program that wants
   metrics from a child VM runs it through `env`, with another port or file:
-  `Process.spawn("env", ["AGENTICA_VM_METRICS=9465", "agentica-vm", "--", "child.agcb"], 5000)`.
+  `Process.spawn("env", ["AGENTICA_VM_METRICS=9465", "agentica", "run", "--", "child.agcb"], 5000)`.
   No environment parameter is planned here. This differs from tracing on
   purpose: a child's trace lines append to the same file safely; a port and a
   file cannot be shared.
@@ -734,7 +734,7 @@ Expected values come from fixtures whose numbers are known.
   Python tests, `tests/test_vm_latency.py` and `tests/test_vm_trace.py` among
   them, use `vm_environment` of `tests/agentica_test.py`), so a developer's
   setting cannot change expected output. The `vm-sanitizers` CI job also builds
-  `make vm vm-test METRICS=0`, and `agentica-vm --version` says `metrics off`
+  `make vm-test METRICS=0`, and `agentica run --version` says `metrics off`
   there.
 - **Overhead check** (manual, like `make bench`; not in `make test` or CI, where
   timing is noisy): a CPU-heavy program from `benchmarks/programs/` (`calls` and

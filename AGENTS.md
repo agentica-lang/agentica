@@ -1,24 +1,28 @@
 # Agentica
 
-Interpreter for the Agentica language: a Racket front end compiles `.agc` to
-bytecode, and a C VM runs every program.
+Interpreter for the Agentica language. One binary, `dist/agentica`: a C VM that
+runs every program, with the front end (written in Agentica, compiled to
+bytecode) and the `std/` sources inside. The build starts from the checked-in
+`bootstrap/stage0.agcb` and needs no Racket.
 
 ## Map
 
 ```text
 VERSION             the version, one line (read by the Makefile and src/version.rkt)
-src/                Racket front end, one module per stage
+src/                Racket front end, one module per stage; a development oracle
+                    until Racket is deleted, not the product
   lexer.rkt → parser.rkt (ast.rkt) → modules.rkt (imports) → checker.rkt → lower.rkt → bytecode.rkt
   builtins.rkt      every builtin described once (signatures, effects, docs)
   stdlib.rkt        embeds stdlib/ as std/
   source.rkt token.rkt diagnostic.rkt   shared data: spans, tokens, diagnostics
-  main.rkt          thin CLI: printing and exit codes live only here
-  bdd-driver.rkt    `agentica test`: the hand-off to the Agentica driver
-compiler/           front end ported to Agentica, one stage per PR (§35):
-                    lexer, parser, modules, builtin catalog, checker, lowering,
-                    bytecode writer, BDD driver (bdd.agc), CLI (cli.agc, not the
-                    default yet)
-vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, tasks, I/O, HTTP, JSON
+  main.rkt          thin CLI: printing and exit codes live only here; runs
+                    programs with `dist/agentica run`
+compiler/           the front end in Agentica (§35): lexer, parser, modules,
+                    builtin catalog, checker, lowering, bytecode writer, BDD
+                    driver, CLI; front_end.agc is the program the binary carries
+bootstrap/          stage0.agcb: a checked-in front end that the build starts from
+vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, JSON;
+                    agentica.c is the main of the binary (`run`, front end, hand-off)
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
 stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner)
@@ -42,14 +46,17 @@ phase 13).
 
 ## Commands
 
-- `make vm`: build `dist/agentica-vm` (`git submodule update --init` first).
-  `make vm-test`: the C tests.
-- `make cli`: build `dist/agentica-cli.agcb`, the command line in Agentica (not
-  the default yet); `make test-cli` runs the CLI tests on it and on
-  `dist/agentica-next`.
+- `make`: build `dist/agentica` (`git submodule update --init` first). It links
+  a first binary with `bootstrap/stage0.agcb`, compiles the front end three
+  times and links the final binary. `make fixed-point` checks it once more.
+  `make vm-test`: the C tests. `make test-cli`: the command line tests on the
+  binary. `make stage0` refreshes `bootstrap/stage0.agcb` (see `references/ci.md`
+  of the development skill).
 - `make test TESTS="tests/lexer-test.rkt"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
-- `racket src/main.rkt file.agc` runs a program; `... check file.agc` checks.
+- `dist/agentica file.agc` runs a program; `... check file.agc` checks;
+  `dist/agentica run -- file.agcb` runs compiled bytecode. `racket src/main.rkt`
+  takes the same words, as an oracle.
 - `make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"`: a `.rkt` file
   goes to rackunit, a `.py` file to unittest (one process per module).
 - `make test-slow`: the `(module+ slow ...)` and `@slow` cases; CI only.

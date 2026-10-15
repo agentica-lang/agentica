@@ -180,7 +180,7 @@ needs it.
   marked `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`:
   - the `AGC_NO_GC` block tracking in `vm/value.c` (fuzz and test builds,
     single-threaded), the fuzz harness statics in `vm/fuzz.c` and
-    `vm/fuzz_main.c`, and `wide_args` in `vm/main.c` (Windows, set once before
+    `vm/fuzz_main.c`, and `wide_args` in the old `vm/main.c` (Windows, set once before
     any scheduler starts);
   - the block-scope `extern char **environ` in `host_env` of `vm/process.c`,
     read but never written (the child's environment and `System.env` read it);

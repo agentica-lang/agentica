@@ -90,7 +90,7 @@ The vendored build:
   line is a reviewed change of its own.
 - Rejected: loading OpenSSL with `dlopen` only when a program uses TLS. It is
   more complex, and the static build costs only about 6 MB more for
-  `dist/agentica-vm`.
+  `dist/agentica`.
 - The vendored build is Linux only for now. macOS and Windows leave OpenSSL out,
   and `vm/tls_openssl.c` has stubs there.
 

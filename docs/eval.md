@@ -99,7 +99,8 @@ copies each `reference.*` as the solution, grades it like an agent's, prints the
 table, and exits 1 when a reference fails. `make eval-references` runs it with
 `--jobs 8`; it is not part of CI. Use it after any change to a task, the runner,
 the image or the VM. For the Agentica references it needs `dist/runtime` (the
-runner builds it unless you pass `--no-build`) and `dist/agentica-vm`.
+runner builds it unless you pass `--no-build`), which holds the `dist/agentica`
+binary.
 
 The Docker sandbox works like this:
 
@@ -112,11 +113,11 @@ The Docker sandbox works like this:
   `no-new-privileges`. Credentials come only from `--pass-env`.
 - `TMPDIR` is `/tmp` in every container, because the root file system is
   read-only and the launcher writes its bytecode to the temporary directory. The
-  image has `libgc1` and `libssl3t64`, which `dist/agentica-vm` links (the
+  image has `libgc1` and `libssl3t64`, which `dist/agentica` links (the
   default Linux build uses the system libraries).
 - `--no-build` reuses `dist/runtime`, the bundle that a normal run makes with
-  `make exe`, `raco distribute` and a copy of `agentica-vm` into its `bin/`. The
-  runner exits when it is missing.
+  `make` and a copy of `dist/agentica` into its `bin/`. The runner exits when it
+  is missing.
 - `--agent claude` needs `--image` with the Claude CLI and Python. The default
   image has Pi only.
 

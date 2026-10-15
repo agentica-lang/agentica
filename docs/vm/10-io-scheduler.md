@@ -285,8 +285,8 @@ section says how the scheduler and the loop keep them, as built.
   the end of the run, as for a `File.open` handle, until 24b makes the close
   cover every end of a task, a task parked in a stepper included.
 - **End of run: one exit path.** However the run ends (`main` returns,
-  `System.exit`, a runtime error, the step limit, a stop signal), `end_run` in
-  `vm/main.c` takes the same steps and nothing else (§14.4):
+  `System.exit`, a runtime error, the step limit, a stop signal), `agc_launch_settle` in
+  `vm/launch.c` takes the same steps and nothing else (§14.4):
   1. kill the children and drive the loop until libuv's exit callbacks have
      reaped them (10.4, Close; at most about 2 seconds);
   2. one non-blocking TLS `close_notify` on each TLS session that finished its
@@ -552,7 +552,7 @@ section says how the scheduler and the loop keep them, as built.
   forwards the stderr of a child process to the stderr `FILE` with a blocking
   `fwrite`. It can block the loop when stderr is stuck, and its text is not
   ordered with the buffered stderr. A write error on stdout keeps today's
-  exit-code rule (`end_run` in `vm/main.c`). No language change: the builtins
+  exit-code rule (`agc_launch_settle` in `vm/launch.c`). No language change: the builtins
   keep their names, types and results, and a full stdout pipe stalls only the
   tasks that print.
   - **Tests** (VM only, hermetic, Python stdlib peers).

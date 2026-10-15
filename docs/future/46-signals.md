@@ -59,17 +59,19 @@ The VM has one stop path. A program cannot take part in it.
   from a program that read the loop's own signal pipes. The guard is
   `private_pipe` in `vm/files.c`, from PR #162 (2026-10-13). Any new watcher
   must respect that guard and libuv's shared signal lock.
-- **The driver.** `agentica file.agc` runs the VM under a Racket driver
-  (`src/main.rkt`, `src/vm-launch.rkt`). The driver handles SIGINT, SIGTERM and
-  SIGHUP as Racket breaks (`call-noting-break`). On a break it waits up to 2
-  seconds for the VM. Then it sends SIGTERM, waits 2 more seconds, and sends
-  SIGKILL (`stop-vm`, lines 24 to 32). If the driver is PID 1 in a container,
-  the VM gets its first signal 2 seconds after the stop. A handled stop then has
-  about 2 seconds to finish.
-- **A direct run.** `agentica compile FILE.agc -o FILE.agcb` writes bytecode.
-  `agentica-vm [--allow-run] -- FILE.agcb` runs it with no driver (usage in
-  `vm/main.c`, and `docs/vm/08-loader-and-cli.md` §9). A container can use this
-  path today. The stop reaches the program at once.
+- **The driver (until step 8d-2).** `agentica file.agc` ran the VM under a
+  Racket driver (`src/main.rkt`, `src/vm-launch.rkt`). The driver handled
+  SIGINT, SIGTERM and SIGHUP as Racket breaks (`call-noting-break`). On a break
+  it waited up to 2 seconds for the VM. Then it sent SIGTERM, waited 2 more
+  seconds, and sent SIGKILL (`stop-vm`). If the driver was PID 1 in a
+  container, the VM got its first signal 2 seconds after the stop. Since 8d-2
+  an ordinary run is the process of the binary, so there is no driver and no
+  delay: the stop reaches the program at once. Only `racket src/main.rkt` (the
+  oracle) still has the driver.
+- **A compiled run.** `agentica compile FILE.agc -o FILE.agcb` writes bytecode.
+  `agentica run [--allow-run] -- FILE.agcb` runs it (usage in `vm/agentica.c`,
+  and `docs/vm/08-loader-and-cli.md` §9). The stop reaches the program at
+  once, as for any run of the binary.
 - **PID 1.** The VM reaps the children that libuv spawned. Nothing in `vm/`
   calls `waitpid` on other pids. So a grandchild that is re-parented to a VM
   running as PID 1 stays a zombie. `docker run --init` avoids this.
@@ -91,10 +93,10 @@ The VM has one stop path. A program cannot take part in it.
    signal. The program sees a signal as a value on a channel, and tasks handle
    it.
 
-The headline use case needs `agentica-vm` run directly, or phase 46c. Under
-`agentica file.agc` the driver waits 2 seconds before it signals the VM
-(`stop-vm` in `src/vm-launch.rkt`). So a handled stop in a container has about 2
-seconds. A compiled file run with `agentica-vm` has no such delay.
+The headline use case used to need `agentica-vm` run directly, or phase 46c:
+under `agentica file.agc` the Racket driver waited 2 seconds before it signaled
+the VM (`stop-vm` in `src/vm-launch.rkt`), so a handled stop in a container had
+about 2 seconds. Since step 8d-2 no run has that delay.
 
 Non-goals: reloading program state on SIGHUP (the VM does nothing special, see
 46.8, question 6), Windows (46.3.9), and signals to processes of another user
@@ -940,7 +942,7 @@ are the default-path cases.
   `CHANGELOG.md` entry. The catalog is regenerated in the same PR, as in 46a.
 - **46c: the driver.** The driver forwards a break at once to a VM in its own
   process group (46.8, question 7). It needs a test with terminal input first.
-  Until then, containers use `agentica compile` and `agentica-vm` directly
+  Until then, containers use `agentica compile` and `agentica run` directly
   (46.1). That recipe belongs in the site page.
 - **46d: graceful HTTP stop.** A drain in `std/http`: stop accepting, and wait
   for the handlers to finish, up to a deadline. It is a separate change in
@@ -993,7 +995,7 @@ Each question has options and a recommendation.
    child behind, because Quit stops the children. The hard stop belongs to the
    parent: Docker's SIGKILL after 10 seconds, the driver's SIGKILL, or
    `Process.close`. Under the driver, a stuck program is ended by the driver's
-   SIGKILL after about 4 seconds. The cost is that a direct `agentica-vm` run,
+   SIGKILL after about 4 seconds. The cost is that a direct `agentica run`,
    with no driver, can only be stopped by Quit or SIGKILL. Ctrl-\ is less known
    than Ctrl-C twice, so the site page must say so. Option (C) is the fallback
    if the owner wants Ctrl-C twice to work.
@@ -1025,7 +1027,7 @@ Each question has options and a recommendation.
    **Decided (2026-10-15):** the recommendation.
 
 7. **The driver's 2-second wait.** Options: (a) keep it, and tell containers to
-   run `agentica-vm` on the compiled file. (b) forward the break at once and
+   run `agentica run` on the compiled file. (b) forward the break at once and
    drop the second copy that comes from the terminal. This is fragile. (c) start
    the VM in its own process group and forward the signal once. Under Ctrl-C the
    terminal reaches only the driver, which forwards one copy. A signal from

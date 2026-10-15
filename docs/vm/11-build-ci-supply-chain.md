@@ -2,13 +2,14 @@
 
 ### Build
 
-- `make vm` compiles `vm/*.c` with `$(CC) -std=c11 -O2 -Wall -Wextra -Werror`
-  and the hardening flags `-fstack-protector-strong -D_FORTIFY_SOURCE=2`. On
-  Linux it links PIE with full RELRO. macOS links PIE and has no RELRO. MinGW
-  uses `--dynamicbase --nxcompat --high-entropy-va`, links `vm/main.c` with
-  `-municode`, and adds `.exe`. The Makefile picks the platform from
-  `OS=Windows_NT` or `uname -s`. The warning flags apply to our own `vm/*.c`
-  only.
+- `make` compiles `vm/*.c` with `$(CC) -std=c11 -O2 -Wall -Wextra -Werror`
+  and the hardening flags `-fstack-protector-strong -D_FORTIFY_SOURCE=2`, and
+  links `dist/agentica` (the VM with the front end inside, the one product;
+  35.3). On Linux it links PIE with full RELRO. The binary embeds the front end
+  with `.incbin` in ELF assembly, so only Linux builds it; `make vm-test` builds
+  the C VM and its tests on macOS and MinGW too (`platforms.yml`). The Makefile
+  picks the platform from `OS=Windows_NT` or `uname -s`. The warning flags apply
+  to our own `vm/*.c` only.
 - `AGENTICA_GC` picks the libgc build, like `AGENTICA_OPENSSL` picks OpenSSL.
   `system` (the default on Linux) links the distro's libgc dynamically with the
   flags of `pkg-config --cflags --libs bdw-gc`. The stamp
@@ -55,13 +56,14 @@
   hits. The CI ccache volume is shared with PR jobs, so the release passes
   `CCACHE=` and never reads it.
 - `make vm-test` builds the small C tests in `vm/tests/` with plain `assert`.
-- `make vm SANITIZE=1` builds with clang, ASan and UBSan,
+- `make SANITIZE=1` builds with clang, ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and never
   frees, so ASan guards every object. libgc is not built (`-DAGC_NO_GC`). Leak
   detection is off, and `allocator_may_return_null=1` lets a huge request reach
   the out-of-memory exit (6.3). `make vm-test SANITIZE=1` and
   `make vm-fuzz SANITIZE=1` use the same flags.
-- `make vm-gc-stress` builds `build/vm/gcstress/agentica-vm` with `GC_STRESS=1`
+- `make vm-gc-stress` builds `build/vm/gcstress/agentica` (the binary, linked with
+  the stage2 of the release build; it does not run the fixed point) with `GC_STRESS=1`
   (`-DGC_DEBUG -DAGC_GC_STRESS`, gcc). `agc_alloc` and `agc_alloc_atomic` call
   `GC_gcollect()` every 64 allocations. It runs `make vm-test` and the
   differential shards on that binary (`AGENTICA_VM_BINARY` points the tests at
@@ -93,18 +95,18 @@
   build a crash prints the mutant's index and saves it to `fuzz-crash.agcb`.
 - `.github/workflows/fuzz.yml` runs by hand. It builds the sanitizer VM, runs 5
   million mutants with a random `FUZZ_SEED`, prints the commit and seed first,
-  and uploads `fuzz-crash.agcb` on failure. `agentica-vm --` on that file, or
+  and uploads `fuzz-crash.agcb` on failure. `agentica run --` on that file, or
   the same commit, seed and run count, reproduces a failure.
 - Planned: a clang job that also builds the fuzzer with `-fsanitize=fuzzer`.
 
 ### Tests in make
 
-- `make test` includes the VM tests. They run `make -s vm` first, so a stale
-  `dist/agentica-vm` is rebuilt. Locally they skip visibly when the VM cannot be
+- `make test` includes the VM tests. They run `make -s` first, so a stale
+  `dist/agentica` is rebuilt. Locally they skip visibly when the VM cannot be
   built (no C compiler, submodule not checked out, no system OpenSSL 3 or libgc,
   or no Perl for the vendored build). In CI they fail instead, since
   `AGENTICA_REQUIRE_VM=1` is set, as `AGENTS.md` requires.
-- `make vm` reads `SANITIZE` from the environment. The sanitizer job sets it
+- `make` reads `SANITIZE` from the environment. The sanitizer job sets it
   once, and the tests rebuild the sanitized VM.
 
 ### Supply chain
@@ -112,7 +114,7 @@
 - Runner images are pinned. The submodules (libgc, yyjson, libuv, picohttpparser
   and OpenSSL) are pinned to release tags and upgraded only by a reviewed PR
   that bumps the submodule. CI checks out with `submodules: true`.
-- `agentica-vm --version` prints the versions of libgc, yyjson, libuv and
+- `agentica run --version` prints the versions of libgc, yyjson, libuv and
   OpenSSL. Rule: rebuild and release after any High or Critical advisory for
   libgc, yyjson, libuv, picohttpparser or OpenSSL.
 - The release links OpenSSL statically, so a fix reaches users only through a
@@ -123,10 +125,10 @@
 
 | Job | Runner | Runs |
 |---|---|---|
-| Linux (`ci.yml`) | self-hosted runner (`docker-runner`, Debian), submodules | `make vm vm-test`, `make test` (with the differential tests), smoke tests |
+| Linux (`ci.yml`) | self-hosted runner (`docker-runner`, Debian), submodules | the binary from `bootstrap/stage0.agcb` and `make vm-test`, `make test` (with the differential tests), the fixed point, smoke tests |
 | Linux sanitizers (`ci.yml`) | the same runner, clang and `libclang-rt-dev` | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run |
-| macOS (`platforms.yml`, by hand) | `macos-15` (Apple clang, arm64), submodules | `make vm vm-test`, differential and bytecode tests |
-| Windows (`platforms.yml`, by hand) | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential and bytecode tests |
+| macOS (`platforms.yml`, by hand) | `macos-15` (Apple clang, arm64), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
+| Windows (`platforms.yml`, by hand) | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
 | Fuzz (`fuzz.yml`, by hand) | self-hosted runner, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` |
 
 - The Linux jobs run on every pull request that changes more than docs. Racket
@@ -138,11 +140,12 @@
   `raco make` checks each source's SHA-1.
 - macOS and Windows minutes cost 10 and 2 times Linux minutes on a private
   repository. So `platforms.yml` and `fuzz.yml` run by hand. Run `platforms.yml`
-  before merging a change to platform code (`vm/main.c`, the Makefile, files,
-  processes, text output).
-- Racket comes from `Bogdanp/setup-racket` everywhere. The macOS and Windows
-  jobs do not run the whole `make test`, since the process and network tests are
-  not portable yet.
+  before merging a change to platform code (the Makefile, files, processes, text
+  output).
+- Racket comes from `Bogdanp/setup-racket` where it is still used (the rackunit
+  tests and the Racket oracle, until step 8d-3). The macOS and Windows jobs
+  build the C tests only, since the binary and the process and network tests
+  are not portable yet.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,
   and git detects the `string-inspect.agc` fixture as binary from its NUL bytes.
   So Windows sees the same sources, spans and output as Linux.
@@ -160,8 +163,8 @@
   into a cache, keyed by `openssl-release-` and the hash of
   `make -s vm-openssl-key AGENTICA_OPENSSL=vendored`. The `test` job restores
   that cache (a pull request can restore only its own caches or `master`'s). On
-  a hit it links `build/vm/release/agentica-vm` against it, checks it with
-  `readelf -d` and `--version`, and runs the TLS and HTTP tests on it.
+  a hit it links `build/vm/release/agentica` against it, checks it with
+  `readelf -d` and `run --version`, and runs the TLS and HTTP tests on it.
 - The third-party objects (yyjson, picohttpparser, libuv and `build/vm/gc.o`)
   follow content stamps, `$(VM_BUILD)/third-party-flags` and
   `build/vm/gc-flags`, from `make -s vm-third-party-key`. The key starts with a
@@ -179,5 +182,5 @@
   pin the compiler, and the downloaded archive must pass `sha256sum -c` before
   it is used. The `objdump -T` floor check covers OpenSSL's symbols too. The
   release fails if `readelf -d` shows `libssl`, `libcrypto` or `libgc` (on the
-  built VM and on the unpacked archive), and the archive ships
+  built binary and on the unpacked archive), and the archive ships
   `licenses/openssl/LICENSE.txt`.
