@@ -1,17 +1,11 @@
 /*
- * The agentica binary (dist/agentica, docs/future/35-self-hosting.md §35.6),
- * the only program of the product. It does one of two things.
- *
- * `agentica run [OPTIONS] -- FILE.agcb [ARGS...]` runs a compiled program: the
- * VM with its flags, and nothing else. No front end starts.
- *
- * Anything else is the command line of the front end, a compiled program
- * carried in the binary, which runs in a first runtime. The front end
- * compiles in memory and hands the program over (FrontEnd.hand_off); this
- * file retires that runtime and runs the program in a second one, so the
- * options and the heap are the program's alone.
- * `--front-end FILE.agcb` (build-only) loads another front end in place of the carried one.
- * Design: docs/vm/08-loader-and-cli.md.
+ * The agentica binary (dist/agentica, docs/future/35-self-hosting.md 35.6), the only program of the
+ * product. `agentica run [OPTIONS] -- FILE.agcb [ARGS...]` runs a compiled program with the VM flags and
+ * starts no front end. Anything else is the command line of the front end, a compiled program carried in
+ * the binary: it runs in a first runtime, compiles in memory and hands the program over
+ * (FrontEnd.hand_off); this file retires that runtime and runs the program in a second one, so the
+ * options and the heap are the program's alone. `--front-end FILE.agcb` (build-only) loads another front
+ * end in place of the carried one. Design: docs/vm/08-loader-and-cli.md.
  */
 #include "core.h"
 #include "embedded.h"

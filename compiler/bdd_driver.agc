@@ -1,7 +1,8 @@
 ## The BDD driver: what `agentica test` does before and after the runner. It finds the test files,
 ## compiles the runner, the step program and each test file into a private run directory, writes the configuration,
-## starts the runner on the VM and prints its report. The runner (stdlib/test/runner.agc) runs the scenarios and the
-## tests.
+## starts the runner (`agentica run`, a child of the binary) and prints its report. The runner
+## (stdlib/test/runner.agc) runs the scenarios and the tests. The driver runs inside the front end of the binary
+## (cli.agc), which gives it the settings: the version and the provider of the `std/` sources.
 ##
 ## Every failure of the driver's own work is an infrastructure error (RUNTIME-BDD-INFRA, exit code 2) in the format the
 ## user asked for. A failure to compile a test file or the step program is not: it goes to the runner, which reports it
@@ -16,7 +17,6 @@ import RunDir from "bdd_rundir"
 import Runner from "bdd_runner"
 import SourceRoot from "bdd_source_root"
 import DiagnosticJson from "diagnostic_json"
-import Paths from "import_path"
 import Env from "link_env"
 import Pipeline from "pipeline"
 
@@ -26,16 +26,6 @@ DEFAULT_STEPS = "import BDD from \"std/bdd\"\n\ndef main() -> Void\n  BDD.run([]
 
 # Where the tests are when no path is given.
 DEFAULT_PATHS = ["specs/", "test/"]
-
-# The std/ sources on stdin: where each goes in the stdlib/ folder, and what it holds.
-struct StdSource
-  path: String
-  text: String
-end
-
-struct StdSources
-  files: List[StdSource]
-end
 
 # The step program, compiled: where its bytecode is (nothing is written when it did not compile), the source the
 # runner names in reports, the folder for the VM's --source-root, and the diagnostic that the runner reports in place
@@ -48,32 +38,16 @@ struct Steps
   given: Bool
 end
 
-# Where the std/ sources of the programs the driver compiles come from.
-enum Std
-  # The caller (src/bdd-driver.rkt) sends them on stdin; they are installed in the run directory.
-  Stdin
-  # The settings of the caller, which has a provider of its own (the front end's `test` command).
-  Given(Env.Settings)
-end
-
-## Runs `agentica test` for the options and says how it ended. The `std/` sources come on stdin.
-export def run(options: Opts.Options) -> Report.Ending
-  return start(options, Std.Stdin)
-end
-
-## The same, with the settings of the caller (its version and its provider of the `std/` sources), when the driver runs
-## inside the front end and has no stdin of its own to read them from.
-export def run_with(options: Opts.Options, settings: Env.Settings) -> Report.Ending
-  return start(options, Std.Given(settings))
-end
-
-def start(options: Opts.Options, std: Std) -> Report.Ending
+## Runs `agentica test` for the options and says how it ended. `settings` are the caller's: the Agentica version that
+## the programs it compiles are written for, and its provider of the `std/` sources (the files of a folder, or the
+## binary).
+export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   if options.steps.size > 1
     return Report.usage("one --steps program; import the other files from it", options)
   end
   found = File.stat(options.vm, IO_TIMEOUT)
   if !found.ok? or found.unwrap!.kind != "file"
-    message = "cannot find the VM at #{options.vm}; run make vm or set AGENTICA_VM"
+    message = "cannot find agentica at #{options.vm}"
     return Report.infrastructure(message, options.vm, options)
   end
   temporary = RunDir.temporary_directory()
@@ -86,23 +60,13 @@ def start(options: Opts.Options, std: Std) -> Report.Ending
   end
   run_directory = claimed.unwrap!
   RunDir.sweep(temporary.unwrap!, run_directory)
-  ending = inside(run_directory.path, options, std, temporary.unwrap!)
+  ending = inside(run_directory.path, options, settings, temporary.unwrap!)
   RunDir.release(run_directory)
   return ending
 end
 
-# The run in its directory. The std/ sources are written first when they come on stdin, and the runner compiled before
-# anything else: its failure is a bug of the installation. The programs name the version the caller gave.
-def inside(directory: String, options: Opts.Options, std: Std, temporary: String) -> Report.Ending
-  settings = Env.settings("#{directory}/std", Env.process_env()).with(version: options.version)
-  case std
-    Std.Stdin ->
-      installed = install_std_sources(directory)
-      if !installed.ok?
-        return Report.infrastructure(installed.message, temporary, options)
-      end
-    Std.Given(given) -> settings = given
-  end
+# The run in its directory. The runner is compiled before anything else: its failure is a bug of the installation.
+def inside(directory: String, options: Opts.Options, settings: Env.Settings, temporary: String) -> Report.Ending
   case compile_runner(directory, settings)
     Pipeline.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"
@@ -114,18 +78,6 @@ def inside(directory: String, options: Opts.Options, std: Std, temporary: String
       end
       return ran.unwrap!
   end
-end
-
-# The std/ sources, which `agentica` has embedded and sends on stdin as {"files": [{"path": ..., "text": ...}]}, go to
-# the `std` folder of the run directory, which is the stdlib/ folder of the linker. They live and die with the run.
-def install_std_sources(directory: String) -> Result[Void]
-  sources = try JSON.decode(IO.read(), StdSources)
-  for source in sources.files
-    path = "#{directory}/std/#{source.path}"
-    try Dir.mkdir(Paths.directory_of(path), IO_TIMEOUT)
-    try write_text(path, source.text)
-  end
-  return ok()
 end
 
 def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compiled

@@ -12,6 +12,7 @@ USAGE = [
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
   "       agentica help NAME [--json]",
   "       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
+  "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
 
 # The first line of the help of `-h`.
@@ -19,7 +20,7 @@ HELP_FIRST_LINE = "usage: agentica [ <option> ... ] [<arguments>] ..."
 
 # The lines of the summary: the commands and the core rules.
 SUMMARY = [
-  "Programs run on the bytecode VM (agentica-vm, or AGENTICA_VM).",
+  "Programs run on the bytecode VM.",
   "Commands:",
   "  agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS",
   "  agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic",
@@ -27,6 +28,9 @@ SUMMARY = [
   "                                          run *_test.agc and .feature files (default PATH: test/ and specs/);",
   "                                          --steps FILE is the step program of the .feature files",
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
+  "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
+  "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",
+  "                                          --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json",
   "  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split",
   "  agentica help                           this summary and the builtin namespaces",
   "Core rules:",
@@ -79,6 +83,17 @@ OPTIONS = [
   " Multiple single-letter switches can be combined after",
   " one `-`. For example, `-h-` is the same as `-h --`.",
 ]
+
+## What a command line gets when it names `run` after other words: `agentica run` is answered before the options of the
+## command line are read, so it must be the first word.
+export def run_first_text() -> String
+  return "agentica: run must be the first word, before any option: agentica run [OPTIONS] -- <file.agcb> [args...]\n"
+end
+
+## What `test` says when the front end does not know the path of the binary that it has to start again.
+export def test_without_binary_text() -> String
+  return "agentica: the test command needs the path of the binary, which this front end was not given (--self)\n"
+end
 
 ## The usage lines, each ending with a line feed.
 export def usage_text() -> String
