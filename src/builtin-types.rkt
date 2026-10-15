@@ -29,7 +29,7 @@
                               ("max_connections" . Int) ("max_body_bytes" . Int))
         "LogEvent" '(("level" . (Enum "LogLevel")) ("message" . String) ("fields" . (Map String String))
                      ("time_ms" . Int) ("task" . Int))
-        "FileInfo" '(("kind" . String) ("size_bytes" . Int) ("modified_seconds" . Int))
+        "FileInfo" '(("kind" . String) ("size_bytes" . Int) ("modified_seconds" . Int) ("mode" . Int) ("user_id" . Int) ("group_id" . Int))
         "ProcessOutput" '(("stdout" . String) ("stderr" . String) ("truncated" . Bool))))
 
 (define builtin-enum-declarations

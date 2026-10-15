@@ -4,7 +4,8 @@
 ## The `implementation` names of the builtins the VM has. A call of any other builtin is LOWER-UNSUPPORTED.
 export VM_BUILTINS = Set.new([
   "puts", "IO.print", "IO.warn", "IO.inspect", "IO.gets", "IO.gets!", "IO.read", "IO.read_bytes", "IO.flush",
-  "IO.eof?", "System.args", "System.exit", "System.env", "String.from_int", "String.from_float", "ok", "error",
+  "IO.eof?", "System.args", "System.exit", "System.env", "System.pid", "String.from_int", "String.from_float", "ok",
+  "error",
   "Result.ok?", "Result.unwrap!", "Result.unwrap_or", "Result.message", "List.map", "List.filter", "List.reduce",
   "List.each", "List.any?", "List.all?", "List.sort_by", "Range.size", "Range.to_a", "Range.include?",
   "Range.each", "Range.first", "Range.last", "Int.times", "Int.upto", "Int.downto", "List.size", "List.append",
@@ -21,8 +22,9 @@ export VM_BUILTINS = Set.new([
   "JSON.parse", "JSON.encode", "JSON.from", "JSON.object", "JSON.array", "JSON.null", "JSON.null?", "JSON.get",
   "JSON.at", "JSON.string", "JSON.int", "JSON.float", "JSON.bool", "JSON.list", "JSON.decode", "JSON.schema",
   "File.open", "File.read_bytes", "File.read_line", "File.write", "File.write_bytes", "File.flush", "File.close",
-  "File.each_line", "File.read_text", "File.write_text", "File.append_text", "File.stat", "Dir.list", "Dir.mkdir",
-  "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Task.spawn", "Task.spawn_owning", "Task.await",
+  "File.each_line", "File.read_text", "File.write_text", "File.append_text", "File.stat", "File.lstat",
+  "File.try_lock", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve",
+  "Path.real", "Path.remove", "Task.spawn", "Task.spawn_owning", "Task.await",
   "Task.sleep", "Channel.new", "Channel.send", "Channel.recv", "Channel.close", "Channel.closed?", "Process.spawn",
   "Process.send", "Process.send_bytes", "Process.read_line", "Process.read_bytes", "Process.close_stdin",
   "Process.wait", "Process.close", "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port",

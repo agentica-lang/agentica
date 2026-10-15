@@ -1,6 +1,7 @@
 /*
  * The File, Dir and Path builtins (Linux only): the argument checks, host
- * paths, and file handles with their read and write buffers. Work runs on the
+ * paths, and file handles with their read and write buffers, including the
+ * owner-only creates, lstat, the handle lock and the removals. Work runs on the
  * libuv pool. Service layer. Design: docs/vm/02-reference-behavior.md §2.8.
  */
 #include "services.h"
@@ -13,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
 #include <unistd.h>
@@ -27,12 +29,13 @@
 
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
-  FS_MKDIR, FS_RESOLVE
+  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
-  OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL
+  OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK
 } op_kind;
 
 typedef struct {
@@ -54,12 +57,13 @@ typedef struct {
   size_t out_len, out_cap, count, fail_at;
   fs_status status;
   int err, fd;
-  bool dir, owns_st, polled;
+  bool owns_st, polled, locked;
+  const char *file_type;
   agc_vm *vm;
   agc_poller *poller;
   agc_io_job *job;
   size_t sent;
-  int64_t size, mtime;
+  int64_t size, mtime, mode, user_id, group_id;
 } op;
 
 typedef struct {
@@ -94,6 +98,9 @@ static const char not_regular[] = "filesystem: path does not refer to a regular 
 static const char timed_out[] = "filesystem: operation timed out";
 static const char line_too_long[] = "filesystem: line exceeds buffer_bytes";
 static const char bad_timeout[] = "filesystem: timeout must be positive milliseconds";
+static const char too_deep[] = "filesystem: directory tree is deeper than 128 levels";
+static const char refused_path[] = "filesystem: refusing to remove /, . or ..";
+static const char not_lockable[] = "filesystem: only a regular file can be locked";
 static const char complete_who[] = "path->complete-path";
 static const char complete_expected[] = "(or/c path-string? path-for-some-system?)";
 
@@ -480,6 +487,12 @@ static bool names_output_fd(const op *o) {
 }
 
 static int open_for(op *o, bool reading, bool append) {
+  if (o->kind == OP_OPEN_CREATE) {
+    /* O_EXCL fails on any existing entry, a dangling link included, and never follows one. */
+    int fd = open(o->path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600);
+    if (fd < 0) fail_op(o, FS_OPEN, errno);
+    return fd;
+  }
   if (names_output_fd(o)) {
     fail_op(o, FS_NOT_REGULAR, 0);
     return -1;
@@ -588,13 +601,17 @@ static void work_write_text(op *o) {
 
 static void work_stat(op *o) {
   struct stat info;
-  if (stat(o->path, &info) != 0) {
+  if ((o->kind == OP_LSTAT ? lstat(o->path, &info) : stat(o->path, &info)) != 0) {
     fail_op(o, errno == ELOOP ? FS_LINK : FS_MISSING, 0);
     return;
   }
-  o->dir = S_ISDIR(info.st_mode);
-  o->size = o->dir ? 0 : (int64_t)info.st_size;
+  bool dir = S_ISDIR(info.st_mode);
+  o->file_type = dir ? "directory" : S_ISLNK(info.st_mode) ? "link" : "file";
+  o->size = dir ? 0 : (int64_t)info.st_size;
   o->mtime = (int64_t)info.st_mtim.tv_sec;
+  o->mode = (int64_t)(info.st_mode & 07777);
+  o->user_id = (int64_t)info.st_uid;
+  o->group_id = (int64_t)info.st_gid;
 }
 
 static void work_list(op *o) {
@@ -685,6 +702,45 @@ static void work_real(op *o) {
   }
   o->out = (uint8_t *)resolved;
   o->out_len = strlen(resolved);
+}
+
+/* Exactly one directory, owner only: an existing path is the caller's error, never a success. */
+static void work_mkdir_private(op *o) {
+  if (mkdir(o->path, 0700) == 0) return;
+  fail_op(o, FS_MKDIR, errno);
+  o->fail_at = strlen(o->path);
+}
+
+/* Whatever is at the path goes, as rm -rf would remove it but never following a link: unlink takes a file or a link
+   itself, and only a directory (EISDIR) starts the tree walk, which opens it with O_NOFOLLOW. A missing path is
+   success, as with unlink(missing_ok=True). */
+static void work_remove(op *o) {
+  if (unlink(o->path) == 0 || errno == ENOENT) return;
+  if (errno != EISDIR) {
+    fail_op(o, FS_REMOVE, errno);
+    return;
+  }
+  int rc = agc_remove_tree(o->path);
+  if (rc == 0 || rc == ENOENT) return;
+  if (rc == AGC_TREE_TOO_DEEP)
+    fail_op(o, FS_TREE_DEEP, 0);
+  else if (rc == AGC_TREE_REFUSED)
+    fail_op(o, FS_REFUSED, 0);
+  else
+    fail_op(o, FS_REMOVE, rc);
+}
+
+/* flock ties the lock to the open file description, which is the handle's descriptor: closing the handle
+   or ending the process releases it, and descriptors are close-on-exec, so no child keeps it. */
+static void work_try_lock(op *o) {
+  int rc;
+  do {
+    rc = flock(o->st->fd, LOCK_EX | LOCK_NB);
+  } while (rc != 0 && errno == EINTR);
+  if (rc == 0)
+    o->locked = true;
+  else if (errno != EWOULDBLOCK)
+    fail_op(o, FS_LOCK, errno);
 }
 
 static void work_open(op *o) {
@@ -837,12 +893,17 @@ static void work(void *data) {
     case OP_READ_TEXT: work_read_text(o); break;
     case OP_WRITE_TEXT:
     case OP_APPEND_TEXT: work_write_text(o); break;
-    case OP_STAT: work_stat(o); break;
+    case OP_STAT:
+    case OP_LSTAT: work_stat(o); break;
     case OP_REAL: work_real(o); break;
     case OP_LIST: work_list(o); break;
     case OP_MKDIR: work_mkdir(o); break;
+    case OP_MKDIR_PRIVATE: work_mkdir_private(o); break;
+    case OP_REMOVE: work_remove(o); break;
+    case OP_TRY_LOCK: work_try_lock(o); break;
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
+    case OP_OPEN_CREATE:
     case OP_OPEN_APPEND: work_open(o); break;
     case OP_READ_BYTES: work_read_bytes(o); break;
     case OP_READ_LINE: work_read_line(o); break;
@@ -990,6 +1051,10 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_LONG_LINE: return error_of("filesystem: line exceeds 1048576 bytes");
     case FS_MKDIR: return os_error(vm, "make-directory: cannot make directory", o->path, o->fail_at, o->err);
     case FS_RESOLVE: return os_error(vm, "filesystem: cannot resolve path", o->path, path_len, o->err);
+    case FS_REMOVE: return os_error(vm, "filesystem: cannot remove path", o->path, path_len, o->err);
+    case FS_TREE_DEEP: return error_of(too_deep);
+    case FS_REFUSED: return error_of(refused_path);
+    case FS_LOCK: return agc_system_error(vm, "filesystem: cannot lock file", o->err);
     default:
       return agc_system_error(vm, o->status == FS_WRITE ? "error writing to stream port" : "error reading from stream port",
                               o->err);
@@ -1004,16 +1069,18 @@ static agc_value text_result(const op *o) {
 }
 
 static uint32_t file_info_struct(agc_vm *vm) {
-  static const char *const fields[] = {"kind", "size_bytes", "modified_seconds"};
-  return agc_builtin_struct(vm, "FileInfo", fields, 3);
+  static const char *const fields[] = {"kind", "size_bytes", "modified_seconds", "mode", "user_id", "group_id"};
+  return agc_builtin_struct(vm, "FileInfo", fields, 6);
 }
 
 static agc_value stat_result(agc_vm *vm, const op *o) {
-  agc_struct *info = agc_new_struct(file_info_struct(vm), 3);
-  const char *kind = o->dir ? "directory" : "file";
-  info->fields[0] = agc_string_value(agc_make_string(kind, strlen(kind), strlen(kind)));
+  agc_struct *info = agc_new_struct(file_info_struct(vm), 6);
+  info->fields[0] = agc_string_value(agc_make_string(o->file_type, strlen(o->file_type), strlen(o->file_type)));
   info->fields[1] = agc_int(o->size);
   info->fields[2] = agc_int(o->mtime);
+  info->fields[3] = agc_int(o->mode);
+  info->fields[4] = agc_int(o->user_id);
+  info->fields[5] = agc_int(o->group_id);
   return agc_result_value(true, agc_struct_value(info));
 }
 
@@ -1086,7 +1153,7 @@ static void close_file(agc_vm *vm, agc_resource *r, agc_task *ender) {
 static agc_value done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   op *o = data;
-  if (o->kind == OP_STAT && o->status == FS_OK) {
+  if ((o->kind == OP_STAT || o->kind == OP_LSTAT) && o->status == FS_OK) {
     op info = *o;
     free_op(o);
     return stat_result(vm, &info);
@@ -1101,8 +1168,10 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_LIST: result = list_result(vm, o); break;
       case OP_REAL: result = real_result(o); break;
       case OP_READ_BYTES: result = bytes_result(o); break;
+      case OP_TRY_LOCK: result = agc_result_value(true, agc_bool(o->locked)); break;
       case OP_OPEN_READ:
       case OP_OPEN_WRITE:
+      case OP_OPEN_CREATE:
       case OP_OPEN_APPEND: {
         int err = 0;
         if (o->st->polled && !(o->st->poller = agc_poller_open(vm, o->st->fd, &err))) {
@@ -1208,6 +1277,11 @@ static agc_value builtin_stat(agc_vm *vm, agc_value *args, uint32_t span) {
   return path_op(vm, OP_STAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
 }
 
+static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
+  files_on(vm, span);
+  return path_op(vm, OP_LSTAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
+}
+
 static agc_value builtin_dir_list(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   return path_op(vm, OP_LIST, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "directory-list", "path-string?");
@@ -1216,6 +1290,18 @@ static agc_value builtin_dir_list(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_dir_mkdir(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   return path_op(vm, OP_MKDIR, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "make-directory*",
+                 "path-string?");
+}
+
+static agc_value builtin_dir_mkdir_private(agc_vm *vm, agc_value *args, uint32_t span) {
+  files_on(vm, span);
+  return path_op(vm, OP_MKDIR_PRIVATE, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "make-directory",
+                 "path-string?");
+}
+
+static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
+  files_on(vm, span);
+  return path_op(vm, OP_REMOVE, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "delete-directory/files",
                  "path-string?");
 }
 
@@ -1249,8 +1335,10 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
     kind = OP_OPEN_WRITE;
   } else if (same_text(mode->data, mode->bytes, "append")) {
     kind = OP_OPEN_APPEND;
+  } else if (same_text(mode->data, mode->bytes, "create_private")) {
+    kind = OP_OPEN_CREATE;
   } else {
-    return error_of("filesystem: mode must be read, write, or append");
+    return error_of("filesystem: mode must be read, write, append, or create_private");
   }
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
   return start(vm, open_op(vm, kind, path), agc_void(), timeout);
@@ -1270,12 +1358,23 @@ static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *r
   return true;
 }
 
-static file_state *usable(agc_vm *vm, agc_value handle, bool reading, agc_value *failure) {
+static file_state *open_state(agc_vm *vm, agc_value handle, agc_value *failure) {
   const agc_resource *r = agc_as_handle(vm, handle);
-  file_state *st = r->native;
-  if (!st || r->closing) {
-    *failure = error_of("filesystem: file handle is closed");
-  } else if (reading && !st->readable) {
+  if (r->native && !r->closing) return r->native;
+  *failure = error_of("filesystem: file handle is closed");
+  return NULL;
+}
+
+/* The state of an open handle once the task has the handle's lock; NULL with the call's result in *failure. */
+static file_state *held_state(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *failure) {
+  if (blocked(vm, handle, timeout, failure)) return NULL;
+  return open_state(vm, handle, failure);
+}
+
+static file_state *usable(agc_vm *vm, agc_value handle, bool reading, agc_value *failure) {
+  file_state *st = open_state(vm, handle, failure);
+  if (!st) return NULL;
+  if (reading && !st->readable) {
     *failure = error_of("filesystem: file handle is not open for reading");
   } else if (!reading && !st->writable) {
     *failure = error_of("filesystem: file handle is not open for writing");
@@ -1372,6 +1471,19 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   if (r->closing) return agc_is(r->context, AGC_T_RESULT) ? r->context : ok_void();
   if (!r->native) return ok_void();
   return close_handle(vm, r, args[0], timeout);
+}
+
+static agc_value builtin_try_lock(agc_vm *vm, agc_value *args, uint32_t span) {
+  files_on(vm, span);
+  agc_value failure;
+  int64_t timeout = agc_as_int(vm, args[1]);
+  file_state *st = held_state(vm, args[0], &timeout, &failure);
+  if (!st) return failure;
+  /* A pipe, FIFO or device waits on the loop, which this one-shot job does not. */
+  if (st->poller) return error_of(not_lockable);
+  op *o = new_op(vm, OP_TRY_LOCK);
+  o->st = st;
+  return start(vm, o, args[0], timeout);
 }
 
 static agc_step lines_wait(void) { return (agc_step){AGC_STEP_WAIT, agc_void()}; }
@@ -1599,12 +1711,16 @@ const agc_builtin agc_file_builtins[] = {
   {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.lstat", 2, builtin_lstat, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.try_lock", 2, builtin_try_lock, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Dir.mkdir_private", 2, builtin_dir_mkdir_private, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Path.join", 1, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];

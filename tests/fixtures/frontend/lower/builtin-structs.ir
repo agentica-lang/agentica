@@ -1,6 +1,6 @@
 program 0:1:1-17:1 entry=1 globals=0
 source 0 "builtin-structs.agc" chars=506
-struct s0 "FileInfo" ["kind","size_bytes","modified_seconds"] types=[String, Int, Int]
+struct s0 "FileInfo" ["kind","size_bytes","modified_seconds","mode","user_id","group_id"] types=[String, Int, Int, Int, Int, Int]
 struct s1 "Header" ["name","value"] types=[String, String]
 struct s2 "HttpRequest" ["method","target","path","headers","body"] types=[String, String, String, List(Struct(Header)), String]
 struct s3 "HttpResponse" ["status","headers","body"] types=[Int, List(Struct(Header)), String]

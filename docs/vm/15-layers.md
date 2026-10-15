@@ -38,7 +38,7 @@ before it moved; the header split moved no line of a `.c` file except the
 | Layer | Files | May use |
 |---|---|---|
 | **Core** | `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
-| **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `stream.c`, `duplex.c`, `process.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
+| **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `tree.c`, `stream.c`, `duplex.c`, `process.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
 | **Adapters** | `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c` (`http_parse.h`) | their own header, their library, and from `value.h` only the memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`, `agc_size_mul`, `agc_out_of_memory`) |
 | **Driver** (not a layer: it wires them) | `main.c`, `builtin_tables.c` (§15.6 V2), `fuzz.c`, `fuzz_main.c` | everything |
 
@@ -247,16 +247,18 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   `agc_around`) with `agc_number_status` and `AGC_NOT_FOUND`; the JSON parser
   and typed JSON (`agc_json_status`, `agc_json_version`, `agc_json_parse`,
   `agc_json_status_message`, `agc_json_to_float`, `agc_json_decode`,
-  `agc_json_schema`); `files.c`'s exports (`agc_files_init`, `agc_files_close`,
-  `agc_host_path`, `agc_utf8_error`, `agc_system_error`, `agc_each_fd`,
-  `agc_files_inherited`, `agc_files_forget`); `agc_processes_stop` (`process.c`,
-  called by the driver's exit path); the stream kit (`agc_new_lock`,
-  `agc_stream_lock`, `agc_stream_bad_timeout`, `agc_stream_timed_out`,
-  `agc_inbuf_*`, `agc_stream_write`, with forward `struct uv_stream_s` and
-  `struct uv_write_s`); `agc_duplex_*` and `agc_parent_*` (the child channel,
-  `duplex.c`, used by `process.c`, `testing.c` and the driver); the builtin
-  tables of the services (strings, numbers, json, files, duplex, process, tcp,
-  http, test) and their counts.
+  `agc_json_schema`); `files.c`'s exports (`agc_files_init`,
+  `agc_files_close`, `agc_host_path`, `agc_utf8_error`, `agc_system_error`,
+  `agc_each_fd`, `agc_files_inherited`, `agc_files_forget`); `agc_remove_tree`
+  (`tree.c`, the tree walk of `Path.remove`, with `AGC_TREE_TOO_DEEP`,
+  `AGC_TREE_REFUSED` and `AGC_TREE_MAX_DEPTH`; it uses no VM state);
+  `agc_processes_stop` (`process.c`, called by the driver's exit path); the
+  stream kit (`agc_new_lock`, `agc_stream_lock`, `agc_stream_bad_timeout`,
+  `agc_stream_timed_out`, `agc_inbuf_*`, `agc_stream_write`, with forward
+  `struct uv_stream_s` and `struct uv_write_s`); `agc_duplex_*` and
+  `agc_parent_*` (the child channel, `duplex.c`, used by `process.c`,
+  `testing.c` and the driver); the builtin tables of the services (strings,
+  numbers, json, files, duplex, process, tcp, http, test) and their counts.
 
 - **`list_impl.h`** (includes `value.h`; private to the core): `struct agc_list`
   (`{ len, root, shift, kind, tail[] }`), the node type of the 32-way trie and

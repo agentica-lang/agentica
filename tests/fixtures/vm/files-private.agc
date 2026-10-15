@@ -1,0 +1,76 @@
+def at(dir: String, name: String) -> String
+  return Result.unwrap!(Path.join([dir, name]))
+end
+
+def describe(label: String, result: Result[FileInfo]) -> Void
+  if result.ok?
+    info = Result.unwrap!(result)
+    puts("#{label} #{info.kind} #{info.size_bytes} #{info.mode}")
+  else
+    IO.inspect(result)
+  end
+end
+
+def main() -> Void
+  dir: String = System.args()[0]
+  nul = String.from_code(0)
+  secret = at(dir, "private")
+  IO.inspect(Dir.mkdir_private(secret, 60000))
+  IO.inspect(Dir.mkdir_private(secret, 60000))
+  IO.inspect(Dir.mkdir_private(at(dir, "missing/child"), 60000))
+  IO.inspect(Dir.mkdir_private("", 60000))
+  IO.inspect(Dir.mkdir_private("a" + nul, 60000))
+  IO.inspect(Dir.mkdir_private(at(dir, "late"), 0))
+  describe("dir", File.lstat(secret, 60000))
+
+  file = at(secret, "secret.bin")
+  handle = Result.unwrap!(File.open(file, "create_private", 60000))
+  IO.inspect(File.write(handle, "top secret", 60000))
+  IO.inspect(File.write_bytes(handle, [0, 255], 60000))
+  IO.inspect(File.close(handle, 60000))
+  describe("file", File.lstat(file, 60000))
+  describe("followed", File.stat(file, 60000))
+  IO.inspect(File.open(file, "create_private", 60000))
+  IO.inspect(File.open(at(dir, "missing/file"), "create_private", 60000))
+  IO.inspect(File.open("", "create_private", 60000))
+  IO.inspect(File.open(at(dir, "late"), "create_private", 0))
+  describe("missing", File.lstat(at(dir, "missing"), 60000))
+  describe("below a file", File.lstat(at(file, "x"), 60000))
+  IO.inspect(File.lstat("", 60000))
+  IO.inspect(File.lstat("a" + nul, 60000))
+  IO.inspect(File.lstat(file, -1))
+
+  first = Result.unwrap!(File.open(file, "read", 60000))
+  second = Result.unwrap!(File.open(file, "read", 60000))
+  IO.inspect(File.try_lock(first, 60000))
+  IO.inspect(File.try_lock(first, 60000))
+  IO.inspect(File.try_lock(second, 60000))
+  IO.inspect(File.try_lock(second, 0))
+  IO.inspect(File.close(first, 60000))
+  IO.inspect(File.try_lock(second, 60000))
+  IO.inspect(File.try_lock(first, 60000))
+  IO.inspect(File.close(second, 60000))
+
+  IO.inspect(Path.remove(file, 60000))
+  IO.inspect(Path.remove(file, 60000))
+  IO.inspect(Path.remove("", 60000))
+  IO.inspect(Path.remove(file, 0))
+
+  tree = at(dir, "tree")
+  Dir.mkdir(at(tree, "a/b/c"), 60000)
+  File.write_text(at(tree, "a/b/c/f.txt"), "f", 60000)
+  File.write_text(at(tree, "top.txt"), "t", 60000)
+  IO.inspect(Path.remove(at(at(tree, "top.txt"), "x"), 60000))
+  IO.inspect(Path.remove(at(dir, "missing"), 60000))
+  IO.inspect(Path.remove("/", 60000))
+  IO.inspect(Path.remove(at(tree, "a/.."), 60000))
+  IO.inspect(Path.remove(at(tree, "a/b/c/") + "/.", 60000))
+  IO.inspect(Path.remove(tree, 0))
+  IO.inspect(File.lstat(at(tree, "a/b/c/f.txt"), 60000).ok?)
+  IO.inspect(Path.remove(at(tree, "top.txt"), 60000))
+  IO.inspect(Path.remove(tree, 60000))
+  IO.inspect(Path.remove(tree, 60000))
+  IO.inspect(File.lstat(tree, 60000).ok?)
+  IO.inspect(Path.remove(secret, 60000))
+  IO.inspect(Dir.list(dir, 60000))
+end
