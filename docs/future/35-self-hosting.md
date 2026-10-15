@@ -466,7 +466,9 @@ Notes:
   - **Limits of the hand-off of an ordinary run** (`cli_spawn.agc`; the single
     binary has none of them). It writes the program to a new 0600 file in the
     temporary directory, starts `agentica-vm --driver-pid PID -- FILE ARGS` with
-    `Process.spawn`, and removes the file. A `Process` is a pipe, so (1) the
+    `Process.spawn` under `/bin/sh` (so that a SIGTERM to the command line
+    reaches the program's VM as a SIGTERM and it stops its own children, not as
+    the SIGKILL that a plain child gets), and removes the file. A `Process` is a pipe, so (1) the
     program's stdin and stdout pass through this process one byte at a time
     (`Process.read_bytes` and `IO.read_bytes` wait for a whole count; a larger
     read would hold back a reply of an interactive program), which gives about

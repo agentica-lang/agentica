@@ -25,9 +25,11 @@ How `agentica test` works: the driver (`compiler/bdd.agc`, `src/bdd-driver.rkt`)
     the real VM unless it is asked for `runner.agcb` (`fake_vm` in
     `tests/test_bdd.py`), since the driver runs on that VM too.
 - The Agentica command line (`compiler/cli.agc`, step 8a) does not go through the
-  hand-off: `test` calls `Driver.run` in its own process, with `--stdlib DIR` in
-  place of the `std/` sources on stdin, so `AGENTICA_VM` runs only the runner and
-  the programs under test there. `make test-cli` runs this file on it.
+  hand-off: `test` calls `Driver.run_with(options, settings)` in its own process,
+  with the settings of the command line in place of the `std/` sources on stdin,
+  so `AGENTICA_VM` runs only the runner and the programs under test there. In the
+  single binary `test` answers status 2 until step 8d (the front end runs without
+  `--allow-run`). `make test-cli` runs this file on it.
 - `compiler/bdd.agc` (the driver, over `compiler/bdd_*.agc`; `bdd_options.agc`
   reads the arguments, usage errors included)
   - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the

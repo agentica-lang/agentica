@@ -101,10 +101,13 @@ dist/agentica-cli.agcb: $(CLI_INPUTS) | build
 
 cli: dist/agentica-cli.agcb
 
-# The tests that run the product command line, run on the Agentica one (the same exit codes, stdout and stderr).
-CLI_TESTS ?= tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py tests/test_source_utf8.py tests/test_bdd.py
-test-cli: build vm bdd-driver cli
+# The tests that run the product command line, run on the Agentica one (the same exit codes, stdout and stderr): as an
+# ordinary program on the VM (tests/agentica-agcb), and as the single binary, which cannot start `agentica test` yet.
+CLI_TESTS ?= tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
+  tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py
+test-cli: build vm bdd-driver cli $(AGC_NEXT)
 	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/tests/agentica-agcb" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
+	$(if $(AGC_NEXT),AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(AGC_NEXT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=)
 
 dist/agentica: $(EXE_INPUTS) | build vm bdd-driver
 	mkdir -p dist

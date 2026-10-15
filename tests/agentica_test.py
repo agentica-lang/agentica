@@ -175,6 +175,12 @@ def cli():
 AGCB_CLI = TESTS / "agentica-agcb"
 
 
+def cli_runs_tests():
+    """False for the single binary (dist/agentica-next), whose front end cannot start the test runner before step 8d."""
+    executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
+    return not (executable and Path(executable).name == "agentica-next")
+
+
 def cli_is_agentica():
     """True when cli() is the command line written in Agentica (make test-cli), which is not the default yet."""
     executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")

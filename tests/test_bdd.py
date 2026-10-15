@@ -9,8 +9,8 @@ import json
 import os
 import unittest
 
-from tests.agentica_test import (ROOT, TESTS, TestCase, agentica_version, cli, cli_is_agentica, report_cases, run,
-                                 vm_binary, vm_environment)
+from tests.agentica_test import (ROOT, TESTS, TestCase, agentica_version, cli, cli_is_agentica, cli_runs_tests,
+                                 report_cases, run, vm_binary, vm_environment)
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
@@ -36,6 +36,7 @@ def main_running(*steps):
     return "def main() -> Void\n  BDD.run([\n%s\n  ])\nend\n" % ",\n".join("    " + step for step in steps)
 
 
+@unittest.skipUnless(cli_runs_tests(), "the single binary cannot start the test runner yet (step 8d)")
 class Bdd(TestCase):
     def agentica_test(self, *args, env=None, cwd=None):
         return run(cli() + ["test", *args], env=vm_environment(env), cwd=cwd)

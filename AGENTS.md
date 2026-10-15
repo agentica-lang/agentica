@@ -45,7 +45,8 @@ phase 13).
 - `make vm`: build `dist/agentica-vm` (`git submodule update --init` first).
   `make vm-test`: the C tests.
 - `make cli`: build `dist/agentica-cli.agcb`, the command line in Agentica (not
-  the default yet); `make test-cli` runs the CLI tests on it.
+  the default yet); `make test-cli` runs the CLI tests on it and on
+  `dist/agentica-next`.
 - `make test TESTS="tests/lexer-test.rkt"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
 - `racket src/main.rkt file.agc` runs a program; `... check file.agc` checks.

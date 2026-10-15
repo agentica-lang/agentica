@@ -1,18 +1,28 @@
 ## The hand-off of an ordinary run: runs a compiled program by starting `agentica-vm` on it, as src/main.rkt does. The
 ## program is written to a new file of mode 0600 in the temporary directory (a VM started with `--driver-pid` reads
-## only a private file, and deletes it after loading it) and `agentica-vm` is started with `--driver-pid` set to this
-## process, so it ends if this one does.
+## only a private file, and deletes it after loading it) and `agentica-vm` is started with `--driver-pid`, under a
+## shell that names itself, so the VM ends if this process does (and stops the processes it started; see SHELL).
 ##
-## Limits, because a Process gives only pipes: the program's standard input and output pass through this process one
-## byte at a time (`Process.read_bytes` and `IO.read_bytes` wait for a whole count, so a larger read could hold back a
-## reply an interactive program has already made), about 1.4 MB per second, and the output of the program must be
-## UTF-8 (it is: a program prints Strings). The standard error of the program goes straight to this process's, as
-## `Process.spawn` forwards it. The single binary (docs/future/35-self-hosting.md, 8d) replaces this module with a
-## builtin that loads the bytes in the same process.
+## Limits, because a Process gives only pipes (docs/future/35-self-hosting.md, "Step 8a status"; the single binary has
+## none of them): the program's standard input and output pass through this process one byte at a time, because
+## `Process.read_bytes` and `IO.read_bytes` wait for a whole count and a larger read could hold back a reply an
+## interactive program has already made. That is about 3.5 MB in 7 seconds, and the output must be UTF-8 (it is: a
+## program prints Strings). The standard error of the program goes straight to this process's, so with `2>&1` the two
+## streams can come out of order. The `--flush-timeout 0` message of Racket is missing, and a broken pipe on the
+## standard output is reported against cli_main.agc, not against the program. The single binary (step 8d) replaces this
+## module with a builtin that loads the bytes in the same process.
 
 import {IO_TIMEOUT, write_bytes} from "bdd_files"
 import RunDir from "bdd_rundir"
 import Host from "cli_host"
+
+# The VM runs under a shell that starts it in the background and waits for it. A plain child gets SIGKILL when this
+# process ends, and a VM killed that way cannot stop the processes it started. With the shell in between, the shell is
+# the one that is killed, the VM's parent dies, and a VM started with --driver-pid gets SIGTERM from the kernel and
+# stops its own children, as it does under Racket. The shell is the process that --driver-pid names (the VM checks
+# that it is its parent). The standard input moves to descriptor 3 first: a background job of a shell reads /dev/null
+# unless it is given another descriptor for it.
+SHELL = ["-c", "vm=$1\nshift\nexec 3<&0\n\"$vm\" --driver-pid $$ \"$@\" <&3 3<&- &\nwait $!", "sh"]
 
 # The deadline of the start of the VM, and a wait that never ends in practice (a year): a timeout of a read of the
 # program's output would stop the program.
@@ -77,8 +87,8 @@ end
 # Starts the VM on the file and passes the streams through until it ends. It gives the exit status, or -1 when the VM
 # cannot be started or waited for.
 def run(vm: String, path: String, launch: Host.Launch) -> Int
-  words = launch.flags.concat(["--driver-pid", System.pid().to_s, "--", path]).concat(launch.arguments)
-  spawned = Process.spawn(vm, words, START_TIMEOUT)
+  words = launch.flags.concat(["--", path]).concat(launch.arguments)
+  spawned = Process.spawn("/bin/sh", SHELL.concat([vm]).concat(words), START_TIMEOUT)
   if !spawned.ok?
     return -1
   end

@@ -27,8 +27,10 @@ comment), then a step that calls it. Targets that are not obvious:
   Racket front end, the command line in Agentica (§35.4 step 8a, not the
   default). `tests/agentica-agcb` runs it on the VM like the `agentica` command;
   `make test-cli` runs the tests of the product command line
-  (`CLI_TESTS`) with `AGENTICA_TEST_EXECUTABLE` set to it, and
-  `tests/test_cli_parity.py` (run by `make test`) compares it with the Racket
+  (`CLI_TESTS`) with `AGENTICA_TEST_EXECUTABLE` set to it and then to
+  `dist/agentica-next` (the single binary carries the same command line, but
+  its `test` is not there yet: those cases skip), and
+  `tests/test_cli_parity.py` (run by `make test`) compares both with the Racket
   one. `test` and `test-slow` depend on it.
 - `test` and `test-slow` run two frameworks side by side while the tests move
   from rackunit to Python `unittest` (a test lives in one only; design in
@@ -302,8 +304,8 @@ CHANGELOG rules are under "Tags, versions and CHANGELOG" below.
   C as `AGC_VERSION`; `src/version.rkt` embeds it when it is compiled (so
   `raco exe` and `raco distribute` carry it and need no file at run time) and
   `agentica --version` reports it. The Agentica front end takes it as an input
-  (the arguments of `compiler/cli_main.agc`), and writes it into each `.agcb`
-  header. Keep it in sync with the Git tag.
+  (`Settings.version`; `--version V` in the arguments of `compiler/front_end.agc`
+  and `compiler/cli_main.agc`), and writes it into each `.agcb` header. Keep it in sync with the Git tag.
 - Every PR with a user-visible change adds a short entry under `## [Unreleased]`
   in `CHANGELOG.md` (Added, Changed, Removed or Fixed; start a change that
   breaks programs or CLI use with `**Breaking:**`; add the PR number).
