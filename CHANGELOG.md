@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-15
+
 ### Added
 
 - **OS builtins for the BDD driver port** (§35.5, step 7a), all VM only. `File.lstat(path, timeout_ms)` is `File.stat` without following a final symbolic link (`kind` is `"link"`). `File.open(path, "create_private", timeout_ms)` creates a new write-only file with mode 0600 and fails when the path exists, a dangling link included. `File.try_lock(handle, timeout_ms)` takes an exclusive `flock` on an open file without waiting, `ok(true)` or `ok(false)` when another handle or process holds it; only a regular file can be locked; the lock ends when the handle closes, its task ends or the process ends, and no child process keeps it. `Dir.mkdir_private(path, timeout_ms)` creates one directory with mode 0700 and fails when it exists. `Path.remove(path, timeout_ms)` deletes a file, a symbolic link itself, or a directory with everything in it, never following a link (`vm/tree.c`, `openat` with `O_NOFOLLOW` and `unlinkat`); a missing path is `ok()`, a path that ends in `/`, `.` or `..` is refused, a tree deeper than 128 levels is an error, and a failure inside the tree names the entry that failed. `Path.rename(from, to, timeout_ms)` renames a file, a link or a directory to a path that does not exist, atomically (`renameat2` with `RENAME_NOREPLACE`): an existing target is an error and is never replaced. `System.pid()` returns the process id (#288).
@@ -189,6 +191,7 @@ programs from stable diagnostics.
 - Maps keep insertion order with immutable hashes; `Map.get/2` returns a
   `Result` and `Map.get/3` an eagerly evaluated default.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.2.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/sonic182/agentica/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/sonic182/agentica/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/sonic182/agentica/releases/tag/0.1.0
