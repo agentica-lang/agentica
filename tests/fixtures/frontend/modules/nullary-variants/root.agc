@@ -1,4 +1,4 @@
-import "shapes" as S
+import S from "shapes"
 
 enum Command
   Show

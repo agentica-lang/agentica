@@ -1,11 +1,11 @@
 ## The text form of a parse, for tests. See parse_text.
 
-import "ast" as Ast
-import "diagnostic" as Diag
-import "lexer" as Lexer
-import "parser" as Parser
-import "source" as Source
-import "text" as Text
+import Ast from "ast"
+import Diag from "diagnostic"
+import Lexer from "lexer"
+import Parser from "parser"
+import Source from "source"
+import Text from "text"
 
 ## The text form of a parse and the first node id the next file can use (first_id again when the parse failed).
 export struct Printed

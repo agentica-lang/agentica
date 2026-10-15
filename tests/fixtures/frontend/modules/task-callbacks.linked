@@ -1,15 +1,15 @@
-program #11 0:1:1-117:7:1
+program #11 0:1:1-119:7:1
   module "root.agc"
-    declaration: function-decl #10 26:2:1-116:6:1 name="main"
-      result: type-ref #1 40:2:15-44:2:19 name="Void"
-      body: binding #5 47:3:3-81:4:1 name="task"
-        value: call #4 54:3:10-80:3:36 name="Task.spawn" piped=false
-          arg: function-ref #2 65:3:21-76:3:32 name="@2::run"
-          arg: literal #3 78:3:34-79:3:35 value=int:0
-      body: expr-stmt #9 83:4:3-112:5:1
-        value: call #8 83:4:3-111:4:31 name="IO.inspect" piped=false
-          arg: call #7 94:4:14-110:4:30 name="Task.await" piped=false
-            arg: name-ref #6 105:4:25-109:4:29 name="task"
+    declaration: function-decl #10 28:2:1-118:6:1 name="main"
+      result: type-ref #1 42:2:15-46:2:19 name="Void"
+      body: binding #5 49:3:3-83:4:1 name="task"
+        value: call #4 56:3:10-82:3:36 name="Task.spawn" piped=false
+          arg: function-ref #2 67:3:21-78:3:32 name="@2::run"
+          arg: literal #3 80:3:34-81:3:35 value=int:0
+      body: expr-stmt #9 85:4:3-114:5:1
+        value: call #8 85:4:3-113:4:31 name="IO.inspect" piped=false
+          arg: call #7 96:4:14-112:4:30 name="Task.await" piped=false
+            arg: name-ref #6 107:4:25-111:4:29 name="task"
   module "worker.agc"
     declaration: function-decl #13 7:1:8-81:7:1 name="@2::run"
       param: param #1 15:1:16-21:1:22 name="n"

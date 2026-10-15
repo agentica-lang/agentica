@@ -163,7 +163,7 @@ No new opcode and no bytecode format change: the VM imports builtins by name
 ### 23.5 `std/binary`
 
 ```agentica
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   header = Binary.write_u16_be(513).unwrap!

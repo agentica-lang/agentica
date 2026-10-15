@@ -1,4 +1,4 @@
-import "models" as Models
+import Models from "models"
 
 def main() -> Void
   secret = Models.make()

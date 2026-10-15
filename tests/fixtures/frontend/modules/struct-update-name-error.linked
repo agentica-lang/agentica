@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 64:6:23-74:6:33 "unknown module alias" "\"Nope\" is neither an import alias nor an enum of this file; import a module with import \"path\" as Nope, or declare enum Nope" file="root.agc"
+ERROR CHECK-IMPORT-NAME 64:6:23-74:6:33 "unknown module alias" "\"Nope\" is neither an import alias nor an enum of this file; import a module with import Nope from \"path\", or declare enum Nope" file="root.agc"

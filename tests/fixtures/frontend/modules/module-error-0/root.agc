@@ -1,4 +1,4 @@
-import "missing" as Missing
+import Missing from "missing"
 def main() -> Void
 end
 

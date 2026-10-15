@@ -1,6 +1,6 @@
-import "library/models" as First
-import "library/../library/models" as Second
-import "library/outer" as Outer
+import First from "library/models"
+import Second from "library/../library/models"
+import Outer from "library/outer"
 def main() -> Void
   value: Second.Value = Outer.make(42)
   IO.inspect(First.read(value))

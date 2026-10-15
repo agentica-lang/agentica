@@ -25,7 +25,7 @@ Predefined step patterns (keyword is irrelevant for matching):
 A step program is a normal program: `main` builds a list of steps and passes it to `BDD.run`. Other files are imported from it.
 
 ```ruby
-import "std/bdd" as BDD
+import BDD from "std/bdd"
 
 def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return BDD.set(ctx, "count", JSON.from(args[0].to_i!))

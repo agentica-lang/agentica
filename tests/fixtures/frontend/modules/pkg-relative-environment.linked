@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-PATH 0:1:1-28:2:1 "AGENTICA_PATH roots must be absolute" - file="root.agc"
+ERROR CHECK-IMPORT-PATH 0:1:1-30:2:1 "AGENTICA_PATH roots must be absolute" - file="root.agc"

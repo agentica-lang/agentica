@@ -1,16 +1,16 @@
-program #3 0:1:1-48:5:1
+program #3 0:1:1-50:5:1
   module "root.agc"
-    declaration: function-decl #2 24:2:1-47:4:1 name="main"
-      result: type-ref #1 38:2:15-42:2:19 name="Void"
+    declaration: function-decl #2 26:2:1-49:4:1 name="main"
+      result: type-ref #1 40:2:15-44:2:19 name="Void"
   module "steps.agc"
-    declaration: function-decl #9 59:4:1-136:7:1 name="@2::main"
-      result: type-ref #2 73:4:15-77:4:19 name="Void"
-      body: expr-stmt #8 80:5:3-132:6:1
-        value: call #7 80:5:3-131:5:54 name="@3::run" piped=false
-          arg: list-lit #6 88:5:11-130:5:53
-            element: call #5 89:5:12-129:5:52 name="@3::step" piped=false
-              arg: literal #3 98:5:21-108:5:31 value=string:"it works"
-              arg: function-ref #4 110:5:33-128:5:51 name="@4::verify"
+    declaration: function-decl #9 63:4:1-140:7:1 name="@2::main"
+      result: type-ref #2 77:4:15-81:4:19 name="Void"
+      body: expr-stmt #8 84:5:3-136:6:1
+        value: call #7 84:5:3-135:5:54 name="@3::run" piped=false
+          arg: list-lit #6 92:5:11-134:5:53
+            element: call #5 93:5:12-133:5:52 name="@3::step" piped=false
+              arg: literal #3 102:5:21-112:5:31 value=string:"it works"
+              arg: function-ref #4 114:5:33-132:5:51 name="@4::verify"
   module "std/bdd.agc"
     declaration: struct-decl #11 266:6:1-371:13:1 name="@3::Settings"
       field: field-decl #1 284:7:3-297:8:1 name="base"
@@ -1500,26 +1500,26 @@ program #3 0:1:1-48:5:1
       body: return-stmt #1497 15710:458:3-15757:459:1
         value: literal #1496 15717:458:10-15756:458:49 value=string:"process: output exceeds 1048576 bytes"
   module "assertions.agc"
-    declaration: function-decl #21 61:4:8-280:8:1 name="@4::verify"
-      param: param #3 72:4:19-89:4:36 name="ctx"
-        type: type-ref #2 77:4:24-89:4:36 name="@3::Context"
-      param: param #6 91:4:38-109:4:56 name="args"
-        type: type-ref #5 97:4:44-109:4:56 name="List"
-          arg: type-ref #4 102:4:49-108:4:55 name="String"
-      result: type-ref #7 114:4:61-126:4:73 name="@3::Context"
-      body: binding #11 129:5:3-177:6:1 name="q"
-        value: call #10 133:5:7-176:5:50 name="@5::push" piped=false
-          arg: call #8 144:5:18-155:5:29 name="@5::new" piped=false
-          arg: literal #9 157:5:31-175:5:49 value=string:"imported handler"
-      body: return-stmt #20 179:6:3-276:7:1
-        value: call #19 186:6:10-275:6:99 name="@3::assert" piped=false
-          arg: name-ref #12 198:6:22-201:6:25 name="ctx"
-          arg: binary #17 203:6:27-254:6:78 op=equal op-span=233:6:57-235:6:59
-            left: call #15 203:6:27-232:6:56 name="Result.unwrap!" piped=false
-              arg: call #14 218:6:42-231:6:55 name="@5::peek" piped=false
-                arg: name-ref #13 229:6:53-230:6:54 name="q"
-            right: literal #16 236:6:60-254:6:78 value=string:"imported handler"
-          arg: literal #18 256:6:80-274:6:98 value=string:"imported handler"
+    declaration: function-decl #21 65:4:8-284:8:1 name="@4::verify"
+      param: param #3 76:4:19-93:4:36 name="ctx"
+        type: type-ref #2 81:4:24-93:4:36 name="@3::Context"
+      param: param #6 95:4:38-113:4:56 name="args"
+        type: type-ref #5 101:4:44-113:4:56 name="List"
+          arg: type-ref #4 106:4:49-112:4:55 name="String"
+      result: type-ref #7 118:4:61-130:4:73 name="@3::Context"
+      body: binding #11 133:5:3-181:6:1 name="q"
+        value: call #10 137:5:7-180:5:50 name="@5::push" piped=false
+          arg: call #8 148:5:18-159:5:29 name="@5::new" piped=false
+          arg: literal #9 161:5:31-179:5:49 value=string:"imported handler"
+      body: return-stmt #20 183:6:3-280:7:1
+        value: call #19 190:6:10-279:6:99 name="@3::assert" piped=false
+          arg: name-ref #12 202:6:22-205:6:25 name="ctx"
+          arg: binary #17 207:6:27-258:6:78 op=equal op-span=237:6:57-239:6:59
+            left: call #15 207:6:27-236:6:56 name="Result.unwrap!" piped=false
+              arg: call #14 222:6:42-235:6:55 name="@5::peek" piped=false
+                arg: name-ref #13 233:6:53-234:6:54 name="q"
+            right: literal #16 240:6:60-258:6:78 value=string:"imported handler"
+          arg: literal #18 260:6:80-278:6:98 value=string:"imported handler"
   module "std/queue.agc"
     declaration: struct-decl #3 239:6:8-314:10:1 name="@5::QueueState"
       field: field-decl #2 290:8:3-310:9:1 name="items" doc="The values, oldest first."

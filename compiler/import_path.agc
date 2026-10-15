@@ -1,10 +1,10 @@
 ## The import path rules of src/modules.rkt that need no file system: the module file name, the std/ and pkg/ path check, and the path helpers.
 
-import "ast" as Ast
-import "declarations" as Declarations
-import "diagnostic" as Diag
-import "link_failure" as Failure
-import "unicode" as Unicode
+import Ast from "ast"
+import Declarations from "declarations"
+import Diag from "diagnostic"
+import Failure from "link_failure"
+import Unicode from "unicode"
 
 ## The text after the last "/" of a path.
 export def last_part(text: String) -> String

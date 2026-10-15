@@ -1,4 +1,4 @@
-import "std/queue" as Queue
+import Queue from "std/queue"
 
 def main() -> Void
   Test.run([

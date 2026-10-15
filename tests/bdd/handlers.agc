@@ -1,4 +1,4 @@
-import "std/bdd" as BDD
+import BDD from "std/bdd"
 
 def save_number(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return BDD.set(ctx, "number", Result.unwrap!(JSON.parse(args[0])))

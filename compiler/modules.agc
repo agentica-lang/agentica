@@ -2,17 +2,17 @@
 ##
 ## The walk is a loop over an explicit stack of files that still have imports to read, so a long chain of imports uses no VM call depth. Files are met in the order Racket meets them (a file is read at its import, before the imports after it), so the first failure is the same, and so are the node ids: every file is parsed from the next free id of the file read before it (parse, Ast.next_free_id).
 
-import "ast" as Ast
-import "declarations" as Declarations
-import "diagnostic" as Diag
-import "import_path" as Paths
-import "lexer" as Lexer
-import "link_env" as Env
-import "link_failure" as Failure
-import "parser" as Parser
-import "resolve_import" as Resolve
-import "source" as Source
-import "suggest" as Suggest
+import Ast from "ast"
+import Declarations from "declarations"
+import Diag from "diagnostic"
+import Paths from "import_path"
+import Lexer from "lexer"
+import Env from "link_env"
+import Failure from "link_failure"
+import Parser from "parser"
+import Resolve from "resolve_import"
+import Source from "source"
+import Suggest from "suggest"
 
 ## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the exported name.
 export struct Named

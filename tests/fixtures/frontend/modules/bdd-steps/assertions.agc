@@ -1,5 +1,5 @@
-import "std/bdd" as Spec
-import "std/queue" as Queue
+import Spec from "std/bdd"
+import Queue from "std/queue"
 
 export def verify(ctx: Spec.Context, args: List[String]) -> Spec.Context
   q = Queue.push(Queue.new(), "imported handler")

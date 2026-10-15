@@ -1,16 +1,16 @@
 ## Expressions (src/checker.rkt: check-expression and the checks it calls). check_expression is the function that Cx.expression holds: every part of the checker reaches an expression through it. It counts the nesting (CHECK-TOO-DEEP), checks the node by its kind, records the type by node id, and refuses a Void value that is not a completion.
 
-import "ast" as Ast
-import "check_call" as Calls
-import "check_failure" as Failure
-import "check_help" as Help
-import "check_method" as Methods
-import "check_rules" as Rules
-import "check_state" as State
-import "check_stmt" as Statements
-import "check_types" as CheckTypes
-import "parse_base" as Base
-import "types" as T
+import Ast from "ast"
+import Calls from "check_call"
+import Failure from "check_failure"
+import Help from "check_help"
+import Methods from "check_method"
+import Rules from "check_rules"
+import State from "check_state"
+import Statements from "check_stmt"
+import CheckTypes from "check_types"
+import Base from "parse_base"
+import T from "types"
 
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
 struct Sides

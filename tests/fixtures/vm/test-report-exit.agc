@@ -1,4 +1,4 @@
-import "std/test/report" as Report
+import Report from "std/test/report"
 
 def at(line: Int) -> Report.Span
   return Report.Span(file: "/specs/x.feature", line: line, column: 3, end_column: 12)

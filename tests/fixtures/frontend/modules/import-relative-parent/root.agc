@@ -1,4 +1,4 @@
-import "app/inner" as Inner
+import Inner from "app/inner"
 def main() -> Void
   puts(Inner.read())
 end

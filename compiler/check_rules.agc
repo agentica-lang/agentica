@@ -1,16 +1,16 @@
 ## A call of a builtin (src/checker.rkt, check-builtin-call): the form that takes this many arguments, a block only where the last parameter is a function, then the rule of the builtin. The List, Map, Set, Task and Channel rules are in check_list.agc and check_collections.agc; the rest are here.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "builtins" as Builtins
-import "check_args" as Args
-import "check_collections" as Collections
-import "check_failure" as Failure
-import "check_list" as Lists
-import "check_state" as State
-import "check_types" as CheckTypes
-import "source" as Source
-import "types" as T
+import Ast from "ast"
+import Model from "builtin_model"
+import Builtins from "builtins"
+import Args from "check_args"
+import Collections from "check_collections"
+import Failure from "check_failure"
+import Lists from "check_list"
+import State from "check_state"
+import CheckTypes from "check_types"
+import Source from "source"
+import T from "types"
 
 ## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown when none.
 export def check_builtin_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type, entry: Model.Builtin) -> Result[State.Out]

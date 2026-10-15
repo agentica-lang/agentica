@@ -1,4 +1,4 @@
-import "a" as A
+import A from "a"
 
 enum Local[T]
   Wrap(A.Opt[T])

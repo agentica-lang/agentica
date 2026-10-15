@@ -134,7 +134,7 @@ puts(seen.size)            # 3
 - `pop` returning both the value and the rest waits for tuples (12.5). Until
   then, `peek` then `drop`.
 - `std/queue` stays, deprecated: `Queue` becomes a reserved name, so
-  `import "std/queue" as Queue` would fail with `CHECK-REDEFINED-NAME`. 8c
+  `import Queue from "std/queue"` would fail with `CHECK-REDEFINED-NAME`. 8c
   renames the documented alias to `StringQueue` in `README.md`,
   `examples/queue.agc`, `docs/grammar.md`, the programming skill's modules
   reference, `tests/modules-test.rkt` and `tests/stdlib-distribution-test.rkt`,

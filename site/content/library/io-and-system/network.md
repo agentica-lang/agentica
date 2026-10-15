@@ -161,7 +161,7 @@ end
 ## HTTP client
 
 HTTP is the `std/http` library, written in Agentica. Import it with
-`import "std/http" as HTTP`; a call to `HTTP.get` without the import fails
+`import HTTP from "std/http"`; a call to `HTTP.get` without the import fails
 with `CHECK-UNKNOWN-NAME` and a help that shows the import. It has a client
 (this section) and a server (the next one).
 
@@ -189,7 +189,7 @@ every number must be positive, `max_connections` at most 65536 and
 `max_body_bytes` at most 64 MiB. Calls wait in FIFO order for one of the `max_connections` slots. A call still in flight when `close_client` runs fails with `http: client is closed`.
 
 ```agentica {mode="check"}
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def main() -> Void
   defaults = HTTP.client_options()
@@ -216,7 +216,7 @@ so a request may not set them, nor `Transfer-Encoding` or `Connection`.
 A host in brackets, as in `http://[::1]:8080/`, must look like an IPv6 address (hex digits, `:` and `.`); any other bracketed host is an error result.
 
 ```agentica {mode="check"}
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def main() -> Void
   client = HTTP.client(HTTP.client_options()).unwrap!
@@ -240,7 +240,7 @@ HTTP.header_values(headers: List[Header], name: String) -> List[String]
 `header_values` finds every value of a header, ignoring case, in order.
 
 ```agentica
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def main() -> Void
   headers = [Header(name: "set-cookie", value: "a=1"), Header(name: "Set-Cookie", value: "b=2")]
@@ -268,7 +268,7 @@ HTTP.local_port(server: HttpServer) -> Int
 `listen` returns at once and serves in the background; `listen_tls` does the same over TLS with a PEM certificate and key. Port 0 picks a free port, which `local_port` returns. The `HttpRequest` has `method`, `target` (as sent, with the query), `path` (the target before `?`), `headers` (names in lowercase) and `body` (valid UTF-8). This program serves itself and fetches its own page:
 
 ```agentica
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"
@@ -308,7 +308,7 @@ HTTP.close_server(server: HttpServer) -> Void
 `close_server` stops accepting, closes every connection and cancels the running handlers and every task they started. Calling it again does nothing. `wait` returns `ok()` once the server is closed, so a program that only serves waits on it. When `main` returns, the server stops with the program. A server belongs to the task that called `HTTP.listen`: when that task ends, the server is closed and its port is free, so call `listen` in the task that keeps the server, such as `main`. Each connection belongs to the task that serves it, so a crash in a handler closes only its connection.
 
 ```agentica {mode="check"}
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   return ok(HttpResponse(status: 200, headers: [], body: "you asked for #{request.path}"))

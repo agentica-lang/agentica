@@ -938,7 +938,7 @@ How `Await[T]` reuses the enum machinery: no special case per site.
   its table of enums, so type annotations (`Await[Int]`), constructors,
   patterns, exhaustiveness and printing all take the user-enum paths, and the
   name is in the checker's reserved type names: a user `struct Await`,
-  `enum Await`, an enum type parameter `Await`, or `import "..." as Await` is
+  `enum Await`, an enum type parameter `Await`, or `import Await from "..."` is
   `CHECK-REDEFINED-NAME`, as for `Range` and `Channel`. The module linker leaves
   `Await` unmangled in every module and reads `Await.TimedOut` and
   `Await.Done(...)` as enum constructors.

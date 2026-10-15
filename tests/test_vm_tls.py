@@ -58,7 +58,7 @@ end
 """
 
 HTTPS_GOODBYE_PROGRAM = """\
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 struct Call
   pool: HttpClient

@@ -1,7 +1,7 @@
 ## Module doc.
 
-import "lib" as Lib
-import "std/queue" as Queue
+import Lib from "lib"
+import Queue from "std/queue"
 
 export enum Kind
   A

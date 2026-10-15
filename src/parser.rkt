@@ -242,7 +242,7 @@
       (expect-statement-end "a newline after the statement")
       (const-decl (token-lexeme name) type value exported? (span-from start)))
 
-    ;; The three import forms. `import "path" as Alias` is the old alias form, kept until 44a0-2.
+    ;; The two import forms. A string after `import` is the path-first form of earlier versions: the help shows the new one.
     ;; `from` and `as` are plain name tokens that this parser reads by their text, so a parameter
     ;; or a function called `from` or `as` still works.
     (define (parse-import)
@@ -262,13 +262,10 @@
          (expect 'NL "a newline after import")
          (import-decl (token-value path) #f names (span-from begin))]
         [else
-         (define path (expect 'string "an import path"))
-         (define as-token (expect 'name "as"))
-         (unless (equal? (token-lexeme as-token) "as")
-           (bail 'PARSE-UNEXPECTED-TOKEN "expected as" as-token))
-         (define alias (expect 'type-name "a module alias"))
-         (expect 'NL "a newline after import")
-         (import-decl (token-value path) (token-lexeme alias) '() (span-from begin))]))
+         (bail 'PARSE-UNEXPECTED-TOKEN
+               (format "expected a module alias or \"{\", found ~a" (describe (current)))
+               (current)
+               #:help (and (kind? 'string) "write import Alias from \"path\""))]))
 
     (define (expect-word word [help #f])
       (if (and (kind? 'name) (equal? (token-lexeme (current)) word))

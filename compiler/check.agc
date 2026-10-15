@@ -1,5 +1,5 @@
-import "link_env" as Env
-import "check_text" as CheckText
+import Env from "link_env"
+import CheckText from "check_text"
 
 # `agentica compiler/check.agc [flags] ROOT...` prints the text form of checking each root file (check_text.agc). The flags are those of link.agc: `--stdlib=DIR` (the default is stdlib), `--agentica-path=V`, `--xdg-data-home=V` and `--home=V`.
 def main() -> Void

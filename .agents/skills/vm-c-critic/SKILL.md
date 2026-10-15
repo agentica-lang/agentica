@@ -208,7 +208,7 @@ builds. Exit 124 means a timeout: retry once, then report it.
   `vm-sanitize-*` and `vm-gc-stress` targets.
 - Never run the full `make test`, full golden or vm-diff sweeps,
   `make vm-sanitize-test`, fuzzing or `make smoke`. Run localized tests, for
-  example `make test TESTS="tests/vm-stdout-test.rkt"`. CI covers the rest.
+  example `make test TESTS="tests/test_vm_stdout.py"`. CI covers the rest.
 - Put scratch programs under the job's tmp directory, not in the repo. Delete
   them at the end. Never `pkill -f`, and leave no background processes.
 - Never print secrets or the real environment. Use `env -i` or explicit

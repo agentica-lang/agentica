@@ -1,6 +1,6 @@
 ## What the linker reads from outside the program being linked: the environment variables that place pkg/ libraries, the std/ sources folder, and the builtin catalog with its name tables.
 
-import "builtins" as Builtins
+import Builtins from "builtins"
 
 ## The environment variables the pkg/ search reads (src/modules.rkt, library-roots). An unset variable is "".
 export struct Env

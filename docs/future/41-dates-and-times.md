@@ -80,9 +80,10 @@ Reserved names. Like `Await` (the builtin enum added by PR #217), the names
 `src/checker.rkt` takes every key of `builtin-records`. A user `struct`, `enum`,
 type parameter or import alias with one of these names is
 `CHECK-REDEFINED-NAME`. On the Racket front end, `enum Await[T]`, `import
-"std/binary" as Time` and a user `struct Header` each give that code today. The
-implementation PR marks this **Breaking:** in `CHANGELOG.md`. No migration path
-or compatibility workaround is added: the language has no external users yet.
+Time from "std/binary"` and a user `struct Header` each give that code today.
+The implementation PR marks this **Breaking:** in `CHANGELOG.md`. No migration
+path or compatibility workaround is added: the language has no external users
+yet.
 
 Construction. Builtin records can be constructed today: `Header(name: "a",
 value: "b")` checks. For dates that is wrong: `Date(year: 2026, month: 13, day:

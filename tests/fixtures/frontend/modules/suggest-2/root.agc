@@ -1,4 +1,4 @@
-import "module" as M
+import M from "module"
 def main() -> Void
   x: M.Publc = nil
 end

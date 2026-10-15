@@ -1,11 +1,11 @@
 ## The checking rules of the Map, Set, Task and Channel builtins (src/checker.rkt, check-builtin-call: task-spawn ... set-subset). A rule takes the call (State.Site) and returns the new state with the type of the call.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "check_args" as Args
-import "check_state" as State
-import "check_types" as CheckTypes
-import "types" as T
+import Ast from "ast"
+import Model from "builtin_model"
+import Args from "check_args"
+import State from "check_state"
+import CheckTypes from "check_types"
+import T from "types"
 
 ## Checks a call of a Task, Channel, Map or Set builtin by its rule. Any other rule is the caller's.
 export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]

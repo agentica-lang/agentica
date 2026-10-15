@@ -417,8 +417,8 @@
                    ("  text = JSON.encode(&double)" CHECK-NOT-ENCODABLE))])
       (check-equal? (check-code (string-append prefix (main-with (car entry)))) (cadr entry))))
   (test-case "a BDD or HTTP call without its import points to its std/ module"
-    (for ([entry '(("  BDD.run([])" #rx"import \"std/bdd\" as BDD")
-                   ("  c = HTTP.client_options()" #rx"import \"std/http\" as HTTP"))])
+    (for ([entry '(("  BDD.run([])" #rx"import BDD from \"std/bdd\"")
+                   ("  c = HTTP.client_options()" #rx"import HTTP from \"std/http\""))])
       (define problem (check-text (main-with (car entry))))
       (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-NAME)
       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)

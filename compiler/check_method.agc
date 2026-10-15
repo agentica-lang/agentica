@@ -1,13 +1,13 @@
 ## Methods and fields (src/checker.rkt: check-method, check-field-access, check-struct-field). A method call or a field access that is not a struct field names a builtin of the receiver's kind; it is checked as the call of that builtin with the receiver as first argument, and the resolution is recorded by node id for lowering.
 
-import "ast" as Ast
-import "check_call" as Calls
-import "check_help" as Help
-import "check_names" as Names
-import "check_state" as State
-import "check_types" as CheckTypes
-import "source" as Source
-import "types" as T
+import Ast from "ast"
+import Calls from "check_call"
+import Help from "check_help"
+import Names from "check_names"
+import State from "check_state"
+import CheckTypes from "check_types"
+import Source from "source"
+import T from "types"
 
 ## Checks target.name(args).
 export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]

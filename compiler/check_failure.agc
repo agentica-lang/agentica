@@ -1,7 +1,7 @@
 ## How the checker reports a failure: a diagnostic with the extra notes of src/diagnostic.rkt (expected, actual, callee, signature, labels) and the file it is in. A Result error is a String, so the failure travels packed (pack) and `try` stops at the first one, as in the parser; unpack reads it back.
 
-import "diagnostic" as Diag
-import "source" as Source
+import Diag from "diagnostic"
+import Source from "source"
 
 ## A note on a second span, such as "this is Int".
 export struct Label

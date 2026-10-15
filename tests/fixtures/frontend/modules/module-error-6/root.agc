@@ -1,4 +1,4 @@
-import "module" as Set
+import Set from "module"
 def main() -> Void
 end
 

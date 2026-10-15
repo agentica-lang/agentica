@@ -1,4 +1,4 @@
 struct Early
 end
 
-import "lib" as Lib
+import Lib from "lib"

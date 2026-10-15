@@ -1,4 +1,4 @@
-import "pkg/" as Q
+import Q from "pkg/"
 def main() -> Void
 end
 

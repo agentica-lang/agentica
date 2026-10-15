@@ -1,5 +1,5 @@
-import "std/queue" as Queue
-import "std/queue" as Again
+import Queue from "std/queue"
+import Again from "std/queue"
 def main() -> Void
   original = Queue.new()
   q: Again.QueueState = Queue.push(original, "")

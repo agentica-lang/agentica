@@ -1,13 +1,13 @@
 ## The state of the checker (src/checker.rkt has it as mutable variables inside `check`): what is fixed for the run (Cx), what changes while the tree is walked (St), and the small operations on them that every part of the checker uses. A check function takes Cx and St and returns the new St with its result (Out for an expression), or fails with a packed Problem (check_failure.agc), so `try` stops at the first diagnostic.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "builtins" as Builtins
-import "check_help" as Help
-import "check_failure" as Failure
-import "diagnostic" as Diag
-import "source" as Source
-import "types" as Types
+import Ast from "ast"
+import Model from "builtin_model"
+import Builtins from "builtins"
+import Help from "check_help"
+import Failure from "check_failure"
+import Diag from "diagnostic"
+import Source from "source"
+import Types from "types"
 
 ## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was introduced (a block cannot assign a name from outside it, so the level tells which side a name is on).
 export struct Binding

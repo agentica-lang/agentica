@@ -2,10 +2,10 @@
 ##
 ## Names are resolved in the order Racket resolves them (a node's own name first, then its parts in field order), so the first failure is the same. Nodes keep their ids and spans. The recursion follows the depth of the tree: about one VM call per level (rewrite_expr passes to rewrite_compound with a tail call), so trees up to about 9,900 levels fit in the limit of 10,000 calls (the parser's nesting limit bounds the calls it makes, not the depth of the tree; see ast.agc).
 
-import "ast" as Ast
-import "declarations" as Declarations
-import "resolve" as Resolve
-import "source" as Source
+import Ast from "ast"
+import Declarations from "declarations"
+import Resolve from "resolve"
+import Source from "source"
 
 ## The declarations of a file in the linked program: its functions, structs and enums without the export, imports left out.
 export def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]

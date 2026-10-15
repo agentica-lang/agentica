@@ -17,7 +17,7 @@ SERVER_NODE_PEER = FIXTURES / "http-server-peer.js"
 CERTS = FIXTURES / "tls"
 
 PRELUDE = """\
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 struct Fetch
   pool: HttpClient
@@ -141,7 +141,7 @@ end
 """
 
 SERVER_PROGRAM = """\
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.path == "/big"

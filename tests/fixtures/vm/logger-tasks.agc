@@ -1,4 +1,4 @@
-import "std/logger" as Logger
+import Logger from "std/logger"
 
 def show(event: LogEvent) -> Void
   IO.warn("task #{event.task}: #{event.message} #{event.fields}")

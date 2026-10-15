@@ -1,150 +1,150 @@
-program #142 0:1:1-827:45:1
+program #142 0:1:1-829:45:1
   module "root.agc"
-    declaration: struct-decl #10 21:3:1-112:8:1 name="Local"
-      field: field-decl #2 36:4:3-51:5:1 name="item"
-        type: type-ref #1 42:4:9-50:4:17 name="@2::Item"
-      field: field-decl #5 53:5:3-75:6:1 name="items"
-        type: type-ref #4 60:5:10-74:5:24 name="List"
-          arg: type-ref #3 65:5:15-73:5:23 name="@2::Item"
-      field: field-decl #9 77:6:3-108:7:1 name="by_name"
-        type: type-ref #8 86:6:12-107:6:33 name="Map"
-          arg: type-ref #6 90:6:16-96:6:22 name="String"
-          arg: type-ref #7 98:6:24-106:6:32 name="@2::Pick"
-    declaration: function-decl #141 113:9:1-826:44:1 name="main"
-      result: type-ref #11 127:9:15-131:9:19 name="Void"
-      body: binding #15 134:10:3-156:11:1 name="item"
-        value: construct #14 141:10:10-155:10:24 type="@2::Item"
-          arg: named-arg #13 150:10:19-154:10:23 name="n"
-            value: literal #12 153:10:22-154:10:23 value=int:1
-      body: binding #28 158:11:3-228:12:1 name="l"
-        value: construct #27 162:11:7-227:11:72 type="Local"
-          arg: named-arg #17 168:11:13-178:11:23 name="item"
-            value: name-ref #16 174:11:19-178:11:23 name="item"
-          arg: named-arg #20 180:11:25-193:11:38 name="items"
-            value: list-lit #19 187:11:32-193:11:38
-              element: name-ref #18 188:11:33-192:11:37 name="item"
-          arg: named-arg #26 195:11:40-226:11:71 name="by_name"
-            value: map-lit #25 204:11:49-226:11:71
-              entry: map-entry #24 205:11:50-225:11:70
-                key: literal #21 205:11:50-208:11:53 value=string:"a"
-                value: enum-constructor #23 210:11:55-225:11:70 enum="@2::Pick" variant="One"
-                  arg: literal #22 223:11:68-224:11:69 value=int:2
-      body: binding #30 230:12:3-245:13:1 name="f"
-        value: function-ref #29 234:12:7-244:12:17 name="@2::twice"
-      body: binding #32 247:13:3-257:14:1 name="total"
-        value: literal #31 255:13:11-256:13:12 value=int:0
-      body: for-stmt #58 259:14:3-399:23:1 variable="x"
-        iterable: list-lit #36 268:14:12-277:14:21
-          element: literal #33 269:14:13-270:14:14 value=int:1
-          element: literal #34 272:14:16-273:14:17 value=int:2
-          element: literal #35 275:14:19-276:14:20 value=int:3
-        body: if-stmt #57 282:15:5-393:22:1
-          branch: if-branch #50 282:15:5-336:17:1
-            condition: binary #44 285:15:8-307:15:30 op=and op-span=291:15:14-294:15:17
-              left: binary #39 285:15:8-290:15:13 op=greater op-span=287:15:10-288:15:11
-                left: name-ref #37 285:15:8-286:15:9 name="x"
-                right: literal #38 289:15:12-290:15:13 value=int:1
-              right: unary #43 295:15:18-307:15:30 op=not op-span=295:15:18-298:15:21
-                operand: binary #42 300:15:23-306:15:29 op=equal op-span=302:15:25-304:15:27
-                  left: name-ref #40 300:15:23-301:15:24 name="x"
-                  right: literal #41 305:15:28-306:15:29 value=int:2
-            body: binding #49 314:16:7-336:17:1 name="total"
-              value: binary #48 314:16:7-336:17:1 op=plus op-span=320:16:13-322:16:15
-                left: name-ref #45 314:16:7-319:16:12 name="total"
-                right: call #47 323:16:16-335:16:28 name="@2::twice" piped=false
-                  arg: name-ref #46 333:16:26-334:16:27 name="x"
-          branch: if-branch #55 340:17:5-364:19:1
-            condition: binary #53 346:17:11-352:17:17 op=equal op-span=348:17:13-350:17:15
-              left: name-ref #51 346:17:11-347:17:12 name="x"
-              right: literal #52 351:17:16-352:17:17 value=int:1
-            body: loop-control #54 359:18:7-363:18:11 kind=next
+    declaration: struct-decl #10 23:3:1-114:8:1 name="Local"
+      field: field-decl #2 38:4:3-53:5:1 name="item"
+        type: type-ref #1 44:4:9-52:4:17 name="@2::Item"
+      field: field-decl #5 55:5:3-77:6:1 name="items"
+        type: type-ref #4 62:5:10-76:5:24 name="List"
+          arg: type-ref #3 67:5:15-75:5:23 name="@2::Item"
+      field: field-decl #9 79:6:3-110:7:1 name="by_name"
+        type: type-ref #8 88:6:12-109:6:33 name="Map"
+          arg: type-ref #6 92:6:16-98:6:22 name="String"
+          arg: type-ref #7 100:6:24-108:6:32 name="@2::Pick"
+    declaration: function-decl #141 115:9:1-828:44:1 name="main"
+      result: type-ref #11 129:9:15-133:9:19 name="Void"
+      body: binding #15 136:10:3-158:11:1 name="item"
+        value: construct #14 143:10:10-157:10:24 type="@2::Item"
+          arg: named-arg #13 152:10:19-156:10:23 name="n"
+            value: literal #12 155:10:22-156:10:23 value=int:1
+      body: binding #28 160:11:3-230:12:1 name="l"
+        value: construct #27 164:11:7-229:11:72 type="Local"
+          arg: named-arg #17 170:11:13-180:11:23 name="item"
+            value: name-ref #16 176:11:19-180:11:23 name="item"
+          arg: named-arg #20 182:11:25-195:11:38 name="items"
+            value: list-lit #19 189:11:32-195:11:38
+              element: name-ref #18 190:11:33-194:11:37 name="item"
+          arg: named-arg #26 197:11:40-228:11:71 name="by_name"
+            value: map-lit #25 206:11:49-228:11:71
+              entry: map-entry #24 207:11:50-227:11:70
+                key: literal #21 207:11:50-210:11:53 value=string:"a"
+                value: enum-constructor #23 212:11:55-227:11:70 enum="@2::Pick" variant="One"
+                  arg: literal #22 225:11:68-226:11:69 value=int:2
+      body: binding #30 232:12:3-247:13:1 name="f"
+        value: function-ref #29 236:12:7-246:12:17 name="@2::twice"
+      body: binding #32 249:13:3-259:14:1 name="total"
+        value: literal #31 257:13:11-258:13:12 value=int:0
+      body: for-stmt #58 261:14:3-401:23:1 variable="x"
+        iterable: list-lit #36 270:14:12-279:14:21
+          element: literal #33 271:14:13-272:14:14 value=int:1
+          element: literal #34 274:14:16-275:14:17 value=int:2
+          element: literal #35 277:14:19-278:14:20 value=int:3
+        body: if-stmt #57 284:15:5-395:22:1
+          branch: if-branch #50 284:15:5-338:17:1
+            condition: binary #44 287:15:8-309:15:30 op=and op-span=293:15:14-296:15:17
+              left: binary #39 287:15:8-292:15:13 op=greater op-span=289:15:10-290:15:11
+                left: name-ref #37 287:15:8-288:15:9 name="x"
+                right: literal #38 291:15:12-292:15:13 value=int:1
+              right: unary #43 297:15:18-309:15:30 op=not op-span=297:15:18-300:15:21
+                operand: binary #42 302:15:23-308:15:29 op=equal op-span=304:15:25-306:15:27
+                  left: name-ref #40 302:15:23-303:15:24 name="x"
+                  right: literal #41 307:15:28-308:15:29 value=int:2
+            body: binding #49 316:16:7-338:17:1 name="total"
+              value: binary #48 316:16:7-338:17:1 op=plus op-span=322:16:13-324:16:15
+                left: name-ref #45 316:16:7-321:16:12 name="total"
+                right: call #47 325:16:16-337:16:28 name="@2::twice" piped=false
+                  arg: name-ref #46 335:16:26-336:16:27 name="x"
+          branch: if-branch #55 342:17:5-366:19:1
+            condition: binary #53 348:17:11-354:17:17 op=equal op-span=350:17:13-352:17:15
+              left: name-ref #51 348:17:11-349:17:12 name="x"
+              right: literal #52 353:17:16-354:17:17 value=int:1
+            body: loop-control #54 361:18:7-365:18:11 kind=next
           else:
-            body: loop-control #56 379:20:7-384:20:12 kind=break
-      body: while-stmt #68 401:23:3-477:26:1
-        condition: binary #61 407:23:9-418:23:20 op=less op-span=413:23:15-414:23:16
-          left: name-ref #59 407:23:9-412:23:14 name="total"
-          right: literal #60 415:23:17-418:23:20 value=int:100
-        body: binding #67 423:24:5-471:25:1 name="total"
-          value: call #66 459:24:41-470:24:52 name="@2::twice" piped=true
-            arg: binary #65 431:24:13-455:24:37 op=plus op-span=437:24:19-438:24:20
-              left: name-ref #62 431:24:13-436:24:18 name="total"
-              right: call #64 439:24:21-455:24:37 name="@2::twice" piped=false
-                arg: name-ref #63 449:24:31-454:24:36 name="total"
-      body: binding #79 479:26:3-523:27:1 name="r"
-        value: method-call #78 483:26:7-522:26:46 name="map"
-          target: list-lit #71 483:26:7-489:26:13
-            element: literal #69 484:26:8-485:26:9 value=int:1
-            element: literal #70 487:26:11-488:26:12 value=int:2
-          arg: block-lit #77 494:26:18-522:26:46
-            param: block-param #73 498:26:22-504:26:28 name="v"
-              type: type-ref #72 501:26:25-504:26:28 name="Int"
-            body: expr-stmt #76 506:26:30-518:26:42
-              value: call #75 506:26:30-518:26:42 name="@2::twice" piped=false
-                arg: name-ref #74 516:26:40-517:26:41 name="v"
-      body: binding #84 525:27:3-567:28:1 name="s"
-        value: interpolation #83 529:27:7-566:27:44
+            body: loop-control #56 381:20:7-386:20:12 kind=break
+      body: while-stmt #68 403:23:3-479:26:1
+        condition: binary #61 409:23:9-420:23:20 op=less op-span=415:23:15-416:23:16
+          left: name-ref #59 409:23:9-414:23:14 name="total"
+          right: literal #60 417:23:17-420:23:20 value=int:100
+        body: binding #67 425:24:5-473:25:1 name="total"
+          value: call #66 461:24:41-472:24:52 name="@2::twice" piped=true
+            arg: binary #65 433:24:13-457:24:37 op=plus op-span=439:24:19-440:24:20
+              left: name-ref #62 433:24:13-438:24:18 name="total"
+              right: call #64 441:24:21-457:24:37 name="@2::twice" piped=false
+                arg: name-ref #63 451:24:31-456:24:36 name="total"
+      body: binding #79 481:26:3-525:27:1 name="r"
+        value: method-call #78 485:26:7-524:26:46 name="map"
+          target: list-lit #71 485:26:7-491:26:13
+            element: literal #69 486:26:8-487:26:9 value=int:1
+            element: literal #70 489:26:11-490:26:12 value=int:2
+          arg: block-lit #77 496:26:18-524:26:46
+            param: block-param #73 500:26:22-506:26:28 name="v"
+              type: type-ref #72 503:26:25-506:26:28 name="Int"
+            body: expr-stmt #76 508:26:30-520:26:42
+              value: call #75 508:26:30-520:26:42 name="@2::twice" piped=false
+                arg: name-ref #74 518:26:40-519:26:41 name="v"
+      body: binding #84 527:27:3-569:28:1 name="s"
+        value: interpolation #83 531:27:7-568:27:44
           part: text "total "
-          part: name-ref #80 538:27:16-543:27:21 name="total"
+          part: name-ref #80 540:27:16-545:27:21 name="total"
           part: text " "
-          part: call #82 547:27:25-559:27:37 name="@2::twice" piped=false
-            arg: literal #81 557:27:35-558:27:36 value=int:2
+          part: call #82 549:27:25-561:27:37 name="@2::twice" piped=false
+            arg: literal #81 559:27:35-560:27:36 value=int:2
           part: text " text"
-      body: binding #90 569:28:3-586:29:1 name="t"
-        value: field-access #89 573:28:7-585:28:19 name="n"
-          target: index-access #88 573:28:7-583:28:17
-            target: field-access #86 573:28:7-580:28:14 name="items"
-              target: name-ref #85 573:28:7-574:28:8 name="l"
-            index: literal #87 581:28:15-582:28:16 value=int:0
-      body: binding #95 588:29:3-611:30:1 name="u"
-        value: method-call #94 592:29:7-610:29:25 name="get"
-          target: field-access #92 592:29:7-601:29:16 name="by_name"
-            target: name-ref #91 592:29:7-593:29:8 name="l"
-          arg: literal #93 606:29:21-609:29:24 value=string:"a"
-      body: case-stmt #110 613:30:3-699:34:1
-        value: index-access #99 618:30:8-632:30:22
-          target: field-access #97 618:30:8-627:30:17 name="by_name"
-            target: name-ref #96 618:30:8-619:30:9 name="l"
-          index: literal #98 628:30:18-631:30:21 value=string:"a"
-        arm: case-arm #104 637:31:5-664:32:1
-          pattern: variant-pattern #100 637:31:5-652:31:20 enum="@2::Pick" variant="One" bindings=["k"]
-          body: expr-stmt #103 656:31:24-664:32:1
-            value: call #102 656:31:24-663:31:31 name="puts" piped=false
-              arg: name-ref #101 661:31:29-662:31:30 name="k"
-        arm: case-arm #109 668:32:5-693:33:1
-          pattern: variant-pattern #105 668:32:5-681:32:18 enum="@2::Pick" variant="Zero" bindings=[]
-          body: expr-stmt #108 685:32:22-693:33:1
-            value: call #107 685:32:22-692:32:29 name="puts" piped=false
-              arg: literal #106 690:32:27-691:32:28 value=int:0
-      body: case-stmt #123 701:34:3-757:38:1
-        value: name-ref #111 706:34:8-711:34:13 name="total"
-        arm: case-arm #116 716:35:5-733:36:1
-          pattern: literal-pattern #112 716:35:5-717:35:6 value=int:1
-          body: expr-stmt #115 721:35:10-733:36:1
-            value: call #114 721:35:10-732:35:21 name="puts" piped=false
-              arg: literal #113 726:35:15-731:35:20 value=string:"one"
-        arm: case-arm #122 737:36:5-751:37:1
-          pattern: wildcard-pattern #117 737:36:5-738:36:6
-          body: expr-stmt #121 742:36:10-751:37:1
-            value: call #120 742:36:10-750:36:18 name="puts" piped=false
-              arg: unary #119 747:36:15-749:36:17 op=minus op-span=747:36:15-748:36:16
-                operand: literal #118 748:36:16-749:36:17 value=int:2
-      body: binding #127 759:38:3-773:39:1 name="v"
-        value: invoke #126 763:38:7-772:38:16
-          target: name-ref #124 763:38:7-764:38:8 name="f"
-          arg: literal #125 770:38:14-771:38:15 value=int:4
-      body: binding #130 775:39:3-785:40:1 name="w"
-        value: try-expr #129 779:39:7-784:39:12
-          operand: name-ref #128 783:39:11-784:39:12 name="u"
-      body: binding #134 787:40:3-799:41:1 name="x"
-        value: binary #133 792:40:8-797:40:13 op=dot-dot-dot op-span=793:40:9-796:40:12
-          left: literal #131 792:40:8-793:40:9 value=int:1
-          right: literal #132 796:40:12-797:40:13 value=int:3
-      body: binding #137 801:41:3-812:42:1 name="y"
-        value: unary #136 805:41:7-811:41:13 op=minus op-span=805:41:7-806:41:8
-          operand: name-ref #135 806:41:8-811:41:13 name="total"
-      body: expr-stmt #140 814:42:3-822:43:1
-        value: call #139 814:42:3-821:42:10 name="puts" piped=false
-          arg: name-ref #138 819:42:8-820:42:9 name="s"
+      body: binding #90 571:28:3-588:29:1 name="t"
+        value: field-access #89 575:28:7-587:28:19 name="n"
+          target: index-access #88 575:28:7-585:28:17
+            target: field-access #86 575:28:7-582:28:14 name="items"
+              target: name-ref #85 575:28:7-576:28:8 name="l"
+            index: literal #87 583:28:15-584:28:16 value=int:0
+      body: binding #95 590:29:3-613:30:1 name="u"
+        value: method-call #94 594:29:7-612:29:25 name="get"
+          target: field-access #92 594:29:7-603:29:16 name="by_name"
+            target: name-ref #91 594:29:7-595:29:8 name="l"
+          arg: literal #93 608:29:21-611:29:24 value=string:"a"
+      body: case-stmt #110 615:30:3-701:34:1
+        value: index-access #99 620:30:8-634:30:22
+          target: field-access #97 620:30:8-629:30:17 name="by_name"
+            target: name-ref #96 620:30:8-621:30:9 name="l"
+          index: literal #98 630:30:18-633:30:21 value=string:"a"
+        arm: case-arm #104 639:31:5-666:32:1
+          pattern: variant-pattern #100 639:31:5-654:31:20 enum="@2::Pick" variant="One" bindings=["k"]
+          body: expr-stmt #103 658:31:24-666:32:1
+            value: call #102 658:31:24-665:31:31 name="puts" piped=false
+              arg: name-ref #101 663:31:29-664:31:30 name="k"
+        arm: case-arm #109 670:32:5-695:33:1
+          pattern: variant-pattern #105 670:32:5-683:32:18 enum="@2::Pick" variant="Zero" bindings=[]
+          body: expr-stmt #108 687:32:22-695:33:1
+            value: call #107 687:32:22-694:32:29 name="puts" piped=false
+              arg: literal #106 692:32:27-693:32:28 value=int:0
+      body: case-stmt #123 703:34:3-759:38:1
+        value: name-ref #111 708:34:8-713:34:13 name="total"
+        arm: case-arm #116 718:35:5-735:36:1
+          pattern: literal-pattern #112 718:35:5-719:35:6 value=int:1
+          body: expr-stmt #115 723:35:10-735:36:1
+            value: call #114 723:35:10-734:35:21 name="puts" piped=false
+              arg: literal #113 728:35:15-733:35:20 value=string:"one"
+        arm: case-arm #122 739:36:5-753:37:1
+          pattern: wildcard-pattern #117 739:36:5-740:36:6
+          body: expr-stmt #121 744:36:10-753:37:1
+            value: call #120 744:36:10-752:36:18 name="puts" piped=false
+              arg: unary #119 749:36:15-751:36:17 op=minus op-span=749:36:15-750:36:16
+                operand: literal #118 750:36:16-751:36:17 value=int:2
+      body: binding #127 761:38:3-775:39:1 name="v"
+        value: invoke #126 765:38:7-774:38:16
+          target: name-ref #124 765:38:7-766:38:8 name="f"
+          arg: literal #125 772:38:14-773:38:15 value=int:4
+      body: binding #130 777:39:3-787:40:1 name="w"
+        value: try-expr #129 781:39:7-786:39:12
+          operand: name-ref #128 785:39:11-786:39:12 name="u"
+      body: binding #134 789:40:3-801:41:1 name="x"
+        value: binary #133 794:40:8-799:40:13 op=dot-dot-dot op-span=795:40:9-798:40:12
+          left: literal #131 794:40:8-795:40:9 value=int:1
+          right: literal #132 798:40:12-799:40:13 value=int:3
+      body: binding #137 803:41:3-814:42:1 name="y"
+        value: unary #136 807:41:7-813:41:13 op=minus op-span=807:41:7-808:41:8
+          operand: name-ref #135 808:41:8-813:41:13 name="total"
+      body: expr-stmt #140 816:42:3-824:43:1
+        value: call #139 816:42:3-823:42:10 name="puts" piped=false
+          arg: name-ref #138 821:42:8-822:42:9 name="s"
   module "lib.agc"
     declaration: struct-decl #2 7:1:8-32:4:1 name="@2::Item"
       field: field-decl #1 21:2:3-28:3:1 name="n"

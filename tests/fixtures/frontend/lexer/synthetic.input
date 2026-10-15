@@ -2,7 +2,7 @@
 ##
 ## Totals are in cents.
 
-import "std/queue" as Queue
+import Queue from "std/queue"
 
 ## One line of an order.
 export struct Line

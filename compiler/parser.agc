@@ -2,10 +2,10 @@
 ##
 ## It is a recursive descent parser. Every function takes the context (Env, parse_base.agc), a position and the next free node id, and returns a Result: the node, the next position and id, or the packed diagnostic. The grammar functions mirror the ones of the Racket parser; the differences are listed where they are made: precedence climbing for the binary operators, ids assigned at construction, and the nesting limit.
 
-import "ast" as Ast
-import "diagnostic" as Diag
-import "parse_base" as Base
-import "token" as Tokens
+import Ast from "ast"
+import Diag from "diagnostic"
+import Base from "parse_base"
+import Tokens from "token"
 
 # A declaration with the next position and the next free node id.
 struct DeclAt
@@ -1477,7 +1477,7 @@ def top_level_help(kind: String) -> String
   return "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import, export and constants (NAME = value)"
 end
 
-# The three import forms. `import "path" as Alias` is the old alias form, kept until 44a0-2. `from` and `as` are plain name tokens read by their text, so a parameter or a function called `from` or `as` still works (src/parser.rkt, parse-import).
+# The two import forms. A string after `import` is the path-first form of earlier versions: the help shows the new one. `from` and `as` are plain name tokens read by their text, so a parameter or a function called `from` or `as` still works (src/parser.rkt, parse-import).
 def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   kind = Base.kind_at(e, pos + 1)
   if kind == "type-name"
@@ -1485,16 +1485,11 @@ def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   elsif kind == "left-brace"
     return parse_import_names(e, pos, ids)
   end
-  after_path = try Base.expect(e, pos + 1, "string", "an import path", false)
-  after_as = try Base.expect(e, after_path, "name", "as", false)
-  if e.tokens[after_path].lexeme != "as"
-    return error(Base.unexpected(e, after_path, "expected as"))
+  message = "expected a module alias or \"{\", found " + Base.describe(e.tokens[pos + 1])
+  if kind == "string"
+    return error(Base.unexpected_help(e, pos + 1, message, "write import Alias from \"path\""))
   end
-  after_alias = try Base.expect(e, after_as, "type-name", "a module alias", false)
-  stop = try Base.expect(e, after_alias, "NL", "a newline after import", false)
-  alias = Ast.Optional.Present(e.tokens[after_as].lexeme)
-  node = Ast.Decl.Import(Ast.ImportDecl(id: ids, path: Base.token_text(e.tokens[pos + 1]), alias: alias, names: [], span: Base.span_from(e, pos, stop)))
-  return decl_at(node, stop, ids)
+  return error(Base.unexpected(e, pos + 1, message))
 end
 
 # import Alias from "path"

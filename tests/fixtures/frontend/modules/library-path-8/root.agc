@@ -1,4 +1,4 @@
-import "std/" as Q
+import Q from "std/"
 def main() -> Void
 end
 

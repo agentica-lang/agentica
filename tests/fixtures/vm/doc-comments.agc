@@ -2,7 +2,7 @@
 ##
 ## This program documents everything it declares, and the VM runs it as if the comments were not there.
 
-import "std/queue" as Queue
+import Queue from "std/queue"
 
 ## A point on a grid.
 export struct Point

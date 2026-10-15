@@ -1,105 +1,105 @@
-program #104 0:1:1-664:28:1
-  declaration: import-decl #0 0:1:1-25:2:1 path="geometry" alias="Geo"
-  declaration: struct-decl #5 26:3:1-68:7:1 name="User"
-    field: field-decl #2 40:4:3-53:5:1 name="name"
-      type: type-ref #1 46:4:9-52:4:15 name="String"
-    field: field-decl #4 55:5:3-64:6:1 name="age"
-      type: type-ref #3 60:5:8-63:5:11 name="Int"
-  declaration: function-decl #103 69:8:1-664:28:1 name="main"
-    result: type-ref #6 83:8:15-87:8:19 name="Void"
-    body: binding #12 90:9:3-123:10:1 name="ana"
-      value: construct #11 96:9:9-122:9:35 type="User"
-        arg: named-arg #8 101:9:14-112:9:25 name="name"
-          value: literal #7 107:9:20-112:9:25 value=string:"Ana"
-        arg: named-arg #10 114:9:27-121:9:34 name="age"
-          value: literal #9 119:9:32-121:9:34 value=int:30
-    body: binding #17 125:10:3-151:11:1 name="older"
-      value: struct-update #16 133:10:11-150:10:28
-        target: name-ref #13 133:10:11-136:10:14 name="ana"
-        arg: named-arg #15 142:10:20-149:10:27 name="age"
-          value: literal #14 147:10:25-149:10:27 value=int:31
-    body: binding #24 153:11:3-192:12:1 name="both"
-      value: struct-update #23 160:11:10-191:11:41
-        target: name-ref #18 160:11:10-163:11:13 name="ana"
-        arg: named-arg #20 169:11:19-180:11:30 name="name"
-          value: literal #19 175:11:25-180:11:30 value=string:"Bea"
-        arg: named-arg #22 182:11:32-189:11:39 name="age"
-          value: literal #21 187:11:37-189:11:39 value=int:32
-    body: binding #33 194:12:3-249:13:1 name="nested"
-      value: struct-update #32 203:12:12-248:12:57
-        target: name-ref #25 203:12:12-204:12:13 name="a"
-        arg: named-arg #31 210:12:19-247:12:56 name="address"
-          value: struct-update #30 219:12:28-247:12:56
-            target: field-access #27 219:12:28-228:12:37 name="address"
-              target: name-ref #26 219:12:28-220:12:29 name="a"
-            arg: named-arg #29 234:12:43-246:12:55 name="city"
-              value: literal #28 240:12:49-246:12:55 value=string:"Lima"
-    body: binding #42 251:13:3-300:14:1 name="chained"
-      value: field-access #41 261:13:13-299:13:51 name="name"
-        target: struct-update #40 261:13:13-294:13:46
-          target: struct-update #37 261:13:13-277:13:29
-            target: name-ref #34 261:13:13-264:13:16 name="ana"
-            arg: named-arg #36 270:13:22-276:13:28 name="age"
-              value: literal #35 275:13:27-276:13:28 value=int:1
-          arg: named-arg #39 283:13:35-293:13:45 name="name"
-            value: literal #38 289:13:41-293:13:45 value=string:"Cy"
-    body: binding #47 302:14:3-334:15:1 name="from_call"
-      value: struct-update #46 314:14:15-333:14:34
-        target: call #43 314:14:15-320:14:21 name="make" piped=false
-        arg: named-arg #45 326:14:27-332:14:33 name="age"
-          value: literal #44 331:14:32-332:14:33 value=int:2
-    body: binding #52 336:15:3-374:16:1 name="from_module"
-      value: struct-update #51 350:15:17-373:15:40
-        target: call #48 350:15:17-362:15:29 name="Geo.origin" piped=false
-        arg: named-arg #50 368:15:35-372:15:39 name="x"
-          value: literal #49 371:15:38-372:15:39 value=int:1
-    body: binding #55 376:16:3-398:17:1 name="field_read"
-      value: field-access #54 389:16:16-397:16:24 name="with"
-        target: name-ref #53 389:16:16-392:16:19 name="ana"
-    body: binding #58 400:17:3-426:18:1 name="module_call"
-      value: call #57 414:17:17-425:17:28 name="Geo.with" piped=false
-        arg: literal #56 423:17:26-424:17:27 value=int:1
-    body: binding #69 428:18:3-484:19:1 name="mapped"
-      value: struct-update #68 437:18:12-483:18:58
-        target: name-ref #59 437:18:12-440:18:15 name="ana"
-        arg: named-arg #67 446:18:21-482:18:57 name="tags"
-          value: method-call #66 452:18:27-482:18:57 name="map"
-            target: name-ref #60 452:18:27-456:18:31 name="tags"
-            arg: block-lit #65 461:18:36-482:18:57
-              param: block-param #61 465:18:40-466:18:41 name="t"
-              body: expr-stmt #64 468:18:43-478:18:53
-                value: method-call #63 468:18:43-478:18:53 name="upcase"
-                  target: name-ref #62 468:18:43-469:18:44 name="t"
-    body: binding #76 486:19:3-519:20:1 name="text"
-      value: interpolation #75 493:19:10-518:19:35
-        part: field-access #74 496:19:13-516:19:33 name="age"
-          target: struct-update #73 496:19:13-512:19:29
-            target: name-ref #70 496:19:13-499:19:16 name="ana"
-            arg: named-arg #72 505:19:22-511:19:28 name="age"
-              value: literal #71 510:19:27-511:19:28 value=int:3
-    body: binding #85 521:20:3-555:21:1 name="indexed"
-      value: index-access #84 531:20:13-554:20:36
-        target: struct-update #82 531:20:13-551:20:33
-          target: name-ref #77 531:20:13-534:20:16 name="ana"
-          arg: named-arg #81 540:20:22-550:20:32 name="xs"
-            value: list-lit #80 544:20:26-550:20:32
-              element: literal #78 545:20:27-546:20:28 value=int:1
-              element: literal #79 548:20:30-549:20:31 value=int:2
-        index: literal #83 552:20:34-553:20:35 value=int:0
-    body: binding #92 557:21:3-595:22:1 name="piped"
-      value: call #91 572:21:18-594:21:40 name="keep" piped=true
-        arg: name-ref #86 565:21:11-568:21:14 name="ana"
-        arg: struct-update #90 577:21:23-593:21:39
-          target: name-ref #87 577:21:23-580:21:26 name="ana"
-          arg: named-arg #89 586:21:32-592:21:38 name="age"
-            value: literal #88 591:21:37-592:21:38 value=int:4
-    body: binding #99 597:22:3-646:26:1 name="wide"
-      value: struct-update #98 604:22:10-645:25:4
-        target: name-ref #93 604:22:10-607:22:13 name="ana"
-        arg: named-arg #95 618:23:5-629:23:16 name="name"
-          value: literal #94 624:23:11-629:23:16 value=string:"Dee"
-        arg: named-arg #97 635:24:5-641:24:11 name="age"
-          value: literal #96 640:24:10-641:24:11 value=int:5
-    body: expr-stmt #102 648:26:3-660:27:1
-      value: call #101 648:26:3-659:26:14 name="puts" piped=false
-        arg: name-ref #100 653:26:8-658:26:13 name="older"
+program #104 0:1:1-666:28:1
+  declaration: import-decl #0 0:1:1-27:2:1 path="geometry" alias="Geo"
+  declaration: struct-decl #5 28:3:1-70:7:1 name="User"
+    field: field-decl #2 42:4:3-55:5:1 name="name"
+      type: type-ref #1 48:4:9-54:4:15 name="String"
+    field: field-decl #4 57:5:3-66:6:1 name="age"
+      type: type-ref #3 62:5:8-65:5:11 name="Int"
+  declaration: function-decl #103 71:8:1-666:28:1 name="main"
+    result: type-ref #6 85:8:15-89:8:19 name="Void"
+    body: binding #12 92:9:3-125:10:1 name="ana"
+      value: construct #11 98:9:9-124:9:35 type="User"
+        arg: named-arg #8 103:9:14-114:9:25 name="name"
+          value: literal #7 109:9:20-114:9:25 value=string:"Ana"
+        arg: named-arg #10 116:9:27-123:9:34 name="age"
+          value: literal #9 121:9:32-123:9:34 value=int:30
+    body: binding #17 127:10:3-153:11:1 name="older"
+      value: struct-update #16 135:10:11-152:10:28
+        target: name-ref #13 135:10:11-138:10:14 name="ana"
+        arg: named-arg #15 144:10:20-151:10:27 name="age"
+          value: literal #14 149:10:25-151:10:27 value=int:31
+    body: binding #24 155:11:3-194:12:1 name="both"
+      value: struct-update #23 162:11:10-193:11:41
+        target: name-ref #18 162:11:10-165:11:13 name="ana"
+        arg: named-arg #20 171:11:19-182:11:30 name="name"
+          value: literal #19 177:11:25-182:11:30 value=string:"Bea"
+        arg: named-arg #22 184:11:32-191:11:39 name="age"
+          value: literal #21 189:11:37-191:11:39 value=int:32
+    body: binding #33 196:12:3-251:13:1 name="nested"
+      value: struct-update #32 205:12:12-250:12:57
+        target: name-ref #25 205:12:12-206:12:13 name="a"
+        arg: named-arg #31 212:12:19-249:12:56 name="address"
+          value: struct-update #30 221:12:28-249:12:56
+            target: field-access #27 221:12:28-230:12:37 name="address"
+              target: name-ref #26 221:12:28-222:12:29 name="a"
+            arg: named-arg #29 236:12:43-248:12:55 name="city"
+              value: literal #28 242:12:49-248:12:55 value=string:"Lima"
+    body: binding #42 253:13:3-302:14:1 name="chained"
+      value: field-access #41 263:13:13-301:13:51 name="name"
+        target: struct-update #40 263:13:13-296:13:46
+          target: struct-update #37 263:13:13-279:13:29
+            target: name-ref #34 263:13:13-266:13:16 name="ana"
+            arg: named-arg #36 272:13:22-278:13:28 name="age"
+              value: literal #35 277:13:27-278:13:28 value=int:1
+          arg: named-arg #39 285:13:35-295:13:45 name="name"
+            value: literal #38 291:13:41-295:13:45 value=string:"Cy"
+    body: binding #47 304:14:3-336:15:1 name="from_call"
+      value: struct-update #46 316:14:15-335:14:34
+        target: call #43 316:14:15-322:14:21 name="make" piped=false
+        arg: named-arg #45 328:14:27-334:14:33 name="age"
+          value: literal #44 333:14:32-334:14:33 value=int:2
+    body: binding #52 338:15:3-376:16:1 name="from_module"
+      value: struct-update #51 352:15:17-375:15:40
+        target: call #48 352:15:17-364:15:29 name="Geo.origin" piped=false
+        arg: named-arg #50 370:15:35-374:15:39 name="x"
+          value: literal #49 373:15:38-374:15:39 value=int:1
+    body: binding #55 378:16:3-400:17:1 name="field_read"
+      value: field-access #54 391:16:16-399:16:24 name="with"
+        target: name-ref #53 391:16:16-394:16:19 name="ana"
+    body: binding #58 402:17:3-428:18:1 name="module_call"
+      value: call #57 416:17:17-427:17:28 name="Geo.with" piped=false
+        arg: literal #56 425:17:26-426:17:27 value=int:1
+    body: binding #69 430:18:3-486:19:1 name="mapped"
+      value: struct-update #68 439:18:12-485:18:58
+        target: name-ref #59 439:18:12-442:18:15 name="ana"
+        arg: named-arg #67 448:18:21-484:18:57 name="tags"
+          value: method-call #66 454:18:27-484:18:57 name="map"
+            target: name-ref #60 454:18:27-458:18:31 name="tags"
+            arg: block-lit #65 463:18:36-484:18:57
+              param: block-param #61 467:18:40-468:18:41 name="t"
+              body: expr-stmt #64 470:18:43-480:18:53
+                value: method-call #63 470:18:43-480:18:53 name="upcase"
+                  target: name-ref #62 470:18:43-471:18:44 name="t"
+    body: binding #76 488:19:3-521:20:1 name="text"
+      value: interpolation #75 495:19:10-520:19:35
+        part: field-access #74 498:19:13-518:19:33 name="age"
+          target: struct-update #73 498:19:13-514:19:29
+            target: name-ref #70 498:19:13-501:19:16 name="ana"
+            arg: named-arg #72 507:19:22-513:19:28 name="age"
+              value: literal #71 512:19:27-513:19:28 value=int:3
+    body: binding #85 523:20:3-557:21:1 name="indexed"
+      value: index-access #84 533:20:13-556:20:36
+        target: struct-update #82 533:20:13-553:20:33
+          target: name-ref #77 533:20:13-536:20:16 name="ana"
+          arg: named-arg #81 542:20:22-552:20:32 name="xs"
+            value: list-lit #80 546:20:26-552:20:32
+              element: literal #78 547:20:27-548:20:28 value=int:1
+              element: literal #79 550:20:30-551:20:31 value=int:2
+        index: literal #83 554:20:34-555:20:35 value=int:0
+    body: binding #92 559:21:3-597:22:1 name="piped"
+      value: call #91 574:21:18-596:21:40 name="keep" piped=true
+        arg: name-ref #86 567:21:11-570:21:14 name="ana"
+        arg: struct-update #90 579:21:23-595:21:39
+          target: name-ref #87 579:21:23-582:21:26 name="ana"
+          arg: named-arg #89 588:21:32-594:21:38 name="age"
+            value: literal #88 593:21:37-594:21:38 value=int:4
+    body: binding #99 599:22:3-648:26:1 name="wide"
+      value: struct-update #98 606:22:10-647:25:4
+        target: name-ref #93 606:22:10-609:22:13 name="ana"
+        arg: named-arg #95 620:23:5-631:23:16 name="name"
+          value: literal #94 626:23:11-631:23:16 value=string:"Dee"
+        arg: named-arg #97 637:24:5-643:24:11 name="age"
+          value: literal #96 642:24:10-643:24:11 value=int:5
+    body: expr-stmt #102 650:26:3-662:27:1
+      value: call #101 650:26:3-661:26:14 name="puts" piped=false
+        arg: name-ref #100 655:26:8-660:26:13 name="older"

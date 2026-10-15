@@ -87,7 +87,7 @@ agentica test specs/ --steps steps.agc
 ```
 
 ```agentica {mode="check"}
-import "std/bdd" as BDD
+import BDD from "std/bdd"
 
 def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return BDD.set(ctx, "count", JSON.from(String.to_int!(args[0])))
@@ -140,7 +140,7 @@ and `{int}` captures as strings, in order. A block works too, and it can use
 the variables around it:
 
 ```agentica {mode="check"}
-import "std/bdd" as BDD
+import BDD from "std/bdd"
 
 def main() -> Void
   answer = "42"
@@ -184,7 +184,7 @@ BDD.table(ctx: BDD.Context) -> List[List[String]]
 Read the Doc String or the Data Table under the current step.
 
 ```agentica {mode="check"}
-import "std/bdd" as BDD
+import BDD from "std/bdd"
 
 def check_rows(ctx: BDD.Context, args: List[String]) -> BDD.Context
   rows = BDD.table(ctx)
@@ -223,7 +223,7 @@ These do what the built-in steps do, so your own steps can combine them.
 on.
 
 ```agentica {mode="check"}
-import "std/bdd" as BDD
+import BDD from "std/bdd"
 
 def ask(ctx: BDD.Context, args: List[String]) -> BDD.Context
   started = BDD.given_program(ctx, "../greet.agc")

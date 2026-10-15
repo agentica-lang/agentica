@@ -1,11 +1,11 @@
 ## The text form of a link, for tests. See link.agc.
 
-import "import_path" as Paths
-import "link_env" as Env
-import "link_failure" as Failure
-import "linker" as Linker
-import "parse_text" as ParseText
-import "text" as Text
+import Paths from "import_path"
+import Env from "link_env"
+import Failure from "link_failure"
+import Linker from "linker"
+import ParseText from "parse_text"
+import Text from "text"
 
 ## The text form of linking the file at path: the linked program, or the ERROR line of the first failure. The first line is `program #id span`, the root's module doc as ` module-doc="..."`. Each file that declares something follows as `module "path"`, with its declarations (without export, names linked) one level deeper, in the node text form of parse_text with ids that start at 0 inside the file. The path is relative to the folder of the root file, or absolute outside it, or std/NAME.agc. A failure is the lexer's ERROR line with ` file="path"` added. tests/frontend-modules-common.rkt prints the same text from the Racket program.
 export def link_text(path: String, settings: Env.Settings) -> String

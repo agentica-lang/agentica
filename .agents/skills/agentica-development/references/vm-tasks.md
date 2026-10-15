@@ -160,7 +160,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   250 ms next to CPU, sort and concat tasks, and must not with
   `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only switch that leaves
   stdout and stderr on the blocking `FILE` fallback, so
-  `tests/vm-stdout-test.rkt` can test that path on Linux) and
+  `tests/test_vm_stdout.py` can test that path on Linux) and
   `AGENTICA_VM_TEST_NO_TURN_COST=1` (a test-only switch that skips turn
   costs, `docs/vm/10-io-scheduler.md` §10.2.1). A task reading a
   `FileHandle` in a loop must let `main` close it, and the run must end.

@@ -1,4 +1,4 @@
-import "geometry" as Geo
+import Geo from "geometry"
 
 struct User
   name: String

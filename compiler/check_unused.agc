@@ -1,9 +1,9 @@
 ## CHECK-UNUSED-VALUE (src/checker.rkt: check-unused-value!): a value that is dropped, and could only have been used for itself, is an error.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "check_state" as State
-import "types" as T
+import Ast from "ast"
+import Model from "builtin_model"
+import State from "check_state"
+import T from "types"
 
 ## CHECK-UNUSED-VALUE when a value that is dropped could only have been used for itself: a pure builtin, a to_s on a data value, a .with. Anything else, and any Void value, is fine.
 export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type: T.Type) -> Result[Bool]
