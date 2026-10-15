@@ -29,7 +29,7 @@ end
 ## The builtin that method name of that kind stands for, "self", or "" when there is none: an alias first (size, to_i,
 ## push), then the builtin of the kind's module whose first parameter has that kind.
 export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
-  alias = cx.help.aliases.get(kind + "." + name)
+  alias = cx.help.aliases.get("#{kind}.#{name}")
   if alias.ok?
     return alias.unwrap!
   end
@@ -40,7 +40,7 @@ end
 export def method_names(cx: State.Cx, kind: String) -> List[String]
   names: List[String] = []
   seen: Set[String] = Set.new([])
-  prefix = kind + "."
+  prefix = "#{kind}."
   for key in cx.help.aliases.keys
     if key.starts_with?(prefix)
       names = names.push(key.slice(prefix.length, key.length - prefix.length))
@@ -48,7 +48,7 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
   end
   module = cx.help.modules.get(kind)
   if module.ok?
-    names = names.concat(module_methods(cx, kind, module.unwrap! + "."))
+    names = names.concat(module_methods(cx, kind, "#{module.unwrap!}."))
   end
   unique: List[String] = []
   for name in names
@@ -70,7 +70,7 @@ export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
       return suffix
     end
   end
-  prefix = kind + "."
+  prefix = "#{kind}."
   for key in cx.help.aliases.keys.sort
     if key.starts_with?(prefix) and cx.help.aliases[key] == name
       return key.slice(prefix.length, key.length - prefix.length)
@@ -81,7 +81,7 @@ end
 
 ## The help for a method name another language has, or "".
 export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> String
-  direct = cx.help.kind_methods.get(kind + "." + name)
+  direct = cx.help.kind_methods.get("#{kind}.#{name}")
   if direct.ok?
     return direct.unwrap!
   end
@@ -101,7 +101,7 @@ def catalog_method(cx: State.Cx, kind: String, name: String) -> String
   if !module.ok?
     return ""
   end
-  entry = cx.catalog.entries.get(module.unwrap! + "." + name)
+  entry = cx.catalog.entries.get("#{module.unwrap!}.#{name}")
   if entry.ok? and entry.unwrap!.parameters.size > 0 and T.tag(entry.unwrap!.parameters[0].type) == kind
     return entry.unwrap!.name
   end
@@ -124,7 +124,7 @@ end
 
 # True when a String has the method, or a foreign String method has help.
 def string_method?(cx: State.Cx, name: String) -> Bool
-  return resolve_method(cx, "String", name) != "" or cx.help.kind_methods.has_key?("String." + name)
+  return resolve_method(cx, "String", name) != "" or cx.help.kind_methods.has_key?("String.#{name}")
 end
 
 # A method of a String that a Result does not have: unwrap the Result first.
@@ -132,7 +132,7 @@ def result_help(cx: State.Cx, name: String) -> String
   string_help = foreign_method_help(cx, "String", name)
   text = "this is a Result; unwrap it first with r.unwrap! (use gets! to read a line without a Result)"
   if string_help != ""
-    return text + ", then: " + string_help
+    return "#{text}, then: #{string_help}"
   end
   return text
 end
@@ -145,7 +145,7 @@ def renamed_help(cx: State.Cx, kind: String, name: String) -> String
   end
   for candidate in candidates.unwrap!
     if resolve_method(cx, kind, candidate) != ""
-      return "use ." + candidate
+      return "use .#{candidate}"
     end
   end
   return ""

@@ -42,5 +42,5 @@ export def unpack_failure(text: String) -> Failure
 end
 
 def in_file(file: String, packed: String) -> String
-  return file.length.to_s + "\n" + file + packed
+  return "#{file.length}\n#{file}#{packed}"
 end

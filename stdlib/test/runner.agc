@@ -308,7 +308,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
     "seed": JSON.from(config.seed),
   }
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)
-  sent = Process.channel_send(p, JSON.encode(JSON.object(fields)) + "\n", Child.left(deadline))
+  sent = Process.channel_send(p, "#{JSON.encode(JSON.object(fields))}\n", Child.left(deadline))
   if not sent.ok?
     run = Run(failed_at: 0, verdict: Report.Verdict.Fail(send_failure(p, sent.message, deadline, item.steps[0].span)))
   end
@@ -316,7 +316,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
   i = 0
   while i < count and run.failed_at == count
     step = item.steps[i]
-    sent = Process.channel_send(p, step_line(i, found[i], patterns, step) + "\n", Child.left(deadline))
+    sent = Process.channel_send(p, "#{step_line(i, found[i], patterns, step)}\n", Child.left(deadline))
     answer = StepEnd(verdict: Report.Verdict.Pass, asserts: 0)
     if sent.ok?
       answer = await_step(p, i, deadline, step.span, step.kind == "Then")

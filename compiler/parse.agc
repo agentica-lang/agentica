@@ -16,7 +16,7 @@ def main() -> Void
       continuing = true
       next
     end
-    puts("== " + path)
+    puts("== #{path}")
     case SourceFile.read(path, 10000)
       SourceFile.Read.Text(text) ->
         printed = ParseText.print_from(text, first_id)
@@ -25,7 +25,7 @@ def main() -> Void
           first_id = printed.next_id
         end
       SourceFile.Read.Invalid(at) -> puts(Text.diagnostic_line(SourceFile.invalid_utf8(at)))
-      SourceFile.Read.Unreadable(message) -> puts("!! " + message)
+      SourceFile.Read.Unreadable(message) -> puts("!! #{message}")
     end
   end
 end

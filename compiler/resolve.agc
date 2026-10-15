@@ -115,7 +115,7 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
     Ast.Optional.Present(text) -> help = Failure.hint(text)
     Ast.Optional.Absent -> help = Diag.Help.NoHelp
   end
-  return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"" + name + "\"", help)
+  return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"#{name}\"", help)
 end
 
 export def identity(cx: Context, name: String) -> String
@@ -143,7 +143,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   elsif cx.settings.catalog.std_only.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, span))
   elsif function_wanted?(want)
-    return ok(alias + "." + member)
+    return ok("#{alias}.#{member}")
   end
   return error(
     Failure.fail_at(
@@ -164,20 +164,11 @@ end
 
 def std_only_failure(cx: Context, alias: String, member: String, span: Source.Span) -> String
   wrapper = cx.settings.catalog.std_only[alias]
-  help = (
-    alias +
-    " is internal to " +
-    wrapper.std_path +
-    "; use import " +
-    wrapper.alias +
-    " from \"" +
-    wrapper.std_path +
-    "\""
-  )
+  help = "#{alias} is internal to #{wrapper.std_path}; use import #{wrapper.alias} from \"#{wrapper.std_path}\""
   return Failure.fail_at(
     site(cx, span),
     "CHECK-UNKNOWN-NAME",
-    "unknown function \"" + alias + "." + member + "\"",
+    "unknown function \"#{alias}.#{member}\"",
     Failure.hint(help),
   )
 end
@@ -191,15 +182,11 @@ def alias_help(alias: String, hint: Bool) -> String
     return "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"
   elsif hint
     return (
-      "\"" +
-      alias +
-      "\" is neither an import alias nor an enum of this file; import a module with import " +
-      alias +
-      " from \"path\", or declare enum " +
-      alias
+      "\"#{alias}\" is neither an import alias nor an enum of this file; " +
+      "import a module with import #{alias} from \"path\", or declare enum #{alias}"
     )
   end
-  return "import a module with import " + alias + " from \"path\""
+  return "import a module with import #{alias} from \"path\""
 end
 
 # A name bound by import {Name} from "path": the linked name of the export, if it is of the kind wanted. The import
@@ -216,16 +203,10 @@ end
 
 # Mod.NAME on a constant: the import that reads it, with the path as the alias import wrote it, and the other way.
 def constant_help(cx: Context, alias: String, member: String) -> String
+  path = cx.me.paths[alias]
   return (
-    "write import {" +
-    member +
-    "} from \"" +
-    cx.me.paths[alias] +
-    "\", then use " +
-    member +
-    "\nor let the module export a function and call it as " +
-    alias +
-    ".name()"
+    "write import {#{member}} from \"#{path}\", then use #{member}\n" +
+    "or let the module export a function and call it as #{alias}.name()"
   )
 end
 

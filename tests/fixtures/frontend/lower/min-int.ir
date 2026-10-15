@@ -1,0 +1,44 @@
+program 0:1:1-8:1 entry=0 globals=0
+source 0 "min-int.agc" chars=142
+fn0 "main" params=0 captures=0 slots=5 entry @ 0:1:1-8:1
+    step @ 0:2:3-3:1
+    step @ 0:2:7-2:27
+    step @ 0:2:8-2:27
+    const r0 int:-9223372036854775808 @ 0:2:7-2:27
+    step @ 0:3:3-4:1
+    step @ 0:3:7-3:26
+    const r1 int:9223372036854775807 @ 0:3:7-3:26
+    step @ 0:4:3-5:1
+    step @ 0:4:7-4:27
+    step @ 0:4:8-4:27
+    const r3 int:9223372036854775807 @ 0:4:8-4:27
+    neg-i r2 r3 @ 0:4:7-4:8
+    step @ 0:5:3-6:1
+    step @ 0:5:3-5:25
+    step @ 0:5:8-5:24
+    step @ 0:5:11-5:12
+    move r3 r0 @ 0:5:11-5:12
+    to-text r3 r3 @ 0:5:8-5:24
+    const r4 " " @ 0:5:8-5:24
+    concat r3 r3 r4 @ 0:5:8-5:24
+    step @ 0:5:16-5:17
+    move r4 r1 @ 0:5:16-5:17
+    to-text r4 r4 @ 0:5:8-5:24
+    concat r3 r3 r4 @ 0:5:8-5:24
+    const r4 " " @ 0:5:8-5:24
+    concat r3 r3 r4 @ 0:5:8-5:24
+    step @ 0:5:21-5:22
+    move r4 r2 @ 0:5:21-5:22
+    to-text r4 r4 @ 0:5:8-5:24
+    concat r3 r3 r4 @ 0:5:8-5:24
+    call-builtin r3 "puts" 1 @ 0:5:3-5:25 0:5:8-5:24
+    step @ 0:6:3-7:1
+    step @ 0:6:3-6:14
+    step @ 0:6:8-6:13
+    step @ 0:6:8-6:9
+    step @ 0:6:12-6:13
+    const r4 int:1 @ 0:6:12-6:13
+    add-i r3 r0 r4 @ 0:6:10-6:11
+    call-builtin r3 "puts" 1 @ 0:6:3-6:14 0:6:8-6:13
+    const r3 void @ 0:1:1-8:1
+    return r3 @ 0:1:1-8:1

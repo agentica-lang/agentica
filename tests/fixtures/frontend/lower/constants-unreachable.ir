@@ -1,0 +1,26 @@
+program 0:1:1-10:1 entry=2 globals=1
+source 0 "constants-unreachable.agc" chars=119
+fn0 "never" params=0 captures=0 slots=3 @ 0:3:1-6:1
+    step @ 0:4:3-5:1
+    step @ 0:4:10-4:18
+    step @ 0:4:10-4:15
+    global r1 g0 @ 0:4:10-4:15
+    step @ 0:4:16-4:17
+    const r2 int:0 @ 0:4:16-4:17
+    list-get r0 r1 r2 @ 0:4:16-4:17
+    return r0 @ 0:4:3-5:1
+    const r0 void @ 0:3:1-6:1
+    return r0 @ 0:3:1-6:1
+fn1 "main" params=0 captures=0 slots=1 @ 0:7:1-10:1
+    step @ 0:8:3-9:1
+    step @ 0:8:3-8:35
+    step @ 0:8:8-8:34
+    const r0 "main does not call never" @ 0:8:8-8:34
+    call-builtin r0 "puts" 1 @ 0:8:3-8:35 0:8:8-8:34
+    const r0 void @ 0:7:1-10:1
+    return r0 @ 0:7:1-10:1
+fn2 "<start>" params=0 captures=0 slots=1 entry @ 0:1:1-10:1
+    step @ 0:1:1-10:1
+    tail-call r0 fn1 @ 0:1:1-10:1
+    const r0 void @ 0:1:1-10:1
+    return r0 @ 0:1:1-10:1

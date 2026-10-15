@@ -4,10 +4,14 @@ import Tokens from "token"
 import Unicode from "unicode"
 
 # An open bracket (`(`, `[`, `{`), an interpolation (`#`) or a block (`kw`), and
-# where it opened.
+# where it opened. `inside` is the stack index of the innermost `#` frame at or
+# below this one (-1 if none), fixed when the frame is pushed. It keeps the
+# per-line "am I inside an interpolation" check O(1): scanning the stack for
+# it on every line break made a deeply nested file quadratic.
 struct Frame
   kind: String
   start: Source.Position
+  inside: Int
 end
 
 # One piece of a string literal: from the opening quote (or the `}` that ends
@@ -126,13 +130,13 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
             end
             tokens = tokens.push(piece_token(input, piece, index, line, line_start))
             if piece.opens
-              delimiters = delimiters.push(Frame(kind: "#", start: piece.start))
+              delimiters = open_frame(delimiters, "#", piece.start)
             end
             index = piece.next
         end
       CharClass.Opening ->
         opening = scan_opening(input, index, line, line_start)
-        delimiters = delimiters.push(Frame(kind: opening.lexeme, start: opening.span.start))
+        delimiters = open_frame(delimiters, opening.lexeme, opening.span.start)
         tokens = tokens.push(opening)
         index = opening.span.stop.offset
       CharClass.Closing ->
@@ -168,7 +172,7 @@ def new_input(text: String) -> Input
     block_openers: Set.new(["def", "struct", "enum", "if", "while", "for", "do"]),
     operators: operator_table(),
     classes: char_classes(),
-    name_codes: code_set(letters + "0123456789_"),
+    name_codes: code_set("#{letters}0123456789_"),
     number_codes: code_set("0123456789_"),
     line_ends: code_set("\n\r"),
     string_stops: code_set("\"#\\\n\r")
@@ -187,7 +191,7 @@ def finish(
   if statement_level?(delimiters) and !ends_with_newline?(tokens)
     closed = closed.push(token(input.text, "NL", Tokens.Value.NoValue, here, here))
   end
-  opening = innermost(delimiters, false)
+  opening = innermost_bracket(delimiters)
   if opening >= 0
     return Diag.Outcome.Failed(unclosed(delimiters[opening], here))
   end
@@ -209,7 +213,7 @@ def after_newline(
       Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp),
     )
   end
-  inside = innermost(delimiters, true)
+  inside = innermost_interpolation(delimiters)
   if inside >= 0
     return Diag.Outcome.Failed(unterminated(delimiters[inside].start, start))
   end
@@ -269,7 +273,7 @@ end
 # still counts as a statement break there but not inside brackets.
 def track_block(openers: Set[String], delimiters: List[Frame], kind: String, start: Source.Position) -> List[Frame]
   if openers.include?(kind)
-    return delimiters.push(Frame(kind: "kw", start: start))
+    return open_frame(delimiters, "kw", start)
   elsif kind == "end" and delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "kw"
     return pop(delimiters)
   end
@@ -393,7 +397,7 @@ def bad_escape(input: Input, index: Int, line: Int, line_start: Int) -> Diag.Dia
   end
   return Diag.fail(
     "LEX-INVALID-ESCAPE",
-    "unsupported escape \\" + input.text.slice(index + 1, 1),
+    "unsupported escape \\#{input.text.slice(index + 1, 1)}",
     span(escape_start, stop),
     Diag.Help.NoHelp,
   )
@@ -471,7 +475,7 @@ def scan_closing(
       help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
     end
     return Diag.Outcome.Failed(
-      Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help),
+      Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched #{lexeme} delimiter", span(start, stop), help),
     )
   end
   return Diag.Outcome.Done(
@@ -533,20 +537,36 @@ def statement_level?(delimiters: List[Frame]) -> Bool
   return delimiters.size == 0 or delimiters[delimiters.size - 1].kind == "kw"
 end
 
-def innermost(delimiters: List[Frame], wanted_string: Bool) -> Int
+# The stack index of the innermost `#` frame, or -1. O(1): the top frame
+# already knows it.
+def innermost_interpolation(delimiters: List[Frame]) -> Int
+  if delimiters.size == 0
+    return -1
+  end
+  return delimiters[delimiters.size - 1].inside
+end
+
+# The stack index of the innermost frame that is not a block, or -1. Walks the
+# stack, so only `finish` calls it, once per text.
+def innermost_bracket(delimiters: List[Frame]) -> Int
   index = delimiters.size - 1
   while index >= 0
-    interpolation = delimiters[index].kind == "#"
-    if wanted_string
-      if interpolation
-        return index
-      end
-    elsif delimiters[index].kind != "kw"
+    if delimiters[index].kind != "kw"
       return index
     end
     index -= 1
   end
   return -1
+end
+
+# Pushes a frame. The new frame is its own innermost `#` frame when it is one,
+# otherwise it inherits the one below.
+def open_frame(delimiters: List[Frame], kind: String, start: Source.Position) -> List[Frame]
+  inside = innermost_interpolation(delimiters)
+  if kind == "#"
+    inside = delimiters.size
+  end
+  return delimiters.push(Frame(kind: kind, start: start, inside: inside))
 end
 
 def pop(delimiters: List[Frame]) -> List[Frame]
@@ -561,12 +581,12 @@ def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
   if frame.kind == "{"
     help = Diag.Help.Hint(
       (
-        "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no " +
-        "braces and end with \"end\""
+        "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: " +
+        "blocks have no braces and end with \"end\""
       ),
     )
   end
-  return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed " + frame.kind + " delimiter", span(frame.start, here), help)
+  return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed #{frame.kind} delimiter", span(frame.start, here), help)
 end
 
 def code_set(characters: String) -> Set[Int]
@@ -793,9 +813,9 @@ def unexpected_character(
   start: Source.Position,
   stop: Source.Position,
 ) -> Diag.Diagnostic
-  message = "unexpected character " + Unicode.written(code)
+  message = "unexpected character #{Unicode.written(code)}"
   if Unicode.graphic?(code)
-    message = "unexpected character \"" + character + "\""
+    message = "unexpected character \"#{character}\""
   end
   help = Diag.Help.NoHelp
   if code == 59
