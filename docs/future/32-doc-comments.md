@@ -223,7 +223,7 @@ end
   hand.
 - **Builtin docs:** move the builtin catalog descriptions to doc comments, once
   more builtins become `std/` wrappers.
-- **Editors:** hover text in an editor, once a language server is built
+- **Editors:** hover text in an editor, if a language server is built
   ([§43](43-language-server.md)).
 - **Rejected for now:**
   - An Elixir-style `@doc` attribute. It needs attribute syntax and multi-line

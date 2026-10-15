@@ -344,10 +344,10 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
 
 ### 39.11 Decided against
 
-- **LSP, out of this phase.** A language server needs a long-lived process,
+- **LSP, not in this phase.** A language server needs a long-lived process,
   incremental checking and an editor protocol. Agents call commands in a shell;
-  JSON on stdout is enough. The LSP is planned later as its own item, see
-  [§43](43-language-server.md).
+  JSON on stdout is enough. A language server is a separate item, see
+  [§43](43-language-server.md) (not scheduled).
 - **Rename and refactor commands.** Agents edit files well; what they lack is
   the list of places to edit, which `refs` gives.
 - **Editor integration, a daemon, a cache.** See §39.8.
