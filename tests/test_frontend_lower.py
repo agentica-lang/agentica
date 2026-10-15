@@ -10,21 +10,11 @@ import re
 
 from tests.agentica_test import ROOT, run_vm, slow
 from tests.frontend_cases import lower_deep_cases, lower_generated_program
-from tests.frontend_support import FROZEN, HERMETIC_ENVIRONMENT, StageTestCase, load_corpus, load_json, write_files
+from tests.frontend_support import (
+    FROZEN, HERMETIC_ENVIRONMENT, StageTestCase, fixture_roots, load_corpus, load_json, write_files)
 from tests.test_frontend_check import direct_files
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "lower"
-
-
-def fixture_roots():
-    """{fixture name: path of its program relative to the repository}: NAME.agc, or NAME/root.agc for a folder."""
-    roots = {}
-    for path in sorted(FIXTURES.iterdir()):
-        if path.is_dir():
-            roots[path.name] = "tests/fixtures/frontend/lower/%s/root.agc" % path.name
-        elif path.suffix == ".agc":
-            roots[path.stem] = "tests/fixtures/frontend/lower/" + path.name
-    return roots
 
 
 def golden_text():
@@ -51,10 +41,10 @@ class LowerFrozenTest(StageTestCase):
         self.assert_manifest(outputs, manifest, files)
 
     def test_every_fixture_has_a_golden_and_no_golden_is_left_over(self):
-        self.fixture_goldens(FIXTURES, list(fixture_roots()), ".ir")
+        self.fixture_goldens(FIXTURES, list(fixture_roots(FIXTURES)), ".ir")
 
     def test_the_lowering_matches_the_goldens_of_the_fixtures(self):
-        roots = fixture_roots()
+        roots = fixture_roots(FIXTURES)
         goldens = self.fixture_goldens(FIXTURES, list(roots), ".ir")
         outputs = self.run_sections(list(roots.values()), "--stdlib=%s" % (ROOT / "stdlib"), cwd=ROOT)
         self.assert_goldens({name: outputs[path] for name, path in roots.items()}, goldens, "lowering fixtures")

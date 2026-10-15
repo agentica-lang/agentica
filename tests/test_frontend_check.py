@@ -11,7 +11,7 @@ import time
 
 from tests.agentica_test import ROOT, slow
 from tests.frontend_cases import check_deep_cases, check_generated_program
-from tests.frontend_support import FROZEN, StageTestCase, load_corpus, load_json, write_files
+from tests.frontend_support import FROZEN, StageTestCase, fixture_roots, load_corpus, load_json, write_files
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "check"
 
@@ -37,26 +37,16 @@ class CheckFrozenTest(StageTestCase):
         write_files(directory, files)
         return self.run_sections(sorted(files), "--stdlib=%s" % self.stdlib, cwd=directory)
 
-    def fixture_roots(self):
-        """{fixture name: path of its program relative to the repository}: NAME.agc, or NAME/root.agc for a folder."""
-        roots = {}
-        for path in sorted(FIXTURES.iterdir()):
-            if path.is_dir():
-                roots[path.name] = "tests/fixtures/frontend/check/%s/root.agc" % path.name
-            elif path.suffix == ".agc":
-                roots[path.stem] = "tests/fixtures/frontend/check/" + path.name
-        return roots
-
     def golden_texts(self):
-        roots = self.fixture_roots()
+        roots = fixture_roots(FIXTURES)
         goldens = self.fixture_goldens(FIXTURES, list(roots), ".checked")
         return {name: path.read_bytes().decode("utf-8") for name, path in goldens.items()}
 
     def test_every_fixture_has_a_golden_and_no_golden_is_left_over(self):
-        self.fixture_goldens(FIXTURES, list(self.fixture_roots()), ".checked")
+        self.fixture_goldens(FIXTURES, list(fixture_roots(FIXTURES)), ".checked")
 
     def test_the_checker_matches_the_goldens_of_the_fixtures_types_resolutions_and_diagnostics(self):
-        roots = self.fixture_roots()
+        roots = fixture_roots(FIXTURES)
         goldens = self.fixture_goldens(FIXTURES, list(roots), ".checked")
         outputs = self.run_sections(list(roots.values()), "--stdlib=%s" % (ROOT / "stdlib"), cwd=ROOT)
         self.assert_goldens({name: outputs[path] for name, path in roots.items()}, goldens, "checker fixtures")

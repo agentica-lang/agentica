@@ -241,6 +241,19 @@ class StageTestCase(GoldenTestCase):
         outputs = self.run_sections(sorted(paths.values()), *before, flags=flags, cwd=directory, timeout=timeout)
         return {key: outputs[path] for key, path in paths.items()}
 
+def fixture_roots(folder):
+    """{fixture name: path of its program relative to the repository} for a fixture folder of the repository: NAME.agc, or
+    NAME/root.agc for a folder."""
+    roots = {}
+    for path in sorted(Path(folder).iterdir()):
+        relative = path.relative_to(ROOT).as_posix()
+        if path.is_dir():
+            roots[path.name] = relative + "/root.agc"
+        elif path.suffix == ".agc":
+            roots[path.stem] = relative
+    return roots
+
+
 def shown(path):
     """A path as the refreeze report names it: relative to the repository when it is inside."""
     path = Path(path)
