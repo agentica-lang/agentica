@@ -14,7 +14,8 @@ src/                Racket front end, one module per stage
   main.rkt          thin CLI: printing and exit codes live only here
   bdd-driver.rkt    `agentica test`
 compiler/           front end ported to Agentica, one stage per PR (§35):
-                    lexer, parser, modules, builtin catalog, checker, lowering
+                    lexer, parser, modules, builtin catalog, checker, lowering,
+                    bytecode writer
 vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, tasks, I/O, HTTP, JSON
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl

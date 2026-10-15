@@ -201,7 +201,7 @@ goldens stay.
 | 3 | **Done** (PR #254): Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution, or the first `CHECK-IMPORT-*`, `CHECK-DECL-ORDER` or `CHECK-REDEFINED-NAME` diagnostic with its file. Needs the environment and real-path builtins (35.5). It carries the privacy rule of `value.with(...)` (roadmap 15c) as data: each linked module lists the user structs it may update, and the text form prints the list on every update. The text form is `tests/frontend-modules-common.rkt` (Racket) and `compiler/link.agc` (Agentica) |
 | 4 | **Done** (4a, the builtin catalog as Agentica data, PR #258; 4b, the checker, PR #263; module constants, §44, in PR 44a2-1, with `compiler/check_const.agc` and `compiler/const_walk.agc`): Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then constants, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). It carries module constants (§44, roadmap row 7.2.8; done in 44a2-1): the order, `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE` and the `CHECK-DECL-ORDER` rank of constants; the new import forms of §44.2 (`import Mod from "path"`, `import {A, B} from "path"`) are parser and linker changes that land in `src/` and `compiler/` together (44a0), and the checker sees no import, but one help text of `src/checker.rkt` shows the old form and the checker port carries the new text. Decided for deep trees (35.9): the linker of step 3 handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that, so both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and statements (one level for each, so it bounds the depth of the tree they recurse on; a diagnostic change in both front ends, made in 4b). |
 | 5 | **Done** (PR #282): Lowering (`src/lower.rkt`) | The IR in a text form of its own (not `--dump-ir`, see the status note below), or the `LOWER-` diagnostic. The port carries the lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by 44a2-2): scalar literal constants inlined, the other kept constants as zero-parameter functions, the `<start>` entry, the pruning by reachability from `main`, and the order of `Checked.constants`. The text form is `tests/frontend-lower-common.rkt` (Racket) and `compiler/lower.agc` (Agentica) |
-| 6 | Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal |
+| 6 | **Done** (PR #286): Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal (not a text form: the test compares the bytes of `compiler/bytecode.agc` with the ones Racket writes; see the status note below). The port writes every section as `src/bytecode.rkt` does, format version 5 with the Updates and Globals sections, and has its `BYTECODE-` diagnostics |
 | 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`) |
 | 8 | CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
 
@@ -761,6 +761,70 @@ Notes:
   examples, `tests/fixtures/vm/`, the `std/` modules and `compiler/` itself
   (the slow tier repeats all of them and the deep shapes). Same functions,
   registers, labels, spans, constants, structs and enums.
+
+Status on 2026-10-15 (PR #286): step 6 is done. `compiler/` also holds the
+bytecode writer: `bytecode_tables.agc` (the format version, the limits, the
+Agentica version of the header and the opcode numbers), `bytecode_bytes.agc`
+(little-endian integers, UTF-8 and the chunk lists), `bytecode_pool.agc` and
+`bytecode_spans.agc` (the interned tables), `bytecode_types.agc` (the Types and
+Decodable sections), `bytecode_function.agc` (one function),
+`bytecode_failure.agc`, and `bytecode_writer.agc`
+(`Writer.write(root_dir, program)`: `Written.Done(bytes)` or `Failed(Problem)`),
+with the entry `bytecode.agc` (`FILE -o OUT` for each file; it prints
+`wrote N bytes` or the `ERROR` line of lower.agc). About 800 lines of Agentica
+for the 290 of `src/bytecode.rkt`. Notes:
+
+- The test is byte equality. `tests/frontend-bytecode-test.rkt` makes the
+  Racket bytes in its own process, runs the runner once over the fixtures and
+  compares the files. The fast tier is the 26 lowering fixtures, `examples/`
+  and `tests/fixtures/frontend/bytecode/` (UTF-8 text of 1 to 4 bytes, floats,
+  a JSON field type 990 levels deep); it asserts that an instruction of every
+  opcode and every section of the file appear, and that the constants hold all
+  seven kinds. It also runs the Agentica `.agcb` and the Racket `.agcb` of two
+  programs on the VM and compares what they print. The slow tier adds
+  `tests/fixtures/vm/`, the `std/` modules, `compiler/` itself (the bootstrap
+  check: the Agentica writer writes the compiler with the bytes Racket does),
+  the deep shapes and a generated program. The two error fixtures of step 5
+  (a check failure and an import failure) run the failure path of the runner:
+  its `ERROR` line is the one of the lowering text form and no file is written.
+- The limits and the `BYTECODE-INTERNAL` paths are tested on lowered programs
+  that no source gives (`tests/fixtures/frontend/limits/limits.agc` builds 22
+  of them for the Agentica writer, 4 of them in the slow tier because they
+  write a million bytes or build 65,535 structs; the test builds the same for
+  the Racket writer): the bytes or the code, the span, the file and the message of a limit
+  must be equal. `BYTECODE-LIMIT` for nested List and Map levels in a JSON field
+  type (1,024) cannot be reached from a source file, because the parser stops a
+  type at 1,000 levels; the other limits (65,535 structs, enum variants, fields,
+  payload items, constants, JSON field types, registers in a function, struct
+  updates) need a program of tens of thousands of declarations or instructions.
+  `BYTECODE-INTERNAL` cannot be reached from a lowered program; its message is
+  the writer's own where Racket gives the text of its exception (the code and
+  the span are the same).
+- The file is built as a list of byte chunks that `Binary.concat` of
+  `std/binary` joins once (`compiler/` imports a `std/` module for the first
+  time). A small
+  piece joins the last chunk, which costs O(piece) (`List.concat` with at most
+  32 items on the right); a longer one, such as a source text, is a chunk. The
+  tables of constants, struct updates, builtins and spans are filled while the
+  functions are walked, because their entries are numbered in the order the code
+  names them, so the writer encodes the functions first and puts the sections in
+  file order after. A run of `step` is one instruction, cut at 65,535 as in
+  Racket. The spans of a merged `step` keep the file of each one, which Racket
+  gets from its span objects.
+- No recursion over the program: the IR is flat, so the functions are `while`
+  loops. Only the JSON field types recurse (`type_id`, `nesting`), with 1 VM
+  frame for each level, and the writer stops them at 1,024 levels, so about
+  1,040 of the 10,000 frames. Measured: starting the writer 8,950 frames deeper
+  still writes the 1,024-level type, and 9,000 overflows with 995 frames of
+  `type_id` on the stack.
+- Speed (load average about 1.7): a generated program of
+  1,500 functions (230,000 instructions, 8.2 MB of output) takes 17 s in the
+  Agentica pipeline, 2.3 s of it lowering and 9 s the writer, against 10 s for
+  the whole Racket `compile`. 6 s of the writer is the span table: one
+  `Map[String, Int]` insert and lookup is about 9 µs at 275,000 entries; the
+  final `Binary.concat` of the 8 MB is 1.1 s. The `.agcb` is a `List[Int]`,
+  written in pieces of 1 MiB. For scale, `compiler/lower.agc` with everything it
+  imports is 64,000 instructions.
 
 ### 35.10 Tests move to Python unittest
 

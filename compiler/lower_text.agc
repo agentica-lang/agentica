@@ -1,10 +1,12 @@
 ## The text form of lowering, for tests. See lower.agc.
 
 import Builtins from "builtins"
+import Failure from "check_failure"
 import CheckText from "check_text"
 import Checker from "checker"
 import Diag from "diagnostic"
 import Ir from "ir"
+import Paths from "import_path"
 import Env from "link_env"
 import LinkText from "link_text"
 import Linker from "linker"
@@ -36,6 +38,13 @@ export def lower_text_after(path: String, settings: Env.Settings, frames: Int) -
   end
 end
 
+## The ERROR line of a problem of the lowering or of the bytecode writer: the line of its diagnostic with
+## ` file="path"` added.
+export def problem_text(root_dir: String, problem: Failure.Problem) -> String
+  shown = Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help)
+  return "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(root_dir, problem.file))}"
+end
+
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
   case Checker.check(linked, settings.catalog)
     Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
@@ -57,10 +66,7 @@ end
 
 def lowered_text(linked: Linker.Linked, lowered: Lowering.Lowered) -> String
   case lowered
-    Lowering.Lowered.Failed(problem) ->
-      shown = Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help)
-      line = Text.diagnostic_line(shown)
-      return "#{line} file=#{Text.quote(LinkText.stored(linked.root_dir, problem.file))}"
+    Lowering.Lowered.Failed(problem) -> return problem_text(linked.root_dir, problem)
     Lowering.Lowered.Done(program) -> return program_lines(linked.root_dir, program).join("\n")
   end
 end
@@ -70,7 +76,7 @@ def program_lines(root_dir: String, program: Ir.Program) -> List[String]
   lines: List[String] = ["#{head} globals=#{program.globals}"]
   index = 0
   for source in program.sources
-    shown = Text.quote(LinkText.stored(root_dir, source.file))
+    shown = Text.quote(Paths.stored_file(root_dir, source.file))
     lines = lines.push("source #{index} #{shown} chars=#{source.text.length}")
     index += 1
   end
