@@ -26,6 +26,16 @@ export struct Encoded
   parts: List[List[Int]]
 end
 
+## The operands an instruction is written with, and the tables after naming what it needs. The instruction is written
+## as the opcode and three u16 operands, or, when generic, as the operands it has.
+struct Operands
+  tables: Tables
+  a: Int
+  b: Int
+  c: Int
+  generic: Bool
+end
+
 ## Encodes a function. It fails with BYTECODE-LIMIT when the function has more than 65,535 registers or the program
 ## more than 65,535 distinct struct updates.
 export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) -> Result[Encoded]
@@ -34,144 +44,171 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
   end
   body = function.body
   labels = label_pcs(body)
-  constants = tables.constants
-  updates = tables.updates
-  builtins = tables.builtins
-  spans = tables.spans
+  state = tables
   code: List[Int] = []
   refs: List[Int] = []
   count = 0
   at = 0
   while at < body.size
     instr = body[at]
-    op = instr.op
-    if op == "label"
+    if instr.op == "label"
       at += 1
       next
     end
-    if !OPCODES.has_key?(op)
-      return error(Failure.internal(program, "unknown opcode #{op}"))
-    end
-    args = instr.args
     run = 1
-    if op == "step"
+    if instr.op == "step"
       run = step_run_end(body, at) - at
     end
-    # The three operands. A wide operand is a 32-bit index that the VM reads from the last two, low half first.
-    a = 0
-    b = 0
-    c = 0
-    index = 0
-    wide = false
-    generic = false
-    if NEEDS.has_key?(op) and args.size < NEEDS[op]
-      return error(Failure.internal(program, "#{op} needs at least #{NEEDS[op]} operands and has #{args.size}"))
-    end
-    if op == "const"
-      a = args[0]
-      wide = true
-      key = constant_key(instr.imm)
-      if constants.index.has_key?(key)
-        index = constants.index[key]
-      else
-        index = constants.count
-        constants = Pool.add(constants, key, constant_bytes(instr.imm), 1)
-      end
-    elsif op == "struct-with"
-      a = args[0]
-      b = args[1]
-      positions = args.drop(3)
-      fields = positions.map do |position: Int| position.to_s end.join(",")
-      key = "#{args[2]}:#{fields}"
-      if updates.index.has_key?(key)
-        c = updates.index[key]
-      else
-        if updates.count >= MAX_U16
-          return error(Failure.limit(program, 0, "struct updates", program.span))
-        end
-        c = updates.count
-        entry = Bytes.u32(args[2]).concat(Bytes.u32(positions.size))
-        for position in positions
-          entry = entry.concat(Bytes.u32(position))
-        end
-        updates = Pool.add(updates, key, entry, 1)
-      end
-    elsif op == "call-builtin"
-      a = args[0]
-      wide = true
-      key = "#{args[1]}:#{instr.name}"
-      if builtins.index.has_key?(key)
-        index = builtins.index[key]
-      else
-        index = builtins.count
-        builtins = Pool.add(builtins, key, Bytes.string(instr.name).concat(Bytes.u32(args[1])), 1)
-      end
-    elsif op == "jump" or op == "jump-if-false" or op == "jump-if-true"
-      wide = true
-      label = args[0]
-      if op != "jump"
-        a = args[0]
-        label = args[1]
-      end
-      if !labels.has_key?(label)
-        return error(Failure.internal(program, "the function #{function.name} jumps to a missing label"))
-      end
-      index = labels[label]
-    elsif WIDE_OPS.include?(op)
-      a = args[0]
-      index = args[1]
-      wide = true
-    elsif op == "step"
-      a = run
-    elsif PAIR_OPS.include?(op)
-      a = args[0]
-      b = args[1]
-    elsif SINGLE_OPS.include?(op)
-      a = args[0]
-    elsif args.size == 3
-      a = args[0]
-      b = args[1]
-      c = args[2]
-    else
-      generic = true
-    end
-    if wide
-      if index < 0
-        return error(Failure.internal(program, "a negative index in #{op}"))
-      end
-      b = index % 65536
-      c = index / 65536
-    end
-    if generic
-      # Any other number of operands is written as given, as src/bytecode.rkt does; the loader rejects it.
-      words = [OPCODES[op], 0]
-      for arg in args
-        if arg < 0 or arg > MAX_U16
-          return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
-        end
-        words = words.concat(Bytes.u16(arg))
-      end
-      code = code.concat(words)
-    else
-      if a < 0 or a > MAX_U16 or b < 0 or b > MAX_U16 or c < 0 or c > MAX_U16
-        return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
-      end
-      code = code.concat([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
-    end
-    interned = Spans.intern(spans, run_instrs(body, at, run))
-    spans = interned.pool
+    found = try operands(program, function, labels, state, instr, run)
+    state = found.tables
+    words = try instr_words(program, instr, found)
+    code = code.concat(words)
+    interned = Spans.intern_instrs(state.spans, run_instrs(body, at, run))
+    state = state.with(spans: interned.pool)
     refs = refs.concat(Bytes.u32(interned.id))
     count += 1
     at += run
   end
   # The span of the function comes after those of its instructions.
-  own = Spans.intern_one(spans, function.file, function.span)
+  own = Spans.intern_one(state.spans, function.file, function.span)
   head = Bytes.string(function.name).concat(Bytes.u32(function.params)).concat(Bytes.u32(function.captures))
   head = head.concat(Bytes.u32(function.slots)).concat(Bytes.u32(own.id)).concat(Bytes.u32(count))
-  return ok(Encoded(
-    tables: Tables(constants: constants, updates: updates, builtins: builtins, spans: own.pool),
-    parts: [head, code, refs],
-  ))
+  return ok(Encoded(tables: state.with(spans: own.pool), parts: [head, code, refs]))
+end
+
+# The operands of one instruction, which is a written run of `run` instructions when it is a `step`. The tables gain
+# the entry the instruction names, if it has one. The cases are in the order src/bytecode.rkt tries them.
+def operands(
+  program: Ir.Program, function: Ir.Function, labels: Map[Int, Int], tables: Tables, instr: Ir.Instr, run: Int
+) -> Result[Operands]
+  op = instr.op
+  args = instr.args
+  if !OPCODES.has_key?(op)
+    return error(Failure.internal(program, "unknown opcode #{op}"))
+  end
+  if NEEDS.has_key?(op) and args.size < NEEDS[op]
+    return error(Failure.internal(program, "#{op} needs at least #{NEEDS[op]} operands and has #{args.size}"))
+  end
+  if op == "const"
+    return const_operands(program, tables, instr)
+  elsif op == "struct-with"
+    return update_operands(program, tables, args)
+  elsif op == "call-builtin"
+    return builtin_operands(program, tables, instr)
+  elsif op == "jump" or op == "jump-if-false" or op == "jump-if-true"
+    return jump_operands(program, function, labels, tables, instr)
+  elsif WIDE_OPS.include?(op)
+    return wide_operands(program, tables, op, args[0], args[1])
+  elsif op == "step"
+    return ok(plain(tables, run, 0, 0))
+  elsif PAIR_OPS.include?(op)
+    return ok(plain(tables, args[0], args[1], 0))
+  elsif SINGLE_OPS.include?(op)
+    return ok(plain(tables, args[0], 0, 0))
+  elsif args.size == 3
+    return ok(plain(tables, args[0], args[1], args[2]))
+  end
+  # Any other number of operands is written as given, as src/bytecode.rkt does; the loader rejects it.
+  return ok(Operands(tables: tables, a: 0, b: 0, c: 0, generic: true))
+end
+
+def plain(tables: Tables, a: Int, b: Int, c: Int) -> Operands
+  return Operands(tables: tables, a: a, b: b, c: c, generic: false)
+end
+
+# A wide operand is a 32-bit index that the VM reads from the last two, low half first.
+def wide_operands(program: Ir.Program, tables: Tables, op: String, a: Int, index: Int) -> Result[Operands]
+  if index < 0
+    return error(Failure.internal(program, "a negative index in #{op}"))
+  end
+  return ok(plain(tables, a, index % 65536, index / 65536))
+end
+
+# const: the register, and the index of its constant, which is added to the table when it is new.
+def const_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Result[Operands]
+  key = constant_key(instr.imm)
+  found = Pool.find(tables.constants, key)
+  if found.ok?
+    return wide_operands(program, tables, instr.op, instr.args[0], found.unwrap!)
+  end
+  added = Pool.add(tables.constants, key, constant_bytes(instr.imm), 1)
+  return wide_operands(program, tables.with(constants: added), instr.op, instr.args[0], tables.constants.count)
+end
+
+# struct-with: the two registers, and the number of its update (the struct and the positions it sets), which is added
+# to the table when it is new. The VM reads that number as a u16, so the table holds at most 65,535 updates.
+def update_operands(program: Ir.Program, tables: Tables, args: List[Int]) -> Result[Operands]
+  positions = args.drop(3)
+  fields = positions.map do |position: Int| position.to_s end.join(",")
+  key = "#{args[2]}:#{fields}"
+  found = Pool.find(tables.updates, key)
+  if found.ok?
+    return ok(plain(tables, args[0], args[1], found.unwrap!))
+  end
+  updates = tables.updates
+  if updates.count >= MAX_U16
+    return error(Failure.limit(program, 0, "struct updates", program.span))
+  end
+  entry = Bytes.u32(args[2]).concat(Bytes.u32(positions.size))
+  for position in positions
+    entry = entry.concat(Bytes.u32(position))
+  end
+  return ok(plain(tables.with(updates: Pool.add(updates, key, entry, 1)), args[0], args[1], updates.count))
+end
+
+# call-builtin: the register, and the index of its builtin (the name and the argument count), which is added to the
+# table when it is new.
+def builtin_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Result[Operands]
+  args = instr.args
+  key = "#{args[1]}:#{instr.name}"
+  found = Pool.find(tables.builtins, key)
+  if found.ok?
+    return wide_operands(program, tables, instr.op, args[0], found.unwrap!)
+  end
+  bytes = Bytes.string(instr.name).concat(Bytes.u32(args[1]))
+  added = Pool.add(tables.builtins, key, bytes, 1)
+  return wide_operands(program, tables.with(builtins: added), instr.op, args[0], tables.builtins.count)
+end
+
+# jump, jump-if-false and jump-if-true: the register of the test, if there is one, and the number of the instruction
+# the label stands before.
+def jump_operands(
+  program: Ir.Program, function: Ir.Function, labels: Map[Int, Int], tables: Tables, instr: Ir.Instr
+) -> Result[Operands]
+  args = instr.args
+  register = 0
+  label = args[0]
+  if instr.op != "jump"
+    register = args[0]
+    label = args[1]
+  end
+  if !labels.has_key?(label)
+    return error(Failure.internal(program, "the function #{function.name} jumps to a missing label"))
+  end
+  return wide_operands(program, tables, instr.op, register, labels[label])
+end
+
+# The instruction as bytes: the opcode, a zero, and the operands as u16.
+def instr_words(program: Ir.Program, instr: Ir.Instr, found: Operands) -> Result[List[Int]]
+  op = instr.op
+  if found.generic
+    # The operands as given, without padding.
+    words = [OPCODES[op], 0]
+    for arg in instr.args
+      if arg < 0 or arg > MAX_U16
+        return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
+      end
+      words = words.concat(Bytes.u16(arg))
+    end
+    return ok(words)
+  end
+  a = found.a
+  b = found.b
+  c = found.c
+  if a < 0 or a > MAX_U16 or b < 0 or b > MAX_U16 or c < 0 or c > MAX_U16
+    return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
+  end
+  return ok([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
 end
 
 # The place after the run of `step` instructions that starts at `at`. A run is cut at 65,535, the most one instruction
