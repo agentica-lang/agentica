@@ -65,8 +65,12 @@
 
 ; Runs compiler/bytecode.agc once over the paths, writing the file of each under work/out. Gives, by path, the
 ; line the runner printed and the file it wrote.
+; Each call writes into a folder of its own, so a file of an earlier call is never taken for the output of a failure.
+(define runs 0)
+
 (define (agentica-compile bytecode work paths #:timeout [timeout 600])
-  (define folder (build-path work "out"))
+  (set! runs (add1 runs))
+  (define folder (build-path work (format "out~a" runs)))
   (make-directory* folder)
   (define outputs
     (for/list ([path (in-list paths)] [n (in-naturals)]) (path->string (build-path folder (format "~a.agcb" n)))))
@@ -290,6 +294,14 @@
           (check-equal? (length failures) 2)
           (check-true (ormap (lambda (line) (regexp-match? #rx"^ERROR CHECK-[A-Z-]+ " line)) failures))
           (check-true (ormap (lambda (line) (regexp-match? #rx"^ERROR CHECK-IMPORT-IO " line)) failures)))
+
+        (test-case "a failure after a success in the same work folder leaves no file of an earlier run"
+          (define good (car paths))
+          (define bad (for/first ([path (in-list paths)] #:when (regexp-match? #rx"/error-check" path)) path))
+          (agentica-compile bytecode work (list good))
+          (define again (agentica-compile bytecode work (list bad)))
+          (check-regexp-match #rx"^ERROR CHECK-" (car (hash-ref again bad)))
+          (check-false (file-exists? (cdr (hash-ref again bad)))))
 
         (test-case "the VM runs the Agentica file as it runs the Racket file"
           (for ([name (in-list '("basics" "case" "closures" "collections" "enums" "results" "structs" "unicode"))])
