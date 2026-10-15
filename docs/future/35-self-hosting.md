@@ -206,7 +206,7 @@ goldens stay.
 | 5 | **Done** (PR #282): Lowering (`src/lower.rkt`) | The IR in a text form of its own (not `--dump-ir`, see the status note below), or the `LOWER-` diagnostic. The port carries the lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by 44a2-2): scalar literal constants inlined, the other kept constants as zero-parameter functions, the `<start>` entry, the pruning by reachability from `main`, and the order of `Checked.constants`. The text form is `tests/frontend-lower-common.rkt` (Racket) and `compiler/lower.agc` (Agentica) |
 | 6 | **Done** (PR #286): Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal (not a text form: the test compares the bytes of `compiler/bytecode.agc` with the ones Racket writes; see the status note below). The port writes every section as `src/bytecode.rkt` does, format version 5 with the Updates and Globals sections, and has its `BYTECODE-` diagnostics |
 | 7 | **Done** (7a, the OS builtins the port needs, audited in 35.5, PR #288; 7b, the driver, PR #294): BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`, `tests/unit-test-test.rkt`). The port is `compiler/bdd.agc` over the `compiler/bdd_*.agc` modules; see the status note below |
-| 8 | CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
+| 8 | **8a done** (PR #NNN): CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
 
 Notes:
 
@@ -338,6 +338,82 @@ Notes:
   - No release with both front ends in between: it would keep two front ends
     alive longer (risk 1 of 35.7), and the private alpha has no external users
     who need it.
+- **Step 8a status.** The command line is `compiler/cli.agc`, `Cli.run(args,
+  version, host, hand_off) -> Int` (the exit status), over `cli_options.agc`
+  (the options in front of the command, read as Racket's `command-line` reads
+  them), `cli_help.agc` and `cli_text.agc` (`help`, `-h` and the fixed texts),
+  `cli_reply.agc` (what a command answers), `cli_host.agc` (the `Host` and the
+  `Launch`), `cli_spawn.agc` (the hand-off of an ordinary run), `pipeline.agc`
+  (read, link, check, lower and write, shared with the BDD driver),
+  `diagnostic_text.agc` (the plain and `--ai` forms; the JSON form is
+  `diagnostic_json.agc`) and the runner `cli_main.agc`, which `make cli`
+  compiles to `dist/agentica-cli.agcb`. `tests/agentica-agcb` runs it on the VM
+  as the `agentica` command, so `make test-cli` runs the tests of the product
+  command line on it (`tests/test_examples.py`, `test_filesystem.py`,
+  `test_process.py`, `test_source_paths.py`, `test_source_utf8.py`,
+  `test_bdd.py`), and `tests/test_cli_parity.py` runs the same arguments through
+  both command lines and compares exit code, stdout and stderr. It is not the
+  default: `bin/agentica` is still Racket.
+  - **Inputs of `Cli.run`.** `args` are the words the user typed; `version` is
+    the Agentica version (the `VERSION` file, one line: the Makefile reads it
+    for `AGC_VERSION` and `make version`, and `src/version.rkt` embeds it when
+    it is compiled, so `raco exe` and `raco distribute` need no file at run
+    time). The writer takes it as an input (`Writer.write(version, root_dir,
+    program)`), and so does the BDD driver (`--version V`, passed by
+    `src/bdd-driver.rkt`); `VERSION` is no longer a constant of `compiler/`.
+    `host` is `Host(stdlib, vm, command)`: the folder of the `std/` sources (the
+    provider of an ordinary run), the VM binary, and the words that run the
+    front end again (the programs under test start `agentica`). `hand_off` is
+    `Fn[Host, Launch, Int]` and runs a compiled program: `Launch` holds the
+    bytes, the VM option words (`--max-steps`, `--seed`, `--flush-timeout`,
+    `--allow-run`, `--source-root`, `--ai` or `--json`, in the order
+    `src/main.rkt` gives them) and the program arguments.
+  - **How 8d plugs in 8b.** The entry of the single binary
+    (`compiler/front_end.agc`) calls `Cli.run` with a `Host` that needs no `vm`
+    or `command`, and passes a `hand_off` that calls the `FrontEnd.hand_off`
+    builtin with `Launch.bytes`, `Launch.flags` and `Launch.arguments`. An
+    ordinary run (`cli_main.agc`) passes `Spawn.hand_off`. Nothing in C changes.
+  - **The hand-off of an ordinary run** writes the program to a new 0600 file in
+    the temporary directory, starts `agentica-vm --driver-pid PID -- FILE ARGS`
+    with `Process.spawn`, and removes the file. Limits: a `Process` is a pipe,
+    so the program's stdin and stdout pass through this process one byte at a
+    time (`Process.read_bytes` and `IO.read_bytes` wait for a whole count; a
+    larger read would hold back a reply of an interactive program), about 1.4 MB
+    per second. The program's stderr is forwarded by the VM as it is. A failing
+    read of this process's stdin ends the program's input, where Racket stops
+    the VM and prints `RUNTIME-INTERNAL` ("cannot read standard input"). The
+    single binary does none of this.
+  - **`test`** calls the BDD driver in the same process (`Driver.run`), with the
+    options in front of `test`; it no longer sends the `std/` sources on stdin
+    (the driver takes `--stdlib DIR` and links against it). The driver is no
+    longer a program on `AGENTICA_VM`: only the runner and the programs under
+    test are.
+  - **Deliberate differences.** (1) `--dump` and `--dump-ir` print the text
+    forms of `compiler/check_text.agc` and `lower_text.agc`; Racket prints
+    `pretty-print` of its structures and `format-ir`, which cannot be reproduced
+    and leave out what the bytecode needs. (2) `-abc` is not read as three short
+    options: `-h` is the only one (`-hx` is the help, `-xh` is `unknown switch:
+    -x`, as in Racket). (3) An empty source file name is `cannot read ` (status
+    2); Racket stops with a contract error. (4) With `AGENTICA_TEST_EXECUTABLE`
+    set to the Agentica command line, two tests of `test_bdd.py` change: a
+    crashing driver cannot be simulated with a fake `AGENTICA_VM`, and a
+    temporary directory that cannot be written gives the driver's infrastructure
+    report in the chosen format instead of the plain `cannot write a temporary
+    file` line. (5) Nothing else: the exit codes, stdout and stderr agree on the
+    corpus (below).
+  - **Parity.** `racket src/main.rkt` and `tests/agentica-agcb` give the same
+    exit code, stdout and stderr for `--json check` of the 891 `.agc` files of
+    `examples/`, `stdlib/` and `tests/fixtures/` (502 of them fail), for the
+    plain and `--ai` forms of those 502, for `--max-steps 3000000` runs of the
+    25 files of `examples/` and the 242 of `tests/fixtures/vm/` (plain and
+    `--json`), and for the cases of `tests/test_cli_parity.py` (options and
+    their mistakes, the diagnostics of every stage, runs with stdin and
+    arguments, `compile`, `help`). The `.agcb` that `compile` writes is byte for
+    byte the same. Timings on a shared machine (load average 4.5), one run each,
+    Racket and then Agentica, in seconds: `--version` 0.57 and 0.04, `check
+    hello.agc` 0.52 and 0.04, running `hello.agc` 0.59 and 0.06, `check
+    stdlib/bdd/gherkin.agc` 0.72 and 0.14, `check compiler/parser.agc` 0.86 and
+    0.44.
 - No language change lands in a stage while its port is open (35.7).
 - **Reading source files. Done** (decided by the owner on 2026-10-15). The two
   front ends used to read differently: Racket's `file->string` replaced invalid

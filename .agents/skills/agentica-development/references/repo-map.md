@@ -57,11 +57,16 @@ compiler/         # the front end in Agentica (35.4, one stage per PR); lexer, p
   lower.agc lower_text.agc  # entry: prints the text form of lowering each root file argument (flags as check.agc, and --burn=N)
   bytecode_tables.agc bytecode_bytes.agc bytecode_pool.agc  # bytecode writer: format constants and opcode numbers, little-endian integers, UTF-8 and chunk lists, interned tables
   bytecode_spans.agc bytecode_types.agc bytecode_function.agc bytecode_failure.agc  # the span table, the Types and Decodable sections, one function (constants, updates, builtins, labels), BYTECODE- problems
-  bytecode_writer.agc  # write(root_dir, program): Written.Done(bytes) | Failed(Problem), the sections in the order of src/bytecode.rkt
+  bytecode_writer.agc  # write(version, root_dir, program): Written.Done(bytes) | Failed(Problem), the sections in the order of src/bytecode.rkt
   bdd.agc bdd_driver.agc  # the BDD driver (35.4 step 7): entry (System.args, report, exit code); run(Options) -> Ending, the std/ sources from stdin, the runner and tests compiled into the run directory
   bdd_options.agc bdd_report.agc bdd_files.agc bdd_source_root.agc  # the arguments (driver options, then the user's words); the usage and infrastructure reports; private 0600 writes in pieces; the VM's --source-root of a file
   bdd_discover.agc bdd_compile.agc bdd_rundir.agc bdd_runner.agc  # the walk over the test paths; file -> Compiled.Bytes | Rejected(Problem); the temporary directory, lock and sweep; the runner as a captured child and its report file
   diagnostic_json.agc  # the --json object of a Problem (diagnostic->jsexpr)
+  diagnostic_text.agc  # the plain and --ai text of a Problem and the text of its file (format-diagnostic, format-diagnostic-ai)
+  pipeline.agc  # read_root, check_file, build, compile: link, check, lower and write, shared by the CLI and the BDD driver
+  cli.agc  # the command line (35.4 step 8a): run(args, version, host, hand_off) -> exit status; test calls the BDD driver in process
+  cli_options.agc cli_help.agc cli_text.agc cli_reply.agc cli_host.agc  # the options as Racket's command-line reads them; help; the fixed texts; what a command answers; Host and Launch
+  cli_spawn.agc cli_main.agc  # the hand-off of an ordinary run (agentica-vm on a private file, stdio through); the runner `make cli` compiles (--version, --stdlib, --vm, --program, then the arguments)
   bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc)
 vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references/vm.md
   value.h         # values and the agc_ value API, shared by all layers (references/vm-core.md)
@@ -193,6 +198,8 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   stdlib-distribution-test.rkt  # the relocated executable still finds std/ (references/ci.md)
   stdlib-docs-test.rkt  # every stdlib module has a module doc and export docs (references/stages.md)
   test_bdd.py  # unittest: agentica test over the CLI: step programs, isolation (references/bdd.md)
+  test_cli_parity.py  # unittest: the Agentica command line (tests/agentica-agcb) against the Racket one: exit code, stdout, stderr
+  agentica-agcb  # shell script: dist/agentica-cli.agcb on dist/agentica-vm as the `agentica` command (make test-cli sets AGENTICA_TEST_EXECUTABLE to it)
   test_bdd_integration.py  # unittest: programs under test, limits, seed, cleanup; slow: 1 MiB outputs, big JSON line, killed driver (references/bdd.md)
   unit-test-test.rkt  # agentica test on *_test.agc files; slow: stderr flood, endless print, flooding listing (references/bdd.md)
   std/            # *_test.agc unit tests of the std/ modules

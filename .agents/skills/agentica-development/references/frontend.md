@@ -142,3 +142,17 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 - Lines in `compiler/*.agc` are at most 119 characters, comments included (`compiler/agentica.toml`, `[style]`), checked by `tests/test_style_line_width.py`. Break a call or list one item per line with a trailing comma, wrap a long expression in parentheses, and flow a doc block over several `##` lines (a generated file comes out of its tool at that width: `tools/agc-format.rkt`).
 - Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into a few sentence-sized pieces joined with `+`, never one piece per line.
+
+## The command line in Agentica (step 8a)
+
+`compiler/cli.agc` is the command line of `src/main.rkt`: `Cli.run(args, version, host, hand_off) -> Int`. It reads the
+options like Racket's `command-line` (`cli_options.agc`, first error wins, `--version` and `-h` answer at once), then
+runs `check`, `compile`, `help`, `test` or a source file, through `pipeline.agc` (the stages the BDD driver shares).
+A command does not print: it answers with a `Reply` (code, stdout, stderr) and `cli.agc` writes it. A diagnostic is
+printed as plain text (`diagnostic_text.agc`, with the text of its file read again), `--ai` text or the JSON of
+`diagnostic_json.agc`; the root file is named as typed, imported files by canonical path. `hand_off` is a function value
+(`&Spawn.hand_off`): the ordinary run starts `agentica-vm` on a private file and passes stdin and stdout through byte by
+byte (`cli_spawn.agc`, see the limits in §35.4); the single binary passes one that calls `FrontEnd.hand_off`. `cli_main.agc`
+is the runner of an ordinary run (`make cli`, `tests/agentica-agcb`). A change to `src/main.rkt` or `src/diagnostic.rkt`
+(a bug fix) changes these modules in the same PR; `tests/test_cli_parity.py` compares the two. `cli_text.agc` keeps the
+help texts of `src/main.rkt` as data, and the parity test catches a drift.

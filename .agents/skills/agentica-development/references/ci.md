@@ -23,6 +23,13 @@ comment), then a step that calls it. Targets that are not obvious:
   when `compiler/*.agc` or `src/*.rkt` change, and `release.yml` copies it into
   the archive's `bin/` next to `agentica-vm`. Without it `agentica test` exits 2
   with "cannot find the BDD driver"; a test run by hand needs `make bdd-driver`.
+- `cli` builds `dist/agentica-cli.agcb`: `compiler/cli_main.agc` compiled by the
+  Racket front end, the command line in Agentica (§35.4 step 8a, not the
+  default). `tests/agentica-agcb` runs it on the VM like the `agentica` command;
+  `make test-cli` runs the tests of the product command line
+  (`CLI_TESTS`) with `AGENTICA_TEST_EXECUTABLE` set to it, and
+  `tests/test_cli_parity.py` (run by `make test`) compares it with the Racket
+  one. `test` and `test-slow` depend on it.
 - `test` and `test-slow` run two frameworks side by side while the tests move
   from rackunit to Python `unittest` (a test lives in one only; design in
   `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of `.rkt` files

@@ -6,6 +6,7 @@ bytecode, and a C VM runs every program.
 ## Map
 
 ```text
+VERSION             the version, one line (read by the Makefile and src/version.rkt)
 src/                Racket front end, one module per stage
   lexer.rkt → parser.rkt (ast.rkt) → modules.rkt (imports) → checker.rkt → lower.rkt → bytecode.rkt
   builtins.rkt      every builtin described once (signatures, effects, docs)
@@ -15,7 +16,8 @@ src/                Racket front end, one module per stage
   bdd-driver.rkt    `agentica test`: the hand-off to the Agentica driver
 compiler/           front end ported to Agentica, one stage per PR (§35):
                     lexer, parser, modules, builtin catalog, checker, lowering,
-                    bytecode writer, BDD driver (bdd.agc)
+                    bytecode writer, BDD driver (bdd.agc), CLI (cli.agc, not the
+                    default yet)
 vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, tasks, I/O, HTTP, JSON
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
@@ -42,6 +44,8 @@ phase 13).
 
 - `make vm`: build `dist/agentica-vm` (`git submodule update --init` first).
   `make vm-test`: the C tests.
+- `make cli`: build `dist/agentica-cli.agcb`, the command line in Agentica (not
+  the default yet); `make test-cli` runs the CLI tests on it.
 - `make test TESTS="tests/lexer-test.rkt"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
 - `racket src/main.rkt file.agc` runs a program; `... check file.agc` checks.
