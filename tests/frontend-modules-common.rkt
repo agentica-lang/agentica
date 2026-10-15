@@ -51,7 +51,7 @@
   (parameterize ([current-environment-variables copy]) (thunk)))
 
 ; The folder of the root file as a string without a final "/" (except "/" itself), or #f when it does not
-; exist; the paths of the text form are relative to it.
+; exist; the paths of the text form are relative to it (relative-source-name, with .. above it).
 (define (root-folder root-path)
   (with-handlers ([exn:fail? (lambda (_) #f)])
     (define text (path->string (path-only (normalize-path (path->complete-path root-path)))))
@@ -59,11 +59,14 @@
         (substring text 0 (sub1 (string-length text)))
         text)))
 
+; The root file of a failure is named as given, links included, and the stored name is built from the canonical
+; file, as the key of every loaded file is.
 (define (display-path folder name)
-  (define prefix (and folder (if (string-suffix? folder "/") folder (string-append folder "/"))))
-  (if (and prefix (string-prefix? name prefix))
-      (substring name (string-length prefix))
-      name))
+  (define canonical
+    (if (absolute-path? name)
+        (with-handlers ([exn:fail? (lambda (_) name)]) (path->string (normalize-path name)))
+        name))
+  (if (and folder (absolute-path? canonical)) (stored-relative-name folder canonical) canonical))
 
 (define (file-name span)
   (source-name (source-span-source span)))

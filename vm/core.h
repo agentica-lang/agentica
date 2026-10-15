@@ -36,6 +36,8 @@ bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *erro
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
                      const agc_trace *trace);
 
+bool agc_program_set_source_root(agc_program *program, const char *root, size_t root_chars);
+
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
 agc_task *agc_new_task(agc_vm *vm);
 void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);

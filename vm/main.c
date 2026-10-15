@@ -302,8 +302,9 @@ static agc_value program_args(int argc, char **argv, int first) {
 }
 
 static const char usage[] =
-  "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] -- "
-  "<file.agcb> [args...]\n"
+  "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] "
+  "[--source-root DIR] -- <file.agcb> [args...]\n"
+  "  --source-root DIR is put before each stored source name that is relative and does not start with std/, in diagnostics and reports\n"
   "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins, at most 86400000)\n";
 
 static int usage_error(void) {
@@ -385,6 +386,9 @@ static int run(int argc, char **argv) {
   agc_style style = AGC_STYLE_PLAIN;
   int64_t driver = 0, flush_timeout = AGC_FLUSH_TIMEOUT_MS;
   uint32_t seed = 0;
+  const char *source_root = "";
+  size_t source_root_chars = 0;
+  bool seen_root = false;
   bool seen_flush = false, seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false, seen_seed = false, allow_run = false;
   int i = 1;
   while (i < argc) {
@@ -446,6 +450,17 @@ static int run(int argc, char **argv) {
       i += 2;
       continue;
     }
+    if (strcmp(arg, "--source-root") == 0) {
+      if (!once(&seen_root, arg)) return 2;
+      if (i + 1 >= argc || strcmp(argv[i + 1], "--") == 0 ||
+          !agc_utf8_chars((const uint8_t *)argv[i + 1], strlen(argv[i + 1]), &source_root_chars)) {
+        fputs("agentica-vm: --source-root needs a folder name in UTF-8\n", stderr);
+        return 2;
+      }
+      source_root = argv[i + 1];
+      i += 2;
+      continue;
+    }
     if (strcmp(arg, "--driver-pid") == 0) {
       if (!once(&seen_driver, arg)) return 2;
       if (i + 1 >= argc || !parse_steps(argv[i + 1], &driver)) {
@@ -487,6 +502,10 @@ static int run(int argc, char **argv) {
   char error[160];
   if (!agc_load_traced(data, len, &program, error, sizeof error, &trace)) {
     fprintf(stderr, "agentica-vm: invalid bytecode: %s\n", error);
+    return 2;
+  }
+  if (!agc_program_set_source_root(program, source_root, source_root_chars)) {
+    fputs("agentica-vm: invalid bytecode: file needs too much memory\n", stderr);
     return 2;
   }
 

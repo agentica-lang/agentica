@@ -12,6 +12,7 @@ struct Config
   vm: String
   steps_bytecode: String
   steps_source: String
+  steps_root: String
   steps_error: String
   steps_given: Bool
   agentica: List[String]
@@ -36,6 +37,7 @@ struct Entry
   problem: String
   kind: String
   bytecode: String
+  source_root: String
   front_end: String
 end
 
@@ -141,14 +143,14 @@ def run_entry(config: Config, patterns: List[Match.Pattern], entry: Entry) -> Re
     return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
   if entry.kind == "tests"
-    settings = Units.Settings(vm: config.vm, seed: config.seed, only: config.only, timeout_ms: config.test_timeout_ms)
+    settings = Units.Settings(vm: config.vm, seed: config.seed, only: config.only, timeout_ms: config.test_timeout_ms, source_root: entry.source_root)
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
   return run_file(config, patterns, entry.path)
 end
 
 def seeded(config: Config, seed: Int) -> Config
-  return Config(vm: config.vm, steps_bytecode: config.steps_bytecode, steps_source: config.steps_source,
+  return Config(vm: config.vm, steps_bytecode: config.steps_bytecode, steps_source: config.steps_source, steps_root: config.steps_root,
                 steps_error: config.steps_error, steps_given: config.steps_given, agentica: config.agentica, count: config.count,
                 empty_path: config.empty_path, empty_message: config.empty_message, style: config.style,
                 allow_run: config.allow_run, seeded: true, seed: seed, only: config.only,
@@ -433,8 +435,8 @@ def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Erro
 end
 
 def vm_args(config: Config, steps: Int, mode: String) -> List[String]
-  return ["--allow-run", "--json", "--max-steps", steps.to_s, "--seed", config.seed.to_s, "--", config.steps_bytecode,
-          "--agentica-bdd", mode]
+  return ["--allow-run", "--json", "--max-steps", steps.to_s, "--seed", config.seed.to_s, "--source-root", config.steps_root,
+          "--", config.steps_bytecode, "--agentica-bdd", mode]
 end
 
 def failure(code: String, message: String, span: Report.Span) -> Report.Verdict
