@@ -55,6 +55,52 @@
     (check-equal? (check-code "struct Range\n  a: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME)
     (check-equal? (check-code "enum Range\n  A\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
 
+  (test-case "sets hold Int or String, iterate, print and reserve the Set name"
+    (check-ok (main-with (string-append
+                          "  seen: Set[String] = Set.new([])\n"
+                          "  seen = seen.add(\"a\").add(\"b\")\n"
+                          "  nums = Set.new([1, 2, 2])\n"
+                          "  other: Set[Int] = Set.new([2, 3])\n"
+                          "  both: Set[Int] = nums.union(other).intersection(other).difference(Set.new([3]))\n"
+                          "  n: Int = seen.size\n"
+                          "  e: Bool = nums.empty? or nums.include?(1) or nums.subset?(other)\n"
+                          "  xs: List[Int] = Set.to_a(nums.delete(1))\n"
+                          "  for x in seen\n    puts(x + \"!\")\n  end\n"
+                          "  puts(\"#{nums} #{seen.inspect}\")\n"
+                          "  r = Test.eq(nums, other)")))
+    (define empty (check-text (main-with "  puts(Set.new([]))")))
+    (check-equal? (diagnostic-code empty) 'CHECK-EMPTY-SET-TYPE)
+    (check-equal? (span-slice empty) "Set.new([])")
+    (check-regexp-match #rx"Set\\[Int\\]" (diagnostic-help empty))
+    (define floats (check-text (main-with "  s = Set.new([1.5])")))
+    (check-equal? (diagnostic-code floats) 'CHECK-SET-ELEMENT-TYPE)
+    (check-equal? (span-slice floats) "[1.5]")
+    (define annotated (check-text (main-with "  s: Set[Float] = Set.new([1])")))
+    (check-equal? (diagnostic-code annotated) 'CHECK-SET-ELEMENT-TYPE)
+    (check-equal? (span-slice annotated) "Float")
+    (check-equal? (check-code (main-with "  s: Set[List[Int]] = Set.new([])")) 'CHECK-SET-ELEMENT-TYPE)
+    (define equality (check-text (main-with "  a = Set.new([1])\n  r = a == a")))
+    (check-equal? (diagnostic-code equality) 'CHECK-TYPE-MISMATCH)
+    (check-regexp-match #rx"subset" (diagnostic-help equality))
+    (define encoded (check-text (main-with "  s = JSON.encode(Set.new([1]))")))
+    (check-equal? (diagnostic-code encoded) 'CHECK-NOT-ENCODABLE)
+    (check-equal? (span-slice encoded) "Set.new([1])")
+    (check-equal? (check-code "struct Box\n  seen: Set[Int]\nend\n\ndef main() -> Void\n  r = JSON.decode(\"{}\", Box)\nend\n\n")
+                  'CHECK-NOT-DECODABLE)
+    (check-equal? (check-code (main-with "  a = Set.new([1])\n  puts(a[0])")) 'CHECK-NOT-INDEXABLE)
+    (define element (check-text (main-with "  a = Set.new([1])\n  r = a.include?(\"x\")")))
+    (check-equal? (diagnostic-code element) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (span-slice element) "\"x\"")
+    (check-equal? (check-code (main-with "  a = Set.new([1])\n  r = a.union(Set.new([\"x\"]))")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  a = Set.new([1])\n  a.add(2)")) 'CHECK-UNUSED-VALUE)
+    (define method (check-text (main-with "  a = Set.new([1])\n  r = a.contains?(1)")))
+    (check-equal? (diagnostic-code method) 'CHECK-UNKNOWN-METHOD)
+    (check-regexp-match #rx"include\\?" (diagnostic-help method))
+    (check-equal? (check-code (main-with "  for x in 3\n    puts(x)\n  end")) 'CHECK-NOT-A-LIST)
+    (check-equal? (check-code (main-with "  m: Map[Set[Int], Int] = {}")) 'CHECK-MAP-KEY-TYPE)
+    (check-equal? (check-code "struct Set\n  a: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME)
+    (check-equal? (check-code "enum Set\n  A\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
+
   (test-case "Test assertions need a type with equality; Test and TestCase are reserved"
     (define types "struct Box\n  items: List[Int]\n  tags: Map[String, Json]\nend\n\nstruct Hook\n  run: Fn[Int, Int]\nend\n\n")
     (check-ok (string-append types (main-with (string-append

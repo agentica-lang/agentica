@@ -87,6 +87,7 @@
   (cond
     [(list-type? type) (vm-type? (cadr type) user-types)]
     [(map-type? type) (vm-type? (caddr type) user-types)]
+    [(set-type? type) #t]
     [(result-type? type) (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
     [(and (pair? type) (eq? (car type) 'Task))
      (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
@@ -170,6 +171,9 @@
 (define (map-type? type)
   (and (pair? type) (eq? (car type) 'Map)))
 
+(define (set-type? type)
+  (and (pair? type) (eq? (car type) 'Set)))
+
 (define (result-type? type)
   (and (pair? type) (eq? (car type) 'Result)))
 
@@ -192,6 +196,8 @@
                       "List.size" "List.append" "List.set" "List.repeat" "List.concat" "List.take"
                       "List.drop" "List.at" "List.reverse" "List.sort"
                       "Map.has_key?" "Map.keys" "Map.size" "Map.put" "Map.get" "Map.delete" "Map.values"
+                      "Set.new" "Set.add" "Set.delete" "Set.include?" "Set.size" "Set.empty?" "Set.to_a"
+                      "Set.union" "Set.intersection" "Set.difference" "Set.subset?"
                       "String.length" "String.upcase" "String.downcase" "String.trim" "String.split" "String.join"
                       "String.contains?" "String.starts_with?" "String.ends_with?" "String.replace" "String.slice"
                       "String.index_of" "String.at" "String.reverse" "String.code" "String.from_code" "String.from_bytes"
@@ -815,6 +821,9 @@
        (define body (for-stmt-body statement))
        (define items (alloc!))
        (lower-expression (for-stmt-iterable statement) items)
+       ;; A set loops over its elements as a list, in first-insertion order.
+       (when (set-type? (static-type (for-stmt-iterable statement)))
+         (emit! 'call-builtin (list items "Set.to_a" 1) span span))
        (unless (null? body)
          (define index (alloc!))
          (define count (alloc!))
