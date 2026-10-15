@@ -44,14 +44,15 @@ end
 def check(linked: Linker.Linked, settings: Env.Settings) -> Compiled
   case Checker.check(linked, settings.catalog)
     Checker.Checking.Failed(problem) -> return Compiled.Rejected(problem)
-    Checker.Checking.Done(checked) -> return lower(linked, Lowering.lower(linked, checked, settings.catalog))
+    Checker.Checking.Done(checked) ->
+      return lower(linked, Lowering.lower(linked, checked, settings.catalog), settings)
   end
 end
 
-def lower(linked: Linker.Linked, lowered: Lowering.Lowered) -> Compiled
+def lower(linked: Linker.Linked, lowered: Lowering.Lowered, settings: Env.Settings) -> Compiled
   case lowered
     Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
-    Lowering.Lowered.Done(program) -> return write(Writer.write(linked.root_dir, program))
+    Lowering.Lowered.Done(program) -> return write(Writer.write(linked.root_dir, program, settings.version))
   end
 end
 

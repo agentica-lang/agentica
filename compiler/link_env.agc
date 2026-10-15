@@ -1,5 +1,6 @@
-## What the linker reads from outside the program being linked: the environment variables that place pkg/ libraries,
-## the std/ sources folder, and the builtin catalog with its name tables.
+## What the front end reads from outside the program it compiles: the environment variables that place pkg/ libraries,
+## where the std/ sources are, the Agentica version the .agcb header names, and the builtin catalog with its name
+## tables.
 
 import Builtins from "builtins"
 
@@ -10,11 +11,20 @@ export struct Env
   home: String
 end
 
-## The inputs of one link: where the std/ sources are (a stdlib/ folder), the environment, and the builtin catalog
+## Where the std/ sources come from: the files of a stdlib/ folder (an ordinary run of the front end, with `--stdlib`),
+## or the copy the binary carries, read with FrontEnd.std_source (docs/future/35-self-hosting.md, 35.3).
+export enum StdProvider
+  Folder(String)
+  Embedded
+end
+
+## The inputs of one compile: where the std/ sources are, the environment, the Agentica version that the header of
+## the .agcb file names (the writer's input; the linker and the checker do not read it), and the builtin catalog
 ## (reserved type names, bare builtins, builtin enums and std-only modules).
 export struct Settings
-  stdlib: String
+  std: StdProvider
   env: Env
+  version: String
   catalog: Builtins.Catalog
 end
 
@@ -27,9 +37,15 @@ export def process_env() -> Env
   )
 end
 
-## Settings for a stdlib/ folder and an environment.
+## Settings for a stdlib/ folder and an environment. The version is "": a program that writes .agcb files sets it
+## with `with(version: ...)`, and the writer refuses an empty one.
 export def settings(stdlib: String, env: Env) -> Settings
-  return Settings(stdlib: stdlib, env: env, catalog: Builtins.catalog())
+  return Settings(std: StdProvider.Folder(stdlib), env: env, version: "", catalog: Builtins.catalog())
+end
+
+## Settings for the std/ sources of the binary (FrontEnd.std_source), with the version the headers name.
+export def embedded_settings(env: Env, version: String) -> Settings
+  return Settings(std: StdProvider.Embedded, env: env, version: version, catalog: Builtins.catalog())
 end
 
 ## The deadline, in milliseconds, of every file system call of the linker.

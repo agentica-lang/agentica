@@ -20,20 +20,26 @@ SCENARIOS = [
 
 SLOW_SCENARIOS = ["structs-ok", "types-over", "updates-ok", "updates-over"]
 
+# `--version=V` names the Agentica version of the header; the writer takes it as an input.
 def main() -> Void
   names = SCENARIOS
-  if System.args().any? do |argument: String| argument == "slow" end
-    names = SLOW_SCENARIOS
+  version = ""
+  for argument in System.args()
+    if argument == "slow"
+      names = SLOW_SCENARIOS
+    elsif argument.starts_with?("--version=")
+      version = argument.slice(10, argument.length - 10)
+    end
   end
   for name in names
-    puts("#{name} #{describe(scenario(name))}")
+    puts("#{name} #{describe(scenario(name), version)}")
   end
 end
 
 # What writing a program gives, in one line: the size and a checksum of the bytes, or the code and place of the
 # problem (and the message of a BYTECODE-LIMIT, which is fixed).
-def describe(program: Ir.Program) -> String
-  case Writer.write("", program)
+def describe(program: Ir.Program, version: String) -> String
+  case Writer.write("", program, version)
     Writer.Written.Done(bytes) -> return "ok #{bytes.size} #{checksum(bytes)}"
     Writer.Written.Failed(problem) ->
       line = "ERROR #{problem.code} #{place(problem.span)} file=#{problem.file}"
