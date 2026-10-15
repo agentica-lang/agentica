@@ -1,7 +1,8 @@
 /*
  * The loader: full validation of an untrusted .agcb file before any of its
  * code runs, section by section (constants, struct and enum tables, Types,
- * struct updates, code). Core layer. Design: docs/vm/08-loader-and-cli.md §8.
+ * struct updates, Globals, code). Core layer. Design:
+ * docs/vm/08-loader-and-cli.md §8.
  */
 #include "core.h"
 
@@ -153,7 +154,16 @@ static bool calls_anything(const agc_function *f) {
   return false;
 }
 
+/* A file with Globals slots lets only the entry function write them (check_function), and the writes are
+   safe because the entry runs once, first, on the main task. A call, tail call or closure of the entry would
+   run it again, possibly after main started and other tasks read the slots, so it is rejected. With no slots
+   the entry is plain main, which a program may call. */
+static void check_not_entry(reader *r, const agc_program *p, uint32_t target) {
+  if (p->global_count && target == p->entry) reject(r, "call or closure of the entry function of a file with globals");
+}
+
 static void check_function(reader *r, const agc_program *p, const agc_function *f) {
+  bool sets_global = false, jumps_back = false;
   uint16_t last = f->code[f->count - 1].op;
   if (last != AGC_OP_RETURN && last != AGC_OP_JUMP) reject(r, "function does not end with RETURN or JUMP");
   if (f->code[0].op != AGC_OP_STEP && (f->count > 2 || calls_anything(f)))
@@ -211,6 +221,15 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         check_register(r, in.a, f);
         if (bx >= p->constant_count) reject(r, "constant index out of range");
         break;
+      case AGC_OP_GLOBAL:
+      case AGC_OP_GLOBAL_SET:
+        check_register(r, in.a, f);
+        if (bx >= p->global_count) reject(r, "global index out of range");
+        if (in.op == AGC_OP_GLOBAL_SET) {
+          if (f != &p->functions[p->entry]) reject(r, "GLOBAL_SET outside the entry function");
+          sets_global = true;
+        }
+        break;
       case AGC_OP_STEP:
         if (in.a < 1) reject(r, "STEP count is zero");
         check_spans(r, p, span, in.a);
@@ -254,10 +273,12 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
       case AGC_OP_JUMP:
         if (bx >= f->count) reject(r, "jump target out of range");
         if (bx <= pc && f->code[bx].op != AGC_OP_STEP) reject(r, "backward jump does not target a STEP");
+        if (bx <= pc) jumps_back = true;
         break;
       case AGC_OP_CALL:
       case AGC_OP_TAIL_CALL:
         if (bx >= p->function_count) reject(r, "function index out of range");
+        check_not_entry(r, p, bx);
         if (p->functions[bx].captures) reject(r, "direct call to a function with captures");
         check_window(r, in.a, p->functions[bx].params, f);
         break;
@@ -271,6 +292,7 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         break;
       case AGC_OP_CLOSURE:
         if (bx >= p->function_count) reject(r, "function index out of range");
+        check_not_entry(r, p, bx);
         check_window(r, in.a, p->functions[bx].captures, f);
         break;
       case AGC_OP_RANGE:
@@ -289,6 +311,8 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         reject(r, "unknown opcode %u", (unsigned)in.op);
     }
   }
+  /* The writes must happen once each, before main: a loop around a GLOBAL_SET would write a slot again. */
+  if (sets_global && jumps_back) reject(r, "GLOBAL_SET in a function with a backward jump");
 }
 
 static void skip_string(reader *r) { take(r, read_u32(r)); }
@@ -425,6 +449,15 @@ static void load_updates(reader *r, agc_program *p) {
   }
 }
 
+/* Only a slot count: the initializers are ordinary functions that the entry calls. The count has no minimum
+   bytes per entry, so read_count cannot bound it by the file size; the cap and the load budget do. The array
+   is zeroed memory (AGC_T_VOID), hence "unset", and is scanned by the collector through the program. */
+static void load_globals(reader *r, agc_program *p) {
+  p->global_count = read_u32(r);
+  if (p->global_count > AGC_MAX_GLOBALS) reject(r, "too many globals");
+  p->globals = load_alloc(r, agc_size_mul(p->global_count, sizeof(agc_value)), false);
+}
+
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), "AGCB", 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
@@ -482,6 +515,7 @@ static void load(reader *r, agc_program *p) {
 
   load_tables(r, p);
   load_updates(r, p);
+  load_globals(r, p);
 
   p->builtin_count = read_count(r, 8, "builtin");
   p->builtins = load_alloc(r, agc_size_mul(p->builtin_count, sizeof(agc_builtin *)), false);
@@ -530,9 +564,10 @@ static void load(reader *r, agc_program *p) {
 static void trace_tables(const agc_trace *tr, const agc_program *p) {
   AGC_TRACE(tr, AGC_TRACE_LOADER,
             "tables sources=%" PRIu32 " spans=%" PRIu32 " constants=%" PRIu32 " builtins=%" PRIu32
-            " functions=%" PRIu32 " structs=%" PRIu32 " types=%" PRIu32 " enums=%" PRIu32 " variants=%" PRIu32 " updates=%" PRIu32,
+            " functions=%" PRIu32 " structs=%" PRIu32 " types=%" PRIu32 " enums=%" PRIu32 " variants=%" PRIu32
+            " updates=%" PRIu32 " globals=%" PRIu32,
             p->source_count, p->span_count, p->constant_count, p->builtin_count, p->function_count, p->struct_count,
-            p->type_count, p->enum_count, p->variant_count, p->update_count);
+            p->type_count, p->enum_count, p->variant_count, p->update_count, p->global_count);
 }
 
 static bool load_guarded(reader *r, agc_program *p) {

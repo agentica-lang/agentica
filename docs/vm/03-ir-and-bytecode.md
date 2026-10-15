@@ -145,8 +145,9 @@ behavior.
 | Data | `LIST a b c`, `LIST_LEN a b`, `LIST_GET a b c`, `MAP a b c`, `MAP_GET a b c`, `STRUCT a b c`, `STRUCT_WITH a b c`, `FIELD a b c`, `ENUM a b c`, `IS_VARIANT a b c`, `PAYLOAD a b c` | Lists, maps, structs and enums. `LIST_GET` and `MAP_GET` fail at the index span. `STRUCT_WITH`: `R[a]` is a copy of the struct in `R[b]` whose fields listed in update entry `c` (4.6) are overwritten by `R[b+1]`, `R[b+2]`, ... in that order. |
 | Result | `TRY a b`, `IS_OK a b`, `RESULT_VALUE a b` | `TRY`: if `R[b]` is an error, return it, else `R[a]` = its value. |
 | Range | `RANGE a b c`, `RANGE_BOUNDS a b` | `RANGE` from Int `R[b]` to `R[b+1]`, `c` 0 for `..`, 1 for `...`. `RANGE_BOUNDS`: first value into `R[a]`, last included value into `R[a+1]`, non-empty flag into `R[a+2]`. |
+| Global | `GLOBAL a bx`, `GLOBAL_SET a bx` | `R[a] = G[bx]` and `G[bx] = R[a]`, where `G` is the table of the Globals section (4.6), the module constants of [§44](../future/44-module-constants.md). `GLOBAL` of a slot that was never set is `RUNTIME-INTERNAL`. |
 
-There are 50 opcodes. Everything else, including `ok`, `error`, `puts` and every
+There are 52 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
 by `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/value.h`. New opcodes
 are appended at the end. An appended opcode does not bump the format version,
@@ -181,6 +182,19 @@ Details that code and tests rely on:
   struct's field count, so the writes need no bounds test. Unlike `STRUCT`, the
   copy is linear in the field count, so the instruction charges
   `n * sizeof(agc_value)` bytes of cost, like `CONCAT`.
+- `GLOBAL` and `GLOBAL_SET` index the Globals table. The loader has checked
+  that `bx` is below the slot count, so the interpreter does not check it again,
+  as for `CONST`. A slot starts as zeroed memory, which is tag 0, `AGC_T_VOID`.
+  No module constant has type `Void`, so tag 0 means "never set", and `GLOBAL`
+  of such a slot is `RUNTIME-INTERNAL` (only a hand-made file can do it, or a
+  `GLOBAL_SET` of a `Void`, which unsets the slot again). Neither instruction
+  charges cost beyond the `STEP`s of the function that holds it, as `MOVE` and
+  `CONST` do. `GLOBAL_SET` is the only instruction that writes to the loaded
+  program. The loader allows it only in the entry function, which has no
+  backward jump (4.6) and cannot be called when the table is not empty, so each
+  `GLOBAL_SET` runs at most once, in the main task, before the entry hands over
+  to `main`. `10-io-multicore.md` §10.2.3 and `16-architecture.md` §16.7 say
+  why that makes the table safe to share.
 - An error in `TRY` returns from the frame like `RETURN`. An error in a `TRY` of
   the entry function is `RUNTIME-INTERNAL` (the checker allows `try` only in
   functions that return Result).
@@ -253,7 +267,7 @@ header and the entry.
 
 | Section | Entry |
 |---|---|
-| Header | magic `"AGCB"`, `u32` format version (4), `str` Agentica version (`src/version.rkt`) |
+| Header | magic `"AGCB"`, `u32` format version (5), `str` Agentica version (`src/version.rkt`) |
 | Sources | `str` name, `str` full text |
 | Spans | `u32` source, start line, start column, end line, end column. Span 0 is the program span. |
 | Constants | `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6 String), then `i64`, `f64` bits or `str` |
@@ -261,9 +275,10 @@ header and the entry.
 | Types | `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2 Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct) and, for 4 to 6, a `u32` operand: the item or value type index (smaller than the entry's own) or the struct index. Then a `u32` count of decodable structs, each a `u32` struct index (increasing), the `str` linked name and one `u32` type index per field. |
 | Enums | `str` display name, `u32` variant count, each `str` name and `u32` arity. Variants are numbered globally in file order. |
 | Updates | `u32` struct index, `u32` field count k (1 to the struct's field count), k `u32` field indexes, strictly increasing and below the struct's field count. One entry per distinct set of fields of a struct that a `.with(...)` changes; `STRUCT_WITH` names an entry. |
+| Globals | `u32` slot count, nothing else (at most 65,535). The slots are the module constants of [§44](../future/44-module-constants.md); the initializers are ordinary functions that the entry calls. A program without constants writes 0. |
 | Builtins | `str` name, `u32` arity |
 | Functions | `str` name, `u32` params, captures, registers, span, instruction count, the instructions, then one `u32` span index per instruction |
-| Entry | `u32` index of `main` |
+| Entry | `u32` index of the entry function: `main`, or `<start>` in a file with module constants (§44), which sets the slots and tail-calls `main` |
 
 - The Sources section embeds the full source texts, so the VM prints diagnostics
   without reading files. A linked program has one entry per file a span points
@@ -274,7 +289,17 @@ header and the entry.
   the decodable struct records. `src/bytecode.rkt` interns each distinct type
   once, children first. A program without a JSON type argument writes two zero
   counts.
+- The Globals section holds only a count because a slot has no bytes of its
+  own to read. The loader allocates the slots as zeroed memory inside the
+  program, so the collector scans them like constants. It rejects a count above
+  65,535 (the bytes left in the file cannot bound it, so the cap does) and
+  charges the array to the load budget. The entry rules of 8 apply only to a
+  file with a count above zero: a file with no slots has a plain `main` as
+  entry, and a program may call `main()`.
 - The VM accepts only its own format version and Agentica version (8). Any
   change to the layout or to an opcode's meaning bumps the format version.
+  Version 5 added the Globals section (version 4 is the Updates section and
+  `STRUCT_WITH`, 15c). Versions 6 and 7 are reserved by the designs of §41 and
+  §42.
 - The C loader is the only reader of this format. There is no Racket reader, and
   no compatibility shims: the Racket side and the VM ship together.

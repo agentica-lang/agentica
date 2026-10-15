@@ -634,7 +634,8 @@ The array is part of the `agc_program`, as the constant pool is, so it is
 reachable from the same roots and the collector keeps its values. It rejects
 (with the loader's usual rejection, as for other bad operands):
 
-- a count above 65,535 (`BYTECODE-LIMIT` in the writer, as for structs);
+- a count above 65,535 (`BYTECODE-LIMIT` in the writer, as for structs; the
+  writer of 44a1 always writes 0, so that check comes with 44a2);
 - a `GLOBAL` or `GLOBAL_SET` whose slot is not below the count;
 - a `GLOBAL_SET` in a function that is not the entry, and a function that has
   a `GLOBAL_SET` and a backward jump (a jump whose target is not after it);
@@ -643,19 +644,26 @@ reachable from the same roots and the collector keeps its values. It rejects
   write a slot after `main` started. With a count of zero the entry is `main`,
   which a program may call (`main()` inside `main`); nothing is rejected, and
   the rules about the entry apply only to a file that has slots. Only the
-  entry writes, once, in straight-line code, before `main`. After it returns
-  the table is read-only, which keeps a future multicore scheduler (step 11)
-  free of races on it.
+  entry writes, each `GLOBAL_SET` running at most once (no backward jump),
+  before `main`. After the entry has tail-called `main` the table is read-only,
+  which keeps a future multicore scheduler (step 11) free of races on it. The
+  loader cannot stop a hand-made entry from spawning a task before its last
+  write, so the multicore build must not run a second task on another scheduler
+  until the entry has handed over to `main` (`docs/vm/10-io-multicore.md`
+  §10.2.3, "The Globals table"); at one scheduler nothing is racy.
 
 **Run time.** A slot starts as zeroed memory, which is tag 0, `AGC_T_VOID`
-(`vm/value.h`). No constant has type `Void` (44.5), so tag 0 means "unset", and
-`GLOBAL` of a slot with tag 0 is `RUNTIME-INTERNAL` (only a hand-made file can
-do it; the front end orders the reads). Each read is a checked array access and
-a register copy. Initializers run under the normal step budget
-(`--max-steps`, which is `INT64_MAX` unless set) and the normal limits, in the
-main task, with no scheduler involvement, because the checker allows no effects
-and no waiting. A hostile file that does wait or loop in the entry is the same
-case as a hostile `main`: memory safe, bounded by the budget.
+(`vm/value.h`). No module constant has type `Void` (44.5), so tag 0 means
+"unset", and `GLOBAL` of a slot with tag 0 is `RUNTIME-INTERNAL` (only a
+hand-made file can do it, or a `GLOBAL_SET` of a Void, which unsets the slot;
+the front end orders the reads). The loader has checked every slot index, so a
+read is an array access and a register copy, as `CONST` is, and neither
+instruction charges cost beyond the `STEP`s of its function. Initializers run
+under the normal step budget (`--max-steps`, which is `INT64_MAX` unless set)
+and the normal limits, in the main task, with no scheduler involvement, because
+the checker allows no effects and no waiting. A hostile file that does wait or
+loop in the entry is the same case as a hostile `main`: memory safe, bounded by
+the budget.
 
 **Traces.** An error in an initializer shows the function named by the
 constant, then `<start>`. The call depth limit (10,000) sees one frame for each.
@@ -890,9 +898,10 @@ user function.
 
 ### 44.10 Cost model
 
-- **A read** is `GLOBAL a i`: one bounds-checked array access and a copy of a
-  16-byte value (a pointer for a collection). It is not a call and builds
-  nothing. A literal constant is a `CONST`, the same cost as the literal itself.
+- **A read** is `GLOBAL a i`: one array access (the loader checked the index)
+  and a copy of a 16-byte value (a pointer for a collection). It is not a call
+  and builds nothing. A literal constant is a `CONST`, the same cost as the
+  literal itself.
 - **No rebuild.** A zero-argument function rebuilds on each call; a constant is
   built once per process. For the Agentica compiler that is once per run, not
   once per `lex` call (one per imported file) or once per `graphic?` call.

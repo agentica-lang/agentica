@@ -1,7 +1,7 @@
 /*
  * One assert per loader rule: each case is a malformed input that must be
- * rejected, and the Types section cases come from type_tables. The Updates
- * section and STRUCT_WITH come from make_updates.
+ * rejected. type_tables builds the Types section cases, make_updates the Updates
+ * section and STRUCT_WITH, and pair_spec the Globals section and GLOBAL.
  */
 #include "../core.h"
 
@@ -14,6 +14,15 @@ typedef struct {
   uint8_t *data;
   size_t len;
 } buffer;
+
+/* One function of a file with two: the entry is picked by spec.entry. */
+typedef struct {
+  const char *name;
+  uint32_t params, registers;
+  const agc_instr *code;
+  const uint32_t *spans;
+  uint32_t count;
+} fn_spec;
 
 typedef struct {
   const char *magic;
@@ -39,6 +48,9 @@ typedef struct {
   uint32_t captures, helper_captures;
   const char *second_source;
   const buffer *updates;
+  uint32_t globals;
+  fn_spec funcs[2];
+  uint32_t func_count;
 } spec;
 
 static const agc_instr puts_code[] = {
@@ -93,7 +105,7 @@ static void function(buffer *b, const char *name, uint32_t params, uint32_t capt
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0};
   return s;
 }
 
@@ -148,14 +160,23 @@ static buffer build(spec s) {
   } else {
     u32(&b, 0);
   }
+  u32(&b, s.globals);
   u32(&b, 1);
   str(&b, s.builtin);
   u32(&b, s.builtin_arity ? s.builtin_arity : 1);
-  u32(&b, s.helper_params ? 2 : 1);
-  function(&b, "main", s.params, s.captures, s.registers, s.code, s.code_spans, s.count);
-  if (s.helper_params)
-    function(&b, "helper", s.helper_params, s.helper_captures, s.helper_params + s.helper_captures, helper_code,
-             two_spans, 2);
+  if (s.func_count) {
+    u32(&b, s.func_count);
+    for (uint32_t i = 0; i < s.func_count; i++) {
+      const fn_spec *f = &s.funcs[i];
+      function(&b, f->name, f->params, 0, f->registers, f->code, f->spans, f->count);
+    }
+  } else {
+    u32(&b, s.helper_params ? 2 : 1);
+    function(&b, "main", s.params, s.captures, s.registers, s.code, s.code_spans, s.count);
+    if (s.helper_params)
+      function(&b, "helper", s.helper_params, s.helper_captures, s.helper_params + s.helper_captures, helper_code,
+               two_spans, 2);
+  }
   u32(&b, s.entry);
   if (s.trailing) u8(&b, 0);
   return b;
@@ -381,6 +402,174 @@ static bool loads_types(int which, const char *reason) {
   bool ok = loads(s, reason);
   free(t.data);
   return ok;
+}
+
+/* Globals (module constants, docs/future/44-module-constants.md §44.8). The two functions of the files below
+   take 4 registers each and every instruction uses span 0. */
+static const uint32_t zero_spans[16] = {0};
+
+/* A file of two functions with the given number of Globals slots and the entry at index `entry`. Constant 2 is
+   the String "ab". */
+static spec pair_spec(const agc_instr *first, uint32_t first_count, const agc_instr *second, uint32_t second_count,
+                      uint32_t globals, uint32_t entry) {
+  spec s = base();
+  s.extra_kind = 6;
+  s.extra_string = "ab";
+  s.globals = globals;
+  s.entry = entry;
+  s.func_count = 2;
+  s.funcs[0] = (fn_spec){"first", 0, 4, first, zero_spans, first_count};
+  s.funcs[1] = (fn_spec){"second", 0, 4, second, zero_spans, second_count};
+  return s;
+}
+
+/* The slot is the only reference to its String once the registers are cleared, so it must stay readable across
+   collections: junk of the String's size class (0xAB) takes its place if the collector frees it. Not run under
+   AGC_NO_GC, which never frees. */
+static void expect_global_alive(agc_vm *vm, const agc_program *p) {
+  agc_gc_info info;
+  if (!agc_gc_stats(&info)) return;
+  if (vm->main->regs) memset(vm->main->regs, 0, vm->main->reg_capacity * sizeof(agc_value));
+  uint64_t stop = info.collections + 3;
+  for (size_t round = 0; info.collections < stop; round++) {
+    assert(round < 4000000);
+    memset(agc_alloc_atomic(24), 0xAB, 24);
+    agc_gc_stats(&info);
+  }
+  for (size_t round = 0; round < 20000; round++) memset(agc_alloc_atomic(24), 0xAB, 24);
+  const agc_string *text = agc_as_string(vm, p->globals[1]);
+  assert(text->bytes == 4 && memcmp(text->data, "abab", 4) == 0);
+}
+
+static void globals_tests(void) {
+  /* The entry sets slot 0 to the Int 1 and slot 1 to the String "abab", then tail-calls main; main clears the
+     registers the entry used and prints both slots. */
+  static const agc_instr start_code[] = {
+    {AGC_OP_STEP, 1, 0, 0},    {AGC_OP_CONST, 0, 0, 0},      {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_CONST, 1, 2, 0},
+    {AGC_OP_CONCAT, 1, 1, 1},  {AGC_OP_GLOBAL_SET, 1, 1, 0}, {AGC_OP_TAIL_CALL, 0, 1, 0},  {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr read_code[] = {
+    {AGC_OP_STEP, 3, 0, 0},         {AGC_OP_CONST, 1, 1, 0},  {AGC_OP_GLOBAL, 0, 0, 0},     {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+    {AGC_OP_GLOBAL, 0, 1, 0},       {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  buffer used = build(pair_spec(start_code, 8, read_code, 8, 2, 0));
+  char error[160];
+  agc_program *p;
+  for (size_t n = 0; n < used.len; n++) {
+    agc_program *q;
+    assert(!agc_load(used.data, n, &q, error, sizeof error));
+  }
+  assert(agc_load(used.data, used.len, &p, error, sizeof error));
+  free(used.data);
+  assert(p->global_count == 2 && p->globals[0].tag == AGC_T_VOID && p->globals[1].tag == AGC_T_VOID);
+  FILE *out = tmpfile();
+  assert(out);
+  agc_vm vm;
+  agc_vm_init(&vm, p, out, out, INT64_MAX);
+  assert(agc_vm_run(&vm).kind == AGC_DONE);
+  expect_output(out, "1\nabab\n");
+  expect_global_alive(&vm, p);
+
+  /* The count: 65535 slots load, one more does not, and the array is charged to the load budget. */
+  spec s = base();
+  s.globals = AGC_MAX_GLOBALS;
+  assert(loads(s, NULL));
+  s.globals = AGC_MAX_GLOBALS + 1;
+  assert(!loads(s, "too many globals"));
+  s.globals = UINT32_MAX;
+  assert(!loads(s, "too many globals"));
+  s = base();
+  s.extra_voids = 60000;
+  s.globals = 1000;
+  assert(loads(s, NULL));
+  s.globals = AGC_MAX_GLOBALS;
+  assert(!loads(s, "too much memory"));
+
+  /* Slot and register operands. A count of zero has no slot, so no GLOBAL and no GLOBAL_SET loads. */
+  static const agc_instr read_one[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_GLOBAL, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr write_one[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr read_wide[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_GLOBAL, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr read_last[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_GLOBAL, 0, 65534, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr read_far[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_GLOBAL, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr write_far[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_GLOBAL_SET, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(loads(pair_spec(read_one, 3, helper_code, 2, 2, 0), NULL));
+  assert(!loads(pair_spec(read_one, 3, helper_code, 2, 1, 0), "global index out of range"));
+  assert(!loads(pair_spec(read_one, 3, helper_code, 2, 0, 0), "global index out of range"));
+  assert(loads(pair_spec(write_one, 4, helper_code, 2, 2, 0), NULL));
+  assert(!loads(pair_spec(write_one, 4, helper_code, 2, 1, 0), "global index out of range"));
+  assert(!loads(pair_spec(write_one, 4, helper_code, 2, 0, 0), "global index out of range"));
+  assert(!loads(pair_spec(read_wide, 3, helper_code, 2, AGC_MAX_GLOBALS, 0), "global index out of range"));
+  assert(loads(pair_spec(read_last, 3, helper_code, 2, AGC_MAX_GLOBALS, 0), NULL));
+  assert(!loads(pair_spec(read_far, 3, helper_code, 2, 1, 0), "register out of range"));
+  assert(!loads(pair_spec(write_far, 3, helper_code, 2, 1, 0), "register out of range"));
+
+  /* Only the entry writes, and in straight-line code. */
+  static const agc_instr enter_code[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr set_code[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  assert(loads(pair_spec(set_code, 5, helper_code, 2, 1, 0), NULL));
+  assert(loads(pair_spec(helper_code, 2, set_code, 5, 1, 1), NULL));
+  assert(!loads(pair_spec(enter_code, 3, set_code, 5, 1, 0), "GLOBAL_SET outside the entry"));
+  assert(!loads(pair_spec(set_code, 5, set_code, 5, 1, 0), "GLOBAL_SET outside the entry"));
+  static const agc_instr set_loop[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_JUMP, 0, 0, 0}};
+  static const agc_instr loop_then_set[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_JUMP, 0, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr set_then_skip[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_JUMP, 0, 5, 0},
+    {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr spin_code[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_JUMP, 0, 0, 0}};
+  assert(!loads(pair_spec(set_loop, 4, helper_code, 2, 1, 0), "GLOBAL_SET in a function with a backward jump"));
+  assert(!loads(pair_spec(loop_then_set, 5, helper_code, 2, 1, 0), "GLOBAL_SET in a function with a backward jump"));
+  assert(loads(pair_spec(set_then_skip, 6, helper_code, 2, 1, 0), NULL));
+  assert(loads(pair_spec(enter_code, 3, spin_code, 2, 1, 0), NULL));
+
+  /* With slots, nothing may run the entry again. Without, it is plain main and may be called. */
+  static const agc_instr call_entry[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr tail_entry[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr closure_entry[] = {{AGC_OP_CLOSURE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr call_second[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL, 0, 1, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  const char *entry_reason = "entry function of a file with globals";
+  assert(!loads(pair_spec(enter_code, 3, call_entry, 4, 1, 0), entry_reason));
+  assert(!loads(pair_spec(enter_code, 3, tail_entry, 3, 1, 0), entry_reason));
+  assert(!loads(pair_spec(enter_code, 3, closure_entry, 2, 1, 0), entry_reason));
+  assert(!loads(pair_spec(call_second, 4, helper_code, 2, 1, 1), entry_reason));
+  assert(loads(pair_spec(call_second, 4, helper_code, 2, 1, 0), NULL));
+  assert(loads(pair_spec(enter_code, 3, call_entry, 4, 0, 0), NULL));
+  assert(loads(pair_spec(enter_code, 3, tail_entry, 3, 0, 0), NULL));
+  assert(loads(pair_spec(enter_code, 3, closure_entry, 2, 0, 0), NULL));
+  assert(loads(pair_spec(call_second, 4, helper_code, 2, 0, 1), NULL));
+
+  /* main() inside main with no constants loads and runs: it recurses until the step limit. */
+  static const agc_instr recurse[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  s = base();
+  s.code = recurse;
+  s.code_spans = zero_spans;
+  s.count = 3;
+  buffer recursive = build(s);
+  assert(agc_load(recursive.data, recursive.len, &p, error, sizeof error));
+  free(recursive.data);
+  agc_vm_init(&vm, p, stdout, stdout, 50);
+  agc_outcome spun = agc_vm_run(&vm);
+  assert(spun.kind == AGC_FAILED && strcmp(spun.code, "RUNTIME-STEP-LIMIT") == 0);
+  s.globals = 1;
+  assert(!loads(s, entry_reason));
+
+  /* A slot that was never set is RUNTIME-INTERNAL, whichever slot a hand-made file reads. */
+  static const agc_instr read_unset[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_GLOBAL, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr read_set[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_GLOBAL_SET, 0, 0, 0}, {AGC_OP_GLOBAL, 1, 0, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  agc_outcome unset = run_spec(pair_spec(read_unset, 5, helper_code, 2, 2, 0), stdout);
+  assert(unset.kind == AGC_FAILED && strcmp(unset.code, "RUNTIME-INTERNAL") == 0);
+  assert(strstr(unset.message, "before it was set"));
+  assert(run_spec(pair_spec(read_set, 5, helper_code, 2, 2, 0), stdout).kind == AGC_DONE);
 }
 
 int main(void) {
@@ -1255,6 +1444,8 @@ int main(void) {
   free(updated_file.data);
   free(table.data);
   free(updates.data);
+
+  globals_tests();
 
   puts("loader tests passed");
   return 0;
