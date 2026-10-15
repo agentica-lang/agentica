@@ -27,7 +27,7 @@ FROZEN = FIXTURES / "frontend" / "frozen"
 # how the goldens are kept once the Racket stages that wrote them are gone.
 def refreezing():
     """True while tools/refreeze.py runs the tests (read at each call, so a test can switch it)."""
-    return os.environ.get("AGENTICA_REFREEZE", "") not in ("", "0")
+    return os.environ.get("AGENTICA_REFREEZE", "") == "1"
 
 
 # The stages read the environment of the pkg/ search when they are not given the flags; the Racket writers ran with no

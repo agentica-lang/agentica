@@ -65,6 +65,15 @@ def lower_deep_cases():
     }
 
 
+def wide_span_programs():
+    """Programs whose spans need the high bytes of a u32 (compiler/bytecode_bytes.agc, bytecode_spans.agc): one has its
+    code after 65,600 blank lines, the other a string literal of 65,600 characters, so a column passes 65,535."""
+    return {
+        "lines": "\n" * 65600 + "def main() -> Void\n  puts(\"x\")\nend\n",
+        "columns": "def main() -> Void\n  puts(\"" + "x" * 65600 + "\")\nend\n",
+    }
+
+
 STRUCT_AND_ENUM = (
     "struct Item\n  id: Int\n  name: String\n  score: Float\nend\n\n"
     "enum Shape\n  Circle(Float)\n  Rect(Float, Float)\nend\n\n")
