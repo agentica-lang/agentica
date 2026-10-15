@@ -10,8 +10,6 @@ import errno
 import json
 import os
 import re
-import signal
-import subprocess
 import threading
 import time
 
@@ -52,16 +50,6 @@ def literal(text):
 
 def brief(lines):
     return [len(line) if len(line) > 200 else line for line in lines]
-
-
-def kill_group(process):
-    """Kill a child of its own session and what it started, then reap it (safe to call twice)."""
-    if process.poll() is None:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-    process.wait()
 
 
 class Filesystem(TestCase):
@@ -112,10 +100,11 @@ class Filesystem(TestCase):
 
     def run_vm_bounded(self, root, text, *arguments, peer=None, stdin_text=None, one_pool_thread=False,
                        keep_stdin=False):
-        """Compile `text`, run the VM on it with --allow-run, and return (exit code, stdout).
+        """Compile `text`, run the VM on it with --allow-run, and return (exit code, stdout, stderr).
 
         The VM must end within 10 s. `peer` runs it under fixtures/stop-peer.py in that mode;
-        `keep_stdin` leaves stdin open until the VM has ended.
+        `keep_stdin` leaves stdin open until the VM has ended. stdout stays a pipe, which a reader thread drains,
+        so the cases with one pool thread still cover a pipe on the loop.
         """
         source = root / "program.agc"
         source.write_text(text, encoding="utf-8")
@@ -124,23 +113,18 @@ class Filesystem(TestCase):
         if peer:
             command = [PYTHON, STOP_PEER, peer, *command]
         env = vm_environment({"UV_THREADPOOL_SIZE": "1"} if one_pool_thread else None)
-        output = root / "vm-output.txt"
-        with open(output, "wb") as out:
-            process = subprocess.Popen([str(part) for part in command], stdin=subprocess.PIPE, stdout=out,
-                                       stderr=subprocess.DEVNULL, env=env, start_new_session=True)
-            self.addCleanup(process.stdin.close)
-            self.addCleanup(kill_group, process)
-            if stdin_text:
-                process.stdin.write(stdin_text.encode())
-                process.stdin.flush()
-            if not keep_stdin:
-                process.stdin.close()
-            try:
-                code = process.wait(VM_WAIT_SECONDS)
-            except subprocess.TimeoutExpired:
-                kill_group(process)
-                self.fail("the VM ends within %s s" % VM_WAIT_SECONDS)
-        return code, output.read_bytes().decode("utf-8", "replace")
+        child = self.adopt(Child(command, env=env, stdin=True, capture_stderr=True))
+        if stdin_text:
+            child.process.stdin.write(stdin_text.encode())
+            child.process.stdin.flush()
+        if not keep_stdin:
+            child.close_stdin()
+        try:
+            code = child.wait(VM_WAIT_SECONDS)
+        except AssertionError:
+            child.stop()
+            self.fail("the VM ends within %s s\nstderr: %s" % (VM_WAIT_SECONDS, child.stderr_text()))
+        return code, child.stdout_text(), child.stderr_text()
 
     def os_lines(self, mode, items, cwd=None, env=None):
         """The lines Agentica prints for Path.real (mode "real") or System.env (mode "env") of each item."""
@@ -197,7 +181,8 @@ end
 """, encoding="utf-8")
 
         def start(*arguments, variable=None):
-            return run(cli() + [*arguments], env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": variable}))
+            # Each run ends in well under a second when the limit works; 6 s fails a broken limit before the watchdog.
+            return run(cli() + [*arguments], timeout=6, env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": variable}))
 
         began = time.monotonic()
         by_flag = start("--json", "--flush-timeout", "200", source, fifo)
@@ -222,7 +207,7 @@ def main() -> Void
 end
 """, encoding="utf-8")
         began = time.monotonic()
-        result = run(cli() + ["--flush-timeout", "200", source, fifo], env=vm_environment())
+        result = run(cli() + ["--flush-timeout", "200", source, fifo], timeout=10, env=vm_environment())
         self.assertLess(time.monotonic() - began, 10)
         self.assertEqual((result.code, result.stdout), (0, "ok()\nawaited\n"), result.stderr)
 
@@ -231,7 +216,7 @@ end
         fifo = root / "fifo"
         out = root / "out.txt"
         os.mkfifo(fifo)
-        code, output = self.run_vm_bounded(root, r"""def stuck(path: String) -> Result[String]
+        code, output, errors = self.run_vm_bounded(root, r"""def stuck(path: String) -> Result[String]
   return File.read_text(path, 60000)
 end
 
@@ -251,7 +236,7 @@ def main() -> Void
 end
 """, fifo, out, one_pool_thread=True)
         self.assertEqual((code, output), (0, 'error("filesystem: operation timed out")\n'
-                                              'error("filesystem: operation timed out")\nmain done\n'))
+                                              'error("filesystem: operation timed out")\nmain done\n'), errors)
         self.assertEqual(out.read_text(), "flushed")
 
     def test_fifos_stream_on_the_loop_read_line_waits_for_a_writer_task_read_text_reads_to_eof(self):
@@ -259,7 +244,7 @@ end
         first, second = root / "first", root / "second"
         os.mkfifo(first)
         os.mkfifo(second)
-        code, output = self.run_vm_bounded(root, r"""struct Pair
+        code, output, errors = self.run_vm_bounded(root, r"""struct Pair
   first: FileHandle
   second: FileHandle
 end
@@ -291,7 +276,8 @@ def main() -> Void
   IO.inspect(String.length(text))
 end
 """, first, second, one_pool_thread=True)
-        self.assertEqual((code, output), (0, 'ok("hello")\nerror("filesystem: end of file")\nok()\n81920\n'))
+        self.assertEqual((code, output), (0, 'ok("hello")\nerror("filesystem: end of file")\nok()\n81920\n'),
+                         errors)
 
     def test_a_fifo_write_waits_on_the_loop_for_a_slow_reader_and_a_reader_that_leaves_gives_epipe(self):
         for mode in ("slow", "close"):
@@ -300,7 +286,7 @@ end
                 fifo = root / "fifo"
                 peer = self.adopt(Child([PYTHON, FIFO_PEER, fifo, mode, "65536"]))
                 self.assertEqual(peer.next_line(VM_WAIT_SECONDS), "ready", mode)
-                code, output = self.run_vm_bounded(root, r"""def main() -> Void
+                code, output, errors = self.run_vm_bounded(root, r"""def main() -> Void
   big = "0123456789"
   for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     big = big + big
@@ -312,9 +298,9 @@ end
                     got = peer.next_line(VM_WAIT_SECONDS)
                 except AssertionError:
                     got = None
-                self.assertEqual(code, 0, mode)
+                self.assertEqual(code, 0, mode + "\n" + errors)
                 if mode == "slow":
-                    self.assertEqual(output, "ok()\n")
+                    self.assertEqual(output, "ok()\n", errors)
                     self.assertEqual(got, "327680")
                 else:
                     self.assertRegex(output, re.compile(r'^error\("error writing to stream port.*Broken pipe', re.S))
@@ -324,7 +310,7 @@ end
         fifo = root / "fifo"
         path = root / "plain.txt"
         os.mkfifo(fifo)
-        code, output = self.run_vm_bounded(root, r"""def reader(path: String) -> Result[String]
+        code, output, errors = self.run_vm_bounded(root, r"""def reader(path: String) -> Result[String]
   text = File.read_text(path, 60000)
   puts("the read returned")
   return text
@@ -354,13 +340,13 @@ def main() -> Void
   IO.inspect(File.write_text(System.args()[1], "x", 1000))
 end
 """, fifo, path, one_pool_thread=True)
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 1, errors)
         self.assertEqual(output, "1\n0\nok()\n", "the read parks with one descriptor, and the cancel closes it")
 
     def test_stdin_waits_on_the_loop_so_file_calls_run_while_a_task_waits_for_input(self):
         root = self.new_dir()
         path = root / "plain.txt"
-        code, output = self.run_vm_bounded(root, r"""def reader(n: Int) -> Int
+        code, output, errors = self.run_vm_bounded(root, r"""def reader(n: Int) -> Int
   IO.inspect(IO.gets())
   return n
 end
@@ -372,11 +358,11 @@ def main() -> Void
   IO.inspect(File.read_text(System.args()[0], 1000))
 end
 """, path, one_pool_thread=True, keep_stdin=True)
-        self.assertEqual((code, output), (0, 'ok()\nok("x")\n'))
+        self.assertEqual((code, output), (0, 'ok()\nok("x")\n'), errors)
 
     def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock(self):
         root = self.new_dir()
-        code, output = self.run_vm_bounded(root, r"""def main() -> Void
+        code, output, errors = self.run_vm_bounded(root, r"""def main() -> Void
   for name in Dir.list("/proc/self/fd", 1000).unwrap!
     if name != "0" and name != "1" and name != "2"
       path = "/proc/self/fd/" + name
@@ -388,7 +374,7 @@ end
 end
 """, peer="clean")
         lines = output_lines(output)
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 0, errors)
         self.assertEqual(lines[-1], "ok(0)")
         self.assertEqual(list(dict.fromkeys(lines[:-1])), ["[false, false]"])
 
@@ -399,9 +385,10 @@ end
   IO.inspect(File.read_line(f, 1000))
 end
 """
-        self.assertEqual(self.run_vm_bounded(root, program, peer="inherit"), (0, 'ok("inherited")\n'))
-        self.assertEqual(self.run_vm_bounded(root, program, "/dev/stdin", stdin_text="piped\n"),
-                         (0, 'ok("piped")\n'))
+        code, output, errors = self.run_vm_bounded(root, program, peer="inherit")
+        self.assertEqual((code, output), (0, 'ok("inherited")\n'), errors)
+        code, output, errors = self.run_vm_bounded(root, program, "/dev/stdin", stdin_text="piped\n")
+        self.assertEqual((code, output), (0, 'ok("piped")\n'), errors)
 
     def test_file_summary_example_reads_a_command_line_path(self):
         input_path = EXAMPLES / "hello.agc"
@@ -576,6 +563,7 @@ end
 
     def test_system_env_gives_what_pythons_os_environ_gives_decoding_bytes_that_are_not_utf_8_with_u_fffd(self):
         env = vm_environment()
+        # Not vm_environment(extra): it turns values into str, so bytes would become "b'..'" and lose the non-UTF-8 cases.
         env.update({
             "AGC_PEER_SET": b"plain", "AGC_PEER_EMPTY": b"", "AGC_PEER_EQ": b"x=y=", "AGC_PEER_SPACE": b"  padded  ",
             "AGC_PEER_UNI": "h\u00e9llo \u2713 \u65e5\u672c".encode("utf-8"),
