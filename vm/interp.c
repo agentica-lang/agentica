@@ -708,8 +708,10 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
       case AGC_OP_STRUCT_WITH: {
         /* R[b] is the receiver and R[b+1..] the new values, in the order of
            the update's fields. The loader checked the field indexes against
-           the struct's field count, so the receiver must be exactly that
-           struct (a hand-made file may put another value there). */
+           the struct's field count. Every C creator of a struct goes through
+           agc_builtin_struct, so a receiver of the declared type has that
+           count; the test below keeps the invariant at the write (as
+           agc_struct_def_of does) so a field index can never leave the copy. */
         const agc_update_def *u = &p->updates[in.c];
         const agc_struct *old = agc_as_struct(vm, R[in.b]);
         if (old->type != u->type || old->n != p->structs[u->type].count)
@@ -718,6 +720,11 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
         memcpy(st->fields, old->fields, (size_t)old->n * sizeof(agc_value));
         for (uint32_t k = 0; k < u->count; k++) st->fields[u->fields[k]] = R[(uint32_t)in.b + 1 + k];
         R[in.a] = agc_struct_value(st);
+        /* The copy is linear in the field count (up to 65535), unlike a
+           STRUCT whose fields the program wrote one by one, so it is charged
+           by size as CONCAT is. */
+        agc_charge_bytes(vm, (size_t)old->n * sizeof(agc_value));
+        if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       }
       case AGC_OP_FIELD: {

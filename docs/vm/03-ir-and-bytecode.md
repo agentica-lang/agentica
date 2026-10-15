@@ -173,11 +173,14 @@ Details that code and tests rely on:
 - `STRUCT_WITH` allocates one struct of the receiver's size and copies the
   receiver into it, then writes the updated fields. The receiver must be the
   struct type that update entry `c` names, with the field count of that type's
-  table entry (a hand-made file may put another value there, or a builtin record
-  declared with more fields than the VM makes); anything else is
-  `RUNTIME-INTERNAL`. The loader has checked every field index of the entry
-  against the struct's field count, so the writes need no bounds test. It charges
-  no cost beyond its `STEP`s, like `STRUCT`.
+  table entry (a hand-made file may put another value there); anything else is
+  `RUNTIME-INTERNAL`. Every C creator of a struct goes through
+  `agc_builtin_struct`, which checks the name, the count and the field names, so
+  the count test only keeps the invariant at the write, as `agc_struct_def_of`
+  does. The loader has checked every field index of the entry against the
+  struct's field count, so the writes need no bounds test. Unlike `STRUCT`, the
+  copy is linear in the field count, so the instruction charges
+  `n * sizeof(agc_value)` bytes of cost, like `CONCAT`.
 - An error in `TRY` returns from the frame like `RETURN`. An error in a `TRY` of
   the entry function is `RUNTIME-INTERNAL` (the checker allows `try` only in
   functions that return Result).

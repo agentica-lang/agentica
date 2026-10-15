@@ -530,9 +530,9 @@ static void load(reader *r, agc_program *p) {
 static void trace_tables(const agc_trace *tr, const agc_program *p) {
   AGC_TRACE(tr, AGC_TRACE_LOADER,
             "tables sources=%" PRIu32 " spans=%" PRIu32 " constants=%" PRIu32 " builtins=%" PRIu32
-            " functions=%" PRIu32 " structs=%" PRIu32 " types=%" PRIu32 " enums=%" PRIu32 " variants=%" PRIu32,
+            " functions=%" PRIu32 " structs=%" PRIu32 " types=%" PRIu32 " enums=%" PRIu32 " variants=%" PRIu32 " updates=%" PRIu32,
             p->source_count, p->span_count, p->constant_count, p->builtin_count, p->function_count, p->struct_count,
-            p->type_count, p->enum_count, p->variant_count);
+            p->type_count, p->enum_count, p->variant_count, p->update_count);
 }
 
 static bool load_guarded(reader *r, agc_program *p) {
