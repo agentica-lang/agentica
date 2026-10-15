@@ -206,13 +206,21 @@
 (define (checksum data)
   (for/fold ([total 0]) ([byte (in-bytes data)]) (modulo (+ (* total 31) byte) 1000000007)))
 
+;; The header ends with the Agentica version (magic, format version, the length of the version and its bytes). The size and
+;; the checksum leave it out, so a release does not change them, and neither the line nor its frozen copy
+;; (tests/fixtures/frontend/frozen/bytecode/limits.expected).
+(define (without-header data)
+  (subbytes data (+ 12 (integer-bytes->integer data #f #f 8 12))))
+
 (define (racket-limits-line name)
   (define ir (limits-scenario name))
   (define result
     (with-handlers ([exn:fail? (lambda (failure) (error 'frontend-bytecode "~a: ~a" name (exn-message failure)))])
       (let ([code (ir->bytecode ir)]) (if (diagnostic? code) code (write-bytecode code)))))
   (cond
-    [(bytes? result) (format "~a ok ~a ~a" name (bytes-length result) (checksum result))]
+    [(bytes? result)
+     (define body (without-header result))
+     (format "~a ok ~a ~a" name (bytes-length body) (checksum body))]
     [else
      (define span (diagnostic-span result))
      (define line

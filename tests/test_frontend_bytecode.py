@@ -41,6 +41,13 @@ def scenario_names(constant):
     return re.findall(r'"([^"]+)"', text[start:text.index("]", start)])
 
 
+def without_version(data):
+    """The file without the length and the text of the Agentica version, which a release changes (magic and format
+    version, then the length of the version and its bytes)."""
+    length = int.from_bytes(data[8:12], "little")
+    return data[:8] + data[12 + length:]
+
+
 class BytecodeFrozenTest(StageTestCase):
     ENTRY = "bytecode.agc"
     STDLIB = True
@@ -48,9 +55,9 @@ class BytecodeFrozenTest(StageTestCase):
     def compile_paths(self, paths, directory, timeout=1800):
         """Compile each path (relative to `directory`) to a file of its own.
 
-        Gives {path: what the Racket writer froze for it}: the line the runner printed, then the hash of the file it wrote
-        or `no file`. Each call writes into a fresh folder, so a file of an earlier call is never taken for the output of a
-        failure.
+        Gives {path: what the Racket writer froze for it}: the size and the hash of the file it wrote without the version
+        (`wrote N bytes`, then the hash), or the line the runner printed for a failure and `no file`. Each call writes into
+        a fresh folder, so a file of an earlier call is never taken for the output of a failure.
         """
         outputs = self.make_temp_dir()
         arguments = ["--stdlib=%s" % self.stdlib]
@@ -61,8 +68,13 @@ class BytecodeFrozenTest(StageTestCase):
         found = sections(self.run_stage(*arguments, cwd=directory, timeout=timeout))
         results = {}
         for path, target in targets.items():
-            written = sha256(target.read_bytes()) if target.exists() else "no file"
-            results[path] = found[path] + written + "\n"
+            if not target.exists():
+                results[path] = found[path] + "no file\n"
+                continue
+            data = target.read_bytes()
+            self.assertEqual(found[path], "wrote %d bytes\n" % len(data), path)
+            body = without_version(data)
+            results[path] = "wrote %d bytes\n%s\n" % (len(body), sha256(body))
         self.files = targets
         return results
 

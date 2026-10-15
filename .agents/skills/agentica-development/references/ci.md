@@ -33,6 +33,11 @@ comment), then a step that calls it. Targets that are not obvious:
   purpose: `tests/eval/test_*.py` are not modules for this runner. `PY_ALONE`
   in the Makefile (`tests/test_vm_latency.py`) lists modules that a directory
   does not pick up: they run when named, as `make vm-latency` does.
+- `frontend-freeze` and `frontend-snapshot` are not CI steps: they rewrite the
+  frozen Racket outputs and the snapshot of the corpus that
+  `tests/test_frontend_<stage>.py` compare the Agentica stages with
+  (`references/frontend.md`, "Frozen comparisons"). They need Racket and go away
+  with the Racket stages.
 - Each Python module runs in its own process (`python3 -m unittest
   tests.test_<area>` from the root), run by make itself: `make -k -O -j$(JOBS)`
   over `py-test/<file>` targets, so a failure shows that module's report and

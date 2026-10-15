@@ -13,13 +13,21 @@
          "../src/bytecode.rkt"
          (prefix-in test: "frontend-bytecode-test.rkt"))
 
-;; What one compile gives, as the Python test builds it: `wrote N bytes` and the hash of the bytes, or the ERROR line of
-;; the first stage that failed and `no file`.
+;; The header ends with the Agentica version (magic, format version, the length of the version and its bytes). A release
+;; changes it, and the freeze must not change with it, so the size and the hash are those of the file without the length
+;; and the text of the version. The Python test does the same (tests/test_frontend_bytecode.py, without_version).
+(define (without-version data)
+  (bytes-append (subbytes data 0 8) (subbytes data (+ 12 (integer-bytes->integer data #f #f 8 12)))))
+
+;; What one compile gives, as the Python test builds it: `wrote N bytes` and the hash of the bytes without the version, or
+;; the ERROR line of the first stage that failed and `no file`.
 (define (output-of path)
   (define compiled (test:racket-compile path))
-  (if (test:compiled-bytes compiled)
-      (format "wrote ~a bytes\n~a\n" (bytes-length (test:compiled-bytes compiled)) (sha256-hex (test:compiled-bytes compiled)))
-      (format "~a\nno file\n" (test:compiled-line compiled))))
+  (cond
+    [(test:compiled-bytes compiled)
+     (define body (without-version (test:compiled-bytes compiled)))
+     (format "wrote ~a bytes\n~a\n" (bytes-length body) (sha256-hex body))]
+    [else (format "~a\nno file\n" (test:compiled-line compiled))]))
 
 ;; The lowering fixtures: a NAME.agc file or a folder NAME with a root.agc.
 (define (lower-fixture-keys files)
