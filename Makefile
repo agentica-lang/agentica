@@ -25,7 +25,9 @@ RKT_TESTS = $(filter-out %.py,$(TESTS))
 # (tests/eval/test_*.py are not unittest modules for this runner).
 TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
-PY_TESTS = $(sort $(PY_FILES) $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py)))
+# Modules that only run when named (make vm-latency): a directory in TESTS does not pick them up
+PY_ALONE = tests/test_vm_latency.py
+PY_TESTS = $(sort $(PY_FILES) $(filter-out $(PY_ALONE),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
 # A .py path outside tests/test_<area>.py would build a wrong module name below
 PY_BAD = $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
 PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a tests/test_<area>.py file))
@@ -83,7 +85,7 @@ eval-references:
 
 # Task wake latency next to busy tasks (docs/vm/10-io-scheduler.md 10.2.1), alone so it has the CPU to itself
 vm-latency: build vm
-	$(RACO) test tests/vm-latency-test.rkt
+	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_latency.py
 
 test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
@@ -496,9 +498,9 @@ sweep-full: vm-diff-build
 	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
 # The Racket tests that run against the built VM (the ASan job runs them on the sanitizer VM)
-VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-stack-test.rkt
+VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-stack-test.rkt
 # The unittest modules that do the same (make test-py runs them)
-VM_PY_TESTS = tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py
+VM_PY_TESTS = tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py tests/test_vm_trace.py
 SANITIZE_JOBS ?= 4
 
 vm-sanitize-build: build

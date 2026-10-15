@@ -80,7 +80,7 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
   tests/fixtures/std-binary-vectors.py` writes (standard library only; it loads
   `bits-vectors.py` for the float helpers and checks `struct` against the 13a
   exact f32 rounding). CI does not run the script: run it by hand and commit
-  both files when the vectors change. `tests/std-binary-test.rkt` checks the
+  both files when the vectors change. `tests/test_std_binary.py` checks the
   fixed output.
 
 ## Comments in stdlib/

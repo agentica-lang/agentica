@@ -666,7 +666,7 @@ Expected values come from fixtures whose numbers are known.
   stop at the same place.
 - **Timing-sensitive cases go in their own file,**
   `tests/vm-metrics-timing-test.rkt`, listed in `test-omit-paths` in
-  `tests/info.rkt` next to `vm-latency-test.rkt`, so `make test`'s parallel
+  `tests/info.rkt` next to `test_vm_latency.py`, so `make test`'s parallel
   batch never runs them. A `make vm-metrics-timing` target runs it alone, and CI
   runs it in its own step right after `make vm-latency`. They are the cases
   marked *(timing file)* below; the rest go in `tests/vm-metrics-test.rkt`.
@@ -722,9 +722,9 @@ Expected values come from fixtures whose numbers are known.
   trace variables, and every test file that removes `AGENTICA_VM_TRACE` removes
   all three too when it loads (today `tests/bytecode-test.rkt`,
   `tests/cli-in-process.rkt`, `tests/modules-test.rkt`,
-  `tests/stdlib-distribution-test.rkt`, `tests/vm-diff-common.rkt`,
-  `tests/vm-latency-test.rkt` and `tests/vm-trace-test.rkt`; the Python tests
-  use `vm_environment` of `tests/agentica_test.py`), so a developer's setting
+  `tests/stdlib-distribution-test.rkt` and `tests/vm-diff-common.rkt`; the
+  Python tests, `tests/test_vm_latency.py` and `tests/test_vm_trace.py`
+  among them, use `vm_environment` of `tests/agentica_test.py`), so a developer's setting
   cannot change expected output. The `vm-sanitizers` CI job also builds
   `make vm vm-test METRICS=0`, and `agentica-vm --version` says `metrics off`
   there.
@@ -753,7 +753,7 @@ Expected values come from fixtures whose numbers are known.
 - `vm/trace.h`: the observe word and `AGC_OBSERVE`, shared by trace points and
   hooks; the new `metrics` category in `vm/trace.c` (18a, with its `write`
   lines; 18b adds `listen` and scrape lines), and `metrics` in the category
-  regex of `tests/vm-trace-test.rkt`.
+  regex of `tests/test_vm_trace.py`.
 - `vm/main.c`: one `start_observe` reads the trace and metrics variables
   together before loading; it starts the metrics thread, and at the end sets
   `stop`, hands the final snapshot to the thread, and joins it with the 1-second

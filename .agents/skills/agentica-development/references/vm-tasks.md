@@ -154,8 +154,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Gotchas
 
-- Tasks: `make vm-latency` runs `tests/vm-latency-test.rkt` alone (kept
-  out of `make test`'s parallel batch by `tests/info.rkt`; CI runs it right
+- Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept
+  out of `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it right
   after `make test`). A sleeping task and a stdin reader must wake within
   250 ms next to CPU, sort and concat tasks, and must not with
   `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only switch that leaves

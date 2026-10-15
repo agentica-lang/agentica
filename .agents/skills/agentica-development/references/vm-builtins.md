@@ -130,7 +130,7 @@ must never crash or change the run):
   function; libuv callbacks (`uv_signal_t` included) run on the loop thread
   and may trace.
 - A new category gets a bit in `vm/trace.h` and a name in `category_names`
-  in `vm/trace.c`, the regex in `tests/vm-trace-test.rkt`, and the list in
+  in `vm/trace.c`, the regex in `tests/test_vm_trace.py`, and the list in
   `docs/vm/08-loader-and-cli.md` §9.
 - Every test file that starts the VM itself removes `AGENTICA_VM_TRACE` and
   `AGENTICA_VM_TRACE_FILE` when it loads (the Makefile `unexport`s them).
