@@ -4,66 +4,12 @@
 ## The first call of any function here installs a handler named `console` (`stderr_text`, level `info`). Handlers run in order, synchronously, in the task that logs, so a line is written when the call returns.
 ## A handler error is the error of the task that logged. The registry lives in the VM and belongs to one run.
 
-# The ranks are the order of LogLevel: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
-# so its rows need no enum type.
-
 struct JsonLine
   time: String
   level: String
   msg: String
   fields: Map[String, String]
   task: Int
-end
-
-def rank_of(level: LogLevel) -> Int
-  case level
-    LogLevel.Debug -> return 0
-    LogLevel.Info -> return 1
-    LogLevel.Warning -> return 2
-    LogLevel.Error -> return 3
-  end
-end
-
-def level_of(rank: Int) -> LogLevel
-  case rank
-    0 -> return LogLevel.Debug
-    1 -> return LogLevel.Info
-    2 -> return LogLevel.Warning
-    _ -> return LogLevel.Error
-  end
-end
-
-def level_name(level: LogLevel) -> String
-  case level
-    LogLevel.Debug -> return "debug"
-    LogLevel.Info -> return "info"
-    LogLevel.Warning -> return "warning"
-    LogLevel.Error -> return "error"
-  end
-end
-
-# The install is one native call that checks for -1 itself, so two tasks that log for the first time together
-# install the console handler once, and a later detach("console") stays in effect.
-def ready() -> Int
-  current = LogRegistry.level()
-  if current < 0
-    LogRegistry.install_default(&stderr_text)
-    return LogRegistry.level()
-  end
-  return current
-end
-
-# The event takes its handlers here, so a handler that attaches or detaches another does not change this event.
-# The event is made only when some handler accepts it.
-def dispatch(level: LogLevel, rank: Int, message: String, fields: Map[String, String]) -> Void
-  accepting = LogRegistry.handlers(rank)
-  if accepting.size == 0
-    return
-  end
-  event = LogEvent(level: level, message: message, fields: fields, time_ms: Time.now_ms(), task: LogRegistry.task_id())
-  for handler in accepting
-    handler.call(event)
-  end
 end
 
 # A level function reads the floor once and compares it once. The floor is the higher of the global level and the
@@ -201,36 +147,6 @@ export def stderr_json(event: LogEvent) -> Void
   IO.warn(format_json(event))
 end
 
-# JSON.encode(s) is the quoted, escaped text, so it equals "\"" + s + "\"" exactly when s has no quote, backslash
-# or control character (DEL included). The three line breaks above are not escaped by it, so they are checked apart.
-def plain?(text: String) -> Bool
-  return text.length > 0 and !text.contains?("=") and !line_break?(text) and JSON.encode(text) == "\"" + text + "\""
-end
-
-# JSON.encode leaves U+0085, U+2028 and U+2029 as they are, but splitlines() and some viewers break lines there.
-# Escaping them keeps one event on one line.
-def one_line(text: String) -> String
-  return text.replace(String.from_code(133), "\\u0085").replace(String.from_code(8232), "\\u2028").replace(String.from_code(8233), "\\u2029")
-end
-
-def line_break?(text: String) -> Bool
-  return text.contains?(String.from_code(133)) or text.contains?(String.from_code(8232)) or text.contains?(String.from_code(8233))
-end
-
-def message_token(message: String) -> String
-  if plain?(message) and !message.starts_with?(" ") and !message.ends_with?(" ")
-    return message
-  end
-  return one_line(JSON.encode(message))
-end
-
-def field_token(text: String) -> String
-  if plain?(text) and !text.contains?(" ")
-    return text
-  end
-  return one_line(JSON.encode(text))
-end
-
 ## Returns the text line of an event: `TIME LEVEL MESSAGE key=value ...`, with the time in UTC.
 ## A message or field that is empty, has a space (for a field), `=`, a quote, a backslash or a control character is written as a JSON string, so a line is always one line.
 export def format_text(event: LogEvent) -> String
@@ -245,14 +161,6 @@ end
 export def format_json(event: LogEvent) -> String
   return one_line(JSON.encode(JsonLine(time: time_text(event.time_ms), level: level_name(event.level), msg: event.message,
                                        fields: event.fields, task: event.task)))
-end
-
-def pad(n: Int, width: Int) -> String
-  text = n.to_s
-  while text.length < width
-    text = "0" + text
-  end
-  return text
 end
 
 ## Returns milliseconds since the Unix epoch as UTC text, such as `2026-10-12T10:15:02.345Z`.
@@ -292,4 +200,95 @@ export def time_text(ms: Int) -> String
   second = rest % 60000 / 1000
   milli = rest % 1000
   return "#{sign}#{pad(year, 4)}-#{pad(month, 2)}-#{pad(day, 2)}T#{pad(hour, 2)}:#{pad(minute, 2)}:#{pad(second, 2)}.#{pad(milli, 3)}Z"
+end
+
+# The ranks are the order of LogLevel: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
+# so its rows need no enum type.
+def rank_of(level: LogLevel) -> Int
+  case level
+    LogLevel.Debug -> return 0
+    LogLevel.Info -> return 1
+    LogLevel.Warning -> return 2
+    LogLevel.Error -> return 3
+  end
+end
+
+def level_of(rank: Int) -> LogLevel
+  case rank
+    0 -> return LogLevel.Debug
+    1 -> return LogLevel.Info
+    2 -> return LogLevel.Warning
+    _ -> return LogLevel.Error
+  end
+end
+
+def level_name(level: LogLevel) -> String
+  case level
+    LogLevel.Debug -> return "debug"
+    LogLevel.Info -> return "info"
+    LogLevel.Warning -> return "warning"
+    LogLevel.Error -> return "error"
+  end
+end
+
+# The install is one native call that checks for -1 itself, so two tasks that log for the first time together
+# install the console handler once, and a later detach("console") stays in effect.
+def ready() -> Int
+  current = LogRegistry.level()
+  if current < 0
+    LogRegistry.install_default(&stderr_text)
+    return LogRegistry.level()
+  end
+  return current
+end
+
+# The event takes its handlers here, so a handler that attaches or detaches another does not change this event.
+# The event is made only when some handler accepts it.
+def dispatch(level: LogLevel, rank: Int, message: String, fields: Map[String, String]) -> Void
+  accepting = LogRegistry.handlers(rank)
+  if accepting.size == 0
+    return
+  end
+  event = LogEvent(level: level, message: message, fields: fields, time_ms: Time.now_ms(), task: LogRegistry.task_id())
+  for handler in accepting
+    handler.call(event)
+  end
+end
+
+# JSON.encode(s) is the quoted, escaped text, so it equals "\"" + s + "\"" exactly when s has no quote, backslash
+# or control character (DEL included). The three line breaks above are not escaped by it, so they are checked apart.
+def plain?(text: String) -> Bool
+  return text.length > 0 and !text.contains?("=") and !line_break?(text) and JSON.encode(text) == "\"" + text + "\""
+end
+
+# JSON.encode leaves U+0085, U+2028 and U+2029 as they are, but splitlines() and some viewers break lines there.
+# Escaping them keeps one event on one line.
+def one_line(text: String) -> String
+  return text.replace(String.from_code(133), "\\u0085").replace(String.from_code(8232), "\\u2028").replace(String.from_code(8233), "\\u2029")
+end
+
+def line_break?(text: String) -> Bool
+  return text.contains?(String.from_code(133)) or text.contains?(String.from_code(8232)) or text.contains?(String.from_code(8233))
+end
+
+def message_token(message: String) -> String
+  if plain?(message) and !message.starts_with?(" ") and !message.ends_with?(" ")
+    return message
+  end
+  return one_line(JSON.encode(message))
+end
+
+def field_token(text: String) -> String
+  if plain?(text) and !text.contains?(" ")
+    return text
+  end
+  return one_line(JSON.encode(text))
+end
+
+def pad(n: Int, width: Int) -> String
+  text = n.to_s
+  while text.length < width
+    text = "0" + text
+  end
+  return text
 end

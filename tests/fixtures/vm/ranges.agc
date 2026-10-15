@@ -1,7 +1,3 @@
-def show(n: Int) -> Void
-  print(n)
-end
-
 struct Span
   name: String
   r: Range
@@ -10,6 +6,10 @@ end
 enum Shape
   Line(Range)
   Dot
+end
+
+def show(n: Int) -> Void
+  print(n)
 end
 
 def find(r: Range, want: Int) -> Int

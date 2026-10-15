@@ -4,6 +4,13 @@ import "source" as Source
 import "token" as Tokens
 import "unicode" as Unicode
 
+export def lex_text(text: String) -> String
+  case Lexer.lex(text)
+    Diag.Outcome.Done(tokens) -> return tokens.map do |token| token_line(token) end.join("\n")
+    Diag.Outcome.Failed(problem) -> return diagnostic_line(problem)
+  end
+end
+
 def escaped(code: Int) -> String
   case code
     34 -> return "\\\""
@@ -70,11 +77,4 @@ end
 
 def diagnostic_line(problem: Diag.Diagnostic) -> String
   return "ERROR " + problem.code + " " + span_text(problem.span) + " " + quote(problem.message) + " " + help_text(problem.help)
-end
-
-export def lex_text(text: String) -> String
-  case Lexer.lex(text)
-    Diag.Outcome.Done(tokens) -> return tokens.map do |token| token_line(token) end.join("\n")
-    Diag.Outcome.Failed(problem) -> return diagnostic_line(problem)
-  end
 end

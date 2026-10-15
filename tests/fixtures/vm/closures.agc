@@ -5,6 +5,11 @@ struct Handler
   run: Fn[Int, Int]
 end
 
+enum Opt
+  Some(Int)
+  None
+end
+
 def double(x: Int) -> Int
   return x * 2
 end
@@ -20,11 +25,6 @@ def pick(n: Int) -> Fn[Int, Int]
     end
   end
   return &double
-end
-
-enum Opt
-  Some(Int)
-  None
 end
 
 def run(f: Fn[Int, Void], x: Int) -> Void
