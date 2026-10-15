@@ -1,0 +1,1 @@
+{"code":"RUNTIME-INDEX-OUT-OF-RANGE","file":"@fixtures/vm/constants-error.agc","message":"index 7 is outside a list of length 3","range":{"end":{"column":14,"line":2},"start":{"column":13,"line":2}},"stack":[{"column":13,"file":"@fixtures/vm/constants-error.agc","function":"BAD","line":2},{"column":1,"file":"@fixtures/vm/constants-error.agc","function":"<start>","line":2}]}

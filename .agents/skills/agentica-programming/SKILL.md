@@ -82,7 +82,8 @@ Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]
 
 - Syntax: no semicolons, braces, `let`, `when`, `elif`, `then`, `match`, or `loop do`. Strings are double-quoted (`'x'` is an error). Comments are `#` only (`//` is an error). `break` and `next` stand alone on a line; write `if x ... break ... end`, not `break if x`.
 - A `##` block directly above a `def`, `struct`, `enum`, field or variant is its Markdown doc (`## Adds two numbers.` above `def add(a: Int, b: Int) -> Int`). The first `##` block of a file, followed by a blank line, documents the module. Any other `##` block is `PARSE-DETACHED-DOC`.
-- File order: module doc and `import`s, then `struct` and `enum`, then `export def`, then private `def`; any other order is `CHECK-DECL-ORDER` (the help says where the declaration goes). Order has no other meaning: a function may call a later one.
+- Constants: a top-level `LIMIT = 100` (capitals, at least two characters; `export LIMIT = 100` to share) is a value built once before `main`: literals, collections, struct and enum values, operators, other constants, and effect-free builtins (`Set.new`, `map`). No calls of your own functions, no `&f`, no `while`, no effects (`CHECK-CONSTANT-EXPRESSION`); a channel or function value is `CHECK-CONSTANT-TYPE`. Read it as `LIMIT` (in another file by `import {LIMIT} from "x"`, never `Mod.LIMIT`). Build lookup tables as constants, not in functions that run per call.
+- File order: module doc and `import`s, then constants, then `struct` and `enum`, then `export def`, then private `def`; any other order is `CHECK-DECL-ORDER` (the help says where the declaration goes). Order has no other meaning: a function may call a later one.
 - Imports: `import Models from "models"` then `Models.User`, or `import {User, greet as hello} from "models"` for bare names (an alias and a name list never share a line; a rename keeps the case rule: types stay capitalized, functions lowercase).
 - Calls take parentheses: `puts("hi")`, `main()`, `run(5) do |x| ... end`. Only a builtin method or a zero-argument module function may drop them: `s.length`, `xs.size`, `IO.gets!`.
 - Values are immutable: `xs = xs.push(4)`, `m = m.put("k", 1)`. A bare `xs.push(4)` or `user.with(age: 31)` is `CHECK-UNUSED-VALUE`. Fields and indexes cannot be assigned: copy a struct with some fields changed, `user = user.with(age: 31)` (named fields, one or more; the values see the old struct).
@@ -113,7 +114,7 @@ Read only the files the task needs:
 | [references/builtins.md](references/builtins.md) | calls a builtin not in the cheat sheet, or needs an exact signature for `String`, `List`, `Map`, `Set`, `Range`, `Int`, `Float`, `IO`, `System` (arguments, environment), `Time`, or `Random` |
 | [references/examples.md](references/examples.md) | needs a complete program to start from |
 | [references/performance.md](references/performance.md) | a program is too slow or must process 100,000+ items or about 1 MB; choosing `while`, recursion, `.with` or a collection for a hot path |
-| [references/modules.md](references/modules.md) | spans several files, or imports `std/` or `pkg/` modules |
+| [references/modules.md](references/modules.md) | spans several files, shares constants between files, or imports `std/` or `pkg/` modules |
 | [references/json.md](references/json.md) | reads or writes JSON |
 | [references/files.md](references/files.md) | reads or writes files, directories, or paths |
 | [references/processes.md](references/processes.md) | starts other programs and talks to them (`Process`) |

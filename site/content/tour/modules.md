@@ -27,7 +27,7 @@ end
 
 ## File layout
 
-Every file lists its declarations in the same order: the module doc and the imports, then `struct` and `enum` declarations, then `export def` functions, then private `def` functions. Types may come in any order among themselves. The order is only style, because a function can still call one declared later, but the checker enforces it so every file reads the same way.
+Every file lists its declarations in the same order: the module doc and the imports, then constants (see [Constants](/tour/constants/)), then `struct` and `enum` declarations, then `export def` functions, then private `def` functions. Types may come in any order among themselves. The order is only style, because a function can still call one declared later, but the checker enforces it so every file reads the same way.
 
 A private function before an exported one is `CHECK-DECL-ORDER`:
 
@@ -123,7 +123,7 @@ end
 9
 ```
 
-This works for functions, structs and enums. For an enum, import the enum, not its variants: its values and patterns keep the enum name in front.
+This works for functions, structs, enums and constants. For an enum, import the enum, not its variants: its values and patterns keep the enum name in front.
 
 ```agentica
 import {Status} from "status"

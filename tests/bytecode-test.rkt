@@ -8,6 +8,7 @@
          "../src/diagnostic.rkt"
          "../src/lexer.rkt"
          "../src/lower.rkt"
+         "../src/modules.rkt"
          "../src/parser.rkt"
          "../src/source.rkt")
 
@@ -20,6 +21,15 @@
 (define (lower-text text)
   (define types (make-hasheq))
   (define checked (check (parse (lex (source "test.agc" text))) #:types types))
+  (when (diagnostic? checked) (error 'bytecode-test "~a" (format-diagnostic checked)))
+  (lower checked types))
+
+;; Programs with module constants go through the linker, which rewrites the reads.
+(define (lower-linked-text text)
+  (define linked (link-program (parse (lex (source "test.agc" text))) (string->path "test.agc")))
+  (when (diagnostic? linked) (error 'bytecode-test "~a" (format-diagnostic linked)))
+  (define types (make-hasheq))
+  (define checked (check linked #:types types))
   (when (diagnostic? checked) (error 'bytecode-test "~a" (format-diagnostic checked)))
   (lower checked types))
 
@@ -171,6 +181,68 @@
     (check-equal? updates '(0 0 1))
     (check-false (member (index-of opcodes 'field)
                          (for/list ([instr (in-vector (bc-function-code main))]) (first instr)))))
+
+  (test-case "module constants: literals are inlined, the others get a slot, a function and a place in <start>"
+    (define program
+      (ir->bytecode
+       (lower-linked-text
+        (string-append
+         "SIZE = 4\nTABLE = {\"a\": SIZE}\nSQUARES = [1, 2].map do |n| n * SIZE end\nLATE = SQUARES.size\n"
+         "UNUSED = [9]\n\n"
+         "def main() -> Void\n  puts(\"#{TABLE} #{SIZE}\")\n  [1].each do |n|\n    puts(n + LATE)\n  end\nend\n\n"
+         "def unreachable() -> Int\n  return UNUSED.size\nend\n"))))
+    (define names (map bc-function-name (bc-program-functions program)))
+    ;; Declared functions, the kept constants in initialization order, <start>, then the blocks in the
+    ;; order they are lowered: the functions first, then the constants.
+    (check-equal? (take names 6) '("main" "unreachable" "TABLE" "SQUARES" "LATE" "<start>"))
+    (check-equal? (length names) 8)
+    ;; The block of main (line 9) is lowered before the block of SQUARES (line 3).
+    (check-equal? (drop names 6) '("block@test.agc:9:12" "block@test.agc:3:22"))
+    (check-equal? (bc-program-entry program) 5)
+    ;; Slots follow the initialization order: TABLE, SQUARES, LATE, and UNUSED, which only the unreachable
+    ;; function reads (a slot nothing writes). SIZE is a literal and has none.
+    (check-equal? (bc-program-globals program) 4)
+    (define start (list-ref (bc-program-functions program) 5))
+    (define (ops function) (for/list ([instr (in-vector (bc-function-code function))]) (first instr)))
+    (define set-op (index-of opcodes 'global-set))
+    (define call-op (index-of opcodes 'call))
+    (check-equal? (for/list ([instr (in-vector (bc-function-code start))] #:when (= (first instr) set-op))
+                    (list (second instr) (+ (third instr) (* 65536 (fourth instr)))))
+                  '((0 0) (0 1) (0 2)))
+    (check-equal? (for/list ([instr (in-vector (bc-function-code start))] #:when (= (first instr) call-op))
+                    (third instr))
+                  '(2 3 4))
+    (check-equal? (count (lambda (op) (= op (index-of opcodes 'tail-call))) (ops start)) 1)
+    ;; Only <start> writes a slot.
+    (for ([function (in-list (bc-program-functions program))] #:unless (eq? function start))
+      (check-false (member set-op (ops function)) (bc-function-name function)))
+    ;; A literal constant is a CONST in the reader: no GLOBAL reads SIZE (slot 0 is TABLE, read once in main).
+    (define main (car (bc-program-functions program)))
+    (check-equal? (count (lambda (op) (= op (index-of opcodes 'global))) (ops main)) 1))
+
+  (test-case "a constant read only by an unreachable function still gets a slot and <start>"
+    (define program
+      (ir->bytecode
+       (lower-linked-text "UNUSED = [9]\n\ndef main() -> Void\n  puts(1)\nend\n\ndef never() -> Int\n  return UNUSED.size\nend\n")))
+    (check-equal? (map bc-function-name (bc-program-functions program)) '("main" "never" "<start>"))
+    (check-equal? (bc-program-globals program) 1)
+    (check-equal? (bc-program-entry program) 2))
+
+  (test-case "a program without constants keeps main as its entry and writes no slots"
+    (define program (ir->bytecode (lower-text "def main() -> Void\n  puts(1)\nend\n")))
+    (check-equal? (bc-program-globals program) 0)
+    (check-equal? (map bc-function-name (bc-program-functions program)) '("main"))
+    (check-equal? (bc-program-entry program) 0)
+    ;; A program that only has literal constants has no slot and no <start> either.
+    (define literals (ir->bytecode (lower-linked-text "SIZE = 4\nNAME = \"x\"\n\ndef main() -> Void\n  puts(\"#{NAME}#{SIZE}\")\nend\n")))
+    (check-equal? (bc-program-globals literals) 0)
+    (check-equal? (map bc-function-name (bc-program-functions literals)) '("main")))
+
+  (test-case "more than 65,535 slots is BYTECODE-LIMIT"
+    (define ir (lower-linked-text "ITEMS = [1]\n\ndef main() -> Void\n  puts(ITEMS.size)\nend\n"))
+    (check-true (bc-program? (ir->bytecode (struct-copy ir-program ir [globals 65535]))))
+    (define over (ir->bytecode (struct-copy ir-program ir [globals 65536])))
+    (check-equal? (diagnostic-code over) 'BYTECODE-LIMIT))
 
   (test-case "opcode numbers match vm/value.h"
     (define names

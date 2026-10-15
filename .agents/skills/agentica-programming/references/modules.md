@@ -3,12 +3,12 @@
 Each file is a module. `import Models from "models"` loads `models.agc` and names it `Models`; `import Util from "../lib/util"` loads `../lib/util.agc`. Paths never include the extension (`import "models.agc"` is `CHECK-IMPORT-PATH`, and so are an empty path, a path ending in `/`, or a last part with a dot such as `"models.rb"`). So a module file name has no dot except `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
 
 - Relative paths resolve from the importing file, not the working directory.
-- Every file, imported ones included, keeps the order: `import`s, then `struct` and `enum`, then `export def`, then private `def`. An imported file out of order is `CHECK-DECL-ORDER`, located in that file.
+- Every file, imported ones included, keeps the order: `import`s, then constants, then `struct` and `enum`, then `export def`, then private `def`. An imported file out of order is `CHECK-DECL-ORDER`, located in that file.
 - Canonical paths identify files, and each file is linked once. A cycle is `CHECK-IMPORT-CYCLE`; a missing or unreadable import is `CHECK-IMPORT-IO`; an invalid path is `CHECK-IMPORT-PATH`. Each is reported at the import.
 
 ## Exports and names
 
-`export struct`, `export enum`, and `export def` expose declarations; everything else is private.
+`export struct`, `export enum`, `export def`, and `export NAME = ...` (a constant) expose declarations; everything else is private.
 
 - Use `Models.User` in annotations and JSON type arguments, `Models.User(name: "Ana")` to construct, `Models.greet(user)` to call, and `&Models.greet` for a callback.
 - Imported enums: `Models.Option[T]` as a type, `Models.Option.Some(value)` to build, and `Models.Option.Some(item)` in a pattern.
@@ -27,11 +27,15 @@ Each file is a module. `import Models from "models"` loads `models.agc` and name
 - A name the module does not export, or keeps private, is `CHECK-IMPORT-NAME` at the name in the braces, with a `did you mean` help over the exports. It is reported at the import, before any use.
 - A module imported by names counts as imported for `value.with(...)`: the file may update every exported struct of it.
 
+## Constants
+
+`export LIMIT = 100` shares a constant; `import {LIMIT, TABLE as LOOKUP} from "limits"` brings it in by name and it is read bare. A constant can be renamed only to another constant name (capitals and underscores): `{LIMIT as max}` is `CHECK-IMPORT-RENAME`. It is not reached through the alias: `Limits.LIMIT` is `CHECK-IMPORT-NAME`, and the help says `write import {LIMIT} from "limits", then use LIMIT`. To offer a value through the alias, export a function. An imported constant cannot equal a constant or another name of the file (`CHECK-REDEFINED-NAME`); a private constant cannot be imported (`CHECK-IMPORT-NAME`). The constants of the imported files that the program can reach are built before `main`.
+
 ## Running
 
 Only the root file's `def main() -> Void` runs; imported `main` functions never run. Linking keeps source spans and distinct module identities. Imported calls and tasks share the program's execution budget and resource ownership. `agentica check`, `agentica FILE`, `agentica --dump`, and `agentica test` use the same loader.
 
-There are no wildcard imports, package registry, module state, nested module blocks, or receiver attachment. `as` and `from` are contextual in imports, not reserved.
+There are no wildcard imports, package registry, mutable module state, nested module blocks, or receiver attachment. `as` and `from` are contextual in imports, not reserved.
 
 ## Standard library and external libraries
 

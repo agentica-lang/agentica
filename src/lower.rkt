@@ -1,6 +1,6 @@
 #lang racket
 
-(require "ast.rkt" "builtins.rkt" "builtin-types.rkt" "diagnostic.rkt" "source.rkt")
+(require "ast.rkt" "builtins.rkt" "builtin-types.rkt" "constants.rkt" "diagnostic.rkt" "source.rkt")
 
 (provide lower
          format-ir
@@ -12,7 +12,8 @@
          (struct-out ir-label)
          (struct-out ir-instr))
 
-(struct ir-program (sources structs enums functions entry span) #:transparent)
+;; globals is the slot count of the module constants (the Globals section).
+(struct ir-program (sources structs enums functions entry globals span) #:transparent)
 (struct ir-struct (name fields types) #:transparent)
 (struct ir-enum (name variants) #:transparent)
 (struct ir-function (name params captures slots body span) #:transparent)
@@ -255,8 +256,6 @@
     (with-handlers ([exn:fail? (lambda (failure)
                                  (diagnostic 'LOWER-INTERNAL (exn-message failure)
                                              (program-span program)))])
-      (for ([declaration (in-list (program-declarations program))] #:when (const-decl? declaration))
-        (unsupported "module constants" (const-decl-span declaration)))
       (define declarations
         (for/list ([declaration (in-list (program-declarations program))]
                    #:when (function-decl? declaration))
@@ -278,9 +277,24 @@
       (define json-structs
         (for/hash ([entry (in-list structs)] #:when (ir-struct-types entry)) (values (ir-struct-name entry) #t)))
       (define program-types (list user-types struct-info variant-ids json-structs))
+      ;; Module constants (44.7). The function table is: the declared functions, the kept constants'
+      ;; functions in initialization order, `<start>` when there are slots, then the block functions.
+      (define constant-decls
+        (filter const-decl? (program-declarations program)))
+      (define plan
+        (let-values ([(order cycle) (constant-order constant-decls)])
+          (plan-constants declarations constant-decls order)))
+      (define kept (constant-plan-kept plan))
+      (define slot-count (hash-count (constant-plan-slots plan)))
+      (define start? (> slot-count 0))
       (define function-index
         (for/hash ([declaration (in-list declarations)] [index (in-naturals)])
           (values (function-decl-name declaration) index)))
+      (define constant-reads
+        (for/fold ([table (for/hash ([(name value) (in-hash (constant-plan-literals plan))])
+                            (values name (cons 'literal value)))])
+                  ([(name slot) (in-hash (constant-plan-slots plan))])
+          (hash-set table name (cons 'slot slot))))
       (define sources '())
       (define (note-source! span)
         (define text-source (source-span-source span))
@@ -288,13 +302,13 @@
           (set! sources (append sources (list text-source)))))
       (note-source! (program-span program))
       (define blocks (make-hasheqv))
-      (define block-count (length declarations))
+      (define block-count (+ (length declarations) (length kept) (if start? 1 0)))
       (define (new-block! make)
         (define index block-count)
         (set! block-count (add1 block-count))
         (hash-set! blocks index (make))
         index)
-      (define env (list types program-types function-index unsupported note-source! new-block!))
+      (define env (list types program-types function-index unsupported note-source! new-block! constant-reads))
       (define functions
         (for/list ([declaration (in-list declarations)])
           (lower-function (function-decl-name declaration)
@@ -304,15 +318,50 @@
                           (function-decl-span declaration)
                           #f
                           env)))
+      (define constant-functions
+        (for/list ([declaration (in-list kept)])
+          (lower-function (const-decl-name declaration)
+                          '()
+                          '()
+                          (list (return-stmt (const-decl-value declaration) (const-decl-span declaration)))
+                          (const-decl-span declaration)
+                          #f
+                          env)))
+      (define main-index (hash-ref function-index "main"))
+      ;; `<start>` calls each kept constant's function in order and stores the result in its slot, then
+      ;; tail-calls main, so it is the only function that writes a slot (the loader checks that).
+      (define start-function
+        (and start?
+             (let ([span (program-span program)])
+               (note-source! span)
+               (ir-function "<start>" 0 0 1
+                            (append
+                             ;; The loader wants a function to start with a step.
+                             (list (ir-instr 'step '() (list span)))
+                             (append*
+                              (for/list ([declaration (in-list kept)] [offset (in-naturals)])
+                                (define declaration-span (const-decl-span declaration))
+                                (note-source! declaration-span)
+                                (list (ir-instr 'call (list 0 (+ (length declarations) offset)) (list declaration-span))
+                                      (ir-instr 'global-set (list 0 (hash-ref (constant-plan-slots plan) (const-decl-name declaration)))
+                                                (list declaration-span)))))
+                             (list (ir-instr 'tail-call (list 0 main-index) (list span))
+                                   ;; The loader wants a function to end with a return.
+                                   (ir-instr 'const (list 0 (void)) (list span))
+                                   (ir-instr 'return (list 0) (list span))))
+                            span))))
       (ir-program sources structs enums
                   (append functions
-                          (for/list ([index (in-range (length declarations) block-count)])
+                          constant-functions
+                          (if start-function (list start-function) '())
+                          (for/list ([index (in-range (+ (length declarations) (length kept) (if start? 1 0)) block-count)])
                             (hash-ref blocks index)))
-                  (hash-ref function-index "main")
+                  (if start? (+ (length declarations) (length kept)) main-index)
+                  slot-count
                   (program-span program)))))
 
 (define (lower-function name parameter-names capture-names statements function-span block? env)
-  (match-define (list types program-types function-index unsupported note-source! new-block!) env)
+  (match-define (list types program-types function-index unsupported note-source! new-block! constant-reads) env)
   (match-define (list user-types struct-info variant-ids json-structs) program-types)
   (define code '())
   (define next 0)
@@ -405,6 +454,14 @@
        (emit! 'step '() span)
        (define dst (target want))
        (emit! 'const (list dst (literal-value expression)) span)
+       dst]
+      [(const-ref? expression)
+       (emit! 'step '() span)
+       (define dst (target want))
+       (define read (hash-ref constant-reads (const-ref-name expression)))
+       (if (eq? (car read) 'literal)
+           (emit! 'const (list dst (cdr read)) span)
+           (emit! 'global (list dst (cdr read)) span))
        dst]
       [(name-ref? expression)
        (emit! 'step '() span)
@@ -1006,6 +1063,7 @@
           (= index (if (eq? op 'jump) 0 1)))
      (format "L~a" value)]
     [(and (memq op '(call tail-call closure)) (= index 1)) (format "fn~a" value)]
+    [(and (memq op '(global global-set)) (= index 1)) (format "g~a" value)]
     [(and (eq? op 'call-value) (= index 1)) (format "~a" value)]
     [(and (memq op '(enum is-variant)) (= index 2)) (format "v~a" value)]
     [(and (memq op '(struct struct-with)) (= index 2)) (format "s~a" value)]
@@ -1035,7 +1093,7 @@
                               (for/list ([variant (in-list variants)] [k (in-naturals id)])
                                 (format " v~a=~a/~a" k (car variant) (cdr variant)))))
                      out))])))
-  (append structs enums))
+  (append structs enums (if (zero? (ir-program-globals ir)) '() (list (format "globals ~a" (ir-program-globals ir))))))
 
 (define (format-ir ir)
   (define tables (format-tables ir))

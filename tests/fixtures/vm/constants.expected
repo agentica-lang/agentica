@@ -1,0 +1,21 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 176,
+  "stdout": [
+    "hello world",
+    "8 -3 2.5 true nil",
+    "8",
+    "1",
+    "keyword word",
+    "[1, 4, 9, 16] 30",
+    "Point(x: -3, y: 8) Point(x: 0, y: 8) Color.Green",
+    "42 42 [\"x\", \"y\", \"z\"] Window(low: 0, high: 42)",
+    "xworld",
+    "yworld",
+    "zworld",
+    "3",
+    ""
+  ],
+  "stderr": []
+}
