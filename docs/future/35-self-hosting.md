@@ -434,10 +434,13 @@ Notes:
     the VM options, which 8d adds.
   - **An ordinary program** (`cli_main.agc`, which `make cli` compiles to
     `dist/agentica-cli.agcb`): `tests/agentica-agcb` runs it on the VM as the
-    `agentica` command, with `cli_spawn.agc` as the hand-off and the real `test`.
-    `make test-cli` runs the tests of the product command line on it
-    (`tests/test_examples.py`, `test_filesystem.py`, `test_process.py`,
-    `test_source_paths.py`, `test_source_utf8.py`, `test_bdd.py`).
+    `agentica` command, with `cli_spawn.agc` as the hand-off and the real
+    `test`.
+    `make test-cli` runs the tests of the product command line on it and on
+    the single binary (`tests/test_examples.py`, `test_filesystem.py`,
+    `test_process.py`, `test_source_paths.py`, `test_source_utf8.py`,
+    `test_bdd.py`, `test_modules.py`, `test_vm_diff_8.py`); the cases that need
+    `agentica test` skip on the binary. CI runs it in the `test` job.
   Neither is the default: `bin/agentica` is still Racket.
   - **Inputs of `Cli.run`.** `settings` are 8b's `Env.Settings`: the Agentica
     version (`settings.version`, which the writer puts in every header), the
@@ -464,23 +467,30 @@ Notes:
     The Racket `src/bdd-driver.rkt` still starts it as a program and sends the
     sources on stdin (`Driver.run`).
   - **Limits of the hand-off of an ordinary run** (`cli_spawn.agc`; the single
-    binary has none of them). It writes the program to a new 0600 file in the
-    temporary directory, starts `agentica-vm --driver-pid PID -- FILE ARGS` with
-    `Process.spawn` under `/bin/sh` (so that a SIGTERM to the command line
-    reaches the program's VM as a SIGTERM and it stops its own children, not as
-    the SIGKILL that a plain child gets), and removes the file. A `Process` is a pipe, so (1) the
+    binary has none of them, and 8d removes this path). It writes the program
+    to a new 0600 file in the temporary directory, starts `agentica-vm
+    --driver-pid PID -- FILE ARGS` with `Process.spawn` under `/bin/sh`, and
+    removes the file. The shell is there so that a SIGTERM to the command line
+    reaches the program's VM as a SIGTERM and it stops its own children, not
+    as the SIGKILL that a plain child gets. A `Process` is a pipe, so: (1) the
     program's stdin and stdout pass through this process one byte at a time
     (`Process.read_bytes` and `IO.read_bytes` wait for a whole count; a larger
     read would hold back a reply of an interactive program), which gives about
-    3.5 MB in 7 seconds; (2) the stdout goes through that copy while the stderr
-    is inherited, so with `2>&1` the two streams can come out of order; (3) a
-    `--flush-timeout 0` message that Racket prints is missing; (4) a broken
-    pipe on the stdout is reported against `cli_main.agc`, not against the
-    program; (5) a failing read of this process's stdin ends the program's
-    input, where Racket stops the VM and prints `RUNTIME-INTERNAL` ("cannot read
-    standard input"). The messages for a temporary directory that cannot be
-    written (named with a slash at its end) and for a missing VM (`AGENTICA_VM`
-    made absolute, nothing else changed) are the same as Racket's.
+    3.5 MB in 7 seconds; (2) the stdout goes through that copy while the
+    stderr is inherited, so with `2>&1` the two streams can come out of order;
+    (3) a `--flush-timeout 0` message that Racket prints is missing; (4) a
+    broken pipe on the stdout is reported against `cli_main.agc`, not against
+    the program; (5) a failing read of this process's stdin ends the program's
+    input, where Racket stops the VM and prints `RUNTIME-INTERNAL` ("cannot
+    read standard input"). The shell adds two more: (6) it has no death
+    signal of its own, so when the command line is killed with SIGKILL the
+    shell, the program's VM and the processes it started keep running (a
+    SIGTERM or an interrupt is handled and cleans up); (7) a shell runs a
+    background job with SIGINT and SIGQUIT ignored, so the program's VM ignores
+    them too, and a `kill -INT` aimed at the VM alone does nothing. The
+    messages for a temporary directory that cannot be written (named with a
+    slash at its end) and for a missing VM (`AGENTICA_VM` made absolute,
+    nothing else changed) are the same as Racket's.
   - **Deliberate differences.** (1) `--dump` and `--dump-ir` print the text
     forms of `compiler/check_text.agc` and `lower_text.agc`; Racket prints
     `pretty-print` of its structures and `format-ir`, which cannot be reproduced

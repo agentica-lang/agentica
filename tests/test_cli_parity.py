@@ -8,7 +8,6 @@ the stages that can fail. The differences that are on purpose (docs/future/35-se
 status") are checked on their own: the dump flags, and the version.
 """
 import os
-import subprocess
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -27,6 +26,8 @@ FILES = {
         'def main() -> Void\n  puts(System.args().join("|"))\n  IO.warn("to stderr")\n  name = IO.gets()\n'
         '  if name.ok?\n    puts("hello #{name.unwrap!}")\n  end\n  print("rest=#{IO.read()}")\n'
         '  System.exit(3)\nend\n'),
+    "selfkill.agc": (
+        'def main() -> Void\n  Process.spawn("/bin/sh", ["-c", "kill -KILL $PPID"], 5000)\n  Task.sleep(5000)\nend\n'),
     "loop.agc": "def main() -> Void\n  while true\n  end\nend\n",
     "divide.agc": "def main() -> Void\n  puts(1 / 0)\nend\n",
     "lex.agc": 'def main() -> Void\n  puts("unterminated)\nend\n',
@@ -216,6 +217,11 @@ class AgcbParity(Parity, TestCase):
         cls.agentica = [str(AGCB_CLI)]
         require(os.access(AGCB_CLI, os.X_OK), "%s is not executable" % AGCB_CLI)
 
+    def test_a_program_killed_by_a_signal_gives_status_128_plus_n_and_no_shell_message(self):
+        """The hand-off waits in a shell, which would print `Killed` on stderr; Racket prints nothing."""
+        self.assertEqual(self.parallel([(["--allow-run", "selfkill.agc"], {})]), "")
+        self.assertEqual(self.both(["--allow-run", "selfkill.agc"])[1][0], (137, "", ""))
+
     def test_a_temporary_folder_that_cannot_be_written_and_a_missing_vm_are_named_as_racket_names_them(self):
         """These are the messages of the hand-off through a file; the single binary writes none and needs no VM."""
         folder = self.work / "readonly"
@@ -242,9 +248,8 @@ class BinaryParity(Parity, TestCase):
             'def main() -> Void\n  for i in 0...20\n    puts("out #{i}")\n    IO.warn("err #{i}")\n  end\nend\n')
         results = []
         for command in (RACKET_CLI, self.agentica):
-            merged = subprocess.run(
-                ["sh", "-c", 'exec "$@" 2>&1', "sh"] + command + ["mixed.agc"], cwd=self.work, env=vm_environment(),
-                stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, timeout=60)
-            results.append((merged.returncode, merged.stdout))
+            merged = run(["sh", "-c", 'exec "$@" 2>&1', "sh"] + command + ["mixed.agc"], cwd=self.work,
+                         env=vm_environment(), timeout=60)
+            results.append((merged.code, merged.stdout))
         self.assertEqual(results[1], results[0])
-        self.assertEqual(results[1][1], b"".join(b"out %d\nerr %d\n" % (i, i) for i in range(20)))
+        self.assertEqual(results[1][1], "".join("out %d\nerr %d\n" % (i, i) for i in range(20)))

@@ -215,6 +215,8 @@ jobs:
         run: make test-ci
       - name: Fixed point of the front end (stage2 == stage3, Racket's stage1 == stage2, the single binary compiles stage2)
         run: make fixed-point
+      - name: The product command line tests on the Agentica command line and on the single binary (step 8a)
+        run: make test-cli
       - name: Slow tests
         run: make test-slow
       - run: make vm-latency

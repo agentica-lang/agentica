@@ -9,8 +9,13 @@
 ## interactive program has already made. That is about 3.5 MB in 7 seconds, and the output must be UTF-8 (it is: a
 ## program prints Strings). The standard error of the program goes straight to this process's, so with `2>&1` the two
 ## streams can come out of order. The `--flush-timeout 0` message of Racket is missing, and a broken pipe on the
-## standard output is reported against cli_main.agc, not against the program. The single binary (step 8d) replaces this
-## module with a builtin that loads the bytes in the same process.
+## standard output is reported against cli_main.agc, not against the program.
+##
+## Two more come from the shell (see SHELL). The shell has no death signal of its own, so when this process is killed
+## with SIGKILL the shell, the program's VM and the processes it started stay running (a SIGTERM or an interrupt is
+## handled and cleans up). And a shell runs a background job with SIGINT and SIGQUIT ignored, so the program's VM
+## ignores them too: `kill -INT` aimed at the VM alone does nothing. The single binary (step 8d) replaces this module
+## with a builtin that loads the bytes in the same process, and with it these limits go.
 
 import {IO_TIMEOUT, write_bytes} from "bdd_files"
 import RunDir from "bdd_rundir"
@@ -22,7 +27,7 @@ import Host from "cli_host"
 # stops its own children, as it does under Racket. The shell is the process that --driver-pid names (the VM checks
 # that it is its parent). The standard input moves to descriptor 3 first: a background job of a shell reads /dev/null
 # unless it is given another descriptor for it.
-SHELL = ["-c", "vm=$1\nshift\nexec 3<&0\n\"$vm\" --driver-pid $$ \"$@\" <&3 3<&- &\nwait $!", "sh"]
+SHELL = ["-c", "vm=$1\nshift\nexec 3<&0\n\"$vm\" --driver-pid $$ \"$@\" <&3 3<&- &\nwait $! 2>/dev/null", "sh"]
 
 # The deadline of the start of the VM, and a wait that never ends in practice (a year): a timeout of a read of the
 # program's output would stop the program.

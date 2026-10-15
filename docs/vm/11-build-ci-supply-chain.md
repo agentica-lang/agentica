@@ -43,12 +43,12 @@
 - yyjson's reader, picohttpparser and libuv are compiled per build mode (10).
   OpenSSL is the system one by default, or the vendored static build for the
   release (10.0).
-- The Agentica version is the one line of the `VERSION` file, which the
-  Makefile reads with `cat`, so the VM build needs no Racket. Each mode
-  compiles `vm/*.c` once into `build/vm/<mode>/obj/` (with `-MMD -MP`, so an
-  edited header recompiles only its users) and links the VM, the fuzz driver
-  and the C tests from those objects. `build/vm/flags` holds the compile and link line, so switching
-  between a normal and a sanitizer build relinks.
+- The Agentica version is the one line of the `VERSION` file, which the Makefile
+  reads with `cat`, so the VM build needs no Racket. Each mode compiles `vm/*.c`
+  once into `build/vm/<mode>/obj/` (with `-MMD -MP`, so an edited header
+  recompiles only its users) and links the VM, the fuzz driver and the C tests
+  from those objects. `build/vm/flags` holds the compile and link line, so
+  switching between a normal and a sanitizer build relinks.
 - Compiles go through ccache when it is on `PATH` and its cache directory is
   writable (`CCACHE=` turns it off). `CCACHE_BASEDIR` is the checkout, and the
   `-g` modes map the checkout to `.` in debug info, so worktrees share cache

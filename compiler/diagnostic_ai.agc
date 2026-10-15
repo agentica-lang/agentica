@@ -7,12 +7,13 @@
 
 import Problems from "check_failure"
 import Diag from "diagnostic"
+import Plain from "diagnostic_plain"
 
 ## The compact form for an agent: `check failed: 1 error`, then the code, one `name: value` line for each part the
 ## problem has (message, place, function, source line, callee, expected, actual, labels, help).
 export def ai(problem: Problems.Problem, text: String) -> String
   start = problem.span.start
-  line = trim(source_line(source_lines(text), start.line))
+  line = trim(Plain.line_text(text.split("\n"), start.line))
   out = [
     "check failed: 1 error",
     "",
@@ -44,22 +45,6 @@ def field(out: List[String], name: String, value: String) -> List[String]
     return out
   end
   return out.push("  #{name}: #{value}")
-end
-
-def source_lines(text: String) -> List[String]
-  return text.split("\n")
-end
-
-# The line (from 1), or "" outside the text, without one trailing "\r".
-def source_line(lines: List[String], number: Int) -> String
-  if number < 1 or number > lines.size
-    return ""
-  end
-  line = lines[number - 1]
-  if line.ends_with?("\r")
-    return line.slice(0, line.length - 1)
-  end
-  return line
 end
 
 # Without the whitespace around it (space, tab, line feed, vertical tab, form feed and carriage return), as Racket's

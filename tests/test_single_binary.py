@@ -136,6 +136,16 @@ class SingleBinary(TestCase):
         self.assertEqual((got.code, got.stdout), (0, "".join("out %d\nerr %d\n" % (i, i) for i in range(6))))
         self.assertEqual(got, expected)
 
+    def test_the_test_command_is_refused_with_status_2_until_step_8d(self):
+        """The front end runs without --allow-run, so it cannot start the test runner; the answer is one fixed line."""
+        line = ("agentica: the test command is not in the single binary yet: it cannot start the test runner "
+                "(step 8d)\n")
+        directory = self.make_suite({"main.agc": EXIT_THREE})
+        for words in (["test", "x"], ["--json", "test", "x"]):
+            with self.subTest(words=words):
+                got = self.agentica(*words, cwd=directory)
+                self.assertEqual((got.code, got.stdout, got.stderr), (2, "", line))
+
     def test_compile_writes_the_bytes_of_the_racket_front_end(self):
         work = self.make_temp_dir()
         source = ROOT / "examples" / "json-modules.agc"

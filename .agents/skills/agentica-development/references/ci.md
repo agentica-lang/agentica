@@ -31,7 +31,8 @@ comment), then a step that calls it. Targets that are not obvious:
   `dist/agentica-next` (the single binary carries the same command line, but
   its `test` is not there yet: those cases skip), and
   `tests/test_cli_parity.py` (run by `make test`) compares both with the Racket
-  one. `test` and `test-slow` depend on it.
+  one. `test` and `test-slow` depend on it. The `test` job of `ci.yml` runs
+  `make test-cli` after the fixed point.
 - `test` and `test-slow` run two frameworks side by side while the tests move
   from rackunit to Python `unittest` (a test lives in one only; design in
   `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of `.rkt` files
