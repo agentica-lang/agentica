@@ -12,6 +12,8 @@
 static const char in_task[] = " in a task";
 static const char block_prefix[] = "block@";
 static const char block_word[] = "block";
+static const char cut_mark[] = "...";
+static const size_t stack_name_max = 256;
 
 typedef struct {
   const char *text;
@@ -46,8 +48,7 @@ static void put_text(FILE *err, const char *text, size_t len) {
   if (len) fwrite(text, 1, len, err);
 }
 
-static void put_json(FILE *err, const char *text, size_t len) {
-  fputc('"', err);
+static void put_json_body(FILE *err, const char *text, size_t len) {
   for (size_t i = 0; i < len; i++) {
     uint8_t c = (uint8_t)text[i];
     switch (c) {
@@ -65,6 +66,11 @@ static void put_json(FILE *err, const char *text, size_t len) {
           fputc(c, err);
     }
   }
+}
+
+static void put_json(FILE *err, const char *text, size_t len) {
+  fputc('"', err);
+  put_json_body(err, text, len);
   fputc('"', err);
 }
 
@@ -93,6 +99,29 @@ static void put_flat(FILE *err, const char *text, size_t len) {
     else
       fputc(text[i], err);
   }
+}
+
+/* A stack line prints names from the program file, so each one is cut to
+ * stack_name_max bytes, at a character boundary, and ends with cut_mark. */
+static size_t capped_len(const char *text, size_t len) {
+  if (len <= stack_name_max) return len;
+  size_t cut = stack_name_max;
+  while (cut > 0 && ((uint8_t)text[cut] & 0xC0) == 0x80) cut--;
+  return cut;
+}
+
+static void put_capped_flat(FILE *err, const char *text, size_t len) {
+  size_t cut = capped_len(text, len);
+  put_flat(err, text, cut);
+  if (cut < len) fputs(cut_mark, err);
+}
+
+static void put_capped_json(FILE *err, const char *text, size_t len) {
+  size_t cut = capped_len(text, len);
+  fputc('"', err);
+  put_json_body(err, text, cut);
+  if (cut < len) fputs(cut_mark, err);
+  fputc('"', err);
 }
 
 static name_view display_name(const agc_string *name) {
@@ -187,7 +216,7 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
 static void put_place(FILE *err, const agc_program *p, uint32_t index) {
   const agc_span *span = &p->spans[index];
   const agc_string *file = p->sources[span->source].name;
-  put_flat(err, file->data, file->bytes);
+  put_capped_flat(err, file->data, file->bytes);
   fprintf(err, ":%u:%u", (unsigned)span->start_line, (unsigned)span->start_column);
 }
 
@@ -198,7 +227,7 @@ static void put_stack_text(FILE *err, const agc_program *p, const agc_stack *sta
       fprintf(err, "    ... %" PRIu64 " frame%s not shown ...\n", stack->omitted, stack->omitted == 1 ? "" : "s");
     name_view name = display_name(p->functions[line->function].name);
     fputs("    ", err);
-    put_flat(err, name.text, name.len);
+    put_capped_flat(err, name.text, name.len);
     fputs(" at ", err);
     put_place(err, p, line->span);
     if (line->repeat > 1) fprintf(err, " (%u times)", (unsigned)line->repeat);
@@ -216,11 +245,11 @@ static void put_json_place(FILE *err, const agc_program *p, uint32_t index, cons
   const agc_span *span = &p->spans[index];
   const agc_string *file = p->sources[span->source].name;
   fprintf(err, "{\"column\":%u,\"file\":", (unsigned)span->start_column);
-  put_json(err, file->data, file->bytes);
+  put_capped_json(err, file->data, file->bytes);
   if (function) {
     name_view name = display_name(function);
     fputs(",\"function\":", err);
-    put_json(err, name.text, name.len);
+    put_capped_json(err, name.text, name.len);
   }
   fprintf(err, ",\"line\":%u", (unsigned)span->start_line);
 }
