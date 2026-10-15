@@ -75,7 +75,7 @@ with `_` is the one way to keep a name that is unused on purpose (26.2).
   example, which `tests/site-examples-test.rkt` runs end to end; and one
   CLI-level check: `racket src/main.rkt --json check file.agc` exits 1 and its
   JSON diagnostic has the code (next to the CLI checks of
-  `tests/examples-test.rkt`, which already runs the CLI with `--json`). There is
+  `tests/test_examples.py`, which already runs the CLI with `--json`). There is
   no golden fixture per code: the goldens in `tests/fixtures/vm/` compile and
   run on the VM, and compiling stops with an error on any front-end diagnostic,
   so a program that fails checking cannot be one.

@@ -103,7 +103,7 @@
     (define path (hash-ref entry 'path))
     (cond
       [(not (and (equal? (hash-ref entry 'kind) "tests") (equal? (hash-ref entry 'problem) "")))
-       (hash-set* entry 'bytecode "" 'front_end "")]
+       (hash-set* entry 'bytecode "" 'source_root "" 'front_end "")]
       [else
        (define text (with-handlers ([exn:fail? (lambda (_) #f)]) (file->string path)))
        (define compiled
@@ -113,6 +113,7 @@
        (define output (build-path directory (format "test-~a.agcb" index)))
        (unless (diagnostic? compiled) (write-private output compiled))
        (hash-set* entry 'bytecode (path->string output)
+                  'source_root (source-root-option path)
                   'front_end (if (diagnostic? compiled) (jsexpr->string (diagnostic->jsexpr compiled)) ""))])))
 
 (define stale-name #rx"^agentica-bdd-[0-9a-f]+$")
@@ -289,6 +290,7 @@
         (hasheq 'vm (path->string vm)
                 'steps_bytecode (path->string steps-file)
                 'steps_source (path->string (if step-file (path->complete-path step-file) (build-path directory "steps.agc")))
+                'steps_root (if step-file (source-root-option step-file) "")
                 'steps_error (if (diagnostic? steps) (jsexpr->string (diagnostic->jsexpr steps)) "")
                 'steps_given (and step-file #t)
                 'agentica (agentica-command)

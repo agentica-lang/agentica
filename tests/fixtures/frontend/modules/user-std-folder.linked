@@ -1,0 +1,12 @@
+program #6 0:1:1-81:7:1
+  module "root.agc"
+    declaration: function-decl #5 35:3:1-80:6:1 name="main"
+      result: type-ref #1 49:3:15-53:3:19 name="Void"
+      body: expr-stmt #4 56:4:3-76:5:1
+        value: call #3 56:4:3-75:4:22 name="puts" piped=false
+          arg: call #2 61:4:8-74:4:21 name="@2::name" piped=false
+  module "./std/helper.agc"
+    declaration: function-decl #3 7:1:8-50:4:1 name="@2::name"
+      result: type-ref #0 21:1:22-27:1:28 name="String"
+      body: return-stmt #2 30:2:3-46:3:1
+        value: literal #1 37:2:10-45:2:18 value=string:"helper"

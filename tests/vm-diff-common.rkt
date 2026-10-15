@@ -190,11 +190,12 @@
                      " ")
       ""))
 
-(define (run-vm bytecode limit #:style [style 'json] #:timeout [timeout #f] . extra)
+(define (run-vm bytecode limit #:style [style 'json] #:timeout [timeout #f] #:root [root '()] . extra)
   (apply run-vm-process #:timeout timeout
          (append (allow-options)
                  (limit-options limit)
                  (style-options style)
+                 root
                  (list "--" (path->string bytecode))
                  (map string->bytes/utf-8 (fixture-args))
                  extra)))
@@ -239,6 +240,12 @@
 (define (allow-options)
   (if (fixture-allow-run) '("--allow-run") '()))
 
+; The fixtures are run as the CLI runs a program in tests/fixtures/vm: the stored names are put under that folder,
+; and unfixture turns it into @fixtures/ in the output.
+(define (source-root-options)
+  (list "--source-root"
+        (path->string (simplify-path (build-path tests-directory "fixtures" "vm")))))
+
 (define (vm-batch name bytecode directory option-lists)
   (define process #f)
   (define out #f)
@@ -272,7 +279,7 @@
                          (format "~a --foreground -k 5 ~a "
                                  (shell-quote (path->string timeout-program)) run-timeout)
                          "")
-                     (shell-quote (path->string vm-file)) (string-join (map shell-quote (append (allow-options) options)))
+                     (shell-quote (path->string vm-file)) (string-join (map shell-quote (append (allow-options) (source-root-options) options)))
                      (tail tmp)
                      (shell-quote (path->string input)) out-file err-file out-file err-file
                      (shell-quote (string-append base ".status")))
@@ -418,10 +425,10 @@
        void
        (lambda ()
          (untmp directory (apply run-vm-process #:timeout run-timeout
-                                 (append (allow-options) (limit-options limit) (style-options 'json)
+                                 (append (allow-options) (limit-options limit) (style-options 'json) (source-root-options)
                                          (list "--" (path->string bytecode)) (tmp-args directory)))))
        (lambda () (delete-directory/files directory #:must-exist? #f)))]
-    [else (run-vm bytecode limit #:timeout run-timeout)]))
+    [else (run-vm bytecode limit #:timeout run-timeout #:root (source-root-options))]))
 
 (define (total-steps bytecode)
   (define (limited? limit) (step-limited? (run-fixture-vm bytecode limit)))

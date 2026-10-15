@@ -1,0 +1,18 @@
+program #8 0:1:1-76:7:1
+  module "root.agc"
+    declaration: function-decl #7 25:3:1-75:6:1 name="main"
+      result: type-ref #1 39:3:15-43:3:19 name="Void"
+      body: expr-stmt #6 46:4:3-71:5:1
+        value: call #5 46:4:3-70:4:27 name="puts" piped=false
+          arg: field-access #4 51:4:8-69:4:26 name="to_s"
+            target: call #3 51:4:8-64:4:21 name="@2::twice" piped=false
+              arg: literal #2 62:4:19-63:4:20 value=int:2
+  module "util.agc"
+    declaration: function-decl #7 7:1:8-51:4:1 name="@2::twice"
+      param: param #1 17:1:18-23:1:24 name="n"
+        type: type-ref #0 20:1:21-23:1:24 name="Int"
+      result: type-ref #2 28:1:29-31:1:32 name="Int"
+      body: return-stmt #6 34:2:3-47:3:1
+        value: binary #5 41:2:10-46:2:15 op=multiply op-span=43:2:12-44:2:13
+          left: name-ref #3 41:2:10-42:2:11 name="n"
+          right: literal #4 45:2:14-46:2:15 value=int:2

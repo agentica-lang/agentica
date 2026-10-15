@@ -139,6 +139,29 @@
           (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO 0:1:1-0:1:1 " output)
           (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO 0:1:1-0:1:1 " (link-text path)))
 
+        ; Resolution allows "../", and the stored name of such a file keeps the .. part (35.4, "Source paths").
+        (test-case "a file above the root folder is printed with .. parts, the same on both sides"
+          (define root
+            (write-file (build-path work "above" "app" "root.agc")
+                        "import Shared from \"../shared/x\"\n\ndef main() -> Void\n  puts(Shared.name())\nend\n"))
+          (write-file (build-path work "above" "shared" "x.agc") "export def name() -> String\n  return \"x\"\nend\n")
+          (define output (hash-ref (run-linker bytecode (list (list default-env root))) root))
+          (check-regexp-match #rx"\n  module \"../shared/x.agc\"\n" output)
+          (check-equal? output (string-append (link-text root #:env default-env) "\n")))
+
+        ; The stored name comes from the canonical file, so a link in the way of the entry changes nothing.
+        (test-case "an entry reached through a symbolic link to its folder is named from the real folder, on both sides"
+          (define real (build-path work "linked" "real" "app"))
+          (write-file (build-path real "root.agc")
+                      "import Shared from \"../shared/x\"\n\ndef main() -> Void\n  puts(Shared.name())\nend\n")
+          (write-file (build-path work "linked" "real" "shared" "x.agc") "export def name() -> String\n  return \"x\"\nend\n")
+          (make-file-or-directory-link (build-path "real" "app") (build-path work "linked" "linkapp"))
+          (define root (path->string (build-path work "linked" "linkapp" "root.agc")))
+          (define output (hash-ref (run-linker bytecode (list (list default-env root))) root))
+          (check-regexp-match #rx"\n  module \"root.agc\"\n" output)
+          (check-regexp-match #rx"\n  module \"../shared/x.agc\"\n" output)
+          (check-equal? output (string-append (link-text root #:env default-env) "\n")))
+
         ; Racket reads such a file with replacement characters and goes on; File.read_text is strict (a
         ; documented difference, docs/future/35-self-hosting.md 35.9), so only the Agentica side is asserted.
         (test-case "an import with invalid UTF-8 is CHECK-IMPORT-IO, \"cannot read import\" (Agentica only)"
