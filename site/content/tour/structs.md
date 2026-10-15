@@ -197,6 +197,20 @@ def main() -> Void
 end
 ```
 
+A bare `p.with(x: 2)` changes nothing, because values never change, so it is `CHECK-UNUSED-VALUE`. Assign the result: `p = p.with(x: 2)`.
+
+```agentica {expect="CHECK-UNUSED-VALUE"}
+struct Point
+  x: Int
+  y: Int
+end
+
+def main() -> Void
+  p = Point(x: 1, y: 2)
+  p.with(x: 2)
+end
+```
+
 `with` is not a reserved word. It only means the update after a `.` and before `(`, so a struct can still have a field named `with` (a function-typed field of that name is `CHECK-REDEFINED-NAME`).
 
 ## Structs in structs and lists

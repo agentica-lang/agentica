@@ -5,11 +5,12 @@ Specified in [`docs/future/25-ruby-typed-idioms.md` section
 principle of one way to do each thing. Every item comes after 7i deletes the
 evaluator (order 7.2), changes the front end and `src/lower.rkt`, and runs on
 the C VM only, never on the Racket evaluator. Item 15l is the exception: it
-comes at order row 7.2.1g, before order step 7.5, and changes no lowering. Three
-order steps: 15a (front end only) as order row 7.5a, deferred until after the
+comes at order row 7.2.1g, before order step 7.5, and changes no lowering. Item
+15c is another exception: the owner moved it before the bootstrap on 2026-10-15
+(built; see its line). Three order steps: 15a (front end only) as order row 7.5a, deferred until after the
 bootstrap (row 7.2.7). `std/logger` (14c) does not wait for it (§24.2): its
-`_meta` functions become one `fields` default when it lands. 15b to 15e, 15i and
-15j at order step 7.6, after phase 16 (strict diagnostics); the prelude part,
+`_meta` functions become one `fields` default when it lands. 15b, 15d, 15e, 15i
+and 15j at order step 7.6, after phase 16 (strict diagnostics); the prelude part,
 15f and 15k, at order step 8.2, after faster lists (8d), because on today's
 flat-array lists an Agentica loop that builds a list is O(n²). One small PR per
 item, each with `grammar.md`, the programming skill, the site page, the
@@ -32,11 +33,22 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   (`src/modules.rkt`) only. A re-export counts as a use of its alias for
   `CHECK-UNUSED-IMPORT` (16a, §26.1). Docs: `grammar.md`,
   `references/modules.md`, `site/content/tour/modules.md`.
-- [ ] 15c Struct update `value.with(field: x)` (§25.3). The ban on `Fn` fields
-  named `with` comes here, in advance, so that 10a stays non-breaking; the ban
-  on a type-parameter field named `with` is in 10c. Breaking change: an `Fn`
-  field named `with` becomes `CHECK-REDEFINED-NAME` (say so in the changelog).
-  Docs: `grammar.md`, the programming skill, `site/content/tour/structs.md`.
+- [x] 15c Struct update `value.with(field: x)` (§25.3), **built early** on the
+  owner's decision of 2026-10-15, before the bootstrap (it relaxes the freeze of
+  row 7.2.7), so that `compiler/` can be written as pure functions and
+  `step(state)` loops. Both parsers (a `struct-update` node, `Update` in
+  `compiler/ast.agc`), the checker (`CHECK-UNKNOWN-METHOD` for a receiver that
+  is not a struct, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`,
+  `CHECK-TYPE-MISMATCH`, and `CHECK-IMPORT-NAME` for a struct that its module
+  keeps private, through a `visible` predicate of the linker), and one new
+  opcode, `STRUCT_WITH` (bytecode format version 4, an Updates section checked
+  by the loader), which beat a constructor call by 20% to 35% on structs of 4 to
+  16 fields (`docs/vm-benchmarks.md`). The ban on `Fn` fields named `with` comes
+  here, in advance, so that 10a stays non-breaking; the ban on a type-parameter
+  field named `with` is in 10c. Breaking change: an `Fn` field named `with`
+  becomes `CHECK-REDEFINED-NAME`. Docs: `grammar.md`, the programming skill, the
+  development skill, `site/content/tour/structs.md`. The checker and modules
+  ports (§35.4 steps 3 and 4) carry it.
 - [ ] 15d Value equality for structs, enums, lists, maps and Results (§25.4):
   the checker rule and the VM's `EQ`/`NE` opcodes with an explicit stack; a
   bytecode format version bump (an opcode's meaning changes). Docs:

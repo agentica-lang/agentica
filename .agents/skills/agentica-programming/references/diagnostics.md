@@ -66,7 +66,7 @@ Each line is a function and the place it runs: the error for the first, the call
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
 | `CHECK-PIPE-METHOD` | `x \|> String.trim()`: a builtin that has a method form for the left value is written with `.` (`x.trim`); the help shows the method form, with a piped left side in parentheses |
 | `CHECK-UNKNOWN-METHOD` | method not defined for the receiver's type, or a method call on a struct, or `.with(...)` on a value that is not a struct. Common foreign names get the real one: `s.chars` says `s.split("")`, `s.matches?` says `contains?`, `to_string` says `to_s` |
-| `CHECK-UNUSED-VALUE` | result of a builtin without effects is ignored (`xs.push(1)` alone) |
+| `CHECK-UNUSED-VALUE` | result of a builtin without effects is ignored (`xs.push(1)` alone), or of a struct update (`user.with(age: 31)` alone) |
 | `CHECK-BLOCK-TYPE` | a block parameter has no type from the call; annotate it (`do |x: Int|`) |
 | `CHECK-BLOCK-TARGET` | a block is passed to a function whose last parameter is not a `Fn` |
 | `CHECK-LOOP-CONTROL` | `break` or `next` outside a `while`/`for` body, or inside a block |
