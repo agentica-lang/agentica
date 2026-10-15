@@ -152,8 +152,8 @@ because the manager needs it and any program can use it.
 - **Datetimes (open question 11).** Recommended: `Datetime(String)` keeps the
   text exactly as written. A datetime and a string differ in TOML, and the
   encoder must write a datetime unquoted. Keeping the text makes the round trip
-  exact. When §41 adds date types, a conversion function reads the text, and
-  `to_json` turns it into a string. The value does not change.
+  exact. When §41 adds its date types, this variant splits into four, one for
+  each TOML kind (41.19), which is a breaking change of `std/toml`.
 - **Errors.** The error message starts with `line L, column C: ` and then says
   what was expected. Lines and columns count from 1, and a column counts
   characters. A `Result` error holds only a `String`
