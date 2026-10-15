@@ -190,7 +190,8 @@ in a new `vm/list.c`. `list.c` is core, like `map.c` (`docs/vm/15-layers.md`
 takes no `agc_vm` (so it adds nothing to the port). It goes in `VM_SRC`
 (`Makefile:128`), in the `core` list of `vm/tools/check-layers.sh:10`, in the
 table of §15.1 and in the file table of the development skill
-(`.agents/skills/agentica-development/references/vm.md`, next to `vm/map.c`).
+(`.agents/skills/agentica-development/references/vm-core.md`, next to
+`vm/map.c`).
 
 ```c
 typedef struct agc_list agc_list;

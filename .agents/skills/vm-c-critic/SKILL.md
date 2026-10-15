@@ -68,8 +68,8 @@ line ranges will not match the diff.
   before use. Look for off-by-one at the boundaries the data structure has
   (for example 31/32/33 in a 32-wide node, or a list at its cap).
 - Fixed-width copies: `memcpy`, loops or struct copies of `N` items whose
-  source may hold fewer. PR #221 read 512 bytes from a 40-byte tail this way.
-  Release builds hid it, and only ASan found it.
+  source may hold fewer. Release builds can hide this; ASan finds it. PR #221
+  fixed one such copy (commit 82677b9, "copy only the items a tail holds").
 - Size arithmetic goes through `agc_size_add` / `agc_size_mul`. Signed
   overflow, shifts by ≥ 64 or by a negative count, and narrowing casts are
   UB or silent bugs: compute on `uint64_t`.
@@ -121,22 +121,27 @@ handles. A second way for any of them is a finding.
 - Diagnostics: one code with a span. Changes to diagnostic output (new JSON
   keys, new lines) must not break their readers: `stdlib/test/child.agc`
   (`vm_shape?`), `src/bdd-driver.rkt` and the tests that parse `--json`.
-  PR #225 broke the BDD child protocol this way.
+  PR #225 needed a fix in the child helpers for its new stack keys (commit
+  "tests: the child helpers accept the stack keys of a VM diagnostic").
 
 ### Efficiency
 
 - Hot paths are `agc_run_turn` in `vm/interp.c`, `CALL` and `TAIL_CALL`,
   `LIST_GET` and the arithmetic opcodes. Look for new branches, calls, frame
-  growth or allocation on them. PR #225 found a bitfield in the frame cost
-  5–8 %, where a plain `bool` cost nothing.
+  growth or allocation on them. Keep hot-path flags plain `bool`s, not
+  bit-fields. PR #225 kept a plain `bool tail` in the frame (commit daa8dc9).
 - Look for allocation per item where a bulk path exists, and for O(n) work
   where the design promises O(1) or O(log n). Check builders, slices and
   copies.
-- Measure before you claim a regression. Build a master VM in a scratch
-  worktree, alternate the runs, take the median of three or more, and use
-  more than one link layout: the same binary moves 20–35 % with code
-  alignment. Pad `value.o` by 1000 or 2600 bytes to check this. Compare peak
-  RSS too (`/usr/bin/time -v`).
+- Performance: claim a speed change only with numbers. When a PR claims one, a
+  small comparison against master is optional and short: one release build of
+  master in a scratch worktree (`git worktree add <scratch>/base origin/<base>`,
+  then `git submodule update --init vm/third_party/bdwgc vm/third_party/libuv
+  vm/third_party/yyjson vm/third_party/picohttpparser`; the default build uses
+  the system OpenSSL) and one of the PR, alternate the runs, take the median of
+  three, and remember that the same binary can move 20-35 % with code layout
+  alone. Compare peak RSS too (`/usr/bin/time -v`) when memory is the claim.
+  Otherwise skip timing.
 
 ### Simplicity and architecture
 
@@ -148,12 +153,16 @@ handles. A second way for any of them is a finding.
   OpenSSL or private headers such as `list_impl.h`. An exemption added to
   `vm/tools/check-layers.sh` needs a reason, and an exact path, not a bare
   basename glob.
-- C style: types at the top of the file, no prototypes of `static`
-  functions, no mutable globals or file-scope statics, and no value-driven
-  recursion. No comments except short `/* */` notes on an invariant.
-  Exported names start with `agc_`.
-- Duplication: run `make dup-check`, or flag clones you see. Fix a clone by
-  sharing code, never by adding it to the baseline.
+- C style: types at the top of the file, no prototypes of `static` functions, no
+  mutable globals or file-scope statics, and no value-driven recursion. Follow
+  the development skill's `references/vm-c.md`: every C file starts with a
+  header comment (3 to 8 lines for a source file, 1 to 4 for a C test), and
+  other comments say why. CI checks part of this style: `make vm-lint`
+  (clang-tidy) and `tests/vm-style-test.rkt`, which checks types at the top, no
+  prototypes of `static` functions and the file header size. Exported names
+  start with `agc_`.
+- Duplication: flag the clones you see and suggest a shared helper; CI runs
+  `make dup-check`. Never fix a clone by adding it to the baseline.
 - Builtin tables: a C test may index a table by position. For example,
   `process_test.c` calls `agc_process_builtins[0]` as `Process.spawn`. Add new
   rows at the end.
@@ -175,25 +184,27 @@ handles. A second way for any of them is a finding.
 Run only what the finding needs. Wrap every command:
 
 ```bash
-systemd-run --user --scope -q -p MemoryMax=8G timeout -k 10 300 <cmd>
+timeout -k 10 300 <cmd>
 ```
 
-Use 600 seconds and `-j8` for builds. Exit 124 means a timeout: retry once,
-then report it.
+Use a memory limit if your system has one. Use 600 seconds and `-j8` for
+builds. Exit 124 means a timeout: retry once, then report it.
 
 - Build the PR VM with `make -j8 vm`. Run a program with
   `racket src/main.rkt prog.agc`, plus `--json` or `--max-steps N` when they
   matter.
-- To compare with master, `git worktree add <scratch>/base origin/<base>`,
-  build it there, and remove the worktree afterwards.
+- A master comparison is only for a claimed speed change (see Performance under
+  Efficiency). Remove its scratch worktree afterwards.
 - Run one C test with `make build/vm/release/<name>-test`, then the binary.
   Run one golden through the harness's single-fixture path (see the
   development skill's `references/vm-build.md`).
-- Build ASan (`make vm SANITIZE=1`, or the one sanitize test binary) only to
-  reproduce a concrete suspected memory bug. Build gc-stress
-  (`GC_STRESS=1`) only for a concrete GC suspicion.
-- Never run `make test` without `TESTS`, full golden or vm-diff sweeps,
-  `make vm-sanitize-test`, fuzzing or full smoke runs. CI covers those.
+- A single C test under ASan (`make build/vm/sanitize/<name>-test SANITIZE=1`)
+  or under gc-stress (`make build/vm/gcstress/<name>-test GC_STRESS=1`) only to
+  prove a concrete bug. Never `make vm SANITIZE=1` or `GC_STRESS=1`, or the
+  `vm-sanitize-*` and `vm-gc-stress` targets.
+- Never run the full `make test`, full golden or vm-diff sweeps,
+  `make vm-sanitize-test`, fuzzing or `make smoke`. Run localized tests, for
+  example `make test TESTS="tests/vm-stdout-test.rkt"`. CI covers the rest.
 - Put scratch programs under the job's tmp directory, not in the repo. Delete
   them at the end. Never `pkill -f`, and leave no background processes.
 - Never print secrets or the real environment. Use `env -i` or explicit

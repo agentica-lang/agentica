@@ -2,6 +2,8 @@
 
 Read before writing or reviewing C in `vm/`.
 
+Read first: `references/vm.md` (the trust model and the layers).
+
 **C style.** C11. `make vm-lint` (clang-tidy, `.clang-tidy`) and
 `tests/vm-style-test.rkt` check the rules marked *checked*.
 

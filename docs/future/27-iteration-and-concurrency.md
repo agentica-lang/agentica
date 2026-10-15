@@ -432,7 +432,8 @@ sentence and the handle rules above), `site/content/library/concurrency/task.md`
 and `site/content/tour/tasks.md` (runnable examples whose output does not depend
 on timing), `docs/vm/10-io-scheduler.md` §10.2.1 and §10.2.2 (task cancellation,
 detached jobs, the `next_owner` hand-on), `docs/vm/10-io-multicore.md` §10.2.3
-(the group lock), the development skill's notes (`references/vm.md`).
+(the group lock), the development skill's notes (`references/vm-tasks.md`
+and `references/vm-io.md`).
 
 ### 27.2 Channels
 

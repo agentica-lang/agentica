@@ -612,7 +612,8 @@ independent Python peer, with the standard library only.
   tokens; `references/language.md`, `builtins.md`, `diagnostics.md`, `json.md`,
   and `binary.md` in step 3); the site page
   `site/content/library/text-and-data/numbers.md` (and `binary.md` in step 3);
-  the development skill's `references/vm.md` (the new tags, opcodes and
+  the development skill's `references/vm-core.md` (the new tags),
+  `references/vm-lowering.md` (the opcodes) and `references/vm-builtins.md` (the
   builtins); and a `CHANGELOG.md` entry under `## [Unreleased]`, with
   `**Breaking:**` for the reserved names (step 1) and the binary API (step 3).
 
