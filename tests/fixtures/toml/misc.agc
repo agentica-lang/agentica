@@ -206,6 +206,8 @@ def limits_case() -> Void
   puts("json tables 50000: " + Toml.to_json(table_chain(50000)).message)
 end
 
+# The encoder checks every date-time with the reader's code, so it must cost about what the reader
+# costs on the same text. A ratio on one machine at one moment does not depend on how loaded it is.
 def dates_case() -> Void
   items: List[Toml.Value] = []
   for i in 0...10000
@@ -213,9 +215,14 @@ def dates_case() -> Void
   end
   root: Map[String, Toml.Value] = {"when": Toml.Value.Array(items)}
   start = Time.monotonic_ms()
-  written = Toml.encode(table(root))
-  puts("size: " + Result.unwrap!(written).length.to_s)
-  puts("fast: " + (Time.monotonic_ms() - start < 2000).to_s)
+  written = Result.unwrap!(Toml.encode(table(root)))
+  encode_ms = Time.monotonic_ms() - start
+  start = Time.monotonic_ms()
+  parsed = Result.unwrap!(Toml.parse(written))
+  parse_ms = Time.monotonic_ms() - start
+  puts("size: " + written.length.to_s)
+  puts("parsed: " + (show(parsed) == show(table(root))).to_s)
+  puts("encode within 3x of parse: " + (encode_ms <= 3 * parse_ms + 50).to_s)
 end
 
 def main() -> Void

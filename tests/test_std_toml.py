@@ -518,7 +518,7 @@ class Misc(TestCase):
         ])
 
     def test_many_date_times_encode_fast(self):
-        self.assertEqual(self.lines("dates"), ["size: 220008", "fast: true"])
+        self.assertEqual(self.lines("dates"), ["size: 220008", "parsed: true", "encode within 3x of parse: true"])
 
     def test_encode_then_parse_is_the_identity_for_built_values(self):
         self.assertEqual(self.lines("round_trip"), ["same"])
