@@ -106,6 +106,8 @@ end
 120
 ```
 
+A call that is the whole value of a `return`, such as `return factorial(n - 1)` to your own function, reuses the caller's frame and does not count toward the limit of 10000 nested calls. A call inside a bigger expression, such as `return 1 + f(n - 1)`, does count toward that limit, and a call of a builtin uses no frame.
+
 ## Many results
 
 A function returns one value. To give back several, return a
