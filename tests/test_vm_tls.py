@@ -8,7 +8,8 @@ and a client. The certificates are the ones in fixtures/tls. Everything is on
 import json
 import re
 
-from tests.agentica_test import FIXTURES, PYTHON, Child, TestCase, run, run_vm, start_vm, tool, vm_environment
+from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, check_lines, run, run_vm, start_vm, tool,
+                                 vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
@@ -266,19 +267,6 @@ def client_program(ports):
         '  show(TLS.connect("localhost", %d, ca, 200))' % ports["stall"],
         '  show(TLS.connect("localhost", %d, "", 5000))' % ports["echo"],
         'end'])
-
-
-def check_lines(case, text, expected, message):
-    """One stdout line per expectation: a string is equal, ("prefix", text) is a prefix."""
-    lines = text.split("\n")
-    if lines and lines[-1] == "":
-        lines.pop()
-    case.assertEqual(len(lines), len(expected), message + "\n" + text)
-    for line, want in zip(lines, expected):
-        if isinstance(want, str):
-            case.assertEqual(line, want, message)
-        else:
-            case.assertTrue(line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1]))
 
 
 class VmTls(TestCase):

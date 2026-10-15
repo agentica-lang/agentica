@@ -8,8 +8,8 @@ certificates are the ones in fixtures/tls.
 """
 import json
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, optional_tool, run, run_vm, start_vm,
-                                 vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, check_lines, optional_tool, output_lines, run,
+                                 run_vm, start_vm, vm_environment)
 
 PEER = FIXTURES / "http-peer.py"
 SERVER_PEER = FIXTURES / "http-server-peer.py"
@@ -237,26 +237,6 @@ SERVER_NODE_LINES = [
 
 
 
-def output_lines(text):
-    """The lines of a peer's output; only \\n separates them (splitlines also splits on other control characters)."""
-    lines = text.split("\n")
-    if lines and lines[-1] == "":
-        lines.pop()
-    return lines
-
-
-def check_lines(case, result, expected, message):
-    """Exit 0 and one stdout line per expectation: a string is equal, ("prefix", text) is a prefix."""
-    case.assertEqual(result.code, 0, result.stderr)
-    lines = output_lines(result.stdout)
-    case.assertEqual(len(lines), len(expected), message + "\n" + result.stdout)
-    for line, want in zip(lines, expected):
-        if isinstance(want, str):
-            case.assertEqual(line, want, message)
-        else:
-            case.assertTrue(line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1]))
-
-
 class VmHttp(TestCase):
     def start_peer(self):
         """http-peer.py serves until its stdin closes, so the pipe stays open; returns the ports it prints."""
@@ -265,7 +245,9 @@ class VmHttp(TestCase):
 
     def run_program(self, name, text, ports):
         bytecode = self.compile_text(PRELUDE + text, name)
-        return run_vm(bytecode, env=vm_environment(), args=[CERTS] + [ports[key] for key in ("plain", "tls", "raw")])
+        result = run_vm(bytecode, env=vm_environment(), args=[CERTS] + [ports[key] for key in ("plain", "tls", "raw")])
+        self.assertEqual(result.code, 0, result.stderr)
+        return result.stdout
 
     def test_client_against_threading_http_server_keep_alive_chunked_close_delimited_timeout_pool_limits(self):
         ports = self.start_peer()

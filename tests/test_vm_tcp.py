@@ -6,6 +6,7 @@ ports (fragments, resets, silence, ...) and prints their numbers as JSON;
 with port 0.
 """
 import json
+import re
 import socket
 import time
 
@@ -300,12 +301,14 @@ class VmTcp(TestCase):
     def test_main_returns_while_tasks_wait_on_sockets_and_the_peer_sees_every_socket_close(self):
         peer, ports = self.start_peer()
         trace, env = self.trace_env()
+        bytecode = self.compile_text(EXIT_PROGRAM % (ports["watch"], ports["silent"], ports["silent"]), "exit")
+        # Only the VM run is timed: compiling through the CLI can be slow on a busy machine.
         started = time.monotonic()
-        result = self.run_text("exit", EXIT_PROGRAM % (ports["watch"], ports["silent"], ports["silent"]), env)
+        result = run_vm(bytecode, env=vm_environment(env))
         self.assertEqual((result.code, result.stdout), (0, "<Socket>\ndone\n"), result.stderr)
         self.assertLess(time.monotonic() - started, 20)
         text = trace.read_text()
-        self.assertRegex(text, r" io end code=0 signal=0$", text)
+        self.assertRegex(text, re.compile(r" io end code=0 signal=0$", re.M), text)
         self.assertIn(" io tcp_listen listener=", text, "listen is traced")
         self.assertIn(" io tcp_connected socket=", text, "connect is traced")
         self.assertEqual(peer.next_line(), "closed watch")

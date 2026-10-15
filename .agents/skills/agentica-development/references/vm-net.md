@@ -342,7 +342,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   server task in the same program; only `main` prints); the std/http URL
   parser costs about 500 steps per call, so the sweep samples them. Put the
   other cases in `tests/test_vm_http.py`, which starts one Python peer
-  (`tests/fixtures/http-peer.py`: a `ThreadingHTTPServer`, the same over `ssl`, and a raw socket server with
+  per client case (`tests/fixtures/http-peer.py`: a `ThreadingHTTPServer`, the same over `ssl`, and a raw socket server with
   canned hostile responses) and runs three programs once. Python 3
   (standard library only) is required in CI, as Node is for TCP: with `CI`
   set the test fails without it, locally it prints a skip. picohttpparser

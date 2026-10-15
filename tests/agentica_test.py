@@ -35,6 +35,16 @@ SLOW = os.environ.get("AGENTICA_TEST_SLOW", "") not in ("", "0")
 # Time limit of one line or one exit of a Child.
 WAIT_SECONDS = 30
 
+def _terminate(signum, frame):
+    raise KeyboardInterrupt
+
+
+# Children live in their own sessions, so a SIGTERM or SIGHUP to the test process (timeout, a closing terminal) does not
+# reach them. Turning those signals into KeyboardInterrupt runs the cleanups like Ctrl-C does, which stop the children.
+if threading.current_thread() is threading.main_thread():
+    signal.signal(signal.SIGTERM, _terminate)
+    signal.signal(signal.SIGHUP, _terminate)
+
 Result = namedtuple("Result", "code stdout stderr")
 
 
@@ -130,7 +140,7 @@ def optional_tool(name):
 
 
 def tool(name):
-    """The path of an executable that a test needs (node, curl, openssl), or a skip (a failure in CI)."""
+    """The path of an executable that a test needs (node), or a skip (a failure in CI)."""
     path = shutil.which(name)
     if path is None:
         _missing("%s is required (not found on PATH)" % name)
@@ -215,9 +225,10 @@ def vm_environment(extra=None):
 class Child:
     """A process that runs beside the test: a peer or a VM that is read line by line.
 
-    It has its own session, so stop() kills it with everything it spawned.
-    Use it in `with`, or add stop to the test's cleanups, so that a failed
-    assertion or Ctrl-C leaves nothing behind. stdout is read by a thread, so
+    It has its own session, so stop() kills its process group (the child and what it spawned) while the child is still alive;
+    a group left by a child that already exited is not reached.
+    Hand it to TestCase.adopt(), so that a failed assertion, Ctrl-C or SIGTERM
+    leaves nothing behind. stdout is read by a thread, so
     next_line() has a time limit and a child that exits is reported at once.
     """
 
@@ -243,12 +254,6 @@ class Child:
     def _read_stderr(self):
         self._stderr.extend(raw.decode(errors="replace") for raw in iter(self.process.stderr.readline, b""))
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        self.stop()
-
     def next_line(self, timeout=WAIT_SECONDS):
         """The next line of stdout without its newline; AssertionError if none comes in time or the output ended."""
         try:
@@ -273,19 +278,6 @@ class Child:
             thread.join(5)
         return code
 
-    def rest(self):
-        """The stdout not yet read, as one string (call after wait())."""
-        parts = []
-        while True:
-            try:
-                line = self._lines.get_nowait()
-            except queue.Empty:
-                break
-            if line is None:
-                break
-            parts.append(line)
-        return "".join(parts)
-
     def stderr_text(self):
         """What the child wrote to stderr (capture_stderr=True; call after wait())."""
         return "".join(self._stderr)
@@ -307,3 +299,22 @@ class Child:
 def start_vm(bytecode, *args, env=None, **options):
     """Start `dist/agentica-vm -- bytecode [args]` as a Child (stderr captured), with vm_environment()."""
     return Child([vm_binary(), "--", bytecode, *args], env=vm_environment(env), capture_stderr=True, **options)
+
+
+def output_lines(text):
+    """The lines of a peer's or program's output; only \\n separates them (splitlines also splits on other control characters)."""
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def check_lines(case, text, expected, message):
+    """One output line per expectation: a string is equal, ("prefix", text) is a prefix."""
+    lines = output_lines(text)
+    case.assertEqual(len(lines), len(expected), message + "\n" + text)
+    for line, want in zip(lines, expected):
+        if isinstance(want, str):
+            case.assertEqual(line, want, message)
+        else:
+            case.assertTrue(line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1]))
