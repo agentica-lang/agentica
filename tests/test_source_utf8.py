@@ -13,6 +13,8 @@ PROGRAM = "def main() -> Void\n  puts(\"ok\")\nend\n"
 # (name, valid text before the bad bytes, bad bytes, what follows)
 INVALID = [
     ("continuation byte alone", "# café\ndef main() -> Void\n  puts(\"日", b"\x80", b"\")\nend\n"),
+    # CR and tab are one column each; only LF starts a line.
+    ("CRLF and tab before the bad byte", "# a\r\n\tx = \"\t", b"\xff", b"\"\r\n"),
     ("byte that never occurs", "# \U0001F600\n", b"\xff", b"\n"),
     ("overlong", "x = \"", b"\xc0\x80", b"\"\n"),
     ("overlong three bytes", "x = \"", b"\xe0\x80\x80", b"\"\n"),

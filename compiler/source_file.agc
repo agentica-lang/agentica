@@ -99,17 +99,44 @@ def lead_width(byte: Int) -> Int
   return 0
 end
 
-# `head` did not decode. The position is that of the first invalid sequence, found by hand (the error path only):
-# the text before it, which decodes, gives the characters and the lines.
+# `head` did not decode. The position is that of the first invalid sequence, found by hand (the error path only).
+# The characters, lines and columns before it are counted in loops, as src/source-file.rkt does: the decoded chunks
+# by their newlines, and the valid bytes of `head` by their lead bytes. The text before it is never built in one piece.
 def error_position(parts: List[String], head: List[Int]) -> Source.Position
   bad = first_invalid(head)
   valid = head.size
   if bad >= 0
     valid = bad
   end
-  before = parts.join("") + String.from_bytes(head.take(valid)).unwrap_or("")
-  lines = before.split("\n")
-  return Source.Position(offset: before.length, line: lines.size, column: lines[lines.size - 1].length + 1)
+  offset = 0
+  line = 1
+  since_newline = 0
+  for part in parts
+    pieces = part.split("\n")
+    offset += part.length
+    line += pieces.size - 1
+    last = pieces[pieces.size - 1].length
+    if pieces.size > 1
+      since_newline = last
+    else
+      since_newline += last
+    end
+  end
+  at = 0
+  while at < valid
+    byte = head[at]
+    # A continuation byte (128 to 191) belongs to the character its lead byte started.
+    if byte < 128 or byte >= 192
+      offset += 1
+      since_newline += 1
+      if byte == 10
+        line += 1
+        since_newline = 0
+      end
+    end
+    at += 1
+  end
+  return Source.Position(offset: offset, line: line, column: since_newline + 1)
 end
 
 # The index of the first byte of the first invalid sequence, or -1. The rules of agc_utf8_valid in vm/value.c.

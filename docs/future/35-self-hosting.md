@@ -300,11 +300,12 @@ Notes:
     with `File.open` and `File.read_bytes` in chunks of 256 KiB, decodes each
     chunk with `String.from_bytes` (the bytes of a character that a chunk
     cuts in two wait for the next chunk) and joins the pieces once, so nothing
-    is quadratic. Only on the error path does it find the first invalid byte, with
-    a small validator over the byte list. `lex.agc`, `parse.agc` and both read
-    sites of `modules.agc` use it. Racket reads the bytes in
-    `src/source-file.rkt` (`file->string` is gone from the front end; the
-    embedded `std/` sources are trusted and still read at compile time).
+    is quadratic. Only on the error path does it find the first invalid byte,
+    with a small validator over the byte list, and it counts the lines and
+    columns in a loop over that validated prefix, without copying it. `lex.agc`,
+    `parse.agc` and both read sites of `modules.agc` use it. Racket reads the
+    bytes in `src/source-file.rkt` (`file->string` is gone from the front end;
+    the embedded `std/` sources are trusted and still read at compile time).
   - I/O errors keep their codes and spans: `CHECK-IMPORT-IO` at the start of
     the root file, or "cannot read import" at the import.
 
@@ -695,8 +696,7 @@ are in `tests/fixtures/frontend/check/` (58 fixtures, one for every reachable
   `constant-order` of `src/constants.rkt` on the linked program.
 - The list of types is built from repeats of at most 1,048,576 slots, because
   `List.repeat` halts with `RUNTIME-INVALID-COUNT` above that count and a
-  program of about 5.7 MB of source has more node ids. One file is limited to
-  1 MiB, so such a program is several files joined by imports.
+  program of about 5.7 MB of source has more node ids.
 
 ### 35.10 Tests move to Python unittest
 

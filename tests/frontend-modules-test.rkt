@@ -109,6 +109,8 @@
   (let ([prefix (string->bytes/utf-8 "# \u00E9\u65E5\U1F600\ndef main() -> Void\n  puts(\"\u00E9")]
         [suffix #"\")\nend\n"])
     (list (list "a continuation byte alone" prefix #"\x80" suffix)
+          (list "CRLF and a tab before the bad byte (CR and tab are one column, only LF starts a line)"
+                #"# a\r\n\tx = \"\t" #"\xFF" #"\"\r\n")
           (list "a byte that never occurs" prefix #"\xFF" suffix)
           (list "a lead byte above F4" prefix #"\xF5" suffix)
           (list "an overlong two-byte form" prefix #"\xC0\x80" suffix)
