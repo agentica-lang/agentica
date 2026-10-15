@@ -3,7 +3,8 @@
 (require rackunit
          racket/runtime-path
          "frontend-parser-common.rkt"
-         (only-in "frontend-lexer-common.rkt" call-with-bytecode diagnostic-line)
+         "frontend-corpus-common.rkt"
+         (only-in "frontend-lexer-common.rkt" diagnostic-line)
          "vm-diff-common.rkt"
          "../src/source-file.rkt")
 
@@ -19,22 +20,7 @@
   (file->string (golden-file input)))
 
 (define (run-parser bytecode paths)
-  (define result
-    (parameterize ([current-directory root])
-      (apply run-process vm-file #:timeout run-timeout "--" (path->string bytecode) paths)))
-  (check-equal? (first result) 0 (third result))
-  (check-equal? (third result) "")
-  (for/hash ([piece (in-list (cdr (regexp-split #rx"(?m:^== )" (second result))))])
-    (define newline-at (let loop ([at 0]) (if (char=? (string-ref piece at) #\newline) at (loop (add1 at)))))
-    (values (substring piece 0 newline-at) (substring piece (add1 newline-at)))))
-
-(define (racket-files directories)
-  (define base (simplify-path root))
-  (sort (for*/list ([directory (in-list directories)]
-                    [file (in-directory (build-path base directory))]
-                    #:when (path-has-extension? file #".agc"))
-          (path->string (find-relative-path base file)))
-        string<?))
+  (run-stage-sections bytecode paths))
 
 (define (check-against-racket outputs paths)
   (for ([path (in-list paths)])
@@ -212,7 +198,7 @@
   (when (vm-built? "frontend parser tests")
     (with-bytecode
       (lambda (work bytecode)
-        (define live-paths (racket-files '("examples" "stdlib" "tests/fixtures/vm")))
+        (define live-paths (agc-files-under '("examples" "stdlib" "tests/fixtures/vm")))
         (define generated-paths
           (for/list ([text (in-list (generated-cases))] [n (in-naturals)])
             (write-case work (format "case-~a.agc" n) text)))

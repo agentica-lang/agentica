@@ -14,22 +14,9 @@
          lexer-inputs
          (struct-out lexer-input)
          golden-file
-         write-lexer-goldens
-         call-with-bytecode)
+         write-lexer-goldens)
 
 (struct lexer-input (name path))
-
-; Compiles the entry program with compile (compile-file of vm-diff-common.rkt, which this file does not load)
-; into a temporary folder, calls (proc folder bytecode-path) and deletes the folder.
-(define (call-with-bytecode compile entry proc)
-  (define work (make-temporary-directory "agentica-frontend~a"))
-  (dynamic-wind
-    void
-    (lambda ()
-      (define bytecode (build-path work "entry.agcb"))
-      (compile entry bytecode)
-      (proc work bytecode))
-    (lambda () (delete-directory/files work))))
 
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/frontend/lexer")

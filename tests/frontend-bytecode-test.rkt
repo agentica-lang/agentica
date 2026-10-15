@@ -8,7 +8,7 @@
 (require (except-in rackunit check)
          racket/runtime-path
          "frontend-lower-common.rkt"
-         (only-in "frontend-lexer-common.rkt" call-with-bytecode)
+         "frontend-corpus-common.rkt"
          (only-in "frontend-modules-common.rkt" default-env env-arguments with-env stdlib-folder)
          "vm-diff-common.rkt"
          "../src/bytecode.rkt"

@@ -3,7 +3,7 @@
 (require rackunit
          racket/runtime-path
          "frontend-catalog-common.rkt"
-         "frontend-lexer-common.rkt"
+         "frontend-corpus-common.rkt"
          "vm-diff-common.rkt"
          "../src/builtins.rkt"
          "../tools/gen-builtins-data.rkt")
