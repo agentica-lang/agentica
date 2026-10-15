@@ -20,8 +20,8 @@ export struct Module
   prefix: String
   first_id: Int
   program: Ast.Program
-  names: Map[String, String]
-  public: Map[String, String]
+  names: Map[String, Declarations.Kind]
+  public: Map[String, Declarations.Kind]
   aliases: Map[String, String]
 end
 
@@ -51,14 +51,14 @@ struct Walk
 end
 
 struct Collected
-  names: Map[String, String]
-  public: Map[String, String]
+  names: Map[String, Declarations.Kind]
+  public: Map[String, Declarations.Kind]
 end
 
 ## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*, CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
 export def load(root: String, settings: Env.Settings) -> Result[Loaded]
   file = Path.resolve(root).unwrap_or(root)
-  text = File.read_text(root, timeout())
+  text = File.read_text(root, Env.io_timeout())
   if !text.ok?
     return error(Failure.fail_at(Failure.Site(file: file, span: start_span()), "CHECK-IMPORT-IO", text.message, Diag.Help.NoHelp))
   end
@@ -136,7 +136,7 @@ def replace_top(walk: Walk, frame: Frame) -> Walk
 end
 
 def load_file(settings: Env.Settings, walk: Walk, key: String, site: Failure.Site) -> Result[Walk]
-  text = File.read_text(Resolve.source_path(settings, key), timeout())
+  text = File.read_text(Resolve.source_path(settings, key), Env.io_timeout())
   if !text.ok?
     return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read import", Diag.Help.NoHelp))
   end
@@ -160,11 +160,11 @@ end
 
 # The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is CHECK-REDEFINED-NAME at the declaration.
 def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) -> Result[Collected]
-  names: Map[String, String] = {}
-  public: Map[String, String] = {}
+  names: Map[String, Declarations.Kind] = {}
+  public: Map[String, Declarations.Kind] = {}
   for wrapped in declarations
     kind = Declarations.kind_of(wrapped)
-    if kind == "import"
+    if Declarations.import?(kind)
       next
     end
     name = Declarations.name_of(wrapped)
@@ -177,9 +177,4 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
     end
   end
   return ok(Collected(names: names, public: public))
-end
-
-# Every file system call here has this deadline, in milliseconds.
-def timeout() -> Int
-  return 10000
 end

@@ -1,6 +1,7 @@
 ## The module linker: loads the root file and its imports (modules.agc) and rewrites them into one program (rewrite.agc). This is link-program and load-program of src/modules.rkt.
 
 import "ast" as Ast
+import "declarations" as Declarations
 import "link_env" as Env
 import "link_failure" as Failure
 import "modules" as Modules
@@ -77,6 +78,6 @@ def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]
   return Set.new(names).to_a.sort
 end
 
-def structs_of(prefix: String, kinds: Map[String, String]) -> List[String]
-  return kinds.keys.filter do |name| kinds[name] == "struct" end.map do |name| prefix + name end
+def structs_of(prefix: String, kinds: Map[String, Declarations.Kind]) -> List[String]
+  return kinds.keys.filter do |name| Declarations.struct?(kinds[name]) end.map do |name| prefix + name end
 end

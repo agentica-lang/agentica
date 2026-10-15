@@ -10,11 +10,11 @@ def main() -> Void
     if argument.starts_with?("--stdlib=")
       stdlib = argument.slice(9, argument.length - 9)
     elsif argument.starts_with?("--agentica-path=")
-      env = Env.Env(agentica_path: argument.slice(16, argument.length - 16), xdg_data_home: env.xdg_data_home, home: env.home)
+      env = env.with(agentica_path: argument.slice(16, argument.length - 16))
     elsif argument.starts_with?("--xdg-data-home=")
-      env = Env.Env(agentica_path: env.agentica_path, xdg_data_home: argument.slice(16, argument.length - 16), home: env.home)
+      env = env.with(xdg_data_home: argument.slice(16, argument.length - 16))
     elsif argument.starts_with?("--home=")
-      env = Env.Env(agentica_path: env.agentica_path, xdg_data_home: env.xdg_data_home, home: argument.slice(7, argument.length - 7))
+      env = env.with(home: argument.slice(7, argument.length - 7))
     elsif argument == "--ids"
       ids = true
     else

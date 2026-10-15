@@ -5,6 +5,14 @@ import "diagnostic" as Diag
 import "link_failure" as Failure
 import "source" as Source
 
+## What a top-level declaration is.
+export enum Kind
+  Struct
+  Enum
+  Function
+  Import
+end
+
 ## The declaration inside an export, or the declaration itself.
 export def unwrap(decl: Ast.Decl) -> Ast.Decl
   case decl
@@ -34,13 +42,45 @@ export def name_of(decl: Ast.Decl) -> String
   end
 end
 
-## "struct", "enum" or "function" for the declaration inside an export or not; "import" for an import.
-export def kind_of(decl: Ast.Decl) -> String
+## The kind of the declaration inside an export, or of the declaration itself.
+export def kind_of(decl: Ast.Decl) -> Kind
   case unwrap(decl)
-    Ast.Decl.Function(node) -> return "function"
-    Ast.Decl.Struct(node) -> return "struct"
-    Ast.Decl.Enum(node) -> return "enum"
-    _ -> return "import"
+    Ast.Decl.Function(node) -> return Kind.Function
+    Ast.Decl.Struct(node) -> return Kind.Struct
+    Ast.Decl.Enum(node) -> return Kind.Enum
+    _ -> return Kind.Import
+  end
+end
+
+## True for a struct.
+export def struct?(kind: Kind) -> Bool
+  case kind
+    Kind.Struct -> return true
+    _ -> return false
+  end
+end
+
+## True for a function.
+export def function?(kind: Kind) -> Bool
+  case kind
+    Kind.Function -> return true
+    _ -> return false
+  end
+end
+
+## True for an enum.
+export def enum?(kind: Kind) -> Bool
+  case kind
+    Kind.Enum -> return true
+    _ -> return false
+  end
+end
+
+## True for an import.
+export def import?(kind: Kind) -> Bool
+  case kind
+    Kind.Import -> return true
+    _ -> return false
   end
 end
 

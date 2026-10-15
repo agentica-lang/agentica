@@ -1,6 +1,6 @@
 ## The second half of the linker: rewrites the declarations of one file so that every name is the name of the linked program (resolve.agc), and so every file can share one program. This is the rewrite function of src/modules.rkt.
 ##
-## Names are resolved in the order Racket resolves them (a node's own name first, then its parts in field order), so the first failure is the same. Nodes keep their ids and spans. The recursion follows the depth of the tree: about two VM calls per level, so a tree of 3,000 levels is near the limit of 10,000 calls (the parser's nesting limit bounds the calls it makes, not the depth of the tree; see ast.agc).
+## Names are resolved in the order Racket resolves them (a node's own name first, then its parts in field order), so the first failure is the same. Nodes keep their ids and spans. The recursion follows the depth of the tree: about one VM call per level (rewrite_expr passes to rewrite_compound with a tail call), so trees up to about 9,900 levels fit in the limit of 10,000 calls (the parser's nesting limit bounds the calls it makes, not the depth of the tree; see ast.agc).
 
 import "ast" as Ast
 import "declarations" as Declarations
@@ -11,7 +11,7 @@ import "source" as Source
 export def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
   out: List[Ast.Decl] = []
   for wrapped in cx.me.program.declarations
-    if Declarations.kind_of(wrapped) != "import"
+    if !Declarations.import?(Declarations.kind_of(wrapped))
       out = out.push(try rewrite_decl(cx, Declarations.unwrap(wrapped)))
     end
   end
@@ -61,7 +61,7 @@ end
 def rewrite_payload(cx: Resolve.Context, parameters: List[String], type: Ast.TypeRef) -> Result[Ast.TypeRef]
   name = type.name
   if type.args.size > 0 or !parameters.any? do |parameter| parameter == type.name end
-    name = try Resolve.resolve(cx, type.name, "type", type.span, false)
+    name = try Resolve.resolve(cx, type.name, Resolve.Want.Type, type.span, false)
   end
   args: List[Ast.TypeRef] = []
   for arg in type.args
@@ -71,7 +71,7 @@ def rewrite_payload(cx: Resolve.Context, parameters: List[String], type: Ast.Typ
 end
 
 def rewrite_type(cx: Resolve.Context, type: Ast.TypeRef) -> Result[Ast.TypeRef]
-  name = try Resolve.resolve(cx, type.name, "type", type.span, false)
+  name = try Resolve.resolve(cx, type.name, Resolve.Want.Type, type.span, false)
   args: List[Ast.TypeRef] = []
   for arg in type.args
     args = args.push(try rewrite_type(cx, arg))
@@ -147,7 +147,7 @@ end
 def rewrite_pattern(cx: Resolve.Context, pattern: Ast.Pattern) -> Result[Ast.Pattern]
   case pattern
     Ast.Pattern.Variant(node) ->
-      name = try Resolve.resolve(cx, node.enum_name, "enum", node.span, false)
+      name = try Resolve.resolve(cx, node.enum_name, Resolve.Want.Enum, node.span, false)
       return ok(Ast.Pattern.Variant(node.with(enum_name: name)))
     _ -> return ok(pattern)
   end
@@ -182,15 +182,15 @@ def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.Name(node) -> return ok(expr)
     Ast.Expr.TypeName(node) -> return rewrite_type_name(cx, node)
     Ast.Expr.Call(node) ->
-      name = try Resolve.resolve(cx, node.name, "function", node.span, false)
+      name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
       args = try rewrite_exprs(cx, node.args)
       return ok(Ast.Expr.Call(node.with(name: name, args: args)))
     Ast.Expr.EnumConstructor(node) ->
-      name = try Resolve.resolve(cx, node.enum_name, "enum", node.span, false)
+      name = try Resolve.resolve(cx, node.enum_name, Resolve.Want.Enum, node.span, false)
       args = try rewrite_exprs(cx, node.args)
       return ok(Ast.Expr.EnumConstructor(node.with(enum_name: name, args: args)))
     Ast.Expr.FunctionRef(node) ->
-      name = try Resolve.resolve(cx, node.name, "function", node.span, false)
+      name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
       return ok(Ast.Expr.FunctionRef(node.with(name: name)))
     Ast.Expr.Construct(node) -> return rewrite_construct(cx, node)
     _ -> return rewrite_compound(cx, expr)
@@ -264,12 +264,12 @@ end
 # Enum.Variant, written without parentheses, is a variant of an enum of this file or a builtin one; any other name is a type.
 def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Expr]
   parts = node.name.split(".")
-  if parts.size == 2 and cx.me.names.get(parts[0], "") == "enum"
+  if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
     return ok(variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], [], node.span))
   elsif parts.size == 2 and cx.settings.builtin_enums.include?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], [], node.span))
   end
-  name = try Resolve.resolve(cx, node.name, "type", node.span, true)
+  name = try Resolve.resolve(cx, node.name, Resolve.Want.Type, node.span, true)
   return ok(Ast.Expr.TypeName(node.with(name: name)))
 end
 
@@ -280,20 +280,20 @@ end
 # Name(field: value) builds a struct, unless the name is a variant (Enum.Variant, or Alias.Enum.Variant): that is an enum constructor with named arguments, which the checker refuses.
 def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Expr]
   parts = node.type_name.split(".")
-  if parts.size == 2 and cx.me.names.get(parts[0], "") == "enum"
+  if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
     return ok(variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], try rewrite_named(cx, node.args), node.span))
   elsif parts.size == 2 and cx.settings.builtin_enums.include?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], try rewrite_named(cx, node.args), node.span))
   elsif parts.size == 3 and exported_enum?(cx, parts[0], parts[1])
-    name = try Resolve.resolve(cx, parts[0] + "." + parts[1], "enum", node.span, false)
+    name = try Resolve.resolve(cx, parts[0] + "." + parts[1], Resolve.Want.Enum, node.span, false)
     return ok(variant(node.id, name, parts[2], [], try rewrite_named(cx, node.args), node.span))
   end
-  name = try Resolve.resolve(cx, node.type_name, "type", node.span, false)
+  name = try Resolve.resolve(cx, node.type_name, Resolve.Want.Type, node.span, false)
   args = try rewrite_named(cx, node.args)
   return ok(Ast.Expr.Construct(node.with(type_name: name, args: args)))
 end
 
 def exported_enum?(cx: Resolve.Context, alias: String, name: String) -> Bool
   target = cx.me.aliases.get(alias, "")
-  return target != "" and cx.modules[target].public.get(name, "") == "enum"
+  return target != "" and Resolve.exports_enum?(cx.modules[target], name)
 end

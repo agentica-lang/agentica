@@ -36,12 +36,12 @@ def io_failure(site: Failure.Site, message: String) -> String
 end
 
 def file?(path: String) -> Bool
-  info = File.stat(path, timeout())
+  info = File.stat(path, Env.io_timeout())
   return info.ok? and info.unwrap!.kind != "directory"
 end
 
 def directory?(path: String) -> Bool
-  info = File.stat(path, timeout())
+  info = File.stat(path, Env.io_timeout())
   return info.ok? and info.unwrap!.kind == "directory"
 end
 
@@ -142,9 +142,4 @@ def relative(key: String, file: String, site: Failure.Site) -> Result[String]
     return error(io_failure(site, "cannot read import"))
   end
   return ok(target.unwrap!)
-end
-
-# Every file system call here has this deadline, in milliseconds.
-def timeout() -> Int
-  return 10000
 end
