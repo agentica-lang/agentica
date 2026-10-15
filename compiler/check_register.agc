@@ -1,12 +1,12 @@
 ## Registration: the first four passes of `check` in src/checker.rkt, which read every declaration of the program in order and fill the tables of Cx before any function body is checked: the names of the enums, the structs and their fields, the variants of the enums, and the signatures of the functions. Then check_main. A problem is CHECK-REDEFINED-NAME, CHECK-VOID-TYPE or another type problem, or CHECK-MAIN.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "check_state" as State
-import "check_types" as Types
-import "linker" as Linker
-import "source" as Source
-import "types" as T
+import Ast from "ast"
+import Model from "builtin_model"
+import State from "check_state"
+import Types from "check_types"
+import Linker from "linker"
+import Source from "source"
+import T from "types"
 
 ## The context with the enums, structs and functions of the program added to the builtin ones.
 export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]

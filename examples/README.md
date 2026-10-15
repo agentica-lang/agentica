@@ -14,7 +14,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The [README](../README.
 - [`concurrency.agc`](concurrency.agc): lightweight tasks with `Task.spawn` and `Task.await`.
 - [`process-tool.agc`](process-tool.agc): run another program; needs `--allow-run`, as in `dist/agentica --allow-run examples/process-tool.agc`.
 - [`tcp_echo.agc`](tcp_echo.agc): a TCP echo: read a line from a socket and send it back.
-- [`http_get.agc`](http_get.agc): an HTTP client with `import "std/http" as HTTP`.
+- [`http_get.agc`](http_get.agc): an HTTP client with `import HTTP from "std/http"`.
 - [`http_server.agc`](http_server.agc): an HTTP server with `std/http`; `http_server.agc serve` keeps serving and prints its port.
 - [`queue.agc`](queue.agc): the embedded `std/queue` library.
 - [`json-modules.agc`](json-modules.agc): a program split across files (it imports [`modules/json-tools.agc`](modules/json-tools.agc)).

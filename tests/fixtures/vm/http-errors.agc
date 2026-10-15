@@ -1,4 +1,4 @@
-import "std/http" as HTTP
+import HTTP from "std/http"
 
 def options(connections: Int, body: Int) -> HttpClientOptions
   return HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, ca_file: "")

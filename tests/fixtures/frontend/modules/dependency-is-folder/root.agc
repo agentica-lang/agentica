@@ -1,4 +1,4 @@
-import "sub" as Sub
+import Sub from "sub"
 def main() -> Void
 end
 

@@ -121,7 +121,7 @@ the tests 10.7.4. Streaming is planned in `docs/future/30-hybrid-http.md`.
   `main` returns or the run fails, every server and client is closed and every
   handler task stops.
 - **Exposure.** `std/http` is reached by an explicit import,
-  `import "std/http" as HTTP`, like `std/queue`. `HTTP` is a free alias. The
+  `import HTTP from "std/http"`, like `std/queue`. `HTTP` is a free alias. The
   record and handle types (`HttpRequest`, `HttpResponse`, `HttpClientOptions`,
   `HttpServerOptions`, `Header`, `HttpClient`, `HttpServer`) are global builtin
   names.

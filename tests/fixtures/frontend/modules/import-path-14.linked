@@ -1,7 +1,7 @@
-program #3 46:1:47-135:8:1
+program #3 46:1:47-137:8:1
   module "root.agc"
-    declaration: function-decl #2 111:5:1-134:7:1 name="main"
-      result: type-ref #1 125:5:15-129:5:19 name="Void"
+    declaration: function-decl #2 113:5:1-136:7:1 name="main"
+      result: type-ref #1 127:5:15-131:5:19 name="Void"
   module "lib/util.agc"
     declaration: function-decl #3 7:1:8-48:4:1 name="@2::read"
       result: type-ref #0 21:1:22-27:1:28 name="String"

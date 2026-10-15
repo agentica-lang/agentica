@@ -1,4 +1,4 @@
-import "base" as Base
+import Base from "base"
 
 export struct Mid
   b: Base.Base

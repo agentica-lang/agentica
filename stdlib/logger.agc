@@ -1,6 +1,6 @@
 ## An Elixir-style logger with four levels, one global level and named handlers.
 ##
-## Import it with `import "std/logger" as Logger`. The levels are the builtin enum `LogLevel` (`Debug < Info < Warning < Error`) and a handler receives the builtin record `LogEvent`.
+## Import it with `import Logger from "std/logger"`. The levels are the builtin enum `LogLevel` (`Debug < Info < Warning < Error`) and a handler receives the builtin record `LogEvent`.
 ## The first call of any function here installs a handler named `console` (`stderr_text`, level `info`). Handlers run in order, synchronously, in the task that logs, so a line is written when the call returns.
 ## A handler error is the error of the task that logged. The registry lives in the VM and belongs to one run.
 

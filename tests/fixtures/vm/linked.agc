@@ -1,6 +1,6 @@
-import "lib/inventory" as Inv
-import "lib/stock" as Stock
-import "pkg/text/pad" as Pad
+import Inv from "lib/inventory"
+import Stock from "lib/stock"
+import Pad from "pkg/text/pad"
 
 def main() -> Void
   items = [Stock.Item(name: "pen", count: 0), Stock.Item(name: "ink", count: 3)]

@@ -85,16 +85,17 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `loop do ... end` | `while true ... end`, or a `while` condition |
 | `puts(x) if ok`, `if x do` | `if ok ... end`; an `if` condition ends with a newline |
 | `Result.Some(x)` and other unknown Result variants | `Result.Ok(x)` / `ok(x)`, `Result.Err(m)` / `error(m)` |
-| `Color.Red` with no `Color` enum or import | `enum Color`, or `import "path" as Color` |
+| `Color.Red` with no `Color` enum or import | `enum Color`, or `import Color from "path"` |
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |
-| `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import "std/http" as HTTP`, then `HTTP.get`, `HTTP.post` or `HTTP.request` |
-| `LogRegistry.level()` or another `LogRegistry` call outside `std/logger` | `import "std/logger" as Logger`, then `Logger.info`, `Logger.attach` and the other `Logger` functions |
+| `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import HTTP from "std/http"`, then `HTTP.get`, `HTTP.post` or `HTTP.request` |
+| `LogRegistry.level()` or another `LogRegistry` call outside `std/logger` | `import Logger from "std/logger"`, then `Logger.info`, `Logger.attach` and the other `Logger` functions |
+| `import` followed by a string, the path-first form of earlier versions (`PARSE-UNEXPECTED-TOKEN`) | `import Models from "models"`: the alias comes first, then `from` and the path |
 | `import Mod, {name} from "path"`, `import {} from "path"`, `import {a b} from "path"` (`PARSE-UNEXPECTED-TOKEN`) | one line does one thing: write `import Mod from "path"` and `import {name} from "path"` on two lines; a name list has at least one name, with commas between names |
 | `import {Token as token} from "path"`, `import {lex as Lex} from "path"` (`CHECK-IMPORT-RENAME`) | a struct or an enum is renamed to a type name (a capital first letter) and a function to a lowercase name |
 | an imported name (or the new name after `as`) that is also a declaration of the file, an alias, another imported name, a builtin function such as `puts` or a reserved type name such as `Int` (`CHECK-REDEFINED-NAME`) | rename the import: `import {name as other} from "path"` |
 | `M.nme` or `import {nme} from "path"` when module `M` exports `name` (`CHECK-IMPORT-NAME`) | the help suggests the closest export of `M` (`did you mean "name"?`); it never suggests a private name, and it stays empty when no export is close |
 | `Logger.error(...)` (`CHECK-IMPORT-NAME`) | `Logger.err(...)`; `error` is a reserved name, so the function for the error level is `err` |
-| `HTTP.get(...)` or another `HTTP.` call without the import | `import "std/http" as HTTP` |
+| `HTTP.get(...)` or another `HTTP.` call without the import | `import HTTP from "std/http"` |
 | `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`) | a handler that returns its whole response: `return ok(HttpResponse(status: 200, headers: [], body: text))` |
 | `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`) | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
 | `Enumerator.new(...)`, `Fiber.new(...)` | a producer task that sends into a channel: `Task.spawn(&produce, ch)`, then `ch.recv(timeout_ms)` |

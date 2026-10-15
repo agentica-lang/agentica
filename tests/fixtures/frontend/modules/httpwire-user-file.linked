@@ -1,1 +1,1 @@
-ERROR CHECK-UNKNOWN-NAME 26:2:3-57:2:34 "unknown function \"HttpWire.client\"" "HttpWire is internal to std/http; use import \"std/http\" as HTTP" file="lib.agc"
+ERROR CHECK-UNKNOWN-NAME 26:2:3-57:2:34 "unknown function \"HttpWire.client\"" "HttpWire is internal to std/http; use import HTTP from \"std/http\"" file="lib.agc"

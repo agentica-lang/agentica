@@ -1,66 +1,66 @@
-program #63 0:1:1-566:21:1
+program #63 0:1:1-570:21:1
   module "root.agc"
-    declaration: function-decl #62 56:3:1-565:20:1 name="main"
-      result: type-ref #2 70:3:15-74:3:19 name="Void"
-      body: binding #4 77:4:3-100:5:1 name="original"
-        value: call #3 88:4:14-99:4:25 name="@2::new" piped=false
-      body: binding #9 102:5:3-149:6:1 name="q"
-        type: type-ref #5 105:5:6-121:5:22 name="@2::QueueState"
-        value: call #8 124:5:25-148:5:49 name="@2::push" piped=false
-          arg: name-ref #6 135:5:36-143:5:44 name="original"
-          arg: literal #7 145:5:46-147:5:48 value=string:""
-      body: binding #13 151:6:3-177:7:1 name="q"
-        value: call #12 155:6:7-176:6:28 name="@2::push" piped=false
-          arg: name-ref #10 166:6:18-167:6:19 name="q"
-          arg: literal #11 169:6:21-175:6:27 value=string:"same"
-      body: binding #17 179:7:3-205:8:1 name="q"
-        value: call #16 183:7:7-204:7:28 name="@2::push" piped=false
-          arg: name-ref #14 194:7:18-195:7:19 name="q"
-          arg: literal #15 197:7:21-203:7:27 value=string:"same"
-      body: expr-stmt #21 207:8:3-233:9:1
-        value: call #20 207:8:3-232:8:28 name="IO.inspect" piped=false
-          arg: call #19 218:8:14-231:8:27 name="@2::size" piped=false
-            arg: name-ref #18 229:8:25-230:8:26 name="q"
-      body: expr-stmt #25 235:9:3-270:10:1
-        value: call #24 235:9:3-269:9:37 name="IO.inspect" piped=false
-          arg: call #23 246:9:14-268:9:36 name="@2::empty?" piped=false
-            arg: name-ref #22 259:9:27-267:9:35 name="original"
-      body: expr-stmt #31 272:10:3-320:11:1
-        value: call #30 272:10:3-319:10:50 name="IO.inspect" piped=false
-          arg: unary #29 283:10:14-318:10:49 op=not op-span=283:10:14-286:10:17
-            operand: call #28 287:10:18-318:10:49 name="Result.ok?" piped=false
-              arg: call #27 298:10:29-317:10:48 name="@2::pop" piped=false
-                arg: name-ref #26 308:10:39-316:10:47 name="original"
-      body: expr-stmt #37 322:11:3-371:12:1
-        value: call #36 322:11:3-370:11:51 name="IO.inspect" piped=false
-          arg: unary #35 333:11:14-369:11:50 op=not op-span=333:11:14-336:11:17
-            operand: call #34 337:11:18-369:11:50 name="Result.ok?" piped=false
-              arg: call #33 348:11:29-368:11:49 name="@2::peek" piped=false
-                arg: name-ref #32 359:11:40-367:11:48 name="original"
-      body: expr-stmt #42 373:12:3-415:13:1
-        value: call #41 373:12:3-414:12:44 name="IO.inspect" piped=false
-          arg: call #40 384:12:14-413:12:43 name="Result.unwrap!" piped=false
-            arg: call #39 399:12:29-412:12:42 name="@2::peek" piped=false
-              arg: name-ref #38 410:12:40-411:12:41 name="q"
-      body: while-stmt #57 417:13:3-533:18:1
-        condition: unary #45 423:13:9-442:13:28 op=not op-span=423:13:9-426:13:12
-          operand: call #44 427:13:13-442:13:28 name="@2::empty?" piped=false
-            arg: name-ref #43 440:13:26-441:13:27 name="q"
-        body: binding #49 447:14:5-483:15:1 name="item"
-          value: call #48 454:14:12-482:14:40 name="Result.unwrap!" piped=false
-            arg: call #47 469:14:27-481:14:39 name="@2::pop" piped=false
-              arg: name-ref #46 479:14:37-480:14:38 name="q"
-        body: expr-stmt #53 487:15:5-504:16:1
-          value: call #52 487:15:5-503:15:21 name="puts" piped=false
-            arg: field-access #51 492:15:10-502:15:20 name="value"
-              target: name-ref #50 492:15:10-496:15:14 name="item"
-        body: binding #56 508:16:5-527:17:1 name="q"
-          value: field-access #55 512:16:9-526:16:23 name="remaining"
-            target: name-ref #54 512:16:9-516:16:13 name="item"
-      body: expr-stmt #61 535:18:3-561:19:1
-        value: call #60 535:18:3-560:18:28 name="IO.inspect" piped=false
-          arg: call #59 546:18:14-559:18:27 name="@2::size" piped=false
-            arg: name-ref #58 557:18:25-558:18:26 name="q"
+    declaration: function-decl #62 60:3:1-569:20:1 name="main"
+      result: type-ref #2 74:3:15-78:3:19 name="Void"
+      body: binding #4 81:4:3-104:5:1 name="original"
+        value: call #3 92:4:14-103:4:25 name="@2::new" piped=false
+      body: binding #9 106:5:3-153:6:1 name="q"
+        type: type-ref #5 109:5:6-125:5:22 name="@2::QueueState"
+        value: call #8 128:5:25-152:5:49 name="@2::push" piped=false
+          arg: name-ref #6 139:5:36-147:5:44 name="original"
+          arg: literal #7 149:5:46-151:5:48 value=string:""
+      body: binding #13 155:6:3-181:7:1 name="q"
+        value: call #12 159:6:7-180:6:28 name="@2::push" piped=false
+          arg: name-ref #10 170:6:18-171:6:19 name="q"
+          arg: literal #11 173:6:21-179:6:27 value=string:"same"
+      body: binding #17 183:7:3-209:8:1 name="q"
+        value: call #16 187:7:7-208:7:28 name="@2::push" piped=false
+          arg: name-ref #14 198:7:18-199:7:19 name="q"
+          arg: literal #15 201:7:21-207:7:27 value=string:"same"
+      body: expr-stmt #21 211:8:3-237:9:1
+        value: call #20 211:8:3-236:8:28 name="IO.inspect" piped=false
+          arg: call #19 222:8:14-235:8:27 name="@2::size" piped=false
+            arg: name-ref #18 233:8:25-234:8:26 name="q"
+      body: expr-stmt #25 239:9:3-274:10:1
+        value: call #24 239:9:3-273:9:37 name="IO.inspect" piped=false
+          arg: call #23 250:9:14-272:9:36 name="@2::empty?" piped=false
+            arg: name-ref #22 263:9:27-271:9:35 name="original"
+      body: expr-stmt #31 276:10:3-324:11:1
+        value: call #30 276:10:3-323:10:50 name="IO.inspect" piped=false
+          arg: unary #29 287:10:14-322:10:49 op=not op-span=287:10:14-290:10:17
+            operand: call #28 291:10:18-322:10:49 name="Result.ok?" piped=false
+              arg: call #27 302:10:29-321:10:48 name="@2::pop" piped=false
+                arg: name-ref #26 312:10:39-320:10:47 name="original"
+      body: expr-stmt #37 326:11:3-375:12:1
+        value: call #36 326:11:3-374:11:51 name="IO.inspect" piped=false
+          arg: unary #35 337:11:14-373:11:50 op=not op-span=337:11:14-340:11:17
+            operand: call #34 341:11:18-373:11:50 name="Result.ok?" piped=false
+              arg: call #33 352:11:29-372:11:49 name="@2::peek" piped=false
+                arg: name-ref #32 363:11:40-371:11:48 name="original"
+      body: expr-stmt #42 377:12:3-419:13:1
+        value: call #41 377:12:3-418:12:44 name="IO.inspect" piped=false
+          arg: call #40 388:12:14-417:12:43 name="Result.unwrap!" piped=false
+            arg: call #39 403:12:29-416:12:42 name="@2::peek" piped=false
+              arg: name-ref #38 414:12:40-415:12:41 name="q"
+      body: while-stmt #57 421:13:3-537:18:1
+        condition: unary #45 427:13:9-446:13:28 op=not op-span=427:13:9-430:13:12
+          operand: call #44 431:13:13-446:13:28 name="@2::empty?" piped=false
+            arg: name-ref #43 444:13:26-445:13:27 name="q"
+        body: binding #49 451:14:5-487:15:1 name="item"
+          value: call #48 458:14:12-486:14:40 name="Result.unwrap!" piped=false
+            arg: call #47 473:14:27-485:14:39 name="@2::pop" piped=false
+              arg: name-ref #46 483:14:37-484:14:38 name="q"
+        body: expr-stmt #53 491:15:5-508:16:1
+          value: call #52 491:15:5-507:15:21 name="puts" piped=false
+            arg: field-access #51 496:15:10-506:15:20 name="value"
+              target: name-ref #50 496:15:10-500:15:14 name="item"
+        body: binding #56 512:16:5-531:17:1 name="q"
+          value: field-access #55 516:16:9-530:16:23 name="remaining"
+            target: name-ref #54 516:16:9-520:16:13 name="item"
+      body: expr-stmt #61 539:18:3-565:19:1
+        value: call #60 539:18:3-564:18:28 name="IO.inspect" piped=false
+          arg: call #59 550:18:14-563:18:27 name="@2::size" piped=false
+            arg: name-ref #58 561:18:25-562:18:26 name="q"
   module "std/queue.agc"
     declaration: struct-decl #3 239:6:8-314:10:1 name="@2::QueueState"
       field: field-decl #2 290:8:3-310:9:1 name="items" doc="The values, oldest first."

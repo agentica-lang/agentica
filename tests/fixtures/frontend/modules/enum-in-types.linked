@@ -1,65 +1,65 @@
-program #61 0:1:1-392:28:1
+program #61 0:1:1-394:28:1
   module "root.agc"
-    declaration: enum-decl #11 17:3:1-88:8:1 name="Local" type-parameters=["T"]
-      variant: enum-variant #3 33:4:3-48:5:1 name="Wrap"
-        payload: type-ref #2 38:4:8-46:4:16 name="@2::Opt"
-          arg: type-ref #1 44:4:14-45:4:15 name="T"
-      variant: enum-variant #8 50:5:3-71:6:1 name="Two"
-        payload: type-ref #4 54:5:7-55:5:8 name="T"
-        payload: type-ref #6 57:5:10-64:5:17 name="List"
-          arg: type-ref #5 62:5:15-63:5:16 name="T"
-        payload: type-ref #7 66:5:19-69:5:22 name="@2::W"
-      variant: enum-variant #10 73:6:3-84:7:1 name="Plain"
-        payload: type-ref #9 79:6:9-82:6:12 name="Int"
-    declaration: function-decl #60 89:9:1-391:27:1 name="main"
-      result: type-ref #12 103:9:15-107:9:19 name="Void"
-      body: binding #15 110:10:3-129:11:1 name="x"
-        value: enum-constructor #14 114:10:7-128:10:21 enum="Local" variant="Plain"
-          arg: literal #13 126:10:19-127:10:20 value=int:1
-      body: binding #18 131:11:3-149:12:1 name="y"
-        value: enum-constructor #17 135:11:7-148:11:20 enum="@2::Opt" variant="Some"
-          arg: literal #16 146:11:18-147:11:19 value=int:1
-      body: binding #20 151:12:3-170:13:1 name="z"
-        value: enum-constructor #19 155:12:7-169:12:21 enum="Await" variant="TimedOut"
-      body: binding #22 172:13:3-191:14:1 name="w"
-        value: enum-constructor #21 176:13:7-190:13:21 enum="LogLevel" variant="Debug"
-      body: case-stmt #34 193:14:3-261:18:1
-        value: name-ref #23 198:14:8-199:14:9 name="y"
-        arm: case-arm #28 204:15:5-229:16:1
-          pattern: variant-pattern #24 204:15:5-217:15:18 enum="@2::Opt" variant="Some" bindings=["v"]
-          body: expr-stmt #27 221:15:22-229:16:1
-            value: call #26 221:15:22-228:15:29 name="puts" piped=false
-              arg: name-ref #25 226:15:27-227:15:28 name="v"
-        arm: case-arm #33 233:16:5-255:17:1
-          pattern: variant-pattern #29 233:16:5-243:16:15 enum="@2::Opt" variant="Nope" bindings=[]
-          body: expr-stmt #32 247:16:19-255:17:1
-            value: call #31 247:16:19-254:16:26 name="puts" piped=false
-              arg: literal #30 252:16:24-253:16:25 value=int:0
-      body: case-stmt #46 263:18:3-323:22:1
-        value: name-ref #35 268:18:8-269:18:9 name="x"
-        arm: case-arm #40 274:19:5-300:20:1
-          pattern: variant-pattern #36 274:19:5-288:19:19 enum="Local" variant="Plain" bindings=["n"]
-          body: expr-stmt #39 292:19:23-300:20:1
-            value: call #38 292:19:23-299:19:30 name="puts" piped=false
-              arg: name-ref #37 297:19:28-298:19:29 name="n"
-        arm: case-arm #45 304:20:5-317:21:1
-          pattern: wildcard-pattern #41 304:20:5-305:20:6
-          body: expr-stmt #44 309:20:10-317:21:1
-            value: call #43 309:20:10-316:20:17 name="puts" piped=false
-              arg: literal #42 314:20:15-315:20:16 value=int:0
-      body: case-stmt #59 325:22:3-387:26:1
-        value: call #48 330:22:8-335:22:13 name="ok" piped=false
-          arg: literal #47 333:22:11-334:22:12 value=int:1
-        arm: case-arm #53 340:23:5-357:24:1
-          pattern: variant-pattern #49 340:23:5-345:23:10 enum="Result" variant="Ok" bindings=["v"]
-          body: expr-stmt #52 349:23:14-357:24:1
-            value: call #51 349:23:14-356:23:21 name="puts" piped=false
-              arg: name-ref #50 354:23:19-355:23:20 name="v"
-        arm: case-arm #58 361:24:5-381:25:1
-          pattern: variant-pattern #54 361:24:5-369:24:13 enum="Result" variant="Err" bindings=["m"]
-          body: expr-stmt #57 373:24:17-381:25:1
-            value: call #56 373:24:17-380:24:24 name="puts" piped=false
-              arg: name-ref #55 378:24:22-379:24:23 name="m"
+    declaration: enum-decl #11 19:3:1-90:8:1 name="Local" type-parameters=["T"]
+      variant: enum-variant #3 35:4:3-50:5:1 name="Wrap"
+        payload: type-ref #2 40:4:8-48:4:16 name="@2::Opt"
+          arg: type-ref #1 46:4:14-47:4:15 name="T"
+      variant: enum-variant #8 52:5:3-73:6:1 name="Two"
+        payload: type-ref #4 56:5:7-57:5:8 name="T"
+        payload: type-ref #6 59:5:10-66:5:17 name="List"
+          arg: type-ref #5 64:5:15-65:5:16 name="T"
+        payload: type-ref #7 68:5:19-71:5:22 name="@2::W"
+      variant: enum-variant #10 75:6:3-86:7:1 name="Plain"
+        payload: type-ref #9 81:6:9-84:6:12 name="Int"
+    declaration: function-decl #60 91:9:1-393:27:1 name="main"
+      result: type-ref #12 105:9:15-109:9:19 name="Void"
+      body: binding #15 112:10:3-131:11:1 name="x"
+        value: enum-constructor #14 116:10:7-130:10:21 enum="Local" variant="Plain"
+          arg: literal #13 128:10:19-129:10:20 value=int:1
+      body: binding #18 133:11:3-151:12:1 name="y"
+        value: enum-constructor #17 137:11:7-150:11:20 enum="@2::Opt" variant="Some"
+          arg: literal #16 148:11:18-149:11:19 value=int:1
+      body: binding #20 153:12:3-172:13:1 name="z"
+        value: enum-constructor #19 157:12:7-171:12:21 enum="Await" variant="TimedOut"
+      body: binding #22 174:13:3-193:14:1 name="w"
+        value: enum-constructor #21 178:13:7-192:13:21 enum="LogLevel" variant="Debug"
+      body: case-stmt #34 195:14:3-263:18:1
+        value: name-ref #23 200:14:8-201:14:9 name="y"
+        arm: case-arm #28 206:15:5-231:16:1
+          pattern: variant-pattern #24 206:15:5-219:15:18 enum="@2::Opt" variant="Some" bindings=["v"]
+          body: expr-stmt #27 223:15:22-231:16:1
+            value: call #26 223:15:22-230:15:29 name="puts" piped=false
+              arg: name-ref #25 228:15:27-229:15:28 name="v"
+        arm: case-arm #33 235:16:5-257:17:1
+          pattern: variant-pattern #29 235:16:5-245:16:15 enum="@2::Opt" variant="Nope" bindings=[]
+          body: expr-stmt #32 249:16:19-257:17:1
+            value: call #31 249:16:19-256:16:26 name="puts" piped=false
+              arg: literal #30 254:16:24-255:16:25 value=int:0
+      body: case-stmt #46 265:18:3-325:22:1
+        value: name-ref #35 270:18:8-271:18:9 name="x"
+        arm: case-arm #40 276:19:5-302:20:1
+          pattern: variant-pattern #36 276:19:5-290:19:19 enum="Local" variant="Plain" bindings=["n"]
+          body: expr-stmt #39 294:19:23-302:20:1
+            value: call #38 294:19:23-301:19:30 name="puts" piped=false
+              arg: name-ref #37 299:19:28-300:19:29 name="n"
+        arm: case-arm #45 306:20:5-319:21:1
+          pattern: wildcard-pattern #41 306:20:5-307:20:6
+          body: expr-stmt #44 311:20:10-319:21:1
+            value: call #43 311:20:10-318:20:17 name="puts" piped=false
+              arg: literal #42 316:20:15-317:20:16 value=int:0
+      body: case-stmt #59 327:22:3-389:26:1
+        value: call #48 332:22:8-337:22:13 name="ok" piped=false
+          arg: literal #47 335:22:11-336:22:12 value=int:1
+        arm: case-arm #53 342:23:5-359:24:1
+          pattern: variant-pattern #49 342:23:5-347:23:10 enum="Result" variant="Ok" bindings=["v"]
+          body: expr-stmt #52 351:23:14-359:24:1
+            value: call #51 351:23:14-358:23:21 name="puts" piped=false
+              arg: name-ref #50 356:23:19-357:23:20 name="v"
+        arm: case-arm #58 363:24:5-383:25:1
+          pattern: variant-pattern #54 363:24:5-371:24:13 enum="Result" variant="Err" bindings=["m"]
+          body: expr-stmt #57 375:24:17-383:25:1
+            value: call #56 375:24:17-382:24:24 name="puts" piped=false
+              arg: name-ref #55 380:24:22-381:24:23 name="m"
   module "a.agc"
     declaration: enum-decl #3 7:1:8-40:5:1 name="@2::Opt" type-parameters=["T"]
       variant: enum-variant #1 21:2:3-29:3:1 name="Some"

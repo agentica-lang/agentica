@@ -1,4 +1,4 @@
-import "b" as B
+import B from "b"
 export def go() -> Void
   B.nope()
 end

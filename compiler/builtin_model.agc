@@ -1,6 +1,6 @@
 ## The data types of the builtin catalog (src/builtins.rkt, src/builtin-types.rkt). The rows themselves are builtins_data.agc, generated.
 
-import "types" as Types
+import Types from "types"
 
 ## The special checking rule of a builtin, the `rule` field of a src/builtins.rkt row. Plain is no rule (#f): the arguments are checked against the parameters. The other variants are the symbols of src/builtins.rkt in CamelCase (task-spawn is TaskSpawn); a test compares the two lists.
 export enum Rule

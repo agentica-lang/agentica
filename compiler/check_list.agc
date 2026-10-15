@@ -1,13 +1,13 @@
 ## The checking rules of the List builtins (src/checker.rkt, check-builtin-call: list-size ... list-repeat). A rule takes the call (State.Site) and returns the new state with the type of the call.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "check_args" as Args
-import "check_state" as State
-import "check_stmt" as Stmt
-import "check_types" as CheckTypes
-import "source" as Source
-import "types" as T
+import Ast from "ast"
+import Model from "builtin_model"
+import Args from "check_args"
+import State from "check_state"
+import Stmt from "check_stmt"
+import CheckTypes from "check_types"
+import Source from "source"
+import T from "types"
 
 ## Checks a call of a List builtin by its rule. Any other rule is the caller's.
 export def check_list_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]

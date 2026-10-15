@@ -2,8 +2,8 @@
 ##
 ## It lists the tests in a child VM, then runs them there one at a time.
 
-import "report" as Report
-import "child" as Child
+import Report from "report"
+import Child from "child"
 
 ## The options of a run: the VM path, the seed, the `--only` text and the timeout of each test in milliseconds.
 export struct Settings

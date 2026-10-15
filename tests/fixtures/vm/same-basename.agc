@@ -1,5 +1,5 @@
-import "lib/a/m" as A
-import "lib/b/m" as B
+import A from "lib/a/m"
+import B from "lib/b/m"
 
 def main() -> Void
   puts(A.go([1, 2]))

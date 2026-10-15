@@ -5,7 +5,7 @@ description: The std/queue module, a first-in, first-out queue of strings.
 ---
 
 `std/queue` is part of the standard library. It is written in Agentica
-itself. Import it with an alias: `import "std/queue" as Queue`.
+itself. Import it with an alias: `import Queue from "std/queue"`.
 
 A queue is an immutable `Queue.QueueState` value. Every function gives a new
 queue; assign it to keep it.
@@ -17,7 +17,7 @@ Queue.new() -> Queue.QueueState
 ```
 
 ```agentica
-import "std/queue" as Queue
+import Queue from "std/queue"
 
 def main() -> Void
   q = Queue.new()
@@ -38,7 +38,7 @@ Queue.push(q: Queue.QueueState, value: String) -> Queue.QueueState
 Adds a value at the back.
 
 ```agentica
-import "std/queue" as Queue
+import Queue from "std/queue"
 
 def main() -> Void
   q = Queue.push(Queue.new(), "a")
@@ -61,7 +61,7 @@ Takes the oldest value. It gives a `Popped` with `value` and the `remaining`
 queue, or an error when the queue is empty.
 
 ```agentica
-import "std/queue" as Queue
+import Queue from "std/queue"
 
 def main() -> Void
   q = Queue.push(Queue.push(Queue.new(), "a"), "b")
@@ -87,7 +87,7 @@ Queue.peek(q: Queue.QueueState) -> Result[String]
 Reads the oldest value without removing it.
 
 ```agentica
-import "std/queue" as Queue
+import Queue from "std/queue"
 
 def main() -> Void
   q = Queue.push(Queue.new(), "first")
@@ -107,7 +107,7 @@ Queue.empty?(q: Queue.QueueState) -> Bool
 ```
 
 ```agentica
-import "std/queue" as Queue
+import Queue from "std/queue"
 
 def main() -> Void
   q = Queue.new()

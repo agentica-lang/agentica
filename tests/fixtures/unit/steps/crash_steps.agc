@@ -1,4 +1,4 @@
-import "std/bdd" as BDD
+import BDD from "std/bdd"
 
 def main() -> Void
   zero = 0

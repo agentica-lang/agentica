@@ -1,13 +1,13 @@
 ## Statements, blocks, case and functions (src/checker.rkt: check-statement, check-block-body, check-case, check-function). Expressions are checked through State.expr, because they are in a module that imports this one.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "check_flow" as Flow
-import "check_state" as State
-import "check_types" as Types
-import "check_unused" as Unused
-import "source" as Source
-import "types" as T
+import Ast from "ast"
+import Model from "builtin_model"
+import Flow from "check_flow"
+import State from "check_state"
+import Types from "check_types"
+import Unused from "check_unused"
+import Source from "source"
+import T from "types"
 
 ## What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
 struct Arms

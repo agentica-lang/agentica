@@ -2,11 +2,11 @@
 ##
 ## src/parser.rkt keeps its state in variables that it changes (the position, the nesting, the block flags). Agentica has no such variables, so every parse function takes the context (Env), a position and the next free node id, and returns the node with the new position and id. A failure is a Result error whose String is the packed diagnostic, so `try` stops at the first one, as the Racket stages do.
 
-import "ast" as Ast
-import "diagnostic" as Diag
-import "source" as Source
-import "token" as Tokens
-import "unicode" as Unicode
+import Ast from "ast"
+import Diag from "diagnostic"
+import Source from "source"
+import Tokens from "token"
+import Unicode from "unicode"
 
 ## What a parse function reads and never changes: the tokens, the context of the construct being parsed, and the nesting level. depth is the block depth (0 outside a do block body), allow_blocks tells whether `do` after a call starts a block, and brace_at and brace_form remember a `{` right after a block head, for the help of PARSE-UNEXPECTED-TOKEN.
 export struct Env

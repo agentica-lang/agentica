@@ -1,12 +1,12 @@
-program #8 0:1:1-65:6:1
+program #8 0:1:1-67:6:1
   module "root.agc"
-    declaration: function-decl #7 16:2:1-64:5:1 name="main"
-      result: type-ref #1 30:2:15-34:2:19 name="Void"
-      body: binding #6 37:3:3-60:4:1 name="n"
-        type: type-ref #2 40:3:6-43:3:9 name="Int"
-        value: construct #5 46:3:12-59:3:25 type="@2::Point"
-          arg: named-arg #4 54:3:20-58:3:24 name="x"
-            value: literal #3 57:3:23-58:3:24 value=int:1
+    declaration: function-decl #7 18:2:1-66:5:1 name="main"
+      result: type-ref #1 32:2:15-36:2:19 name="Void"
+      body: binding #6 39:3:3-62:4:1 name="n"
+        type: type-ref #2 42:3:6-45:3:9 name="Int"
+        value: construct #5 48:3:12-61:3:25 type="@2::Point"
+          arg: named-arg #4 56:3:20-60:3:24 name="x"
+            value: literal #3 59:3:23-60:3:24 value=int:1
   module "a.agc"
     declaration: struct-decl #2 7:1:8-33:4:1 name="@2::Point"
       field: field-decl #1 22:2:3-29:3:1 name="x"

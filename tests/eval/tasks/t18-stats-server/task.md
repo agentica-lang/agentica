@@ -1,6 +1,6 @@
 # Task: repair a JSON service
 
-`start.agc` (or `start.py` for Python) is a small HTTP service for numbers, and it does not meet its spec. Fix it and save the result as `solution.agc` (or `solution.py`). In Agentica use `std/http` (`import "std/http" as HTTP`); in Python use the standard library (`http.server`).
+`start.agc` (or `start.py` for Python) is a small HTTP service for numbers, and it does not meet its spec. Fix it and save the result as `solution.agc` (or `solution.py`). In Agentica use `std/http` (`import HTTP from "std/http"`); in Python use the standard library (`http.server`).
 
 ## How the service starts
 

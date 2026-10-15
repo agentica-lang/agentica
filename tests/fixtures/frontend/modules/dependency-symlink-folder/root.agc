@@ -1,5 +1,5 @@
-import "lnk/lib" as L
-import "real/lib" as R
+import L from "lnk/lib"
+import R from "real/lib"
 def main() -> Void
   L.go()
   R.go()

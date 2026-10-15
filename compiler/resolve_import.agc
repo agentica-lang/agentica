@@ -1,9 +1,9 @@
 ## Finds the module an import names: a std/ module in the stdlib/ folder, a pkg/ library in the search roots, or a file next to the importing one. This is resolve-import of src/modules.rkt. A module is known by its key: the canonical path of a file, or std/NAME.agc for a standard module.
 
-import "diagnostic" as Diag
-import "import_path" as Paths
-import "link_env" as Env
-import "link_failure" as Failure
+import Diag from "diagnostic"
+import Paths from "import_path"
+import Env from "link_env"
+import Failure from "link_failure"
 
 ## True for the key of a standard module, which no canonical path can look like.
 export def embedded?(key: String) -> Bool

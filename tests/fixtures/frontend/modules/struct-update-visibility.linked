@@ -1,32 +1,32 @@
-program #28 0:1:1-193:13:1
+program #28 0:1:1-195:13:1
   module "root.agc"
-    declaration: struct-decl #3 21:3:1-47:6:1 name="Local"
-      field: field-decl #2 36:4:3-43:5:1 name="n"
-        type: type-ref #1 39:4:6-42:4:9 name="Int"
-    declaration: function-decl #27 48:7:1-192:12:1 name="main"
-      result: type-ref #4 62:7:15-66:7:19 name="Void"
-      body: binding #9 69:8:3-95:9:1 name="a"
-        value: struct-update #8 73:8:7-94:8:28 visible=["@2::Pub","Local"]
-          target: call #5 73:8:7-83:8:17 name="@2::make" piped=false
-          arg: named-arg #7 89:8:23-93:8:27 name="n"
-            value: literal #6 92:8:26-93:8:27 value=int:5
-      body: binding #17 97:9:3-135:10:1 name="b"
-        value: struct-update #16 101:9:7-134:9:40 visible=["@2::Pub","Local"]
-          target: construct #12 101:9:7-112:9:18 type="Local"
-            arg: named-arg #11 107:9:13-111:9:17 name="n"
-              value: literal #10 110:9:16-111:9:17 value=int:1
-          arg: named-arg #15 118:9:24-133:9:39 name="n"
-            value: field-access #14 121:9:27-133:9:39 name="n"
-              target: call #13 121:9:27-131:9:37 name="@2::make" piped=false
-      body: binding #26 137:10:3-188:11:1 name="c"
-        value: struct-update #25 141:10:7-187:10:53 visible=["@2::Pub","Local"]
-          target: construct #22 141:10:7-170:10:36 type="Header"
-            arg: named-arg #19 148:10:14-157:10:23 name="name"
-              value: literal #18 154:10:20-157:10:23 value=string:"a"
-            arg: named-arg #21 159:10:25-169:10:35 name="value"
-              value: literal #20 166:10:32-169:10:35 value=string:"b"
-          arg: named-arg #24 176:10:42-186:10:52 name="value"
-            value: literal #23 183:10:49-186:10:52 value=string:"c"
+    declaration: struct-decl #3 23:3:1-49:6:1 name="Local"
+      field: field-decl #2 38:4:3-45:5:1 name="n"
+        type: type-ref #1 41:4:6-44:4:9 name="Int"
+    declaration: function-decl #27 50:7:1-194:12:1 name="main"
+      result: type-ref #4 64:7:15-68:7:19 name="Void"
+      body: binding #9 71:8:3-97:9:1 name="a"
+        value: struct-update #8 75:8:7-96:8:28 visible=["@2::Pub","Local"]
+          target: call #5 75:8:7-85:8:17 name="@2::make" piped=false
+          arg: named-arg #7 91:8:23-95:8:27 name="n"
+            value: literal #6 94:8:26-95:8:27 value=int:5
+      body: binding #17 99:9:3-137:10:1 name="b"
+        value: struct-update #16 103:9:7-136:9:40 visible=["@2::Pub","Local"]
+          target: construct #12 103:9:7-114:9:18 type="Local"
+            arg: named-arg #11 109:9:13-113:9:17 name="n"
+              value: literal #10 112:9:16-113:9:17 value=int:1
+          arg: named-arg #15 120:9:24-135:9:39 name="n"
+            value: field-access #14 123:9:27-135:9:39 name="n"
+              target: call #13 123:9:27-133:9:37 name="@2::make" piped=false
+      body: binding #26 139:10:3-190:11:1 name="c"
+        value: struct-update #25 143:10:7-189:10:53 visible=["@2::Pub","Local"]
+          target: construct #22 143:10:7-172:10:36 type="Header"
+            arg: named-arg #19 150:10:14-159:10:23 name="name"
+              value: literal #18 156:10:20-159:10:23 value=string:"a"
+            arg: named-arg #21 161:10:25-171:10:35 name="value"
+              value: literal #20 168:10:32-171:10:35 value=string:"b"
+          arg: named-arg #24 178:10:42-188:10:52 name="value"
+            value: literal #23 185:10:49-188:10:52 value=string:"c"
   module "lib.agc"
     declaration: struct-decl #2 7:1:8-31:4:1 name="@2::Pub"
       field: field-decl #1 20:2:3-27:3:1 name="n"

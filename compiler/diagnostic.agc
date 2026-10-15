@@ -1,4 +1,4 @@
-import "source" as Source
+import Source from "source"
 
 export struct Diagnostic
   code: String

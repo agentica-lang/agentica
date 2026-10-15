@@ -2,7 +2,7 @@
 ##
 ## Used by `agentica test`.
 
-import "report" as Report
+import Report from "report"
 
 ## The JSON records read from a child's channel, and the message of the error that ended the reading.
 export struct Records

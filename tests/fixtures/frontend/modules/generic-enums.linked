@@ -1,41 +1,41 @@
-program #37 0:1:1-406:19:1
+program #37 0:1:1-408:19:1
   module "root.agc"
-    declaration: function-decl #36 26:2:1-405:18:1 name="main"
-      result: type-ref #1 40:2:15-44:2:19 name="Void"
-      body: binding #6 47:3:3-97:4:1 name="value"
-        type: type-ref #3 54:3:10-72:3:28 name="@2::Option"
-          arg: type-ref #2 68:3:24-71:3:27 name="Int"
-        value: enum-constructor #5 75:3:31-96:3:52 enum="@2::Option" variant="Some"
-          arg: literal #4 94:3:50-95:3:51 value=int:7
-      body: case-stmt #19 99:4:3-231:10:1
-        value: name-ref #7 104:4:8-109:4:13 name="value"
-        arm: case-arm #13 117:5:5-179:7:1
-          pattern: variant-pattern #8 117:5:5-141:5:29 enum="@2::Option" variant="Some" bindings=["item"]
-          body: expr-stmt #12 151:6:7-179:7:1
-            value: call #11 151:6:7-178:6:34 name="puts" piped=false
-              arg: call #10 156:6:12-177:6:33 name="String.from_int" piped=false
-                arg: name-ref #9 172:6:28-176:6:32 name="item"
-        arm: case-arm #18 183:7:5-225:9:1
-          pattern: variant-pattern #14 183:7:5-201:7:23 enum="@2::Option" variant="None" bindings=[]
-          body: expr-stmt #17 211:8:7-225:9:1
-            value: call #16 211:8:7-224:8:20 name="puts" piped=false
-              arg: literal #15 216:8:12-223:8:19 value=string:"empty"
-      body: binding #23 233:10:3-285:11:1 name="empty"
-        type: type-ref #21 240:10:10-261:10:31 name="@2::Option"
-          arg: type-ref #20 254:10:24-260:10:30 name="String"
-        value: enum-constructor #22 264:10:34-284:10:54 enum="@2::Option" variant="None"
-      body: case-stmt #35 287:11:3-401:17:1
-        value: name-ref #24 292:11:8-297:11:13 name="empty"
-        arm: case-arm #29 305:12:5-350:14:1
-          pattern: variant-pattern #25 305:12:5-329:12:29 enum="@2::Option" variant="Some" bindings=["item"]
-          body: expr-stmt #28 339:13:7-350:14:1
-            value: call #27 339:13:7-349:13:17 name="puts" piped=false
-              arg: name-ref #26 344:13:12-348:13:16 name="item"
-        arm: case-arm #34 354:14:5-395:16:1
-          pattern: variant-pattern #30 354:14:5-372:14:23 enum="@2::Option" variant="None" bindings=[]
-          body: expr-stmt #33 382:15:7-395:16:1
-            value: call #32 382:15:7-394:15:19 name="puts" piped=false
-              arg: literal #31 387:15:12-393:15:18 value=string:"none"
+    declaration: function-decl #36 28:2:1-407:18:1 name="main"
+      result: type-ref #1 42:2:15-46:2:19 name="Void"
+      body: binding #6 49:3:3-99:4:1 name="value"
+        type: type-ref #3 56:3:10-74:3:28 name="@2::Option"
+          arg: type-ref #2 70:3:24-73:3:27 name="Int"
+        value: enum-constructor #5 77:3:31-98:3:52 enum="@2::Option" variant="Some"
+          arg: literal #4 96:3:50-97:3:51 value=int:7
+      body: case-stmt #19 101:4:3-233:10:1
+        value: name-ref #7 106:4:8-111:4:13 name="value"
+        arm: case-arm #13 119:5:5-181:7:1
+          pattern: variant-pattern #8 119:5:5-143:5:29 enum="@2::Option" variant="Some" bindings=["item"]
+          body: expr-stmt #12 153:6:7-181:7:1
+            value: call #11 153:6:7-180:6:34 name="puts" piped=false
+              arg: call #10 158:6:12-179:6:33 name="String.from_int" piped=false
+                arg: name-ref #9 174:6:28-178:6:32 name="item"
+        arm: case-arm #18 185:7:5-227:9:1
+          pattern: variant-pattern #14 185:7:5-203:7:23 enum="@2::Option" variant="None" bindings=[]
+          body: expr-stmt #17 213:8:7-227:9:1
+            value: call #16 213:8:7-226:8:20 name="puts" piped=false
+              arg: literal #15 218:8:12-225:8:19 value=string:"empty"
+      body: binding #23 235:10:3-287:11:1 name="empty"
+        type: type-ref #21 242:10:10-263:10:31 name="@2::Option"
+          arg: type-ref #20 256:10:24-262:10:30 name="String"
+        value: enum-constructor #22 266:10:34-286:10:54 enum="@2::Option" variant="None"
+      body: case-stmt #35 289:11:3-403:17:1
+        value: name-ref #24 294:11:8-299:11:13 name="empty"
+        arm: case-arm #29 307:12:5-352:14:1
+          pattern: variant-pattern #25 307:12:5-331:12:29 enum="@2::Option" variant="Some" bindings=["item"]
+          body: expr-stmt #28 341:13:7-352:14:1
+            value: call #27 341:13:7-351:13:17 name="puts" piped=false
+              arg: name-ref #26 346:13:12-350:13:16 name="item"
+        arm: case-arm #34 356:14:5-397:16:1
+          pattern: variant-pattern #30 356:14:5-374:14:23 enum="@2::Option" variant="None" bindings=[]
+          body: expr-stmt #33 384:15:7-397:16:1
+            value: call #32 384:15:7-396:15:19 name="puts" piped=false
+              arg: literal #31 389:15:12-395:15:18 value=string:"none"
   module "option.agc"
     declaration: enum-decl #3 7:1:8-43:5:1 name="@2::Option" type-parameters=["T"]
       variant: enum-variant #1 24:2:3-32:3:1 name="Some"

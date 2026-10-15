@@ -1,4 +1,4 @@
-import "bad" as Bad
+import Bad from "bad"
 def main() -> Void
 end
 

@@ -1,11 +1,11 @@
 ## The text form of the builtin catalog, for tests. See catalog_text. tests/frontend-catalog-common.rkt prints the same text from src/builtins.rkt.
 
-import "ast" as Ast
-import "builtin_model" as Model
-import "builtins" as Builtins
-import "suggest" as Suggest
-import "text" as Text
-import "types" as Types
+import Ast from "ast"
+import Model from "builtin_model"
+import Builtins from "builtins"
+import Suggest from "suggest"
+import Text from "text"
+import Types from "types"
 
 ## The whole catalog, one line per fact, then the answer to each probe. A probe is `near:WORD` (the did-you-mean help among the public builtin names), `ref:NAME/ARITY` (the form of NAME with that many arguments), `std:NAME` (is NAME inside a std-only module) `type:WORD` (the help for an unknown type: the record and enum names, and the primitive and handle type names), `sig:NAME` (the signature of every form of NAME) or `disp:NAME` (display_name of a linked name).
 export def catalog_text(probes: List[String]) -> String

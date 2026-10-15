@@ -99,7 +99,7 @@ class BddIntegration(TestCase):
         directory = self.suite({
             "echo.agc": "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  IO.flush()\n  ending = IO.gets()\nend\n",
             "steps.agc": (
-                'import "std/bdd" as BDD\n\n'
+                'import BDD from "std/bdd"\n\n'
                 "def receive(ctx: BDD.Context) -> BDD.Context\n"
                 '  return BDD.then_line(ctx, "hello", 5000)\nend\n\n'
                 "def exchange(ctx: BDD.Context, args: List[String]) -> BDD.Context\n  task = Task.spawn(&receive, ctx)\n"
@@ -123,7 +123,7 @@ class BddIntegration(TestCase):
         draw = 'Random.int(1, 1000000).to_s + " " + Random.int(1, 1000000).to_s'
         directory = self.suite({
             "draw.agc": "def main() -> Void\n  puts(%s)\nend\n" % draw,
-            "steps.agc": ('import "std/bdd" as BDD\n\ndef main() -> Void\n'
+            "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
                           '  BDD.run([BDD.step("stdout repeats the seeded draw") do |ctx, args| '
                           'BDD.then_stdout(ctx, %s + "\\n") end])\nend\n' % draw),
             "seed.feature": ('Feature: Seeds\nScenario: seeded\nGiven the Agentica program "draw.agc"\n'
@@ -182,7 +182,7 @@ class BddIntegration(TestCase):
     @slow
     def test_a_handler_that_prints_for_ever_fails_at_the_output_limit_long_before_the_scenario_deadline(self):
         directory = self.suite({
-            "steps.agc": ('import "std/bdd" as BDD\n\ndef main() -> Void\n'
+            "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
                           '  BDD.run([BDD.step("the handler prints for ever") do |ctx, args|\n'
                           '    chunk = String.join(List.repeat("x", 100000), "")\n'
                           "    while true\n      puts(chunk)\n      Task.sleep(5)\n    end\n"
@@ -196,7 +196,7 @@ class BddIntegration(TestCase):
     @slow
     def test_a_step_program_that_prints_for_ever_while_it_lists_its_steps_fails_at_the_output_limit(self):
         directory = self.suite({
-            "steps.agc": ('import "std/bdd" as BDD\n\ndef main() -> Void\n'
+            "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
                           '  chunk = String.join(List.repeat("x", 100000), "")\n'
                           "  while true\n    puts(chunk)\n    Task.sleep(5)\n  end\n"
                           "  BDD.run([])\nend\n"),
@@ -217,7 +217,7 @@ class BddIntegration(TestCase):
             "where.agc": "def main() -> Void\n  puts(Path.cwd().unwrap!)\nend\n",
             "json.agc": JSON_PROGRAM,
             "quotes.agc": 'def main() -> Void\n  puts(String.join(List.repeat("\\"", 300000), ""))\nend\n',
-            "steps.agc": ('import "std/bdd" as BDD\n\ndef main() -> Void\n'
+            "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
                           '  BDD.run([BDD.step("the handler floods stdout") do |ctx, args|\n'
                           '    puts(String.join(List.repeat(String.join(List.repeat("x", 1000), ""), 1100), "\\n"))\n'
                           "    ctx\n  end,\n"

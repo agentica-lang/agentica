@@ -1,6 +1,6 @@
-import "std/test/report" as Report
-import "std/bdd/match" as Match
-import "std/bdd/gherkin" as Gherkin
+import Report from "std/test/report"
+import Match from "std/bdd/match"
+import Gherkin from "std/bdd/gherkin"
 
 def check(definitions: List[String]) -> Void
   where = Report.Span(file: "steps.agc", line: 1, column: 1, end_column: 12)

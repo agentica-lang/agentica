@@ -1,8 +1,8 @@
 ## The first argument of a builtin call that must be a collection, a channel or a Result (src/checker.rkt: map-argument, set-argument, list-argument, channel-argument, result-argument inside check-builtin-call). Each checks argument 0 against the context given and returns the new state with its type, or CHECK-TYPE-MISMATCH naming the type it should have been.
 
-import "ast" as Ast
-import "check_state" as State
-import "types" as T
+import Ast from "ast"
+import State from "check_state"
+import T from "types"
 
 ## Argument 0 as a Map[K, V].
 export def map_argument(cx: State.Cx, st: State.St, site: State.Site, context: T.Type) -> Result[State.Out]

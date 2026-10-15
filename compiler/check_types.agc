@@ -1,10 +1,10 @@
 ## Types in the checker: reading a type written in the source (resolve_type), the questions the rules ask of a type (can it be printed, encoded to JSON, decoded from JSON), and the type variables of generic enums (substitute, unify). These are the helpers of src/checker.rkt that do not depend on the walk of the tree.
 
-import "ast" as Ast
-import "check_help" as Help
-import "check_state" as State
-import "source" as Source
-import "types" as Types
+import Ast from "ast"
+import Help from "check_help"
+import State from "check_state"
+import Source from "source"
+import Types from "types"
 
 ## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or CHECK-UNKNOWN-TYPE.
 export def resolve_type(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]

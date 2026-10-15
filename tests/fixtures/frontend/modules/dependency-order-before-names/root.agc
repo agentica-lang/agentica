@@ -1,4 +1,4 @@
-import "a" as A
+import A from "a"
 def main() -> Void
   A.nope()
 end

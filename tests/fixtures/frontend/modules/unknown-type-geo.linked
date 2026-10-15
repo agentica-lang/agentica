@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 24:2:6-33:2:15 "unknown module alias" "import a module with import \"path\" as Geo" file="root.agc"
+ERROR CHECK-IMPORT-NAME 24:2:6-33:2:15 "unknown module alias" "import a module with import Geo from \"path\"" file="root.agc"

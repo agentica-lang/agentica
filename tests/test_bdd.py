@@ -26,7 +26,7 @@ def start_line(problem):
 
 
 def steps_program(*parts):
-    return 'import "std/bdd" as BDD\n\n' + "\n".join(parts) + "\n"
+    return 'import BDD from "std/bdd"\n\n' + "\n".join(parts) + "\n"
 
 
 def main_running(*steps):

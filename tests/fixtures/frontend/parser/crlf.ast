@@ -1,12 +1,12 @@
-program #9 0:1:1-91:8:1
-  declaration: import-decl #0 0:1:1-23:2:1 path="util" alias="Util"
-  declaration: function-decl #8 39:4:1-91:8:1 name="main" doc="Doc line."
-    result: type-ref #1 53:4:15-57:4:19 name="Void"
-    body: binding #3 61:5:3-68:6:1 name="x"
-      value: literal #2 65:5:7-66:5:8 value=int:1
-    body: expr-stmt #7 70:6:3-86:7:1
-      value: call #6 70:6:3-84:6:17 name="puts" piped=false
-        arg: interpolation #5 75:6:8-83:6:16
+program #9 0:1:1-93:8:1
+  declaration: import-decl #0 0:1:1-25:2:1 path="util" alias="Util"
+  declaration: function-decl #8 41:4:1-93:8:1 name="main" doc="Doc line."
+    result: type-ref #1 55:4:15-59:4:19 name="Void"
+    body: binding #3 63:5:3-70:6:1 name="x"
+      value: literal #2 67:5:7-68:5:8 value=int:1
+    body: expr-stmt #7 72:6:3-88:7:1
+      value: call #6 72:6:3-86:6:17 name="puts" piped=false
+        arg: interpolation #5 77:6:8-85:6:16
           part: text "a"
-          part: name-ref #4 79:6:12-80:6:13 name="x"
+          part: name-ref #4 81:6:12-82:6:13 name="x"
           part: text "b"

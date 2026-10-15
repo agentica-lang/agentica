@@ -198,8 +198,8 @@ facade module can collect the API of several files:
 
 ```agentica
 # web.agc
-import "url" as Url
-import "http_parts" as Parts
+import Url from "url"
+import Parts from "http_parts"
 
 export Url.parse
 export Url.Address
@@ -207,7 +207,7 @@ export Parts.header_value
 ```
 
 ```agentica
-import "web" as Web
+import Web from "web"
 
 def main() -> Void
   case Web.parse("http://localhost:8080/a")

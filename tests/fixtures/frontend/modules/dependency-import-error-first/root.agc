@@ -1,5 +1,5 @@
-import "a" as A
-import "missing" as M
+import A from "a"
+import M from "missing"
 def main() -> Void
 end
 

@@ -27,7 +27,7 @@ TICKS = os.sysconf("SC_CLK_TCK")
 START_TIMEOUT = 30.0
 CLIENT_TIMEOUT = 600.0
 
-CLIENT = """import "std/http" as HTTP
+CLIENT = """import HTTP from "std/http"
 
 struct Job
   pool: HttpClient

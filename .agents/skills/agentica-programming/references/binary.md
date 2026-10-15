@@ -1,6 +1,6 @@
 # Binary data (`std/binary`)
 
-`import "std/binary" as Binary`. Binary data is a `List[Int]` with each item in `0 .. 255`, like `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and `Process.read_bytes` give. The module is written in Agentica on the `Int` and `Float` bit builtins (`references/builtins.md`).
+`import Binary from "std/binary"`. Binary data is a `List[Int]` with each item in `0 .. 255`, like `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and `Process.read_bytes` give. The module is written in Agentica on the `Int` and `Float` bit builtins (`references/builtins.md`).
 
 ```text
 Binary.read_u8(data: List[Int], offset: Int) -> Result[Int]
@@ -27,7 +27,7 @@ Binary.read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[Int]
 - No mutable buffers and no `Bytes` type: writers return new lists, which the program joins.
 
 ```ruby
-import "std/binary" as Binary
+import Binary from "std/binary"
 
 def main() -> Void
   header = Binary.write_u16_be(513).unwrap!

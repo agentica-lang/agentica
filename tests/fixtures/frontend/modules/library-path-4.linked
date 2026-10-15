@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-IO 0:1:1-59:2:1 "cannot find library module" - file="root.agc"
+ERROR CHECK-IMPORT-IO 0:1:1-61:2:1 "cannot find library module" - file="root.agc"

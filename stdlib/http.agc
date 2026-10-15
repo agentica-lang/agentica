@@ -1,6 +1,6 @@
 ## An HTTP/1.1 client and server.
 ##
-## Import it with `import "std/http" as HTTP`. Every call is whole: it returns after the whole response arrived, and the body is a `String`.
+## Import it with `import HTTP from "std/http"`. Every call is whole: it returns after the whole response arrived, and the body is a `String`.
 ## Status codes such as 404 or 500 are normal responses. A bad URL, a refused connection, a timeout or a body over the limit is an `error` result.
 
 struct Target

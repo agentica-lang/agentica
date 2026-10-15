@@ -1,21 +1,21 @@
-program #19 0:1:1-250:10:1
+program #19 0:1:1-256:10:1
   module "root.agc"
-    declaration: function-decl #18 110:4:1-249:9:1 name="main"
-      result: type-ref #3 124:4:15-128:4:19 name="Void"
-      body: binding #7 131:5:3-168:6:1 name="value"
-        type: type-ref #4 138:5:10-150:5:22 name="@2::Value"
-        value: call #6 153:5:25-167:5:39 name="@3::make" piped=false
-          arg: literal #5 164:5:36-166:5:38 value=int:42
-      body: expr-stmt #11 170:6:3-200:7:1
-        value: call #10 170:6:3-199:6:32 name="IO.inspect" piped=false
-          arg: call #9 181:6:14-198:6:31 name="@2::read" piped=false
-            arg: name-ref #8 192:6:25-197:6:30 name="value"
-      body: expr-stmt #17 202:7:3-245:8:1
-        value: call #16 202:7:3-244:7:45 name="IO.inspect" piped=false
-          arg: call #15 213:7:14-243:7:44 name="@2::read" piped=false
-            arg: construct #14 225:7:26-242:7:43 type="@2::Value"
-              arg: named-arg #13 237:7:38-241:7:42 name="n"
-                value: literal #12 240:7:41-241:7:42 value=int:7
+    declaration: function-decl #18 116:4:1-255:9:1 name="main"
+      result: type-ref #3 130:4:15-134:4:19 name="Void"
+      body: binding #7 137:5:3-174:6:1 name="value"
+        type: type-ref #4 144:5:10-156:5:22 name="@2::Value"
+        value: call #6 159:5:25-173:5:39 name="@3::make" piped=false
+          arg: literal #5 170:5:36-172:5:38 value=int:42
+      body: expr-stmt #11 176:6:3-206:7:1
+        value: call #10 176:6:3-205:6:32 name="IO.inspect" piped=false
+          arg: call #9 187:6:14-204:6:31 name="@2::read" piped=false
+            arg: name-ref #8 198:6:25-203:6:30 name="value"
+      body: expr-stmt #17 208:7:3-251:8:1
+        value: call #16 208:7:3-250:7:45 name="IO.inspect" piped=false
+          arg: call #15 219:7:14-249:7:44 name="@2::read" piped=false
+            arg: construct #14 231:7:26-248:7:43 type="@2::Value"
+              arg: named-arg #13 243:7:38-247:7:42 name="n"
+                value: literal #12 246:7:41-247:7:42 value=int:7
   module "library/models.agc"
     declaration: struct-decl #2 7:1:8-33:4:1 name="@2::Value"
       field: field-decl #1 22:2:3-29:3:1 name="n"
@@ -33,11 +33,11 @@ program #19 0:1:1-250:10:1
         value: call #14 114:10:3-134:10:23 name="puts" piped=false
           arg: literal #13 119:10:8-133:10:22 value=string:"must not run"
   module "library/outer.agc"
-    declaration: function-decl #8 33:2:8-98:5:1 name="@3::make"
-      param: param #2 42:2:17-48:2:23 name="n"
-        type: type-ref #1 45:2:20-48:2:23 name="Int"
-      result: type-ref #3 53:2:28-65:2:40 name="@2::Value"
-      body: return-stmt #7 68:3:3-94:4:1
-        value: construct #6 75:3:10-93:3:28 type="@2::Value"
-          arg: named-arg #5 88:3:23-92:3:27 name="n"
-            value: name-ref #4 91:3:26-92:3:27 name="n"
+    declaration: function-decl #8 35:2:8-100:5:1 name="@3::make"
+      param: param #2 44:2:17-50:2:23 name="n"
+        type: type-ref #1 47:2:20-50:2:23 name="Int"
+      result: type-ref #3 55:2:28-67:2:40 name="@2::Value"
+      body: return-stmt #7 70:3:3-96:4:1
+        value: construct #6 77:3:10-95:3:28 type="@2::Value"
+          arg: named-arg #5 90:3:23-94:3:27 name="n"
+            value: name-ref #4 93:3:26-94:3:27 name="n"

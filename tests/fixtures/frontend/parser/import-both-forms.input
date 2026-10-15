@@ -1,4 +1,4 @@
-import "old" as Old
+import Old from "old"
 import New from "new"
 import {a, B as C} from "new"
 import Other from "new"
