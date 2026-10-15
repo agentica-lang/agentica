@@ -190,7 +190,7 @@ goldens stay.
 | Step | Racket stage | Compared output |
 |---|---|---|
 | 1 | **Done** (PR #237): Lexer (`src/lexer.rkt`, with `source.rkt`, `token.rkt` and the diagnostic data of `diagnostic.rkt`) | Tokens as text lines (kind, value, span), or the one `LEX-` diagnostic |
-| 2 | **Done** (PR #PRNUM): Parser (`src/parser.rkt`, `ast.rkt`) | The AST in a stable text form, or the `PARSE-` diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree, so step 2 adds a printer with the same output on both sides (`tests/frontend-parser-common.rkt`) |
+| 2 | **Done** (PR #245): Parser (`src/parser.rkt`, `ast.rkt`) | The AST in a stable text form, or the `PARSE-` diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree, so step 2 adds a printer with the same output on both sides (`tests/frontend-parser-common.rkt`) |
 | 3 | Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution. Needs the environment and real-path builtins (35.5) |
 | 4 | Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression |
 | 5 | Lowering (`src/lower.rkt`) | The IR in the form `--dump-ir` prints, or the `LOWER-` diagnostic |
@@ -355,7 +355,7 @@ steps:
   Racket lexer takes 35 ms inside its process (20 ms when warm), but the
   process takes 0.55 s and 105 MB with Racket's start-up.
 
-Status on 2026-10-15 (PR #PRNUM): step 2 is done. `compiler/` also holds the
+Status on 2026-10-15 (PR #245): step 2 is done. `compiler/` also holds the
 AST (`ast.agc`) and the parser (`parse_base.agc`, `parser.agc`), and an entry
 program that prints the tree in a text form with a node id on every node; the
 goldens are in `tests/fixtures/frontend/parser/`. Notes:
