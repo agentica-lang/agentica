@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-15
+
 ### Added
 
 - **OS builtins for the BDD driver port** (§35.5, step 7a), all VM only. `File.lstat(path, timeout_ms)` is `File.stat` without following a final symbolic link (`kind` is `"link"`). `File.open(path, "create_private", timeout_ms)` creates a new write-only file with mode 0600 and fails when the path exists, a dangling link included. `File.try_lock(handle, timeout_ms)` takes an exclusive `flock` on an open file without waiting, `ok(true)` or `ok(false)` when another handle or process holds it; only a regular file can be locked; the lock ends when the handle closes, its task ends or the process ends, and no child process keeps it. `Dir.mkdir_private(path, timeout_ms)` creates one directory with mode 0700 and fails when it exists. `Path.remove(path, timeout_ms)` deletes a file, a symbolic link itself, or a directory with everything in it, never following a link (`vm/tree.c`, `openat` with `O_NOFOLLOW` and `unlinkat`); a missing path is `ok()`, a path that ends in `/`, `.` or `..` is refused, a tree deeper than 128 levels is an error, and a failure inside the tree names the entry that failed. `Path.rename(from, to, timeout_ms)` renames a file, a link or a directory to a path that does not exist, atomically (`renameat2` with `RENAME_NOREPLACE`): an existing target is an error and is never replaced. `System.pid()` returns the process id (#288).
@@ -27,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `agentica test` is now driven by a program in Agentica (§35 step 7b, `compiler/bdd.agc`; `src/bdd-driver.rkt` only starts it on the VM). Reports, exit codes and diagnostics are the same, with three differences. A run stopped by a signal (Ctrl-C, `SIGTERM`) stops its children as before but may leave its temporary folder (`agentica-bdd-HEX` in `TMPDIR`, `/var/tmp`, `/usr/tmp` or `/tmp`), which it used to remove: the VM does not unwind, and the next `agentica test` sweeps it. When the VM, the driver file (`agentica-bdd-driver.agcb`, next to `agentica-vm`) or the temporary folder is missing, `agentica test` prints one line on stderr and exits 2, as `agentica file.agc` does, instead of a report in the chosen format. A name that `Dir.list` cannot decode (a byte that is not UTF-8) in a folder name is no longer reported, because its kind is unknown; a file name that fits (`.feature`, `_test.agc`) still is. The release archive has the driver in `bin/`.
 - **`CONFIG.with()` help.** `.with()` with no fields, on a constant, now says that `with` needs the fields to change (for a struct) or that it copies structs (for any other type), instead of listing the type's methods or giving no help.
 - **Breaking:** invalid UTF-8 in a source file is now an error. The front end reports `LEX-INVALID-UTF8` at the first byte of the first sequence that does not decode (overlong forms, surrogates, code points above U+10FFFF and truncated sequences count), in the root file or in an imported file. The Racket front end used to replace such bytes with U+FFFD and go on. A source file has no size limit in either front end, so a file over 1 MiB compiles.
 - **`FileInfo` has three more fields**, after `modified_seconds`: `mode` (the permission bits with setuid, setgid and sticky, so `rw-------` is 384), `user_id` and `group_id`. `File.stat` fills them, and `IO.inspect` of a `FileInfo` shows them. The error for a bad `File.open` mode now lists `create_private` (#288).
@@ -188,6 +191,7 @@ programs from stable diagnostics.
 - Maps keep insertion order with immutable hashes; `Map.get/2` returns a
   `Result` and `Map.get/3` an eagerly evaluated default.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.2.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.3.0...HEAD
+[0.3.0]: https://github.com/sonic182/agentica/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/sonic182/agentica/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/sonic182/agentica/releases/tag/0.1.0

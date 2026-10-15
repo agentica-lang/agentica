@@ -4,8 +4,9 @@ TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
 EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
+BDD_DRIVER_INPUTS := $(wildcard compiler/*.agc src/*.rkt)
 
-.PHONY: build build-tests test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests bdd-driver test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -37,14 +38,14 @@ RKT_FLAGS ?=
 
 # -k: the unittest run still happens when the rackunit run fails, so one run shows every failure.
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
-test: build vm
+test: build vm bdd-driver
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py AGENTICA_TEST_SLOW=
 
 # The slow tier: the (module+ slow ...) cases of the .rkt files and the @slow cases of the .py files
 # (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after make test; a local run does not.
 # A .rkt file without a slow submodule is skipped; with the flag a .py file runs only its @slow cases.
-test-slow: build vm
+test-slow: build vm bdd-driver
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py RKT_FLAGS="--submodule slow --no-run-if-absent" AGENTICA_TEST_SLOW=1
 
@@ -69,7 +70,16 @@ py-test/%: FORCE
 	@echo "unittest $*"
 	@$(PYTHON) -m unittest $(call PY_MODULE,$*)
 
-dist/agentica: $(EXE_INPUTS) | build vm
+# The BDD driver of `agentica test` (compiler/bdd.agc), compiled once here by the Racket front end and run by the VM; it
+# sits next to the VM and the executable (docs/future/35-self-hosting.md, step 7b). Racket compiles `compiler/` to the
+# same bytes every time, so the file only changes with its inputs.
+dist/agentica-bdd-driver.agcb: $(BDD_DRIVER_INPUTS) | build
+	mkdir -p dist
+	racket src/main.rkt compile compiler/bdd.agc -o $@
+
+bdd-driver: dist/agentica-bdd-driver.agcb
+
+dist/agentica: $(EXE_INPUTS) | build vm bdd-driver
 	mkdir -p dist
 	$(RACO) exe -o dist/agentica src/main.rkt
 

@@ -46,9 +46,10 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   program; a `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1.
   Every catalog implementation is in `vm-builtins` in `src/lower.rkt`
   (`tests/bytecode-test.rkt` checks it), so no builtin reaches it today.
-  `agentica test` runs on the VM: `src/bdd-driver.rkt` compiles
-  the step program and `std/test/runner` and starts the runner VM with
-  `--driver-pid` (see `references/bdd.md`).
+  `agentica test` runs on the VM: `src/bdd-driver.rkt` starts the Agentica
+  BDD driver (`compiler/bdd.agc`) with `--driver-pid`, which compiles the step
+  program and `std/test/runner` and starts the runner VM with `--driver-pid`
+  too (see `references/bdd.md`).
   Otherwise it writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
   in the temp directory and runs the VM with the hidden `--driver-pid PID`
   flag. The VM then deletes its input right after reading it; on Linux it
