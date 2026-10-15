@@ -42,10 +42,11 @@ Checked at `5fb7ed7`:
 
 **The table.** `agc_runtime` gets `agc_string *chars[128]`, `empty_string`,
 `empty_list`, `empty_map` and `empty_set`. `agc_vm_init` (`vm/interp.c:64`)
-fills them before any task runs. The 129 strings can share one `GC_MALLOC_ATOMIC` block (24 bytes
-each). Cost: about 3 KB for the strings, 48 bytes for the empty list and map, 1
-KB of pointers in the runtime, and 131 or fewer small allocations at start-up
-(microseconds; the VM starts in about 1 ms).
+fills them before any task runs. The 129 strings can share one
+`GC_MALLOC_ATOMIC` block (24 bytes each). Cost: about 3 KB for the strings, 72
+bytes for the empty list, map and set, 1 KB of pointers in the runtime, and 132
+or fewer small allocations at start-up (microseconds; the VM starts in about 1
+ms).
 
 **The constructors.** `agc_new_string`, `agc_new_list` and `agc_new_map` stay as
 they are: builders fill and grow the objects they return. New helpers in

@@ -73,7 +73,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | a `}` with no `{` open (`LEX-UNMATCHED-DELIMITER`), an unclosed `{` (`LEX-UNCLOSED-DELIMITER`) | blocks end with `end`, not `}` |
 | `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
 | `Hash.new`, `Map.new`, `Array.new`, `List.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
-| `Set.empty`, `s.contains?(x)`, `s.member?(x)`, `s << x` | `Set.new([])` with an expected type, `s.include?(x)`, `s = s.add(x)` |
+| `Set.empty`, `s.contains?(x)`, `s.member?(x)` | `Set.new([])` with an expected type, `s.include?(x)` |
 | `continue` | `next` |
 | `x \|> f`, `x \|> r.field`, `x \|> xs[0]`, `x \|> f(1).g` (`PARSE-PIPE-TARGET`) | a call with parentheses on the right; wrap the expression in parentheses and use `.` on the result: `(x \|> f()).unwrap!` |
 | `x \|> String.trim()` (`CHECK-PIPE-METHOD`) | the method form: `x.trim` |
