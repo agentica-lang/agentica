@@ -409,7 +409,7 @@ Status on 2026-10-15 (PR #254): step 3 is done. `compiler/` also holds the
 module loader and linker (`modules.agc`, `resolve_import.agc`, `resolve.agc`,
 `rewrite.agc`, `linker.agc`, with `declarations.agc`, `import_path.agc`,
 `suggest.agc`, `link_env.agc` and `link_failure.agc`) and an entry program,
-`link.agc`, that prints the linked program; the goldens are 159 fixture folders
+`link.agc`, that prints the linked program; the goldens are 163 fixture folders
 in `tests/fixtures/frontend/modules/` (a folder with a `root.agc`, the files it
 imports and an optional `fixture.env`, plus `NAME.linked`). The port needed no
 language or VM change. Notes for the next steps:
@@ -466,8 +466,8 @@ language or VM change. Notes for the next steps:
   for loading the second file. On `stdlib/test/runner.agc` (7 files, 3,598
   lines, 9,400 nodes): 0.29 s and 16.4 MB. The loop is the lexer and parser;
   rewriting the trees costs little. Nothing is quadratic.
-- The Agentica linker matches the Racket linker on the 159 fixtures (which
-  include every input of `tests/modules-test.rkt` that links files), the 320
+- The Agentica linker matches the Racket linker on the 163 fixtures (which
+  include every input of `tests/modules-test.rkt` that links files), the 322
   files of `examples/`, `stdlib/` and `tests/fixtures/`, the 307 programs of the
   site, and the large inputs of the slow tier (chains of 3,000 files, 2,000
   imports, cycles, and deep trees).
