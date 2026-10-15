@@ -1,11 +1,11 @@
 ## 47. Code formatter (`agentica fmt`)
 
-**Status:** Deferred until after the bootstrap (§35 step 8), decided by the owner
-on 2026-10-15: roadmap row 7.9 and phase 28
+**Status:** Deferred until after the bootstrap (§35 step 8), decided by the
+owner on 2026-10-15: roadmap row 7.9 and phase 28
 ([`docs/roadmap/28-formatter.md`](../roadmap/28-formatter.md)). The owner also
-asked for this plan on the same day. Nothing is implemented. The facts in
-47.1 were checked on `origin/master` at `95a45635`. The open questions in 47.9
-need the owner's answers before phase 47b starts. Phase 47d also waits for the
+asked for this plan on the same day. Nothing is implemented. The facts in 47.1
+were checked on `origin/master` at `95a45635`. The open questions in 47.9 need
+the owner's answers before phase 47b starts. Phase 47d also waits for the
 language server (§43), which is not scheduled.
 
 In short: `agentica fmt` rewrites `.agc` files in place with one printer. It is
