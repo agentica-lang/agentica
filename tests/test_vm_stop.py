@@ -184,7 +184,12 @@ class VmStop(TestCase):
     def test_a_stop_signal_while_standard_output_is_full_ends_the_run_without_a_diagnostic(self):
         # stdout is a pipe that nobody reads until the signal: Child must not drain it.
         vm = self.adopt(start_vm(self.bytecode(FULL_STDOUT), read_stdout=False))
-        self.assertTrue(vm.process.stdout.readline())
+        # Read the first line in a thread: a live VM that prints nothing must fail in WAIT_SECONDS, not hang.
+        first = []
+        reader = threading.Thread(target=lambda: first.append(vm.process.stdout.readline()), daemon=True)
+        reader.start()
+        reader.join(WAIT_SECONDS)
+        self.assertTrue(first and first[0], "the VM printed a line")
         time.sleep(0.3)
         os.kill(vm.process.pid, signal.SIGTERM)
         drain = threading.Thread(target=vm.process.stdout.read, daemon=True)
