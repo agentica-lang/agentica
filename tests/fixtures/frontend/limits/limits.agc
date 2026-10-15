@@ -10,15 +10,23 @@ import Types from "../../../../compiler/types"
 # Every program has two files, so that a limit can name the span of a function in the second file (the writer reports
 # that file with the problem); the span of the program is in the first.
 
+# The scenarios that take under a second. Run with the argument `slow`, the program runs SLOW_SCENARIOS instead: those
+# that write about a million bytes, or build 65,535 structs, and so belong to the slow tier of the test.
 SCENARIOS = [
-  "globals-ok", "globals-over", "structs-ok", "structs-over", "variants-over", "fields-over", "payload-over",
-  "registers-ok", "registers-over", "types-over", "types-deep-ok", "types-deep-over", "updates-ok", "updates-over",
-  "steps-merged", "labels", "unknown-op", "missing-label", "operand-range", "operand-wide", "operand-count", "operand-short",
+  "globals-ok", "globals-over", "structs-over", "variants-over", "fields-over", "payload-over", "registers-ok",
+  "registers-over", "types-deep-ok", "types-deep-over", "steps-merged", "labels", "unknown-op", "missing-label",
+  "operand-range", "operand-wide", "operand-count", "operand-short",
 ]
 
+SLOW_SCENARIOS = ["structs-ok", "types-over", "updates-ok", "updates-over"]
+
 def main() -> Void
-  for name in SCENARIOS
-    puts(name + " " + describe(scenario(name)))
+  names = SCENARIOS
+  if System.args().any? do |argument: String| argument == "slow" end
+    names = SLOW_SCENARIOS
+  end
+  for name in names
+    puts("#{name} #{describe(scenario(name))}")
   end
 end
 
@@ -26,11 +34,11 @@ end
 # problem (and the message of a BYTECODE-LIMIT, which is fixed).
 def describe(program: Ir.Program) -> String
   case Writer.write("", program)
-    Writer.Written.Done(bytes) -> return "ok " + bytes.size.to_s + " " + checksum(bytes).to_s
+    Writer.Written.Done(bytes) -> return "ok #{bytes.size} #{checksum(bytes)}"
     Writer.Written.Failed(problem) ->
-      line = "ERROR " + problem.code + " " + place(problem.span) + " file=" + problem.file
+      line = "ERROR #{problem.code} #{place(problem.span)} file=#{problem.file}"
       if problem.code == "BYTECODE-LIMIT"
-        return line + " " + problem.message
+        return "#{line} #{problem.message}"
       end
       return line
   end
@@ -71,7 +79,9 @@ def decodable(name: String, types: List[Types.Type]) -> Ir.StructDef
   return Ir.StructDef(name: name, fields: ["f"], decodable: true, types: types)
 end
 
-def program(structs: List[Ir.StructDef], enums: List[Ir.EnumDef], functions: List[Ir.Function], globals: Int) -> Ir.Program
+def program(
+  structs: List[Ir.StructDef], enums: List[Ir.EnumDef], functions: List[Ir.Function], globals: Int
+) -> Ir.Program
   return Ir.Program(
     sources: [Ir.SourceFile(file: "a.agc", text: "one\n"), Ir.SourceFile(file: "b.agc", text: "é\n")],
     structs: structs,
@@ -94,7 +104,7 @@ end
 def structs_named(count: Int) -> List[Ir.StructDef]
   found: List[Ir.StructDef] = []
   for index in 0...count
-    found = found.push(plain("S" + index.to_s, []))
+    found = found.push(plain("S#{index}", []))
   end
   return found
 end
@@ -127,7 +137,7 @@ def scenario(name: String) -> Ir.Program
   elsif name == "variants-over"
     variants: List[Ir.VariantDef] = []
     for index in 0...65536
-      variants = variants.push(Ir.VariantDef(name: "V" + index.to_s, size: 0))
+      variants = variants.push(Ir.VariantDef(name: "V#{index}", size: 0))
     end
     return program([], [Ir.EnumDef(name: "E", variants: variants)], [], 0)
   elsif name == "fields-over"
@@ -144,7 +154,7 @@ def scenario(name: String) -> Ir.Program
     found = structs_named(65534)
     types: List[Types.Type] = [Types.Type.Int, Types.Type.Float, Types.Type.Bool, Types.Type.String]
     for index in 0...65534
-      types = types.push(Types.Type.Struct("S" + index.to_s))
+      types = types.push(Types.Type.Struct("S#{index}"))
     end
     return program(found.push(decodable("J", types.push(Types.Type.Struct("J")))), [], [], 0)
   elsif name == "types-deep-ok"

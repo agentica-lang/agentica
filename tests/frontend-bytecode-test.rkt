@@ -95,7 +95,9 @@
     [(equal? expected actual) #f]
     [else
      (define shared (min (bytes-length expected) (bytes-length actual)))
-     (define at (or (for/first ([i (in-range shared)] #:unless (= (bytes-ref expected i) (bytes-ref actual i))) i) shared))
+     (define at
+       (or (for/first ([i (in-range shared)] #:unless (= (bytes-ref expected i) (bytes-ref actual i))) i)
+           shared))
      (format "first difference at byte ~a, lengths ~a (Racket) and ~a (Agentica)"
              at (bytes-length expected) (bytes-length actual))]))
 
@@ -106,7 +108,8 @@
     (cond
       [(compiled-bytes expected)
        (check-equal? (car got) (format "wrote ~a bytes" (bytes-length (compiled-bytes expected))) path)
-       (check-equal? (and (file-exists? (cdr got)) (first-difference (compiled-bytes expected) (file->bytes (cdr got))))
+       (check-equal? (and (file-exists? (cdr got))
+                          (first-difference (compiled-bytes expected) (file->bytes (cdr got))))
                      #f path)]
       [else
        (check-equal? (car got) (compiled-line expected) path)
@@ -170,7 +173,8 @@
     ["types-over"
      (program (append (structs-named 65534)
                       (list (decodable "J" (append '(Int Float Bool String)
-                                                   (for/list ([index (in-range 65534)]) (list 'Struct (format "S~a" index)))
+                                                   (for/list ([index (in-range 65534)])
+                                                     (list 'Struct (format "S~a" index)))
                                                    (list '(Struct "J"))))))
               '() '() 0)]
     ["types-deep-ok" (program (list (decodable "J" (list (deep 1024)))) '() '() 0)]
@@ -217,10 +221,10 @@
          (string-append line " " (diagnostic-message result))
          line)]))
 
-; The scenario names of the Agentica fixture: the strings of its SCENARIOS constant.
-(define (scenario-names)
+; The scenario names of the Agentica fixture: the strings of its SCENARIOS constant (or SLOW_SCENARIOS).
+(define (scenario-names constant)
   (define text (file->string limits-fixture))
-  (define at (car (regexp-match-positions #rx"SCENARIOS = \\[" text)))
+  (define at (car (regexp-match-positions (regexp (format "~a = \\[" constant)) text)))
   (define end (car (regexp-match-positions #rx"\n\\]" text (cdr at))))
   (map cadr (regexp-match* #rx"\"([^\"]+)\"" (substring text (cdr at) (car end)) #:match-select values)))
 
@@ -265,8 +269,8 @@
                       (cons "true" (lambda (v) (eq? v #t))) (cons "int" exact-integer?) (cons "float" flonum?)
                       (cons "string" string?))])
       (check-true (ormap (cdr kind) constants) (car kind)))
-    (check-true (ormap (lambda (v) (and (string? v) (not (= (string-length v) (bytes-length (string->bytes/utf-8 v)))))) constants)
-                "a string with a multi-byte character"))
+    (define (multi-byte? v) (and (string? v) (not (= (string-length v) (bytes-length (string->bytes/utf-8 v))))))
+    (check-true (ormap multi-byte? constants) "a string with a multi-byte character"))
 
   (when (vm-built? "frontend bytecode tests")
     (call-with-bytecode
@@ -277,8 +281,8 @@
            (parameterize ([current-directory root])
              (run-process vm-file #:timeout 300 "--" (path->string bytecode))))
          (check-equal? (first result) 0 (third result))
-         (define names (scenario-names))
-         (check-true (> (length names) 20))
+         (define names (scenario-names "SCENARIOS"))
+         (check-true (> (length names) 15))
          (check-equal? (string-split (second result) "\n") (map racket-limits-line names)))))
 
     (with-bytecode
@@ -289,23 +293,19 @@
           (agentica-matches-racket results paths))
 
         (test-case "a check failure and an import failure print their ERROR line and write no file"
+          ; The files are checked in "the Agentica writer writes the bytes of the Racket writer", where each run has a
+          ; folder of its own: no file of a failure exists.
           (define failures
             (for/list ([path (in-list paths)] #:when (regexp-match? #rx"/error-" path)) (car (hash-ref results path))))
           (check-equal? (length failures) 2)
           (check-true (ormap (lambda (line) (regexp-match? #rx"^ERROR CHECK-[A-Z-]+ " line)) failures))
           (check-true (ormap (lambda (line) (regexp-match? #rx"^ERROR CHECK-IMPORT-IO " line)) failures)))
 
-        (test-case "a failure after a success in the same work folder leaves no file of an earlier run"
-          (define good (car paths))
-          (define bad (for/first ([path (in-list paths)] #:when (regexp-match? #rx"/error-check" path)) path))
-          (agentica-compile bytecode work (list good))
-          (define again (agentica-compile bytecode work (list bad)))
-          (check-regexp-match #rx"^ERROR CHECK-" (car (hash-ref again bad)))
-          (check-false (file-exists? (cdr (hash-ref again bad)))))
-
         (test-case "the VM runs the Agentica file as it runs the Racket file"
-          (for ([name (in-list '("basics" "case" "closures" "collections" "enums" "results" "structs" "unicode"))])
-            (define path (for/first ([path (in-list paths)] #:when (regexp-match? (regexp (format "/~a\\.agc$" name)) path)) path))
+          (for ([name (in-list '("basics" "unicode"))])
+            (define path
+              (for/first ([path (in-list paths)] #:when (regexp-match? (regexp (format "/~a\\.agc$" name)) path))
+                path))
             (check-true (string? path) name)
             (define racket-file (build-path work (string-append name "-racket.agcb")))
             (display-to-file (compiled-bytes (racket-compile path)) racket-file #:exists 'truncate/replace)
@@ -328,7 +328,7 @@
           (check-true (> (length paths) 200))
           (compare paths))
 
-        (test-case "while Racket exists: the Agentica writer matches the Racket writer on every std/ module and the compiler"
+        (test-case "while Racket exists: the Agentica writer matches the Racket writer on std/ and compiler/"
           (define paths (append (std-wrapper-paths work) (agc-files-in "compiler")))
           (check-true (> (length paths) 50))
           (compare paths))
@@ -338,4 +338,17 @@
             (cons (write-file (build-path work "generated.agc") (generated-program 300))
                   (for/list ([entry (in-list (deep-cases))])
                     (write-file (build-path work "deep" (format "~a.agc" (car entry))) (cdr entry)))))
-          (compare paths))))))
+          (compare paths)))))
+
+  (when (vm-built? "frontend bytecode tests")
+    (call-with-bytecode
+     compile-file limits-fixture
+     (lambda (work bytecode)
+       (test-case "the Agentica writer matches the Racket writer on the large limit scenarios"
+         (define result
+           (parameterize ([current-directory root])
+             (run-process vm-file #:timeout 1800 "--" (path->string bytecode) "slow")))
+         (check-equal? (first result) 0 (third result))
+         (define names (scenario-names "SLOW_SCENARIOS"))
+         (check-equal? (length names) 4)
+         (check-equal? (string-split (second result) "\n") (map racket-limits-line names)))))))

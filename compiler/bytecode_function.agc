@@ -65,7 +65,7 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
     wide = false
     generic = false
     if NEEDS.has_key?(op) and args.size < NEEDS[op]
-      return error(Failure.internal(program, "#{op} has #{args.size} operands, not #{NEEDS[op]}"))
+      return error(Failure.internal(program, "#{op} needs at least #{NEEDS[op]} operands and has #{args.size}"))
     end
     if op == "const"
       a = args[0]

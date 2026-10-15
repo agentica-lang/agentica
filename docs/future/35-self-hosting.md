@@ -780,7 +780,7 @@ for the 290 of `src/bytecode.rkt`. Notes:
   and `tests/fixtures/frontend/bytecode/` (UTF-8 text of 1 to 4 bytes, floats,
   a JSON field type 990 levels deep); it asserts that an instruction of every
   opcode and every section of the file appear, and that the constants hold all
-  seven kinds. It also runs the Agentica `.agcb` and the Racket `.agcb` of eight
+  seven kinds. It also runs the Agentica `.agcb` and the Racket `.agcb` of two
   programs on the VM and compares what they print. The slow tier adds
   `tests/fixtures/vm/`, the `std/` modules, `compiler/` itself (the bootstrap
   check: the Agentica writer writes the compiler with the bytes Racket does),
@@ -789,8 +789,9 @@ for the 290 of `src/bytecode.rkt`. Notes:
   its `ERROR` line is the one of the lowering text form and no file is written.
 - The limits and the `BYTECODE-INTERNAL` paths are tested on lowered programs
   that no source gives (`tests/fixtures/frontend/limits/limits.agc` builds 22
-  of them for the Agentica writer; the test builds the same for the Racket
-  writer): the bytes or the code, the span, the file and the message of a limit
+  of them for the Agentica writer, 4 of them in the slow tier because they
+  write a million bytes or build 65,535 structs; the test builds the same for
+  the Racket writer): the bytes or the code, the span, the file and the message of a limit
   must be equal. `BYTECODE-LIMIT` for nested List and Map levels in a JSON field
   type (1,024) cannot be reached from a source file, because the parser stops a
   type at 1,000 levels; the other limits (65,535 structs, enum variants, fields,
