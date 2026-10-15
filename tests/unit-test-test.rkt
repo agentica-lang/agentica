@@ -70,6 +70,18 @@
     (check-true (string-contains? ai "actual \"a\\\"b\" | output \"first line\\n\\u001Eagentica-bdd "))
     (check-regexp-match #rx"\\[RUNTIME-DIVISION-BY-ZERO\\] division by zero \\| stack divide at [^;]*:2:13; block at " ai))
 
+  (test-case "a stack cut after 15 frames says how many frames are not shown, in the text and --ai reports"
+    (match-define (list _ plain _) (agentica-test (fixture "deep_test.agc")))
+    (match-define (list _ ai _) (agentica-test "--ai" (fixture "deep_test.agc")))
+    (define (section text name)
+      (car (filter (lambda (part) (string-contains? part (string-append "/ " name))) (string-split text "FAIL "))))
+    (for ([omitted '("1 frame" "2 frames")]
+          [name '("one frame cut" "two frames cut")])
+      (check-regexp-match (pregexp (string-append "stack, innermost first:\n(?:    (?:ping|pong) at [^\n]*\n){15}    \\.\\.\\. " omitted " not shown \\.\\.\\.\n"))
+                          (section plain name))
+      (check-regexp-match (pregexp (string-append "(?:(?:ping|pong) at [^;]*; ){15}\\.\\.\\. " omitted " not shown \\.\\.\\.; "))
+                          (section ai name))))
+
   (test-case "an exit or a timeout ends the file's run, and bad names are a file error"
     (match-define (list status report) (json-test (fixture "stops_test.agc") (fixture "names_test.agc")))
     (check-equal? status 1)

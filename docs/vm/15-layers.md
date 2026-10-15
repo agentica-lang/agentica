@@ -201,8 +201,9 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   `agc_as_*`; the UTF-8, string, map, list (`agc_list_len` to `agc_list_concat`,
   defined in `list.c`), text and equality functions; `agc_sort_by_keys`; every
   Unicode table; the Json value API (`agc_json_ascii`, `agc_json_grow`,
-  `agc_json_put`, `agc_json_leaf`, `agc_json_object`, `agc_json_array`,
-  `agc_json_find`, `agc_json_encode`, `agc_json_from`, and the node helpers
+  `agc_json_put`, `agc_json_leaf`, `agc_json_number`, `agc_json_pair`,
+  `agc_json_object`, `agc_json_array`, `agc_json_find`, `agc_json_encode`,
+  `agc_json_from`, and the node helpers
   `agc_json_container`, `agc_json_store` and `agc_json_finish`, which
   `json_value.c` defines); `agc_error_value` and `agc_utf8_count` (V4, V15).
 - **`port.h`**: `agc_release_fn`, `agc_close_fn`, `agc_end_fn`,
@@ -212,12 +213,15 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   `agc_more_fn`, `agc_poller` and `agc_native`; `agc_frame`; `agc_step_kind`,
   `agc_step`, `agc_stepper` (one member, its `agc_step_fn`, which a service's
   state struct starts with) and `agc_step_fn`; `agc_io_kind`;
-  `agc_outcome_kind`, `agc_style`, `agc_outcome`; `agc_input_status` and
+  `agc_outcome_kind`, `agc_style`, `agc_stack_line`, `agc_stack` with
+  `AGC_STACK_HEAD` and `AGC_STACK_TAIL`, `agc_outcome`; `agc_input_status` and
   `agc_input`; `agc_runtime`, `agc_task_state`, `agc_turn_result`,
   `agc_lock_status`, `struct agc_task`, `struct agc_vm`; `agc_file_id` and
-  `agc_file_ids` (`rt->inherited`); and the port functions of §15.2, with
-  `agc_io_block_stop`, `agc_io_start_then` and the poller functions under
-  `__linux__` (so `port.h` includes `<signal.h>` and `<locale.h>` there).
+  `agc_file_ids` (`rt->inherited`); and the port functions of §15.2 (among them
+  `agc_stack_members`, which builds the stack members of a Json failure record
+  for `testing.c`), with `agc_io_block_stop`, `agc_io_start_then` and the poller
+  functions under `__linux__` (so `port.h` includes `<signal.h>` and
+  `<locale.h>` there).
 - **`core.h`**: what only the core and the driver call: `agc_builtin_table`;
   `agc_vm_init`; tasks and turns (`agc_new_task`, `agc_task_call`,
   `agc_task_enter`, `agc_task_remove`, `agc_turn_begin`, `agc_turn_charge`,
@@ -348,7 +352,7 @@ port.
 
 | # | Where | What | Fix |
 |---|---|---|---|
-| V1 | `text.c:149`, `281`, `286`; `equal.c:66` | `to_s`, `inspect` and `==` of a `Json` value call `agc_json_encode` in `json.c` (a service) | **Move (done).** The Json value is a core type (`AGC_T_JSON`), so its code is in a new core file, `json_value.c`: the writer (`agc_json_put`, the string and scalar writers, `agc_json_encode`), `agc_json_from` and its frame walker, `agc_json_leaf`, `agc_json_object`, `agc_json_array`, `agc_json_find`, `agc_json_ascii`, `agc_json_grow`, and the node code shared with the parser: `agc_json_container`, `agc_json_store` and `agc_json_finish` (which sorts the members by key bytes and drops repeated keys), the former statics `container`, `store` and `finish`. The parser's `leaf` is `agc_json_leaf`. `json.c` keeps the yyjson parser (`convert`, `agc_json_parse`), `agc_json_status_message`, `agc_json_to_float` and the `JSON.*` builtins; `agc_json_decode` and `agc_json_schema` stay in `json_typed.c` |
+| V1 | `text.c:149`, `281`, `286`; `equal.c:66` | `to_s`, `inspect` and `==` of a `Json` value call `agc_json_encode` in `json.c` (a service) | **Move (done).** The Json value is a core type (`AGC_T_JSON`), so its code is in a new core file, `json_value.c`: the writer (`agc_json_put`, the string and scalar writers, `agc_json_encode`), `agc_json_from` and its frame walker, `agc_json_leaf`, `agc_json_number`, `agc_json_pair`, `agc_json_object`, `agc_json_array`, `agc_json_find`, `agc_json_ascii`, `agc_json_grow`, and the node code shared with the parser: `agc_json_container`, `agc_json_store` and `agc_json_finish` (which sorts the members by key bytes and drops repeated keys), the former statics `container`, `store` and `finish`. The parser's `leaf` is `agc_json_leaf`. `json.c` keeps the yyjson parser (`convert`, `agc_json_parse`), `agc_json_status_message`, `agc_json_to_float` and the `JSON.*` builtins; `agc_json_decode` and `agc_json_schema` stay in `json_typed.c` |
 | V2 | `builtins.c:433-444` | the builtin table list names every service's table (`agc_file_builtins`, `agc_tcp_builtins`, `agc_test_builtins`, ...) | **Move (done)** of the list, in the same order (`agc_find_builtin` returns the first match), to a new driver file, `builtin_tables.c`: `agc_builtin_tables` and `agc_builtin_table_count`. `agc_find_builtin` stays in `builtins.c` (`builtins.c:428`) and reads the list through `core.h`. `builtins.c` exports its own table as `agc_core_builtins` with `agc_core_builtin_count`, like the other libraries. The list is the one place that wires the services in, like `main.c` |
 | V3 | `loop.c:284-290` | `discard` (a detached job's result) skipped `AGC_T_PROCESS` by name: a process rule in the loop | **Port data (done).** The tag check became a new `agc_resource` field, `keep_detached`, that `process.c` sets when it registers the process (`process.c:781`); `discard` reads the field, not the tag (`loop.c:287`) |
 | V4 | `task.c:461`, `505` | `await_task` and `builtin_unobserved_crash` build their error with `agc_error_value`, which was defined in `stream.c` (a service) | **Move (done)** of `agc_error_value` (four lines) to `value.c`, next to `agc_make_string` |

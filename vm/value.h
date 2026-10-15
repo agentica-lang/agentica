@@ -440,6 +440,8 @@ void agc_json_store(agc_json *node, agc_list_builder *items, size_t k, agc_value
 agc_value agc_json_finish(agc_json *node, agc_list_builder *items, size_t n);
 void agc_json_put(agc_json_buffer *b, const char *text, size_t n);
 agc_value agc_json_leaf(agc_json_kind kind, agc_value scalar);
+agc_value agc_json_number(int64_t n);
+agc_json_member agc_json_pair(const char *key, agc_value value);
 agc_value agc_json_object(agc_json_member *members, size_t n);
 agc_value agc_json_array(agc_list *items);
 const agc_json_member *agc_json_find(const agc_json *j, const agc_string *key);

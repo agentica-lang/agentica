@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - When the `agentica test` runner itself crashes, the `RUNTIME-BDD-INFRA` message names the error (its code and message) instead of the last stack frame (#235).
+- The `RUNTIME-BDD-INFRA` message for a crashed runner names its final diagnostic, even when an earlier task crash was printed first (#243).
+- The `agentica test` report says `... 1 frame not shown ...` for one omitted frame, as the VM does (#243).
 
 ## [0.2.0] - 2026-10-14
 

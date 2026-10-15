@@ -250,19 +250,9 @@ static agc_string *capped_string(const char *text, size_t len) {
   return agc_utf8_decode((const uint8_t *)buffer, total, "\xEF\xBF\xBD", false);
 }
 
-static agc_json_member json_member(const char *key, agc_value value) {
-  size_t n = strlen(key);
-  agc_json_member m;
-  m.key = agc_make_string(key, n, n);
-  m.value = value;
-  return m;
-}
-
 static agc_value json_text(const char *text, size_t len) {
   return agc_json_leaf(AGC_JSON_STRING, agc_string_value(capped_string(text, len)));
 }
-
-static agc_value json_number(uint64_t n) { return agc_json_leaf(AGC_JSON_INT, agc_int((int64_t)n)); }
 
 static agc_value place_value(const agc_program *p, uint32_t index, const agc_string *function, uint32_t repeat,
                              bool tail) {
@@ -270,28 +260,28 @@ static agc_value place_value(const agc_program *p, uint32_t index, const agc_str
   const agc_string *file = p->sources[span->source].name;
   agc_json_member *m = agc_alloc(agc_size_mul(6, sizeof(agc_json_member)));
   size_t n = 0;
-  m[n++] = json_member("column", json_number(span->start_column));
-  m[n++] = json_member("file", json_text(file->data, file->bytes));
+  m[n++] = agc_json_pair("column", agc_json_number(span->start_column));
+  m[n++] = agc_json_pair("file", json_text(file->data, file->bytes));
   if (function) {
     name_view name = display_name(function);
-    m[n++] = json_member("function", json_text(name.text, name.len));
+    m[n++] = agc_json_pair("function", json_text(name.text, name.len));
   }
-  m[n++] = json_member("line", json_number(span->start_line));
-  if (repeat > 1) m[n++] = json_member("repeat", json_number(repeat));
-  if (tail) m[n++] = json_member("tail", agc_json_leaf(AGC_JSON_BOOL, agc_bool(true)));
+  m[n++] = agc_json_pair("line", agc_json_number(span->start_line));
+  if (repeat > 1) m[n++] = agc_json_pair("repeat", agc_json_number(repeat));
+  if (tail) m[n++] = agc_json_pair("tail", agc_json_leaf(AGC_JSON_BOOL, agc_bool(true)));
   return agc_json_object(m, n);
 }
 
 size_t agc_stack_members(const agc_program *p, const agc_stack *stack, agc_json_member out[3]) {
   size_t n = 0;
-  if (stack->spawned) out[n++] = json_member("spawned_at", place_value(p, stack->spawn_span, NULL, 0, false));
+  if (stack->spawned) out[n++] = agc_json_pair("spawned_at", place_value(p, stack->spawn_span, NULL, 0, false));
   agc_value *items = agc_alloc(agc_size_mul(stack->count ? stack->count : 1, sizeof(agc_value)));
   for (uint32_t i = 0; i < stack->count; i++) {
     const agc_stack_line *line = &stack->lines[i];
     items[i] = place_value(p, line->span, p->functions[line->function].name, line->repeat, line->tail);
   }
-  out[n++] = json_member("stack", agc_json_array(agc_list_from_array(items, stack->count)));
-  if (stack->omitted) out[n++] = json_member("stack_omitted", json_number(stack->omitted));
+  out[n++] = agc_json_pair("stack", agc_json_array(agc_list_from_array(items, stack->count)));
+  if (stack->omitted) out[n++] = agc_json_pair("stack_omitted", agc_json_number(stack->omitted));
   return n;
 }
 

@@ -93,6 +93,20 @@
        (check-equal? (list (hash-ref crash 'file) (start-line crash)) (list (path->string handlers) 35))
        (check-equal? (hash-ref (hash-ref (sixth results) 'error) 'actual) "\"missing definition\""))))
 
+  (test-case "a crashing handler shows its stack in the text and --ai reports"
+    (with-suite
+     `(("crash.feature" . "Feature: Crash\nScenario: runtime\nThen execution crashes\n"))
+     (lambda (directory)
+       (define place (string-append (path->string handlers) ":35:15"))
+       (match-define (list text-status text _)
+         (agentica-test (in directory "crash.feature") "--steps" (path->string handlers)))
+       (check-equal? text-status 1)
+       (check-true (string-contains? text (string-append "[RUNTIME-DIVISION-BY-ZERO] division by zero\n  stack, innermost first:\n    crash at " place "\n    serve at std/bdd.agc:")))
+       (match-define (list ai-status ai _)
+         (agentica-test "--ai" (in directory "crash.feature") "--steps" (path->string handlers)))
+       (check-equal? ai-status 1)
+       (check-true (string-contains? ai (string-append "division by zero | stack crash at " place "; serve at std/bdd.agc:"))))))
+
   (test-case "tasks may assert, must end before the handler returns, and a crashing task fails its scenario"
     (with-suite
      `(("tasks.feature" . ,(string-append "Feature: Tasks\nScenario: parallel\nThen state is concurrent\n"
@@ -229,6 +243,27 @@
        (define error (hash-ref (car (hash-ref (string->jsexpr output) 'files)) 'error))
        (check-equal? (hash-ref error 'code) "RUNTIME-BDD-INFRA")
        (check-regexp-match #rx"RUNTIME-INDEX-OUT-OF-RANGE" (hash-ref error 'message)))))
+
+  (test-case "the infrastructure message names the runner's final diagnostic, not an earlier task crash"
+    (with-suite
+     `(("a.feature" . "Feature: A\nScenario: a\nThen 1 is fine\n")
+       ("vm.sh" . ,(string-append
+                    "#!/bin/sh\n"
+                    "echo 'runner.agc:5:9 error[RUNTIME-DIVISION-BY-ZERO] in a task' >&2\n"
+                    "echo 'division by zero' >&2\n"
+                    "echo 'runner.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]' >&2\n"
+                    "echo 'index 5 is outside a list of length 3' >&2\n"
+                    "echo '  = stack, innermost first:' >&2\n"
+                    "exit 3\n")))
+     (lambda (directory)
+       (file-or-directory-permissions (in directory "vm.sh") #o700)
+       (define environment (environment-variables-copy (current-environment-variables)))
+       (environment-variables-set! environment #"AGENTICA_VM" (string->bytes/utf-8 (in directory "vm.sh")))
+       (match-define (list status output _) (agentica-test #:environment environment "--json" (in directory "a.feature")))
+       (check-equal? status 2)
+       (define message (hash-ref (file-error (string->jsexpr output)) 'message))
+       (check-regexp-match #rx"RUNTIME-INDEX-OUT-OF-RANGE" message)
+       (check-false (regexp-match? #rx"DIVISION-BY-ZERO" message)))))
 
   (test-case "usage errors exit 2, an empty directory exits 1 and missing pieces are infrastructure errors"
     (with-suite
