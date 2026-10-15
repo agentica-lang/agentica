@@ -18,7 +18,8 @@ def fill(path):
 
 
 def drive(command):
-    vm = subprocess.Popen(command[:1] + ["--driver-pid", str(os.getpid())] + command[1:], stdout=subprocess.PIPE)
+    # command is [binary, "run", "--", file, ...]: the flag goes after `run`.
+    vm = subprocess.Popen(command[:2] + ["--driver-pid", str(os.getpid())] + command[2:], stdout=subprocess.PIPE)
     vm.stdout.readline()
     print(vm.pid, flush=True)
     os._exit(0)

@@ -5,9 +5,8 @@ Each case writes an Agentica program, runs it with `--allow-run --json` and
 compares its output, or its diagnostic code taken from the last line of stderr.
 """
 import json
-import unittest
 
-from tests.agentica_test import FIXTURES, TestCase, cli, cli_runs_tests, run, tool, vm_environment
+from tests.agentica_test import FIXTURES, TestCase, cli, run, tool, vm_environment
 
 PEER = FIXTURES / "process-peer.js"
 
@@ -84,7 +83,6 @@ class ProcessCli(TestCase):
             '  IO.inspect(Result.ok?(Process.spawn("node", [nul], 1000)))\nend\n\n'),
             "false\nfalse\nfalse\n")
 
-    @unittest.skipUnless(cli_runs_tests(), "the single binary cannot start the test runner yet (step 8d)")
     def test_bdd_handlers_can_always_spawn_and_programs_under_test_need_allow_run(self):
         directory = self.make_temp_dir("agentica-process-bdd-")
         feature = directory / "process.feature"

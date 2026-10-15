@@ -1,22 +1,18 @@
-"""The command line written in Agentica against the Racket one, in its two homes.
+"""The command line of the binary (compiler/front_end_cli.agc in dist/agentica) against the Racket one.
 
-AgcbParity runs it as an ordinary program (compiler/cli_main.agc, run on the VM by tests/agentica-agcb); BinaryParity
-runs it in the single binary (compiler/front_end_cli.agc in dist/agentica-next). Each case runs the same arguments
-through the Racket command line and the other one, and compares the exit code, stdout and stderr, byte for byte. The
-cases cover every command and option of src/main.rkt, and the three forms of a diagnostic (plain, --ai, --json) for
-the stages that can fail. The differences that are on purpose (docs/future/35-self-hosting.md, 35.4, "Step 8a
-status") are checked on their own: the dump flags, and the version.
+Each case runs the same arguments through the Racket command line (src/main.rkt, the development oracle until Racket
+is deleted) and the binary, and compares the exit code, stdout and stderr, byte for byte. The cases cover every
+command and option of src/main.rkt, and the three forms of a diagnostic (plain, --ai, --json) for the stages that can
+fail. The differences that are on purpose (docs/future/35-self-hosting.md, 35.4, "Step 8a status") are checked on
+their own: the dump flags, and the version. `agentica test` and `agentica run` are the binary's: tests/test_bdd.py and
+tests/test_single_binary.py check them.
 """
-import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from tests.agentica_test import (
-    AGCB_CLI, ROOT, TestCase, agentica_version, require, run, slow, tool, vm_environment)
+from tests.agentica_test import ROOT, TestCase, agentica_version, binary, run, slow, tool, vm_environment
 
-CLI_PROGRAM = ROOT / "dist" / "agentica-cli.agcb"
-BINARY = ROOT / "dist" / "agentica-next"
 RACKET_CLI = ["racket", str(ROOT / "src" / "main.rkt")]
 JOBS = 6
 
@@ -26,8 +22,6 @@ FILES = {
         'def main() -> Void\n  puts(System.args().join("|"))\n  IO.warn("to stderr")\n  name = IO.gets()\n'
         '  if name.ok?\n    puts("hello #{name.unwrap!}")\n  end\n  print("rest=#{IO.read()}")\n'
         '  System.exit(3)\nend\n'),
-    "selfkill.agc": (
-        'def main() -> Void\n  Process.spawn("/bin/sh", ["-c", "kill -KILL $PPID"], 5000)\n  Task.sleep(5000)\nend\n'),
     "loop.agc": "def main() -> Void\n  while true\n  end\nend\n",
     "divide.agc": "def main() -> Void\n  puts(1 / 0)\nend\n",
     "lex.agc": 'def main() -> Void\n  puts("unterminated)\nend\n',
@@ -80,17 +74,12 @@ OPTIONS = [
 ]
 
 
-class Parity:
-    """The cases, for the command line in `agentica`; the two classes below say which one it is."""
-
-    agentica = None
-
+class Parity(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         tool("racket")
-        require((ROOT / "dist" / "agentica-vm").is_file(), "the VM is not built: run make vm")
-        cls.prepare()
+        cls.agentica = [str(binary())]
         cls.directory = tempfile.TemporaryDirectory(prefix="agentica-parity-")
         cls.addClassCleanup(cls.directory.cleanup)
         cls.work = Path(cls.directory.name).resolve()
@@ -206,41 +195,6 @@ class Parity:
     def test_the_version_is_the_version_file(self):
         result = run(self.agentica + ["--version"], env=vm_environment())
         self.assertEqual(result, (0, agentica_version() + "\n", ""))
-
-
-class AgcbParity(Parity, TestCase):
-    """The ordinary program: compiler/cli_main.agc on agentica-vm, started by tests/agentica-agcb."""
-
-    @classmethod
-    def prepare(cls):
-        require(CLI_PROGRAM.is_file(), "the Agentica command line is not built (%s): run make cli" % CLI_PROGRAM)
-        cls.agentica = [str(AGCB_CLI)]
-        require(os.access(AGCB_CLI, os.X_OK), "%s is not executable" % AGCB_CLI)
-
-    def test_a_program_killed_by_a_signal_gives_status_128_plus_n_and_no_shell_message(self):
-        """The hand-off waits in a shell, which would print `Killed` on stderr; Racket prints nothing."""
-        self.assertEqual(self.parallel([(["--allow-run", "selfkill.agc"], {})]), "")
-        self.assertEqual(self.both(["--allow-run", "selfkill.agc"])[1][0], (137, "", ""))
-
-    def test_a_temporary_folder_that_cannot_be_written_and_a_missing_vm_are_named_as_racket_names_them(self):
-        """These are the messages of the hand-off through a file; the single binary writes none and needs no VM."""
-        folder = self.work / "readonly"
-        folder.mkdir(exist_ok=True)
-        folder.chmod(0o555)
-        self.addCleanup(folder.chmod, 0o755)
-        require(not os.access(folder, os.W_OK), "this user can write in a read-only folder")
-        cases = [(["ok.agc"], {"env": {"TMPDIR": str(folder) + suffix}}) for suffix in ("", "/", "//")]
-        cases += [(["ok.agc"], {"env": {"AGENTICA_VM": path}}) for path in ("missing-vm", "../nope/../vm", "/nope/vm")]
-        self.assertEqual(self.parallel(cases), "")
-
-
-class BinaryParity(Parity, TestCase):
-    """The single binary: the same command line as the front end it carries, with the hand-off to C."""
-
-    @classmethod
-    def prepare(cls):
-        require(BINARY.is_file(), "the single binary is not built (%s): run make agentica-next" % BINARY)
-        cls.agentica = [str(BINARY)]
 
     def test_both_streams_of_a_program_keep_their_order_in_one_pipe(self):
         """The program writes to the real streams, so `2>&1` interleaves them as the program wrote them."""

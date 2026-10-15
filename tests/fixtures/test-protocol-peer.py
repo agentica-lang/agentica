@@ -7,7 +7,7 @@ from child_channel import launch, lines, read_ready
 
 
 def start(vm, bytecode, mode, channel=True):
-    argv = [vm, "--json", "--", bytecode, "--agentica-test", mode]
+    argv = [vm, "run", "--json", "--", bytecode, "--agentica-test", mode]
     if channel:
         return launch(argv)
     return subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE), None

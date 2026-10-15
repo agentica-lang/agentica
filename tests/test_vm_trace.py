@@ -14,7 +14,7 @@ import subprocess
 import sys
 import unittest
 
-from tests.agentica_test import FIXTURES, TestCase, scaled, vm_binary, vm_environment
+from tests.agentica_test import FIXTURES, TestCase, scaled, vm_command, vm_environment
 
 VM_FIXTURES = FIXTURES / "vm"
 WAIT_SECONDS = scaled(60)
@@ -73,8 +73,8 @@ class VmTrace(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.vm = vm_binary()
-        cls.version = subprocess.run([cls.vm, "--version"], stdout=subprocess.PIPE, timeout=WAIT_SECONDS).stdout
+        cls.vm = vm_command()
+        cls.version = subprocess.run([*cls.vm, "--version"], stdout=subprocess.PIPE, timeout=WAIT_SECONDS).stdout
         if b"trace off" in cls.version:
             raise unittest.SkipTest("the VM was built with TRACE=0")
 
@@ -83,7 +83,7 @@ class VmTrace(TestCase):
         if tmp is not None:
             self.fresh_directory(tmp)
         env = vm_environment(settings)
-        arguments = [self.vm, *(["--allow-run"] if allow_run else []), "--", bytecode, *args]
+        arguments = [*self.vm, *(["--allow-run"] if allow_run else []), "--", bytecode, *args]
         return vm_run(arguments, env, stdin_file)
 
     def fresh_directory(self, path):
@@ -113,8 +113,8 @@ class VmTrace(TestCase):
 
     def run_closed(self, redirect, bytecode, stdin_file):
         """The VM under `sh` with a descriptor closed ("2>&-" or ">&-") and the file as stdin."""
-        script = 'exec "$0" -- "$1" %s <"$2"' % redirect
-        return vm_run(["sh", "-c", script, self.vm, bytecode, stdin_file], vm_environment())
+        script = 'exec "$0" run -- "$1" %s <"$2"' % redirect
+        return vm_run(["sh", "-c", script, self.vm[0], bytecode, stdin_file], vm_environment())
 
     def check_case(self, name, stdin, allow_run, categories):
         work = self.make_temp_dir("agentica-trace-")

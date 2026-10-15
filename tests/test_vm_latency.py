@@ -10,7 +10,7 @@ import threading
 import time
 import unittest
 
-from tests.agentica_test import FIXTURES, Child, TestCase, scaled, vm_binary, vm_environment
+from tests.agentica_test import FIXTURES, Child, TestCase, scaled, vm_command, vm_environment
 
 LIMIT_MS = 250
 WAIT_SECONDS = scaled(60)
@@ -22,13 +22,13 @@ class VmLatency(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        if os.environ.get("AGENTICA_VM") or os.environ.get("AGENTICA_VM_BINARY"):
-            raise unittest.SkipTest("AGENTICA_VM or AGENTICA_VM_BINARY names another binary")
-        cls.vm = vm_binary()
+        if os.environ.get("AGENTICA_VM_BINARY"):
+            raise unittest.SkipTest("AGENTICA_VM_BINARY names another binary")
+        cls.vm = vm_command()
 
     def start(self, bytecode, mode, no_turn_cost):
         env = vm_environment({"AGENTICA_VM_TEST_NO_TURN_COST": "1" if no_turn_cost else None})
-        return self.adopt(Child([self.vm, "--", bytecode, mode], env=env, stdin=True))
+        return self.adopt(Child([*self.vm, "--", bytecode, mode], env=env, stdin=True))
 
     def sleep_worst(self, bytecode, no_turn_cost):
         child = self.start(bytecode, "sleep", no_turn_cost)
@@ -92,7 +92,7 @@ class VmLatency(TestCase):
     def test_a_task_reading_in_a_loop_lets_main_close_the_handle_and_the_run_ends(self):
         work = self.make_temp_dir("agentica-latency-")
         bytecode = self.compile_fixture(CLOSE_READER)
-        child = self.adopt(Child([self.vm, "--", bytecode, work], env=vm_environment(), stdin=True))
+        child = self.adopt(Child([*self.vm, "--", bytecode, work], env=vm_environment(), stdin=True))
         child.close_stdin()
         self.assertEqual(child.wait(WAIT_SECONDS), 0, "the VM did not end")
         self.assertEqual(child.stdout_text(), "ok()\ntrue\n")

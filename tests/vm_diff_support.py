@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from tests.agentica_test import (FIXTURES, PYTHON, ROOT, RUN_TIMEOUT, TestCase, _kill_and_collect, compile_agc, scaled,
-                                 vm_binary, vm_environment)
+                                 vm_binary, vm_command, vm_environment)
 
 FIXTURE_DIR = FIXTURES / "vm"
 RUNAWAY_DIR = FIXTURE_DIR / "step-limited"
@@ -239,7 +239,7 @@ def run_vm_process(fixture, options, bytecode, args, timeout=RUN_TIMEOUT, cwd=No
     A fixture with a channel runs through tests/fixtures/channel-run.py, which hands the VM a socket as descriptor 3.
     """
     prefix = [PYTHON, CHANNEL_RUN, fixture.channel] if fixture.channel else []
-    argv = prefix + [vm_binary(), *options, "--", bytecode, *args]
+    argv = prefix + [*vm_command(), *options, "--", bytecode, *args]
     return execute(argv, fixture.input, stdin_path, timeout, cwd, vm_environment({**fixture.env, **(env or {})}))
 
 

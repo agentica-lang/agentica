@@ -14,7 +14,7 @@ import threading
 import time
 
 from tests.agentica_test import (FIXTURES, PYTHON, ROOT, Child, TestCase, cli, compile_agc, output_lines, run, scaled,
-                                 vm_binary, vm_environment)
+                                 vm_command, vm_environment)
 
 EXAMPLES = ROOT / "examples"
 STOP_PEER = FIXTURES / "stop-peer.py"
@@ -109,7 +109,7 @@ class Filesystem(TestCase):
         source = root / "program.agc"
         source.write_text(text, encoding="utf-8")
         bytecode = compile_agc(source, root / "program.agcb")
-        command = [vm_binary(), "--allow-run", "--", bytecode, *arguments]
+        command = [*vm_command(), "--allow-run", "--", bytecode, *arguments]
         if peer:
             command = [PYTHON, STOP_PEER, peer, *command]
         env = vm_environment({"UV_THREADPOOL_SIZE": "1"} if one_pool_thread else None)

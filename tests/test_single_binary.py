@@ -1,18 +1,20 @@
-"""The single binary dist/agentica-next (35.3 and 35.6, step 8b): the front end it carries compiles in memory and hands
-the program to C, which runs it in a new runtime.
+"""The single binary dist/agentica (35.3 and 35.6): the front end it carries compiles in memory and hands the program
+to C, which runs it in a new runtime; `agentica run` runs a compiled file with the VM flags.
 
-The binary is checked against what `agentica` does today (the Racket front end, or AGENTICA_TEST_EXECUTABLE): the
-same stdout, stderr and exit status for a few programs and a few diagnostics, and the same bytes for `compile`.
-The other cases use a front end of their own (tests/fixtures/single-binary/front.agc, loaded with --front-end) to
-see what the C side does with the two FrontEnd builtins. The fixed point is not tested here: `make fixed-point` is a
-step of CI (the test job and the sanitizer job), where it compiles compiler/ three times next to this module.
+The binary is checked against the Racket front end (the development oracle until Racket is deleted): the same stdout,
+stderr and exit status for a few programs and a few diagnostics, and the same bytes for `compile`. The other cases use
+a front end of their own (tests/fixtures/single-binary/front.agc, loaded with --front-end) to see what the C side does
+with the two FrontEnd builtins. The fixed point is not tested here: `make fixed-point` is a step of CI (the test job
+and the sanitizer job), where it compiles compiler/ three times next to this module.
 """
 import os
 import random
+import re
 import struct
+import subprocess
 
-from tests.agentica_test import (FIXTURES, ROOT, TestCase, cli, compile_agc, require, run, run_vm, scaled,
-                                 vm_environment)
+from tests.agentica_test import (FIXTURES, ROOT, TestCase, binary, compile_agc, racket_cli, require, run, run_vm,
+                                 scaled, vm_environment)
 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
@@ -50,13 +52,6 @@ def version():
     return (ROOT / "VERSION").read_text().strip()
 
 
-def next_binary():
-    """dist/agentica-next, built by `make test` for this module; a skip when it is missing, a failure in CI."""
-    path = ROOT / "dist" / "agentica-next"
-    require(path.is_file(), "the single binary is not built (%s): run make agentica-next" % path)
-    return path
-
-
 def bad_utf8_file(path):
     """A source file of 350 KB: valid lines, then bad bytes on line 50001, then 100 KB of random bytes.
 
@@ -76,7 +71,7 @@ class SingleBinary(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.binary = next_binary()
+        cls.binary = binary()
 
     def agentica(self, *words, **options):
         options.setdefault("env", vm_environment())
@@ -84,7 +79,7 @@ class SingleBinary(TestCase):
 
     def racket(self, *words, **options):
         options.setdefault("env", vm_environment())
-        return run(cli() + list(words), **options)
+        return run(racket_cli() + list(words), **options)
 
     def front_end(self, work):
         """The test front end, compiled once for the case, with the header version of the current build."""
@@ -133,19 +128,35 @@ class SingleBinary(TestCase):
         directory = self.make_suite({"mixed.agc": INTERLEAVED})
         merged = ["sh", "-c", 'exec "$@" 2>&1', "sh"]
         got = run(merged + [str(self.binary), "mixed.agc"], cwd=directory, env=vm_environment())
-        expected = run(merged + cli() + ["mixed.agc"], cwd=directory, env=vm_environment())
+        expected = run(merged + racket_cli() + ["mixed.agc"], cwd=directory, env=vm_environment())
         self.assertEqual((got.code, got.stdout), (0, "".join("out %d\nerr %d\n" % (i, i) for i in range(6))))
         self.assertEqual(got, expected)
 
-    def test_the_test_command_is_refused_with_status_2_until_step_8d(self):
-        """The front end runs without --allow-run, so it cannot start the test runner; the answer is one fixed line."""
-        line = ("agentica: the test command is not in the single binary yet: it cannot start the test runner "
-                "(step 8d)\n")
-        directory = self.make_suite({"main.agc": EXIT_THREE})
-        for words in (["test", "x"], ["--json", "test", "x"]):
-            with self.subTest(words=words):
-                got = self.agentica(*words, cwd=directory)
-                self.assertEqual((got.code, got.stdout, got.stderr), (2, "", line))
+    def test_a_front_end_that_stops_with_an_error_ends_with_status_2_not_the_status_of_a_failed_run(self):
+        """The driver of `agentica test` is part of the front end: when it crashes, the status is 2, as for a usage
+        error, and it is never the 1 of a test run that failed."""
+        front = self.front_end(self.make_temp_dir())
+        got = self.agentica("--front-end", front, "crash")
+        self.assertEqual((got.code, got.stdout), (2, ""))
+        self.assertIn("RUNTIME-DIVISION-BY-ZERO", got.stderr)
+
+    def test_a_front_end_without_the_path_of_the_binary_cannot_test(self):
+        """The front end started as an ordinary program has no --self: `test` says so and exits 2."""
+        got = run_vm(STAGE2, "--allow-run", args=["--version", version(), "--stdlib", STDLIB, "--", "test", "x"],
+                     env=vm_environment())
+        self.assertEqual((got.code, got.stdout), (2, ""))
+        self.assertIn("the test command needs the path of the binary", got.stderr)
+
+    def test_the_version_is_answered_even_when_the_standard_output_is_closed(self):
+        """A closed pipe must end the answer with a status, not with SIGPIPE, for the early --version path too."""
+        reader, writer = os.pipe()
+        os.close(reader)
+        try:
+            process = subprocess.run([str(self.binary), "--version"], stdout=writer, stderr=subprocess.PIPE,
+                                     env=vm_environment(), timeout=scaled(10))
+        finally:
+            os.close(writer)
+        self.assertEqual(process.returncode, 1, process.stderr)
 
     def test_compile_writes_the_bytes_of_the_racket_front_end(self):
         work = self.make_temp_dir()
@@ -157,6 +168,46 @@ class SingleBinary(TestCase):
         # What compile writes is what the VM loads: the same output as running the file in one step.
         self.assertEqual(run_vm(work / "next.agcb", env=vm_environment()), self.agentica(source))
         self.assertIn(version().encode(), data[:32])
+
+    def test_run_runs_a_compiled_file_with_the_vm_flags_and_no_front_end(self):
+        directory = self.make_suite({"loop.agc": LOOP, "random.agc": RANDOM, "spawn.agc": SPAWN,
+                                     "args.agc": STDIN_AND_ARGS, "divide.agc": "def main() -> Void\n  puts(1 / 0)\nend\n"})
+        compiled = {name: compile_agc(directory / (name + ".agc"), directory / (name + ".agcb"))
+                    for name in ("loop", "random", "spawn", "args", "divide")}
+        limited = self.agentica("run", "--max-steps", "5000", "--", compiled["loop"])
+        self.assertEqual((limited.code, limited.stdout), (1, ""))
+        self.assertIn("RUNTIME-STEP-LIMIT", limited.stderr)
+        draws = [self.agentica("run", "--seed", seed, "--", compiled["random"]).stdout for seed in "445"]
+        self.assertEqual(draws[0], draws[1])
+        self.assertNotEqual(draws[0], draws[2])
+        self.assertIn("--allow-run", self.agentica("run", "--", compiled["spawn"]).stdout)
+        self.assertEqual(self.agentica("run", "--allow-run", "--", compiled["spawn"]).stdout, "spawned\n")
+        # The words after the file are the program's, flags included; its input and exit status are the process's.
+        got = self.agentica("run", "--", compiled["args"], "--seed", "x", stdin="typed\n")
+        self.assertEqual((got.code, got.stdout), (3, 'args ["--seed", "x"]\nline ok("typed")\n'))
+        failed = self.agentica("run", "--json", "--", compiled["divide"])
+        self.assertEqual(failed.code, 1)
+        self.assertRegex(failed.stderr, r'^\{"code":"RUNTIME-DIVISION-BY-ZERO"')
+
+    def test_run_checks_its_command_line_and_names_itself_in_its_messages(self):
+        compiled = compile_agc(self.make_suite({"main.agc": EXIT_THREE}) / "main.agc", self.make_temp_dir() / "main.agcb")
+        for words, message in (
+                ([], "usage: agentica run "),
+                (["--seed", "x", "--", compiled], "agentica run: --seed needs an integer from 0 to 2147483647\n"),
+                (["--bogus", "--", compiled], "agentica run: unknown option --bogus\n")):
+            with self.subTest(words=words):
+                got = self.agentica("run", *words)
+                self.assertEqual((got.code, got.stdout), (2, ""))
+                self.assertTrue(got.stderr.startswith(message.rstrip("\n")), got.stderr)
+        # `run` must be the first word: after an option it is a source file name, and the front end says so.
+        late = self.agentica("--json", "run", "x.agcb")
+        self.assertEqual((late.code, late.stdout), (2, ""))
+        self.assertIn("run must be the first word", late.stderr)
+        # The long version line is the VM's (the libraries it links); `agentica --version` is the version alone.
+        long = self.agentica("run", "--version")
+        self.assertEqual(long.code, 0)
+        self.assertRegex(long.stdout, r"^agentica %s \(libgc .*yyjson .*libuv .*OpenSSL " % re.escape(version()))
+        self.assertEqual(self.agentica("--version").stdout, version() + "\n")
 
     def test_a_program_cannot_call_the_front_end_builtins(self):
         directory = self.make_suite({"std.agc": STD_SOURCE, "hand_off.agc": HAND_OFF})

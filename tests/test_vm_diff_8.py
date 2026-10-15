@@ -1,8 +1,8 @@
-"""Shard 8 of the VM golden tests: the VM command line, the product CLI and the cases that need more than a fixture.
+"""Shard 8 of the VM golden tests: `agentica run`, the product CLI and the cases that need more than a fixture.
 
-(Ported from run-extras of vm-diff-common.rkt.) The programs are compiled with the product CLI and run on the VM
-directly, or through the CLI where the test is about the CLI. The VM runs have the scratch folder of the test as working
-directory.
+(Ported from run-extras of vm-diff-common.rkt.) The programs are compiled with the product CLI and run with `agentica
+run` directly, or through the CLI where the test is about the CLI. The runs have the scratch folder of the test as
+working directory.
 """
 import json
 import os
@@ -15,8 +15,8 @@ import threading
 import time
 import unittest
 
-from tests.agentica_test import (RUN_TIMEOUT, TESTS, Child, cli, process_alive, scaled, vm_binary, vm_environment,
-                                 wait_until)
+from tests.agentica_test import (RUN_TIMEOUT, TESTS, Child, cli, process_alive, scaled, vm_binary, vm_command,
+                                 vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, SHARD_COUNT, Fixture, VmCase, check_text_format,
     decode, exit_status, execute, fixture_programs, last_limit, outcome, read_expected, read_expected_steps,
@@ -62,8 +62,8 @@ class Extras(VmCase):
         return self.bytecode_of(FIXTURE_DIR / (name + ".agc"))
 
     def vm(self, *argv, timeout=RUN_TIMEOUT):
-        """The VM with the given words (options, "--", file, arguments) and nothing else."""
-        return execute([vm_binary(), *argv], cwd=self.work_dir(), env=vm_environment(), timeout=timeout)
+        """`agentica run` with the given words (options, "--", file, arguments) and nothing else."""
+        return execute([*vm_command(), *argv], cwd=self.work_dir(), env=vm_environment(), timeout=timeout)
 
     def test_shard_tables_name_real_fixtures_and_shards(self):
         names = [program.name for program, _shard in shard_assignment(fixture_programs())]
@@ -106,7 +106,7 @@ class Extras(VmCase):
         for seed in ["-1", "2147483648", "1x", "", "99999999999999999999"]:
             rejected = self.vm("--seed", seed, "--", bytecode)
             self.assertEqual(rejected[0], 2, seed)
-            self.assertEqual(rejected[2], "agentica-vm: --seed needs an integer from 0 to 2147483647\n", seed)
+            self.assertEqual(rejected[2], "agentica run: --seed needs an integer from 0 to 2147483647\n", seed)
         draws = self.program(
             "random-draws", "def main() -> Void\n  puts(Random.int(0, 1000000000))\n  puts(Random.float)\nend\n")
 
@@ -163,7 +163,7 @@ class Extras(VmCase):
         bad.write_bytes(b"AGCB")
         rejected = self.vm("--", str(bad))
         self.assertEqual(rejected[0], 2)
-        self.assertTrue(rejected[2].startswith("agentica-vm: invalid bytecode: "), rejected[2])
+        self.assertTrue(rejected[2].startswith("agentica run: invalid bytecode: "), rejected[2])
 
     @unittest.skipUnless(LINUX, "Linux only")
     def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_it(self):
@@ -240,7 +240,7 @@ class Extras(VmCase):
             "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(20000)\nend\n",
             encoding="utf-8")
         driver = self.adopt(Child(
-            cli() + ["--allow-run", program], env=vm_environment({"TMPDIR": self.work_dir(), "AGENTICA_VM": vm_binary()}),
+            cli() + ["--allow-run", program], env=vm_environment({"TMPDIR": self.work_dir()}),
             cwd=self.work_dir(), capture_stderr=True))
         pid = driver.next_line(RUN_TIMEOUT)
         self.addCleanup(kill_alive, [pid])
@@ -259,7 +259,7 @@ class Extras(VmCase):
         outer = self.program(
             "captured-outer",
             "def main() -> Void\n  args = System.args()\n"
-            "  child = Result.unwrap!(Process.spawn_captured(args[0], [\"--allow-run\", \"--\", args[1]], \".\", 60000))\n"
+            "  child = Result.unwrap!(Process.spawn_captured(args[0], [\"run\", \"--allow-run\", \"--\", args[1]], \".\", 60000))\n"
             "  puts(Result.unwrap!(Process.read_line(child, 60000)))\n"
             "  if args[2] == \"close\"\n    Process.close(child)\n  else\n    IO.inspect(Process.read_line(child, 200))\n  end\nend\n")
         for mode in ["close", "timeout"]:
@@ -324,7 +324,7 @@ class Extras(VmCase):
             "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n"
             "  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\n  puts(\"survived\")\nend\n")
         # Nothing reads the VM's stdout after the first line, so its 1 MiB write blocks: the state under test.
-        vm = self.adopt(Child([vm_binary(), "--allow-run", "--", bytecode], env=vm_environment(),
+        vm = self.adopt(Child([*vm_command(), "--allow-run", "--", bytecode], env=vm_environment(),
                               cwd=self.work_dir(), read_stdout=False))
         pid = vm.process.stdout.readline().decode().strip()
         self.addCleanup(kill_alive, [pid])
@@ -343,7 +343,7 @@ class Extras(VmCase):
             "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", "
             "\"if [ -e /proc/self/fd/7 ]; then echo leaked; else echo private; fi\"], 60000))\n"
             "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  Process.close(p)\nend\n")
-        result = execute(["/bin/sh", "-c", "exec 7</dev/null; exec \"$0\" --allow-run -- \"$1\"", vm_binary(), bytecode],
+        result = execute(["/bin/sh", "-c", "exec 7</dev/null; exec \"$0\" run --allow-run -- \"$1\"", vm_binary(), bytecode],
                          cwd=self.work_dir(), env=vm_environment())
         self.assertEqual(result, (0, "private\n", ""))
 
@@ -365,7 +365,7 @@ class Extras(VmCase):
         arguments = [b"\xff\xfeZ", b"\xe2\x82A", b"\xed\xa0\x80z", b"a\xe2\x82", b"\xf0\x9f\x98", b"\xe0\x80",
                      b"\xf0\x80\x80", b"\xed\xa0", b"\xf4\x90", b"\xc0\xaf", b"\xe2\x82\xe2\x82", b"\xe2\x82\xac"]
         environment = vm_environment({"LC_ALL": "C.UTF-8"})
-        on_vm = execute([vm_binary(), "--", bytecode, *arguments], cwd=self.work_dir(), env=environment)
+        on_vm = execute([*vm_command(), "--", bytecode, *arguments], cwd=self.work_dir(), env=environment)
         on_cli = execute(cli() + [program, *arguments], cwd=self.work_dir(), env=environment)
         self.assertEqual(outcome(on_vm), outcome(on_cli))
 
@@ -441,9 +441,9 @@ class CliCase(VmCase):
     def setUp(self):
         self.temp = self.make_temp_dir("agentica-cli-").resolve()
 
-    def agentica(self, *argv, stdin=b"", vm=None):
-        """The CLI with TMPDIR set to the folder that must stay empty and the VM it should use."""
-        environment = vm_environment({"TMPDIR": self.temp, "AGENTICA_VM": vm or vm_binary()})
+    def agentica(self, *argv, stdin=b"", env=None):
+        """The CLI with TMPDIR set to the folder that must stay empty."""
+        environment = vm_environment({"TMPDIR": self.temp, **(env or {})})
         return execute(cli() + list(argv), stdin=stdin, cwd=self.work_dir(), env=environment)
 
     def fixture(self, name):
@@ -522,32 +522,29 @@ class ProductCli(CliCase):
         self.assertEqual(self.agentica("compile", supported, "-o", work / "missing" / "out.agcb")[0], 2)
 
 
-@unittest.skipIf(os.environ.get("AGENTICA_TEST_EXECUTABLE"), "the Racket launcher only: step 8d deletes AGENTICA_VM")
-class RacketLauncher(CliCase):
-    """What only the launcher of src/main.rkt does: it finds the VM by AGENTICA_VM and feeds the VM its stdin."""
-
-    @unittest.skipUnless(LINUX, "Linux only")
-    def test_a_missing_or_non_executable_vm_exits_2(self):
-        calls = self.fixture("calls.agc")
-        missing = self.agentica(calls, vm=self.temp / "no-vm")
-        self.assertEqual(missing[0], 2)
-        self.assertTrue(missing[2].startswith("agentica: cannot find the VM at "), missing[2])
-        plain = self.work_dir() / "plain-vm"
-        shutil.copy(vm_binary(), plain)
-        plain.chmod(0o644)
-        self.assertEqual(self.agentica(calls, vm=plain)[0], 2)
+class StandardInput(CliCase):
+    """What the binary does with its own standard input and its environment."""
 
     def test_a_standard_input_that_cannot_be_read_is_an_internal_error(self):
         gets = self.fixture("io-gets.agc")
         # A directory opens for reading and fails on the first read.
-        environment = vm_environment({"TMPDIR": self.temp, "AGENTICA_VM": vm_binary()})
         descriptor = os.open(self.work_dir(), os.O_RDONLY)
         try:
             process = subprocess.run(cli() + ["--json", gets], stdin=descriptor, capture_output=True,
-                                     env=environment, cwd=self.work_dir(), timeout=RUN_TIMEOUT)
+                                     env=vm_environment({"TMPDIR": self.temp}), cwd=self.work_dir(),
+                                     timeout=RUN_TIMEOUT)
         finally:
             os.close(descriptor)
         self.assertEqual(process.returncode, 1)
         last = decode(process.stderr).strip().split("\n")[-1]
         self.assertEqual(json.loads(last)["code"], "RUNTIME-INTERNAL")
+        self.assertEqual(json.loads(last)["message"], "cannot read standard input")
 
+    def test_agentica_vm_names_nothing_any_more(self):
+        """The variable that named the VM is gone: a value that names no file changes nothing, for a run, for `agentica
+        run` and for the tests."""
+        calls = self.fixture("calls.agc")
+        for value in (str(self.temp / "no-vm"), "", "/bin/false"):
+            self.assertEqual(self.agentica(calls, env={"AGENTICA_VM": value}), self.agentica(calls), value)
+            self.assertEqual(self.agentica("--json", self.fixture("division-by-zero.agc"), env={"AGENTICA_VM": value}),
+                             self.agentica("--json", self.fixture("division-by-zero.agc")), value)
