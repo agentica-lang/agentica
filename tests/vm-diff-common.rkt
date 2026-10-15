@@ -34,7 +34,7 @@
 (define vm-file
   (if vm-binary
       (path->complete-path vm-binary root)
-      (build-path root "dist" (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))))
+      (build-path root "dist" "agentica")))
 
 (for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE" #"AGENTICA_FLUSH_TIMEOUT_MS")])
   (environment-variables-set! (current-environment-variables) name #f))
@@ -52,7 +52,7 @@
       (define result
         (call-with-file-lock/timeout
          lock 'exclusive
-         (lambda () (if (parameterize ([current-directory root]) (system* make "-s" "vm")) 'built 'failed))
+         (lambda () (if (parameterize ([current-directory root]) (system* make "-s" "agentica")) 'built 'failed))
          (lambda () 'busy)
          #:max-delay 0.2))
       (cond
@@ -66,7 +66,7 @@
   (cond
     [built? #t]
     [(getenv "AGENTICA_REQUIRE_VM") (error 'vm-diff "the VM must build when AGENTICA_REQUIRE_VM is set")]
-    [else (printf "SKIP ~a: make vm failed\n" tests) #f]))
+    [else (printf "SKIP ~a: make failed\n" tests) #f]))
 
 (define (front-end path #:types [types #f])
   (define name (path->string path))
@@ -79,8 +79,10 @@
   (when (diagnostic? checked) (error 'vm-diff "~a" (format-diagnostic checked)))
   checked)
 
+; The VM is `dist/agentica run`: the words of a run of vm-file get the command in front.
 (define (run-process program #:input [input #""] #:timeout [timeout #f] . arguments)
-  (define-values (process out in err) (apply subprocess #f #f #f program arguments))
+  (define words (if (equal? program vm-file) (cons "run" arguments) arguments))
+  (define-values (process out in err) (apply subprocess #f #f #f program words))
   (define writer
     (thread (lambda ()
               (with-handlers ([exn:fail? void]) (write-bytes input in))
