@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from collections import namedtuple
 from pathlib import Path
@@ -95,6 +96,12 @@ class TestCase(unittest.TestCase):
         path = Path(tempfile.mkdtemp(prefix=prefix))
         self.addCleanup(shutil.rmtree, path, ignore_errors=True)
         return path
+
+    def make_suite(self, files, prefix="agentica-"):
+        """A resolved temp dir holding the given files (name -> text); removed when the test ends."""
+        directory = self.make_temp_dir(prefix).resolve()
+        write_files(directory, files)
+        return directory
 
     def adopt(self, child):
         """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
@@ -299,6 +306,19 @@ class Child:
             thread.join(5)
         return code
 
+    def stdout_text(self):
+        """The stdout lines that next_line() has not returned, as text (call after wait(), when the reader has ended)."""
+        lines = []
+        while True:
+            try:
+                line = self._lines.get_nowait()
+            except queue.Empty:
+                break
+            if line is None:
+                break
+            lines.append(line)
+        return "".join(lines)
+
     def stderr_text(self):
         """What the child wrote to stderr (capture_stderr=True; call after wait())."""
         return "".join(self._stderr)
@@ -330,6 +350,17 @@ def output_lines(text):
     return lines
 
 
+def write_files(directory, files):
+    """Write each name -> text of `files` into `directory`, for a text that must name the directory first."""
+    for name, text in files.items():
+        (Path(directory) / name).write_text(text, encoding="utf-8")
+
+
+def report_cases(report):
+    """The scenarios of an `agentica test --json` report, in file order."""
+    return [scenario for file in report["files"] for scenario in file["scenarios"]]
+
+
 def check_lines(case, text, expected, message):
     """One output line per expectation: a string is equal, ("prefix", text) is a prefix."""
     lines = output_lines(text)
@@ -339,3 +370,28 @@ def check_lines(case, text, expected, message):
             case.assertEqual(line, want, message)
         else:
             case.assertTrue(line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1]))
+
+
+def process_alive(pid):
+    """True while the process exists and is not a zombie (Linux /proc)."""
+    try:
+        number = int(pid)
+    except ValueError:
+        raise AssertionError("not a process id: %r" % (pid,)) from None
+    try:
+        with open("/proc/%d/stat" % number) as stat:
+            text = stat.read()
+    except OSError:
+        return False
+    return text.rsplit(") ", 1)[-1][:1] != "Z"
+
+
+def wait_until(predicate, timeout=WAIT_SECONDS, interval=0.05):
+    """Poll `predicate` until it is true (returns True) or `timeout` seconds pass (returns False)."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval)

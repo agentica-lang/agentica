@@ -24,7 +24,7 @@ AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
-make vm-latency                      # tests/vm-latency-test.rkt alone (see `vm-tasks.md`, Gotchas)
+make vm-latency                      # tests/test_vm_latency.py alone (see `vm-tasks.md`, Gotchas)
 make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff
 make goldens FIXTURES="name ..."     # only those fixtures (names without .agc, step-limited/ ones too); an unknown name exits 2
 make vm-golden-check FIXTURES="name ..."  # the CI golden check (3 formats, sweep, sidecars, stack files) for only those fixtures

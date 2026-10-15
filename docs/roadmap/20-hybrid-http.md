@@ -95,7 +95,7 @@ the server).
   `tests/modules-test.rkt` for the guard (a user file, a `pkg/` module, a
   relative import) and the help lists; one test per refusal place
   (`tests/vm-diff-common.rkt` for the fallback and `--legacy-eval`,
-  `tests/bdd-test.rkt` for a step file under `agentica test`), each checking
+  `tests/test_bdd.py` for a step file under `agentica test`), each checking
   `LOWER-UNSUPPORTED` at the `HttpWire` call, exit 1, and that the evaluator
   never ran. Add picohttpparser to `.gitmodules` and the release's license
   files; it is under `vm/`, which the `vm-sanitizers` path list of

@@ -75,8 +75,8 @@ stacked-PR rule). The first five add pieces that nothing user-facing uses yet;
   `tests/gherkin-test.rkt`, the `BDD.*` builtins and the evaluator's BDD
   dispatch (the VM-only refusal of 21a goes with `read-program`; the one in the
   fallback stays until 7i deletes the fallback); the checker gets the import
-  help for `BDD.`. Tests: every case over the CLI (`tests/bdd-test.rkt`,
-  `tests/bdd-integration.rkt`), `tests/bdd/handlers.agc` migrated,
+  help for `BDD.`. Tests: every case over the CLI (`tests/test_bdd.py`,
+  `tests/test_bdd_integration.py`), `tests/bdd/handlers.agc` migrated,
   `make test-bdd`. Docs: the migration list (the table "Changes from the Racket
   BDD" in `docs/bdd.md`; `grammar.md`, `docs/bdd.md`, the programming skill, the
   site, the development skill, `AGENTS.md`, `README.md`, `CHANGELOG.md` with the

@@ -21,7 +21,7 @@ builtins too (§24.2, "Types").
   per `agc-trace` line; `make vm TRACE=0` compiles it out (built in the
   `vm-sanitizers` job on manual CI runs and when the trace files change); the
   Makefile `unexport`s both variables and the VM test runners remove them;
-  `tests/vm-trace-test.rkt` traces to a file and checks that exit code, stdout
+  `tests/test_vm_trace.py` traces to a file and checks that exit code, stdout
   and stderr do not change. Docs: `docs/vm/` and the development skill. Done: as
   built in `docs/vm/08-loader-and-cli.md` §9 ("VM tracing (as built)"); `tls` is
   defined and has no trace points yet.

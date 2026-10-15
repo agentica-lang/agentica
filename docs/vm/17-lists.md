@@ -386,7 +386,7 @@ Rules: `AGENTS.md` (`rackunit` for Racket; C tests are plain-assert files in
   `test-list`; `tests/examples-test.rkt`; `tests/site-examples-test.rkt` (the
   site list page runs); `tests/bytecode-test.rkt` (opcode order and builtin
   names, unchanged); `tests/unit-test-test.rkt` with `tests/std/*_test.agc`;
-  `tests/bdd-test.rkt`; `tests/vm-latency-test.rkt` (run alone).
+  `tests/test_bdd.py`; `tests/test_vm_latency.py` (run alone).
 - **Commands for the implementation PRs:** locally, only the localized checks:
   `make vm vm-test` (the C tests), the new `list-vector` golden alone,
   `tests/bytecode-test.rkt`, `make vm-layers` and `make vm-lint`, and

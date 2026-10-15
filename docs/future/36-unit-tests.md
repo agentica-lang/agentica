@@ -355,7 +355,7 @@ discovery and the report of this section, not `Test`.
 - Checker tests: `Test.eq` on two different types and on an `Fn`
   (`CHECK-TYPE-MISMATCH`); a block that does not return `Result[Void]`; `try` in
   a test block; `Test` as a user type name (`CHECK-REDEFINED-NAME`).
-- Racket tests over the CLI (`tests/bdd-test.rkt` or a new
+- Racket tests over the CLI (`tests/test_bdd.py` or a new
   `tests/unit-test-test.rkt`), with fixtures in `tests/fixtures/`: a file that
   passes; a failed `Test.eq` (code, span, expected, actual in the three formats,
   quoted once); a block's own `error`; a crash in a test (the next test still
