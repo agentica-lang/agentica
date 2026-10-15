@@ -93,5 +93,6 @@ types and variants even while the program does not check), and get the checked
 type at a position, each in text and in JSON with `version` 1; a broken root is
 `skipped`, not fatal; a command that needs a check gives the first diagnostic
 and exit 1; the `QUERY-` codes and exit codes of §39.7 hold; and the tests of
-§39.13 pass. LSP, rename and refactor commands, editor integration and a daemon
-stay out (§39.11).
+§39.13 pass. The LSP is out of this phase and planned later
+([§43](../future/43-language-server.md)). Rename and refactor commands, editor
+integration and a daemon stay out (§39.11).

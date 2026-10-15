@@ -56,10 +56,11 @@ unboxed storage from the static types (unboxed `List[Int]` and `List[Float]`,
 step 3 of 8d, are built; the rest is a note). Section 39 (semantic CLI for agents) plans
 `agentica outline`, `symbol`, `refs` and `type-at`: questions about checked code
 answered as text or versioned JSON, with `QUERY-` codes; front end and CLI only,
-no LSP, no language change. Section 40 (native code and FFI) is an idea outside
-the roadmap order: the JIT first (section 22), then an `extern def` FFI into
-native libraries behind an explicit flag when a library needs it, and AOT last;
-the JIT changes no language, and the FFI syntax is only a sketch.
+no LSP in this phase (§43), no language change. Section 40 (native code and
+FFI) is an idea outside the roadmap order: the JIT first (section 22), then an
+`extern def` FFI into native libraries behind an explicit flag when a library
+needs it, and AOT last; the JIT changes no language, and the FFI syntax is only
+a sketch.
 
 Section 41 (dates and times) designs the calendar types `Date`, `NaiveDateTime`
 and `DateTime`, their conversions and their text, as native `Time` functions.
@@ -68,6 +69,11 @@ The types are checker changes, so they come after the bootstrap (§35).
 numeric types) designs `Int8` to `UInt64` and `Float32`, with explicit
 conversions and rules for literals. It is implemented after the bootstrap, in
 the Agentica front end. `Int` and `Float` stay 64 bits on every target.
+
+Section 43 (language server) records the owner's decision of 2026-10-15: an LSP
+is built at some point, after the bootstrap (§35) and the semantic CLI (§39). It
+reuses the §39 commands and the §32 doc comments; it is an idea with no design
+yet.
 
 
 ## Files
@@ -119,6 +125,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 40 | Native code and FFI | [`40-native-code.md`](40-native-code.md) | Idea, not in the roadmap order: the JIT (roadmap 9.1) first; FFI and AOT wait for a need or a measurement |
 | 41 | Dates and times | [`41-dates-and-times.md`](41-dates-and-times.md) | Designed by the owner's scope of 2026-10-14; the types wait until after the bootstrap (§35, 41.13); `Time.monotonic_ns` may land earlier |
 | 42 | Sized numeric types | [`42-sized-numeric-types.md`](42-sized-numeric-types.md) | Designed by the owner's scope of 2026-10-14; implement after the bootstrap (§35) |
+| 43 | Language server (LSP) | [`43-language-server.md`](43-language-server.md) | Idea: owner decision of 2026-10-15, after the bootstrap (§35) and the semantic CLI (§39, roadmap row 7.2b); roadmap row 7.2c |
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no Racket
 twin ([roadmap
