@@ -3,16 +3,16 @@
   "code": "RUNTIME-TASK-CRASHED",
   "steps": 48,
   "stdout": [
-    "Await.Done(error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-crash.agc:2:17: division by zero\"))",
-    "failed: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-crash.agc:2:17: division by zero",
+    "Await.Done(error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at await-timeout-crash.agc:2:17: division by zero\"))",
+    "failed: task crashed: RUNTIME-DIVISION-BY-ZERO at await-timeout-crash.agc:2:17: division by zero",
     "false",
-    "Await.Done(error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-crash.agc:2:17: division by zero\"))",
+    "Await.Done(error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at await-timeout-crash.agc:2:17: division by zero\"))",
     "before",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":18,\"line\":2},\"start\":{\"column\":17,\"line\":2}},\"spawned_at\":{\"column\":13,\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"line\":10},\"stack\":[{\"column\":17,\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"function\":\"invert\",\"line\":2}],\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":15,\"line\":6},\"start\":{\"column\":14,\"line\":6}},\"spawned_at\":{\"column\":11,\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"line\":23},\"stack\":[{\"column\":14,\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"function\":\"halve\",\"line\":6}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"await-timeout-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":18,\"line\":2},\"start\":{\"column\":17,\"line\":2}},\"spawned_at\":{\"column\":13,\"file\":\"await-timeout-crash.agc\",\"line\":10},\"stack\":[{\"column\":17,\"file\":\"await-timeout-crash.agc\",\"function\":\"invert\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"await-timeout-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":15,\"line\":6},\"start\":{\"column\":14,\"line\":6}},\"spawned_at\":{\"column\":11,\"file\":\"await-timeout-crash.agc\",\"line\":23},\"stack\":[{\"column\":14,\"file\":\"await-timeout-crash.agc\",\"function\":\"halve\",\"line\":6}],\"task\":true}",
     ""
   ]
 }

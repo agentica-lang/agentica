@@ -1,10 +1,10 @@
-@fixtures/vm/lib/trace.agc:2:12 error[RUNTIME-DIVISION-BY-ZERO]
+lib/trace.agc:2:12 error[RUNTIME-DIVISION-BY-ZERO]
 division by zero
 
 2 |   return a / b
   |            ^
   = stack, innermost first:
-    safe_div at @fixtures/vm/lib/trace.agc:2:12
-    block at @fixtures/vm/lib/trace.agc:7:5
-    each_div at @fixtures/vm/lib/trace.agc:6:10
-    main at @fixtures/vm/stack-trace-import.agc:4:8
+    safe_div at lib/trace.agc:2:12
+    block at lib/trace.agc:7:5
+    each_div at lib/trace.agc:6:10
+    main at stack-trace-import.agc:4:8

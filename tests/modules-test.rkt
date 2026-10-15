@@ -361,7 +361,7 @@
        (define-values (out problem) (run (build-path directory "root.agc")))
        (check-equal? (hash-ref problem 'code) "RUNTIME-DIVISION-BY-ZERO")
        (check-equal? (hash-ref (hash-ref (hash-ref problem 'range) 'start) 'line) 2)
-       (check-equal? (hash-ref problem 'file) (path->string (build-path directory "a.agc"))))))
+       (check-equal? (hash-ref problem 'file) "a.agc"))))
 
   (test-case "imported task callbacks keep the execution budget"
     (with-files

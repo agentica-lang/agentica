@@ -9,7 +9,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-late-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":14,\"line\":2}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/await-timeout-late-crash.agc\",\"line\":7},\"stack\":[{\"column\":14,\"file\":\"@fixtures/vm/await-timeout-late-crash.agc\",\"function\":\"divide\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"await-timeout-late-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":14,\"line\":2}},\"spawned_at\":{\"column\":10,\"file\":\"await-timeout-late-crash.agc\",\"line\":7},\"stack\":[{\"column\":14,\"file\":\"await-timeout-late-crash.agc\",\"function\":\"divide\",\"line\":2}],\"task\":true}",
     ""
   ]
 }

@@ -3,12 +3,12 @@
   "code": "RUNTIME-TASK-CANCELLED",
   "steps": 41,
   "stdout": [
-    "parent: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-task-cancelled.agc:9:15: division by zero",
+    "parent: task crashed: RUNTIME-DIVISION-BY-ZERO at channel-task-cancelled.agc:9:15: division by zero",
     "waiting for the child",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-task-cancelled.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":9},\"start\":{\"column\":15,\"line\":9}},\"spawned_at\":{\"column\":11,\"file\":\"@fixtures/vm/channel-task-cancelled.agc\",\"line\":14},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-task-cancelled.agc\",\"function\":\"parent\",\"line\":9}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"channel-task-cancelled.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":9},\"start\":{\"column\":15,\"line\":9}},\"spawned_at\":{\"column\":11,\"file\":\"channel-task-cancelled.agc\",\"line\":14},\"stack\":[{\"column\":15,\"file\":\"channel-task-cancelled.agc\",\"function\":\"parent\",\"line\":9}],\"task\":true}",
     ""
   ]
 }

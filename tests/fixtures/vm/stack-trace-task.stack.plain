@@ -1,14 +1,14 @@
-@fixtures/vm/stack-trace-task.agc:2:13 error[RUNTIME-DIVISION-BY-ZERO] in a task
+stack-trace-task.agc:2:13 error[RUNTIME-DIVISION-BY-ZERO] in a task
 division by zero
 
 2 |   return 10 / n
   |             ^
   = stack, innermost first:
-    inner at @fixtures/vm/stack-trace-task.agc:2:13
-    worker at @fixtures/vm/stack-trace-task.agc:7:10
-    task spawned at @fixtures/vm/stack-trace-task.agc:12:10
-@fixtures/vm/stack-trace-task.agc:13:8 error[RUNTIME-TASK-CRASHED]
-task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/stack-trace-task.agc:2:13: division by zero
+    inner at stack-trace-task.agc:2:13
+    worker at stack-trace-task.agc:7:10
+    task spawned at stack-trace-task.agc:12:10
+stack-trace-task.agc:13:8 error[RUNTIME-TASK-CRASHED]
+task crashed: RUNTIME-DIVISION-BY-ZERO at stack-trace-task.agc:2:13: division by zero
 
 13 |   puts(Task.await(task))
    |        ^^^^^^^^^^^^^^^^

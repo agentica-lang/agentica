@@ -51,7 +51,7 @@
   (parameterize ([current-environment-variables copy]) (thunk)))
 
 ; The folder of the root file as a string without a final "/" (except "/" itself), or #f when it does not
-; exist; the paths of the text form are relative to it.
+; exist; the paths of the text form are relative to it (relative-source-name, with .. above it).
 (define (root-folder root-path)
   (with-handlers ([exn:fail? (lambda (_) #f)])
     (define text (path->string (path-only (normalize-path (path->complete-path root-path)))))
@@ -60,10 +60,7 @@
         text)))
 
 (define (display-path folder name)
-  (define prefix (and folder (if (string-suffix? folder "/") folder (string-append folder "/"))))
-  (if (and prefix (string-prefix? name prefix))
-      (substring name (string-length prefix))
-      name))
+  (if (and folder (absolute-path? name)) (relative-source-name folder name) name))
 
 (define (file-name span)
   (source-name (source-span-source span)))

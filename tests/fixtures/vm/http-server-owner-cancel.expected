@@ -4,13 +4,13 @@
   "steps": 1304,
   "stdout": [
     "before: 200 served",
-    "supervisor: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/http-server-owner-cancel.agc:24:15: division by zero",
+    "supervisor: task crashed: RUNTIME-DIVISION-BY-ZERO at http-server-owner-cancel.agc:24:15: division by zero",
     "after: refused",
     "0",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/http-server-owner-cancel.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":24},\"start\":{\"column\":15,\"line\":24}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/http-server-owner-cancel.agc\",\"line\":41},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/http-server-owner-cancel.agc\",\"function\":\"supervisor\",\"line\":24}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"http-server-owner-cancel.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":24},\"start\":{\"column\":15,\"line\":24}},\"spawned_at\":{\"column\":10,\"file\":\"http-server-owner-cancel.agc\",\"line\":41},\"stack\":[{\"column\":15,\"file\":\"http-server-owner-cancel.agc\",\"function\":\"supervisor\",\"line\":24}],\"task\":true}",
     ""
   ]
 }

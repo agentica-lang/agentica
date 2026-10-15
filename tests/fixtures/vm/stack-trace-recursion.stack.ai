@@ -2,9 +2,9 @@ check failed: 1 error
 
 [RUNTIME-STACK-OVERFLOW]
   message: call depth limit exceeded
-  at: @fixtures/vm/stack-trace-recursion.agc:2:10
+  at: stack-trace-recursion.agc:2:10
   source: return down(n + 1) + 1
   stack:
-    down at @fixtures/vm/stack-trace-recursion.agc:2:10 (9998 times)
-    run at @fixtures/vm/stack-trace-recursion.agc:6:10
-    main at @fixtures/vm/stack-trace-recursion.agc:11:8
+    down at stack-trace-recursion.agc:2:10 (9998 times)
+    run at stack-trace-recursion.agc:6:10
+    main at stack-trace-recursion.agc:11:8

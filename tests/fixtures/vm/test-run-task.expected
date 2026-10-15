@@ -3,12 +3,12 @@
   "code": null,
   "steps": 13,
   "stdout": [
-    "ok(\"task crashed: RUNTIME-TEST-RUN at @fixtures/vm/test-run-task.agc:2:3: call Test.run from main, outside every test\")",
+    "ok(\"task crashed: RUNTIME-TEST-RUN at test-run-task.agc:2:3: call Test.run from main, outside every test\")",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-TEST-RUN\",\"file\":\"@fixtures/vm/test-run-task.agc\",\"message\":\"call Test.run from main, outside every test\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":3,\"line\":2}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/test-run-task.agc\",\"line\":7},\"stack\":[{\"column\":3,\"file\":\"@fixtures/vm/test-run-task.agc\",\"function\":\"serve\",\"line\":2}],\"task\":true}",
-    "{\"unobserved_crashes\":1,\"first\":\"task crashed: RUNTIME-TEST-RUN at @fixtures/vm/test-run-task.agc:2:3: call Test.run from main, outside every test\"}",
+    "{\"code\":\"RUNTIME-TEST-RUN\",\"file\":\"test-run-task.agc\",\"message\":\"call Test.run from main, outside every test\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":3,\"line\":2}},\"spawned_at\":{\"column\":10,\"file\":\"test-run-task.agc\",\"line\":7},\"stack\":[{\"column\":3,\"file\":\"test-run-task.agc\",\"function\":\"serve\",\"line\":2}],\"task\":true}",
+    "{\"unobserved_crashes\":1,\"first\":\"task crashed: RUNTIME-TEST-RUN at test-run-task.agc:2:3: call Test.run from main, outside every test\"}",
     ""
   ]
 }

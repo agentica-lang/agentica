@@ -10,8 +10,8 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-close-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":2},\"start\":{\"column\":16,\"line\":2}},\"spawned_at\":{\"column\":7,\"file\":\"@fixtures/vm/process-close-crash.agc\",\"line\":15},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/process-close-crash.agc\",\"function\":\"crash\",\"line\":2}],\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-close-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":2},\"start\":{\"column\":16,\"line\":2}},\"spawned_at\":{\"column\":7,\"file\":\"@fixtures/vm/process-close-crash.agc\",\"line\":16},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/process-close-crash.agc\",\"function\":\"crash\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"process-close-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":2},\"start\":{\"column\":16,\"line\":2}},\"spawned_at\":{\"column\":7,\"file\":\"process-close-crash.agc\",\"line\":15},\"stack\":[{\"column\":16,\"file\":\"process-close-crash.agc\",\"function\":\"crash\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"process-close-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":2},\"start\":{\"column\":16,\"line\":2}},\"spawned_at\":{\"column\":7,\"file\":\"process-close-crash.agc\",\"line\":16},\"stack\":[{\"column\":16,\"file\":\"process-close-crash.agc\",\"function\":\"crash\",\"line\":2}],\"task\":true}",
     ""
   ]
 }

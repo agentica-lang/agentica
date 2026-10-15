@@ -2,5 +2,5 @@ check failed: 1 error
 
 [RUNTIME-DIVISION-BY-ZERO]
   message: division by zero
-  at: @fixtures/vm/stack-trace-main.agc:3:11
+  at: stack-trace-main.agc:3:11
   source: puts(10 / (3 - 3))

@@ -39,8 +39,10 @@ Measured by the owner on master on 2026-10-13:
   (`docs/bdd.md`), so part of the tool is already Agentica.
 - An `.agcb` holds the format version (5), the Agentica version, and the path
   and full text of every source file (`write-program`, `src/bytecode.rkt:203`).
-  The paths are absolute (`path->complete-path`, `src/modules.rkt:9,15,26`). The
-  loader rejects a file built for another Agentica version (`vm/loader.c:402`).
+  The paths are relative to the project root (35.4, "Source paths"); they were
+  absolute (`path->complete-path`) until that change, so the bytes depended on
+  where the checkout lived. The loader rejects a file built for another
+  Agentica version (`vm/loader.c:402`).
 
 ### 35.2 Goal and success criteria
 
@@ -218,10 +220,35 @@ Notes:
   Agentica data in step 4 (4a, done: `compiler/builtins_data.agc`, generated
   from the Racket tables). It remains the one description of the builtins, and
   `agentica help` reads it.
-- **Source paths.** A required change before step 6: both front ends store
-  source paths relative to the project root, not absolute (35.1), so the bytes
-  do not depend on where the checkout lives. The PR that makes the change also
-  decides how diagnostics print the path.
+- **Source paths. Done.** Both front ends store source paths relative to the
+  project root, not absolute (35.1), so the bytes do not depend on where the
+  checkout lives. The rules:
+  - The project root is the folder of the entry file (the root file of the
+    link), the same folder that anchors `agc_libs/`. Resolution is unchanged;
+    only the stored form changes. `src/source.rkt` (`stored-source-names`,
+    used by `ir->bytecode`) and `Paths.stored_name` in
+    `compiler/import_path.agc` (the `name` of a `LinkedModule`) compute it the
+    same way.
+  - A file inside the root is stored as its path from there, joined with `/`
+    and with no `./` (`main.agc`, `lib/util.agc`). The entry file is its own
+    file name. A `std/` module keeps its `std/NAME.agc` key.
+  - An import that goes above the root with `../` is allowed, as before, and
+    keeps the `..` parts (`../shared/x.agc`). A `pkg/` library found outside
+    the root (the user or system library folders) is stored the same way, so
+    its path depends on how deep the project is; vendor libraries in
+    `agc_libs/` for reproducible bytes. Only a file on another drive
+    (Windows) stays absolute.
+  - Compile-time diagnostics (plain, `--ai`, `--json`) print as before, from
+    the front end's own source names: the entry file as written on the command
+    line, imported files by their canonical path. They are never stored. A
+    runtime diagnostic and its stack trace print the stored path, because the
+    VM reads only the `.agcb`: `agentica dir/main.agc` shows `main.agc:3:5`,
+    where it showed `dir/main.agc:3:5`.
+  - The text forms of `compiler/` print the stored path (`module "path"`,
+    ` file="path"`), so the Racket oracle and the Agentica linker agree on
+    the `..` case (`tests/frontend-modules-test.rkt`).
+  - `tests/test_source_paths.py` compiles one program from two folders and
+    checks that the two `.agcb` are equal byte for byte.
 - **No gap between the drivers.** The BDD driver is ported before the CLI. Until
   step 8, the Racket `main.rkt` compiles and runs the Agentica BDD driver on the
   VM, as it runs the BDD runner today, and passes it the VM's path. So

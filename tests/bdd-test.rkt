@@ -25,6 +25,10 @@
 (define (in directory name)
   (path->string (build-path directory name)))
 
+; A runtime trace names a file by the path stored in the bytecode: relative to the folder of the entry file.
+(define (stored path)
+  (path->string (file-name-from-path path)))
+
 (define (cases report)
   (append-map (lambda (file) (hash-ref file 'scenarios)) (hash-ref report 'files)))
 
@@ -90,14 +94,14 @@
        (define assertion (hash-ref (first results) 'error))
        (check-equal? (list (hash-ref assertion 'file) (start-line assertion)) (list (in directory "b.feature") 3))
        (define crash (hash-ref (third results) 'error))
-       (check-equal? (list (hash-ref crash 'file) (start-line crash)) (list (path->string handlers) 35))
+       (check-equal? (list (hash-ref crash 'file) (start-line crash)) (list (stored handlers) 35))
        (check-equal? (hash-ref (hash-ref (sixth results) 'error) 'actual) "\"missing definition\""))))
 
   (test-case "a crashing handler shows its stack in the text and --ai reports"
     (with-suite
      `(("crash.feature" . "Feature: Crash\nScenario: runtime\nThen execution crashes\n"))
      (lambda (directory)
-       (define place (string-append (path->string handlers) ":35:15"))
+       (define place (string-append (stored handlers) ":35:15"))
        (match-define (list text-status text _)
          (agentica-test (in directory "crash.feature") "--steps" (path->string handlers)))
        (check-equal? text-status 1)

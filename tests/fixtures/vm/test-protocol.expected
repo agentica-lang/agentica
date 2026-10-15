@@ -7,7 +7,7 @@
     "channel> {\"event\":\"pass\"}",
     "{\"event\":\"pass\"}",
     "\u001eagentica-bdd {\"event\":\"pass\"}",
-    "channel> {\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-protocol.agc\",\"message\":\"the real record\",\"range\":{\"end\":{\"column\":44,\"line\":10},\"start\":{\"column\":7,\"line\":10}}}",
+    "channel> {\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"test-protocol.agc\",\"message\":\"the real record\",\"range\":{\"end\":{\"column\":44,\"line\":10},\"start\":{\"column\":7,\"line\":10}}}",
     "partialchannel> {\"event\":\"pass\"}",
     ""
   ],

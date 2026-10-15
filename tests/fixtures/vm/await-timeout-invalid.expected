@@ -4,13 +4,13 @@
   "steps": 35,
   "stdout": [
     "1",
-    "error(\"task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/await-timeout-invalid.agc:6:25: await timeout must be positive milliseconds\")",
-    "error(\"task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/await-timeout-invalid.agc:13:25: await timeout must be positive milliseconds\")",
+    "error(\"task crashed: RUNTIME-INVALID-DURATION at await-timeout-invalid.agc:6:25: await timeout must be positive milliseconds\")",
+    "error(\"task crashed: RUNTIME-INVALID-DURATION at await-timeout-invalid.agc:13:25: await timeout must be positive milliseconds\")",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"message\":\"await timeout must be positive milliseconds\",\"range\":{\"end\":{\"column\":26,\"line\":6},\"start\":{\"column\":25,\"line\":6}},\"spawned_at\":{\"column\":25,\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"line\":22},\"stack\":[{\"column\":25,\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"function\":\"zero\",\"line\":6}],\"task\":true}",
-    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"message\":\"await timeout must be positive milliseconds\",\"range\":{\"end\":{\"column\":27,\"line\":13},\"start\":{\"column\":25,\"line\":13}},\"spawned_at\":{\"column\":25,\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"line\":23},\"stack\":[{\"column\":25,\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"function\":\"negative\",\"line\":13}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"await-timeout-invalid.agc\",\"message\":\"await timeout must be positive milliseconds\",\"range\":{\"end\":{\"column\":26,\"line\":6},\"start\":{\"column\":25,\"line\":6}},\"spawned_at\":{\"column\":25,\"file\":\"await-timeout-invalid.agc\",\"line\":22},\"stack\":[{\"column\":25,\"file\":\"await-timeout-invalid.agc\",\"function\":\"zero\",\"line\":6}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"await-timeout-invalid.agc\",\"message\":\"await timeout must be positive milliseconds\",\"range\":{\"end\":{\"column\":27,\"line\":13},\"start\":{\"column\":25,\"line\":13}},\"spawned_at\":{\"column\":25,\"file\":\"await-timeout-invalid.agc\",\"line\":23},\"stack\":[{\"column\":25,\"file\":\"await-timeout-invalid.agc\",\"function\":\"negative\",\"line\":13}],\"task\":true}",
     ""
   ]
 }
