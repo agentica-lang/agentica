@@ -16,6 +16,13 @@ ELF checks, `make exe`, `raco distribute`, the archive). A new check in
 `ci.yml` or `sweep.yml` gets a target first (in `.PHONY` and with a one-line
 comment), then a step that calls it. Targets that are not obvious:
 
+- `bdd-driver` builds `dist/agentica-bdd-driver.agcb`: `compiler/bdd.agc`
+  compiled by the Racket front end (`racket src/main.rkt compile`). It is what
+  `agentica test` runs on the VM until step 8 (`docs/future/35-self-hosting.md`
+  §35.4). `test`, `test-slow` and `dist/agentica` depend on it, it is rebuilt
+  when `compiler/*.agc` or `src/*.rkt` change, and `release.yml` copies it into
+  the archive's `bin/` next to `agentica-vm`. Without it `agentica test` exits 2
+  with "cannot find the BDD driver"; a test run by hand needs `make bdd-driver`.
 - `test` and `test-slow` run two frameworks side by side while the tests move
   from rackunit to Python `unittest` (a test lives in one only; design in
   `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of `.rkt` files

@@ -1,219 +1,73 @@
 #lang racket
 
-(require file/sha1 json racket/os racket/random racket/runtime-path
-         "bytecode.rkt" "checker.rkt" "diagnostic.rkt" "lexer.rkt" "lower.rkt"
-         "modules.rkt" "parser.rkt" "source.rkt" "source-file.rkt" "vm-launch.rkt")
+;; `agentica test`: the hand-off to the BDD driver, a program in Agentica (compiler/bdd.agc; docs/future/35-self-hosting.md,
+;; step 7b). The driver finds the test files, compiles them, runs the runner on the VM and prints the report. This
+;; module only starts it on the VM, as `agentica file.agc` starts a program, and gives it what only this process knows:
+;; the VM, the std/ sources (they are embedded in this program, so they go to the driver on its stdin, and it writes
+;; them to its own private run directory) and the command that runs agentica. Until step 8 moves the command line to
+;; Agentica too, the driver is compiled by `make` (dist/agentica-bdd-driver.agcb) and shipped next to the VM, never
+;; compiled on a run.
 
-(provide run-agentica-test bdd-usage-report)
+(require file/sha1 json racket/os racket/random racket/runtime-path
+         "stdlib.rkt" "vm-launch.rkt")
+
+(provide run-agentica-test find-bdd-driver)
 
 (define-runtime-path main-program "main.rkt")
 
-(define runner-root "import Runner from \"std/test/runner\"\n\ndef main() -> Void\n  Runner.main()\nend\n")
-(define default-steps "import BDD from \"std/bdd\"\n\ndef main() -> Void\n  BDD.run([])\nend\n")
+(define driver-name "agentica-bdd-driver.agcb")
 
+;; The compiled driver: dist/ in a checkout, next to the executable otherwise (as find-vm finds the VM).
+(define (find-bdd-driver)
+  (define here (variable-reference->module-source (#%variable-reference)))
+  (cond
+    [(path? here)
+     (define-values (directory _name _dir?) (split-path here))
+     (simplify-path (build-path directory 'up "dist" driver-name) #f)]
+    [else (build-path (path-only (running-executable)) driver-name)]))
+
+;; The command that runs agentica, which the runner gives to the programs under test.
 (define (agentica-command)
   (if (path? (variable-reference->module-source (#%variable-reference)))
       (list (path->string (or (find-executable-path "racket") (find-system-path 'exec-file)))
             (path->string main-program))
       (list (path->string (running-executable)))))
 
-(define (first-line-span file)
-  (source-span (source file "") (source-position 0 1 1) (source-position 0 1 1)))
+;; The std/ sources of the registry as the JSON the driver reads on stdin: {"files": [{"path": "bdd/match.agc", "text": ...}]}.
+;; The key std/bdd/match.agc is the file bdd/match.agc of the stdlib/ folder that the Agentica linker reads.
+(define (std-sources-json)
+  (jsexpr->string
+   (hasheq 'files (for/list ([(key text) (in-hash stdlib-sources)])
+                    (hasheq 'path (substring key (string-length "std/")) 'text text)))))
 
-(define (one-error-report problem style seed)
-  (define error (diagnostic->jsexpr problem))
-  (define file (hash-ref error 'file))
-  (values 2
-          (if (eq? style 'json)
-              (string-append
-               (jsexpr->string
-                (hasheq 'ok #f 'passed 0 'failed 0 'not_executed 0 'file_errors 1 'exit_code 2 'seed (or seed (json-null))
-                        'files (list (hasheq 'path file 'feature "" 'kind "" 'status "failed" 'scenarios '() 'error error))))
-               "\n")
-              (format "FAIL ~a~a~a:1:1 [~a] ~a\n0 passed, 0 failed, 0 not executed, 1 file errors\n"
-                      file (if (eq? style 'ai) " | " "\n") file (hash-ref error 'code) (hash-ref error 'message)))))
-
-(define (bdd-usage-report message style [seed #f])
-  (one-error-report (diagnostic 'RUNTIME-BDD-USAGE message (first-line-span "<arguments>")) style seed))
-
-(define (infrastructure-report message file style seed)
-  (one-error-report (diagnostic 'RUNTIME-BDD-INFRA message (first-line-span file)) style seed))
-
-(define (compile-text name text)
-  (let/ec stop
-    (define (pass value) (if (diagnostic? value) (stop value) value))
-    (define tree (pass (parse (pass (lex (source name text))))))
-    (define types (make-hasheq))
-    (define checked (pass (check (pass (link-program tree name)) #:types types)))
-    (pass (write-bytecode (pass (ir->bytecode (pass (lower checked types))))))))
-
-(define (feature-name? name)
-  (regexp-match? #rx#"[.]feature$" (path->bytes name)))
-
-(define (test-name? name)
-  (regexp-match? #rx#"_test[.]agc$" (path->bytes name)))
-
-(define (target-name? name)
-  (or (feature-name? name) (test-name? name)))
-
-(define (kind-of path)
-  (cond
-    [(test-name? path) "tests"]
-    [(feature-name? path) "feature"]
-    [else ""]))
-
-(define (utf-8-name? name)
-  (with-handlers ([exn:fail:contract? (lambda (_) #f)])
-    (and (bytes->string/utf-8 (path->bytes name)) #t)))
-
-(define (discover paths)
-  (define errors '())
-  (define targets '())
-  (define (fail! path message)
-    (set! errors (cons (hasheq 'path (path->string path) 'problem message 'kind (kind-of path)) errors)))
-  (define (walk directory)
-    (define names
-      (with-handlers ([exn:fail? (lambda (failure) (fail! directory (format "cannot list the directory: ~a" (exn-message failure))) '())])
-        (directory-list directory)))
-    (for ([name (in-list names)])
-      (define path (build-path directory name))
-      (define type
-        (with-handlers ([exn:fail? (lambda (failure) (fail! path (format "cannot read the file information: ~a" (exn-message failure))) #f)])
-          (file-or-directory-type path #t)))
-      (cond
-        [(not type) (void)]
-        [(and (not (utf-8-name? name)) (or (eq? type 'directory) (target-name? name)))
-         (fail! path "the file name is not valid UTF-8")]
-        [(eq? type 'directory) (walk path)]
-        [(not (target-name? name)) (void)]
-        [(eq? type 'file) (set! targets (cons path targets))]
-        [(and (eq? type 'link) (file-exists? path)) (set! targets (cons path targets))]
-        [(memq type '(link directory-link)) (fail! path "the symbolic link does not name a file")])))
-  (for ([given (in-list paths)])
-    (define path (simplify-path (path->complete-path given) #f))
-    (cond
-      [(directory-exists? path) (walk path)]
-      [(file-exists? path) (set! targets (cons path targets))]
-      [else (fail! path "test path does not exist")]))
-  (define files (sort (remove-duplicates (map path->string targets)) string<?))
-  (append (reverse errors) (for/list ([file (in-list files)]) (hasheq 'path file 'problem "" 'kind (kind-of (string->path file))))))
-
-(define (compile-tests entries directory)
-  (for/list ([entry (in-list entries)] [index (in-naturals)])
-    (define path (hash-ref entry 'path))
-    (cond
-      [(not (and (equal? (hash-ref entry 'kind) "tests") (equal? (hash-ref entry 'problem) "")))
-       (hash-set* entry 'bytecode "" 'source_root "" 'front_end "")]
-      [else
-       (define text (with-handlers ([exn:fail? (lambda (_) #f)]) (read-source-file path path)))
-       (define compiled
-         (cond
-           [(not text)
-            (diagnostic 'RUNTIME-BDD-INFRA (format "cannot read the test file ~a" path) (first-line-span path))]
-           [(diagnostic? text) text]
-           [else (compile-text path text)]))
-       (define output (build-path directory (format "test-~a.agcb" index)))
-       (unless (diagnostic? compiled) (write-private output compiled))
-       (hash-set* entry 'bytecode (path->string output)
-                  'source_root (source-root-option path)
-                  'front_end (if (diagnostic? compiled) (jsexpr->string (diagnostic->jsexpr compiled)) ""))])))
-
-(define stale-name #rx"^agentica-bdd-[0-9a-f]+$")
-
-(define (lock-file directory)
-  (build-path directory "lock"))
-
-(define (take-lock directory)
-  (define port (open-output-file (lock-file directory) #:exists 'error #:permissions #o600))
-  (define locked?
-    (with-handlers ([(lambda (_) #t) (lambda (failure) (close-output-port port) (raise failure))])
-      (port-try-file-lock? port 'exclusive)))
-  (unless locked?
-    (close-output-port port)
-    (error 'agentica "cannot lock ~a" directory))
-  port)
-
-(define (abandoned? path owner)
-  (with-handlers ([exn:fail? (lambda (_) #f)])
-    (and (eq? (file-or-directory-type path #t) 'directory)
-         (equal? (hash-ref (file-or-directory-stat path #t) 'user-id) owner)
-         (eq? (file-or-directory-type (lock-file path) #t) 'file)
-         (let ([port (open-output-file (lock-file path) #:exists 'update)])
-           (if (port-try-file-lock? port 'exclusive)
-               port
-               (begin (close-output-port port) #f))))))
-
-(define (sweep-stale temporary own)
-  (define owner (hash-ref (file-or-directory-stat own #t) 'user-id))
-  (for ([name (in-list (with-handlers ([exn:fail:filesystem? (lambda (_) '())]) (directory-list temporary)))])
-    (define path (build-path temporary name))
-    (define held (and (regexp-match? stale-name (path->bytes name)) (not (equal? path own)) (abandoned? path owner)))
-    (when held
-      (remove-run-directory path)
-      (close-output-port held))))
-
-(define (remove-run-directory directory)
-  (with-handlers ([exn:fail? void])
-    (for ([name (in-list (directory-list directory))]
-          #:unless (equal? (path->bytes name) #"lock"))
-      (delete-directory/files (build-path directory name) #:must-exist? #f))
-    (delete-directory/files directory #:must-exist? #f)))
-
-(define (shared-and-not-sticky? temporary own)
-  (define stat (file-or-directory-stat temporary))
-  (define mine (file-or-directory-stat own #t))
-  (define mode (hash-ref stat 'mode))
-  (define (set? bits) (not (zero? (bitwise-and mode bits))))
-  (define (same? key) (equal? (hash-ref stat key) (hash-ref mine key)))
-  (and (not (set? #o1000))
-       (or (set? #o002)
-           (and (set? #o020)
-                (not (and (same? 'user-id) (same? 'group-id) (not (set? #o2000))))))))
-
-(define (message-line text pick)
-  (define lines (string-split text "\n"))
-  (if (null? lines) "no diagnostic" (pick lines)))
-
-(define (final-diagnostic lines)
-  (define headers
-    (for/list ([line (in-list lines)] [index (in-naturals)]
-               #:when (regexp-match? #px"^.+:[0-9]+:[0-9]+ error\\[[A-Z0-9-]+\\]$" line))
-      index))
-  (define shown (drop lines (if (null? headers) 0 (last headers))))
-  (string-join (take shown (min 2 (length shown))) " "))
-
-(define (compile-steps path directory)
-  (cond
-    [(not path) (compile-text (path->string (build-path directory "steps.agc")) default-steps)]
-    [else
-     (define file (path->string (path->complete-path path)))
-     (define text
-       (with-handlers ([exn:fail? (lambda (_) #f)])
-         (read-source-file file file)))
-     (cond
-       [(not text)
-        (diagnostic 'RUNTIME-BDD-INFRA (format "cannot read the step program ~a" path) (first-line-span file))]
-       [(diagnostic? text) text]
-       [else (compile-text file text)])]))
-
-(define (write-private path data)
-  (call-with-output-file path #:exists 'error #:permissions #o600
-    (lambda (out) (void (write-bytes data out)))))
+;; A private copy of the driver for the VM to run, next to where `agentica file.agc` puts its bytecode: a VM started
+;; with --driver-pid reads only a private file (owner, no group or other bits) and deletes it after the load. The
+;; driver must not leave more than that in the temporary directory when this process is killed.
+(define (write-private-copy driver)
+  (define copy (build-path (find-system-path 'temp-dir)
+                           (format "agentica-bdd-driver-~a.agcb" (bytes->hex-string (crypto-random-bytes 16)))))
+  (call-with-output-file copy #:exists 'error #:permissions #o600
+    (lambda (out) (write-bytes (file->bytes driver) out)))
+  copy)
 
 (define (capture port)
   (define out (open-output-bytes))
   (values out (thread (lambda () (copy-port port out) (close-input-port port)))))
 
-(define (run-runner vm runner config seed)
-  (define environment (environment-variables-copy (current-environment-variables)))
-  (for ([name '(#"AGENTICA_VM_METRICS" #"AGENTICA_VM_METRICS_FILE")])
-    (environment-variables-set! environment name #f))
+;; Runs the driver on the VM with the arguments and waits for it. The std/ sources go to its stdin. Its stdout is the
+;; report, kept to be returned; its stderr is shown at once. A break (Ctrl-C, SIGTERM) stops the VM, which stops the
+;; driver's children, as the Racket driver stopped the runner; unlike that driver, this one does not remove its run
+;; directory then (see 35.5).
+(define (run-driver vm driver arguments)
   (define-values (process stdout stdin stderr)
-    (parameterize ([current-environment-variables environment])
-      (apply subprocess #f #f #f vm
-             (append '("--allow-run") (if seed (list "--seed" (number->string seed)) '())
-                     (list "--driver-pid" (number->string (getpid)) "--" (path->string runner) (path->string config))))))
-  (close-output-port stdin)
+    (apply subprocess #f #f #f vm
+           (append (list "--allow-run" "--driver-pid" (number->string (getpid)) "--" (path->string driver)) arguments)))
+  ;; A driver that ends before it reads its stdin (a usage error) breaks the pipe: that is not an error here.
+  (define sender
+    (thread (lambda ()
+              (with-handlers ([exn:fail? void])
+                (write-string (std-sources-json) stdin)
+                (close-output-port stdin)))))
   (define broke? #f)
   (dynamic-wind
     void
@@ -222,102 +76,52 @@
        (lambda () (set! broke? #t))
        (lambda ()
          (define-values (out out-reader) (capture stdout))
-         (define-values (err err-reader) (capture stderr))
+         (define errors (current-error-port))
+         (define err-reader (thread (lambda () (copy-port stderr errors) (close-input-port stderr))))
          (subprocess-wait process)
          (thread-wait out-reader)
          (thread-wait err-reader)
-         (values (subprocess-status process)
-                 (bytes->string/utf-8 (get-output-bytes out) #\uFFFD)
-                 (bytes->string/utf-8 (get-output-bytes err) #\uFFFD)))))
-    (lambda () (parameterize-break #f (stop-vm process #:interrupted? broke?)))))
+         (define status (subprocess-status process))
+         (define text (bytes->string/utf-8 (get-output-bytes out) (integer->char #xFFFD)))
+         ;; A driver that ran always printed a report or a usage message. A VM that stopped on a runtime error of the
+         ;; driver (status 1) printed nothing, and must not look like "the tests failed": that is status 2.
+         (values (if (and (equal? text "") (not (eqv? status 0))) 2 status) text))))
+    (lambda ()
+      (kill-thread sender)
+      (with-handlers ([exn:fail? void]) (close-output-port stdin))
+      (parameterize-break #f (stop-vm process #:interrupted? broke?)))))
 
-(define default-paths '("specs/" "test/"))
-
-(define (run-agentica-test paths step-files #:style style #:allow-run allow-run? #:seed seed #:vm vm
-                           #:only [only ""] #:test-timeout-ms [test-timeout-ms 30000])
+;; Runs `agentica test`. `arguments` are the words after `test`, `step-files` the --steps given before it; the driver
+;; reads both and reports usage errors itself. Gives the exit status and the text to print.
+(define (run-agentica-test arguments step-files #:style style #:allow-run allow-run? #:seed seed #:vm vm
+                           #:test-timeout-ms [test-timeout-ms 30000])
+  (define driver (find-bdd-driver))
   (cond
-    [(> (length step-files) 1)
-     (bdd-usage-report "one --steps program; import the other files from it" style seed)]
     [(not (and (file-exists? vm) (memq 'execute (file-or-directory-permissions vm))))
-     (infrastructure-report (format "cannot find the VM at ~a; run make vm or set AGENTICA_VM" vm)
-                            (path->string vm) style seed)]
+     (eprintf "agentica: cannot find the VM at ~a; run make vm or set AGENTICA_VM\n" vm)
+     (values 2 "")]
+    [(not (file-exists? driver))
+     (eprintf "agentica: cannot find the BDD driver at ~a; run make dist/agentica-bdd-driver.agcb\n" driver)
+     (values 2 "")]
     [else
-     (define temporary (find-system-path 'temp-dir))
-     (define (random-name prefix) (build-path temporary (string-append prefix (bytes->hex-string (crypto-random-bytes 16)))))
-     (define directory (random-name "agentica-bdd-"))
-     (define current (random-name "agentica-bdd-new-"))
-     (define created? #f)
-     (define lock #f)
-     (with-handlers ([exn:break? raise])
-       (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (message-line (exn-message failure) car) (path->string temporary) style seed))])
-         (dynamic-wind
-           (lambda ()
-             (parameterize-break #f
-               (make-directory current #o700)
-               (set! created? #t)))
-           (lambda ()
-             (cond
-               [(shared-and-not-sticky? temporary current)
-                (infrastructure-report
-                 (format "the temporary directory ~a is shared and not sticky; set TMPDIR to a private folder" temporary)
-                 (path->string temporary) style seed)]
-               [else
-                (parameterize-break #f
-                  (set! lock (take-lock current))
-                  (rename-file-or-directory current directory)
-                  (set! current directory))
-                (sweep-stale temporary directory)
-                (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm only test-timeout-ms)]))
-           (lambda ()
-             (parameterize-break #f
-               (when created? (remove-run-directory current))
-               (with-handlers ([exn:fail? void])
-                 (when lock (close-output-port lock))))))))]))
-
-(define (run-in directory paths step-file style allow-run? seed vm only test-timeout-ms)
-  (define runner-file (build-path directory "runner.agcb"))
-  (define steps-file (build-path directory "steps.agcb"))
-  (define config-file (build-path directory "config.jsonl"))
-  (define runner (compile-text (path->string (build-path directory "runner.agc")) runner-root))
-  (define steps (compile-steps step-file directory))
-  (cond
-    [(diagnostic? runner)
-     (infrastructure-report (format "the BDD runner does not compile: ~a" (diagnostic-message runner))
-                            (path->string vm) style seed)]
-    [else
-     (write-private runner-file runner)
-     (unless (diagnostic? steps) (write-private steps-file steps))
-     (define given (if (null? paths) (filter directory-exists? default-paths) paths))
-     (define entries (compile-tests (discover given) directory))
-     (define config
-       (jsexpr->string
-        (hasheq 'vm (path->string vm)
-                'steps_bytecode (path->string steps-file)
-                'steps_source (path->string (if step-file (path->complete-path step-file) (build-path directory "steps.agc")))
-                'steps_root (if step-file (source-root-option step-file) "")
-                'steps_error (if (diagnostic? steps) (jsexpr->string (diagnostic->jsexpr steps)) "")
-                'steps_given (and step-file #t)
-                'agentica (agentica-command)
-                'count (length entries)
-                'empty_path (path->string (simplify-path (path->complete-path (if (null? given) (car default-paths) (car given))) #f))
-                'empty_message (if (null? given)
-                                   "no .feature or *_test.agc files found: neither specs/ nor test/ exists"
-                                   "no .feature or *_test.agc files found")
-                'style (symbol->string style)
-                'allow_run allow-run?
-                'seeded (and seed #t)
-                'seed (or seed 0)
-                'only only
-                'test_timeout_ms test-timeout-ms)))
-     (write-private config-file
-                    (string->bytes/utf-8
-                     (string-append* config "\n" (for/list ([entry (in-list entries)]) (string-append (jsexpr->string entry) "\n")))))
-     (define-values (status out err)
-       (with-handlers ([exn:fail? (lambda (failure) (values #f "" (exn-message failure)))])
-         (run-runner vm runner-file config-file seed)))
-     (if (and (memv status '(0 1 2)) (equal? err ""))
-         (values status out)
-         (infrastructure-report
-          (format "the BDD runner failed with exit code ~a: ~a" status
-                  (message-line err final-diagnostic))
-          (path->string vm) style seed))]))
+     (define copy (with-handlers ([exn:fail:filesystem? (lambda (_) #f)]) (write-private-copy driver)))
+     (cond
+       [(not copy)
+        (eprintf "agentica: cannot write a temporary file in ~a\n" (find-system-path 'temp-dir))
+        (values 2 "")]
+       [else
+        (dynamic-wind
+          void
+          (lambda ()
+            (run-driver vm copy
+                        (append (list "--vm" (path->string vm)
+                                      "--style" (symbol->string style)
+                                      "--test-timeout-ms" (number->string test-timeout-ms))
+                                (if allow-run? '("--allow-run") '())
+                                (if seed (list "--seed" (number->string seed)) '())
+                                (append-map (lambda (word) (list "--agentica" word)) (agentica-command))
+                                '("--")
+                                (append-map (lambda (file) (list "--steps" file)) step-files)
+                                arguments)))
+          ;; The VM deletes its copy of the driver after loading it; this covers a VM that never got there.
+          (lambda () (parameterize-break #f (with-handlers ([exn:fail:filesystem? void]) (delete-file copy)))))])]))

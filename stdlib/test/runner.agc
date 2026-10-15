@@ -26,6 +26,7 @@ struct Config
   seed: Int
   only: String
   test_timeout_ms: Int
+  report_path: String
 end
 
 enum Listing
@@ -53,7 +54,9 @@ struct Run
 end
 
 ## Reads the configuration file named by the one command-line argument, runs every feature and test file in it, and
-## prints the report. Exits with a non-zero code when something failed.
+## writes the report to the file the configuration names (`report_path`, a new file). The driver reads it from there:
+## a child's stdout keeps only 1 MiB, and the report of a large run is bigger. Exits with a non-zero code when
+## something failed.
 export def main() -> Void
   args = System.args()
   if args.size != 1
@@ -84,15 +87,38 @@ export def main() -> Void
     seed = Random.int(0, 2147483647)
   end
   files = matched(config, run_all(seeded(config, seed), read.map do |entry| entry.unwrap! end))
+  text = Report.text(files, config.style == "ai", seed)
   if config.style == "json"
-    puts(Report.json(files, seed))
-  else
-    puts(Report.text(files, config.style == "ai", seed))
+    text = JSON.encode(Report.json(files, seed))
+  end
+  saved = save_report(config.report_path, text)
+  if not saved.ok?
+    IO.warn("cannot write the BDD report: #{saved.message}")
+    System.exit(2)
   end
   code = Report.exit_code(files)
   if code != 0
     System.exit(code)
   end
+end
+
+# A file gets at most 1 MiB in one write, and a character takes up to 4 bytes.
+def save_report(path: String, text: String) -> Result[Void]
+  out = try File.open(path, "create_private", 5000)
+  at = 0
+  while at < text.length
+    size = min_of(250000, text.length - at)
+    try File.write(out, text.slice(at, size), 5000)
+    at += size
+  end
+  return File.close(out, 5000)
+end
+
+def min_of(a: Int, b: Int) -> Int
+  if a < b
+    return a
+  end
+  return b
 end
 
 def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
@@ -178,6 +204,7 @@ def seeded(config: Config, seed: Int) -> Config
     seed: seed,
     only: config.only,
     test_timeout_ms: config.test_timeout_ms,
+    report_path: config.report_path,
   )
 end
 

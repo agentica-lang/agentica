@@ -163,9 +163,12 @@ byte of a file with a type table, an Updates section or Globals.
   exits 2, after the front end and the lowering, so a program diagnostic wins.
   The lookup does not use `define-runtime-path`, since `raco distribute` would
   copy the VM into `lib/`.
-- `agentica test` runs on the VM (`docs/bdd.md`). `src/bdd-driver.rkt` compiles
-  the step program and the runner, starts the runner with `--driver-pid`, and
-  the runner starts one VM per scenario.
+- `agentica test` runs on the VM (`docs/bdd.md`). `src/bdd-driver.rkt` starts
+  the BDD driver (`compiler/bdd.agc`, compiled by `make` into
+  `dist/agentica-bdd-driver.agcb`) with `--driver-pid`, as a private copy that
+  the VM deletes after the load. The driver compiles the step program and the
+  runner, starts the runner with `--driver-pid` too, and the runner starts one
+  VM per scenario.
 - `make vm` builds `dist/agentica-vm` (`.exe` on Windows). `make exe` and
   `make test` build it first. The release builds it against glibc 2.28 (11).
 - Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.

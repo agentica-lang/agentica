@@ -115,7 +115,7 @@ jobs:
         run: |
           name="agentica-${{ steps.version.outputs.version }}-linux-x86_64"
           raco distribute "dist/$name" dist/agentica
-          cp dist/agentica-vm "dist/$name/bin/"
+          cp dist/agentica-vm dist/agentica-bdd-driver.agcb "dist/$name/bin/"
           cp LICENSE NOTICE "dist/$name/"
           share=$(racket -e '(require setup/dirs) (display (find-share-dir))')
           mkdir -p "dist/$name/licenses/"{racket,bdwgc,libuv,yyjson,picohttpparser,openssl,unicode}
@@ -130,7 +130,7 @@ jobs:
           tar -czf "dist/$name.tar.gz" -C dist "$name"
           rm -rf "dist/$name"
           listing=$(tar -tzf "dist/$name.tar.gz")
-          for f in bin/agentica bin/agentica-vm LICENSE NOTICE licenses/racket/LICENSE.txt licenses/racket/LICENSE-MIT.txt \
+          for f in bin/agentica bin/agentica-vm bin/agentica-bdd-driver.agcb LICENSE NOTICE licenses/racket/LICENSE.txt licenses/racket/LICENSE-MIT.txt \
             licenses/racket/LICENSE-APACHE.txt licenses/racket/ChezScheme-NOTICE licenses/bdwgc/NOTICE \
             licenses/libuv/LICENSE licenses/libuv/LICENSE-extra licenses/yyjson/LICENSE licenses/picohttpparser/LICENSE licenses/openssl/LICENSE.txt licenses/unicode/LICENSE.txt; do
             grep -qxF "$name/$f" <<< "$listing" || { echo "$name.tar.gz lacks $name/$f" >&2; exit 1; }
@@ -143,6 +143,7 @@ jobs:
           "$agentica" --version
           if LC_ALL=C readelf -d "$unpacked/$name/bin/agentica-vm" | grep -qE 'NEEDED.*lib(ssl|crypto|gc)[.]'; then echo "the archive's agentica-vm links OpenSSL or libgc dynamically" >&2; exit 1; fi
           "$agentica" examples/queue.agc
+          "$agentica" test tests/bdd/specs/ --steps tests/bdd/handlers.agc
           diff <("$agentica" --seed 7 tests/fixtures/vm/random.agc) <("$agentica" --seed 7 tests/fixtures/vm/random.agc)
           rm -rf "$unpacked"
       - uses: actions/upload-artifact@v4

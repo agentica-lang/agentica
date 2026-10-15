@@ -12,10 +12,10 @@ src/                Racket front end, one module per stage
   stdlib.rkt        embeds stdlib/ as std/
   source.rkt token.rkt diagnostic.rkt   shared data: spans, tokens, diagnostics
   main.rkt          thin CLI: printing and exit codes live only here
-  bdd-driver.rkt    `agentica test`
+  bdd-driver.rkt    `agentica test`: the hand-off to the Agentica driver
 compiler/           front end ported to Agentica, one stage per PR (§35):
                     lexer, parser, modules, builtin catalog, checker, lowering,
-                    bytecode writer
+                    bytecode writer, BDD driver (bdd.agc)
 vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, tasks, I/O, HTTP, JSON
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl

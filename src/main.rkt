@@ -167,42 +167,12 @@
      #:args arguments
      arguments))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "test"))
-    (for ([argument (in-list (cdr raw-arguments))])
-      (when (member argument '("--ai" "--json"))
-        (set! style (if (equal? argument "--json") 'json 'ai))))
-    (define (show-report code text)
-      (display text)
-      (exit code))
-    (define (usage-error message)
-      (call-with-values (lambda () (bdd-usage-report message style seed)) show-report))
-    (define paths '())
-    (define only #f)
-    (let loop ([arguments (cdr raw-arguments)])
-      (cond
-        [(null? arguments) (void)]
-        [(member (car arguments) '("--steps" "--only"))
-         (when (null? (cdr arguments))
-           (usage-error "option needs a value"))
-         (cond
-           [(equal? (car arguments) "--steps") (set! step-files (append step-files (list (cadr arguments))))]
-           [only (usage-error "one --only TEXT")]
-           [(equal? (cadr arguments) "") (usage-error "--only needs a non-empty TEXT")]
-           [else (set! only (cadr arguments))])
-         (loop (cddr arguments))]
-        [(member (car arguments) '("--json" "--ai"))
-         (set! style (if (equal? (car arguments) "--json") 'json 'ai))
-         (loop (cdr arguments))]
-        [(equal? (car arguments) "--allow-run")
-         (set! allow-run? #t)
-         (loop (cdr arguments))]
-        [(string-prefix? (car arguments) "--")
-         (usage-error (format "unknown option ~a" (car arguments)))]
-        [else (set! paths (append paths (list (car arguments)))) (loop (cdr arguments))]))
-    (call-with-values
-     (lambda ()
-       (run-agentica-test paths step-files #:only (or only "")
-                          #:style style #:allow-run allow-run? #:seed seed #:vm (find-vm)))
-     show-report))
+    ;; The BDD driver is a program in Agentica (compiler/bdd.agc): it reads the words after `test` itself, usage errors included.
+    (define-values (code text)
+      (run-agentica-test (cdr raw-arguments) step-files
+                         #:style style #:allow-run allow-run? #:seed seed #:vm (find-vm)))
+    (display text)
+    (exit code))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
     ;; Only help consumes a trailing option; program args stay untouched.
     (when (equal? (last raw-arguments) "--json")
