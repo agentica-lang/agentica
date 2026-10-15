@@ -213,6 +213,8 @@ jobs:
         run: make vm-unicode-check
       - name: make test, with the process and module tests on the built executable alongside
         run: make test-ci
+      - name: Fixed point of the front end (stage2 == stage3, Racket's stage1 == stage2, the single binary compiles stage2)
+        run: make fixed-point
       - name: Slow tests
         run: make test-slow
       - run: make vm-latency
@@ -293,4 +295,7 @@ jobs:
         run: make vm-sanitize-build
       - if: ${{ !cancelled() }}
         run: make vm-sanitize-test
+      - name: Fixed point of the front end on the sanitizer VM and binary
+        if: ${{ !cancelled() }}
+        run: make fixed-point
       - run: make -j"$(nproc)" vm-gc-stress JOBS=4

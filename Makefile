@@ -3,10 +3,16 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
-EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
+EXE_INPUTS := $(wildcard src/*.rkt stdlib/MODULES stdlib/*.agc stdlib/*/*.agc)
 BDD_DRIVER_INPUTS := $(wildcard compiler/*.agc src/*.rkt)
+# The single binary (docs/future/35-self-hosting.md, 35.6) is built beside dist/agentica-vm; Linux only for now. The tests
+# that need it (the whole suite, or tests/test_single_binary.py) build it first.
+ifeq ($(shell uname -s),Linux)
+AGC_NEXT := dist/agentica-next
+endif
+NEXT_TESTS := tests tests/test_single_binary.py
 
-.PHONY: build build-tests bdd-driver test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests bdd-driver test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz stage1 stage2 stage3 fixed-point agentica-next vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -28,6 +34,7 @@ TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency): a directory in TESTS does not pick them up
 PY_ALONE = tests/test_vm_latency.py
+NEXT_PREREQ = $(if $(filter $(NEXT_TESTS),$(TESTS_NORM)),$(AGC_NEXT))
 PY_TESTS = $(sort $(PY_FILES) $(filter-out $(PY_ALONE),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
 # A .py path outside tests/test_<area>.py would build a wrong module name below
 PY_BAD = $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
@@ -38,14 +45,14 @@ RKT_FLAGS ?=
 
 # -k: the unittest run still happens when the rackunit run fails, so one run shows every failure.
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
-test: build vm bdd-driver
+test: build vm bdd-driver $(NEXT_PREREQ)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py AGENTICA_TEST_SLOW=
 
 # The slow tier: the (module+ slow ...) cases of the .rkt files and the @slow cases of the .py files
 # (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after make test; a local run does not.
 # A .rkt file without a slow submodule is skipped; with the flag a .py file runs only its @slow cases.
-test-slow: build vm bdd-driver
+test-slow: build vm bdd-driver $(NEXT_PREREQ)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py RKT_FLAGS="--submodule slow --no-run-if-absent" AGENTICA_TEST_SLOW=1
 
@@ -459,6 +466,60 @@ dist/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_O
 	$(VM_LINK) $(VM_ENTRY)
 
 vm: dist/agentica-vm$(EXE)
+
+# The single binary and its bootstrap (docs/future/35-self-hosting.md, 35.3 and 35.6; docs/vm/08-loader-and-cli.md).
+# The front end is compiler/front_end.agc. Each stage is the .agcb of the front end, in build/stage/:
+#   stage1  compiled by the Racket compiler (src/)
+#   stage2  compiled by stage1, run on dist/agentica-vm with the std/ sources from stdlib/
+#   stage3  compiled by stage2 in the same way
+# The fixed point is stage2 == stage3, byte for byte, and stage1 == stage2 (Racket and the Agentica compiler agree, while
+# Racket exists). stage2 is the front end that dist/agentica-next carries; the binary then compiles it once more with its
+# embedded std/ sources, and that must be stage2 as well.
+# make fixed-point        build the stages and the binary, and check all of the above
+# make agentica-next      dist/agentica-next only (it needs stage1 and stage2)
+STAGE_DIR := build/stage
+FRONT_END_SRC := compiler/front_end.agc
+STD_NAMES := $(shell cat stdlib/MODULES)
+STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
+STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES)
+# The VM runs a stage as: PROGRAM --version V --stdlib DIR -- WORDS (compiler/front_end_inputs.agc)
+STAGE_RUN = dist/agentica-vm$(EXE) -- $< --version $(AGC_VERSION) --stdlib stdlib -- compile $(FRONT_END_SRC) -o $@
+
+$(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(wildcard src/*.rkt) | build
+	@mkdir -p $(STAGE_DIR)
+	racket src/main.rkt compile $(FRONT_END_SRC) -o $@
+
+$(STAGE_DIR)/stage2.agcb: $(STAGE_DIR)/stage1.agcb $(STAGE_INPUTS) dist/agentica-vm$(EXE)
+	$(STAGE_RUN)
+
+$(STAGE_DIR)/stage3.agcb: $(STAGE_DIR)/stage2.agcb $(STAGE_INPUTS) dist/agentica-vm$(EXE)
+	$(STAGE_RUN)
+
+stage1: $(STAGE_DIR)/stage1.agcb
+stage2: $(STAGE_DIR)/stage2.agcb
+stage3: $(STAGE_DIR)/stage3.agcb
+
+# The std/ sources and the front end go into the binary through a generated assembly file with .incbin (not through ccache,
+# which cannot see the files that .incbin reads). Linux and ELF only.
+$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE_DIR)/stage2.agcb $(STD_FILES)
+	@mkdir -p $(VM_BUILD)
+	sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES > $@
+
+$(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(STD_FILES)
+	@mkdir -p $(VM_OBJ)
+	$(VM_CC) -x assembler -c $< -o $@
+
+dist/agentica-next: $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o $(VM_OBJ)/embedded.o $(VM_LINK_LIBS) $(VM_STAMP)
+	@mkdir -p dist
+	$(VM_LINK)
+
+agentica-next: dist/agentica-next
+
+fixed-point: $(STAGE_DIR)/stage1.agcb $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage3.agcb dist/agentica-next
+	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage3.agcb || { echo "fixed point: stage2 and stage3 differ" >&2; exit 1; }
+	cmp $(STAGE_DIR)/stage1.agcb $(STAGE_DIR)/stage2.agcb || { echo "fixed point: Racket's stage1 and stage2 differ" >&2; exit 1; }
+	dist/agentica-next compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
+	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage4.agcb || { echo "fixed point: dist/agentica-next compiles another front end" >&2; exit 1; }
 
 VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/tests/*_test.c))
 .SECONDARY: $(patsubst vm/tests/%.c,$(VM_OBJ)/tests/%.o,$(wildcard vm/tests/*_test.c))
