@@ -1554,8 +1554,9 @@
                                (and field (pair? (cdr field)) (eq? (car (cdr field)) 'Fn))))
                         (format "~a is a function field; call it with .~a.call(...)" name name)]
                        [(and (struct-type? target) (equal? name "with"))
-                        (format "with needs the fields to change, as in .with(field: value); ~a"
-                                (field-help name (hash-ref structs (cadr target))))]
+                        ;; No did-you-mean here: a field close to "with" is not a typo of it.
+                        (format "with needs the fields to change, as in .with(field: value); fields: ~a"
+                                (string-join (map car (hash-ref structs (cadr target))) ", "))]
                        [(struct-type? target)
                         (format "structs have no methods; ~a"
                                 (field-help name (hash-ref structs (cadr target))))]

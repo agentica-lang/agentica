@@ -167,7 +167,8 @@ def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
   elsif field.ok? and T.is(field.unwrap!.type, "Fn")
     return "#{name} is a function field; call it with .#{name}.call(...)"
   elsif name == "with"
-    return "with needs the fields to change, as in .with(field: value); #{Help.field_help(name, fields)}"
+    # No did-you-mean here: a field close to "with" is not a typo of it.
+    return "with needs the fields to change, as in .with(field: value); #{Help.field_list(fields)}"
   end
   return "structs have no methods; #{Help.field_help(name, fields)}"
 end

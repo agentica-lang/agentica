@@ -128,4 +128,5 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
 
 - Lines are at most 119 characters, comments included (`stdlib/agentica.toml`),
   checked by `tests/test_style_line_width.py`.
-- Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into a few sentence-sized pieces joined with `+`, never one piece per line.
+- Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into
+  a few sentence-sized pieces joined with `+`, never one piece per line.
