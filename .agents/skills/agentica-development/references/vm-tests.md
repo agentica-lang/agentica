@@ -2,6 +2,8 @@
 
 What each VM test file covers, and the golden sweep rules.
 
+Read first: `references/vm.md` and `references/vm-c.md`.
+
 ## Files
 
 | Path | Owns |

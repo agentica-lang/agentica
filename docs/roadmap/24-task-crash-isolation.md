@@ -69,7 +69,7 @@ are a proposal for the owner to review.
       `references/bdd.md`);
     - `site/content/library/concurrency/task.md`;
     - `docs/vm/10-io-scheduler.md` §10.2.1 ("As built", "Cancellation");
-    - the development skill (`references/vm.md`).
+    - the development skill (`references/vm-tasks.md`).
   - CHANGELOG: an entry under `[Unreleased]` for any user-visible change.
   - **Done.** As built:
     - `agc_vm_run` runs each turn under its own `setjmp` (`vm->turn`, used while

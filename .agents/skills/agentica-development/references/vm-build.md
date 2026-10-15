@@ -2,6 +2,8 @@
 
 Make targets, the third-party submodules, sanitizers, fuzzing and portability.
 
+Read first: `references/vm.md` and `references/vm-c.md`.
+
 ## Commands
 
 ```sh
@@ -114,15 +116,30 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   fixture exits 2, and `vm-golden-check` without `FIXTURES` exits 2. The
   same names work by hand: `AGENTICA_FIXTURES=name racket
   tests/vm-diff-common.rkt check`. Sidecars next to `<name>.agc`, read by
-  `call-with-fixture`:
-  - `.stdin`: bytes fed to the program's stdin.
-  - `.args`: a Racket list of strings passed as program arguments; `"@tmp"`
-    becomes a fresh temporary directory and `"@fixtures/x"` the path
-    `tests/fixtures/x`.
-  - `.env`: a Racket list of `("NAME" . "value")` pairs added to the
-    environment.
-  - `.channel`: the lines `tests/fixtures/channel-run.py` feeds the program's
-    child channel one at a time (needs `python3`).
+  `call-with-fixture` (the golden test and the `--max-steps` sweep feed `.stdin`
+  and `.args` to the VM):
+  - `.stdin`: raw bytes fed to the program's stdin (`.gitattributes` marks them
+    binary so CRLF survives).
+  - -
+  - `.args`: a Racket list of strings (read with `file->value`) passed as
+    program arguments; `"@tmp"` becomes a fresh empty directory per run, and
+    that path is turned back into `@tmp` in the output before the comparison;
+    `"@fixtures/x"` the path `tests/fixtures/x`. File fixtures (`files-*`) use
+    `@tmp` and long timeouts, and never touch paths outside it. -
+  - `.env`: a Racket list of `("NAME" . "value")` string pairs (read with
+    `file->value`) added to the environment of every VM run of the fixture
+    (`system-env.env`); a program reads only the names it lists and never prints
+    the whole environment. -
+  - `.channel`: the golden run goes through `tests/fixtures/channel-run.py`
+    (Python 3, needed in CI). The wrapper opens a socket pair, hands one end to
+    the VM as fd 3 with `AGENTICA_CHANNEL=3`, sends the first line of the file
+    and one more after each line the VM sends back, closes its sending side
+    after the last, and writes everything to its stdout in the order the child
+    produced it: the child's stdout as it is, each channel line as `channel> `
+    and the line. Stdout is drained before each channel line is shown, which is
+    why the order is fixed. The `test-*` fixtures use it; the plain golden reads
+    of `agentica test` modes (`--agentica-test run`) need a `.channel` file, and
+    a fixture without one is the no-channel case (`test-no-channel`).
   - `process-` name prefix: runs with `--allow-run`.
   - `heavy-fixtures` (in `vm-diff-common.rkt`): fixtures pinned to a shard;
     the others rotate over shards 1 to 7 and shard 8 runs the extras.

@@ -109,8 +109,8 @@ the server).
   "needs the VM" on an evaluator path), `docs/vm/10-io-http.md` §10.6 and §10.7
   (as built), `docs/vm/12-testing-and-pr-plan.md` §12.3,
   `docs/vm/08-loader-and-cli.md` §9 (the refusal), the development skill
-  (`references/vm.md`, `references/stages.md` for the guard), and CHANGELOG
-  ("Added", with the reserved names).
+  (`references/vm-net.md`, `references/stages.md` for the guard), and
+  CHANGELOG ("Added", with the reserved names).
 - [x] 20b **Task cancellation core** (`docs/vm/10-io-scheduler.md` §10.2.1), C
   only, no public API. Parent and children links on each task (a task's running
   children move to its parent when it ends) and `agc_task_cancel` for a ready
@@ -130,8 +130,8 @@ the server).
   `docs/vm/10-io-scheduler.md` §10.2.1 and §10.2.2 (task cancellation, detached
   jobs, the `next_owner` hand-on), `docs/future/27-iteration-and-concurrency.md`
   §27.1 and roadmap 17a (the core is here), `docs/vm/12-testing-and-pr-plan.md`
-  §12.3, the development skill (`references/vm.md`). No CHANGELOG entry: nothing
-  a program can see changes.
+  §12.3, the development skill (`references/vm-net.md`). No CHANGELOG entry:
+  nothing a program can see changes.
 - [x] 20c **Server** (`docs/vm/10-io-http.md` §10.7), the first HTTP server
   since 7i removed the builtin one. It brings back the builtin records
   `HttpServerOptions` (with `request_timeout_ms`, not the old

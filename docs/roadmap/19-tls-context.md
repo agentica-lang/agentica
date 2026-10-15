@@ -40,7 +40,7 @@ one PR with its own tests and docs.
   `references/network.md` and `references/diagnostics.md`,
   `site/content/library/io-and-system/network.md`, `docs/vm/10-io-tls.md` §10.3,
   `docs/vm/05-values-execution-builtins.md` §5.3, the development skill
-  (`references/vm.md`), and one CHANGELOG entry under "Changed" (§29.5).
+  (`references/vm-net.md`), and one CHANGELOG entry under "Changed" (§29.5).
 - [ ] 19b **`TLS.upgrade` (STARTTLS)** (§29.3):
   `TLS.upgrade(socket, context, host, timeout_ms) -> Result[Socket]` over an
   open TCP socket; the role comes from the context (a server context needs

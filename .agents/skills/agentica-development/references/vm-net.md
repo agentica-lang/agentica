@@ -2,20 +2,165 @@
 
 Read before touching processes, the child channel, sockets, OpenSSL or HTTP in `vm/`.
 
+Read first: `references/vm.md` and `references/vm-c.md`.
+
 ## Files
 
 | Path | Owns |
 |---|---|
-| `vm/duplex.c` | the child channel (25c, service; `docs/vm/10-io-processes.md` §10.4 "As built (25c)"; Linux only, stubs elsewhere): an `agc_duplex` is one bidirectional libuv pipe over a socket end with an `agc_inbuf` (line reads, 1 MiB), at most one reader request and one writer request, a reference count (the owner, each request, the pipe handle and the shutdown request) the `overflow` text and the flags `closed`, `write_closed` and `sent`. `agc_duplex_overflow` (called by `process.c` when stdout or stderr is cut) stores the output-exceeds text and readies a pending reader; a read that finds no complete line then returns that error, now or later, and lines already buffered still come first. The jobs are `external` loop jobs with the call's timeout (`duplex_io`, kind name `channel`): a read parks until a line is in the buffer, a send writes with `agc_stream_write` and parks only when the pipe is full; `request_expired` closes the whole channel (`agc_duplex_shut`), so a timeout ends the channel and nothing else; `ECONNRESET` on a read is the end of input. The parent side is used by `process.c` (`agc_duplex_new` over the parent's socket end, `agc_duplex_read_line`, `agc_duplex_send`, `agc_duplex_close_write`, which ignores a `uv_shutdown` that fails on the spot (`ENOTCONN` when the peer is gone), `agc_duplex_overflow`, `agc_duplex_release`); the child side is `agc_parent_take` (called by `main.c` after `agc_files_init`: takes fd 3 only with `AGENTICA_CHANNEL=3`, a socket or a FIFO opened `O_RDWR` (`F_GETFL`; a one-way FIFO would fail the read start and park `Test.run` for ever), moves it with `F_DUPFD_CLOEXEC`, forgets it in the inherited-file table, removes the variable, registers the duplex as `vm->parent`; the libuv handle is attached on first use), the builtins `Process.parent_read_line` and `Process.parent_send` (a positive timeout, the `vm->parent_locks` pair; `error("process: no parent channel")` without a channel; `process: the channel is in use` only when a request in that direction is already pending, which keeps a test's call from sharing a buffer with `Test.run`'s retry-style request) and the functions `Test.run` uses (`agc_parent_open`, true when the channel exists and is not closed, and `agc_parent_line` and `agc_parent_send`, which park the calling task with `task->retry`, without a timeout) |
-| `vm/process.c` | the `Process` builtins and `System.env` (`agc_process_builtins`, Linux only; `docs/vm/10-io-processes.md` §10.4): `System.env` (`builtin_env`) scans `host_env()` (the one block-scope `extern char **environ`) for the first `name=` entry and decodes the value with U+FFFD per bad byte; a name that is empty, or has `=` or NUL, and an unset name are error Results; `own_env` says which entries the VM keeps for itself (`AGENTICA_CHANNEL`, and `UV_USE_IO_URING` when `drop_uring_env`), and both `builtin_env` and `child_env` skip them; no flag and no `no_files` check, since `File.read_text("/proc/self/environ")` already reads the same data; a GC `agc_process` with the registered `state` resource and two unregistered lock records (`reader`, `writer`) for `agc_handle_wait`; a `malloc`'d `proc` with the `uv_process_t`, three `uv_pipe_t` (real pipes from `uv_pipe` given with `UV_INHERIT_FD`), the stdout buffer and the pending requests, freed when its user count (resource and requests) and handle count (close callbacks) reach zero; requests park on `external` jobs that pipe, write and exit callbacks ready with `agc_io_ready`; stdout is read only while a reader waits, 4 KiB at a time (more only for a bigger `read_bytes`); stderr is forwarded in its read callback; one close path (`shut`: `SIGKILL`, with no `waitpid` and no sleep anywhere in the file; libuv's exit callback `exited` reaps the child and `retire` closes its `uv_process_t`; a failed kill in `Process.close` is `RUNTIME-PROCESS-CLOSE`) for `close`, stream timeouts and the end of run; `Process.close` of a plain child that still runs parks its task on a `REQ_CLOSE` request (an `external` job with a 1 s timer, kept in `waits`, readied by `exited`; `expired` returns `Void`, so a child in uninterruptible sleep is not waited for), while every other close only signals (§10.4 Close); the park is skipped when the kill failed; the per-run guard (a registered resource, `vm->process_guard`): the list of running children and the loop; `agc_processes_stop`, the first step of the one exit path (stop signals are `vm/loop.c`'s, not the guard's), calls `close_children` (once per run: a second call returns at once), which sends the signals and then `await_exits`: `uv_run` ONCE under a 1 s stack timer until the awaited children (kill not failed) have exited, and `unlink_child` clears `proc.g` so a release after the guard is freed never reaches it; the first spawn marks inherited descriptors above 2 close-on-exec (`agc_each_fd`); executable lookup (`PATH` only for a bare name, the working directory for a name with `/`); captured children (`Process.spawn_captured`, `Process.output`, 21a, §10.4 "As built (21a)"): `spawn_child` serves both spawns, `cwd` from `dir`, both pipes read from the spawn on into `out_buf` and `err_kept` held to 1 MiB of capacity (near the limit a chunk goes to the scratch buffer and `keep_scratch` copies what fits; `out_cut`, `err_cut`, then dropped into the scratch buffer), `output` a wait like `wait` (`await_child`), and a close that sends `SIGTERM` and starts the 1 s `grace` timer for `SIGKILL` (`retire` closes the timer and the process handle once the child is gone); the end of the run waits for captured children under one `await_exits` bound before it kills them (a second bound waits for the exits); the child channel (25c, §10.4 "As built (25c)"): `Process.spawn_channel` is `spawn_child` with `channel` true: a `uv_socketpair`, a fourth stdio slot that hands the child end over as fd 3, and `child_env`, which rebuilds the child environment on every spawn (it removes `AGENTICA_CHANNEL`, removes `UV_USE_IO_URING` when `drop_uring_env`, and adds `AGENTICA_CHANNEL=3` for a channel spawn only, as a separate `marker` string the caller frees; `AGC_CHANNEL_ENV` and `AGC_CHANNEL_FD` are in `vm/services.h`); the parent end is an `agc_duplex` (`vm/duplex.c`) in `proc.channel`, and the `agc_process` has a third pair of lock records, `channel.reader` and `channel.writer`; `channel_read_line`, `channel_send` and `channel_close` call the duplex functions with those locks, `shut` closes the channel with the pipes, and `read_available` drains the stdout pipe with non-blocking `read`s (`drain_out`, at most `DRAIN_LIMIT` = 2 MiB per call, into `out_buf` through the same cut rules) before it consumes the pending bytes, holding back an incomplete UTF-8 sequence at the end (`whole_prefix`, up to 3 bytes) unless the stream ended or failed, and takes them out with `agc_inbuf_take`; the trace line of a spawn has `channel=` |
+| `vm/duplex.c` | The child channel (fd 3) and the duplex stream of `Process.spawn_channel` (Linux only). |
+| `vm/process.c` | The `Process` builtins and `System.env`, behind `--allow-run` (Linux only). |
 | `vm/stream.c` | what processes and TCP share (`docs/vm/10-io-tls.md` §10.3.1): `agc_inbuf` (one `malloc`'d input buffer with EOF and a sticky read error; `agc_inbuf_room` for libuv's alloc callback, `agc_inbuf_got` for its read callback, `agc_inbuf_ready`, `agc_inbuf_want` for the read size: 4 KiB or what a byte read still needs), `agc_inbuf_take` (drop the first bytes of the pending data and keep `scanned` right), `agc_inbuf_line` (LF in the first 1 MiB + 1 bytes, searched once per byte through `scanned`, CRLF stripped, a final line only at EOF, the read error when bytes without LF end in an error, the caller's texts for too long and end of input; it says when the line was too long so the caller closes) and `agc_inbuf_bytes`, `agc_stream_write` (`uv_try_write`, then one `uv_write` of a `malloc`'d copy in buffers of at most 1 GiB; 0 written, 1 queued, or a libuv error), `agc_new_lock` and `agc_stream_lock` (an unregistered lock record, and the timeout check plus `agc_handle_wait`), and the `network:` timeout texts |
 | `vm/tcp.c` | the `TCP` and `TLS` builtins (`agc_tcp_builtins`, Linux only; §10.3.1, TLS in §10.3): one `malloc`'d `net` for a socket or a listener (users: the resource and each request; callbacks: a DNS lookup in flight and one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its `uv_connect_t` that finds the `net` through `owner`), registered when the call starts, so a crash or the in-process harnesses' `agc_io_close` closes it; the VM's own end of the run closes no socket one by one (`_exit` does), and only calls the `goodbye` hook for TLS `close_notify`; requests park on `external` jobs (`park`): connect resolves with `uv_getaddrinfo` and tries each address with a fresh link (`attempt` takes its callback as an argument, so no prototype is needed), listen binds every resolved address on one port (one link per address, chained through `next`; `bind_all` retries a port-0 listen when a later address finds the port taken), accept is one FIFO for all links whose head is marked served by a link's connection callback (`chosen`) and calls `uv_accept` in its `done` half (a failed `uv_accept` closes the listener, since libuv stops watching that link), reads and writes use the `agc_socket` reader and writer locks and `vm/stream.c`; `shut` is the one close (trace `why`), and wakes every waiting request; `no_files` (the fuzzer) makes connect and listen fail with `RUNTIME-INTERNAL` |
 | `vm/net.h` | tcp.c's connection object for other C modules (`agc_conn`, `docs/vm/10-io-http.md` §10.7.1): `agc_conn_open` (DNS, connect, TLS with a borrowed `agc_tls_config`) with a watch callback that runs on every state change, `agc_conn_send`/`agc_conn_sent`, `agc_conn_input`/`agc_conn_read` (the `agc_inbuf`), `agc_conn_ready`/`agc_conn_failed`/`agc_conn_error`, `agc_conn_shut` and `agc_conn_release`; also `agc_tls_load_error` |
 | `vm/http_parse.h`, `vm/http_pico.c`, `vm/http_body.c` | the HTTP head adapter and body decoder (§10.6, §10.6.1): limits as constants, `agc_http_error` with its status and text, `agc_http_parse_request_head`/`_response_head` (our pre-scan and start-line checks, then picohttpparser, then token, value, obs-fold, Host and status checks), `agc_http_framing`, and the body decoder (`agc_http_body_init/feed/end/free`: Content-Length, chunked with saturating sizes and checked trailers, close-delimited, one `malloc`'d buffer within the limit). No recursion |
 | `vm/http_fields.h`, `vm/http_fields.c` | what the client and the server share (`agc_http_closes` on a parsed head and `agc_http_list_closes` on a `List[Header]` use one token check): a growable byte buffer (`agc_http_put`), the header writer with its checks and the managed names (`agc_http_put_headers`, which returns a reason without the `http: ` prefix), the kept header fields (`agc_http_fields`, names lowercased) and their `List[Header]` (`agc_http_header_list`), `agc_http_closes` and `agc_http_error_result` |
-| `vm/http_server.c` | `HttpWire.read_request`, `write_response`, `server`, `accept`, `spawn`, `close_server`, `wait` and `local_port` (`agc_http_server_builtins`, Linux only, a stub table elsewhere; §10.7): a `reader` state machine on an `agc_conn` watch (first byte, head, body, answer) that applies the order of `docs/vm/10-io-http.md` §10.7.3 (parse errors, `Upgrade` 501, `Expect` 417, the `Content-Length` limit 413, then `100 Continue`, then the body and its UTF-8 check), writes every error answer itself, then lingers (`linger`: half-close and drop input until the peer closes or the deadline, so no reset loses the answer); the deadline is `first_byte_timeout_ms` until the first byte, then `agc_io_extend` restarts it with `timeout_ms`; a finished request pauses reading (`agc_conn_pause`) until the next `read_request`, so pipelined bytes cannot pile up while a response is written. `write_response` takes the request and the response, builds the whole response first (status 200..599, no body on 204 and 304 or for `HEAD`, `Content-Length` and `Transfer-Encoding` managed, a `Date` header; when the request or response says `Connection: close` (`agc_http_list_closes`), the handler's `Connection` headers are dropped for one `Connection: close`), returns `http: invalid response: ...` without writing when it is bad, else `ok(keep)`, and lingers before a close. The `HttpServer` holds a `server` (listener, open count, `max`, waiting `accept` and `wait` jobs poked by the listener watch, a freed slot and the close) and a group node (`agc_task_group`) in which `server` starts `std/http`'s accept loop: `spawn` starts the connection task under it with `agc_task_spawn_owning` (the hand-off of `Task.spawn_owning`: the socket goes to the connection task), marks it `hidden` and sets its `end` hook, which only frees the slot (the one close path, `finish_task`, closes the socket first); `close_server` (also the owned close) closes the listener, wakes the waiters and cancels the group (`agc_task_cancel`: each cancelled task closes the handles it owns as it ends; the closes may nest, which is safe because each takes the head of its own task's list). Every wait is an `external` job with a `cancel` half |
+| `vm/http_server.c` | The `HttpWire` server builtins: request reading, response writing and the server task group (Linux only). |
 | `vm/http_client.c` | `HttpWire.client`, `exchange` and `close_client` (`agc_http_builtins`, Linux only, a stub table elsewhere; §10.7.1): a `malloc`'d `client` per handle with its origins (idle connections, open slots, a FIFO of waiting exchanges), one idle timer and a lazily built `agc_tls_config` (a pool job on the first HTTPS call); each `exchange` parks on an `external` job and moves through config, wait, connect and exchange phases on `agc_conn` watches; a `runnable` queue (`schedule`/`drain`) and callbacks stored in the client avoid both static prototypes and call cycles. GC values (the `HttpResponse`) are built only in `done`. Its `cancel` half (20b): an exchange of a cancelled task that has not sent its request leaves the queue or closes its connection, so its slot passes to the next waiter; one that has sent it runs to its end and is not pooled. Its `goodbye` (`client_goodbye`) sends one TLS close_notify on every idle and active connection when the run ends |
 | `vm/tls.h`, `vm/tls_openssl.c` | the TLS adapter (`docs/vm/10-io-tls.md` §10.3): our own types (`agc_tls_config`, `agc_tls`, status OK, WANT_READ, WANT_WRITE, CLOSED or ERROR, `agc_tls_error`, `agc_tls_failure` with code, `errno` and a short detail); `vm/tls_openssl.c` is the only file that includes OpenSSL: init with `OPENSSL_INIT_NO_LOAD_CONFIG \| OPENSSL_INIT_NO_ATEXIT`, TLS 1.2 and security level 2, trust (`SSL_CERT_FILE` or the first readable bundle of a fixed list, `SSL_CERT_DIR` or none; a non-empty `ca_file` replaces them), SNI and `SSL_set1_host` or `X509_VERIFY_PARAM_set1_ip_asc`, two memory BIOs per session, error-queue draining into our codes; stubs that fail with "TLS needs Linux" elsewhere |
+
+- `vm/duplex.c`
+  - the child channel (25c, service; `docs/vm/10-io-processes.md` §10.4 "As
+    built (25c)"; Linux only, stubs elsewhere): an `agc_duplex` is one
+    bidirectional libuv pipe over a socket end with an `agc_inbuf` (line reads,
+    1 MiB), at most one reader request and one writer request, a reference count
+    (the owner, each request, the pipe handle and the shutdown request) the
+    `overflow` text and the flags `closed`, `write_closed` and `sent`.
+  - `agc_duplex_overflow` (called by `process.c` when stdout or stderr is cut)
+    stores the output-exceeds text and readies a pending reader
+  - a read that finds no complete line then returns that error, now or later,
+    and lines already buffered still come first.
+  - The jobs are `external` loop jobs with the call's timeout (`duplex_io`, kind
+    name `channel`): a read parks until a line is in the buffer, a send writes
+    with `agc_stream_write` and parks only when the pipe is full
+  - `request_expired` closes the whole channel (`agc_duplex_shut`), so a timeout
+    ends the channel and nothing else
+  - `ECONNRESET` on a read is the end of input.
+  - The parent side is used by `process.c` (`agc_duplex_new` over the parent's
+    socket end, `agc_duplex_read_line`, `agc_duplex_send`,
+    `agc_duplex_close_write`, which ignores a `uv_shutdown` that fails on the
+    spot (`ENOTCONN` when the peer is gone), `agc_duplex_overflow`,
+    `agc_duplex_release`)
+  - the child side is `agc_parent_take` (called by `main.c` after
+    `agc_files_init`: takes fd 3 only with `AGENTICA_CHANNEL=3`, a socket or a
+    FIFO opened `O_RDWR` (`F_GETFL`; a one-way FIFO would fail the read start
+    and park `Test.run` for ever), moves it with `F_DUPFD_CLOEXEC`, forgets it
+    in the inherited-file table, removes the variable, registers the duplex as
+    `vm->parent`; the libuv handle is attached on first use), the builtins
+    `Process.parent_read_line` and `Process.parent_send` (a positive timeout,
+    the `vm->parent_locks` pair; `error("process: no parent channel")` without a
+    channel; `process: the channel is in use` only when a request in that
+    direction is already pending, which keeps a test's call from sharing a
+    buffer with `Test.run`'s retry-style request) and the functions `Test.run`
+    uses (`agc_parent_open`, true when the channel exists and is not closed, and
+    `agc_parent_line` and `agc_parent_send`, which park the calling task with
+    `task->retry`, without a timeout)
+- `vm/process.c`
+  - the `Process` builtins and `System.env` (`agc_process_builtins`, Linux only;
+    `docs/vm/10-io-processes.md` §10.4): `System.env` (`builtin_env`) scans
+    `host_env()` (the one block-scope `extern char **environ`) for the first
+    `name=` entry and decodes the value with U+FFFD per bad byte
+  - a name that is empty, or has `=` or NUL, and an unset name are error Results
+  - `own_env` says which entries the VM keeps for itself (`AGENTICA_CHANNEL`,
+    and `UV_USE_IO_URING` when `drop_uring_env`), and both `builtin_env` and
+    `child_env` skip them
+  - no flag and no `no_files` check, since
+    `File.read_text("/proc/self/environ")` already reads the same data
+  - a GC `agc_process` with the registered `state` resource and two unregistered
+    lock records (`reader`, `writer`) for `agc_handle_wait`
+  - a `malloc`'d `proc` with the `uv_process_t`, three `uv_pipe_t` (real pipes
+    from `uv_pipe` given with `UV_INHERIT_FD`), the stdout buffer and the
+    pending requests, freed when its user count (resource and requests) and
+    handle count (close callbacks) reach zero
+  - requests park on `external` jobs that pipe, write and exit callbacks ready
+    with `agc_io_ready`
+  - stdout is read only while a reader waits, 4 KiB at a time (more only for a
+    bigger `read_bytes`)
+  - stderr is forwarded in its read callback
+  - one close path (`shut`: `SIGKILL`, with no `waitpid` and no sleep anywhere
+    in the file; libuv's exit callback `exited` reaps the child and `retire`
+    closes its `uv_process_t`; a failed kill in `Process.close` is
+    `RUNTIME-PROCESS-CLOSE`) for `close`, stream timeouts and the end of run
+  - `Process.close` of a plain child that still runs parks its task on a
+    `REQ_CLOSE` request (an `external` job with a 1 s timer, kept in `waits`,
+    readied by `exited`; `expired` returns `Void`, so a child in uninterruptible
+    sleep is not waited for), while every other close only signals (§10.4 Close)
+  - the park is skipped when the kill failed
+  - the per-run guard (a registered resource, `vm->process_guard`): the list of
+    running children and the loop
+  - `agc_processes_stop`, the first step of the one exit path (stop signals are
+    `vm/loop.c`'s, not the guard's), calls `close_children` (once per run: a
+    second call returns at once), which sends the signals and then
+    `await_exits`: `uv_run` ONCE under a 1 s stack timer until the awaited
+    children (kill not failed) have exited, and `unlink_child` clears `proc.g`
+    so a release after the guard is freed never reaches it
+  - the first spawn marks inherited descriptors above 2 close-on-exec
+    (`agc_each_fd`)
+  - executable lookup (`PATH` only for a bare name, the working directory for a
+    name with `/`)
+  - captured children (`Process.spawn_captured`, `Process.output`, 21a, §10.4
+    "As built (21a)"): `spawn_child` serves both spawns, `cwd` from `dir`, both
+    pipes read from the spawn on into `out_buf` and `err_kept` held to 1 MiB of
+    capacity (near the limit a chunk goes to the scratch buffer and
+    `keep_scratch` copies what fits; `out_cut`, `err_cut`, then dropped into the
+    scratch buffer), `output` a wait like `wait` (`await_child`), and a close
+    that sends `SIGTERM` and starts the 1 s `grace` timer for `SIGKILL`
+    (`retire` closes the timer and the process handle once the child is gone)
+  - the end of the run waits for captured children under one `await_exits` bound
+    before it kills them (a second bound waits for the exits)
+  - the child channel (25c, §10.4 "As built (25c)"): `Process.spawn_channel` is
+    `spawn_child` with `channel` true: a `uv_socketpair`, a fourth stdio slot
+    that hands the child end over as fd 3, and `child_env`, which rebuilds the
+    child environment on every spawn (it removes `AGENTICA_CHANNEL`, removes
+    `UV_USE_IO_URING` when `drop_uring_env`, and adds `AGENTICA_CHANNEL=3` for a
+    channel spawn only, as a separate `marker` string the caller frees;
+    `AGC_CHANNEL_ENV` and `AGC_CHANNEL_FD` are in `vm/services.h`)
+  - the parent end is an `agc_duplex` (`vm/duplex.c`) in `proc.channel`, and the
+    `agc_process` has a third pair of lock records, `channel.reader` and
+    `channel.writer`
+  - `channel_read_line`, `channel_send` and `channel_close` call the duplex
+    functions with those locks, `shut` closes the channel with the pipes, and
+    `read_available` drains the stdout pipe with non-blocking `read`s
+    (`drain_out`, at most `DRAIN_LIMIT` = 2 MiB per call, into `out_buf` through
+    the same cut rules) before it consumes the pending bytes, holding back an
+    incomplete UTF-8 sequence at the end (`whole_prefix`, up to 3 bytes) unless
+    the stream ended or failed, and takes them out with `agc_inbuf_take`
+  - the trace line of a spawn has `channel=`
+- `vm/http_server.c`
+  - `HttpWire.read_request`, `write_response`, `server`, `accept`, `spawn`,
+    `close_server`, `wait` and `local_port` (`agc_http_server_builtins`, Linux
+    only, a stub table elsewhere; §10.7): a `reader` state machine on an
+    `agc_conn` watch (first byte, head, body, answer) that applies the order of
+    `docs/vm/10-io-http.md` §10.7.3 (parse errors, `Upgrade` 501, `Expect` 417,
+    the `Content-Length` limit 413, then `100 Continue`, then the body and its
+    UTF-8 check), writes every error answer itself, then lingers (`linger`:
+    half-close and drop input until the peer closes or the deadline, so no reset
+    loses the answer)
+  - the deadline is `first_byte_timeout_ms` until the first byte, then
+    `agc_io_extend` restarts it with `timeout_ms`
+  - a finished request pauses reading (`agc_conn_pause`) until the next
+    `read_request`, so pipelined bytes cannot pile up while a response is
+    written.
+  - `write_response` takes the request and the response, builds the whole
+    response first (status 200..599, no body on 204 and 304 or for `HEAD`,
+    `Content-Length` and `Transfer-Encoding` managed, a `Date` header; when the
+    request or response says `Connection: close` (`agc_http_list_closes`), the
+    handler's `Connection` headers are dropped for one `Connection: close`),
+    returns `http: invalid response: ...` without writing when it is bad, else
+    `ok(keep)`, and lingers before a close.
+  - The `HttpServer` holds a `server` (listener, open count, `max`, waiting
+    `accept` and `wait` jobs poked by the listener watch, a freed slot and the
+    close) and a group node (`agc_task_group`) in which `server` starts
+    `std/http`'s accept loop: `spawn` starts the connection task under it with
+    `agc_task_spawn_owning` (the hand-off of `Task.spawn_owning`: the socket
+    goes to the connection task), marks it `hidden` and sets its `end` hook,
+    which only frees the slot (the one close path, `finish_task`, closes the
+    socket first)
+  - `close_server` (also the owned close) closes the listener, wakes the waiters
+    and cancels the group (`agc_task_cancel`: each cancelled task closes the
+    handles it owns as it ends; the closes may nest, which is safe because each
+    takes the head of its own task's list).
+  - Every wait is an `external` job with a `cancel` half
 
 ## Design notes
 
