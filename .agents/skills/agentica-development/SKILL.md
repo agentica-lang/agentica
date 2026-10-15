@@ -67,7 +67,7 @@ runs everything else (`references/ci.md`, "What CI runs").
 | AST node | by default waits for the parser port (35.4 step 2); then `compiler/` |
 | syntax form | by default waits for the parser port; `src/parser.rkt` only for a bug fix |
 | diagnostic code | where the problem is found; prefix `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-` (`references/stages.md` lists them) |
-| builtin | `src/builtins.rkt` metadata, checker rule, the `vm-builtins` table in `src/lower.rkt`, C in `vm/`, a golden (`references/vm-builtins.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
+| builtin | `src/builtins.rkt` metadata, checker rule, the `vm-builtins` table in `src/lower.rkt` and `VM_BUILTINS` in `compiler/lower_tables.agc` (a test enforces that they match), C in `vm/`, a golden (`references/vm-builtins.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | pipeline stage | `src/<stage>.rkt`, wired in `src/main.rkt`, `tests/<stage>-test.rkt` |
 | `std/` module | `stdlib/<name>.agc`, registered in `src/stdlib.rkt`, a doc on the module and every export, comments as `references/library-notes.md` says |

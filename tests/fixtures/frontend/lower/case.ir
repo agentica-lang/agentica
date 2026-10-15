@@ -1,0 +1,303 @@
+program 0:1:1-72:1 entry=6 globals=0
+source 0 "case.agc" chars=1249
+enum "Shape" v0="Dot"/0 v1="Circle"/1 v2="Rect"/2
+fn0 "area" params=1 captures=0 slots=5 @ 0:7:1-14:1
+    step @ 0:8:3-13:1
+    step @ 0:8:8-8:13
+    is-variant r1 r0 v0 @ 0:9:5-9:14
+    jump-if-false r1 L1 @ 0:9:5-9:14
+    step @ 0:9:18-10:1
+    step @ 0:9:25-9:28
+    const r1 float:bits:0 @ 0:9:25-9:28
+    return r1 @ 0:9:18-10:1
+    jump L0 @ 0:8:3-13:1
+  L1:
+    is-variant r1 r0 v1 @ 0:10:5-10:20
+    jump-if-false r1 L2 @ 0:10:5-10:20
+    payload r1 r0 0 @ 0:10:5-10:20
+    step @ 0:10:24-11:1
+    step @ 0:10:31-10:42
+    step @ 0:10:31-10:36
+    step @ 0:10:31-10:32
+    step @ 0:10:35-10:36
+    mul-f r3 r1 r1 @ 0:10:33-10:34
+    step @ 0:10:39-10:42
+    const r4 float:bits:4613937818241073152 @ 0:10:39-10:42
+    mul-f r2 r3 r4 @ 0:10:37-10:38
+    return r2 @ 0:10:24-11:1
+    jump L0 @ 0:8:3-13:1
+  L2:
+    is-variant r1 r0 v2 @ 0:11:5-11:21
+    jump-if-false r1 L3 @ 0:11:5-11:21
+    payload r1 r0 0 @ 0:11:5-11:21
+    step @ 0:11:25-12:1
+    step @ 0:11:32-11:33
+    return r1 @ 0:11:25-12:1
+  L3:
+  L0:
+    const r1 void @ 0:7:1-14:1
+    return r1 @ 0:7:1-14:1
+fn1 "describe" params=1 captures=0 slots=2 @ 0:15:1-24:1
+    step @ 0:16:3-23:1
+    step @ 0:16:8-16:9
+    const r1 int:1 @ 0:17:5-17:6
+    same r1 r0 r1 @ 0:17:5-17:6
+    jump-if-false r1 L1 @ 0:17:5-17:6
+    step @ 0:17:10-18:1
+    step @ 0:17:17-17:22
+    const r1 "one" @ 0:17:17-17:22
+    return r1 @ 0:17:10-18:1
+    jump L0 @ 0:16:3-23:1
+  L1:
+    const r1 int:-2 @ 0:18:5-18:7
+    same r1 r0 r1 @ 0:18:5-18:7
+    jump-if-false r1 L2 @ 0:18:5-18:7
+    step @ 0:18:11-19:1
+    step @ 0:18:18-18:29
+    const r1 "minus two" @ 0:18:18-18:29
+    return r1 @ 0:18:11-19:1
+    jump L0 @ 0:16:3-23:1
+  L2:
+    const r1 int:-9223372036854775808 @ 0:19:5-19:25
+    same r1 r0 r1 @ 0:19:5-19:25
+    jump-if-false r1 L3 @ 0:19:5-19:25
+    step @ 0:19:29-20:1
+    step @ 0:19:36-19:41
+    const r1 "min" @ 0:19:36-19:41
+    return r1 @ 0:19:29-20:1
+    jump L0 @ 0:16:3-23:1
+  L3:
+    jump L4 @ 0:20:5-20:24
+    step @ 0:20:28-21:1
+    step @ 0:20:35-20:43
+    const r1 "beyond" @ 0:20:35-20:43
+    return r1 @ 0:20:28-21:1
+    jump L0 @ 0:16:3-23:1
+  L4:
+    step @ 0:21:10-22:1
+    step @ 0:21:17-21:23
+    const r1 "many" @ 0:21:17-21:23
+    return r1 @ 0:21:10-22:1
+  L5:
+  L0:
+    const r1 void @ 0:15:1-24:1
+    return r1 @ 0:15:1-24:1
+fn2 "word" params=1 captures=0 slots=2 @ 0:25:1-34:1
+    step @ 0:26:3-33:1
+    step @ 0:26:8-26:9
+    const r1 "a" @ 0:27:5-27:8
+    same r1 r0 r1 @ 0:27:5-27:8
+    jump-if-false r1 L1 @ 0:27:5-27:8
+    step @ 0:27:12-28:1
+    step @ 0:27:19-27:20
+    const r1 int:1 @ 0:27:19-27:20
+    return r1 @ 0:27:12-28:1
+    jump L0 @ 0:26:3-33:1
+  L1:
+    const r1 "b" @ 0:28:5-28:8
+    same r1 r0 r1 @ 0:28:5-28:8
+    jump-if-false r1 L2 @ 0:28:5-28:8
+    step @ 0:29:7-30:1
+    step @ 0:29:7-29:16
+    step @ 0:29:12-29:15
+    const r1 "b" @ 0:29:12-29:15
+    call-builtin r1 "puts" 1 @ 0:29:7-29:16 0:29:12-29:15
+    step @ 0:30:7-31:1
+    step @ 0:30:14-30:15
+    const r1 int:2 @ 0:30:14-30:15
+    return r1 @ 0:30:7-31:1
+    jump L0 @ 0:26:3-33:1
+  L2:
+    step @ 0:31:10-32:1
+    step @ 0:31:17-31:18
+    const r1 int:0 @ 0:31:17-31:18
+    return r1 @ 0:31:10-32:1
+  L3:
+  L0:
+    const r1 void @ 0:25:1-34:1
+    return r1 @ 0:25:1-34:1
+fn3 "flag" params=3 captures=0 slots=4 @ 0:35:1-51:1
+    step @ 0:36:3-41:1
+    step @ 0:36:8-36:9
+    const r3 true @ 0:37:5-37:9
+    same r3 r0 r3 @ 0:37:5-37:9
+    jump-if-false r3 L1 @ 0:37:5-37:9
+    step @ 0:37:13-38:1
+    step @ 0:37:13-37:24
+    step @ 0:37:18-37:23
+    const r3 "yes" @ 0:37:18-37:23
+    call-builtin r3 "puts" 1 @ 0:37:13-37:24 0:37:18-37:23
+    jump L0 @ 0:36:3-41:1
+  L1:
+    const r3 false @ 0:38:5-38:10
+    same r3 r0 r3 @ 0:38:5-38:10
+    jump-if-false r3 L2 @ 0:38:5-38:10
+    step @ 0:38:14-39:1
+    step @ 0:38:14-38:24
+    step @ 0:38:19-38:23
+    const r3 "no" @ 0:38:19-38:23
+    call-builtin r3 "puts" 1 @ 0:38:14-38:24 0:38:19-38:23
+    jump L0 @ 0:36:3-41:1
+  L2:
+    step @ 0:39:10-40:1
+    step @ 0:39:10-39:19
+    step @ 0:39:15-39:18
+    const r3 "?" @ 0:39:15-39:18
+    call-builtin r3 "puts" 1 @ 0:39:10-39:19 0:39:15-39:18
+  L3:
+  L0:
+    step @ 0:41:3-46:1
+    step @ 0:41:8-41:9
+    const r3 float:bits:4609434218613702656 @ 0:42:5-42:8
+    same r3 r1 r3 @ 0:42:5-42:8
+    jump-if-false r3 L5 @ 0:42:5-42:8
+    step @ 0:42:12-43:1
+    step @ 0:42:12-42:34
+    step @ 0:42:17-42:33
+    const r3 "one and a half" @ 0:42:17-42:33
+    call-builtin r3 "puts" 1 @ 0:42:12-42:34 0:42:17-42:33
+    jump L4 @ 0:41:3-46:1
+  L5:
+    const r3 float:bits:-4620693217682128896 @ 0:43:5-43:9
+    same r3 r1 r3 @ 0:43:5-43:9
+    jump-if-false r3 L6 @ 0:43:5-43:9
+    step @ 0:43:13-44:1
+    step @ 0:43:13-43:34
+    step @ 0:43:18-43:33
+    const r3 "negative half" @ 0:43:18-43:33
+    call-builtin r3 "puts" 1 @ 0:43:13-43:34 0:43:18-43:33
+    jump L4 @ 0:41:3-46:1
+  L6:
+    step @ 0:44:10-45:1
+    step @ 0:44:10-44:23
+    step @ 0:44:15-44:22
+    const r3 "float" @ 0:44:15-44:22
+    call-builtin r3 "puts" 1 @ 0:44:10-44:23 0:44:15-44:22
+  L7:
+  L4:
+    step @ 0:46:3-50:1
+    step @ 0:46:8-46:9
+    const r3 nil @ 0:47:5-47:8
+    same r3 r2 r3 @ 0:47:5-47:8
+    jump-if-false r3 L9 @ 0:47:5-47:8
+    step @ 0:47:12-48:1
+    step @ 0:47:12-47:23
+    step @ 0:47:17-47:22
+    const r3 "nil" @ 0:47:17-47:22
+    call-builtin r3 "puts" 1 @ 0:47:12-47:23 0:47:17-47:22
+    jump L8 @ 0:46:3-50:1
+  L9:
+    step @ 0:48:10-49:1
+    step @ 0:48:10-48:23
+    step @ 0:48:15-48:22
+    const r3 "other" @ 0:48:15-48:22
+    call-builtin r3 "puts" 1 @ 0:48:10-48:23 0:48:15-48:22
+  L10:
+  L8:
+    const r3 void @ 0:35:1-51:1
+    return r3 @ 0:35:1-51:1
+fn4 "check" params=1 captures=0 slots=4 @ 0:52:1-58:1
+    step @ 0:53:3-57:1
+    step @ 0:53:8-53:9
+    is-ok r1 r0 @ 0:54:5-54:10
+    jump-if-false r1 L1 @ 0:54:5-54:10
+    result-value r1 r0 @ 0:54:5-54:10
+    step @ 0:54:14-55:1
+    step @ 0:54:21-54:30
+    const r2 "ok " @ 0:54:21-54:30
+    step @ 0:54:27-54:28
+    move r3 r1 @ 0:54:27-54:28
+    to-text r3 r3 @ 0:54:21-54:30
+    concat r2 r2 r3 @ 0:54:21-54:30
+    return r2 @ 0:54:14-55:1
+    jump L0 @ 0:53:3-57:1
+  L1:
+    is-ok r1 r0 @ 0:55:5-55:19
+    jump-if-true r1 L2 @ 0:55:5-55:19
+    result-value r1 r0 @ 0:55:5-55:19
+    step @ 0:55:23-56:1
+    step @ 0:55:30-55:37
+    return r1 @ 0:55:23-56:1
+  L2:
+  L0:
+    const r1 void @ 0:52:1-58:1
+    return r1 @ 0:52:1-58:1
+fn5 "check_void" params=1 captures=0 slots=3 @ 0:59:1-65:1
+    step @ 0:60:3-64:1
+    step @ 0:60:8-60:9
+    is-ok r1 r0 @ 0:61:5-61:17
+    jump-if-false r1 L1 @ 0:61:5-61:17
+    step @ 0:61:21-62:1
+    step @ 0:61:21-61:33
+    step @ 0:61:26-61:32
+    const r1 "fine" @ 0:61:26-61:32
+    call-builtin r1 "puts" 1 @ 0:61:21-61:33 0:61:26-61:32
+    jump L0 @ 0:60:3-64:1
+  L1:
+    is-ok r1 r0 @ 0:62:5-62:18
+    jump-if-true r1 L2 @ 0:62:5-62:18
+    result-value r1 r0 @ 0:62:5-62:18
+    step @ 0:62:22-63:1
+    step @ 0:62:22-62:29
+    step @ 0:62:27-62:28
+    move r2 r1 @ 0:62:27-62:28
+    call-builtin r2 "puts" 1 @ 0:62:22-62:29 0:62:27-62:28
+  L2:
+  L0:
+    const r1 void @ 0:59:1-65:1
+    return r1 @ 0:59:1-65:1
+fn6 "main" params=0 captures=0 slots=5 entry @ 0:66:1-72:1
+    step @ 0:67:3-68:1
+    step @ 0:67:3-67:35
+    step @ 0:67:8-67:34
+    step @ 0:67:13-67:33
+    step @ 0:67:24-67:27
+    const r2 float:bits:4607182418800017408 @ 0:67:24-67:27
+    step @ 0:67:29-67:32
+    const r3 float:bits:4611686018427387904 @ 0:67:29-67:32
+    enum r1 r2 v2 @ 0:67:13-67:33
+    call r1 fn0 @ 0:67:8-67:34
+    move r0 r1 @ 0:67:8-67:34
+    call-builtin r0 "puts" 1 @ 0:67:3-67:35 0:67:8-67:34
+    step @ 0:68:3-69:1
+    step @ 0:68:3-68:52
+    step @ 0:68:8-68:51
+    step @ 0:68:8-68:36
+    step @ 0:68:8-68:19
+    step @ 0:68:17-68:18
+    const r2 int:1 @ 0:68:17-68:18
+    call r2 fn1 @ 0:68:8-68:19
+    step @ 0:68:22-68:36
+    step @ 0:68:22-68:31
+    step @ 0:68:27-68:30
+    const r4 "b" @ 0:68:27-68:30
+    call r4 fn2 @ 0:68:22-68:31
+    move r3 r4 @ 0:68:22-68:31
+    call-builtin r3 "String.from_int" 1 @ 0:68:22-68:36 0:68:22-68:31
+    concat r1 r2 r3 @ 0:68:20-68:21
+    step @ 0:68:39-68:51
+    step @ 0:68:45-68:50
+    step @ 0:68:48-68:49
+    const r3 int:1 @ 0:68:48-68:49
+    call-builtin r3 "ok" 1 @ 0:68:45-68:50 0:68:48-68:49
+    move r2 r3 @ 0:68:45-68:50
+    call r2 fn4 @ 0:68:39-68:51
+    concat r0 r1 r2 @ 0:68:37-68:38
+    call-builtin r0 "puts" 1 @ 0:68:3-68:52 0:68:8-68:51
+    step @ 0:69:3-70:1
+    step @ 0:69:3-69:23
+    step @ 0:69:8-69:12
+    const r0 true @ 0:69:8-69:12
+    step @ 0:69:14-69:17
+    const r1 float:bits:4609434218613702656 @ 0:69:14-69:17
+    step @ 0:69:19-69:22
+    const r2 nil @ 0:69:19-69:22
+    call r0 fn3 @ 0:69:3-69:23
+    step @ 0:70:3-71:1
+    step @ 0:70:3-70:19
+    step @ 0:70:14-70:18
+    call-builtin r1 "ok" 0 @ 0:70:14-70:18
+    move r0 r1 @ 0:70:14-70:18
+    call r0 fn5 @ 0:70:3-70:19
+    const r0 void @ 0:66:1-72:1
+    return r0 @ 0:66:1-72:1
