@@ -168,7 +168,7 @@ def new_input(text: String) -> Input
     block_openers: Set.new(["def", "struct", "enum", "if", "while", "for", "do"]),
     operators: operator_table(),
     classes: char_classes(),
-    name_codes: code_set(letters + "0123456789_"),
+    name_codes: code_set("#{letters}0123456789_"),
     number_codes: code_set("0123456789_"),
     line_ends: code_set("\n\r"),
     string_stops: code_set("\"#\\\n\r")
@@ -393,7 +393,7 @@ def bad_escape(input: Input, index: Int, line: Int, line_start: Int) -> Diag.Dia
   end
   return Diag.fail(
     "LEX-INVALID-ESCAPE",
-    "unsupported escape \\" + input.text.slice(index + 1, 1),
+    "unsupported escape \\#{input.text.slice(index + 1, 1)}",
     span(escape_start, stop),
     Diag.Help.NoHelp,
   )
@@ -471,7 +471,7 @@ def scan_closing(
       help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
     end
     return Diag.Outcome.Failed(
-      Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help),
+      Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched #{lexeme} delimiter", span(start, stop), help),
     )
   end
   return Diag.Outcome.Done(
@@ -561,12 +561,12 @@ def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
   if frame.kind == "{"
     help = Diag.Help.Hint(
       (
-        "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no " +
-        "braces and end with \"end\""
+        "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: " +
+        "blocks have no braces and end with \"end\""
       ),
     )
   end
-  return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed " + frame.kind + " delimiter", span(frame.start, here), help)
+  return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed #{frame.kind} delimiter", span(frame.start, here), help)
 end
 
 def code_set(characters: String) -> Set[Int]
@@ -793,9 +793,9 @@ def unexpected_character(
   start: Source.Position,
   stop: Source.Position,
 ) -> Diag.Diagnostic
-  message = "unexpected character " + Unicode.written(code)
+  message = "unexpected character #{Unicode.written(code)}"
   if Unicode.graphic?(code)
-    message = "unexpected character \"" + character + "\""
+    message = "unexpected character \"#{character}\""
   end
   help = Diag.Help.NoHelp
   if code == 59

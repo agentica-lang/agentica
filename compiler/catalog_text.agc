@@ -28,26 +28,18 @@ end
 
 def builtin_lines(entry: Model.Builtin) -> List[String]
   forms = [entry].concat(entry.alternatives)
-  lines: List[String] = ["builtin " + entry.name + " forms=" + forms.size.to_s]
+  lines: List[String] = ["builtin #{entry.name} forms=#{forms.size}"]
   for form in forms
-    lines = lines.push("  " + form_line(form))
+    lines = lines.push("  #{form_line(form)}")
   end
   return lines
 end
 
 def form_line(form: Model.Builtin) -> String
   return (
-    Builtins.form_signature(form) +
-    " shape=" +
-    shape_text(form) +
-    " rule=" +
-    rule_name(form.rule) +
-    " impl=" +
-    Text.quote(form.implementation) +
-    " effects=" +
-    quoted_list(form.effects) +
-    " desc=" +
-    Text.quote(form.description)
+    "#{Builtins.form_signature(form)} shape=#{shape_text(form)} rule=#{rule_name(form.rule)} " +
+    "impl=#{Text.quote(form.implementation)} effects=#{quoted_list(form.effects)} " +
+    "desc=#{Text.quote(form.description)}"
   )
 end
 
@@ -55,14 +47,14 @@ end
 # Var("X") alike.
 def shape_text(form: Model.Builtin) -> String
   parameters = form.parameters.map do |parameter: Model.Named| Types.debug_text(parameter.type) end
-  return "(" + parameters.join(", ") + ") -> " + Types.debug_text(form.result)
+  return "(#{parameters.join(", ")}) -> #{Types.debug_text(form.result)}"
 end
 
 def record_lines(catalog: Builtins.Catalog) -> List[String]
   lines: List[String] = []
   for name in catalog.records.keys.sort
-    fields = catalog.records[name].map do |field: Model.Named| field.name + ": " + Types.debug_text(field.type) end
-    lines = lines.push("record " + name + " " + fields.join(", "))
+    fields = catalog.records[name].map do |field: Model.Named| "#{field.name}: #{Types.debug_text(field.type)}" end
+    lines = lines.push("record #{name} #{fields.join(", ")}")
   end
   return lines
 end
@@ -73,7 +65,7 @@ def enum_lines(catalog: Builtins.Catalog) -> List[String]
     definition = catalog.enums[name]
     variants = definition.variants.map do |variant: Model.Variant| variant_text(variant) end
     lines = lines.push(
-      "enum " + name + " parameters=" + quoted_list(definition.parameters) + " variants=" + variants.join(" | "),
+      "enum #{name} parameters=#{quoted_list(definition.parameters)} variants=#{variants.join(" | ")}",
     )
   end
   return lines
@@ -82,15 +74,15 @@ end
 def name_lines(catalog: Builtins.Catalog) -> List[String]
   std_only: List[String] = []
   for name in catalog.std_only.keys.sort
-    std_only = std_only.push(name + "=" + catalog.std_only[name].std_path + " as " + catalog.std_only[name].alias)
+    std_only = std_only.push("#{name}=#{catalog.std_only[name].std_path} as #{catalog.std_only[name].alias}")
   end
   return [
-    "public " + quoted_list(catalog.public_names),
-    "bare " + quoted_list(catalog.bare_names.to_a.sort),
-    "opaque " + quoted_list(catalog.opaque.to_a.sort),
-    "handles " + quoted_list(catalog.handles.to_a.sort),
-    "reserved " + quoted_list(catalog.reserved.to_a.sort),
-    "std-only " + std_only.join(", "),
+    "public #{quoted_list(catalog.public_names)}",
+    "bare #{quoted_list(catalog.bare_names.to_a.sort)}",
+    "opaque #{quoted_list(catalog.opaque.to_a.sort)}",
+    "handles #{quoted_list(catalog.handles.to_a.sort)}",
+    "reserved #{quoted_list(catalog.reserved.to_a.sort)}",
+    "std-only #{std_only.join(", ")}",
   ]
 end
 
@@ -99,17 +91,18 @@ def probe_line(catalog: Builtins.Catalog, probe: String) -> String
   kind = probe.slice(0, colon)
   rest = probe.slice(colon + 1, probe.length - colon - 1)
   if kind == "near"
-    return probe + " -> " + help_text(Suggest.did_you_mean_among(rest, catalog.public_names, []))
+    near = Suggest.did_you_mean_among(rest, catalog.public_names, [])
+    return "#{probe} -> #{help_text(near)}"
   elsif kind == "ref"
-    return probe + " -> " + ref_text(catalog, rest)
+    return "#{probe} -> #{ref_text(catalog, rest)}"
   elsif kind == "type"
-    return probe + " -> " + help_text(type_help(catalog, rest))
+    return "#{probe} -> #{help_text(type_help(catalog, rest))}"
   elsif kind == "sig"
-    return probe + " -> " + signature_text(catalog, rest)
+    return "#{probe} -> #{signature_text(catalog, rest)}"
   elsif kind == "disp"
-    return probe + " -> " + Text.quote(Types.display_name(rest))
+    return "#{probe} -> #{Text.quote(Types.display_name(rest))}"
   end
-  return probe + " -> " + Builtins.std_only_name?(catalog, rest).to_s
+  return "#{probe} -> #{Builtins.std_only_name?(catalog, rest)}"
 end
 
 def type_help(catalog: Builtins.Catalog, word: String) -> Ast.Optional[String]

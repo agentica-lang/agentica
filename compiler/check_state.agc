@@ -156,7 +156,7 @@ export def mismatch(cx: Cx, st: St, expected: Types.Type, actual: Types.Type, sp
     cx.file,
     st.signature,
     "CHECK-TYPE-MISMATCH",
-    "expected " + Types.to_text(expected) + ", found " + Types.to_text(actual),
+    "expected #{Types.to_text(expected)}, found #{Types.to_text(actual)}",
     span,
     hint_of(Help.conversion(expected, actual)),
   )
@@ -223,7 +223,7 @@ export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Sourc
           cx,
           st,
           "CHECK-SHADOWED-NAME",
-          "\"" + name + "\" is already visible; Agentica does not allow shadowing",
+          "\"#{name}\" is already visible; Agentica does not allow shadowing",
           span,
           "choose another name",
         ),
@@ -234,9 +234,9 @@ export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Sourc
         cx,
         st,
         "CHECK-SHADOWED-NAME",
-        "\"" + name + "\" is already visible; Agentica does not allow shadowing",
+        "\"#{name}\" is already visible; Agentica does not allow shadowing",
         span,
-        "assign to it with \"" + name + " = value\" instead of introducing it again, or choose another name",
+        "assign to it with \"#{name} = value\" instead of introducing it again, or choose another name",
       ),
     )
   end
@@ -246,7 +246,7 @@ end
 ## CHECK-REDEFINED-NAME for ok and error, which are builtin constructors.
 export def reserve_constructor(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
   if name == "ok" or name == "error"
-    return error(fail(cx, st, "CHECK-REDEFINED-NAME", "\"" + name + "\" is a builtin constructor", span))
+    return error(fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{name}\" is a builtin constructor", span))
   end
   return ok(true)
 end
@@ -260,7 +260,7 @@ export def reserve_local(cx: Cx, st: St, name: String, span: Source.Span) -> Res
         cx,
         st,
         "CHECK-REDEFINED-NAME",
-        "\"" + name + "\" is a builtin function",
+        "\"#{name}\" is a builtin function",
         span,
         "choose another name, such as line or text",
       ),

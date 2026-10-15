@@ -27,7 +27,7 @@ export def ids_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) ->
       lines = linked.modules.map do |module|
-        "module " + Text.quote(module.name) + " first=" + module.first_id.to_s + " next=" + module.next_id.to_s
+        "module #{Text.quote(module.name)} first=#{module.first_id} next=#{module.next_id}"
       end
       return lines.join("\n")
     Linker.Linking.Failed(failure) -> return failure_text(root_dir_of(path), failure)
@@ -58,7 +58,7 @@ end
 
 ## The ERROR line of a link failure, with the file it is in.
 export def failure_text(root_dir: String, failure: Failure.Failure) -> String
-  return Text.diagnostic_line(failure.diagnostic) + " file=" + Text.quote(stored(root_dir, failure.file))
+  return "#{Text.diagnostic_line(failure.diagnostic)} file=#{Text.quote(stored(root_dir, failure.file))}"
 end
 
 ## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).
@@ -83,7 +83,7 @@ export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List
 end
 
 def module_lines(out: List[String], module: Linker.LinkedModule, notes: Map[Int, String]) -> List[String]
-  lines = out.push("  module " + Text.quote(module.name))
+  lines = out.push("  module #{Text.quote(module.name)}")
   at = ParseText.Margin(indent: "    ", base: module.first_id, notes: notes)
   for decl in module.declarations
     lines = ParseText.print_decl(lines, at, "declaration", decl)

@@ -52,7 +52,7 @@ end
 
 ## The margin one level deeper.
 export def deeper(at: Margin) -> Margin
-  return at.with(indent: at.indent + "  ")
+  return at.with(indent: "#{at.indent}  ")
 end
 
 ## The first line of a node: the indent, the role if there is one (the root has none), the kind, the id relative to the
@@ -60,14 +60,14 @@ end
 export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Span, attrs: String) -> String
   label = ""
   if role != ""
-    label = role + ": "
+    label = "#{role}: "
   end
   note = at.notes.get(id)
   extra = ""
   if note.ok?
     extra = note.unwrap!
   end
-  return at.indent + label + kind + " #" + (id - at.base).to_s + " " + Text.span_text(span) + attrs + extra
+  return "#{at.indent}#{label}#{kind} ##{id - at.base} #{Text.span_text(span)}#{attrs}#{extra}"
 end
 
 ## The label followed by the quoted text of an optional string, or the empty string when it is absent.
@@ -118,7 +118,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
           "enum-decl",
           node.id,
           node.span,
-          name_attr(node.name) + " type-parameters=" + list_text(parameters) + doc_attr(node.doc),
+          "#{name_attr(node.name)} type-parameters=#{list_text(parameters)}#{doc_attr(node.doc)}",
         ),
       )
       for variant in node.variants
@@ -133,16 +133,16 @@ def doc_attr(doc: Ast.Optional[String]) -> String
 end
 
 def name_attr(name: String) -> String
-  return " name=" + Text.quote(name)
+  return " name=#{Text.quote(name)}"
 end
 
 def value_text(value: Ast.LitValue) -> String
   case value
-    Ast.LitValue.Whole(number) -> return "int:" + number.to_s
-    Ast.LitValue.Huge(digits) -> return "int:" + digits
-    Ast.LitValue.Real(number) -> return "float:bits:" + Float.to_bits(number).to_s
-    Ast.LitValue.Text(text) -> return "string:" + Text.quote(text)
-    Ast.LitValue.Flag(flag) -> return "bool:" + flag.to_s
+    Ast.LitValue.Whole(number) -> return "int:#{number}"
+    Ast.LitValue.Huge(digits) -> return "int:#{digits}"
+    Ast.LitValue.Real(number) -> return "float:bits:#{Float.to_bits(number)}"
+    Ast.LitValue.Text(text) -> return "string:#{Text.quote(text)}"
+    Ast.LitValue.Flag(flag) -> return "bool:#{flag}"
     Ast.LitValue.Nothing -> return "nil"
   end
 end
@@ -155,7 +155,7 @@ def visible_attr(visible: Ast.Optional[List[String]]) -> String
 end
 
 def list_text(items: List[String]) -> String
-  return "[" + items.join(",") + "]"
+  return "[#{items.join(",")}]"
 end
 
 def print_type(out: List[String], at: Margin, role: String, type: Ast.TypeRef) -> List[String]
@@ -209,7 +209,7 @@ end
 
 def print_part(out: List[String], at: Margin, part: Ast.Part) -> List[String]
   case part
-    Ast.Part.Text(text) -> return out.push(at.indent + "part: text " + Text.quote(text))
+    Ast.Part.Text(text) -> return out.push("#{at.indent}part: text #{Text.quote(text)}")
     Ast.Part.Code(code) -> return print_expr(out, at, "part", code)
   end
 end
@@ -226,7 +226,7 @@ def print_map_entry(out: List[String], at: Margin, entry: Ast.MapEntry) -> List[
 end
 
 def op_attrs(op: String, op_span: Source.Span) -> String
-  return " op=" + op + " op-span=" + Text.span_text(op_span)
+  return " op=#{op} op-span=#{Text.span_text(op_span)}"
 end
 
 def print_call_like(
@@ -247,7 +247,7 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
   child = deeper(at)
   case expr
     Ast.Expr.Literal(node) -> return out.push(
-      head(at, role, "literal", node.id, node.span, " value=" + value_text(node.value)),
+      head(at, role, "literal", node.id, node.span, " value=#{value_text(node.value)}"),
     )
     Ast.Expr.Name(node) -> return out.push(head(at, role, "name-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.TypeName(node) -> return out.push(
@@ -264,7 +264,7 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
       "call",
       node.id,
       node.span,
-      name_attr(node.name) + " piped=" + node.piped.to_s,
+      "#{name_attr(node.name)} piped=#{node.piped}",
       node.args,
     )
     Ast.Expr.EnumConstructor(node) ->
@@ -275,7 +275,7 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
         "enum-constructor",
         node.id,
         node.span,
-        " enum=" + Text.quote(node.enum_name) + " variant=" + Text.quote(node.variant_name),
+        " enum=#{Text.quote(node.enum_name)} variant=#{Text.quote(node.variant_name)}",
         node.args,
       )
       return print_named_args(lines, child, node.named)
@@ -284,7 +284,7 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
       lines = print_expr(lines, child, "target", node.target)
       return print_exprs(lines, child, "arg", node.args)
     Ast.Expr.Construct(node) ->
-      lines = out.push(head(at, role, "construct", node.id, node.span, " type=" + Text.quote(node.type_name)))
+      lines = out.push(head(at, role, "construct", node.id, node.span, " type=#{Text.quote(node.type_name)}"))
       return print_named_args(lines, child, node.args)
     Ast.Expr.Update(node) ->
       lines = out.push(head(at, role, "struct-update", node.id, node.span, visible_attr(node.visible)))
@@ -348,7 +348,7 @@ def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Patt
   case pattern
     Ast.Pattern.Wildcard(node) -> return out.push(head(at, role, "wildcard-pattern", node.id, node.span, ""))
     Ast.Pattern.Literal(node) -> return out.push(
-      head(at, role, "literal-pattern", node.id, node.span, " value=" + value_text(node.value)),
+      head(at, role, "literal-pattern", node.id, node.span, " value=#{value_text(node.value)}"),
     )
     Ast.Pattern.Variant(node) ->
       names = node.bindings.map do |binding| binding_text(binding) end
@@ -359,14 +359,7 @@ def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Patt
           "variant-pattern",
           node.id,
           node.span,
-          (
-            " enum=" +
-            Text.quote(node.enum_name) +
-            " variant=" +
-            Text.quote(node.variant_name) +
-            " bindings=" +
-            list_text(names)
-          ),
+          " enum=#{Text.quote(node.enum_name)} variant=#{Text.quote(node.variant_name)} bindings=#{list_text(names)}",
         ),
       )
   end
@@ -414,7 +407,7 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
       end
       case node.else_body
         Ast.Optional.Present(body) ->
-          lines = lines.push(child.indent + "else:")
+          lines = lines.push("#{child.indent}else:")
           return print_stmts(lines, deeper(child), "body", body)
         Ast.Optional.Absent -> return lines
       end
@@ -423,10 +416,10 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
       lines = print_expr(lines, child, "condition", node.condition)
       return print_stmts(lines, child, "body", node.body)
     Ast.Stmt.For(node) ->
-      lines = out.push(head(at, role, "for-stmt", node.id, node.span, " variable=" + Text.quote(node.variable)))
+      lines = out.push(head(at, role, "for-stmt", node.id, node.span, " variable=#{Text.quote(node.variable)}"))
       lines = print_expr(lines, child, "iterable", node.iterable)
       return print_stmts(lines, child, "body", node.body)
-    Ast.Stmt.Control(node) -> return out.push(head(at, role, "loop-control", node.id, node.span, " kind=" + node.kind))
+    Ast.Stmt.Control(node) -> return out.push(head(at, role, "loop-control", node.id, node.span, " kind=#{node.kind}"))
     Ast.Stmt.Case(node) ->
       lines = out.push(head(at, role, "case-stmt", node.id, node.span, ""))
       lines = print_expr(lines, child, "value", node.value)
@@ -475,17 +468,17 @@ end
 # rename.
 def import_attrs(node: Ast.ImportDecl) -> String
   case node.alias
-    Ast.Optional.Present(alias) -> return " path=" + Text.quote(node.path) + " alias=" + Text.quote(alias)
+    Ast.Optional.Present(alias) -> return " path=#{Text.quote(node.path)} alias=#{Text.quote(alias)}"
     Ast.Optional.Absent ->
       texts = node.names.map do |entry| import_name_text(entry) end
-      return " path=" + Text.quote(node.path) + " names=[" + texts.join(",") + "]"
+      return " path=#{Text.quote(node.path)} names=[#{texts.join(",")}]"
   end
 end
 
 def import_name_text(entry: Ast.ImportName) -> String
-  text = Text.quote(entry.name) + "@" + Text.span_text(entry.span)
+  text = "#{Text.quote(entry.name)}@#{Text.span_text(entry.span)}"
   if entry.local != entry.name
-    text += " as " + Text.quote(entry.local) + "@" + Text.span_text(entry.local_span)
+    text += " as #{Text.quote(entry.local)}@#{Text.span_text(entry.local_span)}"
   end
   return text
 end

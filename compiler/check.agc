@@ -17,7 +17,7 @@ def main() -> Void
     elsif argument.starts_with?("--home=")
       env = env.with(home: argument.slice(7, argument.length - 7))
     else
-      puts("== " + argument)
+      puts("== #{argument}")
       puts(CheckText.check_text(argument, Env.settings(stdlib, env)))
     end
   end

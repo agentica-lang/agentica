@@ -253,13 +253,13 @@ export def to_text(type: Type) -> String
     Type.Var(name) -> return name
     Type.Struct(name) -> return display_name(name)
     Type.Enum(name, args) -> return enum_text(name, args)
-    Type.Result(item) -> return "Result[" + to_text(item) + "]"
-    Type.Task(item) -> return "Task[" + to_text(item) + "]"
-    Type.Channel(item) -> return "Channel[" + to_text(item) + "]"
-    Type.List(item) -> return "List[" + to_text(item) + "]"
-    Type.Set(item) -> return "Set[" + to_text(item) + "]"
-    Type.Map(key, value) -> return "Map[" + to_text(key) + ", " + to_text(value) + "]"
-    Type.Fn(params, result) -> return "Fn[" + list_text(params.concat([result])) + "]"
+    Type.Result(item) -> return "Result[#{to_text(item)}]"
+    Type.Task(item) -> return "Task[#{to_text(item)}]"
+    Type.Channel(item) -> return "Channel[#{to_text(item)}]"
+    Type.List(item) -> return "List[#{to_text(item)}]"
+    Type.Set(item) -> return "Set[#{to_text(item)}]"
+    Type.Map(key, value) -> return "Map[#{to_text(key)}, #{to_text(value)}]"
+    Type.Fn(params, result) -> return "Fn[#{list_text(params.concat([result]))}]"
   end
 end
 
@@ -267,17 +267,17 @@ end
 ## to_text, two variants never print the same.
 export def debug_text(type: Type) -> String
   case type
-    Type.Opaque(name) -> return "Opaque(" + name + ")"
-    Type.Var(name) -> return "Var(" + name + ")"
-    Type.Struct(name) -> return "Struct(" + name + ")"
-    Type.Enum(name, args) -> return "Enum(" + name + ", [" + debug_list(args) + "])"
-    Type.Result(item) -> return "Result(" + debug_text(item) + ")"
-    Type.Task(item) -> return "Task(" + debug_text(item) + ")"
-    Type.Channel(item) -> return "Channel(" + debug_text(item) + ")"
-    Type.List(item) -> return "List(" + debug_text(item) + ")"
-    Type.Set(item) -> return "Set(" + debug_text(item) + ")"
-    Type.Map(key, value) -> return "Map(" + debug_text(key) + ", " + debug_text(value) + ")"
-    Type.Fn(params, result) -> return "Fn([" + debug_list(params) + "], " + debug_text(result) + ")"
+    Type.Opaque(name) -> return "Opaque(#{name})"
+    Type.Var(name) -> return "Var(#{name})"
+    Type.Struct(name) -> return "Struct(#{name})"
+    Type.Enum(name, args) -> return "Enum(#{name}, [#{debug_list(args)}])"
+    Type.Result(item) -> return "Result(#{debug_text(item)})"
+    Type.Task(item) -> return "Task(#{debug_text(item)})"
+    Type.Channel(item) -> return "Channel(#{debug_text(item)})"
+    Type.List(item) -> return "List(#{debug_text(item)})"
+    Type.Set(item) -> return "Set(#{debug_text(item)})"
+    Type.Map(key, value) -> return "Map(#{debug_text(key)}, #{debug_text(value)})"
+    Type.Fn(params, result) -> return "Fn([#{debug_list(params)}], #{debug_text(result)})"
     _ -> return to_text(type)
   end
 end
@@ -295,7 +295,7 @@ def enum_text(name: String, args: List[Type]) -> String
   if args.size == 0
     return display_name(name)
   end
-  return display_name(name) + "[" + list_text(args) + "]"
+  return "#{display_name(name)}[#{list_text(args)}]"
 end
 
 def digit?(character: String) -> Bool

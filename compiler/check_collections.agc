@@ -33,7 +33,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
         cx,
         callback.st,
         "CHECK-TYPE-MISMATCH",
-        site.selected.name + " requires a function with one parameter",
+        "#{site.selected.name} requires a function with one parameter",
         Ast.expr_span(site.args[0]),
       ),
     )
@@ -45,7 +45,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
         cx,
         handed.st,
         "CHECK-NOT-A-HANDLE",
-        "Task.spawn_owning gives a handle to the new task, but the argument is " + T.to_text(handed.type),
+        "Task.spawn_owning gives a handle to the new task, but the argument is #{T.to_text(handed.type)}",
         Ast.expr_span(site.args[1]),
         "pass a FileHandle, Socket, Listener, Process, HttpServer or Channel; Task.spawn passes any other value",
       ),
@@ -232,8 +232,8 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
         "an empty set needs an expected type, for example \"Set[Int]\"",
         span,
         (
-          "annotate the variable: seen: Set[Int] = Set.new([]); a parameter, a field or a function result also " +
-          "gives the type"
+          "annotate the variable: seen: Set[Int] = Set.new([]); " +
+          "a parameter, a field or a function result also gives the type"
         ),
       ),
     )
@@ -246,7 +246,7 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
         cx,
         list.st,
         "CHECK-SET-ELEMENT-TYPE",
-        "a Set element must be Int or String, found " + T.to_text(element),
+        "a Set element must be Int or String, found #{T.to_text(element)}",
         Ast.expr_span(items),
       ),
     )

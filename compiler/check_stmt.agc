@@ -42,7 +42,7 @@ export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) ->
         cx,
         inner,
         "CHECK-MISSING-RETURN",
-        "function \"" + T.display_name(node.name) + "\" must return " + T.to_text(signature.result) + " on every path",
+        "function \"#{T.display_name(node.name)}\" must return #{T.to_text(signature.result)} on every path",
         node.span,
         Flow.missing_return_help(node.body, T.to_text(signature.result)),
       ),
@@ -98,7 +98,7 @@ export def check_block_body(
         cx,
         done.st,
         "CHECK-MISSING-RETURN",
-        "this block must give " + T.to_text(result) + " on every path",
+        "this block must give #{T.to_text(result)} on every path",
         block.span,
         "end the block with an expression, or return a value on every path",
       ),
@@ -117,7 +117,7 @@ def check_statement(cx: State.Cx, st: State.St, statement: Ast.Stmt) -> Result[S
         cx,
         st,
         "CHECK-TOO-DEEP",
-        "nesting is deeper than " + State.nesting_limit().to_s + " levels",
+        "nesting is deeper than #{State.nesting_limit()} levels",
         statement_span(statement),
         "split the code into smaller functions or simpler expressions",
       ),
@@ -157,7 +157,7 @@ def check_loop_control(cx: State.Cx, st: State.St, node: Ast.LoopControl) -> Res
     Ast.Optional.Absent -> help = help
   end
   return error(
-    State.fail_help(cx, st, "CHECK-LOOP-CONTROL", node.kind + " is only valid inside while or for", node.span, help),
+    State.fail_help(cx, st, "CHECK-LOOP-CONTROL", "#{node.kind} is only valid inside while or for", node.span, help),
   )
 end
 
@@ -191,7 +191,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
             cx,
             st,
             "CHECK-CAPTURED-ASSIGNMENT",
-            "a block cannot assign to \"" + node.name + "\", which belongs to the enclosing code",
+            "a block cannot assign to \"#{node.name}\", which belongs to the enclosing code",
             node.span,
             Flow.captured_help(node.name, capture),
           ),
@@ -205,7 +205,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
         cx,
         st,
         "CHECK-ANNOTATION-ON-EXISTING",
-        "an annotation is only allowed when \"" + node.name + "\" is introduced",
+        "an annotation is only allowed when \"#{node.name}\" is introduced",
         node.span,
       ),
     )
@@ -217,7 +217,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
         cx,
         st,
         "CHECK-IMMUTABLE-ASSIGNMENT",
-        "\"" + node.name + "\" cannot be assigned",
+        "\"#{node.name}\" cannot be assigned",
         node.span,
         "\"for\" variables cannot be assigned; copy the value to a new name",
       ),
@@ -286,7 +286,7 @@ def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
         cx,
         iterable.st,
         "CHECK-NOT-A-LIST",
-        "\"for\" iterates over a list, a set or a range, found " + T.to_text(type),
+        "\"for\" iterates over a list, a set or a range, found #{T.to_text(type)}",
         node.span,
       ),
     )
@@ -350,7 +350,7 @@ def check_literal_arm(
         cx,
         st,
         "CHECK-PATTERN-TYPE",
-        "literal pattern has type " + T.to_text(pattern_type) + ", but case value has type " + T.to_text(value_type),
+        "literal pattern has type #{T.to_text(pattern_type)}, but case value has type #{T.to_text(value_type)}",
         pattern.span,
       ),
     )
@@ -384,7 +384,7 @@ def check_variant_arm(
         cx,
         st,
         "CHECK-ARITY",
-        "variant pattern expects " + types.size.to_s + " binding(s), found " + pattern.bindings.size.to_s,
+        "variant pattern expects #{types.size} binding(s), found #{pattern.bindings.size}",
         pattern.span,
       ),
     )
@@ -456,22 +456,16 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
       cx,
       st,
       "CHECK-UNKNOWN-VARIANT",
-      "enum \"" + T.display_name(pattern.enum_name) + "\" has no variant \"" + pattern.variant_name + "\"",
+      "enum \"#{T.display_name(pattern.enum_name)}\" has no variant \"#{pattern.variant_name}\"",
       pattern.span,
     )
   end
+  variant = "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
   return State.fail(
     cx,
     st,
     "CHECK-PATTERN-TYPE",
-    (
-      "variant pattern \"" +
-      T.display_name(pattern.enum_name) +
-      "." +
-      pattern.variant_name +
-      "\" does not match " +
-      T.to_text(value_type)
-    ),
+    "variant pattern \"#{variant}\" does not match #{T.to_text(value_type)}",
     pattern.span,
   )
 end
@@ -513,7 +507,7 @@ def check_exhaustive(
         cx,
         st,
         "CHECK-NON-EXHAUSTIVE-CASE",
-        "case must cover every variant of " + T.to_text(value_type) + " or include _",
+        "case must cover every variant of #{T.to_text(value_type)} or include _",
         node.span,
       ),
     )
@@ -601,7 +595,7 @@ def block_parameter_types(
             cx,
             st,
             "CHECK-ARITY",
-            "this block takes " + types.size.to_s + " parameter(s), found " + block.params.size.to_s,
+            "this block takes #{types.size} parameter(s), found #{block.params.size}",
             block.span,
           ),
         )
@@ -650,9 +644,9 @@ def block_parameter_type(
       cx,
       st,
       "CHECK-BLOCK-TYPE",
-      "the type of block parameter \"" + param.name + "\" is not known here",
+      "the type of block parameter \"#{param.name}\" is not known here",
       param.span,
-      "annotate it, as in do |" + param.name + ": Int| ... end",
+      "annotate it, as in do |#{param.name}: Int| ... end",
     ),
   )
 end
@@ -714,10 +708,10 @@ def signature_text(node: Ast.FunctionDecl, signature: State.Signature) -> String
   parts: List[String] = []
   index = 0
   while index < node.params.size
-    parts = parts.push(node.params[index].name + ": " + T.to_text(signature.params[index]))
+    parts = parts.push("#{node.params[index].name}: #{T.to_text(signature.params[index])}")
     index += 1
   end
-  return T.display_name(node.name) + "(" + parts.join(", ") + ") -> " + T.to_text(signature.result)
+  return "#{T.display_name(node.name)}(#{parts.join(", ")}) -> #{T.to_text(signature.result)}"
 end
 
 def statement_span(statement: Ast.Stmt) -> Source.Span

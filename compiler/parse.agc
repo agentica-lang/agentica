@@ -14,7 +14,7 @@ def main() -> Void
       continuing = true
       next
     end
-    puts("== " + path)
+    puts("== #{path}")
     read = File.read_text(path, 10000)
     if read.ok?
       printed = ParseText.print_from(read.unwrap!, first_id)
@@ -23,7 +23,7 @@ def main() -> Void
         first_id = printed.next_id
       end
     else
-      puts("!! " + read.message)
+      puts("!! #{read.message}")
     end
   end
 end

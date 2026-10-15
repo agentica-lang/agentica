@@ -37,9 +37,9 @@ export def written(code: Int) -> String
     127 -> return "#\\rubout"
     _ ->
       if code < 65536
-        return "#\\u" + hex(code, 4)
+        return "#\\u#{hex(code, 4)}"
       end
-      return "#\\U" + hex(code, 8)
+      return "#\\U#{hex(code, 8)}"
   end
 end
 
@@ -96,8 +96,8 @@ def written_character(ranges: List[Int], code: Int, character: String) -> String
         return character
       end
       if code < 65536
-        return "\\u" + hex(code, 4)
+        return "\\u#{hex(code, 4)}"
       end
-      return "\\U" + hex(code, 8)
+      return "\\U#{hex(code, 8)}"
   end
 end

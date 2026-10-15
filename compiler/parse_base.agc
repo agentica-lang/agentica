@@ -234,7 +234,7 @@ end
 
 ## "expected X, found Y" for the token at at.
 export def found(e: Env, at: Int, expected: String) -> String
-  return unexpected(e, at, "expected " + expected + ", found " + describe(e.tokens[at]))
+  return unexpected(e, at, "expected #{expected}, found #{describe(e.tokens[at])}")
 end
 
 ## The context `levels` deeper than e; PARSE-TOO-DEEP when that passes nesting_limit. enter adds one level, deepen adds
@@ -264,7 +264,7 @@ end
 ## A failure for a state the grammar functions cannot reach, so that no code path needs a bare string error:
 ## PARSE-UNEXPECTED-TOKEN at the token at pos.
 export def impossible(e: Env, pos: Int) -> String
-  return unexpected(e, pos, "the parser cannot continue at " + describe(e.tokens[pos]))
+  return unexpected(e, pos, "the parser cannot continue at #{describe(e.tokens[pos])}")
 end
 
 ## True for a name token without a ? or ! suffix: the names of fields, parameters and bindings.
@@ -317,7 +317,7 @@ export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
   cursor = try expect(e, pos, "type-name", "a type name", false)
   if is_kind(e, cursor, "dot")
     stop = try expect(e, cursor + 1, "type-name", "an imported type name", false)
-    name = name + "." + e.tokens[cursor + 1].lexeme
+    name = "#{name}.#{e.tokens[cursor + 1].lexeme}"
     cursor = stop
   end
   args: List[Ast.TypeRef] = []
@@ -392,7 +392,7 @@ def pack(code: String, message: String, span: Source.Span, help: Diag.Help) -> S
       flag = "1"
     Diag.Help.NoHelp -> flag = "0"
   end
-  return code + "\n" + fields.join("\n") + "\n" + flag + "\n" + message.length.to_s + "\n" + rest
+  return "#{code}\n#{fields.join("\n")}\n#{flag}\n#{message.length}\n#{rest}"
 end
 
 def detached_doc(token: Tokens.Token) -> String
@@ -402,8 +402,8 @@ def detached_doc(token: Tokens.Token) -> String
     token.span,
     hint(
       (
-        "put the doc block directly above the declaration, field or variant it documents; use # for a note that " +
-        "documents nothing"
+        "put the doc block directly above the declaration, field or variant it documents; " +
+        "use # for a note that documents nothing"
       ),
     ),
   )
@@ -415,7 +415,7 @@ def too_deep(e: Env, pos: Int) -> String
     e,
     pos,
     "PARSE-TOO-DEEP",
-    "nesting is deeper than " + nesting_limit().to_s + " levels",
+    "nesting is deeper than #{nesting_limit()} levels",
     hint("split the code into smaller functions or simpler expressions"),
   )
 end
@@ -479,7 +479,7 @@ end
 def negated(value: Ast.LitValue) -> Ast.LitValue
   case value
     Ast.LitValue.Whole(number) -> return Ast.LitValue.Whole(0 - number)
-    Ast.LitValue.Huge(digits) -> return Ast.LitValue.Huge("-" + digits)
+    Ast.LitValue.Huge(digits) -> return Ast.LitValue.Huge("-#{digits}")
     Ast.LitValue.Real(number) -> return Ast.LitValue.Real(-number)
     _ -> return value
   end
@@ -493,7 +493,7 @@ def parse_name_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     return ok(PatternAt(node: node, pos: pos + 1, ids: ids + 1))
   end
   if (lexeme == "ok" or lexeme == "error") and is_kind(e, pos + 1, "left-paren")
-    parsed = try parse_pattern_bindings(e, pos + 1, "write " + lexeme + "(_) to match without binding the value")
+    parsed = try parse_pattern_bindings(e, pos + 1, "write #{lexeme}(_) to match without binding the value")
     variant = "Err"
     if lexeme == "ok"
       variant = "Ok"
@@ -516,9 +516,9 @@ end
 
 def variant_help(enum_name: String, variant_name: String) -> String
   if enum_name == "Result" or (enum_name == "Await" and variant_name == "Done")
-    return "write " + enum_name + "." + variant_name + "(_) to match without binding the value"
+    return "write #{enum_name}.#{variant_name}(_) to match without binding the value"
   end
-  return "a variant without payload has no parentheses: " + enum_name + "." + variant_name
+  return "a variant without payload has no parentheses: #{enum_name}.#{variant_name}"
 end
 
 def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
@@ -527,7 +527,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
       unexpected_help(
         e,
         pos + 1,
-        "expected a dot between an enum and variant, found " + describe(e.tokens[pos + 1]),
+        "expected a dot between an enum and variant, found #{describe(e.tokens[pos + 1])}",
         "a constant is not a pattern; compare with if",
       ),
     )
@@ -539,7 +539,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   cursor = after
   if is_kind(e, cursor, "dot")
     last = try expect(e, cursor + 1, "type-name", "a variant name", false)
-    enum_name = enum_name + "." + variant_name
+    enum_name = "#{enum_name}.#{variant_name}"
     variant_name = e.tokens[cursor + 1].lexeme
     cursor = last
   end
