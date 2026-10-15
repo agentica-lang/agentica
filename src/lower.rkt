@@ -165,15 +165,6 @@
               (for/list ([variant (in-list (enum-decl-variants declaration))])
                 (cons (enum-variant-name variant) (length (enum-variant-payload-types variant))))))))
 
-(define (list-type? type)
-  (and (pair? type) (eq? (car type) 'List)))
-
-(define (map-type? type)
-  (and (pair? type) (eq? (car type) 'Map)))
-
-(define (set-type? type)
-  (and (pair? type) (eq? (car type) 'Set)))
-
 (define (result-type? type)
   (and (pair? type) (eq? (car type) 'Result)))
 

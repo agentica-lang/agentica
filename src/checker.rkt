@@ -22,17 +22,8 @@
 (define (primitive-type? type)
   (memq type '(Int Float Bool String Nil)))
 
-(define (list-type? type)
-  (and (pair? type) (eq? (car type) 'List)))
-
 (define (channel-type? type)
   (and (pair? type) (eq? (car type) 'Channel)))
-
-(define (map-type? type)
-  (and (pair? type) (eq? (car type) 'Map)))
-
-(define (set-type? type)
-  (and (pair? type) (eq? (car type) 'Set)))
 
 (define (key-type? type)
   (memq type '(Int String)))

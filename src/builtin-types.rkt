@@ -1,6 +1,18 @@
 #lang racket
 
-(provide opaque-types handle-types builtin-records builtin-enum-declarations builtin-enums)
+(provide opaque-types handle-types builtin-records builtin-enum-declarations builtin-enums
+         list-type? map-type? set-type?)
+
+;; The checker and the lowering both read a type as a list headed by its name
+;; (`(List T)`, `(Map K V)`, `(Set T)`); the shape tests live here so they stay one copy.
+(define (list-type? type)
+  (and (pair? type) (eq? (car type) 'List)))
+
+(define (map-type? type)
+  (and (pair? type) (eq? (car type) 'Map)))
+
+(define (set-type? type)
+  (and (pair? type) (eq? (car type) 'Set)))
 
 (define opaque-types '(Socket Listener HttpClient HttpServer FileHandle Process TestCase))
 
