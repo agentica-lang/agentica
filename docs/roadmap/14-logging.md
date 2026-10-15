@@ -9,9 +9,10 @@ goes first: it adds no API, and agents get the most from it. 14c is order step
 7.5, a new feature after 7i. It no longer waits for default parameter values
 (15a, row 7.5a): until then its API has two functions per level (decided on
 2026-10-15). 14c follows the library rule (after the order table): the module is
-Agentica code, and its one native part is the std-only registry `LogRegistry`, a
-new exception to the std-first rule (decided on 2026-10-15; the list of
-exceptions gets it in the 14c PR).
+Agentica code, and its native part is the std-only registry `LogRegistry`, a
+new exception to the std-first rule (decided on 2026-10-15; the rule lists it
+now). Its two builtin types, the record `LogEvent` and the enum `LogLevel`, are
+builtins too (§24.2, "Types").
 
 - [x] 14a VM tracing (`docs/future/24-logging.md` §24.4): `vm/trace.h` and
   `vm/trace.c`, `AGENTICA_VM_TRACE` (and `AGENTICA_VM_TRACE_FILE`) with the
@@ -43,20 +44,26 @@ exceptions gets it in the 14c PR).
   function per level, `log` and `log_meta`, `enabled?`, `level`, `set_level`,
   `attach`, `detach`, `handlers`, the built-in handlers `stderr_text` and
   `stderr_json`, the formatters, the default `console` handler and `time_text`);
-  the std-only registry `LogRegistry` (seven native functions on the VM runtime,
-  rows in `src/builtins.rkt`, names in `vm-builtins` and `std-only-modules`);
-  one line in `src/stdlib.rkt`. Each line is one `IO.warn` call (24.1). No
-  flags, no grammar change, and no change to `CHECK-IMPORT-NAME` in this PR (the
-  "did you mean" help is its own PR, 24.2, D9). Tests: goldens with exact stderr
-  (levels, handler levels, quoting, field order), attach and detach across
-  tasks, a handler that halts crashes only its task, the async handler example
-  end to end, a Python peer for the JSON lines, and `Logger.time_text` against
-  Python `datetime` vectors. Docs: `references/logger.md` of the programming
-  skill with its row in the table,
-  `site/content/library/io-and-system/logger.md` with runnable examples, the VM
-  notes on the runtime field, and the CHANGELOG entry. Its Racket parts are data
-  under the freeze (D8), so the PR may land before, during or after row 7.2.7.
-  The registry exception and the freeze are the owner's decisions of §24.2.
+  the builtin record `LogEvent` and the builtin enum `LogLevel` in
+  `src/builtin-types.rkt`; the std-only registry `LogRegistry` (nine native
+  functions on the VM runtime, rows in `src/builtins.rkt`, names in
+  `vm-builtins` and `std-only-modules`, and its reserved name in
+  `src/checker.rkt`); one line in `src/stdlib.rkt`; and the std-only help in
+  `src/modules.rkt`, which names `std/logger` for `LogRegistry`. Each line is
+  one `IO.warn` call (24.1). No flags, no grammar change, and no change to
+  `CHECK-IMPORT-NAME` in this PR (the "did you mean" help is its own PR, §24.2,
+  "The freeze"). Tests: goldens with exact stderr (levels, handler levels,
+  quoting, field order), attach and detach across tasks, a handler that halts
+  crashes only its task, the async handler example end to end, a Python peer for
+  the JSON lines, and `Logger.time_text` against Python `datetime` vectors.
+  Docs: `references/logger.md` of the programming skill with its row in the
+  table, `site/content/library/io-and-system/logger.md` with runnable examples,
+  the VM notes on the runtime field, and the CHANGELOG entry. Its Racket parts
+  are data under the freeze (§24.2, "The freeze"), so the PR may land before,
+  during or after row 7.2.7. The registry exception and the freeze are the
+  owner's decisions of §24.2. Its two-line change in `src/lower.rkt` for the
+  enum field of `LogEvent` relaxes that list for those lines, and the PR says so
+  and why (§24.2, "Decided").
 
 **Done when:** a VM developer can trace the scheduler, I/O, processes and TLS
 without editing C; a runtime error shows its call stack; and the site page's

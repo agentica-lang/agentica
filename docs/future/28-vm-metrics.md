@@ -579,12 +579,12 @@ same endpoint (a `Metrics` builtin module or `std/metrics`)?
 **Decided: not in phase 18; to evaluate later**, after shared tables (phase 9)
 and HTTP on the VM. Reasons:
 
-- A counter is shared mutable state. Agentica values are immutable, and the
-  language has no shared mutable state yet: shared tables
-  (`docs/future/13-ats.md` §13, phase 9) are the planned way, on demand. A
-  `Metrics` builtin with hidden mutable state would be a second, special way to
-  share state between tasks, against the one-way rule, and it would be the first
-  one.
+- A counter is shared mutable state. Agentica values are immutable. Apart from
+  the logger registry (§24.2), the language has no shared mutable state: shared
+  tables (`docs/future/13-ats.md` §13, phase 9) are the planned way, on demand.
+  A `Metrics` builtin with hidden mutable state would be a second special form
+  for sharing state between tasks, against the one-way rule, next to the logger
+  registry.
 - The std-first rule (roadmap README): rendering the Prometheus text format is
   pure computation, so it belongs in a `std/` module, not in a builtin. Only the
   hidden state would need C, and that is the part that should not exist on its

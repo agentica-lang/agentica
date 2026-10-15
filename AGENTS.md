@@ -67,11 +67,12 @@ phase 13).
   `RUNTIME-`, `LOWER-`, `BYTECODE-`), and carry a source span. Tests assert
   the code (and the span when it matters), never message text.
 - By default the Racket front end in `src/` is frozen (roadmap row 7.2.7): no
-  new syntax and no new checker rules. Only bug fixes, and new rows in the
-  `src/builtins.rkt` table with the matching name in the `vm-builtins` list of
-  `src/lower.rkt`. Every later language change goes into `compiler/`. A bug
-  fix in a ported stage changes both front ends in the same PR. They may be
-  relaxed when following them costs more than it saves; the PR says which
+  new syntax and no new checker rules. Only bug fixes, and the data that row
+  7.2.7 lists (builtin table rows and their `vm-builtins` names, builtin record
+  and enum entries, registry lines, std-only and reserved names, message texts).
+  Every later language change goes into `compiler/`. A bug fix in a ported stage
+  changes both front ends in the same PR. These rules are defaults, which a PR
+  may relax when following them costs more than it saves; the PR says which
   rule it relaxes and why.
 - Core grammar only (sections 4–6): user enums (the only user generics),
   `case`, file modules with explicit imports/exports, builtin `List[T]`,

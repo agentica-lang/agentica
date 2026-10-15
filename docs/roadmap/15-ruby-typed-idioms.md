@@ -10,18 +10,17 @@ order steps: 15a (front end only) as order row 7.5a, deferred until after the
 bootstrap (row 7.2.7). `std/logger` (14c) does not wait for it (§24.2): its
 `_meta` functions become one `fields` default when it lands. 15b to 15e, 15i and
 15j at order step 7.6, after phase 16 (strict diagnostics); the prelude part,
-15f and 15k, at
-order step 8.2, after faster lists (8d), because on today's flat-array lists an
-Agentica loop that builds a list is O(n²). One small PR per item, each with
-`grammar.md`, the programming skill, the site page, the development skill's
-notes and tests (parser, lexer and checker tests that assert codes and spans,
-golden VM fixtures, site examples). The items are independent, except where
-noted. Library items follow the library rule (after the order table): their code
-is Agentica in the compiler prelude, and the only new builtins are
-`String.compare` (public, under its exception 5), `File.eof?` (public, under its
-exception 1), and the internal `__fail_arg` and `__float_fixed` (prelude-only,
-guarded by the loader). Part B (§25.12) and Part C (§25.13) add no items. Ten
-items are planned; 15g and 15h are not planned.
+15f and 15k, at order step 8.2, after faster lists (8d), because on today's
+flat-array lists an Agentica loop that builds a list is O(n²). One small PR per
+item, each with `grammar.md`, the programming skill, the site page, the
+development skill's notes and tests (parser, lexer and checker tests that assert
+codes and spans, golden VM fixtures, site examples). The items are independent,
+except where noted. Library items follow the library rule (after the order
+table): their code is Agentica in the compiler prelude, and the only new
+builtins are `String.compare` (public, under its exception 5), `File.eof?`
+(public, under its exception 1), and the internal `__fail_arg` and
+`__float_fixed` (prelude-only, guarded by the loader). Part B (§25.12) and Part
+C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
 
 - [ ] 15a Order row 7.5a (deferred until after the bootstrap, row 7.2.7). Not a
   dependency of 14c (§24.2). Default parameter values (§25.1):

@@ -9,7 +9,7 @@ A Racket front end compiles Agentica to bytecode for a C VM. The short repo
 tree is in `AGENTS.md`. This file says how to work and which reference to
 read; load only the references your change needs.
 
-By default `src/` is frozen (roadmap row 7.2.7): bug fixes and builtin-table rows only; language changes go into `compiler/` (`references/frontend.md`). They may be relaxed when following them costs more than it saves; the PR says which rule it relaxes and why.
+By default `src/` is frozen (roadmap row 7.2.7): bug fixes and the data that row 7.2.7 lists (builtin table rows, builtin record and enum entries, registry lines, std-only and reserved names, message texts); language changes go into `compiler/` (`references/frontend.md`). They may be relaxed when following them costs more than it saves; the PR says which rule it relaxes and why.
 
 Read the active phase in `docs/roadmap/` before adding code. Build only what
 that phase asks for: no placeholder modules or empty nodes for later phases.
