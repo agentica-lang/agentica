@@ -5,7 +5,7 @@ and the `std/` docs); 22b (§32.5, §32.6) waits until after the bootstrap
 (roadmap [row 22b](../roadmap/README.md)). Decided on 2026-10-12: Agentica gets
 documentation comments written as `##` lines, in the style of Rust's `///`, so
 that a later tool can generate documentation from the code. Phase 22 is front
-end only. It comes after 7i, HTTP 20b, task crash isolation (§37), unit tests
+end only. 22a comes after 7i, HTTP 20b, task crash isolation (§37), unit tests
 (§36) and HTTP 20c (roadmap order step 7.2.1), and after the evaluation pilot
 (order step 7.2.2, §32.7).
 

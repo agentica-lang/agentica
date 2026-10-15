@@ -177,17 +177,24 @@ conversion.
   checker checks `b` first and then checks the literal with `b`'s type as the
   expected type (the existing code is `check-binary`, `src/checker.rkt:706`).
 - **Operators, calls and sign (recommended; open owner question, §42.17).** A
-  literal on either side of an operator takes the type of the other operand: the
-  checker checks the operand that is not a literal first, then types the
-  literal with its type, so `2 * b` and `0 < b` work as `b + 1` does. When both
-  operands are literals, the expected type of the whole expression flows into
-  both: `x: UInt8 = 1 + 2` types `1` and `2` as `UInt8`. In a call with a type
-  variable, the argument that fixes the variable types the literal arguments:
+  literal expression is an arithmetic tree of only literals, such as `1 + 2` or
+  `(1 + 2) * 3`, and it is typed like a literal. A literal, or a literal
+  expression, on either side of an operator takes the type of the other operand:
+  the checker checks the operand that is not a literal expression first, then
+  types the literal side with its type, so `2 * b`, `0 < b` and `b + (1 + 2)`
+  work as `b + 1` does. For an arithmetic operator (`+`, `-`, `*`, `/`, `%`)
+  with two literal expressions, the expected type of the whole expression flows
+  into both operands: `x: UInt8 = 1 + 2` types `1` and `2` as `UInt8`. A
+  comparison gives `Bool`, so its expected type does not flow into its operands:
+  `x: Bool = 1 < 2` types `1` and `2` as `Int`. In a call with a type variable,
+  the argument that fixes the variable types the literal arguments:
   `List.append(bytes, 1)` types `1` as `UInt8` when `bytes` is a `List[UInt8]`.
-  A `-` before an integer literal folds into the literal, so `-5` is one literal
-  with the value -5: `x: UInt8 = -5` is `CHECK-INT-RANGE` at the literal's span,
-  and `x: Int8 = -128` is in range. Reason: without folding, `-128` could not be
-  an `Int8`, since `128` is out of range. The unary minus of a variable stays
+  A unary `-` before an integer literal folds into the literal, so `-5` is one
+  literal with the value -5: `x: UInt8 = -5` is `CHECK-INT-RANGE` at the
+  literal's span, and `x: Int8 = -128` is in range. Folding also makes
+  `-9223372036854775808` a valid `Int` literal, as it is today (42.2), since
+  `9223372036854775808` alone is out of range. Reason: without folding, `-128`
+  could not be an `Int8`. The unary minus of a variable stays
   `CHECK-TYPE-MISMATCH` (42.7).
 - **No suffixes (recommended).** `200u8` and `1.5f32` are not written. Reason:
   context covers every case a suffix would, a suffix is a second spelling, and
@@ -385,11 +392,14 @@ conversion.
   infinity or NaN prints as `Float` does: `+inf.0`, `-inf.0` or `+nan.0`.
 - **Conversion from `Int` (recommended).** An integer is rounded to binary32
   once, from its 64-bit value: C converts the `int64_t` straight to `float`, not
-  through a `double`. Through a `double` the result can be wrong.
-  `9007199791611905` (2^53 + 2^29 + 1) gives `9007200328482816.0` when rounded
-  once and `9007199254740992.0` through a double, and `2^60 + 2^36 + 1` gives
-  `1.1529216420458004e18` against `1.152921504606847e18`. The vectors of step 2
-  test both.
+  through a `double`. A `UInt64` converts the same way, with
+  `(float)(uint64_t)`. Through a `double` the result can be wrong.
+  `9007199791611905` (2^53 + 2^29 + 1) rounds to 9007200328482816 (2^53 + 2^30),
+  and through a `double` to 9007199254740992 (2^53). `2^60 + 2^36 + 1` rounds to
+  1152921642045800448 (2^60 + 2^37), and through a `double` to
+  1152921504606846976 (2^60). These are exact integers, not printed text,
+  because a `Float32` prints its short form (Printing, above). The vectors of
+  step 2 test both.
 - **JSON (recommended).** Encoding uses the same shortest text. Decoding uses a
   correctly rounded `strtof` (glibc's rounds the decimal once), not `strtod`
   followed by a cast, because the cast rounds a second time. Reason: the double
@@ -687,10 +697,11 @@ Not planned:
 ### 42.17 Questions for the owner
 
 - **Literal typing (42.5, "Operators, calls and sign").** Adopt the rule as
-  written: a literal on either side of an operator takes the other operand's
-  type; a literal expression takes the expected type into both operands; a type
-  variable of a call is fixed by its other arguments; and a `-` folds into an
-  integer literal, so `x: UInt8 = -5` is `CHECK-INT-RANGE`. Recommendation:
+  written: a literal, or a literal expression of arithmetic operators, takes the
+  other operand's type; with two literal expressions, an arithmetic operator
+  passes the expected type into both operands, and a comparison does not; a type
+  variable of a call is fixed by its other arguments; and a unary `-` folds into
+  an integer literal, so `x: UInt8 = -5` is `CHECK-INT-RANGE`. Recommendation:
   adopt it.
 - **`Float.to_bits` return type.** Keep `Int` (signed bit pattern, as in §23.3),
   or change to `UInt64` in step 3? Recommendation: change it in step 3, with the

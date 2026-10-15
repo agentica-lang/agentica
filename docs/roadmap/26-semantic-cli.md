@@ -7,7 +7,7 @@ commands that answer questions about the code, JSON first: `agentica outline`,
 CLI only: no language change, nothing in lowering or the VM. It comes after row
 22b of [phase 22](22-doc-comments.md), whose `src/docs.rkt` it reuses, and after
 digit separators ([phase 23](23-digit-separators.md)), at order step 7.2b of the
-[roadmap](README.md). It waits until after the bootstrap and after row 22b,
+[roadmap](README.md). It waits until after the bootstrap,
 because it extends the Racket front end, and it comes before the full 6c round
 (order step 10), which measures it (§39.12). It has three PRs. Each one has its
 own tests and docs.

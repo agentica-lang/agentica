@@ -12,6 +12,8 @@ Programs compute with dates and times: a due date, the timestamp of a log line
 (§24), an expiry, a time from a JSON API. Today a program has `Time.now_ms()`
 (wall clock) and `Time.monotonic_ms()`, and nothing else. It turns milliseconds
 into a date by hand, and it cannot tell a value with an offset from one without.
+`File.stat` already gives `modified_seconds` as Unix seconds (`vm/files.c`), so
+`Time.from_unix(info.modified_seconds)` turns it into a `DateTime`.
 
 ### 41.1 Where it lives, and the exception to "std/ first"
 
@@ -39,6 +41,10 @@ the rule gets a sixth item: calendar types and their conversions, which need a
 builtin type. This section does not edit the rule text.
 
 ### 41.2 Types
+
+The file and function names in this section are the Racket front end's, as they
+are today. The types and their checks go in `compiler/` after the bootstrap
+(41.13); the Racket names here only show the current mechanism.
 
 Three builtin value types, declared like the builtin records `FileInfo` and
 `HttpServerOptions` in `src/builtin-types.rkt`:
@@ -167,9 +173,9 @@ Time.naive_of(value: DateTime) -> NaiveDateTime
 
 Comparing or subtracting a naive value with an aware one is a compile-time type
 error (`CHECK-TYPE-MISMATCH`, the same error that passing a `FileInfo` where an
-`Int` is expected gives, checked on the Racket front end). Python raises
-`TypeError` at run time for ordering and subtraction; here the program does not
-start.
+`Int` is expected gives; the Racket front end checks it today, 41.2). Python
+raises `TypeError` at run time for ordering and subtraction; here the program
+does not start.
 
 ### 41.6 Text
 
@@ -282,12 +288,14 @@ Not in v1: `add_months` and `add_years` (41.16).
   are not dates. The bounds are on the local reading: every `Date`,
   `NaiveDateTime` and `DateTime` has its reading in years 1 to 9999, whatever
   its offset. In UTC, `0001-01-01T00:00:00Z` is `-62135596800000` ms and
-  `9999-12-31T23:59:59.999Z` is `253402300799999` ms. The Unix functions give an
-  error outside those two instants, since their results are in UTC.
+  `9999-12-31T23:59:59.999Z` is `253402300799999` ms. `from_unix` and
+  `from_unix_ms` give an error outside those two instants, since their results
+  are in UTC. `to_unix_ms` cannot fail (41.4).
 - Every operation that returns a value checks that the result's reading is in
-  years 1 to 9999: `add_ms`, `add_days`, `with_offset`, `to_utc`, `from_unix`
-  and `from_unix_ms`. The check runs before the addition, so it cannot overflow.
-  `assume_offset` and `naive_of` keep the reading, so they need no check.
+  years 1 to 9999: `add_ms`, `add_ms_naive`, `add_days`, `with_offset`,
+  `to_utc`, `from_unix` and `from_unix_ms`. The check runs before the addition,
+  so it cannot overflow. `assume_offset` and `naive_of` keep the reading, so
+  they need no check.
 - Unix time has no leap seconds, as in POSIX: each day has 86400 seconds. Second
   `60` is rejected by `naive`, `datetime` and `parse`, with the message
   `leap second not supported`. This is a chosen loss: a leap second cannot be
@@ -324,7 +332,7 @@ Durations come from the monotonic clock, and the pattern is:
 def main() -> Void
   start = Time.monotonic_ms()
   Task.sleep(5)
-  puts(Time.monotonic_ms() - start >= 5)
+  puts(Time.monotonic_ms() - start >= 4)
 end
 ```
 
@@ -356,9 +364,10 @@ end
   independent counterpart is `tests/fixtures/monotonic-peer.py` (Python,
   standard library): it runs the program on Linux, where both read
   `CLOCK_MONOTONIC`, and checks that its reading lies between two
-  `time.monotonic_ns()` readings taken around the run. The margin is 5 ms:
-  libuv's timers count whole milliseconds of a loop clock that can lag the
-  monotonic clock, so a timer may fire up to about 2 ms early.
+  `time.monotonic_ns()` readings taken around the run. The margin is 5 ms: the
+  loop calls `uv_update_time` before it starts a timer (`vm/loop.c`), so a timer
+  fires early by under 1 ms of truncation, plus any lag of libuv's coarse clock,
+  and 5 ms covers that.
 - No `elapsed` helper. The helper would be `Time.monotonic_ms() - start` with a
   name, and it would hide which clock it reads. The existing code
   (`stdlib/test/runner.agc`) writes the subtraction, and it stays that way.
@@ -389,7 +398,7 @@ The parts land under different rules:
 |---|---|---|
 | Types, reserved names, the construction rule and its code | `compiler/` (the Agentica front end) | A checker change in the Agentica front end (§35), decided by the owner on 2026-10-15. Not a table row. |
 | `Time.*` functions (41.3 to 41.7) | `compiler/` (the Agentica catalog, §35.4), `vm/dates.c` | With the types, in the Agentica front end (§35): most of the functions return the new types, so their catalog rows wait for it. |
-| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt`, `vm/numbers.c` | Independent of the types, so it may land at any time. After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
+| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin catalog, if §35 step 4 is done), `vm/numbers.c` | Independent of the types, so it may land at any time. After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
 
 Most of the functions return the new types, so they cannot land before the
 types. The owner decided on 2026-10-15 that the types come after the Agentica
@@ -405,7 +414,8 @@ The two parts land in two PRs (41.10 and 41.13).
 The monotonic clock (41.10), which may land first:
 
 - `src/builtins.rkt`: one row next to the `Time` rows. `src/lower.rkt`: its
-  `vm-builtins` name. `vm/numbers.c`: the builtin.
+  `vm-builtins` name, or, if §35 step 4 is done, the Agentica builtin catalog
+  instead. `vm/numbers.c`: the builtin.
 - `docs/grammar/06b-builtins.md`: `Time.monotonic_ns` next to
   `Time.monotonic_ms` (the `Time` line).
 - Programming skill: the `Time` line of the `builtins.md` reference of the
@@ -422,6 +432,11 @@ Agentica front end:
 - `compiler/`: the three records, the reserved names, the construction rule and
   its code `CHECK-NOT-CONSTRUCTIBLE`, and the `Time.*` rows of the Agentica
   catalog (§35.4, step 4).
+- JSON (41.18): option B adds three type-table kinds (`AGC_TYPE_*` in
+  `vm/value.h`, `load_types` in `vm/loader.c`), a text branch in
+  `vm/json_typed.c` and `vm/json_value.c`, and the encode and decode rules in
+  `compiler/`. Option A adds only the not-decodable and not-encodable rule in
+  `compiler/`. Either way, `docs/grammar/06b-builtins.md` gets the JSON lines.
 - `vm/dates.c` (new): the civil-date algorithms, the text and the builtins, with
   their own table, registered as the other tables are.
 - Grammar: `docs/grammar/04-lexical.md` (reserved builtin names),
@@ -481,8 +496,8 @@ out-of-range `from_unix_ms`. It also covers the parse errors of 41.6 (no offset
 in `parse`, an offset in `parse_naive`, a space for `T`, `+0200`, `:60`,
 trailing text, empty text, a `.` with no digits), the message of second 60
 (`leap second not supported`), and the results that leave the range (`add_ms`
-past 9999-12-31, and the edge readings of the offsets bullet). It prints the
-accepted bounds 0001-01-01 and 9999-12-31.
+and `add_ms_naive` past 9999-12-31T23:59:59.999, and the edge readings of the
+offsets bullet). It prints the accepted bounds 0001-01-01 and 9999-12-31.
 
 Checker (the goldens of the Agentica front end, against `agentica check --json`,
 as 42.13 says, since the Racket checker is frozen; each asserts the code and the
@@ -527,20 +542,35 @@ struct (`docs/grammar/06b-builtins.md`). `JSON.encode` would write an object,
 not an RFC 3339 or ISO 8601 text. There are two options, and the owner has not
 chosen.
 
-- **B (recommended).** `JSON.encode` writes a field of type `Date`,
-  `NaiveDateTime` or `DateTime` as a JSON string: the text of
-  `Time.format_date`, `Time.format_naive` or `Time.format` (41.6). `JSON.decode`
-  reads such a field with `Time.parse_date`, `Time.parse_naive` or `Time.parse`,
-  so the checks of 41.3 and 41.6 run, and an error names the field path, as the
-  other decode errors do. `JSON.schema` gives a string for each of the three.
-  Reason: the text is the form that other systems write, and the checks run
-  where the text comes in.
+- **B (recommended).** A field of type `Date`, `NaiveDateTime` or `DateTime` is
+  a JSON string. `JSON.encode` writes the text of `Time.format_date`,
+  `Time.format_naive` or `Time.format` (41.6). `JSON.decode` reads the string
+  with `Time.parse_date`, `Time.parse_naive` or `Time.parse`, so the checks of
+  41.3 and 41.6 run, and an error names the field path, as the other decode
+  errors do. `JSON.schema` gives a string for each of the three. Reason: the
+  text is the form that other systems write, and the checks run where the text
+  comes in.
+  - Cost: each type gets a type-table kind of its own (`AGC_TYPE_*` in
+    `vm/value.h`, read by `load_types` in `vm/loader.c`), so the `.agcb` format
+    changes. The typed encoder and decoder (`vm/json_typed.c`,
+    `vm/json_value.c`) get a text branch for each kind. If §42 lands first,
+    these kinds are added to its version 4 (42.11). If §41 lands first, it sets
+    version 4, and §42 sets version 5.
+  - Top level: `JSON.decode(text, DateTime)` reads a JSON string with
+    `Time.parse` and gives `Result[DateTime]`; text that is not a JSON string is
+    an error. `JSON.encode` of a `DateTime` gives the JSON string.
 - **A (alternative).** In v1, a field of one of the three types is
   `CHECK-NOT-DECODABLE` for `JSON.decode` and `CHECK-NOT-ENCODABLE` for
   `JSON.encode`, as Results and other nested types already are
   (`docs/grammar/06b-builtins.md`). A program converts the value with
   `Time.format` and `Time.parse` itself. Reason: nothing to design for v1; the
   cost is one conversion in each program that reads or writes a date.
+  - Cost: one rule in `compiler/`: the three types are not decodable and not
+    encodable, as Results are not encodable. No new `.agcb` kind and no format
+    change; `vm/json_typed.c` and `vm/json_value.c` do not change.
+  - Top level: `JSON.decode(text, DateTime)` and `JSON.encode` of a `DateTime`
+    are `CHECK-NOT-DECODABLE` and `CHECK-NOT-ENCODABLE`, the same checks as for
+    a field.
 
 ### 41.19 Questions for the owner
 
