@@ -101,6 +101,11 @@ Designed, not scheduled: sized numeric types (§42,
 It has no row in this table. Its types are checker changes, so they start
 after the bootstrap, in the Agentica front end (§42.14).
 
+Idea, not scheduled: a language server ([§43](../future/43-language-server.md)).
+It has no row in this table. It would reuse the §39 commands and the §32 doc
+comments, so it can only start after them (and is easiest on the self-hosted
+front end of §35).
+
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
 diagnostics, behavior tests, grammar, and the self-contained programming
