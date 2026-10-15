@@ -1,0 +1,26 @@
+## Module doc.
+##
+## Second paragraph with   spaces.
+
+# plain comment
+#
+#! also plain
+x = 1 ## not a doc
+## First
+##
+##   Third
+  ### Heading
+def f()
+  ## indented doc
+	## tab-indented doc
+  x
+end
+
+## after blank
+
+## before comment
+# note
+## split by comment
+##tight
+###
+## last
