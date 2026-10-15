@@ -1,10 +1,13 @@
-"""A relocated executable still imports std/ modules (ported from stdlib-distribution-test.rkt).
+"""A copied bin/ with the CLI and the VM still imports std/ modules (ported from stdlib-distribution-test.rkt).
 
-The standard library is embedded in the executable, so a copy of it in a folder of its own, with no checkout around,
-must run a program that imports `std/queue`. It runs only when AGENTICA_TEST_EXECUTABLE names a built executable
-(`make test-distribution` builds dist/agentica and sets it); a shell wrapper cannot be moved and is skipped. The
-executable is copied with the VM next to it, where the Racket launcher looks for it; the single binary ignores the
-copy. The release also runs the unpacked archive (release.yml).
+The standard library is embedded in the executable. The test copies the executable and the VM into a folder of its own,
+away from the checkout, and runs a program that imports `std/queue` from another working directory. It runs only when
+AGENTICA_TEST_EXECUTABLE names a built executable (`make test-distribution` builds dist/agentica and sets it); a shell
+wrapper cannot be moved and is skipped. The VM is copied next to the executable, where the Racket launcher looks for
+it; the single binary ignores the copy. The release also runs the unpacked archive (release.yml).
+
+The old test also rebuilt the executable from a copied source tree. That check is dropped: it only made sense for the
+Racket executable, which step 8d removes.
 """
 import os
 import shutil

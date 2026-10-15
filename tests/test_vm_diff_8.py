@@ -16,7 +16,7 @@ import time
 import unittest
 
 from tests.agentica_test import (
-    FIXTURES, ROOT, RUN_TIMEOUT, TESTS, Child, cli, process_alive, vm_binary, vm_environment, wait_until)
+    RUN_TIMEOUT, TESTS, Child, cli, process_alive, vm_binary, vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, SHARD_COUNT, Fixture, VmCase, check_text_format,
     decode, exit_status, execute, fixture_programs, last_limit, outcome, read_expected, read_expected_steps,
@@ -165,6 +165,7 @@ class Extras(VmCase):
         self.assertEqual(rejected[0], 2)
         self.assertTrue(rejected[2].startswith("agentica-vm: invalid bytecode: "), rejected[2])
 
+    @unittest.skipUnless(LINUX, "Linux only")
     def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_it(self):
         bytecode = self.fixture_bytecode("calls")
         copy = self.work_dir() / "driver-copy.agcb"
@@ -508,7 +509,6 @@ class ProductCli(CliCase):
             (0, "0 \"a\"\n1 \"\"\n2 \"λ 𝔸\"\n3 \"--json\"\n4 \"--vm\"\n[\"a\", \"\", \"λ 𝔸\", \"--json\", \"--vm\"]\n", ""))
         self.assertEqual(list(self.temp.iterdir()), [])
 
-
     def test_compile_exits_1_on_a_diagnostic_and_2_on_an_unwritable_output(self):
         work = self.work_dir()
         rejected_file = work / "file.agc"
@@ -526,6 +526,7 @@ class ProductCli(CliCase):
 class RacketLauncher(CliCase):
     """What only the launcher of src/main.rkt does: it finds the VM by AGENTICA_VM and feeds the VM its stdin."""
 
+    @unittest.skipUnless(LINUX, "Linux only")
     def test_a_missing_or_non_executable_vm_exits_2(self):
         calls = self.fixture("calls.agc")
         missing = self.agentica(calls, vm=self.temp / "no-vm")

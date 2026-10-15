@@ -1253,6 +1253,8 @@ in rackunit until phase 3.
   `modules-test`, `checker-test`, `bytecode-test`, `diagnostic-test`), the live
   comparisons (`frontend-*`, frozen by 8c) and `vm-diff-common.rkt`, which is
   cut down to the three helpers the live comparisons use (the VM path,
-  `compile-file` and `run-process`). The in-process comparison of `compile-file`
-  with the CLI `compile` is gone with `compile-file`; the front-end bytecode
-  goldens compare the writers. 8d deletes these files with the rest.
+  `compile-file` and `run-process`). The old byte comparison of the in-process `compile-file`
+  with the CLI `compile` is dropped: `test_vm_diff_8.py` checks that the CLI
+  gives the same bytes twice, and the front-end bytecode goldens compare the
+  writers. `compile-file` itself stays in `vm-diff-common.rkt` for the live
+  comparisons. 8d deletes these files with the rest.

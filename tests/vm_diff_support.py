@@ -16,7 +16,6 @@ import os
 import random
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -24,7 +23,8 @@ import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tests.agentica_test import FIXTURES, PYTHON, ROOT, RUN_TIMEOUT, TestCase, compile_agc, vm_binary, vm_environment
+from tests.agentica_test import (
+    FIXTURES, PYTHON, ROOT, RUN_TIMEOUT, TestCase, _kill_and_collect, compile_agc, vm_binary, vm_environment)
 
 FIXTURE_DIR = FIXTURES / "vm"
 RUNAWAY_DIR = FIXTURE_DIR / "step-limited"
@@ -222,24 +222,15 @@ def execute(argv, stdin=b"", stdin_path=None, timeout=RUN_TIMEOUT, cwd=None, env
         try:
             out, err = process.communicate(None if source else stdin, timeout=timeout)
         except subprocess.TimeoutExpired:
-            _kill_group(process)
+            _kill_and_collect(process)
             return TIMEOUT, "", ""
         except BaseException:
-            _kill_group(process)
+            _kill_and_collect(process)
             raise
     finally:
         if source:
             source.close()
     return exit_status(process.returncode), decode(out), decode(err)
-
-
-def _kill_group(process):
-    # Called before the process is reaped, so its pid (the group id) cannot belong to anyone else yet.
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    process.communicate()
 
 
 def run_vm_process(fixture, options, bytecode, args, timeout=RUN_TIMEOUT, cwd=None, env=None, stdin_path=None):

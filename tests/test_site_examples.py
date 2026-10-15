@@ -12,7 +12,6 @@ import shutil
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from pathlib import Path
 
 from tests.agentica_test import ROOT, TestCase, cli, run, slow, vm_environment
 
