@@ -57,9 +57,9 @@ end
 # A reserved type, a builtin enum (and Result), or a bare builtin function keeps its name.
 def builtin_name?(cx: Context, name: String, want: Want) -> Bool
   case want
-    Want.Type -> return cx.settings.reserved.include?(name)
-    Want.Enum -> return name == "Result" or cx.settings.builtin_enums.include?(name)
-    Want.Function -> return cx.settings.bare_builtins.include?(name)
+    Want.Type -> return cx.settings.catalog.reserved.include?(name)
+    Want.Enum -> return name == "Result" or cx.settings.catalog.enums.has_key?(name)
+    Want.Function -> return cx.settings.catalog.bare_names.include?(name)
   end
 end
 
@@ -72,7 +72,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   target = cx.me.aliases.get(alias, "")
   if target != ""
     return imported(cx, cx.modules[target], member, want, span)
-  elsif cx.settings.std_only.has_key?(alias) and !Resolve.embedded?(cx.me.key)
+  elsif cx.settings.catalog.std_only.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, span))
   elsif function_wanted?(want)
     return ok(alias + "." + member)
@@ -88,7 +88,7 @@ def function_wanted?(want: Want) -> Bool
 end
 
 def std_only_failure(cx: Context, alias: String, member: String, span: Source.Span) -> String
-  wrapper = cx.settings.std_only[alias]
+  wrapper = cx.settings.catalog.std_only[alias]
   help = alias + " is internal to " + wrapper.std_path + "; use import \"" + wrapper.std_path + "\" as " + wrapper.alias
   return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown function \"" + alias + "." + member + "\"", Failure.hint(help))
 end

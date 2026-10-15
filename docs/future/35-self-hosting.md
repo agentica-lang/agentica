@@ -195,7 +195,7 @@ goldens stay.
 | 1 | **Done** (PR #237): Lexer (`src/lexer.rkt`, with `source.rkt`, `token.rkt` and the diagnostic data of `diagnostic.rkt`) | Tokens as text lines (kind, value, span), or the one `LEX-` diagnostic |
 | 2 | **Done** (PR #245): Parser (`src/parser.rkt`, `ast.rkt`) | The AST in a stable text form, or the `PARSE-` diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree, so step 2 adds a printer with the same output on both sides (`tests/frontend-parser-common.rkt`) |
 | 3 | **Done** (PR #254): Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution, or the first `CHECK-IMPORT-*`, `CHECK-DECL-ORDER` or `CHECK-REDEFINED-NAME` diagnostic with its file. Needs the environment and real-path builtins (35.5). It carries the privacy rule of `value.with(...)` (roadmap 15c) as data: each linked module lists the user structs it may update, and the text form prints the list on every update. The text form is `tests/frontend-modules-common.rkt` (Racket) and `compiler/link.agc` (Agentica) |
-| 4 | Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). Open decision for deep trees: the linker of step 3 already handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that (35.9), so the checker either walks with a stack of its own or both parsers get a `PARSE-` tree-depth limit (a diagnostic change in both front ends in one PR); decide it before the checker is written. |
+| 4 | **In progress:** 4a, the builtin catalog (`builtins.rkt`, `builtin-types.rkt`) as Agentica data, is **Done** (PR #258); 4b and 4c, the checker. Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). Open decision for deep trees: the linker of step 3 already handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that (35.9), so the checker either walks with a stack of its own or both parsers get a `PARSE-` tree-depth limit (a diagnostic change in both front ends in one PR); decide it before the checker is written. |
 | 5 | Lowering (`src/lower.rkt`) | The IR in the form `--dump-ir` prints, or the `LOWER-` diagnostic |
 | 6 | Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal |
 | 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/bdd-test.rkt`, `tests/bdd-integration.rkt`) |
@@ -211,7 +211,8 @@ Notes:
   the parser gives each node an `Int` id in step 2, and lowering looks types up
   by id.
 - The builtin catalog (`src/builtins.rkt`, `src/builtin-types.rkt`) moves to
-  Agentica data in step 4. It remains the one description of the builtins, and
+  Agentica data in step 4 (4a, done: `compiler/builtins_data.agc`, generated
+  from the Racket tables). It remains the one description of the builtins, and
   `agentica help` reads it.
 - **Source paths.** A required change before step 6: both front ends store
   source paths relative to the project root, not absolute (35.1), so the bytes
@@ -433,9 +434,9 @@ language or VM change. Notes for the next steps:
   registry of `src/stdlib.rkt` and the folder must list the same files; a test
   checks it. The tables the linker takes from `builtins.rkt` and
   `checker.rkt` (reserved type names, bare builtin names, builtin enums,
-  std-only modules) are `compiler/module_names.agc`, generated by
-  `tools/gen-module-names.rkt` and checked by the same test. Step 4 replaces
-  them with the builtin catalog.
+  std-only modules) were `compiler/module_names.agc`, generated by
+  `tools/gen-module-names.rkt`; step 4a replaced them with the builtin
+  catalog (below).
 - The privacy rule of `value.with(...)` is data: the linker sets
   `StructUpdate.visible` to the sorted linked names of the user structs the
   file may update (its own and the exported structs of the files it imports
@@ -484,3 +485,48 @@ language or VM change. Notes for the next steps:
   files of `examples/`, `stdlib/` and `tests/fixtures/`, the 307 programs of the
   site, and the large inputs of the slow tier (chains of 3,000 files, 2,000
   imports, cycles, and deep trees).
+
+Status on 2026-10-15 (PR #258): step 4a is done. The checker (step 4) is split
+in PRs that each hold their tests and docs: 4a is the builtin catalog, which the
+linker already needed (the name tables) and the checker needs for every call;
+4b and 4c are the checker.
+
+- `compiler/types.agc` has the `Type` enum, the lists headed by a name of
+  `src/checker.rkt` (`'Int`, `'(List T)`, `'(Struct "Point")`) as variants, and
+  `to_text` (`type->string`) and `display_name` (the `@N::` prefix of a linked
+  name is left out of messages). `Type.Var` is a type variable of a builtin
+  signature; `(Await R)` of the Racket rows is `Type.Enum("Await", [R])`, which
+  prints the same.
+- `compiler/builtin_model.agc` has the data structs (`Builtin` with its
+  `alternatives`, `Named`, `Record`, `EnumDef`) and the `Rule` enum: the rule
+  symbols of `builtins.rkt` in CamelCase, `Plain` for no rule. A test checks the
+  variants against the rows.
+- `compiler/builtins_data.agc` is generated by `tools/gen-builtins-data.rkt`
+  from `src/builtins.rkt`, `src/builtin-types.rkt` and `reserved-type-names` of
+  `src/checker.rkt` (rows in functions of at most 40, to stay under 60 lines).
+  It replaces `module_names.agc` and `tools/gen-module-names.rkt`. A fast test
+  fails when the file is out of date: run `racket tools/gen-builtins-data.rkt`
+  after changing a row, a record, an enum or a reserved name.
+- `compiler/builtins.agc` builds a `Catalog` once per run: a `Map` of the
+  builtins by name, `Set`s for the bare names, the opaque and handle types and
+  the reserved names, `Map`s for the records and enums, the public names (all
+  but the std-only modules) sorted, and the std-only table. `lookup`, `ref`
+  (with an arity: the form among the alternatives), `std_only_name?`,
+  `signature` and `form_signature` are map accesses or short loops, never scans
+  of the table. Building the catalog takes 2.6 ms (210 rows); the linker's
+  `Settings` holds one.
+- `suggest.agc` has `did_you_mean_among`, the full `did-you-mean` of
+  `builtins.rkt` (linked-name prefix, shared candidates). It skips candidates
+  whose length differs by more than the limit before it computes a distance.
+- The text form of the catalog is `tests/frontend-catalog-common.rkt` (Racket)
+  and `compiler/catalog.agc` with `catalog_text.agc` (Agentica): one line per
+  form (signature, the parameter and result types with their variants written
+  out, rule, implementation, effects, description), the records, the enums and
+  the name tables, then the answer to each probe (`near:`, `ref:`, `std:`,
+  `type:`, `sig:` and `disp:` questions, listed in the common file). The golden
+  is `tests/fixtures/frontend/catalog/catalog.text`; the Agentica output on the
+  VM equals it.
+- Not in 4a: `agentica help` still reads the Racket catalog (step 8), and the
+  method tables, the foreign-name help texts and the rules of the checker
+  (`method-aliases`, `foreign-names`, the `case` on `builtin-rule`) go with the
+  checker in 4b.

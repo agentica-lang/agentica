@@ -5,12 +5,10 @@
          "frontend-modules-common.rkt"
          (only-in "frontend-lexer-common.rkt" call-with-bytecode)
          "vm-diff-common.rkt"
-         "../src/stdlib.rkt"
-         "../tools/gen-module-names.rkt")
+         "../src/stdlib.rkt")
 
 (define-runtime-path root "..")
 (define-runtime-path entry "../compiler/link.agc")
-(define-runtime-path module-names "../compiler/module_names.agc")
 
 (define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
 
@@ -100,10 +98,6 @@
       (check-equal? (string-append (link-text (module-input-root input) #:env (module-input-env input)) "\n")
                     (golden input)
                     (module-input-name input))))
-
-  (test-case "the name tables of compiler/module_names.agc are the ones of src/"
-    (unless (equal? (file->string module-names) (module-names-source))
-      (fail "compiler/module_names.agc is out of date: run racket tools/gen-module-names.rkt")))
 
   (test-case "the std/ modules of the stdlib/ folder are the registry of src/stdlib.rkt"
     (define in-folder

@@ -115,7 +115,7 @@ end
 def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.ImportDecl) -> Result[Walk]
   module = frame.module
   site = Failure.Site(file: module.file, span: decl.span)
-  if frame.aliases.has_key?(decl.alias) or module.names.has_key?(decl.alias) or settings.reserved.include?(decl.alias)
+  if frame.aliases.has_key?(decl.alias) or module.names.has_key?(decl.alias) or settings.catalog.reserved.include?(decl.alias)
     return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", Diag.Help.NoHelp))
   end
   file = try Paths.module_file(decl.path, decl.alias, site)
@@ -168,7 +168,7 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
       next
     end
     name = Declarations.name_of(wrapped)
-    if names.has_key?(name) or settings.bare_builtins.include?(name) or settings.reserved.include?(name)
+    if names.has_key?(name) or settings.catalog.bare_names.include?(name) or settings.catalog.reserved.include?(name)
       return error(Failure.fail_at(Failure.Site(file: file, span: Declarations.span_of(wrapped)), "CHECK-REDEFINED-NAME", "duplicate or reserved declaration", Diag.Help.NoHelp))
     end
     names = names.put(name, kind)

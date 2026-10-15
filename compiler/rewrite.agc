@@ -266,7 +266,7 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
   parts = node.name.split(".")
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
     return ok(variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], [], node.span))
-  elsif parts.size == 2 and cx.settings.builtin_enums.include?(parts[0])
+  elsif parts.size == 2 and cx.settings.catalog.enums.has_key?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], [], node.span))
   end
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Type, node.span, true)
@@ -282,7 +282,7 @@ def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Ex
   parts = node.type_name.split(".")
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
     return ok(variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], try rewrite_named(cx, node.args), node.span))
-  elsif parts.size == 2 and cx.settings.builtin_enums.include?(parts[0])
+  elsif parts.size == 2 and cx.settings.catalog.enums.has_key?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], try rewrite_named(cx, node.args), node.span))
   elsif parts.size == 3 and exported_enum?(cx, parts[0], parts[1])
     name = try Resolve.resolve(cx, parts[0] + "." + parts[1], Resolve.Want.Enum, node.span, false)
