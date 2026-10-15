@@ -85,6 +85,10 @@ end
 
 ### 12.2 Sets
 
+Implemented in 8b: the rules are in `grammar.md` ("Sets"). This section keeps
+the design notes. Where the notes say "at first", the first version is what
+landed, and `Test.eq` also compares two sets (in any order).
+
 ```agentica
 seen = Set.new(["a", "b"])
 seen = seen.add("c")
@@ -110,7 +114,9 @@ puts(seen.size)            # 3
 - Text form: `Set[1, 2]`. No `==` at first, like `List` and `Map` (`grammar.md`
   §6 allows `==` on primitive values only). Sets are not JSON-encodable at
   first.
-- VM: built on the HAMT of 7e PR 5d, so it comes after maps.
+- VM: built on the HAMT of 7e PR 5d, so it comes after maps. A set is the
+  `agc_map` of a map with nil values under its own tag, so it has no new hash
+  structure. `intersection` and `difference` keep the order of `a`.
 
 ### 12.3 Queues
 

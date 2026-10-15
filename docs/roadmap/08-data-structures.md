@@ -11,7 +11,19 @@ their own place in the order (step 8).
 - [x] 8a Ranges (reserving `Range` breaks a user type of that name; say so in
   the changelog, as for `Set` in 8b): `a..b`, `a...b`, `for` over a range,
   `Range` methods, `Int#times`, `upto` and `downto`.
-- [ ] 8b `Set[T]`.
+- [x] 8b `Set[T]` (reserving `Set` breaks a user type of that name, noted in
+  the changelog): `Set.new`, `add`, `delete`, `include?`, `size`, `empty?`,
+  `to_a`, `union`, `intersection`, `difference`, `subset?`, `for` over a set,
+  the text form `Set[1, 2]`; no `==`, not JSON-encodable. The VM keeps a set as
+  a map with nil values under its own tag
+  (`docs/vm/05-values-execution-builtins.md` §5.1), so it reuses the HAMT of
+  `vm/map.c`; `agc_map_add_hash` leaves a member
+  alone. Done by the owner's decision of 2026-10-15 in the Racket front end,
+  which relaxes the freeze of row 7.2.7 (`compiler/` uses `Set`, and has no
+  checker yet; the port of step 4 in `docs/future/35-self-hosting.md` must
+  handle `Set[T]`). Tests: the goldens `sets` and `set-vectors` (a Python peer,
+  `tests/fixtures/set-vectors.py`), the checker tests, and `map_test.c`.
+  Numbers in `docs/vm-benchmarks.md`; the `sets` benchmark has a Python twin.
 - [ ] 8c `Queue[T]`; `std/queue` stays deprecated under the alias `StringQueue`
   (breaking change for `as Queue`). It is removed later, in its own PR, only
   when another `std/` module covers the `std/` path
