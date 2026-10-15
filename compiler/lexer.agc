@@ -24,6 +24,175 @@ struct DocScan
   next: String
 end
 
+export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
+  codes = text.split("").map do |character| String.code(character) end
+  size = codes.size
+  keywords = keyword_table()
+  operators = operator_table()
+  tokens: List[Tokens.Token] = []
+  delimiters: List[Frame] = []
+  last_kind = ""
+  open_strings = 0
+  index = 0
+  line = 1
+  line_start = 0
+  while true
+    if index == size
+      here = Source.position(index, line, line_start)
+      if statement_level?(delimiters) and last_kind != "NL"
+        tokens = tokens.push(token(text, "NL", Tokens.Value.NoValue, here, here))
+      end
+      opening = innermost(delimiters, false)
+      if opening >= 0
+        frame = delimiters[opening]
+        if frame.kind == "#"
+          return Diag.Outcome.Failed(unterminated(frame.start, here))
+        end
+        help = Diag.Help.NoHelp
+        if frame.kind == "{"
+          help = Diag.Help.Hint("add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no braces and end with \"end\"")
+        end
+        return Diag.Outcome.Failed(Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed " + frame.kind + " delimiter", span(frame.start, here), help))
+      end
+      tokens = tokens.push(token(text, "EOF", Tokens.Value.NoValue, here, here))
+      return Diag.Outcome.Done(tokens)
+    end
+    code = codes[index]
+    if blank?(code)
+      index += 1
+    elsif newline?(code)
+      start = Source.position(index, line, line_start)
+      if code == 13 and at(codes, size, index + 1) != 10
+        return Diag.Outcome.Failed(Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp))
+      end
+      if open_strings > 0
+        return Diag.Outcome.Failed(unterminated(delimiters[innermost(delimiters, true)].start, start))
+      end
+      index += 1
+      if code == 13
+        index += 1
+      end
+      line += 1
+      line_start = index
+      if statement_level?(delimiters)
+        tokens = tokens.push(token(text, "NL", Tokens.Value.NoValue, start, Source.position(index, line, line_start)))
+        last_kind = "NL"
+      end
+    elsif code == 35
+      if at(codes, size, index + 1) == 35 and only_blanks?(codes, line_start, index)
+        start = Source.position(index, line, line_start)
+        scan = scan_doc(text, codes, size, index, line, line_start)
+        block = Tokens.DocBlock(text: scan.text, next: scan.next)
+        tokens = tokens.push(token(text, "DOC", Tokens.Value.Doc(block), start, Source.position(scan.stop, scan.line, scan.line_start)))
+        last_kind = "DOC"
+        index = scan.stop
+        line = scan.line
+        line_start = scan.line_start
+      else
+        index = skip_line(codes, size, index)
+      end
+    elsif letter?(code) or code == 95
+      start = Source.position(index, line, line_start)
+      first = index
+      index = skip_name(codes, size, index + 1)
+      if !(code >= 65 and code <= 90) and index < size and (codes[index] == 63 or codes[index] == 33)
+        if !(codes[index] == 33 and at(codes, size, index + 1) == 61)
+          index += 1
+        end
+      end
+      lexeme = text.slice(first, index - first)
+      kind = keywords.get(lexeme, "")
+      if kind == ""
+        kind = "name"
+        if code >= 65 and code <= 90
+          kind = "type-name"
+        end
+      end
+      if kind == "def" or kind == "struct" or kind == "enum" or kind == "if" or kind == "while" or kind == "for" or kind == "do"
+        delimiters = delimiters.push(Frame(kind: "kw", start: start))
+      elsif kind == "end" and delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "kw"
+        delimiters = pop(delimiters)
+      end
+      tokens = tokens.push(Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, Source.position(index, line, line_start))))
+      last_kind = kind
+    elsif digit?(code)
+      start = Source.position(index, line, line_start)
+      first = index
+      index = skip_number(codes, size, index)
+      is_float = at(codes, size, index) == 46 and number_char?(at(codes, size, index + 1))
+      if is_float
+        index = skip_number(codes, size, index + 1)
+      end
+      stop = Source.position(index, line, line_start)
+      if invalid_separator?(codes, first, index)
+        return Diag.Outcome.Failed(Diag.fail("LEX-INVALID-NUMBER", "a \"_\" in a number must sit between two digits", span(start, stop), Diag.Help.Hint("write digit groups like 1_000 or 0.000_5; remove the extra \"_\"")))
+      end
+      digits = text.slice(first, index - first).replace("_", "")
+      if is_float
+        tokens = tokens.push(token(text, "float", Tokens.Value.Real(digits.to_f!), start, stop))
+        last_kind = "float"
+      else
+        tokens = tokens.push(token(text, "integer", integer_value(digits), start, stop))
+        last_kind = "integer"
+      end
+    elsif code == 34 or (code == 125 and delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#")
+      start = Source.position(index, line, line_start)
+      string_start = start
+      first = true
+      if code == 125
+        string_start = delimiters[delimiters.size - 1].start
+        first = false
+        delimiters = pop(delimiters)
+        open_strings -= 1
+      end
+      outcome = scan_string(text, codes, size, index + 1, string_start, start, line, line_start, first)
+      case outcome
+        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(piece) ->
+          tokens = tokens.push(token(text, piece.kind, Tokens.Value.Text(piece.value), start, Source.position(piece.token_end, line, line_start)))
+          last_kind = piece.kind
+          if piece.opens
+            delimiters = delimiters.push(Frame(kind: "#", start: string_start))
+            open_strings += 1
+          end
+          index = piece.next
+      end
+    else
+      start = Source.position(index, line, line_start)
+      lexeme = text.slice(index, 1)
+      if code == 46 and at(codes, size, index + 1) == 46 and at(codes, size, index + 2) == 46
+        lexeme = "..."
+      elsif index + 1 < size
+        pair = text.slice(index, 2)
+        if operators.has_key?(pair)
+          lexeme = pair
+        end
+      end
+      kind = operators.get(lexeme, "")
+      if kind == ""
+        return Diag.Outcome.Failed(unexpected_character(code, lexeme, start, Source.position(index + 1, line, line_start)))
+      end
+      index += lexeme.length
+      stop = Source.position(index, line, line_start)
+      if kind == "left-paren" or kind == "left-bracket" or kind == "left-brace"
+        delimiters = delimiters.push(Frame(kind: lexeme, start: start))
+      elsif kind == "right-paren" or kind == "right-bracket" or kind == "right-brace"
+        if delimiters.size == 0 or delimiters[delimiters.size - 1].kind != expected_opener(kind)
+          help = Diag.Help.NoHelp
+          if lexeme == "}" and statement_level?(delimiters)
+            help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
+          end
+          return Diag.Outcome.Failed(Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help))
+        end
+        delimiters = pop(delimiters)
+      end
+      tokens = tokens.push(Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)))
+      last_kind = kind
+    end
+  end
+  return Diag.Outcome.Failed(unterminated(Source.position(0, 1, 0), Source.position(0, 1, 0)))
+end
+
 def keyword_table() -> Map[String, String]
   return {
     "import": "import", "export": "export", "def": "def", "struct": "struct", "enum": "enum",
@@ -334,173 +503,4 @@ def expected_opener(kind: String) -> String
     "right-bracket" -> return "["
     _ -> return "{"
   end
-end
-
-export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
-  codes = text.split("").map do |character| String.code(character) end
-  size = codes.size
-  keywords = keyword_table()
-  operators = operator_table()
-  tokens: List[Tokens.Token] = []
-  delimiters: List[Frame] = []
-  last_kind = ""
-  open_strings = 0
-  index = 0
-  line = 1
-  line_start = 0
-  while true
-    if index == size
-      here = Source.position(index, line, line_start)
-      if statement_level?(delimiters) and last_kind != "NL"
-        tokens = tokens.push(token(text, "NL", Tokens.Value.NoValue, here, here))
-      end
-      opening = innermost(delimiters, false)
-      if opening >= 0
-        frame = delimiters[opening]
-        if frame.kind == "#"
-          return Diag.Outcome.Failed(unterminated(frame.start, here))
-        end
-        help = Diag.Help.NoHelp
-        if frame.kind == "{"
-          help = Diag.Help.Hint("add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no braces and end with \"end\"")
-        end
-        return Diag.Outcome.Failed(Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed " + frame.kind + " delimiter", span(frame.start, here), help))
-      end
-      tokens = tokens.push(token(text, "EOF", Tokens.Value.NoValue, here, here))
-      return Diag.Outcome.Done(tokens)
-    end
-    code = codes[index]
-    if blank?(code)
-      index += 1
-    elsif newline?(code)
-      start = Source.position(index, line, line_start)
-      if code == 13 and at(codes, size, index + 1) != 10
-        return Diag.Outcome.Failed(Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp))
-      end
-      if open_strings > 0
-        return Diag.Outcome.Failed(unterminated(delimiters[innermost(delimiters, true)].start, start))
-      end
-      index += 1
-      if code == 13
-        index += 1
-      end
-      line += 1
-      line_start = index
-      if statement_level?(delimiters)
-        tokens = tokens.push(token(text, "NL", Tokens.Value.NoValue, start, Source.position(index, line, line_start)))
-        last_kind = "NL"
-      end
-    elsif code == 35
-      if at(codes, size, index + 1) == 35 and only_blanks?(codes, line_start, index)
-        start = Source.position(index, line, line_start)
-        scan = scan_doc(text, codes, size, index, line, line_start)
-        block = Tokens.DocBlock(text: scan.text, next: scan.next)
-        tokens = tokens.push(token(text, "DOC", Tokens.Value.Doc(block), start, Source.position(scan.stop, scan.line, scan.line_start)))
-        last_kind = "DOC"
-        index = scan.stop
-        line = scan.line
-        line_start = scan.line_start
-      else
-        index = skip_line(codes, size, index)
-      end
-    elsif letter?(code) or code == 95
-      start = Source.position(index, line, line_start)
-      first = index
-      index = skip_name(codes, size, index + 1)
-      if !(code >= 65 and code <= 90) and index < size and (codes[index] == 63 or codes[index] == 33)
-        if !(codes[index] == 33 and at(codes, size, index + 1) == 61)
-          index += 1
-        end
-      end
-      lexeme = text.slice(first, index - first)
-      kind = keywords.get(lexeme, "")
-      if kind == ""
-        kind = "name"
-        if code >= 65 and code <= 90
-          kind = "type-name"
-        end
-      end
-      if kind == "def" or kind == "struct" or kind == "enum" or kind == "if" or kind == "while" or kind == "for" or kind == "do"
-        delimiters = delimiters.push(Frame(kind: "kw", start: start))
-      elsif kind == "end" and delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "kw"
-        delimiters = pop(delimiters)
-      end
-      tokens = tokens.push(Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, Source.position(index, line, line_start))))
-      last_kind = kind
-    elsif digit?(code)
-      start = Source.position(index, line, line_start)
-      first = index
-      index = skip_number(codes, size, index)
-      is_float = at(codes, size, index) == 46 and number_char?(at(codes, size, index + 1))
-      if is_float
-        index = skip_number(codes, size, index + 1)
-      end
-      stop = Source.position(index, line, line_start)
-      if invalid_separator?(codes, first, index)
-        return Diag.Outcome.Failed(Diag.fail("LEX-INVALID-NUMBER", "a \"_\" in a number must sit between two digits", span(start, stop), Diag.Help.Hint("write digit groups like 1_000 or 0.000_5; remove the extra \"_\"")))
-      end
-      digits = text.slice(first, index - first).replace("_", "")
-      if is_float
-        tokens = tokens.push(token(text, "float", Tokens.Value.Real(digits.to_f!), start, stop))
-        last_kind = "float"
-      else
-        tokens = tokens.push(token(text, "integer", integer_value(digits), start, stop))
-        last_kind = "integer"
-      end
-    elsif code == 34 or (code == 125 and delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#")
-      start = Source.position(index, line, line_start)
-      string_start = start
-      first = true
-      if code == 125
-        string_start = delimiters[delimiters.size - 1].start
-        first = false
-        delimiters = pop(delimiters)
-        open_strings -= 1
-      end
-      outcome = scan_string(text, codes, size, index + 1, string_start, start, line, line_start, first)
-      case outcome
-        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(piece) ->
-          tokens = tokens.push(token(text, piece.kind, Tokens.Value.Text(piece.value), start, Source.position(piece.token_end, line, line_start)))
-          last_kind = piece.kind
-          if piece.opens
-            delimiters = delimiters.push(Frame(kind: "#", start: string_start))
-            open_strings += 1
-          end
-          index = piece.next
-      end
-    else
-      start = Source.position(index, line, line_start)
-      lexeme = text.slice(index, 1)
-      if code == 46 and at(codes, size, index + 1) == 46 and at(codes, size, index + 2) == 46
-        lexeme = "..."
-      elsif index + 1 < size
-        pair = text.slice(index, 2)
-        if operators.has_key?(pair)
-          lexeme = pair
-        end
-      end
-      kind = operators.get(lexeme, "")
-      if kind == ""
-        return Diag.Outcome.Failed(unexpected_character(code, lexeme, start, Source.position(index + 1, line, line_start)))
-      end
-      index += lexeme.length
-      stop = Source.position(index, line, line_start)
-      if kind == "left-paren" or kind == "left-bracket" or kind == "left-brace"
-        delimiters = delimiters.push(Frame(kind: lexeme, start: start))
-      elsif kind == "right-paren" or kind == "right-bracket" or kind == "right-brace"
-        if delimiters.size == 0 or delimiters[delimiters.size - 1].kind != expected_opener(kind)
-          help = Diag.Help.NoHelp
-          if lexeme == "}" and statement_level?(delimiters)
-            help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
-          end
-          return Diag.Outcome.Failed(Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help))
-        end
-        delimiters = pop(delimiters)
-      end
-      tokens = tokens.push(Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)))
-      last_kind = kind
-    end
-  end
-  return Diag.Outcome.Failed(unterminated(Source.position(0, 1, 0), Source.position(0, 1, 0)))
 end

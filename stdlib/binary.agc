@@ -5,162 +5,6 @@
 ## `_be` is big-endian (most significant byte first, network order) and `_le` is little-endian. Signed types use two's complement.
 ## A `u64` above `9223372036854775807` is not an `Int`: use `read_i64_be` and `write_i64_be` for all 64 bits.
 
-def window(data: List[Int], offset: Int, n: Int, type: String) -> Result[Void]
-  if offset < 0 or offset > data.size - n
-    return error("#{type} at offset #{offset} is outside a list of length #{data.size}")
-  end
-  return ok()
-end
-
-def first_bad_byte(data: List[Int], offset: Int, n: Int) -> Result[Void]
-  i = offset
-  stop = offset + n
-  while i < stop
-    b = data[i]
-    if b < 0 or b > 255
-      return error("value #{b} at index #{i} is not a byte")
-    end
-    i += 1
-  end
-  return ok()
-end
-
-def bytes_ok(data: List[Int], offset: Int, n: Int, combined: Int) -> Result[Void]
-  if combined < 0 or combined > 255
-    return first_bad_byte(data, offset, n)
-  end
-  return ok()
-end
-
-def fits(value: Int, low: Int, high: Int, type: String) -> Result[Void]
-  if value < low or value > high
-    return error("value #{value} does not fit in #{type}")
-  end
-  return ok()
-end
-
-def extend(value: Int, bits: Int) -> Int
-  return value.shift_left(64 - bits).shift_right(64 - bits)
-end
-
-def load8(data: List[Int], offset: Int, type: String) -> Result[Int]
-  try window(data, offset, 1, type)
-  a = data[offset]
-  try bytes_ok(data, offset, 1, a)
-  return ok(a)
-end
-
-def load16_be(data: List[Int], offset: Int, type: String) -> Result[Int]
-  try window(data, offset, 2, type)
-  a = data[offset]
-  b = data[offset + 1]
-  try bytes_ok(data, offset, 2, a.bit_or(b))
-  return ok(a.shift_left(8).bit_or(b))
-end
-
-def load16_le(data: List[Int], offset: Int, type: String) -> Result[Int]
-  try window(data, offset, 2, type)
-  a = data[offset]
-  b = data[offset + 1]
-  try bytes_ok(data, offset, 2, a.bit_or(b))
-  return ok(b.shift_left(8).bit_or(a))
-end
-
-def load32_be(data: List[Int], offset: Int, type: String) -> Result[Int]
-  try window(data, offset, 4, type)
-  a = data[offset]
-  b = data[offset + 1]
-  c = data[offset + 2]
-  d = data[offset + 3]
-  try bytes_ok(data, offset, 4, a.bit_or(b).bit_or(c).bit_or(d))
-  return ok(a.shift_left(24).bit_or(b.shift_left(16)).bit_or(c.shift_left(8)).bit_or(d))
-end
-
-def load32_le(data: List[Int], offset: Int, type: String) -> Result[Int]
-  try window(data, offset, 4, type)
-  a = data[offset]
-  b = data[offset + 1]
-  c = data[offset + 2]
-  d = data[offset + 3]
-  try bytes_ok(data, offset, 4, a.bit_or(b).bit_or(c).bit_or(d))
-  return ok(d.shift_left(24).bit_or(c.shift_left(16)).bit_or(b.shift_left(8)).bit_or(a))
-end
-
-def load64_be(data: List[Int], offset: Int, type: String) -> Result[Int]
-  try window(data, offset, 8, type)
-  a = data[offset]
-  b = data[offset + 1]
-  c = data[offset + 2]
-  d = data[offset + 3]
-  e = data[offset + 4]
-  f = data[offset + 5]
-  g = data[offset + 6]
-  h = data[offset + 7]
-  try bytes_ok(data, offset, 8, a.bit_or(b).bit_or(c).bit_or(d).bit_or(e).bit_or(f).bit_or(g).bit_or(h))
-  high = a.shift_left(24).bit_or(b.shift_left(16)).bit_or(c.shift_left(8)).bit_or(d)
-  low = e.shift_left(24).bit_or(f.shift_left(16)).bit_or(g.shift_left(8)).bit_or(h)
-  return ok(high.shift_left(32).bit_or(low))
-end
-
-def load64_le(data: List[Int], offset: Int, type: String) -> Result[Int]
-  try window(data, offset, 8, type)
-  a = data[offset]
-  b = data[offset + 1]
-  c = data[offset + 2]
-  d = data[offset + 3]
-  e = data[offset + 4]
-  f = data[offset + 5]
-  g = data[offset + 6]
-  h = data[offset + 7]
-  try bytes_ok(data, offset, 8, a.bit_or(b).bit_or(c).bit_or(d).bit_or(e).bit_or(f).bit_or(g).bit_or(h))
-  low = d.shift_left(24).bit_or(c.shift_left(16)).bit_or(b.shift_left(8)).bit_or(a)
-  high = h.shift_left(24).bit_or(g.shift_left(16)).bit_or(f.shift_left(8)).bit_or(e)
-  return ok(high.shift_left(32).bit_or(low))
-end
-
-def unsigned64(value: Int, offset: Int) -> Result[Int]
-  if value < 0
-    return error("u64 at offset #{offset} does not fit in Int")
-  end
-  return ok(value)
-end
-
-def bytes2_be(value: Int) -> List[Int]
-  return [value.shift_right(8).bit_and(255), value.bit_and(255)]
-end
-
-def bytes2_le(value: Int) -> List[Int]
-  return [value.bit_and(255), value.shift_right(8).bit_and(255)]
-end
-
-def bytes4_be(value: Int) -> List[Int]
-  return [value.shift_right(24).bit_and(255), value.shift_right(16).bit_and(255), value.shift_right(8).bit_and(255), value.bit_and(255)]
-end
-
-def bytes4_le(value: Int) -> List[Int]
-  return [value.bit_and(255), value.shift_right(8).bit_and(255), value.shift_right(16).bit_and(255), value.shift_right(24).bit_and(255)]
-end
-
-def bytes8_be(value: Int) -> List[Int]
-  return [value.shift_right(56).bit_and(255), value.shift_right(48).bit_and(255), value.shift_right(40).bit_and(255), value.shift_right(32).bit_and(255), value.shift_right(24).bit_and(255), value.shift_right(16).bit_and(255), value.shift_right(8).bit_and(255), value.bit_and(255)]
-end
-
-def bytes8_le(value: Int) -> List[Int]
-  return [value.bit_and(255), value.shift_right(8).bit_and(255), value.shift_right(16).bit_and(255), value.shift_right(24).bit_and(255), value.shift_right(32).bit_and(255), value.shift_right(40).bit_and(255), value.shift_right(48).bit_and(255), value.shift_right(56).bit_and(255)]
-end
-
-def join_parts(parts: List[List[Int]], first: Int, stop: Int) -> List[Int]
-  count = stop - first
-  if count == 0
-    return []
-  end
-  if count == 1
-    return parts[first]
-  end
-  middle = first + count / 2
-  return List.concat(join_parts(parts, first, middle), join_parts(parts, middle, stop))
-end
-
 ## Reads an unsigned 8-bit integer at `offset`. Returns an error when the bytes are outside `data` or an item is not a byte.
 export def read_u8(data: List[Int], offset: Int) -> Result[Int]
   return load8(data, offset, "u8")
@@ -387,4 +231,160 @@ export def read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[I
     return error("frame length #{length} is above the limit #{max}")
   end
   return ok(length)
+end
+
+def window(data: List[Int], offset: Int, n: Int, type: String) -> Result[Void]
+  if offset < 0 or offset > data.size - n
+    return error("#{type} at offset #{offset} is outside a list of length #{data.size}")
+  end
+  return ok()
+end
+
+def first_bad_byte(data: List[Int], offset: Int, n: Int) -> Result[Void]
+  i = offset
+  stop = offset + n
+  while i < stop
+    b = data[i]
+    if b < 0 or b > 255
+      return error("value #{b} at index #{i} is not a byte")
+    end
+    i += 1
+  end
+  return ok()
+end
+
+def bytes_ok(data: List[Int], offset: Int, n: Int, combined: Int) -> Result[Void]
+  if combined < 0 or combined > 255
+    return first_bad_byte(data, offset, n)
+  end
+  return ok()
+end
+
+def fits(value: Int, low: Int, high: Int, type: String) -> Result[Void]
+  if value < low or value > high
+    return error("value #{value} does not fit in #{type}")
+  end
+  return ok()
+end
+
+def extend(value: Int, bits: Int) -> Int
+  return value.shift_left(64 - bits).shift_right(64 - bits)
+end
+
+def load8(data: List[Int], offset: Int, type: String) -> Result[Int]
+  try window(data, offset, 1, type)
+  a = data[offset]
+  try bytes_ok(data, offset, 1, a)
+  return ok(a)
+end
+
+def load16_be(data: List[Int], offset: Int, type: String) -> Result[Int]
+  try window(data, offset, 2, type)
+  a = data[offset]
+  b = data[offset + 1]
+  try bytes_ok(data, offset, 2, a.bit_or(b))
+  return ok(a.shift_left(8).bit_or(b))
+end
+
+def load16_le(data: List[Int], offset: Int, type: String) -> Result[Int]
+  try window(data, offset, 2, type)
+  a = data[offset]
+  b = data[offset + 1]
+  try bytes_ok(data, offset, 2, a.bit_or(b))
+  return ok(b.shift_left(8).bit_or(a))
+end
+
+def load32_be(data: List[Int], offset: Int, type: String) -> Result[Int]
+  try window(data, offset, 4, type)
+  a = data[offset]
+  b = data[offset + 1]
+  c = data[offset + 2]
+  d = data[offset + 3]
+  try bytes_ok(data, offset, 4, a.bit_or(b).bit_or(c).bit_or(d))
+  return ok(a.shift_left(24).bit_or(b.shift_left(16)).bit_or(c.shift_left(8)).bit_or(d))
+end
+
+def load32_le(data: List[Int], offset: Int, type: String) -> Result[Int]
+  try window(data, offset, 4, type)
+  a = data[offset]
+  b = data[offset + 1]
+  c = data[offset + 2]
+  d = data[offset + 3]
+  try bytes_ok(data, offset, 4, a.bit_or(b).bit_or(c).bit_or(d))
+  return ok(d.shift_left(24).bit_or(c.shift_left(16)).bit_or(b.shift_left(8)).bit_or(a))
+end
+
+def load64_be(data: List[Int], offset: Int, type: String) -> Result[Int]
+  try window(data, offset, 8, type)
+  a = data[offset]
+  b = data[offset + 1]
+  c = data[offset + 2]
+  d = data[offset + 3]
+  e = data[offset + 4]
+  f = data[offset + 5]
+  g = data[offset + 6]
+  h = data[offset + 7]
+  try bytes_ok(data, offset, 8, a.bit_or(b).bit_or(c).bit_or(d).bit_or(e).bit_or(f).bit_or(g).bit_or(h))
+  high = a.shift_left(24).bit_or(b.shift_left(16)).bit_or(c.shift_left(8)).bit_or(d)
+  low = e.shift_left(24).bit_or(f.shift_left(16)).bit_or(g.shift_left(8)).bit_or(h)
+  return ok(high.shift_left(32).bit_or(low))
+end
+
+def load64_le(data: List[Int], offset: Int, type: String) -> Result[Int]
+  try window(data, offset, 8, type)
+  a = data[offset]
+  b = data[offset + 1]
+  c = data[offset + 2]
+  d = data[offset + 3]
+  e = data[offset + 4]
+  f = data[offset + 5]
+  g = data[offset + 6]
+  h = data[offset + 7]
+  try bytes_ok(data, offset, 8, a.bit_or(b).bit_or(c).bit_or(d).bit_or(e).bit_or(f).bit_or(g).bit_or(h))
+  low = d.shift_left(24).bit_or(c.shift_left(16)).bit_or(b.shift_left(8)).bit_or(a)
+  high = h.shift_left(24).bit_or(g.shift_left(16)).bit_or(f.shift_left(8)).bit_or(e)
+  return ok(high.shift_left(32).bit_or(low))
+end
+
+def unsigned64(value: Int, offset: Int) -> Result[Int]
+  if value < 0
+    return error("u64 at offset #{offset} does not fit in Int")
+  end
+  return ok(value)
+end
+
+def bytes2_be(value: Int) -> List[Int]
+  return [value.shift_right(8).bit_and(255), value.bit_and(255)]
+end
+
+def bytes2_le(value: Int) -> List[Int]
+  return [value.bit_and(255), value.shift_right(8).bit_and(255)]
+end
+
+def bytes4_be(value: Int) -> List[Int]
+  return [value.shift_right(24).bit_and(255), value.shift_right(16).bit_and(255), value.shift_right(8).bit_and(255), value.bit_and(255)]
+end
+
+def bytes4_le(value: Int) -> List[Int]
+  return [value.bit_and(255), value.shift_right(8).bit_and(255), value.shift_right(16).bit_and(255), value.shift_right(24).bit_and(255)]
+end
+
+def bytes8_be(value: Int) -> List[Int]
+  return [value.shift_right(56).bit_and(255), value.shift_right(48).bit_and(255), value.shift_right(40).bit_and(255), value.shift_right(32).bit_and(255), value.shift_right(24).bit_and(255), value.shift_right(16).bit_and(255), value.shift_right(8).bit_and(255), value.bit_and(255)]
+end
+
+def bytes8_le(value: Int) -> List[Int]
+  return [value.bit_and(255), value.shift_right(8).bit_and(255), value.shift_right(16).bit_and(255), value.shift_right(24).bit_and(255), value.shift_right(32).bit_and(255), value.shift_right(40).bit_and(255), value.shift_right(48).bit_and(255), value.shift_right(56).bit_and(255)]
+end
+
+def join_parts(parts: List[List[Int]], first: Int, stop: Int) -> List[Int]
+  count = stop - first
+  if count == 0
+    return []
+  end
+  if count == 1
+    return parts[first]
+  end
+  middle = first + count / 2
+  return List.concat(join_parts(parts, first, middle), join_parts(parts, middle, stop))
 end

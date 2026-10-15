@@ -120,13 +120,6 @@ end
     age: Int
   end
 
-  def valid_name?(name: String) -> Bool
-    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
-    return name != "" and String.split(name, "").all? do |c|
-      String.contains?(allowed, c)
-    end
-  end
-
   export def save_user(dir: String, user: User) -> Result[Void]
     if !valid_name?(user.name)
       return error("bad user name")
@@ -140,6 +133,13 @@ end
     end
     text = try File.read_text("#{dir}/#{name}.json", 1000)
     return JSON.decode(text, User)
+  end
+
+  def valid_name?(name: String) -> Bool
+    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+    return name != "" and String.split(name, "").all? do |c|
+      String.contains?(allowed, c)
+    end
   end
   ```
 

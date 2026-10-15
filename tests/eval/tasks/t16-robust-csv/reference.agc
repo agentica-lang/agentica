@@ -5,17 +5,17 @@ struct Dept
   top_salary: Int
 end
 
+struct Row
+  name: String
+  dept: String
+  salary: Int
+end
+
 def add_row(dept: Dept, name: String, salary: Int) -> Dept
   if dept.rows == 0 || salary > dept.top_salary
     return Dept(rows: dept.rows + 1, total: dept.total + salary, top_name: name, top_salary: salary)
   end
   return Dept(rows: dept.rows + 1, total: dept.total + salary, top_name: dept.top_name, top_salary: dept.top_salary)
-end
-
-struct Row
-  name: String
-  dept: String
-  salary: Int
 end
 
 def parse_row(line: String) -> Result[Row]
