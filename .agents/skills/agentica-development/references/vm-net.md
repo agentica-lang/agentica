@@ -279,13 +279,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     thread: it only uses lock-free atomics and async-signal-safe calls.
   - The signal tests in `tests/test_vm_stop.py` (with
     `tests/fixtures/stop-peer.py`: a FIFO filled so a flush cannot end, a dying
-    driver, an inherited pipe) and `tests/vm-diff-common.rkt` signal the driver
-    and the VM with libc `kill` through the FFI and bound every wait.
+    driver, an inherited pipe) and `tests/test_vm_diff_8.py` signal the driver
+    and the VM with `os.kill` and bound every wait.
   - Captured children (21a) are what `std/bdd` runs its scenario VMs with: never
     block the VM in their close (only the end-of-run cleanup may wait, bounded),
     and keep the `SIGTERM` first, since the child VM's exit path is what stops
     the programs it started.
-  - `tests/vm-diff-common.rkt` checks that with a VM child that started `sleep`,
+  - `tests/test_vm_diff_8.py` checks that with a VM child that started `sleep`,
     closed by `Process.close` and by a `read_line` timeout: the grandchild's pid
     must be gone when the run ends.
   - A second case closes a child that ignores `SIGTERM` (close returns at once,
@@ -337,8 +337,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - Put other TLS cases in `tests/test_vm_tls.py`, which runs each once, with
     short timeouts, small payloads and no sleeps.
   - The `tls-*` fixtures take their certificate directory as `@fixtures/tls` in
-    `.args` (`fixture-arg` in `tests/vm-diff-common.rkt` makes it absolute,
-    since `raco test` and `make goldens` run from different directories).
+    `.args` (`fixture_arg` in `tests/vm_diff_support.py` makes it absolute,
+    since the tests and `make goldens` run from different directories).
   - Certificates come from `tests/fixtures/tls/make-certs.sh` (OpenSSL 3.4 or
     newer for the expired one).
 - **HTTP client (20a, in on Linux)**: `vm/http_client.c` on `vm/net.h`

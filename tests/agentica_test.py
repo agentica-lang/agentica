@@ -25,7 +25,7 @@ FIXTURES = TESTS / "fixtures"
 # The interpreter that runs the tests also runs the Python peers and is the `python3` that VM programs spawn.
 PYTHON = sys.executable
 
-# Same limit as run-timeout in tests/vm-diff-common.rkt.
+# The time limit of a run, as in the VM golden harness (tests/vm_diff_support.py).
 RUN_TIMEOUT = 60
 
 # `make test-slow` sets this. The two tiers are exclusive, like the rackunit

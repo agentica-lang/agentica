@@ -86,13 +86,14 @@ comment), then a step that calls it. Targets that are not obvious:
   mode (`docs/vm/15-layers.md` §15.5) and its self-test. A new `vm/*.c` file
   goes in one list of the script.
 - `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
-  Racket tests (`VM_RKT_TESTS`) and the unittest modules (`VM_PY_TESTS`, run
-  with `make test-py`) that run against the VM in the sanitizer job. They and
+  unittest modules (`VM_PY_TESTS`, the golden shards among them, run with
+  `make test-py`) that run against the VM in the sanitizer job. They and
   `vm-diff-test` do not depend on `vm` on purpose: they test the VM that an
   earlier step built.
-- `vm-diff-build` and `vm-diff-test` are the golden tests; `sweep-full` runs
-  them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`). `test-distribution`
-  is the release's distributed-executable test.
+- `vm-diff-build` and `vm-diff-test` are the golden tests (`tests/test_vm_diff_*.py`);
+  `sweep-full` runs them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`).
+  `test-distribution` is the release's relocated-executable test
+  (`tests/test_stdlib_distribution.py` on `dist/agentica`).
 
 ## Pull requests (`.github/workflows/ci.yml`)
 
@@ -101,7 +102,7 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 
 - `test`: first the `changes` step (below), then `make -j vm vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
-  them), `make test` with the process and module tests on `dist/agentica`
+  them), `make test` with the process, module and distribution tests (`tests/test_process.py`, `tests/test_modules.py`, `tests/test_stdlib_distribution.py`) on `dist/agentica`
   (`AGENTICA_TEST_EXECUTABLE`) running alongside it (`make test` of the whole
   suite, or of `tests/test_single_binary.py`, first builds `dist/agentica-next`
   and the bootstrap stages it embeds), `make fixed-point` (stage2 == stage3,
@@ -181,7 +182,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
 - `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
   `src/stdlib.rkt` (the registry that embeds the `std/` modules, from
   `stdlib/MODULES`);
-- `tests/vm-diff-*`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
+- `tests/test_vm_diff_*`, `tests/vm_diff_support.py`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
   `tests/fixtures/tls/`, `tests/test_vm_http.py`, `tests/fixtures/http-*`,
@@ -192,12 +193,12 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/test_vm_monotonic.py`, `tests/fixtures/monotonic-peer.*`,
   `tests/test_vm_file_lines.py`, `tests/fixtures/lines-peer.py`,
   `tests/test_vm_os.py`,
-  `tests/vm-stack-test.rkt`, `tests/agentica_test.py` (the helper of the
+  `tests/test_vm_stack.py`, `tests/agentica_test.py` (the helper of the
   unittest modules),
   `tests/test_vm_test_protocol.py`, `tests/fixtures/test-protocol-peer.*`,
   `tests/test_vm_child_channel.py`, `tests/fixtures/child-channel*`,
   `tests/fixtures/child_channel.py`, `tests/fixtures/channel-run.py`,
-  `tests/cli-in-process.rkt`, `tests/bytecode-test.rkt`,
+  `tests/bytecode-test.rkt`,
   `tests/fixtures/vm/`;
 - `stdlib/`: every `std/` module written in Agentica, `stdlib/bdd/` too (the
   pattern is `stdlib/*`; in a shell `case`, `*` also matches `/`);
@@ -234,7 +235,7 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   pull requests. PR jobs can write to that volume, so the release sets
   `CCACHE=` (in the job env and on the `make` line) and never uses it.
 - `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`, and
-  `make vm-sanitize-test` runs `raco test -j 4` and then the Python modules. `make vm-test` and `make vm-lint` run their C tests
+  `make vm-sanitize-test` runs the Python modules, the golden shards first. `make vm-test` and `make vm-lint` run their C tests
   and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
