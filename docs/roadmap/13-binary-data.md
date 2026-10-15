@@ -34,7 +34,7 @@ in Agentica, and the bit operations are builtins under its exception 5.
     `bits-vectors.agc`, which checks the 1,037 vectors of
     `tests/fixtures/vm/bits-vectors.stdin` that
     `tests/fixtures/bits-vectors.py` writes (Python `struct`, run by hand; CI
-    does not run Python for it); `tests/vm-bits-test.rkt` for the spans of the
+    does not run Python for it); `tests/test_vm_bits.py` for the spans of the
     errors. There are no evaluator tests, since the evaluator is gone.
 - [x] 13b `std/binary` (`stdlib/binary.agc`, registered in `src/stdlib.rkt`),
   its own PR after 13a (`docs/future/23-binary-data.md` §23.5): readers and
