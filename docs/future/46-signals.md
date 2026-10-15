@@ -46,8 +46,8 @@ The VM has one stop path. A program cannot take part in it.
 - **Wait and stderr.** `Process.wait` returns when the child has exited and its
   stderr is at EOF (`docs/vm/10-io-processes.md`). A grandchild that keeps the
   stderr pipe open delays it. A timed-out wait returns `error("network:
-  operation timed out")` and keeps the child (`agc_stream_timed_out` in
-  `vm/process.c`).
+  operation timed out")` and keeps the child (`agc_stream_timed_out`, defined in
+  `vm/stream.c`).
 - **Sending a signal.** The VM signals only the children it started
   (`uv_process_kill` in `signal_child`). It has no call to signal another pid,
   and no call to signal a process group.
@@ -150,8 +150,11 @@ would be read as a constructor. The options are: (A) keep `Signal.channel` and
 `Signal.number`, and make `src/modules.rkt` resolve a function first, which is a
 front-end change in both front ends; (B) move them to
 `System.subscribe(signals)` and `System.signal_number(sig)`, and keep `Signal`
-as an enum only. The recommendation is (B), which needs no front-end change
-(46.8, question 12). The rest of this section uses the names of (A).
+as an enum only. The recommendation is (B), which avoids the `src/modules.rkt`
+clash. The enum parameter (no builtin takes one today) is checked with a spike
+in 46a (46.8, question 12). The rest of this section, the example included, uses
+the names of (A). Under (B) they change to `System.subscribe` and
+`System.signal_number`.
 
 #### 46.3.2 Ownership, lifecycle and the handler
 
@@ -197,8 +200,9 @@ as an enum only. The recommendation is (B), which needs no front-end change
   (`vm/output.c`, lines 38 to 44) treats EINTR as a stop only when a stop signal
   is set. Otherwise it reports `RUNTIME-INTERNAL`, which would fail the program
   on a handled TERM. 46a changes the callers. An EINTR write is retried for the
-  rest of its bytes, after the stream's error flag is cleared. Only a stop
-  signal ends the write, as now.
+  rest of its bytes, after the stream's error flag is cleared. While a blocked
+  stdout write is retried after EINTR, a handled signal waits until the write
+  finishes; only a stop signal ends it.
 - **Ignored at start.** A signal that the VM started as ignored (for example
   under `nohup`) keeps that state. The handler install skips it (`vm/loop.c`,
   lines 443 to 446). `Signal.channel` returns `error("signal: ignored when the
@@ -287,9 +291,10 @@ Process.signal_group(p: Process, sig: Signal) -> Result[Void]
   reused, so the group id is safe. After the leader is reaped the group may
   still have members, but the VM does not guess in that case, and it refuses.
 - **Close and the end of the run.** `Process.close` and the end of the run send
-  to the whole group for a `spawn_group` child. They send SIGKILL, or SIGTERM
-  and then SIGKILL for a captured child. Other children are unchanged. This
-  closes the "descendants are not covered" limit for group children only.
+  to the whole group for a `spawn_group` child. They send SIGKILL to the group.
+  The children inherit their streams and are never captured, so there is no
+  SIGTERM step. Other children are unchanged. This closes the "descendants are
+  not covered" limit for group children only.
 
 #### 46.3.7 Signals to a pid that is not a child
 
@@ -415,9 +420,8 @@ No `uv_signal_t` watcher is added (46.3.2).
 The program below is the `Supervisor` and the `main` flow of the gh-runner
 script, in the proposed API. It does not compile today. `Signal`,
 `Signal.channel`, `Signal.Term`, `Process.spawn_group`, `Process.signal_group`,
-`System.signal`, `Path.remove` and `File.copy` do not exist yet. The names are
-those of 46.3.1 option (A). Constants are functions until module constants
-(§44) land.
+`System.signal`, `Path.remove` and `File.copy` do not exist yet. Constants are
+functions until module constants (§44) land.
 
 The mapping from Python is short. `handle_signal` becomes `first_signal`. It
 returns the first value. Later values stay queued and unread, which is the
@@ -700,6 +704,7 @@ def wait_exit(child: Process) -> Result[Int]
     case Process.wait(child, 1000)
       ok(code) -> return ok(code)
       error(message) ->
+        # Only the timeout text tells a timed-out wait from other failures.
         if message != "network: operation timed out"
           return error(message)
         end
@@ -894,7 +899,7 @@ localhost. The test cases are these.
    With a wrong name, the call returns an error and the process is still alive.
 6. **Ignored at start.** The test starts the VM with INT ignored, as `nohup`
    does. The program's `Signal.channel` call returns the `ignored` error, and
-   the VM is still stopped by INT as before the change.
+   INT stays ignored: the process is still alive after `os.kill(pid, SIGINT)`.
 
 The C side is tested in `vm/tests` with `make vm-test`. The tests cover the
 masks, the one-value-per-signal rule of the channel, the end of the owning task,
@@ -1023,6 +1028,7 @@ Each question has options and a recommendation.
     `Signal.number` beside the enum, and make `src/modules.rkt` resolve a
     function first. This is a front-end change in both front ends. (B) move the
     functions to `System.subscribe(signals)` and `System.signal_number(sig)`,
-    and keep `Signal` as an enum only. **Recommendation:** (B). It needs no
-    front-end change, and it has no precedent to follow. The fixture rename and
-    the `**Breaking:**` entry happen under either option.
+    and keep `Signal` as an enum only. **Recommendation:** (B). It avoids the
+    `src/modules.rkt` clash. The enum parameter (no builtin takes one today) is
+    checked with a spike in 46a. The fixture rename and the `**Breaking:**`
+    entry happen under either option.
