@@ -1,0 +1,12 @@
+import {Token} from "lexer"
+import {A, B,} from "x"
+import {
+  lex,
+  Token as Tok,
+  scan as scan_text,
+} from "compiler/lexer"
+import {as, from, as as as_text, from as origin, empty?, ready? as done?} from "words"
+
+def check(from: Int, as: Int) -> Int
+  return from + as
+end

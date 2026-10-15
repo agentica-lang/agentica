@@ -712,7 +712,7 @@ and the rules for printing, `==` and JSON. No lowering change.
   that always ends with timeout errors, not `RUNTIME-INTERNAL`; two receivers
   cancelled by their parents' crashes, whose reserved values come back in send
   order.
-- In `tests/vm-channel-test.rkt` (Racket, with a Python peer): a socket handed
+- In `tests/test_vm_channel.py` (unittest, with a Python peer): a socket handed
   to a worker over a channel, against a local Python TCP counterpart on port 0.
 - `RUNTIME-TASK-CANCELLED` without `Task.map` (a golden fixture): a task spawns
   a child, sends the child's handle to `main` over a channel, then crashes; the

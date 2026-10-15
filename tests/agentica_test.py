@@ -9,6 +9,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import unittest
 from collections import namedtuple
@@ -17,6 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TESTS = ROOT / "tests"
 FIXTURES = TESTS / "fixtures"
+
+# The interpreter that runs the tests also runs the Python peers and is the `python3` that VM programs spawn.
+PYTHON = sys.executable
 
 # Same limit as run-timeout in tests/vm-diff-common.rkt.
 RUN_TIMEOUT = 60
@@ -71,6 +75,11 @@ class TestCase(unittest.TestCase):
         path = Path(tempfile.mkdtemp(prefix=prefix))
         self.addCleanup(shutil.rmtree, path, ignore_errors=True)
         return path
+
+    def compile_fixture(self, source):
+        """Compile a .agc file into a fresh temp dir (removed after the test) and return the bytecode path."""
+        source = Path(source)
+        return compile_agc(source, self.make_temp_dir() / (source.stem + ".agcb"))
 
 
 def vm_binary():
@@ -135,6 +144,6 @@ def compile_agc(source, output):
     return Path(output)
 
 
-def run_vm(bytecode, *flags, **options):
-    """Run `dist/agentica-vm [flags] -- bytecode`."""
-    return run([vm_binary(), *flags, "--", bytecode], **options)
+def run_vm(bytecode, *flags, args=(), **options):
+    """Run `dist/agentica-vm [flags] -- bytecode [args]`; options go to run()."""
+    return run([vm_binary(), *flags, "--", bytecode, *args], **options)

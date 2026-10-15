@@ -211,6 +211,26 @@
   (test-case "map literals still parse where a block head does not"
     (check-true (program? (parse-ok "def main() -> Void\n  m: Map[String, Int] = {}\n  n = {\"a\": 1}\n  ys = xs.map do |x| {\"k\": x} end\nend\n\n"))))
 
+  (test-case "import forms: an alias, or a list of names with optional renames"
+    (define imports
+      (filter import-decl?
+              (program-declarations
+               (parse-ok "import \"old\" as Old\nimport New from \"new\"\nimport {\n  as as from,\n  Token,\n} from \"lexer\"\n"))))
+    (check-equal? (map import-decl-alias imports) '("Old" "New" #f))
+    (check-equal? (map (lambda (import) (null? (import-decl-names import))) imports) '(#t #t #f))
+    (define names (import-decl-names (third imports)))
+    (check-equal? (map import-name-name names) '("as" "Token"))
+    (check-equal? (map import-name-local names) '("from" "Token"))
+    (check-equal? (source-position-line (source-span-start (import-name-local-span (car names)))) 4)
+    (check-equal? (import-name-span (cadr names)) (import-name-local-span (cadr names)))
+    (define (import-error text)
+      (define problem (parse-text text))
+      (list (diagnostic-code problem) (source-position-column (source-span-start (diagnostic-span problem)))))
+    (check-equal? (import-error "import {} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 9))
+    (check-equal? (import-error "import {A as} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 13))
+    (check-equal? (import-error "import Mod, {A} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 11))
+    (check-equal? (import-error "import {A} of \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 12)))
+
   (test-case "declarations need a blank line after their end"
     (define problem (parse-text "struct A\n  n: Int\nend\ndef main() -> Void\nend\n\n"))
     (check-equal? (diagnostic-code problem) 'PARSE-MISSING-BLANK-LINE)

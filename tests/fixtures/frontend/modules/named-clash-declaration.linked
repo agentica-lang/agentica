@@ -1,0 +1,1 @@
+ERROR CHECK-REDEFINED-NAME 15:1:16-18:1:19 "duplicate or reserved imported name" - file="root.agc"

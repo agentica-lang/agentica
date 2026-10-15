@@ -63,7 +63,8 @@ comment), then a step that calls it. Targets that are not obvious:
   mode (`docs/vm/15-layers.md` §15.5) and its self-test. A new `vm/*.c` file
   goes in one list of the script.
 - `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
-  Racket tests that run against the VM in the sanitizer job. They and
+  Racket tests (`VM_RKT_TESTS`) and the unittest modules (`VM_PY_TESTS`, run
+  with `make test-py`) that run against the VM in the sanitizer job. They and
   `vm-diff-test` do not depend on `vm` on purpose: they test the VM that an
   earlier step built.
 - `vm-diff-build` and `vm-diff-test` are the golden tests; `sweep-full` runs
@@ -151,12 +152,15 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
   `tests/fixtures/tls/`, `tests/vm-http-test.rkt`, `tests/fixtures/http-*`,
   `tests/vm-stop-test.rkt`, `tests/fixtures/stop-peer.py`,
-  `tests/vm-channel-test.rkt`, `tests/fixtures/channel-peer.py`,
+  `tests/test_vm_channel.py`, `tests/fixtures/channel-peer.py`,
   `tests/vm-stdout-test.rkt`, `tests/fixtures/stdout-peer.py`,
+  `tests/test_vm_logger.py`, `tests/fixtures/logger-peer.*`,
+  `tests/test_vm_monotonic.py`, `tests/fixtures/monotonic-peer.*`,
   `tests/vm-file-lines-test.rkt`, `tests/fixtures/lines-peer.py`,
-  `tests/vm-stack-test.rkt`,
-  `tests/vm-test-protocol-test.rkt`, `tests/fixtures/test-protocol-peer.*`,
-  `tests/vm-child-channel-test.rkt`, `tests/fixtures/child-channel*`,
+  `tests/vm-stack-test.rkt`, `tests/agentica_test.py` (the helper of the
+  unittest modules),
+  `tests/test_vm_test_protocol.py`, `tests/fixtures/test-protocol-peer.*`,
+  `tests/test_vm_child_channel.py`, `tests/fixtures/child-channel*`,
   `tests/fixtures/child_channel.py`, `tests/fixtures/channel-run.py`,
   `tests/cli-in-process.rkt`, `tests/bytecode-test.rkt`,
   `tests/fixtures/vm/`;
@@ -195,7 +199,7 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   pull requests. PR jobs can write to that volume, so the release sets
   `CCACHE=` (in the job env and on the `make` line) and never uses it.
 - `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`, and
-  `make vm-sanitize-test` runs `raco test -j 4`. `make vm-test` and `make vm-lint` run their C tests
+  `make vm-sanitize-test` runs `raco test -j 4` and then the Python modules. `make vm-test` and `make vm-lint` run their C tests
   and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and

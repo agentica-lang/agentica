@@ -1,0 +1,45 @@
+program #14 0:1:1-125:8:1
+  module "root.agc"
+    declaration: function-decl #13 55:4:1-125:8:1 name="main"
+      result: type-ref #2 69:4:15-73:4:19 name="Void"
+      body: binding #7 76:5:3-98:6:1 name="a"
+        value: struct-update #6 80:5:7-97:5:24 visible=["@2::Cell","@2::Other"]
+          target: call #3 80:5:7-86:5:13 name="@2::cell" piped=false
+          arg: named-arg #5 92:5:19-96:5:23 name="n"
+            value: literal #4 95:5:22-96:5:23 value=int:2
+      body: binding #12 100:6:3-121:7:1 name="b"
+        value: struct-update #11 104:6:7-120:6:23 visible=["@2::Cell","@2::Other"]
+          target: call #8 104:6:7-109:6:12 name="@3::get" piped=false
+          arg: named-arg #10 115:6:18-119:6:22 name="n"
+            value: literal #9 118:6:21-119:6:22 value=int:3
+  module "cells.agc"
+    declaration: struct-decl #2 7:1:8-32:4:1 name="@2::Cell"
+      field: field-decl #1 21:2:3-28:3:1 name="n"
+        type: type-ref #0 24:2:6-27:2:9 name="Int"
+    declaration: struct-decl #6 40:5:8-66:8:1 name="@2::Other"
+      field: field-decl #5 55:6:3-62:7:1 name="n"
+        type: type-ref #4 58:6:6-61:6:9 name="Int"
+    declaration: struct-decl #10 67:9:1-94:12:1 name="@2::Secret"
+      field: field-decl #9 83:10:3-90:11:1 name="n"
+        type: type-ref #8 86:10:6-89:10:9 name="Int"
+    declaration: function-decl #16 102:13:8-145:16:1 name="@2::cell"
+      result: type-ref #11 116:13:22-120:13:26 name="@2::Cell"
+      body: return-stmt #15 123:14:3-141:15:1
+        value: construct #14 130:14:10-140:14:20 type="@2::Cell"
+          arg: named-arg #13 135:14:15-139:14:19 name="n"
+            value: literal #12 138:14:18-139:14:19 value=int:1
+  module "holder.agc"
+    declaration: function-decl #4 36:3:8-92:6:1 name="@3::get"
+      result: type-ref #1 49:3:21-62:3:34 name="@4::Behind"
+      body: return-stmt #3 65:4:3-88:5:1
+        value: call #2 72:4:10-87:4:25 name="@4::behind" piped=false
+  module "hidden.agc"
+    declaration: struct-decl #2 7:1:8-34:4:1 name="@4::Behind"
+      field: field-decl #1 23:2:3-30:3:1 name="n"
+        type: type-ref #0 26:2:6-29:2:9 name="Int"
+    declaration: function-decl #9 42:5:8-91:8:1 name="@4::behind"
+      result: type-ref #4 58:5:24-64:5:30 name="@4::Behind"
+      body: return-stmt #8 67:6:3-87:7:1
+        value: construct #7 74:6:10-86:6:22 type="@4::Behind"
+          arg: named-arg #6 81:6:17-85:6:21 name="n"
+            value: literal #5 84:6:20-85:6:21 value=int:1

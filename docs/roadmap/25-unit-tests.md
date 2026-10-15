@@ -120,7 +120,7 @@ docs.
     docs said so; the code now agrees). Goldens `test-protocol` (stdin and
     `/dev/stdin` empty in `main` and in a test, a record after a partial line, a
     forged record) and `test-run-task` (`Test.run` in a task `main` spawned);
-    the `test-*` goldens carry the token. `tests/vm-test-protocol-test.rkt`
+    the `test-*` goldens carry the token. `tests/test_vm_test_protocol.py`
     drives a test file over pipes with an independent Python peer
     (`tests/fixtures/test-protocol-peer.py`): the token, list records, one index
     at a time, a forged record and a `/dev/stdin` read. Docs: `docs/grammar.md`,
@@ -229,7 +229,7 @@ tests run in `make test`.
   - **Tests:** the goldens `test-protocol*` and `test-run-task` (a test reads
     its real stdin and prints a partial line; a record-shaped line on stdout is
     output, not a record), the `test-*` goldens lose the token;
-    `tests/vm-test-protocol-test.rkt` and its Python peer
+    `tests/test_vm_test_protocol.py` and its Python peer
     (`tests/fixtures/test-protocol-peer.py`) drive fd 3; a BDD scenario that
     prints a record-shaped line; a golden or peer test for the parent channel on
     its own (both sides, and the no-channel error), one where an inherited fd 3
@@ -275,14 +275,14 @@ tests run in `make test`.
     record, run by `tests/fixtures/channel-run.py`, which merges the channel
     records into stdout as `channel> ...` lines, in the order the child produced
     them); new `test-no-channel`; `test-protocol` and `test-run-task` were
-    rewritten. **Tests:** `tests/vm-child-channel-test.rkt` (a Python peer on
+    rewritten. **Tests:** `tests/test_vm_child_channel.py` (a Python peer on
     both sides: lines in pieces, a 300 KB line, EOF, timeouts,
     `no parent channel`, a marker without a descriptor, a descriptor without the
     marker, a grandchild that gets neither, a channel line over 1 MiB, a stalled
     send, a UTF-8 character split between two `read_available` calls,
     `channel_close` after the peer exited, and fd 3 as a regular file, a
     character device or a write-only FIFO (refused, untouched) or as a
-    read-write FIFO (taken)), `tests/vm-test-protocol-test.rkt` (the Python peer
+    read-write FIFO (taken)), `tests/test_vm_test_protocol.py` (the Python peer
     is the runner), a test that reads stdin and prints record-shaped lines in
     `tests/unit-test-test.rkt`, a BDD step that prints a record-shaped line.
     **Review round:** a cut of stdout or stderr wakes a pending
