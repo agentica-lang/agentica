@@ -32,10 +32,7 @@ end
 ## The number of the first item of the entry for the key, or an error when the pool has no such entry. Callers build
 ## the bytes of an entry only after this fails, so a key that is already there costs no bytes.
 export def find(pool: Pool, key: String) -> Result[Int]
-  if pool.index.has_key?(key)
-    return ok(pool.index[key])
-  end
-  return error("no entry")
+  return pool.index.get(key)
 end
 
 ## The item of an entry with one item, added when the key is new: its number, and the pool that holds it.

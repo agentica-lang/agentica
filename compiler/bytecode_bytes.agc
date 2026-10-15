@@ -14,6 +14,9 @@ end
 
 ## The 4 bytes of a number in 0 .. 4294967295, low byte first.
 export def u32(number: Int) -> List[Int]
+  if number < 65536
+    return [number % 256, number / 256, 0, 0]
+  end
   return [number % 256, (number / 256) % 256, (number / 65536) % 256, number / 16777216]
 end
 
