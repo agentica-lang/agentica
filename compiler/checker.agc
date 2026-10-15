@@ -32,6 +32,21 @@ export def check(linked: Linker.Linked, catalog: Builtins.Catalog) -> Checking
   return Checking.Failed(Failure.unpack(result.message))
 end
 
+## A list of count slots with no type, built from repeats of at most chunk, so no runtime error escapes for a huge program.
+export def no_types(count: Int, chunk: Int) -> List[T.Type]
+  types: List[T.Type] = []
+  left = count
+  while left > 0
+    size = chunk
+    if left < chunk
+      size = left
+    end
+    types = types.concat(List.repeat(T.Type.Unknown, size))
+    left -= size
+  end
+  return types
+end
+
 # The context of the run: the builtin records and enums, the tables built once, and the text of each file.
 def start(linked: Linker.Linked, catalog: Builtins.Catalog) -> State.Cx
   texts: Map[String, String] = {}
@@ -44,7 +59,7 @@ end
 def run(linked: Linker.Linked, catalog: Builtins.Catalog) -> Result[Checked]
   cx = try Register.register(start(linked, catalog), linked.modules)
   try Register.check_main(cx, linked.modules, linked.root.span)
-  st = State.fresh().with(types: List.repeat(T.Type.Unknown, ids_of(linked)))
+  st = State.fresh().with(types: no_types(ids_of(linked), max_repeat()))
   for module in linked.modules
     here = cx.with(file: module.file)
     for decl in module.declarations
@@ -60,4 +75,9 @@ end
 # The number of node ids of the program: the files are numbered one after the other, so the last one ends it.
 def ids_of(linked: Linker.Linked) -> Int
   return linked.modules[linked.modules.size - 1].next_id
+end
+
+# List.repeat halts above this count (RUNTIME-INVALID-COUNT), and a program of about 5.7 MB of source has more node ids.
+def max_repeat() -> Int
+  return 1048576
 end

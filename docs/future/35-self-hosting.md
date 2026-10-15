@@ -534,8 +534,8 @@ linker already needed (the name tables) and the checker needs for every call;
   (`method-aliases`, `foreign-names`, the `case` on `builtin-rule`) go with the
   checker in 4b.
 
-Status on 2026-10-15 (PR #263): step 4 is done; 4b is the whole checker, so
-there is no 4c. `compiler/` holds `check_register.agc` (the declarations),
+Status on 2026-10-15 (PR #263): step 4 is done except module constants; 4b
+is the whole checker, so there is no 4c. `compiler/` holds `check_register.agc` (the declarations),
 `check_stmt.agc` (functions, blocks, statements and `case`), `check_expr.agc`
 (expressions), `check_call.agc` and `check_method.agc` (calls, enum
 constructors, struct construction and update, methods and fields), the rules of
@@ -582,13 +582,18 @@ are in `tests/fixtures/frontend/check/` (58 fixtures, one for every reachable
   in the Agentica checker, and in the later passes). Each expression and
   statement being checked is one level; the node that would be the 1,001st gets
   the diagnostic (help: split the code into smaller functions or simpler
-  expressions). The checker needs 3 to 4 VM frames per level (a chain of `+`,
-  `-x`, `!x`: 4; method chains, calls, lists, interpolations and `if`
-  statements: 3; a block inside a block: about 6 for each block), measured by
-  burning frames before the check and finding the depth that still passes. So
-  the limit costs at most about 4,000 of the 10,000 frames, and a later pass
-  that recurses on the tree can use up to about 9 frames per level (6 if the
-  limit were 1,500).
+  expressions). The checker needs up to 5 VM frames per level, measured by
+  burning frames before the check and finding the depth that still passes. The
+  worst case is a builtin with the nested call as its first argument
+  (`List.append`, `Map.put`, `Set.add`, `List.concat`, `List.take`, `List.set`:
+  5, 4,952 frames at 990 levels). Enum constructors, `String.trim`, `while`,
+  `for`, `case`, `-x`, `!x`, `ok(ok(...))`, `Map.get`, `List.at` and
+  `List.repeat` take 4; `if`, method chains, calls and lists take 3; a block
+  inside a block takes 6 for each block (the parser allows about 240 of them).
+  So the limit costs up to about 5,000 of the 10,000 frames, a margin of about
+  2 times. A later pass that recurses on the tree must measure its own frames
+  per level: at 1,000 levels it can use about 9 before the VM limit, and the
+  margin shrinks as the limit grows.
 - The Racket checker had a crash in `unify-type!`: a generic enum where another
   generic enum was expected (`Wrap.Holder(Other.Item(1))` where `Box[T]` is
   wanted) compared the enum names as types and raised a Racket exception. It is
@@ -623,8 +628,13 @@ are in `tests/fixtures/frontend/check/` (58 fixtures, one for every reachable
   programs in a one-time run (the slow tier repeats 1,500; the fast tier has the
   fixtures). Same codes,
   spans, messages, helps and notes, and the same types.
-- Not done: module constants (`NAME = expr` at top level, section 44) land in
-  `src/checker.rkt` in a later PR, and the port carries them then.
+- Not done (so step 4 is "Done except module constants", as in 35.4): module
+  constants (`NAME = expr` at top level, section 44) land in `src/checker.rkt`
+  in a later PR, and the port carries them then.
+- The list of types is built from repeats of at most 1,048,576 slots, because
+  `List.repeat` halts with `RUNTIME-INVALID-COUNT` above that count and a
+  program of about 5.7 MB of source has more node ids. One file is limited to
+  1 MiB, so such a program is several files joined by imports.
 
 ### 35.10 Tests move to Python unittest
 
