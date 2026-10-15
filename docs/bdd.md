@@ -225,9 +225,12 @@ then no scenario runs.
   after every step. Handler output is limited to 1 MiB per step.
 - **Cleanup.** When a scenario ends, its child is closed and stops the program
   under test; the runner closes each child with `Process.close`, which sends
-  `SIGTERM`, then `SIGKILL` after one second. An interrupted run stops its
-  children and removes its temporary directory. On Linux the runner also ends,
-  and stops its children, when the driver is killed with `SIGKILL` (see
+  `SIGTERM`, then `SIGKILL` after one second. An interrupted run (Ctrl-C,
+  `SIGTERM`) stops its children, but its temporary directory may stay until the
+  next `agentica test` removes it, because the VM does not unwind (the Racket
+  driver always removed it; `docs/future/35-self-hosting.md` §35.5, until signals,
+  §46). On Linux the runner also ends, and stops its children, when the driver
+  is killed with `SIGKILL` (see
   [`vm/10-io-processes.md`](vm/10-io-processes.md) §10.4).
 - **Temporary directory.** Each run holds an exclusive lock on a `lock` file. A
   later `agentica test` removes a same-user directory whose lock it can take.
@@ -241,7 +244,7 @@ then no scenario runs.
 ## How a run works
 
 ```text
-agentica test [PATH...] [--steps FILE]        (Racket driver, src/bdd-driver.rkt)
+agentica test [PATH...] [--steps FILE]   (the driver, compiler/bdd.agc, on the VM)
   compiles std/test/runner (embedded) and the step program to .agcb files
   in a private temporary directory, then runs the runner on the VM:
     1. list child:    steps.agcb --agentica-bdd list   -> the patterns, in order (channel)
@@ -303,10 +306,13 @@ closes each child on every path.
   would be cancelled silently, and its failed assertion would never be reported.
   Then, if a program under test is running, the child probes it with a zero-byte
   `Process.read_bytes`; a truncated stream is `RUNTIME-BDD-OUTPUT-LIMIT`.
-- **Driver.** `src/bdd-driver.rkt` parses the options and writes the
+- **Driver.** The driver (`compiler/bdd.agc`, a program in Agentica that
+  `src/main.rkt` starts on the VM) parses the options and writes the
   configuration to `config.jsonl`, one line per file, so long lists never meet
-  an argument or line limit. If the runner fails with stderr output, the driver
-  reports one `RUNTIME-BDD-INFRA` file error and exits 2.
+  an argument or line limit. The runner writes its report to a file of the run
+  directory, which the driver prints, so a report is not limited to the 1 MiB
+  that a captured stream keeps. If the runner fails with stderr output, the
+  driver reports one `RUNTIME-BDD-INFRA` file error and exits 2.
 
 ## Unit test files (`Test.run`)
 

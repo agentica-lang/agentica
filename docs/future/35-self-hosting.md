@@ -100,8 +100,10 @@ are two providers:
   steps 3 to 7 and in the bootstrap before step 8. The version and the path of a
   `stdlib/` folder are passed as arguments, and the front end reads the sources
   with the `File` builtins. When Racket's `main.rkt` starts the step-7 BDD
-  driver, it writes the `std/` sources into the driver's private temporary
-  folder and passes that path.
+  driver, it sends the `std/` sources on the driver's stdin, and the driver
+  writes them into its own private run directory and passes that path to the
+  linker (decided in 7b: a folder made by Racket would stay behind when Racket
+  is killed).
 
 The step-7 BDD driver's `.agcb` is built once at `make exe` time and shipped in
 the release archive until step 8 (owner decision). It is never compiled on each
@@ -202,7 +204,7 @@ goldens stay.
 | 4 | **Done** (4a, the builtin catalog as Agentica data, PR #258; 4b, the checker, PR #263; module constants, §44, in PR 44a2-1, with `compiler/check_const.agc` and `compiler/const_walk.agc`): Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then constants, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). It carries module constants (§44, roadmap row 7.2.8; done in 44a2-1): the order, `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE` and the `CHECK-DECL-ORDER` rank of constants; the new import forms of §44.2 (`import Mod from "path"`, `import {A, B} from "path"`) are parser and linker changes that land in `src/` and `compiler/` together (44a0), and the checker sees no import, but one help text of `src/checker.rkt` shows the old form and the checker port carries the new text. Decided for deep trees (35.9): the linker of step 3 handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that, so both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and statements (one level for each, so it bounds the depth of the tree they recurse on; a diagnostic change in both front ends, made in 4b). |
 | 5 | **Done** (PR #282): Lowering (`src/lower.rkt`) | The IR in a text form of its own (not `--dump-ir`, see the status note below), or the `LOWER-` diagnostic. The port carries the lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by 44a2-2): scalar literal constants inlined, the other kept constants as zero-parameter functions, the `<start>` entry, the pruning by reachability from `main`, and the order of `Checked.constants`. The text form is `tests/frontend-lower-common.rkt` (Racket) and `compiler/lower.agc` (Agentica) |
 | 6 | **Done** (PR #286): Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal (not a text form: the test compares the bytes of `compiler/bytecode.agc` with the ones Racket writes; see the status note below). The port writes every section as `src/bytecode.rkt` does, format version 5 with the Updates and Globals sections, and has its `BYTECODE-` diagnostics |
-| 7 | **Started** (7a, the OS builtins the port needs, audited in 35.5): BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`) |
+| 7 | **Done** (7a, the OS builtins the port needs, audited in 35.5, PR #288; 7b, the driver, PR #293): BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`, `tests/unit-test-test.rkt`). The port is `compiler/bdd.agc` over the `compiler/bdd_*.agc` modules; see the status note below |
 | 8 | CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
 
 Notes:
@@ -273,6 +275,32 @@ Notes:
   single binary. A release is cut right before the step-8 PR merges, as a fixed
   starting point before the self-hosted front end becomes the default (owner
   decision, 2026-10-15). It is the last release with the Racket front end.
+- **Step 7 status (7b).** The driver is `compiler/bdd.agc` (the program) over
+  `bdd_driver.agc` (the run), `bdd_options.agc` (the arguments),
+  `bdd_discover.agc` (walking the test paths), `bdd_compile.agc` (the pipeline
+  of steps 3 to 6 from a file to the bytes of its `.agcb`, with the first
+  problem of any stage), `bdd_rundir.agc` (the temporary directory, the lock and
+  the sweep), `bdd_runner.agc` (starting the runner and reading its report),
+  `bdd_report.agc` (the usage and infrastructure reports), `bdd_files.agc`,
+  `bdd_source_root.agc` and `diagnostic_json.agc` (the `--json` form of a
+  diagnostic, for step 8 as well). `src/bdd-driver.rkt` is now the hand-off and
+  nothing else: it finds `agentica-bdd-driver.agcb` (built by `make` into
+  `dist/`, next to the VM and the executable, and in the release archive),
+  writes a private copy of it (a VM started with `--driver-pid` reads only a
+  private file and deletes it), starts it on the VM with `--driver-pid`, sends
+  it the `std/` sources on stdin and returns its stdout and exit code to
+  `main.rkt`. The old Racket driver is not kept as an oracle: the tests of
+  `agentica test` are end-to-end and independent of it, and the two were
+  compared once, on 25 runs (all three formats, relative and absolute paths,
+  compile errors in a test file and in the step program, usage errors, `--only`,
+  links, a missing path), with equal exit codes and reports except for the
+  random seed and the path of a `--steps` file that has `..` parts, which the
+  new driver makes lexically simple (as it does for the paths of the tests). The
+  freeze (row 7.2.7) is relaxed for `src/` only as the hand-off needs:
+  `src/bdd-driver.rkt` shrinks to the hand-off, and the `test` branch of
+  `src/main.rkt` passes the words after `test` to it (the driver reads them,
+  usage errors included). The runner (`stdlib/test/runner.agc`) gains one
+  configuration field, `report_path`.
 - **Step 8 in detail.** The diagnostic forms (`format-diagnostic`, the `--ai`
   text, `diagnostic->jsexpr`) move to Agentica; `vm/diag.c` already prints the
   same forms for runtime errors. The version moves from `src/version.rkt` to a
@@ -342,10 +370,74 @@ existed:
 | The process's own PID | `getpid`, given to the runner as `--driver-pid` | `System.pid()` | **New.** The child VM compares it with its parent (`bind_to_driver`), so the value must be the VM's own PID. |
 | A 0600 write of the bytecode, the config and the lock | `write-private`: `#:exists 'error #:permissions #o600` | `File.open(path, "create_private", ms)`, `File.write_bytes`, `File.close` | **New open mode**, no new write builtin, so a file larger than 1 MiB is written in several calls. A VM started with `--driver-pid` reads only a private bytecode file (owner, one link, no group or other bits) and deletes it. |
 | Delete a file, and remove the run directory tree | `delete-directory/files` on each child of the run directory, then on the directory | `Path.remove(path, ms)` | **New** (`vm/tree.c`), one builtin for both, named as §46.4 names it. It unlinks a file or a link itself; a directory it opens level by level with `O_NOFOLLOW` and empties with `unlinkat`, so a link inside the tree is removed as a link and its target is never touched. A missing path is `ok()`, like `#:must-exist? #f`. It refuses `/`, `.` and `..` (as the last part of a path), and a tree deeper than 128 levels. Like Racket's `delete-directory/files`, and Python's `rmtree`, it crosses mount points. A failure inside the tree names the entry that failed, as they do. A timeout returns the error but does not stop a removal that is running. |
-| A random directory name | `crypto-random-bytes 16` | `Random.int` | **Existing, weaker.** The driver VM is not run with `--seed`, so the draws come from OS entropy, but `Random.int` has a 31-bit seed: the names can be guessed. That is only a denial of service, never a way in: a hostile local user could occupy the names the driver will draw, but `Dir.mkdir_private` is exclusive and 0700, so the driver can never end up in a directory it did not make. The port tries a bounded number of times (16), a new name each time, and after the last failure reports an infrastructure error that names the temporary directory and the last system error. Reading 16 bytes of `/dev/urandom` with `File.open` and `File.read_bytes` needs no new builtin and gives an unguessable name; step 7b picks one. |
+| A random directory name | `crypto-random-bytes 16` | `Random.int` | **Existing, weaker.** The driver VM is not run with `--seed`, so the draws come from OS entropy, but `Random.int` has a 31-bit seed: the names can be guessed. That is only a denial of service, never a way in: a hostile local user could occupy the names the driver will draw, but `Dir.mkdir_private` is exclusive and 0700, so the driver can never end up in a directory it did not make. The port tries a bounded number of times (16), a new name each time, and after the last failure reports an infrastructure error that names the temporary directory and the last system error. Reading 16 bytes of `/dev/urandom` with `File.open` and `File.read_bytes` needs no new builtin and gives an unguessable name; step 7b picks one (decided below). |
 | Walking the test paths | `directory-list`, `file-or-directory-type`, `directory-exists?`, `file-exists?` | `Dir.list`, `File.lstat`, `File.stat` | **Existing, with one gap.** `Dir.list` decodes names lossily, so `utf-8-name?` cannot tell a name with a bad byte from one with a real U+FFFD. The port treats a name with U+FFFD as not UTF-8 (a real U+FFFD in a file name is the only false report); step 7b records the choice. |
 | Starting the runner and reading its output | `subprocess`, with a thread that copies each stream | `Process.spawn_captured`, `Process.output`, `Process.wait`, `Process.close` | **Existing, with one limit to check in 7b.** A captured stream keeps 1 MiB; the Racket driver keeps any size. A `--json` report of a very large run may pass it, and `Process.output` then marks it truncated. |
 | Cleanup when a signal ends the driver | `dynamic-wind` and `stop-vm`: a break (Ctrl-C, SIGTERM) unwinds the driver, which removes its run directory and closes the lock | the VM's own end of run | **Existing, and a behavior change.** The VM does not unwind: a stop signal ends it between turns, kills its children and does not run the program's cleanup. A run stopped that way leaves its directory in the temporary directory until the next run's sweep removes it; the lock is what tells that sweep the directory is abandoned, since the process's end releases it. Until §46 gives a program a stop hook, step 7b records this as a known difference from the Racket driver. |
+
+**Decided in step 7b.** The choices the audit left to the port:
+
+- **(a) Random names.** The driver reads 16 bytes of `/dev/urandom` with
+  `File.open` and `File.read_bytes` (a loop until it has 16) and writes them as
+  32 hex digits, so a name cannot be guessed (`Random.int` has a 31-bit seed).
+  It tries `Dir.mkdir_private` up to 16 times, each with a new name, and after
+  the last failure reports `RUNTIME-BDD-INFRA` with the message `cannot make a
+  private directory in TMPDIR: LAST SYSTEM ERROR`. The final name comes from a
+  new draw, and a `Path.rename` that fails is an infrastructure error too.
+- **(b) Lossy names.** `Dir.list` decodes a name with a byte that is not UTF-8
+  as U+FFFD, so the driver treats every name with a U+FFFD as not UTF-8 (the
+  only false report is a file whose name really has a U+FFFD). Such a name
+  cannot be passed to `File.lstat`, so its kind is unknown: it is the error
+  `the file name is not valid UTF-8` when its name fits (`.feature`,
+  `_test.agc`), and a folder or file that does not fit is skipped. This is one
+  difference from the Racket driver: it also reported a folder with a bad name,
+  which it could tell was a folder.
+- **(c) The 1 MiB of a captured stream.** A large `--json` run does pass it: a
+  report of 1.6 MB (40 tests with long names) was cut to 1 MiB. Reading the
+  stream in a loop does not help, because the VM keeps only 1 MiB of unread
+  data and drops the rest, so a report written in one burst is cut even when
+  the reader is waiting. The better way: the runner writes its report to a new
+  file of the run directory (`report_path` in its configuration, mode 0600, in
+  pieces of at most 1 MiB) and the driver reads that file with
+  `compiler/source_file.agc`, which has no size limit. The report no longer
+  travels on stdout, so there is no truncated report to handle. Stderr stays
+  captured: 1 MiB of it is more than any diagnostic needs, and the driver shows
+  only the last diagnostic of it. `tests/test_bdd.py` runs a report of more
+  than 1 MiB.
+- **(d) Signals.** The VM does not unwind: a stop signal (Ctrl-C, SIGTERM)
+  ends the driver's VM between turns, which stops its children, and the run
+  directory stays until the next `agentica test` sweeps it (the lock ends with
+  the process). The Racket driver removed it before it ended. A Ctrl-C from
+  the terminal reaches the whole process group, so the runner ends too and the
+  driver often finishes its cleanup before the signal ends it; a `SIGTERM` to
+  the driver alone does not. So the directory may stay: a known difference
+  until §46 gives a program a stop hook. The same goes for a driver killed with
+  SIGKILL, which the Racket driver also left behind. `--driver-pid` ties the
+  driver's VM to `main.rkt` and the runner to the driver, so killing `main.rkt`
+  still stops everything.
+- **(e) The temporary directory.** `System.env("TMPDIR")` and `File.stat`, as
+  Racket's `find-system-path 'temp-dir`: `TMPDIR` if it is a directory (a
+  relative one is kept as given), else the first directory among `/var/tmp`,
+  `/usr/tmp` and `/tmp`. `main.rkt` uses the same rule to put the copy of the
+  driver's bytecode. When none is a directory, the driver reports an
+  infrastructure error.
+
+Other choices of the port:
+
+- **The VM is gone.** When `main.rkt` cannot find or run the VM, nothing can
+  run, not even the driver: it prints `agentica: cannot find the VM at PATH; run
+  make vm or set AGENTICA_VM` on stderr and exits 2, as `agentica file.agc`
+  does. The Racket driver printed an infrastructure report in the chosen
+  format. The same for the driver file and for a `TMPDIR` that `main.rkt` cannot
+  write (`cannot write a temporary file in DIR`).
+- **Tests of `agentica test` with a fake VM.** `AGENTICA_VM` now names the VM
+  that runs the driver too; a test that wants a fake runner VM makes a script
+  that runs the real VM unless it is asked for `runner.agcb`.
+- **Compile errors.** The driver reads each test file and the step program once
+  with `compiler/source_file.agc` (an unreadable file is `cannot read the test
+  file PATH`, an invalid one `LEX-INVALID-UTF8` at the bad byte) and then
+  compiles it from its path, so the linker reads it again; the diagnostics
+  (`file`, notes, help) are those of the Racket driver.
 
 ### 35.6 Distribution
 

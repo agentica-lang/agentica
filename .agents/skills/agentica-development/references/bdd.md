@@ -1,53 +1,73 @@
 # `agentica test`: BDD and unit test runner
 
-How `agentica test` works: `src/bdd-driver.rkt`, `std/bdd`, the runner in `stdlib/test/`, step programs, unit test files and the child channel records. Read before changing any of them.
+How `agentica test` works: the driver (`compiler/bdd.agc`, `src/bdd-driver.rkt`), `std/bdd`, the runner in `stdlib/test/`, step programs, unit test files and the child channel records. Read before changing any of them.
 
 ## BDD (`agentica test`)
 
 `agentica test` runs on the VM and is written in Agentica (phase 21; user docs and the runner protocol in `docs/bdd.md`). `std/bdd` is the public step API; `std/bdd/gherkin` and `std/bdd/match` (Gherkin parsing and step matching) and `std/test/runner` and `std/test/report` (the runner and report, shared by BDD and unit tests) are internal (importable through `std/` like any registered module, but not in the programming skill or the site). All are registered in `src/stdlib.rkt`.
 
-- `src/bdd-driver.rkt` (`run-agentica-test paths step-files #:style #:allow-run
-  #:seed #:vm`, returns `(values code text)`)
-  - makes a private 0700 temp dir `agentica-bdd-new-<hex>` and reads the user's
-    uid and gid from it (no FFI), refuses a `TMPDIR` without the sticky bit that
-    others can write to, or that its group can write to unless it has the user's
-    uid and gid and no setgid bit (the user-private-group case), locks the dir's
-    `lock` file exclusively for the whole run, then renames the dir to
-    `agentica-bdd-<other hex>`, a second random value, so the sweep never sees
-    an unlocked new dir (then removes such dirs of the same user whose `lock` it
-    can take, left by a killed driver; links and dirs without `lock` are left
-    alone; any Racket exception becomes an INFRA report), compiles the step
-    program (or a default `BDD.run([])` one) and a tiny root that calls
-    `Runner.main()` into 0600 `.agcb` files, discovers the feature files, writes
-    `config.jsonl`, and runs the runner VM with `--allow-run [--seed N]
-    --driver-pid PID -- runner.agcb config.jsonl`, without the metrics variables
-    (`--driver-pid` ties the runner to the driver with `PR_SET_PDEATHSIG`; the
-    runner's bytecode is its one-shot input).
+- `src/bdd-driver.rkt` (`run-agentica-test arguments step-files #:style
+  #:allow-run #:seed #:vm [#:test-timeout-ms]`, returns `(values code text)`) is
+  only the hand-off (§35.4 step 7)
+  - it writes a private 0600 copy of `dist/agentica-bdd-driver.agcb` (`find-bdd-driver`;
+    `make bdd-driver` builds it from `compiler/bdd.agc`) in the temporary
+    directory, runs it on the VM as `--allow-run --driver-pid PID -- COPY
+    --vm VM --style S [--allow-run] [--seed N] --test-timeout-ms N --agentica
+    WORD... -- [--steps FILE]... ARGUMENTS` (a VM with `--driver-pid` reads only
+    a private file and deletes it), sends the embedded `std/` sources on its
+    stdin as `{"files": [{"path", "text"}]}`, and returns its stdout and exit
+    code; its stderr is shown at once
+  - a missing VM, a missing driver or a temporary directory it cannot write is a
+    plain message on stderr and exit 2, as for `agentica file.agc`
+  - the tests that need a fake runner VM set `AGENTICA_VM` to a script that runs
+    the real VM unless it is asked for `runner.agcb` (`fake_vm` in
+    `tests/test_bdd.py`), since the driver runs on that VM too.
+- `compiler/bdd.agc` (the driver, over `compiler/bdd_*.agc`; `bdd_options.agc`
+  reads the arguments, usage errors included)
+  - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the
+    temporary directory (`TMPDIR` if it is a folder, else `/var/tmp`,
+    `/usr/tmp`, `/tmp`; the hex is 16 bytes of `/dev/urandom`; 16 tries), refuses
+    a `TMPDIR` without the sticky bit that others can write to, or that its
+    group can write to unless it has the user's uid and gid and no setgid bit
+    (the user-private-group case), locks the dir's `lock` file exclusively for
+    the whole run, then renames the dir to `agentica-bdd-<other hex>` with
+    `Path.rename`, which never replaces, so the sweep never sees an unlocked
+    new dir; then it removes the dirs of the same user whose `lock` it can take,
+    left by a killed driver (links and dirs without `lock` are left alone)
+  - it writes the `std/` sources into `std/` of the run dir, compiles the
+    step program (or a default `BDD.run([])` one) and a tiny root that calls
+    `Runner.main()` (`bdd_compile.agc`: the Agentica pipeline from a file to
+    the bytes, or the first `Problem`) into 0600 `.agcb` files, discovers the
+    feature files (`bdd_discover.agc`), writes `config.jsonl`, and runs the
+    runner VM with `--allow-run [--seed N] --driver-pid PID -- runner.agcb
+    config.jsonl` as a captured child (`bdd_runner.agc`; the child environment
+    has no metrics variables, a rule of every `Process.spawn*`)
+  - `Process.spawn_captured` keeps 1 MiB of each stream, and the report of a big
+    run is larger, so the runner writes the report to `report.txt` of the run
+    dir (`report_path` in the config) and the driver prints that file; stderr
+    stays captured
+  - the run dir is removed with `Path.remove` and the lock closed at the end of
+    every run that ends normally; a stop signal does not unwind the VM, so the
+    dir stays until a later run sweeps it (35.5)
   - Discovery lives here, not in the runner, because `File.stat` follows links:
-    `file-or-directory-type` sees links, folder links are skipped, and an
-    unreadable folder, an unreadable entry, a broken `.feature` link or a
-    non-UTF-8 folder or `.feature` name is a `RUNTIME-BDD-INFRA` entry for that
-    path.
+    `File.lstat` sees links, folder links are skipped, and an unreadable folder,
+    an unreadable entry, a broken `.feature` link or a name with U+FFFD (the
+    mark `Dir.list` leaves for bytes that are not UTF-8) on a folder or a
+    `.feature` file is a `RUNTIME-BDD-INFRA` entry for that path.
   - `config.jsonl` is the config on its first line (VM, step bytecode and source
     path, `steps_error`: the step program's front-end diagnostic as `--json`
-    writes it, so the report stays in Agentica; the Agentica command for
-    programs under test, `count`, `empty_path`, style, allow_run, seed), then
-    `count` lines of `{path, problem}`
+    writes it (`diagnostic_json.agc`), so the report stays in Agentica; the
+    Agentica command for programs under test, `count`, `empty_path`, style,
+    allow_run, seed, `report_path`), then `count` lines of `{path, problem,
+    kind, bytecode, source_root, front_end}`
   - the runner reads them with `File.read_line` in a `map` over `0...count`.
-  - A runner exit of 0, 1 or 2 with an empty stderr is the answer
-  - anything else, an exception, a missing VM, or more than one `--steps` is a
-    one-file `RUNTIME-BDD-INFRA` or `USAGE` report built in Racket.
-  - The dir's entries other than `lock` are removed first, then `lock` and the
-    dir, then the lock is closed, ignoring failures (a leftover dir keeps its
-    `lock`, so it is swept later)
-  - the sweep removes dirs in the same order.
-  - This runs in a `dynamic-wind` post wrapped in `(with-handlers ([exn:break?
-    raise]) ...)`, since Racket skips posts on an uncaught break in the main
-    module
-  - the runner is stopped with `stop-vm` (`src/vm-launch.rkt`).
+  - A runner exit of 0, 1 or 2 with an empty stderr and a report file is the
+    answer
+  - anything else, or more than one `--steps`, is a one-file
+    `RUNTIME-BDD-INFRA` or `USAGE` report built by `bdd_report.agc`.
 - Unit tests (25b)
-  - `src/bdd-driver.rkt` (`run-agentica-test ... #:only #:test-timeout-ms`,
-    defaults `""` and 30000; tests pass a short deadline here) discovers
+  - the driver (`--only` is a word after `test`; `#:test-timeout-ms` of the
+    hand-off, default 30000; tests pass a short deadline there) discovers
     `*_test.agc` next to `.feature` files in the same walk (an entry's `kind` is
     `tests`, `feature` or `""`), uses `specs/` and `test/` when no path is given
     (a missing default folder is skipped; nothing found is `CHECK-BDD-EMPTY`),
@@ -56,7 +76,7 @@ How `agentica test` works: `src/bdd-driver.rkt`, `std/bdd`, the runner in `stdli
   - the config gains `only`, `test_timeout_ms`, `steps_given` and
     `empty_message`
   - the runner VM's stdin is closed at once, since nothing is read from it (the
-    25b token is gone; `crypto-random-bytes` only names the temporary folder)
+    25b token is gone; the random bytes only name the temporary folder)
   - a usage or infrastructure report from the driver carries `--seed` when
     given.
   - In the runner, the seed is `--seed` or one drawn with `Random.int` and
