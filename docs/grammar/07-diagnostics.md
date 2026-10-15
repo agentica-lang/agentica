@@ -66,12 +66,13 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `s[0]` on a String (`CHECK-NOT-INDEXABLE`) | `s.at(i)`, `s.slice(start, length)`, or `s.split("")` |
 | `n * 1.5` with an Int `n` (`CHECK-TYPE-MISMATCH`) | `n.to_f * 1.5`; `x.to_i!` truncates a Float; `s.to_i!` / `n.to_s` for String and number |
 | `a < b` on Strings (`CHECK-TYPE-MISMATCH`) | `< <= > >=` take numbers only; compare with `==` and `!=`, order a list with `xs.sort` |
-| `m = {}`, `xs = []` (`CHECK-EMPTY-MAP-TYPE`, `CHECK-EMPTY-LIST-TYPE`) | annotate: `m: Map[String, Int] = {}` |
+| `m = {}`, `xs = []`, `s = Set.new([])` (`CHECK-EMPTY-MAP-TYPE`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-SET-TYPE`) | annotate: `m: Map[String, Int] = {}`, `s: Set[Int] = Set.new([])` |
 | a loop, `if` or `case` as the last statement (`CHECK-MISSING-RETURN`) | a loop is not a return; each branch or arm must return, or return after it |
 | `while x {`, `if x {`, `else {`, `for x in xs {`, `case x {`, `def f() -> T {`, `do \|x\| {` (`PARSE-UNEXPECTED-TOKEN`) | blocks have no braces: `while cond` ... `end` |
 | a `}` with no `{` open (`LEX-UNMATCHED-DELIMITER`), an unclosed `{` (`LEX-UNCLOSED-DELIMITER`) | blocks end with `end`, not `}` |
 | `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
 | `Hash.new`, `Map.new`, `Array.new`, `List.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
+| `Set.empty`, `s.contains?(x)`, `s.member?(x)`, `s << x` | `Set.new([])` with an expected type, `s.include?(x)`, `s = s.add(x)` |
 | `continue` | `next` |
 | `x \|> f`, `x \|> r.field`, `x \|> xs[0]`, `x \|> f(1).g` (`PARSE-PIPE-TARGET`) | a call with parentheses on the right; wrap the expression in parentheses and use `.` on the result: `(x \|> f()).unwrap!` |
 | `x \|> String.trim()` (`CHECK-PIPE-METHOD`) | the method form: `x.trim` |

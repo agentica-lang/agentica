@@ -19,7 +19,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    and the `List` and `Map` library (`List.size`, `append`, `set`,
    `repeat`, `concat`, `take`, `drop`, `at`, `reverse`, `sort`;
    `Map.has_key?`, `keys`, `size`, `put`, `get` at arities 2 and 3,
-   `delete`, `values`), every `String.*` builtin, and `Float.from_int`,
+   `delete`, `values`), the `Set` library (`Set.new`, `add`, `delete`,
+   `include?`, `size`, `empty?`, `to_a`, `union`, `intersection`,
+   `difference`, `subset?`), every `String.*` builtin, and `Float.from_int`,
    `Float.to_int`, `Float.to_int!`, `Time.now_ms`, `Time.monotonic_ms`,
    `Time.monotonic_ns`, `Random.int` and `Random.float`, and every `JSON.*`
    builtin (the type argument of `JSON.decode` and `JSON.schema` lowers to a

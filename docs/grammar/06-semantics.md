@@ -14,6 +14,7 @@ The grammar determines what can be written. The rules below determine which prog
 | `Void` | Completion without a usable value; no literal |
 | `List[T]` | Homogeneous, immutable list; `Int` indexes from zero |
 | `Map[K, V]` | Homogeneous, immutable map; the key `K` is `Int` or `String`; keeps insertion order |
+| `Set[T]` | Immutable set of distinct `Int` or `String` values; keeps first-insertion order |
 | `Result[T]` | `ok(value)`, or `error(message)` with a `String` message |
 | `Json` | Opaque JSON value, used through the `JSON` module |
 | `Range` | Immutable `Int` range: `a..b` includes `b`, `a...b` excludes it |
@@ -26,7 +27,7 @@ The grammar determines what can be written. The rules below determine which prog
 | `Enum[T, ...]` | User-declared nominal sum type |
 | Declared struct | Nominal type with typed, immutable fields |
 
-Parameters and function return types need annotations. Local variables may be inferred from the initializer, as in `count = 3`. An empty list or map needs an expected type, from an annotation, a parameter, a field or a return type: `names: List[String] = []`. A non-empty list has one element type. There is no implicit numeric conversion and no `Any` type. `Nil` is not a nullable wildcard: `name: String = nil` is invalid; use an enum such as `Option[T]`.
+Parameters and function return types need annotations. Local variables may be inferred from the initializer, as in `count = 3`. An empty list, map or `Set.new([])` needs an expected type, from an annotation, a parameter, a field or a return type: `names: List[String] = []`. A non-empty list has one element type. There is no implicit numeric conversion and no `Any` type. `Nil` is not a nullable wildcard: `name: String = nil` is invalid; use an enum such as `Option[T]`.
 
 ### Operators
 
@@ -79,7 +80,7 @@ end
 
 A struct constructor gives every field exactly once, by name, in any order. There are no default or extra fields.
 
-A list index runs from zero to length minus one; a negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing takes O(log32 n) time, at most four steps for a million items; `for` visits the items in order. `for` iterates a `List` in order, or a `Range`. The core has no slices and no string indexing.
+A list index runs from zero to length minus one; a negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing takes O(log32 n) time, at most four steps for a million items; `for` visits the items in order. `for` iterates a `List` in order, a `Set` in first-insertion order, or a `Range`. The core has no slices and no string indexing.
 
 ### Ranges
 
@@ -111,6 +112,23 @@ more = Map.put(stock, "kiwi", 7)
 - A repeated key in a literal keeps the last value at the first position. `Map.put` on an existing key keeps its position.
 - Maps are immutable: there is no `m[key] = value`, and `Map.put` returns a new map. There is no map equality and no `for` over a map; iterate `Map.keys`, which is in insertion order.
 - Lookup, `Map.has_key?` and `Map.put` take effectively constant time; `Map.keys` is O(n).
+
+### Sets
+
+`Set[T]` has one type argument, `Int` or `String`, like a `Map` key: any other element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value once and keeps the order of first insertion.
+
+```ruby
+seen: Set[String] = Set.new([])
+seen = seen.add("a").add("b").add("a")
+puts(seen)
+```
+
+- `Set.new(items)` takes a `List[T]` and drops repeated items; the first one keeps its place. `Set.new([])` needs an expected type, like `[]` and `{}`: `CHECK-EMPTY-SET-TYPE`.
+- Sets are immutable. `Set.add` and `Set.delete` return a new set and leave the input unchanged; adding a member or deleting a missing element gives an equal set. An element deleted and added again goes to the end.
+- `Set.include?`, `Set.size` and `Set.empty?` read the set. `Set.to_a` gives the elements in order. `Set.union(a, b)` gives the elements of `a`, then those of `b` that `a` lacks; `Set.intersection` and `Set.difference` keep the order of `a`; `Set.subset?(a, b)` is true when every element of `a` is in `b`.
+- `for x in set` visits the elements in order. The set is read once before the loop, so assigning the variable in the body does not change the loop.
+- Sets print as `Set[1, 2]` (strings in their `inspect` form). There is no `==` on sets and no index (`CHECK-NOT-INDEXABLE`); `Test.eq` compares two sets in any order. A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`) and cannot be a `Map` key, but it may be a field, a list item or a map value.
+- Functions are in [`library/data-structures/set.md`](../../site/content/library/data-structures/set.md). `Set.include?` and `Set.add` take effectively constant time; `Set.to_a` and the set operations are O(n).
 
 ### Result and propagation
 

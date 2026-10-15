@@ -14,7 +14,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    the subset keeps failing with `LOWER-UNSUPPORTED` at its span; never
    miscompile. `vm-type?` says which checked types the VM accepts (the
    scalars, `(Struct name)` and `(Enum name ...)` declared in the program,
-   `Json`, `List` and `Map` of accepted types, `Result` of accepted types or Void, and
+   `Json`, `List`, `Map` and `Set` of accepted types, `Result` of accepted types or Void, and
    `Fn` over accepted types with an accepted or Void result); a new
    value type widens it.
 3. New opcode: append it to `opcodes` in `src/bytecode.rkt` and to

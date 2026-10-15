@@ -38,7 +38,7 @@ def main() -> Void
 end
 ```
 
-- `Test.eq(actual, expected)`: actual first, as ExUnit's `assert actual == expected`. Both have one type, and it must be data: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, Results, structs and enums of those. `Fn`, `Task`, handles, `TestCase` and two different types are `CHECK-TYPE-MISMATCH`. Maps compare in any key order; Floats by IEEE 754 (NaN is not equal to itself); a `Json` compares as its canonical text (sorted keys). The error is `expected E; actual A` in the `inspect` form, with `Json` as its JSON text.
+- `Test.eq(actual, expected)`: actual first, as ExUnit's `assert actual == expected`. Both have one type, and it must be data: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, sets, Results, structs and enums of those. `Fn`, `Task`, handles, `TestCase` and two different types are `CHECK-TYPE-MISMATCH`. Maps compare in any key order and sets in any element order; Floats by IEEE 754 (NaN is not equal to itself); a `Json` compares as its canonical text (sorted keys). The error is `expected E; actual A` in the `inspect` form, with `Json` as its JSON text.
 - Put the actual value first: the expected type comes from the left argument, so `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`; write `Test.eq(r, error("x"))`.
 - A failed `Test.eq` reports the message `values are not equal` with `expected` and `actual`.
 - `Test.ok?(r)` and `Test.error?(r)` check a Result's tag: `expected ok; actual error("...")`, `expected an error; actual ok(0)`.
