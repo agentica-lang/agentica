@@ -359,6 +359,11 @@ steps:
   VM takes 40 ms and 8 MB of RSS as a process (37 ms inside the process). The
   Racket lexer takes 35 ms inside its process (20 ms when warm), but the
   process takes 0.55 s and 105 MB with Racket's start-up.
+- The lexer was then rewritten in a functional style: small `scan_*`
+  functions, a `step(input, state)` loop of tail calls and `state.with(...)`,
+  with Set and Map lookups for the character classes. On the same VM the same
+  file lexes in 31 ms instead of 34 ms (best of 30 runs), and a 1 MB file of
+  mixed source in 1.74 s instead of 1.92 s.
 
 Status on 2026-10-15 (PR #245): step 2 is done. `compiler/` also holds the
 AST (`ast.agc`) and the parser (`parse_base.agc`, `parser.agc`), and an entry
