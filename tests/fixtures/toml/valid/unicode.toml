@@ -1,0 +1,9 @@
+name = "Zoë Åström"
+emoji = "😀 \U0001F680"
+cjk = "日本語のテキスト"
+literal = 'Ünïcödé ∑ ∫ ≈'
+"clé" = "valeur"
+"日本" = { "語" = 1 }
+combining = "e\u0301 and é"
+astral_key."😀" = "ok"
+max = "\U0010FFFF"
