@@ -344,6 +344,7 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
   tokens: List[Tokens.Token] = []
   delimiters: List[Frame] = []
   last_kind = ""
+  open_strings = 0
   index = 0
   line = 1
   line_start = 0
@@ -376,9 +377,8 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
       if code == 13 and at(codes, size, index + 1) != 10
         return Diag.Outcome.Failed(Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp))
       end
-      open_string = innermost(delimiters, true)
-      if open_string >= 0
-        return Diag.Outcome.Failed(unterminated(delimiters[open_string].start, start))
+      if open_strings > 0
+        return Diag.Outcome.Failed(unterminated(delimiters[innermost(delimiters, true)].start, start))
       end
       index += 1
       if code == 13
@@ -447,16 +447,25 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
         tokens = tokens.push(token(text, "integer", integer_value(digits), start, stop))
         last_kind = "integer"
       end
-    elsif code == 34
+    elsif code == 34 or (code == 125 and delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#")
       start = Source.position(index, line, line_start)
-      outcome = scan_string(text, codes, size, index + 1, start, start, line, line_start, true)
+      string_start = start
+      first = true
+      if code == 125
+        string_start = delimiters[delimiters.size - 1].start
+        first = false
+        delimiters = pop(delimiters)
+        open_strings -= 1
+      end
+      outcome = scan_string(text, codes, size, index + 1, string_start, start, line, line_start, first)
       case outcome
         Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
         Diag.Outcome.Done(piece) ->
           tokens = tokens.push(token(text, piece.kind, Tokens.Value.Text(piece.value), start, Source.position(piece.token_end, line, line_start)))
           last_kind = piece.kind
           if piece.opens
-            delimiters = delimiters.push(Frame(kind: "#", start: start))
+            delimiters = delimiters.push(Frame(kind: "#", start: string_start))
+            open_strings += 1
           end
           index = piece.next
       end
@@ -477,36 +486,20 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
       end
       index += lexeme.length
       stop = Source.position(index, line, line_start)
-      if kind == "right-brace" and delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#"
-        frame = delimiters[delimiters.size - 1]
-        delimiters = pop(delimiters)
-        outcome = scan_string(text, codes, size, index, frame.start, start, line, line_start, false)
-        case outcome
-          Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-          Diag.Outcome.Done(piece) ->
-            tokens = tokens.push(token(text, piece.kind, Tokens.Value.Text(piece.value), start, Source.position(piece.token_end, line, line_start)))
-            last_kind = piece.kind
-            if piece.opens
-              delimiters = delimiters.push(Frame(kind: "#", start: frame.start))
-            end
-            index = piece.next
-        end
-      else
-        if kind == "left-paren" or kind == "left-bracket" or kind == "left-brace"
-          delimiters = delimiters.push(Frame(kind: lexeme, start: start))
-        elsif kind == "right-paren" or kind == "right-bracket" or kind == "right-brace"
-          if delimiters.size == 0 or delimiters[delimiters.size - 1].kind != expected_opener(kind)
-            help = Diag.Help.NoHelp
-            if lexeme == "}" and statement_level?(delimiters)
-              help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
-            end
-            return Diag.Outcome.Failed(Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help))
+      if kind == "left-paren" or kind == "left-bracket" or kind == "left-brace"
+        delimiters = delimiters.push(Frame(kind: lexeme, start: start))
+      elsif kind == "right-paren" or kind == "right-bracket" or kind == "right-brace"
+        if delimiters.size == 0 or delimiters[delimiters.size - 1].kind != expected_opener(kind)
+          help = Diag.Help.NoHelp
+          if lexeme == "}" and statement_level?(delimiters)
+            help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
           end
-          delimiters = pop(delimiters)
+          return Diag.Outcome.Failed(Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help))
         end
-        tokens = tokens.push(Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)))
-        last_kind = kind
+        delimiters = pop(delimiters)
       end
+      tokens = tokens.push(Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)))
+      last_kind = kind
     end
   end
   return Diag.Outcome.Failed(unterminated(Source.position(0, 1, 0), Source.position(0, 1, 0)))

@@ -4,22 +4,25 @@ Step lists for common front-end changes (keyword, AST node, syntax, diagnostic, 
 
 ## The freeze and the Agentica front end
 
-Roadmap row 7.2.7 froze the Racket front end. From then on `src/` takes no new syntax and no new checker rules. Its only changes are bug fixes and new rows in the `src/builtins.rkt` table with the matching name in the `vm-builtins` list of `src/lower.rkt`. Every later language change goes into `compiler/` (`docs/future/35-self-hosting.md`), and the recipes below that add a keyword, a node or a syntax form describe the change to make there once its stage is ported. A bug fix in a Racket stage that has a port changes both in the same PR.
+Roadmap row 7.2.7 froze the Racket front end. From then on `src/` takes no new syntax and no new checker rules. Its only changes are bug fixes and new rows in the `src/builtins.rkt` table with the matching name in the `vm-builtins` list of `src/lower.rkt`. Every later language change goes into `compiler/` (`docs/future/35-self-hosting.md`), and the recipes below that add a keyword, a node or a syntax form describe the change to make there once its stage is ported. A bug fix in a ported stage changes `src/` and `compiler/` in the same PR, with a golden case for it.
 
 `compiler/` holds the Agentica front end, one stage per PR in the order of 35.4. So far it has the lexer: `source.agc`, `token.agc` and `diagnostic.agc` (the data of `src/source.rkt`, `token.rkt`, `diagnostic.rkt`), `lexer.agc` (`src/lexer.rkt`), `unicode.agc` with the generated `unicode_table.agc` (Racket's `char-graphic?` for the text of `LEX-UNEXPECTED-CHAR`), and the entry `lex.agc` with `lex_text.agc`. Code follows 35.5: build lists with `push` and strings with `join`, and use loops, not recursion over the input. Positions and offsets count characters, as in Racket.
 
-The lexer's output has a text form, one line per token (`kind start-end "lexeme" value`, spans as `offset:line:column`, `=` when the value is the lexeme) or one `ERROR` line. The Racket printer is `tests/frontend-lexer-common.rkt`; `compiler/lex.agc` prints the same for each file in `System.args()`, after a `== path` line. Goldens are in `tests/fixtures/frontend/lexer/` (`NAME.input` and `NAME.tokens`, plus a few repo files listed in the printer module); `.input` files keep their bytes (`-text` in `.gitattributes`).
+The lexer's output has a text form, one line per token (`kind start-end "lexeme" value`, spans as `offset:line:column`, `=` when the value is the lexeme) or one `ERROR` line. The Racket printer is `tests/frontend-lexer-common.rkt`; `compiler/lex.agc` prints the same for each file in `System.args()`, after a `== path` line. Token kinds are Strings in `compiler/`; they must match the symbols of the kind list in `src/token.rkt` and `references/stages.md`, because the parser compares them. Goldens are in `tests/fixtures/frontend/lexer/` (`NAME.input` and `NAME.tokens`); `.input` files keep their bytes (`-text` in `.gitattributes`). They hold the message and help text on purpose: 35.2 keeps the texts equal, an exception to "tests assert codes, not messages". They are not tied to live files, so they still work after Racket is deleted. While Racket exists, `tests/frontend-lexer-test.rkt` also compares the two lexers live on `examples/`, `stdlib/`, `tests/fixtures/vm/` and 300 generated inputs (the cases named "while Racket exists"; delete them with `src/`).
 
 ```sh
 racket src/main.rkt compiler/lex.agc file.agc              # the Agentica lexer's text form of a file
 raco test tests/frontend-lexer-test.rkt                    # Racket printer and Agentica lexer against every golden
-make goldens                                               # also rewrites the front-end goldens from the Racket stages
+make goldens                                               # also rewrites the front-end goldens from the Racket stages (make goldens FIXTURES=... skips them)
+racket tests/frontend-lexer-common.rkt                     # rewrites only the lexer goldens
 racket tools/gen-lexer-unicode.rkt                         # rewrites compiler/unicode_table.agc (a test checks it)
 ```
 
-To add a case, put `NAME.input` in the folder and run `make goldens`. A change to a ported stage reruns the test for that stage; review the golden diff.
+To add a case, put `NAME.input` in the folder and run `racket tests/frontend-lexer-common.rkt`. A change to a ported stage reruns the test for that stage; review the golden diff.
 
 ## Common tasks
+
+Under the freeze these recipes name `src/` files. New syntax and new checker rules go into `compiler/` instead, and cannot start until the stage they change is ported (the parser for a syntax form, the checker for a rule): they wait. Only the lexer is ported so far.
 
 ### Add a keyword or operator
 

@@ -229,6 +229,14 @@ Notes:
   with `Process.spawn_captured`, whose close already sends `SIGTERM`, then
   `SIGKILL`.
 - No language change lands in a stage while its port is open (35.7).
+- **Open for step 8: reading source files.** `compiler/lex.agc` reads with
+  `File.read_text`, which is strict UTF-8 with a 1 MiB limit. Racket's
+  `file->string` replaces invalid bytes with U+FFFD and has no limit. So a
+  source file with invalid UTF-8 gives different results on the two sides (the
+  Agentica front end fails to read it). Step 8 has to decide: reject invalid
+  UTF-8 in both front ends with a diagnostic, or decode with replacement in
+  Agentica too (bytes from `File.read_bytes`, then a decoder). It is not
+  decided here.
 
 ### 35.5 Language and VM prerequisites
 

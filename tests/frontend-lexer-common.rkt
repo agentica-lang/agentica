@@ -17,10 +17,6 @@
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/frontend/lexer")
 
-(define repo-inputs
-  '("stdlib/bdd/gherkin.agc"
-    "examples/hello.agc"))
-
 (define (quote-text text)
   (define out (open-output-string))
   (write-char #\" out)
@@ -83,13 +79,10 @@
       (string-join (map token-line result) "\n")))
 
 (define (lexer-inputs)
-  (append
-   (for/list ([file (in-list (sort (directory-list fixtures) path<? #:key values))]
-              #:when (path-has-extension? file #".input"))
-     (define name (path->string (path-replace-extension file #"")))
-     (lexer-input name (string-append "tests/fixtures/frontend/lexer/" (path->string file))))
-   (for/list ([path (in-list repo-inputs)])
-     (lexer-input (string-replace path "/" "-") path))))
+  (for/list ([file (in-list (sort (directory-list fixtures) path<?))]
+             #:when (path-has-extension? file #".input"))
+    (define name (path->string (path-replace-extension file #"")))
+    (lexer-input name (string-append "tests/fixtures/frontend/lexer/" (path->string file)))))
 
 (define (golden-file input)
   (build-path fixtures (string-append (lexer-input-name input) ".tokens")))

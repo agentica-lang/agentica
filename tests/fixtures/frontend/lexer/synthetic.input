@@ -1,0 +1,103 @@
+## Reads orders and prints a report.
+##
+## Totals are in cents.
+
+import "std/queue" as Queue
+
+## One line of an order.
+export struct Line
+  ## The item name.
+  name: String
+  price: Int
+  quantity: Int
+end
+
+## Whether an order is paid.
+export enum Status
+  Paid
+  ## Money still owed, in cents.
+  Owed(Int)
+end
+
+## The price of a line in cents.
+def total(line: Line) -> Int
+  return line.price * line.quantity
+end
+
+def describe(status: Status) -> String
+  case status
+    Status.Paid -> return "paid"
+    Status.Owed(amount) -> return "owed #{amount / 100}.#{amount % 100}"
+  end
+end
+
+def report(lines: List[Line]) -> Result[String]
+  sum = 0
+  names: List[String] = []
+  for line in lines
+    if line.quantity < 0 or line.price < 0
+      return error("bad line: #{line.name}")
+    elsif line.quantity == 0
+      next
+    end
+    sum += total(line)
+    names = names.push(line.name)
+  end
+  limit = 1_000_000
+  ratio = 0.000_5
+  label = "items: #{names.join(", ")} (#{names.size}) of #{{"a": 1}["a"]}\t\"q\"\#{no}"
+  big = 99999999999999999999
+  while sum > limit
+    sum -= limit
+  end
+  rows = lines.map do |line|
+    "#{line.name}:#{total(line)}"
+  end
+  return ok(label + String.join(rows, "|") + " ratio #{ratio} big #{big}")
+end
+
+def main() -> Void
+  lines = [Line(name: "pen", price: 3, quantity: 4), Line(name: "caf\u00e9", price: 12, quantity: 1)]
+  result = report(lines) # trailing comment
+  case result
+    ok(text) -> puts(text)
+    error(message) -> puts(message)
+  end
+  puts(describe(Status.Owed(1250)))
+  items = [
+    1,
+    2,
+    3,
+  ]
+  for i in 0...items.size
+    puts(items[i] |> total2())
+  end
+end
+
+## Counts words. The text may hold "quotes" and #{braces}.
+def count(words: List[String]) -> Map[String, Int]
+  counts: Map[String, Int] = {}
+  for word in words
+    key = word.downcase.strip
+    if key == ""
+      next
+    end
+    counts = counts.put(key, counts.get(key, 0) + 1)
+  end
+  return counts
+end
+
+def nested(depth: Int) -> String
+  if depth == 0
+    return "#{"leaf #{depth}"}"
+  end
+  return "level #{depth}: #{nested(depth - 1)}"
+end
+
+def ranges(n: Int) -> List[Int]
+  evens = (0..n).to_a.filter do |i| i % 2 == 0 end
+  odds = (1...n).to_a.filter do |i|
+    i % 2 == 1
+  end
+  return evens.concat(odds)
+end

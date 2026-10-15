@@ -57,9 +57,9 @@ CI runs everything else (`references/ci.md`, "What CI runs").
 
 | Add | Location |
 | --- | --- |
-| keyword, operator, literal form | `src/lexer.rkt` tables (`references/frontend.md`) |
-| AST node | `src/ast.rkt` struct + `provide`; built in `src/parser.rkt` |
-| syntax form | `src/parser.rkt`: `parse-statement`, `parse-primary` or `parse-program` |
+| keyword, operator, literal form | `compiler/lexer.agc` tables, with a golden case (`references/frontend.md`); `src/lexer.rkt` only for a bug fix, in the same PR |
+| AST node | frozen: waits for the parser port (35.4 step 2); then `compiler/` |
+| syntax form | frozen: waits for the parser port; `src/parser.rkt` only for a bug fix |
 | diagnostic code | where the problem is found; prefix `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-` (`references/stages.md` lists them) |
 | builtin | `src/builtins.rkt` metadata, checker rule, `vm-builtins` in `src/lower.rkt`, C in `vm/`, a golden (`references/vm-builtins.md`) |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`) |
