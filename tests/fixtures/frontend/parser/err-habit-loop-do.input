@@ -1,0 +1,5 @@
+def main() -> Void
+  loop do
+    puts("a")
+  end
+end

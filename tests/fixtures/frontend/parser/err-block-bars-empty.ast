@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 32:2:14-34:2:16 "a block without parameters has no bars; write do ... end" -

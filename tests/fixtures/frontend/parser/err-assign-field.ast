@@ -1,0 +1,1 @@
+ERROR PARSE-INVALID-ASSIGNMENT-TARGET 22:2:7-23:2:8 "the core only assigns to a plain name" -

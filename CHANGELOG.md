@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Nesting limit:** the parser stops at 1,000 levels of nesting with the new `PARSE-TOO-DEEP` (statements, expressions, prefix operators, type arguments, and each operator or `.` suffix of a chain). It was unlimited, and the self-hosted parser must stay inside the VM call limit of 10,000.
 - **Stack traces in `agentica test`.** A test whose task crashes with a runtime error now shows the call stack under its diagnostic in the text report (`  stack, innermost first:`, or ` | stack ...` with `--ai`) and has `stack`, `stack_omitted` and `spawned_at` in its `--json` error, as a halt outside a test already had. The same stack lines show for a BDD scenario whose step crashed (#235).
 - Function names and file paths in a stack line are cut to 256 bytes (at a character boundary, ending with `...`) in the plain, `--ai` and `--json` formats, so a hostile `.agcb` with a huge name cannot make the stack print it 20 times (#235).
 - **Breaking:** `Await` is a reserved name. A user struct, enum, type parameter or import alias with that name is `CHECK-REDEFINED-NAME` (#217).

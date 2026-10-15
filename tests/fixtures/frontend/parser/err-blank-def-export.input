@@ -1,0 +1,5 @@
+def f() -> Void
+end
+export def main() -> Void
+end
+

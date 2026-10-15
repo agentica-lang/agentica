@@ -1,0 +1,57 @@
+## The module doc.
+##
+## Two paragraphs.
+
+import "util" as Util
+import "shapes" as Shapes
+
+## A point.
+struct Point
+  ## Across.
+  x: Int
+  y: Int
+  ## Up, with an imported type.
+  tag: Util.Tag
+  items: List[Map[String, Int]]
+end
+
+## A choice.
+export enum Choice[T, U]
+  ## First.
+  First(T)
+  Second(T, U)
+  Third
+  ## Last.
+  Fourth(List[T])
+end
+
+export struct Empty
+end
+
+enum Plain
+  A
+  B
+end
+
+## Adds.
+export def add(a: Int, b: Int,) -> Int
+  return a + b
+end
+
+def none() -> Void
+end
+
+def with_types(a: List[Int], b: Map[String, Shapes.Shape], c: Result[Int]) -> Result[List[Int]]
+  return ok([])
+end
+
+export enum Documented
+  A
+end
+
+def ready?() -> Bool
+  return true
+end
+
+export def is_ok!() -> Void
+end

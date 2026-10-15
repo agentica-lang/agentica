@@ -213,6 +213,8 @@ jobs:
         run: make vm-unicode-check
       - name: make test, with the process and module tests on the built executable alongside
         run: make test-ci
+      - name: Slow tests
+        run: make test-slow
       - run: make vm-latency
       - name: Example smoke runs
         run: make smoke

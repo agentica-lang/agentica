@@ -34,12 +34,15 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 make vm                                   # build dist/agentica-vm (git submodule update --init first)
 make test TESTS="tests/lexer-test.rkt"    # only the tests the change touches
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
+make test-slow TESTS="tests/x-test.rkt"   # the (module+ slow ...) cases; CI runs it after make test, not for local work
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
 make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
 make vm-golden-check FIXTURES="a b"       # CI golden check of only those fixtures; make goldens FIXTURES="a b" rewrites only them
 make dup-check                            # jscpd: a new copy fails CI; share a helper instead
 make site                                 # before merging a site change
 ```
+
+Two tiers: put fast cases in `(module+ test ...)` and slow ones (live corpus, generated inputs, stress) in `(module+ slow ...)`. Locally run only the fast tier. CI runs the slow tier with `make test-slow` after `make test`. Sanitizers, gc-stress, fuzz, smoke and full sweeps are slow by nature.
 
 CI runs everything else (`references/ci.md`, "What CI runs").
 

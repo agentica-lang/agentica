@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 25:2:7-27:2:9 "there are no standalone lambdas" "pass a block to a call (xs.map do |x: Int| ... end), or declare a function with def and use &name"

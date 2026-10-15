@@ -1,0 +1,49 @@
+def main() -> Void
+  case value
+    _ -> puts("wild")
+  end
+  case value
+    1 -> puts("int")
+    -2 -> puts("negative")
+    9223372036854775807 -> puts("max")
+    9223372036854775808 -> puts("huge")
+    -9223372036854775808 -> puts("min")
+    -9223372036854775809 -> puts("below")
+    340282366920938463463374607431768211456 -> puts("big")
+    1.5 -> puts("float")
+    -0.0 -> puts("negative zero")
+    -2.5 -> puts("negative float")
+    "text" -> puts("string")
+    "café" -> puts("unicode")
+    true -> puts("true")
+    false -> puts("false")
+    nil -> puts("nil")
+    _ -> puts("rest")
+  end
+  case result
+    ok(v) -> puts(v)
+    error(_) -> puts("e")
+  end
+  case result
+    ok(_) -> puts("v")
+    error(message) -> puts(message)
+  end
+  case result
+    Result.Ok(v) -> puts(v)
+    Result.Err(m) -> puts(m)
+  end
+  case waited
+    Await.Done(v) -> puts(v)
+    Await.TimedOut -> puts("late")
+  end
+  case choice
+    Choice.First(a) -> puts(a)
+    Choice.Second(a, _) -> puts(a)
+    Choice.Third ->
+      puts("third")
+      puts("more")
+    Util.Choice.Fourth(_) -> puts("fourth")
+    Util.Choice.First(a) ->
+      puts(a)
+  end
+end

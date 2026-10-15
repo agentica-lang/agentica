@@ -1,0 +1,159 @@
+program #158 0:1:1-806:38:1
+  declaration: function-decl #157 0:1:1-806:38:1 name="main"
+    result: type-ref #0 14:1:15-18:1:19 name="Void"
+    body: expr-stmt #8 21:2:3-54:5:1
+      value: method-call #7 21:2:3-53:4:6 name="each"
+        target: name-ref #1 21:2:3-23:2:5 name="xs"
+        arg: block-lit #6 29:2:11-53:4:6
+          param: block-param #2 33:2:15-34:2:16 name="x"
+          body: expr-stmt #5 40:3:5-48:4:1
+            value: call #4 40:3:5-47:3:12 name="puts" piped=false
+              arg: name-ref #3 45:3:10-46:3:11 name="x"
+    body: binding #17 56:5:3-95:8:1 name="ys"
+      value: method-call #16 61:5:8-94:7:6 name="map"
+        target: name-ref #9 61:5:8-63:5:10 name="xs"
+        arg: block-lit #15 68:5:15-94:7:6
+          param: block-param #10 72:5:19-73:5:20 name="x"
+          param: block-param #12 75:5:22-81:5:28 name="y"
+            type: type-ref #11 78:5:25-81:5:28 name="Int"
+          body: expr-stmt #14 87:6:5-89:7:1
+            value: name-ref #13 87:6:5-88:6:6 name="x"
+    body: binding #28 97:8:3-141:9:1 name="zs"
+      value: call #27 102:8:8-140:8:46 name="List.reduce" piped=false
+        arg: name-ref #18 114:8:20-116:8:22 name="xs"
+        arg: literal #19 118:8:24-119:8:25 value=int:0
+        arg: block-lit #26 121:8:27-140:8:46
+          param: block-param #20 125:8:31-126:8:32 name="a"
+          param: block-param #21 128:8:34-129:8:35 name="b"
+          body: expr-stmt #25 131:8:37-136:8:42
+            value: binary #24 131:8:37-136:8:42 op=plus op-span=133:8:39-134:8:40
+              left: name-ref #22 131:8:37-132:8:38 name="a"
+              right: name-ref #23 135:8:41-136:8:42 name="b"
+    body: binding #33 143:9:3-179:12:1 name="nothing"
+      value: call #32 153:9:13-178:11:6 name="f" piped=false
+        arg: block-lit #31 157:9:17-178:11:6
+          body: return-stmt #30 164:10:5-173:11:1
+            value: literal #29 171:10:12-172:10:13 value=int:1
+    body: binding #41 181:12:3-222:13:1 name="field_block"
+      value: method-call #40 195:12:17-221:12:43 name="each"
+        target: name-ref #34 195:12:17-197:12:19 name="xs"
+        arg: block-lit #39 203:12:25-221:12:43
+          param: block-param #35 207:12:29-208:12:30 name="x"
+          body: expr-stmt #38 210:12:32-217:12:39
+            value: call #37 210:12:32-217:12:39 name="puts" piped=false
+              arg: name-ref #36 215:12:37-216:12:38 name="x"
+    body: binding #52 224:13:3-263:14:1 name="twice"
+      value: call #51 232:13:11-262:13:41 name="f" piped=false
+        arg: literal #42 234:13:13-235:13:14 value=int:1
+        arg: block-lit #46 237:13:16-249:13:28
+          param: block-param #43 241:13:20-242:13:21 name="a"
+          body: expr-stmt #45 244:13:23-245:13:24
+            value: name-ref #44 244:13:23-245:13:24 name="a"
+        arg: block-lit #50 250:13:29-262:13:41
+          param: block-param #47 254:13:33-255:13:34 name="b"
+          body: expr-stmt #49 257:13:36-258:13:37
+            value: name-ref #48 257:13:36-258:13:37 name="b"
+    body: binding #59 265:14:3-299:15:1 name="after_paren"
+      value: call #58 279:14:17-298:14:36 name="f" piped=false
+        arg: literal #53 282:14:20-283:14:21 value=int:1
+        arg: block-lit #57 286:14:24-298:14:36
+          param: block-param #54 290:14:28-291:14:29 name="a"
+          body: expr-stmt #56 293:14:31-294:14:32
+            value: name-ref #55 293:14:31-294:14:32 name="a"
+    body: binding #66 301:15:3-339:16:1 name="access_block"
+      value: method-call #65 316:15:18-338:15:40 name="field"
+        target: name-ref #60 316:15:18-319:15:21 name="obj"
+        arg: block-lit #64 326:15:28-338:15:40
+          param: block-param #61 330:15:32-331:15:33 name="a"
+          body: expr-stmt #63 333:15:35-334:15:36
+            value: name-ref #62 333:15:35-334:15:36 name="a"
+    body: binding #72 341:16:3-396:19:1 name="module_block"
+      value: call #71 356:16:18-395:18:6 name="Util.start" piped=false
+        arg: block-lit #70 367:16:29-395:18:6
+          body: expr-stmt #69 374:17:5-390:18:1
+            value: call #68 374:17:5-389:17:20 name="puts" piped=false
+              arg: literal #67 379:17:10-388:17:19 value=string:"started"
+    body: binding #89 398:19:3-477:24:1 name="nested"
+      value: method-call #88 407:19:12-476:23:6 name="map"
+        target: name-ref #73 407:19:12-409:19:14 name="xs"
+        arg: block-lit #87 414:19:19-476:23:6
+          param: block-param #74 418:19:23-419:19:24 name="x"
+          body: expr-stmt #86 425:20:5-471:23:1
+            value: method-call #85 425:20:5-470:22:8 name="map"
+              target: name-ref #75 425:20:5-426:20:6 name="x"
+              arg: block-lit #84 431:20:11-470:22:8
+                param: block-param #76 435:20:15-436:20:16 name="y"
+                body: expr-stmt #83 444:21:7-463:22:1
+                  value: method-call #82 444:21:7-462:21:25 name="map"
+                    target: name-ref #77 444:21:7-445:21:8 name="y"
+                    arg: block-lit #81 450:21:13-462:21:25
+                      param: block-param #78 454:21:17-455:21:18 name="z"
+                      body: expr-stmt #80 457:21:20-458:21:21
+                        value: name-ref #79 457:21:20-458:21:21 name="z"
+    body: binding #99 479:24:3-513:25:1 name="maps"
+      value: method-call #98 486:24:10-512:24:36 name="map"
+        target: name-ref #90 486:24:10-488:24:12 name="xs"
+        arg: block-lit #97 493:24:17-512:24:36
+          param: block-param #91 497:24:21-498:24:22 name="x"
+          body: expr-stmt #96 500:24:24-508:24:32
+            value: map-lit #95 500:24:24-508:24:32
+              entry: map-entry #94 501:24:25-507:24:31
+                key: literal #92 501:24:25-504:24:28 value=string:"k"
+                value: name-ref #93 506:24:30-507:24:31 name="x"
+    body: binding #107 515:25:3-559:26:1 name="scrutinee"
+      value: call #106 527:25:15-558:25:46 name="case_value" piped=false
+        arg: method-call #105 538:25:26-557:25:45 name="map"
+          target: name-ref #100 538:25:26-540:25:28 name="xs"
+          arg: block-lit #104 545:25:33-557:25:45
+            param: block-param #101 549:25:37-550:25:38 name="x"
+            body: expr-stmt #103 552:25:40-553:25:41
+              value: name-ref #102 552:25:40-553:25:41 name="x"
+    body: case-stmt #119 561:26:3-616:29:1
+      value: method-call #113 567:26:9-586:26:28 name="map"
+        target: name-ref #108 567:26:9-569:26:11 name="xs"
+        arg: block-lit #112 574:26:16-586:26:28
+          param: block-param #109 578:26:20-579:26:21 name="x"
+          body: expr-stmt #111 581:26:23-582:26:24
+            value: name-ref #110 581:26:23-582:26:24 name="x"
+      arm: case-arm #118 595:27:5-610:28:1
+        pattern: wildcard-pattern #114 595:27:5-596:27:6
+        body: expr-stmt #117 600:27:10-610:28:1
+          value: call #116 600:27:10-609:27:19 name="puts" piped=false
+            arg: literal #115 605:27:15-608:27:18 value=string:"b"
+    body: while-stmt #129 618:29:3-670:32:1
+      condition: method-call #125 625:29:10-645:29:30 name="any?"
+        target: name-ref #120 625:29:10-627:29:12 name="xs"
+        arg: block-lit #124 633:29:18-645:29:30
+          param: block-param #121 637:29:22-638:29:23 name="x"
+          body: expr-stmt #123 640:29:25-641:29:26
+            value: name-ref #122 640:29:25-641:29:26 name="x"
+      body: expr-stmt #128 654:30:5-664:31:1
+        value: call #127 654:30:5-663:30:14 name="puts" piped=false
+          arg: literal #126 659:30:10-662:30:13 value=string:"c"
+    body: for-stmt #139 672:32:3-730:35:1 variable="item"
+      iterable: method-call #135 685:32:16-707:32:38 name="filter"
+        target: name-ref #130 685:32:16-687:32:18 name="xs"
+        arg: block-lit #134 695:32:26-707:32:38
+          param: block-param #131 699:32:30-700:32:31 name="x"
+          body: expr-stmt #133 702:32:33-703:32:34
+            value: name-ref #132 702:32:33-703:32:34 name="x"
+      body: expr-stmt #138 713:33:5-724:34:1
+        value: call #137 713:33:5-723:33:15 name="puts" piped=false
+          arg: name-ref #136 718:33:10-722:33:14 name="item"
+    body: binding #147 732:35:3-767:36:1 name="chained"
+      value: field-access #146 742:35:13-766:35:37 name="size"
+        target: method-call #145 742:35:13-761:35:32 name="map"
+          target: name-ref #140 742:35:13-744:35:15 name="xs"
+          arg: block-lit #144 749:35:20-761:35:32
+            param: block-param #141 753:35:24-754:35:25 name="x"
+            body: expr-stmt #143 756:35:27-757:35:28
+              value: name-ref #142 756:35:27-757:35:28 name="x"
+    body: binding #156 769:36:3-802:37:1 name="indexed"
+      value: index-access #155 779:36:13-801:36:35
+        target: method-call #153 779:36:13-798:36:32 name="map"
+          target: name-ref #148 779:36:13-781:36:15 name="xs"
+          arg: block-lit #152 786:36:20-798:36:32
+            param: block-param #149 790:36:24-791:36:25 name="x"
+            body: expr-stmt #151 793:36:27-794:36:28
+              value: name-ref #150 793:36:27-794:36:28 name="x"
+        index: literal #154 799:36:33-800:36:34 value=int:0

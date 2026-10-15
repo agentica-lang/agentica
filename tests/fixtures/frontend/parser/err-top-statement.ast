@@ -1,0 +1,1 @@
+ERROR PARSE-TOP-LEVEL-STATEMENT 0:1:1-4:1:5 "expected a top-level declaration (def, struct, enum, or import), found \"puts\"" "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import and export"

@@ -11,6 +11,8 @@
   (hasheq 'plus-assign 'plus 'minus-assign 'minus 'multiply-assign 'multiply
           'divide-assign 'divide 'modulo-assign 'modulo))
 
+(define nesting-limit 1000)
+
 (define (parse tokens)
   (define toks (list->vector tokens))
   (define count (vector-length toks))
@@ -87,6 +89,21 @@
     (define allow-blocks #t)
     (define block-depth 0)
     (define block-brace #f)
+    (define nesting 0)
+
+    (define (too-deep)
+      (bail 'PARSE-TOO-DEEP
+            (format "nesting is deeper than ~a levels" nesting-limit)
+            (current)
+            #:help "split the code into smaller functions or simpler expressions"))
+
+    (define (nested thunk)
+      (when (>= nesting nesting-limit) (too-deep))
+      (set! nesting (add1 nesting))
+      (begin0 (thunk) (set! nesting (sub1 nesting))))
+
+    (define (check-links! links)
+      (when (> (+ nesting links) nesting-limit) (too-deep)))
 
     (define (brace-help form)
       (format "blocks have no braces: write \"~a\" ... \"end\"" form))
@@ -248,7 +265,9 @@
       (define type (parse-type))
       (param (token-lexeme start) type (span-from start)))
 
-    (define (parse-type)
+    (define (parse-type) (nested parse-type-body))
+
+    (define (parse-type-body)
       (define start (expect 'type-name "a type name"))
       (define name
         (if (kind? 'dot)
@@ -520,7 +539,9 @@
               [(or (kind? 'end) (kind? 'elsif) (kind? 'else) (kind? 'EOF)) (reverse acc)]
               [else (loop (cons (parse-statement) acc))])))))
 
-    (define (parse-statement)
+    (define (parse-statement) (nested parse-statement-body))
+
+    (define (parse-statement-body)
       (case (token-kind (current))
         [(if) (parse-if)]
         [(while) (parse-while)]
@@ -661,7 +682,7 @@
 
     ;; Expressions ---------------------------------------------------------
 
-    (define (parse-expression) (parse-range))
+    (define (parse-expression) (nested parse-range))
 
     (define (parse-range)
       (define start (current))
@@ -680,11 +701,14 @@
 
     (define (parse-left-assoc kinds parse-operand)
       (define start (current))
-      (let loop ([left (parse-operand)])
+      (let loop ([left (parse-operand)] [links 0])
         (if (memq (token-kind (current)) kinds)
-            (let* ([operator (advance!)]
-                   [right (parse-operand)])
-              (loop (binary (token-kind operator) (token-span operator) left right (span-from start))))
+            (let ()
+              (check-links! (add1 links))
+              (let* ([operator (advance!)]
+                     [right (parse-operand)])
+                (loop (binary (token-kind operator) (token-span operator) left right (span-from start))
+                      (add1 links))))
             left)))
 
     (define (parse-or) (parse-left-assoc '(or) parse-and))
@@ -720,9 +744,10 @@
         [else left]))
 
     (define (parse-pipe)
-      (let loop ([left (parse-additive)])
+      (let loop ([left (parse-additive)] [links 0])
         (cond
           [(kind? 'pipe-forward)
+           (check-links! (add1 links))
            (advance!)
            (define right-start (current))
            (define right (parse-additive))
@@ -740,7 +765,8 @@
                (return (diagnostic 'PARSE-PIPE-TARGET
                                    "the right side of |> must be a call with parentheses, such as f() or Alias.f(a)"
                                    right-span
-                                   #:help "wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!"))]))]
+                                   #:help "wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!"))])
+            (add1 links))]
           [else left])))
 
     (define (parse-additive) (parse-left-assoc '(plus minus) parse-multiplicative))
@@ -751,18 +777,21 @@
       (define start (current))
       (cond
         [(kind? 'try)
-         (advance!)
-         (try-expr (parse-unary) (span-from start))]
+         (nested (lambda ()
+                   (advance!)
+                   (try-expr (parse-unary) (span-from start))))]
         [(or (kind? 'minus) (kind? 'not))
-         (define operator (advance!))
-         (unary (token-kind operator) (token-span operator) (parse-unary) (span-from start))]
+         (nested (lambda ()
+                   (define operator (advance!))
+                   (unary (token-kind operator) (token-span operator) (parse-unary) (span-from start))))]
         [else (parse-postfix)]))
 
     (define (parse-postfix)
       (define start (current))
-      (let loop ([target (parse-primary)])
+      (let loop ([target (parse-primary)] [links 0])
         (cond
           [(kind? 'dot)
+           (check-links! (add1 links))
            (advance!)
            (define name (expect 'name "a field or method name" #t))
            (cond
@@ -772,13 +801,15 @@
               (expect 'right-paren "\")\"")
               (loop (if (equal? (token-lexeme name) "call")
                         (invoke target arguments (span-from start))
-                        (method-call target (token-lexeme name) arguments (span-from start))))]
-             [else (loop (field-access target (token-lexeme name) (span-from start)))])]
+                        (method-call target (token-lexeme name) arguments (span-from start)))
+                    (add1 links))]
+             [else (loop (field-access target (token-lexeme name) (span-from start)) (add1 links))])]
           [(kind? 'left-bracket)
+           (check-links! (add1 links))
            (advance!)
            (define index (with-blocks #t parse-expression))
            (expect 'right-bracket "\"]\"")
-           (loop (index-access target index (span-from start)))]
+           (loop (index-access target index (span-from start)) (add1 links))]
           [(and allow-blocks (kind? 'do) (name-ref? target))
            (bail 'PARSE-UNEXPECTED-TOKEN
                  (format "a block needs a call before it, found the name \"~a\"" (name-ref-name target))
@@ -792,6 +823,7 @@
                            (format "to call a function, add parentheses: ~a() do ... end; an if condition ends with a newline, not do"
                                    (name-ref-name target))]))]
           [(and allow-blocks (kind? 'do) (or (call? target) (method-call? target) (field-access? target)))
+           (check-links! (add1 links))
            (define block (parse-block-lit))
            (loop
             (cond
@@ -807,7 +839,8 @@
                             (append (method-call-args target) (list block)) (span-from start))]
               [else
                (method-call (field-access-target target) (field-access-name target)
-                            (list block) (span-from start))]))]
+                            (list block) (span-from start))])
+            (add1 links))]
           [else target])))
 
     (define (parse-block-lit)

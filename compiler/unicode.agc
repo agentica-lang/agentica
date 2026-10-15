@@ -17,7 +17,8 @@ export def graphic?(code: Int) -> Bool
   return search(ranges, code, 0, ranges.size / 2)
 end
 
-def hex(value: Int, width: Int) -> String
+## An Int as upper-case hexadecimal digits, padded with zeros to width.
+export def hex(value: Int, width: Int) -> String
   digits = "0123456789ABCDEF"
   parts: List[String] = []
   rest = value
@@ -52,4 +53,42 @@ export def written(code: Int) -> String
       end
       return "#\\U" + hex(code, 8)
   end
+end
+
+def blank?(code: Int) -> Bool
+  return code == 32 or code == 160 or code == 5760 or (code >= 8192 and code <= 8202) or code == 8239 or code == 8287 or code == 12288
+end
+
+def written_character(ranges: List[Int], code: Int, character: String) -> String
+  case code
+    34 -> return "\\\""
+    92 -> return "\\\\"
+    7 -> return "\\a"
+    8 -> return "\\b"
+    9 -> return "\\t"
+    10 -> return "\\n"
+    11 -> return "\\v"
+    12 -> return "\\f"
+    13 -> return "\\r"
+    27 -> return "\\e"
+    _ ->
+      if (code > 32 and code < 127) or blank?(code) or search(ranges, code, 0, ranges.size / 2)
+        return character
+      end
+      if code < 65536
+        return "\\u" + hex(code, 4)
+      end
+      return "\\U" + hex(code, 8)
+  end
+end
+
+## A String as Racket writes it (`write`): quotes, with \\a \\b \\t \\n \\v \\f \\r \\e, \\" and \\\\, and \\uXXXX or \\UXXXXXXXX for characters that are neither graphic nor blank.
+export def written_text(text: String) -> String
+  ranges = Table.graphic_ranges()
+  parts: List[String] = ["\""]
+  for character in text.split("")
+    parts = parts.push(written_character(ranges, String.code(character), character))
+  end
+  parts = parts.push("\"")
+  return parts.join("")
 end

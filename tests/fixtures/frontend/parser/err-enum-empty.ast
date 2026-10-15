@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 7:2:1-10:2:4 "an enum must declare at least one variant" -

@@ -1,0 +1,4 @@
+def main() -> Void
+  xs.each do |x
+  end
+end

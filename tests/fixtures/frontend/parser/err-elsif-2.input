@@ -1,0 +1,7 @@
+def main() -> Void
+  if true
+    x = 1
+  elseif false
+    x = 2
+  end
+end

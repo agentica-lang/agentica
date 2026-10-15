@@ -1,0 +1,4 @@
+def f() -> Void
+  x = a |> f() |> g() == b == c
+end
+

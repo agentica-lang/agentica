@@ -1,0 +1,1 @@
+ERROR PARSE-DETACHED-DOC 21:4:1-34:4:14 "a doc comment must be followed by a declaration, field or variant on the next line" "put the doc block directly above the declaration, field or variant it documents; use # for a note that documents nothing"

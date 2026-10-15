@@ -1,0 +1,4 @@
+def main() -> Void
+  1 %= 2
+end
+

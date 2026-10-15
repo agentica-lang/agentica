@@ -13,7 +13,8 @@ src/                Racket front end, one module per stage
   source.rkt token.rkt diagnostic.rkt   shared data: spans, tokens, diagnostics
   main.rkt          thin CLI: printing and exit codes live only here
   bdd-driver.rkt    `agentica test`
-compiler/           front end ported to Agentica, one stage per PR (§35): lexer
+compiler/           front end ported to Agentica, one stage per PR (§35):
+                    lexer, parser
 vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, tasks, I/O, HTTP, JSON
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
@@ -85,6 +86,11 @@ phase 13).
   protocol implementation as the peer. Fixtures go in `tests/fixtures/`.
   CI installs the tools and fails if one is missing; local runs may report a
   skip. Racket-only tests may add coverage but are not the base layer.
+- Two test tiers: the fast tier is `(module+ test ...)`; slow cases (live
+  corpus, generated inputs, stress) go in `(module+ slow ...)`, which CI runs
+  with `make test-slow`. Local runs use only the fast tier
+  (`make test TESTS=...`). Sanitizers, gc-stress, fuzz, smoke and full
+  sweeps are slow by nature.
 - When a phase item is done, tick it in the roadmap and update the
   development skill.
 - When the language or a builtin changes, update `docs/grammar/`, the site

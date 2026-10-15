@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 32:3:5-36:3:9 "expected a pattern, found \"when\"" "case arms have no when: write the pattern and ->, as in 1 -> puts(\"one\")"

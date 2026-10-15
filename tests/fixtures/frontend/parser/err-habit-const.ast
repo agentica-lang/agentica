@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 21:2:3-26:2:8 "\"const\" is not a keyword" "write x = 5, or x: Int = 5 to give a type"

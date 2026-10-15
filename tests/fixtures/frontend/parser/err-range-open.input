@@ -1,0 +1,5 @@
+def f() -> Void
+  x = 1..
+  2
+end
+

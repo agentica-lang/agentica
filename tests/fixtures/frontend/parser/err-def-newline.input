@@ -1,0 +1,2 @@
+def main() -> Void puts(1)
+end

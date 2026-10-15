@@ -1,0 +1,3 @@
+struct A
+  n: Int m: Int
+end

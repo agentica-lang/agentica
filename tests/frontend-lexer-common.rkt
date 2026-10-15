@@ -7,6 +7,10 @@
          "../src/token.rkt")
 
 (provide lexer-text
+         quote-text
+         span-text
+         float-bits
+         diagnostic-line
          lexer-inputs
          (struct-out lexer-input)
          golden-file
@@ -44,7 +48,7 @@
   (string-append (position-text (source-span-start span)) "-" (position-text (source-span-end span))))
 
 (define (float-bits value)
-  (integer-bytes->integer (real->floating-point-bytes value 8) #f))
+  (integer-bytes->integer (real->floating-point-bytes value 8) #t))
 
 (define (value-text tok)
   (define value (token-value tok))

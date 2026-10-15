@@ -1,0 +1,7 @@
+import "util" as Util
+
+## Doc line.
+def main() -> Void
+  x = 1
+  puts("a#{x}b")
+end
