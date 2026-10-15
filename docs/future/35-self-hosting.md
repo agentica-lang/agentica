@@ -737,9 +737,10 @@ in rackunit until phase 3.
   19 cases), the VM I/O tests (PR #267: stdout, stop signals and
   `File.each_line`, 35 cases) and the process, BDD and BDD integration tests
   (PR #269: 26 fast cases and 5 slow ones, which run the CLI as a child),
-  the file system tests (PR #274: 21 cases) and the VM trace, latency and
+  the file system tests (PR #274: 21 cases), the VM trace, latency and
   `std/binary` tests (PR #276: 17 cases; the latency test runs alone, by
-  `make vm-latency`).
+  `make vm-latency`), and the examples and CLI tests (PR #279: 17 fast cases
+  and 1 slow one).
   `tests/vm-stack-test.rkt` stays, because `make goldens` writes its sidecars.
   `tests/unit-test-test.rkt` waits for phase 2: it calls
   `run-agentica-test` of `src/bdd-driver.rkt` to set a test timeout that the CLI
