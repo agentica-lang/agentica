@@ -86,4 +86,4 @@ question (13).
 | 14 | VM core invariants: one way to wait, time out, cancel, end and own a handle; the entry rule for the core | [`14-core-invariants.md`](14-core-invariants.md) |
 | 15 | VM layers: core, services and adapters plus the driver, the port between them, one header per layer and the CI check (done, roadmap row 7.2.1b) | [`15-layers.md`](15-layers.md) |
 | 16 | VM architecture: the threads (schedulers and one I/O thread), the queues, who owns jobs and handles, the life cycle of a task, and what differs from N = 1 as built (roadmap row 7.2.1c) | [`16-architecture.md`](16-architecture.md) |
-| 17 | Faster lists: a persistent vector behind `List` (design for roadmap 8d: representation, the C API, costs, tests, PR plan) | [`17-lists.md`](17-lists.md) |
+| 17 | Faster lists: a persistent vector behind `List` (design for roadmap 8d: representation, the C API, costs, tests, PR plan, unboxed Int and Float leaves) | [`17-lists.md`](17-lists.md) |

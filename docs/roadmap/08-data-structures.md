@@ -25,21 +25,25 @@ their own place in the order (step 8).
   and the same loop takes 0.08 s. Order step 8: after 7h processes and network,
   and before any instruction-dispatch micro-optimization (7g). Design:
   [`docs/vm/17-lists.md`](../vm/17-lists.md) (representation, C API, costs,
-  tests, PR plan). Steps 1 and 2 (the API, then the trie) are done; step 3 is
-  the next item.
-- [ ] 8d step 3: unboxed leaves for `List[Int]` and `List[Float]`
+  tests, PR plan). Steps 1 to 3 (the API, the trie, the unboxed leaves) are
+  done.
+- [x] 8d step 3: unboxed leaves for `List[Int]` and `List[Float]`
   ([§38.6](../future/38-value-representation.md#386-direction-use-the-static-types)
-  item 1), scheduled by the owner on 2026-10-14. The trie leaves of these lists
-  hold 8 bytes per item in an atomic array that the GC does not scan, and the
-  checker's static type of the element decides it when the list is created, so
-  the front end passes the element type to the VM. `Int` stays 64 bits. Goals:
-  half the memory of a numeric list (which also offsets the extra memory of the
-  trie), and faster `sort` and scans. Measure it against master and Python 3.13,
-  time and peak RSS, like the step 2 table of
-  [`docs/vm-benchmarks.md`](../vm-benchmarks.md). Because it needs the element
-  type from the front end, it lands before the freeze of the Racket front end
-  (order row 7.2.7 in the [README](README.md)). At that time, compare it with
-  the owner's alternative of a doubling growable vector.
+  item 1), scheduled by the owner on 2026-10-14. The trie leaves and the tail of
+  a list whose items are all Ints, or all Floats, hold 8 bytes per item in an
+  atomic array that the GC does not scan. The VM decides by itself when it
+  builds a list (the owner's decision of 2026-10-15; the first plan had the
+  front end pass the element type): the first item gives the kind, an empty list
+  has none, and a list that is given another kind, which only a hostile `.agcb`
+  can do, becomes boxed. So there is no change to the front end, the lowering,
+  the bytecode or the loader, and the item does not wait for the freeze of the
+  Racket front end (order row 7.2.7 in the [README](README.md)). `Int` stays 64
+  bits. Done: a numeric list takes half the memory (which offsets the extra
+  memory of the trie), and `sort` of a numeric list needs no read through the
+  trie. Design: [`docs/vm/17-lists.md`](../vm/17-lists.md) §17.12; the numbers,
+  time and peak RSS against master and Python 3.13, are in
+  [`docs/vm-benchmarks.md`](../vm-benchmarks.md). The comparison with the
+  owner's alternative of a doubling growable vector is still open.
 - [ ] Later (`docs/future/12-data-structures.md` §12.5), each after a real
   program needs it: tuples (then `Queue.pop`), `Bytes`, `Heap[T]`, a sorted map
   or set, a deque.

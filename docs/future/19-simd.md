@@ -19,9 +19,10 @@ measured faster than AVX2.
    hand-written byte loops. glibc already picks AVX2 or AVX-512 versions at run
    time, so this needs no build change and can land at any time.
 4. Sorting `List[Int]` and `List[Float]` with an AVX-512 sort (for example
-   Intel's x86-simd-sort, BSD-3-Clause, which fits the dependency policy), only
-   once step 3 of faster lists (8d) adds unboxed Int or Float storage. Today
-   list items are boxed 16-byte values, so a vector sort does not apply.
+   Intel's x86-simd-sort, BSD-3-Clause, which fits the dependency policy).
+   Step 3 of faster lists (8d) added unboxed Int and Float storage, so these
+   lists hold raw 8-byte numbers and a vector sort can work on them. Today
+   `List.sort` sorts `(key, item)` entries with a scalar merge.
 5. HTTP head parsing: picohttpparser (`vm/http_pico.c`, behind
    `vm/http_parse.h`, `docs/vm/10-io-http.md` 10.6) has an SSE4.2 path that the
    baseline build leaves off. Enable it with run-time dispatch like the other
