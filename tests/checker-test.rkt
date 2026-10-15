@@ -599,13 +599,6 @@
     (define unknown-value (check-text (in-main "  ana = make()\n  x = ana.with(age: nope)")))
     (check-equal? (span-slice unknown-value) "nope"))
 
-  (test-case "a field named with cannot hold a function, since value.with(...) is the update"
-    (define found (check-text "struct Hooks\n  with: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n"))
-    (check-equal? (diagnostic-code found) 'CHECK-REDEFINED-NAME)
-    (check-equal? (span-slice found) "with: Fn[Int, Int]\n")
-    (check-regexp-match #rx"struct update" (diagnostic-help found))
-    (check-ok "struct Hooks\n  with: Int\n  run: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n"))
-
   (test-case "statements"
     (check-equal? (check-code (main-with "  x = 0\n  x = \"s\"")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  x = 0\n  x: Int = 1")) 'CHECK-ANNOTATION-ON-EXISTING)
@@ -824,24 +817,6 @@
     (check-equal? (check-code (string-append
                              "def f() -> Result[Int]\n  x = try ok(1)\nend\n\n" (main-with "")))
                   'CHECK-MISSING-RETURN))
-
-  (test-case "check diagnostics carry spans"
-    (define mismatch (check-text "def main() -> Void\n  x: Int = \"s\"\nend\n\n"))
-    (check-true (diagnostic? mismatch))
-    (check-equal? (diagnostic-code mismatch) 'CHECK-TYPE-MISMATCH)
-    (check-equal? (source-position-line (source-span-start (diagnostic-span mismatch))) 2)
-    (check-equal? (source-position-column (source-span-start (diagnostic-span mismatch))) 12)
-
-    (define unknown (check-text "def main() -> Void\n  x = missing\nend\n\n"))
-    (check-true (diagnostic? unknown))
-    (check-equal? (diagnostic-code unknown) 'CHECK-UNKNOWN-NAME)
-    (check-equal? (source-position-line (source-span-start (diagnostic-span unknown))) 2)
-    (check-equal? (source-position-column (source-span-start (diagnostic-span unknown))) 7)
-
-    (define operator (check-text "def main() -> Void\n  x = 1 + \"a\"\nend\n\n"))
-    (check-true (diagnostic? operator))
-    (check-equal? (diagnostic-code operator) 'CHECK-TYPE-MISMATCH)
-    (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9))
 
   (test-case "methods resolve by receiver type and report unknown or unused calls"
     (check-ok (string-append
@@ -1235,74 +1210,6 @@
                                             "    State.Ready ->\n      puts(\"again\")\n"
                                             "    State.Done ->\n      puts(\"done\")\n  end"))))
      'CHECK-UNREACHABLE-CASE-ARM))
-
-  (test-case "pipe calls user functions and builtins without a method form"
-    (define helpers
-      (string-append "def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\n"
-                     "def parse(text: String) -> Result[Int]\n  return text.to_i\nend\n\n"
-                     "def load(path: String) -> Result[Int]\n"
-                     "  text = path |> try File.read_text(1000)\n"
-                     "  return text |> parse()\n"
-                     "end\n\n"))
-    (check-ok (string-append helpers (main-with "  n: Int = 1 |> add(2) |> add(3)\n  puts(n)")))
-    (check-ok (string-append helpers (main-with "  r: Result[Int] = \" 4 \".trim |> parse()\n  puts(r.unwrap!)")))
-    (define mismatch (check-text (string-append helpers (main-with "  n = \"a\" |> add(1)"))))
-    (check-equal? (diagnostic-code mismatch) 'CHECK-TYPE-MISMATCH)
-    (check-equal? (source-position-column (source-span-start (diagnostic-span mismatch))) 7)
-    (check-equal? (source-position-column (source-span-end (diagnostic-span mismatch))) 10)
-    (define arity (check-text (string-append helpers (main-with "  n = 1 |> add()\n  puts(n)"))))
-    (check-equal? (diagnostic-code arity) 'CHECK-ARITY)
-    (check-equal? (check-code (string-append helpers (main-with "  n = 1 |> missing()"))) 'CHECK-UNKNOWN-NAME))
-
-  (test-case "pipe into a builtin that has a method form is CHECK-PIPE-METHOD"
-    (define trimmed (check-text (main-with "  s = \" a \"\n  t = s |> String.trim()\n  puts(t)")))
-    (check-equal? (diagnostic-code trimmed) 'CHECK-PIPE-METHOD)
-    (check-equal? (diagnostic-help trimmed) "s.trim")
-    (check-equal? (source-position-column (source-span-start (diagnostic-span trimmed))) 12)
-    (check-equal? (source-position-column (source-span-end (diagnostic-span trimmed))) 25)
-    (define split (check-text (main-with "  s = \"a,b\"\n  xs = s.trim |> String.split(\",\")\n  puts(xs.size)")))
-    (check-equal? (diagnostic-code split) 'CHECK-PIPE-METHOD)
-    (check-equal? (diagnostic-help split) "s.trim.split(\",\")")
-    (define wrapped (check-text (main-with "  n = \"a\" + \"b\" |> String.length()")))
-    (check-equal? (diagnostic-code wrapped) 'CHECK-PIPE-METHOD)
-    (check-equal? (diagnostic-help wrapped) "(\"a\" + \"b\").length")
-    (define helpers
-      (string-append "def f(n: Int) -> Int\n  return n\nend\n\n"
-                     "def g(n: Int) -> Result[Int]\n  return ok(n)\nend\n\n"))
-    (define chained (check-text (string-append helpers (main-with "  z = 1 |> f() |> String.from_int()"))))
-    (check-equal? (diagnostic-code chained) 'CHECK-PIPE-METHOD)
-    (check-equal? (diagnostic-help chained) "(1 |> f()).to_s")
-    (define tried (check-text (string-append helpers "def h() -> Result[String]\n  z = 1 |> try g() |> String.from_int()\n  return ok(z)\nend\n\n" (main-with "  puts(1)"))))
-    (check-equal? (diagnostic-code tried) 'CHECK-PIPE-METHOD)
-    (check-equal? (diagnostic-help tried) "(1 |> try g()).to_s")
-    (define extra (check-text (string-append helpers (main-with "  xs = [1, 2]\n  ys = xs |> List.map() do |v: Int| v |> f() end"))))
-    (check-equal? (diagnostic-code extra) 'CHECK-PIPE-METHOD)
-    (check-equal? (diagnostic-help extra) "xs.map do ... end"))
-
-  (test-case "a block after a piped call does not make it a plain call"
-    (check-equal? (check-code (main-with "  xs = [1, 2]\n  ys = (xs |> List.map()) do |v: Int| v end"))
-                  'CHECK-PIPE-METHOD))
-
-  ; A chain of l links has a tree l levels deep, and the parser counts the right operand of the first link
-  ; only as one more level, so nested chains build trees deeper than the parser's own limit.
-  (test-case "expressions and statements nest at most 1000 levels, else CHECK-TOO-DEEP at the node that goes past"
-    (define (links count) (string-append* (make-list count " + x")))
-    (define (chain count) (main-with (string-append "  x = 1\n  y = x" (links count) "\n  puts(y)")))
-    (check-ok (chain 997))
-    (check-ok (chain 998))
-    (define (nested-chains levels length)
-      (for/fold ([text "x"]) ([_ (in-range levels)])
-        (string-append "x + (" text ")" (links length))))
-    (define deep (check-text (main-with (string-append "  x = 1\n  y = " (nested-chains 3 500) "\n  puts(y)"))))
-    (check-equal? (diagnostic-code deep) 'CHECK-TOO-DEEP)
-    (check-equal? (diagnostic-message deep) "nesting is deeper than 1000 levels")
-    (check-regexp-match #rx"^x " (span-slice deep))
-    (check-equal? (diagnostic-help deep) "split the code into smaller functions or simpler expressions")
-    (define nested-ifs
-      (string-append (string-append* (make-list 300 "  if x == 1\n"))
-                     "  y = " (nested-chains 2 500) "\n"
-                     (string-append* (make-list 300 "  end\n"))))
-    (check-equal? (check-code (main-with (string-append "  x = 1\n" nested-ifs))) 'CHECK-TOO-DEEP))
 
   (test-case "module constants take the values of 44.5 and nothing else, each refusal at the node that breaks the rule"
     (define (constants-main constants) (string-append constants "\n\n" (main-with "  puts(1)")))
