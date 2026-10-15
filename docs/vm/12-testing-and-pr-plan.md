@@ -88,7 +88,7 @@
   stderr before the comparison. The directory is deleted afterwards.
 - Golden fixtures stay timing-free: a fixture is its own client and server, and
   only `main` prints. Anything that depends on a timeout goes in
-  `tests/vm-http-test.rkt`.
+  `tests/test_vm_http.py`.
 - Network and process tests use independent peers: Node or Python programs in
   `tests/fixtures/`, using their standard libraries only. Their checks are
   required in CI (`AGENTS.md`).
@@ -142,7 +142,7 @@ benchmark numbers (20c-bench), the streamed downloads, uploads and responses
 (20e to 20g, on channels, order step 7.4). After them comes `TlsContext` (phase
 19, `docs/roadmap/19-tls-context.md`, `docs/future/29-tls-context.md` §29).
 These keep the rules of 12.1: timing-free goldens, timeouts in
-`tests/vm-http-test.rkt`, and peers with standard libraries only.
+`tests/test_vm_http.py`, and peers with standard libraries only.
 
 ## 13. Open questions
 

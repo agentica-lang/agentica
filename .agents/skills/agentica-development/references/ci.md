@@ -32,7 +32,9 @@ comment), then a step that calls it. Targets that are not obvious:
   Debian runner's `python3`, printed by the `python3 --version` steps; use only
   features of Python 3.10); the helpers are `tests/agentica_test.py` (paths,
   the VM binary, the CLI, `run` with a timeout, `compile_agc`,
-  `make_temp_dir`, `@slow`). Without `python3`, `CI` set fails the run and a
+  `make_temp_dir`, `compile_text`, `@slow`, `tool` for Node and curl, `Child`
+  and `start_vm` for a peer or VM read line by line, killed with its process
+  group when the test ends, also on Ctrl-C). Without `python3`, `CI` set fails the run and a
   local run reports a skip; a missing VM binary does the same for a test.
 - `test-slow` runs the `slow` submodule of the rackunit files (`raco test
   --submodule slow`) and the `@slow` cases of the Python modules
@@ -147,10 +149,10 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
 
 - `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
   `src/stdlib.rkt` (the registry that embeds the `std/` modules);
-- `tests/vm-diff-*`, `tests/vm-trace-test.rkt`, `tests/vm-tcp-test.rkt`,
-  `tests/fixtures/tcp-peer.js`, `tests/vm-tls-test.rkt`,
+- `tests/vm-diff-*`, `tests/vm-trace-test.rkt`, `tests/test_vm_tcp.py`,
+  `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
-  `tests/fixtures/tls/`, `tests/vm-http-test.rkt`, `tests/fixtures/http-*`,
+  `tests/fixtures/tls/`, `tests/test_vm_http.py`, `tests/fixtures/http-*`,
   `tests/vm-stop-test.rkt`, `tests/fixtures/stop-peer.py`,
   `tests/test_vm_channel.py`, `tests/fixtures/channel-peer.py`,
   `tests/vm-stdout-test.rkt`, `tests/fixtures/stdout-peer.py`,

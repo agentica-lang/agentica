@@ -329,7 +329,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     read_error, close.
   - Keep TLS goldens few and small (now `tls-echo` and `tls-errors`, about 60
     steps each): every run of the `--max-steps` sweep does a handshake.
-  - Put other TLS cases in `tests/vm-tls-test.rkt`, which runs each once, with
+  - Put other TLS cases in `tests/test_vm_tls.py`, which runs each once, with
     short timeouts, small payloads and no sleeps.
   - The `tls-*` fixtures take their certificate directory as `@fixtures/tls` in
     `.args` (`fixture-arg` in `tests/vm-diff-common.rkt` makes it absolute,
@@ -341,14 +341,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (the std-only guard). The `http-*` fixtures are their own peers (a TCP
   server task in the same program; only `main` prints); the std/http URL
   parser costs about 500 steps per call, so the sweep samples them. Put the
-  other cases in `tests/vm-http-test.rkt`, which starts one Python peer
+  other cases in `tests/test_vm_http.py`, which starts one Python peer
   (`tests/fixtures/http-peer.py`: a `ThreadingHTTPServer`, the same over `ssl`, and a raw socket server with
   canned hostile responses) and runs three programs once. Python 3
   (standard library only) is required in CI, as Node is for TCP: with `CI`
   set the test fails without it, locally it prints a skip. picohttpparser
   is the submodule `vm/third_party/picohttpparser` (v1.4); bumping it: check
   out the new tag inside it, `git add` it, and rerun
-  `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/vm-http-test.rkt`.
+  `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/test_vm_http.py`.
 - **HTTP server (20c, in on Linux)**
   - `vm/http_server.c` on `vm/net.h`, the same parser and `vm/http_fields.c`.
   - The `http-server*` fixtures are their own peers (the `std/http` client, or a
@@ -356,7 +356,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - a side `TCP` listener tells `main` that a handler started, so
     `close_server`, slow-handler and `main`-returns cases do not depend on
     timing.
-  - `tests/vm-http-test.rkt` starts a VM server program (plain and TLS, port 0,
+  - `tests/test_vm_http.py` starts a VM server program (plain and TLS, port 0,
     ports on its first line) and runs `tests/fixtures/http-server-peer.py`
     (every hostile request of §10.6 on a raw socket, the `Expect` cases,
     pipelining, `http.client`, the `max_connections` wait, TLS, and a pipelined
