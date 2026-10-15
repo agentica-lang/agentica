@@ -92,15 +92,18 @@ byte of a file with a type table, an Updates section or Globals.
   program that is relative and does not start with `std/`, once, right after
   the load (`agc_program_set_source_root`), so diagnostics, stack traces, task
   crash lines and test reports all print the joined name (the 256-byte cut of
-  stack lines applies to it). A name that starts with `std/` is a standard
-  module; the front end writes a user file under a `std/` folder as
-  `./std/NAME.agc`, which is joined with its `./` dropped. An absolute name is
-  left as it is. The bytes added over all names are capped at 64 MiB; past it
-  the VM exits 2 with `invalid bytecode: file needs too much memory`. The `.agcb` stores names relative to the folder of the entry
-  file (4.6); `agentica` passes that folder as the user would type it, relative
-  to the working directory, unless the entry is in it. Without the option the
-  stored name prints. DIR is not normalized: an imported file above the root
-  prints as `DIR/../shared/x.agc`.
+  stack lines applies to it). No `/` is added when DIR already ends in one. A
+  name that starts with `std/` is a standard module; the front end writes a
+  user file under a `std/` folder as `./std/NAME.agc`, which is joined. A
+  leading `./` is dropped from every name that is joined, not only from that
+  one: with DIR `r`, `./x.agc` prints as `r/x.agc`. An absolute name is left
+  as it is. The bytes added over all names are capped at 64 MiB; past it the
+  VM exits 2 with `--source-root is too long for this program`. The `.agcb`
+  stores names relative to the folder of the entry file (4.6); `agentica`
+  passes that folder as the user would type it, relative to the working
+  directory, unless the entry is in it. Without the option the stored name
+  prints. DIR is not normalized: an imported file above the root prints as
+  `DIR/../shared/x.agc`.
 - `--flush-timeout MS` sets the end-of-run wait for file close jobs and for the
   buffered output of stdout and stderr (10.2.2, End of run). The wait is always
   bounded: 30000 ms by default, and the environment variable
