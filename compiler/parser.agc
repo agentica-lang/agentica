@@ -747,10 +747,13 @@ def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   return call_node(e, pos, name + "." + member.lexeme, args.nodes, parenthesized, args.ids, cursor)
 end
 
-# NAME.with(...) updates a constant of a struct type: the postfix loop reads the .with.
+# NAME.with(field: x) updates a constant of a struct type: the postfix loop reads the .with. A call has no named arguments, so field: after the parenthesis tells it from Alias.with(1), a call of a function called with through an alias written in capitals; the linker decides the rest.
 def updates_constant?(e: Base.Env, name: Tokens.Token, dot: Int) -> Bool
   member = e.tokens[dot + 1]
-  return Base.constant_name?(name.lexeme) and member.kind == "name" and member.lexeme == "with" and e.tokens[dot + 2].kind == "left-paren"
+  if member.kind != "name" or member.lexeme != "with" or e.tokens[dot + 2].kind != "left-paren"
+    return false
+  end
+  return e.tokens[dot + 3].kind == "name" and e.tokens[dot + 4].kind == "colon" and Base.constant_name?(name.lexeme)
 end
 
 def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]

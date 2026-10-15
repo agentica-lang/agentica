@@ -254,8 +254,15 @@ def check_data(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: 
       if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type, [])
         return ok(true)
       end
-      return error(State.fail_help(cx, st, "CHECK-CONSTANT-TYPE", "a constant expression must have a data type, found " + T.to_text(type), Ast.expr_span(expr), "a constant holds numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data"))
+      return error(State.fail_help(cx, st, "CHECK-CONSTANT-TYPE", "a constant expression must have a data type, found " + T.to_text(type), Ast.expr_span(expr), data_help(type)))
   end
+end
+
+def data_help(type: T.Type) -> String
+  if T.is(type, "Void")
+    return "a constant's value must be data: write nil, not a Void call"
+  end
+  return "a constant holds numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data"
 end
 
 def block?(expr: Ast.Expr) -> Bool

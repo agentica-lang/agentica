@@ -1,0 +1,1 @@
+ERROR CHECK-CONSTANT-TYPE 27:2:3-48:2:24 "a constant expression must have a data type, found Void" "a constant's value must be data: write nil, not a Void call" file="constant-type-void-statement.agc"

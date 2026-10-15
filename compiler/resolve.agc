@@ -2,11 +2,13 @@
 ##
 ## A name declared in the root file keeps its name; a name declared in another file gets the prefix of that file ("@2::"), so equal names of two files stay apart. A name through an import alias (Alias.name) becomes the prefixed name in the imported file, if that file exports it.
 
+import Ast from "ast"
 import Declarations from "declarations"
 import Diag from "diagnostic"
 import Env from "link_env"
 import Failure from "link_failure"
 import Modules from "modules"
+import Base from "parse_base"
 import Resolve from "resolve_import"
 import Source from "source"
 import Suggest from "suggest"
@@ -73,6 +75,33 @@ export def constant_identity(cx: Context, name: String) -> String
 end
 
 ## The name in the linked program of a declaration of the file.
+## A name in capitals that no declaration, import, alias or reserved type of the file owns: a constant that does not exist.
+export def unknown_constant?(cx: Context, name: String) -> Bool
+  return Base.constant_name?(name) and !cx.settings.catalog.reserved.include?(name) and !cx.me.names.has_key?(name) and !cx.me.named.has_key?(name) and !cx.me.aliases.has_key?(name)
+end
+
+## CHECK-UNKNOWN-NAME for such a name, with the closest constant the file can read: its own, declared above or below, and the ones it imports by name, by the name written.
+export def unknown_constant_failure(cx: Context, name: String, span: Source.Span) -> String
+  seen: List[String] = []
+  for own in cx.me.names.keys
+    if Declarations.constant?(cx.me.names[own])
+      seen = seen.push(own)
+    end
+  end
+  for local in cx.me.named.keys
+    entry = cx.me.named[local]
+    if Declarations.constant?(cx.modules[entry.target].public[entry.name])
+      seen = seen.push(local)
+    end
+  end
+  help = Diag.Help.NoHelp
+  case Suggest.did_you_mean_among(name, [], seen)
+    Ast.Optional.Present(text) -> help = Failure.hint(text)
+    Ast.Optional.Absent -> help = Diag.Help.NoHelp
+  end
+  return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"" + name + "\"", help)
+end
+
 export def identity(cx: Context, name: String) -> String
   return cx.me.prefix + name
 end

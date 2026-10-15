@@ -61,6 +61,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `LIMIT = make()` with a `def`, `&make`, a `while` loop, or a builtin with effects such as `IO.gets!()` in a constant (`CHECK-CONSTANT-EXPRESSION`) | a constant is built from literals, constructors, operators, other constants and builtins without effects; compute anything else in a function |
 | `JOBS: Channel[Int] = Channel.new(1)` in a constant (`CHECK-CONSTANT-TYPE`) | a constant holds data: numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data |
 | `A = B + 1` with `B = A + 1` (`CHECK-CONSTANT-CYCLE`) | break the loop; the help lists the constants around it, `A -> B -> A` |
+| `case x` with `LIMIT -> ...` (`PARSE-UNEXPECTED-TOKEN`) | a constant is not a pattern; compare with `if x == LIMIT` |
 | `LIMIT = 2` or `LIMIT += 1` inside a function (`PARSE-INVALID-ASSIGNMENT-TARGET`) | constants are set at the top level and never change; use a local with a lowercase name |
 | `Limits.MAX` or `Limits.MAX()` for a constant `MAX` (`CHECK-IMPORT-NAME`) | `import {MAX} from "limits"`, then use `MAX`; a constant is not reached through the alias |
 | code nested more than 1,000 levels deep (`PARSE-TOO-DEEP`): parentheses, brackets, blocks, statements, prefix operators, type arguments, or a chain of operators or `.` suffixes that, with the nesting around it, passes 1,000 levels | split the code into smaller functions, or name the parts of a long expression with bindings |

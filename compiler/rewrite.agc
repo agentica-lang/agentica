@@ -303,6 +303,9 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
   if parts.size == 1 and constant != ""
     return ok(Ast.Expr.ConstRef(Ast.ConstRef(id: node.id, name: constant, span: node.span)))
   end
+  if parts.size == 1 and Resolve.unknown_constant?(cx, node.name)
+    return error(Resolve.unknown_constant_failure(cx, node.name, node.span))
+  end
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Type, node.span, true)
   return ok(Ast.Expr.TypeName(node.with(name: name)))
 end
