@@ -200,7 +200,7 @@ goldens stay.
 | 2 | **Done** (PR #245): Parser (`src/parser.rkt`, `ast.rkt`) | The AST in a stable text form, or the `PARSE-` diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree, so step 2 adds a printer with the same output on both sides (`tests/frontend-parser-common.rkt`) |
 | 3 | **Done** (PR #254): Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution, or the first `CHECK-IMPORT-*`, `CHECK-DECL-ORDER` or `CHECK-REDEFINED-NAME` diagnostic with its file. Needs the environment and real-path builtins (35.5). It carries the privacy rule of `value.with(...)` (roadmap 15c) as data: each linked module lists the user structs it may update, and the text form prints the list on every update. The text form is `tests/frontend-modules-common.rkt` (Racket) and `compiler/link.agc` (Agentica) |
 | 4 | **Done** (4a, the builtin catalog as Agentica data, PR #258; 4b, the checker, PR #263; module constants, §44, in PR 44a2-1, with `compiler/check_const.agc` and `compiler/const_walk.agc`): Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then constants, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). It carries module constants (§44, roadmap row 7.2.8; done in 44a2-1): the order, `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE` and the `CHECK-DECL-ORDER` rank of constants; the new import forms of §44.2 (`import Mod from "path"`, `import {A, B} from "path"`) are parser and linker changes that land in `src/` and `compiler/` together (44a0), and the checker sees no import, but one help text of `src/checker.rkt` shows the old form and the checker port carries the new text. Decided for deep trees (35.9): the linker of step 3 handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that, so both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and statements (one level for each, so it bounds the depth of the tree they recurse on; a diagnostic change in both front ends, made in 4b). |
-| 5 | Lowering (`src/lower.rkt`) | The IR in the form `--dump-ir` prints, or the `LOWER-` diagnostic. The port must carry the lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by 44a2-2): scalar literal constants inlined, the other kept constants as zero-parameter functions, the `<start>` entry, the pruning by reachability from `main`, and the order of `Checked.constants` |
+| 5 | **Done** (PR #PRNUM): Lowering (`src/lower.rkt`) | The IR in a text form of its own (not `--dump-ir`, see the status note below), or the `LOWER-` diagnostic. The port carries the lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by 44a2-2): scalar literal constants inlined, the other kept constants as zero-parameter functions, the `<start>` entry, the pruning by reachability from `main`, and the order of `Checked.constants`. The text form is `tests/frontend-lower-common.rkt` (Racket) and `compiler/lower.agc` (Agentica) |
 | 6 | Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal |
 | 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`) |
 | 8 | CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
@@ -681,6 +681,70 @@ are in `tests/fixtures/frontend/check/` (58 fixtures, one for every reachable
   `List.repeat` halts with `RUNTIME-INVALID-COUNT` above that count and a
   program of about 5.7 MB of source has more node ids. One file is limited to
   1 MiB, so such a program is several files joined by imports.
+
+Status on 2026-10-15 (PR #PRNUM): step 5 is done. `compiler/` also holds the
+IR as data (`ir.agc`), the tables of `src/lower.rkt` (`lower_tables.agc`), the
+state (`lower_state.agc`), expressions (`lower_expr.agc`), collections, enums
+and structs (`lower_data.agc`), functions, blocks and statements
+(`lower_stmt.agc`), the scan of what a function uses (`lower_scan.agc`), module
+constants (`lower_const.agc`), the struct and enum tables (`lower_program.agc`),
+and `lowering.agc` (`Lowering.lower(linked, checked, catalog)`:
+`Lowered.Done(Program)` or `Failed(Problem)`), with the entry `lower.agc` and
+`lower_text.agc` (3,000 lines of Agentica for the 1,100 of `src/lower.rkt`).
+Notes:
+
+- The text form is new, not `--dump-ir`. `--dump-ir` keeps only the start line
+  and column of a span, leaves out the sources, the JSON field types of the
+  structs and the file of each span, and prints a constant with Racket's `~s`;
+  step 6 needs all of them to write the same bytes. The new form is
+  `program SPAN entry=N globals=N`, one `source N "path" chars=N` for each file
+  (the stored name of 35.4, "Source paths"), `struct sN "Name" ["f",...]` with
+  ` types=[...]` when JSON can build it, `enum "Name" vN="Variant"/SIZE ...`,
+  then each function as `fnN "name" params=P captures=C slots=S [entry] @ SPAN`
+  followed by its labels (`  LN:`) and instructions
+  (`    op ARGS @ SPAN ...`). A span is `FILE:LINE:COL-LINE:COL` with the index
+  of its source, a register `rN`, a function `fnN`, a struct `sN`, a variant
+  `vN`, a global `gN`, a label `LN`. A constant is `void`, `nil`, `true`,
+  `false`, `int:N`, `float:bits:N` or a quoted string. A failure is the
+  `ERROR` line with ` file="path"`. `tests/frontend-lower-common.rkt` prints it
+  from `src/lower.rkt`.
+- The IR is data: an `Instr` has an op name, integer arguments, an immediate
+  for `const` and a builtin name for `call-builtin`, and a label is an `Instr`
+  with the op `label`. A span has no file in `compiler/`, so each instruction
+  carries the index of its file. Racket keeps the spans as objects.
+- The function table is the one of `src/lower.rkt`: declared functions, the
+  kept constants, `<start>` (when there are global slots), then the block
+  functions in the order they are reserved (before their body is lowered, so a
+  block gets a smaller index than the blocks inside it). The sources are listed
+  in the order Racket first emits a span: the root, each function's module,
+  then the modules of the kept constants.
+- `LOWER-UNSUPPORTED` and `LOWER-INTERNAL` cannot be reached from a program
+  that the checker accepts: every builtin implementation is in the VM list
+  (`VM_BUILTINS` in `lower_tables.agc`; a test checks that it is the same set as
+  `vm-builtins`), and a JSON target that cannot be decoded is
+  `CHECK-NOT-DECODABLE`. The code paths stay, as in Racket, and no fixture ends
+  in a `LOWER-` code.
+- `Cx` (the declarations, the catalog and the types) holds two function fields,
+  `expression` and `block`, because expressions, statements and blocks call one
+  another and a module cannot import a module that imports it. `Fx` is the
+  function being lowered (code, registers, labels, loop labels, the block
+  functions made so far), threaded through the calls. The text of
+  `check_text.problem_text` is now exported.
+- Deep trees: lowering recurses on the tree, with at most 3 VM frames for each
+  level (many calls are tail calls, so most shapes take 1 or 2): nested `if` and
+  `while` 990 deep take about 3,000 frames, calls, method chains and `-x` about
+  1,025, lists about 2,000, interpolations 2 for each level, a block about 4.
+  The scans of constants and of the names a function reads are loops with a
+  worklist. With `CHECK-TOO-DEEP` at 1,000 levels lowering uses about 3,000 of
+  the 10,000 frames, and the checker (up to 5 frames for each level) is the
+  bottleneck. The test starts the lowering 5,000 frames deeper (`--burn=5000`
+  of `lower.agc`) on the deepest shapes and they still lower; with 8,000 the
+  `if` chain overflows with `RUNTIME-STACK-OVERFLOW`, which shows that the burn
+  works.
+- The Agentica lowering matches the Racket one on the 24 fixtures, the
+  examples, `tests/fixtures/vm/`, the `std/` modules and `compiler/` itself
+  (the slow tier repeats all of them and the deep shapes). Same functions,
+  registers, labels, spans, constants, structs and enums.
 
 ### 35.10 Tests move to Python unittest
 

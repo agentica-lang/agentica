@@ -60,7 +60,7 @@ def lowered_text(linked: Linker.Linked, lowered: Lowering.Lowered) -> String
     Lowering.Lowered.Failed(problem) ->
       shown = Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help)
       line = Text.diagnostic_line(shown)
-      return line + " file=" + Text.quote(LinkText.display(linked.root_dir, problem.file))
+      return line + " file=" + Text.quote(LinkText.stored(linked.root_dir, problem.file))
     Lowering.Lowered.Done(program) -> return program_lines(linked.root_dir, program).join("\n")
   end
 end
@@ -70,7 +70,7 @@ def program_lines(root_dir: String, program: Ir.Program) -> List[String]
   lines: List[String] = [head + " globals=" + program.globals.to_s]
   index = 0
   for source in program.sources
-    shown = Text.quote(LinkText.display(root_dir, source.file))
+    shown = Text.quote(LinkText.stored(root_dir, source.file))
     lines = lines.push("source " + index.to_s + " " + shown + " chars=" + source.text.length.to_s)
     index += 1
   end
