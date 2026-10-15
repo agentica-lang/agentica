@@ -73,9 +73,7 @@ The VM hides the variables it keeps for itself: `AGENTICA_CHANNEL`, and `UV_USE_
 System.pid() -> Int
 ```
 
-The process id of the running program. It needs no flag. Pass it when you start
-a VM with `--driver-pid`, which makes that VM check that its parent is this
-program.
+The process id of the running program. It needs no flag. Pass it when you start a VM with `--driver-pid`, which makes that VM check that its parent is this program.
 
 ```agentica
 def main() -> Void

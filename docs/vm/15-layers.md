@@ -249,16 +249,17 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   `agc_json_status_message`, `agc_json_to_float`, `agc_json_decode`,
   `agc_json_schema`); `files.c`'s exports (`agc_files_init`,
   `agc_files_close`, `agc_host_path`, `agc_utf8_error`, `agc_system_error`,
-  `agc_each_fd`, `agc_files_inherited`, `agc_files_forget`); `agc_remove_tree`
-  (`tree.c`, the tree walk of `Path.remove`, with `AGC_TREE_TOO_DEEP`,
-  `AGC_TREE_REFUSED` and `AGC_TREE_MAX_DEPTH`; it uses no VM state);
-  `agc_processes_stop` (`process.c`, called by the driver's exit path); the
-  stream kit (`agc_new_lock`, `agc_stream_lock`, `agc_stream_bad_timeout`,
-  `agc_stream_timed_out`, `agc_inbuf_*`, `agc_stream_write`, with forward
-  `struct uv_stream_s` and `struct uv_write_s`); `agc_duplex_*` and
-  `agc_parent_*` (the child channel, `duplex.c`, used by `process.c`,
-  `testing.c` and the driver); the builtin tables of the services (strings,
-  numbers, json, files, duplex, process, tcp, http, test) and their counts.
+  `agc_each_fd`, `agc_files_inherited`, `agc_files_forget`);
+  `agc_tree_refused` and `agc_remove_tree` (`tree.c`, the refusal test and the
+  tree walk of `Path.remove`, with `AGC_TREE_TOO_DEEP`, `AGC_TREE_REFUSED` and
+  `AGC_TREE_MAX_DEPTH`; no VM state); `agc_processes_stop` (`process.c`,
+  called by the driver's exit path); the stream kit (`agc_new_lock`,
+  `agc_stream_lock`, `agc_stream_bad_timeout`, `agc_stream_timed_out`,
+  `agc_inbuf_*`, `agc_stream_write`, with forward `struct uv_stream_s` and
+  `struct uv_write_s`); `agc_duplex_*` and `agc_parent_*` (the child channel,
+  `duplex.c`, used by `process.c`, `testing.c` and the driver); the builtin
+  tables of the services (strings, numbers, json, files, duplex, process, tcp,
+  http, test) and their counts.
 
 - **`list_impl.h`** (includes `value.h`; private to the core): `struct agc_list`
   (`{ len, root, shift, kind, tail[] }`), the node type of the 32-way trie and

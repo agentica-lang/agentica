@@ -70,11 +70,7 @@ end
 File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
 ```
 
-Gives a `FileInfo` with `kind` (`"file"` or `"directory"`), `size_bytes`,
-`modified_seconds`, `mode` and the owner as `user_id` and `group_id`. A symbolic
-link is followed. `mode` is the permission bits as an `Int`, with the setuid,
-setgid and sticky bits included: a file with mode `rw-------` has `mode` 384
-(octal 600).
+Gives a `FileInfo` with `kind` (`"file"` or `"directory"`), `size_bytes`, `modified_seconds`, `mode` and the owner as `user_id` and `group_id`. A symbolic link is followed. `mode` is the permission bits as an `Int`, with the setuid, setgid and sticky bits included: a file with mode `rw-------` has `mode` 384 (octal 600).
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -89,10 +85,7 @@ end
 File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo]
 ```
 
-Like `File.stat`, but a symbolic link is not followed: its `kind` is `"link"`,
-`size_bytes` is the length of the text of the link, and the other fields are the
-link's own. Use it to tell a link from the file or directory it names, then
-`File.stat` to see what it names. VM only.
+Like `File.stat`, but a symbolic link is not followed: its `kind` is `"link"`, `size_bytes` is the length of the text of the link, and the other fields are the link's own. Use it to tell a link from the file or directory it names, then `File.stat` to see what it names. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -156,14 +149,7 @@ end
 File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
 ```
 
-Takes an exclusive lock on the open file without waiting: `ok(true)` when it is
-yours (also when you already had it on this handle), and `ok(false)` when
-another handle or another process holds it. The lock belongs to the open file,
-so it ends when the handle is closed, when the task that opened it ends, or when
-the program ends, even if it is killed. A program started with `Process.spawn`
-does not keep it. The lock stops only code that also asks for it. Any handle
-mode works, and a read handle can lock too. A pipe, FIFO or device is an error.
-There is no unlock call: close the handle. VM only.
+Takes an exclusive lock on the open file without waiting: `ok(true)` when it is yours (also when you already had it on this handle), and `ok(false)` when another handle or another process holds it. The lock belongs to the open file, so it ends when the handle is closed, when the task that opened it ends, or when the program ends, even if it is killed. A program started with `Process.spawn` does not keep it. The lock stops only code that also asks for it. Any handle mode works, and a read handle can lock too. Only a regular file can be locked: a pipe, a FIFO or a device (such as `/dev/null`) is an error. There is no unlock call: close the handle. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -282,10 +268,7 @@ end
 Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Creates one directory that only you can enter (mode 0700, less where the umask
-clears bits). Unlike `Dir.mkdir` it makes no parents, and a path that already
-exists is an error, so a success means the directory is new and yours. Use it for
-a scratch directory in a shared place such as `/tmp`. VM only.
+Creates one directory that only you can enter (mode 0700, less where the umask clears bits). Unlike `Dir.mkdir` it makes no parents, and a path that already exists is an error, so a success means the directory is new and yours. Use it for a scratch directory in a shared place such as `/tmp`. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -358,18 +341,27 @@ false
 Path.remove(path: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Deletes what is at the path: a file, a symbolic link, or a directory with
-everything in it. It never follows a symbolic link. A link given as the path is
-deleted itself, a link inside a directory is deleted as a link, and what it names
-is left alone. A path that is not there is `ok()`. It refuses `/`, `.` and `..`
-(and a path that ends in one of them), and a tree more than 128 levels deep,
-which it leaves partly deleted. A link with a trailing slash (`"link/"`) is an
-error. When a call fails, what it already deleted stays deleted, and the error
-names the path and the system error. VM only.
+Deletes what is at the path: a file, a symbolic link, or a directory with everything in it. It never follows a symbolic link. A link given as the path is deleted itself, a link inside a directory is deleted as a link, and what it names is left alone. A path that is not there is `ok()`. It refuses `/`, `.` and `..` (and a path that ends in one of them, such as `dir/..`), and a tree more than 128 levels deep, which it leaves partly deleted. A link with a trailing slash (`"link/"`) is an error, and so is a path under a file (`"file/child"`): both are `Not a directory`, on purpose, so that `"link/"` never reports `ok()`. When a call fails, what it already deleted stays deleted, and the error names the path or, for a failure inside the tree, the entry that failed, with the system error. It deletes across mount points, as `rm -rf` does. A timeout gives an error but does not stop a removal that has started: it runs on until it ends. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void
   puts(Path.remove("build", 5000))
   puts(Path.remove("old.log", 1000))
+end
+```
+
+## Path.rename
+
+```text
+Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
+```
+
+Renames a file, a symbolic link or a directory to a path that does not exist yet, in one step. It never replaces anything: when `to` exists, even as an empty directory, the call is an error and nothing changes, so two programs that race for a name have exactly one winner. A symbolic link is moved as a link, and what it names is left alone. Both paths must be on the same file system, and a file system that cannot refuse to replace (some network file systems) gives an error. VM only.
+
+```agentica {mode="check"}
+def main() -> Void
+  made = Dir.mkdir_private("/tmp/job-new", 1000)
+  claimed = Path.rename("/tmp/job-new", "/tmp/job", 1000)
+  puts(claimed.ok?)
 end
 ```

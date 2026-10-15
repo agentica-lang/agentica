@@ -1,12 +1,17 @@
 """The OS builtins the BDD driver port needs (35.5): owner-only creates, File.lstat, File.try_lock, Path.remove,
-System.pid and the child environment.
+Path.rename, System.pid and the child environment.
 
 Each case runs a small Agentica program on the VM against a temp directory and compares the disk, or Python's
 os module, with what the program printed. The lock cases start separate VM processes: the contention is real.
+
+Every VM here runs with its working directory inside the case's own scratch directory, and every path that is
+removed is inside it. The names Path.remove must refuse are asked as "scratch/guarded/sub/..", "." and "..", never
+as "/": a regression of the refusal then removes part of the scratch directory, not a real tree.
 """
 import os
 import signal
 import stat
+import unittest
 
 from tests.agentica_test import Child, TestCase, output_lines, run_vm, start_vm, vm_binary, vm_environment
 
@@ -63,6 +68,53 @@ def main() -> Void
 end
 """
 
+DEVICE_LOCK_PROGRAM = """\
+def main() -> Void
+  device = Result.unwrap!(File.open("/dev/null", "read", 5000))
+  IO.inspect(File.try_lock(device, 5000))
+  fifo = Result.unwrap!(File.open(System.args()[0] + "/fifo", "read", 5000))
+  IO.inspect(File.try_lock(fifo, 5000))
+end
+"""
+
+# The driver's protocol: make a private directory under a temporary name, lock a file in it, then rename it to its
+# final name; the lock follows the file, so a sweep that finds the final name always finds it locked.
+PROTOCOL_PROGRAM = """\
+def main() -> Void
+  base = System.args()[0]
+  fresh = base + "/new-dir"
+  Result.unwrap!(Dir.mkdir_private(fresh, 5000))
+  lock = Result.unwrap!(File.open(fresh + "/lock", "create_private", 5000))
+  puts(Result.unwrap!(File.try_lock(lock, 5000)))
+  Result.unwrap!(Path.rename(fresh, base + "/final-dir", 5000))
+  puts("renamed")
+  IO.flush()
+  IO.gets()
+end
+"""
+
+RENAME_PROGRAM = """\
+def main() -> Void
+  base = System.args()[0]
+  IO.inspect(Path.rename(base + "/a.txt", base + "/b.txt", 5000).ok?)
+  IO.inspect(Path.rename(base + "/c.txt", base + "/d.txt", 5000))
+  IO.inspect(Path.rename(base + "/missing", base + "/e.txt", 5000).ok?)
+  IO.inspect(Path.rename(base + "/dir", base + "/empty", 5000).ok?)
+  IO.inspect(Path.rename(base + "/dir", base + "/moved", 5000).ok?)
+  IO.inspect(Path.rename(base + "/link", base + "/link2", 5000).ok?)
+  IO.inspect(Path.rename(base + "/b.txt", base + "/b.txt", 5000).ok?)
+  IO.inspect(Path.rename(base + "/b.txt", base + "/nodir/x", 5000).ok?)
+end
+"""
+
+# Races for one target name: the argument is the source, the target is shared.
+RACE_PROGRAM = """\
+def main() -> Void
+  args = System.args()
+  puts(Path.rename(args[0], args[1], 5000).ok?)
+end
+"""
+
 # hold: take the lock and keep it until stdin closes, without closing the file; probe: try once;
 # spawn: take the lock, start a child that outlives the handle, close the handle, then wait for stdin.
 CONTENTION_PROGRAM = """\
@@ -93,9 +145,11 @@ def main() -> Void
   IO.inspect(Path.remove(base + "/other-link/", 5000).ok?)
   IO.inspect(Path.remove(base + "/missing", 5000))
   IO.inspect(Path.remove(base + "/plain.txt/x", 5000).ok?)
-  IO.inspect(Path.remove("/", 5000))
+  IO.inspect(Path.remove(base + "/guarded/sub/..", 5000))
+  IO.inspect(Path.remove(base + "/guarded/sub/../", 5000))
   IO.inspect(Path.remove(".", 5000))
-  IO.inspect(Path.remove(base + "/..", 5000))
+  IO.inspect(Path.remove("..", 5000))
+  IO.inspect(Path.remove("../.", 5000))
   IO.inspect(Path.remove(base + "/deep", 5000))
   IO.inspect(Path.remove(base + "/file-link", 5000))
   IO.inspect(Path.remove(base + "/plain.txt", 5000))
@@ -159,10 +213,11 @@ class OsBuiltins(TestCase):
     def program(self, text, name):
         return self.compile_text(text, name)
 
-    def run_program(self, text, name, *args, flags=(), env=None):
-        """Run a program on the VM; asserts exit 0 and no stderr, and returns the stdout lines."""
+    def run_program(self, text, name, *args, flags=(), env=None, cwd=None):
+        """Run a program on the VM in `cwd` (default: the scratch directory); asserts exit 0 and no stderr, and
+        returns the stdout lines."""
         result = run_vm(self.program(text, name), *flags, args=[str(arg) for arg in args],
-                        env=vm_environment(env))
+                        env=vm_environment(env), cwd=cwd or self.root)
         self.assertEqual((result.code, result.stderr), (0, ""), result.stdout)
         return output_lines(result.stdout)
 
@@ -234,20 +289,20 @@ class OsBuiltins(TestCase):
         bytecode = self.program(CONTENTION_PROGRAM, "contention")
 
         def probe():
-            result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment())
+            result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment(), cwd=self.root)
             self.assertEqual((result.code, result.stderr), (0, ""))
             return result.stdout.strip()
 
         self.assertEqual(probe(), "true")
         # The holder never closes the file: ending the process releases the lock.
-        holder = self.adopt(start_vm(bytecode, str(path), "hold", stdin=True))
+        holder = self.adopt(start_vm(bytecode, str(path), "hold", stdin=True, cwd=self.root))
         self.assertEqual(holder.next_line(), "true")
         self.assertEqual(probe(), "false")
         holder.close_stdin()
         self.assertEqual(holder.wait(), 0)
         self.assertEqual(probe(), "true")
         # A killed holder releases it too.
-        killed = self.adopt(start_vm(bytecode, str(path), "hold", stdin=True))
+        killed = self.adopt(start_vm(bytecode, str(path), "hold", stdin=True, cwd=self.root))
         self.assertEqual(killed.next_line(), "true")
         self.assertEqual(probe(), "false")
         os.killpg(killed.process.pid, signal.SIGKILL)
@@ -258,14 +313,85 @@ class OsBuiltins(TestCase):
         path = self.root / "lock"
         path.write_text("")
         bytecode = self.program(CONTENTION_PROGRAM, "contention")
-        holder = self.adopt(start_vm(bytecode, str(path), "spawn", flags=("--allow-run",), stdin=True))
+        holder = self.adopt(start_vm(bytecode, str(path), "spawn", flags=("--allow-run",), stdin=True, cwd=self.root))
         self.assertEqual(holder.next_line(), "true")
         self.assertEqual(holder.next_line(), "closed")
         # The `sleep` child is alive and was started after the lock was taken, yet the lock is free.
-        result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment())
+        result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment(), cwd=self.root)
         self.assertEqual(result.stdout.strip(), "true")
         holder.close_stdin()
         self.assertEqual(holder.wait(), 0)
+
+    def test_try_lock_refuses_what_is_not_a_regular_file(self):
+        os.mkfifo(self.root / "fifo")
+        lines = self.run_program(DEVICE_LOCK_PROGRAM, "devicelock", self.root)
+        self.assertEqual(lines, ['error("filesystem: only a regular file can be locked")'] * 2)
+
+    def test_a_locked_directory_keeps_its_lock_when_it_is_renamed_to_its_final_name(self):
+        bytecode = self.program(CONTENTION_PROGRAM, "contention")
+
+        def probe(name):
+            result = run_vm(bytecode, args=[str(self.root / name / "lock"), "probe"], env=vm_environment(),
+                            cwd=self.root)
+            self.assertEqual((result.code, result.stderr), (0, ""))
+            return result.stdout.strip()
+
+        holder = self.adopt(start_vm(self.program(PROTOCOL_PROGRAM, "protocol"), str(self.root), stdin=True,
+                                     cwd=self.root))
+        self.assertEqual(holder.next_line(), "true")
+        self.assertEqual(holder.next_line(), "renamed")
+        self.assertFalse((self.root / "new-dir").exists())
+        self.assertEqual(stat.S_IMODE((self.root / "final-dir").stat().st_mode), 0o700)
+        self.assertEqual(probe("final-dir"), "false")
+        holder.close_stdin()
+        self.assertEqual(holder.wait(), 0)
+        self.assertEqual(probe("final-dir"), "true")
+
+    def test_rename_never_replaces_and_moves_a_link_as_a_link(self):
+        (self.root / "a.txt").write_text("a")
+        (self.root / "c.txt").write_text("c")
+        (self.root / "d.txt").write_text("d")
+        (self.root / "dir").mkdir()
+        (self.root / "dir" / "inside.txt").write_text("inside")
+        (self.root / "empty").mkdir()
+        (self.root / "target.txt").write_text("target")
+        os.symlink("target.txt", self.root / "link")
+        lines = self.run_program(RENAME_PROGRAM, "rename", self.root)
+        exists = 'error("filesystem: cannot rename path\\n  from: %s/c.txt\\n  to: %s/d.txt\\n  system error: ' \
+                 'File exists; errno=17")' % (self.root, self.root)
+        self.assertEqual(lines, ["true", exists, "false", "false", "true", "true", "false", "false"])
+        self.assertEqual((self.root / "b.txt").read_text(), "a")
+        self.assertFalse((self.root / "a.txt").exists())
+        # The target of a name that exists is never replaced, an empty directory included.
+        self.assertEqual((self.root / "c.txt").read_text(), "c")
+        self.assertEqual((self.root / "d.txt").read_text(), "d")
+        self.assertEqual(list((self.root / "empty").iterdir()), [])
+        self.assertEqual((self.root / "moved" / "inside.txt").read_text(), "inside")
+        self.assertFalse((self.root / "dir").exists())
+        # A link moves as a link; what it names stays.
+        self.assertTrue((self.root / "link2").is_symlink())
+        self.assertEqual(os.readlink(self.root / "link2"), "target.txt")
+        self.assertFalse(os.path.lexists(self.root / "link"))
+        self.assertEqual((self.root / "target.txt").read_text(), "target")
+
+    def test_rename_has_exactly_one_winner_when_processes_race_for_a_name(self):
+        bytecode = self.program(RACE_PROGRAM, "race")
+        target = self.root / "target"
+        sources = []
+        for k in range(6):
+            source = self.root / ("source%d" % k)
+            source.write_text(str(k))
+            sources.append(source)
+        racers = [self.adopt(start_vm(bytecode, str(source), str(target), cwd=self.root)) for source in sources]
+        answers = [racer.next_line() for racer in racers]
+        for racer in racers:
+            self.assertEqual(racer.wait(), 0)
+        self.assertEqual(sorted(answers), ["false"] * 5 + ["true"])
+        winner = answers.index("true")
+        self.assertEqual(target.read_text(), str(winner))
+        self.assertFalse(sources[winner].exists())
+        for k, source in enumerate(sources):
+            self.assertEqual(source.exists(), k != winner)
 
     def prepare_trees(self):
         outside = self.root / "outside"
@@ -285,6 +411,8 @@ class OsBuiltins(TestCase):
         (self.root / "plain.txt").write_text("plain")
         (self.root / "real-dir" / "sub").mkdir(parents=True)
         (self.root / "real-dir" / "sub" / "b.txt").write_text("b")
+        (self.root / "guarded" / "sub").mkdir(parents=True)
+        (self.root / "guarded" / "sub" / "keep.txt").write_text("keep")
         deep = self.root / "deep"
         deep.mkdir()
         path = str(deep)
@@ -294,11 +422,13 @@ class OsBuiltins(TestCase):
 
     def test_remove_deletes_links_as_links_never_follows_them_and_refuses_unsafe_roots(self):
         self.prepare_trees()
-        lines = self.run_program(REMOVE_PROGRAM, "remove", self.root)
+        # The VM runs in guarded/sub: "." and ".." name the scratch directories guarded/sub and guarded.
+        lines = self.run_program(REMOVE_PROGRAM, "remove", self.root, cwd=self.root / "guarded" / "sub")
         refused = 'error("filesystem: refusing to remove /, . or ..")'
         self.assertEqual(lines, [
-            "ok()", "ok()", "ok()", "false", "ok()", "false", refused, refused, refused,
+            "ok()", "ok()", "ok()", "false", "ok()", "false", refused, refused, refused, refused, refused,
             'error("filesystem: directory tree is deeper than 128 levels")', "ok()", "ok()", "ok()"])
+        self.assertEqual((self.root / "guarded" / "sub" / "keep.txt").read_text(), "keep")
         self.assertFalse((self.root / "tree").exists())
         # What the links inside the tree and the root link named is untouched.
         self.assertEqual((self.root / "outside" / "keep.txt").read_text(), "keep")
@@ -310,6 +440,25 @@ class OsBuiltins(TestCase):
         self.assertFalse((self.root / "plain.txt").exists())
         self.assertFalse((self.root / "real-dir").exists())
         self.assertTrue((self.root / "deep").is_dir())
+
+    @unittest.skipIf(os.geteuid() == 0, "root ignores the permission bits")
+    def test_remove_names_the_entry_that_failed_and_leaves_the_rest(self):
+        tree = self.root / "tree"
+        (tree / "a" / "locked").mkdir(parents=True)
+        (tree / "a" / "locked" / "f.txt").write_text("f")
+        (tree / "z.txt").write_text("z")
+        os.chmod(tree / "a" / "locked", 0o500)
+        self.addCleanup(os.chmod, tree / "a" / "locked", 0o700)
+        text = """\
+def main() -> Void
+  IO.inspect(Path.remove(System.args()[0] + "/tree", 5000))
+end
+"""
+        lines = self.run_program(text, "named", self.root)
+        self.assertEqual(lines, [
+            'error("filesystem: cannot remove path\\n  path: %s/tree/a/locked/f.txt\\n  system error: '
+            'Permission denied; errno=13")' % self.root])
+        self.assertTrue((tree / "a" / "locked" / "f.txt").exists())
 
     def test_error_texts_carry_the_path_and_the_os_reason(self):
         (self.root / "plain.txt").write_text("plain")
@@ -332,7 +481,7 @@ end
         child = self.compile_text('def main() -> Void\n  puts("child ran")\nend\n', "child")
         bytecode = self.program(PID_PROGRAM, "pid")
         vm = self.adopt(Child([vm_binary(), "--allow-run", "--", bytecode, str(vm_binary()), str(child), str(self.root)],
-                              env=vm_environment(), capture_stderr=True))
+                              env=vm_environment(), cwd=self.root, capture_stderr=True))
         lines = [vm.next_line() for _ in range(5)]
         self.assertEqual(vm.wait(), 0)
         pid = vm.process.pid

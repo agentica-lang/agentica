@@ -61,6 +61,7 @@ export def builtin_rows() -> List[Model.Builtin]
   rows = rows.concat(rows_52())
   rows = rows.concat(rows_53())
   rows = rows.concat(rows_54())
+  rows = rows.concat(rows_55())
   return rows
 end
 
@@ -517,8 +518,8 @@ def rows_6() -> List[Model.Builtin]
       implementation: "File.try_lock",
       effects: ["filesystem"],
       description: (
-        "Take an exclusive lock on the open file without waiting: ok(true) when taken, ok(false) when another " +
-        "handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
+        "Take an exclusive lock on the open regular file without waiting: ok(true) when taken, ok(false) when " +
+        "another handle or process holds it; the lock lasts until the handle is closed or the process ends; VM only."
       ),
       alternatives: [],
     ),
@@ -1751,6 +1752,23 @@ def rows_29() -> List[Model.Builtin]
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Path.rename",
+      parameters: [
+        Model.Named(name: "from", type: Types.Type.String),
+        Model.Named(name: "to", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Path.rename",
+      effects: ["filesystem"],
+      description: (
+        "Rename a file, a symbolic link (moved as a link) or a directory to a path that does not exist yet, " +
+        "atomically (renameat2 with RENAME_NOREPLACE); an existing target is an error, never replaced; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Path.resolve",
       parameters: [Model.Named(name: "path", type: Types.Type.String)],
       result: Types.Type.Result(Types.Type.String),
@@ -1760,6 +1778,11 @@ def rows_29() -> List[Model.Builtin]
       description: "Return a lexical absolute path without resolving symlinks.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_30() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.channel_close",
       parameters: [
@@ -1773,11 +1796,6 @@ def rows_29() -> List[Model.Builtin]
       description: "Close the sending side of the channel idempotently; the child reads end of input.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_30() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Process.channel_read_line",
       parameters: [
@@ -1815,6 +1833,11 @@ def rows_30() -> List[Model.Builtin]
       description: "Kill and reap the child and close its streams idempotently.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_31() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.close_stdin",
       parameters: [
@@ -1828,11 +1851,6 @@ def rows_30() -> List[Model.Builtin]
       description: "Close stdin idempotently after flushing.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_31() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Process.output",
       parameters: [
@@ -1871,6 +1889,11 @@ def rows_31() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
+  ]
+end
+
+def rows_32() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.read_available",
       parameters: [
@@ -1887,11 +1910,6 @@ def rows_31() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
-  ]
-end
-
-def rows_32() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Process.read_bytes",
       parameters: [
@@ -1919,6 +1937,11 @@ def rows_32() -> List[Model.Builtin]
       description: "Read a bounded UTF-8 line; empty EOF is an error.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_33() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.send",
       parameters: [
@@ -1947,11 +1970,6 @@ def rows_32() -> List[Model.Builtin]
       description: "Send at most 1 MiB of bytes 0..255 and flush.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_33() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Process.spawn",
       parameters: [
@@ -1966,6 +1984,11 @@ def rows_33() -> List[Model.Builtin]
       description: "Start an executable with literal arguments; requires --allow-run.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_34() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Process.spawn_captured",
       parameters: [
@@ -1998,11 +2021,6 @@ def rows_33() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
-  ]
-end
-
-def rows_34() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Process.wait",
       parameters: [
@@ -2026,6 +2044,11 @@ def rows_34() -> List[Model.Builtin]
       description: "Pick a uniform Float in 0.0 up to, but not including, 1.0.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_35() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Random.int",
       parameters: [Model.Named(name: "min", type: Types.Type.Int), Model.Named(name: "max", type: Types.Type.Int)],
@@ -2049,11 +2072,6 @@ def rows_34() -> List[Model.Builtin]
       description: "Call f on each value in order; returns nothing.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_35() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Range.first",
       parameters: [Model.Named(name: "range", type: Types.Type.Range)],
@@ -2077,6 +2095,11 @@ def rows_35() -> List[Model.Builtin]
       description: "Check whether a value is in the range.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_36() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Range.last",
       parameters: [Model.Named(name: "range", type: Types.Type.Range)],
@@ -2107,11 +2130,6 @@ def rows_35() -> List[Model.Builtin]
       description: "List the values in order; at most 1048576 values.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_36() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Result.message",
       parameters: [Model.Named(name: "r", type: Types.Type.Result(Types.Type.Var("T")))],
@@ -2132,6 +2150,11 @@ def rows_36() -> List[Model.Builtin]
       description: "Check whether a Result succeeded.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_37() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Result.unwrap!",
       parameters: [Model.Named(name: "r", type: Types.Type.Result(Types.Type.Var("T")))],
@@ -2155,11 +2178,6 @@ def rows_36() -> List[Model.Builtin]
       description: "Return success or default; both arguments run eagerly.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_37() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Set.add",
       parameters: [
@@ -2186,6 +2204,11 @@ def rows_37() -> List[Model.Builtin]
       description: "Return a new set without this element; a missing element leaves it unchanged.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_38() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Set.difference",
       parameters: [
@@ -2209,11 +2232,6 @@ def rows_37() -> List[Model.Builtin]
       description: "Check whether the set has no elements.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_38() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Set.include?",
       parameters: [
@@ -2240,6 +2258,11 @@ def rows_38() -> List[Model.Builtin]
       description: "Return the elements of a that are also in b, in the order of a.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_39() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Set.new",
       parameters: [Model.Named(name: "items", type: Types.Type.List(Types.Type.Var("T")))],
@@ -2263,11 +2286,6 @@ def rows_38() -> List[Model.Builtin]
       description: "Count set elements.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_39() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Set.subset?",
       parameters: [
@@ -2291,6 +2309,11 @@ def rows_39() -> List[Model.Builtin]
       description: "Return the elements in first-insertion order.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_40() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Set.union",
       parameters: [
@@ -2314,11 +2337,6 @@ def rows_39() -> List[Model.Builtin]
       description: "Read one character at a zero-based index; invalid indexes halt.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_40() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "String.code",
       parameters: [Model.Named(name: "c", type: Types.Type.String)],
@@ -2342,6 +2360,11 @@ def rows_40() -> List[Model.Builtin]
       description: "Check for a substring.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_41() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "String.downcase",
       parameters: [Model.Named(name: "s", type: Types.Type.String)],
@@ -2365,11 +2388,6 @@ def rows_40() -> List[Model.Builtin]
       description: "Check a suffix.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_41() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "String.from_bytes",
       parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
@@ -2400,6 +2418,11 @@ def rows_41() -> List[Model.Builtin]
       description: "Format a float.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_42() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "String.from_int",
       parameters: [Model.Named(name: "n", type: Types.Type.Int)],
@@ -2423,11 +2446,6 @@ def rows_41() -> List[Model.Builtin]
       description: "Find the first character index of part; absent text returns an error.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_42() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "String.join",
       parameters: [
@@ -2451,6 +2469,11 @@ def rows_42() -> List[Model.Builtin]
       description: "Count Unicode characters.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_43() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "String.replace",
       parameters: [
@@ -2475,11 +2498,6 @@ def rows_42() -> List[Model.Builtin]
       description: "Reverse the Unicode characters.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_43() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "String.slice",
       parameters: [
@@ -2507,6 +2525,11 @@ def rows_43() -> List[Model.Builtin]
       description: "Split text; an empty separator gives characters.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_44() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "String.starts_with?",
       parameters: [
@@ -2530,11 +2553,6 @@ def rows_43() -> List[Model.Builtin]
       description: "Parse signed decimal Float as a Result.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_44() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "String.to_float!",
       parameters: [Model.Named(name: "s", type: Types.Type.String)],
@@ -2565,6 +2583,11 @@ def rows_44() -> List[Model.Builtin]
       description: "Parse signed decimal Int; halt on invalid text or overflow.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_45() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "String.trim",
       parameters: [Model.Named(name: "s", type: Types.Type.String)],
@@ -2585,11 +2608,6 @@ def rows_44() -> List[Model.Builtin]
       description: "Uppercase text.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_45() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "System.args",
       parameters: [],
@@ -2623,6 +2641,11 @@ def rows_45() -> List[Model.Builtin]
       description: "End the run with an exit code.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_46() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "System.pid",
       parameters: [],
@@ -2633,11 +2656,6 @@ def rows_45() -> List[Model.Builtin]
       description: "Return the process id of this program; VM only.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_46() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "TCP.accept",
       parameters: [
@@ -2671,6 +2689,11 @@ def rows_46() -> List[Model.Builtin]
       description: "Close a listener idempotently.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_47() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "TCP.connect",
       parameters: [
@@ -2685,11 +2708,6 @@ def rows_46() -> List[Model.Builtin]
       description: "Connect to a TCP peer within a deadline.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_47() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "TCP.listen",
       parameters: [
@@ -2726,6 +2744,11 @@ def rows_47() -> List[Model.Builtin]
       description: "Read a bounded UTF-8 line, removing its terminator.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_48() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "TCP.recv_bytes",
       parameters: [
@@ -2740,11 +2763,6 @@ def rows_47() -> List[Model.Builtin]
       description: "Read available bytes; an empty list indicates EOF.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_48() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "TCP.send",
       parameters: [
@@ -2773,6 +2791,11 @@ def rows_48() -> List[Model.Builtin]
       description: "Send bytes 0..255 and flush, at most 1 MiB per call.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_49() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "TLS.connect",
       parameters: [
@@ -2788,11 +2811,6 @@ def rows_48() -> List[Model.Builtin]
       description: "Connect with certificate and hostname verification; empty CA uses system trust.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_49() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "TLS.listen",
       parameters: [
@@ -2808,6 +2826,11 @@ def rows_49() -> List[Model.Builtin]
       description: "Listen with a PEM certificate chain and private key.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_50() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Task.await",
       parameters: [Model.Named(name: "task", type: Types.Type.Task(Types.Type.Var("R")))],
@@ -2848,11 +2871,6 @@ def rows_49() -> List[Model.Builtin]
       description: "Count the tasks of this run that have not ended, not counting main; VM only.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_50() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Task.sleep",
       parameters: [Model.Named(name: "milliseconds", type: Types.Type.Int)],
@@ -2863,6 +2881,11 @@ def rows_50() -> List[Model.Builtin]
       description: "Suspend this task for nonnegative milliseconds; zero yields execution.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_51() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Task.spawn",
       parameters: [
@@ -2902,11 +2925,6 @@ def rows_50() -> List[Model.Builtin]
       description: "Return the text of the first task crash no await has observed, or an error.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_51() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Test.assert",
       parameters: [
@@ -2920,6 +2938,11 @@ def rows_51() -> List[Model.Builtin]
       description: "Check a condition; a failure with message is recorded on the test.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_52() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Test.eq",
       parameters: [
@@ -2955,11 +2978,6 @@ def rows_51() -> List[Model.Builtin]
       description: "Check that a Result is ok; a failure is recorded on the test.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_52() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Test.run",
       parameters: [Model.Named(name: "tests", type: Types.Type.List(Types.Type.Opaque("TestCase")))],
@@ -2970,6 +2988,11 @@ def rows_52() -> List[Model.Builtin]
       description: "Serve agentica test: list the tests or run each in its own task; never returns.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_53() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "Test.test",
       parameters: [
@@ -3006,11 +3029,6 @@ def rows_52() -> List[Model.Builtin]
       ),
       alternatives: [],
     ),
-  ]
-end
-
-def rows_53() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "Time.now_ms",
       parameters: [],
@@ -3021,6 +3039,11 @@ def rows_53() -> List[Model.Builtin]
       description: "Read wall-clock milliseconds since the Unix epoch; may jump.",
       alternatives: [],
     ),
+  ]
+end
+
+def rows_54() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "error",
       parameters: [Model.Named(name: "message", type: Types.Type.String)],
@@ -3051,11 +3074,6 @@ def rows_53() -> List[Model.Builtin]
       description: "Read a line; halt at EOF.",
       alternatives: [],
     ),
-  ]
-end
-
-def rows_54() -> List[Model.Builtin]
-  return [
     Model.Builtin(
       name: "ok",
       parameters: [Model.Named(name: "value", type: Types.Type.Var("T"))],
@@ -3077,6 +3095,11 @@ def rows_54() -> List[Model.Builtin]
         ),
       ],
     ),
+  ]
+end
+
+def rows_55() -> List[Model.Builtin]
+  return [
     Model.Builtin(
       name: "print",
       parameters: [Model.Named(name: "value", type: Types.Type.Var("T"))],

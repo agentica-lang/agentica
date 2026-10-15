@@ -83,7 +83,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references
   main.c          # CLI, the end of the run and the exit code (references/vm-io.md)
   loop.c          # libuv event loop and resource registry (references/vm-io.md)
   files.c         # File, Dir and Path builtins (Linux) (references/vm-io.md)
-  tree.c          # agc_remove_tree for Path.remove: a tree walk that never follows a link (references/vm-io.md)
+  tree.c          # agc_tree_refused and agc_remove_tree for Path.remove: a tree walk that never follows a link (references/vm-io.md)
   input.c         # the only stdin reader (references/vm-io.md)
   output.c        # stdout and stderr writers (references/vm-io.md)
   duplex.c        # child channel (fd 3) and Process.spawn_channel (references/vm-net.md)

@@ -1,9 +1,12 @@
 /*
  * The File, Dir and Path builtins (Linux only): the argument checks, host
  * paths, and file handles with their read and write buffers, including the
- * owner-only creates, lstat, the handle lock and the removals. Work runs on the
+ * owner-only creates, lstat, the handle lock, the removals and the
+ * no-replace rename. Work runs on the
  * libuv pool. Service layer. Design: docs/vm/02-reference-behavior.md §2.8.
  */
+/* glibc declares renameat2 and RENAME_NOREPLACE only for _GNU_SOURCE. */
+#define _GNU_SOURCE
 #include "services.h"
 
 #ifdef __linux__
@@ -29,13 +32,13 @@
 
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
-  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK
+  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
-  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME
 } op_kind;
 
 typedef struct {
@@ -49,7 +52,7 @@ typedef struct {
 typedef struct {
   op_kind kind;
   const agc_runtime *rt;
-  char *path;
+  char *path, *to;
   file_state *st;
   uint8_t *in;
   size_t in_len;
@@ -101,6 +104,7 @@ static const char bad_timeout[] = "filesystem: timeout must be positive millisec
 static const char too_deep[] = "filesystem: directory tree is deeper than 128 levels";
 static const char refused_path[] = "filesystem: refusing to remove /, . or ..";
 static const char not_lockable[] = "filesystem: only a regular file can be locked";
+static const char rename_who[] = "rename-file-or-directory";
 static const char complete_who[] = "path->complete-path";
 static const char complete_expected[] = "(or/c path-string? path-for-some-system?)";
 
@@ -309,6 +313,7 @@ static void free_state(file_state *st) {
 
 static void free_op(op *o) {
   free(o->path);
+  free(o->to);
   free(o->in);
   free(o->out);
   free(o);
@@ -713,34 +718,60 @@ static void work_mkdir_private(op *o) {
 
 /* Whatever is at the path goes, as rm -rf would remove it but never following a link: unlink takes a file or a link
    itself, and only a directory (EISDIR) starts the tree walk, which opens it with O_NOFOLLOW. A missing path is
-   success, as with unlink(missing_ok=True). */
+   success, as with unlink(missing_ok=True). "file/child" is ENOTDIR and stays an error: a link with a trailing
+   slash ("link/") gives the same error and must never report ok. When the walk fails inside the tree, the error
+   names the entry that failed, not the root. */
 static void work_remove(op *o) {
-  if (unlink(o->path) == 0 || errno == ENOENT) return;
+  int rc;
+  do {
+    rc = unlink(o->path);
+  } while (rc != 0 && errno == EINTR);
+  if (rc == 0 || errno == ENOENT) return;
   if (errno != EISDIR) {
     fail_op(o, FS_REMOVE, errno);
     return;
   }
-  int rc = agc_remove_tree(o->path);
+  char *failed;
+  rc = agc_remove_tree(o->path, &failed);
   if (rc == 0 || rc == ENOENT) return;
-  if (rc == AGC_TREE_TOO_DEEP)
+  if (rc == AGC_TREE_TOO_DEEP) {
     fail_op(o, FS_TREE_DEEP, 0);
-  else if (rc == AGC_TREE_REFUSED)
+  } else if (rc == AGC_TREE_REFUSED) {
     fail_op(o, FS_REFUSED, 0);
-  else
+  } else {
     fail_op(o, FS_REMOVE, rc);
+    if (failed) {
+      free(o->path);
+      o->path = failed;
+    }
+  }
 }
 
 /* flock ties the lock to the open file description, which is the handle's descriptor: closing the handle
-   or ending the process releases it, and descriptors are close-on-exec, so no child keeps it. */
+   or ending the process releases it, and descriptors are close-on-exec, so no child keeps it. Only a regular
+   file locks: a device or a pipe would take the lock too (or fail in ways that say little), and nothing could
+   contend for it. LOCK_NB never blocks, so it is never interrupted. */
 static void work_try_lock(op *o) {
-  int rc;
-  do {
-    rc = flock(o->st->fd, LOCK_EX | LOCK_NB);
-  } while (rc != 0 && errno == EINTR);
-  if (rc == 0)
+  struct stat info;
+  if (fstat(o->st->fd, &info) != 0) {
+    fail_op(o, FS_LOCK, errno);
+    return;
+  }
+  if (!S_ISREG(info.st_mode)) {
+    fail_op(o, FS_NOT_LOCKABLE, 0);
+    return;
+  }
+  if (flock(o->st->fd, LOCK_EX | LOCK_NB) == 0)
     o->locked = true;
   else if (errno != EWOULDBLOCK)
     fail_op(o, FS_LOCK, errno);
+}
+
+/* One renameat2 with RENAME_NOREPLACE: an existing target is EEXIST and is never overwritten (plain rename
+   replaces a file and an empty directory), and a final link is moved as a link, as rename never follows one. A file
+   system without RENAME_NOREPLACE answers EINVAL, which is reported, not worked around with a racy check. */
+static void work_rename(op *o) {
+  if (renameat2(AT_FDCWD, o->path, AT_FDCWD, o->to, RENAME_NOREPLACE) != 0) fail_op(o, FS_RENAME, errno);
 }
 
 static void work_open(op *o) {
@@ -901,6 +932,7 @@ static void work(void *data) {
     case OP_MKDIR_PRIVATE: work_mkdir_private(o); break;
     case OP_REMOVE: work_remove(o); break;
     case OP_TRY_LOCK: work_try_lock(o); break;
+    case OP_RENAME: work_rename(o); break;
     case OP_OPEN_READ:
     case OP_OPEN_WRITE:
     case OP_OPEN_CREATE:
@@ -1055,6 +1087,16 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_TREE_DEEP: return error_of(too_deep);
     case FS_REFUSED: return error_of(refused_path);
     case FS_LOCK: return agc_system_error(vm, "filesystem: cannot lock file", o->err);
+    case FS_NOT_LOCKABLE: return error_of(not_lockable);
+    case FS_RENAME: {
+      text t = {0};
+      puts_text(&t, "filesystem: cannot rename path\n  from: ");
+      put(&t, o->path, path_len);
+      puts_text(&t, "\n  to: ");
+      put(&t, o->to, strlen(o->to));
+      put_system_error(vm, &t, o->err);
+      return error_text(&t);
+    }
     default:
       return agc_system_error(vm, o->status == FS_WRITE ? "error writing to stream port" : "error reading from stream port",
                               o->err);
@@ -1305,6 +1347,20 @@ static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
                  "path-string?");
 }
 
+static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
+  files_on(vm, span);
+  const agc_string *from = agc_as_string(vm, args[0]);
+  const agc_string *to = agc_as_string(vm, args[1]);
+  int64_t timeout = agc_as_int(vm, args[2]);
+  if (timeout <= 0) return error_of(bad_timeout);
+  if (!path_string(from)) return contract_error(rename_who, "path-string?", from);
+  if (!path_string(to)) return contract_error(rename_who, "path-string?", to);
+  op *o = new_op(vm, OP_RENAME);
+  o->path = agc_host_path(vm, from);
+  o->to = agc_host_path(vm, to);
+  return start(vm, o, agc_void(), timeout);
+}
+
 static op *open_op(agc_vm *vm, op_kind kind, const agc_string *path) {
   op *o = new_op(vm, kind);
   o->path = agc_host_path(vm, path);
@@ -1479,7 +1535,8 @@ static agc_value builtin_try_lock(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t timeout = agc_as_int(vm, args[1]);
   file_state *st = held_state(vm, args[0], &timeout, &failure);
   if (!st) return failure;
-  /* A pipe, FIFO or device waits on the loop, which this one-shot job does not. */
+  /* A pipe or FIFO waits on the loop, which this one-shot job does not; any other kind that is not a regular file
+     (a device that never waits) is refused in the job, after fstat. */
   if (st->poller) return error_of(not_lockable);
   op *o = new_op(vm, OP_TRY_LOCK);
   o->st = st;
@@ -1721,6 +1778,7 @@ const agc_builtin agc_file_builtins[] = {
   {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
