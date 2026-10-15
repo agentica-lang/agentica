@@ -19,6 +19,61 @@ struct DocAt
   pos: Int
 end
 
+struct BlockParamsAt
+  params: List[Ast.BlockParam]
+  pos: Int
+  ids: Int
+end
+
+struct NamedArgsAt
+  nodes: List[Ast.NamedArg]
+  pos: Int
+  ids: Int
+end
+
+struct MapEntryAt
+  node: Ast.MapEntry
+  pos: Int
+  ids: Int
+end
+
+struct IfBranchAt
+  node: Ast.IfBranch
+  pos: Int
+  ids: Int
+end
+
+struct ParamsAt
+  nodes: List[Ast.Param]
+  pos: Int
+  ids: Int
+end
+
+struct FieldAt
+  node: Ast.FieldDecl
+  pos: Int
+  ids: Int
+end
+
+struct VariantAt
+  node: Ast.EnumVariant
+  pos: Int
+  ids: Int
+end
+
+struct TypeParametersAt
+  names: List[String]
+  pos: Int
+end
+
+## Parses the tokens of the lexer into a Program, or returns the first PARSE- diagnostic. It stops at the first error and never fails otherwise. The nodes are numbered in post-order from first_id (see ast.agc), so that the modules of one program can share one numbering: start the next file at Ast.next_free_id(program).
+export def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.Program]
+  case parse_program(Base.make_env(tokens), first_id)
+    ok(program) -> return Diag.Outcome.Done(program)
+    error(text) -> return Diag.Outcome.Failed(Base.unpack(text))
+  end
+end
+
 def brace_help(form: String) -> String
   return "blocks have no braces: write \"" + form + "\" ... \"end\""
 end
@@ -349,12 +404,6 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
   return ok(BlockParamsAt(params: params, pos: cursor, ids: next_id))
 end
 
-struct BlockParamsAt
-  params: List[Ast.BlockParam]
-  pos: Int
-  ids: Int
-end
-
 # do |params| body end. The body allows blocks again and is a block body (depth 1), where `end` may follow a statement on the same line.
 def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   cursor = pos + 1
@@ -411,12 +460,6 @@ def parse_expression_list(e: Base.Env, pos: Int, ids: Int, terminator: String) -
   return ok(Base.ExprsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
-struct NamedArgsAt
-  nodes: List[Ast.NamedArg]
-  pos: Int
-  ids: Int
-end
-
 def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt]
   nodes: List[Ast.NamedArg] = []
   if e.tokens[pos].kind == "right-paren"
@@ -449,12 +492,6 @@ def parse_list_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   close = try Base.expect(e, elements.pos, "right-bracket", "\"]\"", false)
   node = Ast.Expr.ListLit(Ast.ListLit(id: elements.ids, elements: elements.nodes, span: Base.span_from(e, pos, close)))
   return expr_at(node, close, elements.ids)
-end
-
-struct MapEntryAt
-  node: Ast.MapEntry
-  pos: Int
-  ids: Int
 end
 
 def parse_map_entry(e: Base.Env, pos: Int, ids: Int, block_form: String) -> Result[MapEntryAt]
@@ -926,12 +963,6 @@ def parse_if_branch(e: Base.Env, pos: Int, ids: Int) -> Result[IfBranchAt]
   return ok(IfBranchAt(node: node, pos: body.pos, ids: body.ids + 1))
 end
 
-struct IfBranchAt
-  node: Ast.IfBranch
-  pos: Int
-  ids: Int
-end
-
 def parse_if(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   branches: List[Ast.IfBranch] = []
   cursor = pos
@@ -1059,12 +1090,6 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   return stmt_at(Ast.Stmt.Case(Ast.CaseStmt(id: next_id, value: value.node, arms: arms, span: Base.span_from(e, pos, stop))), stop, next_id)
 end
 
-struct ParamsAt
-  nodes: List[Ast.Param]
-  pos: Int
-  ids: Int
-end
-
 def parse_parameters(e: Base.Env, pos: Int, ids: Int) -> Result[ParamsAt]
   nodes: List[Ast.Param] = []
   if e.tokens[pos].kind == "right-paren"
@@ -1121,18 +1146,6 @@ def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String])
   stop = try Base.expect(e, type.pos, "NL", "a newline after the field", false)
   node = Ast.FieldDecl(id: type.ids, name: e.tokens[pos].lexeme, type: type.node, doc: doc, span: Base.span_from(e, pos, stop))
   return ok(FieldAt(node: node, pos: stop, ids: type.ids + 1))
-end
-
-struct FieldAt
-  node: Ast.FieldDecl
-  pos: Int
-  ids: Int
-end
-
-struct VariantAt
-  node: Ast.EnumVariant
-  pos: Int
-  ids: Int
 end
 
 def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[VariantAt]
@@ -1232,11 +1245,6 @@ def parse_type_parameters(e: Base.Env, pos: Int) -> Result[TypeParametersAt]
   end
   cursor = try Base.expect(e, cursor, "right-bracket", "]", false)
   return ok(TypeParametersAt(names: names, pos: cursor))
-end
-
-struct TypeParametersAt
-  names: List[String]
-  pos: Int
 end
 
 def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
@@ -1371,13 +1379,5 @@ def module_doc_absent?(doc: Ast.Optional[String]) -> Bool
   case doc
     Ast.Optional.Absent -> return true
     _ -> return false
-  end
-end
-
-## Parses the tokens of the lexer into a Program, or returns the first PARSE- diagnostic. It stops at the first error and never fails otherwise. The nodes are numbered in post-order from first_id (see ast.agc), so that the modules of one program can share one numbering: start the next file at Ast.next_free_id(program).
-export def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.Program]
-  case parse_program(Base.make_env(tokens), first_id)
-    ok(program) -> return Diag.Outcome.Done(program)
-    error(text) -> return Diag.Outcome.Failed(Base.unpack(text))
   end
 end

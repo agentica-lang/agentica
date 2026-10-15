@@ -38,11 +38,6 @@ export struct Program
   span: Source.Span
 end
 
-## The first id the next file can use: one more than the id of the Program.
-export def next_free_id(program: Program) -> Int
-  return program.id + 1
-end
-
 ## A top-level declaration.
 export enum Decl
   Import(ImportDecl)
@@ -437,4 +432,9 @@ export struct TypeName
   id: Int
   name: String
   span: Source.Span
+end
+
+## The first id the next file can use: one more than the id of the Program.
+export def next_free_id(program: Program) -> Int
+  return program.id + 1
 end

@@ -7,6 +7,23 @@ import "parser" as Parser
 import "source" as Source
 import "text" as Text
 
+## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node per line: `role: kind #id span attributes`, children indented by two spaces. tests/frontend-parser-common.rkt prints the same text from the Racket tree.
+export def parse_text(text: String) -> String
+  return parse_text_from(text, 0)
+end
+
+## Like parse_text, with the ids of the nodes starting at first_id.
+export def parse_text_from(text: String, first_id: Int) -> String
+  case Lexer.lex(text)
+    Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
+    Diag.Outcome.Done(tokens) ->
+      case Parser.parse(tokens, first_id)
+        Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
+        Diag.Outcome.Done(program) -> return print_program(program).join("\n")
+      end
+  end
+end
+
 # The first line of a node. The root has no role.
 def head(indent: String, role: String, kind: String, id: Int, span: Source.Span, attrs: String) -> String
   label = ""
@@ -309,21 +326,4 @@ def print_program(program: Ast.Program) -> List[String]
     lines = print_decl(lines, "  ", "declaration", decl)
   end
   return lines
-end
-
-## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node per line: `role: kind #id span attributes`, children indented by two spaces. tests/frontend-parser-common.rkt prints the same text from the Racket tree.
-export def parse_text(text: String) -> String
-  return parse_text_from(text, 0)
-end
-
-## Like parse_text, with the ids of the nodes starting at first_id.
-export def parse_text_from(text: String, first_id: Int) -> String
-  case Lexer.lex(text)
-    Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
-    Diag.Outcome.Done(tokens) ->
-      case Parser.parse(tokens, first_id)
-        Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
-        Diag.Outcome.Done(program) -> return print_program(program).join("\n")
-      end
-  end
 end

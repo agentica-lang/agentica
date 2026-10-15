@@ -99,10 +99,6 @@ export def kind_at(e: Env, index: Int) -> String
   return e.tokens[e.size - 1].kind
 end
 
-def is_kind(e: Env, pos: Int, kind: String) -> Bool
-  return e.tokens[pos].kind == kind
-end
-
 ## The span from the start of the token at start to the end of the last token before pos, that is, the last consumed token.
 export def span_from(e: Env, start: Int, pos: Int) -> Source.Span
   return Source.Span(start: e.tokens[start].span.start, stop: e.tokens[pos - 1].span.stop)
@@ -120,21 +116,6 @@ export def describe(token: Tokens.Token) -> String
     return "\"}\""
   end
   return Unicode.written_text(token.lexeme)
-end
-
-# A Result error is a String, so the diagnostic travels packed: the code, the six numbers of the span, a help flag, the length of the message, then the message followed by the help.
-def pack(code: String, message: String, span: Source.Span, help: Diag.Help) -> String
-  numbers = [span.start.offset, span.start.line, span.start.column, span.stop.offset, span.stop.line, span.stop.column]
-  fields = numbers.map do |number| number.to_s end
-  rest = message
-  flag = "0"
-  case help
-    Diag.Help.Hint(text) ->
-      rest = message + text
-      flag = "1"
-    Diag.Help.NoHelp -> flag = "0"
-  end
-  return code + "\n" + fields.join("\n") + "\n" + flag + "\n" + message.length.to_s + "\n" + rest
 end
 
 ## Reads back the failure that pack wrote.
@@ -167,10 +148,6 @@ export def bail_span(code: String, message: String, span: Source.Span, help: Dia
   return pack(code, message, span, help)
 end
 
-def detached_doc(token: Tokens.Token) -> String
-  return pack("PARSE-DETACHED-DOC", "a doc comment must be followed by a declaration, field or variant on the next line", token.span, hint("put the doc block directly above the declaration, field or variant it documents; use # for a note that documents nothing"))
-end
-
 ## The failure for the token at at. A doc comment token always gives PARSE-DETACHED-DOC, except for PARSE-MISSING-BLANK-LINE, as in src/parser.rkt.
 export def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help) -> String
   token = e.tokens[at]
@@ -200,11 +177,6 @@ export def found(e: Env, at: Int, expected: String) -> String
   return unexpected(e, at, "expected " + expected + ", found " + describe(e.tokens[at]))
 end
 
-# The PARSE-TOO-DEEP failure at the token at pos.
-def too_deep(e: Env, pos: Int) -> String
-  return bail(e, pos, "PARSE-TOO-DEEP", "nesting is deeper than " + nesting_limit().to_s + " levels", hint("split the code into smaller functions or simpler expressions"))
-end
-
 ## The context `levels` deeper than e; PARSE-TOO-DEEP when that passes nesting_limit. enter adds one level, deepen adds the k links of a chain so far.
 export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
   if e.nesting + levels > nesting_limit()
@@ -221,10 +193,6 @@ end
 ## A failure for a state the grammar functions cannot reach, so that no code path needs a bare string error: PARSE-UNEXPECTED-TOKEN at the token at pos.
 export def impossible(e: Env, pos: Int) -> String
   return unexpected(e, pos, "the parser cannot continue at " + describe(e.tokens[pos]))
-end
-
-def decorated?(lexeme: String) -> Bool
-  return lexeme.ends_with?("?") or lexeme.ends_with?("!")
 end
 
 ## The position after the token at pos when it has the kind. A name that ends in ? or ! is refused unless suffix is true, which only function and method names allow.
@@ -291,6 +259,73 @@ export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
   end
   node = Ast.TypeRef(id: next_id, name: name, args: args, span: span_from(e, pos, cursor))
   return ok(TypeAt(node: node, pos: cursor, ids: next_id + 1))
+end
+
+## Parses the pattern of a case arm.
+export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
+  token = e.tokens[pos]
+  kind = token.kind
+  if kind == "name"
+    return parse_name_pattern(e, pos, ids)
+  end
+  if kind == "integer" or kind == "float" or kind == "string"
+    return literal_pattern(e, ids, literal_value(token), pos, pos + 1)
+  end
+  if kind == "true" or kind == "false"
+    return literal_pattern(e, ids, Ast.LitValue.Flag(kind == "true"), pos, pos + 1)
+  end
+  if kind == "nil"
+    return literal_pattern(e, ids, Ast.LitValue.Nothing, pos, pos + 1)
+  end
+  if kind == "minus"
+    number = e.tokens[pos + 1]
+    if number.kind != "integer" and number.kind != "float"
+      return error(unexpected(e, pos + 1, "expected a number after - in a pattern"))
+    end
+    return literal_pattern(e, ids, negated(literal_value(number)), pos, pos + 2)
+  end
+  if kind == "type-name"
+    return parse_variant_pattern(e, pos, ids)
+  end
+  return error(unexpected(e, pos, "expected a pattern"))
+end
+
+## Whether the tokens at pos start a case arm, that is, a pattern followed by ->. A case body ends there, because arms have no closing token.
+export def case_arm_start?(e: Env, pos: Int) -> Bool
+  stop = pattern_end(e, pos)
+  return stop >= 0 and kind_at(e, stop) == "arrow"
+end
+
+def is_kind(e: Env, pos: Int, kind: String) -> Bool
+  return e.tokens[pos].kind == kind
+end
+
+# A Result error is a String, so the diagnostic travels packed: the code, the six numbers of the span, a help flag, the length of the message, then the message followed by the help.
+def pack(code: String, message: String, span: Source.Span, help: Diag.Help) -> String
+  numbers = [span.start.offset, span.start.line, span.start.column, span.stop.offset, span.stop.line, span.stop.column]
+  fields = numbers.map do |number| number.to_s end
+  rest = message
+  flag = "0"
+  case help
+    Diag.Help.Hint(text) ->
+      rest = message + text
+      flag = "1"
+    Diag.Help.NoHelp -> flag = "0"
+  end
+  return code + "\n" + fields.join("\n") + "\n" + flag + "\n" + message.length.to_s + "\n" + rest
+end
+
+def detached_doc(token: Tokens.Token) -> String
+  return pack("PARSE-DETACHED-DOC", "a doc comment must be followed by a declaration, field or variant on the next line", token.span, hint("put the doc block directly above the declaration, field or variant it documents; use # for a note that documents nothing"))
+end
+
+# The PARSE-TOO-DEEP failure at the token at pos.
+def too_deep(e: Env, pos: Int) -> String
+  return bail(e, pos, "PARSE-TOO-DEEP", "nesting is deeper than " + nesting_limit().to_s + " levels", hint("split the code into smaller functions or simpler expressions"))
+end
+
+def decorated?(lexeme: String) -> Bool
+  return lexeme.ends_with?("?") or lexeme.ends_with?("!")
 end
 
 # A binding of `_` is Absent, as the Racket parser keeps #f.
@@ -389,35 +424,6 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   return ok(PatternAt(node: node, pos: cursor, ids: ids + 1))
 end
 
-## Parses the pattern of a case arm.
-export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
-  token = e.tokens[pos]
-  kind = token.kind
-  if kind == "name"
-    return parse_name_pattern(e, pos, ids)
-  end
-  if kind == "integer" or kind == "float" or kind == "string"
-    return literal_pattern(e, ids, literal_value(token), pos, pos + 1)
-  end
-  if kind == "true" or kind == "false"
-    return literal_pattern(e, ids, Ast.LitValue.Flag(kind == "true"), pos, pos + 1)
-  end
-  if kind == "nil"
-    return literal_pattern(e, ids, Ast.LitValue.Nothing, pos, pos + 1)
-  end
-  if kind == "minus"
-    number = e.tokens[pos + 1]
-    if number.kind != "integer" and number.kind != "float"
-      return error(unexpected(e, pos + 1, "expected a number after - in a pattern"))
-    end
-    return literal_pattern(e, ids, negated(literal_value(number)), pos, pos + 2)
-  end
-  if kind == "type-name"
-    return parse_variant_pattern(e, pos, ids)
-  end
-  return error(unexpected(e, pos, "expected a pattern"))
-end
-
 # The case_arm_start? helpers look ahead without consuming, like case-arm-start? of src/parser.rkt: they return the index after the pattern, or -1.
 def binders_end(e: Env, at: Int) -> Int
   cursor = at + 1
@@ -478,10 +484,4 @@ def pattern_end(e: Env, start: Int) -> Int
     return variant_end(e, start)
   end
   return -1
-end
-
-## Whether the tokens at pos start a case arm, that is, a pattern followed by ->. A case body ends there, because arms have no closing token.
-export def case_arm_start?(e: Env, pos: Int) -> Bool
-  stop = pattern_end(e, pos)
-  return stop >= 0 and kind_at(e, stop) == "arrow"
 end
