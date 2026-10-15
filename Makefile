@@ -138,7 +138,7 @@ goldens: build vm
 # comparisons of the tests/frontend-*-test.rkt slow tiers, frozen for tests/test_frontend_*.py). Needs Racket, so it ends with
 # the Racket stages (docs/future/35-self-hosting.md 35.10, phase 3). Slow (about five minutes); one stage or some:
 #   make frontend-freeze FREEZE_STAGES="lexer parser"
-FREEZE_STAGES ?= lexer parser modules check lower bytecode
+FREEZE_STAGES ?= lexer parser modules check lower bytecode catalog
 frontend-freeze: build vm
 	for stage in $(FREEZE_STAGES); do racket tests/frontend-$$stage-freeze.rkt || exit 1; done
 

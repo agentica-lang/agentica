@@ -11,6 +11,7 @@
          "frontend-modules-common.rkt"
          "../src/diagnostic.rkt"
          "../src/modules.rkt"
+         (only-in "../src/stdlib.rkt" stdlib-sources)
          (prefix-in test: "frontend-modules-test.rkt"))
 
 (define-runtime-path fixtures "fixtures/frontend/modules")
@@ -273,7 +274,15 @@
      (write-tree dir (list (cons "flat.agc" text)))
      (write-manifest "modules/flat.sha256" (list (list "flat" (link-tree dir "flat.agc") text))))))
 
+;; The std/ modules the Racket front end embeds, which stdlib/ must hold exactly.
+(define (write-registry)
+  (write-frozen "modules/stdlib-registry.expected"
+                (string-append* (for/list ([name (in-list (sort (hash-keys stdlib-sources) string<?))])
+                                  (string-append name "\n"))))
+  (printf "modules/stdlib-registry.expected\n"))
+
 (module+ main
+  (write-registry)
   (write-ids)
   (write-above-and-symlink)
   (write-invalid-utf8)

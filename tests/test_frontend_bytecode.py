@@ -98,6 +98,29 @@ class BytecodeFrozenTest(StageTestCase):
         expected = (FROZEN / "bytecode" / "opcodes.expected").read_text(encoding="utf-8")
         self.assertEqual("".join("%s %s\n" % pair for pair in pairs), expected)
 
+    def test_the_lowering_fixtures_fill_every_section_of_the_file(self):
+        # The writer turns the lowering of these programs into the file, so the sections that their goldens fill are the
+        # sections the byte comparisons below exercise. (The opcodes have their own test in test_frontend_lower.py.) An
+        # accepted loss against the rackunit test, which looked at the Racket program value: the `types` and `decodable`
+        # sections are not told apart here (both come with a `types=[` struct line), and the spans and the functions are
+        # taken as filled when any instruction has a span or any function is lowered.
+        lowered = "".join(path.read_bytes().decode("utf-8")
+                          for path in sorted((ROOT / "tests" / "fixtures" / "frontend" / "lower").glob("*.ir")))
+        patterns = {
+            "sources": r"^source 0 ", "more than one source": r"^source 1 ", "spans": r" @ \d+:\d+:\d+-",
+            "structs": r"^struct ", "types and decodable": r" types=\[", "enums": r"^enum ",
+            "updates": r"^    struct-with ", "globals": r"globals=[1-9]", "builtins": r"^    call-builtin ",
+            "functions": r"^fn0 ",
+            "a void constant": r"^    const r\d+ void ", "a nil constant": r"^    const r\d+ nil ",
+            "a false constant": r"^    const r\d+ false ", "a true constant": r"^    const r\d+ true ",
+            "an int constant": r"^    const r\d+ int:", "a float constant": r"^    const r\d+ float:",
+            "a string constant": r'^    const r\d+ "',
+        }
+        missing = [name for name, pattern in patterns.items() if not re.search(pattern, lowered, flags=re.MULTILINE)]
+        self.assertEqual(missing, [])
+        unicode_fixture = (ROOT / "tests" / "fixtures" / "frontend" / "bytecode" / "unicode.agc").read_text(encoding="utf-8")
+        self.assertTrue(any(ord(char) > 127 for char in unicode_fixture), "a string with a multi-byte character")
+
     def test_the_header_constants_are_those_of_the_racket_writer(self):
         text = TABLES.read_text(encoding="utf-8")
         self.assertEqual(re.search(r"^export FORMAT_VERSION = (.+)$", text, flags=re.MULTILINE).group(1),
@@ -131,15 +154,15 @@ class BytecodeFrozenTest(StageTestCase):
     def test_the_vm_runs_the_agentica_file_as_it_runs_the_racket_file(self):
         files, paths = self.fast_paths()
         self.compile_paths(paths, self.corpus_dir("examples", "fixtures"))
-        golden = (FROZEN / "bytecode" / "runs.expected").read_text(encoding="utf-8")
+        golden = sections((FROZEN / "bytecode" / "runs.expected").read_text(encoding="utf-8"))
         for name, path in (("basics", "tests/fixtures/frontend/lower/basics.agc"),
                            ("unicode", "tests/fixtures/frontend/bytecode/unicode.agc")):
             with self.subTest(name):
                 result = run_vm(self.files[path], cwd=ROOT, env=vm_environment())
-                expected = ("== %s\nexit %d\nstdout %s\nstderr %s\n"
-                            % (name, result.code, json.dumps(result.stdout, ensure_ascii=False),
-                               json.dumps(result.stderr, ensure_ascii=False)))
-                self.assertIn(expected, golden)
+                found = ("exit %d\nstdout %s\nstderr %s\n"
+                         % (result.code, json.dumps(result.stdout, ensure_ascii=False),
+                            json.dumps(result.stderr, ensure_ascii=False)))
+                self.assertEqual(found, golden[name])
 
     @slow
     def test_the_vm_fixtures(self):

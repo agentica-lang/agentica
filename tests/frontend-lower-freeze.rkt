@@ -6,6 +6,7 @@
 ; The inputs that are a formula are rebuilt by the Python test; the manifests hold their hashes.
 
 (require (only-in "frontend-lower-common.rkt" lower-text deep-cases generated-program)
+         (only-in "../src/lower.rkt" vm-builtins)
          "frontend-freeze-common.rkt")
 
 (define (output-of path) (string-append (lower-text path) "\n"))
@@ -43,7 +44,14 @@
      (write-manifest "lower/generated.sha256"
                      (program-entries dir "generated" (list (cons "generated" (generated-program 300))) output-of)))))
 
+;; The builtins the Racket lowering sends to the VM, which VM_BUILTINS of compiler/lower_tables.agc must list.
+(define (write-vm-builtins)
+  (write-frozen "lower/vm-builtins.expected"
+                (string-append* (for/list ([name (in-list (sort vm-builtins string<?))]) (string-append name "\n"))))
+  (printf "lower/vm-builtins.expected\n"))
+
 (module+ main
+  (write-vm-builtins)
   (write-corpus)
   (write-programs)
   (write-deep)

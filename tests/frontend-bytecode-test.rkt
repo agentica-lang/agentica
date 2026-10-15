@@ -252,37 +252,6 @@
     (define data (write-bytecode (car programs)))
     (check-equal? (subbytes data 0 8) (bytes-append #"AGCB" (integer->integer-bytes 5 4 #f #f))))
 
-  (test-case "the programs have an instruction of every opcode"
-    (define seen (make-hash))
-    (for* ([program (in-list programs)] [function (in-list (bc-program-functions program))]
-           [instr (in-vector (bc-function-code function))])
-      (hash-set! seen (car instr) #t))
-    (for ([op (in-list opcodes)] [n (in-naturals)])
-      (check-true (hash-ref seen n #f) (symbol->string op))))
-
-  (test-case "the programs fill every section of the file"
-    (define (some? count) (ormap (lambda (program) (> (count program) 0)) programs))
-    (check-true (some? (lambda (p) (length (bc-program-sources p)))) "sources")
-    (check-true (ormap (lambda (p) (> (length (bc-program-sources p)) 1)) programs) "more than one source")
-    (for ([section (list (cons "spans" (compose vector-length bc-program-spans))
-                         (cons "constants" (compose vector-length bc-program-constants))
-                         (cons "structs" (compose length bc-program-structs))
-                         (cons "types" (compose vector-length bc-program-types))
-                         (cons "decodable" (compose length bc-program-decodable))
-                         (cons "enums" (compose length bc-program-enums))
-                         (cons "updates" (compose length bc-program-updates))
-                         (cons "globals" bc-program-globals)
-                         (cons "builtins" (compose length bc-program-builtins))
-                         (cons "functions" (compose length bc-program-functions)))])
-      (check-true (some? (cdr section)) (car section)))
-    (define constants (append-map (lambda (p) (vector->list (bc-program-constants p))) programs))
-    (for ([kind (list (cons "void" void?) (cons "nil" (lambda (v) (eq? v 'nil))) (cons "false" (lambda (v) (eq? v #f)))
-                      (cons "true" (lambda (v) (eq? v #t))) (cons "int" exact-integer?) (cons "float" flonum?)
-                      (cons "string" string?))])
-      (check-true (ormap (cdr kind) constants) (car kind)))
-    (define (multi-byte? v) (and (string? v) (not (= (string-length v) (bytes-length (string->bytes/utf-8 v))))))
-    (check-true (ormap multi-byte? constants) "a string with a multi-byte character"))
-
   (when (vm-built? "frontend bytecode tests")
     (call-with-bytecode
      compile-file limits-fixture

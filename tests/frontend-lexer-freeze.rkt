@@ -7,6 +7,7 @@
 (require "frontend-freeze-common.rkt"
          "frontend-lexer-common.rkt"
          "../src/source-file.rkt"
+         (only-in "../tools/gen-lexer-unicode.rkt" graphic-ranges)
          (only-in "frontend-lexer-test.rkt" generated-cases))
 
 (define corpus-prefixes '("examples/" "stdlib/" "tests/fixtures/vm/"))
@@ -51,7 +52,16 @@
       (printf "lexer/invalid-utf8.expected\n"))
     (lambda () (delete-file file))))
 
+;; The ranges of code points the Racket lexer takes for graphic characters (char-graphic? and not char-blank?), which
+;; compiler/unicode_table.agc must list: low and high of each range, one line each.
+(define (write-graphic-ranges)
+  (write-frozen "lexer/graphic-ranges.expected"
+                (string-append* (for/list ([range (in-list (graphic-ranges))])
+                                  (format "~a ~a\n" (car range) (cdr range)))))
+  (printf "lexer/graphic-ranges.expected\n"))
+
 (module+ main
+  (write-graphic-ranges)
   (write-corpus)
   (write-generated)
   (write-nested)

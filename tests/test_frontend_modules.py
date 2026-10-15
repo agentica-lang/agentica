@@ -11,7 +11,7 @@ import shutil
 import time
 from pathlib import Path
 
-from tests.agentica_test import FIXTURES, slow
+from tests.agentica_test import FIXTURES, ROOT, slow
 from tests.frontend_cases import nested_chains, repeat
 from tests.frontend_support import (
     FROZEN, StageTestCase, load_corpus, load_json, sections, tree_files, tree_listing, write_files)
@@ -166,9 +166,13 @@ class ModulesFrozenTest(StageTestCase):
     ENTRY = "link.agc"
     STDLIB = True
 
-    def link(self, specs, cwd, mode=None):
-        """Link each (env, root path) spec; gives the output of each by its root path."""
-        arguments = ["--stdlib=%s" % self.stdlib]
+    def link(self, specs, cwd, mode=None, stdlib=None):
+        """Link each (env, root path) spec; gives the output of each by its root path.
+
+        The std/ modules come from the stdlib/ of the freeze, or from `stdlib` (the live folder, for the goldens that
+        track it).
+        """
+        arguments = ["--stdlib=%s" % (stdlib or self.stdlib)]
         if mode:
             arguments.append(mode)
         for env, root in specs:
@@ -208,6 +212,24 @@ class ModulesFrozenTest(StageTestCase):
                     key, value = line.split("=", 1)
                     env[key] = value.replace("@/", str(destination.resolve()) + "/")
         return env
+
+    def fixture_names(self):
+        return sorted(path.name for path in MODULE_FIXTURES.iterdir() if path.is_dir())
+
+    def test_every_fixture_has_a_golden_and_no_golden_is_left_over(self):
+        self.fixture_goldens(MODULE_FIXTURES, self.fixture_names(), ".linked")
+
+    def test_the_linker_matches_the_goldens_of_the_fixtures(self):
+        goldens = self.fixture_goldens(MODULE_FIXTURES, self.fixture_names(), ".linked")
+        directory = self.make_temp_dir()
+        specs = [(self.fixture_copy(name, directory / name), str(directory / name / "root.agc")) for name in goldens]
+        outputs = self.link(specs, directory, stdlib=ROOT / "stdlib")
+        self.assert_goldens({name: outputs[root] for name, (_, root) in zip(goldens, specs)}, goldens, "linker fixtures")
+
+    def test_the_std_modules_of_the_stdlib_folder_are_the_registry(self):
+        # The registry of src/stdlib.rkt, frozen in modules/stdlib-registry.expected: a new std module is one more line.
+        names = sorted("std/" + path.relative_to(ROOT / "stdlib").as_posix() for path in (ROOT / "stdlib").rglob("*.agc"))
+        self.assert_golden("".join(name + "\n" for name in names), FROZEN / "modules" / "stdlib-registry.expected")
 
     def test_the_files_of_a_link_share_one_numbering_of_node_ids(self):
         names = ["diamond", "empty-modules", "every-node", "pkg-environment-first", "canonical-identities", "bdd-steps"]

@@ -6,8 +6,12 @@
 ; here. Run by `make frontend-freeze`. The inputs that are a formula are rebuilt by the Python test; the manifests hold
 ; their hashes.
 
-(require "frontend-freeze-common.rkt"
+(require racket/runtime-path
+         "frontend-freeze-common.rkt"
          "frontend-check-common.rkt"
+         "../src/builtins.rkt"
+         (only-in "../tools/gen-builtins-data.rkt" rule-variant)
+         (only-in "../tools/gen-check-tables.rkt" check-tables-source)
          (prefix-in test: "frontend-check-test.rkt"))
 
 (define (output-of path) (string-append (check-text path) "\n"))
@@ -53,7 +57,22 @@
      (write-manifest "check/generated.sha256"
                      (program-entries dir "generated" (list (cons "generated" (test:generated-program 1000))) output-of)))))
 
+(define-runtime-path checker-source "../src/checker.rkt")
+
+;; What the Racket checker has and the Agentica checker must keep: the generated method tables, every CHECK- code and the
+;; rule of each builtin.
+(define (write-sources)
+  (write-frozen "check/tables.expected" (check-tables-source))
+  (write-frozen "check/codes.expected"
+                (string-append* (for/list ([code (in-list (sort (remove-duplicates (regexp-match* #rx"CHECK-[A-Z-]+" (file->string checker-source))) string<?))])
+                                  (string-append code "\n"))))
+  (write-frozen "check/builtin-rules.expected"
+                (string-append* (for/list ([name (in-list (sort (hash-keys builtins) string<?))])
+                                  (format "~a ~a\n" name (rule-variant (builtin-rule (hash-ref builtins name)))))))
+  (printf "check/tables.expected, check/codes.expected, check/builtin-rules.expected\n"))
+
 (module+ main
+  (write-sources)
   (write-programs)
   (write-corpus)
   (write-deep)

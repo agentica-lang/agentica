@@ -6,10 +6,30 @@ lowering printed once for the same inputs (`make frontend-freeze`, tests/fronten
 std/ module, the compiler, trees at the nesting limit and a program of 300 functions. Inputs that are a formula are
 rebuilt here; the manifests hold their hashes.
 """
-from tests.agentica_test import run_vm, slow
+import re
+
+from tests.agentica_test import ROOT, run_vm, slow
 from tests.frontend_cases import lower_deep_cases, lower_generated_program
-from tests.frontend_support import HERMETIC_ENVIRONMENT, StageTestCase, load_corpus, load_json, write_files
+from tests.frontend_support import FROZEN, HERMETIC_ENVIRONMENT, StageTestCase, load_corpus, load_json, write_files
 from tests.test_frontend_check import direct_files
+
+FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "lower"
+
+
+def fixture_roots():
+    """{fixture name: path of its program relative to the repository}: NAME.agc, or NAME/root.agc for a folder."""
+    roots = {}
+    for path in sorted(FIXTURES.iterdir()):
+        if path.is_dir():
+            roots[path.name] = "tests/fixtures/frontend/lower/%s/root.agc" % path.name
+        elif path.suffix == ".agc":
+            roots[path.stem] = "tests/fixtures/frontend/lower/" + path.name
+    return roots
+
+
+def golden_text():
+    """The text of every golden of the fixtures, in name order."""
+    return "".join(path.read_bytes().decode("utf-8") for path in sorted(FIXTURES.glob("*.ir")))
 
 
 class LowerFrozenTest(StageTestCase):
@@ -29,6 +49,35 @@ class LowerFrozenTest(StageTestCase):
         self.assertGreater(len(paths), minimum)
         outputs = self.run_sections(paths, "--stdlib=%s" % self.stdlib, cwd=self.corpus_dir(corpus))
         self.assert_manifest(outputs, manifest, files)
+
+    def test_every_fixture_has_a_golden_and_no_golden_is_left_over(self):
+        self.fixture_goldens(FIXTURES, list(fixture_roots()), ".ir")
+
+    def test_the_lowering_matches_the_goldens_of_the_fixtures(self):
+        roots = fixture_roots()
+        goldens = self.fixture_goldens(FIXTURES, list(roots), ".ir")
+        outputs = self.run_sections(list(roots.values()), "--stdlib=%s" % (ROOT / "stdlib"), cwd=ROOT)
+        self.assert_goldens({name: outputs[path] for name, path in roots.items()}, goldens, "lowering fixtures")
+
+    def test_vm_builtins_of_the_lowering_tables_are_the_ones_of_the_freeze(self):
+        # VM_BUILTINS of compiler/lower_tables.agc is vm-builtins of src/lower.rkt, frozen in lower/vm-builtins.expected.
+        text = (ROOT / "compiler" / "lower_tables.agc").read_bytes().decode("utf-8")
+        start = text.index("VM_BUILTINS = Set.new([")
+        names = sorted(re.findall(r'"([^"]+)"', text[start:text.index("\n])", start)]))
+        self.assert_golden("".join(name + "\n" for name in names), FROZEN / "lower" / "vm-builtins.expected")
+
+    def test_the_fixtures_lower_an_instruction_of_every_opcode_of_the_bytecode(self):
+        seen = golden_text()
+        listing = (FROZEN / "bytecode" / "opcodes.expected").read_text(encoding="utf-8")
+        opcodes = [line.split(" ")[0] for line in listing.splitlines()]
+        missing = [op for op in opcodes if not re.search(r"^    %s( |$)" % re.escape(op), seen, flags=re.MULTILINE)]
+        self.assertEqual(missing, [])
+
+    def test_the_fixtures_cover_chunked_literals_decodable_structs_constants_and_the_start_function(self):
+        seen = golden_text()
+        needles = ['"List.concat"', '"Map.put"', " types=[", '"<start>"', '"Task.await_result"', "tail-call", "struct-with",
+                   "global-set", "call-value", "range-bounds"]
+        self.assertEqual([needle for needle in needles if needle not in seen], [])
 
     def test_the_examples(self):
         self.lower_corpus("examples", "examples", "lower/examples.sha256", 20)

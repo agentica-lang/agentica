@@ -9,9 +9,16 @@ are a formula are rebuilt here; the manifests hold their hashes.
 import re
 import time
 
-from tests.agentica_test import slow
+from tests.agentica_test import ROOT, slow
 from tests.frontend_cases import check_deep_cases, check_generated_program
-from tests.frontend_support import StageTestCase, load_corpus, load_json, write_files
+from tests.frontend_support import FROZEN, StageTestCase, load_corpus, load_json, write_files
+
+FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "check"
+
+# The codes the Racket checker has and no program can reach: CHECK-INTERNAL guards an impossible node,
+# CHECK-MODULE-CONTEXT a program that still has imports (the linker removes them) and CHECK-BLOCK-TYPE a block with no
+# expected type (a block is only parsed after a call, whose parameter gives the type).
+UNREACHABLE_CODES = ("CHECK-INTERNAL", "CHECK-MODULE-CONTEXT", "CHECK-BLOCK-TYPE")
 
 
 def direct_files(files, folder):
@@ -29,6 +36,49 @@ class CheckFrozenTest(StageTestCase):
         directory = self.make_temp_dir()
         write_files(directory, files)
         return self.run_sections(sorted(files), "--stdlib=%s" % self.stdlib, cwd=directory)
+
+    def fixture_roots(self):
+        """{fixture name: path of its program relative to the repository}: NAME.agc, or NAME/root.agc for a folder."""
+        roots = {}
+        for path in sorted(FIXTURES.iterdir()):
+            if path.is_dir():
+                roots[path.name] = "tests/fixtures/frontend/check/%s/root.agc" % path.name
+            elif path.suffix == ".agc":
+                roots[path.stem] = "tests/fixtures/frontend/check/" + path.name
+        return roots
+
+    def golden_texts(self):
+        roots = self.fixture_roots()
+        goldens = self.fixture_goldens(FIXTURES, list(roots), ".checked")
+        return {name: path.read_bytes().decode("utf-8") for name, path in goldens.items()}
+
+    def test_every_fixture_has_a_golden_and_no_golden_is_left_over(self):
+        self.fixture_goldens(FIXTURES, list(self.fixture_roots()), ".checked")
+
+    def test_the_checker_matches_the_goldens_of_the_fixtures_types_resolutions_and_diagnostics(self):
+        roots = self.fixture_roots()
+        goldens = self.fixture_goldens(FIXTURES, list(roots), ".checked")
+        outputs = self.run_sections(list(roots.values()), "--stdlib=%s" % (ROOT / "stdlib"), cwd=ROOT)
+        self.assert_goldens({name: outputs[path] for name, path in roots.items()}, goldens, "checker fixtures")
+
+    def test_the_method_tables_are_the_ones_of_the_freeze(self):
+        # compiler/check_tables.agc is generated from the method tables of src/checker.rkt (tools/gen-check-tables.rkt).
+        source = (ROOT / "compiler" / "check_tables.agc").read_bytes().decode("utf-8")
+        self.assert_golden(source, FROZEN / "check" / "tables.expected")
+
+    def test_the_fixtures_end_in_every_check_diagnostic_the_checker_can_give(self):
+        codes = (FROZEN / "check" / "codes.expected").read_text(encoding="utf-8").split()
+        seen = "".join(self.golden_texts().values())
+        missing = [code for code in codes if code not in UNREACHABLE_CODES and "ERROR %s " % code not in seen]
+        self.assertEqual(missing, [])
+
+    def test_the_fixtures_check_a_call_of_a_builtin_of_every_rule_of_the_builtin_table(self):
+        listing = (FROZEN / "check" / "builtin-rules.expected").read_text(encoding="utf-8")
+        rules = dict(line.split(" ") for line in listing.splitlines())
+        seen = "".join(self.golden_texts().values())
+        used = re.findall(r'name="([^"]+)" piped', seen) + re.findall(r'resolved=call\("([^"]+)"', seen)
+        covered = {rules[name] for name in used if name in rules}
+        self.assertEqual(sorted(set(rules.values()) - covered), [])
 
     @slow
     def test_the_programs_of_the_cases_of_the_racket_checker_tests(self):

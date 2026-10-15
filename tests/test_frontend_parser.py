@@ -8,7 +8,7 @@ manifests hold their hashes.
 """
 import time
 
-from tests.agentica_test import FIXTURES, slow
+from tests.agentica_test import FIXTURES, ROOT, slow
 from tests.frontend_support import FROZEN, StageTestCase, load_corpus, load_json, write_files
 
 NESTING_LIMIT = 1000
@@ -89,6 +89,15 @@ class ParserFrozenTest(StageTestCase):
         outputs = self.parse_cases(cases)
         self.assert_manifest(outputs, manifest, cases)
         return outputs
+
+    def test_every_input_has_a_golden_and_no_golden_is_left_over(self):
+        self.fixture_pairs(PARSER_FIXTURES, ".input", ".ast")
+
+    def test_the_parser_matches_the_goldens_of_the_fixtures(self):
+        pairs = self.fixture_pairs(PARSER_FIXTURES, ".input", ".ast")
+        outputs = self.run_sections(["tests/fixtures/frontend/parser/" + name for name in pairs], cwd=ROOT)
+        self.assert_goldens({name: outputs["tests/fixtures/frontend/parser/" + name] for name in pairs}, pairs,
+                            "parser fixtures")
 
     def test_chains_prefix_operators_and_nested_chains_are_legal_at_the_limit_and_refused_one_past_it(self):
         # The trees of the legal cases print about 1 MB each, so the golden holds their hashes.

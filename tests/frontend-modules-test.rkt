@@ -4,8 +4,7 @@
          racket/runtime-path
          "frontend-modules-common.rkt"
          "frontend-corpus-common.rkt"
-         "vm-diff-common.rkt"
-         "../src/stdlib.rkt")
+         "vm-diff-common.rkt")
 
 (define-runtime-path root "..")
 (define-runtime-path entry "../compiler/link.agc")
@@ -122,36 +121,15 @@
 (module+ test
   (define inputs (module-inputs))
 
-  (test-case "every fixture has a golden and no golden is left over"
-    (define expected (sort (map (lambda (input) (path->string (file-name-from-path (module-golden input)))) inputs) string<?))
-    (define found
-      (sort (for/list ([file (in-list (directory-list (path-only (module-golden (car inputs)))))]
-                       #:when (path-has-extension? file #".linked"))
-              (path->string file))
-            string<?))
-    (check-equal? found expected))
-
   (test-case "the Racket printer matches its goldens"
     (for ([input (in-list inputs)])
       (check-equal? (string-append (link-text (module-input-root input) #:env (module-input-env input)) "\n")
                     (golden input)
                     (module-input-name input))))
 
-  (test-case "the std/ modules of the stdlib/ folder are the registry of src/stdlib.rkt"
-    (define in-folder
-      (for/list ([file (in-directory stdlib-folder)] #:when (path-has-extension? file #".agc"))
-        (string-append "std/" (path->string (find-relative-path (simplify-path stdlib-folder) (simplify-path file))))))
-    (check-equal? (sort in-folder string<?) (sort (hash-keys stdlib-sources) string<?)))
-
   (when (vm-built? "frontend modules tests")
     (with-bytecode
       (lambda (work bytecode)
-        (define specs (for/list ([input (in-list inputs)]) (list (module-input-env input) (input-path input))))
-        (define outputs (run-linker bytecode specs))
-        (test-case "the Agentica linker matches the goldens on the VM"
-          (for ([input (in-list inputs)])
-            (check-equal? (hash-ref outputs (input-path input) #f) (golden input) (module-input-name input))))
-
         (test-case "the files of a link share one numbering of node ids"
           (define names '("diamond" "empty-modules" "every-node" "pkg-environment-first" "canonical-identities" "bdd-steps"))
           (define chosen (filter (lambda (input) (member (module-input-name input) names)) inputs))
@@ -268,11 +246,6 @@
         (define live-paths (files-under '("examples" "stdlib" "tests/fixtures")))
         (test-case "while Racket exists: the Agentica linker matches the Racket linker on examples/, stdlib/ and tests/fixtures/"
           (define specs (for/list ([path (in-list live-paths)]) (list default-env path)))
-          (agentica-matches-racket (run-linker bytecode specs) specs))
-
-        (test-case "while Racket exists: the Agentica linker matches the Racket linker on the fixtures, live"
-          (define specs
-            (for/list ([input (in-list (module-inputs))]) (list (module-input-env input) (input-path input))))
           (agentica-matches-racket (run-linker bytecode specs) specs))
 
         (test-case "while Racket exists: the Agentica linker matches the Racket linker on the programs of the site"

@@ -129,15 +129,6 @@
 (module+ test
   (define inputs (parser-inputs))
 
-  (test-case "every input has a golden and no golden is left over"
-    (define expected (sort (map (lambda (input) (path->string (file-name-from-path (golden-file input)))) inputs) string<?))
-    (define found
-      (sort (for/list ([file (in-list (directory-list (path-only (golden-file (car inputs)))))]
-                       #:when (path-has-extension? file #".ast"))
-              (path->string file))
-            string<?))
-    (check-equal? found expected))
-
   (test-case "the Racket printer matches its goldens"
     (for ([input (in-list inputs)])
       (check-equal? (string-append (parser-text (read-text (parser-input-path input))) "\n")
@@ -147,11 +138,6 @@
   (when (vm-built? "frontend parser tests")
     (with-bytecode
       (lambda (work bytecode)
-        (define outputs (run-parser bytecode (map parser-input-path inputs)))
-        (test-case "the Agentica parser matches the goldens on the VM"
-          (for ([input (in-list inputs)])
-            (check-equal? (hash-ref outputs (parser-input-path input) #f) (golden input) (parser-input-name input))))
-
         (test-case "chains, prefix operators and nested chains are legal at the limit and refused one past it"
           ; The trees of the legal cases print about 1 MB each, so they are checked here and not kept as goldens.
           (define shapes
