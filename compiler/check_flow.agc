@@ -49,8 +49,8 @@ export def captured_help(name: String, capture: State.Capture) -> String
     return "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in #{path} ... end"
   end
   return (
-    "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in xs ... " +
-    "end, or build it with xs.reduce(#{name}) do |acc, #{element}| ... end"
+    "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in xs ... end, " +
+    "or build it with xs.reduce(#{name}) do |acc, #{element}| ... end"
   )
 end
 

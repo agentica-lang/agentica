@@ -114,9 +114,6 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
 
 ## Comments in stdlib/
 
-- Lines are at most 119 characters, comments included (`stdlib/agentica.toml`),
-  checked by `tests/test_style_line_width.py`.
-- Wrap a long string with interpolation and a few sentence-sized pieces, never one piece per line.
 - Give the module a `##` doc block (its first block, followed by a blank
   line), and give every exported `def`, `struct` and `enum` you add or touch
   one, as `stdlib/queue.agc` does; do not add docs to code you do not touch.
@@ -126,3 +123,10 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
 - Add a `#` comment where the Agentica is complex: a bit trick, a bound that
   keeps input safe, an order that matters, or a copy of a Racket or VM
   behavior (name it). Never narrate obvious code.
+
+## Code style in stdlib/
+
+- Lines are at most 119 characters, comments included (`stdlib/agentica.toml`),
+  checked by `tests/test_style_line_width.py`.
+- Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into
+  a few sentence-sized pieces joined with `+`, never one piece per line.
