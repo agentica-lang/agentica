@@ -5,6 +5,34 @@
 
 (provide link-program load-program)
 
+;; Style rule, no meaning for evaluation: imports, then structs and enums, then
+;; exported functions, then private functions. Returns the diagnostic for the
+;; first declaration that comes after a later group, or #f.
+(define (declaration-order-error declarations)
+  (define (rank wrapped)
+    (cond
+      [(import-decl? wrapped) 0]
+      [(or (struct-decl? wrapped) (enum-decl? wrapped)) 1]
+      [(and (export-decl? wrapped)
+            (let ([inner (export-decl-declaration wrapped)])
+              (or (struct-decl? inner) (enum-decl? inner))))
+       1]
+      [(export-decl? wrapped) 2]
+      [else 3]))
+  (let loop ([remaining declarations] [highest 0])
+    (cond
+      [(null? remaining) #f]
+      [(< (rank (car remaining)) highest)
+       (define wrapped (car remaining))
+       (diagnostic 'CHECK-DECL-ORDER
+                   "declaration is out of order"
+                   (node-span wrapped)
+                   #:help (case (rank wrapped)
+                            [(0) "imports come first, before any struct, enum or function"]
+                            [(1) "structs and enums come before functions"]
+                            [else "exported functions come before private functions"]))]
+      [else (loop (cdr remaining) (max highest (rank (car remaining))))])))
+
 (define (file-span path)
   (source-span (source (path->string (path->complete-path path)) "")
                (source-position 0 1 1) (source-position 0 1 1)))
@@ -124,6 +152,8 @@
       (define (visit key tree where)
         (when (member key active) (bail 'CHECK-IMPORT-CYCLE "import cycle" where))
         (unless (hash-has-key? trees key)
+          (define misplaced (declaration-order-error (program-declarations tree)))
+          (when misplaced (failed misplaced))
           (hash-set! trees key tree)
           (hash-set! prefixes key (if (equal? key root-key) "" (format "@~a::" (hash-count trees))))
           (set! order (cons key order))
