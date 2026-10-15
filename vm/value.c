@@ -223,6 +223,13 @@ agc_value agc_map_value(agc_map *m) {
   return v;
 }
 
+agc_value agc_set_value(agc_map *m) {
+  agc_value v;
+  v.tag = AGC_T_SET;
+  v.as.p = m;
+  return v;
+}
+
 agc_value agc_struct_value(agc_struct *s) {
   agc_value v;
   v.tag = AGC_T_STRUCT;
@@ -340,7 +347,8 @@ uint64_t agc_value_units(agc_value v) {
   switch (v.tag) {
     case AGC_T_STRING: return ((const agc_string *)v.as.p)->bytes / AGC_COST_BYTES;
     case AGC_T_LIST: return agc_list_len(v.as.p);
-    case AGC_T_MAP: return ((const agc_map *)v.as.p)->size;
+    case AGC_T_MAP:
+    case AGC_T_SET: return ((const agc_map *)v.as.p)->size;
     case AGC_T_JSON: return ((const agc_json *)v.as.p)->count;
     default: return 0;
   }
@@ -429,6 +437,11 @@ agc_list *agc_as_list(agc_vm *vm, agc_value v) {
 
 agc_map *agc_as_map(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_MAP) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_map *agc_as_set(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_SET) wrong_tag(vm);
   return v.as.p;
 }
 

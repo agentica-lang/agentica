@@ -1,7 +1,8 @@
 /*
- * Maps in C: the persistent 32-way HAMT behind Map, hashed with SipHash-1-3
- * keyed by vm->rt->hash_key, with agc_map_put, get and delete (and their _hash
- * variants for tests) and agc_map_keys in insertion order. Core layer.
+ * Maps in C: the persistent 32-way HAMT behind Map and Set, hashed with
+ * SipHash-1-3 keyed by vm->rt->hash_key, with agc_map_put, get and delete (and
+ * their _hash variants for tests), agc_map_add_hash (put that leaves a member
+ * alone, for Set) and agc_map_keys in insertion order. Core layer.
  * Design: docs/vm/05-values-execution-builtins.md §5.1.
  */
 #include "core.h"
@@ -130,10 +131,15 @@ static agc_hamt *insert_at(const agc_hamt *node, uint32_t bitmap, uint32_t at, c
   return copy;
 }
 
-static agc_hamt *put(agc_vm *vm, const agc_hamt *node, unsigned shift, const hamt_entry *leaf, bool *added) { // NOLINT(misc-no-recursion)
+/* Puts leaf under node and returns the new node. With keep, a key that is
+   already in returns node itself, so nothing on the path is copied (Set.add of
+   a member allocates nothing); *added tells the levels above that the key is
+   new. */
+static agc_hamt *put(agc_vm *vm, const agc_hamt *node, unsigned shift, const hamt_entry *leaf, bool *added, bool keep) { // NOLINT(misc-no-recursion)
   if (shift >= HAMT_HASH_BITS) {
     for (uint32_t k = 0; k < node->n; k++) {
       if (key_equal(vm, node->entries[k].key, leaf->key)) {
+        if (keep) return (agc_hamt *)node;
         agc_hamt *copy = copy_node(node, 0, node->n);
         copy->entries[k].value = leaf->value;
         return copy;
@@ -151,8 +157,10 @@ static agc_hamt *put(agc_vm *vm, const agc_hamt *node, unsigned shift, const ham
   const hamt_entry *entry = &node->entries[at];
   hamt_entry replacement = *entry;
   if (entry->child) {
-    replacement.child = put(vm, entry->child, shift + HAMT_BITS, leaf, added);
+    replacement.child = put(vm, entry->child, shift + HAMT_BITS, leaf, added, keep);
+    if (keep && !*added) return (agc_hamt *)node;
   } else if (entry->hash == leaf->hash && key_equal(vm, entry->key, leaf->key)) {
+    if (keep) return (agc_hamt *)node;
     replacement.value = leaf->value;
   } else {
     memset(&replacement, 0, sizeof replacement);
@@ -166,21 +174,24 @@ static agc_hamt *put(agc_vm *vm, const agc_hamt *node, unsigned shift, const ham
 
 agc_map *agc_new_map(void) { return agc_alloc(sizeof(agc_map)); }
 
-agc_map *agc_map_put_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value) {
+static agc_map *map_with(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value, bool keep) {
   hamt_entry leaf;
   memset(&leaf, 0, sizeof leaf);
   leaf.hash = hash;
   leaf.key = key;
   leaf.value = value;
   bool added = false;
-  agc_map *result = agc_new_map();
+  agc_hamt *table;
   if (m->table) {
-    result->table = put(vm, m->table, 0, &leaf, &added);
+    table = put(vm, m->table, 0, &leaf, &added, keep);
+    if (keep && !added) return (agc_map *)m;
   } else {
-    result->table = new_node(1u << slot_of(hash, 0), 1);
-    result->table->entries[0] = leaf;
+    table = new_node(1u << slot_of(hash, 0), 1);
+    table->entries[0] = leaf;
     added = true;
   }
+  agc_map *result = agc_new_map();
+  result->table = table;
   result->size = added ? agc_size_add(m->size, 1) : m->size;
   result->reversed = m->reversed;
   if (added) {
@@ -190,6 +201,14 @@ agc_map *agc_map_put_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value
     result->reversed = cell;
   }
   return result;
+}
+
+agc_map *agc_map_put_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value) {
+  return map_with(vm, m, hash, key, value, false);
+}
+
+agc_map *agc_map_add_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value) {
+  return map_with(vm, m, hash, key, value, true);
 }
 
 agc_map *agc_map_put(agc_vm *vm, const agc_map *m, agc_value key, agc_value value) {

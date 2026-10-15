@@ -31,7 +31,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET
 } agc_tag;
 
 typedef struct {
@@ -83,6 +83,8 @@ typedef struct agc_keys {
   struct agc_keys *next;
 } agc_keys;
 
+/* A Map. A Set is the same struct under AGC_T_SET with every value nil, so it
+   shares the HAMT, the first-insertion order and the persistence of map.c. */
 typedef struct {
   size_t size;
   agc_hamt *table;
@@ -297,6 +299,7 @@ agc_value agc_float(double f);
 agc_value agc_string_value(agc_string *s);
 agc_value agc_list_value(agc_list *l);
 agc_value agc_map_value(agc_map *m);
+agc_value agc_set_value(agc_map *m);
 agc_value agc_struct_value(agc_struct *s);
 agc_value agc_enum_value(agc_enum *e);
 agc_value agc_result_value(bool ok, agc_value value);
@@ -318,6 +321,7 @@ double agc_as_float(agc_vm *vm, agc_value v);
 agc_string *agc_as_string(agc_vm *vm, agc_value v);
 agc_list *agc_as_list(agc_vm *vm, agc_value v);
 agc_map *agc_as_map(agc_vm *vm, agc_value v);
+agc_map *agc_as_set(agc_vm *vm, agc_value v);
 agc_struct *agc_as_struct(agc_vm *vm, agc_value v);
 agc_enum *agc_as_enum(agc_vm *vm, agc_value v);
 agc_result *agc_as_result(agc_vm *vm, agc_value v);
@@ -356,6 +360,7 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key);
 agc_map *agc_new_map(void);
 agc_map *agc_map_put(agc_vm *vm, const agc_map *m, agc_value key, agc_value value);
 agc_map *agc_map_put_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value);
+agc_map *agc_map_add_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value);
 bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value);
 bool agc_map_get_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value *value);
 agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span);

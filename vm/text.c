@@ -169,7 +169,8 @@ static void append_item(agc_vm *vm, builder *b, agc_value v, bool json) {
 }
 
 static bool compound(agc_value v) {
-  return agc_is(v, AGC_T_LIST) || agc_is(v, AGC_T_MAP) || agc_is(v, AGC_T_STRUCT) || agc_is(v, AGC_T_ENUM) || agc_is(v, AGC_T_RESULT);
+  return agc_is(v, AGC_T_LIST) || agc_is(v, AGC_T_MAP) || agc_is(v, AGC_T_SET) || agc_is(v, AGC_T_STRUCT) ||
+         agc_is(v, AGC_T_ENUM) || agc_is(v, AGC_T_RESULT);
 }
 
 const agc_struct_def *agc_struct_def_of(agc_vm *vm, const agc_struct *st) {
@@ -189,6 +190,7 @@ static const agc_variant_def *variant_def(agc_vm *vm, const agc_enum *e) {
 static size_t item_count(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_LIST)) return agc_list_len(agc_as_list(vm, v));
   if (agc_is(v, AGC_T_MAP)) return agc_as_map(vm, v)->size;
+  if (agc_is(v, AGC_T_SET)) return agc_as_set(vm, v)->size;
   if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->n;
   if (agc_is(v, AGC_T_RESULT)) {
     const agc_result *r = agc_as_result(vm, v);
@@ -212,6 +214,10 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   }
   if (agc_is(v, AGC_T_MAP)) {
     append(b, "{", 1);
+    return true;
+  }
+  if (agc_is(v, AGC_T_SET)) {
+    append(b, "Set[", 4);
     return true;
   }
   if (agc_is(v, AGC_T_STRUCT)) {
@@ -257,14 +263,17 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json) {
       }
       stack[depth].value = item;
       stack[depth].next = 0;
-      stack[depth].keys = agc_is(item, AGC_T_MAP) ? agc_map_keys(vm, agc_as_map(vm, item), 0) : NULL;
+      stack[depth].keys = agc_is(item, AGC_T_MAP)   ? agc_map_keys(vm, agc_as_map(vm, item), 0)
+                          : agc_is(item, AGC_T_SET) ? agc_map_keys(vm, agc_as_set(vm, item), 0)
+                                                    : NULL;
       depth++;
     }
     for (;;) {
       if (!depth) return b.s;
       debug_frame *top = &stack[depth - 1];
       if (top->next < item_count(vm, top->value)) break;
-      append(&b, agc_is(top->value, AGC_T_LIST) ? "]" : agc_is(top->value, AGC_T_MAP) ? "}" : ")", 1);
+      bool square = agc_is(top->value, AGC_T_LIST) || agc_is(top->value, AGC_T_SET);
+      append(&b, square ? "]" : agc_is(top->value, AGC_T_MAP) ? "}" : ")", 1);
       depth--;
     }
     debug_frame *top = &stack[depth - 1];
@@ -279,6 +288,10 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json) {
       append(&b, ": ", 2);
       if (!agc_map_get(vm, agc_as_map(vm, top->value), key, &item))
         agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
+      continue;
+    }
+    if (agc_is(top->value, AGC_T_SET)) {
+      item = top->keys[top->next++];
       continue;
     }
     item = item_at(vm, top->value, top->next++);

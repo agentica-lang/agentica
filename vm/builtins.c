@@ -1,8 +1,8 @@
 /*
- * The core builtins (IO, System, List, Map, Result and Range, with a few Int
- * and String helpers), agc_find_builtin over the table of every library, and
- * the lookup of builtin structs and enum variants by name in a program. Core
- * layer. Design: docs/vm/05-values-execution-builtins.md §7.
+ * The core builtins (IO, System, List, Map, Set, Result and Range, with a few
+ * Int and String helpers), agc_find_builtin over the table of every library,
+ * and the lookup of builtin structs and enum variants by name in a program.
+ * Core layer. Design: docs/vm/05-values-execution-builtins.md §7.
  */
 #include "core.h"
 
@@ -217,8 +217,7 @@ static agc_value builtin_map_size(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int((int64_t)agc_as_map(vm, args[0])->size);
 }
 
-static agc_value map_walk(agc_vm *vm, agc_value map, bool values, uint32_t span) {
-  const agc_map *m = agc_as_map(vm, map);
+static agc_value map_walk(agc_vm *vm, const agc_map *m, bool values, uint32_t span) {
   agc_value *keys = agc_map_keys(vm, m, span);
   agc_list_builder b;
   agc_list_builder_sized(&b, m->size);
@@ -232,11 +231,11 @@ static agc_value map_walk(agc_vm *vm, agc_value map, bool values, uint32_t span)
 }
 
 static agc_value builtin_map_keys(agc_vm *vm, agc_value *args, uint32_t span) {
-  return map_walk(vm, args[0], false, span);
+  return map_walk(vm, agc_as_map(vm, args[0]), false, span);
 }
 
 static agc_value builtin_map_values(agc_vm *vm, agc_value *args, uint32_t span) {
-  return map_walk(vm, args[0], true, span);
+  return map_walk(vm, agc_as_map(vm, args[0]), true, span);
 }
 
 static agc_string *ascii(const char *text) {
@@ -261,6 +260,100 @@ static agc_value builtin_map_get_default(agc_vm *vm, agc_value *args, uint32_t s
 static agc_value builtin_map_delete(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_map_value(agc_map_delete(vm, agc_as_map(vm, args[0]), args[1]));
+}
+
+/* Adds x to a set. An element that is already in returns the same map, so
+   Set.add of a member and Set.new of repeated items allocate nothing for it and
+   the first insertion keeps its place. */
+static agc_map *set_with(agc_vm *vm, const agc_map *set, agc_value x) {
+  return agc_map_add_hash(vm, set, agc_key_hash(vm, x), x, agc_nil());
+}
+
+static agc_value builtin_set_new(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_map *set = agc_new_map();
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, agc_as_list(vm, args[0]), 0);
+  while (agc_list_cursor_next(&cursor, &item)) set = set_with(vm, set, item);
+  return agc_set_value(set);
+}
+
+static agc_value builtin_set_add(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_set_value(set_with(vm, agc_as_set(vm, args[0]), args[1]));
+}
+
+static agc_value builtin_set_delete(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_set_value(agc_map_delete(vm, agc_as_set(vm, args[0]), args[1]));
+}
+
+static agc_value builtin_set_include(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_value present;
+  return agc_bool(agc_map_get(vm, agc_as_set(vm, args[0]), args[1], &present));
+}
+
+static agc_value builtin_set_size(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int((int64_t)agc_as_set(vm, args[0])->size);
+}
+
+static agc_value builtin_set_empty(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_bool(agc_as_set(vm, args[0])->size == 0);
+}
+
+static agc_value builtin_set_to_a(agc_vm *vm, agc_value *args, uint32_t span) {
+  return map_walk(vm, agc_as_set(vm, args[0]), false, span);
+}
+
+/* The elements of a, then the elements of b that a lacks. A union that adds
+   nothing is the first set itself. */
+static agc_value builtin_set_union(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_map *a = agc_as_set(vm, args[0]), *b = agc_as_set(vm, args[1]);
+  if (b->size == 0) return args[0];
+  if (a->size == 0) return args[1];
+  agc_map *out = (agc_map *)a;
+  const agc_value *keys = agc_map_keys(vm, b, span);
+  for (size_t k = 0; k < b->size; k++) out = set_with(vm, out, keys[k]);
+  return agc_set_value(out);
+}
+
+/* The elements of a, in a's order, that are (intersection) or are not
+   (difference) in b. The kept elements are distinct, so each put adds. When
+   nothing is dropped the result is the first set itself. */
+static agc_value set_filter(agc_vm *vm, agc_value *args, uint32_t span, bool in_b) {
+  const agc_map *a = agc_as_set(vm, args[0]), *b = agc_as_set(vm, args[1]);
+  const agc_value *keys = agc_map_keys(vm, a, span);
+  agc_map *out = agc_new_map();
+  agc_value present;
+  for (size_t k = 0; k < a->size; k++) {
+    uint64_t hash = agc_key_hash(vm, keys[k]);
+    if (agc_map_get_hash(vm, b, hash, keys[k], &present) == in_b)
+      out = agc_map_put_hash(vm, out, hash, keys[k], agc_nil());
+  }
+  return out->size == a->size ? args[0] : agc_set_value(out);
+}
+
+static agc_value builtin_set_intersection(agc_vm *vm, agc_value *args, uint32_t span) {
+  return set_filter(vm, args, span, true);
+}
+
+static agc_value builtin_set_difference(agc_vm *vm, agc_value *args, uint32_t span) {
+  return set_filter(vm, args, span, false);
+}
+
+/* The key list of a is walked newest first: order does not matter here. */
+static agc_value builtin_set_subset(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_map *a = agc_as_set(vm, args[0]), *b = agc_as_set(vm, args[1]);
+  if (a->size > b->size) return agc_bool(false);
+  agc_value present;
+  for (const agc_keys *cell = a->reversed; cell; cell = cell->next)
+    if (!agc_map_get(vm, b, cell->key, &present)) return agc_bool(false);
+  return agc_bool(true);
 }
 
 static agc_value builtin_ok(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -392,6 +485,17 @@ const agc_builtin agc_core_builtins[] = {
   {"Map.get", 2, builtin_map_get, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Map.get", 3, builtin_map_get_default, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Map.delete", 2, builtin_map_delete, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Set.new", 1, builtin_set_new, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Set.add", 2, builtin_set_add, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Set.delete", 2, builtin_set_delete, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Set.include?", 2, builtin_set_include, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Set.size", 1, builtin_set_size, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Set.empty?", 1, builtin_set_empty, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Set.to_a", 1, builtin_set_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Set.union", 2, builtin_set_union, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Set.intersection", 2, builtin_set_intersection, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Set.difference", 2, builtin_set_difference, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Set.subset?", 2, builtin_set_subset, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"ok", 1, builtin_ok, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"ok", 0, builtin_ok_void, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"error", 1, builtin_error, AGC_NATIVE_NONE, AGC_COST_NONE},

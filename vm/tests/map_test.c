@@ -1,6 +1,7 @@
 /*
  * The HAMT: 20,000 keys, order, replacement, persistence, full hash
- * collisions, delete down to an empty map, and deep nesting.
+ * collisions, add that leaves a member alone (and the Set text), delete down to
+ * an empty map, and deep nesting.
  */
 #include "../core.h"
 
@@ -74,6 +75,29 @@ int main(void) {
   for (int64_t k = 0; k < 40; k++) assert(get_hashed(collide, same, k) == (k == 5 ? -5 : k * 10));
   assert(!agc_map_get_hash(&vm, collide, same, agc_int(40), &missing));
   assert(!agc_map_get_hash(&vm, collide, same ^ (1ULL << 63), agc_int(1), &missing));
+
+  /* agc_map_add_hash returns the map itself for a member, at any depth and in a collision node, and adds like put otherwise. */
+  agc_value nothing = agc_nil();
+  agc_value member = agc_int(5 * 7919 - 50000);
+  assert(agc_map_add_hash(&vm, m, agc_key_hash(&vm, member), member, nothing) == m);
+  assert(agc_map_add_hash(&vm, collide, same, agc_int(7), nothing) == collide);
+  agc_map *collide_plus = agc_map_add_hash(&vm, collide, same, agc_int(77), nothing);
+  assert(collide_plus != collide && collide_plus->size == 41 && collide->size == 40);
+  assert(agc_map_add_hash(&vm, collide_plus, same, agc_int(77), nothing) == collide_plus);
+  assert(agc_as_int(&vm, agc_map_keys(&vm, collide_plus, 0)[40]) == 77);
+  agc_value fresh = agc_int(1);
+  agc_map *m_plus = agc_map_add_hash(&vm, m, agc_key_hash(&vm, fresh), fresh, nothing);
+  assert(m_plus != m && m_plus->size == m->size + 1 && m->size == (size_t)n);
+  assert(agc_map_get(&vm, m_plus, fresh, &missing) && agc_is(missing, AGC_T_NIL) && !agc_map_get(&vm, m, fresh, &missing));
+  assert(get_int(m_plus, agc_int(-50000)) == 0);
+  assert(agc_map_add_hash(&vm, agc_new_map(), 9, fresh, nothing)->size == 1);
+
+  agc_map *members = agc_new_map();
+  members = agc_map_add_hash(&vm, members, agc_key_hash(&vm, text("b")), text("b"), nothing);
+  members = agc_map_add_hash(&vm, members, agc_key_hash(&vm, agc_int(3)), agc_int(3), nothing);
+  assert(agc_map_add_hash(&vm, members, agc_key_hash(&vm, text("b")), text("b"), nothing) == members);
+  debug_is(agc_set_value(members), "Set[\"b\", 3]");
+  debug_is(agc_set_value(agc_new_map()), "Set[]");
 
   agc_map *prefix = agc_new_map();
   for (int64_t k = 0; k < 16; k++)
