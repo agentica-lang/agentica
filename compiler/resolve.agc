@@ -1,6 +1,9 @@
-## Name resolution of the linker: what a name written in one file is called in the linked program. This is resolve of src/modules.rkt.
+## Name resolution of the linker: what a name written in one file is called in the linked program. This is resolve of
+## src/modules.rkt.
 ##
-## A name declared in the root file keeps its name; a name declared in another file gets the prefix of that file ("@2::"), so equal names of two files stay apart. A name through an import alias (Alias.name) becomes the prefixed name in the imported file, if that file exports it.
+## A name declared in the root file keeps its name; a name declared in another file gets the prefix of that file
+## ("@2::"), so equal names of two files stay apart. A name through an import alias (Alias.name) becomes the prefixed
+## name in the imported file, if that file exports it.
 
 import Ast from "ast"
 import Declarations from "declarations"
@@ -13,7 +16,9 @@ import Resolve from "resolve_import"
 import Source from "source"
 import Suggest from "suggest"
 
-## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of the user structs the file may update (StructUpdate.visible), and ids, the number of node ids of the program (the receiver of a rewritten NAME.method(...) takes the id ids + the id of the call).
+## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of
+## the user structs the file may update (StructUpdate.visible), and ids, the number of node ids of the program (the
+## receiver of a rewritten NAME.method(...) takes the id ids + the id of the call).
 export struct Context
   settings: Env.Settings
   modules: Map[String, Modules.Module]
@@ -29,7 +34,9 @@ export enum Want
   Function
 end
 
-## The name in the linked program for a name written in the file. want says what the name must be. hint adds the enum hint to the help of an unknown alias. A failure is CHECK-IMPORT-NAME, CHECK-TYPE-MISMATCH or CHECK-UNKNOWN-NAME at span.
+## The name in the linked program for a name written in the file. want says what the name must be. hint adds the enum
+## hint to the help of an unknown alias. A failure is CHECK-IMPORT-NAME, CHECK-TYPE-MISMATCH or CHECK-UNKNOWN-NAME at
+## span.
 export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hint: Bool) -> Result[String]
   parts = name.split(".")
   if parts.size == 2
@@ -59,7 +66,8 @@ export def named_enum?(cx: Context, name: String) -> Bool
   return cx.me.named.has_key?(name) and exports_enum?(cx.modules[cx.me.named[name].target], cx.me.named[name].name)
 end
 
-## The linked name of the constant that a name reads in this file (declared here, or imported by name), or "" when the name is not a constant of the file.
+## The linked name of the constant that a name reads in this file (declared here, or imported by name), or "" when the
+## name is not a constant of the file.
 export def constant_identity(cx: Context, name: String) -> String
   if cx.me.names.has_key?(name) and Declarations.constant?(cx.me.names[name])
     return identity(cx, name)
@@ -75,12 +83,20 @@ export def constant_identity(cx: Context, name: String) -> String
 end
 
 ## The name in the linked program of a declaration of the file.
-## A name in capitals that no declaration, import, alias or reserved type of the file owns: a constant that does not exist.
+## A name in capitals that no declaration, import, alias or reserved type of the file owns: a constant that does not
+## exist.
 export def unknown_constant?(cx: Context, name: String) -> Bool
-  return Base.constant_name?(name) and !cx.settings.catalog.reserved.include?(name) and !cx.me.names.has_key?(name) and !cx.me.named.has_key?(name) and !cx.me.aliases.has_key?(name)
+  return (
+    Base.constant_name?(name) and
+    !cx.settings.catalog.reserved.include?(name) and
+    !cx.me.names.has_key?(name) and
+    !cx.me.named.has_key?(name) and
+    !cx.me.aliases.has_key?(name)
+  )
 end
 
-## CHECK-UNKNOWN-NAME for such a name, with the closest constant the file can read: its own, declared above or below, and the ones it imports by name, by the name written.
+## CHECK-UNKNOWN-NAME for such a name, with the closest constant the file can read: its own, declared above or below,
+## and the ones it imports by name, by the name written.
 export def unknown_constant_failure(cx: Context, name: String, span: Source.Span) -> String
   seen: List[String] = []
   for own in cx.me.names.keys
@@ -129,7 +145,14 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   elsif function_wanted?(want)
     return ok(alias + "." + member)
   end
-  return error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", "unknown module alias", Failure.hint(alias_help(alias, hint))))
+  return error(
+    Failure.fail_at(
+      site(cx, span),
+      "CHECK-IMPORT-NAME",
+      "unknown module alias",
+      Failure.hint(alias_help(alias, hint)),
+    ),
+  )
 end
 
 def function_wanted?(want: Want) -> Bool
@@ -141,8 +164,22 @@ end
 
 def std_only_failure(cx: Context, alias: String, member: String, span: Source.Span) -> String
   wrapper = cx.settings.catalog.std_only[alias]
-  help = alias + " is internal to " + wrapper.std_path + "; use import " + wrapper.alias + " from \"" + wrapper.std_path + "\""
-  return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown function \"" + alias + "." + member + "\"", Failure.hint(help))
+  help = (
+    alias +
+    " is internal to " +
+    wrapper.std_path +
+    "; use import " +
+    wrapper.alias +
+    " from \"" +
+    wrapper.std_path +
+    "\""
+  )
+  return Failure.fail_at(
+    site(cx, span),
+    "CHECK-UNKNOWN-NAME",
+    "unknown function \"" + alias + "." + member + "\"",
+    Failure.hint(help),
+  )
 end
 
 def alias_help(alias: String, hint: Bool) -> String
@@ -153,35 +190,78 @@ def alias_help(alias: String, hint: Bool) -> String
   elsif alias == "Result"
     return "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"
   elsif hint
-    return "\"" + alias + "\" is neither an import alias nor an enum of this file; import a module with import " + alias + " from \"path\", or declare enum " + alias
+    return (
+      "\"" +
+      alias +
+      "\" is neither an import alias nor an enum of this file; import a module with import " +
+      alias +
+      " from \"path\", or declare enum " +
+      alias
+    )
   end
   return "import a module with import " + alias + " from \"path\""
 end
 
-# A name bound by import {Name} from "path": the linked name of the export, if it is of the kind wanted. The import already checked that the module exports it.
+# A name bound by import {Name} from "path": the linked name of the export, if it is of the kind wanted. The import
+# already checked that the module exports it.
 def imported_by_name(cx: Context, entry: Modules.Named, want: Want, span: Source.Span) -> Result[String]
   target = cx.modules[entry.target]
   if !right_kind?(target.public[entry.name], want)
-    return error(Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp))
+    return error(
+      Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp),
+    )
   end
   return ok(target.prefix + entry.name)
 end
 
 # Mod.NAME on a constant: the import that reads it, with the path as the alias import wrote it, and the other way.
 def constant_help(cx: Context, alias: String, member: String) -> String
-  return "write import {" + member + "} from \"" + cx.me.paths[alias] + "\", then use " + member + "\nor let the module export a function and call it as " + alias + ".name()"
+  return (
+    "write import {" +
+    member +
+    "} from \"" +
+    cx.me.paths[alias] +
+    "\", then use " +
+    member +
+    "\nor let the module export a function and call it as " +
+    alias +
+    ".name()"
+  )
 end
 
 # Only exports are candidates, so a private name is never suggested.
-def imported(cx: Context, alias: String, target: Modules.Module, member: String, want: Want, span: Source.Span) -> Result[String]
+def imported(
+  cx: Context,
+  alias: String,
+  target: Modules.Module,
+  member: String,
+  want: Want,
+  span: Source.Span,
+) -> Result[String]
   if !target.public.has_key?(member)
-    return error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", "unknown or private imported name", Suggest.unknown_import_help(target.key, target.public, member, true)))
+    return error(
+      Failure.fail_at(
+        site(cx, span),
+        "CHECK-IMPORT-NAME",
+        "unknown or private imported name",
+        Suggest.unknown_import_help(target.key, target.public, member, true),
+      ),
+    )
   end
   if Declarations.constant?(target.public[member])
-    return error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", "a constant is read by its name, not through the module alias", Failure.hint(constant_help(cx, alias, member))))
+    return error(
+      Failure.fail_at(
+        site(cx, span),
+        "CHECK-IMPORT-NAME",
+        "a constant is read by its name, not through the module alias",
+        Failure.hint(constant_help(cx, alias, member)),
+      ),
+    )
   end
   if !right_kind?(target.public[member], want)
-    return error(Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp))
+    return error(
+      Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp),
+    )
   end
   return ok(target.prefix + member)
 end

@@ -1,7 +1,7 @@
 ## The step API of `agentica test`.
 ##
-## A step program builds a list of steps with `step` and passes it to `run`. A handler gets the context of its scenario and returns it:
-## most functions here take the context first and return it, so keep the one they return.
+## A step program builds a list of steps with `step` and passes it to `run`. A handler gets the context of its scenario
+## and returns it: most functions here take the context first and return it, so keep the one they return.
 
 struct Settings
   base: String
@@ -87,7 +87,8 @@ export def doc_string(ctx: Context) -> String
   return ""
 end
 
-## Returns the Data Table under the current step as rows of cells. Ends the scenario with an error when the step has none.
+## Returns the Data Table under the current step as rows of cells. Ends the scenario with an error when the step has
+## none.
 export def table(ctx: Context) -> List[List[String]]
   rows: List[List[String]] = ctx.scenario.step.table
   if not ctx.scenario.step.has_table
@@ -118,7 +119,8 @@ export def get(ctx: Context, name: String) -> Result[Json]
   return error("missing scenario state")
 end
 
-## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. One program may start per scenario.
+## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. One
+## program may start per scenario.
 export def given_program(ctx: Context, path: String) -> Context
   case ctx.scenario.program
     Program.Running(_) -> halt("RUNTIME-BDD-CONTEXT", "only one program may start per scenario")
@@ -150,7 +152,8 @@ export def then_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
   return compare_text(ctx, read_line(ctx, timeout_ms), expected)
 end
 
-## Checks that the next output line and `expected` are the same JSON value, in any key order, waiting up to `timeout_ms` milliseconds.
+## Checks that the next output line and `expected` are the same JSON value, in any key order, waiting up to
+## `timeout_ms` milliseconds.
 export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
   actual = read_line(ctx, timeout_ms)
   left = JSON.parse(expected)
@@ -219,7 +222,8 @@ def predefined() -> List[Step]
   ]
 end
 
-# One step per channel line until the runner closes the channel; a failure has already ended the run with a fail record.
+# One step per channel line until the runner closes the channel; a failure has already ended the run with a fail
+# record.
 def serve(all: List[Step]) -> Void
   init = Process.parent_read_line(idle_ms())
   if not init.ok?
@@ -230,7 +234,16 @@ def serve(all: List[Step]) -> Void
     halt("RUNTIME-BDD-INFRA", "invalid scenario settings: #{settings.message}")
   end
   empty: List[List[String]] = []
-  blank = StepLine(index: 0, definition: 0, pattern: "", captures: [], has_doc: false, doc: "", has_table: false, table: empty)
+  blank = StepLine(
+    index: 0,
+    definition: 0,
+    pattern: "",
+    captures: [],
+    has_doc: false,
+    doc: "",
+    has_table: false,
+    table: empty,
+  )
   ctx = Context(scenario: Scenario(settings: settings.unwrap!, state: {}, step: blank, program: Program.NotStarted))
   line = Process.parent_read_line(idle_ms())
   while line.ok?
@@ -433,7 +446,11 @@ def deliver(text: String) -> Void
   sent = Process.parent_send(text, send_ms())
   if not sent.ok?
     if sent.message == "process: send exceeds 1048576 bytes"
-      fields: Map[String, Json] = {"event": JSON.from("fail"), "code": JSON.from("RUNTIME-BDD-OUTPUT-LIMIT"), "message": JSON.from("handler output exceeds 1 MiB")}
+      fields: Map[String, Json] = {
+        "event": JSON.from("fail"),
+        "code": JSON.from("RUNTIME-BDD-OUTPUT-LIMIT"),
+        "message": JSON.from("handler output exceeds 1 MiB"),
+      }
       Process.parent_send(record_text(fields), send_ms())
     else
       IO.warn("BDD could not send a record to the runner: #{sent.message}")

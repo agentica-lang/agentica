@@ -124,7 +124,8 @@ export def alias_of(decl: Ast.ImportDecl) -> String
   end
 end
 
-## True when the name starts with a capital letter, as a TYPE_NAME token does: the case rule that tells a type from a function.
+## True when the name starts with a capital letter, as a TYPE_NAME token does: the case rule that tells a type from a
+## function.
 export def type_name?(name: String) -> Bool
   return "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(name.slice(0, 1))
 end
@@ -146,13 +147,21 @@ export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
   return found
 end
 
-## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then constants, then struct and enum (exported or not), then export def, then def. The span is that of the declaration out of place; the help names the group it belongs to. This is a style rule with no meaning for evaluation (src/modules.rkt, declaration-order-error).
+## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then
+## constants, then struct and enum (exported or not), then export def, then def. The span is that of the declaration
+## out of place; the help names the group it belongs to. This is a style rule with no meaning for evaluation
+## (src/modules.rkt, declaration-order-error).
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
   highest = 0
   for decl in declarations
     group = rank(decl)
     if group < highest
-      problem = Diag.fail("CHECK-DECL-ORDER", "declaration is out of order", span_of(decl), Diag.Help.Hint(order_help(group)))
+      problem = Diag.fail(
+        "CHECK-DECL-ORDER",
+        "declaration is out of order",
+        span_of(decl),
+        Diag.Help.Hint(order_help(group)),
+      )
       return error(Failure.from_stage(file, problem))
     end
     if group > highest

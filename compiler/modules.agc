@@ -1,6 +1,10 @@
-## The module loader: starting at the root file, reads, lexes and parses every file the imports reach, once, and checks each one. This is the first half of link-program in src/modules.rkt (the visit function); rewrite.agc is the second.
+## The module loader: starting at the root file, reads, lexes and parses every file the imports reach, once, and checks
+## each one. This is the first half of link-program in src/modules.rkt (the visit function); rewrite.agc is the second.
 ##
-## The walk is a loop over an explicit stack of files that still have imports to read, so a long chain of imports uses no VM call depth. Files are met in the order Racket meets them (a file is read at its import, before the imports after it), so the first failure is the same, and so are the node ids: every file is parsed from the next free id of the file read before it (parse, Ast.next_free_id).
+## The walk is a loop over an explicit stack of files that still have imports to read, so a long chain of imports uses
+## no VM call depth. Files are met in the order Racket meets them (a file is read at its import, before the imports
+## after it), so the first failure is the same, and so are the node ids: every file is parsed from the next free id of
+## the file read before it (parse, Ast.next_free_id).
 
 import Ast from "ast"
 import Declarations from "declarations"
@@ -15,7 +19,8 @@ import Source from "source"
 import SourceFile from "source_file"
 import Suggest from "suggest"
 
-## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the exported name.
+## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the
+## exported name.
 export struct Named
   target: String
   name: String
@@ -36,14 +41,18 @@ export struct Module
   named: Map[String, Named]
 end
 
-## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a file imported twice appears once. root_dir is the folder of the root file.
+## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a
+## file imported twice appears once. root_dir is the folder of the root file.
 export struct Loaded
   order: List[String]
   modules: Map[String, Module]
   root_dir: String
 end
 
-# A file whose imports are being read: the module so far (its aliases, the paths written for them and named imports are filled in as imports are read), and the index of the next import to read. pending is the key of the file that the import at next names while its names wait to be checked: they need the exports of that file, so they are checked once it is loaded, as src/modules.rkt checks them after visit. "" when no import waits.
+# A file whose imports are being read: the module so far (its aliases, the paths written for them and named imports are
+# filled in as imports are read), and the index of the next import to read. pending is the key of the file that the
+# import at next names while its names wait to be checked: they need the exports of that file, so they are checked once
+# it is loaded, as src/modules.rkt checks them after visit. "" when no import waits.
 struct Frame
   module: Module
   aliases: Map[String, String]
@@ -69,14 +78,17 @@ struct Collected
   public: Map[String, Declarations.Kind]
 end
 
-## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*, CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
+## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
+## CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
 export def load(root: String, settings: Env.Settings) -> Result[Loaded]
   file = Path.resolve(root).unwrap_or(root)
   text = try root_text(root, file)
   program = try parse_source(file, text, 0)
   key = Path.real(root)
   if !key.ok?
-    return error(Failure.fail_at(Failure.Site(file: file, span: program.span), "CHECK-IMPORT-IO", key.message, Diag.Help.NoHelp))
+    return error(
+      Failure.fail_at(Failure.Site(file: file, span: program.span), "CHECK-IMPORT-IO", key.message, Diag.Help.NoHelp),
+    )
   end
   empty = Walk(stack: [], seen: {}, done: {}, order: [], next_id: 0, root_dir: Paths.directory_of(key.unwrap!))
   walk = try enter(settings, empty, key.unwrap!, file, text, program, 0)
@@ -122,17 +134,30 @@ end
 
 def finish(walk: Walk, frame: Frame) -> Walk
   module = frame.module.with(aliases: frame.aliases, paths: frame.paths, named: frame.named)
-  return walk.with(stack: walk.stack.take(walk.stack.size - 1), seen: walk.seen.put(module.key, 0), done: walk.done.put(module.key, module))
+  return walk.with(
+    stack: walk.stack.take(walk.stack.size - 1),
+    seen: walk.seen.put(module.key, 0),
+    done: walk.done.put(module.key, module),
+  )
 end
 
-# One import of the file on top: the alias, the path, then the file it names (read and entered unless it was seen). The names of an import list wait for the file to be loaded (bind_names).
+# One import of the file on top: the alias, the path, then the file it names (read and entered unless it was seen). The
+# names of an import list wait for the file to be loaded (bind_names).
 def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.ImportDecl) -> Result[Walk]
   module = frame.module
   site = Failure.Site(file: module.file, span: decl.span)
   alias = Declarations.alias_of(decl)
   aliases = frame.aliases
   paths = frame.paths
-  if alias != "" and (aliases.has_key?(alias) or module.names.has_key?(alias) or frame.named.has_key?(alias) or settings.catalog.reserved.include?(alias))
+  if (
+    alias != "" and
+    (
+      aliases.has_key?(alias) or
+      module.names.has_key?(alias) or
+      frame.named.has_key?(alias) or
+      settings.catalog.reserved.include?(alias)
+    )
+  )
     return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", Diag.Help.NoHelp))
   end
   file = try Paths.module_file(decl, site)
@@ -159,7 +184,8 @@ def after_read(frame: Frame, aliases: Map[String, String], target: String, decl:
   return frame.with(aliases: aliases, pending: target)
 end
 
-# The names of the import at next, once its file is loaded: each must be an export, keep the case rule of its kind, and join the names of the file like a declaration. The first problem is reported, in the order of the list.
+# The names of the import at next, once its file is loaded: each must be an export, keep the case rule of its kind, and
+# join the names of the file like a declaration. The first problem is reported, in the order of the list.
 def bind_names(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.ImportDecl) -> Result[Walk]
   target = walk.done[frame.pending]
   named = frame.named
@@ -169,24 +195,51 @@ def bind_names(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impor
   return ok(replace_top(walk, frame.with(named: named, next: frame.next + 1, pending: "")))
 end
 
-def bind_name(settings: Env.Settings, frame: Frame, target: Module, entry: Ast.ImportName, named: Map[String, Named]) -> Result[Map[String, Named]]
+def bind_name(
+  settings: Env.Settings,
+  frame: Frame,
+  target: Module,
+  entry: Ast.ImportName,
+  named: Map[String, Named],
+) -> Result[Map[String, Named]]
   file = frame.module.file
   if !target.public.has_key?(entry.name)
-    return error(Failure.fail_at(Failure.Site(file: file, span: entry.span), "CHECK-IMPORT-NAME", "unknown or private imported name", Suggest.unknown_import_help(target.key, target.public, entry.name, false)))
+    return error(
+      Failure.fail_at(
+        Failure.Site(file: file, span: entry.span),
+        "CHECK-IMPORT-NAME",
+        "unknown or private imported name",
+        Suggest.unknown_import_help(target.key, target.public, entry.name, false),
+      ),
+    )
   end
   kind = target.public[entry.name]
   at_local = Failure.Site(file: file, span: entry.local_span)
   if !rename_ok?(entry.local, kind)
-    return error(Failure.fail_at(at_local, "CHECK-IMPORT-RENAME", "the new name does not follow the case rule of the imported name", Failure.hint(rename_help(kind))))
+    return error(
+      Failure.fail_at(
+        at_local,
+        "CHECK-IMPORT-RENAME",
+        "the new name does not follow the case rule of the imported name",
+        Failure.hint(rename_help(kind)),
+      ),
+    )
   end
-  taken = frame.module.names.has_key?(entry.local) or frame.aliases.has_key?(entry.local) or named.has_key?(entry.local)
+  taken = (
+    frame.module.names.has_key?(entry.local) or
+    frame.aliases.has_key?(entry.local) or
+    named.has_key?(entry.local)
+  )
   if taken or settings.catalog.bare_names.include?(entry.local) or settings.catalog.reserved.include?(entry.local)
-    return error(Failure.fail_at(at_local, "CHECK-REDEFINED-NAME", "duplicate or reserved imported name", Diag.Help.NoHelp))
+    return error(
+      Failure.fail_at(at_local, "CHECK-REDEFINED-NAME", "duplicate or reserved imported name", Diag.Help.NoHelp),
+    )
   end
   return ok(named.put(entry.local, Named(target: target.key, name: entry.name)))
 end
 
-# A struct or an enum is renamed to a type name (a capital first letter), a function to a lowercase one, a constant to another constant name.
+# A struct or an enum is renamed to a type name (a capital first letter), a function to a lowercase one, a constant to
+# another constant name.
 def rename_ok?(local: String, kind: Declarations.Kind) -> Bool
   if Declarations.constant?(kind)
     return Declarations.constant_name?(local)
@@ -236,8 +289,17 @@ def imported_text(settings: Env.Settings, key: String, site: Failure.Site) -> Re
   end
 end
 
-# Registers a parsed file: the declaration order, then the declared names, then it goes on the stack with the imports to read.
-def enter(settings: Env.Settings, walk: Walk, key: String, file: String, text: String, program: Ast.Program, first_id: Int) -> Result[Walk]
+# Registers a parsed file: the declaration order, then the declared names, then it goes on the stack with the imports
+# to read.
+def enter(
+  settings: Env.Settings,
+  walk: Walk,
+  key: String,
+  file: String,
+  text: String,
+  program: Ast.Program,
+  first_id: Int,
+) -> Result[Walk]
   try Declarations.check_order(file, program.declarations)
   collected = try collect(settings, file, program.declarations)
   count = walk.seen.size + 1
@@ -245,12 +307,40 @@ def enter(settings: Env.Settings, walk: Walk, key: String, file: String, text: S
   if walk.order.size == 0
     prefix = ""
   end
-  module = Module(key: key, file: file, prefix: prefix, first_id: first_id, text: text, program: program, names: collected.names, public: collected.public, aliases: {}, paths: {}, named: {})
-  frame = Frame(module: module, aliases: {}, paths: {}, named: {}, imports: Declarations.imports_of(program.declarations), next: 0, pending: "")
-  return ok(walk.with(stack: walk.stack.push(frame), seen: walk.seen.put(key, 1), order: walk.order.push(key), next_id: Ast.next_free_id(program)))
+  module = Module(
+    key: key,
+    file: file,
+    prefix: prefix,
+    first_id: first_id,
+    text: text,
+    program: program,
+    names: collected.names,
+    public: collected.public,
+    aliases: {},
+    paths: {},
+    named: {},
+  )
+  frame = Frame(
+    module: module,
+    aliases: {},
+    paths: {},
+    named: {},
+    imports: Declarations.imports_of(program.declarations),
+    next: 0,
+    pending: "",
+  )
+  return ok(
+    walk.with(
+      stack: walk.stack.push(frame),
+      seen: walk.seen.put(key, 1),
+      order: walk.order.push(key),
+      next_id: Ast.next_free_id(program),
+    ),
+  )
 end
 
-# The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is CHECK-REDEFINED-NAME at the declaration.
+# The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is
+# CHECK-REDEFINED-NAME at the declaration.
 def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   names: Map[String, Declarations.Kind] = {}
   public: Map[String, Declarations.Kind] = {}
@@ -261,7 +351,14 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
     end
     name = Declarations.name_of(wrapped)
     if names.has_key?(name) or settings.catalog.bare_names.include?(name) or settings.catalog.reserved.include?(name)
-      return error(Failure.fail_at(Failure.Site(file: file, span: Declarations.span_of(wrapped)), "CHECK-REDEFINED-NAME", "duplicate or reserved declaration", Diag.Help.NoHelp))
+      return error(
+        Failure.fail_at(
+          Failure.Site(file: file, span: Declarations.span_of(wrapped)),
+          "CHECK-REDEFINED-NAME",
+          "duplicate or reserved declaration",
+          Diag.Help.NoHelp,
+        ),
+      )
     end
     names = names.put(name, kind)
     if Declarations.exported?(wrapped)

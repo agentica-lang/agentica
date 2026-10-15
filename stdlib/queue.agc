@@ -1,6 +1,7 @@
 ## An immutable first-in, first-out queue of strings.
 ##
-## Every function returns a new queue and leaves the one you pass in unchanged. The queue is a `List` underneath; there is no native queue.
+## Every function returns a new queue and leaves the one you pass in unchanged. The queue is a `List` underneath; there
+## is no native queue.
 
 ## A queue. Build one with `new`.
 export struct QueueState

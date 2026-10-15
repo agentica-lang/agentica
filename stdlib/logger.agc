@@ -1,8 +1,10 @@
 ## An Elixir-style logger with four levels, one global level and named handlers.
 ##
-## Import it with `import Logger from "std/logger"`. The levels are the builtin enum `LogLevel` (`Debug < Info < Warning < Error`) and a handler receives the builtin record `LogEvent`.
-## The first call of any function here installs a handler named `console` (`stderr_text`, level `info`). Handlers run in order, synchronously, in the task that logs, so a line is written when the call returns.
-## A handler error is the error of the task that logged. The registry lives in the VM and belongs to one run.
+## Import it with `import Logger from "std/logger"`. The levels are the builtin enum `LogLevel`
+## (`Debug < Info < Warning < Error`) and a handler receives the builtin record `LogEvent`. The first call of any
+## function here installs a handler named `console` (`stderr_text`, level `info`). Handlers run in order,
+## synchronously, in the task that logs, so a line is written when the call returns. A handler error is the error of
+## the task that logged. The registry lives in the VM and belongs to one run.
 
 struct JsonLine
   time: String
@@ -102,7 +104,8 @@ export def log_meta(level: LogLevel, message: String, fields: Map[String, String
   end
 end
 
-## Returns true only when a call at `level` would reach a handler: the level is at or above the global level and at or above the lowest level of the attached handlers. Guard costly fields with it.
+## Returns true only when a call at `level` would reach a handler: the level is at or above the global level and at or
+## above the lowest level of the attached handlers. Guard costly fields with it.
 export def enabled?(level: LogLevel) -> Bool
   rank = rank_of(level)
   return rank >= ready() and rank >= LogRegistry.lowest()
@@ -119,7 +122,8 @@ export def set_level(level: LogLevel) -> Void
   LogRegistry.set_level(rank_of(level))
 end
 
-## Attaches a handler under a name, for events at `level` or above. The handler is a function (`&Logger.stderr_json`) or a block. A name already in use is an error result.
+## Attaches a handler under a name, for events at `level` or above. The handler is a function (`&Logger.stderr_json`)
+## or a block. A name already in use is an error result.
 export def attach(name: String, level: LogLevel, handler: Fn[LogEvent, Void]) -> Result[Void]
   _ = ready()
   return LogRegistry.attach(name, rank_of(level), handler)
@@ -148,7 +152,8 @@ export def stderr_json(event: LogEvent) -> Void
 end
 
 ## Returns the text line of an event: `TIME LEVEL MESSAGE key=value ...`, with the time in UTC.
-## A message or field that is empty, has a space (for a field), `=`, a quote, a backslash or a control character is written as a JSON string, so a line is always one line.
+## A message or field that is empty, has a space (for a field), `=`, a quote, a backslash or a control character is
+## written as a JSON string, so a line is always one line.
 export def format_text(event: LogEvent) -> String
   parts = [time_text(event.time_ms), level_name(event.level).upcase, message_token(event.message)]
   for key in event.fields.keys
@@ -157,10 +162,20 @@ export def format_text(event: LogEvent) -> String
   return parts.join(" ")
 end
 
-## Returns the JSON line of an event: the keys `time`, `level`, `msg`, `fields` and `task`. The fields are nested, so a field named `level` never clashes with a fixed key.
+## Returns the JSON line of an event: the keys `time`, `level`, `msg`, `fields` and `task`. The fields are nested, so a
+## field named `level` never clashes with a fixed key.
 export def format_json(event: LogEvent) -> String
-  return one_line(JSON.encode(JsonLine(time: time_text(event.time_ms), level: level_name(event.level), msg: event.message,
-                                       fields: event.fields, task: event.task)))
+  return one_line(
+    JSON.encode(
+      JsonLine(
+        time: time_text(event.time_ms),
+        level: level_name(event.level),
+        msg: event.message,
+        fields: event.fields,
+        task: event.task,
+      ),
+    ),
+  )
 end
 
 ## Returns milliseconds since the Unix epoch as UTC text, such as `2026-10-12T10:15:02.345Z`.
@@ -199,7 +214,10 @@ export def time_text(ms: Int) -> String
   minute = rest % 3600000 / 60000
   second = rest % 60000 / 1000
   milli = rest % 1000
-  return "#{sign}#{pad(year, 4)}-#{pad(month, 2)}-#{pad(day, 2)}T#{pad(hour, 2)}:#{pad(minute, 2)}:#{pad(second, 2)}.#{pad(milli, 3)}Z"
+  return (
+    "#{sign}#{pad(year, 4)}-#{pad(month, 2)}-#{pad(day, 2)}T" +
+    "#{pad(hour, 2)}:#{pad(minute, 2)}:#{pad(second, 2)}.#{pad(milli, 3)}Z"
+  )
 end
 
 # The ranks are the order of LogLevel: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
@@ -264,11 +282,19 @@ end
 # JSON.encode leaves U+0085, U+2028 and U+2029 as they are, but splitlines() and some viewers break lines there.
 # Escaping them keeps one event on one line.
 def one_line(text: String) -> String
-  return text.replace(String.from_code(133), "\\u0085").replace(String.from_code(8232), "\\u2028").replace(String.from_code(8233), "\\u2029")
+  return (
+    text.replace(String.from_code(133), "\\u0085")
+      .replace(String.from_code(8232), "\\u2028")
+      .replace(String.from_code(8233), "\\u2029")
+  )
 end
 
 def line_break?(text: String) -> Bool
-  return text.contains?(String.from_code(133)) or text.contains?(String.from_code(8232)) or text.contains?(String.from_code(8233))
+  return (
+    text.contains?(String.from_code(133)) or
+    text.contains?(String.from_code(8232)) or
+    text.contains?(String.from_code(8233))
+  )
 end
 
 def message_token(message: String) -> String

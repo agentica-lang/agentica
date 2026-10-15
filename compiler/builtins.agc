@@ -1,4 +1,6 @@
-## The builtin catalog (src/builtins.rkt, src/builtin-types.rkt): every builtin function with its signature, the builtin records and enums, and the lookups the linker and the checker make. One Catalog is built per run from the generated rows of builtins_data.agc; every lookup is a Map or Set access.
+## The builtin catalog (src/builtins.rkt, src/builtin-types.rkt): every builtin function with its signature, the
+## builtin records and enums, and the lookups the linker and the checker make. One Catalog is built per run from the
+## generated rows of builtins_data.agc; every lookup is a Map or Set access.
 
 import Model from "builtin_model"
 import Data from "builtins_data"
@@ -10,7 +12,9 @@ export struct StdOnly
   alias: String
 end
 
-## The lookup tables of the catalog. entries holds the first form of each builtin (its alternatives are inside it). public_names are the names a program may call, sorted: all but those of the std-only modules. bare_names are the builtins written as a plain name (puts, ok). reserved is the set of type names no declaration may take.
+## The lookup tables of the catalog. entries holds the first form of each builtin (its alternatives are inside it).
+## public_names are the names a program may call, sorted: all but those of the std-only modules. bare_names are the
+## builtins written as a plain name (puts, ok). reserved is the set of type names no declaration may take.
 export struct Catalog
   entries: Map[String, Model.Builtin]
   public_names: List[String]
@@ -78,7 +82,9 @@ end
 
 ## The signature of one form.
 export def form_signature(form: Model.Builtin) -> String
-  parameters = form.parameters.map do |parameter: Model.Named| parameter.name + ": " + Types.to_text(parameter.type) end
+  parameters = form.parameters.map do |parameter: Model.Named|
+    parameter.name + ": " + Types.to_text(parameter.type)
+  end
   return form.name + "(" + parameters.join(", ") + ") -> " + Types.to_text(form.result)
 end
 
