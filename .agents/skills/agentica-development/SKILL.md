@@ -36,6 +36,7 @@ make bdd-driver                           # build dist/agentica-bdd-driver.agcb,
 make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"  # .rkt: rackunit, .py: unittest
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
+make fixed-point                          # the front end's stages and dist/agentica-next; stage2 == stage3 (about 25 s after make vm)
 make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
 make frontend-freeze                      # rewrite the frozen Racket outputs of tests/fixtures/frontend/frozen/ (references/frontend.md); needs Racket, slow
 python3 tools/refreeze.py                  # rewrite those goldens from the Agentica stages (no Racket) and print what changed; --stage, --fast-only
@@ -73,7 +74,7 @@ runs everything else (`references/ci.md`, "What CI runs").
 | builtin | `src/builtins.rkt` metadata, checker rule, the `vm-builtins` table in `src/lower.rkt` and `VM_BUILTINS` in `compiler/lower_tables.agc` (a test enforces that they match), C in `vm/`, a golden (`references/vm-builtins.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | pipeline stage | `src/<stage>.rkt`, wired in `src/main.rkt`, `tests/<stage>-test.rkt` |
-| `std/` module | `stdlib/<name>.agc`, registered in `src/stdlib.rkt`, a doc on the module and every export, comments and code style (line width, strings) as `references/library-notes.md` says |
+| `std/` module | `stdlib/<name>.agc`, listed in `stdlib/MODULES` (what `src/stdlib.rkt` and the single binary embed), a doc on the module and every export, comments and code style (line width, strings) as `references/library-notes.md` says |
 | test | `tests/<stage>-test.rkt` (rackunit) while the stage needs the Racket front end, otherwise `tests/test_<area>.py` (unittest, `tests/agentica_test.py` helpers); VM behavior: a fixture in `tests/fixtures/vm/` with its `.expected` |
 | language rule | `docs/grammar/`, the site page, and the programming skill (`.agents/skills/agentica-programming/`) |
 

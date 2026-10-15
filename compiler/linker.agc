@@ -43,7 +43,7 @@ export enum Linking
   Failed(Failure.Failure)
 end
 
-## Links the file at path, with the std/ sources of settings.stdlib and the environment of settings.env.
+## Links the file at path, with the std/ sources of settings.std and the environment of settings.env.
 export def link_file(path: String, settings: Env.Settings) -> Linking
   linked = Modules.load(path, settings)
   if linked.ok?

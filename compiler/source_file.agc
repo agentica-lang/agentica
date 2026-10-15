@@ -18,14 +18,15 @@ end
 
 ## Reads the file at `path`.
 export def read(path: String, timeout_ms: Int) -> Read
-  opened = File.open(path, "read", timeout_ms)
-  if !opened.ok?
-    return Read.Unreadable(opened.message)
-  end
-  handle = opened.unwrap!
-  result = read_chunks(handle, timeout_ms)
-  File.close(handle, timeout_ms)
-  return result
+  return read_as(path, timeout_ms, false)
+end
+
+## Reads the file at `path` to show lines of it in a message: the text with U+FFFD in place of each byte that is not
+## part of a valid sequence, as Racket's `bytes->string/utf-8` does with that character (src/source-file.rkt keeps the
+## text of an invalid file that way for its diagnostic). The result is never Invalid. The time is linear in the size of
+## the file, bad bytes or not.
+export def read_shown(path: String, timeout_ms: Int) -> Read
+  return read_as(path, timeout_ms, true)
 end
 
 ## The LEX-INVALID-UTF8 diagnostic for the invalid byte at `at`: a span of length 1 that starts there. Racket has
@@ -36,7 +37,18 @@ export def invalid_utf8(at: Source.Position) -> Diag.Diagnostic
   return Diag.fail("LEX-INVALID-UTF8", "source file is not valid UTF-8", Source.Span(start: at, stop: stop), help)
 end
 
-def read_chunks(handle: FileHandle, timeout_ms: Int) -> Read
+def read_as(path: String, timeout_ms: Int, shown: Bool) -> Read
+  opened = File.open(path, "read", timeout_ms)
+  if !opened.ok?
+    return Read.Unreadable(opened.message)
+  end
+  handle = opened.unwrap!
+  result = read_chunks(handle, timeout_ms, shown)
+  File.close(handle, timeout_ms)
+  return result
+end
+
+def read_chunks(handle: FileHandle, timeout_ms: Int, shown: Bool) -> Read
   parts: List[String] = []
   carry: List[Int] = []
   finished = false
@@ -55,12 +67,37 @@ def read_chunks(handle: FileHandle, timeout_ms: Int) -> Read
     head = data.take(cut)
     carry = data.drop(cut)
     decoded = String.from_bytes(head)
-    if !decoded.ok?
+    if decoded.ok?
+      parts = parts.push(decoded.unwrap!)
+    elsif shown
+      parts = parts.push(replace_invalid(head))
+    else
       return Read.Invalid(error_position(parts, head))
     end
-    parts = parts.push(decoded.unwrap!)
   end
   return Read.Text(parts.join(""))
+end
+
+# The text of `data` with U+FFFD (the bytes 239, 191, 189) for each byte at which no valid sequence starts, and
+# decoding going on at the next byte: the rule of Racket's decoder with an error character. One pass over the bytes
+# that builds the bytes of the result with pushes (near constant time each), then one decoding. Cutting `data` into
+# pieces with take and drop would copy the rest of it at every bad byte.
+def replace_invalid(data: List[Int]) -> String
+  out: List[Int] = []
+  at = 0
+  while at < data.size
+    width = sequence_width(data, at)
+    if width == 0
+      out = out.concat([239, 191, 189])
+      at += 1
+    else
+      for k in 0...width
+        out = out.push(data[at + k])
+      end
+      at += width
+    end
+  end
+  return String.from_bytes(out).unwrap!
 end
 
 # How many leading bytes of `data` end on a character boundary. A lead byte in the last three bytes whose

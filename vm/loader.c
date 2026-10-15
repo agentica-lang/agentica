@@ -24,6 +24,7 @@ typedef struct {
   size_t len, pos;
   uint64_t budget;
   uint32_t format;
+  bool any_version;
   const agc_trace *trace;
   uint64_t start;
   char *error;
@@ -466,7 +467,8 @@ static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), "AGCB", 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
   if (r->format != AGC_FORMAT_VERSION) reject(r, "unsupported format version");
-  if (!same_text(read_string(r), AGC_VERSION)) reject(r, "built for another Agentica version");
+  /* The version is read in both cases, so the text is validated and the file is parsed the same way. */
+  if (!same_text(read_string(r), AGC_VERSION) && !r->any_version) reject(r, "built for another Agentica version");
 
   p->source_count = read_count(r, 8, "source");
   p->sources = load_alloc(r, agc_size_mul(p->source_count, sizeof(agc_source)), false);
@@ -580,8 +582,8 @@ static bool load_guarded(reader *r, agc_program *p) {
   return true;
 }
 
-bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
-                     const agc_trace *trace) {
+static bool load_program(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
+                         const agc_trace *trace, bool any_version) {
   static const agc_trace off = {0, 2, 0};
   const agc_trace *tr = trace ? trace : &off;
   reader r;
@@ -589,6 +591,7 @@ bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, cha
   r.len = len;
   r.pos = 0;
   r.format = 0;
+  r.any_version = any_version;
   r.trace = tr;
   r.start = AGC_TRACE_ON(tr, AGC_TRACE_LOADER) ? agc_trace_now() : 0;
   r.error = error;
@@ -607,6 +610,16 @@ bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, cha
   AGC_TRACE(tr, AGC_TRACE_LOADER, "done us=%" PRIu64, elapsed_us(r.start));
   *program = p;
   return true;
+}
+
+bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
+                     const agc_trace *trace) {
+  return load_program(data, len, program, error, error_size, trace, false);
+}
+
+bool agc_load_front_end(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
+                        const agc_trace *trace) {
+  return load_program(data, len, program, error, error_size, trace, true);
 }
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size) {

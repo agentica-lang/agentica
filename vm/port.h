@@ -179,6 +179,32 @@ typedef struct {
   size_t count, cap;
 } agc_log_registry;
 
+/* One std/ source that the binary carries: PATH is relative to stdlib/ ("queue.agc", "bdd/gherkin.agc"). */
+typedef struct {
+  const char *path;
+  const uint8_t *data;
+  size_t len;
+} agc_std_source;
+
+/* The most words the front end may hand over. A run takes a handful of options; the arguments of a process are bounded
+ * by what the system lets it start with, far below the second number. The caps keep the counts inside an int. */
+#define AGC_FRONT_END_MAX_OPTIONS 64
+#define AGC_FRONT_END_MAX_ARGUMENTS 1048576
+
+/* What the front end (the compiler that the binary loads from its own data) shares with the driver: the std/ sources
+ * it may read, and the hand-off of the program it compiled. The driver owns it and points the front end's runtime at
+ * it; a user program runs in a runtime without one. The hand-off fields are GC memory the driver reads after the
+ * front end's run ends. Design: docs/vm/08-loader-and-cli.md. */
+typedef struct {
+  const agc_std_source *std;
+  size_t std_count;
+  bool handed;
+  uint8_t *program;
+  size_t program_len;
+  char **options, **arguments;
+  size_t option_count, argument_count;
+} agc_front_end;
+
 #define AGC_ASCII_CHARS 128
 #define AGC_FLUSH_TIMEOUT_MS 30000
 #define AGC_FLUSH_TIMEOUT_MAX_MS 86400000
@@ -192,6 +218,7 @@ typedef struct {
   bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired;
   agc_style style;
   int64_t flush_timeout;
+  agc_front_end *front_end;
 #ifdef __linux__
   locale_t messages_locale;
 #endif

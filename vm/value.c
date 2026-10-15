@@ -85,6 +85,12 @@ bool agc_gc_stats(agc_gc_info *info) {
 #endif
 }
 
+void agc_gc_collect(void) {
+#ifndef AGC_NO_GC
+  GC_gcollect();
+#endif
+}
+
 #ifdef AGC_NO_GC
 static void *own(size_t size) {
   if (!on_limit) return calloc(1, size);

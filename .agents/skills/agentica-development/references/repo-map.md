@@ -15,7 +15,7 @@ src/
   builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
   modules.rkt     # import linking: std/, pkg/ and relative files, aliases, exports, cycles; runs before check
-  stdlib.rkt      # std/ Agentica sources embedded at compile time
+  stdlib.rkt      # std/ Agentica sources embedded at compile time, the files listed in stdlib/MODULES
   builtin-types.rkt # opaque handle types, builtin record layouts (Header, HttpResponse, FileInfo, ...), builtin enums (Await) and the `list-type?`, `map-type?`, `set-type?` shape tests shared by the checker and the lowering
   version.rkt     # the version string
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
@@ -57,12 +57,14 @@ compiler/         # the front end in Agentica (35.4, one stage per PR); lexer, p
   lower.agc lower_text.agc  # entry: prints the text form of lowering each root file argument (flags as check.agc, and --burn=N)
   bytecode_tables.agc bytecode_bytes.agc bytecode_pool.agc  # bytecode writer: format constants and opcode numbers, little-endian integers, UTF-8 and chunk lists, interned tables
   bytecode_spans.agc bytecode_types.agc bytecode_function.agc bytecode_failure.agc  # the span table, the Types and Decodable sections, one function (constants, updates, builtins, labels), BYTECODE- problems
-  bytecode_writer.agc  # write(root_dir, program): Written.Done(bytes) | Failed(Problem), the sections in the order of src/bytecode.rkt
+  bytecode_writer.agc  # write(root_dir, program, version): Written.Done(bytes) | Failed(Problem), the sections in the order of src/bytecode.rkt; the version is an input, never a constant
   bdd.agc bdd_driver.agc  # the BDD driver (35.4 step 7): entry (System.args, report, exit code); run(Options) -> Ending, the std/ sources from stdin, the runner and tests compiled into the run directory
   bdd_options.agc bdd_report.agc bdd_files.agc bdd_source_root.agc  # the arguments (driver options, then the user's words); the usage and infrastructure reports; private 0600 writes in pieces; the VM's --source-root of a file
   bdd_discover.agc bdd_compile.agc bdd_rundir.agc bdd_runner.agc  # the walk over the test paths; file -> Compiled.Bytes | Rejected(Problem); the temporary directory, lock and sweep; the runner as a captured child and its report file
   diagnostic_json.agc  # the --json object of a Problem (diagnostic->jsexpr)
-  bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc)
+  bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc, and `--version=V` for the header)
+  front_end.agc front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (35.3, 8b): `--version V [--stdlib DIR] -- WORDS`, then Cli.run (8a replaces it): compile, run through FrontEnd.hand_off; make's stages build it
+  diagnostic_plain.agc save_file.agc  # the plain text of a Problem (format-diagnostic of src/diagnostic.rkt); a file written in pieces (compile -o)
 vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references/vm.md
   value.h         # values and the agc_ value API, shared by all layers (references/vm-core.md)
   port.h          # what services call into the core: park, wake, jobs, handles (references/vm-core.md)
@@ -88,7 +90,10 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references
   unicode_data.c  # generated write-escape ranges (make vm-unicode) (references/vm-core.md)
   trace.c         # trace points and categories (AGC_TRACE) (references/vm-builtins.md)
   trace.h         # the trace categories (references/vm-builtins.md)
-  main.c          # CLI, the end of the run and the exit code (references/vm-io.md)
+  main.c          # agentica-vm: the command line, the file read, the run (references/vm-io.md)
+  launch.c launch.h  # shared by main.c and agentica.c: the option parser, seeds, a runtime from a program, the end of the run and the exit code (references/vm-io.md)
+  agentica.c      # the single binary: runs the front end in a first runtime, retires it at the hand-off, runs the program in a second (references/vm-core.md)
+  embedded.h      # the symbols of the generated embedded.s: the front end and the std/ sources (references/vm-build.md)
   loop.c          # libuv event loop and resource registry (references/vm-io.md)
   files.c         # File, Dir and Path builtins (Linux) (references/vm-io.md)
   tree.c          # agc_tree_refused and agc_remove_tree for Path.remove: a tree walk that never follows a link (references/vm-io.md)
@@ -109,12 +114,13 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references
   http_client.c   # HttpWire client builtins (references/vm-net.md)
   http_server.c   # HttpWire server builtins (references/vm-net.md)
   logger.c        # LogRegistry builtins over vm->rt->log, the std/logger registry (references/library-notes.md)
+  front_end.c     # FrontEnd.hand_off and FrontEnd.std_source, guarded by rt->front_end (references/vm-builtins.md)
   task.c          # scheduler, task cancellation, Task builtins (references/vm-tasks.md)
   channel.c       # Channel builtins (references/vm-tasks.md)
   testing.c       # Test builtins for unit tests (references/vm-tasks.md)
   fuzz.c          # agc_fuzz_one (references/vm-build.md)
   fuzz_main.c     # the mutation driver (references/vm-build.md)
-  tools/          # check-layers.sh and its self-test, gen-unicode.rkt (references/vm-build.md), refreeze.py (rewrites the frozen front-end goldens from the Agentica stages; references/frontend.md)
+  tools/          # check-layers.sh and its self-test, gen-unicode.rkt, gen-embedded.sh (references/vm-build.md), refreeze.py (rewrites the frozen front-end goldens from the Agentica stages; references/frontend.md)
   third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c with AGENTICA_GC=vendored (the Linux default links the system libgc)
   third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
   third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
@@ -184,6 +190,8 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   vm-stack-test.rkt  # stack-trace stderr in the three formats (references/vm-tests.md)
   test_vm_file_lines.py  # unittest: File.each_line on the VM (references/vm-tests.md)
   test_vm_os.py   # unittest: the OS builtins of the BDD driver port, with real contention between VMs (references/vm-tests.md)
+  test_single_binary.py  # unittest: dist/agentica-next against the Racket CLI, the guarded FrontEnd builtins, the options of the hand-off, --front-end with fixtures/single-binary/front.agc (references/vm-tests.md); the fixed point is a CI step, not a test
+  test_stdlib_modules.py  # unittest: stdlib/MODULES names each stdlib/ source once (no binary needed)
   test_vm_test_protocol.py  # unittest: a Python peer plays a test runner over the child channel (references/vm-tests.md)
   test_vm_child_channel.py  # unittest: the child channel on its own, against Python peers (references/vm-tests.md)
   test_vm_tls.py  # unittest: the VM TLS builtins against independent peers (references/vm-tests.md)
@@ -201,7 +209,7 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   fixtures/       # golden fixtures and independent Node.js and Python peers; toml/ (std/toml inputs, driver.agc, misc.agc), toml-test/ (vendored, MIT)
   bdd/            # feature specs and step handlers run by make test-bdd (references/bdd.md)
   eval/           # agent evaluation runner, not part of make test (references/bench-eval.md)
-stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
+stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt and in the single binary; MODULES lists them (an explicit registry keyed "std/<path>.agc")
   queue.agc http.agc binary.agc logger.agc toml.agc    # std/queue, std/http, std/binary, std/logger, std/toml
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/bdd.md

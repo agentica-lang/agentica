@@ -281,7 +281,7 @@ end
 
 # The text of an imported file: CHECK-IMPORT-IO at the import, or LEX-INVALID-UTF8 in the imported file.
 def imported_text(settings: Env.Settings, key: String, site: Failure.Site) -> Result[String]
-  case SourceFile.read(Resolve.source_path(settings, key), Env.io_timeout())
+  case Resolve.read_source(settings, key)
     SourceFile.Read.Text(text) -> return ok(text)
     SourceFile.Read.Invalid(at) -> return error(Failure.from_stage(key, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Unreadable(_) ->

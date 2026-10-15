@@ -27,6 +27,8 @@ Float.to_bits
 Float.to_bits32
 Float.to_int
 Float.to_int!
+FrontEnd.hand_off
+FrontEnd.std_source
 HttpWire.accept
 HttpWire.client
 HttpWire.close_client

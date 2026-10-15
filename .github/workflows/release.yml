@@ -96,6 +96,25 @@ jobs:
           grep -q 'GNU_RELRO' <<< "$segments" || { echo "dist/agentica-vm lacks RELRO" >&2; exit 1; }
           grep -q '__stack_chk_fail' <<< "$symbols" || { echo "dist/agentica-vm lacks the stack protector" >&2; exit 1; }
           grep -qE '__(memcpy|read|vsnprintf)_chk' <<< "$symbols" || { echo "dist/agentica-vm lacks _FORTIFY_SOURCE" >&2; exit 1; }
+      - name: Build the single binary with the release toolchain (not shipped yet)
+        run: |
+          set -o pipefail
+          # The embedding (.incbin in a generated assembly file) and the link have to work with zig cc and glibc ${{ env.VM_GLIBC }},
+          # which PR CI (gcc) does not use. The fixed point also checks that this binary compiles the front end to the same bytes.
+          make fixed-point CCACHE=
+          [ "$(dist/agentica-next --version)" = "${{ steps.version.outputs.version }}" ]
+          dist/agentica-next examples/hello.agc
+          dist/agentica-next examples/queue.agc
+          newest=$(objdump -T dist/agentica-next | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
+          echo "dist/agentica-next needs $newest"
+          [ "$(printf '%s\n' "$newest" "GLIBC_$VM_GLIBC" | sort -V | tail -n 1)" = "GLIBC_$VM_GLIBC" ] || {
+            echo "dist/agentica-next needs $newest, newer than GLIBC_$VM_GLIBC" >&2
+            exit 1
+          }
+          if LC_ALL=C readelf -d dist/agentica-next | grep -qE 'NEEDED.*lib(ssl|crypto|gc)[.]'; then
+            echo "dist/agentica-next links OpenSSL or libgc dynamically" >&2
+            exit 1
+          fi
       - name: Golden tests on the release VM
         env:
           AGENTICA_VM_BINARY: dist/agentica-vm

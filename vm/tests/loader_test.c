@@ -230,6 +230,28 @@ static bool loads_tables(uint32_t arity, const char *reason) {
   return ok;
 }
 
+/* The front end that the binary carries may name another Agentica version (the stages of a bootstrap do); only the
+ * format version and the rest of the file are checked. A user program never loads this way. */
+static void front_end_tests(void) {
+  char error[160] = "";
+  agc_program *p;
+  spec s = base();
+  s.agentica = "0.0.0-other";
+  buffer b = build(s);
+  assert(!agc_load(b.data, b.len, &p, error, sizeof error));
+  assert(agc_load_front_end(b.data, b.len, &p, error, sizeof error, NULL));
+  free(b.data);
+  s.version = AGC_FORMAT_VERSION + 1;
+  b = build(s);
+  assert(!agc_load_front_end(b.data, b.len, &p, error, sizeof error, NULL) && strstr(error, "format version"));
+  free(b.data);
+  s = base();
+  s.trailing = true;
+  b = build(s);
+  assert(!agc_load_front_end(b.data, b.len, &p, error, sizeof error, NULL) && strstr(error, "trailing bytes"));
+  free(b.data);
+}
+
 static agc_outcome run_spec(spec s, FILE *out) {
   buffer b = build(s);
   agc_program *p;
@@ -721,6 +743,7 @@ int main(void) {
   s = base();
   s.agentica = "0.0.0-other";
   assert(!loads(s, "Agentica version"));
+  front_end_tests();
   s = base();
   s.trailing = true;
   assert(!loads(s, "trailing bytes"));

@@ -16,6 +16,9 @@ make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Conf
 make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser and libuv for this mode
 make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
+make stage1 stage2 stage3            # the front end (compiler/front_end.agc) in build/stage/: Racket compiles stage1, stage1 compiles stage2, stage2 compiles stage3 (on dist/agentica-vm, --stdlib stdlib)
+make agentica-next                   # dist/agentica-next, the single binary (Linux): the VM, vm/agentica.c, stage2 and the std/ sources embedded by vm/tools/gen-embedded.sh
+make fixed-point                     # stage2 == stage3, Racket's stage1 == stage2, and dist/agentica-next compiling the front end gives stage2 again (about 25 s after the VM is built); CI runs it in `test` and in `vm-sanitizers`
 make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
 make vm CCACHE=                      # without ccache (used when installed and its cache dir is writable)
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)

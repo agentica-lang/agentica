@@ -76,6 +76,33 @@ export def run(options: Opts.Options, runner: String, config_file: String, repor
   return read_report(code.unwrap!, report_file)
 end
 
+## The Agentica version of the VM at `vm`, which the programs the driver compiles must name in their headers. It is the
+## second word of the line that `vm --version` prints, `agentica-vm 0.3.0 (libgc ...)`, or the only word of a binary
+## that prints just the version.
+export def vm_version(vm: String) -> Result[String]
+  spawned = Process.spawn_captured(vm, ["--version"], ".", START_TIMEOUT)
+  if !spawned.ok?
+    return error("cannot start the VM to read its version: #{spawned.message}")
+  end
+  child = spawned.unwrap!
+  Process.close_stdin(child, IO_TIMEOUT)
+  code = Process.wait(child, START_TIMEOUT)
+  output = Process.output(child, START_TIMEOUT)
+  Process.close(child)
+  if !code.ok? or code.unwrap! != 0 or !output.ok?
+    return error("the VM did not print its version")
+  end
+  words = output.unwrap!.stdout.trim.split(" ")
+  version = words[words.size - 1]
+  if words.size > 1
+    version = words[1]
+  end
+  if version == ""
+    return error("the VM printed no version")
+  end
+  return ok(version)
+end
+
 # Waits as long as the run takes: a wait that times out is repeated.
 def wait_for(child: Process) -> Result[Int]
   waited = Process.wait(child, WAIT_SLICE)
