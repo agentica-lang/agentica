@@ -59,6 +59,9 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | a function before a `struct` or `enum`, a private `def` before an `export def`, an `import` after a declaration (`CHECK-DECL-ORDER`) | keep the file order: module doc and imports, then `struct` and `enum`, then `export def`, then `def` |
 | code nested more than 1,000 levels deep (`PARSE-TOO-DEEP`): parentheses, brackets, blocks, statements, prefix operators, type arguments, or a chain of operators or `.` suffixes that, with the nesting around it, passes 1,000 levels | split the code into smaller functions, or name the parts of a long expression with bindings |
 | a statement or an extra `end` at the top level (`PARSE-TOP-LEVEL-STATEMENT`) | statements go inside `def main() -> Void ... end`; an extra `end` closes nothing; a stray `else` or `elsif` has no matching `if` |
+| `user.with()`, `user.with(31)`, `user.with(age)` (`PARSE-UNEXPECTED-TOKEN`) | a struct update names each field it changes, one or more: `user.with(age: 31)` |
+| `x.with(age: 31)` where `x` is not a struct (`CHECK-UNKNOWN-METHOD`) | `with` copies a struct with some fields changed; the value before `.with` must be a struct |
+| a field named `with` of type `Fn[...]` (`CHECK-REDEFINED-NAME`) | rename the field: `value.with(...)` is always the struct update |
 | `s.chars`, `s.each_char` | `s.split("")`, and `s.at(i)` for one character |
 | `s.matches?(...)`, `s.match?(...)`, `s.scan(...)` | no regular expressions: `contains?`, `starts_with?`, `ends_with?`, `index_of` |
 | `s.gsub`, `s.sub`, `s.substring`, `s.substr`, `s.char_at`, `s.ord`, `n.chr`, `s.empty?`, `s.isdigit` | `s.replace`, `s.slice(start, length)` (length is end - start), `s.at(i)`, `s.code`, `String.from_code(n)`, `s.length == 0`, `s.to_i.ok?` |

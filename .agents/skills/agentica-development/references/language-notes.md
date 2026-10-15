@@ -46,8 +46,9 @@ What the checker enforces and the VM keeps for each core language area: Result a
 
 ## Methods on builtin types
 
-- The parser makes `method-call` for `x.name(args)` (except `.call(`, which stays `invoke`) and `field-access` for `x.name`. Method names may carry `?`/`!`.
+- The parser makes `method-call` for `x.name(args)` (except `.call(`, which stays `invoke`, and `.with(`, which is the `struct-update` node) and `field-access` for `x.name`. Method names may carry `?`/`!`.
 - The checker resolves methods by the receiver's static type (`method-modules`, `method-aliases`, `catalog-method` in checker.rkt). A catalog function is a method only when its first parameter has the receiver's type head. Resolution builds a synthetic `call` whose first argument is a `typed-target` (the receiver plus its already-known type, so chains are checked once) and stores it in the node's mutable `resolved` field; `to_s` on String stores the `typed-target` itself. Lowering lowers only `resolved`; `typed-target` does not count a step. Builtin diagnostics keep working because they read `call-args` spans from the synthetic call.
+- `value.with(f: x)` (15c) is checked in `check-struct-update` (`src/checker.rkt`) with the field rules of construction (`check-named-fields!`): a receiver that is not a struct is `CHECK-UNKNOWN-METHOD`, a struct hidden from the importing module is `CHECK-IMPORT-NAME` (the linker sets the node's `visible` predicate: own structs plus the exported structs of directly imported modules), and a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME` because the update would hide it. The checker port (§35 step 4) must carry all of it.
 - Field access on a struct is unchanged; on anything else it is a zero-argument method. `CHECK-NOT-A-STRUCT` no longer exists; unknown methods are `CHECK-UNKNOWN-METHOD` with did-you-mean or the method list.
 - `CHECK-UNUSED-VALUE`: an expression statement whose (resolved) call is a builtin with no effects, a non-`!` name and a non-Void result. `match` patterns on `field-access`/`method-call` need a `_` for the auto `resolved` field (modules.rkt).
 

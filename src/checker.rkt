@@ -549,7 +549,15 @@
                                (format "duplicate field \"~a\"" field-name)
                                (field-decl-span field)))
                        (set! seen (cons field-name seen))
-                       (cons field-name (resolve-type (field-decl-type field))))))))
+                       (define type (resolve-type (field-decl-type field)))
+                       ;; value.with(...) is always the struct update, so a function field could never be
+                       ;; called without .call if that is ever allowed (section 25.3).
+                       (when (and (equal? field-name "with") (pair? type) (eq? (car type) 'Fn))
+                         (bail 'CHECK-REDEFINED-NAME
+                               "a field named \"with\" cannot hold a function"
+                               (field-decl-span field)
+                               #:help "value.with(...) is the struct update; rename the field"))
+                       (cons field-name type))))))
 
     (define (register-functions!)
       (for ([declaration (in-list (program-declarations program))])
@@ -648,6 +656,7 @@
            (last target)]
           [(try-expr? expression) (check-try expression expected)]
           [(construct? expression) (check-construct expression expected)]
+          [(struct-update? expression) (check-struct-update expression)]
           [(list-lit? expression) (check-list expression expected)]
           [(map-lit? expression) (check-map expression expected)]
           [(field-access? expression) (check-field-access expression expected)]
@@ -1319,8 +1328,20 @@
               (construct-span expression)
               #:help (did-you-mean name (hash-keys structs))))
       (define fields (hash-ref structs name))
+      (define seen (check-named-fields! name fields (construct-args expression)))
+      (for ([field (in-list fields)])
+        (unless (member (car field) seen)
+          (bail 'CHECK-MISSING-FIELD
+                (format "constructor \"~a\" is missing field \"~a\"" (display-name name) (car field))
+                (construct-span expression)
+                #:help (format "add \"~a: ...\" with a value of type ~a" (car field) (type->string (cdr field))))))
+      (list 'Struct name))
+
+    ;; The `name: value` pairs of a construction or an update: each name is a field of the struct, given
+    ;; once, with a value of the field's type. Returns the names, so a construction can look for missing ones.
+    (define (check-named-fields! name fields arguments)
       (define seen '())
-      (for ([argument (in-list (construct-args expression))])
+      (for ([argument (in-list arguments)])
         (define field-name (named-arg-name argument))
         (define field (assoc field-name fields))
         (unless field
@@ -1334,13 +1355,27 @@
                 (named-arg-span argument)))
         (set! seen (cons field-name seen))
         (check-expression (named-arg-value argument) (cdr field)))
-      (for ([field (in-list fields)])
-        (unless (member (car field) seen)
-          (bail 'CHECK-MISSING-FIELD
-                (format "constructor \"~a\" is missing field \"~a\"" (display-name name) (car field))
-                (construct-span expression)
-                #:help (format "add \"~a: ...\" with a value of type ~a" (car field) (type->string (cdr field))))))
-      (list 'Struct name))
+      seen)
+
+    ;; `target.with(field: value)`: a copy of a struct with some fields changed (section 25.3). The values
+    ;; are checked after the receiver, in source order, which is also the order they run in.
+    (define (check-struct-update expression)
+      (define span (struct-update-span expression))
+      (define target (check-expression (struct-update-target expression) #f))
+      (unless (struct-type? target)
+        (bail 'CHECK-UNKNOWN-METHOD
+              (format "~a has no method \"with\"" (type->string target))
+              span
+              #:help "with copies a struct with some fields changed; the value before .with must be a struct"))
+      (define name (cadr target))
+      (define constructible? (struct-update-visible expression))
+      (when (and constructible? (not (constructible? name)))
+        (bail 'CHECK-IMPORT-NAME
+              (format "\"~a\" is private to its module, so a value of it cannot be updated here" (display-name name))
+              span
+              #:help "export the struct from its module, or add a function there that makes the change"))
+      (check-named-fields! name (hash-ref structs name) (struct-update-args expression))
+      target)
 
     (define (check-list expression expected)
       (define span (list-lit-span expression))
@@ -1711,6 +1746,7 @@
       (define entry (and (call? resolved) (builtin-ref (call-name resolved))))
       (when (and (not (eq? type 'Void))
                  (or (typed-target? resolved)
+                     (struct-update? value)
                      (and (not (eq? resolved value)) (or (interpolation? resolved) (inspection? resolved)))
                      (and entry
                           (null? (builtin-effects entry))
@@ -1722,10 +1758,11 @@
               (node-span value)
               #:help (let ([target (cond [(method-call? value) (method-call-target value)]
                                          [(field-access? value) (field-access-target value)]
+                                         [(struct-update? value) (struct-update-target value)]
                                          [(and (call? value) (pair? (call-args value))) (car (call-args value))]
                                          [else #f])])
                        (if (and (name-ref? target)
-                                (or (typed-target? resolved) (keeps-first-type? entry)))
+                                (or (typed-target? resolved) (struct-update? value) (keeps-first-type? entry)))
                            (format "values are immutable, so this call changes nothing; assign the result, for example ~a = ..."
                                    (name-ref-name target))
                            "values are immutable, so this call changes nothing; assign or use the result")))))

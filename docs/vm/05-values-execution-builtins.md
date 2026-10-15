@@ -29,7 +29,9 @@ so zeroed registers are valid values.
 - `CALL_BUILTIN` checks each argument's tag against the builtin's parameter
   tags. Builtins check list and map elements when they touch them.
 - `FIELD` and `PAYLOAD` check the index against the value's own `n`, not only
-  against the tables.
+  against the tables. `STRUCT_WITH` checks that the receiver has the struct type
+  and the field count of its update entry. The count test is a defence: the C
+  creators of a record go through `agc_builtin_struct`, which checks the count.
 - A builtin that reads a builtin record (`Header`, `HttpRequest`,
   `HttpResponse`, `FileInfo`, `ProcessOutput`) finds its struct by exact name
   and fields (`agc_builtin_struct`, `vm/builtins.c`). If the struct is missing,

@@ -50,6 +50,7 @@ typed op still checks its tags at run time (4.2).
 | Functions | One IR function each. Falling off the end returns Void. |
 | Calls | A builtin gives `call-builtin` (including the higher-order `List` functions, 4.3). A user function gives `call`, or `tail-call` when it is the value of a `return`. |
 | Structs, enums | `step` (construct span), fields evaluated in written order straight into their declared slots, then `struct`. An enum constructor is `step`, payload, `enum` with the global variant id; a nullary variant is `enum dst dst v`. Field access is `step`, target, `field` with the declared index. |
+| Struct update `v.with(f: x)` | `step` (the update span), a window with the receiver in its first slot and the new values after it, in the order of the struct's fields (each value is evaluated in written order into its slot), then `struct-with dst window s fields`: one instruction copies the receiver and overwrites those fields. The receiver is evaluated once, before the values. |
 | Lists, maps | `list` / `map` from consecutive slots (a map's key before its value). A literal longer than 255 elements is built in chunks joined with `List.concat`; a longer map literal is extended with `Map.put`. Literals need at most 256 slots (list) or 511 (map) beside their elements. An empty literal is `list dst dst 0` or `map dst dst 0`. |
 | Indexing | `list-get` or `map-get` by the target's checked type, after a `step` for the index node. `RUNTIME-INDEX-OUT-OF-RANGE` and `RUNTIME-KEY-NOT-FOUND` point at the index expression's span. |
 | `case` | The scrutinee is evaluated once. Each arm has a test (`const` + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next arm, payload into arm slots (`_` skipped), then the body. Patterns charge no steps. `_` has no test. An Int literal outside 64 bits can never match, so its test is a plain `jump`. A Result pattern tests `is-ok`, and its binding reads `result-value` (the value or the message). |
@@ -141,11 +142,11 @@ behavior.
 | Logic, compare | `NOT`; `LT_I LE_I LT_F LE_F`; `EQ NE`; `SAME` | Bool not; ordering; `=` for numbers and `equal?` for String, Bool, Nil and Range; `SAME` is the `case` literal test (`eqv?` for Float). |
 | Jump | `JUMP bx`, `JUMP_IF_FALSE a bx`, `JUMP_IF_TRUE a bx` | Go to `bx`; test Bool `R[a]`. |
 | Call | `CALL a bx`, `CALL_VALUE a b`, `CALL_BUILTIN a bx`, `TAIL_CALL a bx`, `RETURN a`, `CLOSURE a bx` | 4.3. |
-| Data | `LIST a b c`, `LIST_LEN a b`, `LIST_GET a b c`, `MAP a b c`, `MAP_GET a b c`, `STRUCT a b c`, `FIELD a b c`, `ENUM a b c`, `IS_VARIANT a b c`, `PAYLOAD a b c` | Lists, maps, structs and enums. `LIST_GET` and `MAP_GET` fail at the index span. |
+| Data | `LIST a b c`, `LIST_LEN a b`, `LIST_GET a b c`, `MAP a b c`, `MAP_GET a b c`, `STRUCT a b c`, `STRUCT_WITH a b c`, `FIELD a b c`, `ENUM a b c`, `IS_VARIANT a b c`, `PAYLOAD a b c` | Lists, maps, structs and enums. `LIST_GET` and `MAP_GET` fail at the index span. `STRUCT_WITH`: `R[a]` is a copy of the struct in `R[b]` whose fields listed in update entry `c` (4.6) are overwritten by `R[b+1]`, `R[b+2]`, ... in that order. |
 | Result | `TRY a b`, `IS_OK a b`, `RESULT_VALUE a b` | `TRY`: if `R[b]` is an error, return it, else `R[a]` = its value. |
 | Range | `RANGE a b c`, `RANGE_BOUNDS a b` | `RANGE` from Int `R[b]` to `R[b+1]`, `c` 0 for `..`, 1 for `...`. `RANGE_BOUNDS`: first value into `R[a]`, last included value into `R[a+1]`, non-empty flag into `R[a+2]`. |
 
-There are 49 opcodes. Everything else, including `ok`, `error`, `puts` and every
+There are 50 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
 by `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/value.h`. New opcodes
 are appended at the end. An appended opcode does not bump the format version,
@@ -169,6 +170,17 @@ Details that code and tests rely on:
   is unique per enum declaration.
 - `FIELD` and `PAYLOAD` read item `c` of the value's own `n`. Past it is
   `RUNTIME-INTERNAL`.
+- `STRUCT_WITH` allocates one struct of the receiver's size and copies the
+  receiver into it, then writes the updated fields. The receiver must be the
+  struct type that update entry `c` names, with the field count of that type's
+  table entry (a hand-made file may put another value there); anything else is
+  `RUNTIME-INTERNAL`. Every C creator of a struct goes through
+  `agc_builtin_struct`, which checks the name, the count and the field names, so
+  the count test only keeps the invariant at the write, as `agc_struct_def_of`
+  does. The loader has checked every field index of the entry against the
+  struct's field count, so the writes need no bounds test. Unlike `STRUCT`, the
+  copy is linear in the field count, so the instruction charges
+  `n * sizeof(agc_value)` bytes of cost, like `CONCAT`.
 - An error in `TRY` returns from the frame like `RETURN`. An error in a `TRY` of
   the entry function is `RUNTIME-INTERNAL` (the checker allows `try` only in
   functions that return Result).
@@ -241,13 +253,14 @@ header and the entry.
 
 | Section | Entry |
 |---|---|
-| Header | magic `"AGCB"`, `u32` format version (3), `str` Agentica version (`src/version.rkt`) |
+| Header | magic `"AGCB"`, `u32` format version (4), `str` Agentica version (`src/version.rkt`) |
 | Sources | `str` name, `str` full text |
 | Spans | `u32` source, start line, start column, end line, end column. Span 0 is the program span. |
 | Constants | `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6 String), then `i64`, `f64` bits or `str` |
 | Structs | `str` display name, `u32` field count, each field's `str` name |
 | Types | `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2 Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct) and, for 4 to 6, a `u32` operand: the item or value type index (smaller than the entry's own) or the struct index. Then a `u32` count of decodable structs, each a `u32` struct index (increasing), the `str` linked name and one `u32` type index per field. |
 | Enums | `str` display name, `u32` variant count, each `str` name and `u32` arity. Variants are numbered globally in file order. |
+| Updates | `u32` struct index, `u32` field count k (1 to the struct's field count), k `u32` field indexes, strictly increasing and below the struct's field count. One entry per distinct set of fields of a struct that a `.with(...)` changes; `STRUCT_WITH` names an entry. |
 | Builtins | `str` name, `u32` arity |
 | Functions | `str` name, `u32` params, captures, registers, span, instruction count, the instructions, then one `u32` span index per instruction |
 | Entry | `u32` index of `main` |

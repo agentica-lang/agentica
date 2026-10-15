@@ -537,6 +537,57 @@
                                   "end\n\n"))
                   'CHECK-TYPE-MISMATCH))
 
+  (test-case "a struct update names fields of the receiver's struct, once each, with values of the field types"
+    (define user
+      (string-append "struct User\n  name: String\n  age: Int\n  tags: List[String]\n  scores: Map[String, Int]\n  with: Int\nend\n\n"
+                     "def make() -> User\n  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)\nend\n\n"))
+    (define (in-main body) (string-append user (main-with body)))
+    (check-ok (in-main (string-append
+                        "  ana = make()\n"
+                        "  older: User = ana.with(age: ana.age + 1)\n"
+                        "  cleared = ana.with(tags: [], scores: {})\n"
+                        "  deep = make().with(name: \"Bea\", age: 2).with(tags: [\"a\"])\n"
+                        "  w: Int = ana.with\n"
+                        "  same_name = ana.with(with: 5)\n"
+                        "  puts(\"#{older.age} #{cleared.tags.size} #{deep.name} #{w}\")")))
+    (define unknown (check-text (in-main "  ana = make()\n  x = ana.with(age: 1, nick: \"a\")")))
+    (check-equal? (diagnostic-code unknown) 'CHECK-UNKNOWN-FIELD)
+    (check-equal? (span-slice unknown) "nick: \"a\"")
+    (check-regexp-match #rx"fields: name, age" (diagnostic-help unknown))
+    (define twice (check-text (in-main "  ana = make()\n  x = ana.with(age: 1, name: \"a\", age: 2)")))
+    (check-equal? (diagnostic-code twice) 'CHECK-DUPLICATE-FIELD)
+    (check-equal? (span-slice twice) "age: 2")
+    (define wrong (check-text (in-main "  ana = make()\n  x = ana.with(age: \"old\")")))
+    (check-equal? (diagnostic-code wrong) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (span-slice wrong) "\"old\"")
+    (define empty-wrong (check-text (in-main "  ana = make()\n  x = ana.with(tags: {})")))
+    (check-equal? (diagnostic-code empty-wrong) 'CHECK-TYPE-MISMATCH)
+    (define result-wrong (check-text (in-main "  ana = make()\n  x: Int = ana.with(age: 1)")))
+    (check-equal? (diagnostic-code result-wrong) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (span-slice result-wrong) "ana.with(age: 1)")
+    ;; Any receiver that is not a struct is an unknown method, whatever its type.
+    (for ([receiver '("1" "\"s\"" "[1]" "{\"a\": 1}" "ok(1)" "1..3")])
+      (define found (check-text (in-main (format "  r = ~a\n  x = r.with(age: 1)" receiver))))
+      (check-equal? (diagnostic-code found) 'CHECK-UNKNOWN-METHOD)
+      (check-equal? (span-slice found) "r.with(age: 1)")
+      (check-regexp-match #rx"copies a struct" (diagnostic-help found)))
+    ;; A bare update changes nothing (values are immutable), like a bare xs.push(4).
+    (define unused (check-text (in-main "  ana = make()\n  ana.with(age: 1)")))
+    (check-equal? (diagnostic-code unused) 'CHECK-UNUSED-VALUE)
+    (check-equal? (span-slice unused) "ana.with(age: 1)")
+    (check-regexp-match #rx"for example ana = " (diagnostic-help unused))
+    ;; The receiver is checked before the values: its own error comes first.
+    (check-equal? (check-code (in-main "  x = missing.with(age: nope)")) 'CHECK-UNKNOWN-NAME)
+    (define unknown-value (check-text (in-main "  ana = make()\n  x = ana.with(age: nope)")))
+    (check-equal? (span-slice unknown-value) "nope"))
+
+  (test-case "a field named with cannot hold a function, since value.with(...) is the update"
+    (define found (check-text "struct Hooks\n  with: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n"))
+    (check-equal? (diagnostic-code found) 'CHECK-REDEFINED-NAME)
+    (check-equal? (span-slice found) "with: Fn[Int, Int]\n")
+    (check-regexp-match #rx"struct update" (diagnostic-help found))
+    (check-ok "struct Hooks\n  with: Int\n  run: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n"))
+
   (test-case "statements"
     (check-equal? (check-code (main-with "  x = 0\n  x = \"s\"")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  x = 0\n  x: Int = 1")) 'CHECK-ANNOTATION-ON-EXISTING)

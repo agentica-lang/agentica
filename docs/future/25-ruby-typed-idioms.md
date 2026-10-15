@@ -2,14 +2,15 @@
 
 **Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator
 (order 7.2): 25.1 (defaults, front end only) as order row 7.5a, deferred until
-after the bootstrap (row 7.2.7); 25.2 to 25.5, 25.9 and 25.10 at order step 7.6,
-after the strict diagnostics of [section
+after the bootstrap (row 7.2.7); 25.2, 25.4, 25.5, 25.9 and 25.10 at order step
+7.6, after the strict diagnostics of [section
 26](26-strict-diagnostics.md#26-strict-diagnostics); and the prelude part, 25.6
 and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved
 to Part C. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists
 ideas that were decided against, so they are not proposed again. Decided by the
-user on 2026-10-12. 25.14 (the pipe operator) is implemented (roadmap item 15l,
-order row 7.2.1g).
+user on 2026-10-12. 25.3 (struct update `with`) is implemented (roadmap item
+15c, moved before the bootstrap on 2026-10-15). 25.14 (the pipe operator) is
+implemented (roadmap item 15l, order row 7.2.1g).
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
 that models already know, with the rule of [section
@@ -49,15 +50,16 @@ one.
   `src/parser.rkt`, `src/modules.rkt`, `src/checker.rkt`) and `src/lower.rkt`,
   and runs on the C VM. No item touches `src/evaluator.rkt`.
 - Most items are sugar that `lower.rkt` turns into code the VM already runs, so
-  the bytecode format and the VM do not change. Four items change the VM, and
-  two of them bump the bytecode format version, since any change to the layout
-  or to an opcode's meaning does (`docs/vm/03-ir-and-bytecode.md` §4): 25.4
-  widens the `EQ` and `NE` opcodes (format version bump); 25.6 adds a prelude
-  flag on functions, argument spans on prelude calls, a name-only source entry
-  per prelude file, the error-span rule, the prelude-only builtin `__fail_arg`
-  and the public builtin `String.compare` (format version bump); 25.9 appends
-  the builtin `File.eof?` (no bump); and 25.11 appends the prelude-only builtin
-  `__float_fixed` (no bump).
+  the bytecode format and the VM do not change. Five items change the VM, and
+  three of them bump the bytecode format version, since any change to the layout
+  or to an opcode's meaning does (`docs/vm/03-ir-and-bytecode.md` §4): 25.3 adds
+  the `STRUCT_WITH` opcode and the Updates section (format version 4, built);
+  25.4 widens the `EQ` and `NE` opcodes (format version bump); 25.6 adds a
+  prelude flag on functions, argument spans on prelude calls, a name-only source
+  entry per prelude file, the error-span rule, the prelude-only builtin
+  `__fail_arg` and the public builtin `String.compare` (format version bump);
+  25.9 appends the builtin `File.eof?` (no bump); and 25.11 appends the
+  prelude-only builtin `__float_fixed` (no bump).
 - Library work follows the roadmap rule [New library features: `std/`
   first](../roadmap/README.md#new-library-features-std-first): pure computation
   is written in Agentica, and C is only for its exceptions. 25.6 and 25.11 need
@@ -85,7 +87,7 @@ one.
 |---|---|---|---|
 | 25.1 | Default parameter values | parser, linker, checker, lowering | `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE` |
 | 25.2 | Re-exports | parser, linker | none |
-| 25.3 | `value.with(field: x)` | parser, linker, checker, lowering | none |
+| 25.3 | `value.with(field: x)` | parser, linker, checker, lowering, VM `STRUCT_WITH` | none |
 | 25.4 | Value equality for data | checker, VM `EQ`/`NE` | none |
 | 25.5 | Standalone lambdas | lexer (`lambda` reserved), parser, linker, checker, lowering | none |
 | 25.6 | More Enumerable methods (after 8d) | catalog, prelude, checker, lowering, VM error spans | none |
@@ -282,6 +284,12 @@ alias); a golden fixture. **Docs:** `grammar.md` ("File modules and imports":
 
 ### 25.3 Struct update with `with`
 
+Implemented in 15c: the rules are in `grammar.md` ("Structs and lists"). This
+section keeps the design notes. The owner moved it before the bootstrap
+(2026-10-15), so that `compiler/` can be written as pure functions and
+`step(state)` loops. It relaxes the freeze of row 7.2.7 (it adds syntax to both
+parsers and rules to the checker), and the checker port carries it.
+
 Like Ruby's `Data#with`: a copy of a struct with some fields changed. The
 original is unchanged.
 
@@ -317,16 +325,21 @@ intent, but the skill teaches `with`.
   a help for structs). Each name must be a field of it (`CHECK-UNKNOWN-FIELD`),
   given at most once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type
   (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take the field type).
+- A bare `ana.with(...)` whose result is dropped is `CHECK-UNUSED-VALUE`, like a
+  bare `xs.push(4)`: values are immutable, so the call would change nothing.
 - At least one field: `ana.with()` is `PARSE-UNEXPECTED-TOKEN`, since
   `named_arguments` needs at least one argument. A positional argument
   (`ana.with(31)`) is `PARSE-UNEXPECTED-TOKEN`, with a help that shows
   `with(age: 31)`.
 - `with` builds a new value of the struct's type, so it follows the rules of
   construction: for a type that another module keeps private, it gives the same
-  diagnostic as constructing it. With generic structs (15.3) the type arguments
-  stay, so a field's new value has the same type as before: `.with(` always
-  parses as the update, and each field is checked after the struct's type
-  arguments are substituted.
+  diagnostic as constructing it (`CHECK-IMPORT-NAME`; the linker gives the node
+  a `visible` predicate: the structs of the file, and the exported structs of
+  the modules it imports directly; a closure in the node today, so the
+  self-hosted linker turns it into data, §35.4 step 3). With generic structs
+  (15.3) the type arguments stay, so a field's new value has the same type as
+  before: `.with(` always parses as the update, and each field is checked after
+  the struct's type arguments are substituted.
 - A field named `with` whose type is `Fn[...]` is `CHECK-REDEFINED-NAME`. (A
   field named `with` whose type is a type parameter is banned where generic
   structs land, [section
@@ -342,13 +355,21 @@ intent, but the skill teaches `with`.
   arguments are decided against (25.13).
 
 **Lowering:** the receiver is evaluated once, then the new values left to right;
-`lower.rkt` builds a new struct with today's construction instruction, reading
-the fields that do not change from the receiver. No VM change.
+every value sees the old struct. The first plan was today's construction
+instruction, reading the fields that do not change from the receiver, with no VM
+change. It was measured against one new instruction, `STRUCT_WITH`, which copies
+the struct and writes the given fields (the field indexes are resolved at lower
+time and kept in the Updates section of the bytecode, format version 4). The
+instruction is about 8 percent slower for a 2-field struct and 15 to 34 percent
+faster for a struct of 4 to 16 fields (the lexer-state case), so the instruction
+stayed (numbers in the PR of 15c, and in `docs/vm-benchmarks.md`).
 
 **Tests:** each code; a struct from an imported module; nested use
 (`a.with(address: a.address.with(city: "Lima"))`); evaluation order with calls
-that print; a golden fixture. **Docs:** `grammar.md` ("Structs and lists"), the
-programming skill (`SKILL.md`), `site/content/tour/structs.md`.
+that print; a golden fixture, with an independent Python peer; the loader rules
+of the Updates section and a hostile receiver in `loader_test.c`. **Docs:**
+`grammar.md` ("Structs and lists"), the programming skill (`SKILL.md`),
+`site/content/tour/structs.md`.
 
 ### 25.4 Value equality for data
 

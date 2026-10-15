@@ -248,6 +248,7 @@ export enum Expr
   FunctionRef(FunctionRef)
   Invoke(Invoke)
   Construct(Construct)
+  Update(StructUpdate)
   ListLit(ListLit)
   MapLit(MapLit)
   FieldAccess(FieldAccess)
@@ -321,6 +322,14 @@ end
 export struct Construct
   id: Int
   type_name: String
+  args: List[NamedArg]
+  span: Source.Span
+end
+
+## target.with(name: value, ...): a copy of a struct with the named fields changed. There is at least one argument.
+export struct StructUpdate
+  id: Int
+  target: Expr
   args: List[NamedArg]
   span: Source.Span
 end

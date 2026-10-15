@@ -195,6 +195,11 @@ export def impossible(e: Env, pos: Int) -> String
   return unexpected(e, pos, "the parser cannot continue at " + describe(e.tokens[pos]))
 end
 
+## True for a name token without a ? or ! suffix: the names of fields, parameters and bindings.
+export def plain_name?(token: Tokens.Token) -> Bool
+  return token.kind == "name" and !decorated?(token.lexeme)
+end
+
 ## The position after the token at pos when it has the kind. A name that ends in ? or ! is refused unless suffix is true, which only function and method names allow.
 export def expect(e: Env, pos: Int, kind: String, description: String, suffix: Bool) -> Result[Int]
   token = e.tokens[pos]

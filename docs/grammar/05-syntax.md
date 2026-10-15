@@ -100,6 +100,7 @@ multiplicative_expr = unary_expr,
                    { ( "*" | "/" | "%" ), unary_expr } ;
 unary_expr       = ( "-" | "not" | "!" | "try" ), unary_expr | postfix_expr ;
 postfix_expr     = primary, { ".", NAME
+                            | ".", "with", "(", named_arguments, ")"
                             | ".", NAME, "(", [ arguments ], ")"
                             | "[", expression, "]"
                             | block } ;
@@ -129,6 +130,8 @@ literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
 
 Calls are to named functions, or to function values through `.call(...)`; there are no user methods. Parentheses are required for every call. They may be dropped only for builtin methods, and for module functions without arguments, builtin or reached through an import alias: `s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So `f = Util.helper` calls `helper`; write `&Util.helper` for the function value. `&name` references a declared top-level function without captures. A bare `Enum.Variant` of an enum in the same file is that nullary variant, and `M.Enum.Variant` through an import alias is one too.
+
+A struct update `value.with(name: expr, ...)` is the one postfix form with named arguments, and it needs at least one. `with` is not a reserved word: it has this meaning only after a `.` and before `(`, so `value.with` without parentheses still reads a field named `with`, and `Alias.with(...)` (an import alias before the dot) is a call of the module's function `with`. `user.with()` and a positional value such as `user.with(31)` are `PARSE-UNEXPECTED-TOKEN`, with help that shows the form: `value.with(age: 31)`. Like a call, the update is a link of a chain (`a.with(x: 1).with(y: 2)`), and a `do` block cannot follow it.
 
 `x |> f(a, b)` means `f(x, a, b)`: the left value becomes the first argument of the call on the right. The right side is a call with parentheses, `name(args)` or `Alias.name(args)` (a user function, an imported function or a builtin), optionally preceded by `try`: `x |> try f(a)` is `try f(x, a)`. A trailing block works: `xs |> each_pair() do |a, b| ... end`. Anything else on the right (a bare name, a field, an index, a method chain such as `f(1).g`, a literal) is `PARSE-PIPE-TARGET` at the right side; wrap the expression in parentheses and use `.` on the result, as in `(x |> f()).unwrap!`. A builtin that has a method form for the type of the left value is `CHECK-PIPE-METHOD` at the right side, with the method form as help: `x |> String.trim()` gives `x.trim`. So `|>` is for user functions and for builtins without a method form, and the two styles mix: `s.trim |> try parse() |> try validate()`. `|>` binds lower than `+` and `-` and higher than the comparisons, and groups from left to right: `a + 1 |> f()` is `f(a + 1)`, `x |> f() == y` is `f(x) == y`, and `x |> f() |> g()` is `g(f(x))`. `try` and unary operators bind tighter: `try x |> f()` is `f(try x)`. The call keeps its normal order of evaluation (the left value first, then the other arguments) and its normal diagnostics: the piped argument's span is the left expression's span. A chain over several lines goes in parentheses, one step per line.
 

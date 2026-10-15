@@ -5,7 +5,8 @@ Specified in [`docs/future/29-tls-context.md` section
 2026-10-12. A new feature, VM-only, after 7i. Order step 7.4: after phase 17 and
 right after the HTTP streaming items 20e to 20g ([phase 20](20-hybrid-http.md)),
 before default parameter values (15a, order row 7.5a, deferred until after the
-bootstrap) and `with` (15c, order step 7.6). So every call has a fixed argument
+bootstrap). `with` (15c) was built early, on 2026-10-15, so
+`TLS.client_options().with(...)` is available. Every call has a fixed argument
 list and options live in records; no call needs a default value. Each item is
 one PR with its own tests and docs.
 
@@ -53,7 +54,7 @@ one PR with its own tests and docs.
   CHANGELOG ("Added").
 - Not in this phase: the later options of §29.7 (`min_version`, ALPN, client
   certificates, `ca_data`, peer certificate info), each its own item after
-  `with` (15c), so adding a field does not break the canonical
+  15c (built), so adding a field does not break the canonical
   `TLS.client_options().with(...)` form. Never: a verify-off path, cipher or
   curve strings, `openssl.cnf` settings, versions below TLS 1.2.
 

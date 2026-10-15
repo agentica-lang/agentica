@@ -8,10 +8,10 @@
          (struct-out bc-program)
          (struct-out bc-function))
 
-(struct bc-program (span sources spans constants structs types decodable enums builtins functions entry) #:transparent)
+(struct bc-program (span sources spans constants structs types decodable enums updates builtins functions entry) #:transparent)
 (struct bc-function (name params captures registers span code spans) #:transparent)
 
-(define format-version 3)
+(define format-version 4)
 (define max-u16 65535)
 (define max-type-depth 1024)
 
@@ -26,7 +26,8 @@
     try is-ok result-value
     map map-get
     call-value closure
-    range range-bounds))
+    range range-bounds
+    struct-with))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -116,6 +117,18 @@
                    (set! constants (cons value constants))
                    (set! constant-count (add1 constant-count))
                    (sub1 constant-count))))
+    ;; Struct updates are interned like constants: `value.with(...)` sites that change the same fields
+    ;; of the same struct share one table entry, which the instruction names by index.
+    (define updates '())
+    (define update-count 0)
+    (define update-index (make-hash))
+    (define (update! struct fields)
+      (hash-ref! update-index (cons struct fields)
+                 (lambda ()
+                   (when (>= update-count max-u16) (too-big "struct updates" (ir-program-span ir)))
+                   (set! updates (cons (cons struct fields) updates))
+                   (set! update-count (add1 update-count))
+                   (sub1 update-count))))
     (define builtins '())
     (define builtin-index (make-hash))
     (define (builtin! name arity)
@@ -166,6 +179,7 @@
                   [(jump-if-false jump-if-true) (wide (first args) (hash-ref labels (second args)))]
                   [(call tail-call closure) (wide (first args) (second args))]
                   [(call-value) (list (first args) (second args) 0)]
+                  [(struct-with) (list (first args) (second args) (update! (third args) (fourth args)))]
                   [(call-builtin) (wide (first args) (builtin! (second args) (third args)))]
                   [(return) (list (first args) 0 0)]
                   [else args]))))
@@ -184,6 +198,7 @@
                 (list->vector (reverse types))
                 decodable
                 enums
+                (reverse updates)
                 builtins
                 functions
                 (ir-program-entry ir))))
@@ -244,6 +259,11 @@
     (for ([variant (in-list (ir-enum-variants entry))])
       (str out (car variant))
       (u32 out (cdr variant))))
+  (u32 out (length (bc-program-updates program)))
+  (for ([entry (in-list (bc-program-updates program))])
+    (u32 out (car entry))
+    (u32 out (length (cdr entry)))
+    (for ([field (in-list (cdr entry))]) (u32 out field)))
   (u32 out (length (bc-program-builtins program)))
   (for ([entry (in-list (bc-program-builtins program))])
     (str out (car entry))

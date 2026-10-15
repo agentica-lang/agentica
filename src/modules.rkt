@@ -199,6 +199,30 @@
           (set! active (cdr active))))
       (visit root-key root (program-span root))
       (define (identity key name) (string-append (hash-ref prefixes key) name))
+      ;; The linked names of every struct a user module declares. A struct outside this table is a
+      ;; builtin record, which every module may build.
+      (define user-structs
+        (for*/hash ([(key names) (in-hash locals)]
+                    [(name declaration) (in-hash names)]
+                    #:when (struct-decl? declaration))
+          (values (identity key name) #t)))
+      ;; A struct update builds a value, so it follows the rules of construction: a module may build
+      ;; its own structs and the exported structs of the modules it imports, nothing else. The
+      ;; checker asks this predicate once it knows the receiver's struct.
+      (define constructible-cache (make-hash))
+      (define (constructible key)
+        (hash-ref! constructible-cache key
+                   (lambda ()
+                     (define allowed
+                       (append
+                        (for/list ([(name declaration) (in-hash (hash-ref locals key))]
+                                   #:when (struct-decl? declaration))
+                          (identity key name))
+                        (for*/list ([target (in-hash-values (hash-ref imports key))]
+                                    [(name declaration) (in-hash (hash-ref exports target))]
+                                    #:when (struct-decl? declaration))
+                          (identity target name))))
+                     (lambda (name) (or (not (hash-ref user-structs name #f)) (and (member name allowed) #t))))))
       (define (resolve key name kind span #:variant-hint? [variant-hint? #f])
         (define parts (string-split name "."))
         (cond
@@ -319,6 +343,10 @@
           [(for-stmt name iterable body span) (for-stmt name (walk iterable) (walks body) span)]
           [(invoke target args span) (invoke (walk target) (walks args) span)]
           [(named-arg name value span) (named-arg name (walk value) span)]
+          [(struct-update target args span _)
+           (define update (struct-update (walk target) (walks args) span))
+           (set-struct-update-visible! update (constructible key))
+           update]
           [(list-lit elements span) (list-lit (walks elements) span)]
           [(map-lit entries span) (map-lit (walks entries) span)]
           [(map-entry key value span) (map-entry (walk key) (walk value) span)]

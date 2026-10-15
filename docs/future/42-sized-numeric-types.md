@@ -76,7 +76,7 @@ commit, and with `racket src/main.rkt check` on small probe programs.
   checker's types reach lowering.
 - The `.agcb` type table has the kinds `INT`, `FLOAT`, `BOOL`, `STRING`, `LIST`,
   `MAP` and `STRUCT` (`AGC_TYPE_*` in `vm/value.h`). The loader rejects an
-  unknown kind (`load_types` in `vm/loader.c`), and the format version is 3
+  unknown kind (`load_types` in `vm/loader.c`), and the format version is 4
   (`src/bytecode.rkt:14`). Typed JSON uses these kinds (`vm/json_typed.c`).
 - A JSON integer beyond `Int` is kept as its text until it is extracted
   (`vm/json.c`, `AGC_JSON_BIG`). `JSON.int` extracts `Int` only.
@@ -517,11 +517,12 @@ With (C), the operations are:
   does not know (its `unknown opcode` check). So they do not change the format
   version.
 - **Type-table kinds change the format.** Sized struct fields in typed JSON need
-  new type-table kinds (`AGC_TYPE_*` in `vm/value.h`), and the loader rejects
-  an unknown kind (`load_types` in `vm/loader.c`). A `Float32` literal needs a
-  new constant kind that holds its decimal text (§42.5): the binary64 constant
-  kind would round twice. So the format goes to version 4. The writer of
-  the Agentica compiler emits version 4, and the steps of §35.3 ("New `.agcb`
+  new type-table kinds (`AGC_TYPE_*` in `vm/value.h`), and the loader rejects an
+  unknown kind (`load_types` in `vm/loader.c`). A `Float32` literal needs a new
+  constant kind that holds its decimal text (§42.5): the binary64 constant kind
+  would round twice. So the format goes to version 5 (version 4 is the struct
+  update `with` of 15c; version 6 if §41 lands first, 41.18). The writer of the
+  Agentica compiler emits that version, and the steps of §35.3 ("New `.agcb`
   format") apply: the old `stage0` compiles the new compiler, which then
   compiles itself. The Racket writer is not changed, since it is frozen.
 - **GC.** The sized values are not pointers, like `Int` (§38.1). No change to

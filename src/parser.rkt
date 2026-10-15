@@ -808,6 +808,12 @@
            (advance!)
            (define name (expect 'name "a field or method name" #t))
            (cond
+             [(and (kind? 'left-paren) (equal? (token-lexeme name) "with"))
+              ;; `with` is only special before `(` after a dot; `x.with` still reads a field.
+              (advance!)
+              (define arguments (parse-update-arguments))
+              (expect 'right-paren "\")\"")
+              (loop (struct-update target arguments (span-from start)) (add1 links))]
              [(kind? 'left-paren)
               (advance!)
               (define arguments (parse-expression-list 'right-paren))
@@ -1081,6 +1087,33 @@
       (expect 'colon "\":\"")
       (define value (parse-expression))
       (named-arg (token-lexeme start) value (span-from start)))
+
+    ;; The arguments of `.with(`: one or more `name: value` pairs, blocks allowed as in any call.
+    ;; A positional value or an empty list gets a help here, since the parser cannot know which
+    ;; field the value was meant for.
+    (define (parse-update-arguments)
+      (with-blocks #t
+        (lambda ()
+          (let loop ([acc (list (parse-update-argument))])
+            (cond
+              [(kind? 'comma)
+               (advance!)
+               (if (kind? 'right-paren)
+                   (reverse acc)
+                   (loop (cons (parse-update-argument) acc)))]
+              [else (reverse acc)])))))
+
+    (define (parse-update-argument)
+      (define named? (and (kind? 'name) (not (regexp-match? #px"[?!]$" (token-lexeme (current))))))
+      (unless (and named? (eq? (token-kind (peek-token 1)) 'colon))
+        (define culprit (if named? (peek-token 1) (current)))
+        (bail 'PARSE-UNEXPECTED-TOKEN
+              (if named?
+                  (format "expected \":\" after the field name, found ~a" (describe culprit))
+                  (format "expected a field name, found ~a" (describe culprit)))
+              culprit
+              #:help "name each field to change, as in value.with(age: 31)"))
+      (parse-named-argument))
 
     (define (parse-list-literal)
       (define start (expect 'left-bracket "\"[\""))

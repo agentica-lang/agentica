@@ -1,7 +1,7 @@
 /*
  * The loader: full validation of an untrusted .agcb file before any of its
  * code runs, section by section (constants, struct and enum tables, Types,
- * code). Core layer. Design: docs/vm/08-loader-and-cli.md §8.
+ * struct updates, code). Core layer. Design: docs/vm/08-loader-and-cli.md §8.
  */
 #include "core.h"
 
@@ -202,6 +202,11 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         if (in.c >= p->variant_count) reject(r, "variant index out of range");
         check_window(r, in.b, p->variants[in.c].arity, f);
         break;
+      case AGC_OP_STRUCT_WITH:
+        check_register(r, in.a, f);
+        if (in.c >= p->update_count) reject(r, "struct update index out of range");
+        check_window(r, in.b, 1 + p->updates[in.c].count, f);
+        break;
       case AGC_OP_CONST:
         check_register(r, in.a, f);
         if (bx >= p->constant_count) reject(r, "constant index out of range");
@@ -400,6 +405,26 @@ static void load_tables(reader *r, agc_program *p) {
   }
 }
 
+static void load_updates(reader *r, agc_program *p) {
+  p->update_count = read_count(r, 8, "struct update");
+  p->updates = load_alloc(r, agc_size_mul(p->update_count, sizeof(agc_update_def)), false);
+  for (uint32_t i = 0; i < p->update_count; i++) {
+    agc_update_def *u = &p->updates[i];
+    u->type = read_u32(r);
+    if (u->type >= p->struct_count) reject(r, "struct index out of range");
+    u->count = read_count(r, 4, "updated field");
+    /* Strictly increasing and below the field count: the interpreter writes
+       fields[k] of a copy of that many fields without a bounds check. */
+    if (u->count == 0 || u->count > p->structs[u->type].count) reject(r, "bad updated field count");
+    u->fields = load_alloc(r, agc_size_mul(u->count, sizeof(uint32_t)), true);
+    for (uint32_t k = 0; k < u->count; k++) {
+      u->fields[k] = read_u32(r);
+      if (u->fields[k] >= p->structs[u->type].count) reject(r, "updated field out of range");
+      if (k && u->fields[k] <= u->fields[k - 1]) reject(r, "updated fields out of order");
+    }
+  }
+}
+
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), "AGCB", 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
@@ -456,6 +481,7 @@ static void load(reader *r, agc_program *p) {
   }
 
   load_tables(r, p);
+  load_updates(r, p);
 
   p->builtin_count = read_count(r, 8, "builtin");
   p->builtins = load_alloc(r, agc_size_mul(p->builtin_count, sizeof(agc_builtin *)), false);
@@ -504,9 +530,9 @@ static void load(reader *r, agc_program *p) {
 static void trace_tables(const agc_trace *tr, const agc_program *p) {
   AGC_TRACE(tr, AGC_TRACE_LOADER,
             "tables sources=%" PRIu32 " spans=%" PRIu32 " constants=%" PRIu32 " builtins=%" PRIu32
-            " functions=%" PRIu32 " structs=%" PRIu32 " types=%" PRIu32 " enums=%" PRIu32 " variants=%" PRIu32,
+            " functions=%" PRIu32 " structs=%" PRIu32 " types=%" PRIu32 " enums=%" PRIu32 " variants=%" PRIu32 " updates=%" PRIu32,
             p->source_count, p->span_count, p->constant_count, p->builtin_count, p->function_count, p->struct_count,
-            p->type_count, p->enum_count, p->variant_count);
+            p->type_count, p->enum_count, p->variant_count, p->update_count);
 }
 
 static bool load_guarded(reader *r, agc_program *p) {

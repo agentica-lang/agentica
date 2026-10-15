@@ -24,6 +24,13 @@ branch.
   record. Records name structs in increasing order with distinct names, have one
   field type per field, and every index is in range. So cycles only go through
   named structs.
+- **Updates**: at most as many entries as fit in the file. Each names a struct
+  in range and lists 1 to that struct's field count of field indexes, strictly
+  increasing (so distinct) and below the field count. `STRUCT_WITH` then names
+  an entry in range, with the window `b..b+k` (the receiver and the `k` values)
+  below `registers`. The loader does not know the type of a register, so the
+  receiver's struct type and field count are checked when the instruction runs
+  (5.2).
 - **Functions**: `1 <= registers <= 65535` and `params + captures <= registers`.
   At least one instruction, and the last is `RETURN` or `JUMP`. Every opcode is
   known. Every register operand is below `registers`, including each window:
@@ -53,7 +60,7 @@ branch.
   (5.2), list, map and string bounds, and the register cap (6.1).
 
 `vm/tests/loader_test.c` checks each rule by its reason, and truncation at every
-byte of a file with a type table.
+byte of a file with a type table or an Updates section.
 
 ## 9. CLI and packaging
 
