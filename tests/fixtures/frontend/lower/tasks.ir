@@ -1,0 +1,153 @@
+program 0:1:1-31:1 entry=3 globals=0
+source 0 "tasks.agc" chars=568
+enum "Await" v0="Done"/1 v1="TimedOut"/0
+fn0 "work" params=1 captures=0 slots=3 @ 0:1:1-4:1
+    step @ 0:2:3-3:1
+    step @ 0:2:10-2:15
+    step @ 0:2:10-2:11
+    step @ 0:2:14-2:15
+    const r2 int:1 @ 0:2:14-2:15
+    add-i r1 r0 r2 @ 0:2:12-2:13
+    return r1 @ 0:2:3-3:1
+    const r1 void @ 0:1:1-4:1
+    return r1 @ 0:1:1-4:1
+fn1 "risky" params=1 captures=0 slots=3 @ 0:5:1-11:1
+    step @ 0:6:3-9:1
+    step @ 0:6:6-6:11
+    step @ 0:6:6-6:7
+    step @ 0:6:10-6:11
+    const r2 int:0 @ 0:6:10-6:11
+    lt-i r1 r2 r0 @ 0:6:8-6:9
+    jump-if-false r1 L1 @ 0:6:6-6:11
+    step @ 0:7:5-8:1
+    step @ 0:7:12-7:17
+    step @ 0:7:15-7:16
+    move r1 r0 @ 0:7:15-7:16
+    call-builtin r1 "ok" 1 @ 0:7:12-7:17 0:7:15-7:16
+    return r1 @ 0:7:5-8:1
+  L1:
+  L0:
+    step @ 0:9:3-10:1
+    step @ 0:9:10-9:23
+    step @ 0:9:16-9:22
+    const r1 "zero" @ 0:9:16-9:22
+    call-builtin r1 "error" 1 @ 0:9:10-9:23 0:9:16-9:22
+    return r1 @ 0:9:3-10:1
+    const r1 void @ 0:5:1-11:1
+    return r1 @ 0:5:1-11:1
+fn2 "show" params=1 captures=0 slots=3 @ 0:12:1-18:1
+    step @ 0:13:3-17:1
+    step @ 0:13:8-13:15
+    is-variant r1 r0 v0 @ 0:14:5-14:18
+    jump-if-false r1 L1 @ 0:14:5-14:18
+    payload r1 r0 0 @ 0:14:5-14:18
+    step @ 0:14:22-15:1
+    step @ 0:14:22-14:29
+    step @ 0:14:27-14:28
+    move r2 r1 @ 0:14:27-14:28
+    call-builtin r2 "puts" 1 @ 0:14:22-14:29 0:14:27-14:28
+    jump L0 @ 0:13:3-17:1
+  L1:
+    is-variant r1 r0 v1 @ 0:15:5-15:19
+    jump-if-false r1 L2 @ 0:15:5-15:19
+    step @ 0:15:23-16:1
+    step @ 0:15:23-15:35
+    step @ 0:15:28-15:34
+    const r1 "late" @ 0:15:28-15:34
+    call-builtin r1 "puts" 1 @ 0:15:23-15:35 0:15:28-15:34
+  L2:
+  L0:
+    const r1 void @ 0:12:1-18:1
+    return r1 @ 0:12:1-18:1
+fn3 "main" params=0 captures=0 slots=7 entry @ 0:19:1-31:1
+    step @ 0:20:3-21:1
+    step @ 0:20:7-20:27
+    step @ 0:20:18-20:23
+    closure r1 fn0 @ 0:20:18-20:23
+    step @ 0:20:25-20:26
+    const r2 int:1 @ 0:20:25-20:26
+    call-builtin r1 "Task.spawn" 2 @ 0:20:7-20:27 0:20:18-20:23 0:20:25-20:26
+    move r0 r1 @ 0:20:7-20:27
+    step @ 0:21:3-22:1
+    step @ 0:21:3-21:22
+    step @ 0:21:8-21:21
+    step @ 0:21:19-21:20
+    move r2 r0 @ 0:21:19-21:20
+    call-builtin r2 "Task.await" 1 @ 0:21:8-21:21 0:21:19-21:20
+    move r1 r2 @ 0:21:8-21:21
+    call-builtin r1 "puts" 1 @ 0:21:3-21:22 0:21:8-21:21
+    step @ 0:22:3-23:1
+    step @ 0:22:3-22:47
+    step @ 0:22:8-22:46
+    step @ 0:22:19-22:39
+    step @ 0:22:30-22:35
+    closure r3 fn0 @ 0:22:30-22:35
+    step @ 0:22:37-22:38
+    const r4 int:2 @ 0:22:37-22:38
+    call-builtin r3 "Task.spawn" 2 @ 0:22:19-22:39 0:22:30-22:35 0:22:37-22:38
+    move r2 r3 @ 0:22:19-22:39
+    step @ 0:22:41-22:45
+    const r3 int:1000 @ 0:22:41-22:45
+    call-builtin r2 "Task.await" 2 @ 0:22:8-22:46 0:22:19-22:39 0:22:41-22:45
+    move r1 r2 @ 0:22:8-22:46
+    call r1 fn2 @ 0:22:3-22:47
+    step @ 0:23:3-24:1
+    step @ 0:23:7-23:28
+    step @ 0:23:18-23:24
+    closure r2 fn1 @ 0:23:18-23:24
+    step @ 0:23:26-23:27
+    const r3 int:0 @ 0:23:26-23:27
+    call-builtin r2 "Task.spawn" 2 @ 0:23:7-23:28 0:23:18-23:24 0:23:26-23:27
+    move r1 r2 @ 0:23:7-23:28
+    step @ 0:24:3-25:1
+    step @ 0:24:3-24:26
+    step @ 0:24:8-24:25
+    step @ 0:24:8-24:21
+    step @ 0:24:19-24:20
+    move r4 r1 @ 0:24:19-24:20
+    call-builtin r4 "Task.await_result" 1 @ 0:24:8-24:21 0:24:19-24:20
+    move r3 r4 @ 0:24:8-24:21
+    call-builtin r3 "Result.ok?" 1 @ 0:24:8-24:25 0:24:8-24:21
+    move r2 r3 @ 0:24:8-24:25
+    call-builtin r2 "puts" 1 @ 0:24:3-24:26 0:24:8-24:25
+    step @ 0:25:3-26:1
+    step @ 0:25:22-25:36
+    step @ 0:25:34-25:35
+    const r3 int:2 @ 0:25:34-25:35
+    call-builtin r3 "Channel.new" 1 @ 0:25:22-25:36 0:25:34-25:35
+    move r2 r3 @ 0:25:22-25:36
+    step @ 0:26:3-27:1
+    step @ 0:26:3-26:18
+    step @ 0:26:3-26:5
+    move r3 r2 @ 0:26:3-26:5
+    step @ 0:26:11-26:12
+    const r4 int:1 @ 0:26:11-26:12
+    step @ 0:26:14-26:17
+    const r5 int:100 @ 0:26:14-26:17
+    call-builtin r3 "Channel.send" 3 @ 0:26:3-26:18 0:26:3-26:5 0:26:11-26:12 0:26:14-26:17
+    step @ 0:27:3-28:1
+    step @ 0:27:3-27:29
+    step @ 0:27:8-27:28
+    step @ 0:27:8-27:20
+    step @ 0:27:8-27:10
+    move r5 r2 @ 0:27:8-27:10
+    step @ 0:27:16-27:19
+    const r6 int:100 @ 0:27:16-27:19
+    call-builtin r5 "Channel.recv" 2 @ 0:27:8-27:20 0:27:8-27:10 0:27:16-27:19
+    move r4 r5 @ 0:27:8-27:20
+    call-builtin r4 "Result.unwrap!" 1 @ 0:27:8-27:28 0:27:8-27:20
+    move r3 r4 @ 0:27:8-27:28
+    call-builtin r3 "puts" 1 @ 0:27:3-27:29 0:27:8-27:28
+    step @ 0:28:3-29:1
+    step @ 0:28:3-28:16
+    step @ 0:28:14-28:15
+    const r3 int:0 @ 0:28:14-28:15
+    call-builtin r3 "Task.sleep" 1 @ 0:28:3-28:16 0:28:14-28:15
+    step @ 0:29:3-30:1
+    step @ 0:29:3-29:29
+    step @ 0:29:8-29:28
+    call-builtin r4 "Task.pending_count" 0 @ 0:29:8-29:28
+    move r3 r4 @ 0:29:8-29:28
+    call-builtin r3 "puts" 1 @ 0:29:3-29:29 0:29:8-29:28
+    const r3 void @ 0:19:1-31:1
+    return r3 @ 0:19:1-31:1

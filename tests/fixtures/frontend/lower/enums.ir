@@ -1,0 +1,148 @@
+program 0:1:1-41:1 entry=2 globals=0
+source 0 "enums.agc" chars=642
+enum "Option" v0="Some"/1 v1="None"/0
+enum "Tree" v2="Leaf"/0 v3="Node"/3
+enum "LogLevel" v4="Debug"/0 v5="Info"/0 v6="Warning"/0 v7="Error"/0
+fn0 "depth" params=1 captures=0 slots=7 @ 0:11:1-23:1
+    step @ 0:12:3-22:1
+    step @ 0:12:8-12:9
+    is-variant r1 r0 v2 @ 0:13:5-13:14
+    jump-if-false r1 L1 @ 0:13:5-13:14
+    step @ 0:13:18-14:1
+    step @ 0:13:25-13:26
+    const r1 int:0 @ 0:13:25-13:26
+    return r1 @ 0:13:18-14:1
+    jump L0 @ 0:12:3-22:1
+  L1:
+    is-variant r1 r0 v3 @ 0:14:5-14:23
+    jump-if-false r1 L2 @ 0:14:5-14:23
+    payload r1 r0 0 @ 0:14:5-14:23
+    payload r2 r0 2 @ 0:14:5-14:23
+    step @ 0:15:7-16:1
+    step @ 0:15:11-15:19
+    step @ 0:15:17-15:18
+    move r4 r1 @ 0:15:17-15:18
+    call r4 fn0 @ 0:15:11-15:19
+    move r3 r4 @ 0:15:11-15:19
+    step @ 0:16:7-17:1
+    step @ 0:16:11-16:19
+    step @ 0:16:17-16:18
+    move r5 r2 @ 0:16:17-16:18
+    call r5 fn0 @ 0:16:11-16:19
+    move r4 r5 @ 0:16:11-16:19
+    step @ 0:17:7-20:1
+    step @ 0:17:10-17:15
+    step @ 0:17:10-17:11
+    step @ 0:17:14-17:15
+    lt-i r5 r4 r3 @ 0:17:12-17:13
+    jump-if-false r5 L4 @ 0:17:10-17:15
+    step @ 0:18:9-19:1
+    step @ 0:18:16-18:21
+    step @ 0:18:16-18:17
+    step @ 0:18:20-18:21
+    const r6 int:1 @ 0:18:20-18:21
+    add-i r5 r3 r6 @ 0:18:18-18:19
+    return r5 @ 0:18:9-19:1
+  L4:
+  L3:
+    step @ 0:20:7-21:1
+    step @ 0:20:14-20:19
+    step @ 0:20:14-20:15
+    step @ 0:20:18-20:19
+    const r6 int:1 @ 0:20:18-20:19
+    add-i r5 r4 r6 @ 0:20:16-20:17
+    return r5 @ 0:20:7-21:1
+  L2:
+  L0:
+    const r1 void @ 0:11:1-23:1
+    return r1 @ 0:11:1-23:1
+fn1 "first" params=1 captures=0 slots=4 @ 0:24:1-30:1
+    step @ 0:25:3-28:1
+    step @ 0:25:6-25:18
+    step @ 0:25:6-25:13
+    step @ 0:25:6-25:8
+    move r2 r0 @ 0:25:6-25:8
+    call-builtin r2 "List.size" 1 @ 0:25:6-25:13 0:25:6-25:8
+    step @ 0:25:17-25:18
+    const r3 int:0 @ 0:25:17-25:18
+    eq r1 r2 r3 @ 0:25:14-25:16
+    jump-if-false r1 L1 @ 0:25:6-25:18
+    step @ 0:26:5-27:1
+    step @ 0:26:12-26:23
+    enum r1 r1 v1 @ 0:26:12-26:23
+    return r1 @ 0:26:5-27:1
+  L1:
+  L0:
+    step @ 0:28:3-29:1
+    step @ 0:28:10-28:28
+    step @ 0:28:22-28:27
+    step @ 0:28:22-28:24
+    step @ 0:28:25-28:26
+    const r3 int:0 @ 0:28:25-28:26
+    list-get r2 r0 r3 @ 0:28:25-28:26
+    enum r1 r2 v0 @ 0:28:10-28:28
+    return r1 @ 0:28:3-29:1
+    const r1 void @ 0:24:1-30:1
+    return r1 @ 0:24:1-30:1
+fn2 "main" params=0 captures=0 slots=5 entry @ 0:31:1-41:1
+    step @ 0:32:3-33:1
+    step @ 0:32:7-32:66
+    step @ 0:32:17-32:51
+    step @ 0:32:27-32:36
+    enum r2 r2 v2 @ 0:32:27-32:36
+    step @ 0:32:38-32:39
+    const r3 int:1 @ 0:32:38-32:39
+    step @ 0:32:41-32:50
+    enum r4 r4 v2 @ 0:32:41-32:50
+    enum r1 r2 v3 @ 0:32:17-32:51
+    step @ 0:32:53-32:54
+    const r2 int:2 @ 0:32:53-32:54
+    step @ 0:32:56-32:65
+    enum r3 r3 v2 @ 0:32:56-32:65
+    enum r0 r1 v3 @ 0:32:7-32:66
+    step @ 0:33:3-34:1
+    step @ 0:33:3-33:17
+    step @ 0:33:8-33:16
+    step @ 0:33:14-33:15
+    move r2 r0 @ 0:33:14-33:15
+    call r2 fn0 @ 0:33:8-33:16
+    move r1 r2 @ 0:33:8-33:16
+    call-builtin r1 "puts" 1 @ 0:33:3-33:17 0:33:8-33:16
+    step @ 0:34:3-38:1
+    step @ 0:34:8-34:18
+    step @ 0:34:14-34:17
+    step @ 0:34:15-34:16
+    const r2 int:4 @ 0:34:15-34:16
+    list r1 r2 1 @ 0:34:14-34:17
+    call r1 fn1 @ 0:34:8-34:18
+    is-variant r2 r1 v0 @ 0:35:5-35:19
+    jump-if-false r2 L1 @ 0:35:5-35:19
+    payload r2 r1 0 @ 0:35:5-35:19
+    step @ 0:35:23-36:1
+    step @ 0:35:23-35:30
+    step @ 0:35:28-35:29
+    move r3 r2 @ 0:35:28-35:29
+    call-builtin r3 "puts" 1 @ 0:35:23-35:30 0:35:28-35:29
+    jump L0 @ 0:34:3-38:1
+  L1:
+    is-variant r2 r1 v1 @ 0:36:5-36:16
+    jump-if-false r2 L2 @ 0:36:5-36:16
+    step @ 0:36:20-37:1
+    step @ 0:36:20-36:32
+    step @ 0:36:25-36:31
+    const r2 "none" @ 0:36:25-36:31
+    call-builtin r2 "puts" 1 @ 0:36:20-36:32 0:36:25-36:31
+  L2:
+  L0:
+    step @ 0:38:3-39:1
+    step @ 0:38:11-38:27
+    enum r1 r1 v6 @ 0:38:11-38:27
+    step @ 0:39:3-40:1
+    step @ 0:39:3-39:19
+    step @ 0:39:8-39:18
+    step @ 0:39:8-39:13
+    move r2 r1 @ 0:39:8-39:13
+    to-text r2 r2 @ 0:39:8-39:18
+    call-builtin r2 "puts" 1 @ 0:39:3-39:19 0:39:8-39:18
+    const r2 void @ 0:31:1-41:1
+    return r2 @ 0:31:1-41:1

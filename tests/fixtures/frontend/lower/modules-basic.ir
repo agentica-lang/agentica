@@ -1,0 +1,214 @@
+program 0:1:1-13:1 entry=0 globals=0
+source 0 "root.agc" chars=278
+source 1 "models.agc" chars=269
+source 2 "std/queue.agc" chars=1533
+struct s0 "@2::User" ["name","age"]
+struct s1 "@3::QueueState" ["items"]
+struct s2 "@3::Popped" ["value","remaining"]
+enum "@2::Status" v0="Active"/0 v1="Gone"/0
+fn0 "main" params=0 captures=0 slots=7 entry @ 0:4:1-13:1
+    step @ 0:5:3-6:1
+    step @ 0:5:10-5:42
+    step @ 0:5:28-5:33
+    const r1 "ana" @ 0:5:28-5:33
+    step @ 0:5:40-5:41
+    const r2 int:3 @ 0:5:40-5:41
+    struct r0 r1 s0 @ 0:5:10-5:42
+    step @ 0:6:3-7:1
+    step @ 0:6:11-6:28
+    step @ 0:6:11-6:15
+    move r2 r0 @ 0:6:11-6:15
+    step @ 0:6:26-6:27
+    const r3 int:4 @ 0:6:26-6:27
+    struct-with r1 r2 s0 [1] @ 0:6:11-6:28
+    step @ 0:7:3-8:1
+    step @ 0:7:3-7:31
+    step @ 0:7:8-7:30
+    step @ 0:7:24-7:29
+    move r3 r1 @ 0:7:24-7:29
+    call r3 fn1 @ 0:7:8-7:30
+    move r2 r3 @ 0:7:8-7:30
+    call-builtin r2 "puts" 1 @ 0:7:3-7:31 0:7:8-7:30
+    step @ 0:8:3-9:1
+    step @ 0:8:3-8:38
+    step @ 0:8:8-8:37
+    step @ 0:8:8-8:32
+    step @ 0:8:21-8:31
+    step @ 0:8:22-8:25
+    const r5 "x" @ 0:8:22-8:25
+    step @ 0:8:27-8:30
+    const r6 "y" @ 0:8:27-8:30
+    list r4 r5 2 @ 0:8:21-8:31
+    call r4 fn2 @ 0:8:8-8:32
+    move r3 r4 @ 0:8:8-8:32
+    call-builtin r3 "List.size" 1 @ 0:8:8-8:37 0:8:8-8:32
+    move r2 r3 @ 0:8:8-8:37
+    call-builtin r2 "puts" 1 @ 0:8:3-8:38 0:8:8-8:37
+    step @ 0:9:3-10:1
+    step @ 0:9:7-9:18
+    call r3 fn3 @ 0:9:7-9:18
+    move r2 r3 @ 0:9:7-9:18
+    step @ 0:10:3-11:1
+    step @ 0:10:3-10:10
+    step @ 0:10:8-10:9
+    move r3 r2 @ 0:10:8-10:9
+    call-builtin r3 "puts" 1 @ 0:10:3-10:10 0:10:8-10:9
+    step @ 0:11:3-12:1
+    step @ 0:11:3-11:29
+    step @ 0:11:8-11:28
+    enum r3 r3 v0 @ 0:11:8-11:28
+    call-builtin r3 "puts" 1 @ 0:11:3-11:29 0:11:8-11:28
+    const r3 void @ 0:4:1-13:1
+    return r3 @ 0:4:1-13:1
+fn1 "@2::describe" params=1 captures=0 slots=5 @ 1:11:8-14:1
+    step @ 1:12:3-13:1
+    step @ 1:12:10-12:41
+    step @ 1:12:10-12:25
+    step @ 1:12:10-12:19
+    step @ 1:12:10-12:14
+    field r3 r0 0 @ 1:12:10-12:19
+    step @ 1:12:22-12:25
+    const r4 ":" @ 1:12:22-12:25
+    concat r2 r3 r4 @ 1:12:20-12:21
+    step @ 1:12:28-12:41
+    step @ 1:12:28-12:36
+    step @ 1:12:28-12:32
+    field r3 r0 1 @ 1:12:28-12:36
+    call-builtin r3 "String.from_int" 1 @ 1:12:28-12:41 1:12:28-12:36
+    concat r1 r2 r3 @ 1:12:26-12:27
+    return r1 @ 1:12:3-13:1
+    const r1 void @ 1:11:8-14:1
+    return r1 @ 1:11:8-14:1
+fn2 "@2::names" params=1 captures=0 slots=3 @ 1:15:8-18:1
+    step @ 1:16:3-17:1
+    step @ 1:16:10-16:36
+    step @ 1:16:10-16:12
+    move r1 r0 @ 1:16:10-16:12
+    step @ 1:16:17-16:36
+    closure r2 fn9 @ 1:16:17-16:36
+    call-builtin r1 "List.map" 2 @ 1:16:10-16:36 1:16:10-16:12 1:16:17-16:36
+    return r1 @ 1:16:3-17:1
+    const r1 void @ 1:15:8-18:1
+    return r1 @ 1:15:8-18:1
+fn3 "@3::new" params=0 captures=0 slots=2 @ 2:20:8-23:1
+    step @ 2:21:3-22:1
+    step @ 2:21:10-21:31
+    step @ 2:21:28-21:30
+    list r1 r1 0 @ 2:21:28-21:30
+    struct r0 r1 s1 @ 2:21:10-21:31
+    return r0 @ 2:21:3-22:1
+    const r0 void @ 2:20:8-23:1
+    return r0 @ 2:20:8-23:1
+fn4 "@3::push" params=2 captures=0 slots=6 @ 2:25:8-28:1
+    step @ 2:26:3-27:1
+    step @ 2:26:10-26:56
+    step @ 2:26:28-26:55
+    step @ 2:26:40-26:47
+    step @ 2:26:40-26:41
+    field r4 r0 0 @ 2:26:40-26:47
+    step @ 2:26:49-26:54
+    move r5 r1 @ 2:26:49-26:54
+    call-builtin r4 "List.append" 2 @ 2:26:28-26:55 2:26:40-26:47 2:26:49-26:54
+    move r3 r4 @ 2:26:28-26:55
+    struct r2 r3 s1 @ 2:26:10-26:56
+    return r2 @ 2:26:3-27:1
+    const r2 void @ 2:25:8-28:1
+    return r2 @ 2:25:8-28:1
+fn5 "@3::pop" params=1 captures=0 slots=7 @ 2:30:8-36:1
+    step @ 2:31:3-34:1
+    step @ 2:31:6-31:15
+    step @ 2:31:13-31:14
+    move r1 r0 @ 2:31:13-31:14
+    call r1 fn8 @ 2:31:6-31:15
+    jump-if-false r1 L1 @ 2:31:6-31:15
+    step @ 2:32:5-33:1
+    step @ 2:32:12-32:35
+    step @ 2:32:18-32:34
+    const r1 "queue is empty" @ 2:32:18-32:34
+    call-builtin r1 "error" 1 @ 2:32:12-32:35 2:32:18-32:34
+    return r1 @ 2:32:5-33:1
+  L1:
+  L0:
+    step @ 2:34:3-35:1
+    step @ 2:34:10-34:92
+    step @ 2:34:13-34:91
+    step @ 2:34:27-34:37
+    step @ 2:34:27-34:34
+    step @ 2:34:27-34:28
+    field r4 r0 0 @ 2:34:27-34:34
+    step @ 2:34:35-34:36
+    const r5 int:0 @ 2:34:35-34:36
+    list-get r2 r4 r5 @ 2:34:35-34:36
+    step @ 2:34:50-34:90
+    step @ 2:34:68-34:89
+    step @ 2:34:78-34:85
+    step @ 2:34:78-34:79
+    field r5 r0 0 @ 2:34:78-34:85
+    step @ 2:34:87-34:88
+    const r6 int:1 @ 2:34:87-34:88
+    call-builtin r5 "List.drop" 2 @ 2:34:68-34:89 2:34:78-34:85 2:34:87-34:88
+    move r4 r5 @ 2:34:68-34:89
+    struct r3 r4 s1 @ 2:34:50-34:90
+    struct r1 r2 s2 @ 2:34:13-34:91
+    call-builtin r1 "ok" 1 @ 2:34:10-34:92 2:34:13-34:91
+    return r1 @ 2:34:3-35:1
+    const r1 void @ 2:30:8-36:1
+    return r1 @ 2:30:8-36:1
+fn6 "@3::peek" params=1 captures=0 slots=4 @ 2:38:8-44:1
+    step @ 2:39:3-42:1
+    step @ 2:39:6-39:15
+    step @ 2:39:13-39:14
+    move r1 r0 @ 2:39:13-39:14
+    call r1 fn8 @ 2:39:6-39:15
+    jump-if-false r1 L1 @ 2:39:6-39:15
+    step @ 2:40:5-41:1
+    step @ 2:40:12-40:35
+    step @ 2:40:18-40:34
+    const r1 "queue is empty" @ 2:40:18-40:34
+    call-builtin r1 "error" 1 @ 2:40:12-40:35 2:40:18-40:34
+    return r1 @ 2:40:5-41:1
+  L1:
+  L0:
+    step @ 2:42:3-43:1
+    step @ 2:42:10-42:24
+    step @ 2:42:13-42:23
+    step @ 2:42:13-42:20
+    step @ 2:42:13-42:14
+    field r2 r0 0 @ 2:42:13-42:20
+    step @ 2:42:21-42:22
+    const r3 int:0 @ 2:42:21-42:22
+    list-get r1 r2 r3 @ 2:42:21-42:22
+    call-builtin r1 "ok" 1 @ 2:42:10-42:24 2:42:13-42:23
+    return r1 @ 2:42:3-43:1
+    const r1 void @ 2:38:8-44:1
+    return r1 @ 2:38:8-44:1
+fn7 "@3::size" params=1 captures=0 slots=2 @ 2:46:8-49:1
+    step @ 2:47:3-48:1
+    step @ 2:47:10-47:28
+    step @ 2:47:20-47:27
+    step @ 2:47:20-47:21
+    field r1 r0 0 @ 2:47:20-47:27
+    call-builtin r1 "List.size" 1 @ 2:47:10-47:28 2:47:20-47:27
+    return r1 @ 2:47:3-48:1
+    const r1 void @ 2:46:8-49:1
+    return r1 @ 2:46:8-49:1
+fn8 "@3::empty?" params=1 captures=0 slots=4 @ 2:51:8-54:1
+    step @ 2:52:3-53:1
+    step @ 2:52:10-52:22
+    step @ 2:52:10-52:17
+    step @ 2:52:15-52:16
+    move r2 r0 @ 2:52:15-52:16
+    call r2 fn7 @ 2:52:10-52:17
+    step @ 2:52:21-52:22
+    const r3 int:0 @ 2:52:21-52:22
+    eq r1 r2 r3 @ 2:52:18-52:20
+    return r1 @ 2:52:3-53:1
+    const r1 void @ 2:51:8-54:1
+    return r1 @ 2:51:8-54:1
+fn9 "block@models.agc:16:17" params=1 captures=0 slots=2 @ 1:16:17-16:36
+    step @ 1:16:24-16:32
+    step @ 1:16:24-16:32
+    step @ 1:16:24-16:25
+    move r1 r0 @ 1:16:24-16:25
+    call-builtin r1 "String.upcase" 1 @ 1:16:24-16:32 1:16:24-16:25
+    return r1 @ 1:16:24-16:32
