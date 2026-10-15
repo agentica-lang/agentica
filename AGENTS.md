@@ -55,6 +55,8 @@ phase 13).
 | any change to src/, vm/, tests/, CI | `.agents/skills/agentica-development/SKILL.md`, then only the references it names |
 | a C VM PR review | `.agents/skills/vm-c-critic/` |
 | language rules | `docs/grammar/` |
+| writing `.agc` programs | `.agents/skills/agentica-programming/` |
+| `site/` or `benchmarks/` | `.agents/skills/agentica-development/SKILL.md` |
 | what is planned or done | `docs/roadmap/README.md` |
 
 ## Rules
@@ -79,8 +81,10 @@ phase 13).
   until its phase lands. No placeholder files or nodes for later phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
-- Tests: `rackunit`. Peers may use Node.js, Python or curl with standard
-  libraries only; no third-party libraries or test frameworks.
+- Tests: `rackunit`. Racket, Node and Python test code and peers (curl included)
+  use the standard library only, with no third-party libraries or test
+  frameworks. The VM's C dependencies are the submodules in `vm/third_party`;
+  the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
 - Network and process tests are hermetic: localhost, port 0, no external
   services, everything cleaned up. TCP/HTTP interop uses an independent
   protocol implementation as the peer. Fixtures go in `tests/fixtures/`.

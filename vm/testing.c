@@ -105,23 +105,14 @@ static run_mode mode_of(agc_vm *vm) {
   return MODE_NONE;
 }
 
-static agc_json_member member(const char *key, agc_value value) {
-  agc_json_member m;
-  m.key = lit(key);
-  m.value = value;
-  return m;
-}
-
 static agc_value json_text(agc_string *s) { return agc_json_leaf(AGC_JSON_STRING, agc_string_value(s)); }
-
-static agc_value json_int(uint32_t n) { return agc_json_leaf(AGC_JSON_INT, agc_int(n)); }
 
 static agc_json_member *members(size_t n) { return agc_alloc(agc_size_mul(n, sizeof(agc_json_member))); }
 
 static agc_value position(uint32_t line, uint32_t column) {
   agc_json_member *m = members(2);
-  m[0] = member("column", json_int(column));
-  m[1] = member("line", json_int(line));
+  m[0] = agc_json_pair("column", agc_json_number(column));
+  m[1] = agc_json_pair("line", agc_json_number(line));
   return agc_json_object(m, 2);
 }
 
@@ -131,7 +122,7 @@ static agc_string *record_line(agc_vm *vm, agc_json_member *m, size_t n) {
 
 static agc_string *event_line(agc_vm *vm, const char *event) {
   agc_json_member *m = members(1);
-  m[0] = member("event", json_text(lit(event)));
+  m[0] = agc_json_pair("event", json_text(lit(event)));
   return record_line(vm, m, 1);
 }
 
@@ -150,10 +141,10 @@ static agc_string *list_lines(agc_vm *vm, const agc_list *tests) {
       const agc_test_case *c = agc_as_test_case(vm, item);
       const agc_span *at = &p->spans[c->span];
       agc_json_member *m = members(4);
-      m[0] = member("column", json_int(at->start_column));
-      m[1] = member("event", json_text(lit("test")));
-      m[2] = member("line", json_int(at->start_line));
-      m[3] = member("name", json_text(c->name));
+      m[0] = agc_json_pair("column", agc_json_number(at->start_column));
+      m[1] = agc_json_pair("event", json_text(lit("test")));
+      m[2] = agc_json_pair("line", agc_json_number(at->start_line));
+      m[3] = agc_json_pair("name", json_text(c->name));
       lines[k] = record_line(vm, m, 4);
     }
     bytes = agc_size_add(bytes, lines[k]->bytes);
@@ -173,17 +164,17 @@ static agc_string *fail_line(agc_vm *vm, const char *code, agc_string *message, 
   const agc_program *p = vm->rt->program;
   const agc_span *at = &p->spans[span];
   agc_json_member *range = members(2);
-  range[0] = member("end", position(at->end_line, at->end_column));
-  range[1] = member("start", position(at->start_line, at->start_column));
+  range[0] = agc_json_pair("end", position(at->end_line, at->end_column));
+  range[1] = agc_json_pair("start", position(at->start_line, at->start_column));
   agc_json_member *m = members(10);
   size_t count = 0;
-  m[count++] = member("code", json_text(lit(code)));
-  m[count++] = member("event", json_text(lit("fail")));
-  m[count++] = member("file", json_text(p->sources[at->source].name));
-  m[count++] = member("message", json_text(message));
-  m[count++] = member("range", agc_json_object(range, 2));
-  if (n && n->expected) m[count++] = member("expected", json_text(n->expected));
-  if (n && n->actual) m[count++] = member("actual", json_text(n->actual));
+  m[count++] = agc_json_pair("code", json_text(lit(code)));
+  m[count++] = agc_json_pair("event", json_text(lit("fail")));
+  m[count++] = agc_json_pair("file", json_text(p->sources[at->source].name));
+  m[count++] = agc_json_pair("message", json_text(message));
+  m[count++] = agc_json_pair("range", agc_json_object(range, 2));
+  if (n && n->expected) m[count++] = agc_json_pair("expected", json_text(n->expected));
+  if (n && n->actual) m[count++] = agc_json_pair("actual", json_text(n->actual));
   if (stack) count += agc_stack_members(p, stack, m + count);
   return record_line(vm, m, count);
 }

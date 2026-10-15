@@ -316,6 +316,16 @@ agc_value agc_json_from(agc_vm *vm, agc_value root, uint32_t span) {
   }
 }
 
+agc_value agc_json_number(int64_t n) { return agc_json_leaf(AGC_JSON_INT, agc_int(n)); }
+
+agc_json_member agc_json_pair(const char *key, agc_value value) {
+  size_t n = strlen(key);
+  agc_json_member m;
+  m.key = agc_make_string(key, n, n);
+  m.value = value;
+  return m;
+}
+
 agc_value agc_json_object(agc_json_member *members, size_t n) {
   agc_json *node = new_node(AGC_JSON_OBJECT, agc_nil());
   node->members = members;

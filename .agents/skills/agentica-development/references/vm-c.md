@@ -2,6 +2,8 @@
 
 Read before writing or reviewing C in `vm/`.
 
+Read first: `references/vm.md` (the trust model and the layers).
+
 **C style.** C11. `make vm-lint` (clang-tidy, `.clang-tidy`) and
 `tests/vm-style-test.rkt` check the rules marked *checked*.
 
@@ -34,13 +36,15 @@ Read before writing or reviewing C in `vm/`.
   does. A C test's header is 1 to 4 lines on what it tests. A legal header may
   come before it. *Checked* by `tests/vm-style-test.rkt` (3 to 8 lines of text
   for a source file, 1 to 4 for a C test, the generated file skipped).
-- Apart from the headers, the default is no comment. Add one only where the
-  code's complexity justifies it, and make it say why, not what: an
-  invariant, a subtle ownership or lifetime rule, a protocol, OpenSSL or libuv
-  quirk, an order that is not obvious, or the spec section or RFC the code
-  follows. Use short `/* */` block comments. Never narrate obvious code and
-  never leave commented-out code. Tool markers (`// NOLINT(...)`,
-  `/* fall through */`) are not comments in this sense.
+- Comments are welcome where the C is complex or not obvious, and they say
+  why, not what: an invariant, a subtle ownership or lifetime rule, GC
+  reachability (why a pointer is still alive after an allocation), an order
+  that is not obvious, a protocol or an OpenSSL or libuv quirk, the RFC or spec
+  section the code follows, or the check that rejects hostile input (a length,
+  offset or count from a `.agcb` or the wire). Use short `/* */` block
+  comments. Never narrate obvious code and never leave commented-out code. Tool
+  markers (`// NOLINT(...)`, `/* fall through */`) are not comments in this
+  sense.
 - Only `value.c` reads the value union, except the two inline word helpers of `value.h` (`agc_value_word`, `agc_word_value`) that list leaves use for the 8-byte payload of an Int or Float. Immediates write the full word.
 
 `make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)

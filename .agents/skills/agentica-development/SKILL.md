@@ -34,7 +34,6 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 make vm                                   # build dist/agentica-vm (git submodule update --init first)
 make test TESTS="tests/lexer-test.rkt"    # only the tests the change touches
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
-make test-slow TESTS="tests/x-test.rkt"   # the (module+ slow ...) cases; CI runs it after make test, not for local work
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
 make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
 make vm-golden-check FIXTURES="a b"       # CI golden check of only those fixtures; make goldens FIXTURES="a b" rewrites only them
@@ -42,9 +41,12 @@ make dup-check                            # jscpd: a new copy fails CI; share a 
 make site                                 # before merging a site change
 ```
 
-Two tiers: put fast cases in `(module+ test ...)` and slow ones (live corpus, generated inputs, stress) in `(module+ slow ...)`. Locally run only the fast tier. CI runs the slow tier with `make test-slow` after `make test`. Sanitizers, gc-stress, fuzz, smoke and full sweeps are slow by nature.
-
-CI runs everything else (`references/ci.md`, "What CI runs").
+Run the stage tests the change touches (`make test TESTS=...`, which builds the
+VM first) and run the affected example with `racket src/main.rkt`. Two tiers:
+put fast cases in `(module+ test ...)` and slow ones (live corpus, generated
+inputs, stress) in `(module+ slow ...)`. Locally run only the fast tier; CI
+runs the slow tier with `make test-slow` after `make test`. CI runs everything
+else (`references/ci.md`, "What CI runs").
 
 ## Stage contract
 
@@ -64,10 +66,10 @@ CI runs everything else (`references/ci.md`, "What CI runs").
 | AST node | by default waits for the parser port (35.4 step 2); then `compiler/` |
 | syntax form | by default waits for the parser port; `src/parser.rkt` only for a bug fix |
 | diagnostic code | where the problem is found; prefix `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-` (`references/stages.md` lists them) |
-| builtin | `src/builtins.rkt` metadata, checker rule, `vm-builtins` in `src/lower.rkt`, C in `vm/`, a golden (`references/vm-builtins.md`) |
-| VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`) |
+| builtin | `src/builtins.rkt` metadata, checker rule, the `vm-builtins` table in `src/lower.rkt`, C in `vm/`, a golden (`references/vm-builtins.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
+| VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | pipeline stage | `src/<stage>.rkt`, wired in `src/main.rkt`, `tests/<stage>-test.rkt` |
-| `std/` module | `stdlib/<name>.agc`, registered in `src/stdlib.rkt`, a doc on the module and every export |
+| `std/` module | `stdlib/<name>.agc`, registered in `src/stdlib.rkt`, a doc on the module and every export, comments as `references/library-notes.md` says |
 | test | `tests/<stage>-test.rkt` (rackunit); VM behavior: a fixture in `tests/fixtures/vm/` with its `.expected` |
 | language rule | `docs/grammar/`, the site page, and the programming skill (`.agents/skills/agentica-programming/`) |
 
@@ -77,10 +79,12 @@ CI runs everything else (`references/ci.md`, "What CI runs").
   diagnostic code. Messages, spans and step counts may change.
 - Every `.agcb` is untrusted: no memory error or UB whatever it holds.
 - Out-of-subset programs fail with `LOWER-UNSUPPORTED`.
-- A change to the scheduler, loop, files, stdin, processes, sockets or the
-  end of the run keeps `docs/vm/14-core-invariants.md` (one way to wait,
-  time out, cancel, end, own a handle) and the thread model of
+- A PR that touches the VM core (scheduler, loop, I/O, the end of the run) is
+  checked against `docs/vm/14-core-invariants.md` (one way to wait, time out,
+  cancel, end, own a handle) and the thread model of
   `docs/vm/16-architecture.md`.
+- No new `vm/` subsystem without a demonstrated use case
+  (`docs/vm/14-core-invariants.md` 14.6).
 - Details: `references/vm.md`, then the file its "Read next" table names.
 
 ## When to read a reference
@@ -88,11 +92,11 @@ CI runs everything else (`references/ci.md`, "What CI runs").
 | Read | When |
 |---|---|
 | `references/repo-map.md` | finding which file in `src/`, `vm/`, `tests/` or `stdlib/` owns something |
-| `references/frontend.md` | editing `src/*.rkt` or `compiler/`: the freeze, the Agentica lexer and its goldens, recipes (keyword, AST node, syntax, diagnostic, stage, tests), Racket gotchas, stray `NL` tokens, reading a failure |
+| `references/frontend.md` | editing `src/*.rkt` or `compiler/`: the freeze, the Agentica lexer and its goldens, recipes (keyword, AST node, syntax, diagnostic, stage, tests), Racket gotchas, stray `NL` tokens, reading a failure, comments in `compiler/`, `src/` and `tests/` |
 | `references/stages.md` | the token kinds, the diagnostic code list, the AST nodes, a module's public API (`source`, `lexer`, `parser`, `modules`, `checker`, `lower`, `bytecode`, `builtins`, `main`) |
 | `references/language-notes.md` | changing a core language rule: Result and `try`, collections, ranges, file modules, methods, interpolation, blocks, hints, enums, function values |
-| `references/library-notes.md` | changing a library area: stdio, JSON, tasks, TCP/TLS/HTTP, files and paths, processes |
-| `references/bdd.md` | `agentica test`: `src/bdd-driver.rkt`, `std/bdd`, `stdlib/test/`, step programs, unit test files |
+| `references/library-notes.md` | changing a library area (stdio, JSON, tasks, TCP/TLS/HTTP, files and paths, processes, Int and Float bits, std/binary) or the comments of a `stdlib/` module |
+| `references/bdd.md` | `agentica test`: `src/bdd-driver.rkt`, `std/bdd`, `stdlib/test/`, step programs and their handler rules, unit test files |
 | `references/vm.md` | any VM work: pipeline, layers, the rules every change keeps, and the index of the `vm-*.md` files |
 | `references/ci.md` | `.github/workflows/`, the Makefile, new VM files, peers or fixtures, jscpd, what CI runs, releases and `CHANGELOG.md` |
 | `references/site.md` | `site/`, or a language rule or builtin shown on a site page |

@@ -40,7 +40,7 @@ By default, under the freeze, these recipes name `src/` files. New syntax and ne
 1. Add it to the `keywords` hash (reserved words) or the operator hash in `src/lexer.rkt`.
 2. If the parser must act on it, add the kind to the relevant `case`/`memq` in `src/parser.rkt`.
 3. Add a test in `tests/lexer-test.rkt` (kinds) and, when it affects syntax, `tests/parser-test.rkt`.
-4. Run `raco test tests/`.
+4. Run `make test TESTS="tests/<stage>-test.rkt"`.
 
 ### Add an AST node
 
@@ -54,7 +54,7 @@ By default, under the freeze, these recipes name `src/` files. New syntax and ne
 2. Add the AST node if no existing node fits.
 3. Write a parse function and call it from the right place: `parse-statement` for statements, `parse-primary` for expressions, `parse-program` for declarations.
 4. Add one valid test and one rejection test asserting the diagnostic code.
-5. Run `raco test tests/` and the smoke test.
+5. Run `make test TESTS="tests/<stage>-test.rkt"` and the affected example.
 
 ### Add a diagnostic code
 
@@ -67,7 +67,7 @@ By default, under the freeze, these recipes name `src/` files. New syntax and ne
 1. Create `src/<stage>.rkt` with one entry point and a `provide`.
 2. Require the previous stage's data modules only; do not reach back into the CLI.
 3. Wire it into `src/main.rkt` after the previous stage, behind a `diagnostic?` guard.
-4. Add `tests/<stage>-test.rkt`. `raco test tests/` discovers it automatically; CI needs no change.
+4. Add `tests/<stage>-test.rkt`. `make test` discovers it automatically; CI needs no change.
 
 ### Add tests
 
@@ -97,7 +97,12 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 ## Error handling
 
-- `raco test tests/` failure: read the failing `test-case` name and the message from the `parse-ok`/`parse-code` helper. A `parse-ok` failure prints the diagnostic the stage returned.
+- `make test TESTS="tests/<stage>-test.rkt"` failure: read the failing `test-case` name and the message from the `parse-ok`/`parse-code` helper. A `parse-ok` failure prints the diagnostic the stage returned.
 - Smoke test exits 1: `main.rkt` printed `file:line:column error[CODE]`, the message, and a source excerpt with a caret on stderr. That is a stage diagnostic, not a crash.
 - A Racket traceback instead of a diagnostic means a stage raised or indexed out of range. Find the token or index and turn it into a `bail`/`fail`; the roadmap requires Agentica diagnostics, never host tracebacks.
 - A stage unexpectedly returns a diagnostic: check the first-error rule and that `main.rkt` guards with `diagnostic?` before passing data to the next stage.
+
+## Comments
+
+- `compiler/*.agc`: a `#` comment where the code is complex or copies a Racket behavior on purpose (name the behavior, such as the span or NL rule). Each exported `def`, `struct` and `enum` you add or touch gets a `##` doc block, as in `stdlib/queue.agc` (`compiler/` has none yet; do not add docs to code you do not touch); the file's first doc block, followed by a blank line, is its module doc (`docs/grammar/05-syntax.md`). A `#` comment goes inside the body or above the `##` block, never between the block and its `def` (that is `PARSE-DETACHED-DOC`).
+- `src/*.rkt` and `tests/*.rkt`: a `;` comment for the non-obvious why, such as a Racket quirk, a freeze exception or a golden that must not change. Never narrate the code.

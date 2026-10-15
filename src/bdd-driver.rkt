@@ -171,8 +171,13 @@
   (define lines (string-split text "\n"))
   (if (null? lines) "no diagnostic" (pick lines)))
 
-(define (first-two-lines lines)
-  (string-join (take lines (min 2 (length lines))) " "))
+(define (final-diagnostic lines)
+  (define headers
+    (for/list ([line (in-list lines)] [index (in-naturals)]
+               #:when (regexp-match? #px"^.+:[0-9]+:[0-9]+ error\\[[A-Z0-9-]+\\]$" line))
+      index))
+  (define shown (drop lines (if (null? headers) 0 (last headers))))
+  (string-join (take shown (min 2 (length shown))) " "))
 
 (define (compile-steps path directory)
   (cond
@@ -308,5 +313,5 @@
          (values status out)
          (infrastructure-report
           (format "the BDD runner failed with exit code ~a: ~a" status
-                  (message-line err first-two-lines))
+                  (message-line err final-diagnostic))
           (path->string vm) style seed))]))

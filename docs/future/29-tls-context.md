@@ -337,4 +337,4 @@ build one context at start-up and share it; `references/diagnostics.md`:
 (runnable examples in `mode="check"`, since they touch the network), the
 CHANGELOG entry of 29.5, `docs/vm/10-io-tls.md` §10.3 (contexts, `TLS.upgrade`),
 `docs/vm/05-values-execution-builtins.md` §5.3 (the finalizer exception), and
-the development skill's `references/vm.md`.
+the development skill's `references/vm-net.md`.
