@@ -525,37 +525,40 @@ time, so the lexer comes first, then the loader.
 Every `agentica` command that runs the front end first loads the carried
 `stage2`, 3.8 MB (1,386 functions, 90,919 spans, 90 sources), and the loader
 checks all of it: the file is bytecode like any other, and a front end given
-with `--front-end` is not trusted. That took 16 ms of the 25 ms of a `check
-examples/hello.agc`. Before is master (17b2c4ae), after is this PR. Both
-binaries are built like the release (`AGENTICA_GC=vendored
-AGENTICA_OPENSSL=vendored`), ran alternately (A B A B, 8 rounds of 10 runs, the
-median of the round medians) on an AMD Ryzen 5 3550H (4 cores, 8 threads),
-Debian 13, gcc 14.2; the load average was 1.5 to 2.2 (another job was
-building now and then, so read the last digit with care). Steps, calls and
-builtin calls are the same before and after (`AGENTICA_VM_TRACE=profile`), and
-so is the peak resident size.
+with `--front-end` is not trusted. That took 15 ms of the 24 ms of a `check
+examples/hello.agc`. Before is master (f2536003, with the interpreter loop of
+the third part), after is this PR. Both binaries are built like the release
+(`AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored`), ran alternately (A B A B, 8
+rounds of 10 runs, the median of the round medians; 5 rounds of 3 for the
+gherkin and parser checks) on an AMD Ryzen 5 3550H (4 cores, 8 threads),
+Debian 13, gcc 14.2. **Measured under load**: the load average was 2.0 to 2.9,
+because another job was building on the machine, so read the last digit with
+care. Steps, calls and builtin calls are the same before and after
+(`AGENTICA_VM_TRACE=profile`), and so is the peak resident size (hello 14.3
+MB, gherkin 21 MB, parser 34 MB).
 
 | command | before ms | after ms |
 |---|---:|---:|
-| `check examples/hello.agc` | 24.8 | 17.3 |
-| `help` | 25.4 | 18.2 |
-| `examples/hello.agc` (compile and run) | 25.8 | 18.4 |
-| `check stdlib/bdd/gherkin.agc` | 92.9 | 83.3 |
-| `check compiler/parser.agc` | 285.5 | 277.4 |
+| `check examples/hello.agc` | 24.3 | 17.5 |
+| `help` | 25.1 | 18.3 |
+| `examples/hello.agc` (compile and run) | 25.3 | 18.4 |
+| `check stdlib/bdd/gherkin.agc` | 73.9 | 65.4 |
+| `check compiler/parser.agc` | 217.5 | 206.6 |
 | `run -- hello.agcb` (372 bytes, no front end) | 3.9 | 3.9 |
-| `--version` | 2.3 | 2.3 |
-| `loader done us` of a hello check (`AGENTICA_VM_TRACE=loader`) | 16.1 | 8.8 |
+| `--version` | 2.4 | 2.3 |
+| `loader done us` of a hello check (`AGENTICA_VM_TRACE=loader`) | 15.4 | 8.3 |
 
-The two rows of 3.9 and 2.3 ms are the floor of a process start (`/bin/true`
+The rows of 3.9 and 2.3 ms are the floor of a process start (`/bin/true`
 is 1.0 ms here): the 12 MB static binary has 24,600 relative relocations,
 almost all in the data of the OpenSSL libraries (the VM's own tables are a few
 KB of the 485 KB of `.data.rel.ro`), which the dynamic loader applies before
 `main`. Collections in a hello check went from 7 to 2, in the gherkin check
-from 10 to 5, in the parser check from 13 to 8.
+from 10 to 5, in the parser check from 13 to 9.
 
-Where the 16 ms went, from an instrumented build that read the clock between
-the sections of the file (a throw-away patch, not in the tree), `check
-examples/hello.agc`, median of 5, in milliseconds:
+Where the 15 to 16 ms went, from an instrumented build that read the clock
+between the sections of the file (a throw-away patch, not in the tree), `check
+examples/hello.agc`, median of 5, in milliseconds (the previous master, which
+has the same loader):
 
 | section | before | after |
 |---|---:|---:|
@@ -619,7 +622,7 @@ Tried and dropped (each measured against the step before, interleaved):
 
 Left, in the order of the time it is worth:
 
-- The loaded program is 4.6 MB of heap and the faults are half of the 8.8 ms.
+- The loaded program is 4.6 MB of heap and the faults are half of the 8.3 ms.
   Spans are 1.8 MB of it (20 bytes each). A table kept in the carried file
   and read in place for the embedded front end would save that copy and its
   faults (about 1.7 ms), but the loader would have to keep the file bytes
