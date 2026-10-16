@@ -311,6 +311,12 @@ static int probe(int fd, bool *polled) {
   *polled = err == 0;
   return err == EPERM ? 0 : err;
 #else
+  if (S_ISCHR(info.st_mode)) {
+    struct stat device;
+    if ((stat("/dev/null", &device) == 0 && info.st_rdev == device.st_rdev) ||
+        (stat("/dev/zero", &device) == 0 && info.st_rdev == device.st_rdev))
+      return 0;
+  }
   *polled = true;
   return 0;
 #endif

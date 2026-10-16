@@ -4,6 +4,9 @@
  * malloc'd memory, and the close and stop paths. Core layer. Design:
  * docs/vm/10-io-scheduler.md §10.2.2 and docs/vm/14-core-invariants.md.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "core.h"
 
 #include <inttypes.h>
@@ -16,6 +19,10 @@
 #include <fcntl.h>
 #include <uv.h>
 #include <signal.h>
+#ifdef __APPLE__
+#include <poll.h>
+#include <sys/stat.h>
+#endif
 #if defined(_WIN32)
 #include <windows.h>
 #else
@@ -81,6 +88,10 @@ struct agc_io_job {
 #if !defined(_WIN32)
 struct agc_poller {
   uv_poll_t handle;
+#ifdef __APPLE__
+  uv_timer_t timer;
+  bool timed, writing;
+#endif
   int fd;
   void (*ready)(void *data, int status);
   void *data;
@@ -627,15 +638,34 @@ static void poll_ready(uv_poll_t *handle, int status, int events) {
 }
 
 static void poller_closed(uv_handle_t *handle) {
-  agc_poller *p = (agc_poller *)(void *)handle;
+  agc_poller *p = handle->data;
   close(p->fd);
   free(p);
 }
+
+#ifdef __APPLE__
+static void poll_tick(uv_timer_t *timer) {
+  agc_poller *p = timer->data;
+  struct pollfd fd = {.fd = p->fd, .events = p->writing ? POLLOUT : POLLIN};
+  int rc = poll(&fd, 1, 0);
+  if (rc < 0 && errno != EINTR) p->ready(p->data, -errno);
+  else if (rc > 0) p->ready(p->data, fd.revents & POLLNVAL ? UV_EBADF : 0);
+}
+#endif
 
 #ifdef __linux__
 int agc_fd_reopen(int fd, int access) {
   char path[32];
   snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
+  return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+}
+#elif defined(__APPLE__)
+int agc_fd_reopen(int fd, int access) {
+  struct stat info;
+  if (fstat(fd, &info) != 0) return -1;
+  if (S_ISFIFO(info.st_mode)) return fcntl(fd, F_DUPFD_CLOEXEC, 3);
+  char path[1024];
+  if (fcntl(fd, F_GETPATH, path) != 0) return -1;
   return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
 }
 #endif
@@ -656,7 +686,19 @@ char *agc_real_path(const char *path, int *err) {
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   agc_poller *p = calloc(1, sizeof(agc_poller));
   if (!p) agc_out_of_memory();
-  int rc = uv_poll_init(&loop_of(vm)->uv, &p->handle, fd);
+  int rc;
+#ifdef __APPLE__
+  struct stat info;
+  p->timed = fstat(fd, &info) == 0 && S_ISFIFO(info.st_mode);
+  if (p->timed) {
+    rc = uv_timer_init(&loop_of(vm)->uv, &p->timer);
+    p->timer.data = p;
+  } else
+#endif
+  {
+    rc = uv_poll_init(&loop_of(vm)->uv, &p->handle, fd);
+    p->handle.data = p;
+  }
   if (rc != 0) {
     free(p);
     *err = -rc;
@@ -669,12 +711,35 @@ agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
 void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data) {
   p->ready = ready;
   p->data = data;
+#ifdef __APPLE__
+  if (p->timed) {
+    p->writing = writing;
+    if (uv_timer_start(&p->timer, poll_tick, 0, 1) != 0) ready(data, UV_EBADF);
+    return;
+  }
+#endif
   if (uv_poll_start(&p->handle, writing ? UV_WRITABLE : UV_READABLE, poll_ready) != 0) ready(data, UV_EBADF);
 }
 
-void agc_poller_pause(agc_poller *p) { uv_poll_stop(&p->handle); }
+void agc_poller_pause(agc_poller *p) {
+#ifdef __APPLE__
+  if (p->timed) {
+    uv_timer_stop(&p->timer);
+    return;
+  }
+#endif
+  uv_poll_stop(&p->handle);
+}
 
-void agc_poller_close(agc_poller *p) { uv_close((uv_handle_t *)&p->handle, poller_closed); }
+void agc_poller_close(agc_poller *p) {
+#ifdef __APPLE__
+  if (p->timed) {
+    uv_close((uv_handle_t *)&p->timer, poller_closed);
+    return;
+  }
+#endif
+  uv_close((uv_handle_t *)&p->handle, poller_closed);
+}
 #endif
 
 bool agc_io_init(void) {

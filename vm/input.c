@@ -4,6 +4,9 @@
  * loop, and any other stdin by a pool job. Core layer. Design:
  * docs/vm/10-io-scheduler.md §10.2.2.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "core.h"
 
 #include <errno.h>
@@ -17,7 +20,7 @@
 #include <unistd.h>
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <poll.h>
 #include <stdio.h>
@@ -31,7 +34,7 @@
 #define INPUT_ROOM ((size_t)4096)
 #define FILL_WAIT 3
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 typedef struct {
   int fd;
   bool socket;
@@ -100,7 +103,7 @@ static size_t read_room(agc_input *in) {
   return room > INPUT_READ_MAX ? INPUT_READ_MAX : room;
 }
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 static bool wait_readable(int fd) {
   struct pollfd p = {.fd = fd, .events = POLLIN};
   for (;;) {
@@ -152,6 +155,17 @@ static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true,
 
 static bool read_once(read_request *q) {
   for (;;) {
+#ifdef __APPLE__
+    if (!q->socket) {
+      struct pollfd fd = {.fd = q->fd, .events = POLLIN};
+      int rc = poll(&fd, 1, 0);
+      if (rc == 0 || (rc < 0 && errno == EINTR)) return false;
+      if (rc < 0) {
+        q->got = -1;
+        return true;
+      }
+    }
+#endif
     ssize_t n = q->socket ? recv(q->fd, q->data, q->room, MSG_DONTWAIT) : read(q->fd, q->data, q->room);
     if (n >= 0) {
       q->got = n;

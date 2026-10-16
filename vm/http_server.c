@@ -7,7 +7,7 @@
 #include "http_fields.h"
 #include "net.h"
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>

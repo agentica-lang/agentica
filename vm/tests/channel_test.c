@@ -8,7 +8,7 @@
 #include <string.h>
 #include <time.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 
 enum { NEW, SEND, RECV, CLOSE, CLOSED, COUNT };
 

@@ -171,7 +171,7 @@ class TestCase(unittest.TestCase):
 
     def make_temp_dir(self, prefix="agentica-"):
         """A fresh directory, removed when the test ends (also after a failure)."""
-        path = Path(tempfile.mkdtemp(prefix=prefix))
+        path = Path(tempfile.mkdtemp(prefix=prefix)).resolve()
         self.addCleanup(shutil.rmtree, path, ignore_errors=True)
         return path
 

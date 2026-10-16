@@ -113,6 +113,8 @@ bool agc_launch_bind(int64_t driver) {
   if (prctl(PR_SET_PDEATHSIG, SIGTERM) != 0) return false;
   return (int64_t)getppid() == driver;
 }
+#elif defined(__APPLE__)
+bool agc_launch_bind(int64_t driver) { return (int64_t)getppid() == driver; }
 #else
 bool agc_launch_bind(int64_t driver) {
   (void)driver;
@@ -204,7 +206,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
 }
 
 void agc_launch_exit(int code) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   sigset_t saved;
   agc_io_block_stop(&saved);
   int sig = agc_io_stop_signal();
@@ -240,7 +242,7 @@ static int private_trace_fd(int fd) {
 }
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 static void fill_standard_fds(void) {
   for (int fd = 0; fd <= 2; fd++) {
     if (fcntl(fd, F_GETFD) != -1 || errno != EBADF) continue;
@@ -259,7 +261,7 @@ void agc_launch_ignore_sigpipe(void) {
 }
 
 void agc_launch_init(agc_launch *launch) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   fill_standard_fds();
 #endif
   agc_launch_ignore_sigpipe();

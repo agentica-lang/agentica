@@ -354,7 +354,7 @@ void agc_io_block_stop(sigset_t *saved);
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more);
 #endif
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 int agc_fd_reopen(int fd, int access);
 #endif
 #if defined(__linux__) || defined(__APPLE__)

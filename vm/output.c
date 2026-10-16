@@ -3,13 +3,20 @@
  * ring and a FIFO of waiting writers, so that a print waits its turn instead
  * of interleaving. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "core.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __APPLE__
+#include <poll.h>
+#endif
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -48,7 +55,7 @@ bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->ta
 
 bool agc_output_failed(const agc_output *out) { return out->base && out->base->failed; }
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 static size_t smaller(size_t a, size_t b) { return a < b ? a : b; }
 
 static size_t room(const agc_output *s) { return AGC_OUTPUT_BUFFER - s->len; }
@@ -126,6 +133,18 @@ static void fail_stream(agc_output *s) {
 static void write_now(agc_output *s) {
   while (s->len) {
     size_t n = run_length(s);
+#ifdef __APPLE__
+    if (!s->socket) {
+      struct pollfd fd = {.fd = s->fd, .events = POLLOUT};
+      int rc = poll(&fd, 1, 0);
+      if (rc == 0 || (rc < 0 && errno == EINTR)) return;
+      if (rc < 0) {
+        fail_stream(s);
+        return;
+      }
+      if (n > PIPE_BUF) n = PIPE_BUF;
+    }
+#endif
     ssize_t done = s->socket ? send(s->fd, s->buf + s->start, n, MSG_DONTWAIT | MSG_NOSIGNAL)
                              : write(s->fd, s->buf + s->start, n);
     if (done > 0) {
@@ -504,7 +523,7 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
 #endif
 
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   if (out->base) return put(vm, out, text, newline);
 #endif
   if (text->bytes && fwrite(text->data, 1, text->bytes, out->file) != text->bytes) write_failed(vm, out);
@@ -514,7 +533,7 @@ bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline
 
 void agc_flush(agc_vm *vm) {
   agc_output *out = &vm->rt->out;
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   if (out->base) {
     flush_now(out->base);
     return;

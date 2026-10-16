@@ -2,6 +2,9 @@
  * vm/output.c with hand-made tasks and a pipe: the order of small prints,
  * writers that wait, the ring wrap-around, and agc_drain.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "../core.h"
 
 #include <assert.h>
@@ -12,7 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 
 #define CAP AGC_OUTPUT_BUFFER
 #define BLOCK ((size_t)16384)
@@ -35,7 +38,9 @@ static agc_task *make_task(void) {
 
 static void fresh(int fd) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  int flags = fcntl(fd, F_GETFL);
   agc_output_open(&vm, out(), fd);
+  assert(fcntl(fd, F_GETFL) == flags);
 }
 
 static void finish(void) { assert(agc_io_close(&vm)); }

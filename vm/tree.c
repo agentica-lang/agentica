@@ -7,15 +7,19 @@
  * the tree is crossed, as rm -rf does. No VM state; Path.remove in files.c runs
  * it on a pool thread. Service layer. Design: docs/vm/02-reference-behavior.md.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "services.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <dirent.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <unistd.h>
 
 /* One open directory of the walk. `removed` counts the entries this pass deleted; `name` is the directory's
