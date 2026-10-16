@@ -85,22 +85,27 @@ static bool number_value(const uint8_t *s, size_t len, agc_value *out) {
   return true;
 }
 
-static yyjson_val *parse_child(parse_frame *f) {
+/* A key or string of the document: the empty String and a one-character ASCII String are the shared ones. */
+static agc_string *json_string(agc_vm *vm, const char *text, size_t len) {
+  if (len <= 1) return agc_small_string(vm, text, len, len);
+  return agc_make_string(text, len, agc_utf8_count((const uint8_t *)text, len));
+}
+
+static yyjson_val *parse_child(agc_vm *vm, parse_frame *f) {
   if (f->node->kind == AGC_JSON_ARRAY) return yyjson_arr_iter_next(&f->it.arr);
   yyjson_val *key = yyjson_obj_iter_next(&f->it.obj);
   const char *text = yyjson_get_str(key);
   size_t len = yyjson_get_len(key);
-  f->node->members[f->next].key = agc_make_string(text, len, agc_utf8_count((const uint8_t *)text, len));
+  f->node->members[f->next].key = json_string(vm, text, len);
   return yyjson_obj_iter_get_val(key);
 }
 
-static bool parse_leaf(yyjson_val *val, agc_value *out) {
+static bool parse_leaf(agc_vm *vm, yyjson_val *val, agc_value *out) {
   if (yyjson_is_raw(val)) return number_value((const uint8_t *)yyjson_get_raw(val), yyjson_get_len(val), out);
   if (yyjson_is_str(val)) {
     const char *text = yyjson_get_str(val);
     size_t len = yyjson_get_len(val);
-    *out = agc_json_leaf(AGC_JSON_STRING,
-                         agc_string_value(agc_make_string(text, len, agc_utf8_count((const uint8_t *)text, len))));
+    *out = agc_json_leaf(AGC_JSON_STRING, agc_string_value(json_string(vm, text, len)));
   } else if (yyjson_is_bool(val)) {
     *out = agc_json_leaf(AGC_JSON_BOOL, agc_bool(yyjson_get_bool(val)));
   } else {
@@ -109,7 +114,7 @@ static bool parse_leaf(yyjson_val *val, agc_value *out) {
   return true;
 }
 
-static bool convert(yyjson_val *val, agc_value *out) {
+static bool convert(agc_vm *vm, yyjson_val *val, agc_value *out) {
   size_t depth = 0, capacity = 16;
   parse_frame *stack = agc_alloc(agc_size_mul(capacity, sizeof(parse_frame)));
   for (;;) {
@@ -132,10 +137,10 @@ static bool convert(yyjson_val *val, agc_value *out) {
           yyjson_obj_iter_init(val, &f->it.obj);
         else
           yyjson_arr_iter_init(val, &f->it.arr);
-        val = parse_child(f);
+        val = parse_child(vm, f);
         continue;
       }
-    } else if (!parse_leaf(val, &v)) {
+    } else if (!parse_leaf(vm, val, &v)) {
       return false;
     }
     for (;;) {
@@ -146,7 +151,7 @@ static bool convert(yyjson_val *val, agc_value *out) {
       parse_frame *f = &stack[depth - 1];
       agc_json_store(f->node, &f->items, f->next, v);
       if (++f->next < f->n) {
-        val = parse_child(f);
+        val = parse_child(vm, f);
         break;
       }
       v = agc_json_finish(f->node, &f->items, f->n);
@@ -183,7 +188,7 @@ static bool only_space(const uint8_t *s, size_t len, size_t i) {
   return true;
 }
 
-agc_json_status agc_json_parse(const uint8_t *s, size_t len, agc_value *out) {
+agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *s, size_t len, agc_value *out) {
   bool quoted = false, escaped = false;
   for (size_t i = 0; i < len; i++) {
     if (quoted && s[i] < 0x20) return AGC_JSON_CONTROL;
@@ -232,7 +237,7 @@ agc_json_status agc_json_parse(const uint8_t *s, size_t len, agc_value *out) {
     yyjson_doc_free(doc);
     return AGC_JSON_TRAILING;
   }
-  bool finite = convert(yyjson_doc_get_root(doc), out);
+  bool finite = convert(vm, yyjson_doc_get_root(doc), out);
   yyjson_doc_free(doc);
   return finite ? AGC_JSON_PARSED : AGC_JSON_NOT_FINITE;
 }
@@ -257,7 +262,7 @@ static agc_value builtin_parse(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
   agc_value out;
-  agc_json_status status = agc_json_parse((const uint8_t *)s->data, s->bytes, &out);
+  agc_json_status status = agc_json_parse(vm, (const uint8_t *)s->data, s->bytes, &out);
   return status == AGC_JSON_PARSED ? ok(out) : failure(agc_json_status_message(status));
 }
 
@@ -276,7 +281,7 @@ static agc_value builtin_decode(agc_vm *vm, agc_value *args, uint32_t span) {
   uint32_t type = decodable_struct(vm, args[1], span + 2);
   const agc_string *s = agc_as_string(vm, args[0]);
   agc_value root;
-  agc_json_status status = agc_json_parse((const uint8_t *)s->data, s->bytes, &root);
+  agc_json_status status = agc_json_parse(vm, (const uint8_t *)s->data, s->bytes, &root);
   if (status != AGC_JSON_PARSED) return failure(agc_json_status_message(status));
   return agc_json_decode(vm, root, type);
 }

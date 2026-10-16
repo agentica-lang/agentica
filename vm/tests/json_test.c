@@ -14,13 +14,13 @@ static agc_vm vm;
 
 static agc_json *parse(const char *text, size_t len) {
   agc_value v;
-  assert(agc_json_parse((const uint8_t *)text, len, &v) == AGC_JSON_PARSED);
+  assert(agc_json_parse(&vm, (const uint8_t *)text, len, &v) == AGC_JSON_PARSED);
   return agc_as_json(&vm, v);
 }
 
 static void round_trip(const char *text, const char *expected) {
   agc_value v;
-  assert(agc_json_parse((const uint8_t *)text, strlen(text), &v) == AGC_JSON_PARSED);
+  assert(agc_json_parse(&vm, (const uint8_t *)text, strlen(text), &v) == AGC_JSON_PARSED);
   agc_string *s = agc_json_encode(&vm, v, 0);
   if (s->bytes != strlen(expected) || memcmp(s->data, expected, s->bytes) != 0) {
     fprintf(stderr, "%s: got %.*s\n", text, (int)s->bytes, s->data);
@@ -50,11 +50,11 @@ int main(void) {
   assert(j->kind == AGC_JSON_FLOAT && signbit(agc_as_float(&vm, j->scalar)));
 
   agc_value v;
-  assert(agc_json_parse((const uint8_t *)"\"\x01\"", 3, &v) == AGC_JSON_CONTROL);
-  assert(agc_json_parse((const uint8_t *)" ", 1, &v) == AGC_JSON_EMPTY);
-  assert(agc_json_parse((const uint8_t *)"[1,]", 4, &v) == AGC_JSON_INVALID);
-  assert(agc_json_parse((const uint8_t *)"01", 2, &v) == AGC_JSON_TRAILING);
-  assert(agc_json_parse((const uint8_t *)"[1e400]", 7, &v) == AGC_JSON_NOT_FINITE);
+  assert(agc_json_parse(&vm, (const uint8_t *)"\"\x01\"", 3, &v) == AGC_JSON_CONTROL);
+  assert(agc_json_parse(&vm, (const uint8_t *)" ", 1, &v) == AGC_JSON_EMPTY);
+  assert(agc_json_parse(&vm, (const uint8_t *)"[1,]", 4, &v) == AGC_JSON_INVALID);
+  assert(agc_json_parse(&vm, (const uint8_t *)"01", 2, &v) == AGC_JSON_TRAILING);
+  assert(agc_json_parse(&vm, (const uint8_t *)"[1e400]", 7, &v) == AGC_JSON_NOT_FINITE);
 
   round_trip("[-9223372036854775809, 1e2, 0.1, 1e21, 1e-7, -0.0]", "[-9223372036854775809,100.0,0.1,1e+21,1e-7,0.0]");
   round_trip("\"\\u0000\\u001f\\b\\f\\n\\r\\t\\\"\\\\\\/\x7f\\u00e9\\ud83d\\ude00\"",

@@ -123,7 +123,7 @@ agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const c
   b->scanned = 0;
   size_t chars;
   if (!agc_utf8_chars(data, len, &chars)) return agc_utf8_error(data, len);
-  return agc_result_value(true, agc_string_value(agc_make_string((const char *)data, len, chars)));
+  return agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, len, chars)));
 }
 
 void agc_inbuf_take(agc_inbuf *b, size_t n) {
