@@ -42,7 +42,7 @@ def log_each() -> Void
   Logger.warning("w")
   Logger.err("e")
   Logger.log(LogLevel.Debug, "log d")
-  Logger.log_meta(LogLevel.Error, "log e", {"k": "v"})
+  Logger.log(LogLevel.Error, "log e", {"k": "v"})
 end
 
 def show_enabled() -> Void
@@ -88,8 +88,8 @@ def main() -> Void
   _ = Logger.detach("again")
   _ = Logger.attach("text", LogLevel.Info, &text)
   _ = Logger.attach("json", LogLevel.Warning, &json)
-  Logger.info_meta("request done", {"path": "/items", "status": "200"})
-  Logger.warning_meta("slow", {"ms": "1500"})
+  Logger.info("request done", {"path": "/items", "status": "200"})
+  Logger.warning("slow", {"ms": "1500"})
   Logger.debug("below every handler")
 
   IO.warn("a handler that detaches another does not change the event in progress")

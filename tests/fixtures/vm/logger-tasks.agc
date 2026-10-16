@@ -7,7 +7,7 @@ end
 def worker(id: Int) -> Int
   i = 0
   while i < 3
-    Logger.info_meta("tick", {"worker": id.to_s, "i": i.to_s})
+    Logger.info("tick", {"worker": id.to_s, "i": i.to_s})
     Task.sleep(0)
     i += 1
   end

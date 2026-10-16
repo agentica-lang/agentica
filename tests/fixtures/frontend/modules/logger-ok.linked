@@ -37,799 +37,713 @@ program #24 0:1:1-217:9:1
           arg: type-ref #7 679:13:23-685:13:29 name="String"
       field: field-decl #11 689:14:3-699:15:1 name="task"
         type: type-ref #10 695:14:9-698:14:12 name="Int"
-    declaration: function-decl #32 1164:23:8-1314:30:1 name="@2::debug"
-      param: param #14 1174:23:18-1189:23:33 name="message"
-        type: type-ref #13 1183:23:27-1189:23:33 name="String"
-      result: type-ref #15 1194:23:38-1198:23:42 name="Void"
-      body: if-stmt #31 1201:24:3-1310:29:1
-        branch: if-branch #30 1201:24:3-1304:28:1
-          condition: binary #18 1204:24:6-1228:24:30 op=less-equal op-span=1224:24:26-1226:24:28
-            left: call #16 1204:24:6-1223:24:25 name="LogRegistry.floor" piped=false
-            right: literal #17 1227:24:29-1228:24:30 value=int:0
-          body: if-stmt #29 1233:25:5-1304:28:1
-            branch: if-branch #28 1233:25:5-1296:27:1
-              condition: binary #21 1236:25:8-1248:25:20 op=less-equal op-span=1244:25:16-1246:25:18
-                left: call #19 1236:25:8-1243:25:15 name="@2::ready" piped=false
-                right: literal #20 1247:25:19-1248:25:20 value=int:0
-              body: expr-stmt #27 1255:26:7-1296:27:1
-                value: call #26 1255:26:7-1295:26:47 name="@2::dispatch" piped=false
-                  arg: enum-constructor #22 1264:26:16-1278:26:30 enum="LogLevel" variant="Debug"
-                  arg: literal #23 1280:26:32-1281:26:33 value=int:0
-                  arg: name-ref #24 1283:26:35-1290:26:42 name="message"
-                  arg: map-lit #25 1292:26:44-1294:26:46
-    declaration: function-decl #57 1361:32:8-1549:39:1 name="@2::debug_meta"
-      param: param #35 1376:32:23-1391:32:38 name="message"
-        type: type-ref #34 1385:32:32-1391:32:38 name="String"
-      param: param #39 1393:32:40-1420:32:67 name="fields"
-        type: type-ref #38 1401:32:48-1420:32:67 name="Map"
-          arg: type-ref #36 1405:32:52-1411:32:58 name="String"
-          arg: type-ref #37 1413:32:60-1419:32:66 name="String"
-      result: type-ref #40 1425:32:72-1429:32:76 name="Void"
-      body: if-stmt #56 1432:33:3-1545:38:1
-        branch: if-branch #55 1432:33:3-1539:37:1
-          condition: binary #43 1435:33:6-1459:33:30 op=less-equal op-span=1455:33:26-1457:33:28
-            left: call #41 1435:33:6-1454:33:25 name="LogRegistry.floor" piped=false
-            right: literal #42 1458:33:29-1459:33:30 value=int:0
-          body: if-stmt #54 1464:34:5-1539:37:1
-            branch: if-branch #53 1464:34:5-1531:36:1
-              condition: binary #46 1467:34:8-1479:34:20 op=less-equal op-span=1475:34:16-1477:34:18
-                left: call #44 1467:34:8-1474:34:15 name="@2::ready" piped=false
-                right: literal #45 1478:34:19-1479:34:20 value=int:0
-              body: expr-stmt #52 1486:35:7-1531:36:1
-                value: call #51 1486:35:7-1530:35:51 name="@2::dispatch" piped=false
-                  arg: enum-constructor #47 1495:35:16-1509:35:30 enum="LogLevel" variant="Debug"
-                  arg: literal #48 1511:35:32-1512:35:33 value=int:0
-                  arg: name-ref #49 1514:35:35-1521:35:42 name="message"
-                  arg: name-ref #50 1523:35:44-1529:35:50 name="fields"
-    declaration: function-decl #78 1584:41:8-1732:48:1 name="@2::info"
-      param: param #60 1593:41:17-1608:41:32 name="message"
-        type: type-ref #59 1602:41:26-1608:41:32 name="String"
-      result: type-ref #61 1613:41:37-1617:41:41 name="Void"
-      body: if-stmt #77 1620:42:3-1728:47:1
-        branch: if-branch #76 1620:42:3-1722:46:1
-          condition: binary #64 1623:42:6-1647:42:30 op=less-equal op-span=1643:42:26-1645:42:28
-            left: call #62 1623:42:6-1642:42:25 name="LogRegistry.floor" piped=false
-            right: literal #63 1646:42:29-1647:42:30 value=int:1
-          body: if-stmt #75 1652:43:5-1722:46:1
-            branch: if-branch #74 1652:43:5-1714:45:1
-              condition: binary #67 1655:43:8-1667:43:20 op=less-equal op-span=1663:43:16-1665:43:18
-                left: call #65 1655:43:8-1662:43:15 name="@2::ready" piped=false
-                right: literal #66 1666:43:19-1667:43:20 value=int:1
-              body: expr-stmt #73 1674:44:7-1714:45:1
-                value: call #72 1674:44:7-1713:44:46 name="@2::dispatch" piped=false
-                  arg: enum-constructor #68 1683:44:16-1696:44:29 enum="LogLevel" variant="Info"
-                  arg: literal #69 1698:44:31-1699:44:32 value=int:1
-                  arg: name-ref #70 1701:44:34-1708:44:41 name="message"
-                  arg: map-lit #71 1710:44:43-1712:44:45
-    declaration: function-decl #103 1779:50:8-1965:57:1 name="@2::info_meta"
-      param: param #81 1793:50:22-1808:50:37 name="message"
-        type: type-ref #80 1802:50:31-1808:50:37 name="String"
-      param: param #85 1810:50:39-1837:50:66 name="fields"
-        type: type-ref #84 1818:50:47-1837:50:66 name="Map"
-          arg: type-ref #82 1822:50:51-1828:50:57 name="String"
-          arg: type-ref #83 1830:50:59-1836:50:65 name="String"
-      result: type-ref #86 1842:50:71-1846:50:75 name="Void"
-      body: if-stmt #102 1849:51:3-1961:56:1
-        branch: if-branch #101 1849:51:3-1955:55:1
-          condition: binary #89 1852:51:6-1876:51:30 op=less-equal op-span=1872:51:26-1874:51:28
-            left: call #87 1852:51:6-1871:51:25 name="LogRegistry.floor" piped=false
-            right: literal #88 1875:51:29-1876:51:30 value=int:1
-          body: if-stmt #100 1881:52:5-1955:55:1
-            branch: if-branch #99 1881:52:5-1947:54:1
-              condition: binary #92 1884:52:8-1896:52:20 op=less-equal op-span=1892:52:16-1894:52:18
-                left: call #90 1884:52:8-1891:52:15 name="@2::ready" piped=false
-                right: literal #91 1895:52:19-1896:52:20 value=int:1
-              body: expr-stmt #98 1903:53:7-1947:54:1
-                value: call #97 1903:53:7-1946:53:50 name="@2::dispatch" piped=false
-                  arg: enum-constructor #93 1912:53:16-1925:53:29 enum="LogLevel" variant="Info"
-                  arg: literal #94 1927:53:31-1928:53:32 value=int:1
-                  arg: name-ref #95 1930:53:34-1937:53:41 name="message"
-                  arg: name-ref #96 1939:53:43-1945:53:49 name="fields"
-    declaration: function-decl #124 2002:59:8-2156:66:1 name="@2::warning"
-      param: param #106 2014:59:20-2029:59:35 name="message"
-        type: type-ref #105 2023:59:29-2029:59:35 name="String"
-      result: type-ref #107 2034:59:40-2038:59:44 name="Void"
-      body: if-stmt #123 2041:60:3-2152:65:1
-        branch: if-branch #122 2041:60:3-2146:64:1
-          condition: binary #110 2044:60:6-2068:60:30 op=less-equal op-span=2064:60:26-2066:60:28
-            left: call #108 2044:60:6-2063:60:25 name="LogRegistry.floor" piped=false
-            right: literal #109 2067:60:29-2068:60:30 value=int:2
-          body: if-stmt #121 2073:61:5-2146:64:1
-            branch: if-branch #120 2073:61:5-2138:63:1
-              condition: binary #113 2076:61:8-2088:61:20 op=less-equal op-span=2084:61:16-2086:61:18
-                left: call #111 2076:61:8-2083:61:15 name="@2::ready" piped=false
-                right: literal #112 2087:61:19-2088:61:20 value=int:2
-              body: expr-stmt #119 2095:62:7-2138:63:1
-                value: call #118 2095:62:7-2137:62:49 name="@2::dispatch" piped=false
-                  arg: enum-constructor #114 2104:62:16-2120:62:32 enum="LogLevel" variant="Warning"
-                  arg: literal #115 2122:62:34-2123:62:35 value=int:2
-                  arg: name-ref #116 2125:62:37-2132:62:44 name="message"
-                  arg: map-lit #117 2134:62:46-2136:62:48
-    declaration: function-decl #149 2205:68:8-2397:75:1 name="@2::warning_meta"
-      param: param #127 2222:68:25-2237:68:40 name="message"
-        type: type-ref #126 2231:68:34-2237:68:40 name="String"
-      param: param #131 2239:68:42-2266:68:69 name="fields"
-        type: type-ref #130 2247:68:50-2266:68:69 name="Map"
-          arg: type-ref #128 2251:68:54-2257:68:60 name="String"
-          arg: type-ref #129 2259:68:62-2265:68:68 name="String"
-      result: type-ref #132 2271:68:74-2275:68:78 name="Void"
-      body: if-stmt #148 2278:69:3-2393:74:1
-        branch: if-branch #147 2278:69:3-2387:73:1
-          condition: binary #135 2281:69:6-2305:69:30 op=less-equal op-span=2301:69:26-2303:69:28
-            left: call #133 2281:69:6-2300:69:25 name="LogRegistry.floor" piped=false
-            right: literal #134 2304:69:29-2305:69:30 value=int:2
-          body: if-stmt #146 2310:70:5-2387:73:1
-            branch: if-branch #145 2310:70:5-2379:72:1
-              condition: binary #138 2313:70:8-2325:70:20 op=less-equal op-span=2321:70:16-2323:70:18
-                left: call #136 2313:70:8-2320:70:15 name="@2::ready" piped=false
-                right: literal #137 2324:70:19-2325:70:20 value=int:2
-              body: expr-stmt #144 2332:71:7-2379:72:1
-                value: call #143 2332:71:7-2378:71:53 name="@2::dispatch" piped=false
-                  arg: enum-constructor #139 2341:71:16-2357:71:32 enum="LogLevel" variant="Warning"
-                  arg: literal #140 2359:71:34-2360:71:35 value=int:2
-                  arg: name-ref #141 2362:71:37-2369:71:44 name="message"
-                  arg: name-ref #142 2371:71:46-2377:71:52 name="fields"
-    declaration: function-decl #170 2522:77:8-2670:84:1 name="@2::err"
-      param: param #152 2530:77:16-2545:77:31 name="message"
-        type: type-ref #151 2539:77:25-2545:77:31 name="String"
-      result: type-ref #153 2550:77:36-2554:77:40 name="Void"
-      body: if-stmt #169 2557:78:3-2666:83:1
-        branch: if-branch #168 2557:78:3-2660:82:1
-          condition: binary #156 2560:78:6-2584:78:30 op=less-equal op-span=2580:78:26-2582:78:28
-            left: call #154 2560:78:6-2579:78:25 name="LogRegistry.floor" piped=false
-            right: literal #155 2583:78:29-2584:78:30 value=int:3
-          body: if-stmt #167 2589:79:5-2660:82:1
-            branch: if-branch #166 2589:79:5-2652:81:1
-              condition: binary #159 2592:79:8-2604:79:20 op=less-equal op-span=2600:79:16-2602:79:18
-                left: call #157 2592:79:8-2599:79:15 name="@2::ready" piped=false
-                right: literal #158 2603:79:19-2604:79:20 value=int:3
-              body: expr-stmt #165 2611:80:7-2652:81:1
-                value: call #164 2611:80:7-2651:80:47 name="@2::dispatch" piped=false
-                  arg: enum-constructor #160 2620:80:16-2634:80:30 enum="LogLevel" variant="Error"
-                  arg: literal #161 2636:80:32-2637:80:33 value=int:3
-                  arg: name-ref #162 2639:80:35-2646:80:42 name="message"
-                  arg: map-lit #163 2648:80:44-2650:80:46
-    declaration: function-decl #195 2718:86:8-2904:93:1 name="@2::err_meta"
-      param: param #173 2731:86:21-2746:86:36 name="message"
-        type: type-ref #172 2740:86:30-2746:86:36 name="String"
-      param: param #177 2748:86:38-2775:86:65 name="fields"
-        type: type-ref #176 2756:86:46-2775:86:65 name="Map"
-          arg: type-ref #174 2760:86:50-2766:86:56 name="String"
-          arg: type-ref #175 2768:86:58-2774:86:64 name="String"
-      result: type-ref #178 2780:86:70-2784:86:74 name="Void"
-      body: if-stmt #194 2787:87:3-2900:92:1
-        branch: if-branch #193 2787:87:3-2894:91:1
-          condition: binary #181 2790:87:6-2814:87:30 op=less-equal op-span=2810:87:26-2812:87:28
-            left: call #179 2790:87:6-2809:87:25 name="LogRegistry.floor" piped=false
-            right: literal #180 2813:87:29-2814:87:30 value=int:3
-          body: if-stmt #192 2819:88:5-2894:91:1
-            branch: if-branch #191 2819:88:5-2886:90:1
-              condition: binary #184 2822:88:8-2834:88:20 op=less-equal op-span=2830:88:16-2832:88:18
-                left: call #182 2822:88:8-2829:88:15 name="@2::ready" piped=false
-                right: literal #183 2833:88:19-2834:88:20 value=int:3
-              body: expr-stmt #190 2841:89:7-2886:90:1
-                value: call #189 2841:89:7-2885:89:51 name="@2::dispatch" piped=false
-                  arg: enum-constructor #185 2850:89:16-2864:89:30 enum="LogLevel" variant="Error"
-                  arg: literal #186 2866:89:32-2867:89:33 value=int:3
-                  arg: name-ref #187 2869:89:35-2876:89:42 name="message"
-                  arg: name-ref #188 2878:89:44-2884:89:50 name="fields"
-    declaration: function-decl #207 2959:95:8-3051:98:1 name="@2::log"
-      param: param #198 2967:95:16-2982:95:31 name="level"
-        type: type-ref #197 2974:95:23-2982:95:31 name="LogLevel"
-      param: param #200 2984:95:33-2999:95:48 name="message"
-        type: type-ref #199 2993:95:42-2999:95:48 name="String"
-      result: type-ref #201 3004:95:53-3008:95:57 name="Void"
-      body: return-stmt #206 3011:96:3-3047:97:1
-        value: call #205 3018:96:10-3046:96:38 name="@2::log_meta" piped=false
-          arg: name-ref #202 3027:96:19-3032:96:24 name="level"
-          arg: name-ref #203 3034:96:26-3041:96:33 name="message"
-          arg: map-lit #204 3043:96:35-3045:96:37
-    declaration: function-decl #232 3118:100:8-3300:106:1 name="@2::log_meta"
-      param: param #210 3131:100:21-3146:100:36 name="level"
-        type: type-ref #209 3138:100:28-3146:100:36 name="LogLevel"
-      param: param #212 3148:100:38-3163:100:53 name="message"
-        type: type-ref #211 3157:100:47-3163:100:53 name="String"
-      param: param #216 3165:100:55-3192:100:82 name="fields"
-        type: type-ref #215 3173:100:63-3192:100:82 name="Map"
-          arg: type-ref #213 3177:100:67-3183:100:73 name="String"
-          arg: type-ref #214 3185:100:75-3191:100:81 name="String"
-      result: type-ref #217 3197:100:87-3201:100:91 name="Void"
-      body: binding #220 3204:101:3-3226:102:1 name="rank"
-        value: call #219 3211:101:10-3225:101:24 name="@2::rank_of" piped=false
-          arg: name-ref #218 3219:101:18-3224:101:23 name="level"
-      body: if-stmt #231 3228:102:3-3296:105:1
-        branch: if-branch #230 3228:102:3-3290:104:1
-          condition: binary #223 3231:102:6-3246:102:21 op=greater-equal op-span=3236:102:11-3238:102:13
-            left: name-ref #221 3231:102:6-3235:102:10 name="rank"
-            right: call #222 3239:102:14-3246:102:21 name="@2::ready" piped=false
-          body: expr-stmt #229 3251:103:5-3290:104:1
-            value: call #228 3251:103:5-3289:103:43 name="@2::dispatch" piped=false
-              arg: name-ref #224 3260:103:14-3265:103:19 name="level"
-              arg: name-ref #225 3267:103:21-3271:103:25 name="rank"
-              arg: name-ref #226 3273:103:27-3280:103:34 name="message"
-              arg: name-ref #227 3282:103:36-3288:103:42 name="fields"
-    declaration: function-decl #248 3508:109:8-3632:113:1 name="@2::enabled?"
-      param: param #235 3521:109:21-3536:109:36 name="level"
-        type: type-ref #234 3528:109:28-3536:109:36 name="LogLevel"
-      result: type-ref #236 3541:109:41-3545:109:45 name="Bool"
-      body: binding #239 3548:110:3-3570:111:1 name="rank"
-        value: call #238 3555:110:10-3569:110:24 name="@2::rank_of" piped=false
-          arg: name-ref #237 3563:110:18-3568:110:23 name="level"
-      body: return-stmt #247 3572:111:3-3628:112:1
-        value: binary #246 3579:111:10-3627:111:58 op=and op-span=3595:111:26-3598:111:29
-          left: binary #242 3579:111:10-3594:111:25 op=greater-equal op-span=3584:111:15-3586:111:17
-            left: name-ref #240 3579:111:10-3583:111:14 name="rank"
-            right: call #241 3587:111:18-3594:111:25 name="@2::ready" piped=false
-          right: binary #245 3599:111:30-3627:111:58 op=greater-equal op-span=3604:111:35-3606:111:37
-            left: name-ref #243 3599:111:30-3603:111:34 name="rank"
-            right: call #244 3607:111:38-3627:111:58 name="LogRegistry.lowest" piped=false
-    declaration: function-decl #254 3706:115:8-3761:118:1 name="@2::level"
-      result: type-ref #250 3721:115:23-3729:115:31 name="LogLevel"
-      body: return-stmt #253 3732:116:3-3757:117:1
-        value: call #252 3739:116:10-3756:116:27 name="@2::level_of" piped=false
-          arg: call #251 3748:116:19-3755:116:26 name="@2::ready" piped=false
-    declaration: function-decl #265 3834:120:8-3931:124:1 name="@2::set_level"
-      param: param #257 3848:120:22-3863:120:37 name="level"
-        type: type-ref #256 3855:120:29-3863:120:37 name="LogLevel"
-      result: type-ref #258 3868:120:42-3872:120:46 name="Void"
-      body: binding #260 3875:121:3-3887:122:1 name="_"
-        value: call #259 3879:121:7-3886:121:14 name="@2::ready" piped=false
-      body: expr-stmt #264 3889:122:3-3927:123:1
-        value: call #263 3889:122:3-3926:122:40 name="LogRegistry.set_level" piped=false
-          arg: call #262 3911:122:25-3925:122:39 name="@2::rank_of" piped=false
-            arg: name-ref #261 3919:122:33-3924:122:38 name="level"
-    declaration: function-decl #285 4114:127:8-4278:131:1 name="@2::attach"
-      param: param #268 4125:127:19-4137:127:31 name="name"
-        type: type-ref #267 4131:127:25-4137:127:31 name="String"
-      param: param #270 4139:127:33-4154:127:48 name="level"
-        type: type-ref #269 4146:127:40-4154:127:48 name="LogLevel"
-      param: param #274 4156:127:50-4183:127:77 name="handler"
-        type: type-ref #273 4165:127:59-4183:127:77 name="Fn"
-          arg: type-ref #271 4168:127:62-4176:127:70 name="LogEvent"
-          arg: type-ref #272 4178:127:72-4182:127:76 name="Void"
-      result: type-ref #276 4188:127:82-4200:127:94 name="Result"
-        arg: type-ref #275 4195:127:89-4199:127:93 name="Void"
-      body: binding #278 4203:128:3-4215:129:1 name="_"
-        value: call #277 4207:128:7-4214:128:14 name="@2::ready" piped=false
-      body: return-stmt #284 4217:129:3-4274:130:1
-        value: call #283 4224:129:10-4273:129:59 name="LogRegistry.attach" piped=false
-          arg: name-ref #279 4243:129:29-4247:129:33 name="name"
-          arg: call #281 4249:129:35-4263:129:49 name="@2::rank_of" piped=false
-            arg: name-ref #280 4257:129:43-4262:129:48 name="level"
-          arg: name-ref #282 4265:129:51-4272:129:58 name="handler"
-    declaration: function-decl #296 4364:133:8-4457:137:1 name="@2::detach"
-      param: param #288 4375:133:19-4387:133:31 name="name"
-        type: type-ref #287 4381:133:25-4387:133:31 name="String"
-      result: type-ref #290 4392:133:36-4404:133:48 name="Result"
-        arg: type-ref #289 4399:133:43-4403:133:47 name="Void"
-      body: binding #292 4407:134:3-4419:135:1 name="_"
-        value: call #291 4411:134:7-4418:134:14 name="@2::ready" piped=false
-      body: return-stmt #295 4421:135:3-4453:136:1
-        value: call #294 4428:135:10-4452:135:34 name="LogRegistry.detach" piped=false
-          arg: name-ref #293 4447:135:29-4451:135:33 name="name"
-    declaration: function-decl #304 4529:139:8-4607:143:1 name="@2::handlers"
-      result: type-ref #299 4547:139:26-4559:139:38 name="List"
-        arg: type-ref #298 4552:139:31-4558:139:37 name="String"
-      body: binding #301 4562:140:3-4574:141:1 name="_"
-        value: call #300 4566:140:7-4573:140:14 name="@2::ready" piped=false
-      body: return-stmt #303 4576:141:3-4603:142:1
-        value: call #302 4583:141:10-4602:141:29 name="LogRegistry.names" piped=false
-    declaration: function-decl #313 4669:145:8-4744:148:1 name="@2::stderr_text"
-      param: param #307 4685:145:24-4700:145:39 name="event"
-        type: type-ref #306 4692:145:31-4700:145:39 name="LogEvent"
-      result: type-ref #308 4705:145:44-4709:145:48 name="Void"
-      body: expr-stmt #312 4712:146:3-4740:147:1
-        value: call #311 4712:146:3-4739:146:30 name="IO.warn" piped=false
-          arg: call #310 4720:146:11-4738:146:29 name="@2::format_text" piped=false
-            arg: name-ref #309 4732:146:23-4737:146:28 name="event"
-    declaration: function-decl #322 4806:150:8-4881:153:1 name="@2::stderr_json"
-      param: param #316 4822:150:24-4837:150:39 name="event"
-        type: type-ref #315 4829:150:31-4837:150:39 name="LogEvent"
-      result: type-ref #317 4842:150:44-4846:150:48 name="Void"
-      body: expr-stmt #321 4849:151:3-4877:152:1
-        value: call #320 4849:151:3-4876:151:30 name="IO.warn" piped=false
-          arg: call #319 4857:151:11-4875:151:29 name="@2::format_json" piped=false
-            arg: name-ref #318 4869:151:23-4874:151:28 name="event"
-    declaration: function-decl #359 5160:157:8-5456:164:1 name="@2::format_text"
-      param: param #325 5176:157:24-5191:157:39 name="event"
-        type: type-ref #324 5183:157:31-5191:157:39 name="LogEvent"
-      result: type-ref #326 5196:157:44-5202:157:50 name="String"
-      body: binding #338 5205:158:3-5302:159:1 name="parts"
-        value: list-lit #337 5213:158:11-5301:158:99
-          element: call #329 5214:158:12-5238:158:36 name="@2::time_text" piped=false
-            arg: field-access #328 5224:158:22-5237:158:35 name="time_ms"
-              target: name-ref #327 5224:158:22-5229:158:27 name="event"
-          element: field-access #333 5240:158:38-5270:158:68 name="upcase"
-            target: call #332 5240:158:38-5263:158:61 name="@2::level_name" piped=false
-              arg: field-access #331 5251:158:49-5262:158:60 name="level"
-                target: name-ref #330 5251:158:49-5256:158:54 name="event"
-          element: call #336 5272:158:70-5300:158:98 name="@2::message_token" piped=false
-            arg: field-access #335 5286:158:84-5299:158:97 name="message"
-              target: name-ref #334 5286:158:84-5291:158:89 name="event"
-      body: for-stmt #354 5304:159:3-5427:162:1 variable="key"
-        iterable: field-access #341 5315:159:14-5332:159:31 name="keys"
-          target: field-access #340 5315:159:14-5327:159:26 name="fields"
-            target: name-ref #339 5315:159:14-5320:159:19 name="event"
-        body: binding #353 5337:160:5-5421:161:1 name="parts"
-          value: method-call #352 5345:160:13-5420:160:88 name="push"
-            target: name-ref #342 5345:160:13-5350:160:18 name="parts"
-            arg: interpolation #351 5356:160:24-5419:160:87
-              part: call #344 5359:160:27-5375:160:43 name="@2::field_token" piped=false
-                arg: name-ref #343 5371:160:39-5374:160:42 name="key"
+    declaration: function-decl #37 1252:24:8-1440:31:1 name="@2::debug"
+      param: param #14 1262:24:18-1277:24:33 name="message"
+        type: type-ref #13 1271:24:27-1277:24:33 name="String"
+      param: param #19 1279:24:35-1311:24:67 name="fields"
+        type: type-ref #17 1287:24:43-1306:24:62 name="Map"
+          arg: type-ref #15 1291:24:47-1297:24:53 name="String"
+          arg: type-ref #16 1299:24:55-1305:24:61 name="String"
+        default: map-lit #18 1309:24:65-1311:24:67
+      result: type-ref #20 1316:24:72-1320:24:76 name="Void"
+      body: if-stmt #36 1323:25:3-1436:30:1
+        branch: if-branch #35 1323:25:3-1430:29:1
+          condition: binary #23 1326:25:6-1350:25:30 op=less-equal op-span=1346:25:26-1348:25:28
+            left: call #21 1326:25:6-1345:25:25 name="LogRegistry.floor" piped=false
+            right: literal #22 1349:25:29-1350:25:30 value=int:0
+          body: if-stmt #34 1355:26:5-1430:29:1
+            branch: if-branch #33 1355:26:5-1422:28:1
+              condition: binary #26 1358:26:8-1370:26:20 op=less-equal op-span=1366:26:16-1368:26:18
+                left: call #24 1358:26:8-1365:26:15 name="@2::ready" piped=false
+                right: literal #25 1369:26:19-1370:26:20 value=int:0
+              body: expr-stmt #32 1377:27:7-1422:28:1
+                value: call #31 1377:27:7-1421:27:51 name="@2::dispatch" piped=false
+                  arg: enum-constructor #27 1386:27:16-1400:27:30 enum="LogLevel" variant="Debug"
+                  arg: literal #28 1402:27:32-1403:27:33 value=int:0
+                  arg: name-ref #29 1405:27:35-1412:27:42 name="message"
+                  arg: name-ref #30 1414:27:44-1420:27:50 name="fields"
+    declaration: function-decl #63 1497:33:8-1683:40:1 name="@2::info"
+      param: param #40 1506:33:17-1521:33:32 name="message"
+        type: type-ref #39 1515:33:26-1521:33:32 name="String"
+      param: param #45 1523:33:34-1555:33:66 name="fields"
+        type: type-ref #43 1531:33:42-1550:33:61 name="Map"
+          arg: type-ref #41 1535:33:46-1541:33:52 name="String"
+          arg: type-ref #42 1543:33:54-1549:33:60 name="String"
+        default: map-lit #44 1553:33:64-1555:33:66
+      result: type-ref #46 1560:33:71-1564:33:75 name="Void"
+      body: if-stmt #62 1567:34:3-1679:39:1
+        branch: if-branch #61 1567:34:3-1673:38:1
+          condition: binary #49 1570:34:6-1594:34:30 op=less-equal op-span=1590:34:26-1592:34:28
+            left: call #47 1570:34:6-1589:34:25 name="LogRegistry.floor" piped=false
+            right: literal #48 1593:34:29-1594:34:30 value=int:1
+          body: if-stmt #60 1599:35:5-1673:38:1
+            branch: if-branch #59 1599:35:5-1665:37:1
+              condition: binary #52 1602:35:8-1614:35:20 op=less-equal op-span=1610:35:16-1612:35:18
+                left: call #50 1602:35:8-1609:35:15 name="@2::ready" piped=false
+                right: literal #51 1613:35:19-1614:35:20 value=int:1
+              body: expr-stmt #58 1621:36:7-1665:37:1
+                value: call #57 1621:36:7-1664:36:50 name="@2::dispatch" piped=false
+                  arg: enum-constructor #53 1630:36:16-1643:36:29 enum="LogLevel" variant="Info"
+                  arg: literal #54 1645:36:31-1646:36:32 value=int:1
+                  arg: name-ref #55 1648:36:34-1655:36:41 name="message"
+                  arg: name-ref #56 1657:36:43-1663:36:49 name="fields"
+    declaration: function-decl #89 1742:42:8-1934:49:1 name="@2::warning"
+      param: param #66 1754:42:20-1769:42:35 name="message"
+        type: type-ref #65 1763:42:29-1769:42:35 name="String"
+      param: param #71 1771:42:37-1803:42:69 name="fields"
+        type: type-ref #69 1779:42:45-1798:42:64 name="Map"
+          arg: type-ref #67 1783:42:49-1789:42:55 name="String"
+          arg: type-ref #68 1791:42:57-1797:42:63 name="String"
+        default: map-lit #70 1801:42:67-1803:42:69
+      result: type-ref #72 1808:42:74-1812:42:78 name="Void"
+      body: if-stmt #88 1815:43:3-1930:48:1
+        branch: if-branch #87 1815:43:3-1924:47:1
+          condition: binary #75 1818:43:6-1842:43:30 op=less-equal op-span=1838:43:26-1840:43:28
+            left: call #73 1818:43:6-1837:43:25 name="LogRegistry.floor" piped=false
+            right: literal #74 1841:43:29-1842:43:30 value=int:2
+          body: if-stmt #86 1847:44:5-1924:47:1
+            branch: if-branch #85 1847:44:5-1916:46:1
+              condition: binary #78 1850:44:8-1862:44:20 op=less-equal op-span=1858:44:16-1860:44:18
+                left: call #76 1850:44:8-1857:44:15 name="@2::ready" piped=false
+                right: literal #77 1861:44:19-1862:44:20 value=int:2
+              body: expr-stmt #84 1869:45:7-1916:46:1
+                value: call #83 1869:45:7-1915:45:53 name="@2::dispatch" piped=false
+                  arg: enum-constructor #79 1878:45:16-1894:45:32 enum="LogLevel" variant="Warning"
+                  arg: literal #80 1896:45:34-1897:45:35 value=int:2
+                  arg: name-ref #81 1899:45:37-1906:45:44 name="message"
+                  arg: name-ref #82 1908:45:46-1914:45:52 name="fields"
+    declaration: function-decl #115 2084:52:8-2270:59:1 name="@2::err"
+      param: param #92 2092:52:16-2107:52:31 name="message"
+        type: type-ref #91 2101:52:25-2107:52:31 name="String"
+      param: param #97 2109:52:33-2141:52:65 name="fields"
+        type: type-ref #95 2117:52:41-2136:52:60 name="Map"
+          arg: type-ref #93 2121:52:45-2127:52:51 name="String"
+          arg: type-ref #94 2129:52:53-2135:52:59 name="String"
+        default: map-lit #96 2139:52:63-2141:52:65
+      result: type-ref #98 2146:52:70-2150:52:74 name="Void"
+      body: if-stmt #114 2153:53:3-2266:58:1
+        branch: if-branch #113 2153:53:3-2260:57:1
+          condition: binary #101 2156:53:6-2180:53:30 op=less-equal op-span=2176:53:26-2178:53:28
+            left: call #99 2156:53:6-2175:53:25 name="LogRegistry.floor" piped=false
+            right: literal #100 2179:53:29-2180:53:30 value=int:3
+          body: if-stmt #112 2185:54:5-2260:57:1
+            branch: if-branch #111 2185:54:5-2252:56:1
+              condition: binary #104 2188:54:8-2200:54:20 op=less-equal op-span=2196:54:16-2198:54:18
+                left: call #102 2188:54:8-2195:54:15 name="@2::ready" piped=false
+                right: literal #103 2199:54:19-2200:54:20 value=int:3
+              body: expr-stmt #110 2207:55:7-2252:56:1
+                value: call #109 2207:55:7-2251:55:51 name="@2::dispatch" piped=false
+                  arg: enum-constructor #105 2216:55:16-2230:55:30 enum="LogLevel" variant="Error"
+                  arg: literal #106 2232:55:32-2233:55:33 value=int:3
+                  arg: name-ref #107 2235:55:35-2242:55:42 name="message"
+                  arg: name-ref #108 2244:55:44-2250:55:50 name="fields"
+    declaration: function-decl #141 2348:61:8-2530:67:1 name="@2::log"
+      param: param #118 2356:61:16-2371:61:31 name="level"
+        type: type-ref #117 2363:61:23-2371:61:31 name="LogLevel"
+      param: param #120 2373:61:33-2388:61:48 name="message"
+        type: type-ref #119 2382:61:42-2388:61:48 name="String"
+      param: param #125 2390:61:50-2422:61:82 name="fields"
+        type: type-ref #123 2398:61:58-2417:61:77 name="Map"
+          arg: type-ref #121 2402:61:62-2408:61:68 name="String"
+          arg: type-ref #122 2410:61:70-2416:61:76 name="String"
+        default: map-lit #124 2420:61:80-2422:61:82
+      result: type-ref #126 2427:61:87-2431:61:91 name="Void"
+      body: binding #129 2434:62:3-2456:63:1 name="rank"
+        value: call #128 2441:62:10-2455:62:24 name="@2::rank_of" piped=false
+          arg: name-ref #127 2449:62:18-2454:62:23 name="level"
+      body: if-stmt #140 2458:63:3-2526:66:1
+        branch: if-branch #139 2458:63:3-2520:65:1
+          condition: binary #132 2461:63:6-2476:63:21 op=greater-equal op-span=2466:63:11-2468:63:13
+            left: name-ref #130 2461:63:6-2465:63:10 name="rank"
+            right: call #131 2469:63:14-2476:63:21 name="@2::ready" piped=false
+          body: expr-stmt #138 2481:64:5-2520:65:1
+            value: call #137 2481:64:5-2519:64:43 name="@2::dispatch" piped=false
+              arg: name-ref #133 2490:64:14-2495:64:19 name="level"
+              arg: name-ref #134 2497:64:21-2501:64:25 name="rank"
+              arg: name-ref #135 2503:64:27-2510:64:34 name="message"
+              arg: name-ref #136 2512:64:36-2518:64:42 name="fields"
+    declaration: function-decl #157 2738:70:8-2862:74:1 name="@2::enabled?"
+      param: param #144 2751:70:21-2766:70:36 name="level"
+        type: type-ref #143 2758:70:28-2766:70:36 name="LogLevel"
+      result: type-ref #145 2771:70:41-2775:70:45 name="Bool"
+      body: binding #148 2778:71:3-2800:72:1 name="rank"
+        value: call #147 2785:71:10-2799:71:24 name="@2::rank_of" piped=false
+          arg: name-ref #146 2793:71:18-2798:71:23 name="level"
+      body: return-stmt #156 2802:72:3-2858:73:1
+        value: binary #155 2809:72:10-2857:72:58 op=and op-span=2825:72:26-2828:72:29
+          left: binary #151 2809:72:10-2824:72:25 op=greater-equal op-span=2814:72:15-2816:72:17
+            left: name-ref #149 2809:72:10-2813:72:14 name="rank"
+            right: call #150 2817:72:18-2824:72:25 name="@2::ready" piped=false
+          right: binary #154 2829:72:30-2857:72:58 op=greater-equal op-span=2834:72:35-2836:72:37
+            left: name-ref #152 2829:72:30-2833:72:34 name="rank"
+            right: call #153 2837:72:38-2857:72:58 name="LogRegistry.lowest" piped=false
+    declaration: function-decl #163 2936:76:8-2991:79:1 name="@2::level"
+      result: type-ref #159 2951:76:23-2959:76:31 name="LogLevel"
+      body: return-stmt #162 2962:77:3-2987:78:1
+        value: call #161 2969:77:10-2986:77:27 name="@2::level_of" piped=false
+          arg: call #160 2978:77:19-2985:77:26 name="@2::ready" piped=false
+    declaration: function-decl #174 3064:81:8-3161:85:1 name="@2::set_level"
+      param: param #166 3078:81:22-3093:81:37 name="level"
+        type: type-ref #165 3085:81:29-3093:81:37 name="LogLevel"
+      result: type-ref #167 3098:81:42-3102:81:46 name="Void"
+      body: binding #169 3105:82:3-3117:83:1 name="_"
+        value: call #168 3109:82:7-3116:82:14 name="@2::ready" piped=false
+      body: expr-stmt #173 3119:83:3-3157:84:1
+        value: call #172 3119:83:3-3156:83:40 name="LogRegistry.set_level" piped=false
+          arg: call #171 3141:83:25-3155:83:39 name="@2::rank_of" piped=false
+            arg: name-ref #170 3149:83:33-3154:83:38 name="level"
+    declaration: function-decl #194 3344:88:8-3508:92:1 name="@2::attach"
+      param: param #177 3355:88:19-3367:88:31 name="name"
+        type: type-ref #176 3361:88:25-3367:88:31 name="String"
+      param: param #179 3369:88:33-3384:88:48 name="level"
+        type: type-ref #178 3376:88:40-3384:88:48 name="LogLevel"
+      param: param #183 3386:88:50-3413:88:77 name="handler"
+        type: type-ref #182 3395:88:59-3413:88:77 name="Fn"
+          arg: type-ref #180 3398:88:62-3406:88:70 name="LogEvent"
+          arg: type-ref #181 3408:88:72-3412:88:76 name="Void"
+      result: type-ref #185 3418:88:82-3430:88:94 name="Result"
+        arg: type-ref #184 3425:88:89-3429:88:93 name="Void"
+      body: binding #187 3433:89:3-3445:90:1 name="_"
+        value: call #186 3437:89:7-3444:89:14 name="@2::ready" piped=false
+      body: return-stmt #193 3447:90:3-3504:91:1
+        value: call #192 3454:90:10-3503:90:59 name="LogRegistry.attach" piped=false
+          arg: name-ref #188 3473:90:29-3477:90:33 name="name"
+          arg: call #190 3479:90:35-3493:90:49 name="@2::rank_of" piped=false
+            arg: name-ref #189 3487:90:43-3492:90:48 name="level"
+          arg: name-ref #191 3495:90:51-3502:90:58 name="handler"
+    declaration: function-decl #205 3594:94:8-3687:98:1 name="@2::detach"
+      param: param #197 3605:94:19-3617:94:31 name="name"
+        type: type-ref #196 3611:94:25-3617:94:31 name="String"
+      result: type-ref #199 3622:94:36-3634:94:48 name="Result"
+        arg: type-ref #198 3629:94:43-3633:94:47 name="Void"
+      body: binding #201 3637:95:3-3649:96:1 name="_"
+        value: call #200 3641:95:7-3648:95:14 name="@2::ready" piped=false
+      body: return-stmt #204 3651:96:3-3683:97:1
+        value: call #203 3658:96:10-3682:96:34 name="LogRegistry.detach" piped=false
+          arg: name-ref #202 3677:96:29-3681:96:33 name="name"
+    declaration: function-decl #213 3759:100:8-3837:104:1 name="@2::handlers"
+      result: type-ref #208 3777:100:26-3789:100:38 name="List"
+        arg: type-ref #207 3782:100:31-3788:100:37 name="String"
+      body: binding #210 3792:101:3-3804:102:1 name="_"
+        value: call #209 3796:101:7-3803:101:14 name="@2::ready" piped=false
+      body: return-stmt #212 3806:102:3-3833:103:1
+        value: call #211 3813:102:10-3832:102:29 name="LogRegistry.names" piped=false
+    declaration: function-decl #222 3899:106:8-3974:109:1 name="@2::stderr_text"
+      param: param #216 3915:106:24-3930:106:39 name="event"
+        type: type-ref #215 3922:106:31-3930:106:39 name="LogEvent"
+      result: type-ref #217 3935:106:44-3939:106:48 name="Void"
+      body: expr-stmt #221 3942:107:3-3970:108:1
+        value: call #220 3942:107:3-3969:107:30 name="IO.warn" piped=false
+          arg: call #219 3950:107:11-3968:107:29 name="@2::format_text" piped=false
+            arg: name-ref #218 3962:107:23-3967:107:28 name="event"
+    declaration: function-decl #231 4036:111:8-4111:114:1 name="@2::stderr_json"
+      param: param #225 4052:111:24-4067:111:39 name="event"
+        type: type-ref #224 4059:111:31-4067:111:39 name="LogEvent"
+      result: type-ref #226 4072:111:44-4076:111:48 name="Void"
+      body: expr-stmt #230 4079:112:3-4107:113:1
+        value: call #229 4079:112:3-4106:112:30 name="IO.warn" piped=false
+          arg: call #228 4087:112:11-4105:112:29 name="@2::format_json" piped=false
+            arg: name-ref #227 4099:112:23-4104:112:28 name="event"
+    declaration: function-decl #268 4390:118:8-4686:125:1 name="@2::format_text"
+      param: param #234 4406:118:24-4421:118:39 name="event"
+        type: type-ref #233 4413:118:31-4421:118:39 name="LogEvent"
+      result: type-ref #235 4426:118:44-4432:118:50 name="String"
+      body: binding #247 4435:119:3-4532:120:1 name="parts"
+        value: list-lit #246 4443:119:11-4531:119:99
+          element: call #238 4444:119:12-4468:119:36 name="@2::time_text" piped=false
+            arg: field-access #237 4454:119:22-4467:119:35 name="time_ms"
+              target: name-ref #236 4454:119:22-4459:119:27 name="event"
+          element: field-access #242 4470:119:38-4500:119:68 name="upcase"
+            target: call #241 4470:119:38-4493:119:61 name="@2::level_name" piped=false
+              arg: field-access #240 4481:119:49-4492:119:60 name="level"
+                target: name-ref #239 4481:119:49-4486:119:54 name="event"
+          element: call #245 4502:119:70-4530:119:98 name="@2::message_token" piped=false
+            arg: field-access #244 4516:119:84-4529:119:97 name="message"
+              target: name-ref #243 4516:119:84-4521:119:89 name="event"
+      body: for-stmt #263 4534:120:3-4657:123:1 variable="key"
+        iterable: field-access #250 4545:120:14-4562:120:31 name="keys"
+          target: field-access #249 4545:120:14-4557:120:26 name="fields"
+            target: name-ref #248 4545:120:14-4550:120:19 name="event"
+        body: binding #262 4567:121:5-4651:122:1 name="parts"
+          value: method-call #261 4575:121:13-4650:121:88 name="push"
+            target: name-ref #251 4575:121:13-4580:121:18 name="parts"
+            arg: interpolation #260 4586:121:24-4649:121:87
+              part: call #253 4589:121:27-4605:121:43 name="@2::field_token" piped=false
+                arg: name-ref #252 4601:121:39-4604:121:42 name="key"
               part: text "="
-              part: call #350 5379:160:47-5417:160:85 name="@2::field_token" piped=false
-                arg: method-call #349 5391:160:59-5416:160:84 name="get"
-                  target: field-access #346 5391:160:59-5403:160:71 name="fields"
-                    target: name-ref #345 5391:160:59-5396:160:64 name="event"
-                  arg: name-ref #347 5408:160:76-5411:160:79 name="key"
-                  arg: literal #348 5413:160:81-5415:160:83 value=string:""
-      body: return-stmt #358 5429:162:3-5452:163:1
-        value: method-call #357 5436:162:10-5451:162:25 name="join"
-          target: name-ref #355 5436:162:10-5441:162:15 name="parts"
-          arg: literal #356 5447:162:21-5450:162:24 value=string:" "
-    declaration: function-decl #385 5639:167:8-5922:180:1 name="@2::format_json"
-      param: param #362 5655:167:24-5670:167:39 name="event"
-        type: type-ref #361 5662:167:31-5670:167:39 name="LogEvent"
-      result: type-ref #363 5675:167:44-5681:167:50 name="String"
-      body: return-stmt #384 5684:168:3-5918:179:1
-        value: call #383 5691:168:10-5917:178:4 name="@2::one_line" piped=false
-          arg: call #382 5705:169:5-5912:177:6 name="JSON.encode" piped=false
-            arg: construct #381 5724:170:7-5905:176:8 type="@2::JsonLine"
-              arg: named-arg #367 5742:171:9-5772:171:39 name="time"
-                value: call #366 5748:171:15-5772:171:39 name="@2::time_text" piped=false
-                  arg: field-access #365 5758:171:25-5771:171:38 name="time_ms"
-                    target: name-ref #364 5758:171:25-5763:171:30 name="event"
-              arg: named-arg #371 5782:172:9-5812:172:39 name="level"
-                value: call #370 5789:172:16-5812:172:39 name="@2::level_name" piped=false
-                  arg: field-access #369 5800:172:27-5811:172:38 name="level"
-                    target: name-ref #368 5800:172:27-5805:172:32 name="event"
-              arg: named-arg #374 5822:173:9-5840:173:27 name="msg"
-                value: field-access #373 5827:173:14-5840:173:27 name="message"
-                  target: name-ref #372 5827:173:14-5832:173:19 name="event"
-              arg: named-arg #377 5850:174:9-5870:174:29 name="fields"
-                value: field-access #376 5858:174:17-5870:174:29 name="fields"
-                  target: name-ref #375 5858:174:17-5863:174:22 name="event"
-              arg: named-arg #380 5880:175:9-5896:175:25 name="task"
-                value: field-access #379 5886:175:15-5896:175:25 name="task"
-                  target: name-ref #378 5886:175:15-5891:175:20 name="event"
-    declaration: function-decl #572 6103:183:8-7195:221:1 name="@2::time_text"
-      param: param #388 6117:183:22-6124:183:29 name="ms"
-        type: type-ref #387 6121:183:26-6124:183:29 name="Int"
-      result: type-ref #389 6129:183:34-6135:183:40 name="String"
-      body: binding #393 6236:185:3-6257:186:1 name="days"
-        value: binary #392 6243:185:10-6256:185:23 op=divide op-span=6246:185:13-6247:185:14
-          left: name-ref #390 6243:185:10-6245:185:12 name="ms"
-          right: literal #391 6248:185:15-6256:185:23 value=int:86400000
-      body: binding #397 6259:186:3-6280:187:1 name="rest"
-        value: binary #396 6266:186:10-6279:186:23 op=modulo op-span=6269:186:13-6270:186:14
-          left: name-ref #394 6266:186:10-6268:186:12 name="ms"
-          right: literal #395 6271:186:15-6279:186:23 value=int:86400000
-      body: if-stmt #410 6282:187:3-6335:191:1
-        branch: if-branch #409 6282:187:3-6329:190:1
-          condition: binary #400 6285:187:6-6293:187:14 op=less op-span=6290:187:11-6291:187:12
-            left: name-ref #398 6285:187:6-6289:187:10 name="rest"
-            right: literal #399 6292:187:13-6293:187:14 value=int:0
-          body: binding #404 6298:188:5-6308:189:1 name="days"
-            value: binary #403 6298:188:5-6308:189:1 op=minus op-span=6303:188:10-6305:188:12
-              left: name-ref #401 6298:188:5-6302:188:9 name="days"
-              right: literal #402 6306:188:13-6307:188:14 value=int:1
-          body: binding #408 6312:189:5-6329:190:1 name="rest"
-            value: binary #407 6312:189:5-6329:190:1 op=plus op-span=6317:189:10-6319:189:12
-              left: name-ref #405 6312:189:5-6316:189:9 name="rest"
-              right: literal #406 6320:189:13-6328:189:21 value=int:86400000
-      body: binding #414 6442:192:3-6460:193:1 name="z"
-        value: binary #413 6446:192:7-6459:192:20 op=plus op-span=6451:192:12-6452:192:13
-          left: name-ref #411 6446:192:7-6450:192:11 name="days"
-          right: literal #412 6453:192:14-6459:192:20 value=int:719468
-      body: binding #418 6462:193:3-6479:194:1 name="era"
-        value: binary #417 6468:193:9-6478:193:19 op=divide op-span=6470:193:11-6471:193:12
-          left: name-ref #415 6468:193:9-6469:193:10 name="z"
-          right: literal #416 6472:193:13-6478:193:19 value=int:146097
-      body: if-stmt #429 6481:194:3-6518:197:1
-        branch: if-branch #428 6481:194:3-6512:196:1
-          condition: binary #423 6484:194:6-6498:194:20 op=less op-span=6495:194:17-6496:194:18
-            left: binary #421 6484:194:6-6494:194:16 op=modulo op-span=6486:194:8-6487:194:9
-              left: name-ref #419 6484:194:6-6485:194:7 name="z"
-              right: literal #420 6488:194:10-6494:194:16 value=int:146097
-            right: literal #422 6497:194:19-6498:194:20 value=int:0
-          body: binding #427 6503:195:5-6512:196:1 name="era"
-            value: binary #426 6503:195:5-6512:196:1 op=minus op-span=6507:195:9-6509:195:11
-              left: name-ref #424 6503:195:5-6506:195:8 name="era"
-              right: literal #425 6510:195:12-6511:195:13 value=int:1
-      body: binding #435 6520:197:3-6543:198:1 name="doe"
-        value: binary #434 6526:197:9-6542:197:25 op=minus op-span=6528:197:11-6529:197:12
-          left: name-ref #430 6526:197:9-6527:197:10 name="z"
-          right: binary #433 6530:197:13-6542:197:25 op=multiply op-span=6534:197:17-6535:197:18
-            left: name-ref #431 6530:197:13-6533:197:16 name="era"
-            right: literal #432 6536:197:19-6542:197:25 value=int:146097
-      body: binding #451 6545:198:3-6605:199:1 name="yoe"
-        value: binary #450 6551:198:9-6604:198:62 op=divide op-span=6599:198:57-6600:198:58
-          left: binary #448 6552:198:10-6597:198:55 op=minus op-span=6583:198:41-6584:198:42
-            left: binary #444 6552:198:10-6582:198:40 op=plus op-span=6569:198:27-6570:198:28
-              left: binary #440 6552:198:10-6568:198:26 op=minus op-span=6556:198:14-6557:198:15
-                left: name-ref #436 6552:198:10-6555:198:13 name="doe"
-                right: binary #439 6558:198:16-6568:198:26 op=divide op-span=6562:198:20-6563:198:21
-                  left: name-ref #437 6558:198:16-6561:198:19 name="doe"
-                  right: literal #438 6564:198:22-6568:198:26 value=int:1460
-              right: binary #443 6571:198:29-6582:198:40 op=divide op-span=6575:198:33-6576:198:34
-                left: name-ref #441 6571:198:29-6574:198:32 name="doe"
-                right: literal #442 6577:198:35-6582:198:40 value=int:36524
-            right: binary #447 6585:198:43-6597:198:55 op=divide op-span=6589:198:47-6590:198:48
-              left: name-ref #445 6585:198:43-6588:198:46 name="doe"
-              right: literal #446 6591:198:49-6597:198:55 value=int:146096
-          right: literal #449 6601:198:59-6604:198:62 value=int:365
-      body: binding #465 6607:199:3-6653:200:1 name="doy"
-        value: binary #464 6613:199:9-6652:199:48 op=minus op-span=6617:199:13-6618:199:14
-          left: name-ref #452 6613:199:9-6616:199:12 name="doe"
-          right: binary #463 6620:199:16-6651:199:47 op=minus op-span=6640:199:36-6641:199:37
-            left: binary #459 6620:199:16-6639:199:35 op=plus op-span=6630:199:26-6631:199:27
-              left: binary #455 6620:199:16-6629:199:25 op=multiply op-span=6624:199:20-6625:199:21
-                left: literal #453 6620:199:16-6623:199:19 value=int:365
-                right: name-ref #454 6626:199:22-6629:199:25 name="yoe"
-              right: binary #458 6632:199:28-6639:199:35 op=divide op-span=6636:199:32-6637:199:33
-                left: name-ref #456 6632:199:28-6635:199:31 name="yoe"
-                right: literal #457 6638:199:34-6639:199:35 value=int:4
-            right: binary #462 6642:199:38-6651:199:47 op=divide op-span=6646:199:42-6647:199:43
-              left: name-ref #460 6642:199:38-6645:199:41 name="yoe"
-              right: literal #461 6648:199:44-6651:199:47 value=int:100
-      body: binding #473 6655:200:3-6685:201:1 name="shifted"
-        value: binary #472 6665:200:13-6684:200:32 op=divide op-span=6679:200:27-6680:200:28
-          left: binary #470 6666:200:14-6677:200:25 op=plus op-span=6674:200:22-6675:200:23
-            left: binary #468 6666:200:14-6673:200:21 op=multiply op-span=6668:200:16-6669:200:17
-              left: literal #466 6666:200:14-6667:200:15 value=int:5
-              right: name-ref #467 6670:200:18-6673:200:21 name="doy"
-            right: literal #469 6676:200:24-6677:200:25 value=int:2
-          right: literal #471 6681:200:29-6684:200:32 value=int:153
-      body: binding #485 6687:201:3-6727:202:1 name="day"
-        value: binary #484 6693:201:9-6726:201:42 op=plus op-span=6723:201:39-6724:201:40
-          left: binary #482 6693:201:9-6722:201:38 op=minus op-span=6697:201:13-6698:201:14
-            left: name-ref #474 6693:201:9-6696:201:12 name="doy"
-            right: binary #481 6699:201:15-6722:201:38 op=divide op-span=6719:201:35-6720:201:36
-              left: binary #479 6700:201:16-6717:201:33 op=plus op-span=6714:201:30-6715:201:31
-                left: binary #477 6700:201:16-6713:201:29 op=multiply op-span=6704:201:20-6705:201:21
-                  left: literal #475 6700:201:16-6703:201:19 value=int:153
-                  right: name-ref #476 6706:201:22-6713:201:29 name="shifted"
-                right: literal #478 6716:201:32-6717:201:33 value=int:2
-              right: literal #480 6721:201:37-6722:201:38 value=int:5
-          right: literal #483 6725:201:41-6726:201:42 value=int:1
-      body: binding #489 6729:202:3-6749:203:1 name="month"
-        value: binary #488 6737:202:11-6748:202:22 op=plus op-span=6745:202:19-6746:202:20
-          left: name-ref #486 6737:202:11-6744:202:18 name="shifted"
-          right: literal #487 6747:202:21-6748:202:22 value=int:3
-      body: binding #495 6751:203:3-6774:204:1 name="year"
-        value: binary #494 6758:203:10-6773:203:25 op=plus op-span=6762:203:14-6763:203:15
-          left: name-ref #490 6758:203:10-6761:203:13 name="yoe"
-          right: binary #493 6764:203:16-6773:203:25 op=multiply op-span=6768:203:20-6769:203:21
-            left: name-ref #491 6764:203:16-6767:203:19 name="era"
-            right: literal #492 6770:203:22-6773:203:25 value=int:400
-      body: if-stmt #508 6776:204:3-6837:208:1
-        branch: if-branch #507 6776:204:3-6831:207:1
-          condition: binary #498 6779:204:6-6792:204:19 op=greater-equal op-span=6787:204:14-6789:204:16
-            left: name-ref #496 6779:204:6-6786:204:13 name="shifted"
-            right: literal #497 6790:204:17-6792:204:19 value=int:10
-          body: binding #502 6797:205:5-6817:206:1 name="month"
-            value: binary #501 6805:205:13-6816:205:24 op=minus op-span=6813:205:21-6814:205:22
-              left: name-ref #499 6805:205:13-6812:205:20 name="shifted"
-              right: literal #500 6815:205:23-6816:205:24 value=int:9
-          body: binding #506 6821:206:5-6831:207:1 name="year"
-            value: binary #505 6821:206:5-6831:207:1 op=plus op-span=6826:206:10-6828:206:12
-              left: name-ref #503 6821:206:5-6825:206:9 name="year"
-              right: literal #504 6829:206:13-6830:206:14 value=int:1
-      body: binding #510 6839:208:3-6849:209:1 name="sign"
-        value: literal #509 6846:208:10-6848:208:12 value=string:""
-      body: if-stmt #521 6851:209:3-6904:213:1
-        branch: if-branch #520 6851:209:3-6898:212:1
-          condition: binary #513 6854:209:6-6862:209:14 op=less op-span=6859:209:11-6860:209:12
-            left: name-ref #511 6854:209:6-6858:209:10 name="year"
-            right: literal #512 6861:209:13-6862:209:14 value=int:0
-          body: binding #515 6867:210:5-6878:211:1 name="sign"
-            value: literal #514 6874:210:12-6877:210:15 value=string:"-"
-          body: binding #519 6882:211:5-6898:212:1 name="year"
-            value: binary #518 6889:211:12-6897:211:20 op=minus op-span=6891:211:14-6892:211:15
-              left: literal #516 6889:211:12-6890:211:13 value=int:0
-              right: name-ref #517 6893:211:16-6897:211:20 name="year"
-      body: binding #525 6906:213:3-6928:214:1 name="hour"
-        value: binary #524 6913:213:10-6927:213:24 op=divide op-span=6918:213:15-6919:213:16
-          left: name-ref #522 6913:213:10-6917:213:14 name="rest"
-          right: literal #523 6920:213:17-6927:213:24 value=int:3600000
-      body: binding #531 6930:214:3-6962:215:1 name="minute"
-        value: binary #530 6939:214:12-6961:214:34 op=divide op-span=6954:214:27-6955:214:28
-          left: binary #528 6939:214:12-6953:214:26 op=modulo op-span=6944:214:17-6945:214:18
-            left: name-ref #526 6939:214:12-6943:214:16 name="rest"
-            right: literal #527 6946:214:19-6953:214:26 value=int:3600000
-          right: literal #529 6956:214:29-6961:214:34 value=int:60000
-      body: binding #537 6964:215:3-6993:216:1 name="second"
-        value: binary #536 6973:215:12-6992:215:31 op=divide op-span=6986:215:25-6987:215:26
-          left: binary #534 6973:215:12-6985:215:24 op=modulo op-span=6978:215:17-6979:215:18
-            left: name-ref #532 6973:215:12-6977:215:16 name="rest"
-            right: literal #533 6980:215:19-6985:215:24 value=int:60000
-          right: literal #535 6988:215:27-6992:215:31 value=int:1000
-      body: binding #541 6995:216:3-7015:217:1 name="milli"
-        value: binary #540 7003:216:11-7014:216:22 op=modulo op-span=7008:216:16-7009:216:17
-          left: name-ref #538 7003:216:11-7007:216:15 name="rest"
-          right: literal #539 7010:216:18-7014:216:22 value=int:1000
-      body: binding #553 7017:217:3-7081:218:1 name="date"
-        value: interpolation #552 7024:217:10-7080:217:66
-          part: name-ref #542 7027:217:13-7031:217:17 name="sign"
-          part: call #545 7034:217:20-7046:217:32 name="@2::pad" piped=false
-            arg: name-ref #543 7038:217:24-7042:217:28 name="year"
-            arg: literal #544 7044:217:30-7045:217:31 value=int:4
+              part: call #259 4609:121:47-4647:121:85 name="@2::field_token" piped=false
+                arg: method-call #258 4621:121:59-4646:121:84 name="get"
+                  target: field-access #255 4621:121:59-4633:121:71 name="fields"
+                    target: name-ref #254 4621:121:59-4626:121:64 name="event"
+                  arg: name-ref #256 4638:121:76-4641:121:79 name="key"
+                  arg: literal #257 4643:121:81-4645:121:83 value=string:""
+      body: return-stmt #267 4659:123:3-4682:124:1
+        value: method-call #266 4666:123:10-4681:123:25 name="join"
+          target: name-ref #264 4666:123:10-4671:123:15 name="parts"
+          arg: literal #265 4677:123:21-4680:123:24 value=string:" "
+    declaration: function-decl #294 4869:128:8-5152:141:1 name="@2::format_json"
+      param: param #271 4885:128:24-4900:128:39 name="event"
+        type: type-ref #270 4892:128:31-4900:128:39 name="LogEvent"
+      result: type-ref #272 4905:128:44-4911:128:50 name="String"
+      body: return-stmt #293 4914:129:3-5148:140:1
+        value: call #292 4921:129:10-5147:139:4 name="@2::one_line" piped=false
+          arg: call #291 4935:130:5-5142:138:6 name="JSON.encode" piped=false
+            arg: construct #290 4954:131:7-5135:137:8 type="@2::JsonLine"
+              arg: named-arg #276 4972:132:9-5002:132:39 name="time"
+                value: call #275 4978:132:15-5002:132:39 name="@2::time_text" piped=false
+                  arg: field-access #274 4988:132:25-5001:132:38 name="time_ms"
+                    target: name-ref #273 4988:132:25-4993:132:30 name="event"
+              arg: named-arg #280 5012:133:9-5042:133:39 name="level"
+                value: call #279 5019:133:16-5042:133:39 name="@2::level_name" piped=false
+                  arg: field-access #278 5030:133:27-5041:133:38 name="level"
+                    target: name-ref #277 5030:133:27-5035:133:32 name="event"
+              arg: named-arg #283 5052:134:9-5070:134:27 name="msg"
+                value: field-access #282 5057:134:14-5070:134:27 name="message"
+                  target: name-ref #281 5057:134:14-5062:134:19 name="event"
+              arg: named-arg #286 5080:135:9-5100:135:29 name="fields"
+                value: field-access #285 5088:135:17-5100:135:29 name="fields"
+                  target: name-ref #284 5088:135:17-5093:135:22 name="event"
+              arg: named-arg #289 5110:136:9-5126:136:25 name="task"
+                value: field-access #288 5116:136:15-5126:136:25 name="task"
+                  target: name-ref #287 5116:136:15-5121:136:20 name="event"
+    declaration: function-decl #481 5333:144:8-6425:182:1 name="@2::time_text"
+      param: param #297 5347:144:22-5354:144:29 name="ms"
+        type: type-ref #296 5351:144:26-5354:144:29 name="Int"
+      result: type-ref #298 5359:144:34-5365:144:40 name="String"
+      body: binding #302 5466:146:3-5487:147:1 name="days"
+        value: binary #301 5473:146:10-5486:146:23 op=divide op-span=5476:146:13-5477:146:14
+          left: name-ref #299 5473:146:10-5475:146:12 name="ms"
+          right: literal #300 5478:146:15-5486:146:23 value=int:86400000
+      body: binding #306 5489:147:3-5510:148:1 name="rest"
+        value: binary #305 5496:147:10-5509:147:23 op=modulo op-span=5499:147:13-5500:147:14
+          left: name-ref #303 5496:147:10-5498:147:12 name="ms"
+          right: literal #304 5501:147:15-5509:147:23 value=int:86400000
+      body: if-stmt #319 5512:148:3-5565:152:1
+        branch: if-branch #318 5512:148:3-5559:151:1
+          condition: binary #309 5515:148:6-5523:148:14 op=less op-span=5520:148:11-5521:148:12
+            left: name-ref #307 5515:148:6-5519:148:10 name="rest"
+            right: literal #308 5522:148:13-5523:148:14 value=int:0
+          body: binding #313 5528:149:5-5538:150:1 name="days"
+            value: binary #312 5528:149:5-5538:150:1 op=minus op-span=5533:149:10-5535:149:12
+              left: name-ref #310 5528:149:5-5532:149:9 name="days"
+              right: literal #311 5536:149:13-5537:149:14 value=int:1
+          body: binding #317 5542:150:5-5559:151:1 name="rest"
+            value: binary #316 5542:150:5-5559:151:1 op=plus op-span=5547:150:10-5549:150:12
+              left: name-ref #314 5542:150:5-5546:150:9 name="rest"
+              right: literal #315 5550:150:13-5558:150:21 value=int:86400000
+      body: binding #323 5672:153:3-5690:154:1 name="z"
+        value: binary #322 5676:153:7-5689:153:20 op=plus op-span=5681:153:12-5682:153:13
+          left: name-ref #320 5676:153:7-5680:153:11 name="days"
+          right: literal #321 5683:153:14-5689:153:20 value=int:719468
+      body: binding #327 5692:154:3-5709:155:1 name="era"
+        value: binary #326 5698:154:9-5708:154:19 op=divide op-span=5700:154:11-5701:154:12
+          left: name-ref #324 5698:154:9-5699:154:10 name="z"
+          right: literal #325 5702:154:13-5708:154:19 value=int:146097
+      body: if-stmt #338 5711:155:3-5748:158:1
+        branch: if-branch #337 5711:155:3-5742:157:1
+          condition: binary #332 5714:155:6-5728:155:20 op=less op-span=5725:155:17-5726:155:18
+            left: binary #330 5714:155:6-5724:155:16 op=modulo op-span=5716:155:8-5717:155:9
+              left: name-ref #328 5714:155:6-5715:155:7 name="z"
+              right: literal #329 5718:155:10-5724:155:16 value=int:146097
+            right: literal #331 5727:155:19-5728:155:20 value=int:0
+          body: binding #336 5733:156:5-5742:157:1 name="era"
+            value: binary #335 5733:156:5-5742:157:1 op=minus op-span=5737:156:9-5739:156:11
+              left: name-ref #333 5733:156:5-5736:156:8 name="era"
+              right: literal #334 5740:156:12-5741:156:13 value=int:1
+      body: binding #344 5750:158:3-5773:159:1 name="doe"
+        value: binary #343 5756:158:9-5772:158:25 op=minus op-span=5758:158:11-5759:158:12
+          left: name-ref #339 5756:158:9-5757:158:10 name="z"
+          right: binary #342 5760:158:13-5772:158:25 op=multiply op-span=5764:158:17-5765:158:18
+            left: name-ref #340 5760:158:13-5763:158:16 name="era"
+            right: literal #341 5766:158:19-5772:158:25 value=int:146097
+      body: binding #360 5775:159:3-5835:160:1 name="yoe"
+        value: binary #359 5781:159:9-5834:159:62 op=divide op-span=5829:159:57-5830:159:58
+          left: binary #357 5782:159:10-5827:159:55 op=minus op-span=5813:159:41-5814:159:42
+            left: binary #353 5782:159:10-5812:159:40 op=plus op-span=5799:159:27-5800:159:28
+              left: binary #349 5782:159:10-5798:159:26 op=minus op-span=5786:159:14-5787:159:15
+                left: name-ref #345 5782:159:10-5785:159:13 name="doe"
+                right: binary #348 5788:159:16-5798:159:26 op=divide op-span=5792:159:20-5793:159:21
+                  left: name-ref #346 5788:159:16-5791:159:19 name="doe"
+                  right: literal #347 5794:159:22-5798:159:26 value=int:1460
+              right: binary #352 5801:159:29-5812:159:40 op=divide op-span=5805:159:33-5806:159:34
+                left: name-ref #350 5801:159:29-5804:159:32 name="doe"
+                right: literal #351 5807:159:35-5812:159:40 value=int:36524
+            right: binary #356 5815:159:43-5827:159:55 op=divide op-span=5819:159:47-5820:159:48
+              left: name-ref #354 5815:159:43-5818:159:46 name="doe"
+              right: literal #355 5821:159:49-5827:159:55 value=int:146096
+          right: literal #358 5831:159:59-5834:159:62 value=int:365
+      body: binding #374 5837:160:3-5883:161:1 name="doy"
+        value: binary #373 5843:160:9-5882:160:48 op=minus op-span=5847:160:13-5848:160:14
+          left: name-ref #361 5843:160:9-5846:160:12 name="doe"
+          right: binary #372 5850:160:16-5881:160:47 op=minus op-span=5870:160:36-5871:160:37
+            left: binary #368 5850:160:16-5869:160:35 op=plus op-span=5860:160:26-5861:160:27
+              left: binary #364 5850:160:16-5859:160:25 op=multiply op-span=5854:160:20-5855:160:21
+                left: literal #362 5850:160:16-5853:160:19 value=int:365
+                right: name-ref #363 5856:160:22-5859:160:25 name="yoe"
+              right: binary #367 5862:160:28-5869:160:35 op=divide op-span=5866:160:32-5867:160:33
+                left: name-ref #365 5862:160:28-5865:160:31 name="yoe"
+                right: literal #366 5868:160:34-5869:160:35 value=int:4
+            right: binary #371 5872:160:38-5881:160:47 op=divide op-span=5876:160:42-5877:160:43
+              left: name-ref #369 5872:160:38-5875:160:41 name="yoe"
+              right: literal #370 5878:160:44-5881:160:47 value=int:100
+      body: binding #382 5885:161:3-5915:162:1 name="shifted"
+        value: binary #381 5895:161:13-5914:161:32 op=divide op-span=5909:161:27-5910:161:28
+          left: binary #379 5896:161:14-5907:161:25 op=plus op-span=5904:161:22-5905:161:23
+            left: binary #377 5896:161:14-5903:161:21 op=multiply op-span=5898:161:16-5899:161:17
+              left: literal #375 5896:161:14-5897:161:15 value=int:5
+              right: name-ref #376 5900:161:18-5903:161:21 name="doy"
+            right: literal #378 5906:161:24-5907:161:25 value=int:2
+          right: literal #380 5911:161:29-5914:161:32 value=int:153
+      body: binding #394 5917:162:3-5957:163:1 name="day"
+        value: binary #393 5923:162:9-5956:162:42 op=plus op-span=5953:162:39-5954:162:40
+          left: binary #391 5923:162:9-5952:162:38 op=minus op-span=5927:162:13-5928:162:14
+            left: name-ref #383 5923:162:9-5926:162:12 name="doy"
+            right: binary #390 5929:162:15-5952:162:38 op=divide op-span=5949:162:35-5950:162:36
+              left: binary #388 5930:162:16-5947:162:33 op=plus op-span=5944:162:30-5945:162:31
+                left: binary #386 5930:162:16-5943:162:29 op=multiply op-span=5934:162:20-5935:162:21
+                  left: literal #384 5930:162:16-5933:162:19 value=int:153
+                  right: name-ref #385 5936:162:22-5943:162:29 name="shifted"
+                right: literal #387 5946:162:32-5947:162:33 value=int:2
+              right: literal #389 5951:162:37-5952:162:38 value=int:5
+          right: literal #392 5955:162:41-5956:162:42 value=int:1
+      body: binding #398 5959:163:3-5979:164:1 name="month"
+        value: binary #397 5967:163:11-5978:163:22 op=plus op-span=5975:163:19-5976:163:20
+          left: name-ref #395 5967:163:11-5974:163:18 name="shifted"
+          right: literal #396 5977:163:21-5978:163:22 value=int:3
+      body: binding #404 5981:164:3-6004:165:1 name="year"
+        value: binary #403 5988:164:10-6003:164:25 op=plus op-span=5992:164:14-5993:164:15
+          left: name-ref #399 5988:164:10-5991:164:13 name="yoe"
+          right: binary #402 5994:164:16-6003:164:25 op=multiply op-span=5998:164:20-5999:164:21
+            left: name-ref #400 5994:164:16-5997:164:19 name="era"
+            right: literal #401 6000:164:22-6003:164:25 value=int:400
+      body: if-stmt #417 6006:165:3-6067:169:1
+        branch: if-branch #416 6006:165:3-6061:168:1
+          condition: binary #407 6009:165:6-6022:165:19 op=greater-equal op-span=6017:165:14-6019:165:16
+            left: name-ref #405 6009:165:6-6016:165:13 name="shifted"
+            right: literal #406 6020:165:17-6022:165:19 value=int:10
+          body: binding #411 6027:166:5-6047:167:1 name="month"
+            value: binary #410 6035:166:13-6046:166:24 op=minus op-span=6043:166:21-6044:166:22
+              left: name-ref #408 6035:166:13-6042:166:20 name="shifted"
+              right: literal #409 6045:166:23-6046:166:24 value=int:9
+          body: binding #415 6051:167:5-6061:168:1 name="year"
+            value: binary #414 6051:167:5-6061:168:1 op=plus op-span=6056:167:10-6058:167:12
+              left: name-ref #412 6051:167:5-6055:167:9 name="year"
+              right: literal #413 6059:167:13-6060:167:14 value=int:1
+      body: binding #419 6069:169:3-6079:170:1 name="sign"
+        value: literal #418 6076:169:10-6078:169:12 value=string:""
+      body: if-stmt #430 6081:170:3-6134:174:1
+        branch: if-branch #429 6081:170:3-6128:173:1
+          condition: binary #422 6084:170:6-6092:170:14 op=less op-span=6089:170:11-6090:170:12
+            left: name-ref #420 6084:170:6-6088:170:10 name="year"
+            right: literal #421 6091:170:13-6092:170:14 value=int:0
+          body: binding #424 6097:171:5-6108:172:1 name="sign"
+            value: literal #423 6104:171:12-6107:171:15 value=string:"-"
+          body: binding #428 6112:172:5-6128:173:1 name="year"
+            value: binary #427 6119:172:12-6127:172:20 op=minus op-span=6121:172:14-6122:172:15
+              left: literal #425 6119:172:12-6120:172:13 value=int:0
+              right: name-ref #426 6123:172:16-6127:172:20 name="year"
+      body: binding #434 6136:174:3-6158:175:1 name="hour"
+        value: binary #433 6143:174:10-6157:174:24 op=divide op-span=6148:174:15-6149:174:16
+          left: name-ref #431 6143:174:10-6147:174:14 name="rest"
+          right: literal #432 6150:174:17-6157:174:24 value=int:3600000
+      body: binding #440 6160:175:3-6192:176:1 name="minute"
+        value: binary #439 6169:175:12-6191:175:34 op=divide op-span=6184:175:27-6185:175:28
+          left: binary #437 6169:175:12-6183:175:26 op=modulo op-span=6174:175:17-6175:175:18
+            left: name-ref #435 6169:175:12-6173:175:16 name="rest"
+            right: literal #436 6176:175:19-6183:175:26 value=int:3600000
+          right: literal #438 6186:175:29-6191:175:34 value=int:60000
+      body: binding #446 6194:176:3-6223:177:1 name="second"
+        value: binary #445 6203:176:12-6222:176:31 op=divide op-span=6216:176:25-6217:176:26
+          left: binary #443 6203:176:12-6215:176:24 op=modulo op-span=6208:176:17-6209:176:18
+            left: name-ref #441 6203:176:12-6207:176:16 name="rest"
+            right: literal #442 6210:176:19-6215:176:24 value=int:60000
+          right: literal #444 6218:176:27-6222:176:31 value=int:1000
+      body: binding #450 6225:177:3-6245:178:1 name="milli"
+        value: binary #449 6233:177:11-6244:177:22 op=modulo op-span=6238:177:16-6239:177:17
+          left: name-ref #447 6233:177:11-6237:177:15 name="rest"
+          right: literal #448 6240:177:18-6244:177:22 value=int:1000
+      body: binding #462 6247:178:3-6311:179:1 name="date"
+        value: interpolation #461 6254:178:10-6310:178:66
+          part: name-ref #451 6257:178:13-6261:178:17 name="sign"
+          part: call #454 6264:178:20-6276:178:32 name="@2::pad" piped=false
+            arg: name-ref #452 6268:178:24-6272:178:28 name="year"
+            arg: literal #453 6274:178:30-6275:178:31 value=int:4
           part: text "-"
-          part: call #548 7050:217:36-7063:217:49 name="@2::pad" piped=false
-            arg: name-ref #546 7054:217:40-7059:217:45 name="month"
-            arg: literal #547 7061:217:47-7062:217:48 value=int:2
+          part: call #457 6280:178:36-6293:178:49 name="@2::pad" piped=false
+            arg: name-ref #455 6284:178:40-6289:178:45 name="month"
+            arg: literal #456 6291:178:47-6292:178:48 value=int:2
           part: text "-"
-          part: call #551 7067:217:53-7078:217:64 name="@2::pad" piped=false
-            arg: name-ref #549 7071:217:57-7074:217:60 name="day"
-            arg: literal #550 7076:217:62-7077:217:63 value=int:2
-      body: binding #567 7083:218:3-7162:219:1 name="clock"
-        value: interpolation #566 7091:218:11-7161:218:81
-          part: call #556 7094:218:14-7106:218:26 name="@2::pad" piped=false
-            arg: name-ref #554 7098:218:18-7102:218:22 name="hour"
-            arg: literal #555 7104:218:24-7105:218:25 value=int:2
+          part: call #460 6297:178:53-6308:178:64 name="@2::pad" piped=false
+            arg: name-ref #458 6301:178:57-6304:178:60 name="day"
+            arg: literal #459 6306:178:62-6307:178:63 value=int:2
+      body: binding #476 6313:179:3-6392:180:1 name="clock"
+        value: interpolation #475 6321:179:11-6391:179:81
+          part: call #465 6324:179:14-6336:179:26 name="@2::pad" piped=false
+            arg: name-ref #463 6328:179:18-6332:179:22 name="hour"
+            arg: literal #464 6334:179:24-6335:179:25 value=int:2
           part: text ":"
-          part: call #559 7110:218:30-7124:218:44 name="@2::pad" piped=false
-            arg: name-ref #557 7114:218:34-7120:218:40 name="minute"
-            arg: literal #558 7122:218:42-7123:218:43 value=int:2
+          part: call #468 6340:179:30-6354:179:44 name="@2::pad" piped=false
+            arg: name-ref #466 6344:179:34-6350:179:40 name="minute"
+            arg: literal #467 6352:179:42-6353:179:43 value=int:2
           part: text ":"
-          part: call #562 7128:218:48-7142:218:62 name="@2::pad" piped=false
-            arg: name-ref #560 7132:218:52-7138:218:58 name="second"
-            arg: literal #561 7140:218:60-7141:218:61 value=int:2
+          part: call #471 6358:179:48-6372:179:62 name="@2::pad" piped=false
+            arg: name-ref #469 6362:179:52-6368:179:58 name="second"
+            arg: literal #470 6370:179:60-6371:179:61 value=int:2
           part: text "."
-          part: call #565 7146:218:66-7159:218:79 name="@2::pad" piped=false
-            arg: name-ref #563 7150:218:70-7155:218:75 name="milli"
-            arg: literal #564 7157:218:77-7158:218:78 value=int:3
-      body: return-stmt #571 7164:219:3-7191:220:1
-        value: interpolation #570 7171:219:10-7190:219:29
-          part: name-ref #568 7174:219:13-7178:219:17 name="date"
+          part: call #474 6376:179:66-6389:179:79 name="@2::pad" piped=false
+            arg: name-ref #472 6380:179:70-6385:179:75 name="milli"
+            arg: literal #473 6387:179:77-6388:179:78 value=int:3
+      body: return-stmt #480 6394:180:3-6421:181:1
+        value: interpolation #479 6401:180:10-6420:180:29
+          part: name-ref #477 6404:180:13-6408:180:17 name="date"
           part: text "T"
-          part: name-ref #569 7182:219:21-7187:219:26 name="clock"
+          part: name-ref #478 6412:180:21-6417:180:26 name="clock"
           part: text "Z"
-    declaration: function-decl #595 7342:224:1-7526:232:1 name="@2::rank_of"
-      param: param #575 7354:224:13-7369:224:28 name="level"
-        type: type-ref #574 7361:224:20-7369:224:28 name="LogLevel"
-      result: type-ref #576 7374:224:33-7377:224:36 name="Int"
-      body: case-stmt #594 7380:225:3-7522:231:1
-        value: name-ref #577 7385:225:8-7390:225:13 name="level"
-        arm: case-arm #581 7395:226:5-7422:227:1
-          pattern: variant-pattern #578 7395:226:5-7409:226:19 enum="LogLevel" variant="Debug" bindings=[]
-          body: return-stmt #580 7413:226:23-7422:227:1
-            value: literal #579 7420:226:30-7421:226:31 value=int:0
-        arm: case-arm #585 7426:227:5-7452:228:1
-          pattern: variant-pattern #582 7426:227:5-7439:227:18 enum="LogLevel" variant="Info" bindings=[]
-          body: return-stmt #584 7443:227:22-7452:228:1
-            value: literal #583 7450:227:29-7451:227:30 value=int:1
-        arm: case-arm #589 7456:228:5-7485:229:1
-          pattern: variant-pattern #586 7456:228:5-7472:228:21 enum="LogLevel" variant="Warning" bindings=[]
-          body: return-stmt #588 7476:228:25-7485:229:1
-            value: literal #587 7483:228:32-7484:228:33 value=int:2
-        arm: case-arm #593 7489:229:5-7516:230:1
-          pattern: variant-pattern #590 7489:229:5-7503:229:19 enum="LogLevel" variant="Error" bindings=[]
-          body: return-stmt #592 7507:229:23-7516:230:1
-            value: literal #591 7514:229:30-7515:229:31 value=int:3
-    declaration: function-decl #617 7527:233:1-7710:241:1 name="@2::level_of"
-      param: param #597 7540:233:14-7549:233:23 name="rank"
-        type: type-ref #596 7546:233:20-7549:233:23 name="Int"
-      result: type-ref #598 7554:233:28-7562:233:36 name="LogLevel"
-      body: case-stmt #616 7565:234:3-7706:240:1
-        value: name-ref #599 7570:234:8-7574:234:12 name="rank"
-        arm: case-arm #603 7579:235:5-7606:236:1
-          pattern: literal-pattern #600 7579:235:5-7580:235:6 value=int:0
-          body: return-stmt #602 7584:235:10-7606:236:1
-            value: enum-constructor #601 7591:235:17-7605:235:31 enum="LogLevel" variant="Debug"
-        arm: case-arm #607 7610:236:5-7636:237:1
-          pattern: literal-pattern #604 7610:236:5-7611:236:6 value=int:1
-          body: return-stmt #606 7615:236:10-7636:237:1
-            value: enum-constructor #605 7622:236:17-7635:236:30 enum="LogLevel" variant="Info"
-        arm: case-arm #611 7640:237:5-7669:238:1
-          pattern: literal-pattern #608 7640:237:5-7641:237:6 value=int:2
-          body: return-stmt #610 7645:237:10-7669:238:1
-            value: enum-constructor #609 7652:237:17-7668:237:33 enum="LogLevel" variant="Warning"
-        arm: case-arm #615 7673:238:5-7700:239:1
-          pattern: wildcard-pattern #612 7673:238:5-7674:238:6
-          body: return-stmt #614 7678:238:10-7700:239:1
-            value: enum-constructor #613 7685:238:17-7699:238:31 enum="LogLevel" variant="Error"
-    declaration: function-decl #639 7711:242:1-7926:250:1 name="@2::level_name"
-      param: param #619 7726:242:16-7741:242:31 name="level"
-        type: type-ref #618 7733:242:23-7741:242:31 name="LogLevel"
-      result: type-ref #620 7746:242:36-7752:242:42 name="String"
-      body: case-stmt #638 7755:243:3-7922:249:1
-        value: name-ref #621 7760:243:8-7765:243:13 name="level"
-        arm: case-arm #625 7770:244:5-7803:245:1
-          pattern: variant-pattern #622 7770:244:5-7784:244:19 enum="LogLevel" variant="Debug" bindings=[]
-          body: return-stmt #624 7788:244:23-7803:245:1
-            value: literal #623 7795:244:30-7802:244:37 value=string:"debug"
-        arm: case-arm #629 7807:245:5-7838:246:1
-          pattern: variant-pattern #626 7807:245:5-7820:245:18 enum="LogLevel" variant="Info" bindings=[]
-          body: return-stmt #628 7824:245:22-7838:246:1
-            value: literal #627 7831:245:29-7837:245:35 value=string:"info"
-        arm: case-arm #633 7842:246:5-7879:247:1
-          pattern: variant-pattern #630 7842:246:5-7858:246:21 enum="LogLevel" variant="Warning" bindings=[]
-          body: return-stmt #632 7862:246:25-7879:247:1
-            value: literal #631 7869:246:32-7878:246:41 value=string:"warning"
-        arm: case-arm #637 7883:247:5-7916:248:1
-          pattern: variant-pattern #634 7883:247:5-7897:247:19 enum="LogLevel" variant="Error" bindings=[]
-          body: return-stmt #636 7901:247:23-7916:248:1
-            value: literal #635 7908:247:30-7915:247:37 value=string:"error"
-    declaration: function-decl #655 8120:253:1-8292:261:1 name="@2::ready"
-      result: type-ref #640 8135:253:16-8138:253:19 name="Int"
-      body: binding #642 8141:254:3-8171:255:1 name="current"
-        value: call #641 8151:254:13-8170:254:32 name="LogRegistry.level" piped=false
-      body: if-stmt #652 8173:255:3-8271:259:1
-        branch: if-branch #651 8173:255:3-8265:258:1
-          condition: binary #645 8176:255:6-8187:255:17 op=less op-span=8184:255:14-8185:255:15
-            left: name-ref #643 8176:255:6-8183:255:13 name="current"
-            right: literal #644 8186:255:16-8187:255:17 value=int:0
-          body: expr-stmt #648 8192:256:5-8234:257:1
-            value: call #647 8192:256:5-8233:256:46 name="LogRegistry.install_default" piped=false
-              arg: function-ref #646 8220:256:33-8232:256:45 name="@2::stderr_text"
-          body: return-stmt #650 8238:257:5-8265:258:1
-            value: call #649 8245:257:12-8264:257:31 name="LogRegistry.level" piped=false
-      body: return-stmt #654 8273:259:3-8288:260:1
-        value: name-ref #653 8280:259:10-8287:259:17 name="current"
-    declaration: function-decl #695 8460:264:1-8819:274:1 name="@2::dispatch"
-      param: param #657 8473:264:14-8488:264:29 name="level"
-        type: type-ref #656 8480:264:21-8488:264:29 name="LogLevel"
-      param: param #659 8490:264:31-8499:264:40 name="rank"
-        type: type-ref #658 8496:264:37-8499:264:40 name="Int"
-      param: param #661 8501:264:42-8516:264:57 name="message"
-        type: type-ref #660 8510:264:51-8516:264:57 name="String"
-      param: param #665 8518:264:59-8545:264:86 name="fields"
-        type: type-ref #664 8526:264:67-8545:264:86 name="Map"
-          arg: type-ref #662 8530:264:71-8536:264:77 name="String"
-          arg: type-ref #663 8538:264:79-8544:264:85 name="String"
-      result: type-ref #666 8550:264:91-8554:264:95 name="Void"
-      body: binding #669 8557:265:3-8596:266:1 name="accepting"
-        value: call #668 8569:265:15-8595:265:41 name="LogRegistry.handlers" piped=false
-          arg: name-ref #667 8590:265:36-8594:265:40 name="rank"
-      body: if-stmt #676 8598:266:3-8638:269:1
-        branch: if-branch #675 8598:266:3-8632:268:1
-          condition: binary #673 8601:266:6-8620:266:25 op=equal op-span=8616:266:21-8618:266:23
-            left: field-access #671 8601:266:6-8615:266:20 name="size"
-              target: name-ref #670 8601:266:6-8610:266:15 name="accepting"
-            right: literal #672 8619:266:24-8620:266:25 value=int:0
-          body: return-stmt #674 8625:267:5-8632:268:1
-      body: binding #688 8640:269:3-8758:270:1 name="event"
-        value: construct #687 8648:269:11-8757:269:120 type="LogEvent"
-          arg: named-arg #678 8657:269:20-8669:269:32 name="level"
-            value: name-ref #677 8664:269:27-8669:269:32 name="level"
-          arg: named-arg #680 8671:269:34-8687:269:50 name="message"
-            value: name-ref #679 8680:269:43-8687:269:50 name="message"
-          arg: named-arg #682 8689:269:52-8703:269:66 name="fields"
-            value: name-ref #681 8697:269:60-8703:269:66 name="fields"
-          arg: named-arg #684 8705:269:68-8727:269:90 name="time_ms"
-            value: call #683 8714:269:77-8727:269:90 name="Time.now_ms" piped=false
-          arg: named-arg #686 8729:269:92-8756:269:119 name="task"
-            value: call #685 8735:269:98-8756:269:119 name="LogRegistry.task_id" piped=false
-      body: for-stmt #694 8760:270:3-8815:273:1 variable="handler"
-        iterable: name-ref #689 8775:270:18-8784:270:27 name="accepting"
-        body: expr-stmt #693 8789:271:5-8809:272:1
-          value: invoke #692 8789:271:5-8808:271:24
-            target: name-ref #690 8789:271:5-8796:271:12 name="handler"
-            arg: name-ref #691 8802:271:18-8807:271:23 name="event"
-    declaration: function-decl #719 9051:277:1-9200:280:1 name="@2::plain?"
-      param: param #697 9062:277:12-9074:277:24 name="text"
-        type: type-ref #696 9068:277:18-9074:277:24 name="String"
-      result: type-ref #698 9079:277:29-9083:277:33 name="Bool"
-      body: return-stmt #718 9086:278:3-9196:279:1
-        value: binary #717 9093:278:10-9195:278:112 op=and op-span=9157:278:74-9160:278:77
-          left: binary #711 9093:278:10-9156:278:73 op=and op-span=9134:278:51-9137:278:54
-            left: binary #707 9093:278:10-9133:278:50 op=and op-span=9109:278:26-9112:278:29
-              left: binary #702 9093:278:10-9108:278:25 op=greater op-span=9105:278:22-9106:278:23
-                left: field-access #700 9093:278:10-9104:278:21 name="length"
-                  target: name-ref #699 9093:278:10-9097:278:14 name="text"
-                right: literal #701 9107:278:24-9108:278:25 value=int:0
-              right: unary #706 9113:278:30-9133:278:50 op=not op-span=9113:278:30-9114:278:31
-                operand: method-call #705 9114:278:31-9133:278:50 name="contains?"
-                  target: name-ref #703 9114:278:31-9118:278:35 name="text"
-                  arg: literal #704 9129:278:46-9132:278:49 value=string:"="
-            right: unary #710 9138:278:55-9156:278:73 op=not op-span=9138:278:55-9139:278:56
-              operand: call #709 9139:278:56-9156:278:73 name="@2::line_break?" piped=false
-                arg: name-ref #708 9151:278:68-9155:278:72 name="text"
-          right: binary #716 9161:278:78-9195:278:112 op=equal op-span=9179:278:96-9181:278:98
-            left: call #713 9161:278:78-9178:278:95 name="JSON.encode" piped=false
-              arg: name-ref #712 9173:278:90-9177:278:94 name="text"
-            right: interpolation #715 9182:278:99-9195:278:112
+    declaration: function-decl #504 6572:185:1-6756:193:1 name="@2::rank_of"
+      param: param #484 6584:185:13-6599:185:28 name="level"
+        type: type-ref #483 6591:185:20-6599:185:28 name="LogLevel"
+      result: type-ref #485 6604:185:33-6607:185:36 name="Int"
+      body: case-stmt #503 6610:186:3-6752:192:1
+        value: name-ref #486 6615:186:8-6620:186:13 name="level"
+        arm: case-arm #490 6625:187:5-6652:188:1
+          pattern: variant-pattern #487 6625:187:5-6639:187:19 enum="LogLevel" variant="Debug" bindings=[]
+          body: return-stmt #489 6643:187:23-6652:188:1
+            value: literal #488 6650:187:30-6651:187:31 value=int:0
+        arm: case-arm #494 6656:188:5-6682:189:1
+          pattern: variant-pattern #491 6656:188:5-6669:188:18 enum="LogLevel" variant="Info" bindings=[]
+          body: return-stmt #493 6673:188:22-6682:189:1
+            value: literal #492 6680:188:29-6681:188:30 value=int:1
+        arm: case-arm #498 6686:189:5-6715:190:1
+          pattern: variant-pattern #495 6686:189:5-6702:189:21 enum="LogLevel" variant="Warning" bindings=[]
+          body: return-stmt #497 6706:189:25-6715:190:1
+            value: literal #496 6713:189:32-6714:189:33 value=int:2
+        arm: case-arm #502 6719:190:5-6746:191:1
+          pattern: variant-pattern #499 6719:190:5-6733:190:19 enum="LogLevel" variant="Error" bindings=[]
+          body: return-stmt #501 6737:190:23-6746:191:1
+            value: literal #500 6744:190:30-6745:190:31 value=int:3
+    declaration: function-decl #526 6757:194:1-6940:202:1 name="@2::level_of"
+      param: param #506 6770:194:14-6779:194:23 name="rank"
+        type: type-ref #505 6776:194:20-6779:194:23 name="Int"
+      result: type-ref #507 6784:194:28-6792:194:36 name="LogLevel"
+      body: case-stmt #525 6795:195:3-6936:201:1
+        value: name-ref #508 6800:195:8-6804:195:12 name="rank"
+        arm: case-arm #512 6809:196:5-6836:197:1
+          pattern: literal-pattern #509 6809:196:5-6810:196:6 value=int:0
+          body: return-stmt #511 6814:196:10-6836:197:1
+            value: enum-constructor #510 6821:196:17-6835:196:31 enum="LogLevel" variant="Debug"
+        arm: case-arm #516 6840:197:5-6866:198:1
+          pattern: literal-pattern #513 6840:197:5-6841:197:6 value=int:1
+          body: return-stmt #515 6845:197:10-6866:198:1
+            value: enum-constructor #514 6852:197:17-6865:197:30 enum="LogLevel" variant="Info"
+        arm: case-arm #520 6870:198:5-6899:199:1
+          pattern: literal-pattern #517 6870:198:5-6871:198:6 value=int:2
+          body: return-stmt #519 6875:198:10-6899:199:1
+            value: enum-constructor #518 6882:198:17-6898:198:33 enum="LogLevel" variant="Warning"
+        arm: case-arm #524 6903:199:5-6930:200:1
+          pattern: wildcard-pattern #521 6903:199:5-6904:199:6
+          body: return-stmt #523 6908:199:10-6930:200:1
+            value: enum-constructor #522 6915:199:17-6929:199:31 enum="LogLevel" variant="Error"
+    declaration: function-decl #548 6941:203:1-7156:211:1 name="@2::level_name"
+      param: param #528 6956:203:16-6971:203:31 name="level"
+        type: type-ref #527 6963:203:23-6971:203:31 name="LogLevel"
+      result: type-ref #529 6976:203:36-6982:203:42 name="String"
+      body: case-stmt #547 6985:204:3-7152:210:1
+        value: name-ref #530 6990:204:8-6995:204:13 name="level"
+        arm: case-arm #534 7000:205:5-7033:206:1
+          pattern: variant-pattern #531 7000:205:5-7014:205:19 enum="LogLevel" variant="Debug" bindings=[]
+          body: return-stmt #533 7018:205:23-7033:206:1
+            value: literal #532 7025:205:30-7032:205:37 value=string:"debug"
+        arm: case-arm #538 7037:206:5-7068:207:1
+          pattern: variant-pattern #535 7037:206:5-7050:206:18 enum="LogLevel" variant="Info" bindings=[]
+          body: return-stmt #537 7054:206:22-7068:207:1
+            value: literal #536 7061:206:29-7067:206:35 value=string:"info"
+        arm: case-arm #542 7072:207:5-7109:208:1
+          pattern: variant-pattern #539 7072:207:5-7088:207:21 enum="LogLevel" variant="Warning" bindings=[]
+          body: return-stmt #541 7092:207:25-7109:208:1
+            value: literal #540 7099:207:32-7108:207:41 value=string:"warning"
+        arm: case-arm #546 7113:208:5-7146:209:1
+          pattern: variant-pattern #543 7113:208:5-7127:208:19 enum="LogLevel" variant="Error" bindings=[]
+          body: return-stmt #545 7131:208:23-7146:209:1
+            value: literal #544 7138:208:30-7145:208:37 value=string:"error"
+    declaration: function-decl #564 7350:214:1-7522:222:1 name="@2::ready"
+      result: type-ref #549 7365:214:16-7368:214:19 name="Int"
+      body: binding #551 7371:215:3-7401:216:1 name="current"
+        value: call #550 7381:215:13-7400:215:32 name="LogRegistry.level" piped=false
+      body: if-stmt #561 7403:216:3-7501:220:1
+        branch: if-branch #560 7403:216:3-7495:219:1
+          condition: binary #554 7406:216:6-7417:216:17 op=less op-span=7414:216:14-7415:216:15
+            left: name-ref #552 7406:216:6-7413:216:13 name="current"
+            right: literal #553 7416:216:16-7417:216:17 value=int:0
+          body: expr-stmt #557 7422:217:5-7464:218:1
+            value: call #556 7422:217:5-7463:217:46 name="LogRegistry.install_default" piped=false
+              arg: function-ref #555 7450:217:33-7462:217:45 name="@2::stderr_text"
+          body: return-stmt #559 7468:218:5-7495:219:1
+            value: call #558 7475:218:12-7494:218:31 name="LogRegistry.level" piped=false
+      body: return-stmt #563 7503:220:3-7518:221:1
+        value: name-ref #562 7510:220:10-7517:220:17 name="current"
+    declaration: function-decl #604 7690:225:1-8049:235:1 name="@2::dispatch"
+      param: param #566 7703:225:14-7718:225:29 name="level"
+        type: type-ref #565 7710:225:21-7718:225:29 name="LogLevel"
+      param: param #568 7720:225:31-7729:225:40 name="rank"
+        type: type-ref #567 7726:225:37-7729:225:40 name="Int"
+      param: param #570 7731:225:42-7746:225:57 name="message"
+        type: type-ref #569 7740:225:51-7746:225:57 name="String"
+      param: param #574 7748:225:59-7775:225:86 name="fields"
+        type: type-ref #573 7756:225:67-7775:225:86 name="Map"
+          arg: type-ref #571 7760:225:71-7766:225:77 name="String"
+          arg: type-ref #572 7768:225:79-7774:225:85 name="String"
+      result: type-ref #575 7780:225:91-7784:225:95 name="Void"
+      body: binding #578 7787:226:3-7826:227:1 name="accepting"
+        value: call #577 7799:226:15-7825:226:41 name="LogRegistry.handlers" piped=false
+          arg: name-ref #576 7820:226:36-7824:226:40 name="rank"
+      body: if-stmt #585 7828:227:3-7868:230:1
+        branch: if-branch #584 7828:227:3-7862:229:1
+          condition: binary #582 7831:227:6-7850:227:25 op=equal op-span=7846:227:21-7848:227:23
+            left: field-access #580 7831:227:6-7845:227:20 name="size"
+              target: name-ref #579 7831:227:6-7840:227:15 name="accepting"
+            right: literal #581 7849:227:24-7850:227:25 value=int:0
+          body: return-stmt #583 7855:228:5-7862:229:1
+      body: binding #597 7870:230:3-7988:231:1 name="event"
+        value: construct #596 7878:230:11-7987:230:120 type="LogEvent"
+          arg: named-arg #587 7887:230:20-7899:230:32 name="level"
+            value: name-ref #586 7894:230:27-7899:230:32 name="level"
+          arg: named-arg #589 7901:230:34-7917:230:50 name="message"
+            value: name-ref #588 7910:230:43-7917:230:50 name="message"
+          arg: named-arg #591 7919:230:52-7933:230:66 name="fields"
+            value: name-ref #590 7927:230:60-7933:230:66 name="fields"
+          arg: named-arg #593 7935:230:68-7957:230:90 name="time_ms"
+            value: call #592 7944:230:77-7957:230:90 name="Time.now_ms" piped=false
+          arg: named-arg #595 7959:230:92-7986:230:119 name="task"
+            value: call #594 7965:230:98-7986:230:119 name="LogRegistry.task_id" piped=false
+      body: for-stmt #603 7990:231:3-8045:234:1 variable="handler"
+        iterable: name-ref #598 8005:231:18-8014:231:27 name="accepting"
+        body: expr-stmt #602 8019:232:5-8039:233:1
+          value: invoke #601 8019:232:5-8038:232:24
+            target: name-ref #599 8019:232:5-8026:232:12 name="handler"
+            arg: name-ref #600 8032:232:18-8037:232:23 name="event"
+    declaration: function-decl #628 8281:238:1-8430:241:1 name="@2::plain?"
+      param: param #606 8292:238:12-8304:238:24 name="text"
+        type: type-ref #605 8298:238:18-8304:238:24 name="String"
+      result: type-ref #607 8309:238:29-8313:238:33 name="Bool"
+      body: return-stmt #627 8316:239:3-8426:240:1
+        value: binary #626 8323:239:10-8425:239:112 op=and op-span=8387:239:74-8390:239:77
+          left: binary #620 8323:239:10-8386:239:73 op=and op-span=8364:239:51-8367:239:54
+            left: binary #616 8323:239:10-8363:239:50 op=and op-span=8339:239:26-8342:239:29
+              left: binary #611 8323:239:10-8338:239:25 op=greater op-span=8335:239:22-8336:239:23
+                left: field-access #609 8323:239:10-8334:239:21 name="length"
+                  target: name-ref #608 8323:239:10-8327:239:14 name="text"
+                right: literal #610 8337:239:24-8338:239:25 value=int:0
+              right: unary #615 8343:239:30-8363:239:50 op=not op-span=8343:239:30-8344:239:31
+                operand: method-call #614 8344:239:31-8363:239:50 name="contains?"
+                  target: name-ref #612 8344:239:31-8348:239:35 name="text"
+                  arg: literal #613 8359:239:46-8362:239:49 value=string:"="
+            right: unary #619 8368:239:55-8386:239:73 op=not op-span=8368:239:55-8369:239:56
+              operand: call #618 8369:239:56-8386:239:73 name="@2::line_break?" piped=false
+                arg: name-ref #617 8381:239:68-8385:239:72 name="text"
+          right: binary #625 8391:239:78-8425:239:112 op=equal op-span=8409:239:96-8411:239:98
+            left: call #622 8391:239:78-8408:239:95 name="JSON.encode" piped=false
+              arg: name-ref #621 8403:239:90-8407:239:94 name="text"
+            right: interpolation #624 8412:239:99-8425:239:112
               part: text "\""
-              part: name-ref #714 9187:278:104-9191:278:108 name="text"
+              part: name-ref #623 8417:239:104-8421:239:108 name="text"
               part: text "\""
-    declaration: function-decl #737 9359:283:1-9566:290:1 name="@2::one_line"
-      param: param #721 9372:283:14-9384:283:26 name="text"
-        type: type-ref #720 9378:283:20-9384:283:26 name="String"
-      result: type-ref #722 9389:283:31-9395:283:37 name="String"
-      body: return-stmt #736 9398:284:3-9562:289:1
-        value: method-call #735 9411:285:5-9557:287:50 name="replace"
-          target: method-call #731 9411:285:5-9507:286:50 name="replace"
-            target: method-call #727 9411:285:5-9457:285:51 name="replace"
-              target: name-ref #723 9411:285:5-9415:285:9 name="text"
-              arg: call #725 9424:285:18-9445:285:39 name="String.from_code" piped=false
-                arg: literal #724 9441:285:35-9444:285:38 value=int:133
-              arg: literal #726 9447:285:41-9456:285:50 value=string:"\\u0085"
-            arg: call #729 9473:286:16-9495:286:38 name="String.from_code" piped=false
-              arg: literal #728 9490:286:33-9494:286:37 value=int:8232
-            arg: literal #730 9497:286:40-9506:286:49 value=string:"\\u2028"
-          arg: call #733 9523:287:16-9545:287:38 name="String.from_code" piped=false
-            arg: literal #732 9540:287:33-9544:287:37 value=int:8233
-          arg: literal #734 9547:287:40-9556:287:49 value=string:"\\u2029"
-    declaration: function-decl #756 9567:291:1-9758:298:1 name="@2::line_break?"
-      param: param #739 9583:291:17-9595:291:29 name="text"
-        type: type-ref #738 9589:291:23-9595:291:29 name="String"
-      result: type-ref #740 9600:291:34-9604:291:38 name="Bool"
-      body: return-stmt #755 9607:292:3-9754:297:1
-        value: binary #754 9620:293:5-9749:295:43 op=or op-span=9704:294:44-9706:294:46
-          left: binary #749 9620:293:5-9703:294:43 op=or op-span=9658:293:43-9660:293:45
-            left: method-call #744 9620:293:5-9657:293:42 name="contains?"
-              target: name-ref #741 9620:293:5-9624:293:9 name="text"
-              arg: call #743 9635:293:20-9656:293:41 name="String.from_code" piped=false
-                arg: literal #742 9652:293:37-9655:293:40 value=int:133
-            right: method-call #748 9665:294:5-9703:294:43 name="contains?"
-              target: name-ref #745 9665:294:5-9669:294:9 name="text"
-              arg: call #747 9680:294:20-9702:294:42 name="String.from_code" piped=false
-                arg: literal #746 9697:294:37-9701:294:41 value=int:8232
-          right: method-call #753 9711:295:5-9749:295:43 name="contains?"
-            target: name-ref #750 9711:295:5-9715:295:9 name="text"
-            arg: call #752 9726:295:20-9748:295:42 name="String.from_code" piped=false
-              arg: literal #751 9743:295:37-9747:295:41 value=int:8233
-    declaration: function-decl #780 9759:299:1-9954:305:1 name="@2::message_token"
-      param: param #758 9777:299:19-9792:299:34 name="message"
-        type: type-ref #757 9786:299:28-9792:299:34 name="String"
-      result: type-ref #759 9797:299:39-9803:299:45 name="String"
-      body: if-stmt #775 9806:300:3-9910:303:1
-        branch: if-branch #774 9806:300:3-9904:302:1
-          condition: binary #771 9809:300:6-9884:300:81 op=and op-span=9856:300:53-9859:300:56
-            left: binary #766 9809:300:6-9855:300:52 op=and op-span=9825:300:22-9828:300:25
-              left: call #761 9809:300:6-9824:300:21 name="@2::plain?" piped=false
-                arg: name-ref #760 9816:300:13-9823:300:20 name="message"
-              right: unary #765 9829:300:26-9855:300:52 op=not op-span=9829:300:26-9830:300:27
-                operand: method-call #764 9830:300:27-9855:300:52 name="starts_with?"
-                  target: name-ref #762 9830:300:27-9837:300:34 name="message"
-                  arg: literal #763 9851:300:48-9854:300:51 value=string:" "
-            right: unary #770 9860:300:57-9884:300:81 op=not op-span=9860:300:57-9861:300:58
-              operand: method-call #769 9861:300:58-9884:300:81 name="ends_with?"
-                target: name-ref #767 9861:300:58-9868:300:65 name="message"
-                arg: literal #768 9880:300:77-9883:300:80 value=string:" "
-          body: return-stmt #773 9889:301:5-9904:302:1
-            value: name-ref #772 9896:301:12-9903:301:19 name="message"
-      body: return-stmt #779 9912:303:3-9950:304:1
-        value: call #778 9919:303:10-9949:303:40 name="@2::one_line" piped=false
-          arg: call #777 9928:303:19-9948:303:39 name="JSON.encode" piped=false
-            arg: name-ref #776 9940:303:31-9947:303:38 name="message"
-    declaration: function-decl #799 9955:306:1-10101:312:1 name="@2::field_token"
-      param: param #782 9971:306:17-9983:306:29 name="text"
-        type: type-ref #781 9977:306:23-9983:306:29 name="String"
-      result: type-ref #783 9988:306:34-9994:306:40 name="String"
-      body: if-stmt #794 9997:307:3-10060:310:1
-        branch: if-branch #793 9997:307:3-10054:309:1
-          condition: binary #790 10000:307:6-10037:307:43 op=and op-span=10013:307:19-10016:307:22
-            left: call #785 10000:307:6-10012:307:18 name="@2::plain?" piped=false
-              arg: name-ref #784 10007:307:13-10011:307:17 name="text"
-            right: unary #789 10017:307:23-10037:307:43 op=not op-span=10017:307:23-10018:307:24
-              operand: method-call #788 10018:307:24-10037:307:43 name="contains?"
-                target: name-ref #786 10018:307:24-10022:307:28 name="text"
-                arg: literal #787 10033:307:39-10036:307:42 value=string:" "
-          body: return-stmt #792 10042:308:5-10054:309:1
-            value: name-ref #791 10049:308:12-10053:308:16 name="text"
-      body: return-stmt #798 10062:310:3-10097:311:1
-        value: call #797 10069:310:10-10096:310:37 name="@2::one_line" piped=false
-          arg: call #796 10078:310:19-10095:310:36 name="JSON.encode" piped=false
-            arg: name-ref #795 10090:310:31-10094:310:35 name="text"
-    declaration: function-decl #818 10102:313:1-10230:320:1 name="@2::pad"
-      param: param #801 10110:313:9-10116:313:15 name="n"
-        type: type-ref #800 10113:313:12-10116:313:15 name="Int"
-      param: param #803 10118:313:17-10128:313:27 name="width"
-        type: type-ref #802 10125:313:24-10128:313:27 name="Int"
-      result: type-ref #804 10133:313:32-10139:313:38 name="String"
-      body: binding #807 10142:314:3-10156:315:1 name="text"
-        value: field-access #806 10149:314:10-10155:314:16 name="to_s"
-          target: name-ref #805 10149:314:10-10150:314:11 name="n"
-      body: while-stmt #815 10158:315:3-10212:318:1
-        condition: binary #811 10164:315:9-10183:315:28 op=less op-span=10176:315:21-10177:315:22
-          left: field-access #809 10164:315:9-10175:315:20 name="length"
-            target: name-ref #808 10164:315:9-10168:315:13 name="text"
-          right: name-ref #810 10178:315:23-10183:315:28 name="width"
-        body: binding #814 10188:316:5-10206:317:1 name="text"
-          value: interpolation #813 10195:316:12-10205:316:22
+    declaration: function-decl #646 8589:244:1-8796:251:1 name="@2::one_line"
+      param: param #630 8602:244:14-8614:244:26 name="text"
+        type: type-ref #629 8608:244:20-8614:244:26 name="String"
+      result: type-ref #631 8619:244:31-8625:244:37 name="String"
+      body: return-stmt #645 8628:245:3-8792:250:1
+        value: method-call #644 8641:246:5-8787:248:50 name="replace"
+          target: method-call #640 8641:246:5-8737:247:50 name="replace"
+            target: method-call #636 8641:246:5-8687:246:51 name="replace"
+              target: name-ref #632 8641:246:5-8645:246:9 name="text"
+              arg: call #634 8654:246:18-8675:246:39 name="String.from_code" piped=false
+                arg: literal #633 8671:246:35-8674:246:38 value=int:133
+              arg: literal #635 8677:246:41-8686:246:50 value=string:"\\u0085"
+            arg: call #638 8703:247:16-8725:247:38 name="String.from_code" piped=false
+              arg: literal #637 8720:247:33-8724:247:37 value=int:8232
+            arg: literal #639 8727:247:40-8736:247:49 value=string:"\\u2028"
+          arg: call #642 8753:248:16-8775:248:38 name="String.from_code" piped=false
+            arg: literal #641 8770:248:33-8774:248:37 value=int:8233
+          arg: literal #643 8777:248:40-8786:248:49 value=string:"\\u2029"
+    declaration: function-decl #665 8797:252:1-8988:259:1 name="@2::line_break?"
+      param: param #648 8813:252:17-8825:252:29 name="text"
+        type: type-ref #647 8819:252:23-8825:252:29 name="String"
+      result: type-ref #649 8830:252:34-8834:252:38 name="Bool"
+      body: return-stmt #664 8837:253:3-8984:258:1
+        value: binary #663 8850:254:5-8979:256:43 op=or op-span=8934:255:44-8936:255:46
+          left: binary #658 8850:254:5-8933:255:43 op=or op-span=8888:254:43-8890:254:45
+            left: method-call #653 8850:254:5-8887:254:42 name="contains?"
+              target: name-ref #650 8850:254:5-8854:254:9 name="text"
+              arg: call #652 8865:254:20-8886:254:41 name="String.from_code" piped=false
+                arg: literal #651 8882:254:37-8885:254:40 value=int:133
+            right: method-call #657 8895:255:5-8933:255:43 name="contains?"
+              target: name-ref #654 8895:255:5-8899:255:9 name="text"
+              arg: call #656 8910:255:20-8932:255:42 name="String.from_code" piped=false
+                arg: literal #655 8927:255:37-8931:255:41 value=int:8232
+          right: method-call #662 8941:256:5-8979:256:43 name="contains?"
+            target: name-ref #659 8941:256:5-8945:256:9 name="text"
+            arg: call #661 8956:256:20-8978:256:42 name="String.from_code" piped=false
+              arg: literal #660 8973:256:37-8977:256:41 value=int:8233
+    declaration: function-decl #689 8989:260:1-9184:266:1 name="@2::message_token"
+      param: param #667 9007:260:19-9022:260:34 name="message"
+        type: type-ref #666 9016:260:28-9022:260:34 name="String"
+      result: type-ref #668 9027:260:39-9033:260:45 name="String"
+      body: if-stmt #684 9036:261:3-9140:264:1
+        branch: if-branch #683 9036:261:3-9134:263:1
+          condition: binary #680 9039:261:6-9114:261:81 op=and op-span=9086:261:53-9089:261:56
+            left: binary #675 9039:261:6-9085:261:52 op=and op-span=9055:261:22-9058:261:25
+              left: call #670 9039:261:6-9054:261:21 name="@2::plain?" piped=false
+                arg: name-ref #669 9046:261:13-9053:261:20 name="message"
+              right: unary #674 9059:261:26-9085:261:52 op=not op-span=9059:261:26-9060:261:27
+                operand: method-call #673 9060:261:27-9085:261:52 name="starts_with?"
+                  target: name-ref #671 9060:261:27-9067:261:34 name="message"
+                  arg: literal #672 9081:261:48-9084:261:51 value=string:" "
+            right: unary #679 9090:261:57-9114:261:81 op=not op-span=9090:261:57-9091:261:58
+              operand: method-call #678 9091:261:58-9114:261:81 name="ends_with?"
+                target: name-ref #676 9091:261:58-9098:261:65 name="message"
+                arg: literal #677 9110:261:77-9113:261:80 value=string:" "
+          body: return-stmt #682 9119:262:5-9134:263:1
+            value: name-ref #681 9126:262:12-9133:262:19 name="message"
+      body: return-stmt #688 9142:264:3-9180:265:1
+        value: call #687 9149:264:10-9179:264:40 name="@2::one_line" piped=false
+          arg: call #686 9158:264:19-9178:264:39 name="JSON.encode" piped=false
+            arg: name-ref #685 9170:264:31-9177:264:38 name="message"
+    declaration: function-decl #708 9185:267:1-9331:273:1 name="@2::field_token"
+      param: param #691 9201:267:17-9213:267:29 name="text"
+        type: type-ref #690 9207:267:23-9213:267:29 name="String"
+      result: type-ref #692 9218:267:34-9224:267:40 name="String"
+      body: if-stmt #703 9227:268:3-9290:271:1
+        branch: if-branch #702 9227:268:3-9284:270:1
+          condition: binary #699 9230:268:6-9267:268:43 op=and op-span=9243:268:19-9246:268:22
+            left: call #694 9230:268:6-9242:268:18 name="@2::plain?" piped=false
+              arg: name-ref #693 9237:268:13-9241:268:17 name="text"
+            right: unary #698 9247:268:23-9267:268:43 op=not op-span=9247:268:23-9248:268:24
+              operand: method-call #697 9248:268:24-9267:268:43 name="contains?"
+                target: name-ref #695 9248:268:24-9252:268:28 name="text"
+                arg: literal #696 9263:268:39-9266:268:42 value=string:" "
+          body: return-stmt #701 9272:269:5-9284:270:1
+            value: name-ref #700 9279:269:12-9283:269:16 name="text"
+      body: return-stmt #707 9292:271:3-9327:272:1
+        value: call #706 9299:271:10-9326:271:37 name="@2::one_line" piped=false
+          arg: call #705 9308:271:19-9325:271:36 name="JSON.encode" piped=false
+            arg: name-ref #704 9320:271:31-9324:271:35 name="text"
+    declaration: function-decl #727 9332:274:1-9460:281:1 name="@2::pad"
+      param: param #710 9340:274:9-9346:274:15 name="n"
+        type: type-ref #709 9343:274:12-9346:274:15 name="Int"
+      param: param #712 9348:274:17-9358:274:27 name="width"
+        type: type-ref #711 9355:274:24-9358:274:27 name="Int"
+      result: type-ref #713 9363:274:32-9369:274:38 name="String"
+      body: binding #716 9372:275:3-9386:276:1 name="text"
+        value: field-access #715 9379:275:10-9385:275:16 name="to_s"
+          target: name-ref #714 9379:275:10-9380:275:11 name="n"
+      body: while-stmt #724 9388:276:3-9442:279:1
+        condition: binary #720 9394:276:9-9413:276:28 op=less op-span=9406:276:21-9407:276:22
+          left: field-access #718 9394:276:9-9405:276:20 name="length"
+            target: name-ref #717 9394:276:9-9398:276:13 name="text"
+          right: name-ref #719 9408:276:23-9413:276:28 name="width"
+        body: binding #723 9418:277:5-9436:278:1 name="text"
+          value: interpolation #722 9425:277:12-9435:277:22
             part: text "0"
-            part: name-ref #812 10199:316:16-10203:316:20 name="text"
-      body: return-stmt #817 10214:318:3-10226:319:1
-        value: name-ref #816 10221:318:10-10225:318:14 name="text"
+            part: name-ref #721 9429:277:16-9433:277:20 name="text"
+      body: return-stmt #726 9444:279:3-9456:280:1
+        value: name-ref #725 9451:279:10-9455:279:14 name="text"

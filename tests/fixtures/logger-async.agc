@@ -21,7 +21,7 @@ def main() -> Void
     _ = events.send(event, 1000)
   end
   Logger.info("server started")
-  Logger.info_meta("request done", {"path": "/items", "status": "200"})
+  Logger.info("request done", {"path": "/items", "status": "200"})
   Logger.debug("below the handler")
   Logger.err("cannot open the cache")
   _ = Logger.detach("file")
