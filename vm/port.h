@@ -279,6 +279,16 @@ struct agc_task {
   agc_output_wait output;
 };
 
+/* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each
+ * function of the program and one more, the last, for the loops of the List and Int builtins that call back (map, each,
+ * times, ...); the builtin arrays have one slot for each builtin the program lists. Allocated when the run starts and
+ * written as trace lines when it ends (trace.c). */
+typedef struct {
+  uint32_t functions, builtins;
+  uint64_t start_ns;
+  uint64_t *calls, *steps, *builtin_calls, *builtin_ns;
+} agc_profile;
+
 struct agc_vm {
   agc_runtime *rt;
   agc_task *task, *main;
@@ -290,9 +300,13 @@ struct agc_vm {
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
   agc_task *crashes, *crashes_tail, *quiet;
   uint64_t tasks_done, gc_seen, crash_count, observed_count;
+  agc_profile *profile;
   bool yield, in_turn;
   jmp_buf fail, turn;
 };
+
+/* The one test of a profile hook: false at compile time when the trace points are compiled out (make TRACE=0). */
+#define AGC_PROFILE_ON(vm) (AGC_TRACE_BUILD && __builtin_expect((vm)->profile != NULL, 0))
 
 uint64_t agc_resource_id(agc_vm *vm);
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);

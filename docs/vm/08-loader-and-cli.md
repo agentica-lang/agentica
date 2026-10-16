@@ -308,3 +308,19 @@ This note lists what the code chose.
   events of 10.3.1 (`tcp_connect`, `tcp_listen`, `tcp_accept`, `tcp_eof`,
   `tcp_close`, and their error forms). Field names are in `vm/trace.c` and
   `vm/loop.c`.
+- `profile` is the odd category: it is not part of `all`, and it counts
+  instead of tracing events. It is for finding where a program spends its
+  steps. With it on, each function counts its calls and the steps it ran (a
+  step is the VM's unit of budget: a `STEP` instruction adds the steps of its
+  block), and each builtin counts its calls and its time. The loop of
+  `interp.c` is built twice, with and without the hooks, so a run without the
+  category costs nothing; with it, every `STEP` takes the slow path of the
+  budget counter and the run is about a third slower. When the run ends (once
+  for each runtime: the front end hands its program over in a second one)
+  `vm/trace.c` writes `total wall_ms= steps= calls= builtin_calls=
+  builtin_ms= gc_ms= collections=`, then the 30 functions with the most steps
+  (`fn calls= steps= name= at=FILE:LINE`; the loops of `map`, `each` and the
+  like are `<native>`), the 12 source files with the most steps (`file calls=
+  steps= name=`) and the 30 builtins that took the most time (`builtin calls=
+  us= name=`). A builtin is timed for the call itself, so one that parks is
+  timed until it does, and `gc_ms` is Boehm's own clock of its collections.

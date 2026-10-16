@@ -61,6 +61,9 @@ void agc_turn_finish(agc_vm *vm);
 agc_turn_result agc_run_turn(agc_vm *vm);
 agc_outcome agc_vm_run(agc_vm *vm);
 
+void agc_profile_start(agc_vm *vm);
+void agc_profile_report(agc_vm *vm);
+
 const char *agc_uv_version(void);
 bool agc_io_init(void);
 bool agc_io_poll(agc_vm *vm, bool wait);

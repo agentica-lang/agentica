@@ -81,7 +81,15 @@ bool agc_gc_stats(agc_gc_info *info) {
   info->heap = (uint64_t)GC_get_heap_size();
   info->free = (uint64_t)GC_get_free_bytes();
   info->since = (uint64_t)GC_get_bytes_since_gc();
+  info->total_ms = (uint64_t)GC_get_full_gc_total_time();
   return true;
+#endif
+}
+
+/* Starts Boehm's clock for the collections; agc_gc_stats then reports their total time (the profile trace category). */
+void agc_gc_measure(void) {
+#ifndef AGC_NO_GC
+  GC_start_performance_measurement();
 #endif
 }
 

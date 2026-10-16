@@ -190,6 +190,36 @@ class VmTrace(TestCase):
         for line in lines:
             self.assertRegex(line, GC_LINE, "gc line %r" % line)
 
+    def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_each_builtin(self):
+        work = self.make_temp_dir("agentica-trace-")
+        source = work / "profile.agc"
+        source.write_text("def square(n: Int) -> Int\n  return n * n\nend\n\ndef main() -> Void\n  total = 0\n"
+                          "  for k in 0...50\n    total += square(k)\n  end\n  puts(total)\nend\n")
+        bytecode = self.compile_fixture(source)
+        path = work / "profile.trace"
+        plain = self.run_vm(bytecode)
+        traced = self.run_vm(bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path})
+        self.assertEqual(traced, plain)
+        lines = trace_lines(path)
+        number = rb"[0-9]+"
+        patterns = [
+            rb"^agc-trace \+[0-9.]+ profile total wall_ms=" + number + rb" steps=([1-9][0-9]*) calls=" + number +
+            rb" builtin_calls=1 builtin_ms=" + number + rb" gc_ms=" + number + rb" collections=" + number + rb"$",
+            rb"^agc-trace \+[0-9.]+ profile fn calls=50 steps=" + number + rb" name=square at=profile\.agc:1$",
+            rb"^agc-trace \+[0-9.]+ profile fn calls=1 steps=" + number + rb" name=main at=profile\.agc:5$",
+            rb"^agc-trace \+[0-9.]+ profile file calls=51 steps=" + number + rb" name=profile\.agc$",
+            rb"^agc-trace \+[0-9.]+ profile builtin calls=1 us=" + number + rb" name=\S*puts$",
+        ]
+        for pattern in patterns:
+            self.assertTrue(any(re.match(pattern, line) for line in lines), "%r in %r" % (pattern, lines))
+
+    def test_the_profile_is_not_part_of_all(self):
+        work = self.make_temp_dir("agentica-trace-")
+        bytecode = self.compile_fixture(VM_FIXTURES / "task-fail.agc")
+        path = work / "all.trace"
+        self.run_vm(bytecode, {"AGENTICA_VM_TRACE": "all", "AGENTICA_VM_TRACE_FILE": path})
+        self.assertFalse(any(b" profile " in line for line in trace_lines(path)))
+
     def test_a_connection_task_names_its_servers_group_as_its_parent(self):
         work = self.make_temp_dir("agentica-trace-")
         path = work / "http-server-close.trace"

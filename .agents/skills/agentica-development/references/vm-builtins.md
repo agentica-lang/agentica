@@ -133,5 +133,12 @@ must never crash or change the run):
 - A new category gets a bit in `vm/trace.h` and a name in `category_names`
   in `vm/trace.c`, the regex in `tests/test_vm_trace.py`, and the list in
   `docs/vm/08-loader-and-cli.md` §9.
+- `profile` is not an event category: `agc_profile_start` and
+  `agc_profile_report` (`vm/trace.c`) own its counters, `interp.c` counts
+  through the `profile_*` hooks (out of line and cold, and only in the copy of
+  `turn_loop` that has `profiling` true), and a new hook goes in the same
+  way, so the plain copy keeps its code. Measure a change of the loop on more
+  than one link layout (`docs/vm-benchmarks.md`): the same code moves by 10 %
+  with the order of the objects.
 - Every test file that starts the VM itself removes `AGENTICA_VM_TRACE` and
   `AGENTICA_VM_TRACE_FILE` when it loads (the Makefile `unexport`s them).

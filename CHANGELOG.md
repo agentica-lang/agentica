@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`AGENTICA_VM_TRACE=profile` profiles a run.** A developer tool for the VM, in the trace layer. When the run ends it writes, to the trace output, the total time, steps and calls, then the 30 functions with the most steps (and their calls), the 12 source files with the most steps, and the 30 builtins that took the most time: `AGENTICA_VM_TRACE=profile agentica check compiler/front_end.agc` shows where the front end spends its time. It is not part of `all`, a run without it is not slowed, and a run with it is about a third slower. The profile is one report for each runtime the process starts.
+
 ### Removed
 
 - **The Racket front end is gone** (#313). `src/` and the development oracle `racket src/main.rkt` are deleted, with every Makefile rule and CI job that ran `racket` or `raco` (the `unicode` and `warm-unicode` jobs, `make vm-unicode` and `make vm-unicode-check`). Building needs only a C toolchain, and the front end is `compiler/`. The generators `tools/gen-builtins-data.rkt`, `gen-check-tables.rkt` and `gen-lexer-unicode.rkt` are deleted too: `compiler/builtins_data.agc`, `check_tables.agc` and `unicode_table.agc` are now edited by hand, and `vm/unicode_data.c` is frozen, checked-in source (a header says it came from Racket 9.3's tables, Unicode 17.0). The last commit that can build the Racket front end is tagged `bootstrap-racket`. This changes nothing for users of the `agentica` binary; it affects contributors only.

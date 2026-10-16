@@ -29,6 +29,8 @@ enum {
   AGC_TRACE_TLS = 1u << 3,
   AGC_TRACE_LOADER = 1u << 4,
   AGC_TRACE_GC = 1u << 5,
+  AGC_TRACE_PROFILE = 1u << 6,
+  /* The event categories. The profile counts every step and call, which slows the run, so "all" leaves it out. */
   AGC_TRACE_ALL = (1u << 6) - 1
 };
 
