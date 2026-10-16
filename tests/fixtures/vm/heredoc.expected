@@ -1,0 +1,27 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 77,
+  "stdout": [
+    "== TOOL ==",
+    "  indented by two",
+    "",
+    "last line",
+    "---",
+    "count: 42",
+    "list: [8, 9]",
+    "map: 7 str: a7b",
+    "escapes: \t tab, \\ slash, \" quote, #{not}, \"plain\"",
+    "---",
+    "left one",
+    "  left two",
+    "+right one",
+    "right two",
+    "---",
+    "5",
+    "[\"a\", \"b\", \"\", \"d\", \"\"]",
+    "4",
+    ""
+  ],
+  "stderr": []
+}
