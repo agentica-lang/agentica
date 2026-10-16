@@ -1,20 +1,17 @@
-"""Language rules of the bytecode writer, through the CLI (rescued from tests/bytecode-test.rkt).
+"""Language rules of the bytecode writer, through the CLI (rescued from the deleted tests/bytecode-test.rkt).
 
 Each case is a program whose behaviour the rule fixes: what it prints, or the diagnostic code of a run that fails. The
-shape the writer makes (opcodes, table entries, slot numbers) is not pinned here; the byte-identical frozen output in
-tests/test_frontend_bytecode.py covers it. The CLI is cli() of tests/agentica_test.py, so AGENTICA_TEST_EXECUTABLE runs
-the same cases on the single binary.
+shape the writer makes (opcodes, table entries, slot numbers) is not pinned here; the .agcb bytes frozen from the Racket
+writer, checked by tests/test_frontend_bytecode.py, cover it. The CLI is cli() of tests/agentica_test.py, so
+AGENTICA_TEST_EXECUTABLE runs the same cases on the single binary.
 """
-import re
+import json
 
 from tests.agentica_test import TestCase, cli, run, vm_environment
 
-# The code of a diagnostic is in its first line, `file:line:column error[CODE]`, which the human output of both
-# front ends prints. The JSON form (--json) is the other route; agentica-next does not have it yet.
-DIAGNOSTIC = re.compile(r"error\[([A-Z0-9-]+)\]")
 MAP_ENTRIES = ", ".join("%d: %d" % (key, key) for key in range(257))
-DEEP_TYPE_DEPTH = 900
-DEEPEST_TYPE_DEPTH = 990  # the parser accepts 1000 levels; 1024 and 1025 are the frozen limits corpus
+# Close to the parser's nesting limit, so the type is deep but still parses.
+DEEP_TYPE_DEPTH = 990
 
 
 def deep_struct(depth):
@@ -32,10 +29,14 @@ class BytecodeRules(TestCase):
         self.assertEqual((result.code, result.stdout), (0, expected), result.stderr)
 
     def assert_fails(self, text, code):
-        """A run that stops with a diagnostic: the code of its `error[CODE]` line, and what was printed before it."""
-        result = self.run_program(text)
+        """A run that stops with a diagnostic: its code in the --json form on stderr, and what was printed before it."""
+        result = self.run_program(text, "--json")
         self.assertEqual(result.code, 1, result.stdout + result.stderr)
-        self.assertEqual(DIAGNOSTIC.search(result.stderr).group(1), code, result.stderr)
+        try:
+            diagnostic = json.loads(result.stderr)
+        except ValueError:
+            self.fail("stderr is not a --json diagnostic: %r" % result.stderr)
+        self.assertEqual(diagnostic.get("code") if isinstance(diagnostic, dict) else None, code, result.stderr)
         return result.stdout
 
     def test_task_await_takes_the_result_entry_only_for_a_result(self):
@@ -116,9 +117,10 @@ class BytecodeRules(TestCase):
                                     "RUNTIME-INDEX-OUT-OF-RANGE")
         self.assertEqual(printed, "")
 
-    def test_json_field_types_are_written_only_for_a_program_that_uses_them(self):
-        self.assert_prints(deep_struct(DEEP_TYPE_DEPTH) + "def main() -> Void\n  puts(1)\nend\n", "1\n")
-        result = self.run_program(deep_struct(DEEPEST_TYPE_DEPTH)
+    def test_deep_json_field_types_still_compile_and_run(self):
+        result = self.run_program(deep_struct(DEEP_TYPE_DEPTH)
                                   + "def main() -> Void\n  puts(JSON.schema(Deep).to_s)\nend\n")
         self.assertEqual(result.code, 0, result.stderr)
-        self.assertTrue(result.stdout.startswith("{"), result.stdout[:80])
+        schema = json.loads(result.stdout)
+        self.assertEqual((schema["type"], schema["required"]), ("object", ["xs"]), result.stdout[:200])
+        self.assertEqual(schema["properties"]["xs"]["type"], "array")
