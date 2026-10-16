@@ -232,9 +232,13 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
 - **`core.h`**: what only the core and the driver call: `agc_builtin_table`;
   `agc_vm_init`; tasks and turns (`agc_new_task`, `agc_task_call`,
   `agc_task_enter`, `agc_task_remove`, `agc_turn_begin`, `agc_turn_charge`,
-  `agc_turn_finish`, `agc_run_turn`, `agc_vm_run`); the loop's own life
-  (`agc_uv_version`, `agc_io_init`, `agc_io_poll`, `agc_io_finish`,
-  `agc_io_detach`, `agc_io_close`); the exit path and stop signals
+  `agc_turn_finish`, `agc_run_turn`, `agc_vm_run`); the numeric opcode helpers
+  (`agc_op_add_i` ... `agc_op_same`, defined in `interp.c`: pure functions on
+  `agc_value` that the interpreter and a future JIT share, which fail through
+  `agc_fail` and leave the step and turn-cost accounting to the caller); the
+  loop's own life (`agc_uv_version`, `agc_io_init`, `agc_io_poll`,
+  `agc_io_finish`, `agc_io_detach`, `agc_io_close`); the exit path and stop
+  signals
   (`agc_io_watch_stop`, `agc_io_stop_signal`, `agc_io_children_stopped`,
   `agc_io_goodbye`, `agc_io_flush_files`, `agc_stop`); ownership internals
   (`agc_owned_of`, `agc_hand_over`, `agc_close_owned`, `agc_handle_leave`); the

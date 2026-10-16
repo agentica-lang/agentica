@@ -1,7 +1,8 @@
 /*
  * What only the core and the driver call: VM setup and the scheduler entry
  * points, the loader, the diagnostic printers, stdin, output and the loop,
- * and the builtin table type. Core header. Design: docs/vm/15-layers.md §15.4.
+ * the numeric opcode helpers (`agc_op_*`) and the builtin table type. Core
+ * header. Design: docs/vm/15-layers.md §15.4.
  */
 #ifndef AGC_CORE_H
 #define AGC_CORE_H
@@ -66,6 +67,12 @@ bool agc_turn_charge(agc_vm *vm);
 void agc_turn_finish(agc_vm *vm);
 agc_turn_result agc_run_turn(agc_vm *vm);
 
+/* Opcode helpers: the arithmetic, comparison and equality opcodes as pure functions of `agc_value`s, shared by
+ * the interpreter and a future JIT. On an error (overflow, division by zero) they call agc_fail, which longjmps:
+ * they never return an error value. `span` is the span of the running instruction (`spans[pc - 1]`). An operand
+ * of the wrong tag fails with RUNTIME-INTERNAL at span 0. The caller keeps the step count and the turn cost: the
+ * cost of an EQ, NE or SAME on strings or ranges is charged by the interpreter's apply_cost, which a JIT must
+ * charge too. */
 agc_value agc_op_add_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
 agc_value agc_op_sub_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
 agc_value agc_op_mul_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
