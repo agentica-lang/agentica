@@ -54,16 +54,52 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      CCACHE_DIR: ${{ runner.temp }}/ccache
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
       - if: env.AGENTICA_OPENSSL == 'system'
-        run: brew install openssl@3 pkg-config
+        run: brew install openssl@3 pkg-config ccache
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        run: brew install ccache
       - if: env.AGENTICA_OPENSSL == 'system'
         run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
+      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: ccache --show-stats
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
 
   vm-macos-intel:
     if: inputs.os != 'windows'
@@ -71,16 +107,52 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      CCACHE_DIR: ${{ runner.temp }}/ccache
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
       - if: env.AGENTICA_OPENSSL == 'system'
-        run: brew install openssl@3 pkg-config
+        run: brew install openssl@3 pkg-config ccache
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        run: brew install ccache
       - if: env.AGENTICA_OPENSSL == 'system'
         run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
+      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: ccache --show-stats
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
 
   vm-windows:
     if: inputs.os != 'macos'
@@ -88,6 +160,7 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      CCACHE_DIR: ${{ runner.temp }}/ccache
     defaults:
       run:
         shell: msys2 {0}
@@ -100,6 +173,39 @@ jobs:
           msystem: UCRT64
           path-type: inherit
           update: false
-          install: make perl mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
+          install: make perl mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ccache mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
       - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
+      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: ccache --show-stats
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
