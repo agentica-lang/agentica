@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 41,
+  "stdout": [
+    "[ok(20), error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/task-map-crash.agc:2:17: division by zero\"), ok(25)]",
+    "false",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-map-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":18,\"line\":2},\"start\":{\"column\":17,\"line\":2}},\"spawned_at\":{\"column\":8,\"file\":\"@fixtures/vm/task-map-crash.agc\",\"line\":7},\"stack\":[{\"column\":17,\"file\":\"@fixtures/vm/task-map-crash.agc\",\"function\":\"divide\",\"line\":2},{\"column\":44,\"file\":\"@fixtures/vm/task-map-crash.agc\",\"function\":\"block\",\"line\":7}],\"task\":true}",
+    ""
+  ]
+}
