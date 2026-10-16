@@ -1113,17 +1113,17 @@ static void map_group(prog *p, int64_t limit, int64_t timeout_ms) {
 static void check_map_cancel(agc_vm *vm, int64_t n) {
   agc_task *group = reg_task(vm, 0);
   if (n == 1) {
-    // Two items run, as children of the caller, which is parked in the call; the third waits for a free place.
+    /* Two items run, as children of the caller, which is parked in the call; the third waits for a free place. */
     assert(group->state == AGC_TASK_PARKED && child_count(group) == 2);
     seen[0] = group->children;
     seen[1] = group->children->next_sibling;
     assert(mark_count == 2 && marks[0] == 1 && marks[1] == 2);
   } else if (n == 2) {
-    // The cancel of the caller reaches the items in flight, and nothing wakes the caller again.
+    /* The cancel of the caller reaches the items in flight, and nothing wakes the caller again. */
     assert(cancelled(group) && child_count(group) == 0);
     assert(cancelled(seen[0]) && cancelled(seen[1]));
   } else {
-    // The pending item never started, and the call never returned.
+    /* The pending item never started, and the call never returned. */
     assert(mark_count == 2 && cancelled(group) && agc_is(group->result, AGC_T_VOID));
   }
 }
@@ -1145,7 +1145,7 @@ static void test_map_caller_cancelled(void) {
 static void check_map_deadlines(agc_vm *vm, int64_t n) {
   (void)n;
   agc_task *group = reg_task(vm, 0);
-  // Each item ran out of time on its own, one after the other (limit 1), and its slot has the timeout error.
+  /* Each item ran out of time on its own, one after the other (limit 1), and its slot has the timeout error. */
   assert(group->state == AGC_TASK_DONE && !group->cancelled && !group->children);
   const agc_list *slots = agc_as_list(vm, group->result);
   assert(agc_list_len(slots) == 3);
