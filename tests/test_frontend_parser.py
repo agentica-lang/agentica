@@ -1,6 +1,6 @@
-"""The Agentica parser (compiler/parse.agc) against the frozen output of the Racket parser.
+"""The Agentica parser (compiler/parse.agc) against the frozen output of the original parser.
 
-This module compares the Agentica parser with what the Racket parser printed once for the same inputs (frozen in
+This module compares the Agentica parser with what the original parser printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
 (examples/, stdlib/ and tests/fixtures/vm/ as they were at the freeze), 300 generated inputs, the nesting limit, large
 files, the numbering of node ids and a file with invalid UTF-8. Inputs that are a formula are rebuilt here; the

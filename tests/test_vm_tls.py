@@ -1,4 +1,4 @@
-"""The TLS builtins of the VM against Node and Python peers (ported from vm-tls-test.rkt).
+"""The TLS builtins of the VM against Node and Python peers.
 
 fixtures/tls-peer.js (Node) serves the client cases and connects to the VM
 server; fixtures/tls-peer.py (Python ssl) is a TLS 1.2 server, an HTTPS server

@@ -1,4 +1,4 @@
-"""Stack traces on stderr (ported from vm-stack-test.rkt).
+"""Stack traces on stderr.
 
 Each stack-trace fixture of tests/fixtures/vm/ is run on the VM in the plain, --ai and --json formats, and its stderr
 (with tests/fixtures/ written as @fixtures/) must equal the sidecar `<name>.stack.<format>` next to the program.

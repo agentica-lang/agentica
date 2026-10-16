@@ -1,4 +1,4 @@
-## Module constants in the lowering (src/constants.rkt: plan-constants; docs/future/44-module-constants.md 44.7). The
+## Module constants in the lowering. The
 ## functions reachable from `main` decide which constants are built, a constant read by a function that is emitted gets
 ## a slot, and a constant that is one scalar literal gets neither: its reads are the literal.
 

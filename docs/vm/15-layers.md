@@ -279,8 +279,7 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
 `http_fields.h` include `services.h`; `net.h` also includes `tls.h`. `tls.h`,
 `http_parse.h` and `trace.h` keep their content. What named `vm/agc.h` now names
 the header that holds the item: `tests/test_frontend_bytecode.py` reads
-`agc_opcode` from `value.h`, `vm/tools/gen-unicode.rkt` writes
-`#include "core.h"` into `unicode_data.c`, and the development skill lists the
+`agc_opcode` from `value.h`, `unicode_data.c` includes `core.h`, and the development skill lists the
 layers.
 
 ### 15.5 The layer check

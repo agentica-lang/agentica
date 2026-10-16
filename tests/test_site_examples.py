@@ -1,4 +1,4 @@
-"""The agentica code blocks of site/content (ported from site-examples-test.rkt).
+"""The agentica code blocks of site/content.
 
 Each block is checked or run with the product CLI, in a folder of its own. A fenced block may carry attributes:
 `mode="check"` only checks the program, `expect="CODE"` says the program is rejected or fails with that diagnostic code,

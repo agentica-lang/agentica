@@ -1,6 +1,6 @@
-"""File, Dir, Path and System.env programs on the VM (ported from filesystem-test.rkt).
+"""File, Dir, Path and System.env programs on the VM.
 
-Most cases run a checked Agentica program through the CLI, like the Racket
+Most cases run a checked Agentica program through the CLI, like the original
 test did in process, against temp directories. The FIFO cases run the VM
 binary directly with a one-thread pool and a 10 s bound; fixtures/fifo-peer.py
 and fixtures/stop-peer.py play the other side of a FIFO or of a pipe, and
@@ -44,7 +44,7 @@ end
 
 
 def literal(text):
-    """An Agentica string literal for a path or text (the escapes of Racket's ~s for these inputs)."""
+    """An Agentica string literal for a path or text (JSON escapes, which the lexer reads back for these inputs)."""
     return json.dumps(str(text), ensure_ascii=False)
 
 

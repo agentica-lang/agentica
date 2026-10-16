@@ -1,15 +1,14 @@
-"""The Agentica builtin catalog (compiler/catalog.agc) against the frozen output of the Racket catalog.
+"""The Agentica builtin catalog (compiler/catalog.agc) against the frozen output of the original catalog.
 
-This module compares the Agentica catalog with the golden the Racket catalog printed
+This module compares the Agentica catalog with the golden the original catalog printed
 (tests/fixtures/frontend/catalog/catalog.text, `make goldens`): the tables, the signatures, the lookups and the
 did-you-mean suggestions. The probes are the lookup lines at the end of the golden, so the golden holds the input of
 the run too. The Rule enum of compiler/builtin_model.agc is compared with the variants frozen in
 catalog/rules.expected.
 
-An accepted loss: compiler/builtins_data.agc is generated from src/builtins.rkt (tools/gen-builtins-data.rkt) and the
-Racket test compared it with a fresh generation. That file is 106 KB; the golden above prints the same data, so it is
-not frozen a second time. Once the Racket tables are gone, the data file is edited by hand and this golden is refreshed
-with tools/refreeze.py.
+An accepted loss: compiler/builtins_data.agc was generated from the tables of the original front end, whose test
+compared it with a fresh generation. That file is 106 KB; the golden above prints the same data, so it is not frozen
+a second time. The data file is edited by hand now and this golden is refreshed with tools/refreeze.py.
 """
 import re
 

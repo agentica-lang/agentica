@@ -1,5 +1,4 @@
-## Which builtin a method name stands for (src/checker.rkt: receiver-kind, resolve-method, catalog-method,
-## method-names, pipe-method-name, foreign-method-help). A receiver kind is the word of its type ("String", "List",
+## Which builtin a method name stands for. A receiver kind is the word of its type ("String", "List",
 ## ...); "" is no kind. A method is resolved to the full name of a builtin, such as String.length, or to "self" when it
 ## returns the receiver (to_s on a String).
 

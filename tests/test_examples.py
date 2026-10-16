@@ -1,7 +1,7 @@
-"""examples/*.agc, rejected fragments and the CLI exit codes (ported from examples-test.rkt).
+"""examples/*.agc, rejected fragments and the CLI exit codes.
 
-Each case runs the CLI as a child (`cli()`), like the Racket test did in
-process. The two cases that the Racket file ran both in process and as a
+Each case runs the CLI as a child (`cli()`), like the original test did in
+process. The two cases that the original file ran both in process and as a
 subprocess run once here. The algorithm examples (knight tour, traveling
 salesman, maze) read JSON from stdin and are checked by their properties, not
 by one fixed answer; the slow tier has the full list of malformed inputs.

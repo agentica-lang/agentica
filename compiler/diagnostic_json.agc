@@ -1,4 +1,4 @@
-## A diagnostic as the JSON object `--json` writes (diagnostic->jsexpr in src/diagnostic.rkt).
+## A diagnostic as the JSON object `--json` writes.
 ##
 ## The keys are `code`, `message`, `file` and `range` (`start` and `end`, each with a `line` and a `column`), then,
 ## only when the diagnostic has them, `expected`, `actual`, `callee`, `function` (the signature of the function being

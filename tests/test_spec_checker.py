@@ -1,6 +1,6 @@
 """Checker rules through the product CLI: where diagnostics point, pipes and the nesting limit.
 
-These are the cases of the old tests/checker-test.rkt about the spans of diagnostics, the pipe rules and the nesting
+These are the cases of the old checker test about the spans of diagnostics, the pipe rules and the nesting
 limit. The other cases are in tests/test_spec_checker_rest.py.
 
 Each program is written to a file and checked with `--json check FILE`. A test asserts the diagnostic code and its

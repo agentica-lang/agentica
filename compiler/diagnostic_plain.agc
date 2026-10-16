@@ -1,4 +1,4 @@
-## The plain text of a problem, as `agentica` prints it on stderr (format-diagnostic of src/diagnostic.rkt): where it
+## The plain text of a problem, as `agentica` prints it on stderr where it
 ## is, its code and message, the source lines with ^ under the span and - under each label, and the help.
 ##
 ## A mark covers `width` characters of one line from `column` (1-based). A span that goes on to another line is marked

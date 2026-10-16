@@ -1,6 +1,6 @@
 """How `check` prints a diagnostic as text: the header, the source line, the caret run, the labels and the help line.
 
-These are the cases of the old tests/diagnostic-test.rkt that a program can reach through the product CLI. Each program
+These are the cases of the old diagnostic test that a program can reach through the product CLI. Each program
 is written to a file and checked from its folder, so the header names the file as typed. The message, the text of a
 label and the help text are not asserted (AGENTS.md): the test checks that they are there, and where the marks stand.
 """

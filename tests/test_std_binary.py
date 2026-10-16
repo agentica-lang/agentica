@@ -1,4 +1,4 @@
-"""std/binary on the VM (ported from std-binary-test.rkt).
+"""std/binary on the VM.
 
 Two fixture programs print their own checks: std-binary.agc ends with a fixed
 summary, and std-binary-vectors.agc reads the Python-made vectors of its

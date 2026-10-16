@@ -17,7 +17,7 @@ make
 
 This writes `dist/agentica`, the only program: the VM with the front end and the
 standard modules inside. It is built from the compiled front end checked in as
-`bootstrap/stage0.agcb`, so the build needs no Racket. `agentica run -- FILE.agcb`
+`bootstrap/stage0.agcb`, so the build needs only a C toolchain. `agentica run -- FILE.agcb`
 runs a compiled program.
 
 ## Hello world
@@ -30,7 +30,7 @@ dist/agentica examples/hello.agc
 ## Test
 
 ```sh
-make test                                      # all tests, after building the binary (Python unittest; no Racket)
+make test                                      # all tests, after building the binary (Python unittest)
 make test TESTS="tests/test_spec_checker.py"   # some files
 make vm-test                                   # the C tests
 ```

@@ -80,7 +80,7 @@ export def join(chunks: List[List[Int]]) -> List[Int]
   return Binary.concat(chunks)
 end
 
-# The UTF-8 bytes of one code point (1 to 4 bytes; Racket strings hold no surrogates).
+# The UTF-8 bytes of one code point (1 to 4 bytes; a String holds no surrogates).
 def encoded(code: Int) -> List[Int]
   if code < 128
     return [code]

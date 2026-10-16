@@ -14,9 +14,8 @@ export def limit(program: Ir.Program, file: Int, what: String, span: Source.Span
   return Failure.pack(found)
 end
 
-## BYTECODE-INTERNAL: the IR holds something the writer cannot write. Lowering never gives such an IR; this is what
-## src/bytecode.rkt reports for the Racket exception it would raise: at the span of the program, with a message of the
-## writer's own.
+## BYTECODE-INTERNAL: the IR holds something the writer cannot write. Lowering never gives such an IR; the failure is
+## reported at the span of the program, with a message of the writer's own.
 export def internal(program: Ir.Program, message: String) -> String
   found = Failure.problem(program.sources[0].file, "", "BYTECODE-INTERNAL", message, program.span, Diag.Help.NoHelp)
   return Failure.pack(found)

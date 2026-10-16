@@ -1,4 +1,4 @@
-"""Task wake latency next to busy tasks (ported from vm-latency-test.rkt).
+"""Task wake latency next to busy tasks.
 
 Run alone by `make vm-latency` (and not by `make test`, see PY_ALONE in the
 Makefile), so the VMs have the CPU to themselves. fixtures/latency/latency.agc

@@ -1,6 +1,6 @@
-"""The Agentica checker (compiler/check.agc) against the frozen output of the Racket checker.
+"""The Agentica checker (compiler/check.agc) against the frozen output of the original checker.
 
-This module compares the Agentica checker with what the Racket checker printed once for the same inputs (frozen in
+This module compares the Agentica checker with what the original checker printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the programs of the cases
 of the old checker test (now also in tests/test_spec_checker_rest.py), 1,500 mutants of them, the corpus (examples/ and
 tests/fixtures/vm/ as they were at the freeze), every std/ module, the compiler, trees around the nesting limit and a
@@ -15,7 +15,7 @@ from tests.frontend_support import FROZEN, StageTestCase, fixture_roots, load_co
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "check"
 
-# The codes the Racket checker has and no program can reach: CHECK-INTERNAL guards an impossible node,
+# The codes the original checker has and no program can reach: CHECK-INTERNAL guards an impossible node,
 # CHECK-MODULE-CONTEXT a program that still has imports (the linker removes them) and CHECK-BLOCK-TYPE a block with no
 # expected type (a block is only parsed after a call, whose parameter gives the type).
 UNREACHABLE_CODES = ("CHECK-INTERNAL", "CHECK-MODULE-CONTEXT", "CHECK-BLOCK-TYPE")
@@ -52,7 +52,7 @@ class CheckFrozenTest(StageTestCase):
         self.assert_goldens({name: outputs[path] for name, path in roots.items()}, goldens, "checker fixtures")
 
     def test_the_method_tables_are_the_ones_of_the_freeze(self):
-        # compiler/check_tables.agc is generated from the method tables of src/checker.rkt (tools/gen-check-tables.rkt).
+        # compiler/check_tables.agc was generated once from the tables of the original checker; it is edited by hand.
         source = (ROOT / "compiler" / "check_tables.agc").read_bytes().decode("utf-8")
         self.assert_golden(source, FROZEN / "check" / "tables.expected")
 
@@ -72,7 +72,7 @@ class CheckFrozenTest(StageTestCase):
 
     @slow
     @timeout(1800)
-    def test_the_programs_of_the_cases_of_the_racket_checker_tests(self):
+    def test_the_programs_of_the_cases_of_the_original_checker_tests(self):
         programs = load_json("corpus/checker-programs.json")
         self.assertGreater(len(programs), 400)
         cases = {"c%d" % n: text for n, text in enumerate(programs)}

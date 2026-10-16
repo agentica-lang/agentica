@@ -1,4 +1,4 @@
-## The "did you mean" help of an unknown name: src/builtins.rkt (did-you-mean, edit-distance).
+## The "did you mean" help of an unknown name.
 
 import Ast from "ast"
 import Diag from "diagnostic"
@@ -11,7 +11,7 @@ export def did_you_mean(name: String, candidates: List[String]) -> Ast.Optional[
   return did_you_mean_among(name, candidates, [])
 end
 
-## did_you_mean for the names of a linked program (src/builtins.rkt, did-you-mean). A linked name starts with "@N::",
+## did_you_mean for the names of a linked program. A linked name starts with "@N::",
 ## the prefix of its file; only the candidates of the same file are offered, and without their prefix. shared are extra
 ## candidates that have no prefix, such as the builtin names.
 export def did_you_mean_among(
@@ -25,8 +25,7 @@ export def did_you_mean_among(
   end
 end
 
-## The name nearest to full_name among the candidates of its file and the shared ones, or Absent when none is close
-## (src/builtins.rkt, closest-name).
+## The name nearest to full_name among the candidates of its file and the shared ones, or Absent when none is close.
 export def closest_among(full_name: String, candidates: List[String], shared: List[String]) -> Ast.Optional[String]
   prefix = file_prefix(full_name)
   name = Types.display_name(full_name)

@@ -1,6 +1,6 @@
 {
-  "path": ["src", "vm"],
-  "format": ["c", "c-header", "racket"],
+  "path": ["vm"],
+  "format": ["c", "c-header"],
   "ignore": [
     "**/third_party/**",
     "**/unicode_data.c",

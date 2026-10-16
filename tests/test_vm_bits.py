@@ -1,4 +1,4 @@
-"""Spans of the diagnostics of the bit builtins (ported from vm-bits-test.rkt).
+"""Spans of the diagnostics of the bit builtins.
 
 Each fixture of tests/fixtures/vm/ halts with a runtime diagnostic; the test
 checks the code and that the range covers the bad argument.

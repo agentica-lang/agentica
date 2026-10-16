@@ -1,4 +1,4 @@
-## The builtin catalog (src/builtins.rkt, src/builtin-types.rkt): every builtin function with its signature, the
+## The builtin catalog: every builtin function with its signature, the
 ## builtin records and enums, and the lookups the linker and the checker make. One Catalog is built per run from the
 ## generated rows of builtins_data.agc; every lookup is a Map or Set access.
 

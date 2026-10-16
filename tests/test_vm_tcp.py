@@ -1,4 +1,4 @@
-"""The TCP builtins of the VM against Node peers (ported from vm-tcp-test.rkt).
+"""The TCP builtins of the VM against Node peers.
 
 fixtures/tcp-peer.js is the independent peer: `servers` listens on several
 ports (fragments, resets, silence, ...) and prints their numbers as JSON;
@@ -17,7 +17,7 @@ PEER = FIXTURES / "tcp-peer.js"
 
 
 def ipv6_localhost():
-    """True when ::1 accepts connections here, like the Racket test's probe."""
+    """True when ::1 accepts connections here, like the original test's probe."""
     try:
         with socket.socket(socket.AF_INET6) as listener:
             listener.bind(("::1", 0))
@@ -278,7 +278,7 @@ class VmTcp(TestCase):
     def test_listen_on_localhost_fails_when_another_program_holds_the_port_on_ipv6(self):
         if not ipv6_localhost():
             self.skipTest("no IPv6 localhost")
-        # No SO_REUSEADDR, like the Racket holder: the VM must find the port taken.
+        # No SO_REUSEADDR, like the original holder: the VM must find the port taken.
         with socket.socket(socket.AF_INET6) as holder:
             holder.bind(("::1", 0))
             holder.listen(4)

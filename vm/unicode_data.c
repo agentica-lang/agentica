@@ -1,3 +1,15 @@
+/*
+ * Unicode tables of the VM: which code points `write` prints raw, and the upper and lower case mappings.
+ *
+ * This file is checked-in source and is no longer generated. It was written by the former vm/tools/gen-unicode.rkt,
+ * from the tables of Racket 9.3 (Chez Scheme), which are Unicode 17.0 as far as I could tell by counting their 159801
+ * graphic and format code points (the size of the 17.0 character list). The generator was removed with the Racket
+ * front end; it modelled Racket's `write` and string-upcase/string-downcase (final sigma), so the VM printed as
+ * Racket did.
+ *
+ * A future generator over pinned Unicode Character Database files must reproduce this file byte for byte (or explain
+ * each difference) before it replaces it. Until then edit it by hand only for a deliberate Unicode update.
+ */
 #include "core.h"
 
 const uint32_t agc_write_raw_ranges[][2] = {

@@ -1,5 +1,5 @@
 /*
- * Float text, checked against the values that Racket prints
+ * Float text, checked against the values of the reference behavior
  * (docs/vm/02-reference-behavior.md §2.2).
  */
 #include "../core.h"

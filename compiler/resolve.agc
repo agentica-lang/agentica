@@ -1,5 +1,4 @@
-## Name resolution of the linker: what a name written in one file is called in the linked program. This is resolve of
-## src/modules.rkt.
+## Name resolution of the linker: what a name written in one file is called in the linked program.
 ##
 ## A name declared in the root file keeps its name; a name declared in another file gets the prefix of that file
 ## ("@2::"), so equal names of two files stay apart. A name through an import alias (Alias.name) becomes the prefixed

@@ -1,6 +1,5 @@
-## What the statements of a body return (src/checker.rkt: block-returns?, missing-return-help,
-## captured-assignment-help): whether every path ends in a return, and the help texts that depend only on the shape of
-## the code.
+## What the statements of a body return: whether every path ends in a return, and the help texts that depend only on
+## the shape of the code.
 
 import Ast from "ast"
 import State from "check_state"

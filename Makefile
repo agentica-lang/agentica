@@ -4,11 +4,11 @@ unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
 # `make` builds the product, dist/agentica: the VM with the front end inside (docs/future/35-self-hosting.md, 35.3 and
-# 35.6). It needs no Racket: the bootstrap below starts from bootstrap/stage0.agcb. Linux only for now (the front end and
-# the std/ sources are linked in with .incbin).
+# 35.6). It needs only a C toolchain: the bootstrap below starts from bootstrap/stage0.agcb. Linux only for now (the front
+# end and the std/ sources are linked in with .incbin).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: dist/agentica
 
@@ -28,7 +28,7 @@ version:
 	@printf '%s' '$(AGC_VERSION)'
 
 # The tests are Python unittest modules, tests/test_<area>.py (docs/future/35-self-hosting.md section 35.10,
-# references/ci.md), and need no Racket. TESTS names modules, or directories that hold them (the default is tests/).
+# references/ci.md). TESTS names modules, or directories that hold them (the default is tests/).
 # All tests, in parallel:      make test
 # A subset:                    make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"
 # More or fewer workers:       make test JOBS=8
@@ -40,7 +40,7 @@ PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency): a directory in TESTS does not pick them up
 PY_ALONE = tests/test_vm_latency.py
 PY_TESTS = $(sort $(PY_FILES) $(filter-out $(PY_ALONE),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
-# A file that is not tests/test_<area>.py (a .rkt file, or a .py file elsewhere) would build a wrong module name below
+# A file that is not tests/test_<area>.py (a file of another kind, or a .py file elsewhere) would build a wrong module name below
 PY_NOT_DIR = $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(if $(wildcard $(t)/.),,$(t)))
 PY_BAD = $(PY_NOT_DIR) $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
 PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a tests/test_<area>.py file))
@@ -148,7 +148,6 @@ dup-baseline: tools/jscpd/node_modules
 	$(JSCPD) --baseline .jscpd-baseline.json --update-baseline --reporters silent
 
 clean:
-	find . -name compiled -type d -prune -exec rm -rf {} +
 	rm -rf dist build site/public site/resources
 
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
@@ -175,7 +174,6 @@ site-serve: site-sass
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
-# make vm-unicode         regenerate vm/unicode_data.c from Racket (the one build step that still needs it)
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
 # make AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
@@ -465,7 +463,7 @@ STAGE_DIR := build/stage
 FRONT_END_SRC := compiler/front_end.agc
 STD_NAMES := $(shell cat stdlib/MODULES)
 STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
-# compiler/agentica.toml is not an input: it holds style rules for tools/agc-format.rkt and the style test, and compile never reads it.
+# compiler/agentica.toml is not an input: it holds the style rules for the style test, and compile never reads it.
 STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES) VERSION
 STAGE0 := bootstrap/stage0.agcb
 BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)
@@ -609,16 +607,8 @@ vendored-check:
 vendored-test: vendored-check
 	AGENTICA_VM_BINARY=build/vm/release/agentica $(MAKE) --no-print-directory test-py JOBS=2 TESTS="tests/test_vm_tls.py tests/test_vm_http.py"
 
-vm-unicode:
-	racket vm/tools/gen-unicode.rkt vm/unicode_data.c
-
-# vm-unicode, then fail when vm/unicode_data.c changed; build/unicode-checked is CI's cache marker
-vm-unicode-check: vm-unicode
-	git diff --exit-code vm/unicode_data.c
-	mkdir -p build
-	touch build/unicode-checked
-
 CLANG_TIDY ?= clang-tidy
+# vm/unicode_data.c is frozen table data (see its header), so it is not linted
 VM_LINT_SKIP := vm/unicode_data.c
 VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
 

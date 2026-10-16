@@ -1,4 +1,4 @@
-## The syntax tree of the Agentica parser: the nodes of src/ast.rkt as structs and enums.
+## The syntax tree of the Agentica parser: the nodes as structs and enums.
 ##
 ## Every node has an Int id and a span. The parser numbers the nodes in post-order: a node's children have smaller ids
 ## than the node, siblings are numbered in source order, the first id is the one given to the parser (0 for a single
@@ -11,7 +11,7 @@
 import Source from "source"
 import Types from "types"
 
-## A value that may be absent; where src/ast.rkt uses #f.
+## A value that may be absent.
 export enum Optional[T]
   Present(T)
   Absent
@@ -366,8 +366,8 @@ end
 ## target.with(name: value, ...): a copy of a struct with the named fields changed. There is at least one argument.
 ## visible is Absent from the parser. The linker sets it to the sorted linked names of the user structs that the file
 ## of the update may build: its own and the exported ones of the files it imports (a builtin record is always allowed,
-## so it is not listed). The checker refuses an update of any other user struct (CHECK-IMPORT-NAME). src/ keeps this as
-## a predicate in the node.
+## so it is not listed). The checker refuses an update of any other user struct (CHECK-IMPORT-NAME). It is data in the
+## node, not a predicate.
 export struct StructUpdate
   id: Int
   target: Expr
@@ -496,7 +496,7 @@ export struct ConstRef
 end
 
 ## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method
-## checks it as the first argument without checking it twice (src/ast.rkt: typed-target). The parser never makes it. id
+## checks it as the first argument without checking it twice. The parser never makes it. id
 ## and span are those of the receiver.
 export struct TypedTarget
   id: Int

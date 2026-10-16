@@ -1,11 +1,11 @@
-## The VM IR that lowering gives (the ir-program, ir-function and ir-instr structs of src/lower.rkt) as data. The
+## The VM IR that lowering gives as data. The
 ## bytecode writer of step 6 reads it.
 ##
 ## A function body is a flat list of instructions. A label is an Instr with the op "label" and one argument (the label
-## id). The ops are the names of src/bytecode.rkt (`add-i`, `jump-if-false`, ...). Arguments are registers, label ids,
-## function, struct, variant and global indexes, counts and builtin arities, in the order src/lower.rkt gives them;
-## `const` takes its value in imm and `call-builtin` its name in name. `struct-with` takes dst, window and struct, then
-## the positions of the changed fields (src/ keeps the positions as one list argument).
+## id). The ops are the names of the bytecode instructions (`add-i`, `jump-if-false`, ...). Arguments are registers,
+## label ids, function, struct, variant and global indexes, counts and builtin arities, in the order the lowering gives
+## them; `const` takes its value in imm and `call-builtin` its name in name. `struct-with` takes dst, window and
+## struct, then the positions of the changed fields.
 
 import Source from "source"
 import Types from "types"

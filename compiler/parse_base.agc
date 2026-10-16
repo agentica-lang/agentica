@@ -1,10 +1,10 @@
 ## The shared part of the Agentica parser: the context, the results, the failures, and the parts of the grammar that
 ## need no expressions (types and case patterns).
 ##
-## src/parser.rkt keeps its state in variables that it changes (the position, the nesting, the block flags). Agentica
+## A parser would keep its state in variables that it changes (the position, the nesting, the block flags). Agentica
 ## has no such variables, so every parse function takes the context (Env), a position and the next free node id, and
 ## returns the node with the new position and id. A failure is a Result error whose String is the packed diagnostic, so
-## `try` stops at the first one, as the Racket stages do.
+## `try` stops at the first one.
 
 import Ast from "ast"
 import Diag from "diagnostic"
@@ -80,8 +80,8 @@ end
 ## comparison add no level but cost frames; measured: `M.f(1 == 1 < ` nested overflows near 1,250 levels, 1.25 times
 ## the limit), so the limit stays below the VM limit of 10,000 (RUNTIME-STACK-OVERFLOW). It does not bound the depth of
 ## the tree: the right operand of the first link of a chain hangs below the whole chain, so nested chains build deeper
-## trees, and a pass that recurses on the tree needs its own stack or limit. src/parser.rkt has the same limit and
-## counts the same way.
+## trees, and a pass that recurses on the tree needs its own stack or limit. The limit counts nesting
+## the same way in every stage.
 export def nesting_limit() -> Int
   return 1000
 end
@@ -130,7 +130,7 @@ export def with_block_body(e: Env, brace_at: Int, brace_form: String) -> Env
   )
 end
 
-## The kind of the token at an index. Like src/parser.rkt, an index past the end reads the last token (EOF).
+## The kind of the token at an index. An index past the end reads the last token (EOF).
 export def kind_at(e: Env, index: Int) -> String
   if index < e.size
     return e.tokens[index].kind
@@ -140,7 +140,6 @@ end
 
 ## True for the name of a module constant: capitals, digits and `_`, starting with a capital, at least two characters
 ## (UPPER_SNAKE_CASE). The lexer makes every such name a type-name token; this tells it from a CamelCase type.
-## src/ast.rkt has the same test (constant-name?).
 export def constant_name?(text: String) -> Bool
   codes = text.split("").map do |character| String.code(character) end
   if codes.size < 2 or codes[0] < 65 or codes[0] > 90
@@ -163,7 +162,7 @@ export def span_from(e: Env, start: Int, pos: Int) -> Source.Span
   return Source.Span(start: e.tokens[start].span.start, stop: e.tokens[pos - 1].span.stop)
 end
 
-## How a token is named in "found ..." messages. This copies the Racket write form of the lexeme on purpose.
+## How a token is named in "found ..." messages. The lexeme is shown in the form of `written_text` (unicode.agc).
 export def describe(token: Tokens.Token) -> String
   if token.lexeme == ""
     return token.kind
@@ -208,7 +207,7 @@ export def bail_span(code: String, message: String, span: Source.Span, help: Dia
 end
 
 ## The failure for the token at at. A doc comment token always gives PARSE-DETACHED-DOC, except for
-## PARSE-MISSING-BLANK-LINE, as in src/parser.rkt.
+## PARSE-MISSING-BLANK-LINE.
 export def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help) -> String
   token = e.tokens[at]
   if token.kind == "DOC" and code != "PARSE-MISSING-BLANK-LINE"
@@ -424,7 +423,7 @@ def decorated?(lexeme: String) -> Bool
   return lexeme.ends_with?("?") or lexeme.ends_with?("!")
 end
 
-# A binding of `_` is Absent, as the Racket parser keeps #f.
+# A binding of `_` is Absent: it binds no name.
 def binding_name(e: Env, pos: Int) -> Result[Ast.Optional[String]]
   advanced = try expect(e, pos, "name", "a pattern binding or _", false)
   lexeme = e.tokens[pos].lexeme
@@ -553,7 +552,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   return ok(PatternAt(node: node, pos: cursor, ids: ids + 1))
 end
 
-# The case_arm_start? helpers look ahead without consuming, like case-arm-start? of src/parser.rkt: they return the
+# The case_arm_start? helpers look ahead without consuming; they return the
 # index after the pattern, or -1.
 def binders_end(e: Env, at: Int) -> Int
   cursor = at + 1

@@ -1,4 +1,4 @@
-"""Lexer rules of the language, checked through the product CLI (the cases of tests/lexer-test.rkt).
+"""Lexer rules of the language, checked through the product CLI.
 
 A source text is checked with `--json check`, or run as a program. A diagnostic case asserts its code and its span: the
 line and column of the start, and of the end when the case gives one (the end is exclusive). `help` is asserted only as

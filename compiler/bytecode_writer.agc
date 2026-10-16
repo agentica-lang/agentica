@@ -1,7 +1,7 @@
-## The bytecode writer (src/bytecode.rkt, `ir->bytecode` and `write-bytecode`): the .agcb bytes of a lowered program.
+## The bytecode writer: the .agcb bytes of a lowered program.
 ## The file is, in this order, the header, the sources, the spans, the constants, the structs, the JSON field types,
 ## the Decodable structs, the enums, the struct updates, the Globals count, the builtins, the functions and the entry
-## (docs/vm/03-ir-and-bytecode.md 4.6). tests/test_frontend_bytecode.py compares them with the Racket writer's.
+## (docs/vm/03-ir-and-bytecode.md 4.6). tests/test_frontend_bytecode.py compares them with frozen goldens.
 ##
 ## The functions are walked first, because they decide the entries of the constant, update, builtin and span tables,
 ## which come before them in the file. The output is a list of chunks that is joined once at the end.
@@ -76,7 +76,7 @@ def build(root_dir: String, program: Ir.Program, version: String) -> Result[List
   return ok(Bytes.join(out))
 end
 
-# The first limits of src/bytecode.rkt, in its order. The limits of the types, the registers and the updates are met
+# The first limits of the format, in this order. The limits of the types, the registers and the updates are met
 # while those are written.
 def check_limits(program: Ir.Program) -> Result[Void]
   span = program.span

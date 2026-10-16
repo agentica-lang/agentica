@@ -1,6 +1,6 @@
 ## The Types and Decodable sections of the .agcb (docs/vm/03-ir-and-bytecode.md 4.6): the field types of the structs
 ## that JSON.decode may build, as a table of types in which a List, a Map from String and a struct name the entry of
-## their item, and for each such struct the entries of its fields. src/bytecode.rkt, `type!` and `decodable`.
+## their item, and for each such struct the entries of its fields.
 ##
 ## Recursion: type_id takes 1 VM frame for each level of List and Map in a field type. The parser stops a written type
 ## at 1,000 levels, and the writer stops at 1,024 (BYTECODE-LIMIT), so the writer stays under 1,100 frames here.

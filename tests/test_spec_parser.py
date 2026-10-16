@@ -1,4 +1,4 @@
-"""The parser rules of the language, through the product CLI (rescued from the deleted tests/parser-test.rkt).
+"""The parser rules of the language, through the product CLI.
 
 Each case writes a program to a temp file and runs the CLI on it. A rejected program is asserted by its diagnostic
 code and, where a position is part of the rule, by the start (and end) of its range. A valid program is asserted by

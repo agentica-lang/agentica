@@ -1,4 +1,4 @@
-"""`agentica test` on feature files with step programs (ported from bdd-test.rkt).
+"""`agentica test` on feature files with step programs.
 
 Each case runs the CLI as a child (`agentica test --json ...`) and compares
 the JSON report: statuses, diagnostic codes, lines, and the text and --ai

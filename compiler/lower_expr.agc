@@ -1,9 +1,9 @@
-## Expressions and calls (src/lower.rkt: lower-expression, lower-value, lower-call, lower-binary and the forms below
-## them). Every function takes the register to compute into (want, or -1 for a new one) and returns the register that
-## holds the value. The registers above it are free again, except the one returned when none was asked for.
+## Expressions and calls. Every function takes the register to compute into (want, or -1 for a new one) and returns the
+## register that holds the value. The registers above it are free again, except the one returned when none was asked
+## for.
 ##
 ## A method call or a field access that names a builtin is not rewritten in compiler/: the lowering reads its Resolved
-## and does what src/lower.rkt does with the synthetic node in the `resolved` field of the node.
+## and lowers the synthetic node it describes.
 
 import Ast from "ast"
 import Builtins from "builtins"
@@ -477,7 +477,7 @@ def lower_field_checked(
   return lower_field(cx, fx, node, want)
 end
 
-# What the synthetic node of src/checker.rkt becomes. The receiver is checked already, with the type the resolution
+# What the synthetic node of the checker becomes. The receiver is checked already, with the type the resolution
 # carries.
 def lower_resolved(
   cx: Lowering.Cx, fx: Lowering.Fx, receiver: Ast.Expr, args: List[Ast.Expr], span: Source.Span, id: Int,
@@ -529,7 +529,7 @@ def lower_inspect(
 end
 
 # The names a block's body reads, in the order of their first read: the walk collects every name and sorts them by
-# where they start in the source, which is the order src/lower.rkt finds them in.
+# where they start in the source, which is the order the lowering finds them in.
 def referenced_names(body: List[Ast.Stmt]) -> List[String]
   work: List[ConstWalk.Node] = body.map do |stmt: Ast.Stmt| ConstWalk.Node.Stmt(stmt) end
   reads: List[Ast.NameRef] = []

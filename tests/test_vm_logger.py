@@ -1,4 +1,4 @@
-"""The logger on the VM (ported from vm-logger-test.rkt)."""
+"""The logger on the VM."""
 import json
 import re
 

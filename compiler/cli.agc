@@ -1,4 +1,4 @@
-## The command line of `agentica` (src/main.rkt): the entry point of the front end, `run`. It reads the options, then
+## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then
 ## does what the first word asks: run a program, `check` it, `compile` it to a file, print `help`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
@@ -9,7 +9,7 @@
 ## `agentica run [OPTIONS] -- FILE.agcb [ARGS...]`, which runs a compiled program, is not here: C answers it before it
 ## starts this front end.
 ##
-## The exit status is the one of the Racket command line: 0 on success, 1 for a diagnostic (printed on stderr in the
+## The exit status is 0 on success, 1 for a diagnostic (printed on stderr in the
 ## style `--ai` or `--json` asks), 2 for a usage error or a file it cannot read or write; a program that runs gives
 ## its own status.
 
@@ -102,7 +102,7 @@ def linked(session: Session, verb: String, rest: List[String]) -> Int
   end
 end
 
-# What is done with a program that checked, in the order of src/main.rkt.
+# What is done with a program that checked, in a fixed order.
 def checked(session: Session, verb: String, rest: List[String], front: Pipeline.Checked) -> Int
   source = rest[0]
   if verb == "check"
@@ -126,9 +126,8 @@ def checked(session: Session, verb: String, rest: List[String], front: Pipeline.
   end
 end
 
-# `--dump-ir`: the lowered program in the text form of lower_text.agc. It is not the `format-ir` of src/lower.rkt,
-# which drops what the bytecode needs and prints Racket values (the status note of step 8a in
-# docs/future/35-self-hosting.md says why).
+# `--dump-ir`: the lowered program in the text form of lower_text.agc. It is not the `format-ir` of the former front
+# end, which dropped what the bytecode needs (the status note of step 8a in docs/future/35-self-hosting.md says why).
 def dump_ir(session: Session, source: String, front: Pipeline.Checked) -> Int
   case Lowering.lower(front.linked, front.checked, session.settings.catalog)
     Lowering.Lowered.Failed(problem) -> return reject(session, problem, source)
@@ -137,7 +136,7 @@ def dump_ir(session: Session, source: String, front: Pipeline.Checked) -> Int
   end
 end
 
-# The options the VM gets, in the order src/main.rkt gives them.
+# The options the VM gets, in a fixed order.
 def vm_flags(options: Options.Options, source: String) -> List[String]
   flags: List[String] = []
   if options.max_steps != ""
@@ -205,7 +204,7 @@ end
 
 # The text that the lines of a message come from. A std/ module is not a file of the working folder: it goes straight
 # to the provider of the settings (the stdlib/ folder or the binary), even when the folder has a std/ of its own. A
-# file with bytes that are not UTF-8 shows them as U+FFFD, as Racket does.
+# file with bytes that are not UTF-8 shows them as U+FFFD.
 def source_text(file: String, root: Bool, settings: Env.Settings) -> String
   if !root and file.starts_with?("std/")
     return text_of(Resolve.read_source(settings, file))

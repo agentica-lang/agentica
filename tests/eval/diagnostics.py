@@ -23,7 +23,7 @@ MESSAGES = (
 )
 RUNS_AGENTICA = re.compile(
     r"(?:^|[;&|(]|\b(?:then|do|time|timeout\s+\S+|env)\b)\s*(?:[A-Z_][A-Z0-9_]*=\S*\s+)*"
-    r"(?:\S*/)?agentica(?=\s|$)|racket\s+\S*main\.rkt",
+    r"(?:\S*/)?agentica(?=\s|$)",
     re.MULTILINE,
 )
 SOURCES = (
@@ -55,7 +55,7 @@ class CodeStats:
 
 
 def is_agentica_call(command: str) -> bool:
-    """Tell whether a shell command runs the Agentica binary or main.rkt."""
+    """Tell whether a shell command runs the Agentica binary."""
     return RUNS_AGENTICA.search(command) is not None
 
 

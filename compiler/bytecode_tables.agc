@@ -1,4 +1,4 @@
-## The constants of src/bytecode.rkt: the format version, the limits of the format, and the opcode numbers with the
+## The constants of the format: the version, the limits, and the opcode numbers with the
 ## groups of opcodes that share an operand layout. tests/test_frontend_bytecode.py checks OPCODES against vm/value.h.
 ## The Agentica version of the header is not here: it is an input of the front end (Settings in link_env.agc,
 ## docs/future/35-self-hosting.md, 35.3).
@@ -12,7 +12,7 @@ export FORMAT_VERSION = 5
 ## The deepest nesting of List and Map in a JSON field type the loader accepts.
 export MAX_TYPE_DEPTH = 1024
 
-## The number of each opcode, in the order of `opcodes` in src/bytecode.rkt and `agc_opcode` in vm/value.h.
+## The number of each opcode, in the order of `agc_opcode` in vm/value.h.
 export OPCODES = {
   "move": 0, "const": 1, "step": 2, "add-i": 3, "sub-i": 4, "mul-i": 5, "div-i": 6, "mod-i": 7, "neg-i": 8, "not": 9,
   "lt-i": 10, "le-i": 11, "eq": 12, "ne": 13, "jump": 14, "jump-if-false": 15, "jump-if-true": 16, "call": 17,

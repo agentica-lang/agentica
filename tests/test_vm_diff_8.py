@@ -1,6 +1,6 @@
 """Shard 8 of the VM golden tests: `agentica run`, the product CLI and the cases that need more than a fixture.
 
-(Ported from run-extras of vm-diff-common.rkt.) The programs are compiled with the product CLI and run with `agentica
+The programs are compiled with the product CLI and run with `agentica
 run` directly, or through the CLI where the test is about the CLI. The runs have the scratch folder of the test as
 working directory.
 """
@@ -29,7 +29,7 @@ ALLOWED = Fixture(allow_run=True)
 
 
 def words(text):
-    """The non-empty lines of a text, as Racket's string-split with "\\n" gives them at the ends."""
+    """The non-empty lines of a text, without the newlines at the ends."""
     return text.strip("\n").split("\n") if text.strip("\n") else []
 
 
@@ -359,7 +359,7 @@ class Extras(VmCase):
         self.assertEqual((folder / "a.txt").read_text(encoding="utf-8"), "hi")
 
     @unittest.skipUnless(LINUX, "Linux only")
-    def test_the_vm_decodes_invalid_utf8_arguments_like_racket_in_a_utf8_locale(self):
+    def test_the_vm_decodes_invalid_utf8_arguments_like_the_original_in_a_utf8_locale(self):
         program = FIXTURE_DIR / "system-args.agc"
         bytecode = self.bytecode_of(program)
         arguments = [b"\xff\xfeZ", b"\xe2\x82A", b"\xed\xa0\x80z", b"a\xe2\x82", b"\xf0\x9f\x98", b"\xe0\x80",

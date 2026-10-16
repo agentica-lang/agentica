@@ -1,6 +1,5 @@
-## The struct and enum tables of the lowered program (src/lower.rkt: user-tables, used-builtin-structs,
-## used-builtin-enums, decodable-structs). The program's structs come first, then the builtin records it uses, each in
-## the order of the catalog; enums likewise, and their variants are numbered in table order.
+## The struct and enum tables of the lowered program The program's structs come first, then the builtin records it
+## uses, each in the order of the catalog; enums likewise, and their variants are numbered in table order.
 
 import Ast from "ast"
 import Builtins from "builtins"

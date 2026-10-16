@@ -1,5 +1,4 @@
-"""Standard output and standard error of the VM against slow, stuck and vanishing readers
-(ported from vm-stdout-test.rkt).
+"""Standard output and standard error of the VM against slow, stuck and vanishing readers.
 
 fixtures/stdout-peer.py starts the VM with its stdout and stderr on a pipe, a
 socket, a pty or a merged pipe, reads them slowly (or never), and prints a

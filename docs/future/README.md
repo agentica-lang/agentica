@@ -135,8 +135,8 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 47 | Code formatter (`agentica fmt`) | [`47-formatter.md`](47-formatter.md) | Deferred until after the bootstrap (§35 step 8, roadmap row 7.9, phase 28), decided by the owner on 2026-10-15; 47d waits for the LSP (§43) |
 | 48 | Regular expressions | [`48-regex.md`](48-regex.md) | Decided by the owner on 2026-10-15; deferred until after the bootstrap (roadmap row 7.10, phase 29): `std/regex` in Agentica first, then the regex literal `/pattern/flags` |
 
-New features are VM-only (roadmap 7i deleted the evaluator) and get no Racket
-twin ([roadmap
+New features are VM-only (roadmap 7i deleted the evaluator) and get no second
+implementation ([roadmap
 rules](../roadmap/README.md#rules-for-the-catch-up-and-new-features)).
 
 The rule "New library features: `std/` first" (a new pure library feature starts

@@ -1,6 +1,6 @@
-"""The Agentica bytecode writer (compiler/bytecode.agc) against the frozen output of the Racket writer.
+"""The Agentica bytecode writer (compiler/bytecode.agc) against the frozen output of the original writer.
 
-This module compares the Agentica writer with what the Racket writer made once for the same programs (frozen in
+This module compares the Agentica writer with what the original writer made once for the same programs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the .agcb bytes of
 the lowering fixtures, examples/, tests/fixtures/vm/, every std/ module, the compiler, trees at the nesting limit and a
 generated program (as SHA-256 of the file, since the bytes of the big ones are megabytes), the lines of the limit
@@ -60,9 +60,9 @@ class BytecodeFrozenTest(StageTestCase):
     def compile_paths(self, paths, directory, timeout=scaled(1800)):
         """Compile each path (relative to `directory`) to a file of its own.
 
-        Gives {path: what the Racket writer froze for it}: the size and the hash of the file it wrote without the version
-        (`wrote N bytes`, then the hash), or the line the runner printed for a failure and `no file`. Each call writes into
-        a fresh folder, so a file of an earlier call is never taken for the output of a failure.
+        Gives {path: what the original writer froze for it}: the size and the hash of the file it wrote without the
+        version (`wrote N bytes`, then the hash), or the line the runner printed for a failure and `no file`. Each call
+        writes into a fresh folder, so a file of an earlier call is never taken for the output of a failure.
         """
         outputs = self.make_temp_dir()
         arguments = ["--stdlib=%s" % self.stdlib, "--version=%s" % VERSION]
@@ -96,7 +96,7 @@ class BytecodeFrozenTest(StageTestCase):
                  + direct_files(files, "examples"))
         return files, paths
 
-    def test_the_opcode_table_is_the_one_of_the_racket_writer(self):
+    def test_the_opcode_table_is_the_one_of_the_original_writer(self):
         text = TABLES.read_text(encoding="utf-8")
         start = re.search(r"OPCODES = \{", text).end()
         pairs = re.findall(r'"([^"]+)": ([0-9]+)', text[start:text.index("\n}", start)])
@@ -115,8 +115,8 @@ class BytecodeFrozenTest(StageTestCase):
     def test_the_lowering_fixtures_fill_every_section_of_the_file(self):
         # The writer turns the lowering of these programs into the file, so the sections that their goldens fill are the
         # sections the byte comparisons below exercise. (The opcodes have their own test in test_frontend_lower.py.) An
-        # accepted loss against the rackunit test, which looked at the Racket program value: the `types` and `decodable`
-        # sections are not told apart here (both come with a `types=[` struct line), and the spans and the functions are
+        # accepted loss against the original test, which looked at the program value of the writer: the `types` and
+        # `decodable` sections are not told apart here (both come with a `types=[` struct line), and the spans and the functions are
         # taken as filled when any instruction has a span or any function is lowered.
         lowered = "".join(path.read_bytes().decode("utf-8")
                           for path in sorted((ROOT / "tests" / "fixtures" / "frontend" / "lower").glob("*.ir")))
@@ -135,7 +135,7 @@ class BytecodeFrozenTest(StageTestCase):
         unicode_fixture = (ROOT / "tests" / "fixtures" / "frontend" / "bytecode" / "unicode.agc").read_text(encoding="utf-8")
         self.assertTrue(any(ord(char) > 127 for char in unicode_fixture), "a string with a multi-byte character")
 
-    def test_the_header_constants_are_those_of_the_racket_writer(self):
+    def test_the_header_constants_are_those_of_the_original_writer(self):
         text = TABLES.read_text(encoding="utf-8")
         self.assertEqual(re.search(r"^export FORMAT_VERSION = (.+)$", text, flags=re.MULTILINE).group(1),
                          str(FORMAT_VERSION))
@@ -147,14 +147,14 @@ class BytecodeFrozenTest(StageTestCase):
         length = int.from_bytes(data[8:12], "little")
         self.assertEqual(data[12:12 + length].decode("utf-8"), VERSION)
 
-    def test_the_writer_reaches_the_limits_and_the_internal_errors_as_the_racket_writer_does(self):
+    def test_the_writer_reaches_the_limits_and_the_internal_errors_as_the_original_writer_does(self):
         bytecode = compile_agc(LIMITS_FIXTURE, self.stage_dir / "limits.agcb")
         result = run_vm(bytecode, args=["--version=%s" % VERSION], cwd=ROOT, env=vm_environment(), timeout=scaled(300))
         self.assertEqual(result.code, 0, result.stderr)
         self.assertGreater(len(scenario_names("SCENARIOS")), 15)
         self.assert_golden(result.stdout, FROZEN / "bytecode" / "limits.expected")
 
-    def test_the_writer_writes_the_bytes_of_the_racket_writer(self):
+    def test_the_writer_writes_the_bytes_of_the_original_writer(self):
         files, paths = self.fast_paths()
         results = self.compile_paths(paths, self.corpus_dir("examples", "fixtures"))
         self.assert_manifest(results, "bytecode/fast.sha256", files)
@@ -165,7 +165,7 @@ class BytecodeFrozenTest(StageTestCase):
         self.assertTrue(any(line.startswith("ERROR CHECK-IMPORT-IO ") for line in failures))
         self.assertTrue(all(line.endswith("\nno file\n") for line in failures))
 
-    def test_spans_past_65535_are_written_with_the_bytes_of_the_racket_writer(self):
+    def test_spans_past_65535_are_written_with_the_bytes_of_the_original_writer(self):
         # A line or a column of 65536 or more takes the general branch of Bytes.u32 and of span_bytes, which the corpus
         # never reaches. A file index of 65536 or more would need that many sources, which is not worth the time.
         cases = wide_span_programs()
@@ -173,7 +173,7 @@ class BytecodeFrozenTest(StageTestCase):
         self.assertTrue(max(len(line) for line in cases["columns"].split("\n")) > 65535)
         self.assert_manifest(self.compile_cases(cases, "wide"), "bytecode/wide-spans.sha256", cases)
 
-    def test_the_vm_runs_the_agentica_file_as_it_runs_the_racket_file(self):
+    def test_the_vm_runs_the_agentica_file_as_it_runs_the_original_file(self):
         files, paths = self.fast_paths()
         self.compile_paths(paths, self.corpus_dir("examples", "fixtures"))
         found = ""
@@ -220,7 +220,7 @@ class BytecodeFrozenTest(StageTestCase):
 
     @slow
     @timeout(3600)
-    def test_the_writer_matches_the_racket_writer_on_the_large_limit_scenarios(self):
+    def test_the_writer_matches_the_original_writer_on_the_large_limit_scenarios(self):
         bytecode = compile_agc(LIMITS_FIXTURE, self.stage_dir / "limits.agcb")
         result = run_vm(bytecode, args=["slow", "--version=%s" % VERSION], cwd=ROOT, env=vm_environment(),
                         timeout=scaled(1800))

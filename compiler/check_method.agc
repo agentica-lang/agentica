@@ -1,4 +1,4 @@
-## Methods and fields (src/checker.rkt: check-method, check-field-access, check-struct-field). A method call or a field
+## Methods and fields. A method call or a field
 ## access that is not a struct field names a builtin of the receiver's kind; it is checked as the call of that builtin
 ## with the receiver as first argument, and the resolution is recorded by node id for lowering.
 

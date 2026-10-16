@@ -1,4 +1,4 @@
-## Registration: the first four passes of `check` in src/checker.rkt, which read every declaration of the program in
+## Registration: the first four passes of `check`, which read every declaration of the program in
 ## order and fill the tables of Cx before any function body is checked: the names of the enums, the structs and their
 ## fields, the variants of the enums, and the signatures of the functions. Then check_main. A problem is
 ## CHECK-REDEFINED-NAME, CHECK-VOID-TYPE or another type problem, or CHECK-MAIN.

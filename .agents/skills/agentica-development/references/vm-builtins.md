@@ -6,8 +6,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Add a C builtin
 
-1. `src/lower.rkt`: let the call through the builtin check (today only the
-   `vm-builtins` keys `puts`, `IO.print`, `IO.warn`, `IO.inspect`,
+1. `compiler/lower_tables.agc`: let the call through the builtin check (today only the
+   `VM_BUILTINS` keys `puts`, `IO.print`, `IO.warn`, `IO.inspect`,
    `IO.gets`, `IO.gets!`, `IO.read`, `IO.read_bytes`, `IO.flush`,
    `IO.eof?`, `System.args`, `System.exit`, `System.env`, `System.pid`, `FrontEnd.hand_off`,
    `FrontEnd.std_source`, `String.from_int`,
@@ -80,7 +80,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 Rules for the C code:
 
-- The catalog in `src/builtins.rkt` stays the source of keys and arity; the
+- The catalog (`compiler/builtins_data.agc`) stays the source of keys and arity; the
   loader resolves each `(key, arity)` against the C table.
 - Check argument tags generically from the table; check list and map
   elements when you touch them.

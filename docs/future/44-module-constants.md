@@ -554,6 +554,9 @@ no existing program changes meaning. `const-ref` has an `id` in
 
 **Checker (Racket now; the Agentica port in 4b/4c).**
 
+*Note: the Racket front end was deleted (PR #313); `compiler/` is the only
+front end. This section is the plan as written.*
+
 1. Collect struct and enum declarations and function signatures as now.
 2. Order the constants (below), check cycles, then check each initializer
    in that order against its annotation, in an environment with no locals, and
@@ -1151,7 +1154,8 @@ argument functions and threaded structs it replaces and no other code.
     two opcodes, and must equal the Racket bytes.
   - Steps 7 and 8 do not change (their help texts use the new import form
     through the migration of 44a0).
-- **stage0.** There is no `stage0` yet, and `compiler/` is compiled by Racket
+- **stage0.** (The Racket front end is deleted since PR #313; this is the plan
+  as written.) There is no `stage0` yet, and `compiler/` is compiled by Racket
   (35.3), so 44b to 44d can use constants as soon as 44a2 merges, with no
   two-step refresh. The first `stage0` is made by a compiler that already uses
   them. The format change needs no extra step for the same reason (the "new

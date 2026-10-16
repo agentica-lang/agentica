@@ -1,5 +1,4 @@
-## Calls and constructions (src/checker.rkt: check-call, check-plain-call, check-pipe-method!, check-enum-constructor,
-## check-construct, check-struct-construct, check-named-fields!, check-struct-update): a call of a builtin or of a
+## Calls and constructions: a call of a builtin or of a
 ## function of the program, an enum variant, a struct construction and a struct update.
 
 import Ast from "ast"

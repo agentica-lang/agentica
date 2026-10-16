@@ -1,4 +1,4 @@
-"""`agentica test` on *_test.agc files (ported from unit-test-test.rkt).
+"""`agentica test` on *_test.agc files.
 
 Each case runs the CLI as a child on the fixtures of tests/fixtures/unit/ and compares the JSON report, or the text
 and --ai formats. The report of a hung test needs the test deadline, which the CLI does not set (30 s), so that case is

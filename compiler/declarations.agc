@@ -149,8 +149,7 @@ end
 
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then
 ## constants, then struct and enum (exported or not), then export def, then def. The span is that of the declaration
-## out of place; the help names the group it belongs to. This is a style rule with no meaning for evaluation
-## (src/modules.rkt, declaration-order-error).
+## out of place; the help names the group it belongs to. This is a style rule with no meaning for evaluation.
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
   highest = 0
   for decl in declarations

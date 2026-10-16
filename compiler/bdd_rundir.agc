@@ -28,7 +28,7 @@ export struct Run
 end
 
 ## The places that can hold the temporary directory, best first: TMPDIR when it is set, then /var/tmp, /usr/tmp and
-## /tmp (the choice of Racket's `find-system-path 'temp-dir`, which the Racket driver used).
+## /tmp.
 export def temporary_candidates() -> List[String]
   candidates: List[String] = []
   from_environment = System.env("TMPDIR")

@@ -1,7 +1,7 @@
 ---
 name: vm-c-critic
-description: Review a pull request or diff that changes the Agentica C VM (vm/*.c, vm/*.h, vm/tests, the bytecode loader or the interpreter) for memory safety, undefined behavior, hostile-bytecode safety, Boehm GC rules, scheduler and task semantics, hot-path efficiency, and keeping the C core small and layered. Drives the investigation with the gmem code tools (code_diff, code_outline, find_symbol, code_imports), then proves suspicions by running small programs. Use when asked for a critic, security review or safety review of a VM or C PR in the agentica repository. Not for writing or fixing the C code, Racket front-end-only changes, Agentica programs, or docs-only PRs.
-compatibility: Agentica repository checkout or worktree with git, gh, rg, ast-grep, make and racket; gmem MCP code tools when listed.
+description: Review a pull request or diff that changes the Agentica C VM (vm/*.c, vm/*.h, vm/tests, the bytecode loader or the interpreter) for memory safety, undefined behavior, hostile-bytecode safety, Boehm GC rules, scheduler and task semantics, hot-path efficiency, and keeping the C core small and layered. Drives the investigation with the gmem code tools (code_diff, code_outline, find_symbol, code_imports), then proves suspicions by running small programs. Use when asked for a critic, security review or safety review of a VM or C PR in the agentica repository. Not for writing or fixing the C code, front-end-only changes (compiler/), Agentica programs, or docs-only PRs.
+compatibility: Agentica repository checkout or worktree with git, gh, rg, ast-grep and make; gmem MCP code tools when listed.
 ---
 
 # VM C critic
@@ -194,8 +194,8 @@ timeout -k 10 300 <cmd>
 Use a memory limit if your system has one. Use 600 seconds and `-j8` for
 builds. Exit 124 means a timeout: retry once, then report it.
 
-- Build the PR VM with `make -j8 vm`. Run a program with
-  `racket src/main.rkt prog.agc`, plus `--json` or `--max-steps N` when they
+- Build the PR binary with `make -j8`. Run a program with
+  `dist/agentica prog.agc`, plus `--json` or `--max-steps N` when they
   matter.
 - A master comparison is only for a claimed speed change (see Performance under
   Efficiency). Remove its scratch worktree afterwards.

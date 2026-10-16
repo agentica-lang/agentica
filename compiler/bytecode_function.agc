@@ -1,4 +1,4 @@
-## Encodes one function of the program (src/bytecode.rkt, `encode-function`): the instructions as four u16 words, a
+## Encodes one function of the program: the instructions as four u16 words, a
 ## label as the number of the instruction after it, runs of `step` merged, and the constants, struct updates, builtins
 ## and spans the instructions name interned in the tables.
 ##
@@ -113,7 +113,7 @@ def operands(
   elsif args.size == 3
     return ok(plain(tables, args[0], args[1], args[2]))
   end
-  # Any other number of operands is written as given, as src/bytecode.rkt does; the loader rejects it.
+  # Any other number of operands is written as given: the loader rejects it.
   return ok(Operands(tables: tables, a: 0, b: 0, c: 0, generic: true))
 end
 

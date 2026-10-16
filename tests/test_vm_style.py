@@ -1,6 +1,5 @@
-"""Style rules of the C sources in vm/ (ported from vm-style-test.rkt): no type
-definition after the first function, no prototype of a static function, and a
-header comment of the right length in every file.
+"""Style rules of the C sources in vm/: no type definition after the first function, no prototype of a static
+function, and a header comment of the right length in every file.
 
 The scanner below finds the top-level declarations of a C file well enough for
 these rules. It skips preprocessor lines (with continuations), comments and
@@ -92,7 +91,7 @@ def top_level_headers(text):
                     j += 1
             i, line_start = j, True
             continue
-        # Whitespace keeps line_start, so an indented directive is still skipped like the Racket scanner does.
+        # Whitespace keeps line_start, so an indented directive is still skipped like the original scanner does.
         if not c.isspace():
             line_start = False
         if c == "/" and at(i + 1) == "/":

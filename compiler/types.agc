@@ -1,10 +1,9 @@
-## The types the checker works with: the lists headed by a name of src/checker.rkt ('Int, '(List T), '(Struct "Point"))
-## as an enum.
+## The types the checker works with, as an enum.
 
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
 ## TestCase). Struct and Enum hold the linked name; Enum carries its type arguments (none for a plain enum). Var is a
 ## type variable of a builtin signature or a generic enum. Fn lists the parameters, then the result. Unknown is no
-## type: the expected type when none is known (src/checker.rkt uses #f), and the type of a literal the lexer could not
+## type: the expected type when none is known (Unknown), and the type of a literal the lexer could not
 ## classify.
 export enum Type
   Int
@@ -129,7 +128,7 @@ export def args(type: Type) -> List[Type]
   end
 end
 
-## Structural equality, since an enum cannot be compared with ==. This is equal? on the types of src/checker.rkt.
+## Structural equality, since an enum cannot be compared with ==.
 export def same(a: Type, b: Type) -> Bool
   if tag(a) != tag(b)
     return false

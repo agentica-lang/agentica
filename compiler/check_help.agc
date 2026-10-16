@@ -1,4 +1,4 @@
-## The help texts of the checker (src/checker.rkt): the tables of check_tables.agc loaded into Maps once, and the helps
+## The help texts of the checker: the tables of check_tables.agc loaded into Maps once, and the helps
 ## that depend only on types or names. A help is a String, and "" means there is none.
 
 import Ast from "ast"

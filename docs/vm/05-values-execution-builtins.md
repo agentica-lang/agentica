@@ -148,7 +148,7 @@ into their GC state.
 ### 7.2 Scope
 
 The C builtins are in `vm/*.c`, with one table per module. The catalog and the
-implementation keys are in `src/builtins.rkt`. BDD has no C builtins: it is
+implementation keys are in `compiler/builtins_data.agc`. BDD has no C builtins: it is
 written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only
 `Process.spawn_captured`, `Process.output`, the child channel builtins of 25c
 (`Process.spawn_channel`, `channel_read_line`, `channel_send`, `channel_close`,

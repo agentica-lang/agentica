@@ -1,6 +1,5 @@
-## Statements, loops, case and functions (src/lower.rkt: lower-function, lower-block, lower-statement,
-## lower-range-for). Expressions are lowered through lower_expr.agc. A block literal becomes a function through
-## lower_block_function, which Cx.block points to.
+## Statements, loops, case and functions Expressions are lowered through lower_expr.agc. A block literal becomes a
+## function through lower_block_function, which Cx.block points to.
 
 import Ast from "ast"
 import Builtins from "builtins"
@@ -63,7 +62,7 @@ export def lower_function(
 end
 
 ## Lowers a block literal as a function of the table (Cx.block). The block takes the next function index before its
-## body is lowered, so the blocks inside it come after it, as in src/lower.rkt. The state it gives back is the
+## body is lowered, so the blocks inside it come after it. The state it gives back is the
 ## caller's, with the blocks and the index count updated.
 export def lower_block_function(
   cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.BlockLit, captured: List[String]

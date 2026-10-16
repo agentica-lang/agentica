@@ -1,4 +1,4 @@
-"""A socket handed to workers over a Channel (ported from vm-channel-test.rkt).
+"""A socket handed to workers over a Channel.
 
 The program listens on port 0 and prints the port; an independent Python peer
 connects six clients, and the loop of the workers ends when the channel closes.

@@ -1,11 +1,10 @@
-## The options in front of the command or the source file, read the way Racket's `command-line` reads them in
-## src/main.rkt: left to right, up to the first word that is not an option; `--` ends them; an option that takes a
-## value takes the next word whatever it is. `--version` and `-h` answer and stop at once, so an option after them is
-## never read. A word that starts with "-" or "+" and has more than one character is an option.
+## The options in front of the command or the source file, read left to right, up to the first word that is not an
+## option; `--` ends them; an option that takes a value takes the next word whatever it is. `--version` and `-h` answer
+## and stop at once, so an option after them is never read. A word that starts with "-" or "+" and has more than one
+## character is an option.
 ##
-## One difference, on purpose: Racket reads `-abc` as the options `-a`, `-b` and `-c` and reports the first one it does
-## not know; here `-h` is the only short option, so `-hx` is the help and `-xh` is `unknown switch: -x`, which is what
-## Racket says as well. Racket stops with a contract error on an empty source file name; here it is `cannot read `.
+## `-h` is the only short option, so `-hx` is the help and `-xh` is `unknown switch: -x`. An empty source file name is
+## `cannot read `.
 
 import Reply from "cli_reply"
 import Texts from "cli_text"
@@ -164,7 +163,7 @@ def digits?(text: String) -> Bool
   return true
 end
 
-# The number as Racket prints it after `string->number`: no leading zeros, and "0" for zero.
+# The number as `agentica` prints it: no leading zeros, and "0" for zero.
 def without_leading_zeros(text: String) -> String
   at = 0
   while at < text.length - 1 and text.slice(at, 1) == "0"

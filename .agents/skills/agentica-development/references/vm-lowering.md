@@ -1,6 +1,6 @@
 # Lowering and bytecode: new forms, opcodes and linked programs
 
-Read before changing `src/lower.rkt`, `src/bytecode.rkt` or adding an opcode.
+Read before changing `compiler/lower_*.agc`, `compiler/bytecode_*.agc` or adding an opcode.
 
 Read first: `references/vm.md` and `references/vm-c.md`.
 
@@ -9,7 +9,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 1. Read the matching rules in `docs/vm/02-reference-behavior.md` §2 (reference behavior) and `docs/vm/03-ir-and-bytecode.md` §3.3
    (lowering). When a detail is not written down, decide it, write it into §2
    and pin it with a golden.
-2. `src/lower.rkt`: lower the form. Emit one IR `step` per former AST
+2. `compiler/lower_*.agc`: lower the form. Emit one IR `step` per former AST
    entry, before the node's children (§3.3). Anything still out of
    the subset keeps failing with `LOWER-UNSUPPORTED` at its span; never
    miscompile. `vm-type?` says which checked types the VM accepts (the
@@ -17,7 +17,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    `Json`, `List`, `Map` and `Set` of accepted types, `Result` of accepted types or Void, and
    `Fn` over accepted types with an accepted or Void result); a new
    value type widens it.
-3. New opcode: append it to `opcodes` in `src/bytecode.rkt` and to
+3. New opcode: append it to `OPCODES` in `compiler/bytecode_tables.agc` and to
    `agc_opcode` in `vm/value.h` at the same position (a test compares them).
    No opcodes for later PRs. 44a1 relaxed this once, for `GLOBAL` and
    `GLOBAL_SET`, which the lowering of 44a2 emits: the loader and interpreter
@@ -39,11 +39,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Linked programs
 
-Imports never reach the VM. `src/main.rkt` (`compile` and the default run) and
-the front end of the binary (`compiler/front_end.agc`) run `link-program`
-(`src/modules.rkt`) before `check`, so `lower` sees one program whose
+Imports never reach the VM. The front end of the binary
+(`compiler/front_end.agc`) links the imports (`compiler/linker.agc`) before
+`check`, so `lower` sees one program whose
 imported declarations carry `@N::` prefixes (display names drop them,
-`write-bytecode` uses `display-name`). The span table names its source
+the bytecode writer uses the display name). The span table names its source
 per span: `lower` collects every `source` a span points to (`note-source!`,
 entry file first), and `vm/diag.c` prints `p->sources[span->source]`, so a
 diagnostic in imported code shows that file (full
@@ -64,13 +64,13 @@ functions up by name.
   call). So a lowering that emits them must put every `GLOBAL_SET` in straight
   line code of the entry (`<start>`), which ends with a tail call of `main`,
   and must never call `<start>` or take `&<start>`.
-- How `src/lower.rkt` lowers constants (44a2-2). The linked program is flat, so
-  `plan-constants` in `src/constants.rkt` decides from the call graph: the
+- How the lowering handles constants (44a2-2). The linked program is flat, so
+  `compiler/lower_const.agc` decides from the call graph: the
   functions reachable from `main` (calls, `&f`, blocks) keep the constants they
   read, and the constants those read; only kept constants are initialized. A
   scalar literal constant (one literal, or `-` and a number) is a `CONST` at
   each read and has no slot. Every other constant that any emitted function
-  reads gets a slot, numbered in initialization order (`constant-order`), so an
+  reads gets a slot, numbered in initialization order (`Checked.constants`), so an
   unreachable function still loads; a slot nothing writes stays unset, and
   nothing can run the function that reads it. A kept constant is a function
   with no parameters named by its linked name whose body is `return <value>`.
@@ -85,9 +85,9 @@ functions up by name.
   in an initializer shows the constant's function, then `<start>`, in the
   stack trace (`tests/fixtures/vm/constants-error`). The Agentica lowering of
   step 5 must produce the same table and the same bytes.
-- Typed JSON: `user-tables` in `src/lower.rkt` gives each `ir-struct` its
+- Typed JSON: `lower_program.agc` gives each IR struct its
   JSON field types when the struct is decodable (greatest fixpoint, so
-  recursive structs stay in), and `src/bytecode.rkt` interns them into the
+  recursive structs stay in), and the bytecode writer interns them into the
   Types section (format version 3). `$defs` names and the type-argument
   constant are the linked names (`@2::Point`), not display names: the
   evaluator's `JSON.schema` prints them, and two imported structs can share
@@ -101,10 +101,10 @@ functions up by name.
   copy is charged by size, like `CONCAT`. The VM also checks the receiver's
   struct type and field count at run time, as `agc_struct_def_of` does; the C
   creators already go through `agc_builtin_struct`, so it is a defence.
-- Struct and enum table names are display names: `write-bytecode` passes
-  the linked name through `display-name` (`builtins.rkt`), as the
-  evaluator does when printing (`docs/vm/02-reference-behavior.md` §2.4). The lowerer keeps the
-  unique linked names as its keys and in `format-ir`. Variant ids are global in file order;
+- Struct and enum table names are display names: the bytecode writer passes
+  the linked name through the display name (`types.agc`), as the
+  evaluator did when printing (`docs/vm/02-reference-behavior.md` §2.4). The lowerer keeps the
+  unique linked names as its keys and in the IR text. Variant ids are global in file order;
   struct ids and field indexes follow declaration order. Generic enums need
   nothing special: type arguments exist only in the checker.
 - `case` reads a local scrutinee in place (no copy) because every test and
@@ -115,7 +115,7 @@ functions up by name.
   (`9223372036854775808 ->`); they never match, so the lowerer emits a plain
   jump to the next arm instead of a constant the writer cannot encode.
 - Tail calls: the lowerer turns `return f(...)` into `tail-call` when the
-  value is a direct user call (`tail-call?` in `src/lower.rkt`; builtins
+  value is a direct user call (`lower_expr.agc`; builtins
   and calls inside larger expressions do not count) and emits no `return`
   after it. `TAIL_CALL` grows the registers to the frame base plus the
   callee's count first, then `memmove`s the argument window to `R[0..]`

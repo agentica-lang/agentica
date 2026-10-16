@@ -1,8 +1,8 @@
 """The single binary dist/agentica (35.3 and 35.6): the front end it carries compiles in memory and hands the program
 to C, which runs it in a new runtime; `agentica run` runs a compiled file with the VM flags.
 
-The binary does not need Racket here, so the sanitizer job can run this module on its own build: the comparison with
-the Racket front end (the development oracle until Racket is deleted) is in tests/test_cli_parity.py. The cases use a
+The binary is all this module needs, so the sanitizer job can run it on its own build: the command line forms are
+frozen in tests/fixtures/cli/forms.json (tests/test_cli_forms.py). The cases use a
 front end of their own (tests/fixtures/single-binary/front.agc, loaded with --front-end) to see what the C side does
 with the two FrontEnd builtins. The fixed point is not tested here: `make fixed-point` is a step of CI (the test job
 and the sanitizer job), where it compiles compiler/ three times next to this module.
@@ -85,7 +85,7 @@ class SingleBinary(TestCase):
     def test_the_exit_status_and_the_problems_of_a_source_file(self):
         """The shapes of a result: the status of the program, a diagnostic with status 1, a file that is not UTF-8.
 
-        tests/test_cli_parity.py compares every command, option and diagnostic form with the Racket front end."""
+        tests/test_cli_forms.py compares every command, option and diagnostic form with a golden."""
         directory = self.make_suite({"exit.agc": EXIT_THREE, "type.agc": TYPE_ERROR})
         (directory / "bad.agc").write_bytes(b"\xff\xfe")
         bad_utf8_file(directory / "big_bad.agc")
@@ -94,7 +94,7 @@ class SingleBinary(TestCase):
         self.assertEqual((typed.code, typed.stdout), (1, ""))
         self.assertIn("CHECK-TYPE-MISMATCH", typed.stderr)
         self.assertEqual(self.agentica("missing.agc", cwd=directory).code, 2)
-        # The line of a file that is not UTF-8 is shown with U+FFFD, as Racket shows it.
+        # The line of a file that is not UTF-8 is shown with U+FFFD, as the front end shows it.
         self.assertIn("1 | \ufffd\ufffd\n", self.agentica("bad.agc", cwd=directory).stderr)
         self.assertIn("50001 | \ufffd\ufffd\n", self.agentica("big_bad.agc", cwd=directory).stderr)
 
@@ -133,7 +133,7 @@ class SingleBinary(TestCase):
 
     def test_compile_writes_what_the_vm_loads(self):
         """What compile writes is what the VM loads: the same output as running the file in one step. The bytes are the
-        Racket front end's bytes (tests/test_cli_parity.py)."""
+        bytes of the front end inside the binary."""
         work = self.make_temp_dir()
         source = ROOT / "examples" / "json-modules.agc"
         self.assertEqual(self.agentica("compile", source, "-o", work / "next.agcb").code, 0)

@@ -1,6 +1,6 @@
 # Agentica: grammar and language design
 
-This is the index of the language definition. The text is split by section into the files of `grammar/`; every file keeps the section numbers and headings of the whole, so `§6` or "Ranges" still finds its place: look it up below. Status: implemented by the interpreter (a Racket front end that compiles to bytecode for the C VM); remaining proposals live in [`future/`](future/README.md). The documentation site shows these files in order as one page.
+This is the index of the language definition. The text is split by section into the files of `grammar/`; every file keeps the section numbers and headings of the whole, so `§6` or "Ranges" still finds its place: look it up below. Status: implemented by the interpreter (a front end written in Agentica that compiles to bytecode for the C VM); remaining proposals live in [`future/`](future/README.md). The documentation site shows these files in order as one page.
 
 | § | Topic | File |
 |---|---|---|
