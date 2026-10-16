@@ -661,6 +661,18 @@
   "stdout": "",
   "written": []
  },
+ "[[\"help\", \"List.group_by\", \"--json\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"arity\":2,\"description\":\"Group elements by an Int or String key; keys in order of first appearance, elements in order; O(n).\",\"effects\":[],\"name\":\"List.group_by\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"key\",\"type\":\"Fn[A, K]\"}],\"result\":\"Map[K, List[A]]\",\"signature\":\"List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]\"}\n",
+  "written": []
+ },
+ "[[\"help\", \"List.group_by\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]\nGroup elements by an Int or String key; keys in order of first appearance, elements in order; O(n).\n",
+  "written": []
+ },
  "[[\"help\", \"Map.get\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
@@ -685,6 +697,18 @@
   "stdout": "",
   "written": []
  },
+ "[[\"help\", \"String.compare\", \"--json\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"arity\":2,\"description\":\"Compare two Strings in the order of sort: -1, 0 or 1.\",\"effects\":[],\"name\":\"String.compare\",\"parameters\":[{\"name\":\"a\",\"type\":\"String\"},{\"name\":\"b\",\"type\":\"String\"}],\"result\":\"Int\",\"signature\":\"String.compare(a: String, b: String) -> Int\"}\n",
+  "written": []
+ },
+ "[[\"help\", \"String.compare\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "String.compare(a: String, b: String) -> Int\nCompare two Strings in the order of sort: -1, 0 or 1.\n",
+  "written": []
+ },
  "[[\"help\", \"String.split\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
@@ -707,6 +731,12 @@
   "code": 0,
   "stderr": "",
   "stdout": "Task.await(task: Task[R]) -> R\nTask.await(task: Task[R], timeout_ms: Int) -> Await[R]\nWait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.\n",
+  "written": []
+ },
+ "[[\"help\", \"__fail_arg\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin __fail_arg\n",
+  "stdout": "",
   "written": []
  },
  "[[\"help\", \"a\", \"b\", \"c\"], {}]": {

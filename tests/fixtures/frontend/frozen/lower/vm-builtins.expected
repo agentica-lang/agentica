@@ -157,6 +157,7 @@ Set.to_a
 Set.union
 String.at
 String.code
+String.compare
 String.contains?
 String.downcase
 String.ends_with?
@@ -211,6 +212,7 @@ Test.test
 Time.monotonic_ms
 Time.monotonic_ns
 Time.now_ms
+__fail_arg
 error
 ok
 puts

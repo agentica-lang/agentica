@@ -8977,5 +8977,342 @@
       ],
       "code": null
     }
+  ],
+  "the compiler prelude methods check their types, refuse foreign names and hide __fail_arg": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [3, 1, 2]",
+        "  a: Result[Int] = xs.find do |x| x > 1 end",
+        "  xs.each_with_index do |x, i|",
+        "    puts(x + i)",
+        "  end",
+        "  b: List[String] = xs.flat_map do |x| [x.to_s] end",
+        "  c: List[List[Int]] = xs.partition do |x| x > 1 end",
+        "  d: List[Int] = xs.take_while do |x| x > 1 end",
+        "  e: List[Int] = xs.drop_while do |x| x > 1 end",
+        "  f: List[List[Int]] = xs.each_slice(2)",
+        "  g: Map[Int, List[Int]] = xs.group_by do |x| x % 2 end",
+        "  h: Map[String, Int] = [\"a\"].tally",
+        "  i: List[Int] = xs.uniq",
+        "  j: Int = xs.sum",
+        "  kf: Float = [1.5].sum",
+        "  l: Result[Int] = xs.min_by do |x| x end",
+        "  m: Result[Int] = xs.max_by do |x| 0 - x end",
+        "  n: Result[String] = [\"b\"].min_by do |s| s end",
+        "  o: Result[Float] = [1.5].max_by do |x| x end",
+        "  t = {\"a\": 1}",
+        "  t.each do |k, v|",
+        "    puts(k)",
+        "  end",
+        "  u: Map[String, Int] = t.filter do |k, v| v > 0 end",
+        "  w: Int = String.compare(\"a\", \"b\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2]",
+        "  puts(xs.select do |x| x > 1 end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        3,
+        8
+      ],
+      "covers": "xs.select do |x| x > 1 end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2]",
+        "  puts(xs.collect do |x| x end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        3,
+        8
+      ],
+      "covers": "xs.collect do |x| x end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2]",
+        "  puts(xs.detect do |x| x > 1 end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        3,
+        8
+      ],
+      "covers": "xs.detect do |x| x > 1 end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2]",
+        "  puts(xs.inject(0) do |a, x| a + x end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        3,
+        8
+      ],
+      "covers": "xs.inject(0) do |a, x| a + x end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2]",
+        "  puts(xs.reject do |x| x > 1 end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        3,
+        8
+      ],
+      "covers": "xs.reject do |x| x > 1 end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts((1..5).map do |x| x end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        2,
+        8
+      ],
+      "covers": "(1..5).map do |x| x end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts((1..5).sum)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        2,
+        8
+      ],
+      "covers": "(1..5).sum",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2]",
+        "  puts(xs.each_slice(2) do |pair| puts(pair) end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-BLOCK-TARGET",
+      "start": [
+        3,
+        25
+      ],
+      "covers": "do |pair| puts(pair) end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1.5].group_by do |x| x end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        23
+      ],
+      "covers": "do |x| x end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([[1]].uniq)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        8
+      ],
+      "covers": "[[1]]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([true].tally)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        8
+      ],
+      "covers": "[true]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([\"a\"].sum)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        8
+      ],
+      "covers": "[\"a\"]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([true].min_by do |x| x end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        22
+      ],
+      "covers": "do |x| x end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1].max_by do |x| [x] end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        19
+      ],
+      "covers": "do |x| [x] end",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1, 2].find do |x| x end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1, 2].each_with_index do |x| puts(x) end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "start": [
+        2,
+        31
+      ],
+      "covers": "do |x| puts(x) end"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1, 2].each_slice(\"a\"))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        26
+      ],
+      "covers": "\"a\""
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = {\"a\": 1}",
+        "  m.each do |k| puts(k) end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "start": [
+        3,
+        10
+      ],
+      "covers": "do |k| puts(k) end"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  __fail_arg(\"RUNTIME-INVALID-COUNT\", 1, \"no\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [
+        2,
+        3
+      ],
+      "covers": "__fail_arg(\"RUNTIME-INVALID-COUNT\", 1, \"no\")"
+    }
   ]
 }

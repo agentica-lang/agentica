@@ -1,0 +1,9 @@
+check failed: 1 error
+
+[RUNTIME-DIVISION-BY-ZERO]
+  message: division by zero
+  at: @fixtures/vm/prelude-error-callback.agc:4:36
+  source: puts(numbers.flat_map do |n| [10 / n] end)
+  stack:
+    block at @fixtures/vm/prelude-error-callback.agc:4:36
+    main at @fixtures/vm/prelude-error-callback.agc:4:8

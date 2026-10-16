@@ -19,7 +19,7 @@ LIMITS_FIXTURE = FIXTURES / "frontend" / "limits" / "limits.agc"
 TABLES = ROOT / "compiler" / "bytecode_tables.agc"
 
 # The format version of the .agcb file and its header: the magic and the version as a 32-bit little-endian number.
-FORMAT_VERSION = 5
+FORMAT_VERSION = 6
 
 # The Agentica version of the header is an input of the writer (the front end gets it from its caller, 35.3), so the
 # runs below pass it with --version=V. It is the one line of the VERSION file. The frozen manifests hash the file

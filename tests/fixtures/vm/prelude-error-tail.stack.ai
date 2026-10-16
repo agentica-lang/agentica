@@ -1,0 +1,9 @@
+check failed: 1 error
+
+[RUNTIME-INVALID-COUNT]
+  message: each_slice needs a size of at least 1, found -1
+  at: @fixtures/vm/prelude-error-tail.agc:2:29
+  source: return numbers.each_slice(size)
+  stack:
+    slices at @fixtures/vm/prelude-error-tail.agc:2:29
+    main at @fixtures/vm/prelude-error-tail.agc:7:8
