@@ -1,0 +1,44 @@
+program 0:1:1-6:1 entry=0 globals=0
+source 0 "root.agc" chars=68
+source 1 "util.agc" chars=221
+enum "@2::Local" v0="One"/0 v1="Two"/0
+enum "@3::Level" v2="Info"/0 v3="Warn"/0
+fn0 "main" params=0 captures=0 slots=4 entry @ 0:3:1-6:1
+    step @ 0:4:3-5:1
+    step @ 0:4:3-4:20
+    step @ 0:4:8-4:19
+    step @ 1:8:39-8:56
+    enum r1 r1 v3 @ 1:8:39-8:56
+    step @ 1:8:73-8:82
+    enum r2 r2 v1 @ 1:8:73-8:82
+    step @ 1:8:105-8:107
+    list r3 r3 0 @ 1:8:105-8:107
+    call r1 fn1 @ 0:4:8-4:19
+    move r0 r1 @ 0:4:8-4:19
+    call-builtin r0 "puts" 1 @ 0:4:3-4:20 0:4:8-4:19
+    const r0 void @ 0:3:1-6:1
+    return r0 @ 0:3:1-6:1
+fn1 "@2::pick" params=3 captures=0 slots=6 @ 1:8:8-11:1
+    step @ 1:9:3-10:1
+    step @ 1:9:10-9:42
+    step @ 1:9:13-9:18
+    move r3 r0 @ 1:9:13-9:18
+    to-text r3 r3 @ 1:9:10-9:42
+    const r4 " " @ 1:9:10-9:42
+    concat r3 r3 r4 @ 1:9:10-9:42
+    step @ 1:9:22-9:27
+    move r4 r1 @ 1:9:22-9:27
+    to-text r4 r4 @ 1:9:10-9:42
+    concat r3 r3 r4 @ 1:9:10-9:42
+    const r4 " " @ 1:9:10-9:42
+    concat r3 r3 r4 @ 1:9:10-9:42
+    step @ 1:9:31-9:40
+    step @ 1:9:31-9:35
+    move r5 r2 @ 1:9:31-9:35
+    call-builtin r5 "List.size" 1 @ 1:9:31-9:40 1:9:31-9:35
+    move r4 r5 @ 1:9:31-9:40
+    to-text r4 r4 @ 1:9:10-9:42
+    concat r3 r3 r4 @ 1:9:10-9:42
+    return r3 @ 1:9:3-10:1
+    const r3 void @ 1:8:8-11:1
+    return r3 @ 1:8:8-11:1

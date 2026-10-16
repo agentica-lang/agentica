@@ -188,6 +188,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Gotchas
 
+- A task is finished only when `state == DONE && !closing`: `agc_task_join`
+  (`Task.await` with one argument) and `await_timeout` (with a timeout) in
+  `vm/task.c` keep waiting while its file closes are pending. A `Task.map` item
+  does the same: `item_ended` (`vm/task_map.c`) puts its end hook back while the
+  task is `closing`. A test of a task whose handle is still closing must allow
+  for that wait.
 - Tasks: `make vm-task-map` runs `tests/test_vm_task_map.py` alone, the timing
   cases of `Task.map` (the bound on the items in flight, timeouts, a grandchild,
   a detached read, HTTP against a `ThreadingHTTPServer`,

@@ -105,11 +105,14 @@ export struct FunctionDecl
   span: Source.Span
 end
 
-## One parameter of a function.
+## One parameter of a function, with its default value when `NAME: type = expression` gave one. The default is an
+## ordinary expression of the file; the checker accepts only a constant (CHECK-DEFAULT-VALUE), and the linker resolves
+## its names in the file that declares the function.
 export struct Param
   id: Int
   name: String
   type: TypeRef
+  default: Optional[Expr]
   span: Source.Span
 end
 

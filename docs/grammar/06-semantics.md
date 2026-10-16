@@ -58,11 +58,32 @@ A Void call may be a statement, or be returned from a Void function. Assigning, 
 
 ### Functions and entry point
 
-- Functions can be called before their declaration, and can be recursive. Arguments are positional: there is no overloading, default value or named argument for ordinary functions.
+- Functions can be called before their declaration, and can be recursive. Arguments are positional: there is no overloading or named argument for ordinary functions. A parameter may have a default value (below).
 - A function with a non-`Void` return type must return on every reachable path. A loop does not guarantee a return.
 - The last expression does not return implicitly. `case` is a statement; a non-`Void` function may end with an exhaustive `case` only when every arm returns.
 - `return` without a value completes a `Void` function. A `Nil` function uses `return nil`.
 - An executable declares exactly one `main() -> Void` with no parameters.
+
+### Default parameter values
+
+```agentica
+def join(xs: List[String], sep: String = ", ") -> String
+  return xs.join(sep)
+end
+
+join(["a", "b"])        # a, b
+join(["a", "b"], "-")   # a-b
+```
+
+A parameter written `NAME: type = expression` has a default value, which a call may leave out. After a parameter with a default, every parameter has a default, except a last parameter of type `Fn[...]`, which stays without one so that a block can still fill it. Any other parameter without a default after one with a default is `CHECK-DEFAULT-ORDER`, located at that parameter.
+
+A default is a constant: an `Int`, `Float` or `String` literal (a minus sign is allowed before a number, and a string has no `#{...}`), `true`, `false`, `nil`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `LogLevel.Info` for a builtin enum, or `Models.Level.Info` through an import alias). Anything else (a call, a name, `&name`, a struct, a variant with a payload, a non-empty list or map, an interpolated string, an operation) is `CHECK-DEFAULT-VALUE`, located at the expression, with a help that says to make the parameter required. A default cannot read another parameter or a module constant.
+
+The type of a default is checked against the type of its parameter like an initializer: `[]` and `{}` take the parameter type as their expected type, and a mismatch is `CHECK-TYPE-MISMATCH` at the default. A default is built at each call, so no call shares a value with another.
+
+A call to a function with `N` parameters without a default and `M` in all takes `N` to `M` arguments; any other count is `CHECK-ARITY`. Arguments fill the parameters from the left. When the last parameter is an `Fn` without a default, the block (or else the last argument) always goes to it, and the other arguments fill the parameters before it from the left. With `def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void`, both `each_line("a.txt") do |line| ... end` and `each_line("a.txt", 50, &show)` are calls, and `each_line("a.txt", 50)` gives `50` to `f`, so it is `CHECK-TYPE-MISMATCH`, not `CHECK-ARITY`.
+
+A call through an import alias leaves out defaults too (`Util.join(xs)`), and an alias call written without parentheses fills all its defaults: `x = Util.connect` is valid when every parameter of `connect` has a default. A function value takes every argument: `&join` has type `Fn[List[String], String, String]`, and `.call` needs both arguments. Defaults are part of an exported signature. A default is resolved in the module that declares the function, so `Models.Level.Info` means the same for a caller that does not import that file. `main` takes no parameters, and blocks take no defaults.
 
 ### Enums and pattern matching
 

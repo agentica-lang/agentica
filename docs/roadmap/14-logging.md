@@ -7,12 +7,13 @@ TLS, to speed up debugging of the rest of 7h; 14b is order row 7.2.5 (taken out
 of row 7.5 by the owner on 2026-10-14, before the freeze of row 7.2.7), and it
 goes first: it adds no API, and agents get the most from it. 14c is order step
 7.5, a new feature after 7i. It no longer waits for default parameter values
-(15a, row 7.5a): until then its API has two functions per level (decided on
-2026-10-15). 14c follows the library rule (after the order table): the module is
-Agentica code, and its native part is the std-only registry `LogRegistry`, a
-new exception to the std-first rule (decided on 2026-10-15; the rule lists it
-now). Its two builtin types, the record `LogEvent` and the enum `LogLevel`, are
-builtins too (§24.2, "Types").
+(15a, row 7.5a): until then its API had two functions per level (decided on
+2026-10-15); 15a landed afterwards and the `_meta` functions are gone. 14c
+follows the library rule (after the order table): the module is Agentica code,
+and its native part is the std-only registry `LogRegistry`, a new exception to
+the std-first rule (decided on 2026-10-15; the rule lists it now). Its two
+builtin types, the record `LogEvent` and the enum `LogLevel`, are builtins too
+(§24.2, "Types").
 
 - [x] 14a VM tracing (`docs/future/24-logging.md` §24.4): `vm/trace.h` and
   `vm/trace.c`, `AGENTICA_VM_TRACE` (and `AGENTICA_VM_TRACE_FILE`) with the
@@ -41,7 +42,8 @@ builtins too (§24.2, "Types").
   rewrites them), and the 32 goldens with a task crash line now hold its stack.
 - [x] 14c `std/logger` (`docs/future/24-logging.md` §24.2): `stdlib/logger.agc`
   (the levels `debug`, `info`, `warning` and `err`, one function and one `_meta`
-  function per level, `log` and `log_meta`, `enabled?`, `level`, `set_level`,
+  function per level (the `_meta` functions were replaced by a `fields` default
+  in 15a), `log` and `log_meta`, `enabled?`, `level`, `set_level`,
   `attach`, `detach`, `handlers`, the built-in handlers `stderr_text` and
   `stderr_json`, the formatters, the default `console` handler and `time_text`);
   the builtin record `LogEvent` and the builtin enum `LogLevel` in

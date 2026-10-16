@@ -5,8 +5,10 @@
 
 import Ast from "ast"
 import Model from "builtin_model"
+import DefaultChecks from "check_defaults"
 import State from "check_state"
 import Types from "check_types"
+import Defaults from "defaults"
 import Linker from "linker"
 import Source from "source"
 import T from "types"
@@ -249,6 +251,8 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Res
     seen = seen.add(param.name)
     params = params.push(try Types.resolve_type(cx, st, param.type, false))
   end
+  try DefaultChecks.check_parameters(cx, st, node)
   result = try Types.resolve_type(cx, st, node.result, true)
-  return ok(cx.with(functions: cx.functions.put(node.name, State.Signature(params: params, result: result))))
+  signature = State.Signature(params: params, result: result, shape: Defaults.shape(node.params))
+  return ok(cx.with(functions: cx.functions.put(node.name, signature)))
 end

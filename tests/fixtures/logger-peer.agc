@@ -1,7 +1,7 @@
 import Logger from "std/logger"
 
 def worker(n: Int) -> Int
-  Logger.info_meta("from worker", {"n": n.to_s})
+  Logger.info("from worker", {"n": n.to_s})
   return n
 end
 
@@ -15,10 +15,10 @@ def main() -> Void
   gone = Logger.detach("console")
   attached = Logger.attach("json", LogLevel.Debug, &Logger.stderr_json)
   Logger.info("plain")
-  Logger.warning_meta("quote \" backslash \\ newline \n tab \t", {"k": "café"})
+  Logger.warning("quote \" backslash \\ newline \n tab \t", {"k": "café"})
   Logger.err("unicode 世界 and DEL " + String.from_code(127))
-  Logger.debug_meta("fixed keys", {"level": "x", "msg": "y", "time": "z", "task": "9"})
-  Logger.info_meta("empty and odd fields", {"": "", "a b": "c=d", "z": "1", "a": "2"})
+  Logger.debug("fixed keys", {"level": "x", "msg": "y", "time": "z", "task": "9"})
+  Logger.info("empty and odd fields", {"": "", "a b": "c=d", "z": "1", "a": "2"})
   first = Task.spawn(&worker, 1)
   second = Task.spawn(&worker, 2)
   puts(Task.await(first) + Task.await(second))

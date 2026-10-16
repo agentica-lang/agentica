@@ -15,21 +15,13 @@ struct JsonLine
 end
 
 # A level function reads the floor once and compares it once. The floor is the higher of the global level and the
-# lowest handler level, so a call that no handler would accept is as cheap as a disabled one: one user call, one
-# builtin call and one comparison. -1 (the default not installed yet) is below every threshold, so it takes the slow
-# path, where ready() installs the default and the real global level is checked.
+# lowest handler level, so a call that no handler would accept is as cheap as a disabled one: one user call (the
+# empty `fields` default is a constant the call site builds), one builtin call and one comparison. -1 (the default not
+# installed yet) is below every threshold, so it takes the slow path, where ready() installs the default and the real
+# global level is checked.
 
-## Logs a `debug` message.
-export def debug(message: String) -> Void
-  if LogRegistry.floor() <= 0
-    if ready() <= 0
-      dispatch(LogLevel.Debug, 0, message, {})
-    end
-  end
-end
-
-## Logs a `debug` message with fields.
-export def debug_meta(message: String, fields: Map[String, String]) -> Void
+## Logs a `debug` message, with optional fields.
+export def debug(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 0
     if ready() <= 0
       dispatch(LogLevel.Debug, 0, message, fields)
@@ -37,17 +29,8 @@ export def debug_meta(message: String, fields: Map[String, String]) -> Void
   end
 end
 
-## Logs an `info` message.
-export def info(message: String) -> Void
-  if LogRegistry.floor() <= 1
-    if ready() <= 1
-      dispatch(LogLevel.Info, 1, message, {})
-    end
-  end
-end
-
-## Logs an `info` message with fields.
-export def info_meta(message: String, fields: Map[String, String]) -> Void
+## Logs an `info` message, with optional fields.
+export def info(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 1
     if ready() <= 1
       dispatch(LogLevel.Info, 1, message, fields)
@@ -55,17 +38,8 @@ export def info_meta(message: String, fields: Map[String, String]) -> Void
   end
 end
 
-## Logs a `warning` message.
-export def warning(message: String) -> Void
-  if LogRegistry.floor() <= 2
-    if ready() <= 2
-      dispatch(LogLevel.Warning, 2, message, {})
-    end
-  end
-end
-
-## Logs a `warning` message with fields.
-export def warning_meta(message: String, fields: Map[String, String]) -> Void
+## Logs a `warning` message, with optional fields.
+export def warning(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 2
     if ready() <= 2
       dispatch(LogLevel.Warning, 2, message, fields)
@@ -73,17 +47,9 @@ export def warning_meta(message: String, fields: Map[String, String]) -> Void
   end
 end
 
-## Logs an `error` message. The function is `err` because `error` is a reserved name; the output still says `error`.
-export def err(message: String) -> Void
-  if LogRegistry.floor() <= 3
-    if ready() <= 3
-      dispatch(LogLevel.Error, 3, message, {})
-    end
-  end
-end
-
-## Logs an `error` message with fields.
-export def err_meta(message: String, fields: Map[String, String]) -> Void
+## Logs an `error` message, with optional fields. The function is `err` because `error` is a reserved name; the output
+## still says `error`.
+export def err(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 3
     if ready() <= 3
       dispatch(LogLevel.Error, 3, message, fields)
@@ -91,13 +57,8 @@ export def err_meta(message: String, fields: Map[String, String]) -> Void
   end
 end
 
-## Logs a message at a level given as a value.
-export def log(level: LogLevel, message: String) -> Void
-  return log_meta(level, message, {})
-end
-
-## Logs a message with fields at a level given as a value.
-export def log_meta(level: LogLevel, message: String, fields: Map[String, String]) -> Void
+## Logs a message, with optional fields, at a level given as a value.
+export def log(level: LogLevel, message: String, fields: Map[String, String] = {}) -> Void
   rank = rank_of(level)
   if rank >= ready()
     dispatch(level, rank, message, fields)

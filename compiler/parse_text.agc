@@ -435,7 +435,11 @@ end
 
 def print_param(out: List[String], at: Margin, param: Ast.Param) -> List[String]
   lines = out.push(head(at, "param", "param", param.id, param.span, name_attr(param.name)))
-  return print_type(lines, deeper(at), "type", param.type)
+  lines = print_type(lines, deeper(at), "type", param.type)
+  case param.default
+    Ast.Optional.Present(value) -> return print_expr(lines, deeper(at), "default", value)
+    Ast.Optional.Absent -> return lines
+  end
 end
 
 def print_field(out: List[String], at: Margin, field: Ast.FieldDecl) -> List[String]

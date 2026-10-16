@@ -1,10 +1,36 @@
 # Benchmarks and agent evaluation
 
-Read before running or changing `benchmarks/`, `make bench`, the HTTP benchmark or `tests/eval/`.
+Read before running or changing `benchmarks/`, `make bench`, the HTTP benchmark, `tests/eval/`, or before measuring a speed change.
 
 ## Benchmarks
 
 Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S --only NAMES --runners exe,vm,python` (`exe` is `agentica FILE.agc`, `vm` is `agentica run` on bytecode)) times `benchmarks/programs/*.agc` on each runner against the CPython versions in `benchmarks/python/`, checks that every runner prints the same output, reports `LOWER-UNSUPPORTED` programs as unsupported, and times `hello.agc` start-up apart, then the front end of `dist/agentica` (`check` of hello, gherkin, parser and `compiler/front_end.agc`, and one small `agentica test`; the heading prints the load average and says "measured under load" above 2; `--no-startup` skips both). For where the time goes, `AGENTICA_VM_TRACE=profile` (`references/vm-build.md`). It is outside `make test` and CI; `BENCH_ARGS="--runs 3 --size 2"` passes options through `make bench`; record new numbers in `docs/vm-benchmarks.md`. `list-build` (n pushes, n scattered `set`s and a `for` sum) is the gate of the list representation (8d): 160,000 pushes (`--size 8`) take under 1 s, doubling n costs less than 2.5 times the time, and no other benchmark slows by more than 2%; `list-bulk` (`repeat`, `to_a`, `reverse`, `take`, `drop`, `concat`, `join`, `String.split` and `sort` of 60,000 to 500,000 items) guards bulk builds, which must stay within 1.3 times the flat array; compare against a VM built from master, alternating the runs, and time loop-bound programs under more than one link layout before blaming list code. A new program needs `def scale() -> Int` returning 1 (the script rewrites it for `--size`), a deterministic checksum line, and a Python twin that takes the size as `argv[1]`. The HTTP sanity check (20c) is apart: `python3 benchmarks/http_bench.py` (Python 3.10 or newer) compares `examples/http_server.agc serve` on `dist/agentica run` with Node `http`, a Python asyncio server and Python's `ThreadingHTTPServer` (servers in `benchmarks/http.js` and `--serve`), all loaded by the same Node keep-alive client (`benchmarks/http.js client`, 4 processes), interleaved per round, pinned with `taskset`, and each round starts only after a 5 s `/proc/stat` sample shows `--min-idle` of all CPUs idle (repeated otherwise) and is marked disturbed when outside CPU use during it is above `--max-outside`; record numbers only from an idle machine, in the last section of `docs/vm-benchmarks.md`.
+
+## Speed work
+
+- Profile before timing. `AGENTICA_VM_TRACE=profile` prints the report when a
+  run ends (stderr, or `AGENTICA_VM_TRACE_FILE`): the `total` line (`wall_ms`,
+  `steps`, `calls`, `builtin_ms`, `gc_ms`, `collections`), then the 30
+  functions with most steps (`fn`, with `at=FILE:LINE`), the 12 files with most
+  steps and the 30 builtins with most time (`us=`). `agentica FILE.agc` prints
+  two reports, the front end's and the program's; in the second, `gc_ms` and
+  `collections` are still those of the whole process. `check` of a file with no
+  `main` prints its report too.
+- Steps are exact and repeat from run to run, so they are the main evidence.
+  Wall time is supporting: a profiled run is about a third slower, so time
+  without the profile, run the old and the new binary alternately (A B A B, a
+  few rounds of several runs), take the median of the round medians, record the
+  load average (`uptime`) and say "measured under load" above 2.
+- On the development machine `perf` is blocked (`perf_event_paranoid` is 3,
+  no root), and valgrind and gdb are not installed: the profiler is the tool.
+- Find the structural cost before editing call sites. In the lexer, inlining
+  `Source.position` at its call sites alone cut 2.1% of the steps; moving the
+  per-token work (tables built once, one lookup for a keyword, a block opener
+  or `end`, no closure per character) halved them (`docs/vm-benchmarks.md`,
+  "Speed pass, second part").
+- A change that must keep the output: `make fixed-point`, `make goldens` (it
+  must leave `git status` clean), and for a front-end stage the differential
+  run against master in `references/frontend.md`.
 
 ## Agent evaluation
 

@@ -1,0 +1,27 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 281,
+  "stdout": [
+    "a, b",
+    "a-b",
+    "9 -0.5 true",
+    "14 -0.5 true",
+    "15 1.5 false",
+    "x Mode.Safe 0 0",
+    "y Mode.Fast 1 1",
+    "[0]",
+    "[0]",
+    "[7, 8, 2]",
+    "a.txt 1000",
+    "b.txt 50",
+    "c.txt 1000",
+    "0",
+    "a, b, c",
+    "7 -0.5 true",
+    "p+q",
+    "[4, 1]",
+    ""
+  ],
+  "stderr": []
+}

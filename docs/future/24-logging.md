@@ -86,10 +86,10 @@ def main() -> Void
     IO.warn("audit: #{event.message}")
   end
 
-  Logger.info_meta("request done", {"path": "/items", "status": "200"})
+  Logger.info("request done", {"path": "/items", "status": "200"})
   Logger.debug("not shown at the console level")
   if Logger.enabled?(LogLevel.Debug)
-    Logger.debug_meta("state", {"dump": expensive_dump()})
+    Logger.debug("state", {"dump": expensive_dump()})
   end
   Logger.err("cannot open the cache")
 end
@@ -106,16 +106,11 @@ audit: cannot open the cache
 **API:**
 
 ```text
-Logger.debug(message: String) -> Void
-Logger.debug_meta(message: String, fields: Map[String, String]) -> Void
-Logger.info(message: String) -> Void
-Logger.info_meta(message: String, fields: Map[String, String]) -> Void
-Logger.warning(message: String) -> Void
-Logger.warning_meta(message: String, fields: Map[String, String]) -> Void
-Logger.err(message: String) -> Void
-Logger.err_meta(message: String, fields: Map[String, String]) -> Void
-Logger.log(level: LogLevel, message: String) -> Void
-Logger.log_meta(level: LogLevel, message: String, fields: Map[String, String]) -> Void
+Logger.debug(message: String, fields: Map[String, String] = {}) -> Void
+Logger.info(message: String, fields: Map[String, String] = {}) -> Void
+Logger.warning(message: String, fields: Map[String, String] = {}) -> Void
+Logger.err(message: String, fields: Map[String, String] = {}) -> Void
+Logger.log(level: LogLevel, message: String, fields: Map[String, String] = {}) -> Void
 Logger.enabled?(level: LogLevel) -> Bool
 Logger.level() -> LogLevel
 Logger.set_level(level: LogLevel) -> Void
@@ -213,7 +208,7 @@ reference to the registry, and only the Logger functions read or change it.
 table is a field of the runtime (`docs/vm/10-io-multicore.md`). Its rules:
 
 - Ten native builtins in a std-only module, `LogRegistry`, read and write the
-  table (below). None of them calls a handler. `Logger.log_meta` reads the
+  table (below). None of them calls a handler. `Logger.log` reads the
   handler list and calls each handler itself, in the logging task.
 - One scheduler runs today, so a table call does not interleave with another.
   When multicore lands (row 11, gated), the table needs a lock, the same lock as
@@ -295,15 +290,14 @@ end
 A channel adds one send and one task switch to every event, so a handler takes
 this path only when its work is slow.
 
-**Calls and names.** Default parameter values stay after the bootstrap (row
-7.5a), and there is no overloading. A second `def info` is
+**Calls and names.** There is no overloading. A second `def info` is
 `CHECK-REDEFINED-NAME`, and an overload would complicate checking and the
 messages of errors. Agentica follows Ruby, which has defaults and not
-overloading. So v1 has two functions per level: `info(msg)` and `info_meta(msg,
-fields)`, and the same pair for `debug`, `warning` and `err`. When row 7.5a
-lands, the API becomes `info(msg, fields = {})`. That is a breaking change,
-which the owner accepts, because the language has no outside users. The `_meta`
-functions then go away.
+overloading. The first version had two functions per level, `info(msg)` and
+`info_meta(msg, fields)`. Default parameter values (row 7.5a, §25.1) replaced
+them: each level function is `info(msg, fields = {})`. That was a breaking
+change, which the owner accepted, because the language has no outside users;
+the `_meta` functions are gone.
 
 **Metadata.** Left out of v1 (D1 below). Elixir's
 `Logger.metadata/1` is per process: the context that every later call of the
@@ -464,7 +458,7 @@ decision above.
 
 **Implementation (where the code goes).**
 
-- `stdlib/logger.agc`: the level functions, `log`, `log_meta`, `enabled?`, the
+- `stdlib/logger.agc`: the level functions, `log`, `enabled?`, the
   formatters, `time_text`, the default install and the two built-in handlers.
   `LogEvent` and `LogLevel` are builtins, so the module declares neither. Every
   export has a `##` doc (`tests/stdlib-docs-test.rkt`).
@@ -527,8 +521,9 @@ state them as the plan.
   runtime and limited to the registry (see "Decided: the handler table ...").
 - **Async handlers.** An option, never the default (see "Async handlers").
 - **Channel-only logger.** Rejected (see "Alternatives for the global state").
-- **Calls.** Two functions per level until default parameter values land; the
-  `_meta` functions then go away (see "Calls and names").
+- **Calls.** One function per level with an optional `fields` default; the
+  `_meta` functions went away when default parameter values landed (see "Calls
+  and names").
 - **Enabled check.** `enabled?(level)` is true only if the level is at or above
   the global level and some attached handler accepts it (see "Two thresholds").
 - **D1 Metadata per task.** Left out of v1. A task slot can come later.
