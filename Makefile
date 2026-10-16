@@ -467,7 +467,8 @@ STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
 STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES) VERSION
 # The runner and the default step program of `agentica test` (compiler/bdd_driver.agc), compiled at build time with the front
 # end of this build and carried by the binary, so `agentica test` does not compile them on every run. The first binary has
-# none (stage2 does not exist yet), and compiles them as it did before.
+# none (stage2 does not exist yet): its front end is stage0, whose driver compiles them from the std/ sources on every
+# `agentica test`, as it always did, and its `run --embedded` exits 2 (tests/test_bdd.py).
 EMBEDDED_PROGRAMS := $(STAGE_DIR)/runner.agcb $(STAGE_DIR)/steps.agcb
 STAGE0 := bootstrap/stage0.agcb
 BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)

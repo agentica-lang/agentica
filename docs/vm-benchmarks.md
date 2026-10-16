@@ -476,9 +476,9 @@ gherkin 21 MB, parser 34 MB, `front_end.agc` 89 MB).
 | `test` of a feature with two scenarios | 0.930 | 0.112 |
 
 The only change in this part that touches a run is the last two rows: `agentica
-test` used to compile `std/test/runner` (15,346,072 VM steps, 0.7 s) and the
-default step program `std/bdd` (2,859,782 steps) on every run. The compiles
-are done when the binary is built. The VM benchmarks (`b-*.agcb` at scale 10,
+test` used to compile `std/test/runner` (15,346,072 VM steps, 0.73 s) and the
+default step program `std/bdd` (2,859,782 steps, 0.15 s) on every run. The
+compiles are done when the binary is built. The VM benchmarks (`b-*.agcb` at scale 10,
 alternating, medians) moved between 0.85 and 1.04 times the old binary, which
 is the link-layout noise of this file (the padding experiments above), not a
 cost of the profiler: the profile hooks live in a second copy of the turn loop
@@ -517,5 +517,5 @@ checks the 3.6 MB `stage2` (1,336 functions, 87,333 spans) in 15 to 16 ms
 (`AGENTICA_VM_TRACE=loader` prints `loader done us=15140`; five runs), and
 about 5 ms for the run of the front end itself (`check examples/hello.agc` is
 27,946 steps). Against the target of 100 ms for gherkin (§35.2), 130 ms now, the
-lexer is 58% of the steps of that check and the loader is 12% of its time, so
-the lexer comes first, then the loader.
+lexer is 58% of the steps of that check and the loader is 12% of its time,
+so the lexer comes first, then the loader.

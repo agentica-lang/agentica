@@ -47,13 +47,17 @@ How `agentica test` works: the driver (`compiler/bdd_driver.agc`, part of the fr
     calls `Runner.main()`) and the default step program (`steps.agc`:
     `BDD.run([])`) are compiled at build time and carried by the binary
     (`vm/embedded.h`, `make` rule on `EMBEDDED_PROGRAMS`), so `agentica test`
-    does not compile the runner (about 0.7 s) on every run. The driver uses
-    them when the provider of `std/` is `Embedded`
-    (`Program.Embedded("runner")` in `bdd_runner.agc`, `steps_embedded` in the
-    runner config, and `--embedded steps` instead of the step bytecode path).
-    With a folder provider (the tests with a fake runner) or in the first
-    binary of the bootstrap (it carries none: `agentica test` exits 2) it
-    compiles both into the run dir as before. The texts of the two roots are
+    does not compile the runner (0.73 s) and the steps (0.15 s) on every run.
+    The driver uses them when the provider of `std/` is `Embedded`
+    (`Program.Embedded("runner")` in `bdd_runner.agc`; an empty
+    `steps_bytecode` in the runner config means the default steps, started
+    with `--embedded steps`; no field was added to the config, so a driver
+    that does not know the embedded programs still works with this runner).
+    With a folder provider (the tests with a fake runner) it compiles both
+    into the run dir as before. The first binary of the bootstrap carries none
+    and has the driver of stage0: its `agentica test` compiles them as before
+    (0.87 s for a small test) and its `run --embedded` exits 2;
+    `tests/test_bdd.py` runs both. The texts of the two roots are
     constants in `bdd_driver.agc`; `tests/test_bdd.py` checks that the files
     equal them, and that a run with the embedded programs reports the same as
     one with the compiled ones

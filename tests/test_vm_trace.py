@@ -7,6 +7,7 @@ started with stderr or stdout closed still behaves as before. The VM runs
 directly (not through `run`), because a fixture's stdin is a regular file, not
 a pipe, as it was for the original test.
 """
+import json
 import os
 import re
 import signal
@@ -212,6 +213,28 @@ class VmTrace(TestCase):
         ]
         for pattern in patterns:
             self.assertTrue(any(re.match(pattern, line) for line in lines), "%r in %r" % (pattern, lines))
+
+    def test_the_profile_stops_a_looping_program_at_the_same_step_and_counts_a_native_loop(self):
+        """Counting takes every STEP through the slow path of the budget; the run must still end where it ended."""
+        work = self.make_temp_dir("agentica-trace-")
+        source = work / "loop.agc"
+        source.write_text("def twice(n: Int) -> Int\n  return n * 2\nend\n\ndef main() -> Void\n"
+                          "  3.times do |n|\n    puts(n)\n  end\n  i = 0\n  while true\n    i = twice(i) + 1\n"
+                          "    if i > 1000\n      i = 0\n    end\n  end\nend\n")
+        bytecode = self.compile_fixture(source)
+        path = work / "loop.trace"
+        command = [*self.vm, "--json", "--max-steps", "5000", "--", bytecode]
+        plain = vm_run(command, vm_environment())
+        traced = vm_run(command, vm_environment({"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path}))
+        self.assertEqual(plain[0], 1)
+        self.assertEqual(traced[:2], plain[:2])
+        ended = json.loads(plain[2])
+        self.assertEqual(ended["code"], "RUNTIME-STEP-LIMIT")
+        self.assertEqual(json.loads(traced[2])["code"], ended["code"])
+        self.assertEqual(json.loads(traced[2])["range"], ended["range"])
+        lines = trace_lines(path)
+        self.assertTrue(any(re.match(rb"^agc-trace \S+ profile fn calls=0 steps=3 name=<native>$", line)
+                            for line in lines), lines)
 
     def test_the_profile_is_not_part_of_all(self):
         work = self.make_temp_dir("agentica-trace-")

@@ -266,6 +266,7 @@ static void call_value(agc_vm *vm, agc_task *t, agc_value value, uint32_t window
   if (fn->function >= p->function_count || p->functions[fn->function].params != argc ||
       p->functions[fn->function].captures != fn->n)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", span);
+  /* The one profile test left in a normal build: these two entries are shared by both copies of the turn loop. */
   if (AGC_PROFILE_ON(vm)) profile_call(vm, fn->function);
   push_frame(vm, t, fn->function, window, ret, span);
   agc_value *R = t->regs + window;
@@ -278,6 +279,7 @@ void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args,
 }
 
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) {
+  /* Like call_value: a profile test that a normal build still pays, once per task start. */
   if (AGC_PROFILE_ON(vm)) profile_call(vm, function);
   push_frame(vm, t, function, 0, 0, 0);
 }

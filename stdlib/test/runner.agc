@@ -12,8 +12,8 @@ import Units from "units"
 struct Config
   # The binary, started as `run ...` for the step program and for each scenario.
   vm: String
+  # The step program file; "" means the default one that the binary carries, started with `run --embedded steps`.
   steps_bytecode: String
-  steps_embedded: Bool
   steps_source: String
   steps_root: String
   steps_error: String
@@ -192,7 +192,6 @@ def seeded(config: Config, seed: Int) -> Config
   return Config(
     vm: config.vm,
     steps_bytecode: config.steps_bytecode,
-    steps_embedded: config.steps_embedded,
     steps_source: config.steps_source,
     steps_root: config.steps_root,
     steps_error: config.steps_error,
@@ -546,7 +545,7 @@ def vm_args(config: Config, steps: Int, mode: String) -> List[String]
     "--source-root",
     config.steps_root,
   ]
-  if config.steps_embedded
+  if config.steps_bytecode == ""
     return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode])
   end
   return options.concat(["--", config.steps_bytecode, "--agentica-bdd", mode])

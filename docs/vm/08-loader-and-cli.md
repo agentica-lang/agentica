@@ -179,7 +179,12 @@ byte of a file with a type table, an Updates section or Globals.
   binary carries them, compiled at build time (see "The embedded data"). A
   front end that reads the `std/` sources from a folder (`--stdlib`, the tests
   that fake the binary) compiles both into the run directory, as before, and
-  starts the runner with `-- runner.agcb CONFIG`. A front end that stops with
+  starts the runner with `-- runner.agcb CONFIG`. The configuration names the
+  step program file in `steps_bytecode`; an empty name means the default step
+  program of the binary, which the runner starts with `--embedded steps`. The
+  first binary of the bootstrap runs the driver of stage0, which knows no
+  embedded program and compiles both from the `std/` sources, as it always
+  did. A front end that stops with
   an error (a bug in the driver) ends the process with status 2, never the 1
   of a failed test run.
 - `make` builds `dist/agentica` from `bootstrap/stage0.agcb` (35.3). The
@@ -217,8 +222,9 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   the binary carries in place of the file: `runner` or `steps`, the two
   programs of `agentica test`. The words after `--` are all the program's
   arguments. A name that is not one of them, or a binary that carries none
-  (the first binary of the bootstrap), is exit 2, and the front end may not
-  pass the option on in a hand-off.
+  (the first binary of the bootstrap: `agentica run: this binary carries no
+  embedded program runner`), is exit 2, and the front end may not pass the
+  option on in a hand-off.
 
 - **Two runs in one process.** `agentica [--front-end FILE.agcb] WORDS...`
   loads the front end (the carried one, or `FILE`; `--front-end` must be the
@@ -295,7 +301,9 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   front end (`build/stage/runner.agcb`, `steps.agcb`), against the `std/`
   sources of the same build; `make fixed-point` checks that `dist/agentica`
   compiles the same bytes. The first binary of the bootstrap is linked without
-  them (length 0), because it has no `stage2` yet to compile them with.
+  them (length 0), because it has no `stage2` yet to compile them with; its
+  front end is stage0, whose driver compiles them from the `std/` sources on
+  every `agentica test`, as before.
 
 **VM tracing (as built).** The rules are in `docs/future/24-logging.md` §24.4.
 This note lists what the code chose.
@@ -342,4 +350,6 @@ This note lists what the code chose.
   like are `<native>`), the 12 source files with the most steps (`file calls=
   steps= name=`) and the 30 builtins that took the most time (`builtin calls=
   us= name=`). A builtin is timed for the call itself, so one that parks is
-  timed until it does, and `gc_ms` is Boehm's own clock of its collections.
+  timed until it does. `gc_ms` is Boehm's own clock of its collections, and
+  `gc_ms` and `collections` count the whole process so far: the second report
+  of `agentica FILE.agc` includes the collections of the front end.

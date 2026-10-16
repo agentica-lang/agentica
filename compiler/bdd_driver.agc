@@ -26,15 +26,17 @@ import Pipeline from "pipeline"
 RUNNER_ROOT = "import Runner from \"std/test/runner\"\n\ndef main() -> Void\n  Runner.main()\nend\n"
 DEFAULT_STEPS = "import BDD from \"std/bdd\"\n\ndef main() -> Void\n  BDD.run([])\nend\n"
 
+# What a report names as the source of the default step program that the binary carries: no file of the run directory.
+EMBEDDED_STEPS_SOURCE = "std/bdd.agc"
+
 # Where the tests are when no path is given.
 DEFAULT_PATHS = ["specs/", "test/"]
 
-# The step program, compiled: where its bytecode is (nothing is written when it did not compile, or when it is the one
-# the binary carries, `embedded`), the source the runner names in reports, the folder for the VM's --source-root, and
-# the diagnostic that the runner reports in place of the steps ("" when it compiled).
+# The step program, compiled: where its bytecode is (nothing is written when it did not compile; "" when it is the
+# default one that the binary carries), the source the runner names in reports, the folder for the VM's --source-root,
+# and the diagnostic that the runner reports in place of the steps ("" when it compiled).
 struct Steps
   bytecode: String
-  embedded: Bool
   source: String
   root: String
   failure: String
@@ -131,7 +133,6 @@ def prepare_and_run(
   config = Runner.Config(
     vm: options.vm,
     steps_bytecode: steps.bytecode,
-    steps_embedded: steps.embedded,
     steps_source: steps.source,
     steps_root: steps.root,
     steps_error: steps.failure,
@@ -178,7 +179,7 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
   root = ""
   compiled = Pipeline.Compiled.Bytes([])
   if options.steps.size == 0 and embedded?(settings)
-    return ok(Steps(bytecode: "", embedded: true, source: source, root: root, failure: "", given: false))
+    return ok(Steps(bytecode: "", source: EMBEDDED_STEPS_SOURCE, root: root, failure: "", given: false))
   elsif options.steps.size == 0
     try write_text(source, DEFAULT_STEPS)
     compiled = Compile.file(source, settings, "cannot read the step program #{source}")
@@ -192,12 +193,10 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
   case compiled
     Pipeline.Compiled.Rejected(problem) ->
       error_text = JSON.encode(DiagnosticJson.json(problem))
-      return ok(Steps(
-        bytecode: bytecode, embedded: false, source: source, root: root, failure: error_text, given: given,
-      ))
+      return ok(Steps(bytecode: bytecode, source: source, root: root, failure: error_text, given: given))
     Pipeline.Compiled.Bytes(bytes) ->
       try write_bytes(bytecode, bytes)
-      return ok(Steps(bytecode: bytecode, embedded: false, source: source, root: root, failure: "", given: given))
+      return ok(Steps(bytecode: bytecode, source: source, root: root, failure: "", given: given))
   end
 end
 

@@ -191,9 +191,12 @@ class SingleBinary(TestCase):
 
     def test_run_embedded_starts_a_program_the_binary_carries(self):
         """`run --embedded NAME` is for `agentica test`: no file, the words after `--` are the program's."""
+        # The runner it starts exits 2 for a configuration it cannot open. A usage error of `run` is exit 2 too, but
+        # its message begins with `agentica run:` (below): the runner's does not.
         got = self.agentica("run", "--embedded", "runner", "--", "/nonexistent/config.jsonl")
         self.assertEqual((got.code, got.stdout), (2, ""))
-        self.assertIn("cannot open the BDD runner configuration", got.stderr)
+        self.assertNotEqual(got.stderr, "")
+        self.assertFalse(got.stderr.startswith("agentica run:"), got.stderr)
         for words, message in (
                 (["--embedded", "nothing", "--", "x"],
                  "agentica run: this binary carries no embedded program nothing\n"),

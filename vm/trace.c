@@ -397,7 +397,9 @@ static void sum_by_file(const agc_program *p, const agc_profile *profile, uint64
 /* One total line, then the functions with the most steps, the source files with the most steps and the builtins that
  * took the most time, each with its counts. The loops of map, each and the like are the function "<native>". Builtin
  * time is wall time of the call itself: a builtin that waits (a sleep, a read) is timed until it parks, and the
- * garbage collector runs inside the allocations of any of them. */
+ * garbage collector runs inside the allocations of any of them. `gc_ms` and `collections` are those of the whole
+ * process so far, not of this runtime: the report of the program that `agentica FILE.agc` runs counts the front end's
+ * collections too. */
 void agc_profile_report(agc_vm *vm) {
   const agc_profile *profile = vm->profile;
   if (!profile) return;

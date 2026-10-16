@@ -19,10 +19,9 @@ MAXIMUM_EXIT_CODE = 2
 export struct Config
   # The binary: the runner starts the step program and each test file with its `run` command.
   vm: String
-  # The step program is the file `steps_bytecode`, or, when `steps_embedded` is true, the default one that the binary
-  # carries (`run --embedded steps`) and `steps_bytecode` is "".
+  # The step program is the file `steps_bytecode`, or, when it is "", the default one that the binary carries
+  # (`run --embedded steps`). A driver that does not know the embedded programs always writes a file.
   steps_bytecode: String
-  steps_embedded: Bool
   steps_source: String
   steps_root: String
   steps_error: String

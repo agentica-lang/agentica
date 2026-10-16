@@ -17,6 +17,9 @@ from tests.agentica_test import (ROOT, TESTS, TestCase, binary, cli, front_end_c
                                  vm_environment)
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
+# The first binary of the bootstrap (the Makefile links it with stage0 and builds the release mode only).
+BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / "agentica"
+ADDS_TEST = 'def main() -> Void\n  Test.run([Test.test("adds") do\n    Test.eq(1 + 1, 2)\n  end])\nend\n'
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
 
 
@@ -92,8 +95,7 @@ class Bdd(TestCase):
         directory = self.suite({
             "hello.agc": 'def main() -> Void\n  puts("hi")\nend\n',
             "a.feature": "Feature: A\nScenario: right\n" + steps % "hi" + "Scenario: wrong\n" + steps % "bye",
-            "c_test.agc": ('def main() -> Void\n  Test.run([Test.test("adds") do\n    Test.eq(1 + 1, 2)\n'
-                           '  end])\nend\n'),
+            "c_test.agc": ADDS_TEST,
             "d.feature": "Feature: D\nScenario: d\nThen an undefined step\n"})
         carried = self.json_test(directory)
         compiled = self.json_test(directory, binary_path=binary())
@@ -109,6 +111,20 @@ class Bdd(TestCase):
             literal = re.search(r'^%s = "(.*)"$' % constant, driver, re.M).group(1)
             self.assertEqual(ast.literal_eval('"%s"' % literal),
                              (ROOT / "compiler" / "embedded" / (name + ".agc")).read_text(), name)
+
+    def test_the_first_binary_of_the_bootstrap_still_tests_with_the_driver_of_stage0(self):
+        """That binary has the driver of stage0: it compiles the runner and the steps from the std/ sources of this
+        checkout, writes the configuration it always wrote, and knows no embedded program. The current runner must
+        read that configuration."""
+        if not BOOTSTRAP.is_file():
+            self.skipTest("the first binary is not built (%s): run make" % BOOTSTRAP)
+        directory = self.suite({"c_test.agc": ADDS_TEST})
+        result = run([BOOTSTRAP, "test", "--json", directory], env=vm_environment())
+        self.assertEqual((result.code, result.stderr), (0, ""))
+        self.assertEqual(json.loads(result.stdout)["passed"], 1)
+        result = run([BOOTSTRAP, "run", "--embedded", "runner", "--", "config.jsonl"], env=vm_environment())
+        self.assertEqual((result.code, result.stdout), (2, ""))
+        self.assertNotEqual(result.stderr, "")
 
     def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(self):
         directory = self.suite({
