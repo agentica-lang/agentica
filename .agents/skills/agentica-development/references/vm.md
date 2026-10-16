@@ -80,4 +80,4 @@ function, which has no backward jump and is never called. A file that loads may 
 | `references/vm-lowering.md` | `compiler/lower_*.agc`, `compiler/bytecode_*.agc`, a new form or opcode, linked programs, closures, ranges, Results, tail calls |
 | `references/vm-builtins.md` | adding or changing a C builtin (`VM_BUILTINS` in `compiler/lower_tables.agc`, the tables) or a trace point |
 | `references/vm-build.md` | make targets, the golden harness (`tests/vm_diff_support.py`, `make goldens`, the step-limit sweep), submodules (bdwgc, yyjson, libuv, picohttpparser, OpenSSL), sanitizers, fuzzing, portability |
-| `references/vm-tests.md` | which C test (`vm/tests/`) or unittest module (`tests/test_vm_*.py`) covers a file, and the sweep cost rule |
+| `references/vm-tests.md` | which C test (`vm/tests/`) or unittest module (`tests/test_vm_*.py`) covers a file, the sweep cost rule, and the timing and race rules of the tests |

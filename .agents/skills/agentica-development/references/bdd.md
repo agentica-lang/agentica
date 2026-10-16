@@ -53,6 +53,10 @@ How `agentica test` works: the driver (`compiler/bdd_driver.agc`, part of the fr
     `steps_bytecode` in the runner config means the default steps, started
     with `--embedded steps`; no field was added to the config, so a driver
     that does not know the embedded programs still works with this runner).
+    The runner decodes the config with `JSON.decode`, which has no optional
+    fields: a field that the driver does not write fails the decode
+    (`expected required field`). Signal a new case with a value of a field the
+    driver already writes, as the empty `steps_bytecode` does.
     With a folder provider (the tests with a fake runner) it compiles both
     into the run dir as before. The first binary of the bootstrap carries none
     and has the driver of stage0: its `agentica test` compiles them as before
