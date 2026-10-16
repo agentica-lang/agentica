@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`Task.map(items, limit, timeout_ms) do |item| ... end`** (§27.1, roadmap 17a), VM only. It runs the block for each item of a list in its own task, at most `limit` at a time (1 to 1024, otherwise `RUNTIME-INVALID-COUNT` at the argument), each item with its own timeout (`timeout_ms` above 0, otherwise `RUNTIME-INVALID-DURATION`), and gives a `List[Result[R]]` in input order. The block gives a `Result[R]`; an item that runs out of time is cancelled with everything it started (its slot is `error("task: timed out")`), a crashed item gives `error("task crashed: ...")`, and the other items go on. The checker rule behind it: `try` works in a builtin block whose `Result[T]` is inferred, with `T` from the expected type of the call or from the body (a block whose first value is `error(...)` needs the annotation `r: List[Result[T]] = Task.map(...)`). New hints for `Task.async_stream`, `Parallel.map`, `Task.async` and `Thread.new`. The timing tests are `tests/test_vm_task_map.py`, run alone by `make vm-task-map`.
+
 ### Removed
 
 - **The Racket front end is gone** (#313). `src/` and the development oracle `racket src/main.rkt` are deleted, with every Makefile rule and CI job that ran `racket` or `raco` (the `unicode` and `warm-unicode` jobs, `make vm-unicode` and `make vm-unicode-check`). Building needs only a C toolchain, and the front end is `compiler/`. The generators `tools/gen-builtins-data.rkt`, `gen-check-tables.rkt` and `gen-lexer-unicode.rkt` are deleted too: `compiler/builtins_data.agc`, `check_tables.agc` and `unicode_table.agc` are now edited by hand, and `vm/unicode_data.c` is frozen, checked-in source (a header says it came from Racket 9.3's tables, Unicode 17.0). The last commit that can build the Racket front end is tagged `bootstrap-racket`. This changes nothing for users of the `agentica` binary; it affects contributors only.

@@ -71,8 +71,9 @@ comment), then a step that calls it. Targets that are not obvious:
   message.
   A directory adds its own `test_*.py` files and is not searched recursively on
   purpose: `tests/eval/test_*.py` are not modules for this runner. `PY_ALONE`
-  in the Makefile (`tests/test_vm_latency.py`) lists modules that a directory
-  does not pick up: they run when named, as `make vm-latency` does.
+  in the Makefile (`tests/test_vm_latency.py`, `tests/test_vm_task_map.py`) lists
+  modules that a directory does not pick up: they run when named, as
+  `make vm-latency` and `make vm-task-map` do.
 - `make goldens` also rewrites `tests/fixtures/cli/forms.json`.
   `tools/refreeze.py` (Python; `make goldens` runs its `--fast-only`
   tier, the full run also rewrites the slow-tier manifests) rewrites the frozen
@@ -169,7 +170,7 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   15 s after `make test` built the stages, as a step of its own so a failure
   shows alone), `make test-cli`, `make test-slow` (the `@slow` cases of the test
   files),
-  `make vm-latency` alone after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
+  `make vm-latency` and `make vm-task-map` alone after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
   check (the last step that builds), and then `make dup-check` (it runs even
   when an earlier step fails, so a clone or an npm outage does not hide the
   test results). The vm-latency negative control starts its two VMs together

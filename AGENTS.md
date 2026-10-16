@@ -52,6 +52,7 @@ phase 13).
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: each
   `tests/test_<area>.py` file runs as one unittest process.
 - `make test-slow`: the `@slow` cases; CI only.
+- `make vm-task-map`: the timing cases of `Task.map` (`tests/test_vm_task_map.py`), alone like `make vm-latency`.
 - `make smoke`, `make site` (before merging a site change).
 - `make goldens` rewrites the VM goldens, the CLI output golden
   (`tests/fixtures/cli/forms.json`) and the fast-tier front-end goldens; commit

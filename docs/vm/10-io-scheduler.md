@@ -192,7 +192,8 @@ section says how the scheduler and the loop keep them, as built.
     hand-off of the server moves both. A handle made outside a turn has no
     owner, and is closed when its result is dropped.
   - **Cancellation (20b).** A program cancels tasks only through a crash, which
-    cancels the crashed task's descendants, and through `HTTP.close_server`.
+    cancels the crashed task's descendants, through `HTTP.close_server`, and
+    through the deadline of a `Task.map` item (below).
     Each task records its parent and its running children, and a task that ends
     hands its running children to its parent. A group node (20c) never runs and
     has no id: it parents an `HttpServer`'s connection tasks, so cancelling the
@@ -210,6 +211,39 @@ section says how the scheduler and the loop keep them, as built.
     finishes its builtin and then ends, so no instruction of it runs after that.
     A cancel spends no step and charges one turn unit per cancelled task, to the
     caller.
+  - **Task.map (17a, `vm/task_map.c`, core layer).** The builtin checks `limit`
+    (1 to 1024, `RUNTIME-INVALID-COUNT` at the argument), then `timeout_ms`
+    (above 0, `RUNTIME-INVALID-DURATION`), then the empty list, and otherwise
+    installs a stepper on the caller (`agc_task_stepper`, as `File.each_line`
+    does), so the caller is one task parked in the call and nothing else waits
+    for the group. The group is a GC object: the items, the function, the result
+    slots, the counters, the running list (in start order) and the list of items
+    that ended. The step function runs on the caller each time it wakes: it
+    moves the ended items into their slots (a crashed item is observed and its
+    slot is `error("task crashed: ...")`), reads `agc_io_now`, expires the
+    oldest running item whose deadline has passed (its slot is `error("task:
+    timed out")` and `agc_task_cancel` stops it and its descendants), starts
+    items up to `limit`, and, when every slot is set, ends with the list.
+    Otherwise it starts one `agc_wait_io` timer job for the oldest deadline and
+    waits. All items have the same timeout and start in input order, so the
+    deadlines grow along the running list and one timer is enough. The caller
+    does the spawning and the cancelling, so the random streams split in input
+    order and nothing runs on another task's turn. Each item is a child of the
+    caller (`agc_task_spawn_seeded`), and starting it costs one step
+    (`agc_count_step`); the result list costs one turn unit per item. An item
+    tells the group that it ended through a hook on the task (`end`,
+    `end_data`), which `finish_task` calls for a return, a crash and a cancel.
+    The hook ignores an item that already timed out and an item that was
+    cancelled by someone else, which can only be a cancel that reached it
+    through its caller: the caller, a stepper parked on the group's timer, is
+    cancelled like any parked task (the timer job is detached), cancels its
+    children first, never runs the step function again, and so starts nothing
+    and writes no slot. An item that ends after its deadline but before the
+    caller runs keeps its result. The handles an item opened are closed when it
+    ends or is cancelled (Owners); an I/O job it had in flight is detached and
+    ends on its own. With more than one scheduler (not built) the hook runs on the
+    item's scheduler while the step function runs on the caller's, so the
+    group needs its small lock (10.2.3, Task.map group lock).
 - **Stall check (N=1).** If the queue is empty, no libuv handle is alive, and
   `main` is not done, the VM fails with `RUNTIME-INTERNAL` ("every task is
   waiting and nothing can wake them"). No program reaches it: every channel wait
@@ -281,9 +315,8 @@ section says how the scheduler and the loop keep them, as built.
   short lines costs about one job per `buffer_bytes`. The close is a job too,
   and the task parks for it. A crash of the reader's task or of one of its
   ancestors closes the handle (`agc_own`, `agc_close_owned`). A cancel without a
-  crash (a `Test.run` leftover, a later `Task.map` timeout) leaves it open until
-  the end of the run, as for a `File.open` handle, until 24b makes the close
-  cover every end of a task, a task parked in a stepper included.
+  crash (a `Test.run` leftover, a `Task.map` timeout) closes it too (24b: the
+  close covers every end of a task, a task parked in a stepper included).
 - **End of run: one exit path.** However the run ends (`main` returns,
   `System.exit`, a runtime error, the step limit, a stop signal),
   `agc_launch_settle` in `vm/launch.c` takes the same steps and nothing else
