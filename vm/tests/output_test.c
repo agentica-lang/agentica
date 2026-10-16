@@ -455,6 +455,7 @@ static void test_a_final_notice_is_written_straight_or_dropped(void) {
   agc_notice_end(&n, AGC_NOTICE_FINAL);
   read_pipe();
   assert(collected_len + out()->len == (size_t)3000 * 18);
+  agc_output_busy(&vm);
   pump_until((size_t)3000 * 18);
   assert(out()->len == 0);
   for (size_t k = 0; k < 3000; k++)
