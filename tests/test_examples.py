@@ -66,7 +66,10 @@ class Examples(TestCase):
                 ("blocks.agc", "cocoa: 3.0\ntea: 4.0\nunits: 15\nany empty: true\n"),
                 ("constants.agc", "8 | 32\n5\nfruit | drink\n3\n"),
                 ("defaults.agc", "Level.Info start 0\nLevel.Warn slow 1\na, b, c\na-b-c\none\ntwo\n- one\n- two\n"
-                                 "- three\n")]:
+                                 "- three\n"),
+                ("heredoc.agc", "Usage: tool [options] FILE\n\n  --verbose   print more\n"
+                                "  --version   print 2.0 and stop\n\nExit code 0 on success.\n"
+                                "NOTES\nfirst line\n  indented line\n14\n")]:
             output, code = self.run_example(name)
             self.assertIsNone(code, name)
             self.assertEqual(output, expected, name)

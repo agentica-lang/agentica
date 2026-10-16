@@ -62,6 +62,7 @@ HABITS = [
     ("  // note", 2),
     ("  x = 4 // 2", 2),
     ("  /* note */", 2),
+    ("  xs = [1]\n  xs << 2", 3),
     ("  break if x > 3", 2),
     ("  puts(\"a\") if x", 2),
     ("  n = String.length \"abc\"", 2),
@@ -277,6 +278,18 @@ class SpecParser(TestCase):
     def test_habits_from_other_languages_get_a_parse_hint(self):
         self.check_rejected([
             Reject(main_of(body + "\n"), "PARSE-UNEXPECTED-TOKEN", (line,)) for body, line in HABITS
+        ])
+
+    def test_a_heredoc_is_a_string_but_not_a_pattern_or_an_import_path(self):
+        heredoc = "<<~A\n      a\n      b\n  A\n"
+        self.check_output([
+            Output(main_of("  case " + heredoc + "    _ -> puts(\"other\")\n  end\n"), ["other"]),
+        ])
+        self.check_rejected([
+            Reject(main_of("  case \"a\"\n    " + heredoc + "    _ -> puts(2)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (3, 5, 3, 9)),
+            Reject("import Util from <<~A\n  a\n  b\nA\n\n" + main_of(""), "PARSE-UNEXPECTED-TOKEN", (1, 18, 1, 22)),
+            Reject("import {run} from <<~A\n  a\n  b\nA\n\n" + main_of(""), "PARSE-UNEXPECTED-TOKEN", (1, 19, 1, 23)),
         ])
 
     def test_braces_after_a_block_head_point_to_end(self):

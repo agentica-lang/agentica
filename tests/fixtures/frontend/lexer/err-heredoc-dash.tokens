@@ -1,0 +1,1 @@
+ERROR LEX-UNEXPECTED-CHAR 4:1:5-7:1:8 "only the squiggly heredoc <<~NAME exists" "write <<~NAME, the text on the lines below it and a line that holds only NAME; \\# writes a # that starts no interpolation"

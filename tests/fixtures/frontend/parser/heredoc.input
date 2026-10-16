@@ -1,0 +1,15 @@
+def main() -> Void
+  name = "tool"
+  puts(<<~PLAIN)
+    one
+    two
+  PLAIN
+  text = join(<<~FIRST, <<~SECOND)
+    first #{name}
+    line
+  FIRST
+    second
+    #{name.upcase} done
+  SECOND
+  puts(text)
+end

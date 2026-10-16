@@ -57,6 +57,10 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `x = 1;` (`LEX-UNEXPECTED-CHAR`) | no semicolons: end the statement with a newline |
 | `'+'`, `'abc'`, `` `abc` `` (`LEX-UNEXPECTED-CHAR`) | strings use double quotes; a character is a one-character String: `"+"` |
 | bytes that are not valid UTF-8 in a source file (`LEX-INVALID-UTF8`) | source files are UTF-8: save the file as UTF-8 text |
+| `xs << x` (`PARSE-UNEXPECTED-TOKEN`) | lists are immutable and have no `<<`: `xs = xs.push(x)` |
+| `<<NAME`, `<<-NAME`, `<<~'NAME'`, `<<~name` (`LEX-UNEXPECTED-CHAR`) | the only heredoc is `<<~NAME`, with the name in capitals; `\#` writes a `#` that starts no interpolation |
+| a heredoc with one line of text or none (`LEX-HEREDOC-ONE-LINE`) | a heredoc is for two lines or more; write one line as a string literal, `"text\n"` |
+| a tab in the indentation of a heredoc (`LEX-HEREDOC-INDENT`), a heredoc with no end line (`LEX-UNTERMINATED-HEREDOC`) | indent with spaces; end the heredoc with a line that holds only its name |
 | `// note`, `/* note */` (`PARSE-UNEXPECTED-TOKEN`) | comments start with `#`; `4 // 2` has no `//` operator, `/` on two Ints truncates |
 | a `##` doc block that is not directly above a `def`, `struct`, `enum`, field or variant (`PARSE-DETACHED-DOC`) | put the doc block on the lines just above what it documents, with no blank line or `#` comment between; use `#` for a note that documents nothing |
 | a function before a `struct` or `enum`, a private `def` before an `export def`, a constant after a declaration that is not an import or a constant, an `import` after a declaration (`CHECK-DECL-ORDER`) | keep the file order: module doc and imports, then constants, then `struct` and `enum`, then `export def`, then `def` |

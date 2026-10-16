@@ -1,0 +1,1 @@
+ERROR LEX-UNEXPECTED-CHAR 4:1:5-7:1:8 "a heredoc name is written in capitals" "write <<~TEXT: the name is capitals, digits and _, and starts with a capital; there is no quoted form"

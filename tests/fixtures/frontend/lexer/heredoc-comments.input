@@ -1,0 +1,9 @@
+x = <<~A # opener comment <<~Z
+  a # body hash
+  ## not a doc
+b
+A
+# comment after
+y = 2 # c
+## doc after
+z = 3
