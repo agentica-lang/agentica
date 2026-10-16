@@ -1,10 +1,11 @@
-# A front end for tests/test_single_binary.py, run as `agentica-next --front-end front.agcb WORDS...`. It calls the
+# A front end for tests/test_single_binary.py, run as `agentica --front-end front.agcb WORDS...`. It calls the
 # two FrontEnd builtins directly, so the test sees what the C side does with them.
 #
 #   inputs               prints the arguments the binary gave it, joined with spaces
 #   std PATH             prints the std/ source at PATH of stdlib/, or the error
 #   hand-off FILE.agcb [OPTIONS... -- ARGUMENTS...]
 #                        hands the program in FILE to the VM with the options and the arguments
+#   crash                stops with a runtime error, as the driver of `agentica test` could
 #   bad-program          hands over a "program" with a byte that is not one
 #   bad-word             hands over a program with an argument that has a character 0
 #   too-many-options     hands over more options than the driver takes
@@ -21,6 +22,8 @@ def main() -> Void
     shown(FrontEnd.std_source(words[1]))
   elsif words[0] == "hand-off"
     hand_off(words[1], words.drop(2))
+  elsif words[0] == "crash"
+    puts(1 / (words.size - 1))
   elsif words[0] == "bad-program"
     shown_void(FrontEnd.hand_off([1, 300], [], []))
   elsif words[0] == "bad-word"

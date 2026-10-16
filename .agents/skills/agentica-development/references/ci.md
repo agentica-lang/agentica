@@ -1,8 +1,11 @@
 # CI, release and the copy-paste check
 
 Read this before changing `.github/workflows/`, the Makefile, or before
-adding VM source files, test peers or fixtures. Everything runs on Racket
-CS 9.3.
+adding VM source files, test peers or fixtures. The build and the release need
+no Racket (they start from `bootstrap/stage0.agcb`), and neither do the tests
+(all Python `unittest`, since step 8d-3). Racket CS 9.3 is installed in CI for
+one job only, the generated `vm/unicode_data.c` check (`unicode` and
+`warm-unicode` in `ci.yml`), until `vm/tools/gen-unicode.rkt` is ported.
 
 ## The checks of ci.yml, sweep.yml and the release are make targets
 
@@ -12,33 +15,74 @@ those files only setup stays in the YAML: checkout, toolchain and `apt`
 installs, caches and their keys, and the `changes` step. Still inline are
 `site-examples.yml`, `platforms.yml`, `fuzz.yml` (its `make vm-fuzz` was
 already a target) and the packaging steps of `release.yml` (the `strip` and
-ELF checks, `make exe`, `raco distribute`, the archive). A new check in
+ELF checks, the archive). A new check in
 `ci.yml` or `sweep.yml` gets a target first (in `.PHONY` and with a one-line
 comment), then a step that calls it. Targets that are not obvious:
 
-- `bdd-driver` builds `dist/agentica-bdd-driver.agcb`: `compiler/bdd.agc`
-  compiled by the Racket front end (`racket src/main.rkt compile`). It is what
-  `agentica test` runs on the VM until step 8 (`docs/future/35-self-hosting.md`
-  §35.4). `test`, `test-slow` and `dist/agentica` depend on it, it is rebuilt
-  when `compiler/*.agc` or `src/*.rkt` change, and `release.yml` copies it into
-  the archive's `bin/` next to `agentica-vm`. Without it `agentica test` exits 2
-  with "cannot find the BDD driver"; a test run by hand needs `make bdd-driver`.
-- `test` and `test-slow` run two frameworks side by side while the tests move
-  from rackunit to Python `unittest` (a test lives in one only; design in
-  `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of `.rkt` files
-  (to `raco test`), `tests/test_<area>.py` files (to unittest) or directories
-  (the default `tests/` is both). A leading `./` and a trailing `/` are
-  ignored; a `.py` path that is not `tests/test_<area>.py` fails with a message.
+- `all` (the default goal, also `agentica`) builds `dist/agentica`, the one
+  binary (`docs/future/35-self-hosting.md` §35.3). The chain, all in
+  `build/stage/` and `build/vm/<mode>/`: a first binary
+  (`build/vm/<mode>/bootstrap/agentica`, never shipped) is linked with
+  `bootstrap/stage0.agcb` and the `std/` sources; it compiles `stage1`;
+  `--front-end stage1` compiles `stage2`; `--front-end stage2` compiles
+  `stage3`; make stops unless `stage2 == stage3`; `dist/agentica` is linked
+  with `stage2`. The stages are the same bytes in every mode, and a mode
+  builds only its own first binary. `make stage1`, `stage2` and `stage3` build
+  the stages alone. `fixed-point` adds one check: `dist/agentica` compiles the
+  front end with its own embedded sources, and that must be `stage2` again
+  (about 25 s).
+- Refreshing stage0 (`make stage0`). `bootstrap/stage0.agcb` is a stage2 that
+  was checked in; it is the only seed of the build. Refresh it (1) after a
+  change that the old stage0 cannot compile or load, and (2) before a
+  release. The `stage1` recipe says which case it is: it prints that
+  `bootstrap/stage0.agcb` is too old for this change. Steps: (a) if the old
+  stage0 still compiles `compiler/` (a release refresh, or a change that adds
+  something `compiler/` does not use yet), run `make fixed-point stage0`,
+  check that the diff is only the one binary file, run `make` again (it must
+  build from the new file) and commit it. (b) If it cannot (the change needs
+  the new stage0: a syntax or builtin that `compiler/` itself uses, a new
+  bytecode format version), split it in two PRs, as 35.3 says: the first adds
+  the feature without using it in `compiler/`, and refreshes stage0; the
+  second uses it. When that is not possible, compile `stage1` with another
+  compiler and say so in the PR: `make stage0 STAGE1_COMPILER="path/to/agentica"`
+  (a binary built from the parent commit in a second worktree, or
+  `STAGE1_COMPILER="racket src/main.rkt"` while Racket exists); the later
+  stages still run on the new first binary. A new bytecode format is harder:
+  the new VM cannot load a program in the old format, so the old VM must run
+  the new compiler once by hand. `make` does not automate that; the PR that
+  changes the format writes the commands. `make` fails with a message when
+  stage0 is too old, never with a silent difference. A stage0 is a 3.7 MB
+  blob: refresh it only when needed, so the history stays small.
+- `cli` is gone (it built `dist/agentica-cli.agcb` for `tests/agentica-agcb`),
+  and so are `bdd-driver` (`dist/agentica-bdd-driver.agcb`; the driver is part
+  of the front end), `exe` and `vm` (the four names stay in the Makefile as
+  targets that stop with a message, because `make vm` would otherwise find the
+  `vm/` folder and do nothing). `test-cli` runs the tests of the product
+  command line (`CLI_TESTS`) on `dist/agentica` (`AGENTICA_TEST_EXECUTABLE`;
+  so the sanitizer job can run the same modules). The option and diagnostic
+  forms of the command line are a golden of the whole output, messages
+  included, in `tests/fixtures/cli/forms.json` (`tests/test_cli_forms.py`, like
+  the VM goldens; `make goldens` rewrites it after an intended change, and the
+  diff is the review).
+- `test` and `test-slow` run Python `unittest` modules only (design in
+  `docs/future/35-self-hosting.md` §35.10; the rackunit files and the Racket
+  oracle comparisons went in step 8d-3). `TESTS` is a list of
+  `tests/test_<area>.py` files or directories (the default `tests/`). A leading
+  `./` and a trailing `/` are ignored; any other path (a `.rkt` file, a `.py`
+  file outside `tests/test_<area>.py`, a name that is not a folder) fails with a
+  message.
   A directory adds its own `test_*.py` files and is not searched recursively on
   purpose: `tests/eval/test_*.py` are not modules for this runner. `PY_ALONE`
   in the Makefile (`tests/test_vm_latency.py`) lists modules that a directory
   does not pick up: they run when named, as `make vm-latency` does.
-- `frontend-freeze` and `frontend-snapshot` are not CI steps: they rewrite the
-  frozen Racket outputs and the snapshot of the corpus that
-  `tests/test_frontend_<stage>.py` compare the Agentica stages with
-  (`references/frontend.md`, "Frozen comparisons"). They need Racket and go away
-  with the Racket stages; `tools/refreeze.py` (Python, no Racket) rewrites the
-  same goldens from the Agentica stages and is not a CI step either.
+- `make goldens` also rewrites `tests/fixtures/cli/forms.json`.
+  `tools/refreeze.py` (Python, no Racket; `make goldens` runs its `--fast-only`
+  tier, the full run also rewrites the slow-tier manifests) rewrites the frozen
+  goldens that `tests/test_frontend_<stage>.py` compare the Agentica stages
+  with (`references/frontend.md`, "Frozen comparisons") from the Agentica
+  stages. It is not a CI step. The Racket writers that made them
+  (`make frontend-freeze`, `make frontend-snapshot`) were removed in step 8d-3;
+  the tag `bootstrap-racket` (set before `src/` is deleted) keeps them.
 - Each Python module runs in its own process (`python3 -m unittest
   tests.test_<area>` from the root), run by make itself: `make -k -O -j$(JOBS)`
   over `py-test/<file>` targets, so a failure shows that module's report and
@@ -57,24 +101,35 @@ comment), then a step that calls it. Targets that are not obvious:
   read `agentica test --json` suites. Without `python3`, `CI` set fails the run
   and a local run reports a skip; a missing VM binary does the same for a
   test.
-- `test-slow` runs the `slow` submodule of the rackunit files (`raco test
-  --submodule slow`) and the `@slow` cases of the Python modules
-  (`AGENTICA_TEST_SLOW=1`; with the flag the fast cases of a Python module are
-  skipped, like the rackunit `test` submodule). `make test` sets the flag to
-  empty, so a stray `AGENTICA_TEST_SLOW=1` in the environment does not turn it
-  into a slow run. Fast cases go in `(module+ test ...)` or are unmarked, slow
-  ones (live corpus, generated inputs, stress) in `(module+ slow ...)` or
+- `test-slow` runs the `@slow` cases of the Python modules
+  (`AGENTICA_TEST_SLOW=1`; with the flag the fast cases of a module are
+  skipped). `make test` sets the flag to empty, so a stray
+  `AGENTICA_TEST_SLOW=1` in the environment does not turn it into a slow run.
+  Fast cases are unmarked, slow ones (frozen corpus, generated inputs, stress)
   marked `@slow`; local runs use only the fast tier.
-- `build` (`raco make src/main.rkt`) and `vm` run before `make test` and
-  `make smoke`, and `make test` then starts its Racket test workers in parallel.
-- `build-tests` compiles every test module; `test-ci` runs `make test
-  JOBS=6` with `test-exe` (the process and module tests on `dist/agentica`)
-  beside it (`tests/test-ci.sh`); `smoke` is the example smoke runs
-  (`tests/smoke.sh`). `dist/agentica` is a real Makefile rule over
-  `src/*.rkt` and `stdlib/*.agc`, and `exe`, `test-bdd`, `test-exe`,
-  `test-ci` and `smoke` all use it, so a pull never leaves a stale
-  executable and an up-to-date one is not rebuilt. The `vm` target is only
-  built before it, never a reason to rebuild it.
+- Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE` (a
+  float, default 1; `ci.yml` and `sweep.yml` set 4 for the slow runners):
+  one test (`tests/agentica_test.py`: SIGALRM per test like pytest-timeout,
+  120 s, 900 s for `@slow`; `@timeout(seconds)` overrides it for a method or
+  a class; `faulthandler` kills the module 30 s later if the signal cannot
+  run); one test module (the `MODULE_LIMIT` of the Makefile:
+  `timeout -k 10` around `unittest`; 600 s, 1800 s for `make test-slow`); the job `timeout-minutes` of the workflow, which must
+  stay larger than the module limit times the scale. Deadlines that a correct
+  run must beat take `scaled(seconds)` (or `ms` in
+  `tests/test_bdd_integration.py`); a
+  deadline that a test expects to fire, or a bound that measures the product
+  (`LIMIT_MS` of `tests/test_vm_latency.py`, the 200 ms step deadline of the
+  cleanup case), stays unscaled. Step deadlines stay under the 30 s scenario
+  deadline of `agentica test`, which has no flag.
+- `dist/agentica` is built before `make test` and `make smoke`, and `make test`
+  then starts its test workers in parallel.
+- `smoke` is the example smoke runs
+  (`tests/smoke.sh`, on `dist/agentica`). `dist/agentica` is a real Makefile
+  rule over `compiler/*.agc`, `stdlib/*.agc`, `VERSION`, the VM objects and
+  `bootstrap/stage0.agcb`, and `test`, `test-bdd`, `test-cli` and `smoke` all
+  use it, so a pull never leaves a stale binary and an up-to-date one is not
+  rebuilt. The process, module and distribution tests are ordinary modules of
+  `make test` now (there is no `test-ci`, `test-exe` or second executable).
 - `vm-unicode-check` regenerates `vm/unicode_data.c` and fails if it changed.
 - `vendored-check` links the VM against the vendored OpenSSL and checks it
   (static, the submodule's version); `vendored-test` adds the TLS and HTTP
@@ -87,51 +142,60 @@ comment), then a step that calls it. Targets that are not obvious:
   goes in one list of the script.
 - `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
   unittest modules (`VM_PY_TESTS`, the golden shards among them, run with
-  `make test-py`) that run against the VM in the sanitizer job. They and
-  `vm-diff-test` do not depend on `vm` on purpose: they test the VM that an
-  earlier step built.
+  `make test-py`) that run against the binary in the sanitizer job. They and
+  `vm-diff-test` do not depend on `dist/agentica` on purpose: they test the
+  binary that an earlier step built (`SANITIZE=1` makes `dist/agentica` the
+  sanitizer build).
+- VM-only artifacts under `build/` (never shipped, never in user docs): the C
+  test binaries of `vm-test`, `build/vm/<mode>/agentica-vm-fuzz` (the fuzzer
+  links the VM without a front end), the bootstrap first binary, and
+  `build/vm/<mode>/agentica` (a second link of the binary for `vm-gc-stress`
+  and `vendored-check`, so they do not replace `dist/agentica`).
+  `AGENTICA_VM_BINARY=path` makes the Python tests run another build of the
+  binary (`path run ...`).
 - `vm-diff-build` and `vm-diff-test` are the golden tests (`tests/test_vm_diff_*.py`);
   `sweep-full` runs them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`).
   `test-distribution` is the release's relocated-executable test
-  (`tests/test_stdlib_distribution.py` on `dist/agentica`).
+  (`tests/test_stdlib_distribution.py` copies `dist/agentica` alone away from
+  the checkout and runs it, `agentica test` included).
 
 ## Pull requests (`.github/workflows/ci.yml`)
 
 CI runs its checks on pull requests, on the self-hosted Linux runner
 (`docker-runner` label).
 
-- `test`: first the `changes` step (below), then `make -j vm vm-test test-bdd`
+- `test`: first the `changes` step (below), then `make -j vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
-  them), `make test` with the process, module and distribution tests (`tests/test_process.py`, `tests/test_modules.py`, `tests/test_stdlib_distribution.py`) on `dist/agentica`
-  (`AGENTICA_TEST_EXECUTABLE`) running alongside it (`make test` of the whole
-  suite, or of `tests/test_single_binary.py`, first builds `dist/agentica-next`
-  and the bootstrap stages it embeds), `make fixed-point` (stage2 == stage3,
-  Racket's stage1 == stage2, and the single binary compiling the front end to
-  stage2 again; about 15 s after `make test` built the first two stages, as a
-  step of its own so a failure shows alone and costs no second checkout and VM
-  build), `make test-slow` (the
-  `(module+ slow ...)` and `@slow` cases of the test files; a file without one
-  is skipped),
+  them, from `bootstrap/stage0.agcb`), `make test JOBS=6` (the whole suite on
+  the binary; it builds the binary first), `make fixed-point` (stage2 == stage3
+  from stage0, and the binary compiling the front end to stage2 again; about
+  15 s after `make test` built the stages, as a step of its own so a failure
+  shows alone), `make test-cli`, `make test-slow` (the `@slow` cases of the test
+  files),
   `make vm-latency` alone after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
   check (the last step that builds), and then `make dup-check` (it runs even
   when an earlier step fails, so a clone or an npm outage does not hide the
-  test results). `make test` runs with `JOBS=6` beside the two executable-test
-  workers, and the vm-latency negative control starts its two VMs together
-  (it can only raise latency, so the control stays valid). It also
-  checks that `vm/unicode_data.c` is up to date. That check is skipped when
-  the generator, the table and the Makefile's `vm-unicode` rule match an
-  earlier passing check. The vendored check stays last: it rebuilds
-  `build/vm/release/obj` with other flags, so nothing that runs `make vm`
+  test results). The vm-latency negative control starts its two VMs together
+  (it can only raise latency, so the control stays valid). The
+  `unicode` job (the only one that installs Racket) checks that
+  `vm/unicode_data.c` is up to date. That check is skipped, and Racket is not
+  installed, when the generator, the table and the Makefile's `vm-unicode` rule
+  match an earlier passing check. The vendored check stays last: it rebuilds
+  `build/vm/release/obj` with other flags, so nothing that builds the binary
   may run beside it.
 - `dup-check` as a job runs only on `master` pushes (it saves the npm cache).
 - `vm-sanitizers` (`needs: test`, and it still runs when `test` fails):
-  `make vm-lint`, one `make -j vm vm-test vm-fuzz`, `make vm-layers` (on the
+  `make vm-lint`, one `make -j vm-test vm-fuzz`, `make vm-layers` (on the
   sanitizer objects; the job installs ripgrep if `rg` is missing), the ASan golden,
-  bytecode, trace, TCP and TLS tests, `make fixed-point` on the sanitizer VM and
+  bytecode, trace, TCP and TLS tests, `make fixed-point` on the sanitizer
   binary (about 75 s and 1.8 GB: the VM has no GC then; it runs before
   `vm-sanitize-test`, whose `tests/test_single_binary.py` needs the sanitizer
-  `dist/agentica-next` that it built), and the GC stress build (which does not
-  run the fixed point: it collects every 64 allocations). The TCP tests need
+  `dist/agentica` that it built), and the GC stress build (which does not
+  run the fixed point: it collects every 64 allocations, so it links the
+  `stage2` of the release build and the golden tests compile with
+  `dist/agentica`). `RUNTIME-TEST-TIMEOUT` (a hung test, a 30 s deadline with
+  no flag) has coverage only in the slow tier (`@slow` in
+  `tests/test_unit_test.py`). The TCP tests need
   Node; the TLS tests need Node and Python 3. Both PR jobs set
   `AGENTICA_SWEEP=sampled`, so their golden and GC-stress runs sample the
   `--max-steps` sweep with a seed from `GITHUB_SHA`; a failure prints
@@ -145,8 +209,8 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   OpenSSL. Only the release sets `AGENTICA_OPENSSL=vendored`. To keep that path
   from rotting, the last building step of `test` restores the cached vendored
   release-mode OpenSSL (restore only) and, on a hit, links
-  `build/vm/release/agentica-vm` against it, checks that `readelf -d`
-  shows no `libssl` or `libcrypto` and that `--version` names the
+  `build/vm/release/agentica` against it, checks that `readelf -d`
+  shows no `libssl` or `libcrypto` and that `run --version` names the
   submodule's version, and runs the TLS and HTTP tests on that binary. On
   a miss (a new OpenSSL key, such as a submodule bump) it skips;
   `warm-third-party` runs the same link check on `master`.
@@ -179,9 +243,8 @@ The first steps of the `test` job (the `changes` step, checkout with
 (`git diff HEAD^1 HEAD`) and publish the result as job outputs. It runs `vm-sanitizers` only when the VM,
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
-- `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
-  `src/stdlib.rkt` (the registry that embeds the `std/` modules, from
-  `stdlib/MODULES`);
+- `vm/`, `bootstrap/`, `compiler/front_end*`, `compiler/lower*`,
+  `compiler/bytecode*`, `VERSION`;
 - `tests/test_vm_diff_*`, `tests/vm_diff_support.py`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
@@ -198,7 +261,6 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/test_vm_test_protocol.py`, `tests/fixtures/test-protocol-peer.*`,
   `tests/test_vm_child_channel.py`, `tests/fixtures/child-channel*`,
   `tests/fixtures/child_channel.py`, `tests/fixtures/channel-run.py`,
-  `tests/bytecode-test.rkt`,
   `tests/fixtures/vm/`;
 - `stdlib/`: every `std/` module written in Agentica, `stdlib/bdd/` too (the
   pattern is `stdlib/*`; in a shell `case`, `*` also matches `/`);
@@ -206,21 +268,19 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
 
 Otherwise it shows as skipped. If the `changes` step does not set its outputs, `vm-sanitizers` still
 runs. A manual run always runs it. Front-end changes (checker, AST,
-builtins, `main.rkt`) skip `vm-sanitizers` on purpose; the `test` job still
+builtins, `src/`) skip `vm-sanitizers` on purpose; the `test` job still
 runs the `vm-diff` golden shards and every CLI test with the real VM. Keep
 that path list in `ci.yml` in step with new VM files.
 
 Only a manual run, or a pull request that changes `vm/trace.*` or
-`vm/tests/trace_test.c`, also runs `make vm-trace-off` (`make vm vm-test
-TRACE=0`, then it checks that `--version` says `trace off`).
+`vm/tests/trace_test.c`, also runs `make vm-trace-off` (`make vm-test
+TRACE=0`, then it checks that `run --version` says `trace off`).
 
 Pull requests and `master` pushes that change only docs, the site or
 Markdown skip the whole CI workflow. A newer push cancels an older run.
 
 ## Caches and `master` pushes
 
-- Compiled Racket files are cached per job. `vm-sanitizers` and
-  `site-examples.yml` fall back to the `test` cache.
 - The vendored OpenSSL's headers, `libssl.a`, `libcrypto.a` and stamp are
   cached for the release mode only, with `actions/cache`. The key is the
   hash of `make -s vm-openssl-key AGENTICA_OPENSSL=vendored` (the Configure and
@@ -239,10 +299,9 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
-  three jobs that fill caches under the PR jobs' keys:
-  - `warm-cache` compiles the Racket files;
+  two jobs that fill caches under the PR jobs' keys:
   - `warm-unicode` runs the unicode check (a separate job, so a stale table
-    fails `master` without losing the compiled-files cache);
+    fails `master`);
   - `warm-third-party` builds the vendored release-mode OpenSSL and runs
     the vendored link check.
 
@@ -253,9 +312,9 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
 
 Actions → Run workflow:
 
-- `platforms.yml` runs `make vm vm-test` and the VM golden and bytecode
-  tests on macOS and Windows (MSYS2 UCRT64). Run it before merging a change
-  to platform code (`vm/main.c`, the Makefile, file or process handling).
+- `platforms.yml` runs `make vm-test` (the C VM and its C tests; the binary is
+  Linux only since 8d-2) on macOS and Windows (MSYS2 UCRT64). Run it before
+  merging a change to platform code (the Makefile, file or process handling).
 - `fuzz.yml` fuzzes the sanitizer VM with 5 million mutants and a random
   seed.
 
@@ -271,43 +330,46 @@ Two more workflows: `site-examples.yml` and `pages.yml` (see
 
 ## Release (`release.yml`)
 
-The release workflow builds `agentica-vm` with a pinned `zig cc` against
+The release workflow builds `dist/agentica` with a pinned `zig cc` against
 glibc 2.28, with `AGENTICA_OPENSSL: vendored` and `AGENTICA_GC: vendored`
-set for the whole job. It
-checks that floor with `objdump -T`, checks that OpenSSL is linked
-statically (in the build and in the unpacked archive) and that `--version`
-names the submodule's OpenSSL version. It fails when `readelf -d` shows a
-NEEDED `libgc` (in the build and in the unpacked archive). It ships the VM in the archive's
-`bin/` next to `agentica`, with the VM's third-party licenses in
-`licenses/`. Its test steps are targets: `make vm-diff-test` runs the golden
-tests on the release VM (`AGENTICA_VM_BINARY=dist/agentica-vm`, with the
-full sweep), and `make test-distribution` runs the distributed-executable
-test. A step builds the single binary with the same toolchain (`make fixed-point
-CCACHE=`, glibc floor and static libraries checked as for the VM) and runs
-`examples/hello.agc` and `examples/queue.agc` with it; the archive does not
-carry it yet (step 8d ships it). The tags, the version, the Racket bundle and the
-CHANGELOG rules are under "Tags, versions and CHANGELOG" below.
+set for the whole job, from `bootstrap/stage0.agcb` (`make vm-test
+fixed-point CCACHE=`: the embedding and the link have to work with this
+toolchain, and the fixed point runs on the result). It needs no Racket. It
+strips the binary, checks the glibc floor with `objdump -T` (an empty list of
+versions is an error with its own message), checks that OpenSSL is linked
+statically (in the build and in the unpacked archive) and that `run
+--version` names the submodule's OpenSSL version. It fails when `readelf -d`
+shows a NEEDED `libgc` (in the build and in the unpacked archive). The
+archive holds `bin/agentica` alone (the workflow checks that nothing else is
+in `bin/`), `LICENSE`, `NOTICE` and the third-party licenses in `licenses/`
+(no Racket files). Its test steps are targets: `make vm-diff-test` runs the
+golden tests on the release binary with the full sweep, and `make
+test-distribution` runs the relocated-binary test. A last step unpacks the
+archive and runs an example, `compile` and `run`, and `agentica test`. The
+tags, the version and the CHANGELOG rules are under "Tags, versions and
+CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
 
 ### Tags, versions and CHANGELOG
 
-- `src/version.rkt` is the single source of the version: `make version` prints
-  it and `agentica --version` reports it. Keep it in sync with the Git tag.
+- The `VERSION` file at the repository root (one line, no `v`) is the single
+  source of the version. `make version` prints it and the Makefile passes it to
+  C as `AGC_VERSION`; `src/version.rkt` embeds it for the Racket oracle and
+  `agentica --version` reports it. The Agentica front end takes it as an input
+  (`Settings.version`; `--version V` in the arguments of `compiler/front_end.agc`),
+  and writes it into each `.agcb` header. Keep it in sync with the Git tag.
 - Every PR with a user-visible change adds a short entry under `## [Unreleased]`
   in `CHANGELOG.md` (Added, Changed, Removed or Fixed; start a change that
   breaks programs or CLI use with `**Breaking:**`; add the PR number).
   Internal-only work (CI, refactors, docs) needs none. A release PR renames
   `[Unreleased]` to `## [X.Y.Z] - DATE`, leaves an empty `[Unreleased]` above
-  it, bumps `src/version.rkt` and fixes the compare links at the bottom.
+  it, bumps `VERSION` and fixes the compare links at the bottom.
 - Every minor or patch bump is tagged, and the tag pushed, right away after its
   PR merges. The bump commit and the annotated tag message are both `release
   version <tag>`, for example `git tag -a 0.2.0 -m "release version 0.2.0"`.
 - Tag releases with the bare version (`0.2.0`, no `v` prefix).
-  `.github/workflows/release.yml` validates the tag against `src/version.rkt`,
-  builds `dist/agentica`, packages a `raco distribute` bundle with `LICENSE`,
-  `NOTICE` and, in `licenses/racket/`, Racket's license files (from its share
-  directory) and Chez Scheme's `NOTICE` (checked in at
-  `licenses/racket/ChezScheme-NOTICE`, from Racket v9.3's source; update it when
-  the Racket version changes), checks that the archive has them, and publishes a
+  `.github/workflows/release.yml` validates the tag against `VERSION`,
+  builds `dist/agentica`, packages it with `LICENSE`, `NOTICE` and the
+  third-party licenses, checks that the archive has them, and publishes a
   GitHub Release with empty notes; a maintainer writes a short summary of the
   release by hand afterwards (key points and breaking changes, no PR list; the
   details stay in `CHANGELOG.md`).

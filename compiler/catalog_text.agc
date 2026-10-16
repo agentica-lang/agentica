@@ -1,5 +1,5 @@
-## The text form of the builtin catalog, for tests. See catalog_text. tests/frontend-catalog-common.rkt prints the same
-## text from src/builtins.rkt.
+## The text form of the builtin catalog, for tests. See catalog_text. The golden is
+## tests/fixtures/frontend/catalog/catalog.text.
 
 import Ast from "ast"
 import Model from "builtin_model"

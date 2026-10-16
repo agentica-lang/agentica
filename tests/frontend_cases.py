@@ -1,7 +1,7 @@
 """Inputs that are a formula, shared by the front-end tests (tests/test_frontend_<stage>.py).
 
-The Racket writers of the frozen comparisons (tests/frontend-<stage>-freeze.rkt) build the same inputs and record
-their SHA-256 in the manifests; the tests here rebuild them and check the hash, so a drift of either side shows as an
+The Racket writers of the frozen comparisons (removed in step 8d-3) built the same inputs and recorded their SHA-256
+in the manifests; the tests here rebuild them and check the hash, so a drift of either side shows as an
 input that differs, not as a front-end bug.
 """
 
@@ -62,6 +62,15 @@ def lower_deep_cases():
         "ifs-990": checked_body(repeat("  if x == 1\n", 990) + "  puts(x)\n" + repeat("  end\n", 990)),
         "whiles-990": checked_body(repeat("  while x < 0\n", 990) + "  puts(x)\n" + repeat("  end\n", 990)),
         "blocks-200": checked_body("  xs = [1]\n  y = " + blocks + "v199" + repeat(" end", 200) + "\n"),
+    }
+
+
+def wide_span_programs():
+    """Programs whose spans need the high bytes of a u32 (compiler/bytecode_bytes.agc, bytecode_spans.agc): one has its
+    code after 65,600 blank lines, the other a string literal of 65,600 characters, so a column passes 65,535."""
+    return {
+        "lines": "\n" * 65600 + "def main() -> Void\n  puts(\"x\")\nend\n",
+        "columns": "def main() -> Void\n  puts(\"" + "x" * 65600 + "\")\nend\n",
     }
 
 

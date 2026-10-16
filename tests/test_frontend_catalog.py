@@ -1,12 +1,13 @@
 """The Agentica builtin catalog (compiler/catalog.agc) against the frozen output of the Racket catalog.
 
-tests/frontend-catalog-test.rkt compares the two live. This module compares the Agentica catalog with the golden the Racket
-catalog printed (tests/fixtures/frontend/catalog/catalog.text, `make goldens`): the tables, the signatures, the lookups and
-the did-you-mean suggestions. The probes are the lookup lines at the end of the golden, so the golden holds the input of
-the run too. The Rule enum of compiler/builtin_model.agc is compared with the variants frozen in catalog/rules.expected.
+This module compares the Agentica catalog with the golden the Racket catalog printed
+(tests/fixtures/frontend/catalog/catalog.text, `make goldens`): the tables, the signatures, the lookups and the
+did-you-mean suggestions. The probes are the lookup lines at the end of the golden, so the golden holds the input of
+the run too. The Rule enum of compiler/builtin_model.agc is compared with the variants frozen in
+catalog/rules.expected.
 
 An accepted loss: compiler/builtins_data.agc is generated from src/builtins.rkt (tools/gen-builtins-data.rkt) and the
-rackunit test compared it with a fresh generation. That file is 106 KB; the golden above prints the same data, so it is
+Racket test compared it with a fresh generation. That file is 106 KB; the golden above prints the same data, so it is
 not frozen a second time. Once the Racket tables are gone, the data file is edited by hand and this golden is refreshed
 with tools/refreeze.py.
 """
@@ -33,3 +34,11 @@ class CatalogFrozenTest(StageTestCase):
         declared = re.search(r"^export enum Rule\n(.*?)\nend", text, flags=re.MULTILINE | re.DOTALL).group(1)
         names = sorted(line.strip() for line in declared.split("\n"))
         self.assert_golden("".join(name + "\n" for name in names), FROZEN / "catalog" / "rules.expected")
+
+    def test_every_builtin_implementation_is_one_the_vm_has(self):
+        names = set(re.findall(r'\bimpl="([^"]+)"', GOLDEN.read_bytes().decode("utf-8")))
+        self.assertGreater(len(names), 150)
+        tables = (ROOT / "compiler" / "lower_tables.agc").read_bytes().decode("utf-8")
+        start = tables.index("VM_BUILTINS = Set.new([")
+        vm_builtins = set(re.findall(r'"([^"]+)"', tables[start:tables.index("\n])", start)]))
+        self.assertEqual(sorted(names - vm_builtins), [])

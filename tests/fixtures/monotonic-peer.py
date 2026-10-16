@@ -30,7 +30,7 @@ def main():
         return
     vm, bytecode = sys.argv[1], sys.argv[2]
     before = time.monotonic_ns()
-    run = subprocess.run([vm, "--", bytecode], capture_output=True, text=True, timeout=60)
+    run = subprocess.run([vm, "run", "--", bytecode], capture_output=True, text=True, timeout=60)
     after = time.monotonic_ns()
     if run.returncode != 0:
         fail("the VM exited %d: %s" % (run.returncode, run.stderr))

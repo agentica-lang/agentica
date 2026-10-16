@@ -1,5 +1,5 @@
 def run_tool() -> Result[Void]
-  p = try Process.spawn("racket", ["--version"], 5000)
+  p = try Process.spawn("sh", ["-c", "echo hello from sh"], 5000)
   try Process.close_stdin(p, 5000)
   puts(try Process.read_line(p, 5000))
   code = try Process.wait(p, 5000)

@@ -1,14 +1,16 @@
 ## The arguments of the BDD driver.
 ##
-## `agentica test` (src/main.rkt, src/bdd-driver.rkt) starts the driver as `DRIVER_OPTIONS -- ARGUMENTS`. The driver
-## options say what only the front end knows: `--vm PATH` (the VM that runs the runner and the tests), `--agentica
-## WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`, `--allow-run`, `--seed N`
-## and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`, `--only
-## TEXT`, `--json`, `--ai` and `--allow-run`. The `std/` sources come on stdin (bdd_driver.agc).
+## `agentica test` (cli.agc, which calls the driver in its own process) gives the driver `DRIVER_OPTIONS -- ARGUMENTS`.
+## The driver options say what only the front end knows: `--vm PATH` (the binary, which the driver starts as `agentica
+## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
+## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`, `--allow-run`,
+## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
+## `--only TEXT`, `--json`, `--ai` and `--allow-run`.
 
 ## Everything a run needs.
 export struct Options
   vm: String
+  version: String
   agentica: List[String]
   style: String
   allow_run: Bool
@@ -32,6 +34,7 @@ end
 export def parse(arguments: List[String]) -> Parsed
   options = Options(
     vm: "",
+    version: "",
     agentica: [],
     style: "plain",
     allow_run: false,
@@ -58,8 +61,8 @@ export def parse(arguments: List[String]) -> Parsed
   if at >= arguments.size
     return Parsed.Broken("the driver options end with --")
   end
-  if options.vm == "" or options.agentica.size == 0
-    return Parsed.Broken("--vm and --agentica are required")
+  if options.vm == "" or options.version == "" or options.agentica.size == 0
+    return Parsed.Broken("--vm, --version and --agentica are required")
   end
   return user_arguments(options, arguments.drop(at + 1))
 end
@@ -69,6 +72,8 @@ end
 def option(options: Options, name: String, value: String) -> Options
   if name == "--vm"
     return options.with(vm: value)
+  elsif name == "--version"
+    return options.with(version: value)
   elsif name == "--agentica"
     return options.with(agentica: options.agentica.push(value))
   elsif name == "--style"

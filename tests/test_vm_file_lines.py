@@ -6,7 +6,7 @@ and a crash that frees the descriptor of a parked task.
 """
 import re
 
-from tests.agentica_test import (FIXTURES, PYTHON, WAIT_SECONDS, Child, TestCase, run, run_vm, vm_binary,
+from tests.agentica_test import (FIXTURES, PYTHON, WAIT_SECONDS, Child, TestCase, run, run_vm, vm_command,
                                  vm_environment)
 
 PEER = FIXTURES / "lines-peer.py"
@@ -159,7 +159,7 @@ class VmFileLines(TestCase):
 
     def collected(self):
         """False for a VM built without libgc (its memory use is not bounded by a collector)."""
-        return "no libgc" not in run([vm_binary(), "--version"]).stdout
+        return "no libgc" not in run([*vm_command(), "--version"]).stdout
 
     def test_a_10_mb_file_of_short_lines_streams_in_order_with_size_over_buffer_reads_and_bounded_memory(self):
         data = self.write_lines()

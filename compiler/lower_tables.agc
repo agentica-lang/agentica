@@ -1,5 +1,5 @@
 ## The tables of src/lower.rkt that are plain data: the builtins the VM implements, the operator instructions, and the
-## builtin structs the VM can build. A test compares VM_BUILTINS with `vm-builtins` of src/lower.rkt.
+## builtin structs the VM can build. tests/test_frontend_lower.py compares VM_BUILTINS with a frozen copy.
 
 ## The `implementation` names of the builtins the VM has. A call of any other builtin is LOWER-UNSUPPORTED.
 export VM_BUILTINS = Set.new([

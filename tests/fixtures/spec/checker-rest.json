@@ -1,0 +1,8444 @@
+{
+  "ranges take Ints, iterate as Int and reserve the Range name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  r: Range = 0...3",
+        "  for i in r",
+        "    x: Int = i",
+        "  end",
+        "  for j in 1..2",
+        "    puts(j + 1)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = 1..5",
+        "  n: Int = r.size",
+        "  xs: List[Int] = r.to_a",
+        "  b: Bool = r.include?(3) and r == (1..5)",
+        "  f: Result[Int] = Range.first(r)",
+        "  l: Result[Int] = r.last",
+        "  puts(\"#{r} #{r.inspect}\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def show(x: Int) -> Void",
+        "  puts(x)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  (1..3).each do |i|",
+        "    puts(i)",
+        "  end",
+        "  3.times do |i|",
+        "    puts(i)",
+        "  end",
+        "  1.upto(3) do |i|",
+        "    puts(i)",
+        "  end",
+        "  Int.downto(3, 1, &show)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = 1..2.5",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = 1..5.to_a",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  -5.times do |i|",
+        "    puts(i)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = \"a\"...\"b\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = (1..2) == 3",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for i in 1..3",
+        "    i = 2",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-IMMUTABLE-ASSIGNMENT"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = (1..2).step(2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = JSON.encode(1..2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m: Map[Range, Int] = {}",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAP-KEY-TYPE"
+    },
+    {
+      "program": [
+        "struct Range",
+        "  a: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "enum Range",
+        "  A",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "sets hold Int or String, iterate, print and reserve the Set name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  seen: Set[String] = Set.new([])",
+        "  seen = seen.add(\"a\").add(\"b\")",
+        "  nums = Set.new([1, 2, 2])",
+        "  other: Set[Int] = Set.new([2, 3])",
+        "  both: Set[Int] = nums.union(other).intersection(other).difference(Set.new([3]))",
+        "  n: Int = seen.size",
+        "  e: Bool = nums.empty? or nums.include?(1) or nums.subset?(other)",
+        "  xs: List[Int] = Set.to_a(nums.delete(1))",
+        "  for x in seen",
+        "    puts(x + \"!\")",
+        "  end",
+        "  puts(\"#{nums} #{seen.inspect}\")",
+        "  r = Test.eq(nums, other)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Set.new([]))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EMPTY-SET-TYPE",
+      "start": [2, 8],
+      "covers": "Set.new([])",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = Set.new([1.5])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-SET-ELEMENT-TYPE",
+      "start": [2, 15],
+      "covers": "[1.5]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s: Set[Float] = Set.new([1])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-SET-ELEMENT-TYPE",
+      "start": [2, 10],
+      "covers": "Float"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s: Set[List[Int]] = Set.new([])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-SET-ELEMENT-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = Set.new([1])",
+        "  r = a == a",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 9],
+      "covers": "==",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = JSON.encode(Set.new([1]))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE",
+      "start": [2, 19],
+      "covers": "Set.new([1])"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  seen: Set[Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", Box)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE",
+      "start": [6, 25],
+      "covers": "Box"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = Set.new([1])",
+        "  puts(a[0])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-INDEXABLE",
+      "start": [3, 8],
+      "covers": "a[0]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = Set.new([1])",
+        "  r = a.include?(\"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 18],
+      "covers": "\"x\""
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = Set.new([1])",
+        "  r = a.union(Set.new([\"x\"]))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = Set.new([1])",
+        "  a.add(2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = Set.new([1])",
+        "  r = a.contains?(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for x in 3",
+        "    puts(x)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-A-LIST"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m: Map[Set[Int], Int] = {}",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAP-KEY-TYPE"
+    },
+    {
+      "program": [
+        "struct Set",
+        "  a: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "enum Set",
+        "  A",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "Test assertions need a type with equality; Test and TestCase are reserved": [
+    {
+      "program": [
+        "struct Box",
+        "  items: List[Int]",
+        "  tags: Map[String, Json]",
+        "end",
+        "",
+        "struct Hook",
+        "  run: Fn[Int, Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Test.test(\"box\") do",
+        "    n = try \"1\".to_i",
+        "    Test.eq(n, 1)",
+        "    try Test.eq(Box(items: [n], tags: {}), Box(items: [1], tags: {}))",
+        "    try Test.eq([JSON.null()], [JSON.null()])",
+        "    try Test.ok?(\"2\".to_i)",
+        "    Test.error?(\"x\".to_i)",
+        "  end",
+        "  Test.run([t])",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Test.eq(1, \"a\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Test.eq(&main, &main)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 15]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  items: List[Int]",
+        "  tags: Map[String, Json]",
+        "end",
+        "",
+        "struct Hook",
+        "  run: Fn[Int, Int]",
+        "end",
+        "",
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  h = Hook(run: &twice)",
+        "  r = Test.eq(h, h)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t = Test.test(\"x\") do",
+        "    1",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Test",
+        "  a: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct TestCase",
+        "  a: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "File.each_line takes a block that returns Result[Void], and try works in it": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = File.each_line(\"a.txt\", 4096, 1000) do |line|",
+        "    puts(line)",
+        "    ok()",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = File.each_line(\"a.txt\", 4096, 1000) do |line|",
+        "    n = try String.to_int(line)",
+        "    puts(n)",
+        "    ok()",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = File.each_line(\"a.txt\", 4096, 1000) do |line|",
+        "    if line == \"\"",
+        "      return error(\"empty\")",
+        "    end",
+        "    try File.write_text(\"b.txt\", line, 1000)",
+        "    ok()",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def show(line: String) -> Result[Void]",
+        "  puts(line)",
+        "  return ok()",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r: Result[Void] = File.each_line(\"a\", 1024, 10, &show)",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = File.each_line(\"a.txt\", 4096, 1000) do |line|",
+        "    puts(line)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 5],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = File.each_line(\"a.txt\", 4096, 1000) do |line|",
+        "    line",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 5]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = File.each_line(\"a.txt\", 4096, 1000) do |line|",
+        "    ok(1)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 8]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  [1].each do |x|",
+        "    n = try String.to_int(\"1\")",
+        "    puts(n)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TRY-CONTEXT"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = try File.each_line(\"a\", 1024, 10) do |l|",
+        "    ok()",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TRY-CONTEXT"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  File.each_line(\"a\", \"4096\", 10) do |l|",
+        "    ok()",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  File.each_line(\"a\", 4096, 10) do |a, b|",
+        "    ok()",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  File.each_line(\"a\", 4096, 10) do |n: Int|",
+        "    ok()",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  File.each_line(\"a\", 4096, 10)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  n: Int = File.each_line(\"a\", 4096, 10) do |l|",
+        "    ok()",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t = Test.test(\"x\") do",
+        "    puts(\"a\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Result[Int] = 5",
+        "  puts(x)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    }
+  ],
+  "JSON builders and schemas enforce their input contracts": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  object = JSON.object({})",
+        "  array = JSON.array([])",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.object({\"a\": 1})",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.array([false])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.null?(nil)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.schema(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.from(ok(1))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "struct Bad",
+        "  value: Json",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = JSON.schema(Bad)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE"
+    }
+  ],
+  "JSON decoding accepts only decodable named structs": [
+    {
+      "program": [
+        "struct Node",
+        "  children: List[Node]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", Node)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "struct Bad",
+        "  value: Nil",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", Bad)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE"
+    },
+    {
+      "program": [
+        "struct Bad",
+        "  value: Json",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", Bad)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE"
+    },
+    {
+      "program": [
+        "struct Bad",
+        "  value: Result[Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", Bad)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE"
+    },
+    {
+      "program": [
+        "struct Bad",
+        "  value: Map[Int, String]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", Bad)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE"
+    },
+    {
+      "program": [
+        "struct Bad",
+        "  value: Fn[Int, Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", Bad)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", Int)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-DECODABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = JSON.decode(\"{}\", 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Int",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    }
+  ],
+  "list callbacks enforce exact signatures and infer empty inputs": [
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  a = List.map([], &text)",
+        "  b = List.filter([], &keep)",
+        "  c = List.reduce([], \"\", &join)",
+        "  d = List.reduce([1], \"\", &join)",
+        "  e = List.reduce([1], [], &collect)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.map([true], &text)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.map([1], &join)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.map([1], 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x: List[Int] = List.map([1], &text)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.filter([1], &text)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.reduce([1], 0, &join)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.reduce([true], \"\", &join)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.reduce([1], \"\", &bad)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.reduce([1], \"\", &text)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  a: List[Float] = List.sort([])",
+        "  b = List.sort_by([], &text)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.sort([true])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.sort([[1]])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.sort_by([1], &keep)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.sort_by([\"a\"], &text)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.sort_by([1], &join)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x: List[String] = List.sort([1])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def text(n: Int) -> String",
+        "  return String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def keep(n: Int) -> Bool",
+        "  return n > 0",
+        "end",
+        "",
+        "",
+        "def join(acc: String, n: Int) -> String",
+        "  return acc + String.from_int(n)",
+        "end",
+        "",
+        "",
+        "def collect(acc: List[Int], n: Int) -> List[Int]",
+        "  return List.append(acc, n)",
+        "end",
+        "",
+        "",
+        "def ignore(n: Int) -> Void",
+        "end",
+        "",
+        "",
+        "def bad(acc: String, n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = List.map([1], &ignore)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.map([1])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.filter()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.reduce([1], 0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    }
+  ],
+  "Void completion cannot enter data positions and Nil requires explicit returns": [
+    {
+      "program": [
+        "def effect() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value = effect()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def effect() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  IO.inspect(effect())",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def effect() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value = ok(effect())",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def effect() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value = [effect()]",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def effect() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value = effect() == effect()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def effect() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value = Result.unwrap!(ok())",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "struct Item",
+        "  value: Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE"
+    },
+    {
+      "program": [
+        "",
+        "def effect(value: Void) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE"
+    },
+    {
+      "program": [
+        "",
+        "def effect(value: List[Void]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE"
+    },
+    {
+      "program": [
+        "",
+        "def effect(value: Map[String, Void]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE"
+    },
+    {
+      "program": [
+        "",
+        "def effect(value: Fn[Void, Int]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Nil",
+        "  return nil",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAIN"
+    },
+    {
+      "program": [
+        "def data() -> Nil",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN"
+    },
+    {
+      "program": [
+        "def data() -> Nil",
+        "  return",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  return nil",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  value: Result[Nil] = ok()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def effect() -> Void",
+        "end",
+        "",
+        "def forward() -> Void",
+        "  return effect()",
+        "end",
+        "",
+        "",
+        "def data() -> Nil",
+        "  return nil",
+        "end",
+        "",
+        "def main() -> Void",
+        "  result: Result[Void] = ok()",
+        "  values: List[Result[Void]] = [result]",
+        "  callback: Fn[Void] = &forward",
+        "  callback.call()",
+        "  Result.unwrap!(result)",
+        "  value: Nil = data()",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "filesystem module and handle type names are reserved": [
+    {
+      "program": [
+        "struct File",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct Dir",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct Path",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct FileHandle",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct FileInfo",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "network handles are opaque and HTTP records are checked": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  socket = Socket()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  response = HttpResponse(status: 200, headers: [], body: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  header = Header(name: \"x\", value: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def f(c: HttpClient) -> Void",
+        "  JSON.encode(c)",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    }
+  ],
+  "task types reject invalid programs at their boundaries": [
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn(&identity, \"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn(7, 0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.await(7)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t: Task[String] = Task.spawn(&identity, 7)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t: Task = Task.spawn(&identity, 7)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn(&main, nil)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  JSON.encode(Task.spawn(&identity, 0))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&identity, 0)",
+        "  t == t",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Task",
+        "  n: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "Task.spawn_owning takes only a handle type or a channel and is checked like Task.spawn": [
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  socket = TCP.connect(\"127.0.0.1\", 1, 10).unwrap!",
+        "  t: Task[Result[String]] = Task.spawn_owning(&serve, socket)",
+        "  Task.await(t)",
+        "  Task.spawn_owning(&edit, File.open(\"x\", \"read\", 10).unwrap!)",
+        "  Task.spawn_owning(&watch, Process.spawn(\"x\", [], 10).unwrap!)",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  fed: Task[Result[Int]] = Task.spawn_owning(&feed, ch)",
+        "  Task.spawn_owning(&feed, Channel.new(2))",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&identity, 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-A-HANDLE",
+      "start": [46, 32],
+      "covers": "1"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&job, Job(socket: TCP.connect(\"127.0.0.1\", 1, 10).unwrap!))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-A-HANDLE"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&many, [TCP.connect(\"127.0.0.1\", 1, 10).unwrap!])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-A-HANDLE"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&crate, Crate(inbox: Channel.new(2)))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-A-HANDLE"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&identity, \"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(7, TCP.connect(\"127.0.0.1\", 1, 10).unwrap!)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&serve)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t: Task[String] = Task.spawn_owning(&serve, TCP.connect(\"127.0.0.1\", 1, 10).unwrap!)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def hand(client: HttpClient) -> Void",
+        "  Task.spawn_owning(&pool, client)",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-A-HANDLE"
+    },
+    {
+      "program": [
+        "struct Job",
+        "  socket: Socket",
+        "end",
+        "",
+        "struct Crate",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def feed(inbox: Channel[Int]) -> Result[Int]",
+        "  return ok(1)",
+        "end",
+        "",
+        "def crate(c: Crate) -> Void",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def serve(socket: Socket) -> Result[String]",
+        "  return TCP.read_line(socket, 10)",
+        "end",
+        "",
+        "def edit(file: FileHandle) -> Void",
+        "end",
+        "",
+        "def watch(p: Process) -> Void",
+        "end",
+        "",
+        "def accept_one(l: Listener) -> Void",
+        "end",
+        "",
+        "def host(s: HttpServer) -> Void",
+        "end",
+        "",
+        "def pool(client: HttpClient) -> Void",
+        "end",
+        "",
+        "def job(j: Job) -> Void",
+        "end",
+        "",
+        "def many(sockets: List[Socket]) -> Void",
+        "end",
+        "",
+        "def hand(l: Listener, s: HttpServer) -> Void",
+        "  Task.spawn_owning(&accept_one, l)",
+        "  Task.spawn_owning(&host, s)",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "channels check their element type and stay out of data operations": [
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  box = Box(inbox: Channel.new(2))",
+        "  sent: Result[Void] = ch.send(1, 10)",
+        "  got: Result[Int] = Channel.recv(ch, 10)",
+        "  ch.close",
+        "  done: Bool = ch.closed?",
+        "  names = make()",
+        "  more: Result[Int] = take(box.inbox)",
+        "  Channel.close(names)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch = Channel.new(4)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EXPECTED-TYPE",
+      "start": [14, 8],
+      "help": true
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n: Int = Channel.new(4)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [14, 12]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Void] = Channel.new(4)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE",
+      "start": [14, 15]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  ch.send(\"x\", 10)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 11]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  ch.send(1, \"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 14]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  ch.recv(nil)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 11]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Channel.close(3)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [14, 17]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  puts(ch)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 8]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  puts(\"#{ch}\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 11]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  same = ch == ch",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 13]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  text = ch.to_s",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [15, 10]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  ch.next",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [15, 3]
+    },
+    {
+      "program": [
+        "struct Box",
+        "  inbox: Channel[Int]",
+        "end",
+        "",
+        "def take(inbox: Channel[Int]) -> Result[Int]",
+        "  return inbox.recv(10)",
+        "end",
+        "",
+        "def make() -> Channel[String]",
+        "  return Channel.new(2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(4)",
+        "  text = JSON.encode(Box(inbox: ch))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE",
+      "start": [15, 22]
+    },
+    {
+      "program": [
+        "struct Channel",
+        "  n: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "enum Channel",
+        "  A",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "Task.await with a timeout returns the builtin Await enum and reserves its name": [
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  case Task.await(t, 10)",
+        "    Await.Done(n) -> puts(n + 1)",
+        "    Await.TimedOut -> puts(0)",
+        "  end",
+        "  r: Await[Int] = Task.await(t, 10)",
+        "  case r",
+        "    Await.Done(_) -> puts(1)",
+        "    _ -> puts(2)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  v = Task.spawn(&nothing, 1)",
+        "  case Task.await(v, 10)",
+        "    Await.Done(_) -> puts(1)",
+        "    Await.TimedOut -> puts(2)",
+        "  end",
+        "  puts(\"#{Task.await(v, 10)}\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  case Task.await(t, 10)",
+        "    Await.Done(n) -> puts(n)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NON-EXHAUSTIVE-CASE",
+      "start": [11, 3]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  case Task.await(t, 10)",
+        "    Await.TimedOut -> puts(0)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NON-EXHAUSTIVE-CASE",
+      "start": [11, 3]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  case Task.await(t, 10)",
+        "    Await.Done(n) -> puts(n + \"x\")",
+        "    Await.TimedOut -> puts(0)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [12, 29]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  v = Task.spawn(&nothing, 1)",
+        "  case Task.await(v, 10)",
+        "    Await.Done(n) -> puts(0)",
+        "    Await.TimedOut -> puts(1)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-TYPE",
+      "start": [12, 5]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  case Task.await(t, 10)",
+        "    Await.Done(n) -> puts(n)",
+        "    Await.Late -> puts(0)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-VARIANT",
+      "start": [13, 5]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  case Task.await(t, 10)",
+        "    Await.Done(n) -> puts(n)",
+        "    Await.TimedOut -> puts(0)",
+        "    _ -> puts(1)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CASE-ARM",
+      "start": [14, 5]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  r: Await[String] = Task.await(t, 10)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [11, 33]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  r: Result[Int] = Task.await(t, 10)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [11, 20]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  r = Task.await(t, \"10\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [11, 21]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  r = Task.await(t, 10, 20)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "start": [11, 7]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.await(3, 10)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [10, 18]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  x: Int = Task.await(t, 10)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [11, 12]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  r = Task.await(t, 10)",
+        "  r.ok?",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [12, 3]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def nothing(n: Int) -> Void",
+        "  puts(n)",
+        "end",
+        "",
+        "def wait(t: Task[Int]) -> Result[Int]",
+        "  n = try Task.await(t, 10)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [10, 11],
+      "covers": "Task.await(t, 10)"
+    },
+    {
+      "program": [
+        "struct Await",
+        "  n: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "enum Await",
+        "  A",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "enum Maybe[Await]",
+        "  A",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "foreign generator, agent, lock and queue names show the Agentica form": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  e = Enumerator.new(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  f = Fiber.new(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = Mutex.new",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  q = SizedQueue.new(3)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = Agent.start_link(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  Agent.update(1, 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 3],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2]",
+        "  ys = xs.lazy",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  ys = (1..3).lazy",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    }
+  ],
+  "function values check references, parameters and returns": [
+    {
+      "program": [
+        "def double(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f: Fn[Int, Int] = &double",
+        "  value: Int = f.call(21)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def double(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f: Fn[String, Int] = &double",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def double(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f: Fn[Int, Void] = &double",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def double(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f = &missing",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "def double(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value = (&double).call()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def double(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value = (&double).call(\"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def double(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  value = 1.call()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def double(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  text = JSON.encode(&double)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    }
+  ],
+  "a BDD or HTTP call without its import points to its std/ module": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  BDD.run([])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 3],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  c = HTTP.client_options()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    }
+  ],
+  "the removed Request and HttpWriter types point to the std/http handler": [
+    {
+      "program": [
+        "def handle(x: Request) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "help": true
+    },
+    {
+      "program": [
+        "def handle(x: HttpWriter) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "help": true
+    }
+  ],
+  "the section 8 programs pass": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(\"hello\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def classify(age: Int) -> String",
+        "  if age >= 18",
+        "    return \"adult\"",
+        "  elsif age >= 13",
+        "    return \"teen\"",
+        "  else",
+        "    return \"child\"",
+        "  end",
+        "end",
+        "",
+        "",
+        "def main() -> Void",
+        "  puts(classify(25))",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "struct Todo",
+        "  title: String",
+        "  done: Bool",
+        "end",
+        "",
+        "",
+        "def main() -> Void",
+        "  tasks: List[Todo] = [",
+        "    Todo(title: \"Probar\", done: false),",
+        "    Todo(title: \"Revisar\", done: true)",
+        "  ]",
+        "  for task in tasks",
+        "    if not task.done",
+        "      puts(task.title)",
+        "    end",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "forward calls and recursion pass": [
+    {
+      "program": [
+        "def even(n: Int) -> Bool",
+        "  if n == 0",
+        "    return true",
+        "  else",
+        "    return odd(n - 1)",
+        "  end",
+        "end",
+        "",
+        "",
+        "def odd(n: Int) -> Bool",
+        "  return even(n)",
+        "end",
+        "",
+        "",
+        "def main() -> Void",
+        "  puts(\"ok\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "the rejected section 8 examples fail": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  age: Int = \"25\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  if 1",
+        "    puts(\"hello\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  values = []",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EMPTY-LIST-TYPE"
+    }
+  ],
+  "names and types": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = missing",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Foo = 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: List = []",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def f() -> Void",
+        "end",
+        "",
+        "def f() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def puts(value: String) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct A",
+        "  x: Int",
+        "end",
+        "",
+        "struct A",
+        "  y: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct IO",
+        "  value: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct System",
+        "  value: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: List[Int, Int] = []",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def f() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = f",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "def f() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f = 1",
+        "  puts(\"ok\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "calls and constructors": [
+    {
+      "program": [
+        "def f(a: Int) -> Int",
+        "  return a",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = f(1, 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "struct Todo",
+        "  title: String",
+        "  done: Bool",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Todo(title: \"x\", done: false, extra: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-FIELD"
+    },
+    {
+      "program": [
+        "struct Todo",
+        "  title: String",
+        "  done: Bool",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Todo(title: \"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-FIELD"
+    },
+    {
+      "program": [
+        "struct Todo",
+        "  title: String",
+        "  done: Bool",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Todo(title: \"x\", title: \"y\", done: false)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-DUPLICATE-FIELD"
+    },
+    {
+      "program": [
+        "struct Todo",
+        "  title: String",
+        "  done: Bool",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Todo(title: 1, done: false)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    }
+  ],
+  "a struct update names fields of the receiver's struct, once each, with values of the field types": [
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ana = make()",
+        "  older: User = ana.with(age: ana.age + 1)",
+        "  cleared = ana.with(tags: [], scores: {})",
+        "  deep = make().with(name: \"Bea\", age: 2).with(tags: [\"a\"])",
+        "  w: Int = ana.with",
+        "  same_name = ana.with(with: 5)",
+        "  puts(\"#{older.age} #{cleared.tags.size} #{deep.name} #{w}\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ana = make()",
+        "  x = ana.with(age: 1, nick: \"a\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-FIELD",
+      "start": [15, 24],
+      "covers": "nick: \"a\"",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ana = make()",
+        "  x = ana.with(age: 1, name: \"a\", age: 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-DUPLICATE-FIELD",
+      "start": [15, 35],
+      "covers": "age: 2"
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ana = make()",
+        "  x = ana.with(age: \"old\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 21],
+      "covers": "\"old\""
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ana = make()",
+        "  x = ana.with(tags: {})",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ana = make()",
+        "  x: Int = ana.with(age: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 12],
+      "covers": "ana.with(age: 1)"
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = 1",
+        "  x = r.with(age: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [15, 7],
+      "covers": "r.with(age: 1)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = \"s\"",
+        "  x = r.with(age: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [15, 7],
+      "covers": "r.with(age: 1)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = [1]",
+        "  x = r.with(age: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [15, 7],
+      "covers": "r.with(age: 1)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = {\"a\": 1}",
+        "  x = r.with(age: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [15, 7],
+      "covers": "r.with(age: 1)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = ok(1)",
+        "  x = r.with(age: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [15, 7],
+      "covers": "r.with(age: 1)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = 1..3",
+        "  x = r.with(age: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [15, 7],
+      "covers": "r.with(age: 1)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ana = make()",
+        "  ana.with(age: 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE",
+      "start": [15, 3],
+      "covers": "ana.with(age: 1)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = missing.with(age: nope)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "struct User",
+        "  name: String",
+        "  age: Int",
+        "  tags: List[String]",
+        "  scores: Map[String, Int]",
+        "  with: Int",
+        "end",
+        "",
+        "def make() -> User",
+        "  return User(name: \"Ana\", age: 30, tags: [], scores: {}, with: 0)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  ana = make()",
+        "  x = ana.with(age: nope)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [15, 21],
+      "covers": "nope"
+    }
+  ],
+  "statements": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 0",
+        "  x = \"s\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 0",
+        "  x: Int = 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ANNOTATION-ON-EXISTING"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 0",
+        "  for x in [1, 2]",
+        "    puts(\"hi\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-SHADOWED-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1",
+        "  y = x.name",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1",
+        "  y = x[0]",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-INDEXABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for i in 1",
+        "    puts(\"hi\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-A-LIST"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1 + 1.5",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for i in [1, 2]",
+        "    i = 3",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-IMMUTABLE-ASSIGNMENT"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: List[Int] = []",
+        "  puts(\"ok\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "returns and entry point": [
+    {
+      "program": [
+        "def f(n: Int) -> Int",
+        "  if n > 0",
+        "    return 1",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN"
+    },
+    {
+      "program": [
+        "def f() -> Int",
+        "  return 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAIN"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def main(x: Int) -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAIN"
+    },
+    {
+      "program": [
+        "def main() -> Int",
+        "  return 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAIN"
+    }
+  ],
+  "Int literals stay in 64 bits and Float literals are Float": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Int = 9223372036854775807",
+        "  y: Int = -9223372036854775808",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Int = 9223372036854775808",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-INT-RANGE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Int = -9223372036854775809",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-INT-RANGE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Float = 1.0",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "function suffixes allow whitespace before call and declaration parentheses": [
+    {
+      "program": [
+        "def ready? () -> Bool",
+        "  return true",
+        "end",
+        "",
+        "",
+        "def main() -> Void",
+        "  x = ready? ()",
+        "  y = String.contains? (\"a\", \"a\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "the String module": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  a: Int = String.length(\"hola\")",
+        "  b: String = String.upcase(String.trim(\" x \"))",
+        "  c: List[String] = String.split(\"a,b\", \",\")",
+        "  d: String = String.join(c, \"-\")",
+        "  e: Bool = String.contains?(\"hola\", \"ol\")",
+        "  f: Bool = String.starts_with?(\"hola\", \"ho\")",
+        "  g: Bool = String.ends_with?(\"hola\", \"la\")",
+        "  h: String = String.replace(\"aXb\", \"X\", \"-\")",
+        "  i: String = String.slice(\"hola\", 1, 2)",
+        "  j: String = String.from_int(3) + String.from_float(1.5)",
+        "  k: Int = String.to_int!(\"3\")",
+        "  l: Float = String.to_float!(\"1.5\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = String.length(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = String.length()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = String.nope(\"a\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = String.join(\"a\", \",\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    }
+  ],
+  "the IO and System modules": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  IO.puts(\"a\")",
+        "  IO.print(\"b\")",
+        "  IO.warn(\"c\")",
+        "  x: Int = IO.inspect(1)",
+        "  s: Result[String] = IO.gets()",
+        "  line: String = IO.gets!()",
+        "  r: String = IO.read()",
+        "  bytes: Result[List[Int]] = IO.read_bytes(3)",
+        "  decoded: Result[String] = String.from_bytes([195, 177])",
+        "  IO.flush()",
+        "  e: Bool = IO.eof?()",
+        "  a: List[String] = System.args()",
+        "  System.exit(0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  IO.puts(IO.flush())",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = IO.gets(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = IO.nope()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  System.exit(\"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = IO.read_bytes(\"3\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = String.from_bytes([\"x\"])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: String = String.from_bytes([65])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: List[Int] = IO.read_bytes(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = IO.read_bytes()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = IO.read_bytes(1, 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  IO.flush(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = String.from_bytes()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    }
+  ],
+  "JSON signatures and opaque types": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  parsed: Result[Json] = JSON.parse(\"{}\")",
+        "  j: Json = Result.unwrap!(parsed)",
+        "  member: Result[Json] = JSON.get(j, \"key\")",
+        "  item: Result[Json] = JSON.at(j, 0)",
+        "  text: Result[String] = JSON.string(j)",
+        "  integer: Result[Int] = JSON.int(j)",
+        "  decimal: Result[Float] = JSON.float(j)",
+        "  flag: Result[Bool] = JSON.bool(j)",
+        "  items: Result[List[Json]] = JSON.list(j)",
+        "  encoded: String = JSON.encode(j)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.parse(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.get(Result.unwrap!(JSON.parse(\"{}\")), 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.at(Result.unwrap!(JSON.parse(\"[]\")), \"0\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.string(\"text\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.int(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.float(1.0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.bool(false)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.list([1])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Int = JSON.int(Result.unwrap!(JSON.parse(\"1\")))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Result.unwrap!(JSON.parse(\"1\")) == Result.unwrap!(JSON.parse(\"1\"))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.parse()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.encode()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.get()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.at()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.string()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.int()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.float()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.bool()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.list()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Json[Int] = Result.unwrap!(JSON.parse(\"1\"))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Json()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  j = Result.unwrap!(JSON.parse(\"{}\"))",
+        "  x = j.key",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  j = Result.unwrap!(JSON.parse(\"[]\"))",
+        "  x = j[0]",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-INDEXABLE"
+    },
+    {
+      "program": [
+        "struct Json",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct JSON",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "JSON encoding checks nested types, including recursive structs": [
+    {
+      "program": [
+        "struct Node",
+        "  children: List[Node]",
+        "  value: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = JSON.encode(Node(value: 1, children: []))",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "struct A",
+        "  bs: List[B]",
+        "end",
+        "",
+        "struct B",
+        "  as: List[A]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = JSON.encode(A(bs: []))",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.encode(ok(1))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.encode([ok(1)])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.encode({1: \"one\"})",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = JSON.encode({\"bad\": {1: true}})",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m: Map[Int, String] = {}",
+        "  x = JSON.encode(m)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs: List[Result[Int]] = []",
+        "  x = JSON.encode(xs)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE"
+    },
+    {
+      "program": [
+        "struct Bad",
+        "  children: List[Bad]",
+        "  value: Result[Int]",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = JSON.encode(Bad(children: [], value: ok(1)))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-ENCODABLE",
+      "start": [7, 19]
+    }
+  ],
+  "Result inference preserves context across the shared call path": [
+    {
+      "program": [
+        "struct Box",
+        "  value: Result[List[Int]]",
+        "end",
+        "",
+        "",
+        "def consume(value: Result[Map[String, Int]]) -> Void",
+        "end",
+        "",
+        "",
+        "def make() -> Result[List[Int]]",
+        "  return ok([])",
+        "end",
+        "",
+        "",
+        "def main() -> Void",
+        "  inferred = ok(1)",
+        "  r: Result[Int] = error(\"bad\")",
+        "  r = ok(2)",
+        "  r = error(\"again\")",
+        "  nested: Result[Result[Bool]] = ok(ok(false))",
+        "  box = Box(value: error(\"bad\"))",
+        "  consume(ok({}))",
+        "  xs: List[Result[Int]] = [error(\"bad\"), ok(1)]",
+        "  map: Map[String, Result[Int]] = {\"k\": error(\"bad\")}",
+        "  inferred_list = [ok(1), error(\"bad\")]",
+        "  a: Int = Result.unwrap!(error(\"bad\"))",
+        "  b = Result.unwrap_or(error(\"bad\"), 7)",
+        "  c: List[Int] = Result.unwrap_or(ok([]), [])",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "Result and builtin failures retain structured diagnostics": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = error(\"bad\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-RESULT-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Result.message(error(\"bad\"))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-RESULT-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = [error(\"bad\"), ok(1)]",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-RESULT-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r: Result[Int, String] = ok(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r: Result = ok(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r: Result[Missing] = ok(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r: Result[Int] = ok(\"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "expected": "Int",
+      "actual": "String",
+      "function": "main() -> Void"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r: Result[Int] = error(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Result.ok?(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Result.unwrap_or(ok(1), \"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = ok(1) == ok(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = ok(1, 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = error()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Result.ok?()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Result.message()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Result.unwrap!()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Result.unwrap_or(ok(1))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = String.to_int()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "callee": "String.to_int(s: String) -> Result[Int]"
+    }
+  ],
+  "Result constructor names cannot be declared by users": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  ok = 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for ok in [1]",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def ok() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def f(ok: Int) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  ok: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  error = 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for error in [1]",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def error() -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def f(error: Int) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  error: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct Result",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    }
+  ],
+  "try checks context separately from operand and return types": [
+    {
+      "program": [
+        "def f() -> Result[String]",
+        "  xs: List[Int] = try ok([])",
+        "  n = try String.to_int(\"7\")",
+        "  return ok(String.from_int(n))",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = try ok(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TRY-CONTEXT"
+    },
+    {
+      "program": [
+        "def f() -> Result[Int]",
+        "  x = try 1",
+        "  return ok(x)",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "expected": "Result[T]",
+      "actual": "Int"
+    },
+    {
+      "program": [
+        "def f() -> Result[Int]",
+        "  x = try ok(1)",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN"
+    }
+  ],
+  "methods resolve by receiver type and report unknown or unused calls": [
+    {
+      "program": [
+        "struct Item",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  s = \" a b \"",
+        "  n: Int = s.length",
+        "  m: Int = s.size",
+        "  parts: List[String] = s.strip.split(\" \")",
+        "  joined: String = parts.join(\",\")",
+        "  i: Result[Int] = s.to_i",
+        "  j: Int = \"4\".to_i!",
+        "  f: Result[Float] = s.to_f",
+        "  b: Bool = s.include?(\"a\") && s.start_with?(\" \") && s.end_with?(\" \")",
+        "  t: String = s.to_s",
+        "  xs = [1]",
+        "  xs = xs.push(2)",
+        "  k: Int = xs.length + xs.size",
+        "  ys: List[Int] = xs.map(&identity)",
+        "  text: String = 7.to_s + 2.5.to_s",
+        "  g: Float = 7.to_f",
+        "  h: Result[Int] = 2.5.to_i",
+        "  map = {\"a\": 1}",
+        "  has: Bool = map.has_key?(\"a\")",
+        "  v: Int = map.get(\"b\", 0)",
+        "  r: Result[Int] = ok(1)",
+        "  good: Bool = r.ok?",
+        "  item = Item(name: \"x\")",
+        "  up: String = item.name.upcase",
+        "end",
+        "",
+        "def identity(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = true.foo",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1.length",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"a\".from_int",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"a\"",
+        "  x = s.lenght",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = [1].join(\",\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Item",
+        "  name: String",
+        "end",
+        "",
+        "",
+        "def total(i: Item) -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  i = Item(name: \"a\")",
+        "  x = i.total()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"a\".to_s(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"a\".inspect(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1]",
+        "  x = xs.inpsect",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = true.to_z",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"a\".split",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1]",
+        "  xs.push(2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE",
+      "start": [3, 3],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"a\"",
+        "  s.upcase",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  String.trim(\" a \")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"a\"",
+        "  s.to_s",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b = true",
+        "  b.to_s",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  Result.unwrap!(ok(1))",
+        "  \"4\".to_i!",
+        "  IO.inspect(\"a\".upcase)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def show(x: Int) -> Int",
+        "  puts(String.from_int(x))",
+        "  return x",
+        "end",
+        "",
+        "def main() -> Void",
+        "  xs = [1]",
+        "  xs.map(&show)",
+        "  List.map(xs, &show)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"a\"",
+        "  s.length",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE",
+      "help": true
+    },
+    {
+      "program": [
+        "struct Box",
+        "  handler: Fn[Int, Int]",
+        "end",
+        "",
+        "",
+        "def inc(x: Int) -> Int",
+        "  return x + 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  b = Box(handler: &inc)",
+        "  x = b.handler(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    }
+  ],
+  "interpolation is a String and rejects Void parts": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  n = 1",
+        "  s: String = \"#{n} #{[n]} #{n.to_f}\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"#{puts(\"a\")}\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"#{missing}\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    }
+  ],
+  "blocks infer parameter and result types from their call": [
+    {
+      "program": [
+        "def twice(x: Int, f: Fn[Int, Int]) -> Int",
+        "  return f.call(f.call(x))",
+        "end",
+        "",
+        "",
+        "def parse(f: Fn[String, Result[Int]]) -> Result[Int]",
+        "  return f.call(\"4\")",
+        "end",
+        "",
+        "def main() -> Void",
+        "  xs = [3, 1]",
+        "  ys: List[String] = xs.map do |x| x.to_s end",
+        "  zs: List[Int] = xs.filter do |x| x > 1 end",
+        "  total: Int = xs.reduce(0) do |sum, x| sum + x end",
+        "  sorted: List[Int] = List.sort_by(xs) do |x| 0 - x end",
+        "  xs.each do |x|",
+        "    puts(x.to_s)",
+        "  end",
+        "  a: Bool = xs.any? do |x| x == 1 end",
+        "  b: Bool = xs.all? do |x| x > 0 end",
+        "  n: Int = twice(1) do |v| v + total end",
+        "  labels: List[String] = xs.map do |x: Int|",
+        "    if x > 1",
+        "      return \"big\"",
+        "    end",
+        "    \"small\"",
+        "  end",
+        "  r = parse() do |s|",
+        "    v = try s.to_i",
+        "    ok(v * 2)",
+        "  end",
+        "  nested = [[1]].map do |row|",
+        "    row.map do |v| v + n end",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Result.unwrap_or(ok(1)) do |y| y end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-BLOCK-TARGET"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t = Task.spawn(5) do |n: Int| n end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-BLOCK-TARGET"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  ys = List.map([]) do |x| x end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EMPTY-LIST-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  ys = List.map([]) do |x: Int| x end",
+        "  zs = [1].reduce([]) do |acc: List[Int], x| acc.push(x) end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  total = 0",
+        "  [1].each do |x|",
+        "    total += x",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CAPTURED-ASSIGNMENT",
+      "start": [4, 5],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  words = [\"a\"]",
+        "  counts: Map[String, Int] = {}",
+        "  words.each do |w|",
+        "    counts = Map.put(counts, w, 1)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CAPTURED-ASSIGNMENT",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  total = 0",
+        "  ys = [1].map do |x|",
+        "    total = total + x",
+        "    x",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CAPTURED-ASSIGNMENT",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  [1].each do |x|",
+        "    local = x",
+        "    local = local + 1",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def f(a: Int, b: Int) -> Int",
+        "  return a",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = f(1) do |v| v end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-BLOCK-TARGET"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1].map do |x|",
+        "    if x > 0",
+        "      return 1",
+        "    end",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1].map do |x|",
+        "    v = try \"1\".to_i",
+        "    v",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TRY-CONTEXT"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1].map do |x| puts(\"a\") end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-VOID-VALUE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1].filter do |x| x end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1",
+        "  ys = [1].map do |x| x end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-SHADOWED-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  ys = [1].map do |x, y| x end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  ys = [1].map do |x: String| x end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  [\"a\"].each do |s|",
+        "    s.strip",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE"
+    }
+  ],
+  "only values with to_s can be printed, interpolated or converted": [
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f = &main",
+        "  puts(f)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  xs = [&main]",
+        "  print(xs)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f = &main",
+        "  x = \"#{f}\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f = &main",
+        "  x = f.to_s",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  b = Box(f: &main)",
+        "  puts(b)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  b = Box(f: &main)",
+        "  x = b.to_s",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  o: Option[Option[Fn[Void]]] = Option.None()",
+        "  puts(o)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f = &main",
+        "  x = f.inspect",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = 1",
+        "  x.inspect",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE"
+    },
+    {
+      "program": [
+        "struct Box",
+        "  f: Fn[Void]",
+        "end",
+        "",
+        "struct Named",
+        "  to_s: Int",
+        "  inspect: Int",
+        "end",
+        "",
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n: Int = Named(to_s: 1, inspect: 2).to_s + Named(to_s: 1, inspect: 2).inspect",
+        "  IO.warn(n)",
+        "  x = 1",
+        "  \"a#{x}\"",
+        "  puts(Option.Some([2]))",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ],
+  "habits from other languages get a hint with the Agentica form": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = len(\"ab\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = str(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = input()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = range(3)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = inspect(3)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Int.to_float(2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = null",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = None",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  n = 2",
+        "  x = n.to_float",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"a\".lower",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"a\".to_string()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  n: Int = \"4\".to_i",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = [1].len",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"ab\".len",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"ab\".startswith(\"a\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1",
+        "  y = x.nil?",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s: String = IO.gets()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = elif(true)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  h = Hash.new",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  h = Map.new",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"abc\"",
+        "  x = s.chars",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"abc\"",
+        "  x = s.matches?(\"a\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"abc\"",
+        "  x = s.error?",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  n = 2",
+        "  x = n * 1.5",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"1\"",
+        "  x = s + 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = \"a\" < \"b\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"abc\"",
+        "  x = s[0]",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-INDEXABLE",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = {}",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EMPTY-MAP-TYPE",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = []",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EMPTY-LIST-TYPE",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: String = IO.gets",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r: Result[Int] = Result.Some(5)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  nexts = 1",
+        "  x = next",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 65.chr",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = IO.gets",
+        "  y = s.chomp",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"a\"",
+        "  x = s.upcas",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.new",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.empty",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = IO.gets",
+        "  x = r[0]",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NOT-INDEXABLE",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s = \"a\" + \"b\"",
+        "  x = s + 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = [1].lower",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def f(x: Int) -> Int",
+        "  if x > 0",
+        "    return 1",
+        "  else",
+        "    puts(\"a\")",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN"
+    },
+    {
+      "program": [
+        "def len(n: Int) -> Int",
+        "  return n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  f = len",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": false
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1",
+        "  y = len(x)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [3, 7]
+    }
+  ],
+  "break and next only inside while or for, never across a block": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  while true",
+        "    if true",
+        "      break",
+        "    end",
+        "    next",
+        "  end",
+        "  for x in [1]",
+        "    next",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  while true",
+        "    [1].each do |x|",
+        "      while true",
+        "        break",
+        "      end",
+        "    end",
+        "    break",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for x in [1, 2]",
+        "    case x",
+        "      1 -> next",
+        "      _ -> break",
+        "    end",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  break",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-LOOP-CONTROL",
+      "start": [2, 3],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  [1].each do |x|",
+        "    next",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-LOOP-CONTROL",
+      "start": [3, 5],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  while true",
+        "    [1].each do |x|",
+        "      break",
+        "    end",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-LOOP-CONTROL",
+      "start": [4, 7],
+      "help": true
+    }
+  ],
+  "builtin function names cannot name locals": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  gets = \"hi\"",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [2, 3]
+    },
+    {
+      "program": [
+        "def f(print: String) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 7]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for gets in [\"a\"]",
+        "    puts(\"x\")",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [2, 3]
+    }
+  ],
+  "compound assignment keeps the assignment and operator rules": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  x += 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1",
+        "  x += \"a\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for i in [1]",
+        "    i += 1",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-IMMUTABLE-ASSIGNMENT"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = !1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1 && true",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    }
+  ],
+  "diagnostics carry types, operand labels, and the enclosing signature": [
+    {
+      "program": [
+        "def total(q: Int, p: Float) -> Float",
+        "  return q * p",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true,
+      "expected": "Int",
+      "actual": "Float",
+      "function": "total(q: Int, p: Float) -> Float",
+      "labels": 2
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Float = 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Int = 1.5",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def f(a: Int) -> Int",
+        "  return a",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = f(1, 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "callee": "f(Int) -> Int"
+    }
+  ],
+  "grounded suggestions appear only when the fix is certain": [
+    {
+      "program": [
+        "def total() -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = totl()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = qqqq",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": false
+    },
+    {
+      "program": [
+        "struct Item",
+        "  name: String",
+        "  price: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  i = Item(name: \"a\", price: 1)",
+        "  x = i.prise",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-FIELD",
+      "help": true
+    },
+    {
+      "program": [
+        "struct Item",
+        "  name: String",
+        "  price: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  i = Item(name: \"a\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-FIELD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Strng = \"a\"",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: String = 1",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "help": true
+    },
+    {
+      "program": [
+        "def f(n: Int) -> Int",
+        "  if n > 0",
+        "    return 1",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN",
+      "help": true
+    },
+    {
+      "program": [
+        "def f(n: Int) -> Int",
+        "  x = n",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN",
+      "help": true
+    },
+    {
+      "program": [
+        "def f(n: Int) -> Int",
+        "  while n > 0",
+        "    return 1",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN",
+      "help": true
+    },
+    {
+      "program": [
+        "def f(n: Int) -> Int",
+        "  case n",
+        "    1 -> return 1",
+        "    _ -> puts(\"a\")",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MISSING-RETURN",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = 1",
+        "  for x in [1]",
+        "    puts(\"a\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-SHADOWED-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for i in [1]",
+        "    i = 2",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-IMMUTABLE-ASSIGNMENT",
+      "help": true
+    }
+  ],
+  "maps and the Map and List modules": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs: List[List[Int]] = List.append([], [])",
+        "  ys: List[List[Int]] = List.repeat([], 2)",
+        "  zs: List[Int] = List.reverse([])",
+        "  rs: List[Result[Int]] = List.repeat(error(\"bad\"), 0)",
+        "  a = List.concat([], [1])",
+        "  b: List[List[Int]] = List.concat([], [[]])",
+        "  c: List[Int] = List.concat([], [])",
+        "  d: List[Int] = List.take([], 0)",
+        "  e: List[Int] = List.drop([], 2)",
+        "  f: Result[Int] = List.at([error(\"bad\")], 0)",
+        "  filled = List.append([], 1)",
+        "  replaced: List[List[Int]] = List.set(ys, 0, [])",
+        "  m: Map[String, List[Int]] = {}",
+        "  r: Result[List[Int]] = Map.get(m, \"x\")",
+        "  value: List[Int] = Map.get(m, \"x\", [])",
+        "  inferred = Map.get({}, \"x\", 1)",
+        "  missing: Result[Int] = Map.get({}, \"x\")",
+        "  nested: Result[Int] = Map.get({}, \"x\", error(\"bad\"))",
+        "  deleted: Map[String, Int] = Map.delete({}, \"x\")",
+        "  values: List[List[Int]] = Map.values(m)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.append([1], false)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.set([1], true, 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.set([1], 0, \"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.repeat(1, false)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.reverse(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.concat([1], [false])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.concat([], 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.take([1], true)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.drop(1, 0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.at([1], false)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: String = List.at([1], 0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.get({\"x\": 1}, 0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.get({\"x\": 1}, \"x\", false)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Int = Map.get({\"x\": 1}, \"x\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: Result[Int] = Map.get({\"x\": 1}, \"x\", 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.delete({\"x\": 1}, 0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.values([1])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.get()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.get({\"x\": 1})",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.get({\"x\": 1}, \"x\", 2, 3)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.append([1])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.set([1], 0)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.repeat(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.reverse()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.concat([1])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.take([1])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.drop()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = List.at([1], 0, 1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.delete({\"x\": 1})",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.values()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m: Map[String, Int] = {\"a\": 1}",
+        "  n = Map.put(m, \"b\", m[\"a\"])",
+        "  e: Map[Int, String] = {}",
+        "  ks: List[String] = Map.keys(n)",
+        "  total: Int = Map.size(n) + List.size(ks)",
+        "  found: Bool = Map.has_key?(n, \"a\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m: Map[Float, Int] = {}",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAP-KEY-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m: Map[String] = {}",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = {1.5: 1}",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-MAP-KEY-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = {\"a\": 1}",
+        "  x = m[1]",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = {\"a\": 1}",
+        "  x = Map.put(m, \"b\", \"c\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = {}",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EMPTY-MAP-TYPE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.size()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Map.nope(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Mpa.put(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  m = {\"a\": 1}",
+        "  x = m == m",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    }
+  ],
+  "generic enum construction infers and checks type arguments": [
+    {
+      "program": [
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "",
+        "def main() -> Void",
+        "  number: Option[Int] = Option.Some(1)",
+        "  text: Option[String] = Option.None()",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "enum Empty[T]",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = Empty.None()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ENUM-TYPE-INFERENCE"
+    },
+    {
+      "program": [
+        "enum Same[T]",
+        "  Pair(T, T)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = Same.Pair(1, \"text\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "enum Box[T]",
+        "  Items(List[T])",
+        "end",
+        "",
+        "def main() -> Void",
+        "  x = Box.Items([])",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ENUM-TYPE-INFERENCE"
+    }
+  ],
+  "case checks enum and Result exhaustiveness and branch bindings": [
+    {
+      "program": [
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "",
+        "def extract(value: Option[Int]) -> Int",
+        "  case value do",
+        "    Option.Some(item) ->",
+        "      return item",
+        "    Option.None ->",
+        "      return 0",
+        "  end",
+        "end",
+        "",
+        "",
+        "def result() -> Result[Void]",
+        "  return ok()",
+        "end",
+        "",
+        "",
+        "def main() -> Void",
+        "  case result() do",
+        "    Result.Ok(_) ->",
+        "      puts(\"ok\")",
+        "    Result.Err(message) ->",
+        "      puts(message)",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "enum Option[T]",
+        "  Some(T)",
+        "  None",
+        "end",
+        "",
+        "def main() -> Void",
+        "  case Option.Some(1) do",
+        "    Option.Some(value) ->",
+        "      puts(String.from_int(value))",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NON-EXHAUSTIVE-CASE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  case true do",
+        "    true ->",
+        "      puts(\"yes\")",
+        "    false ->",
+        "      puts(\"no\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NON-EXHAUSTIVE-CASE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  case true do",
+        "    _ ->",
+        "      puts(\"yes\")",
+        "    false ->",
+        "      puts(\"no\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CASE-ARM"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  case nil do",
+        "    nil ->",
+        "      puts(\"nil\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-NON-EXHAUSTIVE-CASE"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  case nil do",
+        "    nil ->",
+        "      puts(\"nil\")",
+        "    _ ->",
+        "      puts(\"other\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  case true do",
+        "    1 ->",
+        "      puts(\"one\")",
+        "    _ ->",
+        "      puts(\"other\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-PATTERN-TYPE"
+    },
+    {
+      "program": [
+        "enum State",
+        "  Ready",
+        "  Done",
+        "end",
+        "",
+        "def main() -> Void",
+        "  case State.Ready() do",
+        "    State.Missing ->",
+        "      puts(\"missing\")",
+        "    _ ->",
+        "      puts(\"other\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-VARIANT"
+    },
+    {
+      "program": [
+        "enum State",
+        "  Ready",
+        "  Done",
+        "end",
+        "",
+        "def main() -> Void",
+        "  case State.Ready() do",
+        "    State.Ready ->",
+        "      puts(\"ready\")",
+        "    State.Ready ->",
+        "      puts(\"again\")",
+        "    State.Done ->",
+        "      puts(\"done\")",
+        "  end",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CASE-ARM"
+    }
+  ],
+  "module constants take the values of 44.5 and nothing else, each refusal at the node that breaks the rule": [
+    {
+      "program": [
+        "SIZE = LIMIT * 2",
+        "LIMIT = 4",
+        "WORDS = [\"a\", \"b\"]",
+        "LOUD = WORDS.map do |word| word + \"!\" end",
+        "SET = Set.new(WORDS)",
+        "TABLE = {\"a\": SIZE}",
+        "POINT = Point(x: 1)",
+        "MOVED = POINT.with(x: SIZE)",
+        "FIRST = Color.Red",
+        "LINES = WORDS.join(\",\")",
+        "",
+        "struct Point",
+        "  x: Int",
+        "end",
+        "",
+        "enum Color",
+        "  Red",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "VALUE = make()",
+        "",
+        "def make() -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [1, 9],
+      "covers": "make()"
+    },
+    {
+      "program": [
+        "VALUE = [1].map do |n| n + make() end",
+        "",
+        "def make() -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [1, 28],
+      "covers": "make()"
+    },
+    {
+      "program": [
+        "HOOK = &make",
+        "",
+        "def make() -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [1, 8],
+      "covers": "&make"
+    },
+    {
+      "program": [
+        "VALUE = &make.call()",
+        "",
+        "def make() -> Int",
+        "  return 1",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [1, 9],
+      "covers": "&make"
+    },
+    {
+      "program": [
+        "VALUE = [1].map do |n|",
+        "  while false",
+        "    n = 2",
+        "  end",
+        "  n",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [2, 3],
+      "covers": "while false\n    n = 2\n  end\n"
+    },
+    {
+      "program": [
+        "LINE = IO.gets!()",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [1, 8],
+      "covers": "IO.gets!()"
+    },
+    {
+      "program": [
+        "LINE = [1].map do |n| IO.gets!() end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION"
+    },
+    {
+      "program": [
+        "TOTAL = [1].reduce(0) do |sum, n|",
+        "  puts(n)",
+        "  sum",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [2, 3],
+      "covers": "puts(n)"
+    },
+    {
+      "program": [
+        "JOBS: Channel[Int] = Channel.new(1)",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-TYPE",
+      "start": [1, 22],
+      "covers": "Channel.new(1)"
+    },
+    {
+      "program": [
+        "JOBS: Channel[Int] = Channel.new(1)",
+        "OPEN = Channel.closed?(JOBS)",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-TYPE"
+    },
+    {
+      "program": [
+        "CASE = Test.test(\"x\") do",
+        "  ok()",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-TYPE",
+      "start": [1, 8],
+      "covers": "Test.test(\"x\") do\n  ok()\nend"
+    },
+    {
+      "program": [
+        "LIMIT = LIMIT + 1",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-CYCLE",
+      "start": [1, 9],
+      "covers": "LIMIT"
+    },
+    {
+      "program": [
+        "FIRST = SECOND + 1",
+        "SECOND = FIRST + 1",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-CONSTANT-CYCLE",
+      "start": [2, 10],
+      "covers": "FIRST",
+      "help": true
+    },
+    {
+      "program": [
+        "SIZE = 1",
+        "LIMIT = SIZ + 1",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "help": true
+    },
+    {
+      "program": [
+        "TOTAL = 1 + (1 + (1 + (1) + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1) + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TOO-DEEP"
+    }
+  ],
+  "a generic enum where another generic enum is expected is CHECK-TYPE-MISMATCH": [
+    {
+      "program": [
+        "enum Box[T]",
+        "  Full(T)",
+        "end",
+        "",
+        "enum Other[T]",
+        "  Item(T)",
+        "end",
+        "",
+        "enum Wrap[T]",
+        "  Holder(Box[T])",
+        "end",
+        "",
+        "def main() -> Void",
+        "  w = Wrap.Holder(Other.Item(1))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "expected": "Box[T]",
+      "actual": "Other[Int]"
+    },
+    {
+      "program": [
+        "enum Box[T]",
+        "  Full(T)",
+        "end",
+        "",
+        "enum Other[T]",
+        "  Item(T)",
+        "end",
+        "",
+        "enum Wrap[T]",
+        "  Holder(Box[T])",
+        "end",
+        "",
+        "def main() -> Void",
+        "  w = Wrap.Holder(Box.Full(1))",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    }
+  ]
+}

@@ -10,6 +10,8 @@ import Source from "source"
 ## than one for a run of `step`): the pool with it added when it is new, and its number. Nearly every instruction has
 ## one span, which skips the lists the general case builds.
 export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int) -> Pool.Interned
+  # With one instruction and one span the general path below has keys = [span_key(file, span)], so its key is that one
+  # key (join of one item) and run_bytes is span_bytes(file, span): intern_one builds exactly the same key and bytes.
   first = body[at]
   if count == 1 and first.spans.size == 1
     return intern_one(pool, first.file, first.spans[0])
@@ -59,7 +61,9 @@ def run_bytes(body: List[Ir.Instr], at: Int, count: Int) -> List[Int]
 end
 
 # The five numbers of a span as u32, written out in one list: that costs about half of five calls of Bytes.u32. Nearly
-# every number is below 65536 and has two zero high bytes, which the first list leaves out of the arithmetic.
+# every number is below 65536 and has two zero high bytes, which the first list leaves out of the arithmetic. Both
+# lists are Bytes.u32 of file, line, column, line, column joined: for a number below 65536 u32 gives [n % 256, n / 256,
+# 0, 0], and the second list is its general formula. The numbers are never negative (see Bytes.u32).
 def span_bytes(file: Int, span: Source.Span) -> List[Int]
   start = span.start
   stop = span.stop

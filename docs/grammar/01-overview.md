@@ -1,6 +1,6 @@
 # Agentica: grammar and language design
 
-Status: implemented by the interpreter: a Racket front end (`src/`) that compiles to bytecode for the C VM (`vm/`), which runs every program. This document describes what the interpreter accepts; remaining proposals live in [`future/`](../future/README.md).
+Status: implemented by the interpreter: the single binary `agentica`, a C VM (`vm/`) that runs every program, with a front end written in Agentica (`compiler/`) inside it that compiles to bytecode. The Racket front end (`src/`) stays only as a development oracle until it is deleted. This document describes what the interpreter accepts; remaining proposals live in [`future/`](../future/README.md).
 
 ## 1. What we want to validate
 

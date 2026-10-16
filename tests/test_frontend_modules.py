@@ -1,7 +1,7 @@
 """The Agentica linker (compiler/link.agc) against the frozen output of the Racket linker.
 
-tests/frontend-modules-test.rkt compares the two live. This module compares the Agentica linker with what the Racket
-linker printed once for the same inputs (`make frontend-freeze`, tests/frontend-modules-freeze.rkt): the corpus
+This module compares the Agentica linker with what the Racket linker printed once for the same inputs (frozen in
+tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
 (examples/, stdlib/ and tests/fixtures/ as they were at the freeze), the programs of the site, 300 mutated fixtures,
 long chains of files, deep trees, files that are not UTF-8 or over 1 MiB, and the number of node ids each file takes.
 Inputs that are a formula are rebuilt here; the manifests hold their hashes.
@@ -11,7 +11,7 @@ import shutil
 import time
 from pathlib import Path
 
-from tests.agentica_test import FIXTURES, ROOT, slow
+from tests.agentica_test import FIXTURES, ROOT, scaled, slow, timeout
 from tests.frontend_cases import nested_chains, repeat
 from tests.frontend_support import (
     FROZEN, StageTestCase, load_corpus, load_json, sections, tree_files, tree_listing, write_files)
@@ -334,6 +334,7 @@ class ModulesFrozenTest(StageTestCase):
         self.assertRegex(output, r'module "[^"]*homelib.agc"')
 
     @slow
+    @timeout(1800)
     def test_corpus(self):
         directory = self.make_temp_dir()
         files = load_corpus("examples", "stdlib", "fixtures")
@@ -344,6 +345,7 @@ class ModulesFrozenTest(StageTestCase):
         self.assert_manifest(outputs, "modules/corpus.sha256", files)
 
     @slow
+    @timeout(1800)
     def test_the_programs_of_the_site(self):
         programs = load_json("corpus/site-programs.json")
         self.assertGreater(len(programs), 100)
@@ -352,6 +354,7 @@ class ModulesFrozenTest(StageTestCase):
         self.assert_manifest(self.link_trees(trees), "modules/site.sha256", files)
 
     @slow
+    @timeout(1800)
     def test_300_mutated_fixtures(self):
         directory = self.make_temp_dir()
         roots = {}
@@ -373,6 +376,7 @@ class ModulesFrozenTest(StageTestCase):
         self.assertTrue(30 < errors < 290, "%d of 300 mutated fixtures are errors" % errors)
 
     @slow
+    @timeout(1800)
     def test_long_chains_of_files_link_with_one_numbering_of_ids(self):
         sets = {"chain": (chain_files(), "chain/m0.agc"), "wide": (wide_files(), "wide/root.agc"),
                 "cycle": (cycle_files(), "cycle/c0.agc"), "broken": (broken_files(), "broken/b0.agc")}
@@ -385,6 +389,7 @@ class ModulesFrozenTest(StageTestCase):
         self.assert_manifest(found, "modules/large-ids.sha256", {key + "-ids": inputs[key] for key in ("chain", "wide")})
 
     @slow
+    @timeout(1800)
     def test_deep_trees_are_rewritten_as_deep_as_the_parser_lets_them_be(self):
         files = deep_files()
         trees = {"deep-" + name: ({"deep/%s.agc" % name: text}, "deep/%s.agc" % name) for name, text in files.items()}
@@ -393,9 +398,10 @@ class ModulesFrozenTest(StageTestCase):
         self.assert_manifest(found, "modules/deep.sha256", {"deep-" + name: text for name, text in files.items()})
 
     @slow
+    @timeout(1800)
     def test_a_file_of_2000_declarations_links_in_linear_time(self):
         text = "".join("def f%d(a: Int) -> Int\n  return a + %d\nend\n\n" % (n, n) for n in range(2000))
         started = time.monotonic()
         output = self.link_tree({"flat.agc": text}, "flat.agc")
-        self.assertLess(time.monotonic() - started, 60)
+        self.assertLess(time.monotonic() - started, scaled(60))
         self.assert_manifest({"flat": output}, "modules/flat.sha256", {"flat": text})

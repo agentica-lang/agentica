@@ -1,7 +1,7 @@
 ## 8. Loader safety
 
 The loader validates the whole file before anything runs. A failure prints
-`agentica-vm: invalid bytecode: <reason>` and exits 2. Types are not checked
+`agentica run: invalid bytecode: <reason>` and exits 2. Types are not checked
 statically: run-time tag checks are simpler, and each costs one predictable
 branch.
 
@@ -84,12 +84,16 @@ byte of a file with a type table, an Updates section or Globals.
 
 - `agentica compile file.agc -o file.agcb` runs the front end and writes
   bytecode.
-- `agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]`.
-  The option parser is hand written. It stops at the first non-option and honors
-  `--`. Callers always pass `--` before the file, so an option after the file is
-  a program argument. Option errors (a repeated option, an unknown switch, a
-  missing or bad value, a bad `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and
-  `--json` may both appear, and the last one wins.
+- `agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS]
+  [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]` runs a
+  compiled program (until step 8d-2 this was the separate `agentica-vm`
+  program). `run` is read only as the first word of the command line; C answers
+  it before any front end starts. The option parser is hand written. It stops at
+  the first non-option and honors `--`. Callers always pass `--` before the
+  file, so an option after the file is a program argument. Option errors (a
+  repeated option, an unknown switch, a missing or bad value, a bad
+  `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and `--json` may both appear, and
+  the last one wins.
 - `--source-root DIR` (once; DIR must be valid UTF-8 and not `--`, and "" does
   nothing; a bad DIR exits 2) puts `DIR/` before every source name of the
   program that is relative and does not start with `std/`, once, right after
@@ -111,7 +115,7 @@ byte of a file with a type table, an Updates section or Globals.
   buffered output of stdout and stderr (10.2.2, End of run). The wait is always
   bounded: 30000 ms by default, and the environment variable
   `AGENTICA_FLUSH_TIMEOUT_MS` (an integer from 0 to 86400000, read by the VM, so
-  `agentica` and `agentica-vm` both honour it) sets it when the flag is absent;
+  `agentica` and `agentica run` both honour it) sets it when the flag is absent;
   the flag wins. `0` means no wait, and there is no way to turn the limit off:
   values above 86400000 (24 hours) are rejected. A bad flag or variable value
   exits 2. When it runs out, the VM prints
@@ -123,17 +127,17 @@ byte of a file with a type table, an Updates section or Globals.
   libgc, yyjson, libuv and OpenSSL (the one that runs). OpenSSL is linked
   statically in the release.
 - The planned `--schedulers N` (10.2.3) is not in the VM yet.
-- Windows: arguments come from `wmain` and are converted to UTF-8. The input
-  opens with `_wopen` on the original UTF-16 name, so a lone surrogate never
-  maps to another file. The size comes from `_fstat64`, and a file above the 256
-  MiB limit is refused. There is no long-path handling: `vm/main.c` passes the
-  path as given, with no `\\?\` prefix and no long-path manifest.
-- `agentica file.agc [args...]` runs on the VM. `src/main.rkt` runs the front
-  end and `lower`, then writes the bytecode to `agentica-<32 hex>.agcb` in
-  `TMPDIR`. The file is created exclusively with mode 0600. The driver runs
-  `agentica-vm [options] --driver-pid PID -- file [args...]`. `--driver-pid` is
-  a hidden flag. Only a driver that hands the VM a private one-shot file may
-  pass it: the normal run and the BDD runner of `agentica test`.
+- Windows: not supported since 8d-2. The binary embeds the front end with
+  `.incbin` in ELF assembly, so it builds on Linux only; the Windows code of
+  `vm/main.c` (`wmain`, `_wopen`) went with that file. The C VM and its C tests
+  still build there (`platforms.yml`).
+- `agentica file.agc [args...]` runs in the same process: the front end
+  compiles in memory and hands the bytes to C with `FrontEnd.hand_off`, and C
+  runs them in a new runtime (see "The single binary" below). No temporary file
+  and no child are involved. `--driver-pid PID` is a hidden flag of
+  `agentica run`. Only a driver that hands the VM a private one-shot file may
+  pass it: the BDD driver of `agentica test` for the runner and the programs
+  under test, which take `--driver-pid` from their own command line.
 - On Linux, the VM first resets `SIGTERM` to its default, sets
   `prctl(PR_SET_PDEATHSIG, SIGTERM)` (`SIGTERM`, so the VM kills its children
   before it ends, 10.4) and checks that `getppid()` is `PID`. If not, the driver
@@ -143,37 +147,38 @@ byte of a file with a type table, an Updates section or Globals.
   deleted after loading, but only if the path still names the file it opened
   (same device and inode). The driver also deletes the file when the VM never
   ran, or failed before loading.
-- On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver), the driver waits
-  up to 2 seconds, since Ctrl-C also reaches the VM and a second `SIGTERM` would
-  skip the file flush (10.2.2). Then it sends `SIGTERM`, waits up to 2 more
-  seconds, and only then sends `SIGKILL`. On another way out (a failed stdin
-  read) it sends `SIGTERM` at once. A VM whose driver died ends on its first
-  stop signal, without the file flush, after it kills its children.
-- When the driver's output is not a file (captured output), it copies that
-  stream through a pipe. A non-file stdin is copied into the VM's stdin by a
-  thread that stops when the VM exits, so the driver may read ahead of what the
-  program consumes. A special (non-byte) value on the port ends the input like
-  EOF. If reading the driver's stdin fails, the VM is stopped and the driver
-  reports `RUNTIME-INTERNAL` (exit 1).
+- On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the process that runs
+  `agentica test`), the run ends on the first signal and `agc_launch_settle`
+  (`vm/launch.c`) calls `agc_processes_stop` (`vm/process.c`) before anything
+  else (14.4). A child that the driver started with `Process.spawn_captured`
+  (the runner and the programs under test) gets `SIGTERM`, and `SIGKILL` if it
+  is still running after a grace of 1 second (`GRACE_MS`), and then the stop
+  waits at most 1 more second (`REAP_MS`) for the exits. A plain child gets
+  `SIGKILL` at once. Ctrl-C also reaches the children, which end on that first
+  signal without the file flush after they kill their own children; the driver
+  sends no second signal of its own, so the flush of the driver is not cut
+  short (10.2.2). Last, the process flushes and raises the signal again with
+  its default action, so the shell sees it. (Up to 8d-2 the Racket driver
+  waited 2 seconds, sent `SIGTERM`, waited 2 more and sent `SIGKILL`, for every
+  ordinary run; now a run is the process of the binary, and only the BDD
+  driver starts children.)
+- A failed read of the standard input of an `agentica` run is the program's own
+  error: it reads the real descriptor (`RUNTIME-INTERNAL`, `cannot read
+  standard input`, exit 1). The front end's runtime has no standard input.
 - Front-end and `LOWER-` diagnostics print as usual (exit 1). `--vm` and
   `--legacy-eval` are unknown switches.
-- The VM is found and never looked up in the current directory:
-  `AGENTICA_VM=path` wins. Under `racket src/main.rkt` it is `dist/agentica-vm`
-  of the checkout. In a `raco exe` build it is `agentica-vm` next to the
-  executable, with symlinks resolved. The release archive has it in `bin/`. A
-  missing or non-executable VM prints
-  `agentica: cannot find the VM at PATH; run make vm or set AGENTICA_VM` and
-  exits 2, after the front end and the lowering, so a program diagnostic wins.
-  The lookup does not use `define-runtime-path`, since `raco distribute` would
-  copy the VM into `lib/`.
-- `agentica test` runs on the VM (`docs/bdd.md`). `src/bdd-driver.rkt` starts
-  the BDD driver (`compiler/bdd.agc`, compiled by `make` into
-  `dist/agentica-bdd-driver.agcb`) with `--driver-pid`, as a private copy that
-  the VM deletes after the load. The driver compiles the step program and the
-  runner, starts the runner with `--driver-pid` too, and the runner starts one
-  VM per scenario.
-- `make vm` builds `dist/agentica-vm` (`.exe` on Windows). `make exe` and
-  `make test` build it first. The release builds it against glibc 2.28 (11).
+- There is no VM file to find and no `AGENTICA_VM`: nothing reads the variable,
+  so a value of it changes no run. The binary is the VM; a program that starts
+  `agentica` again (the BDD driver) uses the path in `Settings.self_path`.
+- `agentica test` runs in the binary (`docs/bdd.md`). The BDD driver is part of
+  the front end (`compiler/bdd_driver.agc`). It compiles the step program and
+  the runner to a private run directory, starts the runner with `agentica run
+  --allow-run --driver-pid PID -- ...` (`PID` is its own), and the runner starts
+  one VM per scenario or test file with the same command. A front end that
+  stops with an error (a bug in the driver) ends the process with status 2,
+  never the 1 of a failed test run.
+- `make` builds `dist/agentica` from `bootstrap/stage0.agcb` (35.3). The
+  release builds it against glibc 2.28 (11).
 - Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.
   On macOS there is no parent-death signal, so the closest safe thing is the
   delete-after-load flag alone, or a pipe the VM watches. On macOS the flag
@@ -181,16 +186,28 @@ byte of a file with a type table, an Updates section or Globals.
   every non-Windows system. The VM driver is tested on Linux only.
 - `PR_SET_PDEATHSIG` follows the OS thread that forked the VM, so the driver
   must call `subprocess` from the main thread.
-- On Linux, `main` first opens `/dev/null` onto any of descriptors 0, 1 and 2
-  that is closed or in the wrong direction. So libuv never gets a low descriptor
-  and trips its assertion, and reads and writes on that stream still fail with
-  `EBADF`.
+- On Linux, `main` first ignores `SIGPIPE`, so a closed pipe on the standard
+  output ends a write with an error and not the process (before the early
+  `--version` answer too), and opens `/dev/null` onto any of descriptors 0, 1
+  and 2 that is closed or in the wrong direction. So libuv never gets a low
+  descriptor and trips its assertion, and reads and writes on that stream still
+  fail with `EBADF`.
 
-**The single binary (as built in 8b).** `make agentica-next` links
-`dist/agentica-next`: the VM objects, `vm/agentica.c` as its `main`, and the
-front end with the `std/` sources as data (`vm/embedded.h`, written by
-`vm/tools/gen-embedded.sh`). It sits beside `agentica-vm`, which is unchanged,
-and is not the default (docs/future/35-self-hosting.md, 35.3 and 35.6).
+**The single binary (as built in 8b, the product since 8d-2).** `make` links
+`dist/agentica`: the VM objects, `vm/agentica.c` as its `main`, and the front
+end with the `std/` sources as data (`vm/embedded.h`, written by
+`vm/tools/gen-embedded.sh`). It is the only program of the product
+(docs/future/35-self-hosting.md, 35.3 and 35.6). `make` links a first copy with
+`bootstrap/stage0.agcb` in place of the front end
+(build/vm/<mode>/bootstrap/agentica, never shipped) to compile the stages.
+
+- **`agentica run`.** When the first word is `run`, `vm/agentica.c` parses the
+  VM options (`agc_launch_parse`, messages named `agentica run`), reads the
+  file (a regular file of at most 256 MiB; with `--driver-pid`, only a private
+  one, which it deletes after the load), loads it with the full version check
+  and runs it in one runtime. No front end is loaded. `agentica run --version`
+  prints the long line (`agentica 0.3.0 (libgc ..., yyjson ..., libuv ...,
+  OpenSSL ...)`); `agentica --version` prints the version alone.
 
 - **Two runs in one process.** `agentica [--front-end FILE.agcb] WORDS...`
   loads the front end (the carried one, or `FILE`; `--front-end` must be the
@@ -199,16 +216,18 @@ and is not the default (docs/future/35-self-hosting.md, 35.3 and 35.6).
   and `PATH` is the target of `/proc/self/exe` (`argv[0]` without it). A lone
   `agentica --version` is answered by C before anything else is opened, so it
   starts no front end and creates no trace file. `AGENTICA_FLUSH_TIMEOUT_MS`
-  is checked before the front end runs, as `agentica-vm` checks it at its start.
-  The front end
-  has no step limit, no `--allow-run`, no standard input (a read gives EOF, so
-  the program keeps the real one) and no channel to a parent process. If it
+  is checked before the front end runs, as `agentica run` checks it at its
+  start. The front end has no step limit, no standard input (a read gives EOF,
+  so the program keeps the real one) and no channel to a parent process; it has
+  `--allow-run`, because `agentica test` starts the runner (the user's program
+  never runs in that runtime). If it
   calls `FrontEnd.hand_off` and its run ends with status 0, C retires that
   runtime: the same steps as the end of any run (`agc_launch_settle`: children
   stopped, output and files flushed), then the event loop is closed and the
   heap is collected once. Any other end of the front end (a usage error, a
   problem in the user's file, a crash, a stop signal) is the end of the
-  process, with the status the front end gave. The program is then loaded from
+  process, with the status the front end gave, except for a crash (a runtime
+  error in the front end), which is status 2. The program is then loaded from
   the bytes it handed over, with the full version check, and runs in a new
   runtime with the options it was given. A bad option or bytecode is exit 2
   with `agentica: ...`. The stop signal handlers and the wake handle of the
@@ -230,18 +249,18 @@ and is not the default (docs/future/35-self-hosting.md, 35.3 and 35.6).
   (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`), so the counts
   fit an `int`. The file of `--front-end` is opened with `O_NONBLOCK` and must
   be a regular file of at most 256 MiB, so a named pipe is refused at once.
-- **Shared with `agentica-vm`.** `vm/launch.c` holds what both programs do:
-  the option parser (`agc_launch_parse`; its messages start with the
-  program name), seeds, the trace file, the creation of a runtime, and the one
-  exit path (`agc_launch_settle`, `agc_launch_exit`). `vm/main.c` keeps its
-  Windows input handling and its usage text. `agc_io_init` runs once per
+- **Shared by the two runs.** `vm/launch.c` holds what both do: the option
+  parser (`agc_launch_parse`; its messages start with the program name,
+  `agentica` or `agentica run`), seeds, the trace file, the creation of a
+  runtime, the `SIGPIPE` setting (`agc_launch_ignore_sigpipe`) and the one exit
+  path (`agc_launch_settle`, `agc_launch_exit`). `agc_io_init` runs once per
   process, so its result is kept in `agc_launch` for both runtimes.
 - **The guarded builtins.** `FrontEnd.hand_off(program: List[Int], options:
   List[String], arguments: List[String]) -> Result[Void]` and
   `FrontEnd.std_source(path: String) -> Result[String]` (`vm/front_end.c`, in
   the table list after `Test`). The driver sets `rt->front_end` (an
   `agc_front_end`) only for the front end it loads itself. Without it, in a user
-  program or in a front end run by `agentica-vm`, both fail with
+  program or in a front end run by `agentica run`, both fail with
   `RUNTIME-FRONT-END-ONLY` at the call. `hand_off` copies the bytes (at most
   256 MiB, each 0 to 255) and the words (no character 0) into GC memory,
   records them in the `agc_front_end`, and ends the run with `agc_exit(vm, 0)`;
@@ -252,7 +271,7 @@ and is not the default (docs/future/35-self-hosting.md, 35.3 and 35.6).
   the Agentica version in the header (the format version and every other check
   stay). Only `vm/agentica.c` calls it, for the front end; the program that the
   front end hands over goes through `agc_load_traced`, so it is checked like a
-  file given to `agentica-vm`.
+  file given to `agentica run`.
 - **The embedded data.** `agc_embedded_data` holds the front end, then for each
   `std/` source its NUL-terminated path and its text. `agc_embedded_index` has
   `[offset, length]` of the front end, the count `N`, and `N` triples
@@ -266,7 +285,7 @@ This note lists what the code chose.
   `tls`, `loader` and `gc`. Trace lines go to stderr. When
   `AGENTICA_VM_TRACE_FILE` is also set, they go to that file instead, and the
   `unknown category` warning follows them there. If the file cannot be opened,
-  the `cannot open` line goes to stderr and tracing is off. `make vm TRACE=0`
+  the `cannot open` line goes to stderr and tracing is off. `make TRACE=0`
   compiles the trace points out, and `--version` then says `trace off`.
 - The trace file is opened with `O_NONBLOCK` and `O_NOFOLLOW`, and only a
   regular file owned by the VM's user is taken, so start-up never blocks on a

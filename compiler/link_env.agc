@@ -20,9 +20,9 @@ end
 
 ## The inputs of one compile: where the std/ sources are, the environment, the Agentica version that the header of
 ## the .agcb file names (the writer's input; the linker and the checker do not read it), the path of the `agentica`
-## binary that runs the front end ("" when it runs on agentica-vm; a command that starts the binary again, as `test`
-## will, takes it from here), and the builtin catalog (reserved type names, bare builtins, builtin enums and std-only
-## modules).
+## binary that runs the front end ("" when the front end is run as an ordinary program with `agentica run`; a command
+## that starts the binary again, as `test` does, takes it from here), and the builtin catalog (reserved type names,
+## bare builtins, builtin enums and std-only modules).
 export struct Settings
   std: StdProvider
   env: Env

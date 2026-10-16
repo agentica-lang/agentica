@@ -5,8 +5,9 @@
 import Report from "report"
 import Child from "child"
 
-## The options of a run: the VM path, the seed, the `--only` text, the timeout of each test in milliseconds, and the
-## `--source-root` of the file's bytecode ("" for none), so a trace names the file as the report does.
+## The options of a run: the path of the binary (started as `run ...` for each test file), the seed, the `--only` text,
+## the timeout of each test in milliseconds, and the `--source-root` of the file's bytecode ("" for none), so a trace
+## names the file as the report does.
 export struct Settings
   vm: String
   seed: Int
@@ -367,6 +368,7 @@ end
 
 def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]
   return [
+    "run",
     "--allow-run",
     "--json",
     "--max-steps",

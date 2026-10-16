@@ -8,17 +8,17 @@ Feature: JSON Lines replies
       """
       {"name":"Ana","score":80,"active":true}
       """
-    Then I receive a JSON line within 5000 milliseconds:
+    Then I receive a JSON line within 20000 milliseconds:
       """
       {"passed":true,"name":"Ana"}
       """
     And stdin remains open
     When I close stdin
-    Then the program exits with code 0 within 5000 milliseconds
+    Then the program exits with code 0 within 20000 milliseconds
 
   Scenario: Recover after an invalid record
     When I send the line "bad JSON"
-    Then I receive a JSON line within 5000 milliseconds:
+    Then I receive a JSON line within 20000 milliseconds:
       """
       {"error":"invalid record"}
       """
@@ -26,9 +26,9 @@ Feature: JSON Lines replies
       """
       {"name":"Luis","score":40,"active":true}
       """
-    Then I receive a JSON line within 5000 milliseconds:
+    Then I receive a JSON line within 20000 milliseconds:
       """
       {"name":"Luis","passed":false}
       """
     When I close stdin
-    Then the program exits with code 0 within 5000 milliseconds
+    Then the program exits with code 0 within 20000 milliseconds

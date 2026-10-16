@@ -10,6 +10,7 @@ import Child from "child"
 import Units from "units"
 
 struct Config
+  # The binary, started as `run ...` for the step program and for each scenario.
   vm: String
   steps_bytecode: String
   steps_source: String
@@ -533,6 +534,7 @@ end
 
 def vm_args(config: Config, steps: Int, mode: String) -> List[String]
   return [
+    "run",
     "--allow-run",
     "--json",
     "--max-steps",

@@ -18,6 +18,7 @@ Read this for the exact rule behind a checker error or a core question that SKIL
 - `##` lines are doc comments. A `##` block on the lines directly above a `def`, `struct`, `enum`, field or variant documents it (Markdown text); the first block of a file, followed by a blank line, documents the module. A `##` after code on the same line is a plain comment. Any other `##` block is `PARSE-DETACHED-DOC`, and a doc block does not count as the blank line between declarations.
 - A module function with no arguments may drop its parentheses, builtin or through an import alias (`IO.gets!`, `IO.eof?`, `Util.reset`). `f = Util.helper` is a call; `&Util.helper` is the function value.
 - `--max-steps N` bounds execution to N expression or statement entries across all tasks (`RUNTIME-STEP-LIMIT`); it is not an I/O timeout.
+- `agentica compile FILE.agc -o OUT.agcb` writes the bytecode. `agentica run [FLAGS] -- OUT.agcb [ARGS...]` runs it on the VM with `--max-steps`, `--seed`, `--flush-timeout`, `--allow-run`, `--source-root DIR`, `--ai` or `--json` before the `--`; the words after the file are the program's. `run` is read only as the first word. The bytecode runs only on the same Agentica version. `agentica run --version` also lists the libraries.
 
 ## Types
 

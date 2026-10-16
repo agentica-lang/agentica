@@ -10,7 +10,8 @@ import re
 import socket
 import time
 
-from tests.agentica_test import FIXTURES, WAIT_SECONDS, Child, TestCase, run, run_vm, start_vm, tool, vm_environment
+from tests.agentica_test import (FIXTURES, WAIT_SECONDS, Child, TestCase, run, run_vm, scaled, start_vm, tool,
+                                 vm_environment)
 
 PEER = FIXTURES / "tcp-peer.js"
 
@@ -21,7 +22,7 @@ def ipv6_localhost():
         with socket.socket(socket.AF_INET6) as listener:
             listener.bind(("::1", 0))
             listener.listen(1)
-            socket.create_connection(("::1", listener.getsockname()[1]), timeout=5).close()
+            socket.create_connection(("::1", listener.getsockname()[1]), timeout=scaled(5)).close()
         return True
     except OSError:
         return False
@@ -262,7 +263,7 @@ class VmTcp(TestCase):
         port = int(vm.next_line())
 
         def send_line(host, text):
-            with socket.create_connection((host, port), timeout=10) as connection:
+            with socket.create_connection((host, port), timeout=scaled(10)) as connection:
                 connection.sendall((text + "\n").encode())
 
         send_line("127.0.0.1", "v4")
@@ -306,7 +307,7 @@ class VmTcp(TestCase):
         started = time.monotonic()
         result = run_vm(bytecode, env=vm_environment(env))
         self.assertEqual((result.code, result.stdout), (0, "<Socket>\ndone\n"), result.stderr)
-        self.assertLess(time.monotonic() - started, 20)
+        self.assertLess(time.monotonic() - started, scaled(20))
         text = trace.read_text()
         self.assertRegex(text, re.compile(r" io end code=0 signal=0$", re.M), text)
         self.assertIn(" io tcp_listen listener=", text, "listen is traced")

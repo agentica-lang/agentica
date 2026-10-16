@@ -120,7 +120,7 @@ handles. A second way for any of them is a finding.
   builtin that blocks other tasks well past one turn.
 - Diagnostics: one code with a span. Changes to diagnostic output (new JSON
   keys, new lines) must not break their readers: `stdlib/test/child.agc`
-  (`vm_shape?`), `src/bdd-driver.rkt` and the tests that parse `--json`.
+  (`vm_shape?`), `compiler/bdd_runner.agc` and the tests that parse `--json`.
   PR #225 needed a fix in the child helpers for its new stack keys (commit
   "tests: the child helpers accept the stack keys of a VM diagnostic").
 
@@ -204,7 +204,7 @@ builds. Exit 124 means a timeout: retry once, then report it.
   development skill's `references/vm-build.md`).
 - A single C test under ASan (`make build/vm/sanitize/<name>-test SANITIZE=1`)
   or under gc-stress (`make build/vm/gcstress/<name>-test GC_STRESS=1`) only to
-  prove a concrete bug. Never `make vm SANITIZE=1` or `GC_STRESS=1`, or the
+  prove a concrete bug. Never `make SANITIZE=1` or `GC_STRESS=1`, or the
   `vm-sanitize-*` and `vm-gc-stress` targets.
 - Never run the full `make test`, full golden or vm-diff sweeps,
   `make vm-sanitize-test`, fuzzing or `make smoke`. Run localized tests, for

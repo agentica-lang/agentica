@@ -1,8 +1,8 @@
 """Reading a source file: strict UTF-8 and no size limit (docs/future/35-self-hosting.md, 35.4).
 
-The Racket front end decodes the bytes itself, so an invalid byte is LEX-INVALID-UTF8 at the first byte of the first
+The front end decodes the bytes itself, so an invalid byte is LEX-INVALID-UTF8 at the first byte of the first
 sequence that does not decode, not a U+FFFD in the text. Python's strict decoder is the independent oracle of that
-place. The Agentica front end reads the same way and is compared with Racket in tests/frontend-modules-test.rkt.
+place.
 """
 import json
 
@@ -27,7 +27,7 @@ INVALID = [
 
 class SourceUtf8Test(TestCase):
     def check_file(self, path):
-        """Run the Racket front end's check on a file; return the diagnostic as a dict (None when it passes)."""
+        """Run the product CLI's check on a file; return the diagnostic as a dict (None when it passes)."""
         result = run(cli() + ["--json", "check", path])
         if result.code == 0:
             return None
