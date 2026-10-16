@@ -14,6 +14,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_json_builtins, &agc_json_builtin_count},
   {agc_file_builtins, &agc_file_builtin_count},
   {agc_task_builtins, &agc_task_builtin_count},
+  {agc_task_map_builtins, &agc_task_map_builtin_count},
   {agc_channel_builtins, &agc_channel_builtin_count},
   {agc_process_builtins, &agc_process_builtin_count},
   {agc_duplex_builtins, &agc_duplex_builtin_count},

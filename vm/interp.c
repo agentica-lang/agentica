@@ -178,6 +178,9 @@ static void count_step(agc_vm *vm, uint32_t span) {
   step_slow(vm, 1, span);
 }
 
+/* One step for a builtin that starts work of its own, as the interpreter counts one for each callback it makes. */
+void agc_count_step(agc_vm *vm, uint32_t span) { count_step(vm, span); }
+
 static bool apply_cost(agc_vm *vm) {
   int64_t c = vm->task->turn_cost;
   vm->task->turn_cost = 0;
