@@ -1,0 +1,4 @@
+def main() -> Void
+  xs = [1]
+  xs << 2
+end

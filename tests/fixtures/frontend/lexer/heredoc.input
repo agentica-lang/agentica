@@ -1,0 +1,9 @@
+def help_text(name: String) -> String
+  text = <<~TEXT
+    Usage: #{name} [options]
+
+      --verbose   print more
+    Exit code 0 on success. "quoted" \t \#{not} # not a comment
+  TEXT
+  return text
+end

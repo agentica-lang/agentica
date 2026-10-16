@@ -1,0 +1,7 @@
+import Util from <<~PATH
+  util
+  more
+PATH
+
+def main() -> Void
+end

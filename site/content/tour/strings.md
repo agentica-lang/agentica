@@ -69,6 +69,34 @@ end
 literal #{name}
 ```
 
+## Heredocs
+
+Text of two or more lines is a heredoc: `<<~NAME`, the lines of the text, and a last line that holds only `NAME`. The common indentation is removed, so the text can follow the indentation of the code.
+
+```agentica
+def main() -> Void
+  name = "tool"
+  text = <<~TEXT
+    Usage: #{name} [options]
+
+      --verbose   print more
+    Exit code 0 on success.
+  TEXT
+  print(text)
+end
+```
+
+```output
+Usage: tool [options]
+
+  --verbose   print more
+Exit code 0 on success.
+```
+
+A heredoc is a string for everything else: the escapes and `#{...}` work as in a string literal, a `"` needs no escape, and every line, the last one too, ends with a newline. The rest of the line of `<<~NAME` is code as usual, so a heredoc can be an argument (`puts(<<~TEXT)`) or have a method called on it (`<<~TEXT.upcase`), and two heredocs on a line take their texts one after the other.
+
+A heredoc needs two lines of text or more, otherwise it is `LEX-HEREDOC-ONE-LINE`: write one line as `"text\n"`. Indent the text with spaces; a tab is `LEX-HEREDOC-INDENT`. The name is in capitals. A heredoc cannot be a `case` pattern or an `import` path.
+
 ## Joining strings
 
 `+` joins two strings. Both sides must be strings.

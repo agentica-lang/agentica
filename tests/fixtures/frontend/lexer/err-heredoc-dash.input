@@ -1,0 +1,4 @@
+x = <<-NAME
+  a
+  b
+NAME

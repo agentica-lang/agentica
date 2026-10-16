@@ -36,6 +36,15 @@ LINE_ENDS = Set.new(["\n", "\r", ""])
 ## Where the plain text of a string ends: `"`, `#`, `\`, a line break, or the sentinel.
 STRING_STOPS = Set.new(["\"", "#", "\\", "\n", "\r", ""])
 
+## Where the plain text of a heredoc line ends: `#`, `\`, a line break, or the sentinel. A `"` is plain text there.
+HEREDOC_STOPS = Set.new(["#", "\\", "\n", "\r", ""])
+
+## The capitals that start a heredoc name. Never the sentinel, as for NAME_CHARS.
+HEREDOC_UPPER = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))
+
+## The characters of a heredoc name after its first one: capitals, digits and `_`. Never the sentinel.
+HEREDOC_NAME_CHARS = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".split(""))
+
 ## What follows a `\` in a string, and the character it stands for.
 ESCAPES = {"\"": "\"", "\\": "\\", "#": "#", "n": "\n", "r": "\r", "t": "\t"}
 
@@ -63,7 +72,9 @@ CLASSES: Map[String, CharClass] = (0..127).to_a.reduce({}) do |classes, code|
     kind = CharClass.Closing
   elsif code == 125
     kind = CharClass.CloseBrace
-  elsif ",:.=+-*/%<>&|!".contains?(character)
+  elsif code == 60
+    kind = CharClass.Less
+  elsif ",:.=+-*/%>&|!".contains?(character)
     kind = CharClass.Operator
   end
   classes.put(character, kind)
@@ -99,6 +110,9 @@ OPENERS = {")": "(", "]": "[", "}": "{"}
 
 ## The default of a table lookup that cannot miss.
 NO_OP = Op(kind: "", lexeme: "", value: Tokens.Value.NoValue, width: 1)
+
+## No heredoc body waits to be skipped.
+NO_RESUME = Resume(offset: -1, line: 0, line_start: 0)
 
 ## The frame on top of an empty stack: the top level counts as a block, so a line break there is a statement break.
 ROOT = Frame(kind: "kw", start: Source.Position(offset: 0, line: 1, column: 1), inside: -1)
@@ -143,6 +157,53 @@ struct Progress
   index: Int
 end
 
+# Where the lexer goes on at the next line break of the line that holds a heredoc opener: after the end line of the
+# last heredoc of that line. `offset` is -1 when no heredoc waits. The line number and line start are those of
+# `offset`, kept apart because a heredoc that ends the file may have no line break after its end line.
+struct Resume
+  offset: Int
+  line: Int
+  line_start: Int
+end
+
+# The state of the main loop between two runs: the tokens and frames so far, and where scanning goes on.
+struct Lexed
+  tokens: List[Tokens.Token]
+  delimiters: List[Frame]
+  index: Int
+  line: Int
+  line_start: Int
+end
+
+# One body line of a heredoc: where it starts, where its text starts after the spaces, where it stops (before the
+# line break) and its line number.
+struct BodyLine
+  start: Int
+  text_start: Int
+  stop: Int
+  line: Int
+end
+
+# The body of a heredoc: its lines and where the lexer resumes after its end line.
+struct Body
+  lines: List[BodyLine]
+  resume: Resume
+end
+
+# What a heredoc gives the main loop: its tokens, where its opener `<<~NAME` ends and the resume point.
+struct Heredoc
+  tokens: List[Tokens.Token]
+  index: Int
+  resume: Resume
+end
+
+# The string pieces of a heredoc so far: the tokens, the text since the last piece and the number of pieces made.
+struct Pending
+  tokens: List[Tokens.Token]
+  parts: List[String]
+  pieces: Int
+end
+
 # An operator or bracket, with its token kind and value ready: the main loop makes no string or value for it.
 struct Op
   kind: String
@@ -161,6 +222,7 @@ enum CharClass
   NameLower
   Digit
   Quote
+  Less
   Opening
   Closing
   CloseBrace
@@ -186,20 +248,36 @@ end
 ## Lexes a source text into its tokens, or the first `LEX-` diagnostic.
 export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
   input = new_input(text)
+  first = Lexed(tokens: [], delimiters: [], index: 0, line: 1, line_start: 0)
+  case lex_from(input, first, -1)
+    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(lexed) ->
+      here = Source.position(lexed.index, lexed.line, lexed.line_start)
+      return finish(input, lexed.tokens, lexed.delimiters, here)
+  end
+end
+
+# The main loop, from the state `state` to the end of the text. A heredoc runs it again for each `#{...}` of its body
+# with `stop_depth` set to the number of frames with the interpolation's `#` frame on top: the `}` that finds that
+# many frames closes the interpolation and ends the run. The main run passes -1, which no depth equals.
+def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
   chars = input.chars
   size = input.size
-  tokens: List[Tokens.Token] = []
-  delimiters: List[Frame] = []
+  text = input.text
+  tokens = state.tokens
+  delimiters = state.delimiters
   # The size of `delimiters` and its last frame (ROOT when empty), kept beside it so that a bracket or a line break
   # reads them without a call.
-  depth = 0
-  top = ROOT
-  index = 0
-  line = 1
-  line_start = 0
+  depth = delimiters.size
+  top = frame_on_top(delimiters, depth)
+  index = state.index
+  line = state.line
+  line_start = state.line_start
+  # The heredocs of the line being lexed ask to skip their bodies at its line break.
+  resume = NO_RESUME
   # The column of a character is its offset plus this, a sum where the line start would need a subtraction and an
   # addition; it changes where `line_start` does.
-  column_base = 1
+  column_base = 1 - line_start
   # The arms for names, operators, brackets and line breaks (nine of ten tokens) do their work in place: a call
   # costs a few VM steps, and the lexer makes a token every 5 characters or so (docs/vm-benchmarks.md, "Speed
   # pass, second part"). The arms for strings, numbers and docs call a function: they are rare.
@@ -303,6 +381,18 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
         top = frame_on_top(delimiters, depth)
         index += 1
       CharClass.CloseBrace ->
+        if depth == stop_depth
+          # The end of the `#{...}` of a heredoc: its caller goes on with the text of the line.
+          return Diag.Outcome.Done(
+            Lexed(
+              tokens: tokens,
+              delimiters: delimiters.take(depth - 1),
+              index: index + 1,
+              line: line,
+              line_start: line_start,
+            ),
+          )
+        end
         # A `}` that closes an interpolation continues the string, not a map.
         case close_brace(input, tokens, delimiters, index, line, line_start)
           Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
@@ -331,9 +421,7 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
         next = index + 1
         if char == "\r"
           if chars[next] != "\n"
-            return Diag.Outcome.Failed(
-              Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp),
-            )
+            return Diag.Outcome.Failed(lone_carriage_return(start))
           end
           lexeme = "\r\n"
           next += 1
@@ -354,7 +442,14 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
         index = next
         line += 1
         line_start = next
-        column_base = 1 - next
+        if resume.offset >= 0
+          # The heredocs of the line that just ended have their bodies after it: go on after the last end line.
+          index = resume.offset
+          line = resume.line
+          line_start = resume.line_start
+          resume = NO_RESUME
+        end
+        column_base = 1 - line_start
       CharClass.Hash ->
         if chars[index + 1] == "#" and only_blanks?(chars, line_start, index)
           scan = scan_doc(input, index, line, line_start)
@@ -373,12 +468,37 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
             tokens = tokens.push(number)
             index = number.span.stop.offset
         end
+      CharClass.Less ->
+        ahead = chars[index + 1]
+        if ahead == "<" and heredoc_opener?(chars, index)
+          case scan_heredoc(input, tokens, delimiters, resume, index, line, line_start)
+            Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+            Diag.Outcome.Done(found) ->
+              tokens = found.tokens
+              index = found.index
+              resume = found.resume
+          end
+        else
+          op = SINGLE_OPS.get(char, NO_OP)
+          if ahead == "="
+            op = PAIR_OPS.get("<=", op)
+          end
+          tokens = tokens.push(operator_token(op, index, line, column_base))
+          index += op.width
+        end
       CharClass.Other ->
         start = Source.Position(offset: index, line: line, column: index + column_base)
         return Diag.Outcome.Failed(unexpected_character(char, start, Source.position(index + 1, line, line_start)))
     end
   end
-  return finish(input, tokens, delimiters, Source.position(index, line, line_start))
+  if stop_depth >= 0
+    # The text ended inside the `#{` of a heredoc line; a line break would have been reported first.
+    here = Source.position(index, line, line_start)
+    return Diag.Outcome.Failed(unterminated(delimiters[stop_depth - 1].start, here))
+  end
+  return Diag.Outcome.Done(
+    Lexed(tokens: tokens, delimiters: delimiters, index: index, line: line, line_start: line_start),
+  )
 end
 
 # The text as a list of characters (positions count characters) and the sentinels
@@ -657,6 +777,284 @@ def scan_piece(
         ),
       )
   end
+end
+
+# Whether the `<<` at `index` starts a heredoc opener or a mistake for one: `<<~`, `<<NAME` or `<<-NAME`. Every other
+# `<<` stays two `<` tokens, which the parser reports for `xs << x` with a help of its own.
+def heredoc_opener?(chars: List[String], index: Int) -> Bool
+  third = chars[index + 2]
+  if third == "~" or HEREDOC_UPPER.include?(third)
+    return true
+  end
+  return third == "-" and HEREDOC_UPPER.include?(chars[index + 3])
+end
+
+# The heredoc `<<~NAME` at `index` (25.10): its string tokens, which stand where the opener stands, and where the lexer
+# resumes after its end line. The rest of the opener line is lexed by the main loop and its line break jumps over the
+# body (see Resume). `resume` is what an earlier heredoc of the same line left: this body starts there.
+def scan_heredoc(
+  input: Input,
+  tokens: List[Tokens.Token],
+  delimiters: List[Frame],
+  resume: Resume,
+  index: Int,
+  line: Int,
+  line_start: Int,
+) -> Diag.Outcome[Heredoc]
+  chars = input.chars
+  start = Source.position(index, line, line_start)
+  if chars[index + 2] != "~"
+    width = 2
+    if chars[index + 2] == "-"
+      width = 3
+    end
+    return Diag.Outcome.Failed(heredoc_form(span(start, Source.position(index + width, line, line_start))))
+  end
+  name_stop = skip_in(chars, index + 4, HEREDOC_NAME_CHARS)
+  if !HEREDOC_UPPER.include?(chars[index + 3]) or NAME_CHARS.include?(chars[name_stop])
+    return Diag.Outcome.Failed(heredoc_name(span(start, Source.position(index + 3, line, line_start))))
+  end
+  opener = span(start, Source.position(name_stop, line, line_start))
+  # The body starts on the next line, and an interpolation ends on its line: a heredoc inside one cannot end.
+  inside = innermost_interpolation(delimiters)
+  if inside >= 0
+    return Diag.Outcome.Failed(unterminated(delimiters[inside].start, opener.stop))
+  end
+  name = input.text.slice(index + 3, name_stop - index - 3)
+  case heredoc_body(input, name, resume, line, line_start, opener)
+    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(body) ->
+      if body.lines.size < 2
+        return Diag.Outcome.Failed(heredoc_one_line(opener))
+      end
+      case heredoc_tokens(input, tokens, delimiters, body.lines, opener)
+        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(made) ->
+          return Diag.Outcome.Done(Heredoc(tokens: made, index: name_stop, resume: body.resume))
+      end
+  end
+end
+
+# The body lines of the heredoc `name` that is opened on `line`, up to its end line (only spaces and the name), and the
+# point after it. The first body line starts after the line break of the opener line, or where `resume` says. A tab in
+# the leading whitespace of any line is LEX-HEREDOC-INDENT; the end of the text before the end line is
+# LEX-UNTERMINATED-HEREDOC. The end line may be the last line of the file, with no line break.
+def heredoc_body(
+  input: Input,
+  name: String,
+  resume: Resume,
+  line: Int,
+  line_start: Int,
+  opener: Source.Span,
+) -> Diag.Outcome[Body]
+  chars = input.chars
+  size = input.size
+  first = resume
+  if resume.offset < 0
+    stop = line_end(input, opener.stop.offset, line, line_start)
+    following = next_line_start(chars, size, stop)
+    if following < 0
+      if stop < size
+        return Diag.Outcome.Failed(lone_carriage_return(Source.position(stop, line, line_start)))
+      end
+      return Diag.Outcome.Failed(unterminated_heredoc(opener, name))
+    end
+    first = Resume(offset: following, line: line + 1, line_start: following)
+  end
+  lines: List[BodyLine] = []
+  cursor = first.offset
+  number = first.line
+  while cursor < size
+    text_start = cursor
+    while chars[text_start] == " "
+      text_start += 1
+    end
+    if chars[text_start] == "\t"
+      return Diag.Outcome.Failed(heredoc_indent(Source.position(text_start, number, cursor)))
+    end
+    stop = skip_until(chars, text_start, LINE_ENDS)
+    following = next_line_start(chars, size, stop)
+    if following < 0 and stop < size
+      return Diag.Outcome.Failed(lone_carriage_return(Source.position(stop, number, cursor)))
+    end
+    if stop - text_start == name.length and input.text.slice(text_start, name.length) == name
+      after = Resume(offset: following, line: number + 1, line_start: following)
+      if following < 0
+        after = Resume(offset: stop, line: number, line_start: cursor)
+      end
+      return Diag.Outcome.Done(Body(lines: lines, resume: after))
+    end
+    lines = lines.push(BodyLine(start: cursor, text_start: text_start, stop: stop, line: number))
+    cursor = following
+    number += 1
+    if following < 0
+      cursor = size
+    end
+  end
+  return Diag.Outcome.Failed(unterminated_heredoc(opener, name))
+end
+
+# The string tokens of a heredoc: the text of its body lines with the common indentation removed, one `\n` after each
+# line, split around the `#{...}` of the lines. Every piece takes the span of the opener, so that the nodes the parser
+# builds from them stay on the opener line; the tokens of an interpolation keep their own place in the body.
+def heredoc_tokens(
+  input: Input,
+  tokens: List[Tokens.Token],
+  delimiters: List[Frame],
+  lines: List[BodyLine],
+  opener: Source.Span,
+) -> Diag.Outcome[List[Tokens.Token]]
+  indent = common_indent(lines)
+  pending = Pending(tokens: tokens, parts: [], pieces: 0)
+  for body in lines
+    case heredoc_line(input, delimiters, pending, body, indent, opener)
+      Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+      Diag.Outcome.Done(next) -> pending = next
+    end
+  end
+  kind = "string"
+  if pending.pieces > 0
+    kind = "interp-end"
+  end
+  return Diag.Outcome.Done(pending.tokens.push(heredoc_piece(input, opener, kind, pending.parts)))
+end
+
+# The fewest leading spaces of the lines that have text; blank lines do not count, and they become empty lines.
+def common_indent(lines: List[BodyLine]) -> Int
+  indent = -1
+  for body in lines
+    width = body.text_start - body.start
+    if body.text_start < body.stop and (indent < 0 or width < indent)
+      indent = width
+    end
+  end
+  if indent < 0
+    return 0
+  end
+  return indent
+end
+
+# One body line: its text after `indent` spaces is added to the pending text, cut at each `#{`, whose tokens come from
+# a run of the main loop that ends at the matching `}`. Escapes are those of a string, and a `"` needs none.
+def heredoc_line(
+  input: Input,
+  delimiters: List[Frame],
+  pending: Pending,
+  body: BodyLine,
+  indent: Int,
+  opener: Source.Span,
+) -> Diag.Outcome[Pending]
+  chars = input.chars
+  tokens = pending.tokens
+  parts = pending.parts
+  pieces = pending.pieces
+  if body.text_start == body.stop
+    return Diag.Outcome.Done(Pending(tokens: tokens, parts: parts.push("\n"), pieces: pieces))
+  end
+  segment = body.start + indent
+  cursor = skip_until(chars, segment, HEREDOC_STOPS)
+  while cursor < body.stop
+    stopper = chars[cursor]
+    if stopper == "#" and chars[cursor + 1] == "{"
+      kind = "interp-middle"
+      if pieces == 0
+        kind = "interp-start"
+      end
+      parts = parts.push(input.text.slice(segment, cursor - segment))
+      tokens = tokens.push(heredoc_piece(input, opener, kind, parts))
+      parts = []
+      pieces += 1
+      frames = open_frame(delimiters, "#", Source.position(cursor, body.line, body.start))
+      inner = Lexed(tokens: tokens, delimiters: frames, index: cursor + 2, line: body.line, line_start: body.start)
+      case lex_from(input, inner, frames.size)
+        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(lexed) ->
+          tokens = lexed.tokens
+          segment = lexed.index
+      end
+      cursor = skip_until(chars, segment, HEREDOC_STOPS)
+    elsif stopper == "\\"
+      decoded = ESCAPES.get(chars[cursor + 1], "")
+      if decoded == ""
+        return Diag.Outcome.Failed(bad_escape(input, cursor, body.line, body.start))
+      end
+      parts = parts.push(input.text.slice(segment, cursor - segment)).push(decoded)
+      segment = cursor + 2
+      cursor = skip_until(chars, segment, HEREDOC_STOPS)
+    else
+      cursor = skip_until(chars, cursor + 1, HEREDOC_STOPS)
+    end
+  end
+  parts = parts.push(input.text.slice(segment, body.stop - segment)).push("\n")
+  return Diag.Outcome.Done(Pending(tokens: tokens, parts: parts, pieces: pieces))
+end
+
+def heredoc_piece(input: Input, opener: Source.Span, kind: String, parts: List[String]) -> Tokens.Token
+  return token(input.text, kind, Tokens.Value.Text(parts.join("")), opener.start, opener.stop)
+end
+
+def lone_carriage_return(at: Source.Position) -> Diag.Diagnostic
+  return Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(at, at), Diag.Help.NoHelp)
+end
+
+def unterminated_heredoc(opener: Source.Span, name: String) -> Diag.Diagnostic
+  return Diag.fail(
+    "LEX-UNTERMINATED-HEREDOC",
+    "unterminated heredoc",
+    opener,
+    Diag.Help.Hint("end the heredoc with a line that holds only #{name}, as in <<~#{name}"),
+  )
+end
+
+# A tab in the leading whitespace of a body line or of the end line, at the tab.
+def heredoc_indent(at: Source.Position) -> Diag.Diagnostic
+  stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)
+  return Diag.fail(
+    "LEX-HEREDOC-INDENT",
+    "a tab in the indentation of a heredoc",
+    span(at, stop),
+    Diag.Help.Hint(
+      "indent the lines of a heredoc with spaces: the width of a tab is not fixed, so the text left would be unclear",
+    ),
+  )
+end
+
+def heredoc_one_line(opener: Source.Span) -> Diag.Diagnostic
+  return Diag.fail(
+    "LEX-HEREDOC-ONE-LINE",
+    "a heredoc needs two or more lines of text",
+    opener,
+    Diag.Help.Hint(
+      "write one line of text as a string literal, such as \"text\\n\"; a heredoc is for two lines or more",
+    ),
+  )
+end
+
+# `<<NAME`, `<<-NAME`: only the squiggly form exists.
+def heredoc_form(at: Source.Span) -> Diag.Diagnostic
+  return Diag.fail(
+    "LEX-UNEXPECTED-CHAR",
+    "only the squiggly heredoc <<~NAME exists",
+    at,
+    Diag.Help.Hint(
+      (
+        "write <<~NAME, the text on the lines below it and a line that holds only NAME; \\# writes a # that starts " +
+        "no interpolation"
+      ),
+    ),
+  )
+end
+
+# `<<~` that no capital name follows: `<<~text`, `<<~'TEXT'`.
+def heredoc_name(at: Source.Span) -> Diag.Diagnostic
+  return Diag.fail(
+    "LEX-UNEXPECTED-CHAR",
+    "a heredoc name is written in capitals",
+    at,
+    Diag.Help.Hint(
+      "write <<~TEXT: the name is capitals, digits and _, and starts with a capital; there is no quoted form",
+    ),
+  )
 end
 
 # A `##` doc block starting at `from`: one line per `##`, and the block goes on

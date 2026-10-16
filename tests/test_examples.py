@@ -68,7 +68,10 @@ class Examples(TestCase):
                 ("defaults.agc", "Level.Info start 0\nLevel.Warn slow 1\na, b, c\na-b-c\none\ntwo\n- one\n- two\n"
                                  "- three\n"),
                 ("case-guards.agc", "big circle\nempty circle\ntwin\ndot\nnegative -3\nvalue 8\nmissing\n"
-                                    "timed out\n")]:
+                                    "timed out\n"),
+                ("heredoc.agc", "Usage: tool [options] FILE\n\n  --verbose   print more\n"
+                                "  --version   print 2.0 and stop\n\nExit code 0 on success.\n"
+                                "NOTES\nfirst line\n  indented line\n14\n")]:
             output, code = self.run_example(name)
             self.assertIsNone(code, name)
             self.assertEqual(output, expected, name)
