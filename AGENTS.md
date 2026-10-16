@@ -3,20 +3,12 @@
 Interpreter for the Agentica language. One binary, `dist/agentica`: a C VM that
 runs every program, with the front end (written in Agentica, compiled to
 bytecode) and the `std/` sources inside. The build starts from the checked-in
-`bootstrap/stage0.agcb` and needs no Racket.
+`bootstrap/stage0.agcb` and needs only a C toolchain (and the `std/` sources).
 
 ## Map
 
 ```text
-VERSION             the version, one line (read by the Makefile and src/version.rkt)
-src/                Racket front end, one module per stage; a development oracle
-                    until Racket is deleted, not the product
-  lexer.rkt → parser.rkt (ast.rkt) → modules.rkt (imports) → checker.rkt → lower.rkt → bytecode.rkt
-  builtins.rkt      every builtin described once (signatures, effects, docs)
-  stdlib.rkt        embeds stdlib/ as std/
-  source.rkt token.rkt diagnostic.rkt   shared data: spans, tokens, diagnostics
-  main.rkt          thin CLI: printing and exit codes live only here; runs
-                    programs with `dist/agentica run`
+VERSION             the version, one line (read by the Makefile)
 compiler/           the front end in Agentica (§35): lexer, parser, modules,
                     builtin catalog, checker, lowering, bytecode writer, BDD
                     driver, CLI; front_end.agc is the program the binary carries
@@ -54,10 +46,9 @@ phase 13).
   binary. `make stage0` refreshes `bootstrap/stage0.agcb` (see `references/ci.md`
   of the development skill).
 - `make test TESTS="tests/test_vm_bits.py"`: a subset. `make test` alone runs
-  everything (`JOBS=8` sets the workers). The tests need no Racket.
+  everything (`JOBS=8` sets the workers).
 - `dist/agentica file.agc` runs a program; `... check file.agc` checks;
-  `dist/agentica run -- file.agcb` runs compiled bytecode. `racket src/main.rkt`
-  takes the same words (it goes with `src/`, post-bootstrap step 2).
+  `dist/agentica run -- file.agcb` runs compiled bytecode.
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: each
   `tests/test_<area>.py` file runs as one unittest process.
 - `make test-slow`: the `@slow` cases; CI only.
@@ -73,7 +64,7 @@ phase 13).
 
 | Task | Read |
 |---|---|
-| any change to src/, vm/, tests/, CI | `.agents/skills/agentica-development/SKILL.md`, then only the references it names |
+| any change to compiler/, vm/, tests/, CI | `.agents/skills/agentica-development/SKILL.md`, then only the references it names |
 | a C VM PR review | `.agents/skills/vm-c-critic/` |
 | language rules | `docs/grammar/` |
 | writing `.agc` programs | `.agents/skills/agentica-programming/` |
@@ -84,25 +75,24 @@ phase 13).
 
 - Stages: each takes the previous stage's output and returns data or exactly
   one `diagnostic`; it stops at the first error, never prints, and never lets
-  a Racket exception escape.
+  a runtime error of the front end escape: a failure is a diagnostic.
 - Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
   `RUNTIME-`, `LOWER-`, `BYTECODE-`), and carry a source span. Tests assert
   the code (and the span when it matters), never message text.
-- By default the Racket front end in `src/` is frozen (roadmap row 7.2.7): no
-  new syntax and no new checker rules. Only bug fixes, and the data that row
-  7.2.7 lists (builtin table rows and their `vm-builtins` names, builtin record
-  and enum entries, registry lines, std-only and reserved names, message texts).
-  Every later language change goes into `compiler/`. A bug fix in a ported stage
-  changes both front ends in the same PR. These rules are defaults, which a PR
-  may relax when following them costs more than it saves; the PR says which
-  rule it relaxes and why.
+- `compiler/` is the front end: every language change (syntax, checker rule,
+  builtin row, builtin record or enum entry, message text) goes there, with its
+  golden. The files `builtins_data.agc`, `check_tables.agc` and
+  `unicode_table.agc` are edited by hand. `vm/unicode_data.c` is frozen
+  checked-in data (see its header). These rules are defaults, which a PR may
+  relax when following them costs more than it saves; the PR says which rule it
+  relaxes and why.
 - Core grammar only (sections 4–6): user enums (the only user generics),
   `case`, file modules with explicit imports/exports, builtin `List[T]`,
   `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in `docs/future/`
   until its phase lands. No placeholder files or nodes for later phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
-- Tests: Python `unittest` only (no rackunit, no Racket in the tests). Node
+- Tests: Python `unittest` only. Node
   and Python test code and peers (curl included) use the standard library
   only, with no third-party libraries or test frameworks. The VM's C
   dependencies are the submodules in `vm/third_party`; the only dev-tool

@@ -2,10 +2,10 @@
 
 Read this before changing `.github/workflows/`, the Makefile, or before
 adding VM source files, test peers or fixtures. The build and the release need
-no Racket (they start from `bootstrap/stage0.agcb`), and neither do the tests
-(all Python `unittest`, since step 8d-3). Racket CS 9.3 is installed in CI for
-one job only, the generated `vm/unicode_data.c` check (`unicode` and
-`warm-unicode` in `ci.yml`), until `vm/tools/gen-unicode.rkt` is ported.
+only a C toolchain (they start from `bootstrap/stage0.agcb`), and the tests are
+all Python `unittest`. No job installs Racket: the Racket front end and its
+generators were deleted, and `vm/unicode_data.c` is frozen, checked-in data (see
+its header; a future generator must reproduce it byte for byte).
 
 ## The checks of ci.yml, sweep.yml and the release are make targets
 
@@ -45,8 +45,7 @@ comment), then a step that calls it. Targets that are not obvious:
   the feature without using it in `compiler/`, and refreshes stage0; the
   second uses it. When that is not possible, compile `stage1` with another
   compiler and say so in the PR: `make stage0 STAGE1_COMPILER="path/to/agentica"`
-  (a binary built from the parent commit in a second worktree, or
-  `STAGE1_COMPILER="racket src/main.rkt"` while Racket exists); the later
+  (a binary built from the parent commit in a second worktree); the later
   stages still run on the new first binary. A new bytecode format is harder:
   the new VM cannot load a program in the old format, so the old VM must run
   the new compiler once by hand. `make` does not automate that; the PR that
@@ -65,10 +64,9 @@ comment), then a step that calls it. Targets that are not obvious:
   the VM goldens; `make goldens` rewrites it after an intended change, and the
   diff is the review).
 - `test` and `test-slow` run Python `unittest` modules only (design in
-  `docs/future/35-self-hosting.md` §35.10; the rackunit files and the Racket
-  oracle comparisons went in step 8d-3). `TESTS` is a list of
+  `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of
   `tests/test_<area>.py` files or directories (the default `tests/`). A leading
-  `./` and a trailing `/` are ignored; any other path (a `.rkt` file, a `.py`
+  `./` and a trailing `/` are ignored; any other path (a file of another kind, a `.py`
   file outside `tests/test_<area>.py`, a name that is not a folder) fails with a
   message.
   A directory adds its own `test_*.py` files and is not searched recursively on
@@ -76,13 +74,13 @@ comment), then a step that calls it. Targets that are not obvious:
   in the Makefile (`tests/test_vm_latency.py`) lists modules that a directory
   does not pick up: they run when named, as `make vm-latency` does.
 - `make goldens` also rewrites `tests/fixtures/cli/forms.json`.
-  `tools/refreeze.py` (Python, no Racket; `make goldens` runs its `--fast-only`
+  `tools/refreeze.py` (Python; `make goldens` runs its `--fast-only`
   tier, the full run also rewrites the slow-tier manifests) rewrites the frozen
   goldens that `tests/test_frontend_<stage>.py` compare the Agentica stages
   with (`references/frontend.md`, "Frozen comparisons") from the Agentica
   stages. It is not a CI step. The Racket writers that made them
-  (`make frontend-freeze`, `make frontend-snapshot`) were removed in step 8d-3;
-  the tag `bootstrap-racket` (set before `src/` is deleted) keeps them.
+  (`make frontend-freeze`, `make frontend-snapshot`) were removed in step 8d-3
+  and the Racket front end with them; the tag `bootstrap-racket` keeps both.
 - Each Python module runs in its own process (`python3 -m unittest
   tests.test_<area>` from the root), run by make itself: `make -k -O -j$(JOBS)`
   over `py-test/<file>` targets, so a failure shows that module's report and
@@ -130,7 +128,6 @@ comment), then a step that calls it. Targets that are not obvious:
   use it, so a pull never leaves a stale binary and an up-to-date one is not
   rebuilt. The process, module and distribution tests are ordinary modules of
   `make test` now (there is no `test-ci`, `test-exe` or second executable).
-- `vm-unicode-check` regenerates `vm/unicode_data.c` and fails if it changed.
 - `vendored-check` links the VM against the vendored OpenSSL and checks it
   (static, the submodule's version); `vendored-test` adds the TLS and HTTP
   tests on that binary.
@@ -176,11 +173,7 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   check (the last step that builds), and then `make dup-check` (it runs even
   when an earlier step fails, so a clone or an npm outage does not hide the
   test results). The vm-latency negative control starts its two VMs together
-  (it can only raise latency, so the control stays valid). The
-  `unicode` job (the only one that installs Racket) checks that
-  `vm/unicode_data.c` is up to date. That check is skipped, and Racket is not
-  installed, when the generator, the table and the Makefile's `vm-unicode` rule
-  match an earlier passing check. The vendored check stays last: it rebuilds
+  (it can only raise latency, so the control stays valid). The vendored check stays last: it rebuilds
   `build/vm/release/obj` with other flags, so nothing that builds the binary
   may run beside it.
 - `dup-check` as a job runs only on `master` pushes (it saves the npm cache).
@@ -268,7 +261,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
 
 Otherwise it shows as skipped. If the `changes` step does not set its outputs, `vm-sanitizers` still
 runs. A manual run always runs it. Front-end changes (checker, AST,
-builtins, `src/`) skip `vm-sanitizers` on purpose; the `test` job still
+builtins, `compiler/`) skip `vm-sanitizers` on purpose; the `test` job still
 runs the `vm-diff` golden shards and every CLI test with the real VM. Keep
 that path list in `ci.yml` in step with new VM files.
 
@@ -299,9 +292,7 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
-  two jobs that fill caches under the PR jobs' keys:
-  - `warm-unicode` runs the unicode check (a separate job, so a stale table
-    fails `master`);
+  one job that fills caches under the PR jobs' keys:
   - `warm-third-party` builds the vendored release-mode OpenSSL and runs
     the vendored link check.
 
@@ -334,15 +325,14 @@ The release workflow builds `dist/agentica` with a pinned `zig cc` against
 glibc 2.28, with `AGENTICA_OPENSSL: vendored` and `AGENTICA_GC: vendored`
 set for the whole job, from `bootstrap/stage0.agcb` (`make vm-test
 fixed-point CCACHE=`: the embedding and the link have to work with this
-toolchain, and the fixed point runs on the result). It needs no Racket. It
+toolchain, and the fixed point runs on the result). It needs only a C toolchain. It
 strips the binary, checks the glibc floor with `objdump -T` (an empty list of
 versions is an error with its own message), checks that OpenSSL is linked
 statically (in the build and in the unpacked archive) and that `run
 --version` names the submodule's OpenSSL version. It fails when `readelf -d`
 shows a NEEDED `libgc` (in the build and in the unpacked archive). The
 archive holds `bin/agentica` alone (the workflow checks that nothing else is
-in `bin/`), `LICENSE`, `NOTICE` and the third-party licenses in `licenses/`
-(no Racket files). Its test steps are targets: `make vm-diff-test` runs the
+in `bin/`), `LICENSE`, `NOTICE` and the third-party licenses in `licenses/`. Its test steps are targets: `make vm-diff-test` runs the
 golden tests on the release binary with the full sweep, and `make
 test-distribution` runs the relocated-binary test. A last step unpacks the
 archive and runs an example, `compile` and `run`, and `agentica test`. The
@@ -353,8 +343,7 @@ CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
 
 - The `VERSION` file at the repository root (one line, no `v`) is the single
   source of the version. `make version` prints it and the Makefile passes it to
-  C as `AGC_VERSION`; `src/version.rkt` embeds it for the Racket oracle and
-  `agentica --version` reports it. The Agentica front end takes it as an input
+  C as `AGC_VERSION`; `agentica --version` reports it. The Agentica front end takes it as an input
   (`Settings.version`; `--version V` in the arguments of `compiler/front_end.agc`),
   and writes it into each `.agcb` header. Keep it in sync with the Git tag.
 - Every PR with a user-visible change adds a short entry under `## [Unreleased]`
@@ -376,7 +365,7 @@ CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
 
 ## Copy-paste check (jscpd)
 
-- `make dup-check` runs jscpd over `src/*.rkt`, `vm/*.c`, `vm/*.h` and
+- `make dup-check` runs jscpd over `vm/*.c`, `vm/*.h` and
   `vm/tests/*.c` with `.jscpd.json`. Its `weak` mode skips comments, so
   similar file header comments are not clones.
 - jscpd is pinned with its whole dependency tree by

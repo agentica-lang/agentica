@@ -18,13 +18,11 @@ Every C edit also reads `references/vm-c.md`.
 ## Pipeline and files
 
 ```text
-check #:types (src/checker.rkt)   eq? hash: expression node -> checked type
-lower         (src/lower.rkt)     checked program -> IR, or LOWER-UNSUPPORTED / LOWER-INTERNAL
-ir->bytecode  (src/bytecode.rkt)  IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL
-write-bytecode                    the versioned .agcb file (magic, format version, Agentica version)
+check          (compiler/checker.agc)         the type of each expression, by node id
+lower          (compiler/lowering.agc)        checked program -> IR, or LOWER-UNSUPPORTED / LOWER-INTERNAL
+bytecode write (compiler/bytecode_writer.agc) IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL; the versioned .agcb file (magic, format version, Agentica version)
 vm/agentica.c dist/agentica WORDS...: the front end (compiler/front_end.agc, carried in the binary) in a first runtime, then the program it hands over in a second (references/vm-core.md)
 vm/agentica.c dist/agentica run [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000)
-src/main.rkt  the Racket oracle: agentica file.agc through a 0600 temp file and `dist/agentica run` (LOWER-UNSUPPORTED exits 1)
 ```
 
 ## Which layer
@@ -79,7 +77,7 @@ function, which has no backward jump and is never called. A file that loads may 
 | `references/vm-io.md` | the libuv loop and registry, stdin, stdout and stderr, `File`, `Dir`, `Path` |
 | `references/vm-tasks.md` | the scheduler, task cancellation, `Channel`, the `Test` builtins, the latency test |
 | `references/vm-net.md` | processes, the child channel, streams, TCP, TLS (OpenSSL), the HTTP client and server |
-| `references/vm-lowering.md` | `src/lower.rkt`, `src/bytecode.rkt`, a new form or opcode, linked programs, closures, ranges, Results, tail calls |
-| `references/vm-builtins.md` | adding or changing a C builtin (`vm-builtins` in `src/lower.rkt`, the tables) or a trace point |
+| `references/vm-lowering.md` | `compiler/lower_*.agc`, `compiler/bytecode_*.agc`, a new form or opcode, linked programs, closures, ranges, Results, tail calls |
+| `references/vm-builtins.md` | adding or changing a C builtin (`VM_BUILTINS` in `compiler/lower_tables.agc`, the tables) or a trace point |
 | `references/vm-build.md` | make targets, the golden harness (`tests/vm_diff_support.py`, `make goldens`, the step-limit sweep), submodules (bdwgc, yyjson, libuv, picohttpparser, OpenSSL), sanitizers, fuzzing, portability |
 | `references/vm-tests.md` | which C test (`vm/tests/`) or unittest module (`tests/test_vm_*.py`) covers a file, and the sweep cost rule |

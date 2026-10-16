@@ -1,4 +1,4 @@
-# VM tests: C tests, Racket peers and goldens
+# VM tests: C tests, peers and goldens
 
 What each VM test file covers, and the golden sweep rules.
 
@@ -42,7 +42,7 @@ Read first: `references/vm.md`.
 | `vm/tests/tls_test.c` | two adapters in memory: handshakes with tiny record slices, a 100,000-byte transfer, `close_notify` and raw EOF, every verify error, EOF and a plain HTTP request during the handshake, the load errors (`ENOENT`, bad certificate, bad key, mismatch, bad CA) |
 | `tests/test_vm_tls.py` | the VM against independent peers (`tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`, certificates in `tests/fixtures/tls/` from `make-certs.sh`): a client against Node servers (one-byte records, abrupt EOF, a reset, 100,000-byte lines, the 1 MiB limit, a silent peer, wrong host, expired, self-signed, TLS 1.0/1.1 only, plain text, a stalled handshake), system trust through `SSL_CERT_FILE`, a Python TLS 1.2 server, a Python HTTPS server that sees `close_notify` on an idle and an active `HttpClient` connection when `main` returns (`client_goodbye`), a VM server with two Node clients (TLS 1.3 and 1.2), a Python client and a client that does not trust it; VM programs that are their own peers for handshake errors on both sides, timeouts and a pending handshake, and the end of a run with TLS work pending (`tls` trace); every case runs once (no step sweep), in about 5 s; needs Node and Python 3 in CI |
 | `tests/vm_diff_support.py`, `tests/test_vm_diff_{1..8}.py`, `tests/fixtures/vm/` | golden tests (`<name>.expected` next to each fixture, `make goldens` rewrites them from the VM), split into eight shards (`HEAVY_FIXTURES` pins the costly fixtures to a shard, the rest cycle through shards 1 to 7; shard 8 runs only the VM command line, the product CLI and the cases that need more than a fixture: process trees, signals, a FIFO, raw bytes in a path or an argument); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue`; `doc-comments.agc` has `##` docs on every kind of declaration and shows the VM runs them unchanged |
-| `tests/test_frontend_bytecode.py` | the bytes of the Agentica writer against the frozen Racket writer, the opcode numbers against `agc_opcode` in `vm/value.h`; the `compile` exit codes are in `tests/test_vm_diff_8.py` |
+| `tests/test_frontend_bytecode.py` | the bytes of the Agentica writer against the frozen output of the original writer, the opcode numbers against `agc_opcode` in `vm/value.h`; the `compile` exit codes are in `tests/test_vm_diff_8.py` |
 
 ## Gotchas
 

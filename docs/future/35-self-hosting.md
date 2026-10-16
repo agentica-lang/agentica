@@ -267,6 +267,21 @@ per-file rewrites that this section used to list (`cli-in-process.rkt`,
 tests, `bdd-integration.rkt`, now `tests/test_bdd_integration.py`) are done
 (phases 1 to 3, status below).
 
+**Status: Racket is deleted** (2026-10-16, after release 0.4.0, the first with
+the self-hosted front end as the default). One PR removed `src/`, the table
+generators of `tools/` (`gen-builtins-data.rkt`, `gen-check-tables.rkt`,
+`gen-lexer-unicode.rkt`, `agc-format.rkt`), `vm/tools/gen-unicode.rkt`, the
+`unicode` and `warm-unicode` CI jobs and `licenses/racket/`; no Makefile target,
+CI job or release step runs `racket` or `raco` any more. The Unicode condition
+above was settled differently, by the owner's decision of 2026-10-16 (option A):
+`vm/unicode_data.c` and `compiler/unicode_table.agc` are frozen, checked-in
+source, with a header that says they came from the tables of Racket 9.3
+(Unicode 17.0), and `compiler/builtins_data.agc` and `check_tables.agc` are
+hand-edited sources. Option B is a later PR: a generator written in Agentica over
+pinned Unicode Character Database files, which must reproduce `unicode_data.c`
+byte for byte (or explain each difference) before it replaces it. The parent
+commit of the merge of that PR is tagged `bootstrap-racket`.
+
 Replacing rackunit is decided: Python `unittest`, standard library only, in
 phases that run beside steps 4 to 8
 ([§35.10](#3510-tests-move-to-python-unittest)). Phase 3 is 8c and 8d of

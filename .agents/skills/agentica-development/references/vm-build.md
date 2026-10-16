@@ -32,7 +32,6 @@ make goldens                         # rewrite tests/fixtures/vm/**/*.expected f
 make goldens FIXTURES="name ..."     # only those fixtures (names without .agc, step-limited/ ones too); an unknown name exits 2
 make vm-golden-check FIXTURES="name ..."  # the CI golden check (3 formats, sweep, sidecars, stack files) for only those fixtures
 make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
-make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; use Racket CS 9.3, the CI version; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 make vm-diff-test JOBS=4
 dist/agentica compile prog.agc -o prog.agcb && dist/agentica run -- prog.agcb
 dist/agentica --dump-ir prog.agc
@@ -49,8 +48,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   (`compiler/front_end.agc`) compiles in memory and hands the bytes to C with
   `FrontEnd.hand_off`; `vm/agentica.c` runs them in a new runtime. A
   `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1. Every catalog
-  implementation is in `vm-builtins` (`compiler/builtins_data.agc`; the Racket
-  copy is in `src/lower.rkt`), so no builtin reaches it today.
+  implementation is in `VM_BUILTINS` (`compiler/lower_tables.agc`), so no builtin
+  reaches it today.
   `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
   handles it when `run` is the first word, with the VM flags (`--max-steps`,
   `--seed`, `--flush-timeout`, `--allow-run`, `--ai`, `--json`, `--source-root`,
@@ -61,8 +60,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   BDD driver in the front end; it starts the runner with `self_path run
   --driver-pid ...` (see `references/bdd.md`). A new VM option goes in
   `agc_launch_parse` and in the pass-through list of the front end
-  (`compiler/cli_options.agc`, `src/main.rkt` and the hand-off check in
-  `vm/agentica.c`). A new builtin goes into `vm-builtins` with its C
+  (`compiler/cli_options.agc` and the hand-off check in
+  `vm/agentica.c`). A new builtin goes into `VM_BUILTINS` with its C
   implementation. There is no `AGENTICA_VM`: no code reads it, and
   `AGENTICA_VM_BINARY` is a test knob only (the Python tests run that build of
   the binary: the GC stress, the vendored link, a sanitizer build).
@@ -102,7 +101,7 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   `--max-steps` sweep. Shared code is in `tests/vm_diff_support.py`; each
   shard takes a fixed share of the fixtures so `make test-py` runs them in
   parallel. The fixtures are compiled by the product CLI (`compile FILE -o
-  OUT`, `racket src/main.rkt` today), never in process. When behaviour
+  OUT`), never in process. When behaviour
   changes on purpose, `make goldens` rewrites the expected files from the VM;
   commit them, and the PR diff shows the change for review.
 - One fixture: `make vm-golden-check FIXTURES="list-sort-runs std-binary"`
@@ -121,8 +120,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   - `.stdin`: raw bytes fed to the program's stdin (`.gitattributes` marks them
     binary so CRLF survives). The golden batch gives them as a file, the
     step-count search and the extras as a pipe.
-  - `.args`: a list of strings in Racket syntax (the harness reads them with a
-    small regular expression, not a Racket reader) passed as
+  - `.args`: a list of double-quoted strings (the harness reads them with a
+    small regular expression) passed as
     program arguments; `"@tmp"` becomes a fresh empty directory per run, and
     that path is turned back into `@tmp` in the output before the comparison;
     `"@fixtures/x"` the path `tests/fixtures/x`. File fixtures (`files-*`) use
@@ -194,8 +193,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   construct (it prints nothing after the loop). Sweep and runaway
   VM runs time out after 60 seconds; after the first timeout (or exit 124 or
   137) the rest of the batch is skipped and recorded as 124. Output is decoded
-  like Racket's `port->string` (`decode`: one U+FFFD for each byte that is not
-  part of a valid sequence), which is how the goldens were written.
+  with one U+FFFD for each byte that is not part of a valid sequence
+  (`decode`), which is how the goldens were written.
   The VM runs of one fixture go through `vm_batch`, which runs the VM once
   for each list of options. A new costly fixture may need an
   entry in `HEAVY_FIXTURES` in `tests/vm_diff_support.py`. A fixture whose
