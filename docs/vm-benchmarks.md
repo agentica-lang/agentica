@@ -519,3 +519,111 @@ about 5 ms for the run of the front end itself (`check examples/hello.agc` is
 27,946 steps). Against the target of 100 ms for gherkin (§35.2), 130 ms now, the
 lexer is 58% of the steps of that check and the loader is 12% of its time,
 so the lexer comes first, then the loader.
+
+### Speed pass, second part: the interpreter loop
+
+Two changes to the VM core, measured against master (ab93db7c), the master
+binary built apart and kept. Both binaries ran alternately (A B A B, 7 rounds of
+5 runs, the median of the round medians) on the same AMD Ryzen 5 3550H, Debian
+13, gcc 14.2 as above. The load average was 1.7 at the start and 2.3 at the end
+(another agent was building), so the numbers are at the edge of "measured under
+load"; compare the two columns of a row, not rows with earlier tables. The
+VM rows are `dist/agentica run -- f.agcb` at size 4 (bytecode compiled once);
+the last three rows are source to result, start-up included.
+
+| Program | Master s | This PR s | Ratio |
+|---|---:|---:|---:|
+| arithmetic (15.3 M steps) | 0.275 | 0.104 | 0.38 |
+| case | 0.088 | 0.051 | 0.58 |
+| traveling-salesman | 0.154 | 0.085 | 0.55 |
+| knight-tour | 0.144 | 0.082 | 0.57 |
+| calls | 0.106 | 0.065 | 0.61 |
+| lists | 0.134 | 0.089 | 0.67 |
+| strings | 0.127 | 0.090 | 0.71 |
+| sets | 0.371 | 0.268 | 0.72 |
+| string-library | 0.093 | 0.072 | 0.78 |
+| maps | 0.577 | 0.463 | 0.80 |
+| maze-bfs | 0.217 | 0.181 | 0.84 |
+| list-build | 0.175 | 0.148 | 0.85 |
+| list-bulk | 0.310 | 0.292 | 0.94 |
+| `check examples/hello.agc` | 0.0271 | 0.0264 | 0.97 |
+| `check stdlib/bdd/gherkin.agc` | 0.127 | 0.101 | 0.80 |
+| `check compiler/parser.agc` | 0.403 | 0.311 | 0.77 |
+
+The step counts did not change (`AGENTICA_VM_TRACE=profile` prints the same
+steps, calls and builtin calls on master and here for the benchmarks and for
+the gherkin check), and neither did the output of `--max-steps N` runs at seven
+limits from 1 to 1,234,567. `arithmetic` runs 56 M steps per second on master
+and 147 M here. A check of `hello.agc` is start-up (the loader, next section),
+so it does not move.
+
+What changed, and what each step gave (each column is its own interleaved run
+against the column before it, 3 rounds of 3 runs; seconds):
+
+| Program | Master | Inline accessors | And frame state in locals |
+|---|---:|---:|---:|
+| arithmetic | 0.275 | 0.225 | 0.110 |
+| calls | 0.106 | 0.098 | 0.075 |
+| case | 0.091 | 0.093 | 0.060 |
+| knight-tour | 0.144 | 0.124 | 0.086 |
+| `check gherkin.agc` | 0.125 | 0.123 | 0.102 |
+| `check parser.agc` | 0.402 | 0.385 | 0.303 |
+
+- **The value accessors are inline.** `agc_int`, `agc_bool`, `agc_float`,
+  `agc_as_int`, `agc_as_bool` and the rest of the constructors and checked
+  accessors of the common types lived in `value.c`, so the loop made a call
+  for each operand: `ADD_I` was three calls. They are `static inline` in
+  `value.h` now, with one cold out-of-line failure, `agc_wrong_tag`. The service
+  resources (`agc_as_task`, `agc_as_socket`, ...) stay in `value.c`. This also
+  speeds the builtins, which use the same accessors.
+- **The loop keeps the frame in locals.** Every instruction used to reload the
+  frame, the function, the register base and the `pc` through a chain of
+  dependent loads, and the `pc` was stored and loaded again by the next
+  instruction. The loop now holds the code, the spans, the register window and
+  the `pc` in locals and reloads them (`goto reload`) only after `CALL`,
+  `CALL_VALUE`, `TAIL_CALL`, `RETURN`, a failing `TRY` and a builtin that
+  pushes a native frame; no other instruction pushes a frame or grows the
+  register array of the running task
+  (`docs/vm/05-values-execution-builtins.md` §6.1). `frame->pc` is still
+  written before each instruction, because the stack trace of a failure, a
+  park and a yield read it, so spans, traces and step counts are the same.
+
+Where a check of the front end spends its time now, from 60 runs of the gherkin
+check and 30 of the parser check under a `SIGPROF` sampler (`perf` is blocked
+on this host: an `LD_PRELOAD` library that records the instruction pointer at
+250 Hz, symbols from `nm`; 1,465 and 2,243 samples): the turn loop is 41% of
+the gherkin check and 52% of the parser check, the collector (libgc, mostly
+marking) 26% and 21%, the loader about 10% of the gherkin check, and the
+builtins the rest. Inside the loop a third of the samples sit on the dispatch
+(fetch, `switch` jump) and one in five on the `STEP` and `MOVE` handlers. The
+collector and the loader are the next costs (roadmap row 8.3).
+
+Tried and dropped, each measured against the version it changed (interleaved
+runs as above):
+
+- **Computed-goto dispatch** (one `goto *labels[op]` at the end of every
+  handler). GCC 14 cannot inline a function with a computed goto, so it needs
+  one copy of the loop with the profile test at run time, and it was slower on
+  every loop benchmark: `arithmetic` +64%, `calls` +31%, `case` +31%,
+  `traveling-salesman` +27%; only the gherkin check was 4% faster. The `switch`
+  stays.
+- **`MOVE` as two 8-byte copies** instead of one 16-byte vector copy, to avoid a
+  store-forwarding stall after a value built from a tag and a word:
+  `arithmetic` +24%, `case` +25%.
+- **Separate `ADD_I`, `SUB_I` and `MUL_I` handlers** (they share one that tests
+  the opcode again): between -10% and +16% from run to run, the noise of the
+  link layout; not kept.
+- **Reading the span lazily** (`spans[pc - 1]` where a failure or call needs
+  it, not a load on every instruction) frees a register and a load, but it
+  stayed inside the noise of the link layout in two runs. Kept, for the
+  register.
+- **An opcode range check** (`cmp; ja` in front of the jump table) is
+  guaranteed by the loader (`unknown opcode` is rejected), but the check is one
+  well-predicted branch; left in as the second line of defence.
+- **Counting `STEP` in a local** instead of `vm->next_stop` was not tried: every
+  failure path would need to store it back before the `longjmp`, because the
+  budget of a task that crashes is still observable.
+
+The link layout moves single programs by up to 8% here (the same loop code
+moved by 64 bytes: `arithmetic` +3%, `case` +8%), as in the earlier sections.
+Read a difference of that size as noise.
