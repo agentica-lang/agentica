@@ -25,6 +25,7 @@
 #endif
 #if defined(_WIN32)
 #include <windows.h>
+#include <io.h>
 #else
 #include <unistd.h>
 #endif
@@ -630,7 +631,7 @@ static int queue_work(agc_loop *loop, job *j) {
   return rc;
 }
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static void poll_ready(uv_poll_t *handle, int status, int events) {
   (void)events;
   agc_poller *p = (agc_poller *)(void *)handle;
@@ -639,7 +640,11 @@ static void poll_ready(uv_poll_t *handle, int status, int events) {
 
 static void poller_closed(uv_handle_t *handle) {
   agc_poller *p = handle->data;
+#ifdef _WIN32
+  _close(p->fd);
+#else
   close(p->fd);
+#endif
   free(p);
 }
 
@@ -670,19 +675,6 @@ int agc_fd_reopen(int fd, int access) {
   return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
 }
 #endif
-
-char *agc_real_path(const char *path, int *err) {
-  uv_fs_t req;
-  int rc = uv_fs_realpath(NULL, &req, path, NULL);
-  char *copy = NULL;
-  if (rc < 0) {
-    *err = -rc;
-  } else if (!(copy = strdup(req.ptr))) {
-    *err = ENOMEM;
-  }
-  uv_fs_req_cleanup(&req);
-  return copy;
-}
 
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   agc_poller *p = calloc(1, sizeof(agc_poller));

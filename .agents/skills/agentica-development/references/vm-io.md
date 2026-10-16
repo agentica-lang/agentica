@@ -9,7 +9,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 | Path | Owns |
 |---|---|
 | `vm/loop.c` | The libuv event loop and the resource registry. Details below. |
-| `vm/files.c` | The `File`, `Dir` and `Path` builtins (Linux only). Details below. |
+| `vm/files.c` | The shared `File`, `Dir` and `Path` builtins (Unix and Windows regular files). Details below. |
+| `vm/file_io.c`, `vm/file_io.h` | Synchronous libuv filesystem adapter: UTF-8 paths, binary descriptors, metadata, directory names and canonical paths. Called by existing pool jobs; no VM state. |
+| `vm/file_windows.c` | Windows UTF-8/native path conversion, drive and UNC resolution, and OS error mapping. |
 | `vm/tree.c` | `agc_tree_refused` (the pure test of the names never removed) and `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with `O_NOFOLLOW`, `unlinkat`, an explicit stack of at most 128 levels, no VM state. |
 | `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux a pipe, FIFO, terminal or socket stdin is read on the loop (`watch_stdin`: a pipe or terminal reopened through `/proc/self/fd/N` with `O_NONBLOCK` so the inherited description keeps its flags, a socket read with `MSG_DONTWAIT`; an `agc_poller` and an `external` job), any other stdin by one pool job; the job's `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; non-Linux keeps a blocking read |
 | `vm/output.c` | The writer of stdout and stderr, with a buffer and a waiting queue per stream. |
@@ -104,9 +106,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     - `agc_poller_*` (a `malloc`'d `uv_poll_t` that owns a descriptor that can
       wait forever: open (returns the libuv error), wait readable or writable
       with a callback, pause, close, which closes the descriptor),
-    - `agc_real_path` (`Path.real`: `uv_fs_realpath` without a callback, so it
+    - `agc_fs_realpath` (`Path.real`: `uv_fs_realpath` without a callback, so it
       runs on the calling pool thread; it returns a `malloc`'d string, or NULL
-      and the errno; `files.c` includes no libuv header), `agc_io_start_then` (a
+      with errno; `files.c` includes no libuv header), `agc_io_start_then` (a
       pool job's `more` step, run on the loop thread after its work, may keep
       the job waiting on the loop until `agc_io_ready`; the job's `on_loop` flag
       then makes its `expired` and end-of-run paths treat it like an `external`
@@ -122,7 +124,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     loses only the job in hand, not the rest of the batch
   - jobs readied while it runs wait for the next drain
 - `vm/files.c`
-  - the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, Linux only;
+  - the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, shared with Windows;
     `docs/vm/02-reference-behavior.md` §2.8)
     - argument checks in the evaluator's order (
       - for a handle: arguments and timeout, then the lock, then open and mode)
@@ -202,7 +204,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     - `Path.rename` (`OP_RENAME`): `renameat2` with `RENAME_NOREPLACE`;
       `files.c` defines `_GNU_SOURCE` for it; the second path is `op.to`; the
       error is `FS_RENAME` with both paths
-  - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_real_path`, the job
+  - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_fs_realpath`, the job
     has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`, `filesystem:
     cannot resolve path` with the path and the OS error text, and the result is
     decoded with `lossy`, one U+FFFD per bad byte)
@@ -327,3 +329,22 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   through glibc `iconv`); the diff test checks this with `LC_ALL=C.UTF-8`.
   The driver copies a non-file stdin into the VM with a thread that
   it kills once the VM exits.
+
+## Native Windows files
+
+`files.c` shares validation, buffers, task ownership and pool deadlines with
+Unix. `file_io.c` owns the synchronous libuv calls and `file_windows.c` owns
+native path conversion. Do not put `uv.h` or Win32 headers in the driver to
+reach these operations. Regular files use binary descriptors and UTF-8 paths;
+`Path.resolve` preserves drive and UNC roots and normalizes separators.
+
+Windows special streams, private creates/directories, locks, rename and
+`Path.remove` are not enabled by this increment. Removal returns an error
+without changing the path. Keep it disabled until native no-follow traversal,
+raw root/dot validation and junction tests are implemented; normalizing `.`
+before checking it would erase the evidence needed to refuse it.
+
+`vm/tests/files_test.c` exercises real builtin calls without needing a
+self-hosted compiler: text and all-byte round trips, append/flush/close,
+Unicode paths, invalid writes that leave data intact, Windows path roots and
+refused Windows removal. All native `vm-test` jobs run it.

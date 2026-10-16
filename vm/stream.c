@@ -75,7 +75,7 @@ agc_value agc_utf8_error(const uint8_t *data, size_t len) {
   return agc_result_value(false, agc_string_value(decoded));
 }
 
-#if !defined(__linux__) && !defined(__APPLE__)
+#if !defined(__linux__) && !defined(__APPLE__) && !defined(_WIN32)
 agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
   (void)vm;
   (void)err;
