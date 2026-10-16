@@ -86,7 +86,6 @@ struct agc_io_job {
   bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush, on_loop;
 };
 
-#if !defined(_WIN32)
 struct agc_poller {
   uv_poll_t handle;
 #ifdef __APPLE__
@@ -97,7 +96,6 @@ struct agc_poller {
   void (*ready)(void *data, int status);
   void *data;
 };
-#endif
 
 static stop_state *stop_status(void) {
   static stop_state state;

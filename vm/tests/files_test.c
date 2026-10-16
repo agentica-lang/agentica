@@ -4,6 +4,7 @@
 #include "../file_io.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
@@ -74,6 +75,16 @@ int main(void) {
   assert(snprintf(appended, sizeof appended, "%s\nend", text) > 0);
   text = appended;
   check_text(file, text);
+  unsigned invalid_flags[] = {
+    AGC_FS_TRUNCATE, AGC_FS_WRITE | AGC_FS_APPEND | AGC_FS_TRUNCATE,
+    AGC_FS_WRITE | AGC_FS_EXCLUSIVE, 1u << 30, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_PRIVATE
+  };
+  for (size_t k = 0; k < sizeof invalid_flags / sizeof invalid_flags[0]; k++) {
+    assert(agc_fs_open(path, invalid_flags[k]) == -1 && errno == EINVAL);
+    check_text(file, text);
+  }
+  assert(agc_fs_open(NULL, AGC_FS_WRITE) == -1 && errno == EINVAL);
+  assert(agc_fs_open("", AGC_FS_WRITE) == -1 && errno == EINVAL);
   agc_value bad_paths[] = {string(""), agc_string_value(agc_make_string(path, strlen(path) + 1, 0))};
   for (size_t k = 0; k < sizeof bad_paths / sizeof bad_paths[0]; k++) {
     args[0] = bad_paths[k];
