@@ -115,12 +115,16 @@ what was kept.
 
 ### 34.5 Tests
 
-- Goldens do not change: `make test` with no `make goldens` diff, and the
-  `vm-sanitizers` job (ASan, GC stress).
+- Existing goldens do not change: `make test` with no `make goldens` diff,
+  and the `vm-sanitizers` job (ASan, GC stress). As built, one new golden
+  (`shared-small-values`) prints the same output on the old and new VM.
 - A C test in `vm/tests/string_test.c`: two `at` results of the same ASCII
-  character, two `split("")` items, and two empty lists from `LIST` share
-  storage; a non-ASCII character does not; the table still holds the right text
-  after `GC_gcollect` (`make vm-gc-stress`).
+  character and two `split("")` items share storage; a non-ASCII character does
+  not; the table still holds the right text after `GC_gcollect`
+  (`make vm-gc-stress`). As built, `LIST` with no items still allocates (the
+  shared empty List in `vm/interp.c` was dropped, §34.6), so there is no `LIST`
+  case. Not covered by a sharing assert: `IO.gets`, `IO.read`,
+  `File.each_line` and a typed JSON decode of `{}` into a Map field.
 
 ### 34.6 As built
 
