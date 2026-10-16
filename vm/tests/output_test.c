@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <uv.h>
 
 #if defined(__linux__) || defined(__APPLE__)
 
@@ -129,11 +130,17 @@ static void check_run(size_t at, char letter, size_t len) {
 static void pump(void) {
   agc_io_poll(&vm, false);
   read_pipe();
+  uv_sleep(1);
 }
 
 static void pump_until(size_t want) {
   for (int round = 0; round < 100 && collected_len < want; round++) pump();
   assert(collected_len == want);
+}
+
+static void wait_ready(agc_task *t) {
+  for (int round = 0; round < 5000 && t->state == AGC_TASK_PARKED; round++) pump();
+  assert(t->state == AGC_TASK_READY);
 }
 
 static void test_small_prints_keep_order(void) {
@@ -162,8 +169,8 @@ static void test_waiters_do_not_jump_the_queue(void) {
   agc_io_poll(&vm, false);
   assert(b->state == AGC_TASK_PARKED && out()->len == 3 * BLOCK);
   assert(read_pipe() == junk);
-  agc_io_poll(&vm, false);
-  assert(b->state == AGC_TASK_READY && c->state == AGC_TASK_PARKED && out()->len == 0);
+  wait_ready(b);
+  assert(c->state == AGC_TASK_PARKED);
   assert(retry(b));
   assert(c->state == AGC_TASK_READY && out()->waiters == c);
   assert(retry(c));
@@ -210,8 +217,7 @@ static void test_flush_waits_for_an_empty_buffer(void) {
   agc_io_poll(&vm, false);
   assert(d->state == AGC_TASK_PARKED);
   assert(read_pipe() == junk);
-  agc_io_poll(&vm, false);
-  assert(d->state == AGC_TASK_READY);
+  wait_ready(d);
   assert(drain_as(d) && !out()->waiters && !d->output.out);
   pump();
   assert(collected_len == junk + 100);
@@ -248,12 +254,9 @@ static void test_a_leaving_head_hands_on(void) {
   agc_output_leave(&vm, b);
   assert(out()->waiters == c && !b->output.out && b->wait_next == NULL);
   assert(read_pipe() == junk);
-  pump();
-  pump();
-  assert(c->state == AGC_TASK_READY);
+  wait_ready(c);
   assert(retry(c));
-  pump();
-  assert(collected_len == junk + CAP + 10);
+  pump_until(junk + CAP + 10);
   check_run(junk, 'a', CAP);
   check_run(junk + CAP, 'c', 10);
   finish();

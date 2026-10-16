@@ -379,6 +379,15 @@ void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
     return;
   }
   bool pooled = S_ISREG(info.st_mode) || S_ISBLK(info.st_mode);
+#ifdef __APPLE__
+  if (S_ISCHR(info.st_mode)) {
+    const char *devices[] = {"/dev/null", "/dev/zero"};
+    for (size_t k = 0; k < sizeof devices / sizeof devices[0]; k++) {
+      struct stat device;
+      if (stat(devices[k], &device) == 0 && info.st_rdev == device.st_rdev) pooled = true;
+    }
+  }
+#endif
   bool socket = S_ISSOCK(info.st_mode);
   int use = fd;
   agc_poller *poller = NULL;
