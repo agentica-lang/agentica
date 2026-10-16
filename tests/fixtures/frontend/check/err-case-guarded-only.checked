@@ -1,0 +1,1 @@
+ERROR CHECK-NON-EXHAUSTIVE-CASE 57:7:3-149:11:1 "case must cover every variant of Option or include _" - signature="main() -> Void" file="err-case-guarded-only.agc"

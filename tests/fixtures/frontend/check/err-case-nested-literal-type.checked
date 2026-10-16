@@ -1,0 +1,1 @@
+ERROR CHECK-PATTERN-TYPE 93:8:17-98:8:22 "literal pattern has type String, but case value has type Int" - signature="main() -> Void" file="err-case-nested-literal-type.agc"

@@ -1,0 +1,6 @@
+def main() -> Void
+  case 1
+    _ if true
+      puts(1)
+  end
+end

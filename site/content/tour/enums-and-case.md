@@ -181,5 +181,88 @@ end
 9
 ```
 
-Patterns are one level deep: no nested patterns and no guards. Use a nested
-`case` or an `if` inside the arm.
+## Guards
+
+An arm can carry a guard: `pattern if condition ->`. The condition is a Bool and
+can use the names of the pattern. If it is false, `case` goes on with the next
+arm.
+
+```agentica
+enum Shape
+  Circle(Int)
+  Rect(Int, Int)
+end
+
+def size(s: Shape) -> String
+  case s
+    Shape.Circle(r) if r > 100 -> return "big circle"
+    Shape.Circle(_) -> return "circle"
+    Shape.Rect(w, h) if w == h -> return "square"
+    Shape.Rect(_, _) -> return "rect"
+  end
+end
+
+def main() -> Void
+  puts(size(Shape.Circle(500)))
+  puts(size(Shape.Rect(2, 2)))
+  puts(size(Shape.Rect(2, 3)))
+end
+```
+
+```output
+big circle
+square
+rect
+```
+
+A guarded arm may fail, so it never covers a variant. The unguarded arm after it
+does, and the same pattern may come again.
+
+```agentica {expect="CHECK-NON-EXHAUSTIVE-CASE"}
+def main() -> Void
+  case Result.Ok(4)
+    ok(n) if n > 0 -> puts("positive")
+    error(_) -> puts("failed")
+  end
+end
+```
+
+## Patterns inside patterns
+
+In a payload position, a pattern can be a literal (also a negative number), a
+name, `_`, or another variant, `ok(...)` or `error(...)`, at any depth.
+
+```agentica
+enum Option[T]
+  Some(T)
+  None
+end
+
+def describe(r: Result[Option[Int]]) -> String
+  case r
+    ok(Option.Some(0)) -> return "zero"
+    ok(Option.Some(n)) if n < 0 -> return "negative #{n}"
+    ok(Option.Some(n)) -> return "value #{n}"
+    ok(_) -> return "none"
+    error("timeout") -> return "timed out"
+    error(_) -> return "failed"
+  end
+end
+
+def main() -> Void
+  puts(describe(ok(Option.Some(-3))))
+  puts(describe(ok(Option.None)))
+  puts(describe(error("timeout")))
+end
+```
+
+```output
+negative -3
+none
+timed out
+```
+
+The check for a complete `case` is simple. An arm covers its variant only when it
+has no guard and each position is a name or `_`. An arm with a literal or a
+nested variant may fail, like a guarded arm, so end with `ok(_)`, a variant with
+`_` positions, or `_`.

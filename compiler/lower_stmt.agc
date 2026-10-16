@@ -331,9 +331,9 @@ def lower_range_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, span: S
 end
 
 # A case: each arm tests the scrutinee, jumps to the next arm when it does not match, binds the payload names in a
-# scope of its own, and jumps to the end after its body (except the last arm).
+# scope of its own, jumps to the next arm when its guard is false, and jumps to the end after its body (except the last
+# arm).
 def lower_case(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, saved: Int) -> Result[Lowering.Fx]
-  type = Lowering.static_type(cx, node.value)
   scrutinee = try Expr.lower_expression(cx, fx, node.value, -1, false, false)
   fx = Lowering.new_label(scrutinee.fx)
   end_label = fx.labels - 1
@@ -343,10 +343,11 @@ def lower_case(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, saved: Int)
     fx = Lowering.new_label(fx)
     skip = fx.labels - 1
     test_slot = fx.next
-    fx = try lower_test(cx, fx, arm.pattern, type, value, skip)
+    fx = try lower_test(cx, fx, arm.pattern, value, skip)
     fx = fx.with(next: test_slot)
     before = fx
-    fx = try bind_payload(cx, fx, arm.pattern, type, value)
+    fx = try bind_payload(cx, fx, arm.pattern, value)
+    fx = try lower_guard(cx, fx, arm.guard, skip)
     fx = try lower_block(cx, fx, arm.body)
     fx = leave(fx, before)
     if index < node.arms.size
@@ -358,9 +359,11 @@ def lower_case(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, saved: Int)
   return ok(Lowering.place(fx, end_label).with(next: saved))
 end
 
-# The instructions that jump to skip when the scrutinee in value does not match the pattern.
+# The instructions that jump to skip when the value in the register does not match the pattern: the tag of a variant,
+# then each nested pattern on the payload position it sits at, in order. A Result is `ok` or `error` by its own
+# instructions, and the checker has made sure that a pattern of enum "Result" is matched against a Result.
 def lower_test(
-  cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, type: Types.Type, value: Int, skip: Int
+  cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: Int, skip: Int
 ) -> Result[Lowering.Fx]
   span = Ast.pattern_span(pattern)
   case pattern
@@ -369,18 +372,48 @@ def lower_test(
     Ast.Pattern.Variant(node) ->
       fx = Lowering.alloc(fx)
       slot = fx.next - 1
-      if Types.is(type, "Result")
+      if node.enum_name == "Result"
         fx = Lowering.emit_at(fx, "is-ok", [slot, value], span)
         jump = "jump-if-true"
         if node.variant_name == "Ok"
           jump = "jump-if-false"
         end
-        return ok(Lowering.emit_at(fx, jump, [slot, skip], span))
+        fx = Lowering.emit_at(fx, jump, [slot, skip], span)
+      else
+        id = cx.variants["#{node.enum_name}.#{node.variant_name}"]
+        fx = Lowering.emit_at(fx, "is-variant", [slot, value, id], span)
+        fx = Lowering.emit_at(fx, "jump-if-false", [slot, skip], span)
       end
-      id = cx.variants["#{node.enum_name}.#{node.variant_name}"]
-      fx = Lowering.emit_at(fx, "is-variant", [slot, value, id], span)
-      return ok(Lowering.emit_at(fx, "jump-if-false", [slot, skip], span))
+      return test_nested(cx, fx, node, value, skip)
   end
+end
+
+# Tests the nested patterns of a variant: each is read from its payload position into a register and tested there. The
+# registers stay in use until the arm is done with its tests.
+def test_nested(
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.VariantPattern, value: Int, skip: Int
+) -> Result[Lowering.Fx]
+  item = 0
+  for slot in node.slots
+    case slot
+      Ast.Slot.Nested(inner) ->
+        fx = Lowering.alloc(fx)
+        part = fx.next - 1
+        fx = read_payload(fx, node, part, value, item)
+        fx = try lower_test(cx, fx, inner, part, skip)
+      _ -> fx = fx
+    end
+    item += 1
+  end
+  return ok(fx)
+end
+
+# Reads the payload position `item` of the variant in `value` into the register `target`.
+def read_payload(fx: Lowering.Fx, node: Ast.VariantPattern, target: Int, value: Int, item: Int) -> Lowering.Fx
+  if node.enum_name == "Result"
+    return Lowering.emit_at(fx, "result-value", [target, value], node.span)
+  end
+  return Lowering.emit_at(fx, "payload", [target, value, item], node.span)
 end
 
 # A literal pattern compares with `same`. An integer that is not an Int never matches, so its arm is skipped at once.
@@ -407,31 +440,67 @@ def lower_literal_test(
   return ok(Lowering.emit_at(fx, "jump-if-false", [slot, skip], node.span))
 end
 
-# The names of a variant pattern get a register each, filled from the payload of the scrutinee (a `_` takes none).
+# The names of a variant pattern get a register each, filled from the payload of the scrutinee (a `_` takes none). A
+# nested pattern that binds names is read into a register of its own first, and its names come from that register.
 def bind_payload(
-  cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, type: Types.Type, value: Int
+  cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: Int
 ) -> Result[Lowering.Fx]
   case pattern
     Ast.Pattern.Variant(node) ->
       item = 0
-      for binding in node.bindings
-        case binding
-          Ast.Optional.Present(name) ->
+      for slot in node.slots
+        case slot
+          Ast.Slot.Bind(name) ->
             fx = Lowering.alloc(fx)
-            slot = fx.next - 1
-            fx = fx.with(vars: fx.vars.put(name, slot))
-            if Types.is(type, "Result")
-              fx = Lowering.emit_at(fx, "result-value", [slot, value], node.span)
-            else
-              fx = Lowering.emit_at(fx, "payload", [slot, value, item], node.span)
+            target = fx.next - 1
+            fx = fx.with(vars: fx.vars.put(name, target))
+            fx = read_payload(fx, node, target, value, item)
+          Ast.Slot.Nested(inner) ->
+            if binds?(inner)
+              fx = Lowering.alloc(fx)
+              part = fx.next - 1
+              fx = read_payload(fx, node, part, value, item)
+              fx = try bind_payload(cx, fx, inner, part)
             end
-          Ast.Optional.Absent -> fx = fx
+          Ast.Slot.Skip -> fx = fx
         end
         item += 1
       end
     _ -> fx = fx
   end
   return ok(fx)
+end
+
+# Whether a pattern binds a name anywhere in it.
+def binds?(pattern: Ast.Pattern) -> Bool
+  case pattern
+    Ast.Pattern.Variant(node) ->
+      return node.slots.any? do |slot: Ast.Slot| slot_binds?(slot) end
+    _ -> return false
+  end
+end
+
+def slot_binds?(slot: Ast.Slot) -> Bool
+  case slot
+    Ast.Slot.Bind(name) -> return true
+    Ast.Slot.Skip -> return false
+    Ast.Slot.Nested(inner) -> return binds?(inner)
+  end
+end
+
+# The guard of an arm, after its names are bound: the next arm is tried when it is false. Its registers are free after
+# the jump, but the names stay.
+def lower_guard(
+  cx: Lowering.Cx, fx: Lowering.Fx, guard: Ast.Optional[Ast.Expr], skip: Int
+) -> Result[Lowering.Fx]
+  case guard
+    Ast.Optional.Present(condition) ->
+      kept = fx.next
+      lowered = try Expr.lower_expression(cx, fx, condition, -1, false, false)
+      fx = Lowering.emit_at(lowered.fx, "jump-if-false", [lowered.slot, skip], Ast.expr_span(condition))
+      return ok(fx.with(next: kept))
+    Ast.Optional.Absent -> return ok(fx)
+  end
 end
 
 # A block of statements in a scope of its own: the names it makes and the registers it takes are gone after it.

@@ -78,13 +78,16 @@ for_statement    = "for", NAME, "in", expression, [ "do" ], NL,
                    block, "end", NL ;
 case_statement   = "case", expression, [ "do" ], NL,
                    match_arm, { match_arm }, "end", NL ;
-match_arm        = pattern, "->", ( NL, block | simple_statement, NL, block ) ;
+match_arm        = pattern, [ "if", expression ], "->",
+                   ( NL, block | simple_statement, NL, block ) ;
 pattern          = "_" | literal | "-", INTEGER | "-", FLOAT
-                 | qualified_variant, [ "(", pattern_bindings, ")" ]
-                 | ( "ok" | "error" ), "(", pattern_bindings, ")" ;
+                 | variant_pattern ;
+variant_pattern  = qualified_variant, [ "(", pattern_slots, ")" ]
+                 | ( "ok" | "error" ), "(", pattern_slots, ")" ;
 qualified_variant = TYPE_NAME, ".", TYPE_NAME, [ ".", TYPE_NAME ] ;
-pattern_bindings = pattern_binding, { ",", pattern_binding } ;
-pattern_binding  = NAME | "_" ;
+pattern_slots    = pattern_slot, { ",", pattern_slot } ;
+pattern_slot     = NAME | "_" | literal | "-", INTEGER | "-", FLOAT
+                 | variant_pattern ;
 ```
 
 Assignments, `if`, `while` and `for` are statements, not expressions. `x += e` (also `-=`, `*=`, `/=`, `%=`) means `x = x op e`, with the same checks as the long form.

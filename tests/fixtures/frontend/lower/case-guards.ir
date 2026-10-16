@@ -1,0 +1,172 @@
+program 0:1:1-35:1 entry=2 globals=0
+source 0 "case-guards.agc" chars=723
+enum "Option" v0="Some"/1 v1="None"/0
+enum "Shape" v2="Circle"/1 v3="Pair"/2
+fn0 "describe" params=2 captures=0 slots=7 @ 0:11:1-20:1
+    step @ 0:12:3-19:1
+    step @ 0:12:8-12:13
+    is-variant r2 r0 v2 @ 0:13:5-13:20
+    jump-if-false r2 L1 @ 0:13:5-13:20
+    payload r3 r0 0 @ 0:13:5-13:20
+    const r4 int:0 @ 0:13:18-13:19
+    same r4 r3 r4 @ 0:13:18-13:19
+    jump-if-false r4 L1 @ 0:13:18-13:19
+    step @ 0:13:24-14:1
+    step @ 0:13:31-13:38
+    const r2 "empty" @ 0:13:31-13:38
+    return r2 @ 0:13:24-14:1
+    jump L0 @ 0:12:3-19:1
+  L1:
+    is-variant r2 r0 v2 @ 0:14:5-14:20
+    jump-if-false r2 L2 @ 0:14:5-14:20
+    payload r2 r0 0 @ 0:14:5-14:20
+    step @ 0:14:24-14:31
+    step @ 0:14:24-14:25
+    step @ 0:14:28-14:31
+    const r4 int:100 @ 0:14:28-14:31
+    lt-i r3 r4 r2 @ 0:14:26-14:27
+    jump-if-false r3 L2 @ 0:14:24-14:31
+    step @ 0:14:35-15:1
+    step @ 0:14:42-14:47
+    const r3 "big" @ 0:14:42-14:47
+    return r3 @ 0:14:35-15:1
+    jump L0 @ 0:12:3-19:1
+  L2:
+    is-variant r2 r0 v2 @ 0:15:5-15:20
+    jump-if-false r2 L3 @ 0:15:5-15:20
+    step @ 0:15:24-16:1
+    step @ 0:15:31-15:39
+    const r2 "circle" @ 0:15:31-15:39
+    return r2 @ 0:15:24-16:1
+    jump L0 @ 0:12:3-19:1
+  L3:
+    is-variant r2 r0 v3 @ 0:16:5-16:34
+    jump-if-false r2 L4 @ 0:16:5-16:34
+    payload r3 r0 0 @ 0:16:5-16:34
+    const r4 int:1 @ 0:16:16-16:17
+    same r4 r3 r4 @ 0:16:16-16:17
+    jump-if-false r4 L4 @ 0:16:16-16:17
+    payload r5 r0 1 @ 0:16:5-16:34
+    is-variant r6 r5 v0 @ 0:16:19-16:33
+    jump-if-false r6 L4 @ 0:16:19-16:33
+    payload r2 r0 1 @ 0:16:5-16:34
+    payload r3 r2 0 @ 0:16:19-16:33
+    step @ 0:16:38-16:43
+    step @ 0:16:38-16:39
+    step @ 0:16:42-16:43
+    const r5 int:5 @ 0:16:42-16:43
+    lt-i r4 r5 r3 @ 0:16:40-16:41
+    jump-if-false r4 L4 @ 0:16:38-16:43
+    step @ 0:16:47-17:1
+    step @ 0:16:54-16:65
+    const r4 "pair " @ 0:16:54-16:65
+    step @ 0:16:62-16:63
+    move r5 r3 @ 0:16:62-16:63
+    to-text r5 r5 @ 0:16:54-16:65
+    concat r4 r4 r5 @ 0:16:54-16:65
+    return r4 @ 0:16:47-17:1
+    jump L0 @ 0:12:3-19:1
+  L4:
+    is-variant r2 r0 v3 @ 0:17:5-17:21
+    jump-if-false r2 L5 @ 0:17:5-17:21
+    step @ 0:17:25-18:1
+    step @ 0:17:32-17:38
+    const r2 "pair" @ 0:17:32-17:38
+    return r2 @ 0:17:25-18:1
+  L5:
+  L0:
+    const r2 void @ 0:11:1-20:1
+    return r2 @ 0:11:1-20:1
+fn1 "results" params=1 captures=0 slots=4 @ 0:21:1-30:1
+    step @ 0:22:3-29:1
+    step @ 0:22:8-22:9
+    is-ok r1 r0 @ 0:23:5-23:23
+    jump-if-false r1 L1 @ 0:23:5-23:23
+    result-value r2 r0 @ 0:23:5-23:23
+    is-variant r3 r2 v0 @ 0:23:8-23:22
+    jump-if-false r3 L1 @ 0:23:8-23:22
+    result-value r1 r0 @ 0:23:5-23:23
+    payload r2 r1 0 @ 0:23:8-23:22
+    step @ 0:23:27-24:1
+    step @ 0:23:34-23:35
+    return r2 @ 0:23:27-24:1
+    jump L0 @ 0:22:3-29:1
+  L1:
+    is-ok r1 r0 @ 0:24:5-24:10
+    jump-if-false r1 L2 @ 0:24:5-24:10
+    step @ 0:24:14-25:1
+    step @ 0:24:21-24:22
+    const r1 int:0 @ 0:24:21-24:22
+    return r1 @ 0:24:14-25:1
+    jump L0 @ 0:22:3-29:1
+  L2:
+    is-ok r1 r0 @ 0:25:5-25:18
+    jump-if-true r1 L3 @ 0:25:5-25:18
+    result-value r2 r0 @ 0:25:5-25:18
+    const r3 "boom" @ 0:25:11-25:17
+    same r3 r2 r3 @ 0:25:11-25:17
+    jump-if-false r3 L3 @ 0:25:11-25:17
+    step @ 0:25:22-26:1
+    step @ 0:25:29-25:31
+    step @ 0:25:30-25:31
+    const r2 int:1 @ 0:25:30-25:31
+    neg-i r1 r2 @ 0:25:29-25:30
+    return r1 @ 0:25:22-26:1
+    jump L0 @ 0:22:3-29:1
+  L3:
+    is-ok r1 r0 @ 0:26:5-26:13
+    jump-if-true r1 L4 @ 0:26:5-26:13
+    step @ 0:26:17-26:21
+    const r1 true @ 0:26:17-26:21
+    jump-if-false r1 L4 @ 0:26:17-26:21
+    step @ 0:26:25-27:1
+    step @ 0:26:32-26:34
+    step @ 0:26:33-26:34
+    const r2 int:2 @ 0:26:33-26:34
+    neg-i r1 r2 @ 0:26:32-26:33
+    return r1 @ 0:26:25-27:1
+    jump L0 @ 0:22:3-29:1
+  L4:
+    is-ok r1 r0 @ 0:27:5-27:13
+    jump-if-true r1 L5 @ 0:27:5-27:13
+    step @ 0:27:17-28:1
+    step @ 0:27:24-27:26
+    step @ 0:27:25-27:26
+    const r2 int:3 @ 0:27:25-27:26
+    neg-i r1 r2 @ 0:27:24-27:25
+    return r1 @ 0:27:17-28:1
+  L5:
+  L0:
+    const r1 void @ 0:21:1-30:1
+    return r1 @ 0:21:1-30:1
+fn2 "main" params=0 captures=0 slots=4 entry @ 0:31:1-35:1
+    step @ 0:32:3-33:1
+    step @ 0:32:3-32:58
+    step @ 0:32:8-32:57
+    step @ 0:32:17-32:32
+    step @ 0:32:30-32:31
+    const r2 int:1 @ 0:32:30-32:31
+    enum r1 r2 v2 @ 0:32:17-32:32
+    step @ 0:32:34-32:56
+    step @ 0:32:44-32:55
+    enum r3 r3 v1 @ 0:32:44-32:55
+    call-builtin r3 "ok" 1 @ 0:32:34-32:56 0:32:44-32:55
+    move r2 r3 @ 0:32:34-32:56
+    call r1 fn0 @ 0:32:8-32:57
+    move r0 r1 @ 0:32:8-32:57
+    call-builtin r0 "puts" 1 @ 0:32:3-32:58 0:32:8-32:57
+    step @ 0:33:3-34:1
+    step @ 0:33:3-33:43
+    step @ 0:33:8-33:42
+    step @ 0:33:16-33:41
+    step @ 0:33:26-33:40
+    step @ 0:33:38-33:39
+    const r3 int:2 @ 0:33:38-33:39
+    enum r2 r3 v0 @ 0:33:26-33:40
+    call-builtin r2 "ok" 1 @ 0:33:16-33:41 0:33:26-33:40
+    move r1 r2 @ 0:33:16-33:41
+    call r1 fn1 @ 0:33:8-33:42
+    move r0 r1 @ 0:33:8-33:42
+    call-builtin r0 "puts" 1 @ 0:33:3-33:43 0:33:8-33:42
+    const r0 void @ 0:31:1-35:1
+    return r0 @ 0:31:1-35:1
