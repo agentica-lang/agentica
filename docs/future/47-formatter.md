@@ -373,8 +373,9 @@ file with `FMT-UNSUPPORTED` (a proposal), and it never guesses.
   Row 7.6 is ordered before row 7.9, so 47b covers heredocs when it starts. The
   body is printed byte for byte, including its indent, and the end line stays
   where it is. A heredoc is a hard break, so the enclosing call is laid out as a
-  broken one. The width counts only the `<<~NAME` line. If 15j lands after 47b
-  starts, its PR adds the rule.
+  broken one. The width counts only the `<<~NAME` line. 15j has landed
+  (post-bootstrap step 5): a heredoc token has the span of its opener and a
+  lexeme that starts with `<<~`, and the body stays in the file text.
 - **Case guards and nested patterns** are not supported today
   (`docs/grammar/06-semantics.md:71`). They are planned only as §25.12.1, "to
   evaluate later", with no phase. A PR that adds them adds their layout rule and
@@ -407,7 +408,7 @@ test runs the `agentica fmt` binary in a temporary folder that it cleans up.
   comment-only file; an interpolation with nested quotes and a `#` in the text
   (`"#{xs.join(", ")} # not a comment"`); an unbreakable long string and an
   unbreakable long identifier (the output keeps them, and `fmt --check` passes).
-  The heredoc goldens come with 15j.
+  The heredoc goldens are written with 47b (15j has landed).
 - **Round trip** (fast tier, for every golden): the normal form of the input
   equals the normal form of the output. This catches a printer that drops a
   parenthesis, changes an operator or splits a word.

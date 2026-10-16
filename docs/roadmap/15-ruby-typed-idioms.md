@@ -114,12 +114,14 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   (`CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`, `CHECK-UNUSED-RESULT`; the
   lowered close is never reported), with tests. Docs: `grammar.md`,
   `references/files.md`, `site/content/library/io-and-system/files.md`.
-- [ ] 15j Heredocs `<<~NAME` (§25.10): the lexer, with today's token kinds and a
-  `heredoc?` field on the token, carried to the parser's string node as a flag
-  (added here); `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
-  `LEX-HEREDOC-ONE-LINE` (a heredoc is the canonical form for two or more
-  lines); a heredoc in a `case` pattern or an import path is
-  `PARSE-UNEXPECTED-TOKEN`. Docs: `grammar.md`, the programming skill (with
+- [x] 15j Heredocs `<<~NAME` (§25.10): **built** (2026-10-16, post-bootstrap
+  step 5, part A, in `compiler/` only): the lexer, with today's token kinds;
+  `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE` (a
+  heredoc is the canonical form for two or more lines); a heredoc in a `case`
+  pattern or an import path is `PARSE-UNEXPECTED-TOKEN`. The parser tells a
+  heredoc from a string by the lexeme of the token (`<<~NAME`), so there is no
+  `heredoc?` field on the token or the node yet: the flag is added with 15k,
+  when `format` needs it. Docs: `grammar.md`, the programming skill (with
   `references/diagnostics.md`), `site/content/tour/strings.md`.
 - [ ] 15k Order step 8.2, after 15f. `format("...", args)` with a literal format
   checked at compile time (§25.11): `CHECK-FORMAT-LITERAL` (also for a heredoc),
