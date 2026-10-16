@@ -1,0 +1,766 @@
+{
+ "[[\"+\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read +\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"+x\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: unknown switch: +x\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"-\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read -\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "ok\n",
+  "written": []
+ },
+ "[[\"--ai\", \"--ai\", \"check\", \"ok.agc\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: the --ai option can only be specified once\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"--max-steps\", \"1000\", \"loop.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[RUNTIME-STEP-LIMIT]\n  message: execution step budget exhausted\n  at: loop.agc:2:9\n  source: while true\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"absent.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read absent.agc\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"crlf.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-TYPE-MISMATCH]\n  message: expected Int, found String\n  at: crlf.agc:2:12\n  in: main() -> Void\n  source: x: Int = \"a\"\n  expected: Int\n  actual: String\n  help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"divide.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "check ok\n",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"helped.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-EMPTY-LIST-TYPE]\n  message: an empty list needs an expected type, for example \"List[Int]\"\n  at: helped.agc:2:12\n  in: main() -> Void\n  source: values = []\n  help: annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"invalid.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[LEX-INVALID-UTF8]\n  message: source file is not valid UTF-8\n  at: invalid.agc:2:10\n  source: puts(\"a���b\")\n  help: source files are UTF-8: save the file as UTF-8 text\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"labels.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-TYPE-MISMATCH]\n  message: expected Int, found String\n  at: labels.agc:6:14\n  in: main() -> Void\n  source: x = add(1, \"two\")\n  expected: Int\n  actual: String\n  help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"lex.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[LEX-UNTERMINATED-STRING]\n  message: unterminated string\n  at: lex.agc:2:8\n  source: puts(\"unterminated)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"missing_import.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-IMPORT-IO]\n  message: cannot read import\n  at: missing_import.agc:1:1\n  source: import Nothing from \"nothing\"\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"multiline.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-TYPE-MISMATCH]\n  message: operator expects two values of the same type, found List[Int] and String\n  at: multiline.agc:3:8\n  in: main() -> Void\n  source: 3] + \"s\"\n  expected: List[Int]\n  actual: String\n  label: 2:7 this is List[Int]\n  label: 3:10 this is String\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "check ok\n",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"parse.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[PARSE-UNEXPECTED-TOKEN]\n  message: expected a newline after the statement; calls need parentheses, as in puts(...)\n  at: parse.agc:2:8\n  source: puts \"hello\"\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"std_error.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-IMPORT-NAME]\n  message: unknown or private imported name\n  at: std_error.agc:4:8\n  source: puts(Queue.nope())\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"sub/bad.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-TYPE-MISMATCH]\n  message: expected Int, found String\n  at: <work>/lib/util.agc:6:10\n  in: bad() -> Int\n  source: return \"s\"\n  expected: Int\n  actual: String\n  help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"sub/boom.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-TYPE-MISMATCH]\n  message: expected Int, found String\n  at: <work>/lib/util.agc:6:10\n  in: bad() -> Int\n  source: return \"s\"\n  expected: Int\n  actual: String\n  help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"tab.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-TYPE-MISMATCH]\n  message: expected Int, found String\n  at: tab.agc:2:11\n  in: main() -> Void\n  source: x: Int = \"a\"\n  expected: Int\n  actual: String\n  help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"twice.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-REDEFINED-NAME]\n  message: duplicate or reserved declaration\n  at: twice.agc:5:1\n  source: def main() -> Void\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--ai\", \"check\", \"unicode.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-TYPE-MISMATCH]\n  message: expected Int, found String\n  at: unicode.agc:3:12\n  in: main() -> Void\n  source: x: Int = \"éé\"\n  expected: Int\n  actual: String\n  help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--allow-run\", \"--allow-run\", \"ok.agc\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: the --allow-run option can only be specified once\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--dump\", \"compile\", \"ok.agc\", \"-o\", \"out.agcb\"], {}]": {
+  "code": 2,
+  "stderr": "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]\n       agentica run [OPTIONS] -- <file.agcb> [args...]\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--flush-timeout\", \"100\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "ok\n",
+  "written": []
+ },
+ "[[\"--flush-timeout\", \"x\", \"ok.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: --flush-timeout needs a non-negative integer\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--flush-timeout\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: the \"--flush-timeout\" option needs 1 argument, but 0 provided\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--foo\", \"--version\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: unknown switch: --foo\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--foo\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: unknown switch: --foo\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--help\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "usage: agentica [ <option> ... ] [<arguments>] ...\n  Programs run on the bytecode VM.\n  Commands:\n    agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS\n    agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic\n    agentica test [PATH...] [--steps FILE] [--only TEXT]\n                                            run *_test.agc and .feature files (default PATH: test/ and specs/);\n                                            --steps FILE is the step program of the .feature files\n    agentica compile FILE.agc -o OUT.agcb   write bytecode\n    agentica run [OPTIONS] -- FILE.agcb [ARGS...]\n                                            run a compiled program; OPTIONS: --max-steps N, --seed N,\n                                            --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json\n    agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split\n    agentica help                           this summary and the builtin namespaces\n  Core rules:\n    - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").\n    - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".\n    - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v).\n    - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):\n      use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end.\n    - Fallible builtins return Result[T] (ok(v) or error(msg)); `try expr` in a function returning Result passes the error up.\n\n<option> is one of\n\n  --version\n     print the version and exit\n  --allow-run\n     allow Process.spawn to run child programs\n  --max-steps <count>\n     limit execution to N expression/statement entries\n  --seed <n>\n     seed Random with N (0..2147483647) for repeatable runs\n  --flush-timeout <ms>\n     wait at most MS milliseconds for file data and buffered output at the end of the run (default 30000; AGENTICA_FLUSH_TIMEOUT_MS sets it too, the flag wins)\n  --dump\n     print the checked tree instead of running it\n  --dump-ir\n     print the lowered VM IR instead of running it\n  --ai\n     print diagnostics as compact text for an agent\n  --json\n     print diagnostics as one JSON object\n* --steps <path>\n     the step program of agentica test\n  --help, -h\n     Show this help\n  --\n     Do not treat any remaining argument as a switch (at this level)\n\n *   Asterisks indicate options allowed multiple times.\n\n Multiple single-letter switches can be combined after\n one `-`. For example, `-h-` is the same as `-h --`.\n",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"<work>/sub/bad.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/lib/util.agc\",\"function\":\"bad() -> Int\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":13,\"line\":6},\"start\":{\"column\":10,\"line\":6}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"<work>/tab.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/tab.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":11,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"absent.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read absent.agc\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"crlf.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"crlf.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":12,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"divide.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"ok\":true}\n",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"helped.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"CHECK-EMPTY-LIST-TYPE\",\"file\":\"helped.agc\",\"function\":\"main() -> Void\",\"help\":\"annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\",\"message\":\"an empty list needs an expected type, for example \\\"List[Int]\\\"\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":12,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"invalid.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"LEX-INVALID-UTF8\",\"file\":\"invalid.agc\",\"help\":\"source files are UTF-8: save the file as UTF-8 text\",\"message\":\"source file is not valid UTF-8\",\"range\":{\"end\":{\"column\":11,\"line\":2},\"start\":{\"column\":10,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"labels.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"labels.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":19,\"line\":6},\"start\":{\"column\":14,\"line\":6}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"lex.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"LEX-UNTERMINATED-STRING\",\"file\":\"lex.agc\",\"message\":\"unterminated string\",\"range\":{\"end\":{\"column\":22,\"line\":2},\"start\":{\"column\":8,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"missing_import.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"CHECK-IMPORT-IO\",\"file\":\"missing_import.agc\",\"message\":\"cannot read import\",\"range\":{\"end\":{\"column\":1,\"line\":2},\"start\":{\"column\":1,\"line\":1}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"multiline.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"List[Int]\",\"file\":\"multiline.agc\",\"function\":\"main() -> Void\",\"labels\":[{\"range\":{\"end\":{\"column\":7,\"line\":3},\"start\":{\"column\":7,\"line\":2}},\"text\":\"this is List[Int]\"},{\"range\":{\"end\":{\"column\":13,\"line\":3},\"start\":{\"column\":10,\"line\":3}},\"text\":\"this is String\"}],\"message\":\"operator expects two values of the same type, found List[Int] and String\",\"range\":{\"end\":{\"column\":9,\"line\":3},\"start\":{\"column\":8,\"line\":3}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"ok\":true}\n",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"parse.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"PARSE-UNEXPECTED-TOKEN\",\"file\":\"parse.agc\",\"message\":\"expected a newline after the statement; calls need parentheses, as in puts(...)\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":8,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"std_error.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"CHECK-IMPORT-NAME\",\"file\":\"std_error.agc\",\"message\":\"unknown or private imported name\",\"range\":{\"end\":{\"column\":20,\"line\":4},\"start\":{\"column\":8,\"line\":4}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"sub/bad.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/lib/util.agc\",\"function\":\"bad() -> Int\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":13,\"line\":6},\"start\":{\"column\":10,\"line\":6}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"sub/boom.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/lib/util.agc\",\"function\":\"bad() -> Int\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":13,\"line\":6},\"start\":{\"column\":10,\"line\":6}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"tab.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"tab.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":11,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"twice.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"CHECK-REDEFINED-NAME\",\"file\":\"twice.agc\",\"message\":\"duplicate or reserved declaration\",\"range\":{\"end\":{\"column\":1,\"line\":7},\"start\":{\"column\":1,\"line\":5}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"check\", \"unicode.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"unicode.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":16,\"line\":3},\"start\":{\"column\":12,\"line\":3}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--json\", \"compile\", \"labels.agc\", \"-o\", \"out.agcb\"], {\"outputs\": [\"out.agcb\"]}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"labels.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":19,\"line\":6},\"start\":{\"column\":14,\"line\":6}}}\n",
+  "stdout": "",
+  "written": [
+   false
+  ]
+ },
+ "[[\"--json\", \"help\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "Programs run on the bytecode VM.\nCommands:\n  agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS\n  agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic\n  agentica test [PATH...] [--steps FILE] [--only TEXT]\n                                          run *_test.agc and .feature files (default PATH: test/ and specs/);\n                                          --steps FILE is the step program of the .feature files\n  agentica compile FILE.agc -o OUT.agcb   write bytecode\n  agentica run [OPTIONS] -- FILE.agcb [ARGS...]\n                                          run a compiled program; OPTIONS: --max-steps N, --seed N,\n                                          --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json\n  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split\n  agentica help                           this summary and the builtin namespaces\nCore rules:\n  - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").\n  - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".\n  - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v).\n  - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):\n    use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end.\n  - Fallible builtins return Result[T] (ok(v) or error(msg)); `try expr` in a function returning Result passes the error up.\nBuiltins: agentica help NAME prints one signature (NAME is Namespace.function, or a bare function).\n  namespaces: Channel Dir File Float FrontEnd IO Int JSON List Map Path Process Random Range Result Set String System TCP TLS Task Test Time\n  bare functions: error gets gets! ok print puts\n  std modules written in Agentica (import \"std/http\", \"std/queue\", \"std/binary\", \"std/toml\", \"std/bdd\") are not in this catalog.\n",
+  "written": []
+ },
+ "[[\"--json\", \"sub/boom.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"<work>/lib/util.agc\",\"function\":\"bad() -> Int\",\"help\":\"convert it with String.to_int!(...)\",\"message\":\"expected Int, found String\",\"range\":{\"end\":{\"column\":13,\"line\":6},\"start\":{\"column\":10,\"line\":6}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--max-steps\", \"0\", \"ok.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: --max-steps needs a positive integer\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--max-steps\", \"007\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "ok\n",
+  "written": []
+ },
+ "[[\"--max-steps\", \"1\", \"check\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "check ok\n",
+  "written": []
+ },
+ "[[\"--max-steps\", \"1000\", \"--json\", \"loop.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"RUNTIME-STEP-LIMIT\",\"file\":\"loop.agc\",\"message\":\"execution step budget exhausted\",\"range\":{\"end\":{\"column\":13,\"line\":2},\"start\":{\"column\":9,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--max-steps\", \"100000\", \"divide.agc\"], {}]": {
+  "code": 1,
+  "stderr": "divide.agc:2:10 error[RUNTIME-DIVISION-BY-ZERO]\ndivision by zero\n\n2 |   puts(1 / 0)\n  |          ^\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--max-steps\", \"100000\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "ok\n",
+  "written": []
+ },
+ "[[\"--max-steps\", \"100000\", \"sub/boom.agc\"], {}]": {
+  "code": 1,
+  "stderr": "<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--max-steps\", \"5\", \"--seed\", \"1\", \"--json\", \"--allow-run\", \"--flush-timeout\", \"10\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "ok\n",
+  "written": []
+ },
+ "[[\"--max-steps\", \"x\", \"ok.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: --max-steps needs a positive integer\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--max-steps\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: the \"--max-steps\" option needs 1 argument, but 0 provided\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--max-steps=5\", \"ok.agc\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: unknown switch: --max-steps=5\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--seed\", \"--json\", \"ok.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: --seed needs an integer from 0 to 2147483647\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--seed\", \"007\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "ok\n",
+  "written": []
+ },
+ "[[\"--seed\", \"1\", \"--seed\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: the --seed option can only be specified once\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--seed\", \"2147483648\", \"ok.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: --seed needs an integer from 0 to 2147483647\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--seed\", \"3\", \"args.agc\", \"x\"], {\"stdin\": \"Zed\"}]": {
+  "code": 3,
+  "stderr": "to stderr\n",
+  "stdout": "x\nhello Zed\nrest=",
+  "written": []
+ },
+ "[[\"--seed\", \"5\", \"--seed\", \"6\", \"ok.agc\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: the --seed option can only be specified once\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--steps\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: the \"--steps\" option needs 1 argument, but 0 provided\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"--version\", \"--foo\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "<version>\n",
+  "written": []
+ },
+ "[[\"--version\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "<version>\n",
+  "written": []
+ },
+ "[[\"-ab\", \"c\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: unknown switch: -a\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"-h\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "usage: agentica [ <option> ... ] [<arguments>] ...\n  Programs run on the bytecode VM.\n  Commands:\n    agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS\n    agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic\n    agentica test [PATH...] [--steps FILE] [--only TEXT]\n                                            run *_test.agc and .feature files (default PATH: test/ and specs/);\n                                            --steps FILE is the step program of the .feature files\n    agentica compile FILE.agc -o OUT.agcb   write bytecode\n    agentica run [OPTIONS] -- FILE.agcb [ARGS...]\n                                            run a compiled program; OPTIONS: --max-steps N, --seed N,\n                                            --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json\n    agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split\n    agentica help                           this summary and the builtin namespaces\n  Core rules:\n    - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").\n    - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".\n    - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v).\n    - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):\n      use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end.\n    - Fallible builtins return Result[T] (ok(v) or error(msg)); `try expr` in a function returning Result passes the error up.\n\n<option> is one of\n\n  --version\n     print the version and exit\n  --allow-run\n     allow Process.spawn to run child programs\n  --max-steps <count>\n     limit execution to N expression/statement entries\n  --seed <n>\n     seed Random with N (0..2147483647) for repeatable runs\n  --flush-timeout <ms>\n     wait at most MS milliseconds for file data and buffered output at the end of the run (default 30000; AGENTICA_FLUSH_TIMEOUT_MS sets it too, the flag wins)\n  --dump\n     print the checked tree instead of running it\n  --dump-ir\n     print the lowered VM IR instead of running it\n  --ai\n     print diagnostics as compact text for an agent\n  --json\n     print diagnostics as one JSON object\n* --steps <path>\n     the step program of agentica test\n  --help, -h\n     Show this help\n  --\n     Do not treat any remaining argument as a switch (at this level)\n\n *   Asterisks indicate options allowed multiple times.\n\n Multiple single-letter switches can be combined after\n one `-`. For example, `-h-` is the same as `-h --`.\n",
+  "written": []
+ },
+ "[[\"-hx\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "usage: agentica [ <option> ... ] [<arguments>] ...\n  Programs run on the bytecode VM.\n  Commands:\n    agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS\n    agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic\n    agentica test [PATH...] [--steps FILE] [--only TEXT]\n                                            run *_test.agc and .feature files (default PATH: test/ and specs/);\n                                            --steps FILE is the step program of the .feature files\n    agentica compile FILE.agc -o OUT.agcb   write bytecode\n    agentica run [OPTIONS] -- FILE.agcb [ARGS...]\n                                            run a compiled program; OPTIONS: --max-steps N, --seed N,\n                                            --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json\n    agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split\n    agentica help                           this summary and the builtin namespaces\n  Core rules:\n    - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").\n    - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".\n    - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v).\n    - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):\n      use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end.\n    - Fallible builtins return Result[T] (ok(v) or error(msg)); `try expr` in a function returning Result passes the error up.\n\n<option> is one of\n\n  --version\n     print the version and exit\n  --allow-run\n     allow Process.spawn to run child programs\n  --max-steps <count>\n     limit execution to N expression/statement entries\n  --seed <n>\n     seed Random with N (0..2147483647) for repeatable runs\n  --flush-timeout <ms>\n     wait at most MS milliseconds for file data and buffered output at the end of the run (default 30000; AGENTICA_FLUSH_TIMEOUT_MS sets it too, the flag wins)\n  --dump\n     print the checked tree instead of running it\n  --dump-ir\n     print the lowered VM IR instead of running it\n  --ai\n     print diagnostics as compact text for an agent\n  --json\n     print diagnostics as one JSON object\n* --steps <path>\n     the step program of agentica test\n  --help, -h\n     Show this help\n  --\n     Do not treat any remaining argument as a switch (at this level)\n\n *   Asterisks indicate options allowed multiple times.\n\n Multiple single-letter switches can be combined after\n one `-`. For example, `-h-` is the same as `-h --`.\n",
+  "written": []
+ },
+ "[[\"-xh\"], {}]": {
+  "code": 1,
+  "stderr": "agentica: unknown switch: -x\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"<work>/sub/boom.agc\"], {\"cwd\": \"/\"}]": {
+  "code": 1,
+  "stderr": "<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"args.agc\", \"a\", \"b c\", \"--json\", \"\"], {\"stdin\": \"World\\nline2\\nline3\"}]": {
+  "code": 3,
+  "stderr": "to stderr\n",
+  "stdout": "a|b c|--json|\nhello World\nrest=line2\nline3",
+  "written": []
+ },
+ "[[\"args.agc\"], {}]": {
+  "code": 3,
+  "stderr": "to stderr\n",
+  "stdout": "\nrest=",
+  "written": []
+ },
+ "[[\"check\", \"--json\", \"ok.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read --json\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \".\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read .\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"absent.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read absent.agc\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"crlf.agc\"], {}]": {
+  "code": 1,
+  "stderr": "crlf.agc:2:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 |   x: Int = \"a\"\n  |            ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"divide.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "check ok\n",
+  "written": []
+ },
+ "[[\"check\", \"helped.agc\"], {}]": {
+  "code": 1,
+  "stderr": "helped.agc:2:12 error[CHECK-EMPTY-LIST-TYPE]\nan empty list needs an expected type, for example \"List[Int]\"\n\n2 |   values = []\n  |            ^^\n  = help: annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"invalid.agc\"], {}]": {
+  "code": 1,
+  "stderr": "invalid.agc:2:10 error[LEX-INVALID-UTF8]\nsource file is not valid UTF-8\n\n2 |   puts(\"a���b\")\n  |          ^\n  = help: source files are UTF-8: save the file as UTF-8 text\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"labels.agc\"], {}]": {
+  "code": 1,
+  "stderr": "labels.agc:6:14 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   x = add(1, \"two\")\n  |              ^^^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"lex.agc\"], {}]": {
+  "code": 1,
+  "stderr": "lex.agc:2:8 error[LEX-UNTERMINATED-STRING]\nunterminated string\n\n2 |   puts(\"unterminated)\n  |        ^^^^^^^^^^^^^^\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"missing_import.agc\"], {}]": {
+  "code": 1,
+  "stderr": "missing_import.agc:1:1 error[CHECK-IMPORT-IO]\ncannot read import\n\n1 | import Nothing from \"nothing\"\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"multiline.agc\"], {}]": {
+  "code": 1,
+  "stderr": "multiline.agc:3:8 error[CHECK-TYPE-MISMATCH]\noperator expects two values of the same type, found List[Int] and String\n\n2 |   x = [1, 2,\n  |       ------\n  |       this is List[Int]\n3 |     3] + \"s\"\n  |        ^ ---\n  |          this is String\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"nope.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read nope.agc\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"ok.agc\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "check ok\n",
+  "written": []
+ },
+ "[[\"check\", \"parse.agc\"], {}]": {
+  "code": 1,
+  "stderr": "parse.agc:2:8 error[PARSE-UNEXPECTED-TOKEN]\nexpected a newline after the statement; calls need parentheses, as in puts(...)\n\n2 |   puts \"hello\"\n  |        ^^^^^^^\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"std_error.agc\"], {}]": {
+  "code": 1,
+  "stderr": "std_error.agc:4:8 error[CHECK-IMPORT-NAME]\nunknown or private imported name\n\n4 |   puts(Queue.nope())\n  |        ^^^^^^^^^^^^\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"sub/bad.agc\"], {}]": {
+  "code": 1,
+  "stderr": "<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"sub/boom.agc\"], {}]": {
+  "code": 1,
+  "stderr": "<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"tab.agc\"], {}]": {
+  "code": 1,
+  "stderr": "tab.agc:2:11 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 | \tx: Int = \"a\"\n  | \t         ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"twice.agc\"], {}]": {
+  "code": 1,
+  "stderr": "twice.agc:5:1 error[CHECK-REDEFINED-NAME]\nduplicate or reserved declaration\n\n5 | def main() -> Void\n  | ^^^^^^^^^^^^^^^^^^\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"unicode.agc\"], {}]": {
+  "code": 1,
+  "stderr": "unicode.agc:3:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n3 |   x: Int = \"éé\"\n  |            ^^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\"], {}]": {
+  "code": 2,
+  "stderr": "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]\n       agentica run [OPTIONS] -- <file.agcb> [args...]\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"compile\", \"args.agc\", \"-o\", \"out.agcb\"], {\"outputs\": [\"out.agcb\"]}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "",
+  "written": [
+   true
+  ]
+ },
+ "[[\"compile\", \"ok.agc\", \"-o\", \"/nonexistent/folder/out.agcb\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot write /nonexistent/folder/out.agcb\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"compile\", \"ok.agc\"], {}]": {
+  "code": 2,
+  "stderr": "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]\n       agentica run [OPTIONS] -- <file.agcb> [args...]\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"compile\", \"sub/boom.agc\", \"-o\", \"out.agcb\"], {\"outputs\": [\"out.agcb\"]}]": {
+  "code": 1,
+  "stderr": "<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": [
+   false
+  ]
+ },
+ "[[\"compile\", \"tab.agc\", \"-o\", \"out.agcb\"], {\"outputs\": [\"out.agcb\"]}]": {
+  "code": 1,
+  "stderr": "tab.agc:2:11 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 | \tx: Int = \"a\"\n  | \t         ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": [
+   false
+  ]
+ },
+ "[[\"compile\"], {}]": {
+  "code": 2,
+  "stderr": "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]\n       agentica run [OPTIONS] -- <file.agcb> [args...]\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"help\", \"--json\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "Programs run on the bytecode VM.\nCommands:\n  agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS\n  agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic\n  agentica test [PATH...] [--steps FILE] [--only TEXT]\n                                          run *_test.agc and .feature files (default PATH: test/ and specs/);\n                                          --steps FILE is the step program of the .feature files\n  agentica compile FILE.agc -o OUT.agcb   write bytecode\n  agentica run [OPTIONS] -- FILE.agcb [ARGS...]\n                                          run a compiled program; OPTIONS: --max-steps N, --seed N,\n                                          --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json\n  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split\n  agentica help                           this summary and the builtin namespaces\nCore rules:\n  - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").\n  - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".\n  - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v).\n  - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):\n    use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end.\n  - Fallible builtins return Result[T] (ok(v) or error(msg)); `try expr` in a function returning Result passes the error up.\nBuiltins: agentica help NAME prints one signature (NAME is Namespace.function, or a bare function).\n  namespaces: Channel Dir File Float FrontEnd IO Int JSON List Map Path Process Random Range Result Set String System TCP TLS Task Test Time\n  bare functions: error gets gets! ok print puts\n  std modules written in Agentica (import \"std/http\", \"std/queue\", \"std/binary\", \"std/toml\", \"std/bdd\") are not in this catalog.\n",
+  "written": []
+ },
+ "[[\"help\", \"HttpWire.client\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin HttpWire.client\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"help\", \"Map.get\", \"--json\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"description\":\"Read a value as a Result, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"overloads\":[{\"arity\":2,\"description\":\"Read a value as a Result, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Result[V]\",\"signature\":\"Map.get(map: Map[K, V], key: K) -> Result[V]\"},{\"arity\":3,\"description\":\"Read a value as a Result, or supply an eagerly evaluated default as a third argument.\",\"effects\":[],\"name\":\"Map.get\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"},{\"name\":\"default\",\"type\":\"V\"}],\"result\":\"V\",\"signature\":\"Map.get(map: Map[K, V], key: K, default: V) -> V\"}]}\n",
+  "written": []
+ },
+ "[[\"help\", \"Map.get\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "Map.get(map: Map[K, V], key: K) -> Result[V]\nMap.get(map: Map[K, V], key: K, default: V) -> V\nRead a value as a Result, or supply an eagerly evaluated default as a third argument.\n",
+  "written": []
+ },
+ "[[\"help\", \"Nope\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin Nope\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"help\", \"Strin.split\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin Strin.split; did you mean \"String.split\"?\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"help\", \"String.split\", \"--json\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"arity\":2,\"description\":\"Split text; an empty separator gives characters.\",\"effects\":[],\"name\":\"String.split\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"List[String]\",\"signature\":\"String.split(s: String, separator: String) -> List[String]\"}\n",
+  "written": []
+ },
+ "[[\"help\", \"String.split\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "String.split(s: String, separator: String) -> List[String]\nSplit text; an empty separator gives characters.\n",
+  "written": []
+ },
+ "[[\"help\", \"Task.await\", \"--json\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"description\":\"Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.\",\"effects\":[\"concurrency\"],\"name\":\"Task.await\",\"overloads\":[{\"arity\":1,\"description\":\"Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.\",\"effects\":[\"concurrency\"],\"name\":\"Task.await\",\"parameters\":[{\"name\":\"task\",\"type\":\"Task[R]\"}],\"result\":\"R\",\"signature\":\"Task.await(task: Task[R]) -> R\"},{\"arity\":2,\"description\":\"Wait for a task for at most timeout_ms; Await.Done(value) with its cached result, or Await.TimedOut, and the task keeps running; timeout_ms must be positive.\",\"effects\":[\"concurrency\"],\"name\":\"Task.await\",\"parameters\":[{\"name\":\"task\",\"type\":\"Task[R]\"},{\"name\":\"timeout_ms\",\"type\":\"Int\"}],\"result\":\"Await[R]\",\"signature\":\"Task.await(task: Task[R], timeout_ms: Int) -> Await[R]\"}]}\n",
+  "written": []
+ },
+ "[[\"help\", \"Task.await\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "Task.await(task: Task[R]) -> R\nTask.await(task: Task[R], timeout_ms: Int) -> Await[R]\nWait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.\n",
+  "written": []
+ },
+ "[[\"help\", \"a\", \"b\", \"c\"], {}]": {
+  "code": 2,
+  "stderr": "usage: agentica help [NAME [--json]]\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"help\", \"ok\", \"--json\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"description\":\"Construct a successful Result.\",\"effects\":[],\"name\":\"ok\",\"overloads\":[{\"arity\":1,\"description\":\"Construct a successful Result.\",\"effects\":[],\"name\":\"ok\",\"parameters\":[{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Result[T]\",\"signature\":\"ok(value: T) -> Result[T]\"},{\"arity\":0,\"description\":\"Construct successful completion.\",\"effects\":[],\"name\":\"ok\",\"parameters\":[],\"result\":\"Result[Void]\",\"signature\":\"ok() -> Result[Void]\"}]}\n",
+  "written": []
+ },
+ "[[\"help\", \"ok\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "ok(value: T) -> Result[T]\nok() -> Result[Void]\nConstruct a successful Result.\n",
+  "written": []
+ },
+ "[[\"help\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "Programs run on the bytecode VM.\nCommands:\n  agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS\n  agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic\n  agentica test [PATH...] [--steps FILE] [--only TEXT]\n                                          run *_test.agc and .feature files (default PATH: test/ and specs/);\n                                          --steps FILE is the step program of the .feature files\n  agentica compile FILE.agc -o OUT.agcb   write bytecode\n  agentica run [OPTIONS] -- FILE.agcb [ARGS...]\n                                          run a compiled program; OPTIONS: --max-steps N, --seed N,\n                                          --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json\n  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split\n  agentica help                           this summary and the builtin namespaces\nCore rules:\n  - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").\n  - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".\n  - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v).\n  - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):\n    use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end.\n  - Fallible builtins return Result[T] (ok(v) or error(msg)); `try expr` in a function returning Result passes the error up.\nBuiltins: agentica help NAME prints one signature (NAME is Namespace.function, or a bare function).\n  namespaces: Channel Dir File Float FrontEnd IO Int JSON List Map Path Process Random Range Result Set String System TCP TLS Task Test Time\n  bare functions: error gets gets! ok print puts\n  std modules written in Agentica (import \"std/http\", \"std/queue\", \"std/binary\", \"std/toml\", \"std/bdd\") are not in this catalog.\n",
+  "written": []
+ },
+ "[[\"main.agc\"], {\"cwd\": \"sub\"}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read main.agc\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"nope.agc\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: cannot read nope.agc\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"ok.agc\", \"--version\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "ok\n",
+  "written": []
+ },
+ "[[\"sub/boom.agc\"], {}]": {
+  "code": 1,
+  "stderr": "<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with String.to_int!(...)\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[], {}]": {
+  "code": 2,
+  "stderr": "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]\n       agentica run [OPTIONS] -- <file.agcb> [args...]\n",
+  "stdout": "",
+  "written": []
+ }
+}
