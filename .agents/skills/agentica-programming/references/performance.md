@@ -64,9 +64,18 @@ the same text twice or move back and forth in it.
 
 ## VM steps
 
-`AGENTICA_VM_TRACE=profile agentica check FILE` (or `run -- FILE.agcb`) counts
-the steps of a run, which do not depend on the load of the machine. Costs in
-steps, measured on 100,000 repeats of one form [PR #317]:
+`AGENTICA_VM_TRACE=profile` makes a run print a report to stderr when it ends:
+`AGENTICA_VM_TRACE=profile agentica FILE.agc`, `... agentica check FILE`, or
+`... agentica run -- FILE.agcb`. Its first line is `total wall_ms= steps=
+calls= builtin_calls= builtin_ms= gc_ms= collections=`, then up to 30 `fn
+calls= steps= name= at=FILE:LINE` rows (a block is `block@FILE:LINE:COL`), up
+to 12 `file` rows and up to 30 `builtin calls= us= name=` rows.
+`agentica FILE.agc` prints two reports, the front end's first and the
+program's second: the program's `steps` are its own, while `gc_ms` and
+`collections` count the whole process. `AGENTICA_VM_TRACE_FILE=PATH` writes the
+report to a file instead. Steps repeat exactly from run to run, so they are the
+evidence to compare; wall time is not. Costs in steps, measured on 100,000
+repeats of one form [PR #317]:
 
 - A scan loop `while set.include?(chars[i])` and `while chars[i] == "a"` cost 9
   steps for each character. A guard against codes above 127 in front of a
@@ -83,13 +92,28 @@ steps, measured on 100,000 repeats of one form [PR #317]:
   every few characters. The lexer went from 52 to 24 steps for each character
   by moving the hot arms into `lex`, the tables into module constants and
   `text.split("")` as the text instead of `String.code` of each character
-  [PR #317, `docs/vm-benchmarks.md`].
+  [PR #317, `docs/vm-benchmarks.md`]. Inlining one helper at its call sites
+  alone cut 2.1%, so first find the work done for each item: a closure called
+  for each character, a table built on each call, a call for each token.
 - Scan the characters themselves: `text.split("").map do |c| String.code(c) end`
   costs 3 steps and a builtin call for each character (about 100 ms for
   1,000,000), and `Set[String]` tests cost as much as `Set[Int]` ones (177 and
   184 ms for 1,000,000 tests).
 - The line lengths of `text.split("\n")` find the end of a comment or a line
   with no scan of its characters (a CR needs the scan: it ends a line too).
+- Keep a value that is used again in a local. Computing the lexer's column as
+  `index + column_base`, and keeping the top and the depth of its bracket stack
+  in locals instead of reading a list, took about 2% and 3% off the lexer's
+  steps (25.7 M to 25.1 M, then 25.1 M to 24.3 M, on the 112 files of
+  `compiler/` and `stdlib/`).
+- The profile's `builtin ... us=` rows give the time of each builtin. In the
+  profiled front end `List.set` took 109 ms for 44,404 calls and `Map.put` 105
+  ms for 24,793 [`docs/vm-benchmarks.md`]. A profiled run is about a third
+  slower, so use the rows to rank builtins and time the program without the
+  profiler.
+- A `<native>` row is the steps of a range loop such as `(0...n).each`, one
+  for each item; the block's own steps are on its `block@` row. A list's
+  `each` and `map` add no `<native>` steps.
 
 ## Struct updates
 

@@ -116,6 +116,29 @@ The recipes below name `compiler/` files. A change to a stage runs the tests of 
 - For many small programs, add cases to `tests/fixtures/spec/checker-rest.json` (a program as a list of lines, `code`, and the optional `start`, `covers`, `help`, `expected`, `actual`, `function`, `callee`, `labels`).
 - Cover the happy path, the error path, and the specific behavior the change introduces.
 
+### Speed change to a stage (differential run against master)
+
+A speed change must keep every token, span, diagnostic and byte. Run master's
+copy of the stage and the branch's over the same inputs, with the same binary,
+so only the stage source differs:
+
+```sh
+mkdir -p /tmp/master-src && git archive origin/master compiler | tar -x -C /tmp/master-src
+dist/agentica compiler/lex.agc $(git ls-files '*.agc') > /tmp/new.out
+dist/agentica /tmp/master-src/compiler/lex.agc $(git ls-files '*.agc') > /tmp/old.out
+cmp /tmp/old.out /tmp/new.out
+```
+
+`compiler/lex.agc` prints `== PATH` and then the tokens of each file it is
+given (`parse.agc` takes the same paths for the parser). The 1,055 `.agc` files
+of the repository take about 6 s per run. Then add the inputs that the files
+do not hold: generated texts (CRLF, bare CR, non-ASCII, bad escapes, unclosed
+brackets, interpolation), and every prefix of one construct-rich text (one file
+per length, in a fresh folder), which covers every end-of-text position where
+the sentinels are read. Finish with `make fixed-point` (stage2 equals stage3)
+and `make goldens`, which must leave `git status` clean. The measured lexer
+change is recorded in `docs/vm-benchmarks.md`.
+
 
 ## Agentica gotchas
 
