@@ -60,9 +60,9 @@ jobs:
         with:
           submodules: true
       - if: env.AGENTICA_OPENSSL == 'system'
-        run: brew install openssl@3 pkg-config ccache
+        run: brew install make openssl@3 pkg-config ccache
       - if: env.AGENTICA_OPENSSL == 'vendored'
-        run: brew install ccache
+        run: brew install make ccache
       - if: env.AGENTICA_OPENSSL == 'system'
         run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
@@ -84,6 +84,8 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: gmake fixed-point
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py"
       - run: ccache --show-stats
       - uses: actions/cache/save@v4
         with:
@@ -113,9 +115,9 @@ jobs:
         with:
           submodules: true
       - if: env.AGENTICA_OPENSSL == 'system'
-        run: brew install openssl@3 pkg-config ccache
+        run: brew install make openssl@3 pkg-config ccache
       - if: env.AGENTICA_OPENSSL == 'vendored'
-        run: brew install ccache
+        run: brew install make ccache
       - if: env.AGENTICA_OPENSSL == 'system'
         run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
@@ -137,6 +139,8 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: gmake fixed-point
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py"
       - run: ccache --show-stats
       - uses: actions/cache/save@v4
         with:
