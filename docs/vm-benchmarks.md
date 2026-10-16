@@ -516,6 +516,128 @@ and `agentica help` takes 28 ms. The difference is the loader, which reads and
 checks the 3.6 MB `stage2` (1,336 functions, 87,333 spans) in 15 to 16 ms
 (`AGENTICA_VM_TRACE=loader` prints `loader done us=15140`; five runs), and
 about 5 ms for the run of the front end itself (`check examples/hello.agc` is
-27,946 steps). Against the target of 100 ms for gherkin (§35.2), 130 ms now, the
-lexer is 58% of the steps of that check and the loader is 12% of its time,
-so the lexer comes first, then the loader.
+27,946 steps). Against the target of 100 ms for gherkin (§35.2), 130 ms then,
+the lexer is 58% of the steps of that check and the loader is 12% of its
+time, so the lexer comes first, then the loader.
+
+### Speed pass, second part: the lexer
+
+Before is master (2b5f3f3e, with the profiler of the first part), after is this
+PR, which changes `compiler/lexer.agc` only. Both binaries ran alternately (A B
+A B, 5 rounds of 7 to 9 runs for `hello` and gherkin, 5 rounds of 3 for
+`parser.agc`, 3 rounds of 3 for `front_end.agc`, the median of the round
+medians) on an AMD Ryzen 5 3550H (4 cores, 8 threads), Debian 13, gcc 14.2.
+**Measured under load**: the load average was 2.4 to 3.1, because another job
+was building on the machine. The steps do not depend on the load. A first run
+of gherkin at load 1.0 gave 127.0 and 98.5 ms. The resident size went down
+(`front_end.agc` 100.5 to 92.0 MB, gherkin 21.4 to 21.1 MB, `hello` 15.0 to
+14.8 MB).
+
+| command | steps before | steps after | `lexer.agc` steps before | after | s before | s after |
+|---|---:|---:|---:|---:|---:|---:|
+| `check examples/hello.agc` | 27,946 | 26,096 | 11,127 | 9,511 | 0.0282 | 0.0284 |
+| `check stdlib/bdd/gherkin.agc` | 2,833,726 | 1,923,585 | 1,647,836 | 867,097 | 0.1238 | 0.0984 |
+| `check compiler/parser.agc` | 11,153,906 | 7,420,407 | 6,682,444 | 3,431,804 | 0.401 | 0.301 |
+| `check compiler/front_end.agc` | 77,090,543 | 54,397,775 | 39,137,343 | 19,429,944 | 3.154 | 2.459 |
+
+`Source.position` (`source.agc`, 3.2 M steps in `front_end.agc`) is not called
+any more, so the lexer part of `front_end.agc` is 42.4 M steps before and 19.4 M
+after, 54% fewer, and the whole check has 29% fewer. The lexer is 36% of the
+steps of `front_end.agc` now, against 51%. The gherkin check meets the target of
+100 ms (§35.2) on this machine; `hello` is the start-up cost (the loader,
+15 to 16 ms), which this PR does not touch.
+
+The lexer alone, on the 112 files of `compiler/` and `stdlib/` (989,891
+characters), a program that calls `Lexer.lex` on each text:
+
+| | steps | best of 3, ms | steps per character |
+|---|---:|---:|---:|
+| before | 51,620,728 | 1,482 | 52 |
+| after | 24,106,051 | 752 | 24 |
+
+Where the steps went, `check compiler/front_end.agc` (functions with most
+steps, in millions): before `lex` 9.3, `skip_in` 5.0, `scan_name` 3.3,
+`Source.position` 3.2, `skip_until` 3.2, the closure that makes the codes 2.5,
+`skip_blanks` 2.1, `scan_operator` 1.8, `operator_lexeme` 1.6, `name_suffix`
+1.4, `blank?` 1.1, `word_kind` 0.9, `track_block` 0.8, `scan_closing` 0.6;
+after `lex` 14.2, `type_name_token` 1.6, `skip_until` 0.8 (now only the
+strings), `operator_token` 0.7 (the brackets), `scan_string` 0.6. Builtins:
+`String.code` (837,231 calls) is gone, `Set.new` goes from 3,290 calls to the
+constants, `Set.include?`
+went from 773,952 calls to 529,813, `Map.put` from 24,899 to 13,413 (the class
+table was built again by every `lex` call), `String.slice` from 235,815 to
+101,577.
+
+The cost was not in one place: the lexer made a token every 5 characters or
+so, and each token cost 150 to 200 steps. The VM costs behind that (measured
+with `AGENTICA_VM_TRACE=profile` on 100,000 repeats of one form): a call
+costs several steps, `Source.Position(...)` 9 steps (7 when the column is a
+sum, not `offset - line_start + 1`), a whole `Token` with its two positions,
+span and value about 36, `xs.push(x)` 4, `Map.get` 5, and a scan loop
+`while set.include?(chars[i])` 9 steps for each character, which is the
+floor: `chars[i] == "a"` costs 9 too, a table indexed by code with a guard
+against codes above 127 costs 15, and unrolling the loop by two gives 8.5.
+That is why the gain came from fewer tokens' worth of calls, not from a faster
+scan.
+
+Changes, in the order they were made, with the steps of the lexer alone after
+each:
+
+1. **Tables are module constants** (`CLASSES`, `NAME_CHARS`, `WORD_ACTIONS`,
+   `SINGLE_OPS`, `PAIR_OPS`, ...). `new_input` built eight tables on every
+   `lex` call (128 `Map.put` and `classify` calls among them), and `Input`
+   carried them to every `scan_*` function. This is the lexer part of §44.9
+   (44b). The main loop does the work of names, operators, brackets and line
+   breaks in place, with no call per token: one lookup in `WORD_ACTIONS` tells
+   a keyword, a block opener and `end` in one step, an operator is one `Op`
+   with its kind and token value ready, and the text ends with sentinels, so no
+   scan or look-ahead tests `index < size`. 51.6 M to 33.0 M steps.
+2. The blank after a token is skipped in the same iteration, and the operator
+   characters are one class: 33.0 M to 32.9 M (small, 0.4%).
+3. **Characters, not codes.** `text.split("")` is used as it is: the closure
+   that made `String.code` of each character (3 steps and a builtin call per
+   character) is gone, and `Set[String]` tests cost the same as `Set[Int]`
+   (177 and 184 ms for 1,000,000 tests). A comment or a doc line ends at the
+   length of its line (`text.split("\n")`, when the text has no CR), not by a
+   scan of its characters, and a line break is handled in place. 32.9 M to
+   26.1 M.
+4. Trims of the name path (one `if` for the words that are not keywords, the
+   character after the name read once): 26.1 M to 25.7 M. The column of a
+   position is `index + column_base` (`column_base = 1 - line_start`, changed
+   where `line_start` is): 25.7 M to 25.1 M.
+5. The stack of open brackets and blocks keeps its last frame and its size in
+   two locals, so a bracket or a line break reads no list: 25.1 M to 24.3 M.
+   The name loop of `type_name_token` is in place, and the character after a
+   name or operator is read once: 24.3 M to 24.1 M.
+
+The output is the same: `make fixed-point` (stage2 equals stage3), `make
+goldens` rewrites nothing, and the tokens of 1,131 files (the repository's
+`.agc` files and the lexer fixtures), of the 1,725 inputs of the frozen corpus
+(the slow tier compares them to a manifest) and of 12,500 generated texts, with
+CRLF, bare CR, non-ASCII characters, bad escapes, bad numbers and unclosed
+brackets, match the lexer of master byte for byte, diagnostics included. The
+nested-file budget of `tests/test_frontend_lexer.py` is 3,000 steps for each
+line; a file of 3,000 `if x` lines and 3,000 `end` lines takes 1.4 M steps (240
+for each line).
+
+Tried and dropped:
+
+- Inlining `Source.position` alone cut 2.1% of the steps (PR #315 note). Only
+  the structure above moved the number.
+- A `List[Bool]` table indexed by the code, with a guard for codes above 127,
+  for the name scan: 15 steps for each character against 9 for the `Set`.
+- Unrolling the name scan by two characters: 8.5 steps for each character
+  against 9, for more code.
+- `&String.code` as the function of the map that makes the codes: a builtin is
+  not a `&name` (`CHECK-UNKNOWN-NAME`).
+
+Counted, not built:
+
+- Lexing by pieces: mark every punctuation character with a marker character
+  that the text does not hold, `split` on the marker, and take one piece for
+  each punctuation character with the name that follows it. By count it
+  reaches about 22 M steps, and it needs the marker, a slow path for texts that
+  have every candidate marker, and a rewrite of strings, docs and numbers.
+- Lexing line by line, with the characters of a line made only when the line is
+  not a comment: by count the cost of a line (about 60 steps) is more than the
+  comments save.
