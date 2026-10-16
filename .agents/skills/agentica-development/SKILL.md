@@ -99,7 +99,7 @@ runs everything else (`references/ci.md`, "What CI runs").
 | Read | When |
 |---|---|
 | `references/repo-map.md` | finding which file in `compiler/`, `vm/`, `tests/` or `stdlib/` owns something |
-| `references/frontend.md` | editing `compiler/`: the stages and their goldens, recipes (keyword, AST node, syntax, diagnostic, stage, tests), gotchas, stray `NL` tokens, reading a failure, comments and code style (line width, strings) in `compiler/` and `tests/` |
+| `references/frontend.md` | editing `compiler/`: the stages and their goldens, recipes (keyword, AST node, syntax, diagnostic, stage, tests), a speed change to a stage (differential run against master), gotchas, stray `NL` tokens, reading a failure, comments and code style (line width, strings) in `compiler/` and `tests/` |
 | `references/stages.md` | the token kinds, the diagnostic code list, the AST nodes, the notes of each stage (lexer, parser, linker, checker, lowering, bytecode writer, builtin catalog, command line) |
 | `references/language-notes.md` | changing a core language rule: Result and `try`, collections, ranges, file modules, methods, interpolation, blocks, hints, enums, function values |
 | `references/library-notes.md` | changing a library area (stdio, JSON, tasks, TCP/TLS/HTTP, files and paths, processes, Int and Float bits, std/binary) or the comments and code style (line width, strings) of a `stdlib/` module |
@@ -107,4 +107,4 @@ runs everything else (`references/ci.md`, "What CI runs").
 | `references/vm.md` | any VM work: pipeline, layers, the rules every change keeps, and the index of the `vm-*.md` files |
 | `references/ci.md` | `.github/workflows/`, the Makefile, new VM files, peers or fixtures, jscpd, what CI runs, releases and `CHANGELOG.md` |
 | `references/site.md` | `site/`, or a language rule or builtin shown on a site page |
-| `references/bench-eval.md` | `benchmarks/`, `make bench`, the HTTP benchmark, `tests/eval/` |
+| `references/bench-eval.md` | `benchmarks/`, `make bench`, the HTTP benchmark, `tests/eval/`, measuring a speed change (the profiler, A/B runs against master) |
