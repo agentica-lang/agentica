@@ -733,8 +733,14 @@ static void work_remove(op *o) {
     rc = unlink(o->path);
   } while (rc != 0 && errno == EINTR);
   if (rc == 0 || errno == ENOENT) return;
-  if (errno != EISDIR) {
-    fail_op(o, FS_REMOVE, errno);
+  int err = errno;
+  bool directory = err == EISDIR;
+#ifdef __APPLE__
+  struct stat info;
+  if (err == EPERM) directory = lstat(o->path, &info) == 0 && S_ISDIR(info.st_mode);
+#endif
+  if (!directory) {
+    fail_op(o, FS_REMOVE, err);
     return;
   }
   char *failed;
@@ -778,6 +784,11 @@ static void work_try_lock(op *o) {
    system without RENAME_NOREPLACE answers EINVAL, which is reported, not worked around with a racy check. */
 static void work_rename(op *o) {
 #ifdef __APPLE__
+  struct stat info;
+  if (lstat(o->to, &info) == 0) {
+    fail_op(o, FS_RENAME, EEXIST);
+    return;
+  }
   if (renameatx_np(AT_FDCWD, o->path, AT_FDCWD, o->to, RENAME_EXCL) != 0) fail_op(o, FS_RENAME, errno);
 #else
   if (renameat2(AT_FDCWD, o->path, AT_FDCWD, o->to, RENAME_NOREPLACE) != 0) fail_op(o, FS_RENAME, errno);

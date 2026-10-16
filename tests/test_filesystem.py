@@ -533,8 +533,11 @@ end
             os.symlink(target, root.joinpath(*parts))
         os.symlink(str(root / "real" / "dir"), root / "abs")
 
-        def repeat(part):
-            return part * 1500
+        def repeat(part: str) -> str:
+            count = 1500
+            if sys.platform == "darwin":
+                count = max(1, (os.pathconf(root, "PC_PATH_MAX") - len(directory) - 32) // len(part))
+            return part * count
 
         items = [".", "./", "..", "../", "real", "real/", "real/dir/file.txt", "real/dir/../dir/./file.txt",
                  "real/rel", "real/dir/up", "real/dir/up/real", "link1", "link1/", "link1/file.txt", "link1/..",
@@ -562,6 +565,9 @@ end
         self.assertEqual(table["real/dir/file.txt/x"], "error")
         self.assertEqual(seen[len(items) - 2], ok_at("/real"))
         self.assertEqual(seen[-1], ok_at("/real/dir"))
+        if sys.platform == "darwin":
+            overlong = ["real" + "/dir/.." * 1500, "real/dir" + "/../dir" * 1500]
+            self.assertEqual(self.os_lines("real", overlong, cwd=root), ["error", "error"])
 
     def test_system_env_gives_what_pythons_os_environ_gives_decoding_bytes_that_are_not_utf_8_with_u_fffd(self):
         env = vm_environment()

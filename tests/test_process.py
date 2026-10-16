@@ -102,7 +102,7 @@ class ProcessCli(TestCase):
             + 'def main() -> Void\n  BDD.run([BDD.step("the handler can spawn", &handler)])\nend\n')
         args = ["test", feature, "--steps", steps, "--json"]
         denied = self.cli(*args)
-        self.assertEqual(denied.code, 1)
+        self.assertEqual(denied.code, 1, (denied.stdout, denied.stderr))
         report = json.loads(denied.stdout)
         self.assertEqual(report["passed"], 1)
         self.assertEqual([item["status"] for item in report["files"][0]["scenarios"]], ["failed", "passed"])
