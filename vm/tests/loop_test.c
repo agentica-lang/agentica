@@ -9,13 +9,13 @@
 #include <stdlib.h>
 #include <time.h>
 
+#ifdef __linux__
 typedef struct {
   long sleep_ms;
   int value;
 } task_data;
 
 static int dropped;
-static int released;
 
 static void pause_ms(long ms) {
   struct timespec delay = {ms / 1000, (ms % 1000) * 1000000};
@@ -52,7 +52,6 @@ static void drop(void *data) {
 
 static const agc_io_kind kind = {slow_work, finished, expired, drop, false, "test", NULL};
 
-#ifdef __linux__
 static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
   task_data *t = calloc(1, sizeof(task_data));
   assert(t);
@@ -70,6 +69,8 @@ static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
   return agc_as_int(vm, result);
 }
 #endif
+
+static int released;
 
 static void release_count(void *native) { (*(int *)native)++; }
 
