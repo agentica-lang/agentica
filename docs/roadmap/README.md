@@ -297,6 +297,7 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 | [`27-signals.md`](27-signals.md) | Phase 27: signals (stop signals a program handles, signals to children, the driver's stop, graceful HTTP stop; design in §46) |
 | [`28-formatter.md`](28-formatter.md) | Phase 28: code formatter (`agentica fmt`, `--check`, the `[style]` keys; design in §47) |
 | [`29-regex.md`](29-regex.md) | Phase 29: regular expressions (`std/regex` in Agentica, then the regex literal; design in §48) |
+| [`30-type-aliases.md`](30-type-aliases.md) | Phase 30: type aliases (simple, then generic; design in §49) |
 | [`pending-general-programming-and-mcp.md`](pending-general-programming-and-mcp.md) | Pending work: general programming and MCP (everyday library, typed JSON, modules, real applications, MCP) |
 | [`ruby-style-ergonomics.md`](ruby-style-ergonomics.md) | Ruby-style ergonomics (complete) |
 | [`later-extensions.md`](later-extensions.md) | Later extensions and open decisions |
