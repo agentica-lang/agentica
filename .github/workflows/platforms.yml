@@ -5,6 +5,9 @@ name: Platforms
 # run on the binary and need Linux.
 
 on:
+  pull_request:
+  push:
+    branches: [master]
   workflow_dispatch:
     inputs:
       os:

@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: [self-hosted, linux, docker-runner]
+    runs-on: ubuntu-latest
     env:
       ZIG_VERSION: 0.15.2
       ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
@@ -145,7 +145,7 @@ jobs:
   publish:
     if: github.event_name == 'push'
     needs: build
-    runs-on: [self-hosted, linux, docker-runner]
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:

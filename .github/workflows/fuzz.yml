@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   vm-fuzz:
-    runs-on: [self-hosted, linux, docker-runner]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
       SANITIZE: '1'

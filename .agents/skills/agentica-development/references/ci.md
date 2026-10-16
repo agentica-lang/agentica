@@ -165,8 +165,8 @@ comment), then a step that calls it. Targets that are not obvious:
 
 ## Pull requests (`.github/workflows/ci.yml`)
 
-CI runs its checks on pull requests, on the self-hosted Linux runner
-(`docker-runner` label).
+CI runs its checks on pull requests and pushes to `master`, on GitHub-hosted
+Ubuntu runners.
 
 - `test`: first the `changes` step (below), then `make -j vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
@@ -306,22 +306,18 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   These exist because a pull request can restore caches saved on its own
   merge ref or on `master`, never another pull request's.
 
-## Workflows run by hand
+## Other workflows
 
 Actions → Run workflow:
 
 - `platforms.yml` runs `make vm-test` (the C VM and its C tests; the binary is
-  Linux only since 8d-2) on macOS and Windows (MSYS2 UCRT64). Run it before
-  merging a change to platform code (the Makefile, file or process handling).
+  Linux only since 8d-2) on GitHub-hosted macOS and Windows (MSYS2 UCRT64) for
+  pull requests and pushes to `master`. It also supports manual dispatch.
 - `fuzz.yml` fuzzes the sanitizer VM with 5 million mutants and a random
   seed.
 
 `sweep.yml` runs by schedule (Monday 03:00 UTC) and by hand: the `vm-diff` shards on
 the release VM with `AGENTICA_SWEEP=full` (`make sweep-full`). Nothing else in CI runs on a schedule.
-
-macOS and Windows are paused until further notice: `platforms.yml` is not
-run and only Linux is required. Their platform code is kept but untested;
-Linux code goes under `#ifdef __linux__`.
 
 Two more workflows: `site-examples.yml` and `pages.yml` (see
 `references/site.md`).
@@ -391,5 +387,5 @@ CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
   requests" above.
 - `master` pushes: `dup-check` and the cache jobs, under "Caches and `master`
   pushes".
-- Schedule and by hand: `sweep.yml` and "Workflows run by hand".
+- Schedule and by hand: `sweep.yml` and "Other workflows".
 - Release: "Release (`release.yml`)".

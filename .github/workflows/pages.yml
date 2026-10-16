@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: [self-hosted, linux, docker-runner]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       HUGO_VERSION: 0.167.0
@@ -53,7 +53,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: [self-hosted, linux, docker-runner]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       pages: write

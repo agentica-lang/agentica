@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   sweep:
-    runs-on: [self-hosted, linux, docker-runner]
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       AGENTICA_TEST_TIMEOUT_SCALE: '4'

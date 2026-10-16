@@ -126,19 +126,17 @@
 
 | Job | Runner | Runs |
 |---|---|---|
-| Linux (`ci.yml`) | self-hosted runner (`docker-runner`, Debian), submodules | the binary from `bootstrap/stage0.agcb` and `make vm-test`, `make test` (with the differential tests), the fixed point, smoke tests |
-| Linux sanitizers (`ci.yml`) | the same runner, clang and `libclang-rt-dev` | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run |
-| macOS (`platforms.yml`, by hand) | `macos-15` (Apple clang, arm64), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
-| Windows (`platforms.yml`, by hand) | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
-| Fuzz (`fuzz.yml`, by hand) | self-hosted runner, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` |
+| Linux (`ci.yml`) | GitHub-hosted `ubuntu-latest`, submodules | the binary from `bootstrap/stage0.agcb` and `make vm-test`, `make test` (with the differential tests), the fixed point, smoke tests |
+| Linux sanitizers (`ci.yml`) | GitHub-hosted `ubuntu-latest`, clang and `libclang-rt-dev` | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run |
+| macOS (`platforms.yml`) | GitHub-hosted `macos-15` (Apple clang, arm64), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
+| Windows (`platforms.yml`) | GitHub-hosted `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
+| Fuzz (`fuzz.yml`, by hand) | GitHub-hosted `ubuntu-latest`, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` |
 
 - The Linux jobs run on every pull request that changes more than docs. No job
   installs Racket. `vm/unicode_data.c` is frozen source (its header gives the
   provenance), so no CI step checks or regenerates it.
-- macOS and Windows minutes cost 10 and 2 times Linux minutes on a private
-  repository. So `platforms.yml` and `fuzz.yml` run by hand. Run `platforms.yml`
-  before merging a change to platform code (the Makefile, files, processes, text
-  output).
+- `platforms.yml` runs on pull requests and pushes to `master`; it can also be
+  started by hand for one platform or both.
 - No job installs Racket (the Racket front end was deleted, PR #313). The macOS and
   Windows jobs build the C tests only, since the binary and the process and
   network tests are not portable yet.
