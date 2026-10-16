@@ -5,7 +5,6 @@ Each agentica.toml under those folders may hold a [style] table with max_line_wi
 included. This test enforces it until `agentica check` reads [style] itself. A missing tomllib skips the test locally
 and fails it in CI.
 """
-import re
 import unittest
 
 from tests.agentica_test import ROOT, TestCase, require
@@ -16,7 +15,6 @@ except ImportError:  # Python before 3.11
     tomllib = None
 
 STYLED_FOLDERS = ("compiler", "stdlib")
-FORMAT_TOOL = ROOT / "tools" / "agc-format.rkt"
 
 
 def manifests():
@@ -43,14 +41,6 @@ class LineWidthTest(TestCase):
     def test_every_styled_folder_has_a_manifest(self):
         folders = {path.parent.relative_to(ROOT).as_posix() for path in manifests()}
         self.assertEqual(folders, set(STYLED_FOLDERS))
-
-    def test_generator_width_matches_compiler_manifest(self):
-        # tools/agc-format.rkt writes the generated files of compiler/ at its own max-width.
-        require(tomllib is not None, "tomllib needs Python 3.11 or later")
-        limit = tomllib.loads((ROOT / "compiler" / "agentica.toml").read_text(encoding="utf-8"))["style"]["max_line_width"]
-        found = re.search(r"^\(define max-width (\d+)\)", FORMAT_TOOL.read_text(encoding="utf-8"), re.M)
-        self.assertIsNotNone(found, "tools/agc-format.rkt has no (define max-width N)")
-        self.assertEqual(int(found.group(1)), limit)
 
     def test_lines_fit_max_line_width(self):
         require(tomllib is not None, "tomllib needs Python 3.11 or later")

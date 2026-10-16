@@ -1,5 +1,4 @@
-## The data types of the builtin catalog (src/builtins.rkt, src/builtin-types.rkt). The rows themselves are
-## builtins_data.agc, generated.
+## The data types of the builtin catalog. The rows themselves are builtins_data.agc, edited by hand.
 
 import Types from "types"
 
