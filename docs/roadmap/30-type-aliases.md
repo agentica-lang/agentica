@@ -9,14 +9,15 @@ it waits for nothing: the bootstrap is done. The three questions of §49.5 are
 decided. Item 30b waits for 30a, because its parameters use the same parser and
 checker paths.
 
-- [ ] **30a: simple aliases (§49.2).** `type Name = Type` and
+- [x] **30a: simple aliases (§49.2).** `type Name = Type` and
   `export type Name = Type` at the top level, with `type` a contextual word.
   - **Syntax:** the `alias_decl` rule of `docs/grammar/05-syntax.md`, in the
     struct and enum group of the declaration order.
   - **Checks:** `CHECK-REDEFINED-NAME` for a collision, `CHECK-UNKNOWN-TYPE`
-    for an unknown name, `CHECK-TYPE-ALIAS-CYCLE` (proposed) for a cycle, and
-    the existing codes of a constructor or a pattern written through an alias,
-    with a help that names the aliased type.
+    for an unknown name or type arguments, `CHECK-TYPE-ALIAS-CYCLE` for a
+    cycle, and `CHECK-TOO-DEEP` for expansions over 1,000 type references.
+    Constructors and patterns written through an alias use the existing codes,
+    with help that names the aliased type.
   - **Where:** `compiler/` only: the parser, the linker and the checker.
     Lowering, the bytecode writer and the VM do not change.
   - **Tests:** spec tests in `tests/test_spec_alias.py` (`--json check`, the

@@ -26,7 +26,7 @@ export struct Context
   ids: Int
 end
 
-## What a name must be where it is written: a type (a struct or enum), an enum, or a function.
+## What a name must be where it is written: a type (a struct, enum or alias), an enum, or a function.
 export enum Want
   Type
   Enum
@@ -248,7 +248,7 @@ end
 
 def right_kind?(kind: Declarations.Kind, want: Want) -> Bool
   case want
-    Want.Type -> return Declarations.struct?(kind) or Declarations.enum?(kind)
+    Want.Type -> return Declarations.struct?(kind) or Declarations.enum?(kind) or Declarations.type_alias?(kind)
     Want.Enum -> return Declarations.enum?(kind)
     Want.Function -> return Declarations.function?(kind)
   end

@@ -1159,6 +1159,22 @@ end
 def parse_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   inner = try Base.enter(e, pos)
   kind = e.tokens[pos].kind
+  if (
+    kind == "name" and
+    e.tokens[pos].lexeme == "type" and
+    Base.kind_at(e, pos + 1) == "type-name" and
+    Base.kind_at(e, pos + 2) == "assign"
+  )
+    return error(
+      Base.bail(
+        e,
+        pos,
+        "PARSE-TOP-LEVEL-STATEMENT",
+        "type aliases are only allowed at the top level",
+        Diag.Help.NoHelp,
+      ),
+    )
+  end
   if kind == "if"
     return parse_if(inner, pos, ids)
   end
@@ -1732,7 +1748,10 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
   if member == "variant"
     return kind == "type-name"
   end
-  return kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, pos)
+  return (
+    kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, pos) or
+    (kind == "name" and e.tokens[pos].lexeme == "type")
+  )
 end
 
 def doc_block(token: Tokens.Token) -> Tokens.DocBlock
@@ -1850,6 +1869,25 @@ def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) 
   return decl_at(node, stop, next_id)
 end
 
+def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
+  after_word = try expect_word(e, pos, "type", "")
+  after_name = try Base.expect(e, after_word, "type-name", "a type alias name", false)
+  assign = try Base.expect(e, after_name, "assign", "=", false)
+  target = try Base.parse_type(e, assign, ids)
+  stop = try Base.expect(e, target.pos, "NL", "a newline after the type alias", false)
+  node = Ast.Decl.TypeAlias(
+    Ast.TypeAliasDecl(
+      id: target.ids,
+      name: e.tokens[after_word].lexeme,
+      name_span: e.tokens[after_word].span,
+      target: target.node,
+      doc: doc,
+      span: Base.span_from(e, pos, stop),
+    ),
+  )
+  return decl_at(node, stop, target.ids + 1)
+end
+
 def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   kind = e.tokens[pos].kind
   absent: Ast.Optional[String] = Ast.Optional.Absent
@@ -1862,7 +1900,10 @@ def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   if kind == "enum"
     return parse_enum_decl(e, pos, ids, absent)
   end
-  return error(Base.unexpected(e, pos, "export requires def, struct, enum, or a constant"))
+  if kind == "name" and e.tokens[pos].lexeme == "type"
+    return parse_type_alias_decl(e, pos, ids, absent)
+  end
+  return error(Base.unexpected(e, pos, "export requires def, struct, enum, type, or a constant"))
 end
 
 # A constant starts with a type-name token followed by `=` or `:` (docs/future/44-module-constants.md 44.3). The name
@@ -1985,12 +2026,18 @@ def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]
   if kind == "struct"
     return parse_struct_decl(e, pos, ids, doc)
   end
+  if kind == "name" and e.tokens[pos].lexeme == "type"
+    return parse_type_alias_decl(e, pos, ids, doc)
+  end
   return parse_enum_decl(e, pos, ids, doc)
 end
 
 def declaration_start?(e: Base.Env, at: Int) -> Bool
   kind = e.tokens[at].kind
-  return kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, at)
+  return (
+    kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, at) or
+    (kind == "name" and e.tokens[at].lexeme == "type")
+  )
 end
 
 def top_level_help(kind: String) -> String
@@ -2002,7 +2049,7 @@ def top_level_help(kind: String) -> String
   end
   return (
     "statements go inside a function: def main() -> Void ... end; " +
-    "a file holds only def, struct, enum, import, export and constants (NAME = value)"
+    "a file holds only def, struct, enum, type aliases, import, export and constants (NAME = value)"
   )
 end
 
@@ -2221,7 +2268,7 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
           cursor,
           "PARSE-TOP-LEVEL-STATEMENT",
           (
-            "expected a top-level declaration (def, struct, enum, constant, or import), " +
+            "expected a top-level declaration (def, struct, enum, type alias, constant, or import), " +
             "found #{Base.describe(e.tokens[cursor])}"
           ),
           Base.hint(top_level_help(kind)),

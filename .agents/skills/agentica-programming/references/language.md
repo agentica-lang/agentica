@@ -4,8 +4,8 @@ Read this for the exact rule behind a checker error or a core question that SKIL
 
 ## Program shape
 
-- A file has top-level `def`, `struct`, `enum`, `import` and constant declarations; no statements run at top level. `export` may prefix a function, struct, enum, or constant.
-- Declarations keep one order in every file: the module doc and `import`s, then constants, then `struct` and `enum` (exported or not, in any order), then `export def` functions, then private `def` functions. The first declaration out of place is `CHECK-DECL-ORDER`, at its start. The order is style only: a function may call a function declared later.
+- A file has top-level `def`, `struct`, `enum`, type alias, `import` and constant declarations; no statements run at top level. `export` may prefix a function, struct, enum, type alias or constant.
+- Declarations keep one order in every file: the module doc and `import`s, then constants, then `struct`, `enum` and type aliases (exported or not, in any order), then `export def` functions, then private `def` functions. The first declaration out of place is `CHECK-DECL-ORDER`, at its start. The order is style only: a function may call a function declared later.
 - A constant is `NAME = expr` or `NAME: Type = expr` at the top level. The name is capitals, digits and `_`, at least two characters, starting with a capital (`MAX_DEPTH`); another spelling is `PARSE-CONSTANT-NAME`, and `IO`, `JSON`, `TCP`, `TLS` are reserved. Constants follow each other with no blank line, also with `##` docs or `export`; a blank line is still needed before a `struct`, `enum` or `def`. The value starts on the line of the `=`. `NAME: Type = expr` gives `[]`, `{}` and `Set.new([])` their type.
 - A constant is read as `NAME`, in the file that declares it or by a named import. It is a value, so `NAME.size`, `NAME.get(k, 0)`, `NAME[i]`, `NAME.each do |x| ... end`, `NAME.field` and `"#{NAME}"` work. It never changes: `NAME = 1` inside a function is `PARSE-INVALID-ASSIGNMENT-TARGET`, and a local can never shadow it (locals are lowercase). A constant may read another one, before or after it in the file; a loop is `CHECK-CONSTANT-CYCLE` (the help lists `A -> B -> A`).
 - What a constant may hold: literals, string interpolation, lists, maps, `Set.new`, ranges, struct and enum values, `ok`/`error`, operators, field access, indexing, other constants, and builtins whose row has no effects (`List.map`, `reduce`, `Map.put`, `Set.new`...), with blocks passed to them. Not allowed (`CHECK-CONSTANT-EXPRESSION`, at the form): a call of a `def`, `&name`, a block that is not an argument of a builtin, `while`, and a builtin with effects (`puts`, `IO.*`, `File.*`, `Time.*`, `Random.*`, `Task.*`, `Channel.*`...). Every expression inside needs a data type (`CHECK-CONSTANT-TYPE` for a `Channel`, `Task`, `Fn`, handle or `Void`).
@@ -45,6 +45,14 @@ Read this for the exact rule behind a checker error or a core question that SKIL
 | `LogLevel` | builtin enum of `std/logger`: `LogLevel.Debug`, `Info`, `Warning`, `Error`; reserved name; see `logger.md` |
 | builtin records | `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `LogEvent` |
 | `Name` | a struct you declare; fields are typed and immutable |
+
+A simple alias is `type Names = List[String]`; it can name any type or another
+alias and is transparent in all type positions. `export type Names = ...` makes
+it available to importing modules, by module alias or by name. It adds no
+runtime type and cannot be constructed or used as an enum pattern. Cycles are
+`CHECK-TYPE-ALIAS-CYCLE`. Errors in expanded types point to the alias use.
+Expansions stop at 1,000 type references with `CHECK-TOO-DEEP`; generic aliases
+are not supported yet.
 
 `Option[T]` is not builtin; declare it as an enum if you need it. Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.
 

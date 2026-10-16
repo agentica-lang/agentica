@@ -27,7 +27,7 @@ end
 
 ## File layout
 
-Every file lists its declarations in the same order: the module doc and the imports, then constants (see [Constants](/tour/constants/)), then `struct` and `enum` declarations, then `export def` functions, then private `def` functions. Types may come in any order among themselves. The order is only style, because a function can still call one declared later, but the checker enforces it so every file reads the same way.
+Every file lists its declarations in the same order: the module doc and the imports, then constants (see [Constants](/tour/constants/)), then `struct`, `enum` and type alias declarations, then `export def` functions, then private `def` functions. Types may come in any order among themselves. Put a blank line before each declaration after the first, including each type alias. The order is only style, because a function can still call one declared later, but the checker enforces it so every file reads the same way.
 
 A private function before an exported one is `CHECK-DECL-ORDER`:
 
@@ -105,6 +105,11 @@ end
 ```output
 banned: spam
 ```
+
+A transparent type alias may be exported and imported in the same way. For
+example, `export type Names = List[String]` is used as `S.Names` or imported
+with `import {Names} from "status"`. It stands for `List[String]` everywhere;
+the alias does not provide a constructor or enum variants.
 
 ## Import names
 

@@ -1,0 +1,18 @@
+program #19 0:1:1-133:9:1
+  declaration: type-alias-decl #2 0:1:1-26:2:1 name="Names"
+    target: type-ref #1 13:1:14-25:1:26 name="List"
+      arg: type-ref #0 18:1:19-24:1:25 name="String"
+  declaration: export-decl #7 27:3:1-54:4:1
+    declaration: type-alias-decl #5 34:3:8-54:4:1 name="Labels"
+      target: type-ref #4 48:3:22-53:3:27 name="Names"
+  declaration: function-decl #18 55:5:1-133:9:1 name="main"
+    result: type-ref #8 69:5:15-73:5:19 name="Void"
+    body: binding #13 76:6:3-109:7:1 name="labels"
+      type: type-ref #9 84:6:11-90:6:17 name="Labels"
+      value: list-lit #12 93:6:20-108:6:35
+        element: literal #10 94:6:21-99:6:26 value=string:"red"
+        element: literal #11 101:6:28-107:6:34 value=string:"blue"
+    body: expr-stmt #17 111:7:3-129:8:1
+      value: call #16 111:7:3-128:7:20 name="puts" piped=false
+        arg: field-access #15 116:7:8-127:7:19 name="size"
+          target: name-ref #14 116:7:8-122:7:14 name="labels"

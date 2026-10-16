@@ -51,6 +51,7 @@ export enum Decl
   Function(FunctionDecl)
   Struct(StructDecl)
   Enum(EnumDecl)
+  TypeAlias(TypeAliasDecl)
   Constant(ConstDecl)
 end
 
@@ -140,6 +141,15 @@ export struct EnumDecl
   name: String
   type_parameters: List[String]
   variants: List[EnumVariant]
+  doc: Optional[String]
+  span: Source.Span
+end
+
+export struct TypeAliasDecl
+  id: Int
+  name: String
+  name_span: Source.Span
+  target: TypeRef
   doc: Optional[String]
   span: Source.Span
 end

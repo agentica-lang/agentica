@@ -12,7 +12,8 @@ import Declarations from "declarations"
 import Resolve from "resolve"
 import Source from "source"
 
-## The declarations of a file in the linked program: its functions, structs and enums without the export, imports left
+## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
+## imports left
 ## out.
 export def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
   out: List[Ast.Decl] = []
@@ -29,6 +30,9 @@ def rewrite_decl(cx: Resolve.Context, decl: Ast.Decl) -> Result[Ast.Decl]
     Ast.Decl.Function(node) -> return rewrite_function(cx, node)
     Ast.Decl.Struct(node) -> return rewrite_struct(cx, node)
     Ast.Decl.Enum(node) -> return rewrite_enum(cx, node)
+    Ast.Decl.TypeAlias(node) ->
+      target = try rewrite_type(cx, node.target)
+      return ok(Ast.Decl.TypeAlias(node.with(name: Resolve.identity(cx, node.name), target: target)))
     Ast.Decl.Constant(node) -> return rewrite_constant(cx, node)
     _ -> return ok(decl)
   end

@@ -78,6 +78,11 @@ nil
 
 There are also lists, maps, structs, enums and results. Later pages show them.
 
+An alias gives a long type a short name without creating a new type:
+`type Names = List[String]`. `Names` and `List[String]` are interchangeable in
+annotations and signatures, and an alias has no runtime cost. Aliases can name
+another alias, but cannot be constructors or enum patterns. Cycles are rejected.
+
 ## Printing values
 
 `puts` prints any value. Strings print as they are. Other values print in a

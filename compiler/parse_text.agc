@@ -126,6 +126,11 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         lines = print_variant(lines, child, variant)
       end
       return lines
+    Ast.Decl.TypeAlias(node) ->
+      lines = out.push(
+        head(at, role, "type-alias-decl", node.id, node.span, name_attr(node.name) + doc_attr(node.doc)),
+      )
+      return print_type(lines, child, "target", node.target)
   end
 end
 

@@ -1,1 +1,1 @@
-ERROR PARSE-UNEXPECTED-TOKEN 7:1:8-13:1:14 "export requires def, struct, enum, or a constant" -
+ERROR PARSE-UNEXPECTED-TOKEN 7:1:8-13:1:14 "export requires def, struct, enum, type, or a constant" -
