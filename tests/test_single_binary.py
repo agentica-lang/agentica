@@ -291,7 +291,8 @@ class SingleBinary(TestCase):
                 (["--version"], "agentica: the front end passed --version, which is not an option of a run\n"),
                 (["--driver-pid", "1"],
                  "agentica: the front end passed --driver-pid, which only the process that started agentica may name\n"),
-                (["--embedded", "runner"], "agentica: the front end passed --embedded, which only agentica run takes\n"),
+                (["--embedded", "runner"],
+                 "agentica: the front end passed --embedded, which only agentica run takes\n"),
                 (["word"], "agentica: the front end passed word, which is not an option of a run\n")):
             with self.subTest(options=options):
                 got = self.agentica("--front-end", front, "hand-off", program, *options)
