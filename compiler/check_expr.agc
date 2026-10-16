@@ -13,6 +13,7 @@ import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
 import T from "types"
+import {ENTRIES} from "builtins"
 
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods
 # and fields of its chain marked, so that the help can say a method call on a range needs parentheses.
@@ -116,7 +117,7 @@ def check_name(cx: State.Cx, st: State.St, node: Ast.NameRef) -> Result[State.Ou
   if binding.ok?
     return ok(State.Out(st: st, type: binding.unwrap!.type))
   end
-  if cx.functions.has_key?(node.name) or cx.catalog.entries.has_key?(node.name)
+  if cx.functions.has_key?(node.name) or ENTRIES.has_key?(node.name)
     return error(
       State.fail(
         cx,

@@ -7,6 +7,7 @@ import Help from "check_help"
 import State from "check_state"
 import Source from "source"
 import Types from "types"
+import {ENUMS, OPAQUE_TYPES} from "builtins"
 
 type ResolvedType = Types.Type
 
@@ -332,7 +333,7 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     return ok(Types.Type.Json)
   elsif name == "Range"
     return ok(Types.Type.Range)
-  elsif cx.catalog.opaque.include?(name)
+  elsif OPAQUE_TYPES.include?(name)
     return ok(Types.Type.Opaque(name))
   end
   return resolve_generic(cx, st, ref)
@@ -441,7 +442,7 @@ def shared_type_names(cx: State.Cx) -> List[String]
     "Task",
     "Channel",
     "Range",
-  ].concat(cx.catalog.opaque.to_a)
+  ].concat(OPAQUE_TYPES.to_a)
 end
 
 # True when every field of the struct passes the test: 0 for encodable, 1 for decodable. A struct already in seen is
@@ -465,7 +466,7 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   name = Types.name(type)
   key = "#{Types.tag(type)}:#{name}"
   for argument in Types.args(type)
-    builtin_void = Types.is(argument, "Void") and cx.catalog.enums.has_key?(name)
+    builtin_void = Types.is(argument, "Void") and ENUMS.has_key?(name)
     if !builtin_void and !data?(cx, argument, seen)
       return false
     end

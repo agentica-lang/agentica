@@ -1111,10 +1111,15 @@ together; the user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
    `COMPOUND_OPERATORS`, `LITERAL_KINDS` and `GRAPHIC_RANGES`. Goldens
    unchanged. The old Racket generator is absent after the front-end port, so
    the existing frozen-source check remains the source of truth for the ranges.
-7. **44d: the linker and the catalog.** `link_env.agc` (`Settings`),
-   `builtins_data.agc`, `builtins.agc`, `tools/gen-builtins-data.rkt`, and the
-   functions that read `cx.settings.catalog` (`resolve.agc`, `rewrite.agc`,
-   `modules.agc`). Goldens unchanged. Start-up numbers in the PR.
+7. **Done (2026-10-16; 44d: the linker and the catalog).** The builtin and
+   prelude data are module constants; `builtins.agc` exposes shared lookup
+   maps and sets, and `Catalog` is removed from linker, checker and lowering
+   state. `IO_TIMEOUT_MS` replaces the zero-argument timeout function. Catalog
+   goldens and the frozen front-end comparisons are unchanged. A small-program
+   check measured 21 ms on the base and 22 ms on this branch; checking the full
+   `compiler/front_end.agc` measured 2.04 s and 2.53 s respectively, reflecting
+   the extra work of checking the top-level table declarations. 44e is not
+   indicated by the small-program start-up measurement.
 8. **44e (only if 44d's numbers ask for it): static data for literal
    constants** (44.10).
 

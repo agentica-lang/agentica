@@ -11,6 +11,7 @@ import Ast from "ast"
 import Declarations from "declarations"
 import Resolve from "resolve"
 import Source from "source"
+import {ENUMS} from "builtins"
 
 ## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
 ## imports left
@@ -334,7 +335,7 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
   elsif parts.size == 2 and Resolve.named_enum?(cx, parts[0])
     enum_name = try Resolve.resolve(cx, parts[0], Resolve.Want.Enum, node.span, false)
     return ok(variant(node.id, enum_name, parts[1], [], [], node.span))
-  elsif parts.size == 2 and cx.settings.catalog.enums.has_key?(parts[0])
+  elsif parts.size == 2 and ENUMS.has_key?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], [], node.span))
   end
   constant = Resolve.constant_identity(cx, node.name)
@@ -379,7 +380,7 @@ def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Ex
   elsif parts.size == 2 and Resolve.named_enum?(cx, parts[0])
     enum_name = try Resolve.resolve(cx, parts[0], Resolve.Want.Enum, node.span, false)
     return ok(variant(node.id, enum_name, parts[1], [], try rewrite_named(cx, node.args), node.span))
-  elsif parts.size == 2 and cx.settings.catalog.enums.has_key?(parts[0])
+  elsif parts.size == 2 and ENUMS.has_key?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], try rewrite_named(cx, node.args), node.span))
   elsif parts.size == 3 and exported_enum?(cx, parts[0], parts[1])
     name = try Resolve.resolve(cx, "#{parts[0]}.#{parts[1]}", Resolve.Want.Enum, node.span, false)

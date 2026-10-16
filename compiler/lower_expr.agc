@@ -16,6 +16,7 @@ import Lowering from "lower_state"
 import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, STRING_OPS, VM_BUILTINS} from "lower_tables"
 import Source from "source"
 import Types from "types"
+import {PRELUDE} from "builtins"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
 ## skips the type check of an item whose list or map was checked as a whole.
@@ -84,10 +85,10 @@ export def lower_call(
 ) -> Result[Lowering.Out]
   span = node.span
   count = node.args.size
-  form = Builtins.ref(cx.catalog, node.name, count)
+  form = Builtins.ref(node.name, count)
   key = ""
   target = node.name
-  prelude = form.ok? and cx.catalog.prelude.has_key?(node.name)
+  prelude = form.ok? and PRELUDE.has_key?(node.name)
   if prelude
     # A builtin written in the prelude is an ordinary call of its function (the checker chose which), and never a tail
     # call: the VM reports a runtime error of the callee at the frame of this call.

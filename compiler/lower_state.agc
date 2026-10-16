@@ -4,7 +4,6 @@
 ## fails with a packed LOWER- diagnostic (check_failure.agc), so `try` stops at the first one.
 
 import Ast from "ast"
-import Builtins from "builtins"
 import Failure from "check_failure"
 import State from "check_state"
 import Defaults from "defaults"
@@ -13,6 +12,7 @@ import Ir from "ir"
 import {PRELUDE_PREFIX} from "ir"
 import Source from "source"
 import Types from "types"
+import {OPAQUE_TYPES} from "builtins"
 
 ## A struct of the program as the lowering reads it: its index in the struct table, its fields in order, and the
 ## position of each field.
@@ -49,7 +49,6 @@ end
 export struct Cx
   types: List[Types.Type]
   resolved: Map[Int, State.Resolved]
-  catalog: Builtins.Catalog
   user_types: Map[String, String]
   structs: Map[String, StructInfo]
   variants: Map[String, Int]
@@ -204,7 +203,7 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Struct(name) -> return cx.user_types.get(name, "") == "Struct"
     Types.Type.Enum(name, args) -> return cx.user_types.get(name, "") == "Enum"
     Types.Type.Fn(params, result) -> return fn_type?(cx, params, result)
-    Types.Type.Opaque(name) -> return cx.catalog.opaque.include?(name)
+    Types.Type.Opaque(name) -> return OPAQUE_TYPES.include?(name)
     Types.Type.Int -> return true
     Types.Type.Float -> return true
     Types.Type.Bool -> return true

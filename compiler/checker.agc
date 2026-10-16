@@ -4,7 +4,6 @@
 ## program order, file by file.
 
 import Ast from "ast"
-import Builtins from "builtins"
 import Constants from "check_const"
 import Expr from "check_expr"
 import Failure from "check_failure"
@@ -16,6 +15,7 @@ import Env from "link_env"
 import Linker from "linker"
 import Prelude from "prelude"
 import T from "types"
+import {ENUMS, RECORDS} from "builtins"
 
 ## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that
 ## has none: node ids are dense, so a list is faster than a Map to write and read), what each method call or field
@@ -37,8 +37,7 @@ export enum Checking
   Failed(Failure.Problem)
 end
 
-## Checks a linked program. The catalog of the settings is the one the linker used, and the settings tell where the
-## files of the prelude are read.
+## Checks a linked program. The settings tell where the files of the prelude are read.
 export def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
   result = run(linked, settings)
   if result.ok?
@@ -64,16 +63,15 @@ export def no_types(count: Int, chunk: Int) -> List[T.Type]
 end
 
 # The context of the run: the builtin records and enums, the tables built once, and the text of each file.
-def start(linked: Linker.Linked, catalog: Builtins.Catalog) -> State.Cx
+def start(linked: Linker.Linked) -> State.Cx
   texts: Map[String, String] = {}
   for module in linked.modules
     texts = texts.put(module.file, module.text)
   end
   return State.Cx(
-    catalog: catalog,
     help: Help.tables(),
-    structs: catalog.records,
-    enums: catalog.enums,
+    structs: RECORDS,
+    enums: ENUMS,
     aliases: {},
     functions: {},
     constants: {},
@@ -86,7 +84,7 @@ def start(linked: Linker.Linked, catalog: Builtins.Catalog) -> State.Cx
 end
 
 def run(linked: Linker.Linked, settings: Env.Settings) -> Result[Checked]
-  base = start(linked, settings.catalog)
+  base = start(linked)
   cx = try Register.register(base, linked.modules)
   try Register.check_main(cx, linked.modules, linked.root.span)
   st = State.fresh().with(types: no_types(ids_of(linked), max_repeat()))

@@ -9,6 +9,7 @@ import Reply from "cli_reply"
 import Texts from "cli_text"
 import Suggest from "suggest"
 import Types from "types"
+import {PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
 
 ## Runs `agentica help` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of it.
 ## A trailing `--json` asks for the JSON form of the one builtin, and nothing else takes an option.
@@ -20,15 +21,14 @@ export def help(words: List[String], style: String) -> Reply.Reply
     rest = rest.take(rest.size - 1)
   end
   if rest.size == 1
-    return Reply.printed("#{Texts.summary_text()}#{namespaces_text(Builtins.catalog())}\n")
+    return Reply.printed("#{Texts.summary_text()}#{namespaces_text()}\n")
   elsif rest.size != 2
     return Reply.failed(2, "usage: agentica help [NAME [--json]]\n")
   end
-  catalog = Builtins.catalog()
   name = rest[1]
-  entry = Builtins.lookup(catalog, name)
-  if Builtins.std_only_name?(catalog, name) or catalog.prelude_only.include?(name) or !entry.ok?
-    return Reply.failed(2, "agentica: unknown builtin #{name}#{suggestion(name, catalog)}\n")
+  entry = Builtins.lookup(name)
+  if Builtins.std_only_name?(name) or PRELUDE_ONLY.include?(name) or !entry.ok?
+    return Reply.failed(2, "agentica: unknown builtin #{name}#{suggestion(name)}\n")
   end
   if as_json
     return Reply.printed("#{JSON.encode(builtin_json(entry.unwrap!))}\n")
@@ -37,8 +37,8 @@ export def help(words: List[String], style: String) -> Reply.Reply
 end
 
 # `; did you mean "NAME"?` when a public name is close, else nothing.
-def suggestion(name: String, catalog: Builtins.Catalog) -> String
-  case Suggest.did_you_mean(name, catalog.public_names)
+def suggestion(name: String) -> String
+  case Suggest.did_you_mean(name, PUBLIC_NAMES)
     Ast.Optional.Present(text) -> return "; #{text}"
     Ast.Optional.Absent -> return ""
   end
@@ -46,8 +46,8 @@ end
 
 # The paragraph that follows the summary: the namespaces (the part of a name before its first dot, sorted) and the
 # bare functions.
-def namespaces_text(catalog: Builtins.Catalog) -> String
-  names = catalog.public_names.sort
+def namespaces_text() -> String
+  names = PUBLIC_NAMES.sort
   spaces: List[String] = []
   bare: List[String] = []
   for name in names

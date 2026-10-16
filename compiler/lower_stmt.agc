@@ -152,7 +152,7 @@ end
 def tail_call(cx: Lowering.Cx, value: Ast.Expr) -> Ast.Optional[Ast.Call]
   case value
     Ast.Expr.Call(node) ->
-      if Builtins.ref(cx.catalog, node.name, node.args.size).ok?
+      if Builtins.ref(node.name, node.args.size).ok?
         return Ast.Optional.Absent
       end
       return Ast.Optional.Present(node)

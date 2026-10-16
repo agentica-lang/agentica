@@ -12,6 +12,7 @@ import Types from "check_types"
 import Defaults from "defaults"
 import Source from "source"
 import T from "types"
+import {ENTRIES, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS} from "builtins"
 
 # What checking the arguments of a variant learned: the state and the type arguments found.
 struct Inferred
@@ -28,8 +29,8 @@ end
 ## Checks a call written by name: a builtin (and, for a piped call, that its method form is not the better one) or a
 ## function of the program.
 export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
-  entry = cx.catalog.entries.get(node.name)
-  if !entry.ok? or (cx.catalog.prelude_only.include?(node.name) and !cx.prelude)
+  entry = ENTRIES.get(node.name)
+  if !entry.ok? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
     return check_plain_call(cx, st, node)
   end
   out = try Rules.check_builtin_call(cx, st, node, expected, entry.unwrap!)
@@ -333,7 +334,7 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
   elsif name.starts_with?("HTTP.")
     return "import HTTP from \"std/http\""
   end
-  return Help.near(name, cx.functions.keys, cx.catalog.public_names)
+  return Help.near(name, cx.functions.keys, PUBLIC_NAMES)
 end
 
 def unknown_enum_help(name: String) -> String
@@ -529,7 +530,7 @@ end
 def updatable?(cx: State.Cx, visible: Ast.Optional[List[String]], name: String) -> Bool
   case visible
     Ast.Optional.Present(names) ->
-      return cx.catalog.records.has_key?(name) or names.any? do |item: String| item == name end
+      return RECORDS.has_key?(name) or names.any? do |item: String| item == name end
     Ast.Optional.Absent -> return true
   end
 end

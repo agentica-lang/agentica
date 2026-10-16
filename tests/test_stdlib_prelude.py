@@ -24,13 +24,16 @@ SLOW_IN_A_LOOP = re.compile(r"\.(concat|take|drop|reverse|sort|sort_by|keys|valu
 LOOP_START = re.compile(r"^(\s*)(for|while)\b")
 
 
-def table_functions():
-    """{function name: file stem} from the rows of compiler/prelude_data.agc (plain, limited and chosen calls)."""
+def table_functions() -> dict[str, str]:
+    """Return function names and file stems from compiler/prelude_data.agc rows."""
     found = {}
-    row = r'\b(?:plain|limited|chosen)\(\s*"([^"]+)",\s*"([a-z]+)",\s*(?:"([a-z_]+)"|"[A-Z]"[^\[]*\[([^\]]*)\])'
-    for call in re.finditer(row, TABLE):
-        _name, module, function, functions = call.groups()
-        for name in ([function] if function else re.findall(r'"([a-z_]+)"', functions)):
+    row = re.compile(
+        r'Model\.PreludeRow\((?:(?!Model\.PreludeRow\().)*?'
+        r'module: "([a-z]+)".*?bodies: (\{[^}]*\})',
+        flags=re.DOTALL,
+    )
+    for module, bodies in row.findall(TABLE):
+        for name in re.findall(r': "([a-z_]+)"', bodies):
             found[name] = module
     return found
 

@@ -10,6 +10,7 @@ import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 import Source from "source"
 import T from "types"
+import {HANDLES} from "builtins"
 
 ## Checks a call of a Task, Channel, Map or Set builtin by its rule. Any other rule is the caller's.
 export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
@@ -59,7 +60,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
 end
 
 def handle?(cx: State.Cx, type: T.Type) -> Bool
-  return T.is(type, "Opaque") and cx.catalog.handles.include?(T.name(type))
+  return T.is(type, "Opaque") and HANDLES.include?(T.name(type))
 end
 
 def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]

@@ -5,6 +5,7 @@ import Ast from "ast"
 import Model from "builtin_model"
 import State from "check_state"
 import T from "types"
+import {ENTRIES} from "builtins"
 
 ## CHECK-UNUSED-VALUE when a value that is dropped could only have been used for itself: a pure builtin, a to_s on a
 ## data value, a .with. Anything else, and any Void value, is fine.
@@ -14,7 +15,7 @@ export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type:
   end
   resolved = resolution(st, value)
   name = call_name(value, resolved)
-  entry = cx.catalog.entries.get(name)
+  entry = ENTRIES.get(name)
   if unused_result?(value, resolved, entry)
     return error(
       State.fail_help(

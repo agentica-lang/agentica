@@ -64,7 +64,7 @@ end
 
 ## Lowers a checked program and writes its bytes. The header names `settings.version`.
 export def build(front: Checked, settings: Env.Settings) -> Compiled
-  case Lowering.lower(front.linked, front.checked, settings.catalog)
+  case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
     Lowering.Lowered.Done(program) -> return write(Writer.write(front.linked.root_dir, program, settings.version))
   end

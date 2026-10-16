@@ -12,6 +12,7 @@ import Defaults from "defaults"
 import Linker from "linker"
 import Source from "source"
 import T from "types"
+import {ENTRIES, RESERVED} from "builtins"
 
 ## The context with the enums, structs and functions of the program added to the builtin ones.
 export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
@@ -114,7 +115,7 @@ def register_enum_name(cx: State.Cx, st: State.St, node: Ast.EnumDecl) -> Result
     seen = seen.add(parameter)
   end
   for parameter in node.type_parameters
-    if cx.catalog.reserved.include?(parameter)
+    if RESERVED.include?(parameter)
       return error(
         State.fail(
           cx,
@@ -136,7 +137,7 @@ end
 # CHECK-REDEFINED-NAME when a declared type name is reserved or already taken.
 def check_new_name(cx: State.Cx, st: State.St, name: String, span: Source.Span) -> Result[Bool]
   if (
-    cx.catalog.reserved.include?(name) or
+    RESERVED.include?(name) or
     cx.structs.has_key?(name) or
     cx.enums.has_key?(name) or
     cx.aliases.has_key?(name) or
@@ -258,7 +259,7 @@ end
 
 def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.Cx]
   taken = (
-    cx.catalog.entries.has_key?(node.name) or
+    ENTRIES.has_key?(node.name) or
     cx.functions.has_key?(node.name) or
     cx.structs.has_key?(node.name) or
     cx.enums.has_key?(node.name) or

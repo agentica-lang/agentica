@@ -5,13 +5,13 @@
 
 import Ast from "ast"
 import Model from "builtin_model"
-import Builtins from "builtins"
 import Help from "check_help"
 import Failure from "check_failure"
 import Defaults from "defaults"
 import Diag from "diagnostic"
 import Source from "source"
 import Types from "types"
+import {PUBLIC_NAMES} from "builtins"
 
 ## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was
 ## introduced (a block cannot assign a name from outside it, so the level tells which side a name is on).
@@ -65,7 +65,6 @@ end
 ## compiler prelude are checked (check_prelude.agc): their type variables are opaque types, and a Map key or Set
 ## element may be one.
 export struct Cx
-  catalog: Builtins.Catalog
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
   enums: Map[String, Model.EnumDef]
@@ -283,7 +282,7 @@ end
 ## The names a program may use as a value or a call, for the did-you-mean help: names in scope, functions, public
 ## builtins.
 export def visible_names(cx: Cx, st: St) -> List[String]
-  return st.vars.keys.concat(cx.functions.keys).concat(cx.catalog.public_names)
+  return st.vars.keys.concat(cx.functions.keys).concat(PUBLIC_NAMES)
 end
 
 ## A Diag.Help for a help text that may be absent ("" is absent).

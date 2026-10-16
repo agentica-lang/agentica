@@ -12,6 +12,7 @@ import State from "check_state"
 import Linker from "linker"
 import Source from "source"
 import T from "types"
+import {ENTRIES} from "builtins"
 
 ## What checking the constants leaves: the context with the type of every constant, the state with the types of the
 ## initializers, and the linked names of the constants in initialization order.
@@ -234,7 +235,7 @@ def builtin_of(cx: State.Cx, st: State.St, node: ConstWalk.Node) -> Ast.Optional
 end
 
 def entry_named(cx: State.Cx, name: String) -> Ast.Optional[Model.Builtin]
-  found = cx.catalog.entries.get(name)
+  found = ENTRIES.get(name)
   if found.ok?
     return Ast.Optional.Present(found.unwrap!)
   end
