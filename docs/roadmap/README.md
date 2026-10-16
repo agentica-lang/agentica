@@ -115,7 +115,7 @@ and the other features after the JIT.
    [§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria), the
    precompiled BDD runner (about 0.7 s that step 7b added to `agentica test`),
    and maybe a VM profiler and the start-up cut of row 8.3. **First part
-   done (2026-10-16):** the timing rows of `benchmarks/run.py`, the profiler
+   done (2026-10-16, PR #315):** the timing rows of `benchmarks/run.py`, the profiler
    (`AGENTICA_VM_TRACE=profile`) and the BDD runner and default steps carried
    by the binary (`agentica test` of a small file: 0.87 s before, 0.05 s now;
    [`docs/vm-benchmarks.md`](../vm-benchmarks.md#front-end-post-bootstrap-row-3)).
