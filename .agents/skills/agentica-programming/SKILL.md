@@ -95,6 +95,7 @@ Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]
 - Empty `[]`, `{}` and `Set.new([])` need a type from an annotation, a parameter, a field, or the return type: `m: Map[String, Int] = {}`.
 - A non-Void function must `return` on every path. A loop does not count, so put a `return` after `while true`.
 - `case` on Int, Float, String, Bool, or Nil needs a final `_` arm. On an enum, list every variant or add `_`.
+- `case` arms take a guard, `Shape.Circle(r) if r > 3 -> ...` (a Bool that sees the arm's names), and any pattern in a payload position: `ok(Option.Some(0))`, `Shape.Pair(1, n)`. A guarded or literal/nested arm never covers a variant, so end with `ok(_)`, `Shape.Pair(_, _)` or `_`.
 - `for` takes a List, a Set or a Range. `0...n` excludes n; `1..n` includes it. There is no `range(n)`.
 - Result: `ok(v)` and `error(msg)` need an expected Result type: `r: Result[Int] = error("bad")` (a bare `r = error("bad")` is `CHECK-RESULT-TYPE`). `try` needs a Result operand (`try text.to_i`, not `try text.to_i!`) and a Result-returning function. `"x".to_i` is a Result, not `0`.
 - A timed `Task.await(task, timeout_ms)` returns `Await[R]` (`Await.Done(value)` or `Await.TimedOut`), not `R`; `timeout_ms` must be above 0, and the timeout does not cancel the task.

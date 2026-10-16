@@ -89,9 +89,13 @@ A call through an import alias leaves out defaults too (`Util.join(xs)`), and an
 
 Enums are nominal sum types and may declare type parameters. Variants are qualified by their enum, and payloads are positional. A nullary variant is written `Command.Show` or `Command.Show()`. Constructor type parameters come from the payloads and the expected type; unresolved or conflicting ones are errors.
 
-`case value ... end` is a statement. An arm may put one simple statement on the arrow line (`1 -> puts("one")`), and more lines of the same arm may follow. A pattern is a primitive literal, `_`, `ok(...)` or `error(...)`, or a qualified variant with one binding or `_` per payload position. Bindings are local to the arm. Nested patterns and guards are not supported.
+`case value ... end` is a statement. An arm may put one simple statement on the arrow line (`1 -> puts("one")`), and more lines of the same arm may follow. A pattern is a primitive literal, `_`, `ok(...)` or `error(...)`, or a qualified variant with one slot per payload position. A slot is a name (a binding), `_`, a literal (a negative number too), or another variant pattern, `ok(...)` or `error(...)`, to any depth (the parser's nesting limit applies, one level for each nested variant). Bindings are local to the arm, and a name may appear once in an arm (`CHECK-SHADOWED-NAME` otherwise, at the variant pattern that holds the second one). A nested literal has the type of its payload position (`CHECK-PATTERN-TYPE`), and a nested variant must belong to the enum of its position. A name alone is not a top-level pattern. Payloads are positional: there are no struct or list patterns.
 
-Enum values need every variant, unless there is a catch-all `_`. `Result[T]` matches as `Result.Ok(value)` and `Result.Err(message)`, or as `ok` and `error`; `Result.Ok(_)` discards the payload. The builtin `Await[T]` of a timed `Task.await` matches as `Await.Done(value)` and `Await.TimedOut`, with the same rules. Every other `case`, including one on `Bool` or `Nil`, needs `_`. A catch-all is the last arm, and duplicate or unreachable arms are rejected. The codes are `CHECK-ENUM-TYPE-INFERENCE`, `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE` and `CHECK-UNREACHABLE-CASE-ARM`.
+An arm may carry a guard, `pattern if condition -> ...`. The condition is a `Bool` expression (`CHECK-TYPE-MISMATCH` otherwise) that sees the bindings of its own arm. The arm runs when the pattern matches and the condition is `true`; otherwise the case goes on with the next arm. The parser looks for the guard of an arm up to the first `->` of its line, so a guard stays on the line of its pattern.
+
+Enum values need every variant, unless there is a catch-all `_`. `Result[T]` matches as `Result.Ok(value)` and `Result.Err(message)`, or as `ok` and `error`; `Result.Ok(_)` discards the payload. The builtin `Await[T]` of a timed `Task.await` matches as `Await.Done(value)` and `Await.TimedOut`, with the same rules. Every other `case`, including one on `Bool` or `Nil`, needs `_`. A catch-all is the last arm when it has no guard, and duplicate or unreachable arms are rejected. The codes are `CHECK-ENUM-TYPE-INFERENCE`, `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE` and `CHECK-UNREACHABLE-CASE-ARM`.
+
+Exhaustiveness and reachability are conservative, and no deeper analysis is done. An arm covers its variant only when it has no guard and every slot is a name or `_`. An arm with a guard, a literal slot or a nested variant covers nothing: it is a test that may fail. So a guarded `_ if c ->` does not make a case exhaustive, and a case that matches only `Shape.Boxed(Option.Some(n))` needs a `Shape.Boxed(_)` arm (or `_`) after it, as `ok(Reading.Value(n))` needs `ok(_)`. An arm is unreachable (`CHECK-UNREACHABLE-CASE-ARM`) only when an earlier arm without a guard already covers its variant with names and `_`, or follows an unguarded catch-all. The same pattern may come again after a guarded or refutable arm, guarded or not.
 
 ```ruby
 enum Option[T]
@@ -103,6 +107,15 @@ def display(option: Option[Int]) -> Void
   case option
     Option.Some(item) -> puts(String.from_int(item))
     Option.None -> puts("empty")
+  end
+end
+
+def label(option: Option[Int]) -> String
+  case option
+    Option.Some(0) -> return "zero"
+    Option.Some(n) if n < 0 -> return "negative"
+    Option.Some(_) -> return "positive"
+    Option.None -> return "empty"
   end
 end
 ```

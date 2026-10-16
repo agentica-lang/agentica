@@ -138,7 +138,12 @@ and the other features after the JIT.
    ([§25.10](../future/25-ruby-typed-idioms.md#2510-heredocs),
    [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
    in `compiler/` only. The first of steps 4 and 5 to land is the first use of
-   the two-step stage0 refresh of §35.3.
+   the two-step stage0 refresh of §35.3. Part B, `case` guards and nested
+   patterns (§25.12.1, "As decided (post-bootstrap step 5)"), is **done
+   (2026-10-16)**: `pattern if condition ->` and any pattern in a payload
+   position, a conservative exhaustiveness rule, no bytecode change.
+   `compiler/` does not use them yet (the two-step stage0 refresh is a later
+   PR).
 6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
    diagnostics (row 7.6), `agentica doc` and `help` (row 22b), and the 44b to
    44d table rewrites

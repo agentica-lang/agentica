@@ -1157,12 +1157,53 @@ before it is planned.
 (`Shape.Box(Point(x, 0), _)`), struct patterns by field (`User(name:, age:)`),
 list patterns (`[first, *rest]`), and guards (`in x if x > 0`). **Why:** the
 most valuable item of this part; it removes nested `case` statements and lets
-agents write the Ruby they know. Today patterns are one level deep with no
-guards. **Why not now:** high complexity: exhaustiveness and unreachable-arm
-checks for nested patterns, list patterns with a rest, bindings in guards, and
-the lowering to a decision tree. **Open questions:** keep `->` arms or take
-`in`; how list rests fit immutable lists; which patterns `Map` gets; whether
-`case ... in` becomes an expression.
+agents write the Ruby they know. Before step 5, patterns were one level deep
+with no guards. **Why not now:** high complexity: exhaustiveness and
+unreachable-arm checks for nested patterns, list patterns with a rest,
+bindings in guards, and the lowering to a decision tree. **Open questions:**
+keep `->` arms or take `in`; how list rests fit immutable lists; which patterns
+`Map` gets; whether `case ... in` becomes an expression.
+
+**As decided (post-bootstrap step 5).** Guards and nested patterns are built,
+in `compiler/` only, as a smaller form of this idea; the rest stays "to
+evaluate later" and out of scope: struct patterns by field, list patterns with a
+rest, `case ... in` and `case` as an expression. The owner approved guards and
+nested patterns on 2026-10-15 ("multi-clause Elixir-style functions are not
+wanted; a case with guards covers them"); the details below were decided under
+the owner's delegation.
+
+1. **Guards.** `pattern if condition -> ...`, like Ruby's `in x if x > 0`.
+   `if` is already a keyword, so there is no new reserved word, and `when`
+   stays unreserved. The condition is a `Bool` (`CHECK-TYPE-MISMATCH`) and may
+   use the bindings of its arm. A guarded arm never counts toward
+   exhaustiveness, and the same pattern may come again in a later arm, guarded
+   or not, without `CHECK-UNREACHABLE-CASE-ARM`. A guarded catch-all
+   `_ if c ->` is allowed and does not make the case exhaustive; a catch-all
+   must be last only when it has no guard. The parser looks for the guard of an
+   arm up to the first `->` of its line.
+2. **Nested patterns.** In a payload position (of a qualified variant,
+   `ok(...)` or `error(...)`) any pattern may appear: a literal (a negative
+   number too), `_`, a name, or a nested variant, `ok(...)` or `error(...)`,
+   to any depth, within the parser's nesting limit (a nested variant is one
+   level). Payloads stay positional. A name may appear once in an arm
+   (`CHECK-SHADOWED-NAME`, the code that a repeated binding already had).
+3. **Exhaustiveness and reachability** stay simple and conservative. An arm
+   covers its top-level variant only when it has no guard and every
+   sub-pattern is irrefutable (a name or `_`); an arm with a literal or a
+   nested variant is treated like a guarded one. An arm is unreachable when an
+   earlier unguarded arm already covers its variant with irrefutable
+   sub-patterns, or after an unguarded catch-all. There is no deeper analysis:
+   a case on `ok(Option.Some(n))` and `ok(Option.None)` still needs `ok(_)`.
+4. **Lowering.** The sequential test-and-jump chain of each arm gains the
+   nested tests (the payload is read into a temporary register, then its tag
+   or literal is tested) and the guard, after the bindings, as one more
+   condition. A failed test falls through to the next arm. The bytecode and
+   the VM do not change.
+
+**Built (2026-10-16).** The grammar is in `docs/grammar/05-syntax.md` and
+`06-semantics.md`; the example is `examples/case-guards.agc`. `compiler/` does
+not use the syntax yet, because stage0 cannot compile it (the two-step refresh
+of §35.3, a later PR).
 
 #### 25.12.2 Keyword arguments (moved to Part C)
 
