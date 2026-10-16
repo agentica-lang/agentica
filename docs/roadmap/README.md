@@ -120,9 +120,17 @@ and the other features after the JIT.
    steps carried by the binary (`agentica test` of a small file: 0.87 s
    before, 0.05 s now; numbers in
    [vm-benchmarks](../vm-benchmarks.md#front-end-post-bootstrap-row-3)).
-   Still to do: the lexer (51% of the steps of a check of the whole front end),
-   the parser, and the loader (15 ms of every start), toward the 100 ms for
-   `stdlib/bdd/gherkin.agc`.
+   **Second part, the lexer, done (2026-10-16, PR #317):** the lexer was
+   51% of the steps of a check of the whole front end, and its steps are
+   halved (`lexer.agc` 39.4 M to 19.6 M in `check compiler/front_end.agc`; the
+   lexer alone 52 to 24 steps for each character), so `check
+   stdlib/bdd/gherkin.agc` takes 99 ms, not 126 (measured under load). Its
+   tables are module constants, which is 44b of
+   [§44.12](../future/44-module-constants.md#4412-implementation-plan).
+   Numbers, and what was tried, in
+   [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer).
+   Still to do: the parser and the loader (15 ms of every start), for room
+   under the 100 ms for `stdlib/bdd/gherkin.agc`.
 4. Default parameter values (row 7.5a,
    [§25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)).
 5. `case` guards, nested patterns and the `<<~NAME` heredoc
