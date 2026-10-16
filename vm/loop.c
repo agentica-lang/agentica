@@ -90,7 +90,7 @@ struct agc_poller {
   uv_poll_t handle;
 #ifdef __APPLE__
   uv_timer_t timer;
-  bool timed, writing;
+  bool timed, writing, named;
 #endif
   int fd;
   void (*ready)(void *data, int status);
@@ -649,7 +649,8 @@ static void poll_tick(uv_timer_t *timer) {
   struct pollfd fd = {.fd = p->fd, .events = p->writing ? POLLOUT : POLLIN};
   int rc = poll(&fd, 1, 0);
   if (rc < 0 && errno != EINTR) p->ready(p->data, -errno);
-  else if (rc >= 0) p->ready(p->data, fd.revents & POLLNVAL ? UV_EBADF : 0);
+  else if (rc > 0 || (rc == 0 && p->named && !p->writing))
+    p->ready(p->data, fd.revents & POLLNVAL ? UV_EBADF : 0);
 }
 #endif
 
@@ -691,6 +692,8 @@ agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   struct stat info;
   p->timed = fstat(fd, &info) == 0 && S_ISFIFO(info.st_mode);
   if (p->timed) {
+    char path[1024];
+    p->named = fcntl(fd, F_GETPATH, path) == 0;
     rc = uv_timer_init(&loop_of(vm)->uv, &p->timer);
     p->timer.data = p;
   } else
