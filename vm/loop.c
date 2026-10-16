@@ -834,16 +834,20 @@ static bool close_all(agc_vm *vm) {
   release_handles(vm);
   if (!vm->loop) return true;
   unwatch_stop(vm->loop);
-  uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
-  for (job *j = vm->loop->ready; j; j = j->ready_next) j->queued = false;
-  vm->loop->ready = vm->loop->ready_tail = NULL;
-  sweep(vm);
-  release_handles(vm);
-  if (registry_count(vm)) return false;
-  if (uv_loop_close(&vm->loop->uv) != 0) return false;
-  free(vm->loop);
-  vm->loop = NULL;
-  return true;
+  for (int attempt = 0; attempt < 4; attempt++) {
+    uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
+    for (job *j = vm->loop->ready; j; j = j->ready_next) j->queued = false;
+    vm->loop->ready = vm->loop->ready_tail = NULL;
+    sweep(vm);
+    release_handles(vm);
+    if (registry_count(vm)) continue;
+    if (uv_loop_close(&vm->loop->uv) == 0) {
+      free(vm->loop);
+      vm->loop = NULL;
+      return true;
+    }
+  }
+  return false;
 }
 
 bool agc_io_close(agc_vm *vm) {
