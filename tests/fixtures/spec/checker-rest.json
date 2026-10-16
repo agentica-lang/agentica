@@ -726,6 +726,495 @@
       "help": true
     }
   ],
+  "Task.map takes a block that gives a Result, and try works in it": [
+    {
+      "program": [
+        "def slow_double(n: Int) -> Result[Int]",
+        "  Task.sleep(100)",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  results = Task.map([1, 2, 3, 4], 2, 1000) do |n|",
+        "    slow_double(n)",
+        "  end",
+        "  puts(results)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1, 2], 2, 1000) do |n|",
+        "    x = try twice(n)",
+        "    ok(x + 1)",
+        "  end",
+        "  total: Int = r.size",
+        "  puts(total)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r: List[Result[Int]] = Task.map([1, 2], 2, 1000) do |n|",
+        "    x = try twice(n)",
+        "    if x > 2",
+        "      return error(\"big\")",
+        "    end",
+        "    ok(x)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1, 2], 2, 1000) do |n|",
+        "    if n > 1",
+        "      return ok(0)",
+        "    end",
+        "    x = try twice(n)",
+        "    error(\"no\")",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1, 2], 2, 1000, &twice)",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1, 2], 2, 1000) do |n|",
+        "    puts(n)",
+        "    ok()",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([], 2, 1000) do |n: Int|",
+        "    ok(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1, 2], 2, 1000) do |n|",
+        "    n + 1",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [7, 5],
+      "covers": "n + 1",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1, 2], 2, 1000) do |n|",
+        "    puts(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [7, 5],
+      "covers": "puts(n)",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1, 2], 2, 1000) do |n|",
+        "    return n",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [7, 12],
+      "covers": "n",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r: List[Result[String]] = Task.map([1], 1, 10) do |n|",
+        "    ok(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [7, 8],
+      "covers": "n",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r: List[Int] = Task.map([1], 1, 10) do |n|",
+        "    ok(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [6, 18]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, 100) do |n|",
+        "    error(\"no\")",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-RESULT-TYPE",
+      "start": [7, 5],
+      "covers": "error(\"no\")",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, 100) do |n|",
+        "    x = try n",
+        "    ok(x)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [7, 13],
+      "covers": "n",
+      "help": true
+    },
+    {
+      "program": [
+        "def add(a: Int, b: Int) -> Result[Int]",
+        "  return ok(a + b)",
+        "end",
+        "",
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, 100, &add)",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [10, 29],
+      "covers": "&add"
+    },
+    {
+      "program": [
+        "def square(n: Int) -> Int",
+        "  return n * n",
+        "end",
+        "",
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, 100, &square)",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [10, 29],
+      "covers": "&square",
+      "help": true
+    },
+    {
+      "program": [
+        "def shout(s: String) -> Result[String]",
+        "  return ok(s)",
+        "end",
+        "",
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, 100, &shout)",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [10, 17],
+      "covers": "1",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, 100, 7)",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [6, 29],
+      "covers": "7"
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 1) do |n|",
+        "    ok(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "start": [6, 7]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([], 2, 1000) do |n|",
+        "    ok(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-EMPTY-LIST-TYPE",
+      "start": [6, 16],
+      "covers": "[]",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], \"2\", 1000) do |n|",
+        "    ok(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [6, 21],
+      "covers": "\"2\"",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, \"x\") do |n|",
+        "    ok(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [6, 24],
+      "covers": "\"x\"",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, 100) do |a, b|",
+        "    ok(a)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "start": [6, 29]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Task.map([1], 2, 100) do |n: String|",
+        "    ok(n)",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [6, 17],
+      "covers": "1",
+      "help": true
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Result[Int]",
+        "  return ok(n * 2)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = [1].map do |n|",
+        "    x = try twice(n)",
+        "    x",
+        "  end",
+        "  puts(r)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TRY-CONTEXT",
+      "start": [7, 9],
+      "covers": "try twice(n)",
+      "help": true
+    }
+  ],
   "JSON builders and schemas enforce their input contracts": [
     {
       "program": [
@@ -3583,6 +4072,54 @@
         ""
       ],
       "code": "CHECK-UNKNOWN-METHOD",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Task.async_stream([1], 2, 3)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Parallel.map([1], 2)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Task.async(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = Thread.new(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
       "help": true
     }
   ],

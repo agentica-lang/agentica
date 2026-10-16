@@ -194,6 +194,7 @@ TCP.send_bytes Plain
 TLS.connect Plain
 TLS.listen Plain
 Task.await TaskAwait
+Task.map TaskMap
 Task.pending_count Plain
 Task.sleep Plain
 Task.spawn TaskSpawn

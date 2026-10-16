@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 130,
+  "stdout": [
+    "[ok(5), error(\"not a number\"), ok(7)]",
+    "[ok(4), error(\"too long\")]",
+    "false",
+    ""
+  ],
+  "stderr": []
+}

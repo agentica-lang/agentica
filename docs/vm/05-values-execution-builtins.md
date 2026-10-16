@@ -153,9 +153,10 @@ written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only
 `Process.spawn_captured`, `Process.output`, the child channel builtins of 25c
 (`Process.spawn_channel`, `channel_read_line`, `channel_send`, `channel_close`,
 `read_available`, `parent_read_line` and `parent_send`; `vm/process.c`,
-`vm/duplex.c`), `Task.pending_count`, `Task.spawn_owning` (24b, `vm/task.c`) and
-the `Channel` builtins (`vm/channel.c`). A channel call that must wait needs the
-event loop, so off Linux it fails like the other loop builtins. The event loop,
+`vm/duplex.c`), `Task.pending_count`, `Task.spawn_owning` (24b, `vm/task.c`),
+`Task.map` (17a, `vm/task_map.c`) and the `Channel` builtins (`vm/channel.c`). A
+channel call that must wait, and `Task.map`, need the event loop, so off Linux
+they fail like the other loop builtins. The event loop,
 files, processes, TCP, TLS and HTTP (client and server) are Linux only for now
 (the `__linux__` guards in `vm/loop.c`, `vm/files.c`, `vm/process.c`,
 `vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_client.c` and `vm/http_server.c`).

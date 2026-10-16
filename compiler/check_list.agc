@@ -29,6 +29,17 @@ export def check_list_rule(cx: State.Cx, st: State.St, site: State.Site, rule: M
   end
 end
 
+## The type written on parameter number index of a block, or Unknown when it has none.
+export def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, index: Int) -> Result[T.Type]
+  if block.params.size <= index
+    return ok(T.Type.Unknown)
+  end
+  case block.params[index].type
+    Ast.Optional.Present(annotation) -> return CheckTypes.resolve_type(cx, st, annotation, false)
+    Ast.Optional.Absent -> return ok(T.Type.Unknown)
+  end
+end
+
 # List.sort: a list of Int, Float or String.
 def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.list_argument(cx, st, site, T.only_list(site.expected))
@@ -145,17 +156,6 @@ def check_repeat(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.O
   element = try State.expr(cx, st, site.args[0], context)
   count = try State.expr(cx, element.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: count.st, type: T.Type.List(element.type)))
-end
-
-# The type written on parameter number index of a block, or Unknown when it has none.
-def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, index: Int) -> Result[T.Type]
-  if block.params.size <= index
-    return ok(T.Type.Unknown)
-  end
-  case block.params[index].type
-    Ast.Optional.Present(annotation) -> return CheckTypes.resolve_type(cx, st, annotation, false)
-    Ast.Optional.Absent -> return ok(T.Type.Unknown)
-  end
 end
 
 # List.map, filter, reduce, each, any? and all?: the callback is a block (which gets the element type) or a function

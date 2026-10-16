@@ -81,7 +81,7 @@ A runtime trace names each file as you can open it from the working directory (`
 | `CHECK-TOO-DEEP` | more than 1,000 levels of expressions and statements in the tree (each counts one; a chain of operators is as deep as it is long, and nested chains are deeper than the parser counts); split the code into functions or bindings |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
-| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count; `Channel.new` capacity outside 1..1048576; a negative `Int.shift_left`/`shift_right`/`shift_right_unsigned` count |
+| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count; `Channel.new` capacity outside 1..1048576; a `Task.map` `limit` outside 1..1024; a negative `Int.shift_left`/`shift_right`/`shift_right_unsigned` count |
 | `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text, `Float.to_int!` on NaN or infinity, `Float.from_bits32` outside 0..4294967295 |
 | `RUNTIME-INVALID-RANGE` | `Random.int` with `min > max` |
 | `RUNTIME-INVALID-CHARACTER` | `String.code` without exactly one character, or `String.from_code` outside Unicode scalar values |
@@ -90,8 +90,8 @@ A runtime trace names each file as you can open it from the working directory (`
 | `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted; the stack shows where the loop runs |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep (depth 10000); the stack shows the repeating function once, with its count; only `return f(...)` tail calls are free, so rewrite with an accumulator or a loop |
-| `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration, negative `Channel.send`/`Channel.recv` timeout, or a `Task.await(task, timeout_ms)` timeout of 0 or less (see `tasks.md`) |
-| `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); a task can hold a cancelled child's handle by receiving it over a channel |
+| `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration, negative `Channel.send`/`Channel.recv` timeout, a `Task.await(task, timeout_ms)` timeout of 0 or less, or a `Task.map` `timeout_ms` of 0 or less (see `tasks.md`) |
+| `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); a task can hold a cancelled child's handle by receiving it over a channel, for example from a `Task.map` item that timed out |
 | `RUNTIME-TASK-AWAIT-CYCLE` | `Task.await` of a task that is waiting for the caller, directly or through other awaits, at the await (see `tasks.md`) |
 | `RUNTIME-HANDLE-NOT-OWNED` | `Task.spawn_owning` of a handle the calling task does not own, one already handed over, or a closed one (a closed channel too), at the handle argument (see `tasks.md`) |
 | `RUNTIME-TASK-CRASHED` | `Task.await` on a crashed task when `R` is not a `Result`, at the await; the message is the crash text (see `tasks.md`); a BDD step or a test whose task crashed unawaited |

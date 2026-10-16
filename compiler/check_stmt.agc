@@ -61,7 +61,8 @@ export def check_block(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -
 end
 
 ## Checks the body of a block literal (do |x| ... end) against the parameter types and result type its context knows
-## (Absent and Unknown when it knows none). The block's type is Fn(parameters, result), and it is recorded for the
+## (Absent and Unknown when it knows none). A known_result of Result[Unknown] says the block must give a Result whose
+## type the body decides (Slot.InferResult). The block's type is Fn(parameters, result), and it is recorded for the
 ## block's id. each_receiver is the list of a List.each call, for the help of CHECK-CAPTURED-ASSIGNMENT.
 export def check_block_body(
   cx: State.Cx,
@@ -73,7 +74,9 @@ export def check_block_body(
 ) -> Result[State.Out]
   types = try block_parameter_types(cx, st, block, known_params)
   slot = State.Slot.Infer
-  if !T.unknown?(known_result)
+  if T.is(known_result, "Result") and T.unknown?(T.item(known_result))
+    slot = State.Slot.InferResult
+  elsif !T.unknown?(known_result)
     slot = State.Slot.Known(known_result)
   end
   inside = st.with(
@@ -230,6 +233,7 @@ end
 def check_return(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[State.St]
   case st.result
     State.Slot.Infer -> return return_inferred(cx, st, node)
+    State.Slot.InferResult -> return return_inferred_result(cx, st, node)
     State.Slot.Known(expected) -> return return_known(cx, st, node, expected)
   end
 end
@@ -242,6 +246,26 @@ def return_inferred(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[Stat
       return ok(out.st.with(result: State.Slot.Known(out.type)))
     Ast.Optional.Absent -> return ok(st.with(result: State.Slot.Known(T.Type.Void)))
   end
+end
+
+# A return in a block that must give a Result of a type not known yet: the value must be a Result and gives the type.
+def return_inferred_result(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[State.St]
+  case node.value
+    Ast.Optional.Present(value) ->
+      out = try State.expr_completion(cx, st, value, T.Type.Unknown)
+      try require_result(cx, out.st, out.type, Ast.expr_span(value))
+      return ok(out.st.with(result: State.Slot.Known(out.type)))
+    Ast.Optional.Absent ->
+      return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), T.Type.Void, node.span))
+  end
+end
+
+# CHECK-TYPE-MISMATCH, with the help that shows ok(...), unless the type is a Result.
+def require_result(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> Result[Bool]
+  if !T.is(type, "Result")
+    return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), type, span))
+  end
+  return ok(true)
 end
 
 def return_known(cx: State.Cx, st: State.St, node: Ast.Return, expected: T.Type) -> Result[State.St]
@@ -675,8 +699,17 @@ end
 def final_expression(cx: State.Cx, st: State.St, value: Ast.Expr) -> Result[State.Out]
   case st.result
     State.Slot.Infer -> return State.expr_completion(cx, st, value, T.Type.Unknown)
+    State.Slot.InferResult -> return final_inferred_result(cx, st, value)
     State.Slot.Known(expected) -> return final_known(cx, st, value, expected)
   end
+end
+
+# The last expression of a block that must give a Result of a type not known yet: a Void value reaches the check, so
+# it gets the help that shows ok(...), and a Result gives the type.
+def final_inferred_result(cx: State.Cx, st: State.St, value: Ast.Expr) -> Result[State.Out]
+  out = try State.expr_completion(cx, st, value, T.Type.Unknown)
+  try require_result(cx, out.st, out.type, Ast.expr_span(value))
+  return ok(out)
 end
 
 def final_known(cx: State.Cx, st: State.St, value: Ast.Expr, expected: T.Type) -> Result[State.Out]
@@ -693,6 +726,7 @@ def block_result(slot: State.Slot, last: T.Type) -> T.Type
   case slot
     State.Slot.Known(type) -> return type
     State.Slot.Infer -> return infer_result(last)
+    State.Slot.InferResult -> return infer_result(last)
   end
 end
 

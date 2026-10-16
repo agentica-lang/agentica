@@ -1,8 +1,7 @@
 ## 27. Iteration and concurrent collections
 
-**Status:** 27.1 (`Task.map`) is planned (roadmap phase 17) at order step 7.3,
-after 7i deletes the evaluator (order 7.2) and after doc comments and digit
-separators (order step 7.2a) and the semantic CLI (§39, order step 7.2b); 27.2
+**Status:** 27.1 (`Task.map`) is built (roadmap 17a, order step 7.3; "As
+built" at the end of 27.1 says where it differs from the plan below); 27.2
 (channels) is built (roadmap 17b, order step 7.2.1e, moved earlier by the owner
 on 2026-10-13); both on the C VM only. They come before strict diagnostics
 ([section 26](26-strict-diagnostics.md#26-strict-diagnostics), order step 7.6),
@@ -190,25 +189,22 @@ Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> Li
     and its result is dropped. It never closes the handle, so a timed-out item
     cannot close a handle that other items share. The handle's lock stays with
     the operation until it ends, as today, and then passes to the next waiter.
-  - Handles the cancelled task opened stay open until the end of the run, as
-    today: a timed-out item leaks the handles it opened, whatever form opened
-    them (`File.open` with a block too, since no user code runs to close it).
-    The one exception is a handle that a builtin opens inside itself and never
-    returns to user code, such as the pooled connection of an `HTTP.get` or
-    `HTTP.request`: it is closed, not put back in the pool, when the detached
-    job ends, since its state is unknown. For long-running programs (servers)
-    this is an open question in section 8. Until it is decided, the skill says
-    plainly that a timed-out item's open handles leak until the run ends, and
-    teaches: open handles inside the item and close them with the block forms
-    (`File.open` with a block, §25.9, once 15i lands; until then, `File.close`
-    on every path); do not share a handle across `Task.map` items; give a handle
-    that many tasks need to one owner task (27.5).
+  - Handles the cancelled task opened are closed with it (phase 24b:
+    `finish_task` closes what a task owns when it returns, crashes or is
+    cancelled), so a timed-out item does not leak them, whatever form opened
+    them. The plan here said that they stay open until the end of the run; 24b
+    came first and changed it. The pooled connection of an `HTTP.get` or
+    `HTTP.request` is not owned by the item: it is closed, not put back in the
+    pool, when the detached job ends, since its state is unknown. The skill
+    teaches: open the handles inside the item; do not share a handle across
+    `Task.map` items; give a handle that many tasks need to one owner task
+    (27.5).
   - `Task.await` on a cancelled task halts with `RUNTIME-TASK-CANCELLED` at the
     call, for an await made after the cancel and for one already parked on the
     task (built in 20b, `docs/vm/10-io-scheduler.md` §10.2.1, with its C test
     and diagnostics line). A program can reach it only through a handle that a
     descendant passed out, which needs a channel, so its program-level tests (in
-    `tests/vm-task-map-test.rkt`, since they depend on an item timing out) come
+    `tests/test_vm_task_map.py`, since they depend on an item timing out) came
     with 17a, which has `Task.map`; 17b has a crash-based golden fixture (§27.2,
     "Tests").
 - **No public cancel.** `Task.cancel` is not added: per-item timeouts and
@@ -253,7 +249,7 @@ must not depend on timing. Golden fixtures therefore have no timeout that races
 with work (no item that times out, no timed await whose outcome depends on the
 clock, no receive loop that may retry), and their sleeps stay in the tens of ms.
 Every case whose outcome depends on a timeout firing goes in a C test or in
-`tests/vm-task-map-test.rkt`. The caller spends no steps while it waits.
+`tests/test_vm_task_map.py`. The caller spends no steps while it waits.
 Building the result list charges one turn unit per item (`AGC_COST_SIZE` on the
 result), like `Range.to_a`.
 
@@ -378,20 +374,19 @@ with 17b). These forms get a help, through the hint table of `grammar.md` §7
   the argument span); a diagnostic inside an item (its slot is
   `error("task crashed: ...")` and the other items give `ok`, §37.7); a nested
   `Task.map`; the step count of a 1,000-item call with no timeouts.
-- A Racket timing test, `tests/vm-task-map-test.rkt`, planned like
-  `tests/test_vm_latency.py`: it is listed in `test-omit-paths` in
-  `tests/info.rkt` (the latency test itself is now a Python module that
-  `PY_ALONE` in the Makefile keeps out of directory runs), so `make test`'s
-  parallel batch skips it; a `make vm-task-map` target runs it alone; the CI
-  `test` job runs it right after `make vm-latency`; the Commands section of
-  `AGENTS.md` gets the target; it skips when `AGENTICA_VM_BINARY` names another
-  binary; it uses lower bounds that cannot be flaky and generous upper bounds.
+- A Python timing test, `tests/test_vm_task_map.py`, like
+  `tests/test_vm_latency.py`: `PY_ALONE` in the Makefile keeps it out of
+  directory runs, so `make test`'s parallel batch skips it; a `make vm-task-map`
+  target runs it alone; the CI `test` job runs it right after `make vm-latency`;
+  the Commands section of `AGENTS.md` has the target; it skips when
+  `AGENTICA_VM_BINARY` names another binary; it uses lower bounds that cannot be
+  flaky and generous upper bounds.
   It holds every timing-dependent case of 27.1 and 27.2 (27.3's goldens and C
   tests do not depend on the clock): items print `start i` and `end i`; at no
   point are more than `limit` items between their `start` and `end`, and at some
   point exactly `limit` are; 8 items that sleep 250 ms with `limit` 2 take at
   least 1 s; with `limit` 8 they take well under the 2 s of a serial run.
-- Timeout and cancellation, in `tests/vm-task-map-test.rkt`: an item that sleeps
+- Timeout and cancellation, in `tests/test_vm_task_map.py`: an item that sleeps
   60 s with `timeout_ms` 200 gives `error("task: timed out")` while the other
   items give `ok`, and the run ends within a few seconds; the timed-out item's
   line after its sleep never prints; a task it spawned that would print after
@@ -410,7 +405,7 @@ with 17b). These forms get a help, through the hint table of `grammar.md` §7
   FIFO is not used, since `File.open` rejects special files); the socket is not
   closed, the second item gets the second line, and the first line, read by the
   detached job, is dropped.
-- Hermetic I/O, in `tests/vm-task-map-test.rkt`: `Task.map` over HTTP requests
+- Hermetic I/O, in `tests/test_vm_task_map.py`: `Task.map` over HTTP requests
   to a local Python `http.server.ThreadingHTTPServer` counterpart on port 0
   (standard library only, as AGENTS.md asks; threaded, so the requests really
   overlap) whose handler sleeps 300 ms per request: 8 requests with `limit` 8
@@ -435,6 +430,52 @@ on timing), `docs/vm/10-io-scheduler.md` §10.2.1 and §10.2.2 (task cancellatio
 detached jobs, the `next_owner` hand-on), `docs/vm/10-io-multicore.md` §10.2.3
 (the group lock), the development skill's notes (`references/vm-tasks.md`
 and `references/vm-io.md`).
+
+**As built (17a).** `vm/task_map.c` (core layer) and
+`docs/vm/10-io-scheduler.md` §10.2.1, "Task.map", describe the code. It follows
+the plan above, with these choices where the plan left room or changed:
+
+- One timer, not one timer-only job for each item. The caller, parked in a
+  stepper (as `File.each_line` is), starts one `agc_wait_io` job for the oldest
+  deadline and, when it wakes, expires every item whose deadline has passed.
+  Every item has the same timeout and starts in input order, so the deadlines
+  grow along the running list. The caller also does all the spawning and
+  cancelling, in its own turns, so the random streams split in input order.
+- No `dead` flag. A cancelled caller never runs its step function again, and its
+  items are cancelled children-first; the end hook of an item ignores an item
+  that is `cancelled`, so no slot is written and nobody is woken. Late ends
+  cannot reach the group.
+- An item that ends after its deadline but before the caller runs keeps its
+  result (accepted by the owner in the review of the PR). The plan's per-item
+  timer callback would have cancelled it between turns; with one timer on the
+  caller, an item that was already ready (for example a receiver that got its
+  value) runs first. Nothing is lost either way. The hand-off case of §27.2
+  keeps its sketched form only as a C test of the channel; its `Task.map` form
+  holds the CPU in one sort past the deadline and checks that the item keeps the
+  value.
+- An item is settled, as for `Task.await`, only when it is done and has no file
+  close pending (`closing` is 0). If its files are still closing, the end hook
+  puts itself back on the task and `agc_task_close_done` calls it again when the
+  last close ends, so a file that an item wrote is closed (and its lock
+  released) when the call returns. This holds for an item that ended in time. A
+  timed-out item is settled at its deadline and the call does not wait for its
+  close, so the file of such an item may still be closing when the call returns
+  (the close ends on its own and the hook then finds a settled item and does
+  nothing). A crash of an item settled that way is marked observed, since
+  nobody will read it.
+- The handles an item opened are closed when it ends or is cancelled (24b),
+  which the plan did not know; see the cancellation rules above.
+- Costs: one step for each item started (`agc_count_step`), and `agc_charge(n)`
+  on the result list.
+- Checker: the block of `Task.map` gets the expected type `Result[R]` taken from
+  the expected `List[Result[R]]`, else `Result[Unknown]`, and `check_block_body`
+  turns `Result[Unknown]` into the `Slot.InferResult` slot. A first value of
+  `error(...)` has nothing to infer from, so it is `CHECK-RESULT-TYPE` and the
+  program annotates the variable (`r: List[Result[Int]] = Task.map(...)`). A
+  later improvement could treat a first `return error(...)` as `Result[Unknown]`
+  and let a later `ok(...)` decide `R`.
+- Tests: the timing cases are in `tests/test_vm_task_map.py` (a Python module,
+  since Racket is gone), run alone by `make vm-task-map`.
 
 ### 27.2 Channels
 
@@ -726,12 +767,12 @@ and the rules for printing, `==` and JSON. No lowering change.
   halts with the code, and the first task gets that crash as the error of its
   await; a closure that captures a handle gives the same as the first case.
 - `RUNTIME-TASK-CANCELLED` (these land with 17a, which has `Task.map`), in
-  `tests/vm-task-map-test.rkt`, since both depend on an item timing out: a
+  `tests/test_vm_task_map.py`, since both depend on an item timing out: a
   `Task.map` item spawns a child and sends the child's handle over a channel; in
   one case `main` awaits the handle after the item timed out, in the other
   `main` is already parked in that `Task.await` before the item times out. Both
   halt with the code at `main`'s `Task.await` span.
-- Hand-off in order. With 17a, in `tests/vm-task-map-test.rkt` (it depends on
+- Hand-off in order. With 17a, in `tests/test_vm_task_map.py` (it depends on
   timing, so it is not a golden fixture): receiver 1 is a `Task.map` item
   waiting in `recv`; the sender sends one value and then, in the same turn, runs
   one long builtin that outlasts the item's remaining time, so the item's

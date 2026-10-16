@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 154,
+  "stdout": [
+    "[ok(30), ok(20), ok(10)]",
+    "[ok(\"item 1\"), error(\"two failed\"), ok(\"item 3\")]",
+    "[ok(\"item 1\"), ok(\"item 3\")]",
+    "[ok(\"item 3\"), ok(\"item 1\")]",
+    ""
+  ],
+  "stderr": []
+}

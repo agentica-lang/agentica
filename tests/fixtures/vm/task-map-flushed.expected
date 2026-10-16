@@ -1,0 +1,10 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 51020,
+  "stdout": [
+    "0 stale reads in 1000 rounds",
+    ""
+  ],
+  "stderr": []
+}

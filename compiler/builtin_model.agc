@@ -57,6 +57,7 @@ export enum Rule
   Show
   TaskAwait
   TaskAwaitTimeout
+  TaskMap
   TaskSpawn
   TaskSpawnOwning
   TestEq

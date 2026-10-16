@@ -5,6 +5,7 @@ Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
 Task.spawn_owning(f: Fn[A, R], handle: A) -> Task[R]
 Task.await(task: Task[R]) -> R
 Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
+Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> List[Result[R]]
 Task.sleep(milliseconds: Int) -> Void
 Task.pending_count() -> Int
 Task.unobserved_crash() -> Result[String]
@@ -43,7 +44,7 @@ A runtime error in `main`, RUNTIME-STEP-LIMIT and System.exit in any task still 
 
 Random: each task has its own generator, split from its parent at spawn (one parent draw per spawn), so with `--seed N` each task repeats its own values. The interleaving can still vary with timers, sleeps, file and stdin reads, and the thread pool, even on one scheduler, so `--seed` does not make a multi-task run repeatable. Do not depend on cross-task order.
 
-Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. There is no `Task.cancel`, and a timed await does not cancel; the VM cancels a task only when an ancestor crashes. `Task.await` on a cancelled task returns `error("task: cancelled")` when `R` is a `Result`, and otherwise halts with RUNTIME-TASK-CANCELLED at the await. A program reaches it when a task sends its child's handle over a channel and then crashes: the child is cancelled, and an await of it in another task halts. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
+Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. There is no `Task.cancel`, and a timed await does not cancel; the VM cancels a task only when an ancestor crashes or when its `Task.map` item times out. `Task.await` on a cancelled task returns `error("task: cancelled")` when `R` is a `Result`, and otherwise halts with RUNTIME-TASK-CANCELLED at the await. A program reaches it when a task sends its child's handle over a channel and then crashes: the child is cancelled, and an await of it in another task halts. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
 
 `pending_count` returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the caller when it is not `main`, and tasks waiting on a sleep, an await, a channel or I/O. A returned or crashed task is not counted, even when nothing awaited it.
 
@@ -64,6 +65,38 @@ end
 ```
 
 BDD step handlers may spawn tasks and pass `ctx` to them inside a struct. Finish them before returning, normally by awaiting them: `std/bdd` checks `Task.pending_count()` after each handler, and pending work fails the step with RUNTIME-BDD-PENDING-TASKS (also a `main` that leaves tasks running when it calls `BDD.run`). Assertions made by tasks count for the step. A context changed in a task is lost unless the handler takes it back from `Task.await`. A task that crashes and is not awaited fails the step with RUNTIME-TASK-CRASHED when the handler returns. A runtime error in the handler itself ends the scenario's child VM, so only that scenario fails.
+
+## Task.map
+
+`Task.map(items, limit, timeout_ms) do |item| ... end` runs the block on each item in its own task, at most `limit` at a time, and gives one `Result` per item, in input order, whatever order the items end in. Write it as `Task.map(...)`, never as a method: `xs.map` is the sequential `List.map`. A function value works as the last argument: `Task.map(ids, 8, 5000, &fetch)`.
+
+The block gives a `Result[R]`. `try` works in it, and a block that cannot fail ends with `ok(x)`. A last expression that is not a `Result` is CHECK-TYPE-MISMATCH (the help shows `ok(...)`). `R` comes from the expected type or from the first value the block gives, so a block whose first value is `error(...)` needs the annotation: `r: List[Result[Int]] = Task.map(...)` (CHECK-RESULT-TYPE otherwise).
+
+```ruby
+def fetch(n: Int) -> Result[String]
+  if n == 2
+    Task.sleep(10000)
+  end
+  return ok("page #{n}")
+end
+
+def main() -> Void
+  pages = Task.map([1, 2, 3], 3, 200, &fetch)
+  puts(pages)
+end
+```
+
+This prints `[ok("page 1"), error("task: timed out"), ok("page 3")]`. The rules:
+
+- Items start in input order, and when one ends the next starts (a sliding window, not batches). The call waits until every item has ended. There is no mode that gives results as they end: use a channel.
+- `timeout_ms` is per item, from the moment its task starts until it ends, and it includes the time the item waits in the run queue. An item that runs out of time is cancelled and its slot is `error("task: timed out")`. There is no total timeout: a call takes at most about ceil(items / limit) * `timeout_ms`.
+- An item's `error(...)` does not stop the others. A runtime error inside an item crashes only that item: its slot is `error("task crashed: ...")`.
+- `limit` is 1 to 1024, else RUNTIME-INVALID-COUNT at that argument. `timeout_ms` must be above 0, else RUNTIME-INVALID-DURATION at that argument. Both are checked first, also for an empty list (which gives `[]`). A `limit` above the list size starts every item at once.
+- `limit` is for I/O (HTTP, files, processes). CPU work does not get faster on one core, and since the clock of an item includes its time in the run queue, a large `limit` over CPU work makes timeouts more likely, not the work faster.
+- A cancelled item runs no more user code, and neither does anything it started: its tasks (a grandchild too, even if its parent ended) are cancelled, and a `Task.map` it called starts no more items. An operation waiting on I/O is detached, not abandoned: it ends on its own, its result is dropped, and it never closes the handle. The handles the item opened are closed when it ends or is cancelled, and an item that ended in time is settled only after its regular files are written and closed, so a file it wrote is on disk when the call returns; a timed-out item is settled at its deadline, without waiting for its close. The connection of a timed-out `HTTP.get` is closed, not put back in the pool.
+- Open the handles an item needs inside the item. Do not share one handle across items (calls on one handle wait for each other); give a handle that many tasks need to one owner task and talk to it over a `Channel`. Items, captured variables and results are immutable and shared without copies.
+- An item may call `Task.map` itself; each call has its own limit, so the limits multiply. Starting an item costs one step of `--max-steps`.
+- A task handle that an item passed out through a channel is cancelled with the item: awaiting it halts with RUNTIME-TASK-CANCELLED unless it returns a `Result`.
 
 ## Channels
 
@@ -193,6 +226,7 @@ One way for each job:
 |---|---|
 | Change, select or combine the items of a list | `map`, `filter`, `reduce` and the other `List` methods (eager) |
 | Keep a running total, or build a value in a loop | `reduce`, or a `for` or `while` loop that reassigns a local variable |
+| Run a function over a list of items at the same time, a few at a time, with a timeout for each, results in input order | `Task.map(items, limit, timeout_ms)` |
 | Long-lived workers, producer and consumer, a flow of unknown length, results in the order they end | tasks and a `Channel` |
 | State that several tasks update | one owner task that receives messages on a channel |
 | Each line of a big file, in bounded memory | `File.each_line` |

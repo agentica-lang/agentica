@@ -1,7 +1,7 @@
 ---
 title: Task
 weight: 1
-description: Start, await (with or without a timeout), pause and count lightweight tasks, hand a handle to a task, and find their crashes.
+description: Start, await (with or without a timeout), pause and count lightweight tasks, map a block over a list with bounded concurrency, hand a handle to a task, and find their crashes.
 ---
 
 Tasks run functions at the same time in one program. The tour page
@@ -209,6 +209,84 @@ Await.TimedOut
 finished 7
 done
 ```
+
+## Task.map
+
+```text
+Task.map(items: List[A], limit: Int, timeout_ms: Int, function: Fn[A, Result[R]]) -> List[Result[R]]
+```
+
+Runs the function for each item in its own task, at most `limit` at a time, and gives one `Result` per item, in the order of `items`, whatever order the items end in. It is always written `Task.map(...)`, never as a method, so `xs.map` stays the sequential `List.map`. The function is usually the trailing block. It gives a `Result[R]`, because the work this is for (HTTP requests, files, processes) already returns `Result`; `try` works in the block, and a block that cannot fail ends with `ok(x)`. A block whose last expression is not a `Result` is `CHECK-TYPE-MISMATCH`, with a help that shows `ok(...)`.
+
+```agentica
+def slow_double(n: Int) -> Result[Int]
+  Task.sleep(100)
+  return ok(n * 2)
+end
+
+def main() -> Void
+  results = Task.map([1, 2, 3, 4], 2, 1000) do |n|
+    slow_double(n)
+  end
+  puts(results)
+end
+```
+
+```output
+[ok(2), ok(4), ok(6), ok(8)]
+```
+
+This takes about 200 ms, not 400: two items run at a time, and when one ends the next one starts (a sliding window, not batches). Items start in input order. Each item has its own `Result`, and an item's `error(...)` does not stop the others. The call waits until every item has ended; a program that wants a result as soon as it is ready sends it over a [Channel](/library/concurrency/channel/) instead. A bug in an item (a runtime error such as `RUNTIME-DIVISION-BY-ZERO`) crashes only that item: its slot is `error("task crashed: ...")` and the other items go on.
+
+```agentica
+def main() -> Void
+  results = Task.map(["30", "x", "10"], 3, 1000) do |text|
+    n = try String.to_int(text)
+    Task.sleep(40 - n)
+    ok(n * 2)
+  end
+  for result in results
+    case result
+      ok(n) -> puts("value #{n}")
+      error(message) -> puts("failed: #{message}")
+    end
+  end
+end
+```
+
+```output
+value 60
+failed: cannot convert "x" to Int
+value 20
+```
+
+`R` comes from the expected type of the call, or else from the first value the block gives. A block whose first value is `error(...)` has nothing to infer it from (`CHECK-RESULT-TYPE`), so annotate the variable: `results: List[Result[Int]] = Task.map(...)`. A function value works too: `Task.map(ids, 8, 5000, &fetch)`.
+
+`timeout_ms` is the time one item may take, counted from the moment its task starts until it ends. It includes the time the item waits to run while other tasks use the CPU. An item that runs out of time is cancelled, and its slot is `error("task: timed out")`. There is no total timeout: a call takes at most about the number of items divided by `limit`, rounded up, times `timeout_ms`.
+
+```agentica
+def fetch(n: Int) -> Result[String]
+  if n == 2
+    Task.sleep(10000)
+  end
+  return ok("page #{n}")
+end
+
+def main() -> Void
+  pages = Task.map([1, 2, 3], 3, 200, &fetch)
+  puts(pages)
+end
+```
+
+```output
+[ok("page 1"), error("task: timed out"), ok("page 3")]
+```
+
+A cancelled item runs no more user code, and neither does anything it started: the tasks it spawned are cancelled with it, even a grandchild whose own parent has already ended, and a `Task.map` it called starts no more items. The handles it opened are closed, like the handles of any task that ends, and an item counts as ended only after its regular files are written and closed, so a file an item wrote is on disk when the call returns. A timed-out item is the exception: its slot is settled at its deadline and the call does not wait for its files to close. An operation that is waiting on I/O is not abandoned: it finishes or times out on its own, its result is dropped, and it never closes the handle, so a timed-out item cannot close a handle that other items share. The connection of a timed-out `HTTP.get` is closed when its request ends, not put back in the pool. A `Task.await` of a handle to a cancelled task that an item passed out through a channel stops with `RUNTIME-TASK-CANCELLED` (unless the task returns a `Result`, which gives `error("task: cancelled")`).
+
+`limit` is 1 to 1024, otherwise `RUNTIME-INVALID-COUNT` at the argument. `timeout_ms` must be above 0, otherwise `RUNTIME-INVALID-DURATION` at the argument. Both are checked before any item starts, even for an empty list; an empty list with valid arguments gives `[]`, and a `limit` larger than the list starts every item at once.
+
+`limit` is for I/O. CPU work does not get faster on one core, and since the clock of an item includes the time it waits to run, a large `limit` over CPU work makes timeouts more likely, not the work faster. Open the handles an item needs inside the item. Do not share one handle across items: a call on a handle waits for its lock, so the items would run one after the other. A handle that many tasks need belongs to one owner task, which the items talk to over a [Channel](/library/concurrency/channel/). Items, captured variables and results are immutable, so they are shared without copies, and an item may call `Task.map` itself (each call has its own limit, so the limits multiply). Starting an item costs one step of the `--max-steps` budget, and the block costs its own. With `--seed`, each item has its own random generator, split in input order, so the numbers do not depend on which item ends first.
 
 ## Task.sleep
 

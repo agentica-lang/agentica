@@ -48,6 +48,30 @@ end
 [2, 4, 6]
 ```
 
+## Many items, a few at a time
+
+`Task.map(items, limit, timeout_ms)` runs a block for each item, at most `limit` at a time, and gives one `Result` per item, in the order of the items. The block gives a `Result`, so `try` works in it and a block that cannot fail ends with `ok(...)`. An item that takes longer than `timeout_ms` is cancelled and gets `error("task: timed out")`; the other items go on.
+
+```agentica
+def fetch(n: Int) -> Result[String]
+  if n == 2
+    Task.sleep(10000)
+  end
+  return ok("page #{n}")
+end
+
+def main() -> Void
+  pages = Task.map([1, 2, 3], 3, 200, &fetch)
+  puts(pages)
+end
+```
+
+```output
+[ok("page 1"), error("task: timed out"), ok("page 3")]
+```
+
+Use it for work that waits, such as HTTP requests. `limit` does not speed up CPU work on one core. See [Task.map](/library/concurrency/task/#taskmap) for the cancel rules and the handle rules.
+
 ## More than one argument
 
 A task function takes one argument. Pass a struct to send several values:
