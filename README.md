@@ -2,7 +2,9 @@
 
 Agentica is a small, statically typed language with Ruby-like syntax, checked before it runs. A front end written in Agentica compiles each program to bytecode, and a C VM runs it. Both are one binary, `agentica`.
 
-Docs: [language reference](docs/grammar.md) · [agent reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/) · [roadmap](docs/roadmap/) · [planned syntax](docs/future/) · [site](https://sonic182.github.io/agentica/) · [examples](examples/README.md)
+**[Read the documentation →](https://sonic182.github.io/agentica/)**
+
+Contributor resources: [language specification](docs/grammar.md) · [agent reference](.agents/skills/agentica-programming/SKILL.md) · [VM design](docs/vm/) · [roadmap](docs/roadmap/) · [planned syntax](docs/future/) · [examples](examples/README.md)
 
 ## Requirements
 
