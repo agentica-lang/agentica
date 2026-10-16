@@ -104,6 +104,10 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   built" at the end of §25.6 lists the choices (the prelude is attached for each
   program that calls it, not linked into every program), and
   `references/performance.md` of the programming skill has the step counts.
+  Follow-up: build-time prelude. Compile `stdlib/prelude/` once, like the BDD
+  runner, and splice only the called functions (today each program that uses
+  it lexes and parses all of `list.agc`, +7-10 ms per check; or, cheaper, cut
+  the text at the top-level `def`s first).
 - 15g `unless` and 15h statement modifiers: not planned, see §25.13 (second ways
   to write `if`; `unless c` gets a help that shows `if !c ... end`, and section
   11's help for modifiers stays).

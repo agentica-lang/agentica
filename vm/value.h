@@ -225,6 +225,8 @@ typedef enum {
 
 typedef enum { AGC_COST_NONE, AGC_COST_SIZE } agc_cost_rule;
 
+/* No public builtin may have a name that starts with "__": that prefix marks the prelude-only builtins
+   (agc_builtin_prelude_only), which the loader accepts only in prelude functions. */
 typedef struct {
   const char *name;
   uint32_t arity;

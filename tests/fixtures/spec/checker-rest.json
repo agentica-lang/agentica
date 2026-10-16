@@ -9313,6 +9313,51 @@
         3
       ],
       "covers": "__fail_arg(\"RUNTIME-INVALID-COUNT\", 1, \"no\")"
+    },
+    {
+      "program": [
+        "import X from \"std/prelude/list\"",
+        "",
+        "def main() -> Void",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-IMPORT-IO",
+      "start": [
+        1,
+        1
+      ]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  __fail_ar(\"RUNTIME-INVALID-COUNT\", 1, \"no\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [
+        2,
+        3
+      ],
+      "help": false
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1]",
+        "  xs._fail_arg(\"RUNTIME-INVALID-COUNT\", 1, \"no\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        3,
+        3
+      ]
     }
   ]
 }

@@ -8,6 +8,7 @@ Three kinds of check:
   tie, NaN and String-order rules of 25.6, and the output of one program must equal it;
 - `String.compare` agrees with the code point order of Python on random strings.
 """
+import json
 import math
 import random
 import re
@@ -215,3 +216,18 @@ class PreludePeer(TestCase):
         order = [str((a > b) - (a < b)) for a, b in pairs]
         expected = order + [order[4]]
         self.assertEqual(result.stdout.splitlines(), expected)
+
+
+class PreludeOnlyName(TestCase):
+    def test_a_typo_of_the_prelude_only_builtin_gets_no_hint_that_names_it(self):
+        work = self.make_temp_dir()
+        for body, code in (('__fail_ar("RUNTIME-INVALID-COUNT", 1, "no")', "CHECK-UNKNOWN-NAME"),
+                           ('fail_arg("RUNTIME-INVALID-COUNT", 1, "no")', "CHECK-UNKNOWN-NAME"),
+                           ('[1]._fail_arg("RUNTIME-INVALID-COUNT", 1, "no")', "CHECK-UNKNOWN-METHOD")):
+            path = work / "typo.agc"
+            path.write_text("def main() -> Void\n  %s\nend\n" % body, encoding="utf-8")
+            result = run(cli() + ["--json", "check", str(path)])
+            self.assertEqual(result.code, 1, body)
+            found = json.loads(result.stderr)
+            self.assertEqual(found["code"], code, body)
+            self.assertNotIn("fail_arg", found.get("help", ""), body)

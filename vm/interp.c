@@ -42,7 +42,11 @@ static _Noreturn void raise_failure(agc_vm *vm) {
    rule. Natives never sit on natives, since a native calls its callback through a frame of its own. */
 static bool in_prelude_run(const agc_program *p, const agc_task *t, uint32_t at) {
   const agc_frame *frame = &t->frames[at];
-  if (frame->native) return at > 0 && !t->frames[at - 1].native && in_prelude_run(p, t, at - 1);
+  if (frame->native) {
+    /* One step down is enough: a native never sits on a native, so the frame below is a function frame. */
+    if (at == 0 || t->frames[at - 1].native) return false;
+    frame = &t->frames[at - 1];
+  }
   return frame->function < p->function_count && p->functions[frame->function].prelude;
 }
 
@@ -88,14 +92,7 @@ void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) 
 }
 
 void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span) {
-  agc_outcome *o = &vm->rt->outcome;
-  o->kind = AGC_FAILED;
-  o->code = code;
-  o->text = message;
-  o->message = message->data;
-  o->message_len = message->bytes;
-  o->span = report_span(vm, span, -1);
-  raise_failure(vm);
+  agc_fail_argument(vm, code, message, -1, span);
 }
 
 void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument, uint32_t span) {

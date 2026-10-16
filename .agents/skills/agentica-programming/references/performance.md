@@ -189,6 +189,11 @@ elements]:
 | `max_by` (`String`) | 2,200,113 | 22 |
 | `min_by` (`Float`) | 2,799,995 | 28 |
 
+The step counts do not show one cost: the wall time of `tally`, `uniq` and
+`group_by` grows with the number of distinct keys. That is the VM's `Map` and
+`Set` insert cost (about 4 s at 400,000 distinct keys, the same as a
+hand-written loop), not the body.
+
 Each block call is 4 to 6 steps more on its own `block@` row. The bodies
 avoid `concat`, `take`, `drop`, `reverse`, `sort`, `Map.keys`, `Map.values` and
 `Map.delete` inside a loop, because an O(n) builtin in a loop is quadratic in
