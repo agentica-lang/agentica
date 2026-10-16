@@ -65,6 +65,25 @@ void agc_turn_begin(agc_vm *vm);
 bool agc_turn_charge(agc_vm *vm);
 void agc_turn_finish(agc_vm *vm);
 agc_turn_result agc_run_turn(agc_vm *vm);
+
+agc_value agc_op_add_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
+agc_value agc_op_sub_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
+agc_value agc_op_mul_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
+agc_value agc_op_div_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
+agc_value agc_op_mod_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
+agc_value agc_op_neg_i(agc_vm *vm, agc_value value, uint32_t span);
+agc_value agc_op_add_f(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_sub_f(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_mul_f(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_div_f(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
+agc_value agc_op_neg_f(agc_vm *vm, agc_value value);
+agc_value agc_op_lt_i(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_le_i(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_lt_f(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_le_f(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_eq(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_ne(agc_vm *vm, agc_value left, agc_value right);
+agc_value agc_op_same(agc_vm *vm, agc_value left, agc_value right);
 agc_outcome agc_vm_run(agc_vm *vm);
 
 void agc_profile_start(agc_vm *vm);

@@ -651,6 +651,95 @@ static bool same_values(agc_vm *vm, agc_value x, agc_value y) {
   return equal_values(vm, x, y);
 }
 
+agc_value agc_op_add_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+  int64_t result;
+  if (__builtin_add_overflow(agc_as_int(vm, left), agc_as_int(vm, right), &result))
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
+  return agc_int(result);
+}
+
+agc_value agc_op_sub_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+  int64_t result;
+  if (__builtin_sub_overflow(agc_as_int(vm, left), agc_as_int(vm, right), &result))
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
+  return agc_int(result);
+}
+
+agc_value agc_op_mul_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+  int64_t result;
+  if (__builtin_mul_overflow(agc_as_int(vm, left), agc_as_int(vm, right), &result))
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
+  return agc_int(result);
+}
+
+agc_value agc_op_div_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+  int64_t dividend = agc_as_int(vm, left), divisor = agc_as_int(vm, right);
+  if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", span);
+  if (dividend == INT64_MIN && divisor == -1)
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
+  return agc_int(dividend / divisor);
+}
+
+agc_value agc_op_mod_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+  int64_t dividend = agc_as_int(vm, left), divisor = agc_as_int(vm, right);
+  if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", span);
+  return agc_int(divisor == -1 ? 0 : dividend % divisor);
+}
+
+agc_value agc_op_neg_i(agc_vm *vm, agc_value value, uint32_t span) {
+  int64_t integer = agc_as_int(vm, value);
+  if (integer == INT64_MIN) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
+  return agc_int(-integer);
+}
+
+agc_value agc_op_add_f(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_float(agc_as_float(vm, left) + agc_as_float(vm, right));
+}
+
+agc_value agc_op_sub_f(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_float(agc_as_float(vm, left) - agc_as_float(vm, right));
+}
+
+agc_value agc_op_mul_f(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_float(agc_as_float(vm, left) * agc_as_float(vm, right));
+}
+
+agc_value agc_op_div_f(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+  double divisor = agc_as_float(vm, right);
+  if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", span);
+  return agc_float(agc_as_float(vm, left) / divisor);
+}
+
+agc_value agc_op_neg_f(agc_vm *vm, agc_value value) { return agc_float(-agc_as_float(vm, value)); }
+
+agc_value agc_op_lt_i(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_bool(agc_as_int(vm, left) < agc_as_int(vm, right));
+}
+
+agc_value agc_op_le_i(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_bool(agc_as_int(vm, left) <= agc_as_int(vm, right));
+}
+
+agc_value agc_op_lt_f(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_bool(agc_as_float(vm, left) < agc_as_float(vm, right));
+}
+
+agc_value agc_op_le_f(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_bool(agc_as_float(vm, left) <= agc_as_float(vm, right));
+}
+
+agc_value agc_op_eq(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_bool(equal_values(vm, left, right));
+}
+
+agc_value agc_op_ne(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_bool(!equal_values(vm, left, right));
+}
+
+agc_value agc_op_same(agc_vm *vm, agc_value left, agc_value right) {
+  return agc_bool(same_values(vm, left, right));
+}
+
 static _Noreturn void index_out_of_range(agc_vm *vm, int64_t index, size_t len, uint32_t span) {
   char text[96];
   int n = snprintf(text, sizeof text, "index %" PRId64 " is outside a list of length %zu", index, len);
@@ -712,7 +801,7 @@ reload:
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
     pc++;
     frame->pc = pc;
-    int64_t x, y, z;
+    int64_t x;
     switch (in.op) {
       case AGC_OP_MOVE: R[in.a] = R[in.b]; break;
       case AGC_OP_CONST: R[in.a] = p->constants[bx]; break;
@@ -744,46 +833,23 @@ reload:
       case AGC_OP_ADD_I:
       case AGC_OP_SUB_I:
       case AGC_OP_MUL_I: {
-        x = agc_as_int(vm, R[in.b]);
-        y = agc_as_int(vm, R[in.c]);
-        bool overflow = in.op == AGC_OP_ADD_I   ? __builtin_add_overflow(x, y, &z)
-                        : in.op == AGC_OP_SUB_I ? __builtin_sub_overflow(x, y, &z)
-                                                : __builtin_mul_overflow(x, y, &z);
-        if (overflow) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", SPAN);
-        R[in.a] = agc_int(z);
+        R[in.a] = in.op == AGC_OP_ADD_I ? agc_op_add_i(vm, R[in.b], R[in.c], SPAN)
+                    : in.op == AGC_OP_SUB_I ? agc_op_sub_i(vm, R[in.b], R[in.c], SPAN)
+                                            : agc_op_mul_i(vm, R[in.b], R[in.c], SPAN);
         break;
       }
-      case AGC_OP_DIV_I:
-      case AGC_OP_MOD_I:
-        x = agc_as_int(vm, R[in.b]);
-        y = agc_as_int(vm, R[in.c]);
-        if (y == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", SPAN);
-        if (in.op == AGC_OP_MOD_I) {
-          R[in.a] = agc_int(y == -1 ? 0 : x % y);
-        } else {
-          if (x == INT64_MIN && y == -1)
-            agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", SPAN);
-          R[in.a] = agc_int(x / y);
-        }
-        break;
+      case AGC_OP_DIV_I: R[in.a] = agc_op_div_i(vm, R[in.b], R[in.c], SPAN); break;
+      case AGC_OP_MOD_I: R[in.a] = agc_op_mod_i(vm, R[in.b], R[in.c], SPAN); break;
       case AGC_OP_NEG_I:
-        x = agc_as_int(vm, R[in.b]);
-        if (x == INT64_MIN) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", SPAN);
-        R[in.a] = agc_int(-x);
+        R[in.a] = agc_op_neg_i(vm, R[in.b], SPAN);
         break;
-      case AGC_OP_ADD_F: R[in.a] = agc_float(agc_as_float(vm, R[in.b]) + agc_as_float(vm, R[in.c])); break;
-      case AGC_OP_SUB_F: R[in.a] = agc_float(agc_as_float(vm, R[in.b]) - agc_as_float(vm, R[in.c])); break;
-      case AGC_OP_MUL_F: R[in.a] = agc_float(agc_as_float(vm, R[in.b]) * agc_as_float(vm, R[in.c])); break;
-      case AGC_OP_DIV_F: {
-        double divisor = agc_as_float(vm, R[in.c]);
-        double dividend = agc_as_float(vm, R[in.b]);
-        if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", SPAN);
-        R[in.a] = agc_float(dividend / divisor);
-        break;
-      }
-      case AGC_OP_NEG_F: R[in.a] = agc_float(-agc_as_float(vm, R[in.b])); break;
-      case AGC_OP_LT_F: R[in.a] = agc_bool(agc_as_float(vm, R[in.b]) < agc_as_float(vm, R[in.c])); break;
-      case AGC_OP_LE_F: R[in.a] = agc_bool(agc_as_float(vm, R[in.b]) <= agc_as_float(vm, R[in.c])); break;
+      case AGC_OP_ADD_F: R[in.a] = agc_op_add_f(vm, R[in.b], R[in.c]); break;
+      case AGC_OP_SUB_F: R[in.a] = agc_op_sub_f(vm, R[in.b], R[in.c]); break;
+      case AGC_OP_MUL_F: R[in.a] = agc_op_mul_f(vm, R[in.b], R[in.c]); break;
+      case AGC_OP_DIV_F: R[in.a] = agc_op_div_f(vm, R[in.b], R[in.c], SPAN); break;
+      case AGC_OP_NEG_F: R[in.a] = agc_op_neg_f(vm, R[in.b]); break;
+      case AGC_OP_LT_F: R[in.a] = agc_op_lt_f(vm, R[in.b], R[in.c]); break;
+      case AGC_OP_LE_F: R[in.a] = agc_op_le_f(vm, R[in.b], R[in.c]); break;
       case AGC_OP_CONCAT: {
         agc_string *joined = agc_concat(agc_as_string(vm, R[in.b]), agc_as_string(vm, R[in.c]));
         R[in.a] = agc_string_value(joined);
@@ -880,18 +946,18 @@ reload:
         break;
       }
       case AGC_OP_SAME:
-        R[in.a] = agc_bool(same_values(vm, R[in.b], R[in.c]));
+        R[in.a] = agc_op_same(vm, R[in.b], R[in.c]);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
-      case AGC_OP_LT_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) < agc_as_int(vm, R[in.c])); break;
-      case AGC_OP_LE_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) <= agc_as_int(vm, R[in.c])); break;
+      case AGC_OP_LT_I: R[in.a] = agc_op_lt_i(vm, R[in.b], R[in.c]); break;
+      case AGC_OP_LE_I: R[in.a] = agc_op_le_i(vm, R[in.b], R[in.c]); break;
       case AGC_OP_EQ:
-        R[in.a] = agc_bool(equal_values(vm, R[in.b], R[in.c]));
+        R[in.a] = agc_op_eq(vm, R[in.b], R[in.c]);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_NE:
-        R[in.a] = agc_bool(!equal_values(vm, R[in.b], R[in.c]));
+        R[in.a] = agc_op_ne(vm, R[in.b], R[in.c]);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_JUMP: pc = bx; break;
