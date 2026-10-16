@@ -20,7 +20,7 @@ runners:
 
 Options: `--runs N` (timed runs, default 5), `--size N` (scales the work of
 every program), `--only a,b`, `--runners exe,vm,python`, and `--no-startup` to
-skip the `hello.agc` start-up check.
+skip the `hello.agc` start-up check and the front-end rows (see "Front end").
 
 Every runner must print the same output, or the row is a mismatch and the script
 exits 1. A program the VM cannot compile yet shows as `unsupported`, with its
@@ -441,3 +441,81 @@ on a busy machine. The table below fills in after that run.
 
 | Connections | Server | Requests/s | Min to max | p50 ms | p99 ms | Server CPU | Max client CPU |
 |---:|---|---:|---|---:|---:|---:|---:|
+
+## Front end (post-bootstrap row 3)
+
+With the `exe` runner, `benchmarks/run.py` also times the front end inside
+`dist/agentica` (§35.2): `check` of `examples/hello.agc`, of
+`stdlib/bdd/gherkin.agc` and of `compiler/parser.agc` (both have no `main`, so
+`check` ends with `CHECK-MAIN`, exit 1, after lexing, parsing, linking and
+registering the declarations), of a three-line `main` that imports gherkin (the
+full check of its bodies), and of `compiler/front_end.agc` (the whole front
+end), and one `agentica test` of a one-test file. The heading of the table
+prints the load average, and says "measured under load" when the one-minute
+load is above 2. CI does not gate on these times.
+
+```sh
+python3 benchmarks/run.py --runs 11 --only calls --runners exe
+```
+
+### Speed pass, first part
+
+Before is master (34724435), after is this PR (the profiler, and the BDD runner
+and the default steps carried by the binary). Both binaries ran alternately
+(A B A B, 5 rounds of 5 runs, the median of the round medians), on an AMD Ryzen
+5 3550H (4 cores, 8 threads), Debian 13, gcc 14.2; the load average was 0.5 to
+1.5 (not under load). The resident sizes did not change (hello 14.7 MB,
+gherkin 21 MB, parser 34 MB, `front_end.agc` 89 MB).
+
+| command | before s | after s |
+|---|---:|---:|
+| `check examples/hello.agc` | 0.0266 | 0.0264 |
+| `check stdlib/bdd/gherkin.agc` | 0.131 | 0.129 |
+| `check compiler/parser.agc` | 0.420 | 0.414 |
+| `test` of a file with one unit test | 0.868 | 0.051 |
+| `test` of a feature with two scenarios | 0.930 | 0.112 |
+
+The only change in this part that touches a run is the last two rows: `agentica
+test` used to compile `std/test/runner` (15,346,072 VM steps, 0.7 s) and the
+default step program `std/bdd` (2,859,782 steps) on every run. The compiles
+are done when the binary is built. The VM benchmarks (`b-*.agcb` at scale 10,
+alternating, medians) moved between 0.85 and 1.04 times the old binary, which
+is the link-layout noise of this file (the padding experiments above), not a
+cost of the profiler: the profile hooks live in a second copy of the turn loop
+that only a run with `AGENTICA_VM_TRACE=profile` enters.
+
+### Where the front end spends its time
+
+`AGENTICA_VM_TRACE=profile agentica check FILE` counts steps and calls per
+function and the time per builtin (a profiled run is about a third slower; the
+counts do not change from run to run). Totals:
+
+| command | steps | calls | builtin calls | GC runs |
+|---|---:|---:|---:|---:|
+| `check examples/hello.agc` | 27,946 | 1,843 | 2,263 | 7 |
+| `check stdlib/bdd/gherkin.agc` | 2,833,726 | 145,025 | 139,844 | 12 |
+| `check compiler/parser.agc` | 11,153,906 | 565,139 | 551,692 | 16 |
+| `check compiler/front_end.agc` | 76,512,688 | 4,402,340 | 3,880,861 | 38 |
+
+For `front_end.agc`, the lexer is 51% of the steps (`lexer.agc` 38.9 M, then
+`parser.agc` 12.7 M, `parse_base.agc` 5.9 M, `check_expr.agc` 3.3 M,
+`source.agc` 3.2 M, `types.agc` 2.7 M). The functions with most steps: `lex`
+9.3 M (91 calls), `skip_in` 5.0 M (75,866 calls), `scan_name` 3.3 M,
+`Source.position` 3.2 M (356,264 calls), `skip_until` 3.1 M, the closure that
+makes the character codes in `new_input` 2.4 M (811,496 calls, one per source
+character), `skip_blanks` 2.1 M, then `check_expression`, `parse_postfix`,
+`scan_operator`, `expect`, `operator_lexeme`, `parse_climb`. The builtins that
+took the most time (profiled run): `List.set` 109 ms (44,404 calls), `Map.put`
+105 ms (24,793), `Set.include?` 101 ms (768,275), `List.append` 97 ms
+(283,996), `ok` 86 ms (622,089), `String.slice` 57 ms, `String.split` 55 ms,
+`Map.get` 52 ms, `String.code` 43 ms (830,135). Collections cost 437 ms of
+4.06 s.
+
+Start-up is a large part of a small `check`: `agentica --version` takes 6 ms,
+and `agentica help` takes 28 ms. The difference is the loader, which reads and
+checks the 3.6 MB `stage2` (1,336 functions, 87,333 spans) in 15 to 16 ms
+(`AGENTICA_VM_TRACE=loader` prints `loader done us=15140`; five runs), and
+about 5 ms for the run of the front end itself (`check examples/hello.agc` is
+27,946 steps). Against the target of 100 ms for gherkin (§35.2), 130 ms now, the
+lexer is 58% of the steps of that check and the loader is 12% of its time, so
+the lexer comes first, then the loader.
