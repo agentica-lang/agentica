@@ -1,4 +1,5 @@
 import argparse
+import os
 import re
 import shutil
 import statistics
@@ -14,6 +15,9 @@ PROGRAMS = ROOT / "benchmarks" / "programs"
 PYTHON = ROOT / "benchmarks" / "python"
 EXE = ROOT / "dist" / "agentica"
 HELLO = ROOT / "examples" / "hello.agc"
+GHERKIN = ROOT / "stdlib" / "bdd" / "gherkin.agc"
+PARSER = ROOT / "compiler" / "parser.agc"
+FRONT_END = ROOT / "compiler" / "front_end.agc"
 TIME = Path("/usr/bin/time")
 NAMES = [
     "knight-tour",
@@ -31,6 +35,12 @@ NAMES = [
     "string-library",
 ]
 SCALE_DEF = "def scale() -> Int\n  return 1\nend\n"
+# Programs for the front-end rows: a main that imports the largest module of the corpus, so that `check` goes through
+# every function body of it (gherkin.agc alone has no main and stops at CHECK-MAIN), and the smallest unit test.
+GHERKIN_MAIN = 'import Gherkin from "std/bdd/gherkin"\n\ndef main() -> Void\n  puts("ok")\nend\n'
+SMALL_TEST = 'def main() -> Void\n  Test.run([Test.test("adds") do\n    Test.eq(1 + 1, 2)\n  end])\nend\n'
+# A one-minute load average above this makes the numbers rough; the report says so.
+BUSY_LOAD = 2.0
 
 
 @dataclass
@@ -105,11 +115,12 @@ def runners(selected: list[str]) -> dict[str, list[str]]:
     return {name: available[name] for name in selected}
 
 
-def measure(name: str, runner: str, command: list[str], runs: int, expected: str | None) -> tuple[Row, str]:
+def measure(name: str, runner: str, command: list[str], runs: int, expected: str | None,
+            codes: tuple[int, ...] = (0,)) -> tuple[Row, str]:
     first, rss = peak_rss(command)
     times = []
     for sample in [first] + [run(command) for _ in range(runs)]:
-        if sample.code != 0:
+        if sample.code not in codes:
             return Row(name, runner, "failed", note=diagnostic(sample.stderr)), ""
         if expected is not None and sample.stdout != expected:
             last = sample.stdout.strip().splitlines()
@@ -177,6 +188,34 @@ def startup(runs: int, commands: dict[str, list[str] | None], workdir: Path) -> 
     return rows
 
 
+def front_end(runs: int, workdir: Path) -> list[Row]:
+    """Times the front end of dist/agentica (35.2): `check` of files of growing size and a small `agentica test`.
+
+    gherkin.agc and parser.agc have no main, so their `check` ends at CHECK-MAIN (exit 1) after lexing, parsing,
+    linking and registering the declarations; the rows with a main go through every function body."""
+    if not EXE.exists():
+        return [Row("check", "exe", "missing", note="not built")]
+    wrapper = workdir / "gherkin_main.agc"
+    wrapper.write_text(GHERKIN_MAIN)
+    small = workdir / "small_test.agc"
+    small.write_text(SMALL_TEST)
+    cases = [
+        ("check hello.agc", [str(EXE), "check", str(HELLO)], (0,)),
+        ("check gherkin.agc", [str(EXE), "check", str(GHERKIN)], (0, 1)),
+        ("check parser.agc", [str(EXE), "check", str(PARSER)], (0, 1)),
+        ("check gherkin_main.agc", [str(EXE), "check", str(wrapper)], (0,)),
+        ("check front_end.agc", [str(EXE), "check", str(FRONT_END)], (0,)),
+        ("test small_test.agc", [str(EXE), "test", str(small)], (0,)),
+    ]
+    return [measure(name, "exe", command, runs, None, codes)[0] for name, command, codes in cases]
+
+
+def load_note() -> str:
+    one, five, fifteen = os.getloadavg()
+    note = f"load average {one:.2f} {five:.2f} {fifteen:.2f}, {os.cpu_count()} cores"
+    return f"{note}; measured under load" if one > BUSY_LOAD else note
+
+
 def table(rows: list[Row]) -> str:
     baseline = {row.name: row.median for row in rows if row.runner == "python" and row.status == "ok"}
     lines = ["| program | runner | median s | min s | max RSS MB | vs python | note |",
@@ -219,6 +258,12 @@ def main() -> int:
             rows.extend(startup_rows)
             print(table(startup_rows), flush=True)
             print()
+            if "exe" in commands:
+                print(f"## Front end (check and test, {args.runs} runs; {load_note()})\n")
+                front_rows = front_end(args.runs, workdir)
+                rows.extend(front_rows)
+                print(table(front_rows), flush=True)
+                print()
         print(f"## Programs (size {args.size}, {args.runs} runs)\n")
         program_rows = []
         for name in names:

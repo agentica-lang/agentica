@@ -122,7 +122,8 @@ static void sync_budget(agc_vm *vm) {
 
 static void set_counter(agc_vm *vm) {
   int64_t c = vm->turn_left < vm->batch ? vm->turn_left : vm->batch;
-  if (c < 0) c = 0;
+  /* With the profile on, no STEP takes the fast path in the loop, so step_slow sees each one and counts it. */
+  if (c < 0 || AGC_PROFILE_ON(vm)) c = 0;
   vm->next_stop = vm->stop_set = c;
 }
 
@@ -156,7 +157,35 @@ void agc_turn_finish(agc_vm *vm) {
   vm->next_stop = vm->stop_set = 0;
 }
 
+/* The profile hooks (AGENTICA_VM_TRACE=profile) are out of line and cold. The loop itself is built twice, with and
+ * without the hooks (turn_loop), so a run without the profile has the code it had before. */
+#define PROFILE_HOOK __attribute__((noinline, cold))
+
+/* The steps of a STEP, or of one pass of a native loop, go to the function that runs them. */
+static PROFILE_HOOK void profile_steps(agc_vm *vm, int64_t n) {
+  const agc_task *t = vm->task;
+  if (t->frame_count == 0) return;
+  const agc_frame *frame = &t->frames[t->frame_count - 1];
+  vm->profile->steps[frame->native ? vm->profile->functions : frame->function] += (uint64_t)n;
+}
+
+static PROFILE_HOOK void profile_call(agc_vm *vm, uint32_t function) { vm->profile->calls[function]++; }
+
+static PROFILE_HOOK void profile_builtin_call(agc_vm *vm, uint32_t id) { vm->profile->builtin_calls[id]++; }
+
+/* A builtin call with its count and time: the time of the call itself, so a builtin that parks is timed until it
+ * does. */
+static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, uint32_t id, agc_value *args,
+                                              uint32_t span) {
+  uint64_t began = agc_trace_now();
+  agc_value result = b->fn(vm, args, span);
+  vm->profile->builtin_calls[id]++;
+  vm->profile->builtin_ns[id] += agc_trace_now() - began;
+  return result;
+}
+
 static void step_slow(agc_vm *vm, int64_t n, uint32_t span) {
+  if (AGC_PROFILE_ON(vm)) profile_steps(vm, n);
   sync_budget(vm);
   if (vm->batch < n) take_steps(vm, n - vm->batch + AGC_TURN_STEPS);
   if (vm->batch < n)
@@ -237,6 +266,8 @@ static void call_value(agc_vm *vm, agc_task *t, agc_value value, uint32_t window
   if (fn->function >= p->function_count || p->functions[fn->function].params != argc ||
       p->functions[fn->function].captures != fn->n)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", span);
+  /* The one profile test left in a normal build: these two entries are shared by both copies of the turn loop. */
+  if (AGC_PROFILE_ON(vm)) profile_call(vm, fn->function);
   push_frame(vm, t, fn->function, window, ret, span);
   agc_value *R = t->regs + window;
   if (args) memcpy(R, args, (size_t)argc * sizeof(agc_value));
@@ -247,7 +278,11 @@ void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args,
   call_value(vm, t, fn, 0, args, argc, 0, span);
 }
 
-void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) { push_frame(vm, t, function, 0, 0, 0); }
+void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) {
+  /* Like call_value: a profile test that a normal build still pays, once per task start. */
+  if (AGC_PROFILE_ON(vm)) profile_call(vm, function);
+  push_frame(vm, t, function, 0, 0, 0);
+}
 
 static void finish_native(agc_vm *vm, agc_value result) {
   agc_task *t = vm->task;
@@ -585,7 +620,7 @@ static agc_turn_result park_task(agc_task *t) {
   return AGC_TURN_PARKED;
 }
 
-agc_turn_result agc_run_turn(agc_vm *vm) {
+static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *vm, bool profiling) {
   const agc_program *p = vm->rt->program;
   agc_task *t = vm->task;
   if (t->frame_count == 0) return AGC_TURN_DONE;
@@ -789,7 +824,10 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
       case AGC_OP_JUMP_IF_TRUE:
         if (agc_as_bool(vm, R[in.a])) frame->pc = bx;
         break;
-      case AGC_OP_CALL: push_frame(vm, t, bx, frame->base + in.a, frame->base + in.a, s); break;
+      case AGC_OP_CALL:
+        if (profiling) profile_call(vm, bx);
+        push_frame(vm, t, bx, frame->base + in.a, frame->base + in.a, s);
+        break;
       case AGC_OP_CALL_VALUE: {
         uint32_t at = frame->base + in.a;
         call_value(vm, t, t->regs[at], at + 1, NULL, in.b, at, s);
@@ -802,7 +840,10 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
         R[in.a] = agc_fn_value(f);
         break;
       }
-      case AGC_OP_TAIL_CALL: replace_frame(vm, bx, in.a, s); break;
+      case AGC_OP_TAIL_CALL:
+        if (profiling) profile_call(vm, bx);
+        replace_frame(vm, bx, in.a, s);
+        break;
       case AGC_OP_RANGE:
         R[in.a] = agc_range_value(agc_as_int(vm, R[in.b]), agc_as_int(vm, R[(uint32_t)in.b + 1]), in.c != 0);
         break;
@@ -818,6 +859,7 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
         uint32_t base = frame->base + in.a;
         const agc_builtin *b = p->builtins[bx];
         if (b->native) {
+          if (profiling) profile_builtin_call(vm, bx);
           start_native(vm, b->native, base, s);
           if (vm->yield) return AGC_TURN_YIELD;
           break;
@@ -825,7 +867,7 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
         uint64_t units = 0;
         if (b->cost == AGC_COST_SIZE)
           for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(t->regs[base + k]);
-        agc_value result = b->fn(vm, t->regs + base, s);
+        agc_value result = profiling ? profile_builtin(vm, b, bx, t->regs + base, s) : b->fn(vm, t->regs + base, s);
         if (t->stepper) {
           start_stepper(vm, b, base, s);
           if (t->parking) return park_task(t);
@@ -870,4 +912,4 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
   }
 }
 
-
+agc_turn_result agc_run_turn(agc_vm *vm) { return AGC_PROFILE_ON(vm) ? turn_loop(vm, true) : turn_loop(vm, false); }

@@ -114,7 +114,15 @@ and the other features after the JIT.
 3. A speed pass on the self-hosted front end: the targets of
    [§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria), the
    precompiled BDD runner (about 0.7 s that step 7b added to `agentica test`),
-   and maybe a VM profiler and the start-up cut of row 8.3.
+   and maybe a VM profiler and the start-up cut of row 8.3. **First part
+   done (2026-10-16, PR #315):** the timing rows of `benchmarks/run.py`,
+   the profiler (`AGENTICA_VM_TRACE=profile`) and the BDD runner and default
+   steps carried by the binary (`agentica test` of a small file: 0.87 s
+   before, 0.05 s now; numbers in
+   [vm-benchmarks](../vm-benchmarks.md#front-end-post-bootstrap-row-3)).
+   Still to do: the lexer (51% of the steps of a check of the whole front end),
+   the parser, and the loader (15 ms of every start), toward the 100 ms for
+   `stdlib/bdd/gherkin.agc`.
 4. Default parameter values (row 7.5a,
    [§25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)).
 5. `case` guards, nested patterns and the `<<~NAME` heredoc

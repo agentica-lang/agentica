@@ -20,16 +20,21 @@ import DiagnosticJson from "diagnostic_json"
 import Env from "link_env"
 import Pipeline from "pipeline"
 
-# The runner is a program of two lines, and the step program a program of one call when no --steps is given.
+# The runner is a program of two lines, and the step program a program of one call when no --steps is given. A binary
+# that carries the std/ sources carries these two compiled (compiler/embedded/, made by the Makefile with the same two
+# texts, which tests/test_bdd.py checks), and only a run that reads the std/ sources from a folder compiles them.
 RUNNER_ROOT = "import Runner from \"std/test/runner\"\n\ndef main() -> Void\n  Runner.main()\nend\n"
 DEFAULT_STEPS = "import BDD from \"std/bdd\"\n\ndef main() -> Void\n  BDD.run([])\nend\n"
+
+# What a report names as the source of the default step program that the binary carries: no file of the run directory.
+EMBEDDED_STEPS_SOURCE = "std/bdd.agc"
 
 # Where the tests are when no path is given.
 DEFAULT_PATHS = ["specs/", "test/"]
 
-# The step program, compiled: where its bytecode is (nothing is written when it did not compile), the source the
-# runner names in reports, the folder for the VM's --source-root, and the diagnostic that the runner reports in place
-# of the steps ("" when it compiled).
+# The step program, compiled: where its bytecode is (nothing is written when it did not compile; "" when it is the
+# default one that the binary carries), the source the runner names in reports, the folder for the VM's --source-root,
+# and the diagnostic that the runner reports in place of the steps ("" when it compiled).
 struct Steps
   bytecode: String
   source: String
@@ -65,19 +70,41 @@ export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   return ending
 end
 
-# The run in its directory. The runner is compiled before anything else: its failure is a bug of the installation.
+# Whether the std/ sources are the binary's own: then it carries the runner and the default step program, compiled with
+# them, and `run --embedded` starts them.
+def embedded?(settings: Env.Settings) -> Bool
+  case settings.std
+    Env.StdProvider.Embedded -> return true
+    Env.StdProvider.Folder(_) -> return false
+  end
+end
+
+# The run in its directory. Without the binary's own runner it is compiled before anything else: its failure is a bug
+# of the installation.
 def inside(directory: String, options: Opts.Options, settings: Env.Settings, temporary: String) -> Report.Ending
+  if embedded?(settings)
+    return ended(prepare_and_run(directory, options, settings, Runner.Program.Embedded("runner")), options, temporary)
+  end
   case compile_runner(directory, settings)
     Pipeline.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"
       return Report.infrastructure(message, options.vm, options)
     Pipeline.Compiled.Bytes(bytes) ->
-      ran = prepare_and_run(directory, options, settings, bytes)
-      if !ran.ok?
-        return Report.infrastructure(ran.message, temporary, options)
+      file = "#{directory}/runner.agcb"
+      written = write_bytes(file, bytes)
+      if !written.ok?
+        return Report.infrastructure(written.message, temporary, options)
       end
-      return ran.unwrap!
+      return ended(prepare_and_run(directory, options, settings, Runner.Program.File(file)), options, temporary)
   end
+end
+
+# The ending of a run, or the infrastructure error that stopped it.
+def ended(ran: Result[Report.Ending], options: Opts.Options, temporary: String) -> Report.Ending
+  if !ran.ok?
+    return Report.infrastructure(ran.message, temporary, options)
+  end
+  return ran.unwrap!
 end
 
 def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compiled
@@ -92,9 +119,8 @@ end
 # Compiles the step program and the tests, writes the files the runner reads, runs it and reads its report. An error
 # is a failure of the driver itself, and a failure of the runner is part of the ending.
 def prepare_and_run(
-  directory: String, options: Opts.Options, settings: Env.Settings, runner: List[Int]
+  directory: String, options: Opts.Options, settings: Env.Settings, runner: Runner.Program
 ) -> Result[Report.Ending]
-  try write_bytes("#{directory}/runner.agcb", runner)
   steps = try compile_steps(directory, options, settings)
   given = options.paths
   if given.size == 0
@@ -124,7 +150,7 @@ def prepare_and_run(
     report_path: "#{directory}/report.txt",
   )
   try write_text("#{directory}/config.jsonl", Runner.config_text(config, entries))
-  ran = Runner.run(options, "#{directory}/runner.agcb", "#{directory}/config.jsonl", config.report_path)
+  ran = Runner.run(options, runner, "#{directory}/config.jsonl", config.report_path)
   case ran
     Runner.Ran.Reported(code, text) -> return ok(Report.Ending(code: code, text: "#{text}\n"))
     Runner.Ran.Failed(message) -> return ok(Report.infrastructure(message, options.vm, options))
@@ -152,7 +178,9 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
   source = "#{directory}/steps.agc"
   root = ""
   compiled = Pipeline.Compiled.Bytes([])
-  if options.steps.size == 0
+  if options.steps.size == 0 and embedded?(settings)
+    return ok(Steps(bytecode: "", source: EMBEDDED_STEPS_SOURCE, root: root, failure: "", given: false))
+  elsif options.steps.size == 0
     try write_text(source, DEFAULT_STEPS)
     compiled = Compile.file(source, settings, "cannot read the step program #{source}")
   else

@@ -189,6 +189,24 @@ class SingleBinary(TestCase):
                                       % re.escape(version()))
         self.assertEqual(self.agentica("--version").stdout, version() + "\n")
 
+    def test_run_embedded_starts_a_program_the_binary_carries(self):
+        """`run --embedded NAME` is for `agentica test`: no file, the words after `--` are the program's."""
+        # The runner it starts exits 2 for a configuration it cannot open. A usage error of `run` is exit 2 too, but
+        # its message begins with `agentica run:` (below): the runner's does not.
+        got = self.agentica("run", "--embedded", "runner", "--", "/nonexistent/config.jsonl")
+        self.assertEqual((got.code, got.stdout), (2, ""))
+        self.assertNotEqual(got.stderr, "")
+        self.assertFalse(got.stderr.startswith("agentica run:"), got.stderr)
+        for words, message in (
+                (["--embedded", "nothing", "--", "x"],
+                 "agentica run: this binary carries no embedded program nothing\n"),
+                (["--embedded"], "agentica run: --embedded needs a program name\n"),
+                (["--embedded", "runner", "--embedded", "steps", "--"],
+                 "agentica run: the --embedded option can only be specified once\n")):
+            with self.subTest(words=words):
+                got = self.agentica("run", *words)
+                self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
+
     def test_a_program_cannot_call_the_front_end_builtins(self):
         directory = self.make_suite({"std.agc": STD_SOURCE, "hand_off.agc": HAND_OFF})
         for name in ("std", "hand_off"):
@@ -276,6 +294,8 @@ class SingleBinary(TestCase):
                 (["--version"], "agentica: the front end passed --version, which is not an option of a run\n"),
                 (["--driver-pid", "1"],
                  "agentica: the front end passed --driver-pid, which only the process that started agentica may name\n"),
+                (["--embedded", "runner"],
+                 "agentica: the front end passed --embedded, which only agentica run takes\n"),
                 (["word"], "agentica: the front end passed word, which is not an option of a run\n")):
             with self.subTest(options=options):
                 got = self.agentica("--front-end", front, "hand-off", program, *options)

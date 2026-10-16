@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`AGENTICA_VM_TRACE=profile` profiles a run.** A developer tool for the VM, in the trace layer. When the run ends it writes, to the trace output, the total time, steps and calls, then the 30 functions with the most steps (and their calls), the 12 source files with the most steps, and the 30 builtins that took the most time: `AGENTICA_VM_TRACE=profile agentica check compiler/front_end.agc` shows where the front end spends its time. It is not part of `all`, a run without it is not slowed, and a run with it is about a third slower. The profile is one report for each runtime the process starts, and `gc_ms` and `collections` in it count the whole process so far (the report of the program that `agentica FILE.agc` runs includes the front end's collections).
+
+### Changed
+
+- **`agentica test` starts about 0.8 s faster.** The binary carries the BDD runner and the default step program, compiled when it is built, so a run no longer compiles `std/test/runner` (0.73 s) and `std/bdd` (0.15 s) first: a small unit test went from 0.87 s to 0.05 s, and a feature with two scenarios from 0.93 s to 0.11 s. The output and the exit codes are the same. The binary starts them with the new hidden option `agentica run --embedded NAME` (`runner` or `steps`; for the driver, like `--driver-pid`). A front end that reads the `std/` sources from a folder (`--stdlib`) still compiles them. So does the first binary of the bootstrap (never shipped), whose front end is stage0 with its own driver: its `agentica test` works as before, in 0.87 s, and its `run --embedded` exits 2 because it carries no program.
+
 ### Removed
 
 - **The Racket front end is gone** (#313). `src/` and the development oracle `racket src/main.rkt` are deleted, with every Makefile rule and CI job that ran `racket` or `raco` (the `unicode` and `warm-unicode` jobs, `make vm-unicode` and `make vm-unicode-check`). Building needs only a C toolchain, and the front end is `compiler/`. The generators `tools/gen-builtins-data.rkt`, `gen-check-tables.rkt` and `gen-lexer-unicode.rkt` are deleted too: `compiler/builtins_data.agc`, `check_tables.agc` and `unicode_table.agc` are now edited by hand, and `vm/unicode_data.c` is frozen, checked-in source (a header says it came from Racket 9.3's tables, Unicode 17.0). The last commit that can build the Racket front end is tagged `bootstrap-racket`. This changes nothing for users of the `agentica` binary; it affects contributors only.
