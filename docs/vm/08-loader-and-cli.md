@@ -8,7 +8,16 @@ branch.
 - **Input**: a regular file of at most 256 MiB, read with bounds checks. Every
   count is checked against the bytes left before anything is allocated. Index
   and size sums use `uint64_t`. The loader has a memory budget of 4 times the
-  file length plus 1 MiB, and every allocation is charged to it first.
+  file length plus 1 MiB, and every allocation is charged to it first. A table
+  of fixed-size entries (the spans, the instruction words and the span
+  indexes of a function) is taken once, since the count check has shown that
+  it fits, and decoded without more bounds checks; a rejection and its reason
+  are the same as with a check for each field. The text of a source is checked
+  and indexed eight ASCII bytes at a time. The collector is held off while a
+  program loads (`agc_gc_pause`, and `agc_gc_resume` after a load that
+  succeeded or failed), because everything the loader allocates is live until
+  the load ends: the front end is 3.8 MB, and the collections it triggered
+  only marked it again (the GC-stress build ignores the pause).
 - **Header**: magic, format version and Agentica version match exactly. The file
   ends right after the entry. The one exception to the exact Agentica version
   is the front end that the single binary loads itself (the carried one, or
@@ -352,8 +361,9 @@ This note lists what the code chose.
   for each runtime: the front end hands its program over in a second one)
   `vm/trace.c` writes `total wall_ms= steps= calls= builtin_calls=
   builtin_ms= gc_ms= collections=`, then the 30 functions with the most steps
-  (`fn calls= steps= name= at=FILE:LINE`; the loops of `map`, `each` and the
-  like are `<native>`), the 12 source files with the most steps (`file calls=
+  (`fn calls= steps= name= at=FILE:LINE`; the step of each pass of a range
+  `each`, `times`, `upto`, `downto` or `File.each_line` loop is `<native>`,
+  while `List.map` and `List.each` add no step beyond their callbacks), the 12 source files with the most steps (`file calls=
   steps= name=`) and the 30 builtins that took the most time (`builtin calls=
   us= name=`). A builtin is timed for the call itself, so one that parks is
   timed until it does. `gc_ms` is Boehm's own clock of its collections, and

@@ -28,8 +28,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    against the bytes left and allocates through `load_alloc`, which charges
    the load memory budget. Add one assert per new rule to
    `vm/tests/loader_test.c`; `references/vm-core.md` covers the loader.
-5. `vm/interp.c`: implement it with checked accessors only (the interpreter
-   is in `references/vm-core.md`).
+5. `vm/interp.c`: implement it with checked accessors only, and `goto reload`
+   if it changes the frames or can move the registers (the interpreter is in
+   `references/vm-core.md`).
 6. Add a fixture to `tests/fixtures/vm/` for each new runtime code or span;
    the diff test sweeps `--max-steps` over it.
 7. Update any rule that changed in `docs/vm/`, tick the roadmap items in

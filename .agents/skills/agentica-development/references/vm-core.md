@@ -10,8 +10,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 |---|---|
 | `vm/value.h`, `vm/port.h`, `vm/core.h`, `vm/services.h` | the layer headers ("Which layer" in `vm.md`): `value.h` the values, program tables, memory and Json value API, with `agc_opcode` (same order as `OPCODES` in `compiler/bytecode_tables.agc`); `port.h` the runtime structs and the port a service uses (with `agc_step`, `agc_stepper`, `agc_step_fn` and `agc_task_stepper`, the stepper protocol under "Adding a builtin"); `core.h` what only the core and the driver call; `services.h` the exports of the services |
 | `vm/tools/check-layers.sh`, `vm/tools/check-layers-test.sh` | the layer check run by `make vm-layers` (`docs/vm/15-layers.md` §15.5): include rules with `rg`, link rules with `nm` on the objects (Linux only), the header chain; the self-test plants one violation at a time in a temporary copy and rebuilds the object for the link cases |
-| `vm/loader.c` | full validation of untrusted `.agcb` input (`docs/vm/08-loader-and-cli.md` §8), including the struct and enum tables (one variant array sized by a first pass, one shared empty value per nullary variant) the Updates section (`load_updates`: struct index, strictly increasing field indexes below the field count; the `STRUCT_WITH` operand check against it) and the Types section (`load_types`: kinds, back-pointing List/Map entries at most 1024 deep, struct records with unique `json_name`s and `field_types`) and the Globals section (`load_globals`: a slot count of at most `AGC_MAX_GLOBALS`, the zeroed slot array from `load_alloc` stored in `agc_program.globals`; `check_function` checks every `GLOBAL` and `GLOBAL_SET` index and, when the count is above zero, allows `GLOBAL_SET` only in the entry function and only where the function has no backward jump, and `check_not_entry` rejects a `CALL`, `TAIL_CALL` or `CLOSURE` of the entry) |
-| `vm/value.c` | allocation (and the GC stress hook), checked accessors, String allocation, UTF-8 checks and code point count (`agc_utf8_count`), `agc_error_value` (an `error` Result from C text), OOM/abort handlers |
+| `vm/loader.c` | full validation of untrusted `.agcb` input (`docs/vm/08-loader-and-cli.md` §8; it takes a table of fixed-size entries once and decodes it with `get_u16` and `get_u32`, indexes the lines of a source by words, and holds the collector off with `agc_gc_pause` and `agc_gc_resume` while it loads (value.c; the GC-stress build ignores them): the front end is 3.8 MB and loads in about 9 ms, half of it page faults; `agc_utf8_chars` and `agc_utf8_count` skip eight ASCII bytes at a time, with the one-character path as the reference in `string_test.c`), including the struct and enum tables (one variant array sized by a first pass, one shared empty value per nullary variant) the Updates section (`load_updates`: struct index, strictly increasing field indexes below the field count; the `STRUCT_WITH` operand check against it) and the Types section (`load_types`: kinds, back-pointing List/Map entries at most 1024 deep, struct records with unique `json_name`s and `field_types`) and the Globals section (`load_globals`: a slot count of at most `AGC_MAX_GLOBALS`, the zeroed slot array from `load_alloc` stored in `agc_program.globals`; `check_function` checks every `GLOBAL` and `GLOBAL_SET` index and, when the count is above zero, allows `GLOBAL_SET` only in the entry function and only where the function has no backward jump, and `check_not_entry` rejects a `CALL`, `TAIL_CALL` or `CLOSURE` of the entry) |
+| `vm/value.c` | allocation (and the GC stress hook), `agc_wrong_tag` and the constructors and accessors of the service resources (the common ones are `static inline` in `value.h`), String allocation, UTF-8 checks and code point count (`agc_utf8_count`), `agc_error_value` (an `error` Result from C text), OOM/abort handlers |
 | `vm/map.c` | maps and sets: SipHash-1-3 over the value tag word then the key bytes keyed by `vm->hash_key` (set by `agc_vm_init`, then from OS entropy in `vm/launch.c`: `getrandom`, then `/dev/urandom`, else the fixed key), the persistent HAMT (`agc_map_put`, `agc_map_get`, `agc_map_delete`, and `_hash` variants that take a given hash, for tests; `agc_map_add_hash` puts only a new key and returns the same map for a member, which `Set.add` and `Set.new` use), and `agc_map_keys` (insertion order from the reversed key list) |
 | `vm/list_impl.h` | private to the core: `struct agc_list` (`{ len, root, shift, kind, tail[] }`), the trie node type and the `static inline` `list_len`, `list_item` (builds the value from the list's kind), `list_at` (no bounds check; reads the tail in line and calls `agc_list_trie_get` of `list.c` for the trie) and `list_get`. `list.c` and `interp.c` (`LIST_LEN`, `LIST_GET`, hot in `for` loops) include it, and so does `vm/tests/list_test.c` for the shape checks; `make vm-layers` fails any other include |
 | `vm/list.c` | Lists: the persistent vector behind the opaque list API. The layout stays private to this file and `list_impl.h`. |
@@ -87,6 +87,17 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - `docs/vm/17-lists.md`
   - the gate is `benchmarks/programs/list-build.agc`
 - `vm/interp.c`
+  - the turn loop keeps the top frame's code, spans, register window and next
+    `pc` in locals and reloads them at `reload:`. An opcode that pushes or
+    pops a frame, replaces one, or can move the frame or register arrays
+    (`ensure_registers`, `new_frame`) must `goto reload` before it reads a
+    local again; `frame->pc` is still written before each instruction (the
+    stack trace, a park and a yield read it), and `SPAN` is the span of the
+    running instruction, read where a failure or a call needs it
+  - `LIST` and `MAP` with no items return `rt->empty_list` and `rt->empty_map`
+    (made once by `agc_vm_init`), and a map literal starts from the shared empty
+    map: nothing writes a list or map after it is returned (`agc_map_put` copies
+    its path), so the sharing cannot be seen
   - one turn of the current task (`agc_run_turn`, returns yield, parked or done)
     and the budgets: the "next stop" counter of `STEP` over the turn and the
     batch taken from the runtime's atomic `steps_left` (`agc_turn_begin`,
@@ -209,7 +220,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `AGC_COST_SIZE` when they walk or copy a set or a list (`delete` too) and
   `AGC_COST_NONE` for `add`, `include?`, `size` and `empty?`. A hostile `.agcb`
   that puts a non-Int, non-String in a set stops in `agc_key_hash`
-  (`wrong_tag`).
+  (`agc_wrong_tag`).
 - Lists can share items, so a list's text can be exponential in the code
   that built it (`a1 = [a0, a0]`, `a2 = [a1, a1]`, ...); printing then ends in the out-of-memory exit, as the trust
   model allows. Never print or compare nested values with C recursion.

@@ -72,6 +72,21 @@ unsigned agc_gc_version(void) {
 #endif
 }
 
+/* The loader holds the collector off while it builds a program: everything it allocates stays live until the load ends
+ * (or fails and the program is dropped), so a collection can only mark it again, and the program is megabytes for the
+ * front end. Pauses nest. The GC-stress build ignores them, so it still collects while loading. */
+void agc_gc_pause(void) {
+#if !defined(AGC_NO_GC) && !defined(AGC_GC_STRESS)
+  GC_disable();
+#endif
+}
+
+void agc_gc_resume(void) {
+#if !defined(AGC_NO_GC) && !defined(AGC_GC_STRESS)
+  GC_enable();
+#endif
+}
+
 bool agc_gc_stats(agc_gc_info *info) {
 #ifdef AGC_NO_GC
   (void)info;
@@ -181,83 +196,6 @@ size_t agc_size_mul(size_t a, size_t b) {
   return r;
 }
 
-agc_value agc_void(void) {
-  agc_value v;
-  memset(&v, 0, sizeof v);
-  v.tag = AGC_T_VOID;
-  return v;
-}
-
-agc_value agc_nil(void) {
-  agc_value v;
-  v.tag = AGC_T_NIL;
-  v.as.i = 0;
-  return v;
-}
-
-agc_value agc_float(double f) {
-  agc_value v;
-  v.tag = AGC_T_FLOAT;
-  v.as.f = f;
-  return v;
-}
-
-agc_value agc_bool(bool b) {
-  agc_value v;
-  v.tag = AGC_T_BOOL;
-  v.as.i = b;
-  return v;
-}
-
-agc_value agc_int(int64_t i) {
-  agc_value v;
-  v.tag = AGC_T_INT;
-  v.as.i = i;
-  return v;
-}
-
-agc_value agc_string_value(agc_string *s) {
-  agc_value v;
-  v.tag = AGC_T_STRING;
-  v.as.p = s;
-  return v;
-}
-
-agc_value agc_list_value(agc_list *l) {
-  agc_value v;
-  v.tag = AGC_T_LIST;
-  v.as.p = l;
-  return v;
-}
-
-agc_value agc_map_value(agc_map *m) {
-  agc_value v;
-  v.tag = AGC_T_MAP;
-  v.as.p = m;
-  return v;
-}
-
-agc_value agc_set_value(agc_map *m) {
-  agc_value v;
-  v.tag = AGC_T_SET;
-  v.as.p = m;
-  return v;
-}
-
-agc_value agc_struct_value(agc_struct *s) {
-  agc_value v;
-  v.tag = AGC_T_STRUCT;
-  v.as.p = s;
-  return v;
-}
-
-agc_value agc_enum_value(agc_enum *e) {
-  agc_value v;
-  v.tag = AGC_T_ENUM;
-  v.as.p = e;
-  return v;
-}
-
 agc_value agc_result_value(bool ok, agc_value value) {
   agc_result *r = agc_alloc(sizeof(agc_result));
   r->ok = ok;
@@ -265,13 +203,6 @@ agc_value agc_result_value(bool ok, agc_value value) {
   agc_value v;
   v.tag = AGC_T_RESULT;
   v.as.p = r;
-  return v;
-}
-
-agc_value agc_fn_value(agc_fn *f) {
-  agc_value v;
-  v.tag = AGC_T_FN;
-  v.as.p = f;
   return v;
 }
 
@@ -283,13 +214,6 @@ agc_value agc_range_value(int64_t start, int64_t end, bool exclusive) {
   agc_value v;
   v.tag = AGC_T_RANGE;
   v.as.p = r;
-  return v;
-}
-
-agc_value agc_json_value(agc_json *j) {
-  agc_value v;
-  v.tag = AGC_T_JSON;
-  v.as.p = j;
   return v;
 }
 
@@ -418,119 +342,52 @@ agc_value agc_error_value(const char *message) {
   return agc_result_value(false, agc_string_value(agc_make_string(message, n, n)));
 }
 
-bool agc_is(agc_value v, agc_tag tag) { return v.tag == (uint32_t)tag; }
-
-static _Noreturn void wrong_tag(agc_vm *vm) {
+_Noreturn void agc_wrong_tag(agc_vm *vm) {
   agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong value type", 0);
 }
 
-bool agc_as_bool(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_BOOL) wrong_tag(vm);
-  return v.as.i != 0;
-}
-
-int64_t agc_as_int(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_INT) wrong_tag(vm);
-  return v.as.i;
-}
-
-double agc_as_float(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_FLOAT) wrong_tag(vm);
-  return v.as.f;
-}
-
-agc_string *agc_as_string(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_STRING) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_list *agc_as_list(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_LIST) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_map *agc_as_map(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_MAP) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_map *agc_as_set(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_SET) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_struct *agc_as_struct(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_STRUCT) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_enum *agc_as_enum(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_ENUM) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_result *agc_as_result(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_RESULT) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_fn *agc_as_fn(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_FN) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_range *agc_as_range(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_RANGE) wrong_tag(vm);
-  return v.as.p;
-}
-
-agc_json *agc_as_json(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_JSON) wrong_tag(vm);
-  return v.as.p;
-}
-
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_HANDLE) wrong_tag(vm);
+  if (v.tag != AGC_T_HANDLE) agc_wrong_tag(vm);
   return v.as.p;
 }
 
 agc_task *agc_as_task(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_TASK) wrong_tag(vm);
+  if (v.tag != AGC_T_TASK) agc_wrong_tag(vm);
   return v.as.p;
 }
 
 agc_process *agc_as_process(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_PROCESS) wrong_tag(vm);
+  if (v.tag != AGC_T_PROCESS) agc_wrong_tag(vm);
   return v.as.p;
 }
 
 agc_socket *agc_as_socket(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_SOCKET) wrong_tag(vm);
+  if (v.tag != AGC_T_SOCKET) agc_wrong_tag(vm);
   return v.as.p;
 }
 
 agc_listener *agc_as_listener(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_LISTENER) wrong_tag(vm);
+  if (v.tag != AGC_T_LISTENER) agc_wrong_tag(vm);
   return v.as.p;
 }
 
 agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_HTTP_CLIENT) wrong_tag(vm);
+  if (v.tag != AGC_T_HTTP_CLIENT) agc_wrong_tag(vm);
   return v.as.p;
 }
 
 agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_TEST) wrong_tag(vm);
+  if (v.tag != AGC_T_TEST) agc_wrong_tag(vm);
   return v.as.p;
 }
 
 agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_HTTP_SERVER) wrong_tag(vm);
+  if (v.tag != AGC_T_HTTP_SERVER) agc_wrong_tag(vm);
   return v.as.p;
 }
 
 agc_channel *agc_as_channel(agc_vm *vm, agc_value v) {
-  if (v.tag != AGC_T_CHANNEL) wrong_tag(vm);
+  if (v.tag != AGC_T_CHANNEL) agc_wrong_tag(vm);
   return v.as.p;
 }
 
@@ -600,15 +457,39 @@ size_t agc_utf8_valid(const uint8_t *s, size_t len) {
   return n + 1;
 }
 
+/* The characters of valid UTF-8: every byte but the continuation bytes (10xxxxxx). A word of eight ASCII bytes is
+ * eight characters. */
 size_t agc_utf8_count(const uint8_t *s, size_t len) {
-  size_t count = 0;
-  for (size_t i = 0; i < len; i++) count += (s[i] & 0xC0) != 0x80;
+  size_t count = 0, i = 0;
+  while (i < len) {
+    uint64_t word;
+    if (len - i >= sizeof word) {
+      memcpy(&word, s + i, sizeof word);
+      if (!(word & UINT64_C(0x8080808080808080))) {
+        i += sizeof word;
+        count += sizeof word;
+        continue;
+      }
+    }
+    count += (s[i] & 0xC0) != 0x80;
+    i++;
+  }
   return count;
 }
 
+/* Most text is ASCII, so a run of it is skipped eight bytes at a time (no byte with the high bit set) and the
+ * characters are decoded one by one only where a word has a byte of 0x80 or more. */
 bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {
   size_t count = 0, i = 0;
   while (i < len) {
+    uint64_t word;
+    while (len - i >= sizeof word) {
+      memcpy(&word, s + i, sizeof word);
+      if (word & UINT64_C(0x8080808080808080)) break;
+      i += sizeof word;
+      count += sizeof word;
+    }
+    if (i == len) break;
     size_t n = agc_utf8_valid(s + i, len - i);
     if (n == 0) return false;
     i += n;

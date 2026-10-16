@@ -520,6 +520,128 @@ about 5 ms for the run of the front end itself (`check examples/hello.agc` is
 the lexer is 58% of the steps of that check and the loader is 12% of its
 time, so the lexer comes first, then the loader.
 
+### Speed pass, VM start-up (row 8.3)
+
+Every `agentica` command that runs the front end first loads the carried
+`stage2`, 3.8 MB (1,386 functions, 90,919 spans, 90 sources), and the loader
+checks all of it: the file is bytecode like any other, and a front end given
+with `--front-end` is not trusted. That took 15 ms of the 24 ms of a `check
+examples/hello.agc`. Before is master (f2536003, with the interpreter loop of
+the third part), after is this PR. Both binaries are built like the release
+(`AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored`), ran alternately (A B A B, 8
+rounds of 10 runs, the median of the round medians; 5 rounds of 3 for the
+gherkin and parser checks) on an AMD Ryzen 5 3550H (4 cores, 8 threads),
+Debian 13, gcc 14.2. **Measured under load**: the load average was 2.0 to 2.9,
+because another job was building on the machine, so read the last digit with
+care. Steps, calls and builtin calls are the same before and after
+(`AGENTICA_VM_TRACE=profile`), and so is the peak resident size (hello 14.3
+MB, gherkin 21 MB, parser 34 MB; 12 runs of each binary, medians within 0.1 MB
+for hello and gherkin). A default build, which links the system libgc and
+OpenSSL as shared libraries, is about 1.1 MB higher (hello 15.4 MB), in master
+as much as here, so compare binaries of one configuration.
+
+| command | before ms | after ms |
+|---|---:|---:|
+| `check examples/hello.agc` | 24.3 | 17.5 |
+| `help` | 25.1 | 18.3 |
+| `examples/hello.agc` (compile and run) | 25.3 | 18.4 |
+| `check stdlib/bdd/gherkin.agc` | 73.9 | 65.4 |
+| `check compiler/parser.agc` | 217.5 | 206.6 |
+| `run -- hello.agcb` (372 bytes, no front end) | 3.9 | 3.9 |
+| `--version` | 2.4 | 2.3 |
+| `loader done us` of a hello check (`AGENTICA_VM_TRACE=loader`) | 15.4 | 8.3 |
+
+The rows of 3.9 and 2.3 ms are the floor of a process start (`/bin/true`
+is 1.0 ms here): the 12 MB static binary has 24,600 relative relocations,
+almost all in the data of the OpenSSL libraries (the VM's own tables are a few
+KB of the 485 KB of `.data.rel.ro`), which the dynamic loader applies before
+`main`. Collections in a hello check went from 7 to 2, in the gherkin check
+from 10 to 5, in the parser check from 13 to 9.
+
+Where the 15 to 16 ms went, from an instrumented build that read the clock
+between the sections of the file (a throw-away patch, not in the tree), `check
+examples/hello.agc`, median of 5, in milliseconds (the previous master, which
+has the same loader):
+
+| section | before | after |
+|---|---:|---:|
+| sources: UTF-8 check, copy, line index | 6.9 | 2.4 |
+| spans (89,247, five fields each and two column checks) | 3.8 | 2.4 |
+| constants | 0.5 | 0.35 |
+| structs, enums, types, updates, globals, builtins | 0.3 | 0.3 |
+| functions: names, code and span indexes | 2.9 | 1.9 |
+| `check_function` of each function | 0.9 | 0.9 |
+
+Of the sources (7.5 ms in a first instrumented build, with finer timers), the
+UTF-8 check of 834 KB was 2.9 ms (a call for each character, 3.5 ns a byte),
+the line index 3.0 ms (two passes over the text byte by byte) and the copy and
+allocation 1.6 ms. The spans and the code were read field by field, each with
+a bounds check. The rest is memory: the
+machine takes 3.5 to 5 µs for each page fault (a program that touches 8 MB
+spends 7 to 10 ms), and a hello check makes 1,860 minor faults for 14 MB, so
+about 11 of the 25 ms are system time. The loaded program is 4.6 MB of heap
+(the collector's count at the first turn), which is about 1,100 faults, 4 ms,
+and cannot go below what the loader stores without a change of the in-memory
+form.
+
+What changed (`vm/loader.c`, `vm/value.c`):
+
+1. **A table is taken once.** A span is taken as 20 bytes, the code of a
+   function as `8 * count` bytes and its span indexes as `4 * count`, and the
+   fields are decoded with `get_u16` and `get_u32`, without a bounds check or
+   a call for each field. `read_count` has already shown that the entries fit,
+   so the checks cannot fail, and every rejection, with its reason, is the
+   same (the truncation test cuts the file at every byte).
+2. **ASCII is skipped eight bytes at a time** in `agc_utf8_chars` (the check
+   of every loaded string, and of `String` input in the builtins) and
+   `agc_utf8_count`: a word with no byte of 0x80 or more is eight characters.
+   The line index counts the newlines of a source by words, finds them with
+   `memchr`, and takes the characters of a line of an all-ASCII source from its
+   length. Steps 1 and 2 took the loader from 16 to 10.5 ms (tables, UTF-8
+   and a `memchr` line index) and then to 8.6 ms (the word count of newlines
+   and the ASCII lines), a first build of each.
+3. **The collector is held off while a program loads** (`agc_gc_pause`,
+   `agc_gc_resume`). Everything the loader allocates stays live until the load
+   ends, so the five or six collections it triggered only marked it again. The
+   GC-stress build ignores the pause, so it still collects while loading.
+   Hello check 18.6 to 17.4 ms.
+
+`check examples/hello.agc` with the steps 1 and 2, then 3 (builds of each, 5
+rounds of 10 runs): 25.3 ms, 18.6 ms, 17.4 ms.
+
+Tried and dropped (each measured against the step before, interleaved):
+
+- A larger first heap (`GC_INITIAL_HEAP_SIZE` of 4, 6 and 8 MB): 17.7, 18.2,
+  17.5 against 17.7 ms. The heap grows in about ten steps, and that costs less
+  than the noise.
+- `madvise(MADV_POPULATE_READ)` of the carried front end before the load, to
+  map its 900 pages in one call instead of 56 faults: 0.25 ms, inside the
+  noise, and a Linux call for it.
+- A bump allocator for the 7,900 objects of the load that are below 2 KB
+  (1.15 MB; 116 are larger): no change, so the allocator calls are not the
+  cost.
+- `GC_DONT_GC=1` for the whole run, as a bound on the collector: 1.2 ms of
+  25.4 (4.7%); the pause above takes most of it.
+
+Left, in the order of the time it is worth:
+
+- The loaded program is 4.6 MB of heap and the faults are half of the 8.3 ms.
+  Spans are 1.8 MB of it (20 bytes each). A table kept in the carried file
+  and read in place for the embedded front end would save that copy and its
+  faults (about 1.7 ms), but the loader would have to keep the file bytes
+  alive, which no caller promises today, and the front end would load with
+  less checking than a file given to `run`. Not done.
+- The collector is about a third of the samples of a hello check (a sampling
+  profile of 150 runs: building the free lists of new pages 20%, which is
+  mostly the page faults of the first touch, and `GC_mark_from` 11%). A bigger
+  free-space divisor would trade memory for it.
+- The front end's own start: `Map.put` (399 calls, 1.3 ms) and `Set.new` (16
+  calls, 1.1 ms) of a 5 ms run are the builtin catalog built when the program
+  starts, which is 44e (static data).
+- The relocations of OpenSSL's tables in a PIE binary, and the pages they
+  make private, are the likely part of the 1.3 ms by which `--version` is
+  slower than `/bin/true`.
+
 ### Speed pass, second part: the lexer
 
 Before is master (2b5f3f3e, with the profiler of the first part), after is this
@@ -645,3 +767,148 @@ Counted, not built:
 - Lexing line by line, with the characters of a line made only when the line is
   not a comment: by count the cost of a line (about 60 steps) is more than the
   comments save.
+
+### Speed pass, third part: the interpreter loop
+
+Three changes to the VM core, measured against master (5895cab5, which has the
+new lexer), the master binary built apart and kept. Both binaries ran
+alternately (A B A B, 7 rounds of 5 runs, the median of the round medians) on
+the same AMD Ryzen 5 3550H, Debian 13, gcc 14.2 as above. The load average was
+2.1 at the start and 3.2 at the end (another agent was running tests), so this
+is **measured under load**; compare the two columns of a row, not rows with
+earlier tables. The VM rows are `dist/agentica run -- f.agcb` at size 4
+(bytecode compiled once); the last three rows are source to result, start-up
+included.
+
+| Program | Master s | This PR s | Ratio |
+|---|---:|---:|---:|
+| arithmetic (15.3 M steps) | 0.276 | 0.133 | 0.48 |
+| traveling-salesman | 0.156 | 0.088 | 0.57 |
+| calls | 0.114 | 0.068 | 0.60 |
+| knight-tour | 0.152 | 0.090 | 0.59 |
+| lists | 0.139 | 0.094 | 0.68 |
+| case | 0.093 | 0.064 | 0.69 |
+| strings | 0.128 | 0.088 | 0.69 |
+| sets | 0.376 | 0.275 | 0.73 |
+| string-library | 0.098 | 0.072 | 0.74 |
+| maps | 0.574 | 0.483 | 0.84 |
+| maze-bfs | 0.223 | 0.191 | 0.86 |
+| list-build | 0.179 | 0.159 | 0.89 |
+| list-bulk | 0.287 | 0.269 | 0.94 |
+| `check examples/hello.agc` | 0.0281 | 0.0275 | 0.98 |
+| `check stdlib/bdd/gherkin.agc` | 0.102 | 0.080 | 0.78 |
+| `check compiler/parser.agc` | 0.305 | 0.226 | 0.74 |
+
+The step counts did not change (`AGENTICA_VM_TRACE=profile` prints the same
+steps, calls and builtin calls on master and here for the benchmarks and for
+the gherkin check), and neither did the output of `--max-steps N` runs at six
+limits from 1 to 1,234,567. `arithmetic` runs 55 M steps per second on master
+and 115 M here (147 M in the best layout, below). A check of `hello.agc` is
+start-up (the loader), so it does not move.
+
+What changed, and what each of the first two steps gave (an earlier run, master
+then ab93db7c, before the lexer PR; each column is its own interleaved run
+against the column before it, 3 rounds of 3 runs; seconds):
+
+| Program | Master | Inline accessors | And frame state in locals |
+|---|---:|---:|---:|
+| arithmetic | 0.275 | 0.225 | 0.110 |
+| calls | 0.106 | 0.098 | 0.075 |
+| case | 0.091 | 0.093 | 0.060 |
+| knight-tour | 0.144 | 0.124 | 0.086 |
+| `check gherkin.agc` | 0.125 | 0.123 | 0.102 |
+| `check parser.agc` | 0.402 | 0.385 | 0.303 |
+
+- **The value accessors are inline.** `agc_int`, `agc_bool`, `agc_float`,
+  `agc_as_int`, `agc_as_bool` and the rest of the constructors and checked
+  accessors of the common types lived in `value.c`, so the loop made a call
+  for each operand: `ADD_I` was three calls. They are `static inline` in
+  `value.h` now, with one cold out-of-line failure, `agc_wrong_tag`. The service
+  resources (`agc_as_task`, `agc_as_socket`, ...) stay in `value.c`. This also
+  speeds the builtins, which use the same accessors.
+- **The loop keeps the frame in locals.** Every instruction used to reload the
+  frame, the function, the register base and the `pc` through a chain of
+  dependent loads, and the `pc` was stored and loaded again by the next
+  instruction. The loop now holds the code, the spans, the register window and
+  the `pc` in locals and reloads them (`goto reload`) only after `CALL`,
+  `CALL_VALUE`, `TAIL_CALL`, `RETURN`, a failing `TRY` and a builtin that
+  pushes a native frame; no other instruction pushes a frame or grows the
+  register array of the running task
+  (`docs/vm/05-values-execution-builtins.md` §6.1). `frame->pc` is still
+  written before each instruction, because the stack trace of a failure, a
+  park and a yield read it, so spans, traces and step counts are the same.
+
+Where a check of the front end spends its time now, from 60 runs of the gherkin
+check and 30 of the parser check under a `SIGPROF` sampler (`perf` is blocked
+on this host: an `LD_PRELOAD` library that records the instruction pointer at
+250 Hz, symbols from `nm`; 1,465 and 2,243 samples): the turn loop is 41% of
+the gherkin check and 52% of the parser check, the collector (libgc, mostly
+marking) 26% and 21%, the loader about 10% of the gherkin check, and the
+builtins the rest. Inside the loop a third of the samples sit on the dispatch
+(fetch, `switch` jump) and one in five on the `STEP` and `MOVE` handlers. The
+collector and the loader are the next costs (roadmap row 8.3).
+
+Tried and dropped, each measured against the version it changed (interleaved
+runs as above):
+
+- **Computed-goto dispatch** (one `goto *labels[op]` at the end of every
+  handler). GCC 14 cannot inline a function with a computed goto, so it needs
+  one copy of the loop with the profile test at run time, and it was slower on
+  every loop benchmark: `arithmetic` +64%, `calls` +31%, `case` +31%,
+  `traveling-salesman` +27%; only the gherkin check was 4% faster. The `switch`
+  stays.
+- **`MOVE` as two 8-byte copies** instead of one 16-byte vector copy, to avoid a
+  store-forwarding stall after a value built from a tag and a word:
+  `arithmetic` +24%, `case` +25%.
+- **Separate `ADD_I`, `SUB_I` and `MUL_I` handlers** (they share one that tests
+  the opcode again): between -10% and +16% from run to run, the noise of the
+  link layout; not kept.
+- **Reading the span lazily** (`spans[pc - 1]` where a failure or call needs
+  it, not a load on every instruction) frees a register and a load, but it
+  stayed inside the noise of the link layout in two runs. Kept, for the
+  register.
+- **An opcode range check** (`cmp; ja` in front of the jump table) is
+  guaranteed by the loader (`unknown opcode` is rejected), but the check is one
+  well-predicted branch; left in as the second line of defence.
+- **Counting `STEP` in a local** instead of `vm->next_stop` was not tried: every
+  failure path would need to store it back before the `longjmp`, because the
+  budget of a task that crashes is still observable.
+
+- **The empty List and Map are shared.** `LIST` and `MAP` with no items
+  allocated a new object on every run (a `{}` default argument, `m.get(k, [])`,
+  the seed of a `reduce`). The runtime makes one empty list and one empty map
+  in `agc_vm_init` and the two opcodes return them; a map literal with items
+  starts from the shared empty map. This is the first part of
+  `docs/future/34-shared-small-values.md`. Values are persistent (`agc_map_put`
+  copies its path, builders write only fresh lists) and `==` and `SAME` compare
+  by value, so nothing can see the sharing; the fixture `empty-literals` checks
+  that puts, pushes and tasks leave them empty. A loop that calls a function
+  with a `{}` argument (2,000,000 calls, medians of 9 runs, interleaved):
+
+  | Loop | Before ms | After ms |
+  |---|---:|---:|
+  | bare loop | 153 | 170 |
+  | + call with a `{}` argument | 293 | 200 |
+  | + call with a `[]` argument | 283 | 200 |
+
+  The bare loop moved by 11% with no change to it (the link layout, below), so
+  read the cost over it: 70 ns for each call with a `{}` argument before and 15
+  ns after.
+
+  Default parameters (PR #318) make every `Logger.debug("message")` build a
+  `{}` at the call site. `benchmarks/programs/logger-disabled.agc` (1,000,000
+  calls, median of 7 interleaved runs, milliseconds; the bytecode was compiled
+  once with the master front end): the empty loop takes 159 on master and 54 to
+  63 here, an empty user call 223 and 104 to 108, and a disabled
+  `Logger.debug` 393 on master, 197 with the loop changes alone and 148 with
+  the shared empty map too.
+
+The link layout moves single programs by a lot here. The same loop code built
+with the empty-value change (a few instructions in two cases, and a comment in
+`port.h`) ran `arithmetic` in 0.133 s where the build before it took 0.103 s
+(147 M steps per second), and `knight-tour` and `case` moved by 10% in the same
+two builds. Aligning `agc_run_turn` to 64 bytes did not bring it back, so the
+cause is not the start of the function; it is most likely the indirect jump of
+the `switch` and the predictor, which the position of the code changes. The
+tables above are the final build; read a difference below 10% as noise, and
+`arithmetic` as a range, 0.10 to 0.13 s here, against 0.276 s on master.

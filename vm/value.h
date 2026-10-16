@@ -325,25 +325,14 @@ size_t agc_size_add(size_t a, size_t b);
 size_t agc_size_mul(size_t a, size_t b);
 void agc_out_of_memory(void);
 unsigned agc_gc_version(void);
+void agc_gc_pause(void);
+void agc_gc_resume(void);
 bool agc_gc_stats(agc_gc_info *info);
 void agc_gc_measure(void);
 void agc_gc_collect(void);
 
-agc_value agc_void(void);
-agc_value agc_nil(void);
-agc_value agc_bool(bool b);
-agc_value agc_int(int64_t i);
-agc_value agc_float(double f);
-agc_value agc_string_value(agc_string *s);
-agc_value agc_list_value(agc_list *l);
-agc_value agc_map_value(agc_map *m);
-agc_value agc_set_value(agc_map *m);
-agc_value agc_struct_value(agc_struct *s);
-agc_value agc_enum_value(agc_enum *e);
 agc_value agc_result_value(bool ok, agc_value value);
-agc_value agc_fn_value(agc_fn *f);
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
-agc_value agc_json_value(agc_json *j);
 agc_value agc_handle_value(agc_resource *r);
 agc_value agc_task_value(agc_task *t);
 agc_value agc_process_value(agc_process *p);
@@ -353,19 +342,6 @@ agc_value agc_http_client_value(agc_http_client *c);
 agc_value agc_test_case_value(agc_test_case *c);
 agc_value agc_http_server_value(agc_http_server *s);
 agc_value agc_channel_value(agc_channel *c);
-bool agc_as_bool(agc_vm *vm, agc_value v);
-int64_t agc_as_int(agc_vm *vm, agc_value v);
-double agc_as_float(agc_vm *vm, agc_value v);
-agc_string *agc_as_string(agc_vm *vm, agc_value v);
-agc_list *agc_as_list(agc_vm *vm, agc_value v);
-agc_map *agc_as_map(agc_vm *vm, agc_value v);
-agc_map *agc_as_set(agc_vm *vm, agc_value v);
-agc_struct *agc_as_struct(agc_vm *vm, agc_value v);
-agc_enum *agc_as_enum(agc_vm *vm, agc_value v);
-agc_result *agc_as_result(agc_vm *vm, agc_value v);
-agc_fn *agc_as_fn(agc_vm *vm, agc_value v);
-agc_range *agc_as_range(agc_vm *vm, agc_value v);
-agc_json *agc_as_json(agc_vm *vm, agc_value v);
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v);
 agc_task *agc_as_task(agc_vm *vm, agc_value v);
 agc_process *agc_as_process(agc_vm *vm, agc_value v);
@@ -375,10 +351,173 @@ agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v);
 agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v);
 agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v);
 agc_channel *agc_as_channel(agc_vm *vm, agc_value v);
+/* The constructors and checked accessors of the common value types are inline: the interpreter and the builtins
+ * use them on every instruction, and a call for each access (they used to live in value.c) cost more than the
+ * Int add they served. A value of the wrong type calls agc_wrong_tag, which fails with RUNTIME-INTERNAL and does not
+ * return. The rest of the code still never reads the union. */
+_Noreturn void agc_wrong_tag(agc_vm *vm);
+
+static inline agc_value agc_void(void) {
+  agc_value v;
+  memset(&v, 0, sizeof v);
+  v.tag = AGC_T_VOID;
+  return v;
+}
+
+static inline agc_value agc_nil(void) {
+  agc_value v;
+  v.tag = AGC_T_NIL;
+  v.as.i = 0;
+  return v;
+}
+
+static inline agc_value agc_bool(bool b) {
+  agc_value v;
+  v.tag = AGC_T_BOOL;
+  v.as.i = b;
+  return v;
+}
+
+static inline agc_value agc_int(int64_t i) {
+  agc_value v;
+  v.tag = AGC_T_INT;
+  v.as.i = i;
+  return v;
+}
+
+static inline agc_value agc_float(double f) {
+  agc_value v;
+  v.tag = AGC_T_FLOAT;
+  v.as.f = f;
+  return v;
+}
+
+static inline agc_value agc_string_value(agc_string *s) {
+  agc_value v;
+  v.tag = AGC_T_STRING;
+  v.as.p = s;
+  return v;
+}
+
+static inline agc_value agc_list_value(agc_list *l) {
+  agc_value v;
+  v.tag = AGC_T_LIST;
+  v.as.p = l;
+  return v;
+}
+
+static inline agc_value agc_map_value(agc_map *m) {
+  agc_value v;
+  v.tag = AGC_T_MAP;
+  v.as.p = m;
+  return v;
+}
+
+static inline agc_value agc_set_value(agc_map *m) {
+  agc_value v;
+  v.tag = AGC_T_SET;
+  v.as.p = m;
+  return v;
+}
+
+static inline agc_value agc_struct_value(agc_struct *s) {
+  agc_value v;
+  v.tag = AGC_T_STRUCT;
+  v.as.p = s;
+  return v;
+}
+
+static inline agc_value agc_enum_value(agc_enum *e) {
+  agc_value v;
+  v.tag = AGC_T_ENUM;
+  v.as.p = e;
+  return v;
+}
+
+static inline agc_value agc_fn_value(agc_fn *f) {
+  agc_value v;
+  v.tag = AGC_T_FN;
+  v.as.p = f;
+  return v;
+}
+
+static inline agc_value agc_json_value(agc_json *j) {
+  agc_value v;
+  v.tag = AGC_T_JSON;
+  v.as.p = j;
+  return v;
+}
+
+static inline bool agc_as_bool(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_BOOL) agc_wrong_tag(vm);
+  return v.as.i != 0;
+}
+
+static inline int64_t agc_as_int(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_INT) agc_wrong_tag(vm);
+  return v.as.i;
+}
+
+static inline double agc_as_float(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_FLOAT) agc_wrong_tag(vm);
+  return v.as.f;
+}
+
+static inline agc_string *agc_as_string(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_STRING) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_list *agc_as_list(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_LIST) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_map *agc_as_map(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_MAP) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_map *agc_as_set(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_SET) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_struct *agc_as_struct(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_STRUCT) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_enum *agc_as_enum(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_ENUM) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_result *agc_as_result(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_RESULT) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_fn *agc_as_fn(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_FN) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_range *agc_as_range(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_RANGE) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline agc_json *agc_as_json(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_JSON) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+static inline bool agc_is(agc_value v, agc_tag tag) { return v.tag == (uint32_t)tag; }
+
 char *agc_cstr(const agc_string *s);
 uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
-bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
 size_t agc_utf8_width(uint8_t lead);

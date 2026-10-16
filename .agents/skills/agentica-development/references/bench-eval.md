@@ -23,6 +23,14 @@ Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S 
   load average (`uptime`) and say "measured under load" above 2.
 - On the development machine `perf` is blocked (`perf_event_paranoid` is 3,
   no root), and valgrind and gdb are not installed: the profiler is the tool.
+- Start-up (row 8.3): a hello check is bound by memory it touches. Build
+  like the release (`AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored`), because
+  the default links the system libgc and OpenSSL as shared libraries, and the
+  start-up numbers differ. `AGENTICA_VM_TRACE=loader` prints `loader done us=`;
+  `/usr/bin/time -v` prints the minor faults (about 1,860 for a hello check, at
+  3.5 to 5 µs each on the development machine); a throw-away `clock_gettime`
+  between the sections of `load` shows where a phase goes. Time with the
+  front end's own steps unchanged (`profile` prints the same `steps=`).
 - Find the structural cost before editing call sites. In the lexer, inlining
   `Source.position` at its call sites alone cut 2.1% of the steps; moving the
   per-token work (tables built once, one lookup for a keyword, a block opener
