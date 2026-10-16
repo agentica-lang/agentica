@@ -54,7 +54,7 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
-      CCACHE_DIR: ${{ runner.temp }}/ccache
+      CCACHE_DIR: ${{ github.workspace }}/build/ccache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,7 +80,7 @@ jobs:
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
       - uses: actions/cache/restore@v4
         with:
-          path: ${{ runner.temp }}/ccache
+          path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
@@ -98,7 +98,7 @@ jobs:
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
       - uses: actions/cache/save@v4
         with:
-          path: ${{ runner.temp }}/ccache
+          path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
 
   vm-macos-intel:
@@ -107,7 +107,7 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
-      CCACHE_DIR: ${{ runner.temp }}/ccache
+      CCACHE_DIR: ${{ github.workspace }}/build/ccache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,7 +133,7 @@ jobs:
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
       - uses: actions/cache/restore@v4
         with:
-          path: ${{ runner.temp }}/ccache
+          path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
@@ -151,7 +151,7 @@ jobs:
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
       - uses: actions/cache/save@v4
         with:
-          path: ${{ runner.temp }}/ccache
+          path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
 
   vm-windows:
@@ -160,7 +160,7 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
-      CCACHE_DIR: ${{ runner.temp }}/ccache
+      CCACHE_DIR: ${{ github.workspace }}/build/ccache
     defaults:
       run:
         shell: msys2 {0}
@@ -189,7 +189,7 @@ jobs:
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
       - uses: actions/cache/restore@v4
         with:
-          path: ${{ runner.temp }}/ccache
+          path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
@@ -207,5 +207,5 @@ jobs:
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
       - uses: actions/cache/save@v4
         with:
-          path: ${{ runner.temp }}/ccache
+          path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
