@@ -207,7 +207,7 @@ def agentica_version():
 
 def binary():
     """dist/agentica, the product. `make` builds it, and `make test` builds it first."""
-    path = ROOT / "dist" / "agentica"
+    path = ROOT / "dist" / ("agentica.exe" if os.name == "nt" else "agentica")
     if not path.is_file():
         _missing("the binary is not built (%s): run make" % path)
     return path

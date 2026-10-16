@@ -57,15 +57,6 @@ static const uint8_t *embedded_program(const char *which, size_t *len) {
   return agc_embedded_data + agc_embedded_index[slot];
 }
 
-/* The path the front end gets as --self, to start this binary again (the `test` command of the full CLI does). On Linux
- * /proc/self/exe is exact; the name in argv[0] is what is left without /proc. */
-static const char *self_path(const char *argv0, char *buffer, size_t size) {
-  ssize_t n = readlink("/proc/self/exe", buffer, size - 1);
-  if (n <= 0 || (size_t)n >= size - 1) return argv0;
-  buffer[n] = '\0';
-  return buffer;
-}
-
 /* A regular file of at most AGC_MAX_FILE_BYTES. O_NONBLOCK keeps the open of a named pipe from waiting for a writer;
  * the S_ISREG test then refuses it. A program that a driver started this process for (--driver-pid) is read from a
  * private file only (this user's, one link, no group or other bits, not reached through a link in the last place of
@@ -283,8 +274,8 @@ int main(int argc, char **argv) {
   }
   agc_front_end fe;
   memset(&fe, 0, sizeof fe);
-  char self[PATH_MAX];
-  const char *self_name = self_path(argc > 0 ? argv[0] : "", self, sizeof self);
+  char self[32768];
+  const char *self_name = agc_launch_self_path(argc, argv, argc > 0 ? argv[0] : "", self, sizeof self);
   run_front_end(&launch, self_name, replacement, argc - first, argv + first, &fe);
   return run_program(&launch, &fe);
 }

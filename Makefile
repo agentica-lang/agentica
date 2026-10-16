@@ -1,5 +1,7 @@
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
+EXE := $(if $(filter Windows_NT,$(OS)),.exe)
+PRODUCT := dist/agentica$(EXE)
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
@@ -10,9 +12,9 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
 .PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
-all: dist/agentica
+all: $(PRODUCT)
 
-agentica: dist/agentica
+agentica: $(PRODUCT)
 
 # Targets that step 8d-2 removed. They fail on purpose: without a rule, `make vm` would find the vm/ folder and say nothing to do.
 .PHONY: vm exe cli bdd-driver
@@ -48,13 +50,13 @@ PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a te
 PY_MODULE = $(subst /,.,$(patsubst %.py,%,$(1)))
 
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
-test: dist/agentica
+test: $(PRODUCT)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=
 
 # The slow tier: the @slow cases of the .py files (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after
 # make test; a local run does not. With the flag a .py file runs only its @slow cases.
-test-slow: dist/agentica
+test-slow: $(PRODUCT)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=1
 
@@ -94,49 +96,49 @@ py-test/%: FORCE
 # diagnostics, the programs, `agentica test`, `agentica run`.
 CLI_TESTS ?= tests/test_cli_forms.py tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
   tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
-test-cli: dist/agentica
-	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/dist/agentica" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
+test-cli: $(PRODUCT)
+	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(PRODUCT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
-bench: dist/agentica
+bench: $(PRODUCT)
 	python3 benchmarks/run.py $(BENCH_ARGS)
 
 eval-references:
 	python3 tests/eval/run.py --check-references --jobs 8
 
 # Task wake latency next to busy tasks (docs/vm/10-io-scheduler.md 10.2.1), alone so it has the CPU to itself
-vm-latency: dist/agentica
+vm-latency: $(PRODUCT)
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_latency.py
 
 # The timing cases of Task.map (docs/future/27-iteration-and-concurrency.md 27.1), alone for the same reason
-vm-task-map: dist/agentica
+vm-task-map: $(PRODUCT)
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_task_map.py
 
-test-bdd: dist/agentica
-	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
+test-bdd: $(PRODUCT)
+	$(PRODUCT) test tests/bdd/specs/ --steps tests/bdd/handlers.agc
 
 # Example smoke runs on dist/agentica, in parallel (tests/smoke.sh).
-smoke: dist/agentica
+smoke: $(PRODUCT)
 	tests/smoke.sh
 
 # ci.yml, sweep.yml and the release tests run their checks as the targets below, so the same command works locally.
 
 # The built binary, copied away from the checkout, still imports its std/ modules
-test-distribution: dist/agentica
-	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/dist/agentica $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
+test-distribution: $(PRODUCT)
+	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/$(PRODUCT) $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
 
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
 # Without FIXTURES it also rewrites the CLI output golden tests/fixtures/cli/forms.json (tests/test_cli_forms.py) and the
 # front-end goldens of tests/fixtures/frontend/ from the Agentica stages (tools/refreeze.py, fast tier only: run
 # `python3 tools/refreeze.py` with no flag to rewrite the frozen manifests of the slow tier too, slow).
-goldens: dist/agentica
+goldens: $(PRODUCT)
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.test_vm_stack
 	test -n "$(FIXTURES)" || $(PYTHON) -m tests.test_cli_forms freeze
 	test -n "$(FIXTURES)" || $(PYTHON) tools/refreeze.py --fast-only
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
-vm-golden-check: dist/agentica
+vm-golden-check: $(PRODUCT)
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support check
 
 JSCPD ?= tools/jscpd/node_modules/.bin/jscpd

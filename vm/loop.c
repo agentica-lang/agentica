@@ -619,7 +619,7 @@ static int queue_work(agc_loop *loop, job *j) {
   return rc;
 }
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 static void poll_ready(uv_poll_t *handle, int status, int events) {
   (void)events;
   agc_poller *p = (agc_poller *)(void *)handle;
@@ -632,11 +632,13 @@ static void poller_closed(uv_handle_t *handle) {
   free(p);
 }
 
+#ifdef __linux__
 int agc_fd_reopen(int fd, int access) {
   char path[32];
   snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
   return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
 }
+#endif
 
 char *agc_real_path(const char *path, int *err) {
   uv_fs_t req;

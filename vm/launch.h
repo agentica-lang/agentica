@@ -55,6 +55,8 @@ bool agc_launch_flush_env(const char *name, agc_launch_options *options);
 /* --driver-pid: false when the parent process is not the driver that named itself. */
 bool agc_launch_bind(int64_t driver);
 
+const char *agc_launch_self_path(int argc, char **argv, const char *fallback, char *buffer, size_t size);
+
 /* Reads AGENTICA_VM_TRACE and AGENTICA_VM_TRACE_FILE into launch->trace. */
 void agc_launch_trace(agc_launch *launch);
 

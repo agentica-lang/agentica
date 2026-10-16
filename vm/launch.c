@@ -20,6 +20,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <uv.h>
 
 #ifdef __linux__
 #include <sys/prctl.h>
@@ -115,6 +116,14 @@ bool agc_launch_bind(int64_t driver) {
   return true;
 }
 #endif
+
+const char *agc_launch_self_path(int argc, char **argv, const char *fallback, char *buffer, size_t size) {
+  uv_setup_args(argc, argv);
+  size_t len = size;
+  if (!size || uv_exepath(buffer, &len) != 0 || len >= size) return fallback;
+  buffer[len] = '\0';
+  return buffer;
+}
 
 static bool flush_stream(FILE *stream) {
   while (fflush(stream) != 0) {

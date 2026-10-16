@@ -1,5 +1,5 @@
 /*
- * The File, Dir and Path builtins (Linux only): the argument checks, host
+ * The File, Dir and Path builtins on Unix: the argument checks, host
  * paths, and file handles with their read and write buffers, including the
  * owner-only creates, lstat, the handle lock, the removals and the no-replace
  * rename. Work runs on the libuv pool. Service layer. Design:
@@ -7,20 +7,29 @@
  */
 /* glibc declares renameat2 and RENAME_NOREPLACE only for _GNU_SOURCE. */
 #define _GNU_SOURCE
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "services.h"
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#ifdef __linux__
 #include <linux/magic.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __linux__
 #include <sys/epoll.h>
+#endif
 #include <sys/file.h>
 #include <sys/stat.h>
+#ifdef __linux__
 #include <sys/vfs.h>
+#endif
 #include <unistd.h>
 
 #define LIMIT ((size_t)1048576)
@@ -282,6 +291,7 @@ static int probe(int fd, bool *polled) {
   *polled = false;
   if (fstat(fd, &info) != 0) return errno;
   if (S_ISREG(info.st_mode) || S_ISBLK(info.st_mode) || S_ISDIR(info.st_mode)) return 0;
+#ifdef __linux__
   int ep = epoll_create1(EPOLL_CLOEXEC);
   if (ep < 0) return errno;
   struct epoll_event event = {.events = EPOLLIN};
@@ -289,6 +299,10 @@ static int probe(int fd, bool *polled) {
   close(ep);
   *polled = err == 0;
   return err == EPERM ? 0 : err;
+#else
+  *polled = true;
+  return 0;
+#endif
 }
 
 static void blocking(int fd) {
@@ -346,7 +360,11 @@ static bool write_target(const char *path) {
 }
 
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data) {
+#ifdef __linux__
   DIR *dir = opendir("/proc/self/fd");
+#else
+  DIR *dir = opendir("/dev/fd");
+#endif
   if (!dir) return false;
   int own = dirfd(dir);
   for (struct dirent *e = readdir(dir); e; e = readdir(dir)) {
@@ -365,8 +383,15 @@ static bool same_file(int fd, const struct stat *file) {
 }
 
 static bool pipe_info(int fd, struct stat *info) {
+#ifdef __linux__
   struct statfs fs;
   return fstat(fd, info) == 0 && S_ISFIFO(info->st_mode) && fstatfs(fd, &fs) == 0 && fs.f_type == PIPEFS_MAGIC;
+#elif defined(__APPLE__)
+  char path[PATH_MAX];
+  return fstat(fd, info) == 0 && S_ISFIFO(info->st_mode) && fcntl(fd, F_GETPATH, path) != 0;
+#else
+  return fstat(fd, info) == 0 && S_ISFIFO(info->st_mode);
+#endif
 }
 
 static bool same_pipe(int fd, void *data) {
@@ -444,7 +469,11 @@ static bool names_output_fd(const op *o) {
   copy[len] = '\0';
   struct stat info;
   if (stat(slash ? (len ? copy : "/") : ".", &info) != 0) return false;
+#ifdef __linux__
   return same_directory(&info, "/proc/self/fd") || same_directory(&info, "/proc/thread-self/fd");
+#else
+  return same_directory(&info, "/dev/fd");
+#endif
 }
 
 static int open_for(op *o, bool reading, bool append) {
@@ -569,7 +598,11 @@ static void work_stat(op *o) {
   bool dir = S_ISDIR(info.st_mode);
   o->file_type = dir ? "directory" : S_ISLNK(info.st_mode) ? "link" : "file";
   o->size = dir ? 0 : (int64_t)info.st_size;
+#ifdef __APPLE__
+  o->mtime = (int64_t)info.st_mtimespec.tv_sec;
+#else
   o->mtime = (int64_t)info.st_mtim.tv_sec;
+#endif
   o->mode = (int64_t)(info.st_mode & 07777);
   o->user_id = (int64_t)info.st_uid;
   o->group_id = (int64_t)info.st_gid;
@@ -727,7 +760,11 @@ static void work_try_lock(op *o) {
    replaces a file and an empty directory), and a final link is moved as a link, as rename never follows one. A file
    system without RENAME_NOREPLACE answers EINVAL, which is reported, not worked around with a racy check. */
 static void work_rename(op *o) {
+#ifdef __APPLE__
+  if (renameatx_np(AT_FDCWD, o->path, AT_FDCWD, o->to, RENAME_EXCL) != 0) fail_op(o, FS_RENAME, errno);
+#else
   if (renameat2(AT_FDCWD, o->path, AT_FDCWD, o->to, RENAME_NOREPLACE) != 0) fail_op(o, FS_RENAME, errno);
+#endif
 }
 
 static void work_open(op *o) {

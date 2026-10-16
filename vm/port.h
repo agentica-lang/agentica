@@ -347,11 +347,17 @@ void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 #define AGC_JOB_QUIET 2u
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags);
 extern const agc_io_kind agc_wait_io;
-#ifdef __linux__
+#if !defined(_WIN32)
 void agc_io_block_stop(sigset_t *saved);
+#endif
+#if defined(__linux__) || defined(__APPLE__)
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more);
+#endif
+#ifdef __linux__
 int agc_fd_reopen(int fd, int access);
+#endif
+#if defined(__linux__) || defined(__APPLE__)
 char *agc_real_path(const char *path, int *err);
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err);
 void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data);
