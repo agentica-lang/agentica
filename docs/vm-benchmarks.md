@@ -524,10 +524,11 @@ time, so the lexer comes first, then the loader.
 
 Before is master (2b5f3f3e, with the profiler of the first part), after is this
 PR, which changes `compiler/lexer.agc` only (the files checked are the ones of
-the merged tree, so both binaries lex and check the same text). Both binaries ran alternately (A B
-A B, 5 rounds of 7 to 9 runs for `hello` and gherkin, 5 rounds of 3 for
-`parser.agc`, 3 rounds of 3 for `front_end.agc`, the median of the round
-medians) on an AMD Ryzen 5 3550H (4 cores, 8 threads), Debian 13, gcc 14.2.
+the merged tree, so both binaries lex and check the same text). Both binaries
+ran alternately (A B A B, 5 rounds of 7 to 9 runs for `hello` and gherkin,
+5 rounds of 3 for `parser.agc`, 3 rounds of 3 for `front_end.agc`, the median
+of the round medians) on an AMD Ryzen 5 3550H (4 cores, 8 threads), Debian 13,
+gcc 14.2.
 **Measured under load**: the load average was 2.1 to 2.5, because another job
 was building on the machine. The steps do not depend on the load. An earlier
 run of gherkin at load 1.0 gave 127.0 and 98.5 ms. The resident size went down

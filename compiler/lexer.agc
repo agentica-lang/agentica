@@ -23,10 +23,11 @@ WORD_ACTIONS = {
   "or": 1, "not": 1,
 }
 
-## The characters of a name after its first one: letters, digits and `_`.
+## The characters of a name after its first one: letters, digits and `_`. Never the sentinel `""`: a name scan stops at
+## the end of the text only because the sentinel is in no set.
 NAME_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".split(""))
 
-## The characters of a number: digits and `_`.
+## The characters of a number: digits and `_`. Never the sentinel `""`, as for NAME_CHARS.
 NUMBER_CHARS = Set.new("0123456789_".split(""))
 
 ## Where a comment or a doc line ends: a line break, or the sentinel that follows the last character of the text.
@@ -202,6 +203,7 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
   # The arms for names, operators, brackets and line breaks (nine of ten tokens) do their work in place: a call
   # costs a few VM steps, and the lexer makes a token every 5 characters or so (docs/vm-benchmarks.md, "Speed
   # pass, second part"). The arms for strings, numbers and docs call a function: they are rare.
+  # An arm may read up to `index + 2` with no bounds test: the sentinels after the text (see Input) cover it.
   while index < size
     char = chars[index]
     case CLASSES.get(char, CharClass.Other)
@@ -928,13 +930,4 @@ def unexpected_character(character: String, start: Source.Position, stop: Source
     )
   end
   return Diag.fail("LEX-UNEXPECTED-CHAR", message, span(start, stop), help)
-end
-
-def expected_opener(closing: String) -> String
-  if closing == ")"
-    return "("
-  elsif closing == "]"
-    return "["
-  end
-  return "{"
 end
