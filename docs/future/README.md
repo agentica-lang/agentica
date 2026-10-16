@@ -134,6 +134,8 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 46 | Signals | [`46-signals.md`](46-signals.md) | Scheduled on 2026-10-15, after the bootstrap (phase 27, [`docs/roadmap/27-signals.md`](../roadmap/27-signals.md)): catch TERM and INT for a safe shutdown, forward signals to children, signal a process group; 46a and 46b (VM code and builtin table rows) may come earlier |
 | 47 | Code formatter (`agentica fmt`) | [`47-formatter.md`](47-formatter.md) | Deferred until after the bootstrap (§35 step 8, roadmap row 7.9, phase 28), decided by the owner on 2026-10-15; 47d waits for the LSP (§43) |
 | 48 | Regular expressions | [`48-regex.md`](48-regex.md) | Decided by the owner on 2026-10-15; deferred until after the bootstrap (roadmap row 7.10, phase 29): `std/regex` in Agentica first, then the regex literal `/pattern/flags` |
+| 49 | Type aliases | [`49-type-aliases.md`](49-type-aliases.md) | Planned by the owner on 2026-10-16 (roadmap row 7.12, phase 30): simple transparent aliases (49a), then generic ones (49b); compiler/ only |
+| 50 | Test functions without `main` | [`50-test-functions.md`](50-test-functions.md) | Planned (roadmap phase 31, order row 7.11, post-bootstrap step 6): a `*_test.agc` file may have no `main`; its top-level `test_*` functions are its tests |
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no second
 implementation ([roadmap
