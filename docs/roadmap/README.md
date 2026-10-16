@@ -80,8 +80,8 @@ after them may run in parallel when needed and keep their relative order.
 | 7.12 | **Planned by the owner on 2026-10-16** (phase 30, [`docs/roadmap/30-type-aliases.md`](30-type-aliases.md); design: [§49](../future/49-type-aliases.md#49-type-aliases)): type aliases, `compiler/` only, no bytecode or VM change. 30a, simple transparent aliases (`type Grid = List[List[Float]]`); then 30b, generic aliases (`type Matrix[T] = List[List[T]]`). Post-bootstrap step 6, before row 7.11 and before the path to the JIT. | Long types get one name, with no runtime cost |
 | 8.1 | The rest of the VM layers (7l, `docs/future/21-vm-layers.md` §21: opcode helpers, builtin metadata flags, the callback-builtin protocol; the header split is row 7.2.1b); after the tasks PR, next to 7k | The prerequisites of the JIT |
 | 9 | Server measurement on the VM (7j), with the source → result runner (7g); it also reads the VM metrics of phase 18 (GC, run-queue delay, I/O) while the load runs | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
-| 11 | Decided by the owner on 2026-10-14: it comes right after step 9 and before the JIT (9.1), and decides with the numbers of step 9 (and the 6c pilot of step 7.2.2): multicore schedulers (7h item, gated). After step 9 the work stops so the owner reviews the next steps (a review point, not a gate on the JIT: 9.1 stays required and not gated). The front end is decided: self-hosting, in this table from row 7.2.7 on ([§35](../future/35-self-hosting.md)) | Build multicore only if the numbers ask for it |
-| 9.1 | JIT (7m, `docs/future/22-jit.md` §22): required, not gated; after 7l and 7j, independent of 7i and of the multicore decision. The FFI of [§40](../future/40-native-code.md) comes before it, by the owner's decision of 2026-10-15 | Hot functions run as native code with the same results |
+| 9.1 | JIT (7m, `docs/future/22-jit.md` §22): required, not gated; after 7l and 7j, independent of 7i and of the multicore decision, and before multicore (row 11), by the owner's decision of 2026-10-16. The FFI of [§40](../future/40-native-code.md) comes before it, by the owner's decision of 2026-10-15 | Hot functions run as native code with the same results |
+| 11 | Multicore schedulers (7h item, gated), decided with the numbers of step 9 (and the 6c pilot of step 7.2.2). **After the JIT (9.1)**, by the owner's decision of 2026-10-16 (it was right after step 9 by the decision of 2026-10-14); the work stops before it so the owner reviews the next steps. The front end is decided: self-hosting, in this table from row 7.2.7 on ([§35](../future/35-self-hosting.md)) | Build multicore only if the numbers ask for it |
 | 10 | Evaluation round: Agentica against typed Python on harder tasks (6c), the full round after the pilot of step 7.2.2, with the semantic CLI of phase 26 (§39.12). It waits until after the bootstrap (row 7.2.7), by the owner's decision of 2026-10-14 | Evidence on whether agents do better in Agentica than in typed Python |
 | 12 | Core data structures (phase 8): `Set[T]` and `Queue[T]` (may proceed in parallel with steps 6 to 11) | Write loops and algorithms the Ruby way, without workarounds |
 | 13 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
@@ -170,11 +170,12 @@ and the other features after the JIT.
    functions without `main` (row 7.11, §50). `Task.map` (row 7.3) was small
    and is **done** (17a, PR #316).
 7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
-   7.7), the server measurement (row 9), multicore (row 11, which stops for the
-   owner's review), the FFI and native module header
-   ([§40](../future/40-native-code.md)), then the JIT (row 9.1).
-8. After the JIT: the semantic CLI (row 7.2b, postponed by the owner on
-   2026-10-16); signals (row 7.8, [§46](../future/46-signals.md#46-signals),
+   7.7), the server measurement (row 9), the FFI and native module header
+   ([§40](../future/40-native-code.md)), then the JIT (row 9.1). Multicore
+   (row 11) comes after the JIT (owner, 2026-10-16), and the work stops before
+   it for the owner's review.
+8. After the JIT: multicore (row 11, above); the semantic CLI (row 7.2b,
+   postponed by the owner on 2026-10-16); signals (row 7.8, [§46](../future/46-signals.md#46-signals),
    parts 46a to 46d; 46c also lets `agentica test` clean its run directory on
    Ctrl-C); regular expressions (row 7.10,
    [§48](../future/48-regex.md#48-regular-expressions)) before the formatter
