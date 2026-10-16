@@ -10,6 +10,31 @@ import Diag from "diagnostic"
 import Base from "parse_base"
 import Tokens from "token"
 
+LEVELS: Map[String, Int] = {
+  "or": 1,
+  "and": 2,
+  "equal": 3,
+  "not-equal": 3,
+  "less": 4,
+  "less-equal": 4,
+  "greater": 4,
+  "greater-equal": 4,
+  "pipe-forward": 5,
+  "plus": 6,
+  "minus": 6,
+  "multiply": 7,
+  "divide": 7,
+  "modulo": 7,
+}
+
+COMPOUND_OPERATORS: Map[String, String] = {
+  "plus-assign": "plus",
+  "minus-assign": "minus",
+  "multiply-assign": "multiply",
+  "divide-assign": "divide",
+  "modulo-assign": "modulo",
+}
+
 # A declaration with the next position and the next free node id.
 struct DeclAt
   node: Ast.Decl
@@ -150,39 +175,6 @@ def expect_end(e: Base.Env, pos: Int) -> Result[Int]
   return error(Base.found(e, pos, "\"end\""))
 end
 
-# The binding level of a binary operator, 0 for a token that is not one. 1 or, 2 and, 3 equality, 4 comparison, 5 |>,
-# 6 + -, 7 * / %.
-def level_of(kind: String) -> Int
-  case kind
-    "or" -> return 1
-    "and" -> return 2
-    "equal" -> return 3
-    "not-equal" -> return 3
-    "less" -> return 4
-    "less-equal" -> return 4
-    "greater" -> return 4
-    "greater-equal" -> return 4
-    "pipe-forward" -> return 5
-    "plus" -> return 6
-    "minus" -> return 6
-    "multiply" -> return 7
-    "divide" -> return 7
-    "modulo" -> return 7
-    _ -> return 0
-  end
-end
-
-def compound_operator(kind: String) -> String
-  case kind
-    "plus-assign" -> return "plus"
-    "minus-assign" -> return "minus"
-    "multiply-assign" -> return "multiply"
-    "divide-assign" -> return "divide"
-    "modulo-assign" -> return "modulo"
-    _ -> return ""
-  end
-end
-
 def expr_at(node: Ast.Expr, pos: Int, ids: Int) -> Result[Base.ExprAt]
   return ok(Base.ExprAt(node: node, pos: pos, ids: ids + 1))
 end
@@ -313,7 +305,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
   run_level = 0
   while true
     kind = e.tokens[cursor].kind
-    level = level_of(kind)
+    level = LEVELS.get(kind, 0)
     if level == 0 or level < minimum
       return ok(Base.ExprAt(node: left, pos: cursor, ids: next_id))
     end
@@ -347,7 +339,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
       next_id = right.ids
     else
       right = try parse_climb(operand_env, cursor + 1, next_id, level + 1)
-      following = level_of(e.tokens[right.pos].kind)
+      following = LEVELS.get(e.tokens[right.pos].kind, 0)
       if following == level and (level == 3 or level == 4)
         return error(Base.bail(e, right.pos, "PARSE-CHAINED-COMPARISON", chained_message(level), Diag.Help.NoHelp))
       end
@@ -1255,7 +1247,7 @@ def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   combined = Ast.Expr.Binary(
     Ast.Binary(
       id: value.ids,
-      op: compound_operator(operator.kind),
+      op: COMPOUND_OPERATORS.get(operator.kind, ""),
       op_span: operator.span,
       left: target,
       right: value.node,
@@ -1330,7 +1322,7 @@ end
 def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   value = try parse_expression(e, pos, ids)
   following = e.tokens[value.pos].kind
-  if following == "assign" or compound_operator(following) != ""
+  if following == "assign" or COMPOUND_OPERATORS.get(following, "") != ""
     return error(
       Base.bail(
         e,
@@ -1392,7 +1384,7 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
     if following == "assign" or following == "colon"
       return parse_binding(e, pos, ids)
     end
-    if compound_operator(following) != ""
+    if COMPOUND_OPERATORS.get(following, "") != ""
       return parse_compound(e, pos, ids)
     end
   end

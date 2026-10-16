@@ -8,15 +8,19 @@ import State from "check_state"
 import Source from "source"
 import Types from "types"
 
+type ResolvedType = Types.Type
+
+type TypeRef = Ast.TypeRef
+
 struct Expansion
-  ref: Ast.TypeRef
+  ref: TypeRef
   remaining: Int
 end
 
 ## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item
 ## of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or
 ## CHECK-UNKNOWN-TYPE.
-export def resolve_type(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
+export def resolve_type(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
   if !contains_alias(cx, ref)
     return resolve_expanded(cx, st, ref, completion)
   end
@@ -25,8 +29,8 @@ export def resolve_type(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion
 end
 
 ## The types of several type references, in order.
-export def resolve_all(cx: State.Cx, st: State.St, refs: List[Ast.TypeRef]) -> Result[List[Types.Type]]
-  out: List[Types.Type] = []
+export def resolve_all(cx: State.Cx, st: State.St, refs: List[TypeRef]) -> Result[List[ResolvedType]]
+  out: List[ResolvedType] = []
   for ref in refs
     out = out.push(try resolve_type(cx, st, ref, false))
   end
@@ -39,29 +43,29 @@ export def alias_target_text(cx: State.Cx, st: State.St, name: String) -> Result
 end
 
 ## True for Int and String, the types of a Map key or a Set element.
-export def key_type?(type: Types.Type) -> Bool
+export def key_type?(type: ResolvedType) -> Bool
   return Types.is(type, "Int") or Types.is(type, "String")
 end
 
 ## True when the type may be a Map key or a Set element where cx checks: Int and String, and in the files of the
 ## prelude a type variable too (the checker has checked the types it stands for, check_prelude.agc).
-export def key_here?(cx: State.Cx, type: Types.Type) -> Bool
+export def key_here?(cx: State.Cx, type: ResolvedType) -> Bool
   return key_type?(type) or (cx.prelude and Types.is(type, "Var"))
 end
 
 ## True for Int and Float.
-export def numeric?(type: Types.Type) -> Bool
+export def numeric?(type: ResolvedType) -> Bool
   return Types.is(type, "Int") or Types.is(type, "Float")
 end
 
 ## True for Int, Float, Bool, String and Nil, the types that == compares.
-export def primitive?(type: Types.Type) -> Bool
+export def primitive?(type: ResolvedType) -> Bool
   return numeric?(type) or Types.is(type, "Bool") or Types.is(type, "String") or Types.is(type, "Nil")
 end
 
 ## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, and structs of
 ## those.
-export def encodable?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
+export def encodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   if primitive?(type) or Types.is(type, "Json")
     return true
   elsif Types.is(type, "List")
@@ -76,7 +80,7 @@ end
 
 ## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, and
 ## structs of those.
-export def decodable?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
+export def decodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   if Types.is(type, "Int") or Types.is(type, "Float") or Types.is(type, "Bool") or Types.is(type, "String")
     return true
   elsif Types.is(type, "List")
@@ -92,7 +96,7 @@ end
 ## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, type variables, and lists,
 ## maps, sets, Results, structs and enums of those. seen holds the structs and enums already being looked at
 ## ("Struct:name"), so a recursive type ends.
-export def data?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
+export def data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   if primitive?(type) or Types.is(type, "Json") or Types.is(type, "Range") or Types.is(type, "Var")
     return true
   elsif Types.is(type, "List")
@@ -110,7 +114,7 @@ export def data?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
 end
 
 ## True when the type has a type variable inside.
-export def has_variables?(type: Types.Type) -> Bool
+export def has_variables?(type: ResolvedType) -> Bool
   case type
     Types.Type.Var(name) -> return true
     Types.Type.Result(item) -> return has_variables?(item)
@@ -120,14 +124,14 @@ export def has_variables?(type: Types.Type) -> Bool
     Types.Type.Set(item) -> return has_variables?(item)
     Types.Type.Map(key, value) -> return has_variables?(key) or has_variables?(value)
     Types.Type.Fn(params, result) ->
-      return params.any? do |param: Types.Type| has_variables?(param) end or has_variables?(result)
-    Types.Type.Enum(name, args) -> return args.any? do |arg: Types.Type| has_variables?(arg) end
+      return params.any? do |param: ResolvedType| has_variables?(param) end or has_variables?(result)
+    Types.Type.Enum(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
     _ -> return false
   end
 end
 
 ## The type with each type variable that has a substitution replaced.
-export def substitute(type: Types.Type, substitutions: Map[String, Types.Type]) -> Types.Type
+export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedType]) -> ResolvedType
   case type
     Types.Type.Var(name) -> return substitution(type, name, substitutions)
     Types.Type.Result(item) -> return Types.Type.Result(substitute(item, substitutions))
@@ -149,8 +153,8 @@ export def substitute(type: Types.Type, substitutions: Map[String, Types.Type]) 
 end
 
 ## substitute for each type of a list.
-export def substitute_all(types: List[Types.Type], substitutions: Map[String, Types.Type]) -> List[Types.Type]
-  return types.map do |type: Types.Type| substitute(type, substitutions) end
+export def substitute_all(types: List[ResolvedType], substitutions: Map[String, ResolvedType]) -> List[ResolvedType]
+  return types.map do |type: ResolvedType| substitute(type, substitutions) end
 end
 
 ## Matches the actual type against a template that may have type variables, and returns the substitutions with what the
@@ -159,11 +163,11 @@ end
 export def unify(
   cx: State.Cx,
   st: State.St,
-  template: Types.Type,
-  actual: Types.Type,
-  substitutions: Map[String, Types.Type],
+  template: ResolvedType,
+  actual: ResolvedType,
+  substitutions: Map[String, ResolvedType],
   span: Source.Span,
-) -> Result[Map[String, Types.Type]]
+) -> Result[Map[String, ResolvedType]]
   if Types.is(template, "Var")
     previous = substitutions.get(Types.name(template))
     if previous.ok?
@@ -179,17 +183,17 @@ export def unify(
   return ok(substitutions)
 end
 
-def contains_alias(cx: State.Cx, ref: Ast.TypeRef) -> Bool
+def contains_alias(cx: State.Cx, ref: TypeRef) -> Bool
   if !cx.type_params.any? do |item: String| item == ref.name end and cx.aliases.has_key?(ref.name)
     return true
   end
-  return ref.args.any? do |arg: Ast.TypeRef| contains_alias(cx, arg) end
+  return ref.args.any? do |arg: TypeRef| contains_alias(cx, arg) end
 end
 
 def expand_alias(
   cx: State.Cx,
   st: State.St,
-  ref: Ast.TypeRef,
+  ref: TypeRef,
   seen: List[String],
   remaining: Int,
   limit_span: Source.Span,
@@ -253,7 +257,7 @@ def expand_alias(
     expanded = try expand_alias(cx, st, cx.aliases[name], seen.push(name), left, budget_span)
     return ok(Expansion(ref: relocate(expanded.ref, ref.span), remaining: expanded.remaining))
   end
-  args: List[Ast.TypeRef] = []
+  args: List[TypeRef] = []
   for arg in ref.args
     expanded = try expand_alias(cx, st, arg, seen, left, limit_span)
     args = args.push(expanded.ref)
@@ -262,8 +266,8 @@ def expand_alias(
   return ok(Expansion(ref: ref.with(args: args), remaining: left))
 end
 
-def relocate(ref: Ast.TypeRef, span: Source.Span) -> Ast.TypeRef
-  args = ref.args.map do |arg: Ast.TypeRef| relocate(arg, span) end
+def relocate(ref: TypeRef, span: Source.Span) -> TypeRef
+  args = ref.args.map do |arg: TypeRef| relocate(arg, span) end
   return ref.with(args: args, span: span)
 end
 
@@ -280,7 +284,7 @@ def cycle_text(seen: List[String], repeated: String) -> String
   return names.join(" -> ")
 end
 
-def resolve_expanded(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
+def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
   name = ref.name
   args = ref.args
   if args.size == 0
@@ -305,7 +309,7 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: B
 end
 
 # The type resolved when it has no arguments: a type parameter, Void, a primitive, a handle, an enum or a struct.
-def resolve_plain(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
+def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
   name = ref.name
   if cx.type_params.any? do |parameter: String| parameter == name end
     return ok(Types.Type.Var(name))
@@ -334,8 +338,8 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool
   return resolve_generic(cx, st, ref)
 end
 
-def resolve_function(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Result[Types.Type]
-  params: List[Types.Type] = []
+def resolve_function(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
+  params: List[ResolvedType] = []
   index = 0
   while index < args.size - 1
     params = params.push(try resolve_expanded(cx, st, args[index], false))
@@ -345,7 +349,7 @@ def resolve_function(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Res
   return ok(Types.Type.Fn(params, result))
 end
 
-def resolve_map(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Result[Types.Type]
+def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
   key = try resolve_expanded(cx, st, args[0], false)
   if !key_here?(cx, key)
     return error(
@@ -361,7 +365,7 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Result[T
   return ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
 end
 
-def resolve_set(cx: State.Cx, st: State.St, arg: Ast.TypeRef) -> Result[Types.Type]
+def resolve_set(cx: State.Cx, st: State.St, arg: TypeRef) -> Result[ResolvedType]
   element = try resolve_expanded(cx, st, arg, false)
   if !key_here?(cx, element)
     return error(
@@ -378,7 +382,7 @@ def resolve_set(cx: State.Cx, st: State.St, arg: Ast.TypeRef) -> Result[Types.Ty
 end
 
 # An enum (with its type arguments), a struct, or the unknown type.
-def resolve_generic(cx: State.Cx, st: State.St, ref: Ast.TypeRef) -> Result[Types.Type]
+def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[ResolvedType]
   name = ref.name
   definition = cx.enums.get(name)
   if definition.ok?
@@ -394,7 +398,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: Ast.TypeRef) -> Result[Type
         ),
       )
     end
-    args: List[Types.Type] = []
+    args: List[ResolvedType] = []
     for arg in ref.args
       args = args.push(try resolve_expanded(cx, st, arg, false))
     end
@@ -457,7 +461,7 @@ def struct_all?(cx: State.Cx, name: String, seen: List[String], test: Int) -> Bo
   return true
 end
 
-def nominal_data?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
+def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   name = Types.name(type)
   key = "#{Types.tag(type)}:#{name}"
   for argument in Types.args(type)
@@ -488,7 +492,7 @@ def nominal_data?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
   return true
 end
 
-def substitution(type: Types.Type, name: String, substitutions: Map[String, Types.Type]) -> Types.Type
+def substitution(type: ResolvedType, name: String, substitutions: Map[String, ResolvedType]) -> ResolvedType
   found = substitutions.get(name)
   if found.ok?
     return found.unwrap!
@@ -497,7 +501,7 @@ def substitution(type: Types.Type, name: String, substitutions: Map[String, Type
 end
 
 # True for a type with other types inside: the ones unify matches part by part.
-def composite?(type: Types.Type) -> Bool
+def composite?(type: ResolvedType) -> Bool
   return parts(type).size > 0
 end
 
@@ -505,11 +509,11 @@ end
 def unify_inside(
   cx: State.Cx,
   st: State.St,
-  template: Types.Type,
-  actual: Types.Type,
-  substitutions: Map[String, Types.Type],
+  template: ResolvedType,
+  actual: ResolvedType,
+  substitutions: Map[String, ResolvedType],
   span: Source.Span,
-) -> Result[Map[String, Types.Type]]
+) -> Result[Map[String, ResolvedType]]
   pairs = parts(template)
   others = parts(actual)
   if Types.is(template, "Enum") and Types.name(template) != Types.name(actual)
@@ -528,7 +532,7 @@ def unify_inside(
 end
 
 # The types inside a type, in order: the item, the key and value, the parameters then the result, the type arguments.
-def parts(type: Types.Type) -> List[Types.Type]
+def parts(type: ResolvedType) -> List[ResolvedType]
   case type
     Types.Type.Result(item) -> return [item]
     Types.Type.Task(item) -> return [item]

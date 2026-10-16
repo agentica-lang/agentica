@@ -38,6 +38,7 @@ Marks: `[CODE]` means the front end refuses the code with that diagnostic. `[tes
 - Declaration order is fixed `[CHECK-DECL-ORDER]`: module doc and imports, constants, `struct` and `enum`, `export def`, then private `def`. Imports are sorted by path. Inside a group, put callers before the helpers they call.
 - Export only what other files use. One file, one topic; split a file when it grows several.
 - `import Alias from "path"` when you use many names or a name could clash. `import {a, B} from "path"` for one or two names used often. Never both for one module.
+- Use a module-local type alias when the same qualified or composite type recurs across a module. Keep the alias descriptive, and do not add a synonym for a type that is already short and clear.
 - The first `##` block of a file, then a blank line, is the module doc. Every `export def`, `struct`, `enum`, field and variant gets a `##` doc that starts with a verb and says what it returns, not how.
 - A `#` comment goes inside the body or above the `##` block, never between the block and its `def` `[PARSE-DETACHED-DOC]`.
 - Comments say why: a rule, an order, a limit, a trick. Do not narrate the line below. Never leave commented-out code.
@@ -66,6 +67,7 @@ Marks: `[CODE]` means the front end refuses the code with that diagnostic. `[tes
 - On an enum, list every variant and no `_`, so a new variant is a compile error `[CHECK-NON-EXHAUSTIVE-CASE]`. Use `_` only when the rest really is one case.
 - Put the specific arms and guards first. A guarded or nested arm does not cover its variant, so end with `ok(_)` or `_`.
 - A key-to-value `if` chain is a `Map` constant. A membership test is a `Set` constant.
+- Use a nested pattern when the shape of an enum payload decides the branch. Add a guard only for a condition that the pattern cannot express; keep an unguarded fallback because guarded arms do not establish exhaustiveness.
 
 ## Errors
 

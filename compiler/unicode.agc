@@ -1,8 +1,7 @@
-import Table from "unicode_table"
+import {GRAPHIC_RANGES} from "unicode_table"
 
 export def graphic?(code: Int) -> Bool
-  ranges = Table.graphic_ranges()
-  return search(ranges, code, 0, ranges.size / 2)
+  return search(GRAPHIC_RANGES, code, 0, GRAPHIC_RANGES.size / 2)
 end
 
 ## An Int as upper-case hexadecimal digits, padded with zeros to width.
@@ -46,10 +45,9 @@ end
 ## A String as `write` shows it: quotes, with \\a \\b \\t \\n \\v \\f \\r \\e, \\" and \\\\, and \\uXXXX or
 ## \\UXXXXXXXX for characters that are neither graphic nor blank.
 export def written_text(text: String) -> String
-  ranges = Table.graphic_ranges()
   parts: List[String] = ["\""]
   for character in text.split("")
-    parts = parts.push(written_character(ranges, String.code(character), character))
+    parts = parts.push(written_character(GRAPHIC_RANGES, String.code(character), character))
   end
   parts = parts.push("\"")
   return parts.join("")

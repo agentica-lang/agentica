@@ -240,7 +240,7 @@ class SingleBinary(TestCase):
         other.write_bytes(with_version(data, ANOTHER_VERSION))
         loaded = self.agentica("--front-end", other, "inputs", "x")
         # The binary names itself with the real path of its file, for the commands that start it again.
-        inputs = "--version %s --self %s -- inputs x\n" % (version(), os.path.realpath(self.binary))
+        inputs = "--version %s --self %s --embedded-bdd -- inputs x\n" % (version(), os.path.realpath(self.binary))
         self.assertEqual((loaded.code, loaded.stdout, loaded.stderr), (0, inputs, ""))
         refused = run_vm(other, env=vm_environment())
         self.assertEqual(refused.code, 2)

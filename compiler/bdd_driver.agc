@@ -70,13 +70,9 @@ export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   return ending
 end
 
-# Whether the std/ sources are the binary's own: then it carries the runner and the default step program, compiled with
-# them, and `run --embedded` starts them.
+# Whether this binary carries the runner and the default step program, compiled with the std/ sources.
 def embedded?(settings: Env.Settings) -> Bool
-  case settings.std
-    Env.StdProvider.Embedded -> return true
-    Env.StdProvider.Folder(_) -> return false
-  end
+  return settings.embedded_bdd
 end
 
 # The run in its directory. Without the binary's own runner it is compiled before anything else: its failure is a bug

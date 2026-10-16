@@ -12,8 +12,13 @@
 #   too-many-arguments   hands over more arguments than the driver takes
 
 def main() -> Void
-  # The binary puts `--version V --self PATH --` before the words.
+  # The binary puts `--version V --self PATH [--embedded-bdd] --` before the words.
   words = System.args().drop(5)
+  if words[0] == "--embedded-bdd"
+    words = System.args().drop(6)
+  elsif words[0] == "--"
+    words = words.drop(1)
+  end
   if words.size == 0
     System.exit(2)
   elsif words[0] == "inputs"

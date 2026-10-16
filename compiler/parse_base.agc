@@ -12,6 +12,9 @@ import Source from "source"
 import Tokens from "token"
 import Unicode from "unicode"
 
+LITERAL_KINDS = Set.new(["integer", "float", "string", "true", "false", "nil"])
+export NESTING_LIMIT = 1000
+
 ## What a parse function reads and never changes: the tokens, the context of the construct being parsed, and the
 ## nesting level. depth is the block depth (0 outside a do block body), allow_blocks tells whether `do` after a call
 ## starts a block, and brace_at and brace_form remember a `{` right after a block head, for the help of
@@ -98,10 +101,6 @@ end
 ## the tree: the right operand of the first link of a chain hangs below the whole chain, so nested chains build deeper
 ## trees, and a pass that recurses on the tree needs its own stack or limit. The limit counts nesting
 ## the same way in every stage.
-export def nesting_limit() -> Int
-  return 1000
-end
-
 ## The context for the start of a file.
 export def make_env(tokens: List[Tokens.Token]) -> Env
   return Env(tokens: tokens, size: tokens.size, allow_blocks: true, depth: 0, brace_at: -1, brace_form: "", nesting: 0)
@@ -255,7 +254,7 @@ end
 ## The context `levels` deeper than e; PARSE-TOO-DEEP when that passes nesting_limit. enter adds one level, deepen adds
 ## the k links of a chain so far.
 export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
-  if e.nesting + levels > nesting_limit()
+  if e.nesting + levels > NESTING_LIMIT
     return error(too_deep(e, pos))
   end
   return ok(
@@ -447,7 +446,7 @@ def too_deep(e: Env, pos: Int) -> String
     e,
     pos,
     "PARSE-TOO-DEEP",
-    "nesting is deeper than #{nesting_limit()} levels",
+    "nesting is deeper than #{NESTING_LIMIT} levels",
     hint("split the code into smaller functions or simpler expressions"),
   )
 end
@@ -473,7 +472,7 @@ def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
     end
     return ok(SlotAt(slot: slot, pos: advanced, ids: ids))
   end
-  if kind == "integer" or kind == "float" or kind == "string" or kind == "true" or kind == "false" or kind == "nil"
+  if LITERAL_KINDS.include?(kind)
     return nested_slot(e, pos, ids)
   end
   if kind == "type-name"

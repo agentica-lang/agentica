@@ -49,7 +49,7 @@ class LexerFrozenTest(StageTestCase):
         # compiler/unicode_table.agc is hand-edited data (its header has the provenance, Unicode 17.0); the ranges
         # of the original table are frozen in lexer/graphic-ranges.expected.
         text = (ROOT / "compiler" / "unicode_table.agc").read_text(encoding="utf-8")
-        body = text.split("return [", 1)[1].split("]", 1)[0]
+        body = text.split("export GRAPHIC_RANGES = [", 1)[1].split("]", 1)[0]
         numbers = [int(number) for number in re.findall(r"\d+", body)]
         ranges = ["%d %d" % pair for pair in zip(numbers[::2], numbers[1::2])]
         self.assert_golden("".join(line + "\n" for line in ranges), FROZEN / "lexer" / "graphic-ranges.expected")
