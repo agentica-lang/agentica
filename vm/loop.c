@@ -15,8 +15,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <uv.h>
-#if !defined(_WIN32)
 #include <signal.h>
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <unistd.h>
 #endif
 #endif
@@ -30,19 +32,30 @@ struct agc_registry {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 typedef struct agc_io_job job;
 
-#if !defined(_WIN32)
 typedef struct {
   atomic_int signal, now;
   atomic_bool held;
+#if defined(_WIN32)
+  HANDLE driver;
+#else
   pid_t driver;
   uv_async_t *wake;
-} stop_state;
 #endif
+} stop_state;
+
+static stop_state stop;
 
 struct agc_loop {
   uv_loop_t uv;
   uv_timer_t deadline;
   uv_async_t wake;
+#if defined(_WIN32)
+  uv_signal_t stop_signals[3];
+  uv_timer_t stop_grace, parent_check;
+  HANDLE driver;
+  size_t stop_signal_count;
+  bool stop_grace_init, parent_check_init;
+#endif
   job *ready, *ready_tail;
   bool expired;
 };
@@ -261,6 +274,11 @@ static agc_loop *new_loop(agc_vm *vm) {
   agc_loop *loop = malloc(sizeof(agc_loop));
   if (!loop) agc_out_of_memory();
   loop->ready = loop->ready_tail = NULL;
+#if defined(_WIN32)
+  loop->driver = NULL;
+  loop->stop_signal_count = 0;
+  loop->stop_grace_init = loop->parent_check_init = false;
+#endif
   if (uv_loop_init(&loop->uv) != 0) {
     free(loop);
     return NULL;
@@ -394,8 +412,6 @@ void agc_io_block_stop(sigset_t *saved) {
 /* A signal handler gets no context, so the stop state is the one
    process-wide variable. `held` is true until the children are stopped:
    till then a second signal is only recorded in `now`. */
-static stop_state stop; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2, "the stop state is read in a signal handler");
 
 static void stop_at_once(int sig) {
@@ -468,14 +484,75 @@ void agc_io_children_stopped(void) {
   _exit(128 + now);
 }
 #else
-void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
-  (void)vm;
-  (void)driver;
+static const int stop_signal_numbers[] = {SIGINT, SIGBREAK, SIGHUP};
+
+static void stop_force_exit(uv_timer_t *timer) {
+  (void)timer;
+  int sig = atomic_load(&stop.now);
+  if (sig) ExitProcess((UINT)(128 + sig));
 }
 
-int agc_io_stop_signal(void) { return 0; }
+static void stop_parent_check(uv_timer_t *timer) {
+  agc_loop *loop = timer->data;
+  if (!loop->driver) return;
+  DWORD result = WaitForSingleObject(loop->driver, 0);
+  if (result != WAIT_OBJECT_0) return;
+  int none = 0;
+  atomic_compare_exchange_strong(&stop.signal, &none, SIGTERM);
+  uv_timer_stop(timer);
+}
 
-void agc_io_children_stopped(void) {}
+static void stop_received(uv_signal_t *handle, int sig) {
+  agc_loop *loop = handle->data;
+  int none = 0;
+  if (atomic_compare_exchange_strong(&stop.signal, &none, sig)) return;
+  if (!atomic_load(&stop.held)) ExitProcess((UINT)(128 + sig));
+  none = 0;
+  if (atomic_compare_exchange_strong(&stop.now, &none, sig) && loop->stop_grace_init)
+    uv_timer_start(&loop->stop_grace, stop_force_exit, 3000, 0);
+  else if (!loop->stop_grace_init)
+    ExitProcess((UINT)(128 + sig));
+}
+
+void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
+  agc_loop *loop = new_loop(vm);
+  if (!loop) return;
+  atomic_store(&stop.signal, 0);
+  atomic_store(&stop.now, 0);
+  atomic_store(&stop.held, true);
+  loop->stop_signal_count = 0;
+  for (size_t k = 0; k < sizeof stop_signal_numbers / sizeof stop_signal_numbers[0]; k++) {
+    uv_signal_t *handle = &loop->stop_signals[k];
+    if (uv_signal_init(&loop->uv, handle) != 0) break;
+    handle->data = loop;
+    if (uv_signal_start(handle, stop_received, stop_signal_numbers[k]) != 0) {
+      uv_close((uv_handle_t *)handle, NULL);
+      break;
+    }
+    loop->stop_signal_count++;
+  }
+  if (uv_timer_init(&loop->uv, &loop->stop_grace) == 0) {
+    loop->stop_grace.data = loop;
+    loop->stop_grace_init = true;
+  }
+  if (driver > 0) {
+    loop->driver = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)driver);
+    if (!loop->driver) atomic_store(&stop.signal, SIGTERM);
+    if (loop->driver && uv_timer_init(&loop->uv, &loop->parent_check) == 0) {
+      loop->parent_check.data = loop;
+      loop->parent_check_init = true;
+      uv_timer_start(&loop->parent_check, stop_parent_check, 250, 250);
+    }
+  }
+}
+
+int agc_io_stop_signal(void) { return atomic_load(&stop.signal); }
+
+void agc_io_children_stopped(void) {
+  atomic_store(&stop.held, false);
+  int sig = atomic_load(&stop.now);
+  if (sig) ExitProcess((UINT)(128 + sig));
+}
 #endif
 
 static int queue_work(agc_loop *loop, job *j) {
@@ -816,7 +893,25 @@ static void unwatch_stop(agc_loop *loop) {
   pthread_sigmask(SIG_SETMASK, &saved, NULL);
   uv_close((uv_handle_t *)&loop->wake, NULL);
 #else
-  (void)loop;
+  for (size_t k = 0; k < loop->stop_signal_count; k++) {
+    uv_signal_stop(&loop->stop_signals[k]);
+    uv_close((uv_handle_t *)&loop->stop_signals[k], NULL);
+  }
+  loop->stop_signal_count = 0;
+  if (loop->stop_grace_init) {
+    uv_timer_stop(&loop->stop_grace);
+    uv_close((uv_handle_t *)&loop->stop_grace, NULL);
+    loop->stop_grace_init = false;
+  }
+  if (loop->parent_check_init) {
+    uv_timer_stop(&loop->parent_check);
+    uv_close((uv_handle_t *)&loop->parent_check, NULL);
+    loop->parent_check_init = false;
+  }
+  if (loop->driver) {
+    CloseHandle(loop->driver);
+    loop->driver = NULL;
+  }
 #endif
 }
 
