@@ -250,6 +250,7 @@ static const agc_string *cwd_of(agc_vm *vm) {
 
 char *agc_host_path(agc_vm *vm, const agc_string *s) {
 #ifdef _WIN32
+  (void)vm;
   char *given = agc_cstr(s);
   char *resolved = given ? agc_fs_absolute(given) : NULL;
   if (!resolved) return given;
