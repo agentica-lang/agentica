@@ -37,6 +37,45 @@ static _Noreturn void raise_failure(agc_vm *vm) {
   longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
+/* A frame of the run of prelude frames (docs/future/25-ruby-typed-idioms.md §25.6): a function with the prelude flag,
+   or a native frame (List.map and the like running a block) that a prelude frame called, which is transparent to the
+   rule. Natives never sit on natives, since a native calls its callback through a frame of its own. */
+static bool in_prelude_run(const agc_program *p, const agc_task *t, uint32_t at) {
+  const agc_frame *frame = &t->frames[at];
+  if (frame->native) return at > 0 && !t->frames[at - 1].native && in_prelude_run(p, t, at - 1);
+  return frame->function < p->function_count && p->functions[frame->function].prelude;
+}
+
+/* The span a runtime error is reported at. In the user's code it is the span the instruction gave. While a prelude
+   function runs, the span of its own instructions is the fixed place of its file, which tells the user nothing, so the
+   error moves to the call the user wrote: the call of the outermost frame of the innermost run of prelude frames. When
+   argument is not negative and that call is a CALL of the function with argument spans (the loader checked their
+   range), the error is reported at the span of that argument, as a builtin does with span + 1 + i. With no frame of
+   the user below the run (a crafted file that flags main, or the entry of a task) the span stays what it was. */
+static uint32_t report_span(const agc_vm *vm, uint32_t span, int64_t argument) {
+  const agc_task *t = vm->task;
+  if (!t || !t->frames || t->frame_count == 0 || t->frame_count > t->frame_capacity) return span;
+  const agc_program *p = vm->rt->program;
+  uint32_t top = t->frame_count - 1;
+  if (!in_prelude_run(p, t, top)) return span;
+  uint32_t outer = top;
+  while (outer > 0 && in_prelude_run(p, t, outer - 1)) outer--;
+  if (outer == 0) return span;
+  const agc_frame *caller = &t->frames[outer - 1];
+  if (caller->native) return caller->native->span;
+  if (caller->function >= p->function_count) return span;
+  const agc_function *fn = &p->functions[caller->function];
+  if (caller->pc == 0 || caller->pc > fn->count) return span;
+  uint32_t call = fn->spans[caller->pc - 1];
+  const agc_frame *callee = &t->frames[outer];
+  const agc_instr *in = &fn->code[caller->pc - 1];
+  uint32_t target = (uint32_t)in->b | ((uint32_t)in->c << 16);
+  if (argument >= 0 && !callee->tail && in->op == AGC_OP_CALL && target == callee->function &&
+      (uint64_t)argument < p->functions[callee->function].params)
+    return call + 1 + (uint32_t)argument;
+  return call;
+}
+
 void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
   agc_outcome *o = &vm->rt->outcome;
   o->kind = AGC_FAILED;
@@ -44,7 +83,7 @@ void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) 
   o->message = message;
   o->message_len = strlen(message);
   o->text = NULL;
-  o->span = span;
+  o->span = report_span(vm, span, -1);
   raise_failure(vm);
 }
 
@@ -55,7 +94,18 @@ void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint
   o->text = message;
   o->message = message->data;
   o->message_len = message->bytes;
-  o->span = span;
+  o->span = report_span(vm, span, -1);
+  raise_failure(vm);
+}
+
+void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument, uint32_t span) {
+  agc_outcome *o = &vm->rt->outcome;
+  o->kind = AGC_FAILED;
+  o->code = code;
+  o->text = message;
+  o->message = message->data;
+  o->message_len = message->bytes;
+  o->span = report_span(vm, span, argument);
   raise_failure(vm);
 }
 

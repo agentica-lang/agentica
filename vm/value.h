@@ -17,7 +17,10 @@
 
 /* The first four bytes of every .agcb file. */
 #define AGC_MAGIC "AGCB"
-#define AGC_FORMAT_VERSION 5
+#define AGC_FORMAT_VERSION 6
+/* The format before the prelude flag of the functions (version 6). Only agc_load_front_end still reads it, so that the
+   checked-in bootstrap/stage0.agcb loads until it is refreshed; it has no prelude function. */
+#define AGC_FORMAT_PREVIOUS 5
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
@@ -229,9 +232,12 @@ typedef struct {
   agc_cost_rule cost;
 } agc_builtin;
 
+/* prelude marks a function of the compiler prelude (docs/future/25-ruby-typed-idioms.md §25.6): its spans are not
+   the user's, so a runtime error in it is reported at the call the user wrote (agc_fail). */
 typedef struct {
   agc_string *name;
   uint32_t params, captures, registers, span, count;
+  bool prelude;
   agc_instr *code;
   uint32_t *spans;
 } agc_function;

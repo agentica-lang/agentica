@@ -451,6 +451,26 @@ static agc_value builtin_range_last(agc_vm *vm, agc_value *args, uint32_t span) 
   return range_end(vm, args[0], false);
 }
 
+/* __fail_arg(code, index, message): the compiler prelude's way to raise a RUNTIME- error at argument `index` of the
+   call the user wrote (agc_fail_argument). The code is checked here, since the file is untrusted: RUNTIME- and then
+   capitals, digits and dashes only, so a crafted file cannot print another family of codes. */
+static agc_value builtin_fail_arg(agc_vm *vm, agc_value *args, uint32_t span) {
+  static const char prefix[] = "RUNTIME-";
+  const agc_string *code = agc_as_string(vm, args[0]);
+  int64_t index = agc_as_int(vm, args[1]);
+  const agc_string *message = agc_as_string(vm, args[2]);
+  bool valid = code->bytes > sizeof prefix - 1 && code->bytes <= 64 && memcmp(code->data, prefix, sizeof prefix - 1) == 0;
+  for (size_t k = 0; valid && k < code->bytes; k++) {
+    char c = code->data[k];
+    valid = (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-';
+  }
+  if (!valid) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: __fail_arg needs a RUNTIME- code", span);
+  char *text = agc_alloc_atomic(code->bytes + 1);
+  memcpy(text, code->data, code->bytes);
+  text[code->bytes] = '\0';
+  agc_fail_argument(vm, text, message, index, span);
+}
+
 const agc_builtin agc_core_builtins[] = {
   {"puts", 1, builtin_puts, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"IO.print", 1, builtin_print, AGC_NATIVE_NONE, AGC_COST_SIZE},
@@ -509,6 +529,7 @@ const agc_builtin agc_core_builtins[] = {
   {"List.any?", 2, NULL, AGC_NATIVE_ANY, AGC_COST_NONE},
   {"List.all?", 2, NULL, AGC_NATIVE_ALL, AGC_COST_NONE},
   {"List.sort_by", 2, NULL, AGC_NATIVE_SORT_BY, AGC_COST_NONE},
+  {"__fail_arg", 3, builtin_fail_arg, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Range.size", 1, builtin_range_size, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Range.to_a", 1, builtin_range_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Range.include?", 2, builtin_range_include, AGC_NATIVE_NONE, AGC_COST_NONE},
@@ -531,6 +552,8 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
   }
   return NULL;
 }
+
+bool agc_builtin_prelude_only(const agc_builtin *b) { return b->name[0] == '_' && b->name[1] == '_'; }
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {
   const agc_program *p = vm->rt->program;

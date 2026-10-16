@@ -33,6 +33,9 @@ extern const size_t agc_channel_builtin_count;
 extern const agc_builtin_table agc_builtin_tables[];
 extern const size_t agc_builtin_table_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
+/* True for a builtin that only a prelude function may call: its name starts with two underscores
+   (docs/future/25-ruby-typed-idioms.md §25.6). The loader refuses a call of one from any other function. */
+bool agc_builtin_prelude_only(const agc_builtin *b);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,

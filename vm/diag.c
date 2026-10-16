@@ -157,7 +157,9 @@ static bool take_frame(const frame_walk *w, uint32_t *cursor, bool innermost, ag
   const agc_program *p = w->program;
   while (*cursor > 0) {
     const agc_frame *frame = &w->task->frames[--*cursor];
-    if (frame->native || frame->function >= p->function_count) continue;
+    /* A prelude frame is skipped like a native one: the user's code called it, and an error in it is reported at the
+       user's call (agc_fail), so the line of the user's frame is the place to look at. */
+    if (frame->native || frame->function >= p->function_count || p->functions[frame->function].prelude) continue;
     uint32_t span = innermost ? w->error_span : call_span(&p->functions[frame->function], frame->pc);
     line->function = frame->function;
     line->span = span < p->span_count ? span : 0;
