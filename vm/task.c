@@ -93,7 +93,12 @@ static void leave_parent(agc_task *t) {
 }
 
 void agc_task_close_done(agc_vm *vm, agc_task *t) {
-  if (--t->closing == 0) agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+  if (--t->closing != 0) return;
+  agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+  /* An end hook that found a close pending put itself back (Task.map), and now the task has settled. */
+  agc_end_fn end = t->end;
+  t->end = NULL;
+  if (end) end(vm, t);
 }
 
 static void finish_task(agc_vm *vm, agc_task *t) {

@@ -62,11 +62,20 @@ static void running_remove(map_group *g, map_item *it) {
 /* The end hook of an item task (finish_task calls it for a return, a crash and a cancel). An item that already ran out
    of time is settled and the hook has nothing to do. An item that is cancelled otherwise was reached by the cancel of
    its caller (items are the caller's children, so only a cancel of the caller or an ancestor gets to them): its slot
-   is never written and the caller, which is about to end, is not woken. */
+   is never written and the caller, which is about to end, is not woken. An item that still has files to close is not
+   settled, as for Task.await (state DONE and no close pending): it puts the hook back, and agc_task_close_done calls it
+   again when the last close ends. */
 static void item_ended(agc_vm *vm, agc_task *t) {
   map_item *it = t->end_data;
+  if (!it->running || t->cancelled) {
+    t->end_data = NULL;
+    return;
+  }
+  if (t->closing) {
+    t->end = item_ended;
+    return;
+  }
   t->end_data = NULL;
-  if (!it->running || t->cancelled) return;
   map_group *g = it->group;
   running_remove(g, it);
   if (g->ended_last)
