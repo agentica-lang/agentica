@@ -142,7 +142,7 @@ and the other features after the JIT.
    in `compiler/` only. The first of steps 4 and 5 to land is the first use of
    the two-step stage0 refresh of §35.3. Part B, `case` guards and nested
    patterns (§25.12.1, "As decided (post-bootstrap step 5)"), is **done
-   (2026-10-16)**: `pattern if condition ->` and any pattern in a payload
+   (2026-10-16, PR #325)**: `pattern if condition ->` and any pattern in a payload
    position, a conservative exhaustiveness rule, no bytecode change.
    `compiler/` does not use them yet (the two-step stage0 refresh is a later
    PR).
