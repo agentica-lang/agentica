@@ -1,9 +1,9 @@
 """Programs of several files, run with the product CLI (ported from the run cases of modules-test.rkt).
 
 Each case writes a few modules into a temporary folder and runs the root program with `--json`, or runs a CLI command
-that shows how imports resolve. The linker's and the checker's diagnostics for the same programs stay in
-modules-test.rkt until the Racket front end goes. The cases run on dist/agentica, or on the executable that
-AGENTICA_TEST_EXECUTABLE names.
+that shows how imports resolve. The diagnostics of the linker and the checker for such programs are tested through
+`check` in the tests/test_spec_*.py modules and the frozen goldens. The cases run on dist/agentica, or on the
+executable that AGENTICA_TEST_EXECUTABLE names.
 """
 import json
 import os

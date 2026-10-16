@@ -3,8 +3,8 @@
 
 The goldens in tests/fixtures/frontend/frozen/ (manifests of hashes and small `.expected` files) and the goldens next to
 the fixtures (tests/fixtures/frontend/{lexer,parser,modules,check,lower,catalog}/) were first written from the Racket front
-end (`make frontend-freeze`). Once Racket is gone, a change of a compiler/ stage that changes its output on purpose is
-frozen with this tool instead:
+end. A change of a compiler/ stage that changes its output on purpose is frozen with this tool (`make goldens` runs it
+with --fast-only):
 
     python3 tools/refreeze.py                  # every stage, fast and slow tier
     python3 tools/refreeze.py --stage lower    # one stage (repeat or comma-separate for several)

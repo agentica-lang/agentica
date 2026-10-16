@@ -1,6 +1,6 @@
 """tools/refreeze.py and the refreeze mode of tests/frontend_support.py, on a scratch copy of the frozen files.
 
-The goldens of the front end are rewritten from the Agentica stages with the tool once Racket is gone, so the path that
+The goldens of the front end are rewritten from the Agentica stages with the tool, so the path that
 rewrites them is tested here without running a stage: a manifest and a text golden are compared with changed output.
 """
 import importlib.util

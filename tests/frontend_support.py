@@ -2,8 +2,8 @@
 
 Each test compiles one stage of compiler/ with the product CLI, runs it on the VM over inputs and compares what it
 prints with the frozen output of the Racket stage (tests/fixtures/frontend/frozen/, docs/future/35-self-hosting.md,
-35.10, phase 3). The frozen files are written by `make frontend-freeze` while the Racket stages exist; see
-tests/frontend-freeze-common.rkt for their layout.
+35.10, phase 3). The Racket stages wrote the frozen files once; tools/refreeze.py rewrites them from the Agentica
+stages now.
 
 The hashes of a manifest cover big outputs and big inputs. An input hash that differs means the Python side built a
 different input than the Racket writer did, which is a test bug and not a front-end bug.
@@ -274,8 +274,8 @@ def report(record):
 def tree_listing(files):
     """The text whose hash stands for a whole input: each path and the hash of its content, one line each, in path order.
 
-    `files` maps a path (relative to the root of the input) to text or bytes. tests/frontend-freeze-common.rkt
-    (tree-listing) writes the same text.
+    `files` maps a path (relative to the root of the input) to text or bytes. The Racket writer
+    that froze the manifests wrote the same text.
     """
     return "".join("%s %s\n" % (path, sha256(files[path])) for path in sorted(files))
 
