@@ -43,11 +43,6 @@ typedef struct {
 #endif
 } stop_state;
 
-static stop_state *stop_status(void) {
-  static stop_state state;
-  return &state;
-}
-
 struct agc_loop {
   uv_loop_t uv;
   uv_timer_t deadline;
@@ -87,6 +82,11 @@ struct agc_poller {
   void *data;
 };
 #endif
+
+static stop_state *stop_status(void) {
+  static stop_state state;
+  return &state;
+}
 #endif
 
 static agc_registry *registry_of(agc_vm *vm) {
