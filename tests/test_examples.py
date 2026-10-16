@@ -11,11 +11,11 @@ import os
 import select
 import time
 
-from tests.agentica_test import ROOT, Child, TestCase, cli, run, slow, vm_environment
+from tests.agentica_test import ROOT, Child, TestCase, cli, run, scaled, slow, vm_environment
 
 EXAMPLES = ROOT / "examples"
 STEP_BUDGET = "5000000"
-WAIT_SECONDS = 20
+WAIT_SECONDS = scaled(20)
 
 
 def compact(value):
@@ -78,8 +78,7 @@ class Examples(TestCase):
         self.assertEqual(self.cli(example("http_server.agc")), (0, "200\nhello\n\n404\nok()\n", ""))
         tool = self.cli("--allow-run", example("process-tool.agc"))
         self.assertEqual(tool.code, 0, tool.stderr)
-        self.assertRegex(tool.stdout, r"\AWelcome to Racket v[0-9.]+ \[cs\]\.\n\Z")
-        self.assertEqual(tool.stderr, "")
+        self.assertEqual((tool.stdout, tool.stderr), ("hello from sh\n", ""))
 
     def test_echo_agc_reads_and_echoes_standard_input(self):
         output, code = self.run_example("echo.agc", "one\ntwo\n")

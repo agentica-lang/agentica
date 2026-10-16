@@ -407,9 +407,8 @@ class MainTests(unittest.TestCase):
     def test_check_references_runs_the_reference_arms_without_credentials_and_exits_1_on_a_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name in ("agentica", "agentica-vm"):
-                (root / "dist" / "runtime" / "bin").mkdir(parents=True, exist_ok=True)
-                (root / "dist" / "runtime" / "bin" / name).write_text("binary")
+            (root / "dist" / "runtime" / "bin").mkdir(parents=True, exist_ok=True)
+            (root / "dist" / "runtime" / "bin" / "agentica").write_text("binary")
             argv = ["--check-references", "--agent", "pi", "--pass-env", "FOO", "--tasks", "t1", "--image", "custom:1"]
 
             code, calls, validated = self.main(root, argv, "fail")

@@ -337,7 +337,7 @@ void agc_task_observe(agc_vm *vm, agc_task *t) {
 }
 
 /* A stop signal ends the run between turns as an exit with 128 + signal;
-   vm/main.c then raises it again after the exit path. */
+   agc_launch_exit (vm/launch.c) then raises it again after the exit path. */
 static void check_stop(agc_vm *vm) {
   int sig = agc_io_stop_signal();
   if (sig) agc_stop(vm, sig);

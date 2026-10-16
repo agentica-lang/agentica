@@ -104,7 +104,7 @@ so zeroed registers are valid values.
 - A runtime diagnostic always ends the run. `agc_fail(vm, code, message, span)`
   records it and `longjmp`s to the `setjmp` in `agc_vm_run`, which runs cleanup
   and returns an outcome (done, exit code or diagnostic) to the driver. Only the
-  driver (`main.c`, `agentica.c`, `launch.c`) prints and exits. `System.exit`
+  driver (`agentica.c`, `launch.c`) prints and exits. `System.exit`
   takes the same path.
 - `agc_fail` is called only from interpreter and builtin code on the VM's own C
   stack, never from a libuv or OpenSSL callback. Non-GC resources are registered
@@ -124,7 +124,7 @@ so zeroed registers are valid values.
 
 At startup the VM sets `GC_set_oom_fn` and `GC_set_abort_func`. Their handlers
 allocate nothing, write one fixed line with `write(2)`
-(`agentica-vm: out of memory`, or `agentica-vm: internal GC error` for an abort)
+(`agentica: out of memory`, or `agentica: internal GC error` for an abort)
 and call `_Exit(70)`. There are no atexit handlers and no stdio flush, so
 buffered stdout is lost. The VM keeps no list of children, so it does not kill
 them: they see EOF or `EPIPE` and end by themselves (10.4). libgc warnings are
@@ -188,8 +188,8 @@ files, processes, TCP, TLS and HTTP (client and server) are Linux only for now
   charges no steps, so `--max-steps` does not bound a single read; only memory
   does (13). `IO.flush` fails like a write. Output uses C stdio. On Windows the
   three streams are in binary mode.
-- A VM run without `vm/main.c` (the C tests and the fuzzer) has an empty stdin
-  and no arguments.
+- A VM run without `vm/agentica.c` (the C tests and the fuzzer) has an empty
+  stdin and no arguments.
 
 ### 7.4 Random
 
@@ -210,7 +210,7 @@ files, processes, TCP, TLS and HTTP (client and server) are Linux only for now
   uses the threshold method: draws below `2^64 mod size` are rejected, and
   `draw % size` is kept. The result is unbiased. `low > high` fails with
   `RUNTIME-INVALID-RANGE` at the call, and draws nothing.
-- `--seed N` takes 0 to 2147483647 on `agentica-vm`, and `agentica --seed N`
+- `--seed N` takes 0 to 2147483647 on `agentica run`, and `agentica --seed N`
   passes it through. Without a seed the VM takes 8 bytes from the same OS
   entropy as the map hash key. If every source fails, it uses the wall clock.
   `agc_vm_init` seeds with 0, so the C tests and the fuzzer are deterministic.

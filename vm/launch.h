@@ -1,8 +1,8 @@
 /*
- * What the two programs that start a VM share, agentica-vm (main.c) and the
- * single binary (agentica.c): the options of a run, the start of a runtime
- * from a loaded program, and the one way a run ends. Driver header. Design:
- * docs/vm/08-loader-and-cli.md.
+ * What the two ways of starting a VM in the agentica binary (agentica.c) share:
+ * the front end's run and `agentica run`. The options of a run, the start of a
+ * runtime from a loaded program, and the one way a run ends. Driver header.
+ * Design: docs/vm/08-loader-and-cli.md.
  */
 #ifndef AGC_LAUNCH_H
 #define AGC_LAUNCH_H
@@ -30,13 +30,17 @@ typedef struct {
   bool io_started, own_uring_env;
 } agc_launch;
 
+/* Makes a write to a closed pipe fail with EPIPE instead of ending the process with SIGPIPE. agc_launch_init does it;
+ * a caller that answers something before agc_launch_init (agentica --version) calls this first. */
+void agc_launch_ignore_sigpipe(void);
+
 /* Starts the process: fills closed standard descriptors, ignores SIGPIPE, starts the allocator and notes the pipes
  * that came with the process. Call it first. */
 void agc_launch_init(agc_launch *launch);
 
 /* Reads the options at argv[*at] and on, up to a "--" (skipped), the first word that is not an option, or argc.
  * *at is left on the first word that was not read. On AGC_LAUNCH_BAD the message is already on stderr, started
- * with NAME ("agentica-vm: ..."). AGC_LAUNCH_VERSION stops the read at --version, which only agentica-vm answers. */
+ * with NAME ("agentica run: ..."). AGC_LAUNCH_VERSION stops the read at --version, which only `agentica run` answers. */
 agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int *at, agc_launch_options *options);
 
 /* The options of a run that has no flags. */

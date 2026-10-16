@@ -39,7 +39,7 @@ flooding), and the GC.
   `target("avx512bw")`, picked once at start-up with `__builtin_cpu_supports`
   and kept in the read-only runtime data.
 - Opt-in flags for local builds skip the run-time choice:
-  `make vm MARCH=x86-64-v3` (AVX2) or `MARCH=x86-64-v4` (AVX-512).
+  `make MARCH=x86-64-v3` (AVX2) or `MARCH=x86-64-v4` (AVX-512).
 - Every SIMD routine keeps its scalar version. The C tests and the differential
   tests run both: a test-only switch forces the scalar path, so each path is
   checked on the same inputs (non-ASCII text, invalid UTF-8, lengths around the

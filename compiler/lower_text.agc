@@ -24,7 +24,7 @@ import Types from "types"
 ## instructions: a label as `  LN:` and an instruction as `    op ARGS @ SPAN ...`. A span is
 ## FILE:LINE:COLUMN-LINE:COLUMN, with the index of its source. A register is `rN`, a function `fnN`, a struct `sN`, a
 ## variant `vN`, a global `gN`, a label `LN`; a `const` shows its value as `void`, `nil`, `true`, `false`, `int:N`,
-## `float:bits:N` or a quoted string. tests/frontend-lower-common.rkt prints the same text from the Racket lowering.
+## `float:bits:N` or a quoted string. The goldens in tests/fixtures/frontend/lower/ hold it.
 export def lower_text(path: String, settings: Env.Settings) -> String
   return lower_text_after(path, settings, 0)
 end
@@ -43,6 +43,11 @@ end
 export def problem_text(root_dir: String, problem: Failure.Problem) -> String
   shown = Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help)
   return "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(root_dir, problem.file))}"
+end
+
+## The text form of a lowered program: what `agentica --dump-ir` prints.
+export def program_text(root_dir: String, program: Ir.Program) -> String
+  return program_lines(root_dir, program).join("\n")
 end
 
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
@@ -67,7 +72,7 @@ end
 def lowered_text(linked: Linker.Linked, lowered: Lowering.Lowered) -> String
   case lowered
     Lowering.Lowered.Failed(problem) -> return problem_text(linked.root_dir, problem)
-    Lowering.Lowered.Done(program) -> return program_lines(linked.root_dir, program).join("\n")
+    Lowering.Lowered.Done(program) -> return program_text(linked.root_dir, program)
   end
 end
 

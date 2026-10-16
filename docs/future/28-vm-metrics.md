@@ -1,8 +1,8 @@
 ## 28. VM metrics
 
-**Status:** planned (roadmap phase 18). A tool inside `agentica-vm` for
-operators, like VM tracing (§24.4) is for VM developers: the VM exports numbers
-about itself (the GC, tasks, the scheduler, I/O, processes, TCP) in the
+**Status:** planned (roadmap phase 18). A tool inside the VM (`agentica run`)
+for operators, like VM tracing (§24.4) is for VM developers: the VM exports
+numbers about itself (the GC, tasks, the scheduler, I/O, processes, TCP) in the
 Prometheus text format, so Prometheus can scrape them and Grafana can graph
 them. It is not a language feature: no grammar change, no builtin, nothing in
 the programming skill. It is VM-only and comes after 7i. Three small PRs, and a
@@ -45,7 +45,7 @@ Checked at `12df0f8`:
   start and done, poll, process spawn and exit, and, with PR #106, `tcp_accept`,
   `tcp_connected`, `tcp_connect_error`, `tcp_accept_error`). Each costs one test
   of the trace mask when tracing is off (`AGC_TRACE_ON`, `vm/trace.h`).
-  `make vm TRACE=0` compiles them out.
+  `make TRACE=0` compiles them out.
 - I/O job kinds are named in their `agc_io_kind`: `file`, `lock`, `process`,
   `sleep`, `stdin` (and `tcp` with PR #106). `lock` jobs are the timers of tasks
   waiting for a handle's lock or on a channel, not I/O; `trace_finish`
@@ -64,7 +64,7 @@ Checked at `12df0f8`:
   plain function, so timing each collection would need a mutable global, which
   `vm/` forbids (`docs/vm/10-io-multicore.md` §10.2.3, enforced by
   `make vm-lint`).
-- `vm/main.c` ignores `SIGPIPE`. The libuv thread-pool threads start with
+- `vm/launch.c` ignores `SIGPIPE`. The libuv thread-pool threads start with
   `SIGINT`, `SIGTERM` and `SIGHUP` blocked (`vm/loop.c`); Boehm's marker threads
   do not, so the stop handler may run on any thread and only sets lock-free
   atomics (§10.2.2, Stop signals). A metrics thread must start with them blocked
@@ -105,7 +105,7 @@ The same rules as tracing (§24.4), plus one about cost:
    - With metrics off, the cost is zero: derived metrics need no code between
      scrapes, and hooks share the trace tests, so the turn path and the event
      paths have the same tests as today (the one new test runs only after an
-     idle wait, 28.4). With `make vm METRICS=0`, the metrics code is not
+     idle wait, 28.4). With `make METRICS=0`, the metrics code is not
      compiled at all.
 5. **Lazy start of hooks.** Decided: the enabled-only hooks start at the first
    request for a snapshot, not at start-up. With the endpoint that is the first
@@ -202,7 +202,7 @@ then)
 
 | Name | Type | Labels | How | Why |
 |---|---|---|---|---|
-| `agentica_vm_exit_code` | gauge | none | derived (the code `vm/main.c` returns) | The main alert of a batch job |
+| `agentica_vm_exit_code` | gauge | none | derived (the code `vm/launch.c` returns) | The main alert of a batch job |
 | `agentica_vm_end_time_seconds` | gauge | none | derived (wall clock at the last write) | Alert when a cron job has not run for a day |
 | `agentica_vm_runtime_errors_total` | counter | `code`: a `RUNTIME-` code | derived (the outcome); one series with value 1 when the run failed, none otherwise | Which runtime error ended the run; codes are a fixed list, messages are never exported |
 
@@ -237,7 +237,7 @@ the two together:
 so a trace point with a hook is still two loads and one test, the same as
 today's `vm->rt->trace.mask`. The trace bits are copied into the observe word
 once at start-up, from `agc_trace.mask`, and never change. Trace points with no
-hook keep testing `agc_trace.mask` as today: the loader, `vm/main.c`, the
+hook keep testing `agc_trace.mask` as today: the loader, `vm/launch.c`, the
 process guard's copy (`vm/process.c`, `struct guard`) and the trace-only points
 of `proc` (`struct proc`). The metric bits are set only at the lazy start (28.2
 rule 5), by the scheduler that owns the word, so before the first scrape they
@@ -366,7 +366,7 @@ summed at scrape, with no lock and no atomic add on the hot path.
   another thread would be a data race. Asking the owner keeps every hook a plain
   increment and every derived metric free, which is rule 4.
 
-**The metrics thread** is started by `vm/main.c` before the run, only when one
+**The metrics thread** is started by `vm/launch.c` before the run, only when one
 of the two variables is set and valid. It runs its own `uv_loop_t`, separate
 from the program's loop (with N > 1, the one loop of the I/O thread,
 `docs/vm/16-architecture.md` §16.2), so a slow or hostile client never runs on
@@ -390,7 +390,7 @@ write), never on the program's paths. Async sends the other way, from a
 scheduler or main to the thread's own loop, are always safe: only the thread
 closes its handles, and only after its last message (below).
 
-**End of run,** in `vm/main.c`. The normal end sequence of the VM does not
+**End of run,** in `vm/launch.c`. The normal end sequence of the VM does not
 change; metrics fit around it:
 
 1. `agc_vm_run` returns. Main, which is the scheduler thread with N=1, fills the
@@ -399,19 +399,19 @@ change; metrics fit around it:
 2. Main sets `stop` under the mutex (above). From then on the thread sends no
    request; a scrape that waits for a snapshot gets a `503`. Main closes the
    scheduler's metrics async handle.
-3. The normal end sequence runs unchanged: `end_run` in `vm/main.c` (§14.4: kill
-   and reap the children, flush stdout, stderr and the files, the
+3. The normal end sequence runs unchanged: `agc_launch_settle` in `vm/launch.c`
+   (§14.4: kill and reap the children, flush stdout, stderr and the files, the
    `fflush(stdout)` check that can turn the outcome into `RUNTIME-INTERNAL`, the
    diagnostic, and the exit code). It ends with `_exit`, so steps 4 and 5 below
-   go inside `end_run`, before that call.
-4. In `end_run` (`vm/main.c`), right after `code` is computed and before the
-   final `_exit`: main adds the end-of-run metrics (the exit code, the
-   `RUNTIME-` code, `tasks_done + 1`) to the snapshot and sends it to the thread
-   with its "final" async. The thread writes the last file (when file mode is
-   on) with the same temp-and-rename steps as the periodic writes, closes the
-   listener and every client connection (a pending `uv_write` is cancelled),
-   closes its own handles and leaves its loop. All file writes happen on the
-   thread, in order, so the last write is always the last one.
+   go inside `agc_launch_settle`, before that call.
+4. In `agc_launch_settle` (`vm/launch.c`), right after `code` is computed and
+   before the final `_exit`: main adds the end-of-run metrics (the exit code,
+   the `RUNTIME-` code, `tasks_done + 1`) to the snapshot and sends it to the
+   thread with its "final" async. The thread writes the last file (when file
+   mode is on) with the same temp-and-rename steps as the periodic writes,
+   closes the listener and every client connection (a pending `uv_write` is
+   cancelled), closes its own handles and leaves its loop. All file writes
+   happen on the thread, in order, so the last write is always the last one.
 5. Still before `_exit`, main waits for the thread with a timeout of 1 second
    (`pthread_timedjoin_np` on Linux). The thread never blocks on a socket, but a
    file write can block on a slow or stuck disk. On a timeout main goes on to
@@ -452,7 +452,7 @@ newline.
   it, and it must be written out. No host names (no DNS at start-up). Port 0
   picks a free port, for tests. 9464 is the port OpenTelemetry's Prometheus
   exporter uses; it is only an example, there is no default port.
-- `vm/main.c` binds and listens before the run, on the metrics thread's loop
+- `vm/launch.c` binds and listens before the run, on the metrics thread's loop
   (made on the main thread, then run on the metrics thread), so the bound port
   is known before the program starts and a bind error is seen at once. A bad
   value, or a failed bind, writes one line `agc-metrics cannot listen VALUE`
@@ -495,24 +495,23 @@ newline.
   `vm/process.c`; `tests/test_vm_os.py`), in the OS builtins of the BDD driver
   port (§35.5 of `docs/future/35-self-hosting.md`, step 7a), because the driver
   port can no longer edit the runner's environment. It is a breaking change for
-  a program that passed these variables to a child on purpose. The text below
-  is the rule it follows.
-  `child_env()` in `vm/process.c` becomes `child_env(bool drop_uring)` and runs
-  when `drop_uring_env` is set or either metrics variable is present. It removes
-  `UV_USE_IO_URING=` only when `drop_uring` is true (the VM set it itself; a
-  value the user set is passed on as today), and removes `AGENTICA_VM_METRICS=`
-  and `AGENTICA_VM_METRICS_FILE=` whenever they are present, also when the value
-  is empty or invalid (the parent ignored it, but a child VM would print its own
-  warning). Each name is matched with its `=`, so `AGENTICA_VM_METRICS=` never
-  catches `AGENTICA_VM_METRICS_FILE=`. Otherwise a child VM would fight for the
-  port (and print `cannot listen` into the program's stderr) or overwrite the
-  parent's file. `Process.spawn` has no environment parameter
-  (`src/builtins.rkt`: command, arguments, timeout), so a program that wants
-  metrics from a child VM runs it through `env`, with another port or file:
-  `Process.spawn("env", ["AGENTICA_VM_METRICS=9465", "agentica-vm", "--", "child.agcb"], 5000)`.
-  No environment parameter is planned here. This differs from tracing on
-  purpose: a child's trace lines append to the same file safely; a port and a
-  file cannot be shared.
+  a program that passed these variables to a child on purpose. The text below is
+  the rule it follows. `child_env()` in `vm/process.c` becomes `child_env(bool
+  drop_uring)` and runs when `drop_uring_env` is set or either metrics variable
+  is present. It removes `UV_USE_IO_URING=` only when `drop_uring` is true (the
+  VM set it itself; a value the user set is passed on as today), and removes
+  `AGENTICA_VM_METRICS=` and `AGENTICA_VM_METRICS_FILE=` whenever they are
+  present, also when the value is empty or invalid (the parent ignored it, but a
+  child VM would print its own warning). Each name is matched with its `=`, so
+  `AGENTICA_VM_METRICS=` never catches `AGENTICA_VM_METRICS_FILE=`. Otherwise a
+  child VM would fight for the port (and print `cannot listen` into the
+  program's stderr) or overwrite the parent's file. `Process.spawn` has no
+  environment parameter (`src/builtins.rkt`: command, arguments, timeout), so a
+  program that wants metrics from a child VM runs it through `env`, with another
+  port or file: `Process.spawn("env", ["AGENTICA_VM_METRICS=9465", "agentica",
+  "run", "--", "child.agcb"], 5000)`. No environment parameter is planned here.
+  This differs from tracing on purpose: a child's trace lines append to the same
+  file safely; a port and a file cannot be shared.
 - **VMs started by a driver.** By phase 18, `agentica test` runs a runner VM
   that starts a child VM per scenario, and those children start the programs
   under test (phase 21, `docs/bdd.md`, "How a run works"); all of them would
@@ -734,7 +733,7 @@ Expected values come from fixtures whose numbers are known.
   Python tests, `tests/test_vm_latency.py` and `tests/test_vm_trace.py` among
   them, use `vm_environment` of `tests/agentica_test.py`), so a developer's
   setting cannot change expected output. The `vm-sanitizers` CI job also builds
-  `make vm vm-test METRICS=0`, and `agentica-vm --version` says `metrics off`
+  `make vm-test METRICS=0`, and `agentica run --version` says `metrics off`
   there.
 - **Overhead check** (manual, like `make bench`; not in `make test` or CI, where
   timing is noisy): a CPU-heavy program from `benchmarks/programs/` (`calls` and
@@ -762,7 +761,7 @@ Expected values come from fixtures whose numbers are known.
   hooks; the new `metrics` category in `vm/trace.c` (18a, with its `write`
   lines; 18b adds `listen` and scrape lines), and `metrics` in the category
   regex of `tests/test_vm_trace.py`.
-- `vm/main.c`: one `start_observe` reads the trace and metrics variables
+- `vm/launch.c`: one `start_observe` reads the trace and metrics variables
   together before loading; it starts the metrics thread, and at the end sets
   `stop`, hands the final snapshot to the thread, and joins it with the 1-second
   timeout (28.4). The `.prom` path check (`lstat` before `rename`) is new code

@@ -1,14 +1,14 @@
 """The Agentica parser (compiler/parse.agc) against the frozen output of the Racket parser.
 
-tests/frontend-parser-test.rkt compares the two live. This module compares the Agentica parser with what the Racket
-parser printed once for the same inputs (`make frontend-freeze`, tests/frontend-parser-freeze.rkt): the corpus
+This module compares the Agentica parser with what the Racket parser printed once for the same inputs (frozen in
+tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
 (examples/, stdlib/ and tests/fixtures/vm/ as they were at the freeze), 300 generated inputs, the nesting limit, large
 files, the numbering of node ids and a file with invalid UTF-8. Inputs that are a formula are rebuilt here; the
 manifests hold their hashes.
 """
 import time
 
-from tests.agentica_test import FIXTURES, ROOT, slow
+from tests.agentica_test import FIXTURES, ROOT, scaled, slow, timeout
 from tests.frontend_support import FROZEN, StageTestCase, load_corpus, load_json, write_files
 
 NESTING_LIMIT = 1000
@@ -131,6 +131,7 @@ class ParserFrozenTest(StageTestCase):
         self.assert_golden(continued[second], FROZEN / "parser" / "continue-synthetic.expected")
 
     @slow
+    @timeout(1800)
     def test_corpus(self):
         files = {path: text for path, text in load_corpus("examples", "stdlib", "fixtures").items()
                  if path.startswith(("examples/", "stdlib/", "tests/fixtures/vm/"))}
@@ -140,6 +141,7 @@ class ParserFrozenTest(StageTestCase):
         self.assert_manifest(outputs, "parser/corpus.sha256", files)
 
     @slow
+    @timeout(1800)
     def test_300_generated_inputs(self):
         cases = {"case-%d" % n: text for n, text in enumerate(load_json("parser/generated.json"))}
         outputs = self.check_cases(cases, "parser/generated.sha256")
@@ -147,6 +149,7 @@ class ParserFrozenTest(StageTestCase):
         self.assertTrue(30 < errors < 270, "%d of 300 generated inputs are errors" % errors)
 
     @slow
+    @timeout(1800)
     def test_the_nesting_limit_falls_at_the_same_token_in_both_parsers(self):
         cases = {}
         for count in range(NESTING_LIMIT - 5, NESTING_LIMIT + 4):
@@ -158,6 +161,7 @@ class ParserFrozenTest(StageTestCase):
         self.assertEqual(results, {True, False}, "the boundary cases cross the limit")
 
     @slow
+    @timeout(1800)
     def test_nesting_far_below_and_above_the_limit_gives_the_same_tree_or_the_same_too_deep(self):
         cases = {}
         deep = {}
@@ -171,7 +175,8 @@ class ParserFrozenTest(StageTestCase):
             self.assertEqual(is_too_deep(outputs[key]), expected, key)
 
     @slow
+    @timeout(1800)
     def test_a_large_file_parses_in_linear_time(self):
         started = time.monotonic()
         self.check_cases(large_files(), "parser/large.sha256")
-        self.assertLess(time.monotonic() - started, 60)
+        self.assertLess(time.monotonic() - started, scaled(60))

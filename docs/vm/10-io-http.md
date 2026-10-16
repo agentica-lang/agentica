@@ -316,7 +316,7 @@ and a body that is not UTF-8. A connection that fails is never pooled.
   `max_connections`. Python and Node are required in CI.
 - **Guards**: a user file, a `pkg/` module and a relative import that call
   `HttpWire.exchange` each get `CHECK-UNKNOWN-NAME` with the `std/http` help
-  (`tests/modules-test.rkt`).
+  (the `check` spec tests of the modules rules).
 - **Performance** is not a CI gate: `benchmarks/http_bench.py` against
   `examples/http_server.agc`. The numbers go in `docs/vm-benchmarks.md` (roadmap
   20c-bench).

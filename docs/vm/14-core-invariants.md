@@ -144,9 +144,9 @@ stderr is one non-blocking write per stream, because a reader that never reads
 would otherwise hold the stopped VM for the whole flush limit. Files keep their
 wait. A second stop signal exits at once without flushing, so a stuck flush (a
 FIFO nobody reads, or a test child that gets `PR_SET_PDEATHSIG`'s SIGTERM,
-`vm/main.c`) need not wait for the flush limit. A second signal that comes
-before the children are stopped waits for step 1, so children are never left
-behind.
+`agc_launch_bind` in `vm/launch.c`) need not wait for the flush limit. A second
+signal that comes before the children are stopped waits for step 1, so children
+are never left behind.
 
 As built (`agc_launch_settle` of `vm/launch.c`, §10.2.2 "End of run" and "Stop
 signals"): `main`'s return, `System.exit`, a diagnostic, the step limit and the

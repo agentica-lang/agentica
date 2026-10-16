@@ -41,7 +41,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_duplex_close_write`, which ignores a `uv_shutdown` that fails on the
     spot (`ENOTCONN` when the peer is gone), `agc_duplex_overflow`,
     `agc_duplex_release`)
-  - the child side is `agc_parent_take` (called by `main.c` after
+  - the child side is `agc_parent_take` (called by `agc_launch_vm` in `vm/launch.c` after
     `agc_files_init`: takes fd 3 only with `AGENTICA_CHANNEL=3`, a socket or a
     FIFO opened `O_RDWR` (`F_GETFL`; a one-way FIFO would fail the read start
     and park `Test.run` for ever), moves it with `F_DUPFD_CLOEXEC`, forgets it
