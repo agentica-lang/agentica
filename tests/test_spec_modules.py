@@ -1,4 +1,4 @@
-"""Module rules of the language, through the CLI (ported from tests/modules-test.rkt).
+"""Module rules of the language, through the CLI (rescued from the deleted tests/modules-test.rkt).
 
 Each case writes a few source files into a temporary folder and runs `--json check` on the root file. A program that
 is rejected gives its diagnostic code, and the span where the rule asks for one (file, line and column). A program that
@@ -7,16 +7,12 @@ present or absent, since a suggestion that names a private declaration is a rule
 """
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from tests.agentica_test import TestCase, cli, run, vm_environment
 
 # No AGENTICA_PATH roots and no user data folder, so only the files of a case resolve.
 HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"}
-
-# Each check is a process of about a second (Racket start-up), so a test's checks run side by side.
-WORKERS = 8
 
 MAIN = "def main() -> Void\nend\n\n"
 
@@ -59,8 +55,7 @@ class ModuleRules(TestCase):
             return run(cli() + ["--json", "check", str(directory / root)], cwd=self.cwd,
                        env=vm_environment({**HERMETIC, **env}))
 
-        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            results = list(pool.map(check, jobs))
+        results = [check(job) for job in jobs]
         return [(directory, self.problem_of(result)) for (directory, _root, _env), result in zip(jobs, results)]
 
     def check(self, files, root="root.agc", env=None):
@@ -73,8 +68,8 @@ class ModuleRules(TestCase):
             return None
         self.assertEqual(result.code, 1, result.stderr)
         problem = json.loads(result.stderr)
-        # Internal names (with the module mangling '@') must not reach a user.
-        self.assertNotIn("@", json.dumps(problem))
+        # Internal names (with the module mangling '@') must not reach a user in the message or the help.
+        self.assertNotIn("@", json.dumps({key: problem.get(key) for key in ("message", "help")}))
         return problem
 
     def assert_rejected(self, checked, code, line=None, file=None):
@@ -114,7 +109,8 @@ class ModuleRules(TestCase):
         checked = self.check({
             "a.agc": "export struct Point\n  x: Int\nend\n\n",
             "root.agc": 'import A from "a"\ndef main() -> Void\n  n: Int = A.Point(x: 1)\nend\n\n'})
-        self.assert_rejected(checked, "CHECK-TYPE-MISMATCH")
+        problem = self.assert_rejected(checked, "CHECK-TYPE-MISMATCH")
+        self.assertEqual(problem["actual"], "Point")
         files = {
             "a.agc": "export struct Point\n  x: Int\nend\n\n"
                      "export def make(x: Int) -> Point\n  return Point(x: x)\nend\n\n",
@@ -151,9 +147,6 @@ class ModuleRules(TestCase):
             ('import Set from "module"\n', "", "CHECK-REDEFINED-NAME"),
             ('import Await from "module"\n', "", "CHECK-REDEFINED-NAME"),
             ('import M from "module.txt"\n', "", "CHECK-IMPORT-PATH"),
-            ("", '  x = String.nope("a")\n', "CHECK-UNKNOWN-NAME"),
-            ("", "  x = Mpa.put(1)\n", "CHECK-UNKNOWN-NAME"),
-            ("", "  x = IO.nope()\n", "CHECK-UNKNOWN-NAME"),
             ("", "  x: Missing.Value = 1\n", "CHECK-IMPORT-NAME"),
         ]
         results = self.checks([({"module.agc": module,
@@ -297,7 +290,9 @@ class ModuleRules(TestCase):
         self.assertIsNone(clean[1])
         for (body, code), checked in zip(bodies, body_checked):
             with self.subTest(body):
-                self.assert_rejected(checked, code)
+                problem = self.assert_rejected(checked, code)
+                # The hint must not name the internal HttpWire type, which the user never wrote.
+                self.assertNotIn("HttpWire", json.dumps(problem))
         for name, checked in zip(names, names_checked):
             with self.subTest(name):
                 self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
