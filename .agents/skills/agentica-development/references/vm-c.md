@@ -45,7 +45,7 @@ Read first: `references/vm.md` (the trust model and the layers).
   comments. Never narrate obvious code and never leave commented-out code. Tool
   markers (`// NOLINT(...)`, `/* fall through */`) are not comments in this
   sense.
-- Only `value.c` reads the value union, except the two inline word helpers of `value.h` (`agc_value_word`, `agc_word_value`) that list leaves use for the 8-byte payload of an Int or Float. Immediates write the full word.
+- Only `value.c` and the inline constructors and accessors of `value.h` (`agc_int`, `agc_as_int`, ... for the common types, with `agc_wrong_tag` as their one out-of-line failure) read the value union, besides the two inline word helpers of `value.h` (`agc_value_word`, `agc_word_value`) that list leaves use for the 8-byte payload of an Int or Float. Immediates write the full word. A new constructor or accessor for a hot type goes inline in `value.h`; one for a service resource stays in `value.c`.
 
 `make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
 skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes

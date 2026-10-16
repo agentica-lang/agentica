@@ -23,9 +23,13 @@ so zeroed registers are valid values.
 
 ### 5.2 Safety rules for values
 
-- `value.c` is the only code that reads a union member. Everything else uses
-  checked accessors that take the VM. A wrong tag is `RUNTIME-INTERNAL` at the
-  program span.
+- `value.c` and the inline constructors and checked accessors of `value.h` are
+  the only code that reads a union member. Everything else uses the checked
+  accessors, which take the VM. A wrong tag is `RUNTIME-INTERNAL` at the
+  program span. The accessors of the common types are `static inline`, with
+  one out-of-line failure (`agc_wrong_tag`): the interpreter calls two or
+  three on most instructions, and as calls into `value.c` they cost more than
+  the `ADD_I` they served.
 - `CALL_BUILTIN` checks each argument's tag against the builtin's parameter
   tags. Builtins check list and map elements when they touch them.
 - `FIELD` and `PAYLOAD` check the index against the value's own `n`, not only
