@@ -1,9 +1,8 @@
-## Module constants in the checker (src/checker.rkt: check-constants!, validate-constant!;
-## docs/future/44-module-constants.md 44.5 to 44.7). The constants are put in initialization order, a cycle is
-## CHECK-CONSTANT-CYCLE, then each initializer is checked in that order with no locals in scope and its type recorded
-## for the reads, and the value rules are applied to the checked tree: no call of a function of the program, no
-## function value, no while, no builtin with effects (CHECK-CONSTANT-EXPRESSION), and only data types
-## (CHECK-CONSTANT-TYPE).
+## Module constants in the checker (docs/future/44-module-constants.md 44.5 to 44.7). The constants are put in
+## initialization order, a cycle is CHECK-CONSTANT-CYCLE, then each initializer is checked in that order with no
+## locals in scope and its type recorded for the reads, and the value rules are applied to the checked tree: no call of
+## a function of the program, no function value, no while, no builtin with effects (CHECK-CONSTANT-EXPRESSION), and
+## only data types (CHECK-CONSTANT-TYPE).
 
 import Ast from "ast"
 import Model from "builtin_model"

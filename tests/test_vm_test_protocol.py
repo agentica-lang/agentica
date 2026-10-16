@@ -1,5 +1,4 @@
-"""The child-channel protocol of `--agentica-test`, driven by an independent peer
-(ported from vm-test-protocol-test.rkt)."""
+"""The child-channel protocol of `--agentica-test`, driven by an independent peer."""
 import json
 
 from tests.agentica_test import FIXTURES, PYTHON, TestCase, run, vm_binary

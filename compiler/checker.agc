@@ -1,4 +1,4 @@
-## The type checker (src/checker.rkt, `check`): takes a linked program and gives the type of every expression and the
+## The type checker: takes a linked program and gives the type of every expression and the
 ## resolution of every method call, or the first problem. The declarations are registered first (enums, structs,
 ## variants, functions, main), then the module constants are ordered and checked, then each function is checked in
 ## program order, file by file.
@@ -17,7 +17,7 @@ import T from "types"
 
 ## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that
 ## has none: node ids are dense, so a list is faster than a Map to write and read), what each method call or field
-## access resolved to, by node id (lower.rkt reads them), and the linked names of the module constants in
+## access resolved to, by node id (the lowering reads them), and the linked names of the module constants in
 ## initialization order (the lowering reads that too, and does not order them again).
 export struct Checked
   types: List[T.Type]

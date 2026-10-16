@@ -1,4 +1,4 @@
-## The state of the lowering (src/lower.rkt has it as mutable variables inside `lower` and `lower-function`): what is
+## The state of the lowering (a state that is passed and returned, not mutated): what is
 ## fixed for the run (Cx), what changes while one function is lowered (Fx), and the small operations on them that every
 ## part of the lowering uses. A lowering function takes Cx and Fx and returns the new Fx with its register (Out), or
 ## fails with a packed LOWER- diagnostic (check_failure.agc), so `try` stops at the first one.
@@ -87,7 +87,7 @@ export def unsupported(cx: Cx, what: String, span: Source.Span) -> String
   return Failure.pack(Failure.problem(cx.file, "", "LOWER-UNSUPPORTED", message, span, Diag.Help.NoHelp))
 end
 
-## The failure for a program the lowering cannot make sense of (an exception in src/lower.rkt).
+## The failure for a program the lowering cannot make sense of.
 export def internal(cx: Cx, message: String, span: Source.Span) -> String
   return Failure.pack(Failure.problem(cx.file, "", "LOWER-INTERNAL", message, span, Diag.Help.NoHelp))
 end
@@ -176,7 +176,7 @@ export def static_type(cx: Cx, expr: Ast.Expr) -> Types.Type
   end
 end
 
-## True when the VM has a representation for values of the type (vm-type? of src/lower.rkt).
+## True when the VM has a representation for values of the type.
 export def vm_type?(cx: Cx, type: Types.Type) -> Bool
   case type
     Types.Type.List(item) -> return vm_type?(cx, item)

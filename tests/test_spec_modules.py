@@ -1,4 +1,4 @@
-"""Module rules of the language, through the CLI (rescued from the deleted tests/modules-test.rkt).
+"""Module rules of the language, through the CLI.
 
 Each case writes a few source files into a temporary folder and runs `--json check` on the root file. A program that
 is rejected gives its diagnostic code, and the span where the rule asks for one (file, line and column). A program that

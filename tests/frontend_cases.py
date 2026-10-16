@@ -1,6 +1,6 @@
 """Inputs that are a formula, shared by the front-end tests (tests/test_frontend_<stage>.py).
 
-The Racket writers of the frozen comparisons (removed in step 8d-3) built the same inputs and recorded their SHA-256
+The original writers of the frozen comparisons (removed in step 8d-3) built the same inputs and recorded their SHA-256
 in the manifests; the tests here rebuild them and check the hash, so a drift of either side shows as an
 input that differs, not as a front-end bug.
 """
@@ -78,7 +78,7 @@ STRUCT_AND_ENUM = (
     "struct Item\n  id: Int\n  name: String\n  score: Float\nend\n\n"
     "enum Shape\n  Circle(Float)\n  Rect(Float, Float)\nend\n\n")
 
-# The placeholders are filled in order, as the format string of the Racket writer does.
+# The placeholders are filled in order, as the format string of the original writer does.
 CHECK_FUNCTION = """def f~a(xs: List[Int], label: String) -> Int
   total = 0
   items: List[Item] = []

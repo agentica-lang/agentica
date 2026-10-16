@@ -1,6 +1,6 @@
-"""The Agentica bytecode writer (compiler/bytecode.agc) against the frozen output of the Racket writer.
+"""The Agentica bytecode writer (compiler/bytecode.agc) against the frozen output of the original writer.
 
-This module compares the Agentica writer with what the Racket writer made once for the same programs (frozen in
+This module compares the Agentica writer with what the original writer made once for the same programs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the .agcb bytes of
 the lowering fixtures, examples/, tests/fixtures/vm/, every std/ module, the compiler, trees at the nesting limit and a
 generated program (as SHA-256 of the file, since the bytes of the big ones are megabytes), the lines of the limit
@@ -60,9 +60,9 @@ class BytecodeFrozenTest(StageTestCase):
     def compile_paths(self, paths, directory, timeout=scaled(1800)):
         """Compile each path (relative to `directory`) to a file of its own.
 
-        Gives {path: what the Racket writer froze for it}: the size and the hash of the file it wrote without the version
-        (`wrote N bytes`, then the hash), or the line the runner printed for a failure and `no file`. Each call writes into
-        a fresh folder, so a file of an earlier call is never taken for the output of a failure.
+        Gives {path: what the original writer froze for it}: the size and the hash of the file it wrote without the
+        version (`wrote N bytes`, then the hash), or the line the runner printed for a failure and `no file`. Each call
+        writes into a fresh folder, so a file of an earlier call is never taken for the output of a failure.
         """
         outputs = self.make_temp_dir()
         arguments = ["--stdlib=%s" % self.stdlib, "--version=%s" % VERSION]
@@ -115,8 +115,8 @@ class BytecodeFrozenTest(StageTestCase):
     def test_the_lowering_fixtures_fill_every_section_of_the_file(self):
         # The writer turns the lowering of these programs into the file, so the sections that their goldens fill are the
         # sections the byte comparisons below exercise. (The opcodes have their own test in test_frontend_lower.py.) An
-        # accepted loss against the rackunit test, which looked at the Racket program value: the `types` and `decodable`
-        # sections are not told apart here (both come with a `types=[` struct line), and the spans and the functions are
+        # accepted loss against the original test, which looked at the program value of the writer: the `types` and
+        # `decodable` sections are not told apart here (both come with a `types=[` struct line), and the spans and the functions are
         # taken as filled when any instruction has a span or any function is lowered.
         lowered = "".join(path.read_bytes().decode("utf-8")
                           for path in sorted((ROOT / "tests" / "fixtures" / "frontend" / "lower").glob("*.ir")))

@@ -22,15 +22,14 @@ export def read(path: String, timeout_ms: Int) -> Read
 end
 
 ## Reads the file at `path` to show lines of it in a message: the text with U+FFFD in place of each byte that is not
-## part of a valid sequence, as Racket's `bytes->string/utf-8` does with that character (src/source-file.rkt keeps the
-## text of an invalid file that way for its diagnostic). The result is never Invalid. The time is linear in the size of
+## part of a valid sequence, as a lossy UTF-8 decoder does with that character.
+## The result is never Invalid. The time is linear in the size of
 ## the file, bad bytes or not.
 export def read_shown(path: String, timeout_ms: Int) -> Read
   return read_as(path, timeout_ms, true)
 end
 
-## The LEX-INVALID-UTF8 diagnostic for the invalid byte at `at`: a span of length 1 that starts there. Racket has
-## the same code, message and help (src/source-file.rkt).
+## The LEX-INVALID-UTF8 diagnostic for the invalid byte at `at`: a span of length 1 that starts there.
 export def invalid_utf8(at: Source.Position) -> Diag.Diagnostic
   stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)
   help = Diag.Help.Hint("source files are UTF-8: save the file as UTF-8 text")
@@ -79,7 +78,7 @@ def read_chunks(handle: FileHandle, timeout_ms: Int, shown: Bool) -> Read
 end
 
 # The text of `data` with U+FFFD (the bytes 239, 191, 189) for each byte at which no valid sequence starts, and
-# decoding going on at the next byte: the rule of Racket's decoder with an error character. One pass over the bytes
+# decoding going on at the next byte: the rule of a UTF-8 decoder with an error character. One pass over the bytes
 # that builds the bytes of the result with pushes (near constant time each), then one decoding. Cutting `data` into
 # pieces with take and drop would copy the rest of it at every bad byte.
 def replace_invalid(data: List[Int]) -> String
@@ -137,7 +136,7 @@ def lead_width(byte: Int) -> Int
 end
 
 # `head` did not decode. The position is that of the first invalid sequence, found by hand (the error path only).
-# The characters, lines and columns before it are counted in loops, as src/source-file.rkt does: the decoded chunks
+# The characters, lines and columns before it are counted in loops: the decoded chunks
 # by their newlines, and the valid bytes of `head` by their lead bytes. The text before it is never built in one piece.
 def error_position(parts: List[String], head: List[Int]) -> Source.Position
   bad = first_invalid(head)

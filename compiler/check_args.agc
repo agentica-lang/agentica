@@ -1,5 +1,4 @@
-## The first argument of a builtin call that must be a collection, a channel or a Result (src/checker.rkt:
-## map-argument, set-argument, list-argument, channel-argument, result-argument inside check-builtin-call). Each checks
+## The first argument of a builtin call that must be a collection, a channel or a Result Each checks
 ## argument 0 against the context given and returns the new state with its type, or CHECK-TYPE-MISMATCH naming the type
 ## it should have been.
 

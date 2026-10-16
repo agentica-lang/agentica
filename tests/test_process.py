@@ -1,4 +1,4 @@
-"""Process.spawn and friends through the CLI, against a Node child (ported from process-test.rkt).
+"""Process.spawn and friends through the CLI, against a Node child.
 
 fixtures/process-peer.js is the child (modes echo, exit, hold, stubborn, ...).
 Each case writes an Agentica program, runs it with `--allow-run --json` and

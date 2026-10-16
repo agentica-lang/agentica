@@ -1,5 +1,5 @@
-"""stdlib/MODULES, the list of std/ modules that the Makefile embeds in the single binary and src/stdlib.rkt registers
-for the Racket front end, names every source of stdlib/ once and nothing else. It needs no binary."""
+"""stdlib/MODULES, the list of std/ modules that the Makefile embeds in the single binary,
+names every source of stdlib/ once and nothing else. It needs no binary."""
 from tests.agentica_test import ROOT, TestCase
 
 STDLIB = ROOT / "stdlib"

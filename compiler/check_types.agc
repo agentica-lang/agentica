@@ -1,6 +1,6 @@
 ## Types in the checker: reading a type written in the source (resolve_type), the questions the rules ask of a type
 ## (can it be printed, encoded to JSON, decoded from JSON), and the type variables of generic enums (substitute,
-## unify). These are the helpers of src/checker.rkt that do not depend on the walk of the tree.
+## unify). These are the helpers that do not depend on the walk of the tree.
 
 import Ast from "ast"
 import Help from "check_help"

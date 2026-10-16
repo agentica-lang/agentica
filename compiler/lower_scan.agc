@@ -1,5 +1,4 @@
-## What lowering reads off the tree before it lowers anything (src/lower.rkt: walk-ast, names-below,
-## has-type-expression?; src/constants.rkt: names-below): the module constants, the functions and the watched type
+## What lowering reads off the tree before it lowers anything: the module constants, the functions and the watched type
 ## names a body mentions. One walk per body, with a worklist, so the depth of the tree does not matter.
 
 import Ast from "ast"

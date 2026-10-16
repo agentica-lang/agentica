@@ -1,4 +1,4 @@
-## The lowering (src/lower.rkt, `lower`): takes a linked and checked program and gives the VM IR (ir.agc), or the first
+## The lowering: takes a linked and checked program and gives the VM IR (ir.agc), or the first
 ## LOWER- problem. The function table is, in this order: the declared functions in program order, the kept constants in
 ## initialization order, `<start>` when the program has constant slots, then the blocks in the order they were found
 ## (docs/future/44-module-constants.md 44.7).
@@ -279,7 +279,7 @@ def reads_of(plan: Const.Plan) -> Map[String, Lowering.Read]
   return reads
 end
 
-# The files in the order src/lower.rkt first emits an instruction of each: the root, then the file of each function,
+# The files in the order the lowering first emits an instruction of each: the root, then the file of each function,
 # then of each kept constant.
 def source_order(
   linked: Linker.Linked, functions: List[Located], kept: List[Ast.ConstDecl], files_of: Map[String, String]

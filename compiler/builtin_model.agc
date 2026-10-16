@@ -2,9 +2,9 @@
 
 import Types from "types"
 
-## The special checking rule of a builtin, the `rule` field of a src/builtins.rkt row. Plain is no rule (#f): the
-## arguments are checked against the parameters. The other variants are the symbols of src/builtins.rkt in CamelCase
-## (task-spawn is TaskSpawn); a test compares the two lists.
+## The special checking rule of a builtin, the `rule` field of a catalog row. Plain is no rule: the arguments are
+## checked against the parameters. The other variants name a special rule of the checker in CamelCase (a task spawn is
+## TaskSpawn); a test compares the two lists.
 export enum Rule
   Plain
   ChannelNew

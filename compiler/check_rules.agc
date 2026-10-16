@@ -1,4 +1,4 @@
-## A call of a builtin (src/checker.rkt, check-builtin-call): the form that takes this many arguments, a block only
+## A call of a builtin: the form that takes this many arguments, a block only
 ## where the last parameter is a function, then the rule of the builtin. The List, Map, Set, Task and Channel rules are
 ## in check_list.agc and check_collections.agc; the rest are here.
 

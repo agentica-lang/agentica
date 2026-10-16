@@ -1,6 +1,6 @@
 """Shard 8 of the VM golden tests: `agentica run`, the product CLI and the cases that need more than a fixture.
 
-(Ported from run-extras of vm-diff-common.rkt.) The programs are compiled with the product CLI and run with `agentica
+The programs are compiled with the product CLI and run with `agentica
 run` directly, or through the CLI where the test is about the CLI. The runs have the scratch folder of the test as
 working directory.
 """
@@ -29,7 +29,7 @@ ALLOWED = Fixture(allow_run=True)
 
 
 def words(text):
-    """The non-empty lines of a text, as Racket's string-split with "\\n" gives them at the ends."""
+    """The non-empty lines of a text, without the newlines at the ends."""
     return text.strip("\n").split("\n") if text.strip("\n") else []
 
 

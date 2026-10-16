@@ -2,8 +2,8 @@
 """Rewrite the frozen goldens of the Agentica front end from what the Agentica stages print, and show what changed.
 
 The goldens in tests/fixtures/frontend/frozen/ (manifests of hashes and small `.expected` files) and the goldens next to
-the fixtures (tests/fixtures/frontend/{lexer,parser,modules,check,lower,catalog}/) were first written from the Racket front
-end. A change of a compiler/ stage that changes its output on purpose is frozen with this tool (`make goldens` runs it
+the fixtures (tests/fixtures/frontend/{lexer,parser,modules,check,lower,catalog}/) were first written from the original
+front end. A change of a compiler/ stage that changes its output on purpose is frozen with this tool (`make goldens` runs it
 with --fast-only):
 
     python3 tools/refreeze.py                  # every stage, fast and slow tier

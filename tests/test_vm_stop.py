@@ -1,10 +1,10 @@
-"""Stop signals on the VM (ported from vm-stop-test.rkt).
+"""Stop signals on the VM.
 
 A SIGTERM, SIGINT or SIGHUP takes the exit path: children die, buffered file
 data is written, and the VM dies by the signal. fixtures/stop-peer.py starts
 the VM with chosen signal dispositions, fills a FIFO, or plays the driver of a
 driven VM. A process killed by a signal has returncode -signal here (the
-Racket test saw 128 + signal).
+original test saw 128 + signal).
 """
 import os
 import signal

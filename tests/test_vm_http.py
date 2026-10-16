@@ -1,4 +1,4 @@
-"""The VM HTTP client and server against independent peers (ported from vm-http-test.rkt).
+"""The VM HTTP client and server against independent peers.
 
 The client runs against fixtures/http-peer.py (ThreadingHTTPServer, a Python
 ssl server and raw hostile sockets). The server runs against Python raw
@@ -308,7 +308,7 @@ class VmHttp(TestCase):
             "200 ok 2"], "raw")
 
     def test_server_against_python_raw_sockets_python_http_client_and_node_http_clients(self):
-        # Node is optional locally (that part is left out, like the Racket test); CI fails without it.
+        # Node is optional locally (that part is left out, like the original test); CI fails without it.
         node = optional_tool("node")
         vm = self.adopt(start_vm(self.compile_text(SERVER_PROGRAM, "server"), CERTS, stdin=True))
         port, tls_port = vm.next_line().split()

@@ -1,4 +1,4 @@
-"""Every standard library module has a module doc and a doc on every export (ported from stdlib-docs-test.rkt).
+"""Every standard library module has a module doc and a doc on every export.
 
 The check reads the source text, so it needs no front end: a doc block is a run of lines that start with `##`
 (docs/grammar/04-lexical.md). The module doc is the first block of the file when only blank lines and `#` comments

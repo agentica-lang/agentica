@@ -1,4 +1,4 @@
-## The `--source-root` option of the VM for a program (source-root-option in src/source.rkt): the folder of the program
+## The `--source-root` option of the VM for a program the folder of the program
 ## as the user should type it, which the VM puts before the stored names it prints, so a runtime trace names a file the
 ## way a compile-time diagnostic does.
 

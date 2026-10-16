@@ -1,11 +1,11 @@
-"""VM tracing (ported from vm-trace-test.rkt).
+"""VM tracing.
 
 Tracing to a file (AGENTICA_VM_TRACE, AGENTICA_VM_TRACE_FILE) must change no
 exit code, stdout or stderr. Every trace line matches the documented format,
 an unknown category or an unwritable file costs one warning line, and a VM
 started with stderr or stdout closed still behaves as before. The VM runs
 directly (not through `run`), because a fixture's stdin is a regular file, not
-a pipe, as it was for the Racket test.
+a pipe, as it was for the original test.
 """
 import os
 import re
@@ -61,7 +61,7 @@ def vm_run(arguments, env, stdin_file=None):
 
 
 def trace_lines(path):
-    """The lines of a trace file (the last byte, the final newline, is dropped as the Racket test did)."""
+    """The lines of a trace file (the last byte, the final newline, is dropped as the original test did)."""
     if not path.exists():
         return []
     data = path.read_bytes()
@@ -100,7 +100,8 @@ class VmTrace(TestCase):
         if not sidecar.exists():
             return []
         # No escapes: a regex reads the strings, so a sidecar with a backslash escape (system-args.args) needs a real reader.
-        # The sidecar is a Racket list of strings: "@tmp" is the case's temp dir, "@fixtures/x" is tests/fixtures/x.
+        # The sidecar is a list of double-quoted strings: "@tmp" is the case's temp dir, "@fixtures/x" is
+        # tests/fixtures/x.
         arguments = []
         for argument in re.findall(r'"([^"]*)"', sidecar.read_text()):
             if argument == "@tmp":

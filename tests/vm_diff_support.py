@@ -1,4 +1,4 @@
-"""The VM golden harness (ported from vm-diff-common.rkt).
+"""The VM golden harness.
 
 Every program of tests/fixtures/vm/ is compiled with the product CLI (`compile FILE -o OUT`) and run on the VM, and the
 outcome is compared with its `<name>.expected` golden: exit code, stdout, program stderr and diagnostic code, in the
@@ -154,7 +154,7 @@ class Fixture:
 
     @classmethod
     def of(cls, program):
-        """The fixture of a program, from its .stdin, .args (a list of strings in Racket syntax), .env (a list of
+        """The fixture of a program, from its .stdin, .args (a list of double-quoted strings), .env (a list of
         ("NAME" . "value") pairs) and .channel sidecars; a name that starts with `process-` runs with --allow-run."""
         def sidecar(extension):
             path = program.with_suffix(extension)
@@ -183,7 +183,7 @@ def untmp(directory, result):
 # Running the VM -------------------------------------------------------------------------------------------------------
 
 def decode(data):
-    """Bytes as text the way Racket reads a port: each byte that is not part of a valid sequence is one U+FFFD (Python
+    """Bytes as text the way a port reads it: each byte that is not part of a valid sequence is one U+FFFD (Python
     would turn a cut sequence into a single one)."""
     try:
         return data.decode("utf-8")
@@ -466,7 +466,7 @@ def read_expected_steps(program):
 
 
 def _json_string(text):
-    # Racket's write-json escapes DEL too; the goldens keep non-ASCII characters as they are.
+    # The JSON text of a program escapes DEL too; the goldens keep non-ASCII characters as they are.
     return json.dumps(text, ensure_ascii=False).replace("\x7f", "\\u007f")
 
 

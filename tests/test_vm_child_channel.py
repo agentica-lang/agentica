@@ -1,4 +1,4 @@
-"""Both sides of the parent/child channel of the VM (ported from vm-child-channel-test.rkt).
+"""Both sides of the parent/child channel of the VM.
 
 fixtures/child-channel.agc is the program; fixtures/child-channel-peer.py is the
 independent peer: it drives the child side, and it is the child the parent side

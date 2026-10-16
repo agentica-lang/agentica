@@ -1,8 +1,8 @@
-"""Language rules of the bytecode writer, through the CLI (rescued from the deleted tests/bytecode-test.rkt).
+"""Language rules of the bytecode writer, through the CLI.
 
 Each case is a program whose behaviour the rule fixes: what it prints, or the diagnostic code of a run that fails. The
-shape the writer makes (opcodes, table entries, slot numbers) is not pinned here; the .agcb bytes frozen from the Racket
-writer, checked by tests/test_frontend_bytecode.py, cover it. The CLI is cli() of tests/agentica_test.py, so
+shape the writer makes (opcodes, table entries, slot numbers) is not pinned here; the .agcb bytes frozen from the
+original writer, checked by tests/test_frontend_bytecode.py, cover it. The CLI is cli() of tests/agentica_test.py, so
 AGENTICA_TEST_EXECUTABLE runs the same cases on the single binary.
 """
 import json

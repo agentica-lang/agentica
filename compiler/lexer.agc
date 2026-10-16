@@ -159,7 +159,7 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
   return finish(input, tokens, delimiters, Source.position(index, line, line_start))
 end
 
-# The text as character codes (positions count characters, as in Racket) with
+# The text as character codes (positions count characters) with
 # its lookup tables.
 def new_input(text: String) -> Input
   codes = text.split("").map do |character| String.code(character) end

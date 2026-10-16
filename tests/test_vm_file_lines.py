@@ -1,4 +1,4 @@
-"""File.each_line on the VM (ported from vm-file-lines-test.rkt).
+"""File.each_line on the VM.
 
 A 10 MB file streams in order with bounded memory and about size/buffer reads;
 FIFOs fed by fixtures/lines-peer.py check partial reads, stalls, early closes

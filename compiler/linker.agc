@@ -1,5 +1,5 @@
 ## The module linker: loads the root file and its imports (modules.agc) and rewrites them into one program
-## (rewrite.agc). This is link-program and load-program of src/modules.rkt.
+## (rewrite.agc).
 
 import Ast from "ast"
 import Declarations from "declarations"
@@ -120,7 +120,7 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
 end
 
 # A file may update its own structs and the exported structs of the files it imports (the privacy rule of `.with`, the
-# `visible` predicate of src/modules.rkt as data). A file imported by name counts as imported, with all its exported
+# `visible` predicate as data). A file imported by name counts as imported, with all its exported
 # structs: an alias import of it would allow them too.
 def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]) -> List[String]
   names = structs_of(module.prefix, module.names)

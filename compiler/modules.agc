@@ -1,8 +1,8 @@
 ## The module loader: starting at the root file, reads, lexes and parses every file the imports reach, once, and checks
-## each one. This is the first half of link-program in src/modules.rkt (the visit function); rewrite.agc is the second.
+## each one. This is the first half of linking; rewrite.agc is the second.
 ##
 ## The walk is a loop over an explicit stack of files that still have imports to read, so a long chain of imports uses
-## no VM call depth. Files are met in the order Racket meets them (a file is read at its import, before the imports
+## no VM call depth. Files are met in a fixed order (a file is read at its import, before the imports
 ## after it), so the first failure is the same, and so are the node ids: every file is parsed from the next free id of
 ## the file read before it (parse, Ast.next_free_id).
 
@@ -52,7 +52,7 @@ end
 # A file whose imports are being read: the module so far (its aliases, the paths written for them and named imports are
 # filled in as imports are read), and the index of the next import to read. pending is the key of the file that the
 # import at next names while its names wait to be checked: they need the exports of that file, so they are checked once
-# it is loaded, as src/modules.rkt checks them after visit. "" when no import waits.
+# it is loaded, checked after the walk. "" when no import waits.
 struct Frame
   module: Module
   aliases: Map[String, String]

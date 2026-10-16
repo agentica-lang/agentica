@@ -1,6 +1,5 @@
-## Lists, maps, enum values, structs and struct updates (src/lower.rkt: lower-list, lower-map, lower-enum,
-## lower-struct, lower-update). Each is a `step`, the items computed into consecutive registers, and one instruction
-## that gathers them.
+## Lists, maps, enum values, structs and struct updates Each is a `step`, the items computed into consecutive
+## registers, and one instruction that gathers them.
 
 import Ast from "ast"
 import Ir from "ir"

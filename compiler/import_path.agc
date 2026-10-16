@@ -1,4 +1,4 @@
-## The import path rules of src/modules.rkt that need no file system: the module file name, the std/ and pkg/ path
+## The import path rules that need no file system: the module file name, the std/ and pkg/ path
 ## check, and the path helpers.
 
 import Ast from "ast"
@@ -34,10 +34,10 @@ export def join(base: String, rest: String) -> String
   return "#{base}/#{rest}"
 end
 
-## The path a file is stored under in the program and in the .agcb, and printed by the text forms: src/source.rkt,
-## stored-source-names. root_dir is the folder of the root file. A file inside it is its path from there, with no "./";
-## a file above it keeps the ".." parts ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a
-## std/ folder is "./std/NAME.agc". The bytes of an .agcb then do not depend on where the project lives.
+## The path a file is stored under in the program and in the .agcb, and printed by the text forms. root_dir is the
+## folder of the root file. A file inside it is its path from there, with no "./"; a file above it keeps the ".." parts
+## ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a std/ folder is "./std/NAME.agc". The
+## bytes of an .agcb then do not depend on where the project lives.
 export def stored_name(root_dir: String, file: String) -> String
   if root_dir == "" or !file.starts_with?("/")
     return file
@@ -152,7 +152,7 @@ def module_name?(text: String) -> Bool
   return name != "" and !name.contains?(".")
 end
 
-# The path without a final ".ext" (the regexp [.][^./]*$ of src/modules.rkt).
+# The path without a final ".ext".
 def without_extension(path: String) -> String
   pieces = last_part(path).split(".")
   if pieces.size == 1

@@ -1,6 +1,5 @@
-## The `--ai` text form of a diagnostic (`format-diagnostic-ai` of src/diagnostic.rkt): compact, for an agent. The
-## plain form is diagnostic_plain.agc and the JSON form diagnostic_json.agc. vm/diag.c prints the same forms for
-## runtime errors, so a change here is a change there.
+## The `--ai` text form of a diagnostic (compact, for an agent). The plain form is diagnostic_plain.agc and the JSON
+## form diagnostic_json.agc. vm/diag.c prints the same forms for runtime errors, so a change here is a change there.
 ##
 ## It reads the text of the file the problem is in, to show one line of it. A line is cut at "\n" and loses one
 ## trailing "\r".
@@ -47,8 +46,7 @@ def field(out: List[String], name: String, value: String) -> List[String]
   return out.push("  #{name}: #{value}")
 end
 
-# Without the whitespace around it (space, tab, line feed, vertical tab, form feed and carriage return), as Racket's
-# string-trim does.
+# Without the whitespace around it (space, tab, line feed, vertical tab, form feed and carriage return).
 def trim(text: String) -> String
   characters = text.split("")
   first = 0

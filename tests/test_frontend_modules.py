@@ -1,6 +1,6 @@
-"""The Agentica linker (compiler/link.agc) against the frozen output of the Racket linker.
+"""The Agentica linker (compiler/link.agc) against the frozen output of the original linker.
 
-This module compares the Agentica linker with what the Racket linker printed once for the same inputs (frozen in
+This module compares the Agentica linker with what the original linker printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
 (examples/, stdlib/ and tests/fixtures/ as they were at the freeze), the programs of the site, 300 mutated fixtures,
 long chains of files, deep trees, files that are not UTF-8 or over 1 MiB, and the number of node ids each file takes.
@@ -152,7 +152,7 @@ def sizes_text(test, text, label):
     """The names and node counts of the id ranges of one link, one line each in name order, once the ranges are checked.
 
     The ids of a link are one numbering: the first file starts at 0 and each file starts where the one before it ended.
-    A file takes as many ids as it has nodes, which is the size the Racket writer froze for it.
+    A file takes as many ids as it has nodes, which is the size the original writer froze for it.
     """
     ranges = ids_ranges(text)
     test.assertTrue(ranges, "%s: no id ranges in:\n%s" % (label, text[:300]))
@@ -227,7 +227,7 @@ class ModulesFrozenTest(StageTestCase):
         self.assert_goldens({name: outputs[root] for name, (_, root) in zip(goldens, specs)}, goldens, "linker fixtures")
 
     def test_the_std_modules_of_the_stdlib_folder_are_the_registry(self):
-        # The registry of src/stdlib.rkt, frozen in modules/stdlib-registry.expected: a new std module is one more line.
+        # The registry of the std modules, frozen in modules/stdlib-registry.expected: a new module is one more line.
         names = sorted("std/" + path.relative_to(ROOT / "stdlib").as_posix() for path in (ROOT / "stdlib").rglob("*.agc"))
         self.assert_golden("".join(name + "\n" for name in names), FROZEN / "modules" / "stdlib-registry.expected")
 
@@ -321,8 +321,8 @@ class ModulesFrozenTest(StageTestCase):
         self.assert_manifest(outputs, "modules/big.sha256", inputs)
 
     def test_the_user_library_root_falls_back_to_home_local_share_agentica_lib(self):
-        # Racket's find-system-path ignores a replaced environment, so the HOME-based user root cannot be compared with
-        # Racket in a hermetic way: the linker is given --home and no usable XDG_DATA_HOME (relative values are ignored).
+        # The HOME-based user root cannot be compared in a hermetic way when the environment is replaced: the linker is
+        # given --home and no usable XDG_DATA_HOME (relative values are ignored).
         directory = self.make_temp_dir()
         write_files(directory, {
             "home/.local/share/agentica/lib/homelib.agc": "export def answer() -> Int\n  return 42\nend\n",
@@ -339,7 +339,7 @@ class ModulesFrozenTest(StageTestCase):
         directory = self.make_temp_dir()
         files = load_corpus("examples", "stdlib", "fixtures")
         # tests/fixtures/frontend/limits/limits.agc imports ../../../../compiler/..., so the snapshot of compiler/ is
-        # written too, at the same place as in the repository, as the Racket writer had it. It is not a root.
+        # written too, at the same place as in the repository, as the original writer had it. It is not a root.
         write_files(directory, dict(files, **load_corpus("compiler")))
         outputs = self.link([(DEFAULT_ENV, path) for path in sorted(files)], directory)
         self.assert_manifest(outputs, "modules/corpus.sha256", files)

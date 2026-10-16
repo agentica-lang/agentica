@@ -1,6 +1,6 @@
 ## The fixed texts of the command line: the usage lines for bad arguments, and the help (`agentica help` prints
 ## SUMMARY and the namespaces of the builtins; `-h` and `--help` print HELP_FIRST_LINE, the SUMMARY indented by two
-## spaces, and OPTIONS, the list that Racket's `command-line` writes for the options). tests/test_cli_forms.py
+## spaces, and OPTIONS, the list of the options). tests/test_cli_forms.py
 ## compares them with a golden.
 
 # What a command line that names no source file gets on stderr (exit code 2), one line each.

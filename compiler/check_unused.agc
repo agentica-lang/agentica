@@ -1,4 +1,4 @@
-## CHECK-UNUSED-VALUE (src/checker.rkt: check-unused-value!): a value that is dropped, and could only have been used
+## CHECK-UNUSED-VALUE: a value that is dropped, and could only have been used
 ## for itself, is an error.
 
 import Ast from "ast"

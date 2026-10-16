@@ -1,4 +1,4 @@
-## Expressions (src/checker.rkt: check-expression and the checks it calls). check_expression is the function that
+## Expressions. check_expression is the function that
 ## Cx.expression holds: every part of the checker reaches an expression through it. It counts the nesting
 ## (CHECK-TOO-DEEP), checks the node by its kind, records the type by node id, and refuses a Void value that is not a
 ## completion.

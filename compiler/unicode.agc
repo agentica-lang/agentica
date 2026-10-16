@@ -43,7 +43,7 @@ export def written(code: Int) -> String
   end
 end
 
-## A String as Racket writes it (`write`): quotes, with \\a \\b \\t \\n \\v \\f \\r \\e, \\" and \\\\, and \\uXXXX or
+## A String as `write` shows it: quotes, with \\a \\b \\t \\n \\v \\f \\r \\e, \\" and \\\\, and \\uXXXX or
 ## \\UXXXXXXXX for characters that are neither graphic nor blank.
 export def written_text(text: String) -> String
   ranges = Table.graphic_ranges()

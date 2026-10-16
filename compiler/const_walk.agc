@@ -1,6 +1,5 @@
 ## How the checker reads the tree of a constant's initializer (docs/future/44-module-constants.md): the children of a
-## node in source order, and the reads of other constants below it. src/constants.rkt has the same two functions on the
-## Racket tree.
+## node in source order, and the reads of other constants below it.
 
 import Ast from "ast"
 
@@ -11,8 +10,7 @@ export enum Node
 end
 
 ## The expressions and statements directly below a node, in source order. Named arguments, map entries, if branches and
-## case arms are not nodes of their own here: their parts come in the place of the wrapper, which is what
-## src/constants.rkt reaches by going through them.
+## case arms are not nodes of their own here: their parts come in the place of the wrapper.
 export def children(node: Node) -> List[Node]
   case node
     Node.Expr(expr) -> return expr_children(expr)

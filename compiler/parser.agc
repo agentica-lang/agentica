@@ -1,8 +1,8 @@
-## The Agentica parser: a port of src/parser.rkt, with the same tree, the same spans and the same first diagnostic.
+## The Agentica parser: the tree, the spans and the first diagnostic of a program.
 ##
 ## It is a recursive descent parser. Every function takes the context (Env, parse_base.agc), a position and the next
 ## free node id, and returns a Result: the node, the next position and id, or the packed diagnostic. The grammar
-## functions mirror the ones of the Racket parser; the differences are listed where they are made: precedence climbing
+## functions follow the grammar; the notable choices are listed where they are made: precedence climbing
 ## for the binary operators, ids assigned at construction, and the nesting limit.
 
 import Ast from "ast"
@@ -289,13 +289,13 @@ def chained_message(level: Int) -> String
 end
 
 # Precedence climbing over the binary levels of level_of, the same grammar as the chain of parse-or ...
-# parse-multiplicative in src/parser.rkt. It parses the operators of level minimum and above, left to right. The
+# One level of binary operators. It parses the operators of level minimum and above, left to right. The
 # operand on the right of a level L operator is parsed with minimum L + 1, so operators of one level group to the left.
 # Equality and comparison do not chain: a second operator of the same level is PARSE-CHAINED-COMPARISON at that
-# operator. Every binary node starts at the first token of the whole expression, as in the Racket parser.
-# Nesting limit: src/parser.rkt has one loop per level, and in each loop the right operand of the k-th operator starts
-# from the nesting of the loop plus k. Here one loop serves all levels, so run counts the operators of the current
-# level in a row (the levels never rise inside the loop, because the right operand of a level L operator takes
+# operator. Every binary node starts at the first token of the whole expression, as the grammar says.
+# Nesting limit: the first parser had one loop per level, and in each loop the right operand of the k-th operator
+# starts from the nesting of the loop plus k. Here one loop serves all levels, so run counts the operators of the
+# current level in a row (the levels never rise inside the loop, because the right operand of a level L operator takes
 # everything above L) and operand_env is the context for the right operand. Equality and comparison do not chain, so
 # they add nothing.
 def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.ExprAt]
@@ -707,8 +707,7 @@ def parse_update_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsA
   return ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
-# The position of the value after `name:` at pos; PARSE-UNEXPECTED-TOKEN with a help text for anything else (the Racket
-# parser says the same).
+# The position of the value after `name:` at pos; PARSE-UNEXPECTED-TOKEN with a help text for anything else .
 def expect_update_argument(e: Base.Env, pos: Int) -> Result[Int]
   named = Base.plain_name?(e.tokens[pos])
   if named and Base.kind_at(e, pos + 1) == "colon"
@@ -1220,7 +1219,7 @@ end
 # x += v is the binding x = x + v. The name node is numbered first so the ids stay in post-order: it is the left child
 # of the binary node.
 def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
-  # A name ending in ? or ! is not a variable, so `foo? += 1` fails here as in src/parser.rkt.
+  # A name ending in ? or ! is not a variable, so `foo? += 1` fails here.
   after_name = try Base.expect(e, pos, "name", "a name", false)
   operator = e.tokens[pos + 1]
   target = Ast.Expr.Name(Ast.NameRef(id: ids, name: e.tokens[pos].lexeme, span: e.tokens[pos].span))
@@ -1976,7 +1975,7 @@ end
 
 # The two import forms. A string after `import` is the path-first form of earlier versions: the help shows the new one.
 # `from` and `as` are plain name tokens read by their text, so a parameter or a function called `from` or `as` still
-# works (src/parser.rkt, parse-import).
+# works.
 def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   kind = Base.kind_at(e, pos + 1)
   if kind == "type-name"

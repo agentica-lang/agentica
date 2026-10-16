@@ -1,5 +1,5 @@
-## The builtin catalog and the reserved type names, as data. Edited by hand now; it was generated once from the tables of
-## the former front end. tests/test_frontend_catalog.py compares what it prints with a golden (`make goldens`).
+## The builtin catalog and the reserved type names, as data. Edited by hand now; it was generated once from the
+## tables of the former front end. tests/test_frontend_catalog.py compares what it prints with a golden.
 
 import Model from "builtin_model"
 import Types from "types"

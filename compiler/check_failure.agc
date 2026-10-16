@@ -1,4 +1,4 @@
-## How the checker reports a failure: a diagnostic with the extra notes of src/diagnostic.rkt (expected, actual,
+## How the checker reports a failure: a diagnostic with the extra notes (expected, actual,
 ## callee, signature, labels) and the file it is in. A Result error is a String, so the failure travels packed (pack)
 ## and `try` stops at the first one, as in the parser; unpack reads it back.
 
@@ -11,7 +11,7 @@ export struct Label
   text: String
 end
 
-## The first problem the checker found. The notes are "" when the diagnostic has none (src/ uses #f). signature is the
+## The first problem the checker found. The notes are "" when the diagnostic has none. signature is the
 ## signature of the function being checked; callee the signature of the function or builtin called.
 export struct Problem
   file: String

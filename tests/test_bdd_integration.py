@@ -1,4 +1,4 @@
-"""`agentica test` driving real programs under test (ported from bdd-integration.rkt).
+"""`agentica test` driving real programs under test.
 
 Live JSON lines, tasks in handlers, seeds, wrong output, process cleanup and
 the temporary-directory rules. The slow tier keeps the large sizes (1 MiB

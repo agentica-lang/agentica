@@ -1,4 +1,4 @@
-## The checking rules of the List builtins (src/checker.rkt, check-builtin-call: list-size ... list-repeat). A rule
+## The checking rules of the List builtins. A rule
 ## takes the call (State.Site) and returns the new state with the type of the call.
 
 import Ast from "ast"

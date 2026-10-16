@@ -1,7 +1,7 @@
 """The rest of the checker rules, through the product CLI.
 
 tests/test_spec_checker.py has the cases about spans, pipes and the nesting limit. The other cases of the old
-tests/checker-test.rkt are in tests/fixtures/spec/checker-rest.json: one list of programs for each rule group, in the
+checker test are in tests/fixtures/spec/checker-rest.json: one list of programs for each rule group, in the
 order of that file. Each program is written to a file and checked with `--json check FILE`. A case says what the check
 gives:
 

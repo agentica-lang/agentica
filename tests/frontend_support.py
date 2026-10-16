@@ -1,12 +1,12 @@
 """What the tests of the Agentica front end share (tests/test_frontend_<stage>.py).
 
 Each test compiles one stage of compiler/ with the product CLI, runs it on the VM over inputs and compares what it
-prints with the frozen output of the Racket stage (tests/fixtures/frontend/frozen/, docs/future/35-self-hosting.md,
-35.10, phase 3). The Racket stages wrote the frozen files once; tools/refreeze.py rewrites them from the Agentica
+prints with the frozen output of the original stage (tests/fixtures/frontend/frozen/, docs/future/35-self-hosting.md,
+35.10, phase 3). The original stages wrote the frozen files once; tools/refreeze.py rewrites them from the Agentica
 stages now.
 
 The hashes of a manifest cover big outputs and big inputs. An input hash that differs means the Python side built a
-different input than the Racket writer did, which is a test bug and not a front-end bug.
+different input than the original writer did, which is a test bug and not a front-end bug.
 """
 import hashlib
 import json
@@ -24,14 +24,14 @@ FROZEN = FIXTURES / "frontend" / "frozen"
 
 # tools/refreeze.py runs these tests with AGENTICA_REFREEZE=1: a comparison with a golden then rewrites the golden from the
 # Agentica output instead of failing, and appends what changed, as one JSON line, to the file AGENTICA_REFREEZE_LOG. This is
-# how the goldens are kept once the Racket stages that wrote them are gone.
+# how the goldens are kept once the original stages that wrote them are gone.
 def refreezing():
     """True while tools/refreeze.py runs the tests (read at each call, so a test can switch it)."""
     return os.environ.get("AGENTICA_REFREEZE", "") == "1"
 
 
-# The stages read the environment of the pkg/ search when they are not given the flags; the Racket writers ran with no
-# AGENTICA_PATH and a user data folder that does not exist, and so do the stages here.
+# The stages read the environment of the pkg/ search when they are not given the flags; the original writers ran with
+# no AGENTICA_PATH and a user data folder that does not exist, and so do the stages here.
 HERMETIC_ENVIRONMENT = vm_environment({"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"})
 
 # The default limit of one stage run over a corpus; a case that is big or slow passes its own.
@@ -181,7 +181,7 @@ class GoldenTestCase(TestCase):
                 continue
             checked += 1
             if inputs is not None and sha256(inputs[entry.key]) != entry.input_sha:
-                problems.append("%s: the input is not the one the Racket writer used" % entry.key)
+                problems.append("%s: the input is not the one the original writer used" % entry.key)
             text = outputs.get(entry.key)
             if text is None:
                 problems.append("%s: no output" % entry.key)
@@ -274,7 +274,7 @@ def report(record):
 def tree_listing(files):
     """The text whose hash stands for a whole input: each path and the hash of its content, one line each, in path order.
 
-    `files` maps a path (relative to the root of the input) to text or bytes. The Racket writer
+    `files` maps a path (relative to the root of the input) to text or bytes. The original writer
     that froze the manifests wrote the same text.
     """
     return "".join("%s %s\n" % (path, sha256(files[path])) for path in sorted(files))

@@ -1,4 +1,4 @@
-"""A copied binary still imports std/ modules (ported from stdlib-distribution-test.rkt).
+"""A copied binary still imports std/ modules.
 
 The standard library is embedded in the binary. The test copies the binary into a folder of its own, away from the
 checkout, and runs a program that imports `std/queue` from another working directory. It runs on the binary of
@@ -6,7 +6,7 @@ AGENTICA_TEST_EXECUTABLE (`make test-distribution` sets it to dist/agentica); a 
 skipped. The release runs the unpacked archive too (release.yml).
 
 The old test also rebuilt the executable from a copied source tree. That check is dropped: it only made sense for the
-Racket executable, which step 8d removes.
+old executable, which step 8d removed.
 """
 import shutil
 import unittest

@@ -1,5 +1,5 @@
 ## Finds the module an import names: a std/ module in the stdlib/ folder, a pkg/ library in the search roots, or a file
-## next to the importing one. This is resolve-import of src/modules.rkt. A module is known by its key: the canonical
+## next to the importing one. A module is known by its key: the canonical
 ## path of a file, or std/NAME.agc for a standard module.
 
 import Diag from "diagnostic"
@@ -70,7 +70,7 @@ def directory?(path: String) -> Bool
   return info.ok? and info.unwrap!.kind == "directory"
 end
 
-# A std/ module exists when the provider has its source. The registry of src/stdlib.rkt is stdlib/MODULES, which the
+# A std/ module exists when the provider has its source. The registry is stdlib/MODULES, which the
 # binary embeds and which lists the files of the stdlib/ folder (a test checks that they are the same list).
 def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
   try Paths.validate_library_path(file, site)
@@ -119,8 +119,8 @@ def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) 
   return ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
 end
 
-# XDG_DATA_HOME when it is absolute, else ~/.local/share. An unset HOME leaves the user root out (Racket asks the
-# system for the home folder there).
+# XDG_DATA_HOME when it is absolute, else ~/.local/share. An unset HOME leaves the user root out (the system is
+# not asked for the home folder).
 def user_roots(env: Env.Env) -> List[String]
   if env.xdg_data_home.starts_with?("/")
     return [Paths.join(env.xdg_data_home, "agentica/lib")]
@@ -160,7 +160,7 @@ def inside?(base: List[String], target: List[String]) -> Bool
   return true
 end
 
-# The file next to the importing one. Racket's normalize-path accepts a missing last part and refuses a missing folder
+# The file next to the importing one. A missing last part is accepted and a missing folder is refused
 # (CHECK-IMPORT-IO "cannot resolve import"); a missing file is found by the read ("cannot read import"), which this
 # reports at once.
 def relative(key: String, file: String, site: Failure.Site) -> Result[String]

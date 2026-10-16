@@ -1,5 +1,5 @@
-## The checking rules of the Map, Set, Task and Channel builtins (src/checker.rkt, check-builtin-call: task-spawn ...
-## set-subset). A rule takes the call (State.Site) and returns the new state with the type of the call.
+## The checking rules of the Map, Set, Task and Channel builtins A rule takes the call (State.Site) and returns the new
+## state with the type of the call.
 
 import Ast from "ast"
 import Model from "builtin_model"

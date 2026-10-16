@@ -1,5 +1,5 @@
-## Statements, blocks, case and functions (src/checker.rkt: check-statement, check-block-body, check-case,
-## check-function). Expressions are checked through State.expr, because they are in a module that imports this one.
+## Statements, blocks, case and functions. Expressions are checked through State.expr, because they are in a module
+## that imports this one.
 
 import Ast from "ast"
 import Model from "builtin_model"

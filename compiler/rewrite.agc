@@ -1,8 +1,8 @@
 ## The second half of the linker: rewrites the declarations of one file so that every name is the name of the linked
-## program (resolve.agc), and so every file can share one program. This is the rewrite function of src/modules.rkt.
+## program (resolve.agc), and so every file can share one program.
 ##
-## Names are resolved in the order Racket resolves them (a node's own name first, then its parts in field order), so
-## the first failure is the same. Nodes keep their ids and spans. The recursion follows the depth of the tree: about
+## Names are resolved in a fixed order (a node's own name first, then its parts in field order), so the first failure
+## is always the same. Nodes keep their ids and spans. The recursion follows the depth of the tree: about
 ## one VM call per level (rewrite_expr passes to rewrite_compound with a tail call), so trees up to about 9,900 levels
 ## fit in the limit of 10,000 calls (the parser's nesting limit bounds the calls it makes, not the depth of the tree;
 ## see ast.agc).

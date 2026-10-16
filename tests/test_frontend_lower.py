@@ -1,6 +1,6 @@
-"""The Agentica lowering (compiler/lower.agc) against the frozen output of the Racket lowering.
+"""The Agentica lowering (compiler/lower.agc) against the frozen output of the original lowering.
 
-This module compares the Agentica lowering with what the Racket lowering printed once for the same inputs (frozen in
+This module compares the Agentica lowering with what the original lowering printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
 (examples/ and tests/fixtures/vm/ as they were at the freeze), the programs of the cases of the old checker test, every
 std/ module, the compiler, trees at the nesting limit and a program of 300 functions. Inputs that are a formula are
@@ -50,7 +50,8 @@ class LowerFrozenTest(StageTestCase):
         self.assert_goldens({name: outputs[path] for name, path in roots.items()}, goldens, "lowering fixtures")
 
     def test_vm_builtins_of_the_lowering_tables_are_the_ones_of_the_freeze(self):
-        # VM_BUILTINS of compiler/lower_tables.agc is vm-builtins of src/lower.rkt, frozen in lower/vm-builtins.expected.
+        # VM_BUILTINS of compiler/lower_tables.agc is the table of the original lowering, frozen in
+        # lower/vm-builtins.expected.
         text = (ROOT / "compiler" / "lower_tables.agc").read_bytes().decode("utf-8")
         start = text.index("VM_BUILTINS = Set.new([")
         names = sorted(re.findall(r'"([^"]+)"', text[start:text.index("\n])", start)]))

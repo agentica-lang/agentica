@@ -1,4 +1,4 @@
-"""Time.monotonic_ns against Python's clock (ported from vm-monotonic-test.rkt)."""
+"""Time.monotonic_ns against Python's clock."""
 from tests.agentica_test import FIXTURES, PYTHON, TestCase, run, vm_binary
 
 
