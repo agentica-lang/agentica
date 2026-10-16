@@ -1,9 +1,5 @@
 name: Platforms
 
-# Since step 8d-2 the product is one Linux binary (the front end and the std/ sources are embedded with .incbin, which
-# is ELF only), so this workflow checks only that the C VM and its tests still build and pass here. The golden tests
-# run on the binary and need Linux.
-
 on:
   pull_request:
   push:
@@ -52,6 +48,7 @@ jobs:
     runs-on: macos-15
     env:
       AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_OPENSSL: vendored
     steps:
       - uses: actions/checkout@v4
         with:

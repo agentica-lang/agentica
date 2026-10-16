@@ -225,6 +225,12 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
   unix/linux unix/procfs-exepath unix/random-getrandom unix/random-sysctl-linux unix/proctitle
 VM_LIBS += -ldl -lrt
+else ifeq ($(shell uname -s),Darwin)
+UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
+  unix/async unix/core unix/dl unix/fs unix/getaddrinfo unix/getnameinfo unix/loop-watcher unix/loop unix/pipe unix/poll \
+  unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
+  unix/proctitle unix/bsd-ifaddrs unix/kqueue unix/random-getentropy unix/darwin-proctitle unix/darwin unix/fsevents
+UV_DEFS += -D_DARWIN_UNLIMITED_SELECT=1 -D_DARWIN_USE_64_BIT_INODE=1
 endif
 AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
 PKG_CONFIG ?= pkg-config
