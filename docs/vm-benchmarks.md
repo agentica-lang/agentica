@@ -616,7 +616,7 @@ each:
 The output is the same: `make fixed-point` (stage2 equals stage3), `make
 goldens` rewrites nothing, and the tokens of 1,131 files (the repository's
 `.agc` files and the lexer fixtures), of the 1,725 inputs of the frozen corpus
-(the slow tier compares them to a manifest) and of 12,500 generated texts, with
+(the slow tier compares them to a manifest) and of 15,000 generated texts, with
 CRLF, bare CR, non-ASCII characters, bad escapes, bad numbers and unclosed
 brackets, match the lexer of master byte for byte, diagnostics included. The
 nested-file budget of `tests/test_frontend_lexer.py` is 3,000 steps for each

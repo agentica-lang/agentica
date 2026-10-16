@@ -66,7 +66,7 @@ the same text twice or move back and forth in it.
 
 `AGENTICA_VM_TRACE=profile agentica check FILE` (or `run -- FILE.agcb`) counts
 the steps of a run, which do not depend on the load of the machine. Costs in
-steps, measured on 100,000 repeats of one form [PR #PRNUM]:
+steps, measured on 100,000 repeats of one form [PR #317]:
 
 - A scan loop `while set.include?(chars[i])` and `while chars[i] == "a"` cost 9
   steps for each character. A guard against codes above 127 in front of a
@@ -83,7 +83,7 @@ steps, measured on 100,000 repeats of one form [PR #PRNUM]:
   every few characters. The lexer went from 52 to 24 steps for each character
   by moving the hot arms into `lex`, the tables into module constants and
   `text.split("")` as the text instead of `String.code` of each character
-  [PR #PRNUM, `docs/vm-benchmarks.md`].
+  [PR #317, `docs/vm-benchmarks.md`].
 - Scan the characters themselves: `text.split("").map do |c| String.code(c) end`
   costs 3 steps and a builtin call for each character (about 100 ms for
   1,000,000), and `Set[String]` tests cost as much as `Set[Int]` ones (177 and

@@ -120,7 +120,7 @@ and the other features after the JIT.
    steps carried by the binary (`agentica test` of a small file: 0.87 s
    before, 0.05 s now; numbers in
    [vm-benchmarks](../vm-benchmarks.md#front-end-post-bootstrap-row-3)).
-   **Second part, the lexer, done (2026-10-16, PR #PRNUM):** the lexer was
+   **Second part, the lexer, done (2026-10-16, PR #317):** the lexer was
    51% of the steps of a check of the whole front end, and its steps are
    halved (`lexer.agc` 39.4 M to 19.6 M in `check compiler/front_end.agc`; the
    lexer alone 52 to 24 steps for each character), so `check
