@@ -97,41 +97,52 @@ in the order from row 7.2.7 on, after their prerequisites (rows 8 and 7.2.4 to
 PRs, not rows of this table. The release cut right after step 7b was 0.3.0,
 the last one with the Racket front end (owner decision, 2026-10-15).
 
-The owner set this order for the work after the bootstrap on 2026-10-15:
+The owner set this order for the work after the bootstrap on 2026-10-15 and
+revised it on 2026-10-16: the rows that waited for the bootstrap come first,
+then the path to the JIT (row 9.1, which should also speed up `agentica test`),
+and the other features after the JIT.
 
-1. Release 0.4.0, the first release with the single binary, right after step
-   8d ([§35.4](../future/35-self-hosting.md#354-stages-to-port)). Racket can
-   be deleted only after one release has the self-hosted front end as its
-   default ([§35.3](../future/35-self-hosting.md#353-bootstrap)).
-2. **Done (2026-10-16, PR #313)**: delete the Racket front end (`src/*.rkt`), freeze
-   `vm/unicode_data.c` as checked-in source (a later PR may add a generator
-   over pinned Unicode Character Database files that reproduces it byte for
-   byte) and tag `bootstrap-racket` on the parent commit of the merge (§35.3).
+1. **Done (2026-10-16, PR #312)**: release 0.4.0, the first release with the
+   single binary ([§35.4](../future/35-self-hosting.md#354-stages-to-port)).
+   Racket can be deleted only after one release has the self-hosted front end
+   as its default ([§35.3](../future/35-self-hosting.md#353-bootstrap)).
+2. **Done (2026-10-16, PR #313)**: delete the Racket front end (`src/*.rkt`),
+   freeze `vm/unicode_data.c` as checked-in source (a later PR may add a
+   generator over pinned Unicode Character Database files that reproduces it
+   byte for byte) and tag `bootstrap-racket` on the parent commit of the merge
+   (§35.3).
 3. A speed pass on the self-hosted front end: the targets of
    [§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria), the
    precompiled BDD runner (about 0.7 s that step 7b added to `agentica test`),
    and maybe a VM profiler and the start-up cut of row 8.3.
-4. `case` guards, nested patterns and the `<<~NAME` heredoc
+4. Default parameter values (row 7.5a,
+   [§25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)).
+5. `case` guards, nested patterns and the `<<~NAME` heredoc
    ([§25.10](../future/25-ruby-typed-idioms.md#2510-heredocs),
    [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
-   in `compiler/` only. They are the first language changes after the
-   bootstrap and the first use of the two-step stage0 refresh of §35.3.
-5. Signals (row 7.8, [§46](../future/46-signals.md#46-signals)), parts 46a to
-   46d. 46c also lets `agentica test` clean its run directory on Ctrl-C.
-6. Regular expressions (row 7.10,
+   in `compiler/` only. The first of steps 4 and 5 to land is the first use of
+   the two-step stage0 refresh of §35.3.
+6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
+   diagnostics (row 7.6), `agentica doc` and `help` (row 22b), the 44b to 44d
+   table rewrites
+   ([§44.12](../future/44-module-constants.md#4412-implementation-plan)), and
+   `Task.map` (row 7.3), which is small.
+7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
+   7.7), the server measurement (row 9), multicore (row 11, which stops for the
+   owner's review), the FFI and native module header
+   ([§40](../future/40-native-code.md)), then the JIT (row 9.1).
+8. After the JIT: the semantic CLI (row 7.2b, postponed by the owner on
+   2026-10-16); signals (row 7.8, [§46](../future/46-signals.md#46-signals),
+   parts 46a to 46d; 46c also lets `agentica test` clean its run directory on
+   Ctrl-C); regular expressions (row 7.10,
    [§48](../future/48-regex.md#48-regular-expressions)) before the formatter
-   (row 7.9, [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt));
-   the owner swapped the two. Regex first needs the owner's answer on the Ruby
-   anchors question of
-   [§48.10](../future/48-regex.md#4810-decisions-and-open-questions). The
-   formatter needs the heredoc of step 4 and the open questions of
-   [§47.9](../future/47-formatter.md#479-open-questions).
-
-Later, in no fixed order yet: the 6c evaluation round (row 10), the 44b to 44d
-table rewrites
-([§44.12](../future/44-module-constants.md#4412-implementation-plan)), HTTP
-streaming (row 7.4), `Task.map` (row 7.3), and the FFI and native module header
-([§40](../future/40-native-code.md)), before the JIT (row 9.1).
+   (row 7.9, [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)).
+   Regex first needs the owner's answer on the Ruby anchors question of
+   [§48.10](../future/48-regex.md#4810-decisions-and-open-questions); the
+   formatter needs the heredoc of step 5 and the open questions of
+   [§47.9](../future/47-formatter.md#479-open-questions). Also later, in no
+   fixed order: HTTP streaming and `TlsContext` (row 7.4), UDP (row 7.5), the
+   6c evaluation round (row 10) and the Unicode generator.
 
 Designed, not scheduled: dates and times (§41,
 [`docs/future/41-dates-and-times.md`](../future/41-dates-and-times.md)).
