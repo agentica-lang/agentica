@@ -131,6 +131,14 @@ and the other features after the JIT.
    [§44.12](../future/44-module-constants.md#4412-implementation-plan).
    Numbers, and what was tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer).
+   **Third part, the interpreter loop, done (2026-10-16, PR #319):** the
+   common value accessors are inline and the turn loop keeps the frame in
+   locals, and `[]` and `{}` with no items are shared, so `arithmetic` takes
+   0.10 to 0.13 s, not 0.276 s, loops of calls and `case` 30% to 55% less, and
+   `check stdlib/bdd/gherkin.agc` 0.080 s, not 0.102 s (with the new lexer).
+   Numbers, a profile of where a check
+   spends its time now, and what was tried, in
+   [vm-benchmarks](../vm-benchmarks.md#speed-pass-third-part-the-interpreter-loop).
    **VM start-up, done (2026-10-16, PR #326):** the loader of the carried
    front end took 16 ms of every start and takes 8.8 ms now (row 8.3), so a
    hello check is 17.3 ms, not 24.8, and `check stdlib/bdd/gherkin.agc` is
@@ -146,9 +154,14 @@ and the other features after the JIT.
    [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
    in `compiler/` only. The first of steps 4 and 5 to land is the first use of
    the two-step stage0 refresh of §35.3. Part A, the heredoc (15j), is **done
-   (2026-10-16, PR #322)**: the lexer, `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
-   `LEX-HEREDOC-ONE-LINE`, the parser refuses a heredoc as a `case` pattern or
-   an import path. Part B, `case` guards and nested patterns, is next.
+   (2026-10-16, PR #322)**: the lexer, `LEX-UNTERMINATED-HEREDOC`,
+   `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE`, the parser refuses a heredoc
+   as a `case` pattern or an import path. Part B, `case` guards and nested
+   patterns (§25.12.1, "As decided (post-bootstrap step 5)"), is **done
+   (2026-10-16, PR #325)**: `pattern if condition ->` and any pattern in a
+   payload position, a conservative exhaustiveness rule, no bytecode change.
+   `compiler/` does not use them yet (the two-step stage0 refresh is a later
+   PR).
 6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
    diagnostics (row 7.6), `agentica doc` and `help` (row 22b), and the 44b to
    44d table rewrites

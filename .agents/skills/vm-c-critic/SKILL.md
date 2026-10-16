@@ -78,7 +78,7 @@ line ranges will not match the diff.
 - `malloc` memory: freed on every path, including a `longjmp` from
   `agc_fail` that skips the cleanup, a cancelled task, a detached job and the
   end of the run. libuv requests get `uv_*_req_cleanup`.
-- Type punning goes through `memcpy`. Only `value.c` reads the value union.
+- Type punning goes through `memcpy`. Only `value.c` and the inline constructors and accessors of `value.h` read the value union.
 
 ### Hostile bytecode (trust model)
 

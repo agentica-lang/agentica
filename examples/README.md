@@ -11,6 +11,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The [README](../README.
 - [`dispatch.agc`](dispatch.agc): function values and `.call`.
 - [`constants.agc`](constants.agc): module constants: literals, tables built once, and constants that read each other.
 - [`defaults.agc`](defaults.agc): default parameter values: constants, `[]`, enum variants, and a last `Fn` parameter filled by a block.
+- [`case-guards.agc`](case-guards.agc): `case` guards (`pattern if condition ->`) and patterns inside patterns.
 - [`heredoc.agc`](heredoc.agc): heredocs `<<~NAME`: text of several lines with the common indentation removed, interpolation, and a heredoc as an argument.
 - [`echo.agc`](echo.agc): read stdin line by line until EOF.
 - [`file-summary.agc`](file-summary.agc): read a file given as an argument.

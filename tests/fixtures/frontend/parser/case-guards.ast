@@ -1,0 +1,115 @@
+program #114 0:1:1-790:37:1
+  declaration: enum-decl #3 0:1:1-35:5:1 name="Option" type-parameters=[]
+    variant: enum-variant #1 14:2:3-24:3:1 name="Some"
+      payload: type-ref #0 19:2:8-22:2:11 name="Int"
+    variant: enum-variant #2 26:3:3-31:4:1 name="None"
+  declaration: enum-decl #12 36:6:1-104:12:1 name="Shape" type-parameters=[]
+    variant: enum-variant #4 49:7:3-53:8:1 name="Dot"
+    variant: enum-variant #6 55:8:3-67:9:1 name="Circle"
+      payload: type-ref #5 62:8:10-65:8:13 name="Int"
+    variant: enum-variant #9 69:9:3-84:10:1 name="Pair"
+      payload: type-ref #7 74:9:8-77:9:11 name="Int"
+      payload: type-ref #8 79:9:13-82:9:16 name="Int"
+    variant: enum-variant #11 86:10:3-100:11:1 name="Boxed"
+      payload: type-ref #10 92:10:9-98:10:15 name="Option"
+  declaration: function-decl #83 105:13:1-602:28:1 name="describe"
+    param: param #14 118:13:14-130:13:26 name="shape"
+      type: type-ref #13 125:13:21-130:13:26 name="Shape"
+    param: param #17 132:13:28-149:13:45 name="r"
+      type: type-ref #16 135:13:31-149:13:45 name="Result"
+        arg: type-ref #15 142:13:38-148:13:44 name="Option"
+    result: type-ref #18 154:13:50-160:13:56 name="String"
+    body: case-stmt #82 163:14:3-598:27:1
+      value: name-ref #19 168:14:8-173:14:13 name="shape"
+      arm: case-arm #24 178:15:5-212:16:1
+        pattern: variant-pattern #21 178:15:5-193:15:20 enum="Shape" variant="Circle" bindings=[*]
+          nested: literal-pattern #20 191:15:18-192:15:19 value=int:0
+        body: return-stmt #23 197:15:24-212:16:1
+          value: literal #22 204:15:31-211:15:38 value=string:"empty"
+      arm: case-arm #35 216:16:5-272:17:1
+        pattern: variant-pattern #25 216:16:5-231:16:20 enum="Shape" variant="Circle" bindings=["n"]
+        guard: binary #32 235:16:24-255:16:44 op=and op-span=243:16:32-246:16:35
+          left: binary #28 235:16:24-242:16:31 op=greater op-span=237:16:26-238:16:27
+            left: name-ref #26 235:16:24-236:16:25 name="n"
+            right: literal #27 239:16:28-242:16:31 value=int:100
+          right: binary #31 247:16:36-255:16:44 op=less op-span=249:16:38-250:16:39
+            left: name-ref #29 247:16:36-248:16:37 name="n"
+            right: literal #30 251:16:40-255:16:44 value=int:1000
+        body: return-stmt #34 259:16:48-272:17:1
+          value: literal #33 266:16:55-271:16:60 value=string:"big"
+      arm: case-arm #46 276:17:5-339:20:1
+        pattern: variant-pattern #37 276:17:5-292:17:21 enum="Shape" variant="Pair" bindings=[*,"y"]
+          nested: literal-pattern #36 287:17:16-288:17:17 value=int:1
+        guard: binary #40 296:17:25-302:17:31 op=not-equal op-span=298:17:27-300:17:29
+          left: name-ref #38 296:17:25-297:17:26 name="y"
+          right: literal #39 301:17:30-302:17:31 value=int:2
+        body: expr-stmt #43 312:18:7-320:19:1
+          value: call #42 312:18:7-319:18:14 name="puts" piped=false
+            arg: name-ref #41 317:18:12-318:18:13 name="y"
+        body: return-stmt #45 326:19:7-339:20:1
+          value: literal #44 333:19:14-338:19:19 value=string:"one"
+      arm: case-arm #52 343:20:5-385:21:1
+        pattern: variant-pattern #49 343:20:5-363:20:25 enum="Shape" variant="Pair" bindings=[*,*]
+          nested: literal-pattern #47 354:20:16-356:20:18 value=int:-2
+          nested: literal-pattern #48 358:20:20-362:20:24 value=float:bits:-4610560118520545280
+        body: return-stmt #51 367:20:29-385:21:1
+          value: literal #50 374:20:36-384:20:46 value=string:"negative"
+      arm: case-arm #58 389:21:5-434:22:1
+        pattern: variant-pattern #55 389:21:5-416:21:32 enum="Shape" variant="Boxed" bindings=[*]
+          nested: variant-pattern #54 401:21:17-415:21:31 enum="Option" variant="Some" bindings=[*]
+            nested: literal-pattern #53 413:21:29-414:21:30 value=int:9
+        body: return-stmt #57 420:21:36-434:22:1
+          value: literal #56 427:21:43-433:21:49 value=string:"nine"
+      arm: case-arm #66 438:22:5-492:23:1
+        pattern: variant-pattern #60 438:22:5-465:22:32 enum="Shape" variant="Boxed" bindings=[*]
+          nested: variant-pattern #59 450:22:17-464:22:31 enum="Option" variant="Some" bindings=["n"]
+        guard: binary #63 469:22:36-474:22:41 op=greater op-span=471:22:38-472:22:39
+          left: name-ref #61 469:22:36-470:22:37 name="n"
+          right: literal #62 473:22:40-474:22:41 value=int:5
+        body: return-stmt #65 478:22:45-492:23:1
+          value: literal #64 485:22:52-491:22:58 value=string:"some"
+      arm: case-arm #71 496:23:5-538:24:1
+        pattern: variant-pattern #68 496:23:5-520:23:29 enum="Shape" variant="Boxed" bindings=[*]
+          nested: variant-pattern #67 508:23:17-519:23:28 enum="Option" variant="None" bindings=[]
+        body: return-stmt #70 524:23:33-538:24:1
+          value: literal #69 531:23:40-537:23:46 value=string:"none"
+      arm: case-arm #77 542:24:5-568:25:1
+        pattern: wildcard-pattern #72 542:24:5-543:24:6
+        guard: field-access #74 547:24:10-552:24:15 name="ok?"
+          target: name-ref #73 547:24:10-548:24:11 name="r"
+        body: return-stmt #76 556:24:19-568:25:1
+          value: literal #75 563:24:26-567:24:30 value=string:"ok"
+      arm: case-arm #81 572:25:5-592:26:1
+        pattern: wildcard-pattern #78 572:25:5-573:25:6
+        body: return-stmt #80 577:25:10-592:26:1
+          value: literal #79 584:25:17-591:25:24 value=string:"other"
+  declaration: function-decl #113 603:29:1-790:37:1 name="results"
+    param: param #86 615:29:13-632:29:30 name="r"
+      type: type-ref #85 618:29:16-632:29:30 name="Result"
+        arg: type-ref #84 625:29:23-631:29:29 name="Option"
+    result: type-ref #87 637:29:35-641:29:39 name="Void"
+    body: case-stmt #112 644:30:3-786:36:1
+      value: name-ref #88 649:30:8-650:30:9 name="r"
+      arm: case-arm #94 655:31:5-685:32:1
+        pattern: variant-pattern #90 655:31:5-673:31:23 enum="Result" variant="Ok" bindings=[*]
+          nested: variant-pattern #89 658:31:8-672:31:22 enum="Option" variant="Some" bindings=["n"]
+        body: expr-stmt #93 677:31:27-685:32:1
+          value: call #92 677:31:27-684:31:34 name="puts" piped=false
+            arg: name-ref #91 682:31:32-683:31:33 name="n"
+      arm: case-arm #100 689:32:5-716:33:1
+        pattern: variant-pattern #96 689:32:5-704:32:20 enum="Result" variant="Ok" bindings=[*]
+          nested: variant-pattern #95 692:32:8-703:32:19 enum="Option" variant="None" bindings=[]
+        body: expr-stmt #99 708:32:24-716:33:1
+          value: call #98 708:32:24-715:32:31 name="puts" piped=false
+            arg: literal #97 713:32:29-714:32:30 value=int:0
+      arm: case-arm #106 720:33:5-750:34:1
+        pattern: variant-pattern #102 720:33:5-733:33:18 enum="Result" variant="Err" bindings=[*]
+          nested: literal-pattern #101 726:33:11-732:33:17 value=string:"boom"
+        body: expr-stmt #105 737:33:22-750:34:1
+          value: call #104 737:33:22-749:33:34 name="puts" piped=false
+            arg: literal #103 742:33:27-748:33:33 value=string:"boom"
+      arm: case-arm #111 754:34:5-780:35:1
+        pattern: variant-pattern #107 754:34:5-762:34:13 enum="Result" variant="Err" bindings=[-]
+        body: expr-stmt #110 766:34:17-780:35:1
+          value: call #109 766:34:17-779:34:30 name="puts" piped=false
+            arg: literal #108 771:34:22-778:34:29 value=string:"error"

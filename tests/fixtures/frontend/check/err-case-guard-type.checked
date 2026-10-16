@@ -1,0 +1,1 @@
+ERROR CHECK-TYPE-MISMATCH 37:3:10-38:3:11 "expected Bool, found Int" - expected="Bool" actual="Int" signature="main() -> Void" file="err-case-guard-type.agc"

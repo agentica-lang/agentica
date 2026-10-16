@@ -1,0 +1,5 @@
+def main() -> Void
+  case x
+    Shape.Boxed(Option.Some()) -> puts(1)
+  end
+end

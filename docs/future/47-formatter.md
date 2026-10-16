@@ -376,10 +376,12 @@ file with `FMT-UNSUPPORTED` (a proposal), and it never guesses.
   broken one. The width counts only the `<<~NAME` line. 15j has landed
   (post-bootstrap step 5): a heredoc token has the span of its opener and a
   lexeme that starts with `<<~`, and the body stays in the file text.
-- **Case guards and nested patterns** are not supported today
-  (`docs/grammar/06-semantics.md:71`). They are planned only as §25.12.1, "to
-  evaluate later", with no phase. A PR that adds them adds their layout rule and
-  a golden.
+- **Case guards and nested patterns** (`pattern if condition ->`, post-bootstrap
+  step 5, `docs/grammar/06-semantics.md`) are in the language. The guard stays
+  on the line of the pattern, because the parser looks for it up to the first
+  `->` of that line; a guard that does not fit is a layout the formatter has to
+  solve with a shorter condition (a local name), not a line break. A nested
+  pattern is printed on one line. 47b adds the layout rule and a golden.
 - **Pipe chains** that run over lines stay in parentheses, and the `|>` goes at
   the end of the line, as rule 7 says (`docs/grammar/04-lexical.md:33`).
 - **`case` arms** with one simple statement on the arrow line stay on one line

@@ -158,17 +158,26 @@ def rewrite_case(cx: Resolve.Context, node: Ast.CaseStmt) -> Result[Ast.Stmt]
   arms: List[Ast.CaseArm] = []
   for arm in node.arms
     pattern = try rewrite_pattern(cx, arm.pattern)
+    guard = try rewrite_optional_expr(cx, arm.guard)
     body = try rewrite_stmts(cx, arm.body)
-    arms = arms.push(arm.with(pattern: pattern, body: body))
+    arms = arms.push(arm.with(pattern: pattern, guard: guard, body: body))
   end
   return ok(Ast.Stmt.Case(node.with(value: value, arms: arms)))
 end
 
+# A variant pattern names its enum, and so does each variant nested in its slots.
 def rewrite_pattern(cx: Resolve.Context, pattern: Ast.Pattern) -> Result[Ast.Pattern]
   case pattern
     Ast.Pattern.Variant(node) ->
       name = try Resolve.resolve(cx, node.enum_name, Resolve.Want.Enum, node.span, false)
-      return ok(Ast.Pattern.Variant(node.with(enum_name: name)))
+      slots: List[Ast.Slot] = []
+      for slot in node.slots
+        case slot
+          Ast.Slot.Nested(inner) -> slots = slots.push(Ast.Slot.Nested(try rewrite_pattern(cx, inner)))
+          _ -> slots = slots.push(slot)
+        end
+      end
+      return ok(Ast.Pattern.Variant(node.with(enum_name: name, slots: slots)))
     _ -> return ok(pattern)
   end
 end

@@ -56,6 +56,12 @@ struct IfBranchAt
   ids: Int
 end
 
+struct GuardAt
+  node: Ast.Optional[Ast.Expr]
+  pos: Int
+  ids: Int
+end
+
 struct ParamsAt
   nodes: List[Ast.Param]
   pos: Int
@@ -1533,6 +1539,15 @@ def parse_arm_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
   return ok(Base.StmtsAt(nodes: List.concat([first.node], rest.nodes), pos: rest.pos, ids: rest.ids))
 end
 
+# The optional `if condition` between a pattern and ->. Its ids come after the pattern and before the body.
+def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
+  if e.tokens[pos].kind != "if"
+    return ok(GuardAt(node: Ast.Optional.Absent, pos: pos, ids: ids))
+  end
+  condition = try parse_expression(e, pos + 1, ids)
+  return ok(GuardAt(node: Ast.Optional.Present(condition.node), pos: condition.pos, ids: condition.ids))
+end
+
 def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   value = try parse_expression(Base.with_blocks(e, false), pos + 1, ids)
   cursor = value.pos
@@ -1556,12 +1571,14 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     else
       arm_start = cursor
       pattern = try Base.parse_pattern(e, cursor, next_id)
-      arrow = try Base.expect(e, pattern.pos, "arrow", "->", false)
-      body = try parse_arm_body(e, arrow, pattern.ids)
+      guard = try parse_guard(e, pattern.pos, pattern.ids)
+      arrow = try Base.expect(e, guard.pos, "arrow", "->", false)
+      body = try parse_arm_body(e, arrow, guard.ids)
       arms = arms.push(
         Ast.CaseArm(
           id: body.ids,
           pattern: pattern.node,
+          guard: guard.node,
           body: body.nodes,
           span: Base.span_from(e, arm_start, body.pos),
         ),
