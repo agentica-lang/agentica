@@ -139,7 +139,7 @@ and the other features after the JIT.
    [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
    in `compiler/` only. The first of steps 4 and 5 to land is the first use of
    the two-step stage0 refresh of §35.3. Part A, the heredoc (15j), is **done
-   (2026-10-16)**: the lexer, `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
+   (2026-10-16, PR #322)**: the lexer, `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
    `LEX-HEREDOC-ONE-LINE`, the parser refuses a heredoc as a `case` pattern or
    an import path. Part B, `case` guards and nested patterns, is next.
 6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
