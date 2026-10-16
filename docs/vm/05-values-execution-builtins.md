@@ -23,9 +23,13 @@ so zeroed registers are valid values.
 
 ### 5.2 Safety rules for values
 
-- `value.c` is the only code that reads a union member. Everything else uses
-  checked accessors that take the VM. A wrong tag is `RUNTIME-INTERNAL` at the
-  program span.
+- `value.c` and the inline constructors and checked accessors of `value.h` are
+  the only code that reads a union member. Everything else uses the checked
+  accessors, which take the VM. A wrong tag is `RUNTIME-INTERNAL` at the
+  program span. The accessors of the common types are `static inline`, with
+  one out-of-line failure (`agc_wrong_tag`): the interpreter calls two or
+  three on most instructions, and as calls into `value.c` they cost more than
+  the `ADD_I` they served.
 - `CALL_BUILTIN` checks each argument's tag against the builtin's parameter
   tags. Builtins check list and map elements when they touch them.
 - `FIELD` and `PAYLOAD` check the index against the value's own `n`, not only
@@ -64,6 +68,15 @@ so zeroed registers are valid values.
   frame (4.3) has a state pointer, so code that walks frames checks it first.
 - The interpreter is one `switch` loop. Agentica calls push frames and never
   recurse on the C stack, so a task switch only changes the current task.
+- The loop keeps the top frame's code, span table, register window and next
+  `pc` in locals, and reloads them only after an instruction that changes the
+  frame stack or can move the frame or register arrays (`CALL`, `CALL_VALUE`,
+  `TAIL_CALL`, `RETURN`, a failing `TRY`, and a builtin that pushes a native
+  frame). A builtin that returns normally leaves them valid: frames and
+  registers are pushed only by the interpreter, on the running task, and a
+  builtin spawns its tasks' frames, never its own. The saved `pc` of the frame
+  is still written before each instruction runs, because a failure (the stack
+  trace), a park and a yield read it.
 - Before `CALL`, `CALL_VALUE` or a callback push, a call depth of 10000 fails
   with `RUNTIME-STACK-OVERFLOW` at that instruction's span. `main` runs at
   depth 1. Native frames do not count, and each task starts at 0. `TAIL_CALL`

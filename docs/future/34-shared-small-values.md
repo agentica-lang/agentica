@@ -4,8 +4,10 @@
 Partly built by the list performance PR
 ([§17.11](../vm/17-lists.md)): `agc_runtime` has the 128 one-character ASCII
 Strings (`chars`, made in `agc_vm_init`) and `String.split` uses them, which
-took `split(big, "")` of a million characters from 85 ms to 9 ms. The other
-paths and the empty list, map and string are still open.
+took `split(big, "")` of a million characters from 85 ms to 9 ms. `LIST` and
+`MAP` with no items return the runtime's one empty list and map too (the speed
+pass, PR #319; `agc_runtime.empty_list` and `empty_map`, made in `agc_vm_init`).
+The other paths and the empty string are still open.
 An implementation proposal with no language change, in the spirit of CPython's
 small-int cache: the VM makes some values once and returns the same object every
 time a program computes them.
