@@ -5,6 +5,7 @@
  */
 #include "services.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,6 +20,68 @@
 
 static const char bad_timeout[] = "network: timeout must be positive milliseconds";
 static const char timed_out[] = "network: operation timed out";
+
+static size_t byte_escape(const uint8_t *data, size_t len, size_t at, char out[5]) {
+  static const char named[] = "abtnvfr";
+  uint8_t b = data[at];
+  if (b == '"' || b == '\\') {
+    out[0] = '\\';
+    out[1] = (char)b;
+    return 2;
+  }
+  if (b >= 32 && b < 127) {
+    out[0] = (char)b;
+    return 1;
+  }
+  out[0] = '\\';
+  if (b >= 7 && b <= 13) {
+    out[1] = named[b - 7];
+    return 2;
+  }
+  if (b == 27) {
+    out[1] = 'e';
+    return 2;
+  }
+  bool pad = at + 1 < len && data[at + 1] >= '0' && data[at + 1] <= '7';
+  int n = snprintf(out + 1, 4, pad ? "%03o" : "%o", (unsigned)b);
+  return 1 + (size_t)n;
+}
+
+agc_value agc_utf8_error(const uint8_t *data, size_t len) {
+  static const char prefix[] = "bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\n  byte string: ";
+  char form[261];
+  char message[512];
+  size_t form_len = 0;
+  size_t message_len = sizeof prefix - 1;
+  memcpy(form + form_len, "#\"", 2);
+  form_len += 2;
+  for (size_t at = 0; at < len && form_len <= 256; at++) {
+    char piece[5];
+    size_t piece_len = byte_escape(data, len, at, piece);
+    memcpy(form + form_len, piece, piece_len);
+    form_len += piece_len;
+  }
+  form[form_len++] = '"';
+  memcpy(message, prefix, message_len);
+  if (form_len > 256) {
+    memcpy(message + message_len, form, 253);
+    memcpy(message + message_len + 253, "...", 3);
+    message_len += 256;
+  } else {
+    memcpy(message + message_len, form, form_len);
+    message_len += form_len;
+  }
+  agc_string *decoded = agc_utf8_decode((const uint8_t *)message, message_len, "\xEF\xBF\xBD", false);
+  return agc_result_value(false, agc_string_value(decoded));
+}
+
+#ifndef __linux__
+agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
+  (void)vm;
+  (void)err;
+  return agc_error_value(what);
+}
+#endif
 
 agc_value agc_stream_bad_timeout(void) { return agc_error_value(bad_timeout); }
 

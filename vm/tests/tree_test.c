@@ -7,19 +7,20 @@
 #define _GNU_SOURCE
 #include "../services.h"
 
+#include <stdio.h>
+
+#ifdef __linux__
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#ifdef __linux__
 #define PATH_SIZE 4096
 
 /* What the interposed calls do; all zero passes every call through. */

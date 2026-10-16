@@ -187,51 +187,6 @@ static agc_value contract_error(const char *who, const char *expected, const agc
   return error_text(&t);
 }
 
-static size_t byte_escape(const uint8_t *data, size_t len, size_t at, char out[5]) {
-  static const char named[] = "abtnvfr";
-  uint8_t b = data[at];
-  if (b == '"' || b == '\\') {
-    out[0] = '\\';
-    out[1] = (char)b;
-    return 2;
-  }
-  if (b >= 32 && b < 127) {
-    out[0] = (char)b;
-    return 1;
-  }
-  out[0] = '\\';
-  if (b >= 7 && b <= 13) {
-    out[1] = named[b - 7];
-    return 2;
-  }
-  if (b == 27) {
-    out[1] = 'e';
-    return 2;
-  }
-  bool pad = at + 1 < len && data[at + 1] >= '0' && data[at + 1] <= '7';
-  int n = snprintf(out + 1, 4, pad ? "%03o" : "%o", (unsigned)b);
-  return 1 + (size_t)n;
-}
-
-agc_value agc_utf8_error(const uint8_t *data, size_t len) {
-  text t = {0};
-  text form = {0};
-  puts_text(&t, "bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\n  byte string: ");
-  puts_text(&form, "#\"");
-  for (size_t at = 0; at < len && form.len <= FORM_WIDTH; at++) {
-    char piece[5];
-    put(&form, piece, byte_escape(data, len, at, piece));
-  }
-  puts_text(&form, "\"");
-  if (form.len > FORM_WIDTH) {
-    put(&t, form.data, FORM_WIDTH - 3);
-    puts_text(&t, "...");
-  } else {
-    put(&t, form.data, form.len);
-  }
-  return error_text(&t);
-}
-
 static bool same_text(const char *data, size_t len, const char *word) {
   return len == strlen(word) && memcmp(data, word, len) == 0;
 }

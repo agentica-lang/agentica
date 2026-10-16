@@ -22,6 +22,14 @@
     if (AGC_TRACE_ON(tr, category)) agc_trace_emit((tr), (category), __VA_ARGS__); \
   } while (0)
 
+#if defined(__MINGW32__)
+#define AGC_PRINTF_FORMAT(format_index, first_argument) \
+  __attribute__((format(gnu_printf, format_index, first_argument)))
+#else
+#define AGC_PRINTF_FORMAT(format_index, first_argument) \
+  __attribute__((format(printf, format_index, first_argument)))
+#endif
+
 /* The event categories. The profile counts every step and call, which slows the run, so "all" leaves it out. */
 enum {
   AGC_TRACE_SCHED = 1u << 0,
@@ -52,8 +60,10 @@ uint64_t agc_trace_now(void);
 void agc_trace_parse(agc_trace *trace, const char *names, int fd);
 void agc_trace_message(int fd, const char *text, const char *value, size_t len, bool quoted);
 void agc_trace_format(agc_trace_line *line, const agc_trace *trace, unsigned category, const char *format, ...)
-  __attribute__((format(printf, 4, 5)));
+  AGC_PRINTF_FORMAT(4, 5);
 void agc_trace_emit(const agc_trace *trace, unsigned category, const char *format, ...)
-  __attribute__((format(printf, 3, 4)));
+  AGC_PRINTF_FORMAT(3, 4);
+
+#undef AGC_PRINTF_FORMAT
 
 #endif
