@@ -521,6 +521,9 @@ bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail);
 agc_string *agc_new_string(size_t bytes, size_t chars);
 agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
+/* The String of these bytes: the run's shared empty String for no bytes, its shared one-character String for one ASCII
+   byte, else a new String. chars is the number of characters in the bytes. */
+agc_string *agc_small_string(agc_vm *vm, const char *data, size_t bytes, size_t chars);
 agc_value agc_error_value(const char *message);
 agc_struct *agc_new_struct(uint32_t type, uint32_t n);
 agc_enum *agc_new_enum(uint32_t variant, uint32_t n);

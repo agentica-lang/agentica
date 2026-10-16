@@ -337,6 +337,12 @@ agc_string *agc_make_string(const char *data, size_t bytes, size_t chars) {
   return s;
 }
 
+agc_string *agc_small_string(agc_vm *vm, const char *data, size_t bytes, size_t chars) {
+  if (bytes == 0) return vm->rt->empty_string;
+  if (bytes == 1 && (uint8_t)data[0] < AGC_ASCII_CHARS) return vm->rt->chars[(uint8_t)data[0]];
+  return agc_make_string(data, bytes, chars);
+}
+
 agc_value agc_error_value(const char *message) {
   size_t n = strlen(message);
   return agc_result_value(false, agc_string_value(agc_make_string(message, n, n)));

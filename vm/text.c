@@ -314,7 +314,7 @@ static agc_string *debug_text(agc_vm *vm, agc_value v, bool json) {
   if (!agc_is(v, AGC_T_STRING)) {
     char text[AGC_SCALAR_TEXT];
     size_t n = agc_scalar_text(vm, v, text);
-    return agc_make_string(text, n, n);
+    return agc_small_string(vm, text, n, n);
   }
   const agc_string *s = agc_as_string(vm, v);
   agc_charge_bytes(vm, s->bytes);
