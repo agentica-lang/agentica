@@ -1,12 +1,13 @@
-## The inputs of the front end that are not the user's: the Agentica version, where the std/ sources are, and the path
-## of the binary.
+## The inputs of the front end that are not the user's: the Agentica version,
+## where the std/ sources are, and the path of the binary.
 ##
-## The front end is run as `PROGRAM --version V [--stdlib DIR] [--self PATH] [--embedded-bdd] -- ARGUMENTS...`. The
-## binary starts it with `--version V --self PATH [--embedded-bdd] -- ARGUMENTS...` (C passes its own version, its own
-## path, whether it carries the compiled BDD programs, and the user's words, and grants the std/ sources that it carries);
-## an ordinary run on the VM, as `make` does for the stages of the bootstrap, adds `--stdlib DIR` and the front end reads
-## the std/ sources from that folder
-## (docs/future/35-self-hosting.md, 35.3).
+## The front end is run as
+## `PROGRAM --version V [--stdlib DIR] [--self PATH] [--embedded-bdd] -- ARGUMENTS...`.
+## The binary starts it as `--version V --self PATH [--embedded-bdd] -- ARGUMENTS...`;
+## C passes its version, path and whether it carries compiled BDD programs, and
+## grants the std/ sources that it carries. An ordinary VM run, as `make` does
+## for bootstrap stages, adds `--stdlib DIR`, so the front end reads std/ from
+## that folder (docs/future/35-self-hosting.md, 35.3).
 
 import Env from "link_env"
 

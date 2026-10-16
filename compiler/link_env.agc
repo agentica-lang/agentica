@@ -45,7 +45,12 @@ end
 ## with `with(version: ...)`, and the writer refuses an empty one.
 export def settings(stdlib: String, env: Env) -> Settings
   return Settings(
-    std: StdProvider.Folder(stdlib), embedded_bdd: false, env: env, version: "", self_path: "", catalog: Builtins.catalog()
+    std: StdProvider.Folder(stdlib),
+    embedded_bdd: false,
+    env: env,
+    version: "",
+    self_path: "",
+    catalog: Builtins.catalog(),
   )
 end
 
@@ -53,7 +58,12 @@ end
 ## it carries the compiled BDD programs.
 export def embedded_settings(env: Env, version: String, embedded_bdd: Bool) -> Settings
   return Settings(
-    std: StdProvider.Embedded, embedded_bdd: embedded_bdd, env: env, version: version, self_path: "", catalog: Builtins.catalog()
+    std: StdProvider.Embedded,
+    embedded_bdd: embedded_bdd,
+    env: env,
+    version: version,
+    self_path: "",
+    catalog: Builtins.catalog(),
   )
 end
 
