@@ -11,9 +11,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef AGC_NO_GC
+#include <gc.h>
+#endif
+
+/* spans_at and count_at, set by build only, are where the span count and the instruction count of the first function
+ * are, for the tests that patch them. */
 typedef struct {
   uint8_t *data;
-  size_t len;
+  size_t len, spans_at, count_at;
 } buffer;
 
 /* One function of a file with two: the entry is picked by spec.entry. */
@@ -86,13 +92,15 @@ static void float_bits(buffer *b, double f) {
   u32(b, (uint32_t)(bits >> 32));
 }
 
-static void function(buffer *b, const char *name, uint32_t params, uint32_t captures, uint32_t registers,
-                     const agc_instr *code, const uint32_t *spans, uint32_t count) {
+/* Returns where the instruction count is. */
+static size_t function(buffer *b, const char *name, uint32_t params, uint32_t captures, uint32_t registers,
+                       const agc_instr *code, const uint32_t *spans, uint32_t count) {
   str(b, name);
   u32(b, params);
   u32(b, captures);
   u32(b, registers);
   u32(b, 0);
+  size_t count_at = b->len;
   u32(b, count);
   for (uint32_t i = 0; i < count; i++) {
     u16(b, code[i].op);
@@ -101,6 +109,7 @@ static void function(buffer *b, const char *name, uint32_t params, uint32_t capt
     u16(b, code[i].c);
   }
   for (uint32_t i = 0; i < count; i++) u32(b, spans[i]);
+  return count_at;
 }
 
 static spec base(void) {
@@ -126,6 +135,7 @@ static buffer build(spec s) {
     str(&b, "lib/m.agc");
     str(&b, s.second_source);
   }
+  b.spans_at = b.len;
   u32(&b, 3);
   for (int i = 0; i < 3; i++)
     for (int k = 0; k < 5; k++) u32(&b, s.spans[i][k]);
@@ -169,11 +179,12 @@ static buffer build(spec s) {
     u32(&b, s.func_count);
     for (uint32_t i = 0; i < s.func_count; i++) {
       const fn_spec *f = &s.funcs[i];
-      function(&b, f->name, f->params, 0, f->registers, f->code, f->spans, f->count);
+      size_t count_at = function(&b, f->name, f->params, 0, f->registers, f->code, f->spans, f->count);
+      if (i == 0) b.count_at = count_at;
     }
   } else {
     u32(&b, s.helper_params ? 2 : 1);
-    function(&b, "main", s.params, s.captures, s.registers, s.code, s.code_spans, s.count);
+    b.count_at = function(&b, "main", s.params, s.captures, s.registers, s.code, s.code_spans, s.count);
     if (s.helper_params)
       function(&b, "helper", s.helper_params, s.helper_captures, s.helper_params + s.helper_captures, helper_code,
                two_spans, 2);
@@ -183,11 +194,20 @@ static buffer build(spec s) {
   return b;
 }
 
+/* The loader holds the collector off while it loads (agc_gc_pause) and must let it go on every path, a rejection
+ * included. The GC-stress build ignores the pause, so only this test catches a path that skips agc_gc_resume. */
+static void assert_collector_on(void) {
+#ifndef AGC_NO_GC
+  assert(!GC_is_disabled());
+#endif
+}
+
 static bool loads(spec s, const char *reason) {
   buffer b = build(s);
   agc_program *p;
   char error[160] = "";
   bool ok = agc_load(b.data, b.len, &p, error, sizeof error);
+  assert_collector_on();
   free(b.data);
   if (reason && !strstr(error, reason)) {
     fprintf(stderr, "expected \"%s\", got \"%s\"\n", reason, error);
@@ -219,6 +239,62 @@ static buffer make_tables(uint32_t arity) {
   str(&t, "B");
   u32(&t, arity);
   return t;
+}
+
+static void patch_u32(buffer *b, size_t at, uint32_t v) {
+  for (size_t k = 0; k < 4; k++) b->data[at + k] = (uint8_t)(v >> (8 * k));
+}
+
+static void rejects(const buffer *b, const char *reason) {
+  agc_program *p;
+  char error[160] = "";
+  assert(!agc_load(b->data, b->len, &p, error, sizeof error));
+  if (!strstr(error, reason)) fprintf(stderr, "expected \"%s\", got \"%s\"\n", reason, error);
+  assert(strstr(error, reason));
+  assert_collector_on();
+}
+
+/* The tables are taken once and decoded without a check for each field, so a count that is too big for the rest of the
+ * file must stop at read_count. The file has bytes after the tables, which the old field-by-field reads would have
+ * walked into: a count of one more than there is reads the next section as a span, and is stopped by the span rules. */
+static void table_count_tests(void) {
+  buffer b = build(base());
+  patch_u32(&b, b.spans_at, 0xFFFFFFFFu);
+  rejects(&b, "span count exceeds the file");
+  patch_u32(&b, b.spans_at, 4);
+  rejects(&b, "span source out of range");
+  patch_u32(&b, b.spans_at, 3);
+  patch_u32(&b, b.count_at, 0xFFFFFFFFu);
+  rejects(&b, "instruction count exceeds the file");
+  patch_u32(&b, b.count_at, 6);
+  rejects(&b, "instruction count exceeds the file");
+  patch_u32(&b, b.count_at, 0);
+  rejects(&b, "empty function");
+  patch_u32(&b, b.count_at, 5);
+  agc_program *p;
+  char error[160] = "";
+  assert(agc_load(b.data, b.len, &p, error, sizeof error));
+  assert_collector_on();
+  free(b.data);
+}
+
+/* A rejected load, at the first byte, in the middle and past the size limit, and a load that succeeds, all leave the
+ * collector on. */
+static void collector_tests(void) {
+  buffer b = build(base());
+  agc_program *p;
+  char error[160] = "";
+  assert(agc_load(b.data, b.len, &p, error, sizeof error));
+  assert_collector_on();
+  b.data[0] = 'X';
+  assert(!agc_load(b.data, b.len, &p, error, sizeof error));
+  assert_collector_on();
+  b.data[0] = 'A';
+  assert(!agc_load(b.data, b.len / 2, &p, error, sizeof error));
+  assert_collector_on();
+  assert(!agc_load(b.data, AGC_MAX_FILE_BYTES + 1, &p, error, sizeof error));
+  assert_collector_on();
+  free(b.data);
 }
 
 /* The line index decides which columns a span may name: a line of N characters takes the columns 1 to N + 1. The
@@ -1628,6 +1704,8 @@ int main(void) {
   globals_tests();
   source_root_tests();
   line_index_tests();
+  table_count_tests();
+  collector_tests();
 
   puts("loader tests passed");
   return 0;

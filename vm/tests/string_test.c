@@ -82,24 +82,46 @@ static size_t count_by_one(const uint8_t *s, size_t len) {
   return count;
 }
 
+/* One case: the filler and the pieces are copied to a block of exactly len bytes, so a sanitizer build catches a word
+ * read past the end. Both paths must agree with the references on the answer, and the count of agc_utf8_count is
+ * defined for invalid text too (every byte that is not a continuation byte). */
+static void utf8_word_case(const uint8_t *text, size_t len) {
+  uint8_t *exact = malloc(len ? len : 1);
+  assert(exact);
+  memcpy(exact, text, len);
+  size_t want = 0, got = 0;
+  bool valid = chars_by_one(exact, len, &want);
+  assert(agc_utf8_chars(exact, len, &got) == valid);
+  if (valid) assert(got == want);
+  assert(agc_utf8_count(exact, len) == count_by_one(exact, len));
+  free(exact);
+}
+
 /* ASCII filler with one piece (valid, truncated, stray or overlong bytes) at every offset, for every length around the
- * word size: both paths must agree with the references on the answer and the count. */
+ * word size, and then with a second piece in a later eight-byte word. */
 static void utf8_word_paths(void) {
   static const char *const pieces[] = {"a", "\xc3\xa9", "\xe2\x82\xac", "\xf0\x9f\x98\x80", "\x80", "\xc3", "\xe2\x82",
                                        "\xf0\x9f\x98", "\xc0\xaf", "\xf5\x80\x80\x80", "\xed\xa0\x80", "\xff"};
+  size_t piece_count = sizeof pieces / sizeof *pieces;
   for (size_t len = 0; len <= 40; len++) {
     for (size_t at = 0; at < (len ? len : 1); at++) {
-      for (size_t k = 0; k < sizeof pieces / sizeof *pieces; k++) {
+      for (size_t k = 0; k < piece_count; k++) {
         uint8_t buf[64];
         memset(buf, 'a', sizeof buf);
         size_t piece = strlen(pieces[k]);
         if (at + piece > len) continue;
         memcpy(buf + at, pieces[k], piece);
-        size_t want = 0, got = 0;
-        bool valid = chars_by_one(buf, len, &want);
-        assert(agc_utf8_chars(buf, len, &got) == valid);
-        if (valid) assert(got == want);
-        if (valid) assert(agc_utf8_count(buf, len) == count_by_one(buf, len));
+        utf8_word_case(buf, len);
+        for (size_t later = (at / 8 + 1) * 8; later < len; later += 3) {
+          for (size_t m = 0; m < piece_count; m++) {
+            size_t second = strlen(pieces[m]);
+            if (later + second > len) continue;
+            uint8_t both[64];
+            memcpy(both, buf, sizeof both);
+            memcpy(both + later, pieces[m], second);
+            utf8_word_case(both, len);
+          }
+        }
       }
     }
   }

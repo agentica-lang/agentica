@@ -535,7 +535,10 @@ Debian 13, gcc 14.2. **Measured under load**: the load average was 2.0 to 2.9,
 because another job was building on the machine, so read the last digit with
 care. Steps, calls and builtin calls are the same before and after
 (`AGENTICA_VM_TRACE=profile`), and so is the peak resident size (hello 14.3
-MB, gherkin 21 MB, parser 34 MB).
+MB, gherkin 21 MB, parser 34 MB; 12 runs of each binary, medians within 0.1 MB
+for hello and gherkin). A default build, which links the system libgc and
+OpenSSL as shared libraries, is about 1.1 MB higher (hello 15.4 MB), in master
+as much as here, so compare binaries of one configuration.
 
 | command | before ms | after ms |
 |---|---:|---:|
