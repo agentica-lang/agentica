@@ -622,7 +622,10 @@ static bool load_program(const uint8_t *data, size_t len, agc_program **program,
     trace_reject(&r);
     return false;
   }
-  if (!load_guarded(&r, p)) return false;
+  agc_gc_pause();
+  bool loaded = load_guarded(&r, p);
+  agc_gc_resume();
+  if (!loaded) return false;
   AGC_TRACE(tr, AGC_TRACE_LOADER, "format version=%" PRIu32, r.format);
   trace_tables(tr, p);
   AGC_TRACE(tr, AGC_TRACE_LOADER, "done us=%" PRIu64, elapsed_us(r.start));

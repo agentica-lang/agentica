@@ -72,6 +72,21 @@ unsigned agc_gc_version(void) {
 #endif
 }
 
+/* The loader holds the collector off while it builds a program: everything it allocates stays live until the load ends
+ * (or fails and the program is dropped), so a collection can only mark it again, and the program is megabytes for the
+ * front end. Pauses nest. The GC-stress build ignores them, so it still collects while loading. */
+void agc_gc_pause(void) {
+#if !defined(AGC_NO_GC) && !defined(AGC_GC_STRESS)
+  GC_disable();
+#endif
+}
+
+void agc_gc_resume(void) {
+#if !defined(AGC_NO_GC) && !defined(AGC_GC_STRESS)
+  GC_enable();
+#endif
+}
+
 bool agc_gc_stats(agc_gc_info *info) {
 #ifdef AGC_NO_GC
   (void)info;
