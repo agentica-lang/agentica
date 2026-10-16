@@ -80,9 +80,9 @@ is not repeated here; read the file.
 - `upcase` and `downcase` are full Unicode mappings (`"straße"` gives
   `"STRASSE"`). Final sigma: `Σ` becomes `ς` only after a cased letter and not
   before one (`ΑΣ` gives `ας`, `ΣΣ` gives `σς`). The mapping tables and the
-  write-escape tables are generated from Racket's Unicode data by
-  `vm/tools/gen-unicode.rkt` into `vm/unicode_data.c`. `make vm-unicode`
-  regenerates it, and the Linux CI job fails when the committed file is stale.
+  write-escape tables are in `vm/unicode_data.c`, generated once from Racket's
+  Unicode data (Racket 9.3, Unicode 17.0) and now frozen, checked-in source; its
+  header says how a future generator must match it.
 - Debug form of a String: the escapes `\"`, `\\`, `\a \b \t \n \v \f \r \e`; a
   character that is not printed raw becomes `\uXXXX` or `\UXXXXXXXX` (uppercase
   hex). A joiner (U+200C, U+200D, U+E0020 to U+E007F) prints raw only after a

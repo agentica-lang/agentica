@@ -930,9 +930,8 @@ are the default-path cases.
   for the core rule, and a reference file for the detail), and a `CHANGELOG.md`
   entry under `## [Unreleased]`. The entry is marked `**Breaking:**`, since
   `Signal` becomes a reserved builtin name, and it notes the USR1, USR2 and QUIT
-  change. The compiler catalog is regenerated in the same PR (before the
-  bootstrap: `racket tools/gen-builtins-data.rkt`, checked by
-  tests/frontend-catalog-test.rkt; after it, with the generator of that time).
+  change. The compiler catalog (`compiler/builtins_data.agc`) is edited by hand
+  in the same PR, and its golden is refreshed with `tools/refreeze.py`.
 - **46b: sending.** The builtins `Process.signal`, `Process.spawn_group`,
   `Process.signal_group` and `System.signal`, with the pidfd probe and
   `--allow-run`. The group close and the end-of-run group kill for group
