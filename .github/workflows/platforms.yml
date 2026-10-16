@@ -48,11 +48,15 @@ jobs:
     runs-on: macos-15
     env:
       AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: vendored
+      AGENTICA_OPENSSL: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && 'vendored' || 'system' }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - if: env.AGENTICA_OPENSSL == 'system'
+        run: brew install openssl@3 pkg-config
+      - if: env.AGENTICA_OPENSSL == 'system'
+        run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
       - run: make vm-test
 
@@ -61,7 +65,7 @@ jobs:
     runs-on: windows-2025
     env:
       AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: vendored
+      AGENTICA_OPENSSL: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && 'vendored' || 'system' }}
     defaults:
       run:
         shell: msys2 {0}
@@ -74,6 +78,6 @@ jobs:
           msystem: UCRT64
           path-type: inherit
           update: false
-          install: make mingw-w64-ucrt-x86_64-gcc
+          install: make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
       - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
       - run: make vm-test
