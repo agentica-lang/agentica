@@ -699,6 +699,12 @@ keyed by character, not by code, and `new_input` stays (it splits the text and
 adds the sentinels); `compiler/lexer.agc` is the reference, and the lexer
 sketch below is the plan it started from.
 
+**As built (44c):** the parser tables and Unicode ranges are module constants
+in `parse_base.agc`, `parser.agc` and `unicode_table.agc`. The Racket-era
+Unicode generator is no longer in the repository after the front-end port, so
+there is no generator output to update; `tests/test_frontend_lexer.py` still
+checks the checked-in ranges against the frozen source data.
+
 The test the design must pass: the real tables of `compiler/` fit. Every
 example below uses only what 44.5 allows. The expressions of the snippets
 were checked with `racket src/main.rkt check` inside functions of a scratch
@@ -832,8 +838,8 @@ becomes `LITERAL_KINDS.include?(kind)`. The chains of three kinds
 a different set and stay as they are. The parser's `Env` is not a table holder
 (its fields change as parsing goes) and stays as it is.
 
-**Unicode (`compiler/unicode_table.agc`).** The generated file emits a constant
-and `Unicode.graphic?` and `written_text` read it instead of calling
+**Unicode (`compiler/unicode_table.agc`).** The data file holds a constant and
+`Unicode.graphic?` and `written_text` read it instead of calling
 `Table.graphic_ranges()`, which builds the 1,900-number list on every call:
 
 ```ruby
@@ -843,8 +849,7 @@ export GRAPHIC_RANGES = [
 ]
 ```
 
-The generator (`tools/gen-lexer-unicode.rkt`) changes its output header and
-one line; the fast test that compares the generated file stays.
+The fast test that compares the table with the frozen source data stays.
 
 **The linker and the builtin catalog (step 4a, merged in PR #258).**
 `Settings` (`compiler/link_env.agc`) holds the two real inputs of a link (the
@@ -1103,8 +1108,9 @@ together; the user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
    the code, and operators are `Op` values), and the main loop was
    restructured at the same time.
 6. **44c: the parser and unicode.** `NESTING_LIMIT`, `LEVELS`,
-   `COMPOUND_OPERATORS`, `LITERAL_KINDS`, `GRAPHIC_RANGES` and the generator
-   change. Goldens unchanged.
+   `COMPOUND_OPERATORS`, `LITERAL_KINDS` and `GRAPHIC_RANGES`. Goldens
+   unchanged. The old Racket generator is absent after the front-end port, so
+   the existing frozen-source check remains the source of truth for the ranges.
 7. **44d: the linker and the catalog.** `link_env.agc` (`Settings`),
    `builtins_data.agc`, `builtins.agc`, `tools/gen-builtins-data.rkt`, and the
    functions that read `cx.settings.catalog` (`resolve.agc`, `rewrite.agc`,

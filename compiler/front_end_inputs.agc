@@ -1,11 +1,13 @@
-## The inputs of the front end that are not the user's: the Agentica version, where the std/ sources are, and the path
-## of the binary.
+## The inputs of the front end that are not the user's: the Agentica version,
+## where the std/ sources are, and the path of the binary.
 ##
-## The front end is run as `PROGRAM --version V [--stdlib DIR] [--self PATH] -- ARGUMENTS...`. The binary starts it
-## with `--version V --self PATH -- ARGUMENTS...` (C passes its own version, its own path and the user's words, and
-## grants the std/ sources that it carries); an ordinary run on the VM, as `make` does for the stages of the
-## bootstrap, adds `--stdlib DIR` and the front end reads the std/ sources from that folder
-## (docs/future/35-self-hosting.md, 35.3).
+## The front end is run as
+## `PROGRAM --version V [--stdlib DIR] [--self PATH] [--embedded-bdd] -- ARGUMENTS...`.
+## The binary starts it as `--version V --self PATH [--embedded-bdd] -- ARGUMENTS...`;
+## C passes its version, path and whether it carries compiled BDD programs, and
+## grants the std/ sources that it carries. An ordinary VM run, as `make` does
+## for bootstrap stages, adds `--stdlib DIR`, so the front end reads std/ from
+## that folder (docs/future/35-self-hosting.md, 35.3).
 
 import Env from "link_env"
 
@@ -21,10 +23,15 @@ export def read(arguments: List[String]) -> Read
   version = ""
   stdlib = ""
   self_path = ""
+  embedded_bdd = false
   at = 0
   while at < arguments.size and arguments[at] != "--"
     word = arguments[at]
-    if at + 1 >= arguments.size or arguments[at + 1] == "--"
+    step = 2
+    if word == "--embedded-bdd"
+      embedded_bdd = true
+      step = 1
+    elsif at + 1 >= arguments.size or arguments[at + 1] == "--"
       return Read.Broken("#{word} needs a value")
     elsif word == "--version"
       version = arguments[at + 1]
@@ -35,7 +42,7 @@ export def read(arguments: List[String]) -> Read
     else
       return Read.Broken("unknown input #{word}")
     end
-    at += 2
+    at += step
   end
   if at >= arguments.size
     return Read.Broken("the inputs end with --")
@@ -45,7 +52,7 @@ export def read(arguments: List[String]) -> Read
   env = Env.process_env()
   words = arguments.drop(at + 1)
   if stdlib == ""
-    return Read.Ready(Env.embedded_settings(env, version).with(self_path: self_path), words)
+    return Read.Ready(Env.embedded_settings(env, version, embedded_bdd).with(self_path: self_path), words)
   end
   return Read.Ready(Env.settings(stdlib, env).with(version: version, self_path: self_path), words)
 end

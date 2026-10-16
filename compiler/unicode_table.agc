@@ -3,8 +3,7 @@
 ## the char-graphic? table of Racket 9.3, Unicode 17.0 by the count in vm/unicode_data.c. tests/test_frontend_lexer.py
 ## compares it with a golden. A future generator over pinned Unicode Character Database files must reproduce it exactly
 ## before it replaces it.
-export def graphic_ranges() -> List[Int]
-  return [
+export GRAPHIC_RANGES = [
     33, 126, 161, 172, 174, 887, 890, 895, 900, 906,
     908, 908, 910, 929, 931, 1327, 1329, 1366, 1369, 1418,
     1421, 1423, 1425, 1479, 1488, 1514, 1519, 1524, 1542, 1563,
@@ -154,5 +153,4 @@ export def graphic_ranges() -> List[Int]
     129792, 129938, 129940, 130042, 131072, 173791, 173824, 178205, 178208, 183981,
     183984, 191456, 191472, 192093, 194560, 195101, 196608, 201546, 201552, 210041,
     917760, 917999
-  ]
-end
+]

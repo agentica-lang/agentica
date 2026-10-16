@@ -112,19 +112,24 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
     exit(2);
   }
   /* The inputs of the front end (compiler/front_end_inputs.agc), then the words of the user. */
-  char version_flag[] = "--version", self_flag[] = "--self", separator[] = "--", version[] = AGC_VERSION;
-  char **arguments = agc_alloc(agc_size_mul((size_t)count + 5, sizeof *arguments));
+  char version_flag[] = "--version", self_flag[] = "--self", bdd_flag[] = "--embedded-bdd", separator[] = "--",
+       version[] = AGC_VERSION;
+  bool embedded_bdd = !replacement && agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
+  int input_count = embedded_bdd ? 6 : 5;
+  char **arguments = agc_alloc(agc_size_mul((size_t)count + (size_t)input_count, sizeof *arguments));
   arguments[0] = version_flag;
   arguments[1] = version;
   arguments[2] = self_flag;
   arguments[3] = (char *)self;
-  arguments[4] = separator;
-  for (int k = 0; k < count; k++) arguments[5 + k] = words[k];
+  int separator_at = 4;
+  if (embedded_bdd) arguments[separator_at++] = bdd_flag;
+  arguments[separator_at++] = separator;
+  for (int k = 0; k < count; k++) arguments[separator_at + k] = words[k];
   fe->std = std_sources(&fe->std_count);
   agc_launch_options options;
   agc_launch_defaults(&options);
   options.allow_run = true;
-  agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(count + 5, arguments, 0), fe);
+  agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(count + input_count, arguments, 0), fe);
   agc_outcome outcome = agc_vm_run(vm);
   bool crashed = outcome.kind == AGC_FAILED;
   int status = agc_launch_settle(vm, &outcome);

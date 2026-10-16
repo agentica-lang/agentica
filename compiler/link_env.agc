@@ -18,13 +18,14 @@ export enum StdProvider
   Embedded
 end
 
-## The inputs of one compile: where the std/ sources are, the environment, the Agentica version that the header of
-## the .agcb file names (the writer's input; the linker and the checker do not read it), the path of the `agentica`
-## binary that runs the front end ("" when the front end is run as an ordinary program with `agentica run`; a command
-## that starts the binary again, as `test` does, takes it from here), and the builtin catalog (reserved type names,
-## bare builtins, builtin enums and std-only modules).
+## The inputs of one compile: where the std/ sources are, whether this binary carries compiled BDD programs, the
+## environment, the Agentica version that the header of the .agcb file names (the writer's input; the linker and the
+## checker do not read it), the path of the `agentica` binary that runs the front end ("" when the front end is run as
+## an ordinary program with `agentica run`; a command that starts the binary again, as `test` does, takes it from
+## here), and the builtin catalog (reserved type names, bare builtins, builtin enums and std-only modules).
 export struct Settings
   std: StdProvider
+  embedded_bdd: Bool
   env: Env
   version: String
   self_path: String
@@ -43,12 +44,27 @@ end
 ## Settings for a stdlib/ folder and an environment. The version is "": a program that writes .agcb files sets it
 ## with `with(version: ...)`, and the writer refuses an empty one.
 export def settings(stdlib: String, env: Env) -> Settings
-  return Settings(std: StdProvider.Folder(stdlib), env: env, version: "", self_path: "", catalog: Builtins.catalog())
+  return Settings(
+    std: StdProvider.Folder(stdlib),
+    embedded_bdd: false,
+    env: env,
+    version: "",
+    self_path: "",
+    catalog: Builtins.catalog(),
+  )
 end
 
-## Settings for the std/ sources of the binary (FrontEnd.std_source), with the version the headers name.
-export def embedded_settings(env: Env, version: String) -> Settings
-  return Settings(std: StdProvider.Embedded, env: env, version: version, self_path: "", catalog: Builtins.catalog())
+## Settings for the std/ sources of the binary (FrontEnd.std_source), with the version the headers name and whether
+## it carries the compiled BDD programs.
+export def embedded_settings(env: Env, version: String, embedded_bdd: Bool) -> Settings
+  return Settings(
+    std: StdProvider.Embedded,
+    embedded_bdd: embedded_bdd,
+    env: env,
+    version: version,
+    self_path: "",
+    catalog: Builtins.catalog(),
+  )
 end
 
 ## The deadline, in milliseconds, of every file system call of the linker.

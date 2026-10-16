@@ -511,15 +511,15 @@ end
 # The payload types of a variant pattern: Ok and Err of a Result, or the variant of the enum the value has, with its
 # type arguments filled in. An error when the pattern names another enum or no such variant.
 def payload_types(cx: State.Cx, pattern: Ast.VariantPattern, value_type: T.Type) -> Result[List[T.Type]]
-  if T.is(value_type, "Result") and pattern.enum_name == "Result" and pattern.variant_name == "Ok"
-    return ok([T.item(value_type)])
-  elsif T.is(value_type, "Result") and pattern.enum_name == "Result" and pattern.variant_name == "Err"
-    return ok([T.Type.String])
-  elsif T.is(value_type, "Enum") and pattern.enum_name == T.name(value_type)
-    definition = cx.enums.get(pattern.enum_name)
-    if definition.ok?
-      return variant_payload(definition.unwrap!, pattern.variant_name, T.args(value_type))
-    end
+  case value_type
+    T.Type.Result(item) if pattern.enum_name == "Result" and pattern.variant_name == "Ok" -> return ok([item])
+    T.Type.Result(_) if pattern.enum_name == "Result" and pattern.variant_name == "Err" -> return ok([T.Type.String])
+    T.Type.Enum(name, args) if pattern.enum_name == name ->
+      definition = cx.enums.get(name)
+      if definition.ok?
+        return variant_payload(definition.unwrap!, pattern.variant_name, args)
+      end
+    _ -> return error("no such variant")
   end
   return error("no such variant")
 end

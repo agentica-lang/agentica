@@ -115,13 +115,19 @@ the file in the archive are gone.
 the binary runs as its front end. Its `main` reads the inputs
 (`compiler/front_end_inputs.agc`) and calls `Cli.run`
 (`compiler/front_end_cli.agc`), the one module that 8a replaces with the full
-CLI; the C side does not change. The contract:
+CLI. The contract:
 
-- **Arguments:** `--version V [--stdlib DIR] [--self PATH] -- WORDS...`. `V` is
-  required: the Agentica version that the writer puts in every `.agcb` header
+- **Arguments:** `--version V [--stdlib DIR] [--self PATH] [--embedded-bdd] --
+  WORDS...`. `V` is required: the Agentica version that the writer puts in
+  every `.agcb` header
   (`Writer.write(root_dir, program, version)` refuses an empty one; there is no
   `VERSION` constant in `compiler/`). Without `--stdlib` the `std/` sources come
   from the binary (`FrontEnd.std_source`); with it, from the files of `DIR`.
+  `--embedded-bdd` says that the binary also carries the compiled BDD runner
+  and default step program. C passes it to the carried front end only; a front
+  end supplied with `--front-end` gets the original arguments so older front
+  ends remain compatible. The first bootstrap binary embeds the sources but
+  not those programs.
   `PATH` is the path of the running binary (`Settings.self_path`, empty when
   the front end runs as an ordinary program with `agentica run`), for a command
   that starts the binary again: `test` runs the test runner and the programs

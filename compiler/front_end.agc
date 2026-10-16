@@ -5,9 +5,11 @@ import Inputs from "front_end_inputs"
 # compiles what the user asks for in memory and hands the program to C to run. docs/future/35-self-hosting.md, 35.3,
 # is the contract.
 #
-# Arguments: `--version V [--stdlib DIR] -- WORDS...` (front_end_inputs.agc). V is the Agentica version that every
-# .agcb header names; it is an input, never a constant of compiler/. Without --stdlib the std/ sources come from the
-# binary (FrontEnd.std_source); with it, from the files of DIR. WORDS are what the user typed after `agentica`.
+# Arguments: `--version V [--stdlib DIR] [--embedded-bdd] -- WORDS...`
+# (front_end_inputs.agc). V is the Agentica version that every .agcb header
+# names; it is an input, never a constant of compiler/. Without --stdlib the
+# std/ sources come from the binary (FrontEnd.std_source); with it, from the
+# files of DIR. WORDS are what the user typed after `agentica`.
 #
 # What it does: front_end_cli.agc, which step 8a replaces with the full CLI. It never reads standard input, never
 # opens a file the user did not name, and writes only the file `compile` is asked for. Exit status: 0, 1 for a problem
