@@ -170,6 +170,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Result",
     "Set",
     "Socket",
+    "Stream",
     "String",
     "System",
     "TCP",

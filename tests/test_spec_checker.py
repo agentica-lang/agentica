@@ -100,6 +100,15 @@ class SpecCheckerTest(TestCase):
                     "CHECK-REDEFINED-NAME", (2, 3), "with: Fn[Int, Int]\n")
         self.assert_clean("struct Hooks\n  with: Int\n  run: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n")
 
+    def test_stream_is_a_generic_type(self):
+        self.assert_clean(
+            "def accept(stream: Stream[Int]) -> Int\n  return 1\nend\n\n"
+            "def main() -> Void\nend\n\n"
+        )
+        text = ("def accept(stream: Stream[Void]) -> Int\n  return 1\nend\n\n"
+                "def main() -> Void\nend\n\n")
+        self.expect(text, "CHECK-VOID-TYPE", (1, 27), "Void")
+
     def test_pipe_calls_user_functions_and_builtins(self):
         for body in ("  n: Int = 1 |> add(2) |> add(3)\n  puts(n)",
                      "  r: Result[Int] = \" 4 \".trim |> parse()\n  puts(r.unwrap!)"):

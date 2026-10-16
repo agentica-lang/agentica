@@ -35,7 +35,9 @@ development skill's notes, the `docs/vm/` sections named in §27, and tests that
 assert codes and spans (checker tests, golden VM fixtures, site examples, and
 hermetic I/O tests against a Python counterpart on port 0). Section 27.4 adds
 two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
-8.2). Section 27.5 adds no item: its help hints come with 17a and 17b.
+8.2). On 2026-10-16 the owner moved 17e before `format` (15k) and started it
+on `feat/lazy-streams`. Section 27.5 adds no item: its help hints come with 17a
+and 17b.
 
 - [x] 17a `Task.map(items, limit, timeout_ms) do |x| ... end` (§27.1): bounded
   concurrency (`limit` 1 to 1024, `RUNTIME-INVALID-COUNT`), a per-item timeout
@@ -268,8 +270,10 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   `Test.run` leftover, a later `Task.map` timeout) leaves the file open until
   the end of the run, as a `File.open` handle does, until 24b; a crash of the
   task or of an ancestor closes it.
-- [ ] 17e `Stream[T]` (§27.4, step 2), order step 8.2, after 15f (the prelude)
-  and 17d. A builtin opaque generic and an immutable recipe: sources
+- [ ] **In progress on `feat/lazy-streams` (owner, 2026-10-16).** `Stream[T]`
+  (§27.4, step 2), order step 8.2, after 15f (the prelude) and 17d, before
+  `format` (15k) by the owner's decision. A builtin opaque generic and an
+  immutable recipe: sources
   `Stream.lines(path, buffer_bytes, timeout_ms)` (the block buffer of 17d) and
   `Stream.iterate(seed, f)`; lazy `map`, `filter`, `take(n)` and `take_while`;
   terminals `to_list(max)`, `each` and `reduce`, which return a `Result`. Steps

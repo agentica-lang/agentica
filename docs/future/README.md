@@ -1,7 +1,9 @@
 # Agentica: future grammar
 
-Status: proposals only. This document is not normative; implemented language
-behavior is specified in [`grammar.md`](../grammar.md).
+Status: proposals and design records. This document is not normative;
+implemented language behavior is specified in [`grammar.md`](../grammar.md).
+Section 27.4 step 1 (`File.each_line`) is built; step 2 (`Stream[T]`) is in
+progress on the roadmap.
 
 Working rule: when a phase of the [roadmap](../roadmap/README.md) finishes, its
 syntax moves from this document to the language reference in `docs/grammar/`
@@ -19,11 +21,11 @@ Section 25 (Ruby typed idioms) plans more Ruby forms for after 7i, lists others
 to evaluate later, and records the ones decided against. Section 26 (strict
 diagnostics) records that Agentica has no warnings and plans four new errors:
 unused imports, unused variables, unreachable code and ignored `Result` values.
-Section 27 (iteration and concurrent collections) plans `Task.map`, channels and
-`Task.await` with a timeout (returning the builtin enum `Await[T]`) as C
-builtins, and `File.each_line` (C) and a lazy `Stream[T]` (prelude code) in two
-steps, and records generators, fibers, Agent-style shared state and public locks
-as decided against. Section 28 (VM metrics) plans Prometheus metrics for
+Section 27 (iteration and concurrent collections) records built `Task.map`,
+channels, `Task.await` with a timeout (returning the builtin enum `Await[T]`),
+and `File.each_line`, plus the in-progress lazy `Stream[T]` prelude work in two
+steps; it also records generators, fibers, Agent-style shared state and public
+locks as decided against. Section 28 (VM metrics) plans Prometheus metrics for
 `agentica run`, with no language change. Section 29 (TLS contexts) plans
 `TlsContext`, an immutable handle built once and shared by connections, which
 replaces the TLS file paths of `TLS` and `HTTP` in one breaking step, and
@@ -113,7 +115,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Built (14a, 14b, 14c) |
 | 25 | Ruby typed idioms | [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md) | Part A planned (roadmap phase 15); Part B to evaluate later; Part C decided against |
 | 26 | Strict diagnostics | [`26-strict-diagnostics.md`](26-strict-diagnostics.md) | Planned (roadmap phase 16) |
-| 27 | Iteration and concurrent collections | [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md) | Channels (17b) and `Task.await` with a timeout (17c) built; `Task.map` planned (roadmap phase 17); `File.each_line` built (17d), `Stream[T]` planned (17e); generators and shared state decided against |
+| 27 | Iteration and concurrent collections | [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md) | Channels (17b), `Task.await` (17c), `Task.map` (17a) and `File.each_line` (17d) built; `Stream[T]` (17e) in progress before `format`; generators and shared state decided against |
 | 28 | VM metrics | [`28-vm-metrics.md`](28-vm-metrics.md) | Planned (roadmap phase 18) |
 | 29 | TLS contexts | [`29-tls-context.md`](29-tls-context.md) | Planned (roadmap phase 19, order step 7.4) |
 | 30 | HTTP on the VM: simple, synchronous, hybrid | [`30-hybrid-http.md`](30-hybrid-http.md) | Streaming (roadmap 20e to 20g, order step 7.4) and binary bodies planned; the rest of phase 20 is built: [`docs/vm/10-io-http.md`](../vm/10-io-http.md) |

@@ -200,6 +200,7 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Result(item) -> return Types.is(item, "Void") or vm_type?(cx, item)
     Types.Type.Task(item) -> return Types.is(item, "Void") or vm_type?(cx, item)
     Types.Type.Channel(item) -> return vm_type?(cx, item)
+    Types.Type.Stream(item) -> return vm_type?(cx, item)
     Types.Type.Struct(name) -> return cx.user_types.get(name, "") == "Struct"
     Types.Type.Enum(name, args) -> return cx.user_types.get(name, "") == "Enum"
     Types.Type.Fn(params, result) -> return fn_type?(cx, params, result)

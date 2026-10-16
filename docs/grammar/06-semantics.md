@@ -24,6 +24,7 @@ The grammar determines what can be written. The rules below determine which prog
 | `LogLevel` | Builtin enum of `std/logger`: `LogLevel.Debug`, `LogLevel.Info`, `LogLevel.Warning` and `LogLevel.Error`, in that order; matched with `case` like a user enum |
 | `LogEvent` | Builtin record of `std/logger` that a log handler receives: `level: LogLevel`, `message: String`, `fields: Map[String, String]`, `time_ms: Int` and `task: Int`; it is not JSON-decodable |
 | `Channel[T]` | Opaque bounded queue of `T` values that tasks send into and receive from |
+| `Stream[T]` | Reserved opaque generic recipe type; construction and operations are in development (§27.4, roadmap 17e) |
 | `Enum[T, ...]` | User-declared nominal sum type |
 | Declared struct | Nominal type with typed, immutable fields |
 

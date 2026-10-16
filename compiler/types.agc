@@ -19,6 +19,7 @@ export enum Type
   Result(Type)
   Task(Type)
   Channel(Type)
+  Stream(Type)
   List(Type)
   Set(Type)
   Map(Type, Type)
@@ -45,6 +46,7 @@ export def tag(type: Type) -> String
     Type.Result(item) -> return "Result"
     Type.Task(item) -> return "Task"
     Type.Channel(item) -> return "Channel"
+    Type.Stream(item) -> return "Stream"
     Type.List(item) -> return "List"
     Type.Set(item) -> return "Set"
     Type.Map(key, value) -> return "Map"
@@ -65,12 +67,13 @@ export def unknown?(type: Type) -> Bool
   return tag(type) == "Unknown"
 end
 
-## The element type of a List, Set, Result, Task or Channel; Unknown for any other type.
+## The element type of a List, Set, Result, Task, Channel or Stream; Unknown for any other type.
 export def item(type: Type) -> Type
   case type
     Type.Result(inner) -> return inner
     Type.Task(inner) -> return inner
     Type.Channel(inner) -> return inner
+    Type.Stream(inner) -> return inner
     Type.List(inner) -> return inner
     Type.Set(inner) -> return inner
     _ -> return Type.Unknown
@@ -143,6 +146,7 @@ export def same(a: Type, b: Type) -> Bool
     Type.Result(inner) -> return same(inner, item(b))
     Type.Task(inner) -> return same(inner, item(b))
     Type.Channel(inner) -> return same(inner, item(b))
+    Type.Stream(inner) -> return same(inner, item(b))
     Type.List(inner) -> return same(inner, item(b))
     Type.Set(inner) -> return same(inner, item(b))
     _ -> return true
@@ -255,6 +259,7 @@ export def to_text(type: Type) -> String
     Type.Result(item) -> return "Result[#{to_text(item)}]"
     Type.Task(item) -> return "Task[#{to_text(item)}]"
     Type.Channel(item) -> return "Channel[#{to_text(item)}]"
+    Type.Stream(item) -> return "Stream[#{to_text(item)}]"
     Type.List(item) -> return "List[#{to_text(item)}]"
     Type.Set(item) -> return "Set[#{to_text(item)}]"
     Type.Map(key, value) -> return "Map[#{to_text(key)}, #{to_text(value)}]"
@@ -273,6 +278,7 @@ export def debug_text(type: Type) -> String
     Type.Result(item) -> return "Result(#{debug_text(item)})"
     Type.Task(item) -> return "Task(#{debug_text(item)})"
     Type.Channel(item) -> return "Channel(#{debug_text(item)})"
+    Type.Stream(item) -> return "Stream(#{debug_text(item)})"
     Type.List(item) -> return "List(#{debug_text(item)})"
     Type.Set(item) -> return "Set(#{debug_text(item)})"
     Type.Map(key, value) -> return "Map(#{debug_text(key)}, #{debug_text(value)})"
