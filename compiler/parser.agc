@@ -707,7 +707,7 @@ def parse_update_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsA
   return ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
-# The position of the value after `name:` at pos; PARSE-UNEXPECTED-TOKEN with a help text for anything else .
+# The position of the value after `name:` at pos; PARSE-UNEXPECTED-TOKEN with a help text for anything else.
 def expect_update_argument(e: Base.Env, pos: Int) -> Result[Int]
   named = Base.plain_name?(e.tokens[pos])
   if named and Base.kind_at(e, pos + 1) == "colon"
