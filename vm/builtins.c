@@ -174,6 +174,7 @@ static agc_value builtin_list_repeat(agc_vm *vm, agc_value *args, uint32_t span)
   int64_t count = agc_as_int(vm, args[1]);
   if (count < 0 || count > AGC_MAX_LIST_COUNT)
     agc_fail(vm, "RUNTIME-INVALID-COUNT", "count must be between 0 and 1048576", span + 2);
+  if (count == 0) return vm->rt->empty_list;
   return agc_list_value(agc_list_repeat(args[0], (size_t)count));
 }
 
@@ -186,18 +187,23 @@ static size_t list_count(agc_vm *vm, const agc_list *l, agc_value count, uint32_
 
 static agc_value builtin_list_take(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
-  return agc_list_value(agc_list_slice(a, 0, list_count(vm, a, args[1], span)));
+  size_t count = list_count(vm, a, args[1], span);
+  if (count == 0) return vm->rt->empty_list;
+  return agc_list_value(agc_list_slice(a, 0, count));
 }
 
 static agc_value builtin_list_drop(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
   size_t k = list_count(vm, a, args[1], span);
+  if (k == agc_list_len(a)) return vm->rt->empty_list;
   return agc_list_value(agc_list_slice(a, k, agc_list_len(a) - k));
 }
 
 static agc_value builtin_list_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_list_value(agc_list_reverse(agc_as_list(vm, args[0])));
+  const agc_list *a = agc_as_list(vm, args[0]);
+  if (agc_list_len(a) < 2) return args[0];
+  return agc_list_value(agc_list_reverse(a));
 }
 
 static agc_value builtin_list_sort(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -218,6 +224,7 @@ static agc_value builtin_map_size(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value map_walk(agc_vm *vm, const agc_map *m, bool values, uint32_t span) {
+  if (m->size == 0) return vm->rt->empty_list;
   agc_value *keys = agc_map_keys(vm, m, span);
   agc_list_builder b;
   agc_list_builder_sized(&b, m->size);
@@ -421,6 +428,7 @@ static agc_value builtin_range_to_a(agc_vm *vm, agc_value *args, uint32_t span) 
   uint64_t size;
   if (!range_size(vm, args[0], &size) || size > (uint64_t)AGC_MAX_LIST_COUNT)
     agc_fail(vm, "RUNTIME-INVALID-COUNT", "to_a needs a range of at most 1048576 values", span + 1);
+  if (size == 0) return vm->rt->empty_list;
   agc_list_builder b;
   agc_list_builder_sized(&b, (size_t)size);
   int64_t first = agc_as_range(vm, args[0])->start;

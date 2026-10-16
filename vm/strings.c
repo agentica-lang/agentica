@@ -320,6 +320,7 @@ static agc_value builtin_split(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *s = agc_as_string(vm, args[0]), *sep = agc_as_string(vm, args[1]);
   agc_list_builder b;
   if (sep->bytes == 0) {
+    if (s->chars == 0) return vm->rt->empty_list;
     agc_list_builder_sized(&b, s->chars);
     size_t at = 0;
     bool ascii = s->bytes == s->chars;
