@@ -1,7 +1,7 @@
 ## The constants of src/bytecode.rkt: the format version, the limits of the format, and the opcode numbers with the
-## groups of opcodes that share an operand layout. A test compares OPCODES with `opcodes` of src/bytecode.rkt. The
-## Agentica version of the header is not here: it is an input of the front end (the version of Settings in
-## link_env.agc, docs/future/35-self-hosting.md, 35.3).
+## groups of opcodes that share an operand layout. tests/test_frontend_bytecode.py checks OPCODES against vm/value.h.
+## The Agentica version of the header is not here: it is an input of the front end (Settings in link_env.agc,
+## docs/future/35-self-hosting.md, 35.3).
 
 ## The largest value of a u16 operand, and of every count the VM reads as a u16.
 export MAX_U16 = 65535

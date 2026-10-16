@@ -1,4 +1,3 @@
-RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
@@ -9,7 +8,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # the std/ sources are linked in with .incbin).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica build build-tests test test-slow test-rkt test-py test-cli test-distribution clean test-bdd smoke goldens frontend-freeze frontend-snapshot bench eval-references version vm-test vm-latency vm-fuzz stage1 stage2 stage3 stage0 fixed-point racket-fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: dist/agentica
 
@@ -24,21 +23,16 @@ vm exe cli bdd-driver:
 # their output before they write it, so a compiler that exits 0 without writing cannot pass for the previous file.
 .DELETE_ON_ERROR:
 
-# The version is the one line of the VERSION file (src/version.rkt embeds it when it is compiled, C gets it as AGC_VERSION).
+# The version is the one line of the VERSION file (C gets it as AGC_VERSION).
 version:
 	@printf '%s' '$(AGC_VERSION)'
 
-build:
-	$(RACO) make src/main.rkt
-
-# Two frameworks side by side while the tests move from rackunit to Python unittest (docs/future/35-self-hosting.md
-# section 35.10, references/ci.md): a .rkt file in TESTS goes to raco test, a tests/test_<area>.py file to unittest, and a
-# directory (the default, tests/) to both. A test lives in one framework only.
+# The tests are Python unittest modules, tests/test_<area>.py (docs/future/35-self-hosting.md section 35.10,
+# references/ci.md), and need no Racket. TESTS names modules, or directories that hold them (the default is tests/).
 # All tests, in parallel:      make test
-# A subset:                    make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt tests/test_vm_bits.py"
+# A subset:                    make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"
 # More or fewer workers:       make test JOBS=8
 PYTHON ?= python3
-RKT_TESTS = $(filter-out %.py,$(TESTS))
 # TESTS without a leading ./ or a trailing /. A directory contributes its own test_*.py files, not those of subdirectories
 # (tests/eval/test_*.py are not unittest modules for this runner).
 TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
@@ -46,38 +40,33 @@ PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency): a directory in TESTS does not pick them up
 PY_ALONE = tests/test_vm_latency.py
 PY_TESTS = $(sort $(PY_FILES) $(filter-out $(PY_ALONE),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
-# A .py path outside tests/test_<area>.py would build a wrong module name below
-PY_BAD = $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
+# A file that is not tests/test_<area>.py (a .rkt file, or a .py file elsewhere) would build a wrong module name below
+PY_NOT_DIR = $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(if $(wildcard $(t)/.),,$(t)))
+PY_BAD = $(PY_NOT_DIR) $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
 PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a tests/test_<area>.py file))
 # tests/test_x.py -> tests.test_x (run from the repository root, so tests/agentica_test.py imports as tests.agentica_test)
 PY_MODULE = $(subst /,.,$(patsubst %.py,%,$(1)))
-RKT_FLAGS ?=
 
-# -k: the unittest run still happens when the rackunit run fails, so one run shows every failure.
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
-test: build dist/agentica
+test: dist/agentica
 	@: $(PY_CHECK)
-	@$(MAKE) --no-print-directory -k test-rkt test-py AGENTICA_TEST_SLOW=
+	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=
 
-# The slow tier: the (module+ slow ...) cases of the .rkt files and the @slow cases of the .py files
-# (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after make test; a local run does not.
-# A .rkt file without a slow submodule is skipped; with the flag a .py file runs only its @slow cases.
-test-slow: build dist/agentica
+# The slow tier: the @slow cases of the .py files (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after
+# make test; a local run does not. With the flag a .py file runs only its @slow cases.
+test-slow: dist/agentica
 	@: $(PY_CHECK)
-	@$(MAKE) --no-print-directory -k test-rkt test-py RKT_FLAGS="--submodule slow --no-run-if-absent" AGENTICA_TEST_SLOW=1
+	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=1
 
-# Hang guards, innermost first: the limit of one test (tests/agentica_test.py), then this limit of one test module or
-# rackunit file, then the timeout-minutes of the job in ci.yml. Seconds, times AGENTICA_TEST_TIMEOUT_SCALE (default 1),
+# Hang guards, innermost first: the limit of one test (tests/agentica_test.py), then this limit of one test module,
+# then the timeout-minutes of the job in ci.yml. Seconds, times AGENTICA_TEST_TIMEOUT_SCALE (default 1),
 # which also stretches the deadlines inside the tests. The slow tier gets the longer base.
 MODULE_BASE_LIMIT = $(if $(filter-out 0,$(AGENTICA_TEST_SLOW)),1800,600)
 MODULE_LIMIT = $(shell awk -v scale='$(or $(AGENTICA_TEST_TIMEOUT_SCALE),1)' -v base=$(MODULE_BASE_LIMIT) 'BEGIN { printf "%d", base * scale }')
 
-test-rkt:
-	@test -z "$(RKT_TESTS)" || $(RACO) test $(RKT_FLAGS) --timeout $(MODULE_LIMIT) -j $(JOBS) $(RKT_TESTS)
-
 # One unittest process per module, run by make itself: -j gives the workers, -O (GNU make 4.0 or newer) keeps each
 # module's output together, -k runs the other modules after a failure. A failing module shows its unittest report and a make error line.
-# CI (CI is set) fails when Python is missing; a local run reports a skip, like the Racket tests do for their peers.
+# CI (CI is set) fails when Python is missing; a local run reports a skip.
 test-py:
 	@: $(PY_CHECK)
 	@if [ -n "$(PY_TESTS)" ]; then \
@@ -102,9 +91,8 @@ py-test/%: FORCE
 	else $(PYTHON) -m unittest $(call PY_MODULE,$*); fi
 
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
-# diagnostics, the programs, `agentica test`, `agentica run`. None of them needs Racket: the comparison with the Racket
-# oracle is tests/test_cli_parity.py, which make test runs and which needs `build` (compiled Racket).
-CLI_TESTS ?= tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
+# diagnostics, the programs, `agentica test`, `agentica run`.
+CLI_TESTS ?= tests/test_cli_forms.py tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
   tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
 test-cli: dist/agentica
 	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/dist/agentica" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
@@ -129,38 +117,19 @@ smoke: dist/agentica
 
 # ci.yml, sweep.yml and the release tests run their checks as the targets below, so the same command works locally.
 
-# Compile every Racket test module
-build-tests: build
-	$(RACO) make -j $(JOBS) tests/*.rkt
-
 # The built binary, copied away from the checkout, still imports its std/ modules
 test-distribution: dist/agentica
 	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/dist/agentica $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
 
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
-# Without FIXTURES it also rewrites the front-end goldens of tests/fixtures/frontend/ from the Racket stages
-goldens: build dist/agentica
+# Without FIXTURES it also rewrites the CLI output golden tests/fixtures/cli/forms.json (tests/test_cli_forms.py) and the
+# front-end goldens of tests/fixtures/frontend/ from the Agentica stages (tools/refreeze.py, fast tier only: run
+# `python3 tools/refreeze.py` with no flag to rewrite the frozen manifests of the slow tier too, slow).
+goldens: dist/agentica
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.test_vm_stack
-	test -n "$(FIXTURES)" || racket tests/frontend-lexer-common.rkt
-	test -n "$(FIXTURES)" || racket tests/frontend-parser-common.rkt
-	test -n "$(FIXTURES)" || racket tests/frontend-modules-common.rkt
-	test -n "$(FIXTURES)" || racket tests/frontend-catalog-common.rkt
-	test -n "$(FIXTURES)" || racket tests/frontend-check-common.rkt
-
-# The Racket stages once more: writes what they print for the inputs of tests/fixtures/frontend/frozen/ (the live
-# comparisons of the tests/frontend-*-test.rkt slow tiers, frozen for tests/test_frontend_*.py). Needs Racket, so it ends with
-# the Racket stages (docs/future/35-self-hosting.md 35.10, phase 3). Slow (about five minutes); one stage or some:
-#   make frontend-freeze FREEZE_STAGES="lexer parser"
-FREEZE_STAGES ?= lexer parser modules check lower bytecode catalog
-frontend-freeze: build dist/agentica
-	for stage in $(FREEZE_STAGES); do racket tests/frontend-$$stage-freeze.rkt || exit 1; done
-
-# Takes the snapshot of examples/, stdlib/, tests/fixtures/, compiler/, the cases of tests/checker-test.rkt and the site
-# programs that the frozen comparisons run on. Run it once to make a freeze, not with every change of those folders: the
-# snapshot is a fixed set of inputs.
-frontend-snapshot: build
-	racket tests/frontend-freeze-corpus.rkt
+	test -n "$(FIXTURES)" || $(PYTHON) -m tests.test_cli_forms freeze
+	test -n "$(FIXTURES)" || $(PYTHON) tools/refreeze.py --fast-only
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
 vm-golden-check: dist/agentica
@@ -206,7 +175,7 @@ site-serve: site-sass
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
-# make vm-unicode         regenerate vm/unicode_data.c from Racket
+# make vm-unicode         regenerate vm/unicode_data.c from Racket (the one build step that still needs it)
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
 # make AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
@@ -489,7 +458,6 @@ VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LIN
 #   dist/agentica  linked with stage2: the product
 # make fixed-point        the above, then dist/agentica compiles the front end once more; that must be stage2 as well
 # make stage0             refresh bootstrap/stage0.agcb from stage2, after the fixed point holds (references/ci.md)
-# make racket-fixed-point while Racket exists: its compile of compiler/ must be stage2 too
 # The stages are the same bytes in every mode (release, SANITIZE=1, ...): a mode builds its own first binary, and runs the stages
 # again only when one of their inputs changed. The GC stress build is the exception: it links the stage2 that the release mode
 # built, because compiling under it would collect every 64 allocations.
@@ -502,7 +470,7 @@ STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES) VERSION
 STAGE0 := bootstrap/stage0.agcb
 BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)
 # The compiler that makes stage1: the first binary. make stage0 STAGE1_COMPILER=... names another one when stage0 cannot
-# compile the current compiler/ (a binary built from the parent commit, or "racket src/main.rkt" while Racket exists).
+# compile the current compiler/ (a binary built from the parent commit).
 STAGE1_COMPILER ?= $(BOOT)
 STAGE1_NEEDS := $(if $(filter $(BOOT),$(STAGE1_COMPILER)),$(BOOT))
 
@@ -569,15 +537,6 @@ fixed-point: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
 	rm -f $(STAGE_DIR)/stage4.agcb
 	dist/agentica$(EXE) compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
 	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage4.agcb || { echo "fixed point: dist/agentica compiles another front end" >&2; exit 1; }
-
-# While Racket exists, its stage1 must be stage2 as well: the two front ends emit the same bytes (a slow, optional check).
-$(STAGE_DIR)/stage1-racket.agcb: $(STAGE_INPUTS) $(wildcard src/*.rkt) | build
-	@mkdir -p $(STAGE_DIR)
-	rm -f $@
-	racket src/main.rkt compile $(FRONT_END_SRC) -o $@
-
-racket-fixed-point: $(STAGE_DIR)/stage1-racket.agcb $(STAGE_DIR)/stage2.agcb
-	cmp $(STAGE_DIR)/stage1-racket.agcb $(STAGE_DIR)/stage2.agcb || { echo "Racket's stage1 and stage2 differ" >&2; exit 1; }
 
 # A new stage0 is the stage2 of a checkout where the fixed point holds. The next make rebuilds everything from it.
 stage0: $(STAGE_DIR)/stage3.agcb
@@ -647,7 +606,7 @@ vendored-check:
 	  build/vm/release/agentica run --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored binary does not report OpenSSL $$ossl" >&2; exit 1; }
 
 # vendored-check, then the TLS and HTTP tests on that binary
-vendored-test: vendored-check build
+vendored-test: vendored-check
 	AGENTICA_VM_BINARY=build/vm/release/agentica $(MAKE) --no-print-directory test-py JOBS=2 TESTS="tests/test_vm_tls.py tests/test_vm_http.py"
 
 vm-unicode:

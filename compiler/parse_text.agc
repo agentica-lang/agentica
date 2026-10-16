@@ -24,8 +24,8 @@ export struct Margin
 end
 
 ## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node
-## per line: `role: kind #id span attributes`, children indented by two spaces. tests/frontend-parser-common.rkt prints
-## the same text from the Racket tree.
+## per line: `role: kind #id span attributes`, children indented by two spaces. The goldens are in
+## tests/fixtures/frontend/parser/.
 export def parse_text(text: String) -> String
   return parse_text_from(text, 0)
 end

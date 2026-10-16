@@ -1,8 +1,8 @@
 """The Agentica lowering (compiler/lower.agc) against the frozen output of the Racket lowering.
 
-tests/frontend-lower-test.rkt compares the two live. This module compares the Agentica lowering with what the Racket
-lowering printed once for the same inputs (`make frontend-freeze`, tests/frontend-lower-freeze.rkt): the corpus
-(examples/ and tests/fixtures/vm/ as they were at the freeze), the programs of the cases of tests/checker-test.rkt, every
+This module compares the Agentica lowering with what the Racket lowering printed once for the same inputs (frozen in
+tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
+(examples/ and tests/fixtures/vm/ as they were at the freeze), the programs of the cases of the old checker test, every
 std/ module, the compiler, trees at the nesting limit and a program of 300 functions. Inputs that are a formula are
 rebuilt here; the manifests hold their hashes.
 """

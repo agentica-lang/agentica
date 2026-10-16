@@ -59,13 +59,14 @@
   stuck FIFO, a non-UTF-8 working directory, invalid UTF-8 arguments, deep tail
   calls, long strings, a large generated input checked against a line splitter
   written in the test, and a CRLF program under a non-ASCII path.
-- **Compiler.** `tests/bytecode-test.rkt` checks the bytecode the lowering
-  writes: adjacent steps merge into one `STEP`, only a returned user call
-  becomes a tail call, a map literal above 255 entries adds the rest with
-  `Map.put`, a block captures after its parameters, `for` over a range literal
-  counts without a `Range` value, the opcode numbers match `vm/value.h`, JSON
-  field types are written only for programs that use them (up to 1024 nested
-  levels), and `compile` exits 1 on a diagnostic and 2 on an unwritable output.
+- **Compiler.** `tests/test_frontend_bytecode.py` and the spec tests check the
+  bytecode the lowering writes: adjacent steps merge into one `STEP`, only a
+  returned user call becomes a tail call, a map literal above 255 entries adds
+  the rest with `Map.put`, a block captures after its parameters, `for` over a
+  range literal counts without a `Range` value, the opcode numbers match
+  `vm/value.h`, JSON field types are written only for programs that use them (up
+  to 1024 nested levels), and `compile` exits 1 on a diagnostic and 2 on an
+  unwritable output.
 - **Corpora.** Float text has a fixed table in `vm/tests/float_text_test.c` and
   the `float-text` fixture (2.2). The write escapes are checked where the data
   is made: `vm/tools/gen-unicode.rkt` compares its C rule with Racket's `write`

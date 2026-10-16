@@ -18,7 +18,6 @@ make -s vm-third-party-key           # their build key (includes a libgc=system|
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make stage1 stage2 stage3            # the front end (compiler/front_end.agc) in build/stage/: a first binary linked with bootstrap/stage0.agcb compiles stage1; stage1 compiles stage2; stage2 compiles stage3 (--front-end); stage2 == stage3
 make fixed-point                     # the stages, dist/agentica (Linux: the VM, vm/agentica.c, stage2 and the std/ sources embedded by vm/tools/gen-embedded.sh), and dist/agentica compiling the front end gives stage2 again (about 25 s after the VM objects are built); CI runs it in `test` and in `vm-sanitizers`
-make racket-fixed-point              # while Racket exists: racket src/main.rkt compile of compiler/front_end.agc is stage2 too
 make stage0                          # refresh bootstrap/stage0.agcb from stage2 (references/ci.md, "Refreshing stage0")
 make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
 make CCACHE=                         # without ccache (used when installed and its cache dir is writable)
@@ -95,8 +94,7 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
 - `build/vm/<mode>/obj/tests/*_test.o` are `.SECONDARY`, so make keeps them
   and a second `make vm-test` recompiles nothing.
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
-  flags change. Run `make build` (raco make) before many calls of the Racket
-  oracle, or each one recompiles `src/`.
+  flags change.
 - Golden tests (`docs/vm/README.md` §1, `docs/vm/12-testing-and-pr-plan.md`
   §12.1): `tests/test_vm_diff_1.py` … `test_vm_diff_8.py` (unittest) run each
   fixture of `tests/fixtures/vm/` on the VM and compare exit code, stdout,
@@ -208,7 +206,6 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   shard 8 and the CLI tests. `AGENTICA_VM_BINARY=path` makes the tests
   run another build of the binary (`make vm-gc-stress` uses it
   for `build/vm/gcstress/agentica`).
-  `tests/bytecode-test.rkt` needs no VM binary.
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
   `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS
   -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when its stamp

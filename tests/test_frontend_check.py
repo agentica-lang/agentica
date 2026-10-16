@@ -1,10 +1,10 @@
 """The Agentica checker (compiler/check.agc) against the frozen output of the Racket checker.
 
-tests/frontend-check-test.rkt compares the two live. This module compares the Agentica checker with what the Racket
-checker printed once for the same inputs (`make frontend-freeze`, tests/frontend-check-freeze.rkt): the programs of the
-cases of tests/checker-test.rkt, 1,500 mutants of them, the corpus (examples/ and tests/fixtures/vm/ as they were at the
-freeze), every std/ module, the compiler, trees around the nesting limit and a program of 1,000 functions. Inputs that
-are a formula are rebuilt here; the manifests hold their hashes.
+This module compares the Agentica checker with what the Racket checker printed once for the same inputs (frozen in
+tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the programs of the cases
+of the old checker test (now also in tests/test_spec_checker_rest.py), 1,500 mutants of them, the corpus (examples/ and
+tests/fixtures/vm/ as they were at the freeze), every std/ module, the compiler, trees around the nesting limit and a
+program of 1,000 functions. Inputs that are a formula are rebuilt here; the manifests hold their hashes.
 """
 import re
 import time

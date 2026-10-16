@@ -293,7 +293,7 @@ goldens stay.
 | 5 | **Done** (PR #282): Lowering (`src/lower.rkt`) | The IR in a text form of its own (not `--dump-ir`, see the status note below), or the `LOWER-` diagnostic. The port carries the lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by 44a2-2): scalar literal constants inlined, the other kept constants as zero-parameter functions, the `<start>` entry, the pruning by reachability from `main`, and the order of `Checked.constants`. The text form is `tests/frontend-lower-common.rkt` (Racket) and `compiler/lower.agc` (Agentica) |
 | 6 | **Done** (PR #286): Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal (not a text form: the test compares the bytes of `compiler/bytecode.agc` with the ones Racket writes; see the status note below). The port writes every section as `src/bytecode.rkt` does, format version 5 with the Updates and Globals sections, and has its `BYTECODE-` diagnostics |
 | 7 | **Done** (7a, the OS builtins the port needs, audited in 35.5, PR #288; 7b, the driver, PR #294): BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`, `tests/unit-test-test.rkt`). The port is `compiler/bdd.agc` over the `compiler/bdd_*.agc` modules; see the status note below |
-| 8 | **8a, 8b, 8c, 8d-1 and 8d-2 done** (PRs #299, #298, #297, #301 and #310; 8d-3 is next): CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
+| 8 | **Done** (8a, 8b, 8c, 8d-1, 8d-2 and 8d-3: PRs #299, #298, #297, #301, #310 and #311): CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
 
 Notes:
 
@@ -423,9 +423,9 @@ Notes:
     8a and 8b.
   - **8d, the switch**, in three PRs. **8d-1** (done, PR #301) moved the tests
     that needed Racket for no good reason to Python. **8d-2** (done) is the
-    switch, described in "Step 8d-2 status" below. **8d-3** (next) removes the
-    rackunit files with their make targets and CI steps (the second half of
-    phase 3).
+    switch, described in "Step 8d-2 status" below. **8d-3** (done, PR
+    #311) removed the rackunit files with their make targets and CI steps
+    (the second half of phase 3), described in "Step 8d-3 status" below.
   - No release with both front ends in between: it would keep two front ends
     alive longer (risk 1 of 35.7), and the private alpha has no external users
     who need it.
@@ -569,15 +569,27 @@ Notes:
     builds on Linux only. `platforms.yml` (macOS and Windows, run by hand) now
     builds only the C VM and its C tests; a port of the embedding to those
     platforms is later work (35.7).
-  - **What 8d-3 removes.** The rackunit files (`tests/*-test.rkt`,
-    `frontend-*-common.rkt`, `frontend-*-freeze.rkt`, `vm-diff-common.rkt`), the
-    `frontend-freeze` and `frontend-snapshot` targets, the Racket jobs and
-    steps of CI (`build-tests`, `racket-fixed-point`, the Racket cache), and
-    the oracle role of `src/main.rkt`. The deletion of `src/*.rkt` follows the
-    conditions of 35.3. `examples/process-tool.agc` spawns `racket --version`
-    as its example of an outside tool, and `tests/test_examples.py` expects
-    that output, so `make test-cli` still finds `racket` on the `PATH` (it
-    does not compile anything); 8d-3 picks another tool.
+  - **Step 8d-3 status. Done** (PR #311). It removed the rackunit files
+    (all of `tests/*.rkt`: the stage tests, `frontend-*-test.rkt`,
+    `frontend-*-common.rkt`, `frontend-*-freeze.rkt`, `vm-diff-common.rkt`,
+    `info.rkt`), `tests/test_cli_parity.py`, the targets that only ran Racket
+    (`build`, `build-tests`, `test-rkt`, `frontend-freeze`,
+    `frontend-snapshot`, `racket-fixed-point`) and the Racket steps and
+    caches of CI (`warm-cache`, the Racket setup of `test`, `vm-sanitizers`
+    and `site-examples.yml`). `make test` and `make test-slow` are Python
+    only, and no test, make target or workflow runs `racket` or `raco` except
+    the generated-file check of `vm/unicode_data.c` (`make vm-unicode-check`,
+    the `unicode` and `warm-unicode` jobs), which waits for the port of
+    `vm/tools/gen-unicode.rkt` (35.3). The deletion of `src/*.rkt` follows the
+    conditions of 35.3; the oracle role of `src/main.rkt` is over, and no test
+    uses it. `examples/process-tool.agc` spawns `sh -c "echo hello from sh"`
+    now. The language rules of the stage tests that no spec PR had moved
+    are `tests/test_spec_checker_rest.py` (the checker cases, from
+    `tests/fixtures/spec/checker-rest.json`) and
+    `tests/test_spec_diagnostic.py` (the text form of a diagnostic); the
+    options and diagnostic forms that `tests/test_cli_parity.py` compared with
+    Racket are frozen in `tests/fixtures/cli/forms.json`
+    (`tests/test_cli_forms.py`).
 - No language change lands in a stage while its port is open (35.7).
 - **Reading source files. Done** (decided by the owner on 2026-10-15). The two
   front ends used to read differently: Racket's `file->string` replaced invalid
@@ -1288,7 +1300,7 @@ Considered and rejected:
 **The harness.** The tests are black-box. A test runs the product CLI, runs
 `agentica run` directly when it checks the VM alone, and runs the stage programs
 of `compiler/` while they exist. The product CLI was `racket src/main.rkt` until
-step 8, and is the single binary now (Racket stays as an oracle until 8d-3). A
+step 8, and is the single binary now (Racket was an oracle until 8d-3). A
 test compares the output with a golden or a peer: tokens, AST text, linked text,
 diagnostics (code and span, never message text), `.agcb` bytes, CLI exit codes,
 stdout and stderr.
@@ -1320,8 +1332,8 @@ stdout and stderr.
   needed. Tests that open sockets use port 0 and clean up their children. If a
   case ever needs more, it is a tiny stdlib script for the summary and subset
   selection.
-- `make test TESTS=...` selects files of either kind: a `.rkt` file goes to
-  rackunit, a `.py` file to unittest.
+- `make test TESTS=...` selects `tests/test_<area>.py` files or directories
+  (during the migration it took `.rkt` files too, for rackunit).
 
 A test lives in one framework only. Each area PR deletes the `.rkt` files it
 replaces, and the docs that name a moved file change in the same PR. Finding
@@ -1439,3 +1451,23 @@ in rackunit until phase 3.
   flags, a front end that stops with an error exits 2, a closed pipe on
   `--version`, a failing stdin read in the binary, and that `AGENTICA_VM`
   changes nothing. 8d-3 removes the rackunit files.
+  **Status: 8d-3 is done** (PR #311): phase 3 and the whole migration are
+  complete. The test suite is Python `unittest` only and needs no Racket (a
+  run with `racket` and `raco` replaced by failing shims passes). Removed: all
+  `tests/*.rkt` files, `tests/test_cli_parity.py`, the rackunit targets of the
+  Makefile and their CI steps. What the removed files leave behind: the
+  frozen goldens of `tests/fixtures/frontend/frozen/` stay, because the Python
+  tests read them (`make goldens` and `tools/refreeze.py` rewrite them from
+  the Agentica stages); the language rules of the stage tests are spec tests
+  through the CLI (`--json check FILE`, code and span, never message text):
+  the checker cases in `tests/test_spec_checker.py` (spans, pipes, nesting)
+  and `tests/test_spec_checker_rest.py` (the rest, 534 programs in
+  `tests/fixtures/spec/checker-rest.json`), the text form of a diagnostic in
+  `tests/test_spec_diagnostic.py`, and the lexer, parser, modules and
+  bytecode rules in the spec-test PRs #305 to #308. Two contracts of the
+  removed Racket tests now have a Python test of their own: the opcode numbers
+  against `agc_opcode` in `vm/value.h`, and every builtin implementation key
+  against `VM_BUILTINS`. The options, the three diagnostic forms, program
+  runs, `compile` and `help` of the command line are frozen in
+  `tests/fixtures/cli/forms.json`; the freeze was taken from the Racket CLI and
+  the binary, which agreed on all 126 cases.

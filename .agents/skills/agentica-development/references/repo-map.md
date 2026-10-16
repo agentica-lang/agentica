@@ -20,7 +20,7 @@ src/
   version.rkt     # the version string, read from the VERSION file at compile time
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
   bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
-  main.rkt        # the Racket oracle's CLI driver (until 8d-3): lex, parse, link, check, lower, then run bytecode from a temp file with `dist/agentica run` (`check` only, --dump the tree, --dump-ir, `compile -o`); `test` says it is the binary's; exit 1 on a diagnostic, 2 on usage, a missing file or a missing binary
+  main.rkt        # the Racket oracle's CLI driver (until src/ goes; no test runs it): lex, parse, link, check, lower, then run bytecode from a temp file with `dist/agentica run` (`check` only, --dump the tree, --dump-ir, `compile -o`); `test` says it is the binary's; exit 1 on a diagnostic, 2 on usage, a missing file or a missing binary
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (make stage0 refreshes it; references/ci.md)
 compiler/         # the front end in Agentica (35.4, one stage per PR); lexer, parser, modules, linker, checker, lowering, bytecode writer and BDD driver so far; agentica.toml holds its [style] (lines at most 119 characters)
   source.agc token.agc diagnostic.agc  # Position and Span, Token and its Value, Diagnostic and Outcome[T]
@@ -147,36 +147,15 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     text_test.c          # text forms
     tls_test.c           # TLS adapter
     trace_test.c         # trace points
-tests/            # rackunit files and unittest modules (test_<area>.py); the lists of references/vm-tests.md say which covers what
-  lexer-test.rkt  # the lexer (references/stages.md)
-  parser-test.rkt  # the parser (references/stages.md)
-  checker-test.rkt  # ranges, JSON contracts and other checker rules (references/stages.md)
-  modules-test.rkt  # import linking, visibility, cross-file diagnostics, from the linker and the checker in process (references/language-notes.md)
+tests/            # unittest modules (test_<area>.py; no Racket); the lists of references/vm-tests.md say which covers what
+  test_spec_<area>.py  # unittest: the language rules through the CLI (`--json check FILE`: code and span, no message text): the checker (test_spec_checker.py: spans, pipes, nesting; test_spec_checker_rest.py: the other rules, cases in fixtures/spec/checker-rest.json), the text form of a diagnostic (test_spec_diagnostic.py)
+  test_cli_forms.py  # unittest: the options, the three diagnostic forms, runs, compile and help of dist/agentica against fixtures/cli/forms.json (`python3 -m tests.test_cli_forms freeze` rewrites it; references/ci.md)
   test_modules.py  # unittest: programs of several files, pkg roots, the JSON example and step handlers through the CLI (references/language-notes.md)
-  diagnostic-test.rkt  # excerpt and caret format (references/stages.md)
   test_examples.py  # unittest: examples/*.agc, rejected fragments, CLI exit codes; slow: every malformed input of the algorithm examples (references/stages.md)
-  bytecode-test.rkt  # step merging, opcode list vs vm/value.h, every builtin in vm-builtins (references/vm-lowering.md)
-  frontend-corpus-common.rkt  # shared by the frontend-*-test.rkt files: the compiled stage's temp folder, the VM run, the `== path` output sections, the .agc corpus listing
-  frontend-lexer-common.rkt  # the lexer text form and goldens (references/frontend.md)
-  frontend-lexer-test.rkt  # the Racket printer against its goldens, invalid UTF-8 and nesting against Racket (the Agentica lexer against the goldens is in test_frontend_lexer.py; references/frontend.md)
-  frontend-parser-common.rkt  # the parser text form (node ids, spans) and goldens (references/frontend.md)
-  frontend-parser-test.rkt  # fast: the Racket printer against its goldens, limits and node ids against Racket; slow: live and generated comparisons (references/frontend.md)
-  frontend-modules-common.rkt  # the linked program text form and goldens (fixture folders in tests/fixtures/frontend/modules/; references/frontend.md)
-  frontend-modules-test.rkt  # fast: the Racket printer against its goldens, ids and error cases against Racket; slow: corpus, site, large inputs (references/frontend.md)
-  frontend-catalog-common.rkt  # the builtin catalog text form (tables, signatures, shapes, probes) and its golden (references/frontend.md)
-  frontend-catalog-test.rkt  # the generated compiler/builtins_data.agc and the Racket text form of the catalog against its golden (references/frontend.md)
-  frontend-check-common.rkt  # the checker text form (types, resolutions, diagnostic notes) printed from src/checker.rkt, and its goldens (references/frontend.md)
-  frontend-lower-common.rkt  # the lowering text form (IR, sources, structs, enums, spans, constants) printed from src/lower.rkt, and its goldens (tests/fixtures/frontend/lower/; references/frontend.md)
-  frontend-lower-test.rkt  # fast: the Racket printer against its goldens, Agentica lowering on examples/; slow: tests/fixtures/vm, checker-test programs, std/ and compiler/, deep trees at the limit, a generated program
-  frontend-bytecode-test.rkt  # fast: the .agcb bytes of the Agentica writer against the Racket writer on the lowering fixtures, examples/, fixtures/frontend/bytecode/ and the synthetic programs of fixtures/frontend/limits/; slow: tests/fixtures/vm, std/ and compiler/, deep trees, a generated program
-  frontend-check-test.rkt  # fast: the Racket printer against its goldens; slow: both checkers on the corpus, mutants, deep trees, a large program
-  frontend-freeze-common.rkt, frontend-freeze-corpus.rkt, frontend-<stage>-freeze.rkt  # the Racket writers of the frozen comparisons (`make frontend-freeze`, `make frontend-snapshot`; references/frontend.md)
-  test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # unittest: the Agentica stages against tests/fixtures/frontend/frozen/ and the goldens of tests/fixtures/frontend/<stage>/ (references/frontend.md); frontend_support.py and frontend_cases.py are their helpers; test_frontend_refreeze.py tests tools/refreeze.py
+  test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # unittest: the Agentica stages against tests/fixtures/frontend/frozen/ and the goldens of tests/fixtures/frontend/<stage>/ (references/frontend.md); frontend_support.py and frontend_cases.py are their helpers; test_frontend_refreeze.py tests tools/refreeze.py (the rackunit files and the Racket writers of the frozen files were removed in step 8d-3)
   test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
   test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
   test_filesystem.py  # unittest: File and Path programs on the VM (references/vm-io.md)
-  info.rkt        # the Racket package info: the tests the runner omits (none now; test_vm_latency.py is kept out by PY_ALONE in the Makefile)
-  vm-diff-common.rkt  # helper of the frontend-*-test.rkt files only: the VM path, compile-file in process, run-process; goes with them
   vm_diff_support.py  # the golden harness: fixtures, sidecars, sweeps, `make goldens` (references/vm-build.md)
   test_vm_diff_{1..8}.py  # unittest: shards of the golden tests; shard 8 is the VM command line, the product CLI and the process, signal and path cases (references/vm-build.md)
   test_vm_latency.py  # unittest: the latency check, run alone by make vm-latency (references/vm-tasks.md)
@@ -192,7 +171,7 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   test_vm_stack.py  # unittest: stack-trace stderr in the three formats (references/vm-tests.md)
   test_vm_file_lines.py  # unittest: File.each_line on the VM (references/vm-tests.md)
   test_vm_os.py   # unittest: the OS builtins of the BDD driver port, with real contention between VMs (references/vm-tests.md)
-  test_single_binary.py  # unittest: dist/agentica against the Racket CLI, `agentica run`, the guarded FrontEnd builtins, the options of the hand-off, --front-end with fixtures/single-binary/front.agc (references/vm-tests.md); the fixed point is a CI step, not a test
+  test_single_binary.py  # unittest: dist/agentica: the exit status and problems of a source file, `agentica run`, the guarded FrontEnd builtins, the options of the hand-off, --front-end with fixtures/single-binary/front.agc (references/vm-tests.md); the fixed point is a CI step, not a test
   test_stdlib_modules.py  # unittest: stdlib/MODULES names each stdlib/ source once (no binary needed)
   test_vm_test_protocol.py  # unittest: a Python peer plays a test runner over the child channel (references/vm-tests.md)
   test_vm_child_channel.py  # unittest: the child channel on its own, against Python peers (references/vm-tests.md)
@@ -205,7 +184,6 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   test_stdlib_distribution.py  # unittest: a copy of the binary alone still finds std/ and runs `agentica test` (references/ci.md)
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
   test_bdd.py  # unittest: agentica test over the CLI: step programs, isolation (references/bdd.md)
-  test_cli_parity.py  # unittest: the binary's command line against the Racket one: exit code, stdout, stderr
   test_bdd_integration.py  # unittest: programs under test, limits, seed, cleanup; slow: 1 MiB outputs, big JSON line, killed driver (references/bdd.md)
   test_unit_test.py  # unittest: agentica test on *_test.agc files; slow: the test timeout, stderr flood, endless print, flooding listing (references/bdd.md)
   std/            # *_test.agc unit tests of the std/ modules

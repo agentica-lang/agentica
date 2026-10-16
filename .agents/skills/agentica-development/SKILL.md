@@ -32,27 +32,25 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 
 ```sh
 make                                      # build dist/agentica, the one binary, from bootstrap/stage0.agcb (git submodule update --init first; no Racket)
-make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"  # .rkt: rackunit, .py: unittest
+make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"  # unittest modules, one process each; no Racket
 dist/agentica examples/hello.agc          # run a program; `check file.agc` only checks; `run -- file.agcb` runs bytecode
-racket src/main.rkt examples/hello.agc    # the Racket oracle (until 8d-3): the same words, through dist/agentica run
+racket src/main.rkt examples/hello.agc    # the Racket oracle (until src/ goes): the same words; no test uses it
 make test-cli                             # the product command line tests on dist/agentica
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
 make fixed-point                          # stage2 == stage3, and dist/agentica compiles the front end to stage2 again (about 25 s)
 make stage0                               # refresh bootstrap/stage0.agcb from stage2 (references/ci.md, "Refreshing stage0")
 make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
-make frontend-freeze                      # rewrite the frozen Racket outputs of tests/fixtures/frontend/frozen/ (references/frontend.md); needs Racket, slow
-python3 tools/refreeze.py                  # rewrite those goldens from the Agentica stages (no Racket) and print what changed; --stage, --fast-only
+python3 tools/refreeze.py                  # rewrite the frozen goldens of tests/fixtures/frontend/ from the Agentica stages (no Racket), fast and slow tier, and print what changed; --stage, --fast-only
 make vm-golden-check FIXTURES="a b"       # CI golden check of only those fixtures; make goldens FIXTURES="a b" rewrites only them
 make dup-check                            # jscpd: a new copy fails CI; share a helper instead
 make site                                 # before merging a site change
 ```
 
-Run the stage tests the change touches (`make test TESTS=...`, which builds the
+Run the tests the change touches (`make test TESTS=...`, which builds the
 binary first) and run the affected example with `dist/agentica`. Two tiers:
-put fast cases in `(module+ test ...)` (rackunit) or in a `tests/test_<area>.py`
-module (unittest, `references/ci.md`) and slow ones (live corpus, generated
-inputs, stress) in `(module+ slow ...)` or marked `@slow`. Locally run only the
-fast tier; CI runs the slow tier with `make test-slow` after `make test`. CI
+put fast cases in a `tests/test_<area>.py` module (unittest,
+`references/ci.md`) and slow ones (frozen corpus, generated inputs, stress)
+marked `@slow`. Locally run only the fast tier; CI runs the slow tier with `make test-slow` after `make test`. CI
 runs everything else (`references/ci.md`, "What CI runs").
 
 ## Stage contract
@@ -73,11 +71,11 @@ runs everything else (`references/ci.md`, "What CI runs").
 | AST node | by default waits for the parser port (35.4 step 2); then `compiler/` |
 | syntax form | by default waits for the parser port; `src/parser.rkt` only for a bug fix |
 | diagnostic code | where the problem is found; prefix `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-` (`references/stages.md` lists them) |
-| builtin | `src/builtins.rkt` metadata, checker rule, the `vm-builtins` table in `src/lower.rkt` and `VM_BUILTINS` in `compiler/lower_tables.agc` (a test enforces that they match), C in `vm/`, a golden (`references/vm-builtins.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
+| builtin | the Agentica catalog data (`compiler/builtins_data.agc`, golden in `tests/fixtures/frontend/catalog/`), the checker rule, `VM_BUILTINS` in `compiler/lower_tables.agc` (`tests/test_frontend_catalog.py` checks every catalog key is in it), C in `vm/`, a golden; `src/builtins.rkt` and `vm-builtins` in `src/lower.rkt` are the frozen oracle and no test cross-checks them now (a bug-fix row there is optional) (`references/vm-builtins.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
-| pipeline stage | `src/<stage>.rkt`, wired in `src/main.rkt`, `tests/<stage>-test.rkt` |
+| pipeline stage | `compiler/<stage>.agc`, wired in `compiler/front_end.agc`, with `tests/test_spec_<area>.py` for its rules and a golden test in `tests/test_frontend_<stage>.py` |
 | `std/` module | `stdlib/<name>.agc`, listed in `stdlib/MODULES` (what `src/stdlib.rkt` and the single binary embed), a doc on the module and every export, comments and code style (line width, strings) as `references/library-notes.md` says |
-| test | `tests/<stage>-test.rkt` (rackunit) only for a Racket stage or a live comparison (`tests/frontend-*-test.rkt`), otherwise `tests/test_<area>.py` (unittest, `tests/agentica_test.py` helpers, product CLI as a child: `cli()`, `AGENTICA_TEST_EXECUTABLE`); VM behavior: a fixture in `tests/fixtures/vm/` with its `.expected` |
+| test | `tests/test_<area>.py` (unittest, only; a language rule is `tests/test_spec_<area>.py` through `--json check FILE`, code and span, no message text; `tests/agentica_test.py` helpers, product CLI as a child: `cli()`, `AGENTICA_TEST_EXECUTABLE`); VM behavior: a fixture in `tests/fixtures/vm/` with its `.expected` |
 | language rule | `docs/grammar/`, the site page, and the programming skill (`.agents/skills/agentica-programming/`) |
 
 ## VM rules in short

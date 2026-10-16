@@ -61,8 +61,8 @@ Process.close(p: Process) -> Void
 - [x] Test independent local Node children, including nonzero exits, full-duplex
   I/O, cancellation, PID cleanup, BDD allowance, and source/compiled CLI
   behavior; require Node in CI.
-- [x] Add examples/process-tool.agc, which runs racket --version and checks its
-  Result and exit code; include it in CI with --allow-run.
+- [x] Add examples/process-tool.agc, which runs a shell command (`sh -c`) and
+  checks its Result and exit code; include it in CI with --allow-run.
 
 ### 1. Everyday library (remaining phase 5n and supporting utilities)
 

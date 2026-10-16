@@ -12,7 +12,7 @@ import Text from "text"
 ## as `module "path"`, with its declarations (without export, names linked) one level deeper, in the node text form of
 ## parse_text with ids that start at 0 inside the file. The path is the stored name of the file (Paths.stored_name):
 ## relative to the folder of the root file, with `..` parts above it, or std/NAME.agc. A failure is the lexer's ERROR
-## line with ` file="path"` added. tests/frontend-modules-common.rkt prints the same text from the Racket program.
+## line with ` file="path"` added. The goldens are in tests/fixtures/frontend/modules/.
 export def link_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) -> return program_lines(linked, {}).join("\n")

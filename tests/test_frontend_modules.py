@@ -1,7 +1,7 @@
 """The Agentica linker (compiler/link.agc) against the frozen output of the Racket linker.
 
-tests/frontend-modules-test.rkt compares the two live. This module compares the Agentica linker with what the Racket
-linker printed once for the same inputs (`make frontend-freeze`, tests/frontend-modules-freeze.rkt): the corpus
+This module compares the Agentica linker with what the Racket linker printed once for the same inputs (frozen in
+tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
 (examples/, stdlib/ and tests/fixtures/ as they were at the freeze), the programs of the site, 300 mutated fixtures,
 long chains of files, deep trees, files that are not UTF-8 or over 1 MiB, and the number of node ids each file takes.
 Inputs that are a formula are rebuilt here; the manifests hold their hashes.

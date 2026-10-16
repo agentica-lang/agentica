@@ -77,8 +77,7 @@ class TestTimeout(AssertionError):
 # The time limit of a run, as in the VM golden harness (tests/vm_diff_support.py).
 RUN_TIMEOUT = scaled(60)
 
-# `make test-slow` sets this. The two tiers are exclusive, like the rackunit
-# `test` and `slow` submodules: with the flag only @slow cases run, without it
+# `make test-slow` sets this. The two tiers are exclusive: with the flag only @slow cases run, without it
 # the @slow cases are skipped.
 SLOW = os.environ.get("AGENTICA_TEST_SLOW", "") not in ("", "0")
 
@@ -232,7 +231,7 @@ def vm_command():
 
 
 def _missing(message):
-    """CI fails when a tool is missing; a local run skips (AGENTS.md). AGENTICA_REQUIRE_VM is the flag of the Racket tests."""
+    """CI fails when a tool is missing; a local run skips (AGENTS.md). AGENTICA_REQUIRE_VM fails the same way."""
     if os.environ.get("CI") or os.environ.get("AGENTICA_REQUIRE_VM"):
         raise RuntimeError(message)
     raise unittest.SkipTest(message)

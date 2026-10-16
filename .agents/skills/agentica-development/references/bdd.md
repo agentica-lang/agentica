@@ -239,8 +239,7 @@ How `agentica test` works: the driver (`compiler/bdd_driver.agc`, part of the fr
   which runs in its own child VM, so nothing leaks.
 
 - Programs under test run on the host with the inherited environment, through
-  the same Agentica command (the compiled executable, or Racket and
-  `src/main.rkt` from source), with the feature directory as their working
+  the same Agentica command (the binary, `settings.self_path`), with the feature directory as their working
   directory. The child VM's signal guard stops them when a scenario ends, times
   out or fails.
 
