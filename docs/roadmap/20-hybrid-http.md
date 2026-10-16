@@ -252,7 +252,10 @@ the server).
   error; a raw reset may use Node `net`). Docs: `docs/grammar.md`,
   `references/network.md` (the one-form-per-job table of §30.11),
   `site/content/library/io-and-system/network.md`, `docs/vm/10-io-http.md`
-  §10.7, the development skill, CHANGELOG ("Added").
+  §10.7, the development skill, CHANGELOG ("Added"). Design note (owner,
+  §30.13): `HTTP.open` is the public low-level HTTP/1.1 connection, like
+  Python's `http.client`; decide in its design whether a connection whose body
+  was read to the end can carry a second request.
 - [ ] 20f **Streamed uploads** (§30.11), order step 7.4.
   `HTTP.upload(client, method, url, headers, length, body: Channel[String]) -> Result[HttpResponse]`:
   `length` is the exact byte count or -1 for chunked; a body that ends short or

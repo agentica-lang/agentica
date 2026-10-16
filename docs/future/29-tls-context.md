@@ -294,7 +294,7 @@ one-way test because nothing else can express it:
 | Option | Record | One-way test |
 |---|---|---|
 | `min_version` (`"1.2"` or `"1.3"`) | both | passes: today the floor is fixed at 1.2 |
-| `alpn: List[String]`, with `TLS.alpn(socket) -> String` to read the result | both | passes: no other way to offer protocols |
+| `alpn: List[String]`, with `TLS.alpn(socket) -> String` to read the result (planned as item 19c, §30.13) | both | passes: no other way to offer protocols |
 | Client certificates (mTLS): `cert_file` and `key_file` on `TlsClientOptions`; `client_ca_file` on `TlsServerOptions`, which makes the server require and verify a client certificate | both | passes |
 | `ca_data` (PEM text in memory, for a CA that ships inside the program) | client | passes only if it is the one way for in-memory PEM; it does not replace `ca_file` for files |
 | Peer certificate info (`TLS.peer_certificate(socket)`: subject, names, validity) | none, a socket builtin | passes |
