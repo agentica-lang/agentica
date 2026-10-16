@@ -62,6 +62,15 @@ int main(void) {
   round_trip("{\"b\":1,\"a\":2,\"b\":3,\"\":4,\"\xc3\xa9\":5,\"Z\":6,\"a\\u0000\":7}",
              "{\"\":4,\"Z\":6,\"a\":2,\"a\\u0000\":7,\"b\":3,\"\xc3\xa9\":5}");
 
+  /* Keys and string values of no or one ASCII character are the run's shared Strings. */
+  const char *small = "{\"\":\"\",\"a\":\"b\",\"cd\":\"ef\"}";
+  j = parse(small, strlen(small));
+  assert(j->count == 3 && j->members[0].key == vm.rt->empty_string && j->members[1].key == vm.rt->chars['a']);
+  assert(j->members[2].key != NULL && j->members[2].key->bytes == 2);
+  assert(agc_as_string(&vm, agc_as_json(&vm, j->members[0].value)->scalar) == vm.rt->empty_string);
+  assert(agc_as_string(&vm, agc_as_json(&vm, j->members[1].value)->scalar) == vm.rt->chars['b']);
+  assert(agc_as_string(&vm, agc_as_json(&vm, j->members[2].value)->scalar)->bytes == 2);
+
   size_t keys = 5000;
   char *wide = malloc(keys * 24 + 2);
   assert(wide);
