@@ -1,16 +1,17 @@
 ## 25. Ruby typed idioms
 
 **Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator
-(order 7.2): 25.1 (defaults, front end only) as order row 7.5a, deferred until
-after the bootstrap (row 7.2.7); 25.2, 25.4, 25.5, 25.9 and 25.10 at order step
-7.6, after the strict diagnostics of [section
-26](26-strict-diagnostics.md#26-strict-diagnostics); and the prelude part, 25.6
-and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved
-to Part C. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists
-ideas that were decided against, so they are not proposed again. Decided by the
-user on 2026-10-12. 25.3 (struct update `with`) is implemented (roadmap item
-15c, moved before the bootstrap on 2026-10-15). 25.14 (the pipe operator) is
-implemented (roadmap item 15l, order row 7.2.1g).
+(order 7.2): 25.1 (defaults, front end only) as order row 7.5a, built after the
+bootstrap; 25.2, 25.4, 25.5, 25.9 and 25.10 at order step 7.6, after the strict
+diagnostics of [section 26](26-strict-diagnostics.md#26-strict-diagnostics); and
+the prelude part, 25.6 and 25.11, at order step 8.2, after faster lists (8d).
+25.7 and 25.8 were moved to Part C. Part B (25.12) lists ideas to evaluate
+later. Part C (25.13) lists ideas that were decided against, so they are not
+proposed again. Decided by the user on 2026-10-12. 25.1 (default parameter
+values) is implemented (roadmap item 15a, order row 7.5a, in `compiler/`). 25.3
+(struct update `with`) is implemented (roadmap item 15c, moved before the
+bootstrap on 2026-10-15). 25.14 (the pipe operator) is implemented (roadmap item
+15l, order row 7.2.1g).
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
 that models already know, with the rule of [section
@@ -100,6 +101,18 @@ one.
 
 ### 25.1 Default parameter values
 
+Implemented in 15a: the rules are in `grammar` ("Default parameter values" in
+`docs/grammar/06-semantics.md`). This section keeps the design notes. It was
+built in `compiler/` (the Racket front end named below is gone): the parser
+reads `= expression` after the type (`Ast.Param.default`), the linker resolves
+the default in the declaring module (`rewrite.agc`), `check_defaults.agc` has
+the order and value checks and the type check, `defaults.agc` has the argument
+rules that the checker and the lowering share, and `lowering` emits the missing
+arguments at the call site (`lower_expr.agc`). The simplest choices where the
+design left room: the order and value checks run when the function is
+registered, the type check with the function; a default may not read a module
+constant; the arity message gives the range only for a function with defaults.
+
 ```agentica
 def join(xs: List[String], sep: String = ", ") -> String
   return xs.join(sep)
@@ -172,12 +185,12 @@ constant load, an empty list or map, or an `enum` instruction for a nullary enum
 variant). Every call in the bytecode passes all its arguments, so the bytecode
 and the VM do not change.
 
-**`std/logger`:** this item does not block it. Until this item lands,
-the logger has two functions per level (`info` and `info_meta`, [section
-24.2](24-logging.md#242-stdlogger)). When it lands, `std/logger` drops its
-`_meta` functions, and each level function takes an optional `fields`
-parameter with the default `{}`. That is a breaking change, which the owner
-accepts, since the language has no outside users.
+**`std/logger`:** this item did not block it. The logger had two functions per
+level (`info` and `info_meta`, [section 24.2](24-logging.md#242-stdlogger)).
+When this item landed, `std/logger` dropped its `_meta` functions, and each
+level function takes an optional `fields` parameter with the default `{}`. That
+was a breaking change, which the owner accepted, since the language has no
+outside users.
 
 **Tests:** parsing and spans; each code; `each_line("a.txt", 50)` with no block,
 which passes `50` to `f` and gives `CHECK-TYPE-MISMATCH`, not `CHECK-ARITY`;

@@ -1,0 +1,15 @@
+import Models from "models"
+
+## Defaults after the type: a literal, a negative number, an empty list or map, an enum variant, an expression.
+def join(xs: List[String], sep: String = ", ", level: Models.Level = Models.Level.Info) -> String
+  return xs.join(sep)
+end
+
+def numbers(a: Int = -1, b: Float = -2.5, c: Bool = true, d: Map[String, Int] = {}, e: List[Int] = [],) -> Void
+end
+
+def blocks(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void
+end
+
+def wrong(a: Int = 1 + 2, b: Int = x(), c: String = "a#{1}b") -> Void
+end

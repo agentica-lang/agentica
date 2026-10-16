@@ -369,6 +369,17 @@ class SpecParser(TestCase):
                       "  puts(t.title)\n  xs = [1, 2,]\n  puts(xs[1])\n"))
         self.check_output([Output(program, ["7", "3", "x", "2"])])
 
+    def test_a_default_value_follows_the_type_of_a_parameter(self):
+        program = (
+            "def add(a: Int, b: Int = 10, c: Int = -1,) -> Int\n  return a + b + c\nend\n\n"
+            + main_of("  puts(add(1))\n  puts(add(1, 2))\n  puts(add(1, 2, 3))\n"))
+        self.check_output([Output(program, ["10", "2", "6"])])
+        self.check_rejected([
+            Reject("def f(a: Int =) -> Void\nend\n\n", "PARSE-UNEXPECTED-TOKEN", (1, 15, 1, 16)),
+            Reject("def f(a: Int = 1 2) -> Void\nend\n\n", "PARSE-UNEXPECTED-TOKEN", (1, 18, 1, 19)),
+            Reject("def f(a = 1) -> Void\nend\n\n", "PARSE-UNEXPECTED-TOKEN", (1, 9, 1, 10)),
+            Reject(main_of("  [1].each do |x = 1|\n    puts(x)\n  end\n"), "PARSE-UNEXPECTED-TOKEN", (2, 18, 2, 19))])
+
     def test_a_struct_update_is_with_after_a_dot_with_named_arguments_only(self):
         person = "struct Person\n  name: String\n  age: Int\nend\n\nstruct Box\n  with: Int\nend\n\n"
         self.check_output([

@@ -1,0 +1,1 @@
+ERROR CHECK-TYPE-MISMATCH 41:1:42-42:1:43 "expected String, found Int" "convert it with String.from_int(...)" expected="String" actual="Int" signature="join(xs: List[String], sep: String) -> String" file="default-type.agc"

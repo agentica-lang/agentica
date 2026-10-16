@@ -26,7 +26,7 @@ URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`, 
 
 `std/logger` is imported with `import Logger from "std/logger"`. It calls the internal module `LogRegistry`, which no other module can name (`CHECK-UNKNOWN-NAME`). `LogLevel` and `LogEvent` are builtin types and their names are reserved in every program (`CHECK-REDEFINED-NAME`).
 
-There are four levels, `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`. Each level has two functions: `Logger.debug(message)` and `Logger.debug_meta(message, fields)`, and the same for `info`, `warning` and `err` (the function for the last level is `err` because `error` is reserved; the output says `error`). `Logger.log(level, message)` and `Logger.log_meta(level, message, fields)` take the level as a value. Fields are a `Map[String, String]`.
+There are four levels, `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`. Each level has one function, `Logger.debug(message, fields)`, and the same for `info`, `warning` and `err` (the function for the last level is `err` because `error` is reserved; the output says `error`). `fields` is a `Map[String, String]` with the default `{}`, so `Logger.info("started")` and `Logger.info("request done", {"path": "/items"})` are both calls. `Logger.log(level, message, fields)` takes the level as a value.
 
 The global level (`Logger.set_level`, `info` by default) is checked first, by every call. Each handler has its own level and gets an event only when the event is at or above it. `Logger.enabled?(level)` is true only if the level is at or above the global level and some attached handler accepts it, so a costly message goes inside `if Logger.enabled?(LogLevel.Debug)`.
 

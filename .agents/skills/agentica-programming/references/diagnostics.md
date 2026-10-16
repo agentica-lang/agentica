@@ -46,7 +46,8 @@ A runtime trace names each file as you can open it from the working directory (`
 | `CHECK-TYPE-MISMATCH` | a value, operand, condition, argument, or return has the wrong type; also printing or interpolating a value without `to_s` (a function, task or handle). Int with Float: `n.to_f`, `x.to_i!`; String with a number: `s.to_i!`, `n.to_s`; `<` on Strings: only numbers are ordered |
 | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD` | a name, type, or field that does not exist (`continue` says `next`; `Map.new` says `m: Map[String, Int] = {}`); also a field that `value.with(...)` names but the struct lacks |
 | `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING` | duplicate declaration, shadowing, annotation on an existing name; an `Fn` field named `with` (`value.with(...)` is the struct update, so rename the field) |
-| `CHECK-ARITY` | wrong number of arguments |
+| `CHECK-ARITY` | wrong number of arguments; for a function with default values the message gives the range (`expects 1 to 2 arguments`) |
+| `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE` | a parameter without a default after one with a default (only a last `Fn` parameter may stay without one); a default that is not a constant (a literal, `true`, `false`, `nil`, `[]`, `{}` or an enum variant without a payload): make the parameter required instead |
 | `CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD` | struct construction fields |
 | `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE` | an empty `[]` or `{}`, respectively, with no expected type: annotate it, `m: Map[String, Int] = {}` |
 | `CHECK-RESULT-TYPE` | an error constructor without an expected Result type |

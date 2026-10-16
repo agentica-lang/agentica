@@ -11,22 +11,17 @@ The first call of any `Logger` function attaches a handler named `console` that 
 ## Levels
 
 ```text
-Logger.debug(message: String) -> Void
-Logger.debug_meta(message: String, fields: Map[String, String]) -> Void
-Logger.info(message: String) -> Void
-Logger.info_meta(message: String, fields: Map[String, String]) -> Void
-Logger.warning(message: String) -> Void
-Logger.warning_meta(message: String, fields: Map[String, String]) -> Void
-Logger.err(message: String) -> Void
-Logger.err_meta(message: String, fields: Map[String, String]) -> Void
-Logger.log(level: LogLevel, message: String) -> Void
-Logger.log_meta(level: LogLevel, message: String, fields: Map[String, String]) -> Void
+Logger.debug(message: String, fields: Map[String, String] = {}) -> Void
+Logger.info(message: String, fields: Map[String, String] = {}) -> Void
+Logger.warning(message: String, fields: Map[String, String] = {}) -> Void
+Logger.err(message: String, fields: Map[String, String] = {}) -> Void
+Logger.log(level: LogLevel, message: String, fields: Map[String, String] = {}) -> Void
 Logger.level() -> LogLevel
 Logger.set_level(level: LogLevel) -> Void
 Logger.enabled?(level: LogLevel) -> Bool
 ```
 
-The levels are the builtin enum `LogLevel`: `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`. The function for the last level is `err`, because `error` is a reserved name; the output still says `error`. Each level has a plain function and a `_meta` function that takes fields.
+The levels are the builtin enum `LogLevel`: `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`. The function for the last level is `err`, because `error` is a reserved name; the output still says `error`. Each level has one function, and `fields` is optional: it defaults to `{}`, so `Logger.info("started")` and `Logger.info("request done", {"path": "/items"})` are both calls.
 
 The global level is `info` until `set_level` changes it, and every call checks it first: a call below it makes no event. Each handler also has its own level and gets only events at or above it. `enabled?` is true only if the level is at or above the global level and some attached handler would accept it, so a costly message belongs inside an `if`. In the example the console handler is at `info`, so `enabled?` is false for `debug` until a handler at `debug` is attached.
 
@@ -43,7 +38,7 @@ def main() -> Void
   _ = Logger.attach("trace", LogLevel.Debug, &Logger.stderr_text)
   puts(Logger.enabled?(LogLevel.Debug))
   if Logger.enabled?(LogLevel.Debug)
-    Logger.debug_meta("lines", {"count": count_lines().to_s})
+    Logger.debug("lines", {"count": count_lines().to_s})
   end
   Logger.set_level(LogLevel.Info)
   puts(Logger.enabled?(LogLevel.Debug))
@@ -179,6 +174,5 @@ end
 
 - `LogEvent` and `LogLevel` are builtin types, and their names are reserved: a struct or enum with either name is `CHECK-REDEFINED-NAME`.
 - The handlers and the global level live in the VM and belong to one run. A child started with `Process.spawn` has its own.
-- There are no flags and no per-task metadata: pass `fields` on each call.
-- Default parameter values do not exist yet, so each level has two functions.
-- Log calls are normal code and count against `--max-steps`. A call below the global level, or one that no handler accepts, costs one function call, one builtin call and one comparison.
+- There are no flags and no per-task metadata: pass `fields` on each call, as the optional second argument.
+- Log calls are normal code and count against `--max-steps`. A call below the global level, or one that no handler accepts, costs one function call, one builtin call and one comparison, plus the empty map that a call without `fields` passes (about 0.07 µs more than the call alone).

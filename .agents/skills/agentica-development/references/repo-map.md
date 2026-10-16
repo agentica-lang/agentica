@@ -26,6 +26,7 @@ compiler/         # the front end in Agentica (35.4, one stage per PR); lexer, p
   check_register.agc check_stmt.agc check_expr.agc  # declarations and main; functions, blocks, statements, case; expressions and operators (CHECK-TOO-DEEP)
   check_call.agc check_method.agc  # calls, enum constructors, struct construction and update; methods and fields (Resolved by node id)
   check_rules.agc check_list.agc check_collections.agc check_args.agc  # the rule of each builtin
+  defaults.agc check_defaults.agc  # default parameter values: the Shape of a function and how a call fills it (shared by the checker and the lowering); CHECK-DEFAULT-ORDER, CHECK-DEFAULT-VALUE and the type of a default
   check_const.agc const_walk.agc  # module constants: order, CHECK-CONSTANT-CYCLE, the value and type rules; the children and reads of an initializer
   check_help.agc check_names.agc check_flow.agc check_unused.agc  # help texts, method names, what a body returns, CHECK-UNUSED-VALUE
   check_tables.agc  # method tables and foreign-name helps as data, edited by hand
