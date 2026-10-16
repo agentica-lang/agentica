@@ -1,0 +1,1 @@
+ERROR LEX-HEREDOC-ONE-LINE 4:1:5-8:1:9 "a heredoc needs two or more lines of text" "write one line of text as a string literal, such as \"text\\n\"; a heredoc is for two lines or more"

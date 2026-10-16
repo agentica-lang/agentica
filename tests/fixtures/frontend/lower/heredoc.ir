@@ -1,0 +1,44 @@
+program 0:1:1-15:1 entry=1 globals=0
+source 0 "heredoc.agc" chars=210
+fn0 "label" params=2 captures=0 slots=5 @ 0:1:1-7:1
+    step @ 0:2:3-3:1
+    step @ 0:2:10-2:17
+    const r2 "name: " @ 0:2:10-2:17
+    step @ 0:3:13-3:17
+    move r3 r0 @ 0:3:13-3:17
+    concat r2 r2 r3 @ 0:2:10-2:17
+    const r3 "\ncount: " @ 0:2:10-2:17
+    concat r2 r2 r3 @ 0:2:10-2:17
+    step @ 0:4:14-4:23
+    step @ 0:4:14-4:19
+    step @ 0:4:22-4:23
+    const r4 int:1 @ 0:4:22-4:23
+    add-i r3 r1 r4 @ 0:4:20-4:21
+    to-text r3 r3 @ 0:2:10-2:17
+    concat r2 r2 r3 @ 0:2:10-2:17
+    const r3 "\n" @ 0:2:10-2:17
+    concat r2 r2 r3 @ 0:2:10-2:17
+    return r2 @ 0:2:3-3:1
+    const r2 void @ 0:1:1-7:1
+    return r2 @ 0:1:1-7:1
+fn1 "main" params=0 captures=0 slots=3 entry @ 0:8:1-15:1
+    step @ 0:9:3-10:1
+    step @ 0:9:3-9:22
+    step @ 0:9:8-9:21
+    step @ 0:9:14-9:17
+    const r1 "a" @ 0:9:14-9:17
+    step @ 0:9:19-9:20
+    const r2 int:1 @ 0:9:19-9:20
+    call r1 fn0 @ 0:9:8-9:21
+    move r0 r1 @ 0:9:8-9:21
+    call-builtin r0 "puts" 1 @ 0:9:3-9:22 0:9:8-9:21
+    step @ 0:10:3-11:1
+    step @ 0:10:3-10:24
+    step @ 0:10:8-10:23
+    step @ 0:10:8-10:16
+    const r1 "one\ntwo\n" @ 0:10:8-10:16
+    call-builtin r1 "String.length" 1 @ 0:10:8-10:23 0:10:8-10:16
+    move r0 r1 @ 0:10:8-10:23
+    call-builtin r0 "puts" 1 @ 0:10:3-10:24 0:10:8-10:23
+    const r0 void @ 0:8:1-15:1
+    return r0 @ 0:8:1-15:1

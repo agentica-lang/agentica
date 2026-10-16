@@ -298,6 +298,12 @@ export def token_text(token: Tokens.Token) -> String
   end
 end
 
+## Whether a `string` token is a heredoc (25.10). The lexer gives a heredoc the lexeme of its opener, `<<~NAME`, and
+## a string literal the lexeme of its quotes, so the parser tells them apart with no field on the token.
+export def heredoc?(token: Tokens.Token) -> Bool
+  return token.lexeme.starts_with?("<<~")
+end
+
 ## The literal value of an integer, float or string token.
 export def literal_value(token: Tokens.Token) -> Ast.LitValue
   case token.value
@@ -344,6 +350,11 @@ export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   kind = token.kind
   if kind == "name"
     return parse_name_pattern(e, pos, ids)
+  end
+  if kind == "string" and heredoc?(token)
+    return error(
+      unexpected_help(e, pos, "a heredoc is not a pattern", "write the pattern as a \"...\" string literal"),
+    )
   end
   if kind == "integer" or kind == "float" or kind == "string"
     return literal_pattern(e, ids, literal_value(token), pos, pos + 1)

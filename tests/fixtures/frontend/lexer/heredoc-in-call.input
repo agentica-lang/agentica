@@ -1,0 +1,9 @@
+puts(f(<<~A,
+  one #{1 + 2}
+  two
+A
+  x))
+y = g(<<~B) # a comment
+  b1
+  b2 #{h("n#{k}")} #{{"k": 1}["k"]}
+B

@@ -1087,11 +1087,15 @@ def adjacent?(first: Tokens.Token, second: Tokens.Token) -> Bool
   return first.span.stop.offset == second.span.start.offset
 end
 
-# Help for a / or * where an expression should start: // and /* */ are not comments in Agentica.
+# Help for a / or * where an expression should start: // and /* */ are not comments in Agentica. Also for the second <
+# of <<, Ruby's push.
 def primary_help(e: Base.Env, pos: Int) -> Diag.Help
   token = e.tokens[pos]
   if token.kind == "do"
     return Base.hint("a block must follow a call, as in xs.map do |x| ... end; there are no standalone lambdas")
+  end
+  if token.kind == "less" and pos > 0 and e.tokens[pos - 1].kind == "less" and adjacent?(e.tokens[pos - 1], token)
+    return Base.hint("there is no << operator; add to a list with xs = xs.push(x)")
   end
   if token.kind != "divide" and token.kind != "multiply"
     return Diag.Help.NoHelp
@@ -2002,6 +2006,16 @@ def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   return error(Base.unexpected(e, pos + 1, message))
 end
 
+# The path of an import. A heredoc is a `string` token too; the path takes a "..." literal only.
+def expect_import_path(e: Base.Env, pos: Int) -> Result[Int]
+  if Base.kind_at(e, pos) == "string" and Base.heredoc?(e.tokens[pos])
+    return error(
+      Base.unexpected_help(e, pos, "an import path is not a heredoc", "write the path as a \"...\" string literal"),
+    )
+  end
+  return Base.expect(e, pos, "string", "an import path", false)
+end
+
 # import Alias from "path"
 def parse_import_alias(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   mixed = ""
@@ -2009,7 +2023,7 @@ def parse_import_alias(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
     mixed = "write the alias and the names on two import lines"
   end
   after_from = try expect_word(e, pos + 2, "from", mixed)
-  after_path = try Base.expect(e, after_from, "string", "an import path", false)
+  after_path = try expect_import_path(e, after_from)
   stop = try Base.expect(e, after_path, "NL", "a newline after import", false)
   alias = Ast.Optional.Present(e.tokens[pos + 1].lexeme)
   node = Ast.Decl.Import(
@@ -2028,7 +2042,7 @@ end
 def parse_import_names(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   listed = try parse_import_list(e, pos + 2)
   after_from = try expect_word(e, listed.pos, "from", "")
-  after_path = try Base.expect(e, after_from, "string", "an import path", false)
+  after_path = try expect_import_path(e, after_from)
   stop = try Base.expect(e, after_path, "NL", "a newline after import", false)
   node = Ast.Decl.Import(
     Ast.ImportDecl(
