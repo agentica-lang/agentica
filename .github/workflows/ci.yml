@@ -68,7 +68,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -117,11 +117,14 @@ jobs:
           echo "vm=$vm trace=$trace"
           echo "vm=$vm" >> "$GITHUB_OUTPUT"
           echo "trace=$trace" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: tools/jscpd/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
       - run: |
           python3 --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
@@ -169,9 +172,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
       - run: |
           clang --version
           python3 --version
