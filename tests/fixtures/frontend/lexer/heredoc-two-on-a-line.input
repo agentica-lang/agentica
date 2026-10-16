@@ -1,0 +1,8 @@
+joined = join(<<~FIRST, <<~SECOND)
+  one
+  two
+FIRST
+  three
+  four
+SECOND
+after = 1

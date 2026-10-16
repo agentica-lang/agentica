@@ -1,0 +1,1 @@
+ERROR LEX-HEREDOC-INDENT 15:3:1-16:3:2 "a tab in the indentation of a heredoc" "indent the lines of a heredoc with spaces: the width of a tab is not fixed, so the text left would be unclear"

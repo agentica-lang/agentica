@@ -1,0 +1,1 @@
+ERROR LEX-UNTERMINATED-HEREDOC 4:1:5-8:1:9 "unterminated heredoc" "end the heredoc with a line that holds only A, as in <<~A"

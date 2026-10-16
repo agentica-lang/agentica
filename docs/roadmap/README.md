@@ -77,6 +77,7 @@ after them may run in parallel when needed and keep their relative order.
 | 7.9 | **Deferred until after the bootstrap**, decided by the owner on 2026-10-15 (phase 28, [`docs/roadmap/28-formatter.md`](28-formatter.md); design: [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)): a code formatter, `agentica fmt`, written in Agentica on the self-hosted lexer and parser. 47a, comments kept in a side list and attached to nodes; 47b, the printer and `--check` over `compiler/` and `stdlib/`; 47c, the CLI, the `max_line_width` key (the only `[style]` key today) and `CHECK-LINE-TOO-LONG` in `agentica check`, which replaces `tests/test_style_line_width.py`. 47d, the LSP format-document hook, is outside this order: it waits for the language server (§43, not scheduled). Row 7.10 (regular expressions) comes before this row, by the owner's decision of 2026-10-15. | Every `.agc` file has one layout, checked in CI, and an editor can format a file with the compiler's own parser |
 | 7.10 | **Deferred until after the bootstrap**, decided by the owner on 2026-10-15 (phase 29, [`docs/roadmap/29-regex.md`](29-regex.md); design: [§48](../future/48-regex.md#48-regular-expressions)): regular expressions, new library features, std first: `std/regex` in Agentica (a parser and a linear-time Pike VM, no backtracking), then the regex literal `/pattern/flags` (48b, `compiler/` only); a C matcher only if measured (48c). It comes before row 7.9 (the formatter), by the owner's decision of 2026-10-15. | A program searches, extracts, replaces and splits text with a pattern, written as a literal or a string, and no pattern can stall the VM |
 | 7.11 | **Planned**, not yet scheduled by the owner (phase 31, [`docs/roadmap/31-test-functions.md`](31-test-functions.md); design: [§50](../future/50-test-functions.md#50-test-functions)): a `*_test.agc` file may have no `main`; its top-level `test_*` functions are its tests, and the front end adds the `main` that runs them (50a, `compiler/` only). Post-bootstrap step 6. | A test file reads as a list of tests, with no `main` and no `Test.test` blocks |
+| 7.12 | **Planned by the owner on 2026-10-16** (phase 30, [`docs/roadmap/30-type-aliases.md`](30-type-aliases.md); design: [§49](../future/49-type-aliases.md#49-type-aliases)): type aliases, `compiler/` only, no bytecode or VM change. 30a, simple transparent aliases (`type Grid = List[List[Float]]`); then 30b, generic aliases (`type Matrix[T] = List[List[T]]`). Post-bootstrap step 6, before row 7.11 and before the path to the JIT. | Long types get one name, with no runtime cost |
 | 8.1 | The rest of the VM layers (7l, `docs/future/21-vm-layers.md` §21: opcode helpers, builtin metadata flags, the callback-builtin protocol; the header split is row 7.2.1b); after the tasks PR, next to 7k | The prerequisites of the JIT |
 | 9 | Server measurement on the VM (7j), with the source → result runner (7g); it also reads the VM metrics of phase 18 (GC, run-queue delay, I/O) while the load runs | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
 | 11 | Decided by the owner on 2026-10-14: it comes right after step 9 and before the JIT (9.1), and decides with the numbers of step 9 (and the 6c pilot of step 7.2.2): multicore schedulers (7h item, gated). After step 9 the work stops so the owner reviews the next steps (a review point, not a gate on the JIT: 9.1 stays required and not gated). The front end is decided: self-hosting, in this table from row 7.2.7 on ([§35](../future/35-self-hosting.md)) | Build multicore only if the numbers ask for it |
@@ -139,13 +140,17 @@ and the other features after the JIT.
    ([§25.10](../future/25-ruby-typed-idioms.md#2510-heredocs),
    [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
    in `compiler/` only. The first of steps 4 and 5 to land is the first use of
-   the two-step stage0 refresh of §35.3.
+   the two-step stage0 refresh of §35.3. Part A, the heredoc (15j), is **done
+   (2026-10-16, PR #322)**: the lexer, `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
+   `LEX-HEREDOC-ONE-LINE`, the parser refuses a heredoc as a `case` pattern or
+   an import path. Part B, `case` guards and nested patterns, is next.
 6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
    diagnostics (row 7.6), `agentica doc` and `help` (row 22b), and the 44b to
    44d table rewrites
-   ([§44.12](../future/44-module-constants.md#4412-implementation-plan)), and
-   test functions without `main` (§50). `Task.map` (row 7.3) was small and is
-   **done** (17a, PR #316).
+   ([§44.12](../future/44-module-constants.md#4412-implementation-plan)), type
+   aliases (row 7.12, §49: simple first, 49a, then generic, 49b), then test
+   functions without `main` (row 7.11, §50). `Task.map` (row 7.3) was small
+   and is **done** (17a, PR #316).
 7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
    7.7), the server measurement (row 9), multicore (row 11, which stops for the
    owner's review), the FFI and native module header
@@ -299,6 +304,7 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 | [`27-signals.md`](27-signals.md) | Phase 27: signals (stop signals a program handles, signals to children, the driver's stop, graceful HTTP stop; design in §46) |
 | [`28-formatter.md`](28-formatter.md) | Phase 28: code formatter (`agentica fmt`, `--check`, the `[style]` keys; design in §47) |
 | [`29-regex.md`](29-regex.md) | Phase 29: regular expressions (`std/regex` in Agentica, then the regex literal; design in §48) |
+| [`30-type-aliases.md`](30-type-aliases.md) | Phase 30: type aliases (simple, then generic; design in §49) |
 | [`31-test-functions.md`](31-test-functions.md) | Phase 31: test functions without `main` (`test_*` functions are tests; design in §50) |
 | [`pending-general-programming-and-mcp.md`](pending-general-programming-and-mcp.md) | Pending work: general programming and MCP (everyday library, typed JSON, modules, real applications, MCP) |
 | [`ruby-style-ergonomics.md`](ruby-style-ergonomics.md) | Ruby-style ergonomics (complete) |

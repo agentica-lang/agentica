@@ -1,0 +1,9 @@
+def main() -> Void
+  case "a"
+    <<~A -> puts(1)
+      a
+      b
+  A
+    _ -> puts(2)
+  end
+end

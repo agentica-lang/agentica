@@ -1,0 +1,22 @@
+program #17 0:1:1-207:16:1
+  declaration: function-decl #16 0:1:1-207:16:1 name="main"
+    result: type-ref #0 14:1:15-18:1:19 name="Void"
+    body: binding #2 21:2:3-35:3:1 name="name"
+      value: literal #1 28:2:10-34:2:16 value=string:"tool"
+    body: expr-stmt #5 37:3:3-52:4:1
+      value: call #4 37:3:3-51:3:17 name="puts" piped=false
+        arg: literal #3 42:3:8-50:3:16 value=string:"one\ntwo\n"
+    body: binding #12 78:7:3-111:8:1 name="text"
+      value: call #11 85:7:10-110:7:35 name="join" piped=false
+        arg: interpolation #7 90:7:15-98:7:23
+          part: text "first "
+          part: name-ref #6 123:8:13-127:8:17 name="name"
+          part: text "\nline\n"
+        arg: interpolation #10 100:7:25-109:7:34
+          part: text "second\n"
+          part: field-access #9 163:12:7-174:12:18 name="upcase"
+            target: name-ref #8 163:12:7-167:12:11 name="name"
+          part: text " done\n"
+    body: expr-stmt #15 192:14:3-203:15:1
+      value: call #14 192:14:3-202:14:13 name="puts" piped=false
+        arg: name-ref #13 197:14:8-201:14:12 name="text"

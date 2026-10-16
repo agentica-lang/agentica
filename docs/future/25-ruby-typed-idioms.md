@@ -11,7 +11,8 @@ proposed again. Decided by the user on 2026-10-12. 25.1 (default parameter
 values) is implemented (roadmap item 15a, order row 7.5a, in `compiler/`). 25.3
 (struct update `with`) is implemented (roadmap item 15c, moved before the
 bootstrap on 2026-10-15). 25.14 (the pipe operator) is implemented (roadmap item
-15l, order row 7.2.1g).
+15l, order row 7.2.1g). 25.10 (heredocs) is implemented (roadmap item 15j,
+post-bootstrap step 5, in `compiler/`; see "As built" at the end of 25.10).
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
 that models already know, with the rule of [section
@@ -1032,6 +1033,40 @@ name, a heredoc as a `case` pattern and an import path; a golden fixture; a site
 example. **Docs:** `grammar.md` (Literals: "no multiline strings" changes; the
 §7 hint row for `xs << x`), the programming skill (`SKILL.md`, and
 `references/diagnostics.md` for the new codes), `site/content/tour/strings.md`.
+
+**As built** (post-bootstrap step 5, part A; the Racket front end was gone, so
+all of it is in `compiler/`). The rules above hold. Where the design left room:
+
+- No `heredoc?` field on the token and no flag on the string node. The lexeme
+  of a heredoc token is its opener (`<<~NAME`) and the lexeme of a string
+  literal starts with `"`, so `Base.heredoc?` tells them apart in the two
+  places that need it today (the `case` pattern and the import path). The flag
+  is added with `format` (15k), the only other reader.
+- The lexer gives `<` a character class of its own (`CharClass.Less`), so the
+  hot operator arm does not test for `<<`. The main loop became `lex_from`,
+  which `lex` calls once; a heredoc calls it again for each `#{...}` of its
+  body, started on the body line with the `#` frame pushed, and it returns at
+  the `}` that closes that frame. So the tokens inside an interpolation are the
+  ones of a normal string, with real positions.
+- The jump over the bodies is a `resume` point of the main loop: the heredoc
+  sets it, and the line break of the opener line emits its `NL` and goes to
+  it. A second heredoc on the same line starts at the point the first left.
+- The end line is exact: optional spaces, the name, then the line break (or the
+  end of the file). Text after the name makes it a body line. Body lines count
+  for the "two or more lines" rule when blank, too.
+- `<<NAME` is `LEX-UNEXPECTED-CHAR` when a capital follows `<<` (or `<<-`);
+  `<<` before anything else is two `<` tokens, as before. The span of
+  `<<NAME` is `<<`, of `<<-NAME` and `<<~text` the three characters.
+- A heredoc inside any `#{...}` is `LEX-UNTERMINATED-STRING`, as the line
+  break that ends the interpolation would be.
+- `xs << x` gets its help in `primary_help` of the parser (the second `<` is
+  where an expression should start).
+- No `format` exists yet (15k), so `CHECK-FORMAT-LITERAL` for a heredoc waits
+  for it.
+- Spans inside a body lie after the spans of the nodes that hold them. The
+  parser, the checker, the lowering and the diagnostic printers take each span
+  as it is, and the goldens `heredoc`, `heredoc-type-error` and
+  `tests/fixtures/vm/heredoc-error` show a diagnostic inside a body.
 
 ### 25.11 `format`
 
