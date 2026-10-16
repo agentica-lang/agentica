@@ -8,7 +8,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # the std/ sources are linked in with .incbin).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: dist/agentica
 
@@ -175,7 +175,6 @@ site-serve: site-sass
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
-# make vm-unicode         regenerate vm/unicode_data.c from Racket (the one build step that still needs it)
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
 # make AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
@@ -609,16 +608,8 @@ vendored-check:
 vendored-test: vendored-check
 	AGENTICA_VM_BINARY=build/vm/release/agentica $(MAKE) --no-print-directory test-py JOBS=2 TESTS="tests/test_vm_tls.py tests/test_vm_http.py"
 
-vm-unicode:
-	racket vm/tools/gen-unicode.rkt vm/unicode_data.c
-
-# vm-unicode, then fail when vm/unicode_data.c changed; build/unicode-checked is CI's cache marker
-vm-unicode-check: vm-unicode
-	git diff --exit-code vm/unicode_data.c
-	mkdir -p build
-	touch build/unicode-checked
-
 CLANG_TIDY ?= clang-tidy
+# vm/unicode_data.c is frozen table data (see its header), so it is not linted
 VM_LINT_SKIP := vm/unicode_data.c
 VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
 
