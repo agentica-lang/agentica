@@ -46,7 +46,7 @@ jobs:
     env:
       AGENTICA_GC: vendored
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -86,7 +86,7 @@ jobs:
       vm: ${{ steps.changes.outputs.vm }}
       trace: ${{ steps.changes.outputs.trace }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
           fetch-depth: 2
@@ -166,7 +166,7 @@ jobs:
       AGENTICA_SWEEP: sampled
       SANITIZE: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - uses: actions/setup-node@v4
