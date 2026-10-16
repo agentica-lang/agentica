@@ -1,0 +1,12 @@
+def f()
+  a = "x#{ {"k": [1, (2)]}.size }y#{b}z"
+  if (a)
+    c = {"n": "m#{a}"}
+  end
+  end
+  ( end ) end
+  [
+    d,
+  ]
+end
+end
