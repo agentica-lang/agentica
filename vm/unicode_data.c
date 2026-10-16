@@ -2,8 +2,8 @@
  * Unicode tables of the VM: which code points `write` prints raw, and the upper and lower case mappings.
  *
  * This file is checked-in source and is no longer generated. It was written by the former vm/tools/gen-unicode.rkt,
- * from the tables of Racket 9.3 (Chez Scheme), which are Unicode 17.0 (read back from that Racket: 159801 assigned
- * graphic and format code points, the count of the 17.0 character list). The generator was removed with the Racket
+ * from the tables of Racket 9.3 (Chez Scheme), which are Unicode 17.0 as far as I could tell by counting their 159801
+ * graphic and format code points (the size of the 17.0 character list). The generator was removed with the Racket
  * front end; it modelled Racket's `write` and string-upcase/string-downcase (final sigma), so the VM printed as
  * Racket did.
  *

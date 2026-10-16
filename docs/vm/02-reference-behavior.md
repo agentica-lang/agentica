@@ -87,8 +87,8 @@ is not repeated here; read the file.
   character that is not printed raw becomes `\uXXXX` or `\UXXXXXXXX` (uppercase
   hex). A joiner (U+200C, U+200D, U+E0020 to U+E007F) prints raw only after a
   raw, non-blank character, so family emoji and flag sequences print raw. The
-  generator checks `agc_write_form` against Racket's `write` for every code
-  point and for joiner contexts.
+  tables in `vm/unicode_data.c` were checked against Racket's `write` for every
+  code point and for joiner contexts when they were generated.
 - Stdin is decoded per byte: each byte that does not start a complete valid
   UTF-8 sequence becomes one U+FFFD (`E2 82 63` gives two U+FFFD then `c`).
   `IO.gets` ends lines at LF, CR or CRLF. A read decodes only the bytes it

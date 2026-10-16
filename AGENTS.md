@@ -92,11 +92,11 @@ phase 13).
   until its phase lands. No placeholder files or nodes for later phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
-- Tests: Python `unittest` only. Node
-  and Python test code and peers (curl included) use the standard library
-  only, with no third-party libraries or test frameworks. The VM's C
-  dependencies are the submodules in `vm/third_party`; the only dev-tool
-  dependency is the pinned jscpd in `tools/jscpd`.
+- Tests: Python `unittest` only. Node and Python test code and peers (curl
+  included) use the standard library only, with no third-party libraries or
+  test frameworks. The VM's C dependencies are the submodules in
+  `vm/third_party`; the only dev-tool dependency is the pinned jscpd in
+  `tools/jscpd`.
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external

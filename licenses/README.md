@@ -8,7 +8,7 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception (SPDX:
   - the Boehm GC (`vm/third_party/bdwgc`): the Boehm-GC license, with its notice in `README.QUICK`;
   - libuv (`vm/third_party/libuv`): MIT, with BSD-2-Clause and ISC parts in its `LICENSE-extra`;
   - yyjson (`vm/third_party/yyjson`): MIT;
-  - the Unicode character data in `vm/unicode_data.c`, derived from the Unicode Character Database (version 17.0): Unicode License v3;
+  - the Unicode character data in `vm/unicode_data.c`, derived from the Unicode Character Database (Unicode 17.0, determined by counting the graphic and format code points of Racket 9.3's tables): Unicode License v3;
   - picohttpparser (`vm/third_party/picohttpparser`): MIT or the Perl license (dual), with its notice at the top of `picohttpparser.h`;
   - OpenSSL 3 (`vm/third_party/openssl`): Apache-2.0, with its license in `LICENSE.txt`;
 

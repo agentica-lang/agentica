@@ -126,9 +126,9 @@ the tests 10.7.4. Streaming is planned in `docs/future/30-hybrid-http.md`.
   `HttpServerOptions`, `Header`, `HttpClient`, `HttpServer`) are global builtin
   names.
 - **`HttpWire` is std-only.** A public raw layer would be a second way to do
-  HTTP. The linker (`src/modules.rkt`) gives `CHECK-UNKNOWN-NAME` for a
+  HTTP. The linker (`compiler/resolve.agc`) gives `CHECK-UNKNOWN-NAME` for a
   qualified `HttpWire.f` in any module not embedded from `stdlib/`
-  (`std-only-modules` in `src/builtins.rkt`), and `help` leaves it out. The
+  (the std-only modules of `compiler/builtins_data.agc`), and `help` leaves it out. The
   loader does not guard it: a crafted `.agcb` gets nothing `TCP` and `TLS` do
   not give (the trust model of `docs/vm/README.md` §1). `HttpWire` is a reserved
   name.

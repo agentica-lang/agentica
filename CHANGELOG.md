@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- **The Racket front end is gone.** `src/` and the development oracle `racket src/main.rkt` are deleted, with every Makefile rule and CI job that ran `racket` or `raco` (the `unicode` and `warm-unicode` jobs, `make vm-unicode` and `make vm-unicode-check`). Building needs only a C toolchain, and the front end is `compiler/`. The generators `tools/gen-builtins-data.rkt`, `gen-check-tables.rkt` and `gen-lexer-unicode.rkt` are deleted too: `compiler/builtins_data.agc`, `check_tables.agc` and `unicode_table.agc` are now edited by hand, and `vm/unicode_data.c` is frozen, checked-in source (a header says it came from Racket 9.3's tables, Unicode 17.0). The last commit that can build the Racket front end is tagged `bootstrap-racket`. This changes nothing for users of the `agentica` binary; it affects contributors only.
+- **The Racket front end is gone** (#313). `src/` and the development oracle `racket src/main.rkt` are deleted, with every Makefile rule and CI job that ran `racket` or `raco` (the `unicode` and `warm-unicode` jobs, `make vm-unicode` and `make vm-unicode-check`). Building needs only a C toolchain, and the front end is `compiler/`. The generators `tools/gen-builtins-data.rkt`, `gen-check-tables.rkt` and `gen-lexer-unicode.rkt` are deleted too: `compiler/builtins_data.agc`, `check_tables.agc` and `unicode_table.agc` are now edited by hand, and `vm/unicode_data.c` is frozen, checked-in source (a header says it came from Racket 9.3's tables, Unicode 17.0). The last commit that can build the Racket front end is tagged `bootstrap-racket`. This changes nothing for users of the `agentica` binary; it affects contributors only.
 
 ## [0.4.0] - 2026-10-16
 

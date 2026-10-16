@@ -1,6 +1,6 @@
 ## The code points the lexer takes as graphic (a letter, a mark, a digit, a symbol, ... and not blank), as pairs of
 ## first and last code point, in order. Edited by hand now; it was generated once from
-## the char-graphic? table of Racket 9.3, which is Unicode 17.0 (see vm/unicode_data.c). tests/test_frontend_lexer.py
+## the char-graphic? table of Racket 9.3, Unicode 17.0 by the count in vm/unicode_data.c. tests/test_frontend_lexer.py
 ## compares it with a golden. A future generator over pinned Unicode Character Database files must reproduce it exactly
 ## before it replaces it.
 export def graphic_ranges() -> List[Int]

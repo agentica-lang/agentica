@@ -132,20 +132,14 @@
 | Windows (`platforms.yml`, by hand) | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
 | Fuzz (`fuzz.yml`, by hand) | self-hosted runner, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` |
 
-- The Linux jobs run on every pull request that changes more than docs. Racket
-  is installed once into the runner's tool cache
-  (`$RUNNER_TOOL_CACHE/racket-cs-9.3`) and later jobs only add it to `PATH`. The
-  `vm/unicode_data.c` check is skipped when a cache entry shows that it passed
-  for the same generator, table and Makefile. Jobs cache `src/compiled` and
-  `tests/compiled`, and touch every tracked file after the restore, so
-  `raco make` checks each source's SHA-1.
+- The Linux jobs run on every pull request that changes more than docs. No job
+  installs Racket. `vm/unicode_data.c` is frozen source (its header gives the
+  provenance), so no CI step checks or regenerates it.
 - macOS and Windows minutes cost 10 and 2 times Linux minutes on a private
   repository. So `platforms.yml` and `fuzz.yml` run by hand. Run `platforms.yml`
   before merging a change to platform code (the Makefile, files, processes, text
   output).
-- Racket comes from `Bogdanp/setup-racket` in one job only: the `unicode` job of
-  `ci.yml` (and `warm-unicode`), which checks `vm/unicode_data.c` against
-  `vm/tools/gen-unicode.rkt`. The tests need none (step 8d-3). The macOS and
+- No job installs Racket (the Racket front end was deleted, PR #313). The macOS and
   Windows jobs build the C tests only, since the binary and the process and
   network tests are not portable yet.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,

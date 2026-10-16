@@ -602,7 +602,8 @@ independent Python peer, with the standard library only.
   `CHECK-MAP-KEY-TYPE` for a float key; `CHECK-FLOAT-RANGE`;
   `RUNTIME-INTEGER-OVERFLOW` for each direction and for `MIN / -1`;
   `RUNTIME-INVALID-COUNT` for a negative shift count.
-- **Checker tests.** The Racket checker is frozen, so no new rule goes into it,
+- **Checker tests.** (The Racket front end is deleted since PR #313; the
+  rest of this bullet is the plan as written.) The Racket checker is frozen, so no new rule goes into it,
   and its rackunit tests are not extended for these checks. The new checks are
   tested by the goldens of the Agentica front end, against
   `agentica check --json`. The stage goldens of §35.4 cover the compiler
@@ -620,6 +621,10 @@ independent Python peer, with the standard library only.
   `**Breaking:**` for the reserved names (step 1) and the binary API (step 3).
 
 ### 42.14 Freeze and bootstrap impact
+
+*Note: the Racket front end was deleted (PR #313), so `compiler/` is the only
+front end. The text below is the plan as written, when the Racket checker was
+still frozen.*
 
 - **Where it lands.** The Agentica front end (`compiler/`), after the bootstrap.
   Nothing in `src/` changes: the Racket checker and lowering are frozen at row

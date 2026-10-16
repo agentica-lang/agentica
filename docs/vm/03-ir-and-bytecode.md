@@ -1,6 +1,6 @@
 ## 3. IR
 
-The lowerer (`src/lower.rkt`) turns the checked program into IR. Each stage
+The lowerer (`compiler/lowering.agc`) turns the checked program into IR. Each stage
 returns data or one diagnostic.
 
 ### 3.1 Types from the checker
@@ -68,7 +68,7 @@ typed op still checks its tags at run time (4.2).
 The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
 `HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`) join the struct table
 only when the program names them or a checked type mentions them. Then they
-lower like user structs (`used-builtin-structs` in `src/lower.rkt`).
+lower like user structs (`compiler/lower_program.agc`).
 
 ### 3.4 Closure conversion
 
@@ -96,13 +96,13 @@ they cannot clash with the language codes.
 
 | Code | Raised by | Meaning |
 |---|---|---|
-| `LOWER-UNSUPPORTED` | `src/lower.rkt` | A form or a type the lowerer does not handle yet (`vm-type?` in `src/lower.rkt`). The span is the first such node. |
-| `LOWER-INTERNAL` | `src/lower.rkt` | A Racket exception inside the lowerer (a bug), at the program span. |
-| `BYTECODE-LIMIT` | `src/bytecode.rkt` | A function needs more than 65535 registers, or the program has more than 65535 structs or variants (4.4). |
-| `BYTECODE-INTERNAL` | `src/bytecode.rkt` | A Racket exception in `ir->bytecode` or `write-bytecode` (a bug), at the program span. |
+| `LOWER-UNSUPPORTED` | `compiler/lowering.agc` | A form or a type the lowerer does not handle yet (`vm_type?` in `compiler/lower_state.agc`). The span is the first such node. |
+| `LOWER-INTERNAL` | `compiler/lowering.agc` | A failed internal assumption inside the lowerer (a bug), at the program span. |
+| `BYTECODE-LIMIT` | `compiler/bytecode_writer.agc` | A function needs more than 65535 registers, or the program has more than 65535 structs or variants (4.4). |
+| `BYTECODE-INTERNAL` | `compiler/bytecode_writer.agc` | An impossible IR reaches the writer (a bug), at the program span. |
 
-A builtin call lowers only when its implementation key is in `vm-builtins`
-(`src/lower.rkt`). A builtin outside that list is `LOWER-UNSUPPORTED` at the
+A builtin call lowers only when its implementation key is in `VM_BUILTINS`
+(`compiler/lower_tables.agc`). A builtin outside that list is `LOWER-UNSUPPORTED` at the
 call span. Today the list covers every catalog key.
 
 `agentica compile` and `--dump-ir` print them like other diagnostics and exit 1.
@@ -149,7 +149,7 @@ behavior.
 
 There are 52 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
-by `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/value.h`. New opcodes
+by `OPCODES` in `compiler/bytecode_tables.agc` and `agc_opcode` in `vm/value.h`. New opcodes
 are appended at the end. An appended opcode does not bump the format version,
 and an older VM rejects it as unknown.
 
@@ -252,7 +252,7 @@ stops with `RUNTIME-STEP-LIMIT`. The optimization items are in
 ### 4.5 Builtin imports
 
 The file lists the builtins it uses as `(key, arity)`. The key is the
-implementation key in `src/builtins.rkt`, not the written name: `puts` and
+implementation key in `compiler/builtins_data.agc`, not the written name: `puts` and
 `IO.puts` both import `"puts"`. Overloads such as `Map.get` and `ok` are
 separate entries by arity. The loader resolves each pair against the C table and
 rejects unknown pairs. There are no internal helper builtins: `List.concat`,
@@ -286,7 +286,7 @@ header and the entry.
   them. Each keeps the name the front end gave it (`std/` modules by their
   `std/...` key), so a diagnostic in imported code names that file.
 - Only struct entries can make cycles in the Types section, and they go through
-  the decodable struct records. `src/bytecode.rkt` interns each distinct type
+  the decodable struct records. `compiler/bytecode_types.agc` interns each distinct type
   once, children first. A program without a JSON type argument writes two zero
   counts.
 - The Globals section holds only a count because a slot has no bytes of its

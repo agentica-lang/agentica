@@ -68,9 +68,10 @@
   to 1024 nested levels), and `compile` exits 1 on a diagnostic and 2 on an
   unwritable output.
 - **Corpora.** Float text has a fixed table in `vm/tests/float_text_test.c` and
-  the `float-text` fixture (2.2). The write escapes are checked where the data
-  is made: `vm/tools/gen-unicode.rkt` compares its C rule with Racket's `write`
-  for every code point and joiner context (2.3). `vm/tests/text_test.c` checks
+  the `float-text` fixture (2.2). The write escapes were checked where the data
+  was made: the former `vm/tools/gen-unicode.rkt` compared its C rule with
+  Racket's `write` for every code point and joiner context (2.3); the data is
+  now frozen in `vm/unicode_data.c`. `vm/tests/text_test.c` checks
   the range lookup at every range edge, and that the debug form of every
   adjacent pair of scalar values is valid UTF-8 with an exact character count.
 - **Edges.** An extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1 and
