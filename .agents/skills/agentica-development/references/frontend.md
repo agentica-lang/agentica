@@ -171,6 +171,7 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 - Lines in `compiler/*.agc` are at most 119 characters, comments included (`compiler/agentica.toml`, `[style]`), checked by `tests/test_style_line_width.py`. Break a call or list one item per line with a trailing comma, wrap a long expression in parentheses, and flow a doc block over several `##` lines.
 - Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into a few sentence-sized pieces joined with `+`, never one piece per line.
+- Several steps on one value are a pipe chain in parentheses, one `|> f(args)` per line, not `x = f(x, args)` repeated three or more times in a row. The lint does not check it; reviews do.
 
 ## The command line in Agentica (step 8a, the product since 8d-2)
 
