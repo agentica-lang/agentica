@@ -8,7 +8,7 @@ description: The std/toml module, which reads and writes TOML 1.0 documents.
 
 `Toml.parse` turns text into a `Toml.Value`, a recursive enum that models TOML's own values. `Toml.encode` writes a value back as text. `Toml.to_json` converts a value to `Json`, so that `JSON.decode` can fill a struct. Every function returns a `Result` and never halts, whatever the input.
 
-```text
+```ruby
 Toml.parse(text: String) -> Result[Toml.Value]
 Toml.encode(value: Toml.Value) -> Result[String]
 Toml.to_json(value: Toml.Value) -> Result[Json]
@@ -17,7 +17,7 @@ Toml.get(value: Toml.Value, path: String) -> Result[Toml.Value]
 
 ## Values
 
-```text
+```ruby
 enum Toml.Value
   Str(String)
   Int(Int)
