@@ -14,6 +14,7 @@ import Base from "parse_base"
 import Resolve from "resolve_import"
 import Source from "source"
 import Suggest from "suggest"
+import {BARE_NAMES, ENUMS, RESERVED, STD_ONLY} from "builtins"
 
 ## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of
 ## the user structs the file may update (StructUpdate.visible), and ids, the number of node ids of the program (the
@@ -86,7 +87,7 @@ end
 export def unknown_constant?(cx: Context, name: String) -> Bool
   return (
     Base.constant_name?(name) and
-    !cx.settings.catalog.reserved.include?(name) and
+    !RESERVED.include?(name) and
     !cx.me.names.has_key?(name) and
     !cx.me.named.has_key?(name) and
     !cx.me.aliases.has_key?(name)
@@ -124,9 +125,9 @@ end
 # A reserved type, a builtin enum (and Result), or a bare builtin function keeps its name.
 def builtin_name?(cx: Context, name: String, want: Want) -> Bool
   case want
-    Want.Type -> return cx.settings.catalog.reserved.include?(name)
-    Want.Enum -> return name == "Result" or cx.settings.catalog.enums.has_key?(name)
-    Want.Function -> return cx.settings.catalog.bare_names.include?(name)
+    Want.Type -> return RESERVED.include?(name)
+    Want.Enum -> return name == "Result" or ENUMS.has_key?(name)
+    Want.Function -> return BARE_NAMES.include?(name)
   end
 end
 
@@ -139,7 +140,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   target = cx.me.aliases.get(alias, "")
   if target != ""
     return imported(cx, alias, cx.modules[target], member, want, span)
-  elsif cx.settings.catalog.std_only.has_key?(alias) and !Resolve.embedded?(cx.me.key)
+  elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, span))
   elsif function_wanted?(want)
     return ok("#{alias}.#{member}")
@@ -162,8 +163,8 @@ def function_wanted?(want: Want) -> Bool
 end
 
 def std_only_failure(cx: Context, alias: String, member: String, span: Source.Span) -> String
-  wrapper = cx.settings.catalog.std_only[alias]
-  help = "#{alias} is internal to #{wrapper.std_path}; use import #{wrapper.alias} from \"#{wrapper.std_path}\""
+  wrapper = STD_ONLY[alias]
+  help = "#{alias} is internal to #{wrapper[0]}; use import #{wrapper[1]} from \"#{wrapper[0]}\""
   return Failure.fail_at(
     site(cx, span),
     "CHECK-UNKNOWN-NAME",

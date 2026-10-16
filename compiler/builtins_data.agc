@@ -1,72 +1,32 @@
-## The builtin catalog and the reserved type names, as data. Edited by hand now; it was generated once from the
-## tables of the former front end. tests/test_frontend_catalog.py compares what it prints with a golden.
+## The builtin catalog and reserved type names as module constants. Edited by
+## hand; they were generated from the former front end. The catalog test compares
+## what it prints with a golden.
 
 import Model from "builtin_model"
 import Types from "types"
 
 ## Every builtin, sorted by name.
-export def builtin_rows() -> List[Model.Builtin]
-  rows = rows_1()
-  rows = rows.concat(rows_2())
-  rows = rows.concat(rows_3())
-  rows = rows.concat(rows_4())
-  rows = rows.concat(rows_5())
-  rows = rows.concat(rows_6())
-  rows = rows.concat(rows_7())
-  rows = rows.concat(rows_8())
-  rows = rows.concat(rows_9())
-  rows = rows.concat(rows_10())
-  rows = rows.concat(rows_11())
-  rows = rows.concat(rows_12())
-  rows = rows.concat(rows_13())
-  rows = rows.concat(rows_14())
-  rows = rows.concat(rows_15())
-  rows = rows.concat(rows_16())
-  rows = rows.concat(rows_17())
-  rows = rows.concat(rows_18())
-  rows = rows.concat(rows_19())
-  rows = rows.concat(rows_20())
-  rows = rows.concat(rows_21())
-  rows = rows.concat(rows_22())
-  rows = rows.concat(rows_23())
-  rows = rows.concat(rows_24())
-  rows = rows.concat(rows_25())
-  rows = rows.concat(rows_26())
-  rows = rows.concat(rows_27())
-  rows = rows.concat(rows_28())
-  rows = rows.concat(rows_29())
-  rows = rows.concat(rows_30())
-  rows = rows.concat(rows_31())
-  rows = rows.concat(rows_32())
-  rows = rows.concat(rows_33())
-  rows = rows.concat(rows_34())
-  rows = rows.concat(rows_35())
-  rows = rows.concat(rows_36())
-  rows = rows.concat(rows_37())
-  rows = rows.concat(rows_38())
-  rows = rows.concat(rows_39())
-  rows = rows.concat(rows_40())
-  rows = rows.concat(rows_41())
-  rows = rows.concat(rows_42())
-  rows = rows.concat(rows_43())
-  rows = rows.concat(rows_44())
-  rows = rows.concat(rows_45())
-  rows = rows.concat(rows_46())
-  rows = rows.concat(rows_47())
-  rows = rows.concat(rows_48())
-  rows = rows.concat(rows_49())
-  rows = rows.concat(rows_50())
-  rows = rows.concat(rows_51())
-  rows = rows.concat(rows_52())
-  rows = rows.concat(rows_53())
-  rows = rows.concat(rows_54())
-  rows = rows.concat(rows_55())
-  return rows
-end
+BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
+BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
+BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
+BUILTIN_GROUP_4 = ROWS_16.concat(ROWS_17.concat(ROWS_18.concat(ROWS_19.concat(ROWS_20))))
+BUILTIN_GROUP_5 = ROWS_21.concat(ROWS_22.concat(ROWS_23.concat(ROWS_24.concat(ROWS_25))))
+BUILTIN_GROUP_6 = ROWS_26.concat(ROWS_27.concat(ROWS_28.concat(ROWS_29.concat(ROWS_30))))
+BUILTIN_GROUP_7 = ROWS_31.concat(ROWS_32.concat(ROWS_33.concat(ROWS_34.concat(ROWS_35))))
+BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(ROWS_40))))
+BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
+BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
+BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
+BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
+BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
+BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
+BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11)
+export BUILTIN_ROWS: List[Model.Builtin] = BUILTIN_GROUPS_1.concat(BUILTIN_GROUPS_2).concat(
+  BUILTIN_GROUPS_3.concat(BUILTIN_GROUPS_4),
+)
 
 ## The builtin record types, sorted by name.
-export def records() -> List[Model.Record]
-  return [
+export RECORDS: List[Model.Record] = [
     Model.Record(
       name: "FileInfo",
       fields: [
@@ -141,11 +101,9 @@ export def records() -> List[Model.Record]
       ],
     ),
   ]
-end
 
 ## The builtin enums, whose variants are written without an import.
-export def enums() -> List[Model.EnumDef]
-  return [
+export ENUMS: List[Model.EnumDef] = [
     Model.EnumDef(
       name: "Await",
       parameters: ["T"],
@@ -165,21 +123,17 @@ export def enums() -> List[Model.EnumDef]
       ],
     ),
   ]
-end
 
 ## The handle types a task can be given with Task.spawn_owning.
-export def handle_types() -> List[String]
-  return ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
-end
+export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
 
 ## The builtin types with no structure: handles and TestCase.
-export def opaque_types() -> List[String]
-  return ["Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase"]
-end
+export OPAQUE_TYPES: List[String] = [
+  "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase",
+]
 
 ## The type names no declaration or import alias may take.
-export def reserved_type_names() -> List[String]
-  return [
+export RESERVED_TYPE_NAMES: List[String] = [
     "Await",
     "Bool",
     "Channel",
@@ -226,15 +180,14 @@ export def reserved_type_names() -> List[String]
     "Time",
     "Void",
   ]
-end
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
-export def std_only_imports() -> Map[String, List[String]]
-  return {"HttpWire": ["std/http", "HTTP"], "LogRegistry": ["std/logger", "Logger"]}
-end
+export STD_ONLY_IMPORTS: Map[String, List[String]] = {
+  "HttpWire": ["std/http", "HTTP"],
+  "LogRegistry": ["std/logger", "Logger"],
+}
 
-def rows_1() -> List[Model.Builtin]
-  return [
+ROWS_1: List[Model.Builtin] = [
     Model.Builtin(
       name: "Channel.close",
       parameters: [Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("T")))],
@@ -282,10 +235,8 @@ def rows_1() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_2() -> List[Model.Builtin]
-  return [
+ROWS_2: List[Model.Builtin] = [
     Model.Builtin(
       name: "Channel.send",
       parameters: [
@@ -330,10 +281,8 @@ def rows_2() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_3() -> List[Model.Builtin]
-  return [
+ROWS_3: List[Model.Builtin] = [
     Model.Builtin(
       name: "Dir.mkdir_private",
       parameters: [
@@ -375,10 +324,8 @@ def rows_3() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_4() -> List[Model.Builtin]
-  return [
+ROWS_4: List[Model.Builtin] = [
     Model.Builtin(
       name: "File.each_line",
       parameters: [
@@ -424,10 +371,8 @@ def rows_4() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_5() -> List[Model.Builtin]
-  return [
+ROWS_5: List[Model.Builtin] = [
     Model.Builtin(
       name: "File.open",
       parameters: [
@@ -473,10 +418,8 @@ def rows_5() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_6() -> List[Model.Builtin]
-  return [
+ROWS_6: List[Model.Builtin] = [
     Model.Builtin(
       name: "File.read_text",
       parameters: [
@@ -523,10 +466,8 @@ def rows_6() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_7() -> List[Model.Builtin]
-  return [
+ROWS_7: List[Model.Builtin] = [
     Model.Builtin(
       name: "File.write",
       parameters: [
@@ -580,10 +521,8 @@ def rows_7() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_8() -> List[Model.Builtin]
-  return [
+ROWS_8: List[Model.Builtin] = [
     Model.Builtin(
       name: "Float.from_bits32",
       parameters: [Model.Named(name: "bits", type: Types.Type.Int)],
@@ -638,10 +577,8 @@ def rows_8() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_9() -> List[Model.Builtin]
-  return [
+ROWS_9: List[Model.Builtin] = [
     Model.Builtin(
       name: "Float.to_int!",
       parameters: [Model.Named(name: "x", type: Types.Type.Float)],
@@ -694,10 +631,8 @@ def rows_9() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_10() -> List[Model.Builtin]
-  return [
+ROWS_10: List[Model.Builtin] = [
     Model.Builtin(
       name: "HttpWire.client",
       parameters: [
@@ -754,10 +689,8 @@ def rows_10() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_11() -> List[Model.Builtin]
-  return [
+ROWS_11: List[Model.Builtin] = [
     Model.Builtin(
       name: "HttpWire.local_port",
       parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
@@ -812,10 +745,8 @@ def rows_11() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_12() -> List[Model.Builtin]
-  return [
+ROWS_12: List[Model.Builtin] = [
     Model.Builtin(
       name: "HttpWire.wait",
       parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
@@ -865,10 +796,8 @@ def rows_12() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_13() -> List[Model.Builtin]
-  return [
+ROWS_13: List[Model.Builtin] = [
     Model.Builtin(
       name: "IO.gets",
       parameters: [],
@@ -920,10 +849,8 @@ def rows_13() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_14() -> List[Model.Builtin]
-  return [
+ROWS_14: List[Model.Builtin] = [
     Model.Builtin(
       name: "IO.read",
       parameters: [],
@@ -975,10 +902,8 @@ def rows_14() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_15() -> List[Model.Builtin]
-  return [
+ROWS_15: List[Model.Builtin] = [
     Model.Builtin(
       name: "Int.bit_or",
       parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "b", type: Types.Type.Int)],
@@ -1027,10 +952,8 @@ def rows_15() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_16() -> List[Model.Builtin]
-  return [
+ROWS_16: List[Model.Builtin] = [
     Model.Builtin(
       name: "Int.shift_right",
       parameters: [Model.Named(name: "a", type: Types.Type.Int), Model.Named(name: "count", type: Types.Type.Int)],
@@ -1081,10 +1004,8 @@ def rows_16() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_17() -> List[Model.Builtin]
-  return [
+ROWS_17: List[Model.Builtin] = [
     Model.Builtin(
       name: "JSON.array",
       parameters: [Model.Named(name: "items", type: Types.Type.List(Types.Type.Json))],
@@ -1139,10 +1060,8 @@ def rows_17() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_18() -> List[Model.Builtin]
-  return [
+ROWS_18: List[Model.Builtin] = [
     Model.Builtin(
       name: "JSON.float",
       parameters: [Model.Named(name: "j", type: Types.Type.Json)],
@@ -1194,10 +1113,8 @@ def rows_18() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_19() -> List[Model.Builtin]
-  return [
+ROWS_19: List[Model.Builtin] = [
     Model.Builtin(
       name: "JSON.null",
       parameters: [],
@@ -1249,10 +1166,8 @@ def rows_19() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_20() -> List[Model.Builtin]
-  return [
+ROWS_20: List[Model.Builtin] = [
     Model.Builtin(
       name: "JSON.string",
       parameters: [Model.Named(name: "j", type: Types.Type.Json)],
@@ -1303,10 +1218,8 @@ def rows_20() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_21() -> List[Model.Builtin]
-  return [
+ROWS_21: List[Model.Builtin] = [
     Model.Builtin(
       name: "List.at",
       parameters: [
@@ -1402,10 +1315,8 @@ def rows_21() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_22() -> List[Model.Builtin]
-  return [
+ROWS_22: List[Model.Builtin] = [
     Model.Builtin(
       name: "List.filter",
       parameters: [
@@ -1550,10 +1461,8 @@ def rows_22() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_23() -> List[Model.Builtin]
-  return [
+ROWS_23: List[Model.Builtin] = [
     Model.Builtin(
       name: "List.reverse",
       parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("T")))],
@@ -1599,10 +1508,8 @@ def rows_23() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_24() -> List[Model.Builtin]
-  return [
+ROWS_24: List[Model.Builtin] = [
     Model.Builtin(
       name: "List.sort_by",
       parameters: [
@@ -1697,10 +1604,8 @@ def rows_24() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_25() -> List[Model.Builtin]
-  return [
+ROWS_25: List[Model.Builtin] = [
     Model.Builtin(
       name: "LogRegistry.floor",
       parameters: [],
@@ -1750,10 +1655,8 @@ def rows_25() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_26() -> List[Model.Builtin]
-  return [
+ROWS_26: List[Model.Builtin] = [
     Model.Builtin(
       name: "LogRegistry.lowest",
       parameters: [],
@@ -1834,10 +1737,8 @@ def rows_26() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_27() -> List[Model.Builtin]
-  return [
+ROWS_27: List[Model.Builtin] = [
     Model.Builtin(
       name: "Map.get",
       parameters: [
@@ -1890,10 +1791,8 @@ def rows_27() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_28() -> List[Model.Builtin]
-  return [
+ROWS_28: List[Model.Builtin] = [
     Model.Builtin(
       name: "Map.put",
       parameters: [
@@ -1949,10 +1848,8 @@ def rows_28() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_29() -> List[Model.Builtin]
-  return [
+ROWS_29: List[Model.Builtin] = [
     Model.Builtin(
       name: "Path.real",
       parameters: [Model.Named(name: "path", type: Types.Type.String)],
@@ -2007,10 +1904,8 @@ def rows_29() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_30() -> List[Model.Builtin]
-  return [
+ROWS_30: List[Model.Builtin] = [
     Model.Builtin(
       name: "Process.channel_close",
       parameters: [
@@ -2062,10 +1957,8 @@ def rows_30() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_31() -> List[Model.Builtin]
-  return [
+ROWS_31: List[Model.Builtin] = [
     Model.Builtin(
       name: "Process.close_stdin",
       parameters: [
@@ -2118,10 +2011,8 @@ def rows_31() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_32() -> List[Model.Builtin]
-  return [
+ROWS_32: List[Model.Builtin] = [
     Model.Builtin(
       name: "Process.read_available",
       parameters: [
@@ -2166,10 +2057,8 @@ def rows_32() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_33() -> List[Model.Builtin]
-  return [
+ROWS_33: List[Model.Builtin] = [
     Model.Builtin(
       name: "Process.send",
       parameters: [
@@ -2213,10 +2102,8 @@ def rows_33() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_34() -> List[Model.Builtin]
-  return [
+ROWS_34: List[Model.Builtin] = [
     Model.Builtin(
       name: "Process.spawn_captured",
       parameters: [
@@ -2273,10 +2160,8 @@ def rows_34() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_35() -> List[Model.Builtin]
-  return [
+ROWS_35: List[Model.Builtin] = [
     Model.Builtin(
       name: "Random.int",
       parameters: [Model.Named(name: "min", type: Types.Type.Int), Model.Named(name: "max", type: Types.Type.Int)],
@@ -2324,10 +2209,8 @@ def rows_35() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_36() -> List[Model.Builtin]
-  return [
+ROWS_36: List[Model.Builtin] = [
     Model.Builtin(
       name: "Range.last",
       parameters: [Model.Named(name: "range", type: Types.Type.Range)],
@@ -2379,10 +2262,8 @@ def rows_36() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_37() -> List[Model.Builtin]
-  return [
+ROWS_37: List[Model.Builtin] = [
     Model.Builtin(
       name: "Result.unwrap!",
       parameters: [Model.Named(name: "r", type: Types.Type.Result(Types.Type.Var("T")))],
@@ -2433,10 +2314,8 @@ def rows_37() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_38() -> List[Model.Builtin]
-  return [
+ROWS_38: List[Model.Builtin] = [
     Model.Builtin(
       name: "Set.difference",
       parameters: [
@@ -2487,10 +2366,8 @@ def rows_38() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_39() -> List[Model.Builtin]
-  return [
+ROWS_39: List[Model.Builtin] = [
     Model.Builtin(
       name: "Set.new",
       parameters: [Model.Named(name: "items", type: Types.Type.List(Types.Type.Var("T")))],
@@ -2538,10 +2415,8 @@ def rows_39() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_40() -> List[Model.Builtin]
-  return [
+ROWS_40: List[Model.Builtin] = [
     Model.Builtin(
       name: "Set.union",
       parameters: [
@@ -2602,10 +2477,8 @@ def rows_40() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_41() -> List[Model.Builtin]
-  return [
+ROWS_41: List[Model.Builtin] = [
     Model.Builtin(
       name: "String.downcase",
       parameters: [Model.Named(name: "s", type: Types.Type.String)],
@@ -2660,10 +2533,8 @@ def rows_41() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_42() -> List[Model.Builtin]
-  return [
+ROWS_42: List[Model.Builtin] = [
     Model.Builtin(
       name: "String.from_int",
       parameters: [Model.Named(name: "n", type: Types.Type.Int)],
@@ -2711,10 +2582,8 @@ def rows_42() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_43() -> List[Model.Builtin]
-  return [
+ROWS_43: List[Model.Builtin] = [
     Model.Builtin(
       name: "String.replace",
       parameters: [
@@ -2767,10 +2636,8 @@ def rows_43() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_44() -> List[Model.Builtin]
-  return [
+ROWS_44: List[Model.Builtin] = [
     Model.Builtin(
       name: "String.starts_with?",
       parameters: [
@@ -2825,10 +2692,8 @@ def rows_44() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_45() -> List[Model.Builtin]
-  return [
+ROWS_45: List[Model.Builtin] = [
     Model.Builtin(
       name: "String.trim",
       parameters: [Model.Named(name: "s", type: Types.Type.String)],
@@ -2883,10 +2748,8 @@ def rows_45() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_46() -> List[Model.Builtin]
-  return [
+ROWS_46: List[Model.Builtin] = [
     Model.Builtin(
       name: "System.pid",
       parameters: [],
@@ -2931,10 +2794,8 @@ def rows_46() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_47() -> List[Model.Builtin]
-  return [
+ROWS_47: List[Model.Builtin] = [
     Model.Builtin(
       name: "TCP.connect",
       parameters: [
@@ -2986,10 +2847,8 @@ def rows_47() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_48() -> List[Model.Builtin]
-  return [
+ROWS_48: List[Model.Builtin] = [
     Model.Builtin(
       name: "TCP.recv_bytes",
       parameters: [
@@ -3033,10 +2892,8 @@ def rows_48() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_49() -> List[Model.Builtin]
-  return [
+ROWS_49: List[Model.Builtin] = [
     Model.Builtin(
       name: "TLS.connect",
       parameters: [
@@ -3068,10 +2925,8 @@ def rows_49() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_50() -> List[Model.Builtin]
-  return [
+ROWS_50: List[Model.Builtin] = [
     Model.Builtin(
       name: "Task.await",
       parameters: [Model.Named(name: "task", type: Types.Type.Task(Types.Type.Var("R")))],
@@ -3142,10 +2997,8 @@ def rows_50() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_51() -> List[Model.Builtin]
-  return [
+ROWS_51: List[Model.Builtin] = [
     Model.Builtin(
       name: "Task.spawn",
       parameters: [
@@ -3199,10 +3052,8 @@ def rows_51() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_52() -> List[Model.Builtin]
-  return [
+ROWS_52: List[Model.Builtin] = [
     Model.Builtin(
       name: "Test.eq",
       parameters: [
@@ -3249,10 +3100,8 @@ def rows_52() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_53() -> List[Model.Builtin]
-  return [
+ROWS_53: List[Model.Builtin] = [
     Model.Builtin(
       name: "Test.test",
       parameters: [
@@ -3314,10 +3163,8 @@ def rows_53() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end
 
-def rows_54() -> List[Model.Builtin]
-  return [
+ROWS_54: List[Model.Builtin] = [
     Model.Builtin(
       name: "error",
       parameters: [Model.Named(name: "message", type: Types.Type.String)],
@@ -3370,10 +3217,8 @@ def rows_54() -> List[Model.Builtin]
       ],
     ),
   ]
-end
 
-def rows_55() -> List[Model.Builtin]
-  return [
+ROWS_55: List[Model.Builtin] = [
     Model.Builtin(
       name: "print",
       parameters: [Model.Named(name: "value", type: Types.Type.Var("T"))],
@@ -3395,4 +3240,3 @@ def rows_55() -> List[Model.Builtin]
       alternatives: [],
     ),
   ]
-end

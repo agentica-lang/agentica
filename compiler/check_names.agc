@@ -4,6 +4,7 @@
 
 import State from "check_state"
 import T from "types"
+import {ENTRIES} from "builtins"
 
 ## The kind of a receiver, or "" when its type has no methods in the catalog.
 export def receiver_kind(type: T.Type) -> String
@@ -100,7 +101,7 @@ def catalog_method(cx: State.Cx, kind: String, name: String) -> String
   if !module.ok?
     return ""
   end
-  entry = cx.catalog.entries.get("#{module.unwrap!}.#{name}")
+  entry = ENTRIES.get("#{module.unwrap!}.#{name}")
   if entry.ok? and entry.unwrap!.parameters.size > 0 and T.tag(entry.unwrap!.parameters[0].type) == kind
     return entry.unwrap!.name
   end
@@ -110,7 +111,7 @@ end
 # The names of the module's builtins that are methods of the kind.
 def module_methods(cx: State.Cx, kind: String, prefix: String) -> List[String]
   names: List[String] = []
-  for key in cx.catalog.entries.keys
+  for key in ENTRIES.keys
     if key.starts_with?(prefix)
       name = key.slice(prefix.length, key.length - prefix.length)
       if catalog_method(cx, kind, name) != ""

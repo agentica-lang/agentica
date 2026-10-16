@@ -54,18 +54,16 @@ def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> S
   case Checker.check(linked, settings)
     Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
     Checker.Checking.Done(checked) ->
-      return lowered_text(linked, lower_deeper(linked, checked, settings.catalog, frames))
+      return lowered_text(linked, lower_deeper(linked, checked, frames))
   end
 end
 
 # Lowers after `frames` calls that wait for it, which are not tail calls.
-def lower_deeper(
-  linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catalog, frames: Int
-) -> Lowering.Lowered
+def lower_deeper(linked: Linker.Linked, checked: Checker.Checked, frames: Int) -> Lowering.Lowered
   if frames == 0
-    return Lowering.lower(linked, checked, catalog)
+    return Lowering.lower(linked, checked)
   end
-  done = lower_deeper(linked, checked, catalog, frames - 1)
+  done = lower_deeper(linked, checked, frames - 1)
   return done
 end
 

@@ -7,6 +7,7 @@ import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
 import SourceFile from "source_file"
+import {IO_TIMEOUT_MS} from "link_env"
 
 ## True for the key of a standard module, which no canonical path can look like.
 export def embedded?(key: String) -> Bool
@@ -17,10 +18,10 @@ end
 ## stdlib/ folder, or the copy that the binary carries).
 export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
   if !embedded?(key)
-    return SourceFile.read(key, Env.io_timeout())
+    return SourceFile.read(key, IO_TIMEOUT_MS)
   end
   case settings.std
-    Env.StdProvider.Folder(folder) -> return SourceFile.read(Paths.join(folder, std_path(key)), Env.io_timeout())
+    Env.StdProvider.Folder(folder) -> return SourceFile.read(Paths.join(folder, std_path(key)), IO_TIMEOUT_MS)
     Env.StdProvider.Embedded ->
       text = FrontEnd.std_source(std_path(key))
       if text.ok?
@@ -61,12 +62,12 @@ def io_failure(site: Failure.Site, message: String) -> String
 end
 
 def file?(path: String) -> Bool
-  info = File.stat(path, Env.io_timeout())
+  info = File.stat(path, IO_TIMEOUT_MS)
   return info.ok? and info.unwrap!.kind != "directory"
 end
 
 def directory?(path: String) -> Bool
-  info = File.stat(path, Env.io_timeout())
+  info = File.stat(path, IO_TIMEOUT_MS)
   return info.ok? and info.unwrap!.kind == "directory"
 end
 

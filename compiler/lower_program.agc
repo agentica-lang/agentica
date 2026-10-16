@@ -2,12 +2,12 @@
 ## uses, each in the order of the catalog; enums likewise, and their variants are numbered in table order.
 
 import Ast from "ast"
-import Builtins from "builtins"
 import Model from "builtin_model"
 import Ir from "ir"
 import State from "lower_state"
 import {BUILTIN_STRUCTS, STRUCT_NEEDS} from "lower_tables"
 import Types from "types"
+import {ENUMS, RECORDS} from "builtins"
 
 ## The tables, and what the lowering looks up in them. user_types maps each name in the tables to "Struct" or "Enum",
 ## structs gives the index and the fields of a struct by name, variants the id of "Enum.Variant", and json_structs the
@@ -24,7 +24,7 @@ end
 ## Builds the tables. decls are all the declarations of the program in order. used are the watched type names that the
 ## program writes or whose types some expression has (a builtin record or enum is in the tables only then). type_value
 ## says that a function uses a type name as a value, which is when the user structs that JSON can build are looked for.
-export def build(catalog: Builtins.Catalog, decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> Tables
+export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> Tables
   struct_decls: List[Ast.StructDecl] = []
   enum_decls: List[Ast.EnumDecl] = []
   for decl in decls
@@ -34,7 +34,7 @@ export def build(catalog: Builtins.Catalog, decls: List[Ast.Decl], used: Set[Str
       _ -> struct_decls = struct_decls
     end
   end
-  builtin_types = builtin_decodable(catalog)
+  builtin_types = builtin_decodable()
   decodable = user_decodable(struct_decls, builtin_types, type_value)
   structs: List[Ir.StructDef] = []
   for decl in struct_decls
@@ -46,7 +46,7 @@ export def build(catalog: Builtins.Catalog, decls: List[Ast.Decl], used: Set[Str
     known = decodable.has_key?(decl.name)
     structs = structs.push(Ir.StructDef(name: decl.name, fields: fields, decodable: known, types: types))
   end
-  structs = structs.concat(builtin_structs(catalog, used, builtin_types))
+  structs = structs.concat(builtin_structs(used, builtin_types))
   enums: List[Ir.EnumDef] = []
   for decl in enum_decls
     variants = decl.variants.map do |variant: Ast.EnumVariant|
@@ -54,9 +54,9 @@ export def build(catalog: Builtins.Catalog, decls: List[Ast.Decl], used: Set[Str
     end
     enums = enums.push(Ir.EnumDef(name: decl.name, variants: variants))
   end
-  for name in catalog.enums.keys
+  for name in ENUMS.keys
     if used.include?(name)
-      variants = catalog.enums[name].variants.map do |variant: Model.Variant|
+      variants = ENUMS[name].variants.map do |variant: Model.Variant|
         Ir.VariantDef(name: variant.name, size: variant.payload.size)
       end
       enums = enums.push(Ir.EnumDef(name: name, variants: variants))
@@ -105,10 +105,10 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
 end
 
 # The field types of the builtin records JSON.decode can build: all but those with an enum field.
-def builtin_decodable(catalog: Builtins.Catalog) -> Map[String, List[Types.Type]]
+def builtin_decodable() -> Map[String, List[Types.Type]]
   found: Map[String, List[Types.Type]] = {}
   for name in BUILTIN_STRUCTS
-    types = catalog.records[name].map do |field: Model.Named| field.type end
+    types = RECORDS[name].map do |field: Model.Named| field.type end
     if !types.any? do |type: Types.Type| Types.is(type, "Enum") end
       found = found.put(name, types)
     end
@@ -117,9 +117,7 @@ def builtin_decodable(catalog: Builtins.Catalog) -> Map[String, List[Types.Type]
 end
 
 # The builtin records the program uses, and the ones those have a field of, in the order of BUILTIN_STRUCTS.
-def builtin_structs(
-  catalog: Builtins.Catalog, used: Set[String], decodable: Map[String, List[Types.Type]]
-) -> List[Ir.StructDef]
+def builtin_structs(used: Set[String], decodable: Map[String, List[Types.Type]]) -> List[Ir.StructDef]
   wanted: Set[String] = Set.new([])
   for name in BUILTIN_STRUCTS
     if used.include?(name)
@@ -132,7 +130,7 @@ def builtin_structs(
   found: List[Ir.StructDef] = []
   for name in BUILTIN_STRUCTS
     if wanted.include?(name)
-      fields = catalog.records[name].map do |field: Model.Named| field.name end
+      fields = RECORDS[name].map do |field: Model.Named| field.name end
       types: List[Types.Type] = []
       if decodable.has_key?(name)
         types = decodable[name]

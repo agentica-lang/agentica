@@ -54,7 +54,7 @@ def check(linked: Linker.Linked, output: String, settings: Env.Settings) -> Stri
   case Checker.check(linked, settings)
     Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
     Checker.Checking.Done(checked) ->
-      lowered = Lowering.lower(linked, checked, settings.catalog)
+      lowered = Lowering.lower(linked, checked)
       return lower(linked, lowered, output, settings.version)
   end
 end

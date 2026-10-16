@@ -34,6 +34,7 @@ import Pipeline from "pipeline"
 import Resolve from "resolve_import"
 import SaveFile from "save_file"
 import SourceFile from "source_file"
+import {IO_TIMEOUT_MS} from "link_env"
 
 # The deadline of each call that writes the output of `compile`, in milliseconds.
 SAVE_TIMEOUT = 60000
@@ -129,7 +130,7 @@ end
 # `--dump-ir`: the lowered program in the text form of lower_text.agc. It is not the `format-ir` of the former front
 # end, which dropped what the bytecode needs (the status note of step 8a in docs/future/35-self-hosting.md says why).
 def dump_ir(session: Session, source: String, front: Pipeline.Checked) -> Int
-  case Lowering.lower(front.linked, front.checked, session.settings.catalog)
+  case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return reject(session, problem, source)
     Lowering.Lowered.Done(program) ->
       return emit(Reply.printed("#{LowerText.program_text(front.linked.root_dir, program)}\n"))
@@ -209,7 +210,7 @@ def source_text(file: String, root: Bool, settings: Env.Settings) -> String
   if !root and file.starts_with?("std/")
     return text_of(Resolve.read_source(settings, file))
   end
-  return text_of(SourceFile.read_shown(file, Env.io_timeout()))
+  return text_of(SourceFile.read_shown(file, IO_TIMEOUT_MS))
 end
 
 def text_of(read: SourceFile.Read) -> String

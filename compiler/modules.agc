@@ -18,6 +18,8 @@ import Resolve from "resolve_import"
 import Source from "source"
 import SourceFile from "source_file"
 import Suggest from "suggest"
+import {BARE_NAMES, RESERVED} from "builtins"
+import {IO_TIMEOUT_MS} from "link_env"
 
 ## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the
 ## exported name.
@@ -155,7 +157,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
       aliases.has_key?(alias) or
       module.names.has_key?(alias) or
       frame.named.has_key?(alias) or
-      settings.catalog.reserved.include?(alias)
+      RESERVED.include?(alias)
     )
   )
     return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", Diag.Help.NoHelp))
@@ -230,7 +232,7 @@ def bind_name(
     frame.aliases.has_key?(entry.local) or
     named.has_key?(entry.local)
   )
-  if taken or settings.catalog.bare_names.include?(entry.local) or settings.catalog.reserved.include?(entry.local)
+  if taken or BARE_NAMES.include?(entry.local) or RESERVED.include?(entry.local)
     return error(
       Failure.fail_at(at_local, "CHECK-REDEFINED-NAME", "duplicate or reserved imported name", Diag.Help.NoHelp),
     )
@@ -272,7 +274,7 @@ end
 
 # The text of the root file: CHECK-IMPORT-IO at its start with the system's message, or LEX-INVALID-UTF8.
 def root_text(root: String, file: String) -> Result[String]
-  case SourceFile.read(root, Env.io_timeout())
+  case SourceFile.read(root, IO_TIMEOUT_MS)
     SourceFile.Read.Text(text) -> return ok(text)
     SourceFile.Read.Invalid(at) -> return error(Failure.from_stage(file, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Unreadable(message) ->
@@ -352,7 +354,7 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
       next
     end
     name = Declarations.name_of(wrapped)
-    if names.has_key?(name) or settings.catalog.bare_names.include?(name) or settings.catalog.reserved.include?(name)
+    if names.has_key?(name) or BARE_NAMES.include?(name) or RESERVED.include?(name)
       return error(
         Failure.fail_at(
           Failure.Site(file: file, span: Declarations.name_span_of(wrapped)),

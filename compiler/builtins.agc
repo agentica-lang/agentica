@@ -1,61 +1,57 @@
-## The builtin catalog: every builtin function with its signature, the
-## builtin records and enums, and the lookups the linker and the checker make. One Catalog is built per run from the
-## generated rows of builtins_data.agc; every lookup is a Map or Set access.
+## The builtin functions and tables the linker, checker, and lowering read. The tables are module constants derived
+## from builtins_data.agc and prelude_data.agc.
 
 import Model from "builtin_model"
-import Data from "builtins_data"
-import PreludeData from "prelude_data"
+import {
+  BUILTIN_ROWS,
+  ENUMS as DATA_ENUMS,
+  HANDLE_TYPES,
+  OPAQUE_TYPES as DATA_OPAQUE_TYPES,
+  RECORDS as DATA_RECORDS,
+  RESERVED_TYPE_NAMES,
+  STD_ONLY_IMPORTS,
+} from "builtins_data"
+import {PRELUDE_ONLY as DATA_PRELUDE_ONLY, ROWS as PRELUDE_ROWS} from "prelude_data"
 import Types from "types"
 
-## A module only std/ may call: the std module that wraps it and the alias its help shows.
-export struct StdOnly
-  std_path: String
-  alias: String
+EMPTY_BUILTINS: Map[String, Model.Builtin] = {}
+EMPTY_RECORDS: Map[String, List[Model.Named]] = {}
+EMPTY_ENUMS: Map[String, Model.EnumDef] = {}
+EMPTY_PRELUDE: Map[String, Model.PreludeRow] = {}
+
+export ENTRIES: Map[String, Model.Builtin] = BUILTIN_ROWS.reduce(EMPTY_BUILTINS) do |found, row|
+  found.put(row.name, row)
 end
 
-## The lookup tables of the catalog. entries holds the first form of each builtin (its alternatives are inside it).
-## public_names are the names a program may call, sorted: all but those of the std-only modules and the prelude-only
-## builtins. bare_names are the builtins written as a plain name (puts, ok), the prelude-only ones too, so the linker
-## keeps their name. reserved is the set of type names no declaration may take. prelude holds the PreludeRow of each
-## builtin that Rule.Prelude marks and prelude_only the names only the prelude may call.
-export struct Catalog
-  entries: Map[String, Model.Builtin]
-  public_names: List[String]
-  bare_names: Set[String]
-  records: Map[String, List[Model.Named]]
-  enums: Map[String, Model.EnumDef]
-  opaque: Set[String]
-  handles: Set[String]
-  reserved: Set[String]
-  std_only: Map[String, StdOnly]
-  prelude: Map[String, Model.PreludeRow]
-  prelude_only: Set[String]
+export RECORDS: Map[String, List[Model.Named]] = DATA_RECORDS.reduce(EMPTY_RECORDS) do |found, record|
+  found.put(record.name, record.fields)
 end
 
-## The catalog of this run.
-export def catalog() -> Catalog
-  entries = entry_table()
-  std_only = std_only_table()
-  prelude_only = Set.new(PreludeData.prelude_only())
-  names = entries.keys
-  return Catalog(
-    entries: entries,
-    public_names: public_names(names, std_only, prelude_only),
-    bare_names: bare_names(names),
-    records: record_table(),
-    enums: enum_table(),
-    opaque: Set.new(Data.opaque_types()),
-    handles: Set.new(Data.handle_types()),
-    reserved: Set.new(Data.reserved_type_names()),
-    std_only: std_only,
-    prelude: prelude_table(),
-    prelude_only: prelude_only
-  )
+export ENUMS: Map[String, Model.EnumDef] = DATA_ENUMS.reduce(EMPTY_ENUMS) do |found, definition|
+  found.put(definition.name, definition)
 end
+
+export OPAQUE_TYPES = Set.new(DATA_OPAQUE_TYPES)
+export HANDLES = Set.new(HANDLE_TYPES)
+export RESERVED = Set.new(RESERVED_TYPE_NAMES)
+
+export STD_ONLY = STD_ONLY_IMPORTS
+
+export PRELUDE: Map[String, Model.PreludeRow] = PRELUDE_ROWS.reduce(EMPTY_PRELUDE) do |found, row|
+  found.put(row.name, row)
+end
+
+export PRELUDE_ONLY = Set.new(DATA_PRELUDE_ONLY)
+
+export PUBLIC_NAMES = ENTRIES.keys.filter do |name|
+  !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name)
+end
+
+export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.contains?(".") end)
 
 ## The builtin of that name, or an error when there is none (builtin-ref without an arity).
-export def lookup(catalog: Catalog, name: String) -> Result[Model.Builtin]
-  return catalog.entries.get(name)
+export def lookup(name: String) -> Result[Model.Builtin]
+  return ENTRIES.get(name)
 end
 
 ## The form of a builtin that takes that many arguments, or an error when none does.
@@ -72,14 +68,14 @@ export def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
 end
 
 ## The form of the builtin name that takes that many arguments (builtin-ref with an arity).
-export def ref(catalog: Catalog, name: String, arity: Int) -> Result[Model.Builtin]
-  entry = try lookup(catalog, name)
+export def ref(name: String, arity: Int) -> Result[Model.Builtin]
+  entry = try lookup(name)
   return form_for(entry, arity)
 end
 
 ## True for a name inside a std-only module, such as HttpWire.client.
-export def std_only_name?(catalog: Catalog, name: String) -> Bool
-  return catalog.std_only.has_key?(module_of(name))
+export def std_only_name?(name: String) -> Bool
+  return STD_ONLY.has_key?(module_of(name))
 end
 
 ## The signature of every form of a builtin, one per line: name(param: Type, ...) -> Result.
@@ -96,61 +92,10 @@ export def form_signature(form: Model.Builtin) -> String
   return "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
 end
 
-# The part of a builtin name before its first dot: the module.
 def module_of(name: String) -> String
   dot = name.index_of(".")
   if dot.ok?
     return name.slice(0, dot.unwrap!)
   end
   return ""
-end
-
-def entry_table() -> Map[String, Model.Builtin]
-  found: Map[String, Model.Builtin] = {}
-  for row in Data.builtin_rows()
-    found = found.put(row.name, row)
-  end
-  return found
-end
-
-def record_table() -> Map[String, List[Model.Named]]
-  found: Map[String, List[Model.Named]] = {}
-  for record in Data.records()
-    found = found.put(record.name, record.fields)
-  end
-  return found
-end
-
-def enum_table() -> Map[String, Model.EnumDef]
-  found: Map[String, Model.EnumDef] = {}
-  for definition in Data.enums()
-    found = found.put(definition.name, definition)
-  end
-  return found
-end
-
-def std_only_table() -> Map[String, StdOnly]
-  found: Map[String, StdOnly] = {}
-  imports = Data.std_only_imports()
-  for name in imports.keys
-    found = found.put(name, StdOnly(std_path: imports[name][0], alias: imports[name][1]))
-  end
-  return found
-end
-
-# Map.keys is in insertion order and the rows are sorted by name, so the lists stay sorted.
-def public_names(names: List[String], std_only: Map[String, StdOnly], prelude_only: Set[String]) -> List[String]
-  return names.filter do |name: String| !std_only.has_key?(module_of(name)) and !prelude_only.include?(name) end
-end
-
-def prelude_table() -> Map[String, Model.PreludeRow]
-  found: Map[String, Model.PreludeRow] = {}
-  for row in PreludeData.rows()
-    found = found.put(row.name, row)
-  end
-  return found
-end
-
-def bare_names(names: List[String]) -> Set[String]
-  return Set.new(names.filter do |name: String| !name.contains?(".") end)
 end

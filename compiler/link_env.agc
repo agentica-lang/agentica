@@ -1,8 +1,7 @@
 ## What the front end reads from outside the program it compiles: the environment variables that place pkg/ libraries,
-## where the std/ sources are, the Agentica version the .agcb header names, the path of the running binary, and the
-## builtin catalog with its name tables.
+## where the std/ sources are, the Agentica version the .agcb header names, and the path of the running binary.
 
-import Builtins from "builtins"
+export IO_TIMEOUT_MS = 10000
 
 ## The environment variables the pkg/ search reads. An unset variable is "".
 export struct Env
@@ -22,14 +21,13 @@ end
 ## environment, the Agentica version that the header of the .agcb file names (the writer's input; the linker and the
 ## checker do not read it), the path of the `agentica` binary that runs the front end ("" when the front end is run as
 ## an ordinary program with `agentica run`; a command that starts the binary again, as `test` does, takes it from
-## here), and the builtin catalog (reserved type names, bare builtins, builtin enums and std-only modules).
+## here).
 export struct Settings
   std: StdProvider
   embedded_bdd: Bool
   env: Env
   version: String
   self_path: String
-  catalog: Builtins.Catalog
 end
 
 ## The environment of this process.
@@ -50,7 +48,6 @@ export def settings(stdlib: String, env: Env) -> Settings
     env: env,
     version: "",
     self_path: "",
-    catalog: Builtins.catalog(),
   )
 end
 
@@ -63,13 +60,7 @@ export def embedded_settings(env: Env, version: String, embedded_bdd: Bool) -> S
     env: env,
     version: version,
     self_path: "",
-    catalog: Builtins.catalog(),
   )
-end
-
-## The deadline, in milliseconds, of every file system call of the linker.
-export def io_timeout() -> Int
-  return 10000
 end
 
 def variable(name: String) -> String

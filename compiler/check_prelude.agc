@@ -12,6 +12,7 @@ import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 import Source from "source"
 import T from "types"
+import {PRELUDE} from "builtins"
 
 # What the arguments checked so far learned: the state, the type of each variable and the span of the argument that
 # bound it (the limits are reported there).
@@ -31,7 +32,7 @@ export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> R
     bound = try check_argument(cx, bound, site.args[index], form.parameters[index].type)
     index += 1
   end
-  row = cx.catalog.prelude[form.name]
+  row = PRELUDE[form.name]
   try check_limits(cx, bound, form, row, site.node.span)
   found = bound.st.with(bodies: bound.st.bodies.put(site.node.id, body_of(row, bound.types)))
   return ok(State.Out(st: found, type: CheckTypes.substitute(form.result, bound.types)))

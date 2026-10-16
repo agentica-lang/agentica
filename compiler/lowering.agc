@@ -8,7 +8,6 @@
 ## about 3,000 of the 10,000 frames of the VM. The scans that read the whole tree use a worklist and do not recurse.
 
 import Ast from "ast"
-import Builtins from "builtins"
 import Failure from "check_failure"
 import Checker from "checker"
 import Defaults from "defaults"
@@ -24,6 +23,7 @@ import {BUILTIN_STRUCTS} from "lower_tables"
 import Linker from "linker"
 import Source from "source"
 import Types from "types"
+import {ENUMS} from "builtins"
 
 ## The result of lowering: the program, or the first problem (the file it is in comes with it).
 export enum Lowered
@@ -59,15 +59,15 @@ struct Scanned
 end
 
 ## Lowers a linked program that the checker accepted.
-export def lower(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catalog) -> Lowered
-  result = run(linked, checked, catalog)
+export def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered
+  result = run(linked, checked)
   if result.ok?
     return Lowered.Done(result.unwrap!)
   end
   return Lowered.Failed(Failure.unpack(result.message))
 end
 
-def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catalog) -> Result[Ir.Program]
+def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   functions: List[Located] = []
   constants: List[LocatedConst] = []
   decls: List[Ast.Decl] = []
@@ -84,10 +84,10 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
   end
   function_decls = functions.map do |entry: Located| entry.function end
   constant_decls = constants.map do |entry: LocatedConst| entry.constant end
-  watched = Set.new(BUILTIN_STRUCTS.concat(catalog.enums.keys))
+  watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys))
   scanned = scan_all(decls, function_decls, constant_decls, watched)
   used = Set.new(scanned.written.concat(mentioned_in(checked.types, watched)))
-  tables = Program.build(catalog, decls, used, scanned.type_value)
+  tables = Program.build(decls, used, scanned.type_value)
   plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, checked.constants)
   start = plan.slots.size > 0
   files_of = constant_files(constants)
@@ -106,7 +106,6 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
   cx = Lowering.Cx(
     types: checked.types,
     resolved: checked.resolved,
-    catalog: catalog,
     user_types: tables.user_types,
     structs: tables.infos,
     variants: tables.variants,
