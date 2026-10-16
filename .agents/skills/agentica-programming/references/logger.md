@@ -5,16 +5,11 @@ import Logger from "std/logger"
 ```
 
 ```text
-Logger.debug(message: String) -> Void
-Logger.debug_meta(message: String, fields: Map[String, String]) -> Void
-Logger.info(message: String) -> Void
-Logger.info_meta(message: String, fields: Map[String, String]) -> Void
-Logger.warning(message: String) -> Void
-Logger.warning_meta(message: String, fields: Map[String, String]) -> Void
-Logger.err(message: String) -> Void
-Logger.err_meta(message: String, fields: Map[String, String]) -> Void
-Logger.log(level: LogLevel, message: String) -> Void
-Logger.log_meta(level: LogLevel, message: String, fields: Map[String, String]) -> Void
+Logger.debug(message: String, fields: Map[String, String] = {}) -> Void
+Logger.info(message: String, fields: Map[String, String] = {}) -> Void
+Logger.warning(message: String, fields: Map[String, String] = {}) -> Void
+Logger.err(message: String, fields: Map[String, String] = {}) -> Void
+Logger.log(level: LogLevel, message: String, fields: Map[String, String] = {}) -> Void
 Logger.enabled?(level: LogLevel) -> Bool
 Logger.level() -> LogLevel
 Logger.set_level(level: LogLevel) -> Void
@@ -29,7 +24,7 @@ Logger.time_text(ms: Int) -> String
 ```
 
 - `LogLevel` is a builtin enum, `LogLevel.Debug < Info < Warning < Error`. `LogEvent` is a builtin record: `level: LogLevel`, `message: String`, `fields: Map[String, String]`, `time_ms: Int`, `task: Int` (main is 1). Both names are reserved (`CHECK-REDEFINED-NAME`), and neither is JSON-decodable.
-- The function for the last level is `err`: `Logger.error` is `CHECK-IMPORT-NAME` because `error` is a reserved name. Each level has a plain function and a `_meta` function that takes fields; there are no default arguments.
+- The function for the last level is `err`: `Logger.error` is `CHECK-IMPORT-NAME` because `error` is a reserved name. Each level has one function, and `fields` is optional (default `{}`): `Logger.info("started")`, `Logger.info("done", {"path": "/items"})`.
 - No setup is needed. The first call of any `Logger` function attaches a handler named `console` (`stderr_text`, level `info`), so `Logger.info("started")` writes `2026-10-12T10:15:02.345Z INFO started` on stderr. Change the setup at the start of `main`: `Logger.set_level(LogLevel.Debug)`, `_ = Logger.detach("console")`, `_ = Logger.attach("console", LogLevel.Info, &Logger.stderr_json)`.
 - Two levels apply. A call below the global level (`info` by default) makes no event. A handler gets an event only at or above its own level. `Logger.enabled?(level)` is true only when a call would reach a handler, so put a costly message inside `if Logger.enabled?(LogLevel.Debug)`.
 - A handler is `&Logger.stderr_json` or a block: `Logger.attach("audit", LogLevel.Warning) do |event| IO.warn("audit: #{event.message}") end`. A name in use for `attach`, or not in use for `detach`, is an `error` result. Inside a block, assign the result to a new name (`gone = Logger.detach("x")`): a block cannot assign a name that exists outside it, `_` included (`CHECK-CAPTURED-ASSIGNMENT`).

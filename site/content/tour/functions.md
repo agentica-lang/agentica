@@ -23,7 +23,7 @@ Hello, Ana!
 ```
 
 Calls always use parentheses, also with no arguments: `main()`, `puts("hi")`.
-Arguments are given by position.
+Arguments are given by position, and trailing parameters can have default values (see below).
 
 ## return
 
@@ -223,7 +223,71 @@ def main() -> Void
 end
 ```
 
-## No overloading or defaults
+## Default parameter values
 
-A name has one definition. There are no default arguments, no keyword
-arguments and no methods on your own types. Functions are top-level only.
+A parameter can end with `= value`. A call may leave out the parameters that have one, and the default is used.
+
+```agentica
+def join(words: List[String], sep: String = ", ") -> String
+  return words.join(sep)
+end
+
+def main() -> Void
+  puts(join(["a", "b"]))
+  puts(join(["a", "b"], "-"))
+end
+```
+
+```output
+a, b
+a-b
+```
+
+A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `[]`, `{}` or an enum variant without a payload such as `Level.Info`. A call, a name or any other expression is `CHECK-DEFAULT-VALUE`. `[]` and `{}` take the type of the parameter, and each call builds its own, so calls never share a value.
+
+Parameters with a default go at the end. A parameter without one after a default is `CHECK-DEFAULT-ORDER`. The one exception is a last `Fn` parameter, which a block fills:
+
+```agentica
+def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void
+  f.call("#{path} after #{timeout_ms} ms")
+end
+
+def show(line: String) -> Void
+  puts(line)
+end
+
+def main() -> Void
+  each_line("a.txt") do |line|
+    puts(line)
+  end
+  each_line("b.txt", 50, &show)
+end
+```
+
+```output
+a.txt after 1000 ms
+b.txt after 50 ms
+```
+
+Arguments fill the parameters from the left, and the block (or the last argument) always goes to the last `Fn`. A call with too few or too many arguments is `CHECK-ARITY`, and the message gives the range, such as `expects 1 to 2 arguments`. A function value takes every argument: `&join` has type `Fn[List[String], String, String]`.
+
+```agentica {expect="CHECK-DEFAULT-VALUE"}
+def next_id() -> Int
+  return 1
+end
+
+def label(id: Int = next_id()) -> String
+  return "item #{id}"
+end
+
+def main() -> Void
+  puts(label())
+end
+```
+
+## No overloading
+
+A name has one definition. There is no overloading by argument count or type,
+no keyword arguments and no methods on your own types. Functions are top-level
+only; a default value covers the case where you would have wanted a second
+version with fewer arguments.
