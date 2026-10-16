@@ -14,10 +14,12 @@
 def main() -> Void
   # The binary puts `--version V --self PATH [--embedded-bdd] --` before the words.
   words = System.args().drop(5)
-  if words[0] == "--embedded-bdd"
-    words = System.args().drop(6)
-  elsif words[0] == "--"
-    words = words.drop(1)
+  if words.size > 0
+    if words[0] == "--embedded-bdd"
+      words = System.args().drop(6)
+    elsif words[0] == "--"
+      words = words.drop(1)
+    end
   end
   if words.size == 0
     System.exit(2)
