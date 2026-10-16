@@ -131,5 +131,3 @@ class SpecAliasTest(TestCase):
                 found = self.check(text)
                 self.assertIsNotNone(found)
                 self.assertEqual(found["code"], code)
-
-\n

@@ -8,5 +8,3 @@ def main() -> Void
   names: Names = ["red", "blue"]
   puts(count(names))
 end
-
-\n

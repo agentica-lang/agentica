@@ -6,5 +6,3 @@ def main() -> Void
   labels: Labels = ["red", "blue"]
   puts(labels.size)
 end
-
-\n
