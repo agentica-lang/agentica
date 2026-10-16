@@ -648,42 +648,44 @@ Counted, not built:
 
 ### Speed pass, third part: the interpreter loop
 
-Two changes to the VM core, measured against master (ab93db7c), the master
-binary built apart and kept. Both binaries ran alternately (A B A B, 7 rounds of
-5 runs, the median of the round medians) on the same AMD Ryzen 5 3550H, Debian
-13, gcc 14.2 as above. The load average was 1.7 at the start and 2.3 at the end
-(another agent was building), so the numbers are at the edge of "measured under
-load"; compare the two columns of a row, not rows with earlier tables. The
-VM rows are `dist/agentica run -- f.agcb` at size 4 (bytecode compiled once);
-the last three rows are source to result, start-up included.
+Three changes to the VM core, measured against master (5895cab5, which has the
+new lexer), the master binary built apart and kept. Both binaries ran
+alternately (A B A B, 7 rounds of 5 runs, the median of the round medians) on
+the same AMD Ryzen 5 3550H, Debian 13, gcc 14.2 as above. The load average was
+2.1 at the start and 3.2 at the end (another agent was running tests), so this
+is **measured under load**; compare the two columns of a row, not rows with
+earlier tables. The VM rows are `dist/agentica run -- f.agcb` at size 4
+(bytecode compiled once); the last three rows are source to result, start-up
+included.
 
 | Program | Master s | This PR s | Ratio |
 |---|---:|---:|---:|
-| arithmetic (15.3 M steps) | 0.275 | 0.104 | 0.38 |
-| case | 0.088 | 0.051 | 0.58 |
-| traveling-salesman | 0.154 | 0.085 | 0.55 |
-| knight-tour | 0.144 | 0.082 | 0.57 |
-| calls | 0.106 | 0.065 | 0.61 |
-| lists | 0.134 | 0.089 | 0.67 |
-| strings | 0.127 | 0.090 | 0.71 |
-| sets | 0.371 | 0.268 | 0.72 |
-| string-library | 0.093 | 0.072 | 0.78 |
-| maps | 0.577 | 0.463 | 0.80 |
-| maze-bfs | 0.217 | 0.181 | 0.84 |
-| list-build | 0.175 | 0.148 | 0.85 |
-| list-bulk | 0.310 | 0.292 | 0.94 |
-| `check examples/hello.agc` | 0.0271 | 0.0264 | 0.97 |
-| `check stdlib/bdd/gherkin.agc` | 0.127 | 0.101 | 0.80 |
-| `check compiler/parser.agc` | 0.403 | 0.311 | 0.77 |
+| arithmetic (15.3 M steps) | 0.276 | 0.133 | 0.48 |
+| traveling-salesman | 0.156 | 0.088 | 0.57 |
+| calls | 0.114 | 0.068 | 0.60 |
+| knight-tour | 0.152 | 0.090 | 0.59 |
+| lists | 0.139 | 0.094 | 0.68 |
+| case | 0.093 | 0.064 | 0.69 |
+| strings | 0.128 | 0.088 | 0.69 |
+| sets | 0.376 | 0.275 | 0.73 |
+| string-library | 0.098 | 0.072 | 0.74 |
+| maps | 0.574 | 0.483 | 0.84 |
+| maze-bfs | 0.223 | 0.191 | 0.86 |
+| list-build | 0.179 | 0.159 | 0.89 |
+| list-bulk | 0.287 | 0.269 | 0.94 |
+| `check examples/hello.agc` | 0.0281 | 0.0275 | 0.98 |
+| `check stdlib/bdd/gherkin.agc` | 0.102 | 0.080 | 0.78 |
+| `check compiler/parser.agc` | 0.305 | 0.226 | 0.74 |
 
 The step counts did not change (`AGENTICA_VM_TRACE=profile` prints the same
 steps, calls and builtin calls on master and here for the benchmarks and for
-the gherkin check), and neither did the output of `--max-steps N` runs at seven
-limits from 1 to 1,234,567. `arithmetic` runs 56 M steps per second on master
-and 147 M here. A check of `hello.agc` is start-up (the loader, next section),
-so it does not move.
+the gherkin check), and neither did the output of `--max-steps N` runs at six
+limits from 1 to 1,234,567. `arithmetic` runs 55 M steps per second on master
+and 115 M here (147 M in the best layout, below). A check of `hello.agc` is
+start-up (the loader), so it does not move.
 
-What changed, and what each step gave (each column is its own interleaved run
+What changed, and what each of the first two steps gave (an earlier run, master
+then ab93db7c, before the lexer PR; each column is its own interleaved run
 against the column before it, 3 rounds of 3 runs; seconds):
 
 | Program | Master | Inline accessors | And frame state in locals |
@@ -750,6 +752,33 @@ runs as above):
   failure path would need to store it back before the `longjmp`, because the
   budget of a task that crashes is still observable.
 
-The link layout moves single programs by up to 8% here (the same loop code
-moved by 64 bytes: `arithmetic` +3%, `case` +8%), as in the earlier sections.
-Read a difference of that size as noise.
+- **The empty List and Map are shared.** `LIST` and `MAP` with no items
+  allocated a new object on every run (a `{}` default argument, `m.get(k, [])`,
+  the seed of a `reduce`). The runtime makes one empty list and one empty map
+  in `agc_vm_init` and the two opcodes return them; a map literal with items
+  starts from the shared empty map. This is the first part of
+  `docs/future/34-shared-small-values.md`. Values are persistent (`agc_map_put`
+  copies its path, builders write only fresh lists) and `==` and `SAME` compare
+  by value, so nothing can see the sharing; the fixture `empty-literals` checks
+  that puts, pushes and tasks leave them empty. A loop that calls a function
+  with a `{}` argument (2,000,000 calls, medians of 9 runs, interleaved):
+
+  | Loop | Before ms | After ms |
+  |---|---:|---:|
+  | bare loop | 153 | 170 |
+  | + call with a `{}` argument | 293 | 200 |
+  | + call with a `[]` argument | 283 | 200 |
+
+  The bare loop moved by 11% with no change to it (the link layout, below), so
+  read the cost over it: 70 ns for each call with a `{}` argument before and 15
+  ns after.
+
+The link layout moves single programs by a lot here. The same loop code built
+with the empty-value change (a few instructions in two cases, and a comment in
+`port.h`) ran `arithmetic` in 0.133 s where the build before it took 0.103 s
+(147 M steps per second), and `knight-tour` and `case` moved by 10% in the same
+two builds. Aligning `agc_run_turn` to 64 bytes did not bring it back, so the
+cause is not the start of the function; it is most likely the indirect jump of
+the `switch` and the predictor, which the position of the code changes. The
+tables above are the final build; read a difference below 10% as noise, and
+`arithmetic` as a range, 0.10 to 0.13 s here, against 0.276 s on master.

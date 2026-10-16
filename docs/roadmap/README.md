@@ -131,9 +131,10 @@ and the other features after the JIT.
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer).
    **Third part, the interpreter loop, done (2026-10-16, PR #319):** the
    common value accessors are inline and the turn loop keeps the frame in
-   locals, so `arithmetic` takes 0.104 s, not 0.275 s, loops of calls and `case`
-   take 40% less, and `check stdlib/bdd/gherkin.agc` 0.101 s, not 0.127 s (with
-   the old lexer; 0.085 s with both). Numbers, a profile of where a check
+   locals, and `[]` and `{}` with no items are shared, so `arithmetic` takes
+   0.10 to 0.13 s, not 0.276 s, loops of calls and `case` 30% to 55% less, and
+   `check stdlib/bdd/gherkin.agc` 0.080 s, not 0.102 s (with the new lexer).
+   Numbers, a profile of where a check
    spends its time now, and what was tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-third-part-the-interpreter-loop).
    Still to do: the parser and the loader (15 ms of every start), for room
