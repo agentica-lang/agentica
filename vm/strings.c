@@ -127,9 +127,13 @@ static size_t count_matches(const finder *f, const agc_string *text) {
   return count;
 }
 
+/* The piece [start, end) of s. The first two tests are agc_small_string, kept in line because split("") of a long text
+   runs this once per character. */
 static agc_value piece(agc_vm *vm, const agc_string *s, size_t start, size_t end) {
   size_t bytes = end - start;
-  if (bytes == 1 && (uint8_t)s->data[start] < AGC_ASCII_CHARS) return vm->rt->chars[(uint8_t)s->data[start]];
+  if (bytes == 1 && (uint8_t)s->data[start] < AGC_ASCII_CHARS)
+    return agc_string_value(vm->rt->chars[(uint8_t)s->data[start]]);
+  if (bytes == 0) return agc_string_value(vm->rt->empty_string);
   return agc_string_value(
       agc_make_string(s->data + start, bytes, agc_utf8_count((const uint8_t *)s->data + start, bytes)));
 }
@@ -274,14 +278,28 @@ static agc_value builtin_length(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int((int64_t)agc_as_string(vm, args[0])->chars);
 }
 
+/* Upper or lower case of the String in args[0]. A String of no characters is its own result, and one ASCII character
+   maps by itself (no special casing applies to ASCII), so neither allocates. */
+static agc_value change_case(agc_vm *vm, agc_value *args, bool up) {
+  const agc_string *s = agc_as_string(vm, args[0]);
+  if (s->bytes == 0) return args[0];
+  if (s->bytes == 1 && (uint8_t)s->data[0] < AGC_ASCII_CHARS) {
+    char c = s->data[0];
+    if (up && c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
+    if (!up && c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+    return agc_string_value(vm->rt->chars[(uint8_t)c]);
+  }
+  return agc_string_value(agc_change_case(s, up));
+}
+
 static agc_value builtin_upcase(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_string_value(agc_change_case(agc_as_string(vm, args[0]), true));
+  return change_case(vm, args, true);
 }
 
 static agc_value builtin_downcase(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_string_value(agc_change_case(agc_as_string(vm, args[0]), false));
+  return change_case(vm, args, false);
 }
 
 static agc_value builtin_trim(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -291,7 +309,10 @@ static agc_value builtin_trim(agc_vm *vm, agc_value *args, uint32_t span) {
   size_t start = 0, end = s->bytes;
   while (start < end && trim_space(data[start])) start++;
   while (end > start && trim_space(data[end - 1])) end--;
-  return agc_string_value(agc_make_string(s->data + start, end - start, s->chars - (s->bytes - (end - start))));
+  size_t kept = end - start;
+  if (kept == s->bytes) return args[0];
+  /* The trimmed bytes are ASCII, one character each. */
+  return agc_string_value(agc_small_string(vm, s->data + start, kept, s->chars - (s->bytes - kept)));
 }
 
 static agc_value builtin_split(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -299,6 +320,7 @@ static agc_value builtin_split(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *s = agc_as_string(vm, args[0]), *sep = agc_as_string(vm, args[1]);
   agc_list_builder b;
   if (sep->bytes == 0) {
+    if (s->chars == 0) return vm->rt->empty_list;
     agc_list_builder_sized(&b, s->chars);
     size_t at = 0;
     bool ascii = s->bytes == s->chars;
@@ -333,7 +355,7 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *parts = agc_as_list(vm, args[0]);
   const agc_string *sep = agc_as_string(vm, args[1]);
   size_t count = agc_list_len(parts);
-  if (count == 0) return agc_string_value(agc_new_string(0, 0));
+  if (count == 0) return agc_string_value(vm->rt->empty_string);
   size_t bytes = agc_size_mul(count - 1, sep->bytes), chars = agc_size_mul(count - 1, sep->chars);
   agc_list_cursor cursor;
   agc_value item;
@@ -343,6 +365,7 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
     bytes = agc_size_add(bytes, part->bytes);
     chars = agc_size_add(chars, part->chars);
   }
+  if (bytes == 0) return agc_string_value(vm->rt->empty_string);
   agc_string *result = agc_new_string(bytes, chars);
   size_t w = 0;
   agc_list_cursor_begin(&cursor, parts, 0);
@@ -383,8 +406,9 @@ static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
   size_t w = 0;
   if (from->bytes == 0) {
     size_t gaps = agc_size_add(s->chars, 1);
-    result = agc_new_string(agc_size_add(s->bytes, agc_size_mul(gaps, to->bytes)),
-                            agc_size_add(s->chars, agc_size_mul(gaps, to->chars)));
+    size_t joined = agc_size_add(s->bytes, agc_size_mul(gaps, to->bytes));
+    if (joined == 0) return agc_string_value(vm->rt->empty_string);
+    result = agc_new_string(joined, agc_size_add(s->chars, agc_size_mul(gaps, to->chars)));
     for (size_t at = 0;;) {
       if (to->bytes) memcpy(result->data + w, to->data, to->bytes);
       w += to->bytes;
@@ -402,6 +426,7 @@ static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
   if (count == 0) return args[0];
   size_t bytes = agc_size_add(s->bytes - count * from->bytes, agc_size_mul(count, to->bytes));
   size_t chars = agc_size_add(s->chars - count * from->chars, agc_size_mul(count, to->chars));
+  if (bytes == 0) return agc_string_value(vm->rt->empty_string);
   result = agc_new_string(bytes, chars);
   size_t start = 0;
   for (size_t at = find(&f, s, 0); at != AGC_NOT_FOUND; at = find(&f, s, start)) {
@@ -424,13 +449,14 @@ static agc_value builtin_slice(agc_vm *vm, agc_value *args, uint32_t span) {
              s->chars);
     agc_fail_text(vm, "RUNTIME-INDEX-OUT-OF-RANGE", ascii(text), span);
   }
+  if (length == 0) return agc_string_value(vm->rt->empty_string);
   size_t from = agc_utf8_offset(vm, s, (size_t)start);
   size_t at = from + (size_t)length;
   if (s->bytes != s->chars) {
     at = walk(s, (size_t)start + (size_t)length, (size_t)start, from);
     remember(vm, s, (size_t)start + (size_t)length, at);
   }
-  return agc_string_value(agc_make_string(s->data + from, at - from, (size_t)length));
+  return agc_string_value(agc_small_string(vm, s->data + from, at - from, (size_t)length));
 }
 
 static agc_value builtin_index_of(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -449,12 +475,13 @@ static agc_value builtin_at(agc_vm *vm, agc_value *args, uint32_t span) {
   size_t from = agc_utf8_offset(vm, s, (size_t)index), at = from;
   agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
   if (s->bytes != s->chars) remember(vm, s, (size_t)index + 1, at);
-  return agc_string_value(agc_make_string(s->data + from, at - from, 1));
+  return agc_string_value(agc_small_string(vm, s->data + from, at - from, 1));
 }
 
 static agc_value builtin_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
+  if (s->chars <= 1) return args[0];
   agc_string *result = agc_new_string(s->bytes, s->chars);
   for (size_t at = 0; at < s->bytes;) {
     size_t start = at;
@@ -478,7 +505,7 @@ static agc_value builtin_from_code(agc_vm *vm, agc_value *args, uint32_t span) {
     agc_fail(vm, "RUNTIME-INVALID-CHARACTER", "not a Unicode scalar value", span + 1);
   char buf[4];
   size_t n = agc_utf8_encode((uint32_t)code, buf);
-  return agc_string_value(agc_make_string(buf, n, 1));
+  return agc_string_value(agc_small_string(vm, buf, n, 1));
 }
 
 static agc_value builtin_from_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -491,7 +518,13 @@ static agc_value builtin_from_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
     int64_t b = agc_as_int(vm, item);
     if (b < 0 || b > 255) return failure(ascii("bytes must be integers between 0 and 255"));
   }
-  agc_string *s = agc_new_string(agc_list_len(data), 0);
+  size_t count = agc_list_len(data);
+  if (count == 0) return agc_result_value(true, agc_string_value(vm->rt->empty_string));
+  if (count == 1) {
+    int64_t b = agc_as_int(vm, agc_list_get(data, 0));
+    if (b < AGC_ASCII_CHARS) return agc_result_value(true, agc_string_value(vm->rt->chars[b]));
+  }
+  agc_string *s = agc_new_string(count, 0);
   agc_list_cursor_begin(&cursor, data, 0);
   for (size_t k = 0; agc_list_cursor_next(&cursor, &item); k++) s->data[k] = (char)(uint8_t)agc_as_int(vm, item);
   if (!agc_utf8_chars((const uint8_t *)s->data, s->bytes, &s->chars))

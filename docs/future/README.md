@@ -38,9 +38,9 @@ lines attached to declarations, `agentica doc` and `help` for `std/` modules;
 front end only, after 7i, HTTP 20b, sections 37 and 36, and HTTP 20c. Section 33
 (digit separators) plans `_` between digits in number literals (`1_000`); lexer
 only, right after section 32. Section 34 (shared small values) is a VM
-implementation proposal with no language change: one shared object per run for
-`""`, the one-character ASCII strings, `[]`, `{}` and later the empty `Set`,
-kept only if a benchmark shows it helps. Section 35 (self-hosted front end)
+implementation with no language change, built: one shared object per run for
+`""`, the one-character ASCII strings, `[]`, `{}` and the empty `Set`,
+kept because a benchmark shows it helps. Section 35 (self-hosted front end)
 records the owner's decision of 2026-10-13: the front end is rewritten in
 Agentica and embedded in the VM, so the release is one binary that starts in
 tens of milliseconds; a long-term item after the current roadmap order. Section
@@ -119,7 +119,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 30 | HTTP on the VM: simple, synchronous, hybrid | [`30-hybrid-http.md`](30-hybrid-http.md) | Streaming (roadmap 20e to 20g, order step 7.4) and binary bodies planned; the rest of phase 20 is built: [`docs/vm/10-io-http.md`](../vm/10-io-http.md) |
 | 32 | Doc comments | [`32-doc-comments.md`](32-doc-comments.md) | 22a built (roadmap phase 22, order step 7.2a); 22b (`agentica doc`) waits until after the bootstrap (row 22b) |
 | 33 | Digit separators | [`33-digit-separators.md`](33-digit-separators.md) | Done (roadmap phase 23, 23a) |
-| 34 | Shared small values in the VM | [`34-shared-small-values.md`](34-shared-small-values.md) | Candidate (roadmap 7g); needs a measurement |
+| 34 | Shared small values in the VM | [`34-shared-small-values.md`](34-shared-small-values.md) | Built (roadmap 7g, 2026-10-16) |
 | 35 | Self-hosted front end and a single binary | [`35-self-hosting.md`](35-self-hosting.md) | Planned, in the roadmap order from row 7.2.7 on |
 | 36 | Unit tests (`Test`) | [`36-unit-tests.md`](36-unit-tests.md) | `Test` module done (25a); `agentica test` for test files planned (25b) |
 | 37 | Task crash isolation | [`37-task-crash-isolation.md`](37-task-crash-isolation.md) | Planned (roadmap phase 24, after 7i and 20b); semantics for the owner to review |

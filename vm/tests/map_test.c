@@ -33,6 +33,67 @@ static void debug_is(agc_value v, const char *expected) {
   }
 }
 
+static agc_value call(const char *name, uint32_t arity, agc_value *args) {
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
+  assert(b);
+  return b->fn(&vm, args, 0);
+}
+
+/* The Set, Map and List builtins return the run's shared empty values when nothing is left, and building on a shared
+   value leaves it empty. A Set is a Map under another tag, so the two empties are one object. */
+static void shared_empties(void) {
+  agc_runtime *rt = vm.rt;
+  agc_map *empty_set = agc_as_set(&vm, rt->empty_set), *empty_map = agc_as_map(&vm, rt->empty_map);
+  const agc_list *empty_list = agc_as_list(&vm, rt->empty_list);
+  assert(empty_set == empty_map && empty_set->size == 0 && empty_set->table == NULL && empty_set->reversed == NULL);
+
+  agc_value args[2];
+  args[0] = rt->empty_list;
+  assert(agc_as_set(&vm, call("Set.new", 1, args)) == empty_set);
+  agc_value one = agc_int(1), two = agc_int(2);
+  args[0] = agc_list_value(agc_list_from_array(&one, 1));
+  agc_value single = call("Set.new", 1, args);
+  agc_value other = agc_set_value(agc_map_put(&vm, empty_set, two, agc_nil()));
+  assert(agc_as_set(&vm, single)->size == 1 && agc_as_set(&vm, single) != empty_set);
+  args[0] = single;
+  args[1] = one;
+  assert(agc_as_set(&vm, call("Set.delete", 2, args)) == empty_set);
+  args[1] = single;
+  assert(agc_as_set(&vm, call("Set.difference", 2, args)) == empty_set);
+  args[1] = other;
+  assert(agc_as_set(&vm, call("Set.intersection", 2, args)) == empty_set);
+
+  agc_value pair[2] = {one, one};
+  args[0] = agc_map_value(agc_map_put(&vm, empty_map, pair[0], pair[1]));
+  args[1] = one;
+  assert(agc_as_map(&vm, call("Map.delete", 2, args)) == empty_map);
+  assert(agc_as_list(&vm, call("Map.keys", 1, (agc_value[]){rt->empty_map})) == empty_list);
+
+  agc_value items[3] = {one, two, one};
+  args[0] = agc_list_value(agc_list_from_array(items, 3));
+  args[1] = agc_int(0);
+  assert(agc_as_list(&vm, call("List.take", 2, args)) == empty_list);
+  args[1] = agc_int(3);
+  assert(agc_as_list(&vm, call("List.drop", 2, args)) == empty_list);
+  args[0] = one;
+  args[1] = agc_int(0);
+  assert(agc_as_list(&vm, call("List.repeat", 2, args)) == empty_list);
+  args[0] = agc_list_value(agc_list_from_array(&one, 1));
+  assert(agc_as_list(&vm, call("List.reverse", 1, args)) == agc_as_list(&vm, args[0]));
+
+  /* A put, an add or a push on a shared empty gives a new value and leaves the shared one empty. */
+  args[0] = rt->empty_set;
+  args[1] = two;
+  assert(agc_as_set(&vm, call("Set.add", 2, args))->size == 1);
+  agc_value triple[3] = {rt->empty_map, one, two};
+  assert(agc_as_map(&vm, call("Map.put", 3, triple))->size == 1);
+  args[0] = rt->empty_list;
+  args[1] = one;
+  assert(agc_list_len(agc_as_list(&vm, call("List.append", 2, args))) == 1);
+  assert(empty_set->size == 0 && empty_set->table == NULL && empty_set->reversed == NULL);
+  assert(agc_list_len(empty_list) == 0);
+}
+
 int main(void) {
   agc_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
@@ -181,6 +242,8 @@ int main(void) {
   for (size_t k = 0; k < depth; k++) deep = agc_map_value(agc_map_put(&vm, agc_new_map(), agc_int(1), deep));
   agc_string *deep_text = agc_debug(&vm, deep);
   assert(deep_text->bytes == depth * 5 + 2);
+
+  shared_empties();
 
   puts("map tests passed");
   return 0;

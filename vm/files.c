@@ -1559,7 +1559,7 @@ static bool lines_take(agc_vm *vm, lines *s, file_state *st, size_t len, size_t 
   agc_charge_bytes(vm, consume);
   bool valid = agc_utf8_chars(data, len, &chars);
   if (valid)
-    *line = agc_string_value(agc_make_string((const char *)data, len, chars));
+    *line = agc_string_value(agc_small_string(vm, (const char *)data, len, chars));
   else
     s->outcome = agc_utf8_error(data, len);
   st->start += consume;

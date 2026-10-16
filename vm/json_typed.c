@@ -95,7 +95,7 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
     agc_list_builder_sized(&f->list, f->n);
   } else if (kind == AGC_TYPE_MAP) {
     f->n = node->count;
-    f->map = agc_new_map();
+    f->map = agc_as_map(vm, vm->rt->empty_map);
   } else {
     f->def = &vm->rt->program->structs[arg];
     f->n = f->def->count;

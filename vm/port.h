@@ -213,10 +213,13 @@ typedef struct {
   const agc_program *program;
   agc_output out, err;
   agc_value args;
-  /* The one empty List and Map of the run, which LIST and MAP with no items return instead of allocating each time. */
-  agc_value empty_list, empty_map;
+  /* The shared small values of the run (docs/future/34-shared-small-values.md), made once by agc_vm_init and never
+     written: the empty List, Map, Set and String, and the one-character ASCII Strings by code. A builtin that computes
+     one of them returns the shared value instead of allocating. Values are immutable and compared by content, so
+     nothing can tell the object from a fresh one. */
+  agc_value empty_list, empty_map, empty_set;
+  agc_string *empty_string, *chars[AGC_ASCII_CHARS];
   agc_string *cwd;
-  agc_value chars[AGC_ASCII_CHARS];
   bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired;
   agc_style style;
   int64_t flush_timeout;

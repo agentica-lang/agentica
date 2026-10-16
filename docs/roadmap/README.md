@@ -131,19 +131,26 @@ and the other features after the JIT.
    [§44.12](../future/44-module-constants.md#4412-implementation-plan).
    Numbers, and what was tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer).
-   **Third part, the interpreter loop, done (2026-10-16, PR #319):** the
-   common value accessors are inline and the turn loop keeps the frame in
-   locals, and `[]` and `{}` with no items are shared, so `arithmetic` takes
-   0.10 to 0.13 s, not 0.276 s, loops of calls and `case` 30% to 55% less, and
+   **Third part, the interpreter loop, done (2026-10-16, PR #319):** the common
+   value accessors are inline and the turn loop keeps the frame in locals, and
+   `[]` and `{}` with no items are shared, so `arithmetic` takes 0.10 to 0.13 s,
+   not 0.276 s, loops of calls and `case` 30% to 55% less, and
    `check stdlib/bdd/gherkin.agc` 0.080 s, not 0.102 s (with the new lexer).
-   Numbers, a profile of where a check
-   spends its time now, and what was tried, in
+   Numbers, a profile of where a check spends its time now, and what was
+   tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-third-part-the-interpreter-loop).
    **VM start-up, done (2026-10-16, PR #326):** the loader of the carried
    front end took 15 ms of every start and takes 8.3 ms now (row 8.3), so a
    hello check is 17.5 ms, not 24.3, and `check stdlib/bdd/gherkin.agc` is
    about 8 ms faster. Numbers in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-vm-start-up-row-83).
+   **Shared small values, done (2026-10-16,
+   [§34](../future/34-shared-small-values.md)):** one empty String and one
+   empty Set join the one-character Strings, the empty List and the empty Map,
+   and the builtins that end with one of them return it, so a loop of `at` or
+   `slice` allocates 92% fewer bytes and the new `small-values` program takes
+   23% less time. Numbers, the layout noise and what was dropped in
+   [vm-benchmarks](../vm-benchmarks.md#speed-pass-shared-small-values-34).
    Still to do: the parser, for room under the 100 ms for
    `stdlib/bdd/gherkin.agc`.
 4. **Done (2026-10-16)**: default parameter values (row 7.5a,

@@ -127,6 +127,115 @@ static void utf8_word_paths(void) {
   }
 }
 
+/* Calls the builtin NAME of the String, Result and core tables the way the interpreter does. */
+static agc_value call(agc_vm *vm, const char *name, uint32_t arity, agc_value *args) {
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
+  assert(b);
+  return b->fn(vm, args, 0);
+}
+
+static agc_value str(const char *data) { return agc_string_value(text(data)); }
+
+#define STR(v) agc_as_string(vm, (v))
+
+/* The builtins return the run's shared empty and one-character ASCII Strings, never for a longer or non-ASCII result,
+   and the shared Strings keep their text through a collection. */
+static void shared_strings(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  agc_value args[3];
+
+  args[0] = str("hello");
+  args[1] = agc_int(1);
+  assert(STR(call(vm, "String.at", 2, args)) == rt->chars['e']);
+  assert(STR(call(vm, "String.at", 2, args)) == STR(call(vm, "String.at", 2, args)));
+  args[2] = agc_int(1);
+  assert(STR(call(vm, "String.slice", 3, args)) == rt->chars['e']);
+  args[2] = agc_int(0);
+  assert(STR(call(vm, "String.slice", 3, args)) == rt->empty_string);
+  args[2] = agc_int(2);
+  agc_string *two = STR(call(vm, "String.slice", 3, args));
+  assert(two->bytes == 2 && memcmp(two->data, "el", 2) == 0);
+  args[0] = str("a\xf0\x9f\x98\x80");
+  args[1] = agc_int(1);
+  agc_string *wide = STR(call(vm, "String.at", 2, args));
+  assert(wide->bytes == 4 && wide->chars == 1 && wide != STR(call(vm, "String.at", 2, args)));
+
+  args[0] = str("  \t ");
+  assert(STR(call(vm, "String.trim", 1, args)) == rt->empty_string);
+  args[0] = str("  a ");
+  assert(STR(call(vm, "String.trim", 1, args)) == rt->chars['a']);
+  args[0] = str("ab");
+  assert(STR(call(vm, "String.trim", 1, args)) == STR(args[0]));
+
+  args[0] = str("a,,b");
+  args[1] = str(",");
+  agc_value parts = call(vm, "String.split", 2, args);
+  assert(agc_list_len(agc_as_list(vm, parts)) == 3);
+  assert(STR(agc_list_get(agc_as_list(vm, parts), 0)) == rt->chars['a']);
+  assert(STR(agc_list_get(agc_as_list(vm, parts), 1)) == rt->empty_string);
+  assert(STR(agc_list_get(agc_as_list(vm, parts), 2)) == rt->chars['b']);
+  args[0] = str("");
+  args[1] = str("");
+  assert(agc_as_list(vm, call(vm, "String.split", 2, args)) == agc_as_list(vm, rt->empty_list));
+
+  agc_value blanks[2] = {str(""), str("")};
+  args[0] = agc_list_value(agc_list_from_array(blanks, 2));
+  args[1] = str("");
+  assert(STR(call(vm, "String.join", 2, args)) == rt->empty_string);
+  args[0] = agc_list_value(agc_list_from_array(NULL, 0));
+  args[1] = str(",");
+  assert(STR(call(vm, "String.join", 2, args)) == rt->empty_string);
+  args[0] = str("abc");
+  args[1] = str("abc");
+  args[2] = str("");
+  assert(STR(call(vm, "String.replace", 3, args)) == rt->empty_string);
+
+  args[0] = agc_int(65);
+  assert(STR(call(vm, "String.from_code", 1, args)) == rt->chars[65]);
+  args[0] = agc_int(0);
+  assert(STR(call(vm, "String.from_code", 1, args)) == rt->chars[0]);
+  args[0] = agc_int(0x1F600);
+  assert(STR(call(vm, "String.from_code", 1, args))->bytes == 4);
+
+  agc_value bytes[2] = {agc_int(0xC3), agc_int(0xA9)};
+  args[0] = agc_list_value(agc_list_from_array(NULL, 0));
+  assert(STR(agc_as_result(vm, call(vm, "String.from_bytes", 1, args))->value) == rt->empty_string);
+  bytes[0] = agc_int('h');
+  args[0] = agc_list_value(agc_list_from_array(bytes, 1));
+  assert(STR(agc_as_result(vm, call(vm, "String.from_bytes", 1, args))->value) == rt->chars['h']);
+  bytes[0] = agc_int(0xC3);
+  args[0] = agc_list_value(agc_list_from_array(bytes, 2));
+  agc_string *accent = STR(agc_as_result(vm, call(vm, "String.from_bytes", 1, args))->value);
+  assert(accent->bytes == 2 && accent->chars == 1);
+
+  args[0] = str("a");
+  assert(STR(call(vm, "String.upcase", 1, args)) == rt->chars['A']);
+  args[0] = str("Q");
+  assert(STR(call(vm, "String.downcase", 1, args)) == rt->chars['q']);
+  args[0] = str("5");
+  assert(STR(call(vm, "String.upcase", 1, args)) == rt->chars['5']);
+  args[0] = str("\xc3\xa9");
+  agc_string *upper = STR(call(vm, "String.upcase", 1, args));
+  assert(upper->bytes == 2 && memcmp(upper->data, "\xc3\x89", 2) == 0);
+  args[0] = str("");
+  assert(STR(call(vm, "String.upcase", 1, args)) == STR(args[0]));
+  args[0] = str("x");
+  assert(STR(call(vm, "String.reverse", 1, args)) == STR(args[0]));
+  args[0] = str("ab");
+  agc_string *reversed = STR(call(vm, "String.reverse", 1, args));
+  assert(reversed->bytes == 2 && memcmp(reversed->data, "ba", 2) == 0);
+
+  assert(agc_text(vm, agc_int(7)) == rt->chars['7']);
+  assert(agc_text(vm, agc_int(12))->bytes == 2);
+  args[0] = agc_result_value(true, agc_int(1));
+  assert(STR(call(vm, "Result.message", 1, args)) == rt->empty_string);
+
+  agc_gc_collect();
+  for (size_t c = 0; c < AGC_ASCII_CHARS; c++) assert(rt->chars[c]->bytes == 1 && rt->chars[c]->chars == 1);
+  for (size_t c = 0; c < AGC_ASCII_CHARS; c++) assert(rt->chars[c]->data[0] == (char)c);
+  assert(rt->empty_string->bytes == 0 && rt->empty_string->chars == 0);
+}
+
 int main(void) {
   agc_init();
   utf8_word_paths();
@@ -277,6 +386,8 @@ int main(void) {
   for (size_t i = 0; i < sizeof bad_floats / sizeof bad_floats[0]; i++) float_invalid(bad_floats[i]);
   double x;
   assert(agc_parse_float((const uint8_t *)"1.5\0", 4, &x) == AGC_NUMBER_INVALID);
+
+  shared_strings(&vm);
 
   printf("string tests passed\n");
   return 0;

@@ -12,7 +12,7 @@ static agc_string *text_of(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_NIL) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT)) {
     char text[AGC_SCALAR_TEXT];
     size_t n = agc_scalar_text(vm, v, text);
-    return agc_make_string(text, n, n);
+    return agc_small_string(vm, text, n, n);
   }
   return agc_text(vm, v);
 }
@@ -174,6 +174,7 @@ static agc_value builtin_list_repeat(agc_vm *vm, agc_value *args, uint32_t span)
   int64_t count = agc_as_int(vm, args[1]);
   if (count < 0 || count > AGC_MAX_LIST_COUNT)
     agc_fail(vm, "RUNTIME-INVALID-COUNT", "count must be between 0 and 1048576", span + 2);
+  if (count == 0) return vm->rt->empty_list;
   return agc_list_value(agc_list_repeat(args[0], (size_t)count));
 }
 
@@ -186,18 +187,23 @@ static size_t list_count(agc_vm *vm, const agc_list *l, agc_value count, uint32_
 
 static agc_value builtin_list_take(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
-  return agc_list_value(agc_list_slice(a, 0, list_count(vm, a, args[1], span)));
+  size_t count = list_count(vm, a, args[1], span);
+  if (count == 0) return vm->rt->empty_list;
+  return agc_list_value(agc_list_slice(a, 0, count));
 }
 
 static agc_value builtin_list_drop(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
   size_t k = list_count(vm, a, args[1], span);
+  if (k == agc_list_len(a)) return vm->rt->empty_list;
   return agc_list_value(agc_list_slice(a, k, agc_list_len(a) - k));
 }
 
 static agc_value builtin_list_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_list_value(agc_list_reverse(agc_as_list(vm, args[0])));
+  const agc_list *a = agc_as_list(vm, args[0]);
+  if (agc_list_len(a) < 2) return args[0];
+  return agc_list_value(agc_list_reverse(a));
 }
 
 static agc_value builtin_list_sort(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -218,6 +224,7 @@ static agc_value builtin_map_size(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value map_walk(agc_vm *vm, const agc_map *m, bool values, uint32_t span) {
+  if (m->size == 0) return vm->rt->empty_list;
   agc_value *keys = agc_map_keys(vm, m, span);
   agc_list_builder b;
   agc_list_builder_sized(&b, m->size);
@@ -271,7 +278,7 @@ static agc_map *set_with(agc_vm *vm, const agc_map *set, agc_value x) {
 
 static agc_value builtin_set_new(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  agc_map *set = agc_new_map();
+  agc_map *set = agc_as_set(vm, vm->rt->empty_set);
   agc_list_cursor cursor;
   agc_value item;
   agc_list_cursor_begin(&cursor, agc_as_list(vm, args[0]), 0);
@@ -333,7 +340,7 @@ static agc_value set_filter(agc_vm *vm, agc_value *args, uint32_t span, bool in_
   for (size_t k = 0; k < a->size; k++)
     if (agc_map_get(vm, b, keys[k], &present) == in_b) kept++;
   if (kept == a->size) return args[0];
-  agc_map *out = agc_new_map();
+  agc_map *out = agc_as_set(vm, vm->rt->empty_set);
   for (size_t k = 0; k < a->size; k++) {
     uint64_t hash = agc_key_hash(vm, keys[k]);
     if (agc_map_get_hash(vm, b, hash, keys[k], &present) == in_b)
@@ -394,7 +401,7 @@ static agc_value builtin_result_unwrap_or(agc_vm *vm, agc_value *args, uint32_t 
 static agc_value builtin_result_message(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_result *r = agc_as_result(vm, args[0]);
-  if (r->ok) return agc_string_value(agc_new_string(0, 0));
+  if (r->ok) return agc_string_value(vm->rt->empty_string);
   return r->value;
 }
 
@@ -421,6 +428,7 @@ static agc_value builtin_range_to_a(agc_vm *vm, agc_value *args, uint32_t span) 
   uint64_t size;
   if (!range_size(vm, args[0], &size) || size > (uint64_t)AGC_MAX_LIST_COUNT)
     agc_fail(vm, "RUNTIME-INVALID-COUNT", "to_a needs a range of at most 1048576 values", span + 1);
+  if (size == 0) return vm->rt->empty_list;
   agc_list_builder b;
   agc_list_builder_sized(&b, (size_t)size);
   int64_t first = agc_as_range(vm, args[0])->start;

@@ -42,7 +42,7 @@ agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value);
 agc_string *agc_around(const char *before, const agc_string *part, const char *after);
 
 const char *agc_json_version(void);
-agc_json_status agc_json_parse(const uint8_t *text, size_t len, agc_value *out);
+agc_json_status agc_json_parse(agc_vm *vm, const uint8_t *text, size_t len, agc_value *out);
 const char *agc_json_status_message(agc_json_status status);
 bool agc_json_to_float(agc_vm *vm, const agc_json *j, double *out);
 agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type);

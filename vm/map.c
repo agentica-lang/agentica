@@ -302,6 +302,7 @@ agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_va
   bool removed = false;
   agc_hamt *table = m->table ? take(vm, m->table, 0, hash, key, &removed) : NULL;
   if (!removed) return (agc_map *)m;
+  if (m->size == 1) return agc_as_map(vm, vm->rt->empty_map);
   agc_map *result = agc_new_map();
   result->table = table;
   result->size = m->size - 1;

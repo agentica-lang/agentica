@@ -59,7 +59,8 @@ static _Noreturn void read_failed(agc_vm *vm) {
   agc_fail(vm, "RUNTIME-INTERNAL", "cannot read standard input", 0);
 }
 
-static agc_string *decode(const uint8_t *data, size_t len) {
+static agc_string *decode(agc_vm *vm, const uint8_t *data, size_t len) {
+  if (len <= 1 && (len == 0 || data[0] < AGC_ASCII_CHARS)) return agc_small_string(vm, (const char *)data, len, len);
   return agc_utf8_decode(data, len, "\xEF\xBF\xBD", false);
 }
 
@@ -305,7 +306,7 @@ agc_input_status agc_input_line(agc_vm *vm, agc_string **line) {
         }
         in->pending_eof = true;
       }
-      *line = decode(in->buf + in->start, k - in->start);
+      *line = decode(vm, in->buf + in->start, k - in->start);
       size_t next = k + 1;
       if (c == '\r' && next < in->end && in->buf[next] == '\n') next++;
       consume(in, next);
@@ -319,7 +320,7 @@ agc_input_status agc_input_line(agc_vm *vm, agc_string **line) {
     if (r == 0) {
       size_t seen = in->end - in->start;
       if (seen == 0) return AGC_INPUT_EOF;
-      *line = decode(in->buf + in->start, seen);
+      *line = decode(vm, in->buf + in->start, seen);
       consume(in, in->end);
       return AGC_INPUT_OK;
     }
@@ -335,10 +336,10 @@ agc_input_status agc_input_all(agc_vm *vm, agc_string **text) {
     if (r == 0) break;
   }
   if (!in->buf) {
-    *text = agc_new_string(0, 0);
+    *text = vm->rt->empty_string;
     return AGC_INPUT_OK;
   }
-  *text = decode(in->buf + in->start, in->end - in->start);
+  *text = decode(vm, in->buf + in->start, in->end - in->start);
   consume(in, in->end);
   return AGC_INPUT_OK;
 }
