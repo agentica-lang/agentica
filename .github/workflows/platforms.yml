@@ -20,6 +20,33 @@ permissions:
   contents: read
 
 jobs:
+  embedded-object:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh vm/tools/gen-embedded.sh bootstrap/stage0.agcb stdlib stdlib/MODULES > embedded.s
+      - run: cc -c embedded.s -o embedded.o
+
+  embedded-object-windows:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          update: false
+          install: make mingw-w64-ucrt-x86_64-gcc
+      - run: sh vm/tools/gen-embedded.sh bootstrap/stage0.agcb stdlib stdlib/MODULES > embedded.s
+      - run: gcc -c embedded.s -o embedded.o
+
   vm-macos:
     if: inputs.os != 'windows'
     runs-on: macos-15
