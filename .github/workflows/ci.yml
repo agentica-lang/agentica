@@ -176,10 +176,10 @@ jobs:
           clang --version
           python3 --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
-          command -v clang-tidy || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy; }
+          command -v clang-tidy-19 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy-19; }
           command -v rg >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep; }
       - name: make vm-lint
-        run: make vm-lint
+        run: make vm-lint CLANG_TIDY=clang-tidy-19
       - if: github.event_name == 'workflow_dispatch' || needs.test.outputs.trace == 'true'
         run: make vm-trace-off
       - run: make -j"$(nproc)" vm-test vm-fuzz

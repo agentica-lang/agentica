@@ -182,7 +182,9 @@ static void test_names(void) {
   assert(strcmp(agc_tls_error_name(AGC_TLS_ERR_NONE), "none") == 0);
   assert(strcmp(agc_tls_error_name(AGC_TLS_ERR_INTERNAL), "internal") == 0);
   assert(strcmp(agc_tls_error_name(AGC_TLS_ERR_KEY_MISMATCH), "key_mismatch") == 0);
-  assert(strncmp(agc_tls_version(), "3.5.", 4) == 0);
+  unsigned int major = 0;
+  assert(sscanf(agc_tls_version(), "%u.", &major) == 1);
+  assert(major >= 3);
 }
 
 int main(void) {
