@@ -67,7 +67,7 @@ jobs:
         run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: |
             build/vm/release/uv
@@ -78,7 +78,7 @@ jobs:
             build/vm/gc.o
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
@@ -87,7 +87,7 @@ jobs:
       - run: gmake fixed-point
       - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py"
       - run: ccache --show-stats
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with:
           path: |
             build/vm/release/uv
@@ -98,7 +98,7 @@ jobs:
             build/vm/gc.o
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
@@ -122,7 +122,7 @@ jobs:
         run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: |
             build/vm/release/uv
@@ -133,7 +133,7 @@ jobs:
             build/vm/gc.o
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
@@ -142,7 +142,7 @@ jobs:
       - run: gmake fixed-point
       - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py"
       - run: ccache --show-stats
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with:
           path: |
             build/vm/release/uv
@@ -153,7 +153,7 @@ jobs:
             build/vm/gc.o
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
@@ -180,7 +180,7 @@ jobs:
           install: make perl mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ccache mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
       - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: |
             build/vm/release/uv
@@ -191,14 +191,14 @@ jobs:
             build/vm/gc.o
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
       - run: ccache --show-stats
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with:
           path: |
             build/vm/release/uv
@@ -209,7 +209,7 @@ jobs:
             build/vm/gc.o
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         with:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}

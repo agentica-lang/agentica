@@ -51,7 +51,7 @@ jobs:
           submodules: true
       - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             build/vm/release/openssl/include
@@ -144,7 +144,7 @@ jobs:
         run: make smoke
       - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
       - id: vendored
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             build/vm/release/openssl/include
