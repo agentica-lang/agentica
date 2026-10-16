@@ -124,7 +124,9 @@ CLI. The contract:
   `VERSION` constant in `compiler/`). Without `--stdlib` the `std/` sources come
   from the binary (`FrontEnd.std_source`); with it, from the files of `DIR`.
   `--embedded-bdd` says that the binary also carries the compiled BDD runner
-  and default step program. The first bootstrap binary embeds the sources but
+  and default step program. C passes it to the carried front end only; a front
+  end supplied with `--front-end` gets the original arguments so older front
+  ends remain compatible. The first bootstrap binary embeds the sources but
   not those programs.
   `PATH` is the path of the running binary (`Settings.self_path`, empty when
   the front end runs as an ordinary program with `agentica run`), for a command

@@ -246,9 +246,11 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   first word and is not in any help) and runs it in a first runtime with the
   arguments `--version V --self PATH [--embedded-bdd] -- WORDS...`, where `V`
   is `AGC_VERSION`, `PATH` is the target of `/proc/self/exe` (`argv[0]` without
-  it), and `--embedded-bdd` is present only when the binary carries both
-  compiled programs used by `agentica test`. The standard-library sources can
-  be embedded without those programs, as in the first bootstrap binary. A lone
+  it), and `--embedded-bdd` is passed to the carried front end only when the
+  binary carries both compiled programs used by `agentica test`. A replacement
+  front end supplied with `--front-end` gets the original arguments, for
+  compatibility with older front ends. The standard-library sources can be
+  embedded without those programs, as in the first bootstrap binary. A lone
   `agentica --version` is answered by C before anything else is opened, so it
   starts no front end and creates no trace file. `AGENTICA_FLUSH_TIMEOUT_MS`
   is checked before the front end runs, as `agentica run` checks it at its

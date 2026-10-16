@@ -114,7 +114,7 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
   /* The inputs of the front end (compiler/front_end_inputs.agc), then the words of the user. */
   char version_flag[] = "--version", self_flag[] = "--self", bdd_flag[] = "--embedded-bdd", separator[] = "--",
        version[] = AGC_VERSION;
-  bool embedded_bdd = agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
+  bool embedded_bdd = !replacement && agc_embedded_index[3] != 0 && agc_embedded_index[5] != 0;
   int input_count = embedded_bdd ? 6 : 5;
   char **arguments = agc_alloc(agc_size_mul((size_t)count + (size_t)input_count, sizeof *arguments));
   arguments[0] = version_flag;
