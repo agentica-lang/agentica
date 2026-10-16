@@ -48,7 +48,7 @@ def run_stage(stage, fast_only):
         else:
             env["AGENTICA_TEST_SLOW"] = "1"
         try:
-            result = subprocess.run([sys.executable, "-m", "unittest", "tests.test_frontend_" + stage],
+            result = subprocess.run([sys.executable, "-m", "unittest", "-v", "tests.test_frontend_" + stage],
                                     cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                     timeout=STAGE_TIMEOUT)
             code, output = result.returncode, result.stdout
@@ -60,11 +60,20 @@ def run_stage(stage, fast_only):
     return code, output, records
 
 
+# The reasons that tests/agentica_test.py gives for a case of the other tier; any other skip reason is a missing tool.
+TIER_SKIPS = ("slow tier only", "fast tier only", "no cases in this tier")
+
+
 def count_skips(output):
-    """(tests run, tests skipped) from the end of a unittest run, or (0, 0) when the summary is not there."""
+    """(tests run, tests skipped, skipped for another reason than the tier) from a verbose unittest run.
+
+    All three are 0 when the summary is not there. A case of the other tier is an expected skip: with --fast-only the
+    @slow cases are skipped on purpose."""
     ran = re.search(r"^Ran (\d+) tests? in ", output, re.MULTILINE)
     skipped = re.search(r"^(?:OK|FAILED) \(.*\bskipped=(\d+)", output, re.MULTILINE)
-    return (int(ran.group(1)) if ran else 0, int(skipped.group(1)) if skipped else 0)
+    reasons = re.findall(r"\.\.\. skipped '(.*)'$", output, re.MULTILINE)
+    unexpected = sum(1 for reason in reasons if reason not in TIER_SKIPS)
+    return (int(ran.group(1)) if ran else 0, int(skipped.group(1)) if skipped else 0, unexpected)
 
 
 def describe_entry(entry):
@@ -131,10 +140,10 @@ def main(arguments=None):
         for record in records:
             changed_files += 1
             print("\n".join(summarize(record, options.diff_lines)))
-        ran, skipped = count_skips(output)
-        if skipped:
+        ran, skipped, missing_tool = count_skips(output)
+        if missing_tool:
             print("%d of %d tests were skipped (a tool the tests need is missing?); their goldens were not checked or "
-                  "rewritten" % (skipped, ran))
+                  "rewritten" % (missing_tool, ran))
         if ran and skipped == ran:
             # An empty log would read as "nothing changed" while nothing ran, so this is a failure, not a clean stage.
             failed = True

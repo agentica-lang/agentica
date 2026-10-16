@@ -60,9 +60,10 @@ comment), then a step that calls it. Targets that are not obvious:
   `vm/` folder and do nothing). `test-cli` runs the tests of the product
   command line (`CLI_TESTS`) on `dist/agentica` (`AGENTICA_TEST_EXECUTABLE`;
   so the sanitizer job can run the same modules). The option and diagnostic
-  forms of the command line are frozen in `tests/fixtures/cli/forms.json`
-  (`tests/test_cli_forms.py`; `python3 -m tests.test_cli_forms freeze` rewrites
-  it after an intended change, and the diff is the review).
+  forms of the command line are a golden of the whole output, messages
+  included, in `tests/fixtures/cli/forms.json` (`tests/test_cli_forms.py`, like
+  the VM goldens; `make goldens` rewrites it after an intended change, and the
+  diff is the review).
 - `test` and `test-slow` run Python `unittest` modules only (design in
   `docs/future/35-self-hosting.md` §35.10; the rackunit files and the Racket
   oracle comparisons went in step 8d-3). `TESTS` is a list of
@@ -74,10 +75,12 @@ comment), then a step that calls it. Targets that are not obvious:
   purpose: `tests/eval/test_*.py` are not modules for this runner. `PY_ALONE`
   in the Makefile (`tests/test_vm_latency.py`) lists modules that a directory
   does not pick up: they run when named, as `make vm-latency` does.
-- `tools/refreeze.py` (Python, no Racket; `make goldens` runs its fast tier)
-  rewrites the frozen goldens that `tests/test_frontend_<stage>.py` compare the Agentica
-  stages with (`references/frontend.md`, "Frozen comparisons") from the
-  Agentica stages. It is not a CI step. The Racket writers that made them
+- `make goldens` also rewrites `tests/fixtures/cli/forms.json`.
+  `tools/refreeze.py` (Python, no Racket; `make goldens` runs its `--fast-only`
+  tier, the full run also rewrites the slow-tier manifests) rewrites the frozen
+  goldens that `tests/test_frontend_<stage>.py` compare the Agentica stages
+  with (`references/frontend.md`, "Frozen comparisons") from the Agentica
+  stages. It is not a CI step. The Racket writers that made them
   (`make frontend-freeze`, `make frontend-snapshot`) were removed in step 8d-3;
   the tag `bootstrap-racket` (set before `src/` is deleted) keeps them.
 - Each Python module runs in its own process (`python3 -m unittest

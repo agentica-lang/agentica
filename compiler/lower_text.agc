@@ -24,7 +24,7 @@ import Types from "types"
 ## instructions: a label as `  LN:` and an instruction as `    op ARGS @ SPAN ...`. A span is
 ## FILE:LINE:COLUMN-LINE:COLUMN, with the index of its source. A register is `rN`, a function `fnN`, a struct `sN`, a
 ## variant `vN`, a global `gN`, a label `LN`; a `const` shows its value as `void`, `nil`, `true`, `false`, `int:N`,
-## `float:bits:N` or a quoted string. tests/frontend-lower-common.rkt prints the same text from the Racket lowering.
+## `float:bits:N` or a quoted string. The goldens in tests/fixtures/frontend/lower/ hold it.
 export def lower_text(path: String, settings: Env.Settings) -> String
   return lower_text_after(path, settings, 0)
 end

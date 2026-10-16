@@ -86,6 +86,13 @@ class RefreezeTest(GoldenTestCase):
     def test_a_stage_whose_tests_were_all_skipped_is_counted(self):
         all_skipped = "sss\n" + "-" * 70 + "\nRan 3 tests in 0.001s\n\nOK (skipped=3)\n"
         some_skipped = "Ran 5 tests in 1.0s\n\nFAILED (failures=1, skipped=2)\n"
-        self.assertEqual(refreeze.count_skips(all_skipped), (3, 3))
-        self.assertEqual(refreeze.count_skips(some_skipped), (5, 2))
-        self.assertEqual(refreeze.count_skips("Ran 4 tests in 1.0s\n\nOK\n"), (4, 0))
+        self.assertEqual(refreeze.count_skips(all_skipped), (3, 3, 0))
+        self.assertEqual(refreeze.count_skips(some_skipped), (5, 2, 0))
+        self.assertEqual(refreeze.count_skips("Ran 4 tests in 1.0s\n\nOK\n"), (4, 0, 0))
+
+    def test_only_a_skip_for_another_reason_than_the_tier_is_a_missing_tool(self):
+        output = ("test_a (m.C) ... skipped 'slow tier only'\n"
+                  "test_b (m.C) ... skipped 'node is required (not found on PATH)'\n"
+                  "setUpClass (m.D) ... skipped 'no cases in this tier'\n"
+                  "\nRan 3 tests in 0.1s\n\nOK (skipped=3)\n")
+        self.assertEqual(refreeze.count_skips(output), (3, 3, 1))

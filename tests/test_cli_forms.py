@@ -1,15 +1,15 @@
 """The command line of dist/agentica: the options and their mistakes, the three forms of a diagnostic, program runs,
-compile and help, against the output that the Racket command line gave for the same arguments.
+compile and help, against a golden of the whole output.
+
+This is a CLI output golden, like the VM goldens of tests/fixtures/vm/: it compares exit code, stdout and stderr byte
+for byte, message and help texts included. AGENTS.md's "never message text" applies to hand-written assertions, not to
+a golden that `make goldens` rewrites (so a change of wording is one command and a reviewed diff).
 
 The cases ran through both command lines (src/main.rkt, the development oracle, and the binary) until the Racket front
 end went; they agreed on every byte of the exit code, stdout and stderr. tests/fixtures/cli/forms.json keeps that
-output. A change of the command line on purpose rewrites it:
-
-    python3 -m tests.test_cli_forms freeze
-
-and the diff of the file is the review. The temp folder and the version are written as <work> and <version>. A file
-that `compile` writes is only noted as written or not (its bytes carry the version).
-"""
+output. A change of the command line on purpose rewrites it with `make goldens` (or `python3 -m tests.test_cli_forms
+freeze`), and the diff of the file is the review. The temp folder and the version are written as <work> and <version>.
+A file that `compile` writes is only noted as written or not (its bytes carry the version)."""
 import json
 import sys
 import tempfile

@@ -8414,7 +8414,9 @@
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH"
+      "code": "CHECK-TYPE-MISMATCH",
+      "expected": "Box[T]",
+      "actual": "Other[Int]"
     },
     {
       "program": [

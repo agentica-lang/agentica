@@ -17,7 +17,7 @@ import T from "types"
 ## a field access that names a builtin, ` resolved=` and what it became; or the ERROR line of the first failure. A
 ## failure of the checker has the notes of the diagnostic that are present,
 ## ` expected="..." actual="..." callee="..." signature="..." labels=[SPAN "text", ...]`, then ` file="path"`.
-## tests/frontend-check-common.rkt prints the same text from the Racket checker.
+## The goldens in tests/fixtures/frontend/check/ hold it.
 export def check_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Failed(failure) -> return LinkText.failure_text(LinkText.root_dir_of(path), failure)

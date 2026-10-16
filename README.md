@@ -32,7 +32,7 @@ dist/agentica examples/hello.agc
 ```sh
 make test                                      # all tests, after building the binary (Python unittest; no Racket)
 make test TESTS="tests/test_spec_checker.py"   # some files
-make vm-test                                  # the C tests
+make vm-test                                   # the C tests
 ```
 
 ## License

@@ -61,8 +61,11 @@ phase 13).
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: each
   `tests/test_<area>.py` file runs as one unittest process.
 - `make test-slow`: the `@slow` cases; CI only.
-- `make smoke`, `make goldens` (rewrite the VM and front-end goldens; commit
-  them), `make site` (before merging a site change).
+- `make smoke`, `make site` (before merging a site change).
+- `make goldens` rewrites the VM goldens, the CLI output golden
+  (`tests/fixtures/cli/forms.json`) and the fast-tier front-end goldens; commit
+  them. The slow-tier manifests of `tests/fixtures/frontend/frozen/` need the
+  full `python3 tools/refreeze.py`.
 - CI steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are make
   targets, so they run locally the same way.
 
@@ -116,11 +119,10 @@ phase 13).
   process, `JOBS` at a time (standard library only, no pytest).
 - Two test tiers: the fast tier is the default cases of a unittest module;
   slow cases (frozen corpus, generated inputs, stress) are marked `@slow` (run
-  only with
-  `AGENTICA_TEST_SLOW=1`, which `make test-slow` sets), and CI runs them with
-  `make test-slow`. Local runs use only the fast tier
-  (`make test TESTS=...`). Sanitizers, gc-stress, fuzz, smoke and full
-  sweeps are slow by nature.
+  only with `AGENTICA_TEST_SLOW=1`, which `make test-slow` sets), and CI runs
+  them with `make test-slow`. Local runs use only the fast tier
+  (`make test TESTS=...`). Sanitizers, gc-stress, fuzz, smoke and full sweeps
+  are slow by nature.
 - When a phase item is done, tick it in the roadmap and update the
   development skill.
 - When the language or a builtin changes, update `docs/grammar/`, the site

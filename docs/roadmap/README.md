@@ -17,8 +17,8 @@ Ruby-style ergonomics are implemented. The bytecode VM is the default backend:
 runs a compiled `.agcb`). The design (7b),
 lowering, bytecode and the VM (`docs/vm/12-testing-and-pr-plan.md` §12.2 items 1
 to 10), the 7g benchmark script, and 7h part 1 (event loop and files), tasks and
-processes are done, with small items still open in 7c (`tests/lower-test.rkt`),
-7e (loader validation for opcodes as they land) and 7f (the extra corpora).
+processes are done, with small items still open in 7e (loader validation for
+opcodes as they land) and 7f (the extra corpora).
 Ranges (8a) are done.
 
 The VM is the only backend: 7i deleted the Racket evaluator (row 7.2). The table
