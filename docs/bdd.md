@@ -10,14 +10,14 @@ is a fixed Agentica program embedded in `agentica`. The user guide is
 ## Run
 
 ```sh
-make exe
+make
 dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
 dist/agentica --ai test tests/bdd/specs/json-lines.feature
 make test-bdd
 ```
 
-`make exe` builds the CLI. `racket src/main.rkt test ...` runs from source after
-`make vm`. `agentica test` builds and installs nothing.
+`make` builds the binary, which carries the driver and the runner.
+`agentica test` builds and installs nothing.
 
 ```text
 agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--ai|--json] [--allow-run]
@@ -247,9 +247,10 @@ then no scenario runs.
 
 ```text
 agentica test [PATH...] [--steps FILE]
-  (the driver, compiler/bdd.agc, runs on the VM)
+  (the driver, compiler/bdd_driver.agc, runs in the front end of the binary)
   compiles std/test/runner (embedded) and the step program to .agcb files
-  in a private temporary directory, then runs the runner on the VM:
+  in a private temporary directory, then runs the runner with
+  `agentica run` of the same binary:
     1. list child:    steps.agcb --agentica-bdd list   -> the patterns, in order (channel)
     2. per .feature:  parse, expand, match
     3. per scenario:  steps.agcb --agentica-bdd scenario (own child VM)
@@ -309,8 +310,9 @@ closes each child on every path.
   would be cancelled silently, and its failed assertion would never be reported.
   Then, if a program under test is running, the child probes it with a zero-byte
   `Process.read_bytes`; a truncated stream is `RUNTIME-BDD-OUTPUT-LIMIT`.
-- **Driver.** The driver (`compiler/bdd.agc`, a program in Agentica that
-  `src/main.rkt` starts on the VM) parses the options and writes the
+- **Driver.** The driver (`compiler/bdd_driver.agc`, part of the front end of
+  the binary, so it runs in the process that `agentica test` started) parses
+  the options and writes the
   configuration to `config.jsonl`, one line per file, so long lists never meet
   an argument or line limit. The runner writes its report to a file of the run
   directory, which the driver prints, so a report is not limited to the 1 MiB

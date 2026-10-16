@@ -1,8 +1,8 @@
 /*
- * What agentica-vm and the single binary share to start a VM: the option
+ * What the two ways of starting a VM in the agentica binary share: the option
  * parser, the entropy for seeds, the trace setup, the runtime set-up from a
  * loaded program and the one exit path. Driver, not a layer. The choices
- * that differ stay in main.c and agentica.c.
+ * that differ (a run of the front end, `agentica run`) stay in agentica.c.
  * Design: docs/vm/08-loader-and-cli.md and docs/vm/14-core-invariants.md, 14.4.
  */
 #ifdef _WIN32
@@ -240,13 +240,17 @@ static void fill_standard_fds(void) {
 }
 #endif
 
+void agc_launch_ignore_sigpipe(void) {
+#ifdef SIGPIPE
+  signal(SIGPIPE, SIG_IGN);
+#endif
+}
+
 void agc_launch_init(agc_launch *launch) {
 #ifdef __linux__
   fill_standard_fds();
 #endif
-#ifdef SIGPIPE
-  signal(SIGPIPE, SIG_IGN);
-#endif
+  agc_launch_ignore_sigpipe();
   agc_init();
   memset(launch, 0, sizeof *launch);
   launch->inherited = agc_files_inherited();

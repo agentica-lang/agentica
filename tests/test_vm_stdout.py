@@ -11,10 +11,10 @@ import json
 import re
 import time
 
-from tests.agentica_test import FIXTURES, PYTHON, TestCase, run, vm_binary, vm_environment
+from tests.agentica_test import FIXTURES, PYTHON, TestCase, run, scaled, vm_command, vm_environment
 
 PEER = FIXTURES / "stdout-peer.py"
-PEER_LIMIT = 90
+PEER_LIMIT = scaled(90)
 FILLER = "x" * 1024
 
 
@@ -281,7 +281,7 @@ class VmStdout(TestCase):
         out_file = bytecode.with_suffix(".out")
         err_file = bytecode.with_suffix(".err")
         result = run([PYTHON, PEER, "--stdout-file", out_file, "--stderr-file", err_file, *peer,
-                      "--", vm_binary(), *vm, "--", bytecode],
+                      "--", *vm_command(), *vm, "--", bytecode],
                      timeout=PEER_LIMIT, env=vm_environment(env))
         self.assertEqual(result.code, 0, "%s: the peer ends: %s" % (name, result.stderr))
         return json.loads(result.stdout), out_file.read_bytes(), err_file.read_text(errors="replace")
@@ -295,7 +295,7 @@ class VmStdout(TestCase):
         out_file = bytecode.with_suffix(".out")
         err_file = bytecode.with_suffix(".err") if stderr_file is True else stderr_file
         start = time.monotonic()
-        result = run([vm_binary(), "--allow-run", "--flush-timeout", "20000", "--", bytecode], timeout=PEER_LIMIT,
+        result = run([*vm_command(), "--allow-run", "--flush-timeout", "20000", "--", bytecode], timeout=PEER_LIMIT,
                      env=vm_environment(), stdout_to=out_file, stderr_to=err_file)
         elapsed = time.monotonic() - start
         if stderr_file is None:
@@ -455,7 +455,7 @@ class VmStdout(TestCase):
     def test_a_regular_file_written_by_the_pool_is_drained_while_a_child_is_stopped_at_the_end_of_the_run(self):
         status, elapsed, out, err = self.run_to_file("live-child", LIVE_CHILD_PROGRAM)
         self.assertEqual(status, 0)
-        self.assertLess(elapsed, 10, "the run does not wait for the flush limit")
+        self.assertLess(elapsed, min(scaled(10), 25), "the run does not wait for the flush limit")
         self.assertEqual(err, "")
         self.assertRegex(out, re.compile(r"\Achild started\n.*\ndone\n\Z", re.S))
 

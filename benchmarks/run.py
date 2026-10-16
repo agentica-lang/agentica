@@ -1,5 +1,4 @@
 import argparse
-import os
 import re
 import shutil
 import statistics
@@ -13,9 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROGRAMS = ROOT / "benchmarks" / "programs"
 PYTHON = ROOT / "benchmarks" / "python"
-MAIN = ROOT / "src" / "main.rkt"
 EXE = ROOT / "dist" / "agentica"
-VM = Path(os.environ.get("AGENTICA_VM", ROOT / "dist" / "agentica-vm"))
 HELLO = ROOT / "examples" / "hello.agc"
 TIME = Path("/usr/bin/time")
 NAMES = [
@@ -99,7 +96,7 @@ def scaled_source(name: str, size: int, workdir: Path) -> Path:
 def runners(selected: list[str]) -> dict[str, list[str]]:
     available = {
         "exe": [str(EXE)] if EXE.exists() else None,
-        "vm": [str(VM), "--"] if VM.exists() else None,
+        "vm": [str(EXE), "run", "--"] if EXE.exists() else None,
         "python": [sys.executable],
     }
     for name in selected:
@@ -124,7 +121,7 @@ def measure(name: str, runner: str, command: list[str], runs: int, expected: str
 
 
 def compile_vm(name: str, runner: str, source: Path, bytecode: Path) -> Row | None:
-    compiled = run(["racket", str(MAIN), "compile", str(source), "-o", str(bytecode)])
+    compiled = run([str(EXE), "compile", str(source), "-o", str(bytecode)])
     if compiled.code == 0:
         return None
     reason = diagnostic(compiled.stderr)
@@ -202,7 +199,7 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=5, help="runs per program and runner (default 5)")
     parser.add_argument("--size", type=int, default=1, help="work multiplier for every program (default 1)")
     parser.add_argument("--runners", default="exe,vm,python",
-                        help="comma-separated runners: exe, vm, python")
+                        help="comma-separated runners: exe (agentica FILE.agc), vm (agentica run FILE.agcb), python")
     parser.add_argument("--only", default="", help="comma-separated program names")
     parser.add_argument("--no-startup", action="store_true", help="skip the hello.agc start-up check")
     args = parser.parse_args()

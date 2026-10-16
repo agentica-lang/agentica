@@ -17,7 +17,7 @@ rule that a site page shows.
 
 ## Version
 
-- The site shows the version of `src/version.rkt` in the header, the footer, `llms.txt`, `llms-full.txt` and the Install section of Getting started, with links to the GitHub release of that tag and to all releases.
+- The site shows the version of the `VERSION` file in the header, the footer, `llms.txt`, `llms-full.txt` and the Install section of Getting started, with links to the GitHub release of that tag and to all releases.
 - `make site` and `make site-serve` read it (`AGC_VERSION`) and pass it to Hugo as `HUGO_PARAMS_VERSION`; `pages.yml` builds with `make site`, so it follows. `_partials/version.html` fails the build when it is missing (plain `hugo` without the variable). Never type the version in `site/`.
 - The Getting started text comes from the `release` shortcode (`layouts/_shortcodes/release.md`).
 

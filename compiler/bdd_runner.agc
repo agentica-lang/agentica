@@ -1,8 +1,9 @@
 ## Starting the BDD runner and reading what it reports.
 ##
-## The runner (stdlib/test/runner.agc) is a program of its own, run by the same VM as a captured child. It reads the
-## configuration file, runs the tests and writes its report to a file of the run directory. It does not print the
-## report: a captured child keeps 1 MiB of each stream and drops the rest, and a report of a big run is larger.
+## The runner (stdlib/test/runner.agc) is a program of its own, run by `agentica run` of the same binary as a captured
+## child. It reads the configuration file, runs the tests and writes its report to a file of the run directory. It does
+## not print the report: a captured child keeps 1 MiB of each stream and drops the rest, and a report of a big run is
+## larger.
 
 import Discover from "bdd_discover"
 import {IO_TIMEOUT} from "bdd_files"
@@ -16,6 +17,7 @@ MAXIMUM_EXIT_CODE = 2
 
 ## The first line of the configuration file, as the runner decodes it (`Config` in stdlib/test/runner.agc).
 export struct Config
+  # The binary: the runner starts the step program and each test file with its `run` command.
   vm: String
   steps_bytecode: String
   steps_source: String
@@ -47,10 +49,11 @@ export def config_text(config: Config, entries: List[Discover.Entry]) -> String
   return "#{lines.join("\n")}\n"
 end
 
-## Runs the runner program `runner` on `config_file` with the VM of the options, waits for it, and reads the report at
-## `report_file`. The child gets this program's process id with --driver-pid, so it ends if this program does.
+## Runs the runner program `runner` on `config_file` with `agentica run` of the binary of the options, waits for it,
+## and reads the report at `report_file`. The child gets this program's process id with --driver-pid, so it ends if
+## this program does.
 export def run(options: Opts.Options, runner: String, config_file: String, report_file: String) -> Ran
-  words = ["--allow-run"]
+  words = ["run", "--allow-run"]
   if options.seeded
     words = words.concat(["--seed", options.seed.to_s])
   end
@@ -74,33 +77,6 @@ export def run(options: Opts.Options, runner: String, config_file: String, repor
     return Ran.Failed("the BDD runner failed with exit code #{code.unwrap!}: #{message_line(stderr)}")
   end
   return read_report(code.unwrap!, report_file)
-end
-
-## The Agentica version of the VM at `vm`, which the programs the driver compiles must name in their headers. It is the
-## second word of the line that `vm --version` prints, `agentica-vm 0.3.0 (libgc ...)`, or the only word of a binary
-## that prints just the version.
-export def vm_version(vm: String) -> Result[String]
-  spawned = Process.spawn_captured(vm, ["--version"], ".", START_TIMEOUT)
-  if !spawned.ok?
-    return error("cannot start the VM to read its version: #{spawned.message}")
-  end
-  child = spawned.unwrap!
-  Process.close_stdin(child, IO_TIMEOUT)
-  code = Process.wait(child, START_TIMEOUT)
-  output = Process.output(child, START_TIMEOUT)
-  Process.close(child)
-  if !code.ok? or code.unwrap! != 0 or !output.ok?
-    return error("the VM did not print its version")
-  end
-  words = output.unwrap!.stdout.trim.split(" ")
-  version = words[words.size - 1]
-  if words.size > 1
-    version = words[1]
-  end
-  if version == ""
-    return error("the VM printed no version")
-  end
-  return ok(version)
 end
 
 # Waits as long as the run takes: a wait that times out is repeated.

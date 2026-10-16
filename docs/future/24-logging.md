@@ -4,9 +4,9 @@
 parts, each its own small PR, all on the VM only (the evaluator is gone by then,
 or the part changes only VM code):
 
-- 14a, **VM tracing** (24.4): a developer tool inside `agentica-vm`, not a
-  language feature. It comes right after 7h processes and before TCP and TLS, to
-  make the rest of 7h faster to debug.
+- 14a, **VM tracing** (24.4): a developer tool inside the VM (`agentica run`),
+  not a language feature. It comes right after 7h processes and before TCP and
+  TLS, to make the rest of 7h faster to debug.
 - 14b, **stack traces on runtime errors** (24.3): after 7i, as roadmap row
   7.2.5, before the freeze of the Racket front end (row 7.2.7).
 - 14c, **`std/logger`** (24.2): an Elixir-style logger in Agentica, after 7i.
@@ -675,7 +675,7 @@ The plain and `--ai` formats show the same 20 lines, with
 stores one span index. Nothing else: frames, names and spans already exist. On
 failure: `agc_fail` copies the failing task's frames (function, `pc`, tail flag)
 into the outcome before cleanup runs, O(depth), at most about 10,000;
-`vm/diag.c` merges, cuts and formats them; and only `vm/main.c` prints
+`vm/diag.c` merges, cuts and formats them; and only `vm/launch.c` prints
 (`docs/vm/05-values-execution-builtins.md` §6.2).
 
 **Tests:** a fixture set with fixed expected stderr in all three formats: nested
@@ -712,7 +712,7 @@ the text above is silent:
 
 ### 24.4 VM tracing
 
-A developer tool for `agentica-vm`, for debugging the scheduler, I/O jobs,
+A developer tool for the VM, for debugging the scheduler, I/O jobs,
 processes, TLS, the loader and the GC without adding `fprintf` by hand. It is
 not part of the language: not in `grammar.md` or the programming skill, only in
 `docs/vm/` and the development skill.
@@ -734,8 +734,8 @@ exit code. A child started with `Process.spawn` inherits the variable (children
 inherit the environment), so a child VM traces too.
 
 **Where the lines go:** descriptor 2 (stderr) by default.
-`AGENTICA_VM_TRACE_FILE=path` sends them to a file instead: `vm/main.c` opens it
-once at start-up with `O_WRONLY|O_APPEND|O_CREAT|O_CLOEXEC|O_NOFOLLOW` (mode
+`AGENTICA_VM_TRACE_FILE=path` sends them to a file instead: `vm/launch.c` opens
+it once at start-up with `O_WRONLY|O_APPEND|O_CREAT|O_CLOEXEC|O_NOFOLLOW` (mode
 0600), takes it only when it is a regular file owned by the VM's user, and keeps
 the descriptor in the `agc_trace` struct. If it cannot be opened, the VM writes
 one line `agc-trace cannot open PATH` to stderr and traces nothing. A child VM
@@ -780,10 +780,11 @@ be read by a tool; in a file, every line starts with `agc-trace`.
 point: `AGC_TRACE(rt, AGC_TRACE_SCHED, "spawn task=%" PRIu64 ...)` expands to
 `if (AGC_TRACE_BUILD && (rt->trace & AGC_TRACE_SCHED)) agc_trace_emit(...)`.
 Trace points are at events (a spawn, a turn end, a job), never per instruction.
-`make vm TRACE=0` sets `AGC_TRACE_BUILD` to 0, so the compiler drops every trace
+`make TRACE=0` sets `AGC_TRACE_BUILD` to 0, so the compiler drops every trace
 point but still type-checks it; the flag goes in the `build/vm/flags` stamp like
 `SANITIZE`. Release, sanitizer and GC-stress builds keep tracing in, so a user
-can send a trace. `agentica-vm --version` says `trace off` in a `TRACE=0` build.
+can send a trace. `agentica run --version` says `trace off` in a `TRACE=0`
+build.
 
 **It never changes what the program sees**, except for the added trace lines on
 stderr (none when they go to a file):
@@ -791,7 +792,7 @@ stderr (none when they go to a file):
 - Trace code reads state and never changes it: no GC allocation (only the stack
   buffer, numbers and bytes that already exist, such as a function's name), no
   steps, no turn cost, no change to when tasks switch.
-- No mutable globals (`docs/vm/10-io-multicore.md` §10.2.3): `vm/main.c` reads
+- No mutable globals (`docs/vm/10-io-multicore.md` §10.2.3): `vm/launch.c` reads
   the variable before loading, into an `agc_trace` struct (category mask and
   start time), passes it to `agc_load`, and stores it in `agc_runtime`. Each
   task gets an id from `_Atomic uint64_t next_task_id` in the runtime, with
@@ -813,7 +814,7 @@ stderr (none when they go to a file):
   `unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE` in the Makefile covers
   `make test` and every other target, and for a direct `raco test`,
   `tests/vm-diff-common.rkt`, `tests/cli-in-process.rkt` and
-  `tests/test_vm_latency.py` (which starts `dist/agentica-vm` directly) remove
+  `tests/test_vm_latency.py` (which starts `dist/agentica run` directly) remove
   both from the environment when they load. Any later test file that starts the
   VM itself removes them the same way; a developer's exported variable cannot
   change expected output. Only `tests/test_vm_trace.py` sets them: it runs a
@@ -824,7 +825,7 @@ stderr (none when they go to a file):
   line of the trace file matches the format, and that each category it expects
   appears; an allocation-heavy fixture (`map-large`) must write `gc` lines,
   except on a sanitizer build, which has no collector. The `vm-sanitizers` job
-  runs `make vm vm-test TRACE=0` and checks `--version` on a manual CI run and
+  runs `make vm-test TRACE=0` and checks `--version` on a manual CI run and
   on a pull request that changes `vm/trace.*` or `vm/tests/trace_test.c`; other
   pull requests skip it.
 

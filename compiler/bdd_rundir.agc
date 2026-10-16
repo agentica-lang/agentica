@@ -98,8 +98,8 @@ export def sweep(temporary: String, own: Run) -> Void
   end
 end
 
-# A random name: 16 bytes of /dev/urandom as hex, so it cannot be guessed (Random.int has a 31-bit seed).
-def random_hex() -> Result[String]
+## A random name: 16 bytes of /dev/urandom as 32 hex digits, so it cannot be guessed (Random.int has a 31-bit seed).
+export def random_hex() -> Result[String]
   source = try File.open("/dev/urandom", "read", IO_TIMEOUT)
   bytes: List[Int] = []
   while bytes.size < 16

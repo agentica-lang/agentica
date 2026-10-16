@@ -10,7 +10,7 @@ Agentica is Ruby-like syntax with static types, checked before it runs. Values n
 ## Check and run
 
 1. Save the program as `program.agc`, with exactly one `def main() -> Void`.
-2. `agentica check program.agc` checks without running. `agentica program.agc ARGS` runs it on the VM; `System.args()` returns ARGS. If `agentica` is not on `PATH`, use the path the user gives.
+2. `agentica check program.agc` checks without running. `agentica program.agc ARGS` runs it on the VM; `System.args()` returns ARGS. `agentica compile program.agc -o program.agcb` writes bytecode, and `agentica run [FLAGS] -- program.agcb ARGS` runs it with the same flags (`run` must be the first word). If `agentica` is not on `PATH`, use the path the user gives.
 3. Exit 0 is success. Exit 1 is a program diagnostic on stderr: the first error, a stable code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`), a span, often a `help` line that names the Agentica form. Exit 2 is bad usage or an unreadable file. Fix the first error and run again.
 4. Finish only when the run exits 0 and the output matches the request. A check does not test runtime behavior.
 5. `agentica help NAME` prints one builtin's signature (`agentica help Map.get`; add `--json` for a machine form); `agentica help` lists the namespaces; unknown names exit 2. Useful flags: `--allow-run` (needed by `Process.spawn`), `--seed N` (makes `Random` repeatable), `--max-steps N`, `--json` (diagnostics as one JSON object). `agentica --help` lists the other commands. Tests and BDD: `references/testing.md`, `references/bdd.md`.

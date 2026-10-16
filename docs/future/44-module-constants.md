@@ -454,7 +454,7 @@ back to itself: every loop runs over a finite collection or counts to an `Int`,
 and every call is a builtin. So it **terminates**. It is not bounded by the
 size of its data: `Int.times(n)`, `Int.upto`, `Int.downto`, `Range.each` and
 `for i in 0..N` run `N` times for any `Int` `N`, and the default step budget is
-`INT64_MAX` (`vm/main.c`), so `for i in 0..1_000_000_000_000` hangs the start
+`INT64_MAX` (`vm/launch.c`), so `for i in 0..1_000_000_000_000` hangs the start
 of the program unless `--max-steps` is set. The checker never runs the
 initializer, so `check` does not hang; only the run does, as a long `main`
 would. Memory limits apply as to any code. The PR that adds a builtin with

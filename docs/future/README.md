@@ -24,7 +24,7 @@ Section 27 (iteration and concurrent collections) plans `Task.map`, channels and
 builtins, and `File.each_line` (C) and a lazy `Stream[T]` (prelude code) in two
 steps, and records generators, fibers, Agent-style shared state and public locks
 as decided against. Section 28 (VM metrics) plans Prometheus metrics for
-`agentica-vm`, with no language change. Section 29 (TLS contexts) plans
+`agentica run`, with no language change. Section 29 (TLS contexts) plans
 `TlsContext`, an immutable handle built once and shared by connections, which
 replaces the TLS file paths of `TLS` and `HTTP` in one breaking step, and
 `TLS.upgrade` (STARTTLS). Section 30 (HTTP on the VM) keeps the pending

@@ -4,7 +4,7 @@
 
 - **Goldens.** `tests/test_vm_diff_*.py` (eight shards of
   `tests/vm_diff_support.py`) run each fixture of `tests/fixtures/vm/` on
-  `dist/agentica-vm` with `--json`. They compare the exit code, stdout, the
+  `dist/agentica run` with `--json`. They compare the exit code, stdout, the
   program's own stderr and the diagnostic code with the golden
   `<name>.expected`. A golden is JSON: `exit`, `code` (a string or `null`),
   `steps`, and `stdout` and `stderr` as lists of lines. With `--json` the
@@ -59,13 +59,14 @@
   stuck FIFO, a non-UTF-8 working directory, invalid UTF-8 arguments, deep tail
   calls, long strings, a large generated input checked against a line splitter
   written in the test, and a CRLF program under a non-ASCII path.
-- **Compiler.** `tests/bytecode-test.rkt` checks the bytecode the lowering
-  writes: adjacent steps merge into one `STEP`, only a returned user call
-  becomes a tail call, a map literal above 255 entries adds the rest with
-  `Map.put`, a block captures after its parameters, `for` over a range literal
-  counts without a `Range` value, the opcode numbers match `vm/value.h`, JSON
-  field types are written only for programs that use them (up to 1024 nested
-  levels), and `compile` exits 1 on a diagnostic and 2 on an unwritable output.
+- **Compiler.** `tests/test_frontend_bytecode.py` and the spec tests check the
+  bytecode the lowering writes: adjacent steps merge into one `STEP`, only a
+  returned user call becomes a tail call, a map literal above 255 entries adds
+  the rest with `Map.put`, a block captures after its parameters, `for` over a
+  range literal counts without a `Range` value, the opcode numbers match
+  `vm/value.h`, JSON field types are written only for programs that use them (up
+  to 1024 nested levels), and `compile` exits 1 on a diagnostic and 2 on an
+  unwritable output.
 - **Corpora.** Float text has a fixed table in `vm/tests/float_text_test.c` and
   the `float-text` fixture (2.2). The write escapes are checked where the data
   is made: `vm/tools/gen-unicode.rkt` compares its C rule with Racket's `write`
@@ -105,8 +106,8 @@ checklist is in `docs/roadmap/07-vm.md`.
 3. Strings and printing: strings, interpolation, debug forms, the write-escape
    generator, the three diagnostic formats, exit codes and the GC stress run.
    Done.
-4. macOS and Windows CI: `make vm vm-test` and the differential and bytecode
-   tests on `macos-15` and `windows-2025`. Done.
+4. macOS and Windows CI: the C tests (`make vm-test`; before 8d-2 also the
+   differential and bytecode tests) on `macos-15` and `windows-2025`. Done.
 5. Data, in five parts. Done.
    - 5a Lists: `List[T]`, list literals, `for x in xs`, indexing. Done.
    - 5b Structs, enums and `case`: user structs and enums, format version 2.

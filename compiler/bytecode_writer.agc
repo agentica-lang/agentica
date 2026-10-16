@@ -1,7 +1,7 @@
 ## The bytecode writer (src/bytecode.rkt, `ir->bytecode` and `write-bytecode`): the .agcb bytes of a lowered program.
 ## The file is, in this order, the header, the sources, the spans, the constants, the structs, the JSON field types,
 ## the Decodable structs, the enums, the struct updates, the Globals count, the builtins, the functions and the entry
-## (docs/vm/03-ir-and-bytecode.md 4.6). The bytes are the same as the Racket writer's, which a test compares.
+## (docs/vm/03-ir-and-bytecode.md 4.6). tests/test_frontend_bytecode.py compares them with the Racket writer's.
 ##
 ## The functions are walked first, because they decide the entries of the constant, update, builtin and span tables,
 ## which come before them in the file. The output is a list of chunks that is joined once at the end.

@@ -1,11 +1,11 @@
 #lang racket
 
-(require file/sha1
+(require (only-in ffi/unsafe -> _fun _int get-ffi-obj)
+         file/sha1
          json
          (only-in "ast.rkt" program-span)
          racket/os
          racket/random
-         "bdd-driver.rkt"
          "builtins.rkt"
          "bytecode.rkt"
          "checker.rkt"
@@ -16,8 +16,7 @@
          "modules.rkt"
          "source.rkt"
          "source-file.rkt"
-         "version.rkt"
-         "vm-launch.rkt")
+         "version.rkt")
 
 (define-syntax-rule (command-line/summary summary-id (line ...) clause ...)
   (begin
@@ -49,6 +48,28 @@
   (with-handlers ([exn:fail:filesystem? void])
     (delete-file path)))
 
+;; The development oracle runs a program through the binary (dist/agentica run), as the Agentica front end runs it in
+;; process. The product is the binary: nothing here ships.
+(define (find-binary)
+  (define here (variable-reference->module-source (#%variable-reference)))
+  (define-values (directory _name _dir?) (split-path here))
+  (simplify-path (build-path directory 'up "dist" "agentica") #f))
+
+(define unix-kill (get-ffi-obj "kill" #f (_fun _int _int -> _int) (lambda () #f)))
+(define sigterm 15)
+(define vm-grace-seconds 2)
+
+(define (stop-vm process #:interrupted? [interrupted? #f])
+  (when (eq? (subprocess-status process) 'running)
+    (unless (and interrupted? (sync/timeout vm-grace-seconds process))
+      (when unix-kill (unix-kill (subprocess-pid process) sigterm))
+      (unless (and unix-kill (sync/timeout vm-grace-seconds process))
+        (subprocess-kill process #t)))))
+
+(define (call-noting-break broke! thunk)
+  (with-handlers* ([exn:break? (lambda (e) (broke!) (raise e))])
+    (thunk)))
+
 (define (run-vm-process vm bytecode-file options program-args)
   (define (stream port) (and (file-stream-port? port) port))
   (define stdout (current-output-port))
@@ -58,7 +79,7 @@
   (flush-output stderr)
   (define-values (process from-vm to-vm from-vm-err)
     (with-handlers ([exn:fail? (lambda (_) (values #f #f #f #f))])
-      (apply subprocess (stream stdout) (stream stdin) (stream stderr) vm
+      (apply subprocess (stream stdout) (stream stdin) (stream stderr) vm "run"
              (append options (list "--driver-pid" (number->string (getpid)) "--" (path->string bytecode-file))
                      program-args))))
   (define feeder #f)
@@ -121,7 +142,7 @@
   (define raw-arguments
     (command-line/summary
      summary
-     ("Programs run on the bytecode VM (agentica-vm, or AGENTICA_VM)."
+     ("Programs run on the bytecode VM."
       "Commands:"
       "  agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS"
       "  agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic"
@@ -129,6 +150,9 @@
       "                                          run *_test.agc and .feature files (default PATH: test/ and specs/);"
       "                                          --steps FILE is the step program of the .feature files"
       "  agentica compile FILE.agc -o OUT.agcb   write bytecode"
+      "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]"
+      "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,"
+      "                                          --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json"
       "  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split"
       "  agentica help                           this summary and the builtin namespaces"
       "Core rules:"
@@ -167,12 +191,9 @@
      #:args arguments
      arguments))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "test"))
-    ;; The BDD driver is a program in Agentica (compiler/bdd.agc): it reads the words after `test` itself, usage errors included.
-    (define-values (code text)
-      (run-agentica-test (cdr raw-arguments) step-files
-                         #:style style #:allow-run allow-run? #:seed seed #:vm (find-vm)))
-    (display text)
-    (exit code))
+    ;; `agentica test` is the binary's: its driver is a program in Agentica that starts `agentica run` again.
+    (eprintf "agentica: the test command is in the binary: dist/agentica test\n")
+    (exit 2))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
     ;; Only help consumes a trailing option; program args stay untouched.
     (when (equal? (last raw-arguments) "--json")
@@ -202,7 +223,7 @@
   (unless (if compile?
               (and (= (length arguments) 3) (equal? (cadr arguments) "-o") (not dump?) (not dump-ir?))
               (>= (length arguments) 1))
-    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]\n")
+    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]\n       agentica run [OPTIONS] -- <file.agcb> [args...]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
@@ -244,9 +265,9 @@
     data)
   (define (run-on-vm ir)
     (define data (bytecode-data ir))
-    (define vm (find-vm))
+    (define vm (find-binary))
     (unless (and (file-exists? vm) (memq 'execute (file-or-directory-permissions vm)))
-      (eprintf "agentica: cannot find the VM at ~a; run make vm or set AGENTICA_VM\n" vm)
+      (eprintf "agentica: cannot find the binary at ~a; run make\n" vm)
       (exit 2))
     (define bytecode-file (temporary-bytecode-path))
     (define created? #f)

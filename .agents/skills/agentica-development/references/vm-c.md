@@ -32,7 +32,7 @@ Read first: `references/vm.md` (the trust model and the layers).
   comment, except the generated `vm/unicode_data.c`, and a new C file needs
   one too. A source file's header is about 3 to 8 lines of text (the `/*` and
   `*/` lines do not count): what the file is, its main functions or builtin
-  family, its layer, and where its design lives in `docs/vm/`, as `vm/main.c`
+  family, its layer, and where its design lives in `docs/vm/`, as `vm/agentica.c`
   does. A C test's header is 1 to 4 lines on what it tests. A legal header may
   come before it. *Checked* by `tests/test_vm_style.py` (3 to 8 lines of text
   for a source file, 1 to 4 for a C test, the generated file skipped).
@@ -60,7 +60,7 @@ macOS branches are not linted while those platforms are paused.
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
 stack. `System.exit` calls `agc_exit`, which records `AGC_EXITED` and the
-code and `longjmp`s the same way. Only the driver (`vm/launch.c`, with `main.c` and `agentica.c`) prints and exits: it
+code and `longjmp`s the same way. Only the driver (`vm/launch.c`, with `agentica.c`) prints and exits: it
 flushes stdout and maps the code (1..255 as is, anything else 0, like
 Racket's exit handler). SIGPIPE is ignored and every write is checked.
 

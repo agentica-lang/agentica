@@ -22,20 +22,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - id: racket
-        run: |
-          dir="$RUNNER_TOOL_CACHE/racket-cs-9.3"
-          echo "dir=$dir" >> "$GITHUB_OUTPUT"
-          if "$dir/bin/racket" -e '(exit (if (equal? (version) "9.3") 0 1))' 2>/dev/null; then
-            echo "$dir/bin" >> "$GITHUB_PATH"
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.racket.outputs.found != 'true'
-        uses: Bogdanp/setup-racket@v1.15
-        with:
-          variant: CS
-          version: '9.3'
-          dest: ${{ steps.racket.outputs.dir }}
       - run: echo "FUZZ_SEED=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')" >> "$GITHUB_ENV"
       - run: echo "commit $GITHUB_SHA, FUZZ_SEED=$FUZZ_SEED, FUZZ_RUNS=$RUNS"
       - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }

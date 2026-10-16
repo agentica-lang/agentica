@@ -1,14 +1,14 @@
 """The Agentica lowering (compiler/lower.agc) against the frozen output of the Racket lowering.
 
-tests/frontend-lower-test.rkt compares the two live. This module compares the Agentica lowering with what the Racket
-lowering printed once for the same inputs (`make frontend-freeze`, tests/frontend-lower-freeze.rkt): the corpus
-(examples/ and tests/fixtures/vm/ as they were at the freeze), the programs of the cases of tests/checker-test.rkt, every
+This module compares the Agentica lowering with what the Racket lowering printed once for the same inputs (frozen in
+tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
+(examples/ and tests/fixtures/vm/ as they were at the freeze), the programs of the cases of the old checker test, every
 std/ module, the compiler, trees at the nesting limit and a program of 300 functions. Inputs that are a formula are
 rebuilt here; the manifests hold their hashes.
 """
 import re
 
-from tests.agentica_test import ROOT, run_vm, slow
+from tests.agentica_test import ROOT, run_vm, scaled, slow, timeout
 from tests.frontend_cases import lower_deep_cases, lower_generated_program
 from tests.frontend_support import (
     FROZEN, HERMETIC_ENVIRONMENT, StageTestCase, fixture_roots, load_corpus, load_json, write_files)
@@ -73,10 +73,12 @@ class LowerFrozenTest(StageTestCase):
         self.lower_corpus("examples", "examples", "lower/examples.sha256", 20)
 
     @slow
+    @timeout(1800)
     def test_the_vm_fixtures(self):
         self.lower_corpus("fixtures", "tests/fixtures/vm", "lower/vm.sha256", 200)
 
     @slow
+    @timeout(1800)
     def test_the_programs_of_the_cases_of_the_racket_checker_tests(self):
         programs = load_json("corpus/checker-programs.json")
         self.assertGreater(len(programs), 400)
@@ -84,6 +86,7 @@ class LowerFrozenTest(StageTestCase):
         self.assert_manifest(self.run_cases(cases), "lower/programs.sha256", cases)
 
     @slow
+    @timeout(1800)
     def test_every_std_module_and_the_compiler(self):
         wrappers = {}
         for path in load_corpus("stdlib"):
@@ -97,6 +100,7 @@ class LowerFrozenTest(StageTestCase):
         self.assert_manifest(outputs, "lower/std-compiler.sha256", dict(wrappers, **files))
 
     @slow
+    @timeout(1800)
     def test_trees_at_the_nesting_limit_lower_to_the_same_ir_with_a_margin_of_vm_frames(self):
         cases = {"deep-" + name: text for name, text in lower_deep_cases().items()}
         outputs = self.run_cases(cases, folder="deep")
@@ -113,10 +117,11 @@ class LowerFrozenTest(StageTestCase):
         write_files(directory, {"deep/%s.agc" % key: cases[key] for key in deepest})
         result = run_vm(self.bytecode, args=["--stdlib=%s" % self.stdlib, "--burn=8000"]
                         + ["deep/%s.agc" % key for key in deepest],
-                        cwd=directory, env=HERMETIC_ENVIRONMENT, timeout=600)
+                        cwd=directory, env=HERMETIC_ENVIRONMENT, timeout=scaled(600))
         self.assertIn("RUNTIME-STACK-OVERFLOW", result.stdout + result.stderr)
 
     @slow
+    @timeout(1800)
     def test_a_generated_program_of_300_functions_lowers_to_the_same_ir(self):
         cases = {"generated": lower_generated_program(300)}
         self.assert_manifest(self.run_cases(cases, folder="generated"), "lower/generated.sha256", cases)

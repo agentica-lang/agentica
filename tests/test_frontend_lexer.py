@@ -1,14 +1,14 @@
 """The Agentica lexer (compiler/lex.agc) against the frozen output of the Racket lexer.
 
-tests/frontend-lexer-test.rkt compares the two live. This module compares the Agentica lexer with what the Racket
-lexer printed once for the same inputs (`make frontend-freeze`, tests/frontend-lexer-freeze.rkt), so the comparison
-survives the Racket front end (the cases that compare with the goldens in fixtures/frontend/lexer/ moved here
-from the rackunit file, and so did the check of the Unicode table): the corpus (examples/, stdlib/ and tests/fixtures/vm/ as they were at the freeze), 300
-generated inputs, deeply nested files and a file with invalid UTF-8.
+This module compares the Agentica lexer with what the Racket lexer printed once for the same inputs (frozen in
+tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages), so the comparison survives
+the Racket front end. It also compares with the goldens in fixtures/frontend/lexer/ and checks the Unicode table. The
+frozen inputs are the corpus (examples/, stdlib/ and tests/fixtures/vm/ as they were at the freeze), 300 generated
+inputs, deeply nested files and a file with invalid UTF-8.
 """
 import re
 
-from tests.agentica_test import ROOT, slow
+from tests.agentica_test import ROOT, slow, timeout
 from tests.frontend_support import FROZEN, StageTestCase, load_corpus, load_json, write_files
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "lexer"
@@ -64,10 +64,12 @@ class LexerFrozenTest(StageTestCase):
         self.check_nested(4000)
 
     @slow
+    @timeout(1800)
     def test_a_much_deeper_nested_file_lexes_in_a_linear_number_of_steps(self):
         self.check_nested(10000)
 
     @slow
+    @timeout(1800)
     def test_corpus(self):
         files = {path: text for path, text in load_corpus("examples", "stdlib", "fixtures").items()
                  if path.startswith(("examples/", "stdlib/", "tests/fixtures/vm/"))}
@@ -75,6 +77,7 @@ class LexerFrozenTest(StageTestCase):
         self.assert_manifest(outputs, "lexer/corpus.sha256", files)
 
     @slow
+    @timeout(1800)
     def test_300_generated_inputs(self):
         cases = {"case-%d" % n: text for n, text in enumerate(load_json("lexer/generated.json"))}
         outputs = self.lex({key + ".agc": text for key, text in cases.items()})

@@ -5,6 +5,7 @@ process (`python3 -m unittest tests.test_<area>` from the repository root, so
 this module imports as `tests.agentica_test`). Keep this file small: add a
 helper here only when a second test module needs it.
 """
+import faulthandler
 import os
 import queue
 import shutil
@@ -25,16 +26,63 @@ FIXTURES = TESTS / "fixtures"
 # The interpreter that runs the tests also runs the Python peers and is the `python3` that VM programs spawn.
 PYTHON = sys.executable
 
-# The time limit of a run, as in the VM golden harness (tests/vm_diff_support.py).
-RUN_TIMEOUT = 60
 
-# `make test-slow` sets this. The two tiers are exclusive, like the rackunit
-# `test` and `slow` submodules: with the flag only @slow cases run, without it
+
+def _timeout_scale():
+    raw = os.environ.get("AGENTICA_TEST_TIMEOUT_SCALE", "").strip()
+    if not raw:
+        return 1
+    try:
+        scale = float(raw)
+    except ValueError:
+        scale = 0
+    if not scale > 0 or scale == float("inf"):
+        raise SystemExit("AGENTICA_TEST_TIMEOUT_SCALE must be a positive number, got %r" % raw)
+    return scale
+
+
+# Slow runners (a capped CPU frequency, a busy shared host) need longer deadlines. CI sets this to stretch every
+# deadline that a correct run must beat; read it once, here, and wrap such a literal in scaled(). A deadline that a
+# test expects to expire, and a limit that measures the product, stay unscaled.
+TIMEOUT_SCALE = _timeout_scale()
+
+
+def scaled(value):
+    """`value` (seconds or milliseconds) times AGENTICA_TEST_TIMEOUT_SCALE; an int stays an int."""
+    result = value * TIMEOUT_SCALE
+    return max(1, round(result)) if isinstance(value, int) else result
+
+
+# The limit of one test (setUp, the body and the cleanups), like pytest-timeout: fast tests, then @slow ones. A test
+# that legitimately takes longer says so with @timeout(seconds). The limits are scaled like every other deadline.
+TEST_TIMEOUT = 120
+SLOW_TEST_TIMEOUT = 900
+# Extra time before the backstop kills the whole module process: the signal handler cannot run while the test sits
+# in C code, so faulthandler dumps the stacks of every thread and exits from its own thread.
+BACKSTOP_GRACE = 30
+
+
+def timeout(seconds):
+    """Give a test method or a TestCase class its own limit in seconds (scaled), replacing the tier's default."""
+    def mark(item):
+        item.agentica_timeout = seconds
+        return item
+    return mark
+
+
+class TestTimeout(AssertionError):
+    """A test that outlived its limit: unittest reports that test as failed and goes on with the next."""
+
+
+# The time limit of a run, as in the VM golden harness (tests/vm_diff_support.py).
+RUN_TIMEOUT = scaled(60)
+
+# `make test-slow` sets this. The two tiers are exclusive: with the flag only @slow cases run, without it
 # the @slow cases are skipped.
 SLOW = os.environ.get("AGENTICA_TEST_SLOW", "") not in ("", "0")
 
 # Time limit of one line or one exit of a Child.
-WAIT_SECONDS = 30
+WAIT_SECONDS = scaled(30)
 
 def _terminate(signum, frame):
     raise KeyboardInterrupt
@@ -77,6 +125,33 @@ class TestCase(unittest.TestCase):
     def _is_slow(self):
         return _method_is_slow(type(self), self._testMethodName)
 
+    def _time_limit(self):
+        """Seconds that this test may take: its @timeout, else its class's, else the tier's default; all scaled."""
+        method = getattr(type(self), self._testMethodName)
+        seconds = getattr(method, "agentica_timeout", None) or getattr(type(self), "agentica_timeout", None)
+        return scaled(seconds or (SLOW_TEST_TIMEOUT if self._is_slow() else TEST_TIMEOUT))
+
+    def _arm_timeout(self):
+        """Start the per-test limit; return the function that stops it. SIGALRM and its timer exist only in the main
+        thread of a POSIX process: elsewhere the test runs unguarded and the module limit of make is the net."""
+        if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "setitimer"):
+            return lambda: None
+        limit = self._time_limit()
+
+        def expired(signum, frame):
+            raise TestTimeout("%s took longer than %s s (AGENTICA_TEST_TIMEOUT_SCALE=%s)" % (
+                self.id(), limit, TIMEOUT_SCALE))
+
+        previous = signal.signal(signal.SIGALRM, expired)
+        signal.setitimer(signal.ITIMER_REAL, limit)
+        faulthandler.dump_traceback_later(limit + BACKSTOP_GRACE, exit=True)
+
+        def disarm():
+            faulthandler.cancel_dump_traceback_later()
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
+        return disarm
+
     def run(self, result=None):
         # Skipping before setUp keeps the other tier's fixtures from being built.
         if result is not None and self._is_slow() != SLOW:
@@ -84,12 +159,15 @@ class TestCase(unittest.TestCase):
             result.addSkip(self, "slow tier only" if self._is_slow() else "fast tier only")
             result.stopTest(self)
             return result
+        disarm = self._arm_timeout()
         try:
             return super().run(result)
         except KeyboardInterrupt:
             # unittest skips the cleanups on Ctrl-C; they stop the children and remove the temp dirs.
             self.doCleanups()
             raise
+        finally:
+            disarm()
 
     def make_temp_dir(self, prefix="agentica-"):
         """A fresh directory, removed when the test ends (also after a failure)."""
@@ -122,17 +200,38 @@ class TestCase(unittest.TestCase):
         return compile_agc(source, self.make_temp_dir() / (source.stem + ".agcb"))
 
 
-def vm_binary():
-    """dist/agentica-vm, or AGENTICA_VM_BINARY like the Racket tests. `make test` builds it first."""
-    override = os.environ.get("AGENTICA_VM_BINARY")
-    path = (ROOT / override) if override else ROOT / "dist" / "agentica-vm"
+def agentica_version():
+    """The Agentica version: the one line of the VERSION file."""
+    return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+
+
+def binary():
+    """dist/agentica, the product. `make` builds it, and `make test` builds it first."""
+    path = ROOT / "dist" / "agentica"
     if not path.is_file():
-        _missing("the VM is not built (%s): run make vm" % path)
+        _missing("the binary is not built (%s): run make" % path)
     return path
 
 
+def vm_binary():
+    """The binary whose `run` command runs the programs: dist/agentica, or AGENTICA_VM_BINARY for another build of it
+    (the GC stress build, the vendored link, a sanitizer build). `make test` builds dist/agentica first."""
+    override = os.environ.get("AGENTICA_VM_BINARY")
+    if not override:
+        return binary()
+    path = ROOT / override
+    if not path.is_file():
+        _missing("the binary is not built (%s): run make" % path)
+    return path
+
+
+def vm_command():
+    """The words that run a compiled program: `agentica run`, followed by the flags, `--`, the file and its arguments."""
+    return [vm_binary(), "run"]
+
+
 def _missing(message):
-    """CI fails when a tool is missing; a local run skips (AGENTS.md). AGENTICA_REQUIRE_VM is the flag of the Racket tests."""
+    """CI fails when a tool is missing; a local run skips (AGENTS.md). AGENTICA_REQUIRE_VM fails the same way."""
     if os.environ.get("CI") or os.environ.get("AGENTICA_REQUIRE_VM"):
         raise RuntimeError(message)
     raise unittest.SkipTest(message)
@@ -161,9 +260,24 @@ def tool(name):
 
 
 def cli():
-    """The command that runs Agentica programs: the executable of AGENTICA_TEST_EXECUTABLE, else the Racket front end."""
+    """The command that runs Agentica programs: the executable of AGENTICA_TEST_EXECUTABLE, else dist/agentica."""
     executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
-    return [executable] if executable else ["racket", str(ROOT / "src" / "main.rkt")]
+    return [executable] if executable else [str(binary())]
+
+
+# The front end of the binary, as the bootstrap leaves it. `make` builds it.
+STAGE2 = ROOT / "build" / "stage" / "stage2.agcb"
+
+
+def front_end_command(self_path, *words):
+    """The command that runs the front end of the binary as an ordinary program, with `self_path` as the binary it
+    starts again for `agentica test`: a test can put a script there and see what the driver does with the answers.
+
+    Without --front-end the program has no hand-off and no embedded std/ sources: it reads them from stdlib/, and it
+    needs --allow-run because `test` starts processes (the binary does not: its front end has it)."""
+    require(STAGE2.is_file(), "the front end is not built (%s): run make" % STAGE2)
+    return [*vm_command(), "--allow-run", "--", STAGE2, "--version", agentica_version(), "--stdlib", ROOT / "stdlib",
+            "--self", self_path, "--", *words]
 
 
 def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=None, stderr_to=None):
@@ -217,8 +331,8 @@ def compile_agc(source, output):
 
 
 def run_vm(bytecode, *flags, args=(), **options):
-    """Run `dist/agentica-vm [flags] -- bytecode [args]`; options go to run()."""
-    return run([vm_binary(), *flags, "--", bytecode, *args], **options)
+    """Run `dist/agentica run [flags] -- bytecode [args]`; options go to run()."""
+    return run([*vm_command(), *flags, "--", bytecode, *args], **options)
 
 
 # The tests do not read these from their own environment: a trace or a trust store set by the caller would change
@@ -344,8 +458,8 @@ class Child:
 
 
 def start_vm(bytecode, *args, flags=(), env=None, **options):
-    """Start `dist/agentica-vm [flags] -- bytecode [args]` as a Child (stderr captured), with vm_environment()."""
-    return Child([vm_binary(), *flags, "--", bytecode, *args], env=vm_environment(env), capture_stderr=True, **options)
+    """Start `dist/agentica run [flags] -- bytecode [args]` as a Child (stderr captured), with vm_environment()."""
+    return Child([*vm_command(), *flags, "--", bytecode, *args], env=vm_environment(env), capture_stderr=True, **options)
 
 
 def output_lines(text):
