@@ -10,6 +10,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The [README](../README.
 - [`blocks.agc`](blocks.agc): blocks and closures (`xs.map do |x| ... end`).
 - [`dispatch.agc`](dispatch.agc): function values and `.call`.
 - [`constants.agc`](constants.agc): module constants: literals, tables built once, and constants that read each other.
+- [`defaults.agc`](defaults.agc): default parameter values: constants, `[]`, enum variants, and a last `Fn` parameter filled by a block.
 - [`echo.agc`](echo.agc): read stdin line by line until EOF.
 - [`file-summary.agc`](file-summary.agc): read a file given as an argument.
 - [`concurrency.agc`](concurrency.agc): lightweight tasks with `Task.spawn` and `Task.await`.

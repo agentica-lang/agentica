@@ -8,6 +8,7 @@ import Model from "builtin_model"
 import Builtins from "builtins"
 import Help from "check_help"
 import Failure from "check_failure"
+import Defaults from "defaults"
 import Diag from "diagnostic"
 import Source from "source"
 import Types from "types"
@@ -48,10 +49,11 @@ export enum Resolved
   Call(String, Types.Type)
 end
 
-## The parameter types and the result type of a function.
+## The parameter types and the result type of a function, and how many arguments a call takes (Defaults.Shape).
 export struct Signature
   params: List[Types.Type]
   result: Types.Type
+  shape: Defaults.Shape
 end
 
 ## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's;

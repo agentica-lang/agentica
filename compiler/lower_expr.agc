@@ -9,6 +9,7 @@ import Ast from "ast"
 import Builtins from "builtins"
 import State from "check_state"
 import ConstWalk from "const_walk"
+import Defaults from "defaults"
 import Ir from "ir"
 import Data from "lower_data"
 import Lowering from "lower_state"
@@ -106,10 +107,15 @@ export def lower_call(
   saved = fx.next
   fx = Lowering.alloc(fx)
   base = fx.next - 1
+  fill = cx.fills.get(node.name)
+  total = count
+  if fill.ok?
+    total = fill.unwrap!.shape.total
+  end
   index = 0
-  while index < count
+  while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
-    out = try lower_expression(cx, fx, node.args[index], fx.next - 1, false, false)
+    out = try lower_argument(cx, fx, node, fill, index)
     fx = out.fx
     index += 1
   end
@@ -131,6 +137,35 @@ export def lower_call(
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
   return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
+end
+
+# The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults
+# gets all its arguments at the call site, so the bytecode and the VM know nothing about defaults.
+def lower_argument(
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Result[Lowering.Fill], param: Int
+) -> Result[Lowering.Out]
+  source = param
+  if fill.ok?
+    source = Defaults.argument_for(fill.unwrap!.shape, node.args.size, param)
+  end
+  if source >= 0
+    return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false)
+  end
+  return lower_default(cx, fx, node, fill.unwrap!, param)
+end
+
+# A default is an expression of the file that declares the function, so it is lowered with that file's index (the
+# spans of its instructions point into that file) and the file of the call comes back after it.
+def lower_default(
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Lowering.Fill, param: Int
+) -> Result[Lowering.Out]
+  case fill.params[param].default
+    Ast.Optional.Present(value) ->
+      here = cx.with(file: fill.file, index: fill.index)
+      out = try lower_expression(here, fx.with(file: fill.index), value, fx.next - 1, false, false)
+      return ok(Lowering.Out(fx: out.fx.with(file: fx.file), slot: out.slot))
+    Ast.Optional.Absent -> return error(Lowering.internal(cx, "lower: a missing argument has no default", node.span))
+  end
 end
 
 # The type of an expression must be one the VM holds, unless the item was checked with its list.

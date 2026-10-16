@@ -7,6 +7,7 @@ import Ast from "ast"
 import Builtins from "builtins"
 import Failure from "check_failure"
 import State from "check_state"
+import Defaults from "defaults"
 import Diag from "diagnostic"
 import Ir from "ir"
 import Source from "source"
@@ -26,12 +27,23 @@ export enum Read
   Slot(Int)
 end
 
+## A function with default values, as a call site needs it: its shape, its parameters (the defaults are expressions of
+## the file that declares it), that file and its position in the sources. The default is lowered with the instructions
+## in that file, because its spans and the names in it belong there.
+export struct Fill
+  shape: Defaults.Shape
+  params: List[Ast.Param]
+  file: String
+  index: Int
+end
+
 ## What is fixed while the program is lowered. types and resolved are those of the checker. user_types maps a struct or
 ## enum name (the program's and the builtin ones it uses) to "Struct" or "Enum"; structs the struct info by name;
 ## variants the id of "Enum.Variant"; json_structs the structs JSON.decode may build; functions the index of each
-## declared function; reads what a constant read becomes. file is the file of the function being lowered and index its
-## position in the sources. expression lowers an expression, and block lowers a block as a function: the cycles between
-## expressions, statements and blocks go through these two fields, because a module cannot import one that imports it.
+## declared function; fills the functions that have default values, by name; reads what a constant read becomes. file
+## is the file of the function being lowered and index its position in the sources. expression lowers an expression,
+## and block lowers a block as a function: the cycles between expressions, statements and blocks go through these two
+## fields, because a module cannot import one that imports it.
 export struct Cx
   types: List[Types.Type]
   resolved: Map[Int, State.Resolved]
@@ -41,6 +53,7 @@ export struct Cx
   variants: Map[String, Int]
   json_structs: Set[String]
   functions: Map[String, Int]
+  fills: Map[String, Fill]
   reads: Map[String, Read]
   file: String
   index: Int

@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 54,
+  "stdout": [
+    "year Level.Quiet",
+    "year Level.Loud",
+    "report 1 Tone.Bold",
+    "custom 3 Tone.Bold",
+    "rows 2",
+    ""
+  ],
+  "stderr": []
+}
