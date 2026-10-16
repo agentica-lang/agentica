@@ -68,7 +68,7 @@ after them may run in parallel when needed and keep their relative order.
 | 7.5a | **Done (2026-10-16)**, in `compiler/` after the bootstrap (it was deferred because it would have changed the Racket front end). Default parameter values (15a, [`docs/future/25-ruby-typed-idioms.md` §25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)): front end only; split out of row 7.5 on 2026-10-14. `std/logger` (14c, row 7.5) did not need it: until it landed, the API had two functions per level (decided on 2026-10-15, [§24.2](../future/24-logging.md#242-stdlogger)), and the `_meta` functions are gone now | Functions take default parameter values, checked at compile time, and `std/logger` replaces its `_meta` functions with a `fields` default |
 | 7.6 | **Deferred until after the bootstrap**, because each item changes the Racket checker, which the port would then redo. New features, VM-only (cont.): strict diagnostics first (phase 16, `docs/future/26-strict-diagnostics.md` §26, no warnings: `CHECK-UNUSED-IMPORT`, `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`, `CHECK-UNUSED-RESULT`, in the order 16a, 16c, 16b, 16d; front end only, each PR migrates the repo's programs); then Ruby typed idioms (phase 15, `docs/future/25-ruby-typed-idioms.md` §25, Part A, one way to do each thing): re-exports, value equality, lambdas, `File.open` with a block, heredocs (15b, 15d, 15e, 15i, 15j; 15c, `with`, was built earlier, see row 7.2.7); one small PR each | Unused imports, unused variables, unreachable code and ignored `Result` values are errors, and there are no warnings; agents write the Ruby forms they know, still checked, immutable and with one canonical form |
 | 8.2 | **Deferred until after the bootstrap**, because the prelude changes the Racket front end, which the port would then redo. Ruby typed idioms, prelude part (15f, 15k; `docs/future/25-ruby-typed-idioms.md` §25.6 and §25.11): the compiler prelude with the Enumerable methods, then `format`; after faster lists (8d), since the prelude's cost contract needs them; then `Stream[T]` (17e, `docs/future/27-iteration-and-concurrency.md` §27.4 step 2), which comes with the prelude | Enumerable methods, `format` and `Stream[T]`, written in Agentica, O(n) on the new lists |
-| 8.3 | **Deferred until after the bootstrap**, decided by the owner on 2026-10-15, because the bootstrap sets the start-up targets (§35.2) and embeds the front end in the VM binary, so the cut is measured on that build. VM start-up cost, a small perf item ([7g](07-vm.md#7g-speed-check)): measure the about 6 ms of each VM start with `perf` and cut it. Tests start the VM thousands of times. Candidates: Boehm init, libuv init, eager OpenSSL init, bytecode verify. Step 9 (the server measurement) does not wait for this row, so its start-up numbers come from the build before the cut | Each VM start costs less, and the test suite runs faster |
+| 8.3 | **Done (2026-10-16, PR #326)**, after the bootstrap, because the bootstrap embeds the front end in the VM binary and the cut was measured on that build ([§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria)). VM start-up cost, a small perf item ([7g](07-vm.md#7g-speed-check)). A sampling profile and timers between the sections of the load (`perf` is blocked) showed that the about 15 ms of each start were the loader reading the 3.8 MB front end field by field, checking and indexing 834 KB of source text a byte at a time, and collections that only marked the program being loaded; Boehm init (0.35 ms), libuv init (0.3 ms) and OpenSSL (initialized at the first TLS use) are small. The loader takes 8.8 ms now and `check examples/hello.agc` 17.3 ms, not 24.8, with every check of a file kept; what is left is mostly page faults (the loaded program is 4.6 MB of heap). Numbers, and what was tried, in [vm-benchmarks](../vm-benchmarks.md#speed-pass-vm-start-up-row-83). | Each VM start costs less, and the test suite runs faster |
 | 7.3 | New features, VM-only (cont.): iteration and concurrent collections (phase 17, `docs/future/27-iteration-and-concurrency.md` §27): `Task.map` (17a, **done**, PR #316) with bounded concurrency, a per-item timeout and results in input order; `Channel[T]` (17b) moved earlier, to row 7.2.1e; C builtins, so they need neither 8d nor the prelude; `try` in a block with a fixed `Result` type already works (`Test.test`), `File.each_line` (row 7.2.1h) adds the completion-value check and its help, and 17a added `try` in a block whose `Result[T]` is inferred (§25.9) to the Agentica front end, where `File.open` with a block (15i) reuses it; they land before phase 16, whose PRs migrate their programs; `Task.await` with a timeout (17c, built) is a C builtin that returns the builtin enum `Await[T]`, moved out of step 8.2 by the owner on 2026-10-14 (§27.3); `Stream[T]` (17e) comes at step 8.2 (§27.4) | Programs run I/O for each item of a list N at a time, and build producer and consumer pipelines, with one form for each job; CPU speed-ups follow only if the multicore schedulers land (step 11) |
 | 7.4 | New features, VM-only (cont.): the streaming items of phase 20 (20e to 20g, [§30](../future/30-hybrid-http.md#3011-streaming-on-channels), the hybrid HTTP plan), built on the channels of 17b; then `TlsContext` ([phase 19](19-tls-context.md), [§29](../future/29-tls-context.md#29-tls-contexts)) | Programs stream HTTP bodies through channels and set up TLS with a `TlsContext` |
 | 7.5 | New features, VM-only (cont.): UDP, then logging and debugging (14c, **done**: `std/logger` of `docs/future/24-logging.md` §24.2, with no default parameter values and no flags; its Racket parts are data under the freeze of row 7.2.7 (§24.2, "The freeze")), then the `Crypto` module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`). Binary data (row 7.2.4) and stack traces (row 7.2.5) moved to their own rows | Programs send UDP; programs log with levels, fields and JSON lines, and sign, hash and encrypt |
@@ -116,11 +116,11 @@ and the other features after the JIT.
 3. A speed pass on the self-hosted front end: the targets of
    [§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria), the
    precompiled BDD runner (about 0.7 s that step 7b added to `agentica test`),
-   and maybe a VM profiler and the start-up cut of row 8.3. **First part
-   done (2026-10-16, PR #315):** the timing rows of `benchmarks/run.py`,
-   the profiler (`AGENTICA_VM_TRACE=profile`) and the BDD runner and default
-   steps carried by the binary (`agentica test` of a small file: 0.87 s
-   before, 0.05 s now; numbers in
+   and maybe a VM profiler and the start-up cut of row 8.3 (done, below).
+   **First part done (2026-10-16, PR #315):** the timing rows of
+   `benchmarks/run.py`, the profiler (`AGENTICA_VM_TRACE=profile`) and the BDD
+   runner and default steps carried by the binary (`agentica test` of a small
+   file: 0.87 s before, 0.05 s now; numbers in
    [vm-benchmarks](../vm-benchmarks.md#front-end-post-bootstrap-row-3)).
    **Second part, the lexer, done (2026-10-16, PR #317):** the lexer was
    51% of the steps of a check of the whole front end, and its steps are
@@ -131,8 +131,13 @@ and the other features after the JIT.
    [§44.12](../future/44-module-constants.md#4412-implementation-plan).
    Numbers, and what was tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer).
-   Still to do: the parser and the loader (15 ms of every start), for room
-   under the 100 ms for `stdlib/bdd/gherkin.agc`.
+   **VM start-up, done (2026-10-16, PR #326):** the loader of the carried
+   front end took 16 ms of every start and takes 8.8 ms now (row 8.3), so a
+   hello check is 17.3 ms, not 24.8, and `check stdlib/bdd/gherkin.agc` is
+   about 9 ms faster. Numbers in
+   [vm-benchmarks](../vm-benchmarks.md#speed-pass-vm-start-up-row-83).
+   Still to do: the parser, for room under the 100 ms for
+   `stdlib/bdd/gherkin.agc`.
 4. **Done (2026-10-16)**: default parameter values (row 7.5a,
    [§25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)),
    in `compiler/`, which does not use them yet.
