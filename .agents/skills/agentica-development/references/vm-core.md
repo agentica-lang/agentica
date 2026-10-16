@@ -87,6 +87,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - `docs/vm/17-lists.md`
   - the gate is `benchmarks/programs/list-build.agc`
 - `vm/interp.c`
+  - the turn loop keeps the top frame's code, spans, register window and next
+    `pc` in locals and reloads them at `reload:`. An opcode that pushes or
+    pops a frame, replaces one, or can move the frame or register arrays
+    (`ensure_registers`, `new_frame`) must `goto reload` before it reads a
+    local again; `frame->pc` is still written before each instruction (the
+    stack trace, a park and a yield read it), and `SPAN` is the span of the
+    running instruction, read where a failure or a call needs it
   - one turn of the current task (`agc_run_turn`, returns yield, parked or done)
     and the budgets: the "next stop" counter of `STEP` over the turn and the
     batch taken from the runtime's atomic `steps_left` (`agc_turn_begin`,

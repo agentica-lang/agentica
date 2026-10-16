@@ -623,6 +623,16 @@ static agc_turn_result park_task(agc_task *t) {
   return AGC_TURN_PARKED;
 }
 
+/* The span of the running instruction, read only where a failure or a call needs it. */
+#define SPAN spans[pc - 1]
+
+/* The turn loop keeps the state of the top frame in locals (its code, spans, register window and next pc) and
+ * reloads them (`reload`) only after an instruction that can change which frame runs or move the frames or the
+ * registers: CALL, CALL_VALUE, TAIL_CALL, RETURN, a failing TRY, and a builtin that starts a native frame. A
+ * builtin that returns normally cannot move them: push_frame, replace_frame and new_frame are called only from this
+ * file, on the task that runs, and a builtin never pushes a frame of the running task (Task.spawn pushes the
+ * child's). frame->pc is still written before each instruction runs, as the stack trace of a failure, a park and a
+ * yield read it. */
 static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *vm, bool profiling) {
   const agc_program *p = vm->rt->program;
   agc_task *t = vm->task;
@@ -632,15 +642,23 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
     if (t->parking) return park_task(t);
     if (vm->yield) return AGC_TURN_YIELD;
   }
+  agc_frame *frame;
+  const agc_instr *code;
+  const uint32_t *spans;
+  agc_value *R;
+  uint32_t base, pc;
+reload:
+  frame = &t->frames[t->frame_count - 1];
+  code = p->functions[frame->function].code;
+  spans = p->functions[frame->function].spans;
+  base = frame->base;
+  R = t->regs + base;
+  pc = frame->pc;
   for (;;) {
-    agc_frame *frame = &t->frames[t->frame_count - 1];
-    const agc_function *fn = &p->functions[frame->function];
-    agc_value *R = t->regs + frame->base;
-    uint32_t pc = frame->pc;
-    agc_instr in = fn->code[pc];
-    uint32_t s = fn->spans[pc];
+    agc_instr in = code[pc];
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
-    frame->pc = pc + 1;
+    pc++;
+    frame->pc = pc;
     int64_t x, y, z;
     switch (in.op) {
       case AGC_OP_MOVE: R[in.a] = R[in.b]; break;
@@ -650,7 +668,8 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
            has type Void (docs/future/44-module-constants.md §44.5), so it means "never set": only a hand-made
            file reads one (or a slot it unset with GLOBAL_SET of a Void). */
         agc_value g = p->globals[bx];
-        if (g.tag == AGC_T_VOID) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: global read before it was set", s);
+        if (g.tag == AGC_T_VOID)
+          agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: global read before it was set", SPAN);
         R[in.a] = g;
         break;
       }
@@ -666,7 +685,7 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
           vm->next_stop -= in.a;
           break;
         }
-        step_slow(vm, in.a, s);
+        step_slow(vm, in.a, SPAN);
         if (vm->yield) return AGC_TURN_YIELD;
         break;
       case AGC_OP_ADD_I:
@@ -677,7 +696,7 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
         bool overflow = in.op == AGC_OP_ADD_I   ? __builtin_add_overflow(x, y, &z)
                         : in.op == AGC_OP_SUB_I ? __builtin_sub_overflow(x, y, &z)
                                                 : __builtin_mul_overflow(x, y, &z);
-        if (overflow) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", s);
+        if (overflow) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", SPAN);
         R[in.a] = agc_int(z);
         break;
       }
@@ -685,18 +704,18 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
       case AGC_OP_MOD_I:
         x = agc_as_int(vm, R[in.b]);
         y = agc_as_int(vm, R[in.c]);
-        if (y == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", s);
+        if (y == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", SPAN);
         if (in.op == AGC_OP_MOD_I) {
           R[in.a] = agc_int(y == -1 ? 0 : x % y);
         } else {
           if (x == INT64_MIN && y == -1)
-            agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", s);
+            agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", SPAN);
           R[in.a] = agc_int(x / y);
         }
         break;
       case AGC_OP_NEG_I:
         x = agc_as_int(vm, R[in.b]);
-        if (x == INT64_MIN) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", s);
+        if (x == INT64_MIN) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", SPAN);
         R[in.a] = agc_int(-x);
         break;
       case AGC_OP_ADD_F: R[in.a] = agc_float(agc_as_float(vm, R[in.b]) + agc_as_float(vm, R[in.c])); break;
@@ -705,7 +724,7 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
       case AGC_OP_DIV_F: {
         double divisor = agc_as_float(vm, R[in.c]);
         double dividend = agc_as_float(vm, R[in.b]);
-        if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", s);
+        if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", SPAN);
         R[in.a] = agc_float(dividend / divisor);
         break;
       }
@@ -733,7 +752,7 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
         const agc_list *l = agc_as_list(vm, R[in.b]);
         x = agc_as_int(vm, R[in.c]);
         size_t len = list_len(l);
-        if (x < 0 || (uint64_t)x >= len) index_out_of_range(vm, x, len, s);
+        if (x < 0 || (uint64_t)x >= len) index_out_of_range(vm, x, len, SPAN);
         R[in.a] = list_at(l, (size_t)x);
         break;
       }
@@ -747,7 +766,7 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
       }
       case AGC_OP_MAP_GET: {
         agc_value found;
-        if (!agc_map_get(vm, agc_as_map(vm, R[in.b]), R[in.c], &found)) key_not_found(vm, R[in.c], s);
+        if (!agc_map_get(vm, agc_as_map(vm, R[in.b]), R[in.c], &found)) key_not_found(vm, R[in.c], SPAN);
         R[in.a] = found;
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
@@ -820,21 +839,21 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
         R[in.a] = agc_bool(!equal_values(vm, R[in.b], R[in.c]));
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
-      case AGC_OP_JUMP: frame->pc = bx; break;
+      case AGC_OP_JUMP: pc = bx; break;
       case AGC_OP_JUMP_IF_FALSE:
-        if (!agc_as_bool(vm, R[in.a])) frame->pc = bx;
+        if (!agc_as_bool(vm, R[in.a])) pc = bx;
         break;
       case AGC_OP_JUMP_IF_TRUE:
-        if (agc_as_bool(vm, R[in.a])) frame->pc = bx;
+        if (agc_as_bool(vm, R[in.a])) pc = bx;
         break;
       case AGC_OP_CALL:
         if (profiling) profile_call(vm, bx);
-        push_frame(vm, t, bx, frame->base + in.a, frame->base + in.a, s);
-        break;
+        push_frame(vm, t, bx, base + in.a, base + in.a, SPAN);
+        goto reload;
       case AGC_OP_CALL_VALUE: {
-        uint32_t at = frame->base + in.a;
-        call_value(vm, t, t->regs[at], at + 1, NULL, in.b, at, s);
-        break;
+        uint32_t at = base + in.a;
+        call_value(vm, t, R[in.a], at + 1, NULL, in.b, at, SPAN);
+        goto reload;
       }
       case AGC_OP_CLOSURE: {
         uint32_t n = p->functions[bx].captures;
@@ -845,8 +864,8 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
       }
       case AGC_OP_TAIL_CALL:
         if (profiling) profile_call(vm, bx);
-        replace_frame(vm, bx, in.a, s);
-        break;
+        replace_frame(vm, bx, in.a, SPAN);
+        goto reload;
       case AGC_OP_RANGE:
         R[in.a] = agc_range_value(agc_as_int(vm, R[in.b]), agc_as_int(vm, R[(uint32_t)in.b + 1]), in.c != 0);
         break;
@@ -859,32 +878,32 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
         break;
       }
       case AGC_OP_CALL_BUILTIN: {
-        uint32_t base = frame->base + in.a;
+        agc_value *args = R + in.a;
         const agc_builtin *b = p->builtins[bx];
         if (b->native) {
           if (profiling) profile_builtin_call(vm, bx);
-          start_native(vm, b->native, base, s);
+          start_native(vm, b->native, base + in.a, SPAN);
           if (vm->yield) return AGC_TURN_YIELD;
-          break;
+          goto reload;
         }
         uint64_t units = 0;
         if (b->cost == AGC_COST_SIZE)
-          for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(t->regs[base + k]);
-        agc_value result = profiling ? profile_builtin(vm, b, bx, t->regs + base, s) : b->fn(vm, t->regs + base, s);
+          for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(args[k]);
+        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN) : b->fn(vm, args, SPAN);
         if (t->stepper) {
-          start_stepper(vm, b, base, s);
+          start_stepper(vm, b, base + in.a, SPAN);
           if (t->parking) return park_task(t);
           if (vm->yield) return AGC_TURN_YIELD;
-          break;
+          goto reload;
         }
         if (t->parking) {
           t->parking = false;
-          if (t->retry) frame->pc = pc;
-          t->park_reg = base;
+          if (t->retry) frame->pc = pc - 1;
+          t->park_reg = base + in.a;
           t->state = AGC_TASK_PARKED;
           return AGC_TURN_PARKED;
         }
-        t->regs[base] = result;
+        args[0] = result;
         if (b->cost == AGC_COST_SIZE) agc_charge(vm, units + agc_value_units(result));
         if (t->turn_cost) apply_cost(vm);
         if (vm->yield) return AGC_TURN_YIELD;
@@ -894,17 +913,18 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
         if (!return_value(vm, R[in.a])) return AGC_TURN_DONE;
         if (t->parking) return park_task(t);
         if (vm->yield) return AGC_TURN_YIELD;
-        break;
+        goto reload;
       case AGC_OP_TRY: {
         const agc_result *r = agc_as_result(vm, R[in.b]);
         if (r->ok) {
           R[in.a] = r->value;
         } else {
           if (t->frame_count == 1 && t == vm->main)
-            agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", s);
+            agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", SPAN);
           if (!return_value(vm, R[in.b])) return AGC_TURN_DONE;
           if (t->parking) return park_task(t);
           if (vm->yield) return AGC_TURN_YIELD;
+          goto reload;
         }
         break;
       }
@@ -914,5 +934,7 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
     }
   }
 }
+
+#undef SPAN
 
 agc_turn_result agc_run_turn(agc_vm *vm) { return AGC_PROFILE_ON(vm) ? turn_loop(vm, true) : turn_loop(vm, false); }
