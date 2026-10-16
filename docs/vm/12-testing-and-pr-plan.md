@@ -59,8 +59,8 @@
   stuck FIFO, a non-UTF-8 working directory, invalid UTF-8 arguments, deep tail
   calls, long strings, a large generated input checked against a line splitter
   written in the test, and a CRLF program under a non-ASCII path.
-- **Compiler.** `tests/bytecode-test.rkt` checks the bytecode the lowering
-  writes: adjacent steps merge into one `STEP`, only a returned user call
+- **Compiler.** `tests/test_frontend_bytecode.py` and the spec tests check the
+  bytecode the lowering writes: adjacent steps merge into one `STEP`, only a returned user call
   becomes a tail call, a map literal above 255 entries adds the rest with
   `Map.put`, a block captures after its parameters, `for` over a range literal
   counts without a `Range` value, the opcode numbers match `vm/value.h`, JSON

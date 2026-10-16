@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `agentica-vm` is gone. Use `agentica run [OPTIONS] -- FILE.agcb [ARGS...]`; the options are the same. The message prefix of the VM is now `agentica run:` (it was `agentica-vm:`).
 - **Breaking:** `AGENTICA_VM` is gone. Nothing reads it; a value that names a missing file changes nothing. (`AGENTICA_VM_BINARY` names another build of the binary for the tests; the tracing and metrics variables `AGENTICA_VM_TRACE`, `AGENTICA_VM_TRACE_FILE` and `AGENTICA_FLUSH_TIMEOUT_MS` keep their names.)
 - **Breaking:** `make vm`, `make exe`, `make cli`, `make bdd-driver`, `dist/agentica-next` and `dist/agentica-bdd-driver.agcb` are gone (the four targets stop with a message that says to run `make`), with `src/vm-launch.rkt`, `src/bdd-driver.rkt`, `vm/main.c` and the ordinary-run hand-off of `compiler/cli_spawn.agc` and `cli_main.agc` (the `/bin/sh` wrapper and its limits). The macOS and Windows builds of the VM binary are gone with `vm/main.c`; `platforms.yml` builds the C tests only.
+- **The tests need no Racket** (§35 step 8d-3). The rackunit files, `make build`, `make build-tests`, `make frontend-freeze`, `make frontend-snapshot` and `make racket-fixed-point` are gone; `make test` and `make test-slow` run Python `unittest` modules only (a `.rkt` path in `TESTS` is an error). `examples/process-tool.agc` runs `sh -c` instead of `racket --version`. CI installs Racket for one job only, the check of the generated `vm/unicode_data.c`.
 
 ## [0.3.0] - 2026-10-15
 

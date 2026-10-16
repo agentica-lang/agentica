@@ -143,8 +143,9 @@
   repository. So `platforms.yml` and `fuzz.yml` run by hand. Run `platforms.yml`
   before merging a change to platform code (the Makefile, files, processes, text
   output).
-- Racket comes from `Bogdanp/setup-racket` where it is still used (the rackunit
-  tests and the Racket oracle, until step 8d-3). The macOS and Windows jobs
+- Racket comes from `Bogdanp/setup-racket` in one job only: the `unicode` job
+  of `ci.yml` (and `warm-unicode`), which checks `vm/unicode_data.c` against
+  `vm/tools/gen-unicode.rkt`. The tests need none (step 8d-3). The macOS and Windows jobs
   build the C tests only, since the binary and the process and network tests
   are not portable yet.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,

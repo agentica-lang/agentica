@@ -40,7 +40,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 ## Linked programs
 
 Imports never reach the VM. `src/main.rkt` (`compile` and the default run) and
-the helper `compile-file` of the live front-end comparisons (`tests/vm-diff-common.rkt`) run `link-program`
+the front end of the binary (`compiler/front_end.agc`) run `link-program`
 (`src/modules.rkt`) before `check`, so `lower` sees one program whose
 imported declarations carry `@N::` prefixes (display names drop them,
 `write-bytecode` uses `display-name`). The span table names its source

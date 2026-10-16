@@ -278,7 +278,7 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
 `net.h` (the `agc_conn` API of `tcp.c`, used by `http_client.c`) and
 `http_fields.h` include `services.h`; `net.h` also includes `tls.h`. `tls.h`,
 `http_parse.h` and `trace.h` keep their content. What named `vm/agc.h` now names
-the header that holds the item: `tests/bytecode-test.rkt` reads `agc_opcode`
+the header that holds the item: `tests/test_frontend_bytecode.py` reads `agc_opcode`
 from `value.h`, `vm/tools/gen-unicode.rkt` writes `#include "core.h"` into
 `unicode_data.c`, and the development skill lists the layers.
 
