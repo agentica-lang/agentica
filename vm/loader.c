@@ -472,7 +472,7 @@ static void load_globals(reader *r, agc_program *p) {
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
-  if (r->format != AGC_FORMAT_VERSION && !(r->any_version && r->format == AGC_FORMAT_PREVIOUS))
+  if (r->format != AGC_FORMAT_VERSION && r->format != AGC_FORMAT_PREVIOUS)
     reject(r, "unsupported format version");
   /* The version is read in both cases, so the text is validated and the file is parsed the same way. */
   if (!same_text(read_string(r), AGC_VERSION) && !r->any_version) reject(r, "built for another Agentica version");

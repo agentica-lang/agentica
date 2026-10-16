@@ -763,7 +763,7 @@ static void prelude_tests(void) {
   char error[160] = "";
   agc_program *p;
 
-  /* The flag is 0 or 1, and a file of version 5 has none: only the front end's loader reads it. */
+  /* The flag is 0 or 1, and a file of version 5 has none: both loaders read it, with no prelude function. */
   spec s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
   assert(loads(s, NULL));
   s.funcs[1].prelude = 2;
@@ -771,9 +771,13 @@ static void prelude_tests(void) {
   s = base();
   s.version = AGC_FORMAT_PREVIOUS;
   buffer old = build(s);
-  assert(!agc_load(old.data, old.len, &p, error, sizeof error) && strstr(error, "format version"));
-  assert(agc_load_front_end(old.data, old.len, &p, error, sizeof error, NULL));
+  assert(agc_load(old.data, old.len, &p, error, sizeof error));
   assert(!p->functions[0].prelude);
+  assert(agc_load_front_end(old.data, old.len, &p, error, sizeof error, NULL));
+  free(old.data);
+  s.version = AGC_FORMAT_PREVIOUS - 1;
+  old = build(s);
+  assert(!agc_load(old.data, old.len, &p, error, sizeof error) && strstr(error, "format version"));
   free(old.data);
   flags_written = true;
 
