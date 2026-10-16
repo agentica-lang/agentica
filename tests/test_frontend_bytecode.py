@@ -1,7 +1,7 @@
 """The Agentica bytecode writer (compiler/bytecode.agc) against the frozen output of the Racket writer.
 
-tests/frontend-bytecode-test.rkt compares the two live. This module compares the Agentica writer with what the Racket
-writer made once for the same programs (`make frontend-freeze`, tests/frontend-bytecode-freeze.rkt): the .agcb bytes of
+This module compares the Agentica writer with what the Racket writer made once for the same programs (frozen in
+tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the .agcb bytes of
 the lowering fixtures, examples/, tests/fixtures/vm/, every std/ module, the compiler, trees at the nesting limit and a
 generated program (as SHA-256 of the file, since the bytes of the big ones are megabytes), the lines of the limit
 scenarios, the opcode table, and what the VM prints for the Agentica file of two programs. Inputs that are a formula are
@@ -101,6 +101,16 @@ class BytecodeFrozenTest(StageTestCase):
         start = re.search(r"OPCODES = \{", text).end()
         pairs = re.findall(r'"([^"]+)": ([0-9]+)', text[start:text.index("\n}", start)])
         self.assert_golden("".join("%s %s\n" % pair for pair in pairs), FROZEN / "bytecode" / "opcodes.expected")
+
+    def test_the_opcode_numbers_are_those_of_agc_opcode_in_vm_value_h(self):
+        # The C loader and the writer must count the opcodes the same way; the order of the enum is the number.
+        header = (ROOT / "vm" / "value.h").read_text(encoding="utf-8")
+        in_c = [name for name in re.findall(r"\bAGC_OP_([A-Z_]+)\b", header) if name != "COUNT"]
+        text = TABLES.read_text(encoding="utf-8")
+        start = re.search(r"OPCODES = \{", text).end()
+        pairs = re.findall(r'"([^"]+)": ([0-9]+)', text[start:text.index("\n}", start)])
+        self.assertEqual([int(number) for _, number in pairs], list(range(len(pairs))))
+        self.assertEqual([name.upper().replace("-", "_") for name, _ in pairs], in_c)
 
     def test_the_lowering_fixtures_fill_every_section_of_the_file(self):
         # The writer turns the lowering of these programs into the file, so the sections that their goldens fill are the
