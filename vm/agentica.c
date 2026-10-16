@@ -7,6 +7,9 @@
  * options and the heap are the program's alone. `--front-end FILE.agcb` (build-only) loads another front
  * end in place of the carried one. Design: docs/vm/08-loader-and-cli.md.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "core.h"
 #include "embedded.h"
 #include "launch.h"

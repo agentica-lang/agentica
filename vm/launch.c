@@ -5,6 +5,9 @@
  * that differ (a run of the front end, `agentica run`) stay in agentica.c.
  * Design: docs/vm/08-loader-and-cli.md and docs/vm/14-core-invariants.md, 14.4.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #ifdef _WIN32
 #define _CRT_RAND_S
 #endif
