@@ -1,6 +1,8 @@
 """Checker rules through the product CLI: where diagnostics point, pipes and the nesting limit.
 
-These are the cases of tests/checker-test.rkt about the spans of diagnostics, the pipe rules and the nesting limit.
+These are the cases of the old tests/checker-test.rkt about the spans of diagnostics, the pipe rules and the nesting
+limit. The other cases are in tests/test_spec_checker_rest.py.
+
 Each program is written to a file and checked with `--json check FILE`. A test asserts the diagnostic code and its
 range (the 1-based line and column of the start and of the end, which is exclusive). Message and help texts are not
 asserted (AGENTS.md). The programs are also in the frozen corpus (tests/fixtures/frontend/frozen/corpus/), which the
