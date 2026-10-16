@@ -11,6 +11,11 @@ on:
         type: choice
         options: [both, macos, windows]
         default: both
+      openssl:
+        description: OpenSSL linkage mode for a manual run
+        type: choice
+        options: [system, vendored]
+        default: system
 
 permissions:
   contents: read
@@ -48,7 +53,7 @@ jobs:
     runs-on: macos-15
     env:
       AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && 'vendored' || 'system' }}
+      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,7 +70,7 @@ jobs:
     runs-on: windows-2025
     env:
       AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && 'vendored' || 'system' }}
+      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
     defaults:
       run:
         shell: msys2 {0}
