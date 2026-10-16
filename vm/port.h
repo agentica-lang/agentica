@@ -282,9 +282,9 @@ struct agc_task {
 };
 
 /* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each
- * function of the program and one more, the last, for the loops of the List and Int builtins that call back (map, each,
- * times, ...); the builtin arrays have one slot for each builtin the program lists. Allocated when the run starts and
- * written as trace lines when it ends (trace.c). */
+ * function of the program and one more, the last, for the steps that a counting loop (Range#each, times, upto, downto)
+ * or a stepper builtin takes for each pass; the builtin arrays have one slot for each builtin the program lists.
+ * Allocated when the run starts and written as trace lines when it ends (trace.c). */
 typedef struct {
   uint32_t functions, builtins;
   uint64_t start_ns;
