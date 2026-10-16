@@ -85,7 +85,7 @@ jobs:
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
       - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py"
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py"
       - run: ccache --show-stats
       - uses: actions/cache/save@v4
         with:
@@ -140,7 +140,7 @@ jobs:
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
       - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py"
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py"
       - run: ccache --show-stats
       - uses: actions/cache/save@v4
         with:

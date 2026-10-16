@@ -59,7 +59,7 @@ agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 bool agc_tree_refused(const char *path);
 /* Removes the tree at path; on a failure inside it, *failed is a malloc'd path of the entry that failed, else NULL. */
 int agc_remove_tree(const char *path, char **failed);
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 #endif
 

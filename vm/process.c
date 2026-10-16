@@ -3,9 +3,12 @@
  * watching child processes, their pipes, and the environment entries that the VM
  * keeps for itself. Service layer. Design: docs/vm/10-io-processes.md §10.4.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "services.h"
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -16,6 +19,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <uv.h>
+#ifdef __APPLE__
+#include <crt_externs.h>
+#endif
 
 #define LIMIT ((size_t)1048576)
 #define ERR_CHUNK 4096
@@ -615,8 +621,12 @@ static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
 }
 
 static char **host_env(void) {
+#ifdef __APPLE__
+  return *_NSGetEnviron();
+#else
   extern char **environ; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
   return environ;
+#endif
 }
 
 static bool own_env(bool drop_uring, const char *entry) {

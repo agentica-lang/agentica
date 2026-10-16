@@ -3,9 +3,12 @@
  * with line reads and writes, for a child process that talks to its parent.
  * Service layer. Design: docs/vm/10-io-processes.md §10.4.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "services.h"
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>

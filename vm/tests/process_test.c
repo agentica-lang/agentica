@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 static agc_value text(const char *s) {
   size_t bytes = strlen(s);
   return agc_string_value(agc_make_string(s, bytes, bytes));
