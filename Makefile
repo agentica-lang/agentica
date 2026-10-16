@@ -37,8 +37,8 @@ PYTHON ?= python3
 # (tests/eval/test_*.py are not unittest modules for this runner).
 TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
-# Modules that only run when named (make vm-latency): a directory in TESTS does not pick them up
-PY_ALONE = tests/test_vm_latency.py
+# Modules that only run when named (make vm-latency, make vm-task-map): a directory in TESTS does not pick them up
+PY_ALONE = tests/test_vm_latency.py tests/test_vm_task_map.py
 PY_TESTS = $(sort $(PY_FILES) $(filter-out $(PY_ALONE),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
 # A file that is not tests/test_<area>.py (a file of another kind, or a .py file elsewhere) would build a wrong module name below
 PY_NOT_DIR = $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(if $(wildcard $(t)/.),,$(t)))
@@ -107,6 +107,10 @@ eval-references:
 # Task wake latency next to busy tasks (docs/vm/10-io-scheduler.md 10.2.1), alone so it has the CPU to itself
 vm-latency: dist/agentica
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_latency.py
+
+# The timing cases of Task.map (docs/future/27-iteration-and-concurrency.md 27.1), alone for the same reason
+vm-task-map: dist/agentica
+	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_task_map.py
 
 test-bdd: dist/agentica
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
