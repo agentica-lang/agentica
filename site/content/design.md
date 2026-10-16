@@ -6,11 +6,11 @@ description: The main design decisions of Agentica and its bytecode VM, Aurora, 
 
 Agentica is a small, statically typed language for AI agents. Its programs run on Aurora, a bytecode virtual machine written in C11. This page gives the main decisions and why each was taken.
 
-## Two parts: a Racket front end and a C VM
+## Two parts: a front end in Agentica and a C VM
 
-**Decision.** The front end (lexer, parser, checker and lowering to bytecode) is written in Racket. A C11 VM runs every program, and there is no other backend. Moving the front end into Agentica is planned.
+**Decision.** The front end (lexer, parser, checker and lowering to bytecode) is written in Agentica and compiled to bytecode like any program. A C11 VM runs every program, including the front end, and there is no other backend. The two are one binary.
 
-**Why.** The front end stays in Racket while the language still changes, since two front ends would double that work. Agents write, run and repair in a loop, so start-up matters more than peak speed, and users need no compiler toolchain. A small C VM can ship as one binary.
+**Why.** Users need no second language or compiler toolchain, and start-up matters more than peak speed, because agents write, run and repair in a loop. A front end written in the language it compiles is checked by its own fixed point: it compiles itself to the same bytes. A small C VM can ship as one binary, with the front end and the standard modules inside.
 
 ## Immutable values, with state in handles
 

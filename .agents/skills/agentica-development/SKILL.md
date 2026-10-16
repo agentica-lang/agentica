@@ -31,13 +31,14 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 ## Commands while you work
 
 ```sh
-make vm                                   # build dist/agentica-vm (git submodule update --init first)
-make bdd-driver                           # build dist/agentica-bdd-driver.agcb, what `agentica test` runs (make test does it)
-make cli                                  # build dist/agentica-cli.agcb, the command line in Agentica (make test does it); make test-cli runs the CLI tests on it
+make                                      # build dist/agentica, the one binary, from bootstrap/stage0.agcb (git submodule update --init first; no Racket)
 make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"  # .rkt: rackunit, .py: unittest
-racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
+dist/agentica examples/hello.agc          # run a program; `check file.agc` only checks; `run -- file.agcb` runs bytecode
+racket src/main.rkt examples/hello.agc    # the Racket oracle (until 8d-3): the same words, through dist/agentica run
+make test-cli                             # the product command line tests on dist/agentica
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
-make fixed-point                          # the front end's stages and dist/agentica-next; stage2 == stage3 (about 25 s after make vm)
+make fixed-point                          # stage2 == stage3, and dist/agentica compiles the front end to stage2 again (about 25 s)
+make stage0                               # refresh bootstrap/stage0.agcb from stage2 (references/ci.md, "Refreshing stage0")
 make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
 make frontend-freeze                      # rewrite the frozen Racket outputs of tests/fixtures/frontend/frozen/ (references/frontend.md); needs Racket, slow
 python3 tools/refreeze.py                  # rewrite those goldens from the Agentica stages (no Racket) and print what changed; --stage, --fast-only
@@ -47,7 +48,7 @@ make site                                 # before merging a site change
 ```
 
 Run the stage tests the change touches (`make test TESTS=...`, which builds the
-VM first) and run the affected example with `racket src/main.rkt`. Two tiers:
+binary first) and run the affected example with `dist/agentica`. Two tiers:
 put fast cases in `(module+ test ...)` (rackunit) or in a `tests/test_<area>.py`
 module (unittest, `references/ci.md`) and slow ones (live corpus, generated
 inputs, stress) in `(module+ slow ...)` or marked `@slow`. Locally run only the
@@ -102,7 +103,7 @@ runs everything else (`references/ci.md`, "What CI runs").
 | `references/stages.md` | the token kinds, the diagnostic code list, the AST nodes, a module's public API (`source`, `lexer`, `parser`, `modules`, `checker`, `lower`, `bytecode`, `builtins`, `main`) |
 | `references/language-notes.md` | changing a core language rule: Result and `try`, collections, ranges, file modules, methods, interpolation, blocks, hints, enums, function values |
 | `references/library-notes.md` | changing a library area (stdio, JSON, tasks, TCP/TLS/HTTP, files and paths, processes, Int and Float bits, std/binary) or the comments and code style (line width, strings) of a `stdlib/` module |
-| `references/bdd.md` | `agentica test`: the driver `compiler/bdd.agc` and its hand-off `src/bdd-driver.rkt`, `std/bdd`, `stdlib/test/`, step programs and their handler rules, unit test files |
+| `references/bdd.md` | `agentica test`: the driver `compiler/bdd_driver.agc` (part of the front end), `std/bdd`, `stdlib/test/`, step programs and their handler rules, unit test files |
 | `references/vm.md` | any VM work: pipeline, layers, the rules every change keeps, and the index of the `vm-*.md` files |
 | `references/ci.md` | `.github/workflows/`, the Makefile, new VM files, peers or fixtures, jscpd, what CI runs, releases and `CHANGELOG.md` |
 | `references/site.md` | `site/`, or a language rule or builtin shown on a site page |

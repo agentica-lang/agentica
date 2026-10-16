@@ -19,8 +19,7 @@ if sys.version_info < (3, 10):
     raise SystemExit("benchmarks/http_bench.py needs Python 3.10 or newer")
 
 ROOT = Path(__file__).resolve().parent.parent
-MAIN = ROOT / "src" / "main.rkt"
-VM = Path(os.environ.get("AGENTICA_VM", ROOT / "dist" / "agentica-vm"))
+VM = ROOT / "dist" / "agentica"
 SERVER = ROOT / "examples" / "http_server.agc"
 NODE_FILE = ROOT / "benchmarks" / "http.js"
 TICKS = os.sysconf("SC_CLK_TCK")
@@ -139,7 +138,7 @@ def pin(command: list[str], cpus: str | None) -> list[str]:
 
 
 def compile_program(source: Path, output: Path):
-    subprocess.run(["racket", str(MAIN), "compile", str(source), "-o", str(output)], check=True)
+    subprocess.run([str(VM), "compile", str(source), "-o", str(output)], check=True)
 
 
 def read_line(fd: int, timeout: float) -> bytes:
@@ -245,7 +244,7 @@ def vm_client(node: str, bytecode: Path, args, server_cpus, client_cpus) -> floa
         process, port = start(pin([node, str(NODE_FILE), "server"], server_cpus))
         each = args.requests // 8
         started = time.perf_counter()
-        command = [str(VM), "--", str(bytecode), f"http://127.0.0.1:{port}/", "8", str(each)]
+        command = [str(VM), "run", "--", str(bytecode), f"http://127.0.0.1:{port}/", "8", str(each)]
         try:
             result = subprocess.run(pin(command, client_cpus), capture_output=True, text=True, check=True, timeout=CLIENT_TIMEOUT)
         except subprocess.TimeoutExpired:
@@ -335,7 +334,7 @@ def main():
     if not node:
         raise SystemExit("node is required for the load client")
     if not VM.exists():
-        raise SystemExit(f"{VM} is missing; run make vm")
+        raise SystemExit(f"{VM} is missing; run make")
     pinned = not args.no_pin
     if pinned and not shutil.which("taskset"):
         raise SystemExit("taskset is missing; install util-linux or pass --no-pin")
@@ -352,7 +351,7 @@ def main():
         (work / "client.agc").write_text(CLIENT)
         compile_program(work / "client.agc", work / "client.agcb")
         servers = [
-            ("VM (`examples/http_server.agc`)", [str(VM), "--", str(bytecode), "serve"]),
+            ("VM (`examples/http_server.agc`)", [str(VM), "run", "--", str(bytecode), "serve"]),
             ("Node `http`", [node, str(NODE_FILE), "server"]),
             ("Python asyncio", [sys.executable, str(Path(__file__).resolve()), "--serve", "asyncio"]),
             ("Python `ThreadingHTTPServer`", [sys.executable, str(Path(__file__).resolve()), "--serve", "threading"]),

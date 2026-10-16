@@ -49,5 +49,5 @@ jobs:
             racket-zo-test-9.3-
       - run: git ls-files -z | xargs -0 touch
       - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
-      - run: make build vm
+      - run: make build dist/agentica
       - run: make test-slow TESTS=tests/test_site_examples.py

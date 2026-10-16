@@ -168,17 +168,20 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 - Lines in `compiler/*.agc` are at most 119 characters, comments included (`compiler/agentica.toml`, `[style]`), checked by `tests/test_style_line_width.py`. Break a call or list one item per line with a trailing comma, wrap a long expression in parentheses, and flow a doc block over several `##` lines (a generated file comes out of its tool at that width: `tools/agc-format.rkt`).
 - Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into a few sentence-sized pieces joined with `+`, never one piece per line.
 
-## The command line in Agentica (step 8a)
+## The command line in Agentica (step 8a, the product since 8d-2)
 
-`compiler/cli.agc` is the command line of `src/main.rkt`: `Cli.run(settings, words, host, hand_off) -> Int`. It reads the
+`compiler/cli.agc` is the command line of the binary: `Cli.run(settings, words, hand_off) -> Int`. It reads the
 options like Racket's `command-line` (`cli_options.agc`, first error wins, `--version` and `-h` answer at once), then
 runs `check`, `compile`, `help`, `test` or a source file, through `pipeline.agc` (the stages the BDD driver shares).
 A command does not print: it answers with a `Reply` (code, stdout, stderr) and `cli.agc` writes it. A diagnostic is
 printed as plain text (`diagnostic_plain.agc`, with the text of its file read again by `SourceFile.read_shown`), `--ai` text
 (`diagnostic_ai.agc`) or the JSON of `diagnostic_json.agc`; the root file is named as typed, imported files by canonical path. `hand_off` is a function value
-(`&Spawn.hand_off`): the ordinary run starts `agentica-vm` on a private file and passes stdin and stdout through byte by
-byte under `/bin/sh` (`cli_spawn.agc`, see the limits in §35.4); the single binary passes one that calls `FrontEnd.hand_off`
-(`front_end_cli.agc`; its `test` answers status 2 until step 8d). `cli_main.agc` is the runner of an ordinary run
-(`make cli`, `tests/agentica-agcb`). A change to `src/main.rkt` or `src/diagnostic.rkt`
+that calls `FrontEnd.hand_off` (`front_end_cli.agc`); an ordinary run is in the process of the binary, with no child and no
+temporary file. `agentica run` is not here: C answers it when it is the first word (`vm/agentica.c`), so `cli.agc` only
+answers a later `run` with a usage error (`Texts.run_first_text`). `test` runs the BDD driver in the same process; the
+front end runs with `--allow-run`, and the driver starts the runner as `settings.self_path run ...`; without `--self` it
+answers status 2. A front end that stops with an error exits 2. A change to `src/main.rkt` or `src/diagnostic.rkt`
 (a bug fix) changes these modules in the same PR; `tests/test_cli_parity.py` compares the two. `cli_text.agc` keeps the
-help texts of `src/main.rkt` as data, and the parity test catches a drift.
+help texts of `src/main.rkt` as data, and the parity test catches a drift. To try a change to `compiler/` without the
+build chain, run the front end as a program: `dist/agentica run --allow-run -- build/stage/stage2.agcb --version V
+--stdlib stdlib --self PATH -- WORDS` (`tests.agentica_test.front_end_command` builds that command).

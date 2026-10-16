@@ -31,7 +31,8 @@ becomes a resource field that `process.c` sets (V3).
 Line numbers in this section are from the tree after the moves of §15.7 item 1
 (master at d99f273 plus PR 1), except what V1 to V5 of §15.6 say about the code
 before it moved; the header split moved no line of a `.c` file except the
-`#include` lines of `main.c`, `builtin_tables.c`, `fuzz.c` and `fuzz_main.c`.
+`#include` lines of `agentica.c`, `launch.c`, `builtin_tables.c`, `fuzz.c` and
+`fuzz_main.c`.
 
 ### 15.1 Layers
 
@@ -40,7 +41,7 @@ before it moved; the header split moved no line of a `.c` file except the
 | **Core** | `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
 | **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `tree.c`, `stream.c`, `duplex.c`, `process.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
 | **Adapters** | `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c` (`http_parse.h`) | their own header, their library, and from `value.h` only the memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`, `agc_size_mul`, `agc_out_of_memory`) |
-| **Driver** (not a layer: it wires them) | `main.c`, `builtin_tables.c` (§15.6 V2), `fuzz.c`, `fuzz_main.c` | everything |
+| **Driver** (not a layer: it wires them) | `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6 V2), `fuzz.c`, `fuzz_main.c` | everything |
 
 `vm/tests/*.c` may use everything. `trace.h` (tracing; `agc_trace_emit` is used
 by `http_client.c`, `process.c` and `tcp.c`) is shared by every layer but the
@@ -365,7 +366,7 @@ port.
 | V8 | `value.c:268-322`, `457-496`; `text.c:105-112`; `value.h` (`agc_tag`) | the tag enum, constructors, `agc_as_*` and the printed names (`<Socket>`, `<Process>`, ...) of service values live in the core | **Accepted**: the tag set is one closed enum that the loader, `text.c` and `equal.c` need; no service code is called |
 | V9 | `port.h` (`struct agc_task`, `struct agc_vm`, `agc_runtime`), `task.c:409` | service state in core structs: `agc_task`'s `test`, `note` and `test_run` (a spawned task inherits `test`), `agc_vm.process_guard`, and the `allow_run`, `drop_uring_env` and `no_files` settings | **Accepted**: opaque pointers and settings, no calls. The driver sets the settings |
 | V10 | `output.c:78`, `output.c:528`, `input.c:268`, `input.c:375` | 25b's `mid_line` and `agc_write_record`, the reserved stdin and `agc_protocol_line` (core code that exists for `testing.c`) | **Removed (done, 25c, row 7.2.1a):** the child protocol moved to fd 3 (`vm/duplex.c`); `mid_line`, `agc_write_record`, the reserved stdin and `agc_protocol_line` are gone |
-| V11 | `main.c:189`, `385-392`, `482`, `488` | the driver calls `agc_files_init`, `agc_files_close`, `agc_parent_take`, `agc_tls_version` and `agc_json_version` | **Accepted**: `main.c` is the driver |
+| V11 | `main.c:189`, `385-392`, `482`, `488` (now `agentica.c` and `launch.c`) | the driver calls `agc_files_init`, `agc_files_close`, `agc_parent_take`, `agc_tls_version` and `agc_json_version` | **Accepted**: `agentica.c` is the driver |
 | V12 | `http_body.c:142-146` | an adapter calls `agc_size_mul` and `agc_out_of_memory` | **Accepted**: memory only, so out of memory keeps its exit code (§6.3); rule 8 of §15.5 keeps it to memory |
 | V13 | `loop.c` (`agc_owned_of`), 20c | the core reads the `state` field of `agc_http_server` too, so a server passed to `Task.spawn_owning` can be handed over | **Accepted with V7**, for the same reason. 24b kept the lookup in `agc_task_spawn_owning`; the fix, if it is ever wanted, is a resource found through a field the service sets at `agc_register`, not a tag list in the core |
 | V14 | `task.c:264` (`quiet_slot`), 20c | the crash list reads `hidden` and `t->test` to keep one entry per test for HTTP connection tasks | **Accepted with V6**: a flag the service sets, read by the core; no service call |

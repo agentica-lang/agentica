@@ -22,7 +22,7 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
 #define BLOCK_COST ((size_t)64)
 #endif
 
-static const char oom_line[] = "agentica-vm: out of memory\n";
+static const char oom_line[] = "agentica: out of memory\n";
 
 #ifdef AGC_NO_GC
 static void **owned; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -43,7 +43,7 @@ static void *on_gc_oom(size_t size) {
   return NULL;
 }
 
-static const char gc_error_line[] = "agentica-vm: internal GC error\n";
+static const char gc_error_line[] = "agentica: internal GC error\n";
 
 static void on_gc_abort(const char *message) {
   (void)message;

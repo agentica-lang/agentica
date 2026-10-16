@@ -1,36 +1,24 @@
 # `agentica test`: BDD and unit test runner
 
-How `agentica test` works: the driver (`compiler/bdd.agc`, `src/bdd-driver.rkt`), `std/bdd`, the runner in `stdlib/test/`, step programs, unit test files and the child channel records. Read before changing any of them.
+How `agentica test` works: the driver (`compiler/bdd_driver.agc`, part of the front end), `std/bdd`, the runner in `stdlib/test/`, step programs, unit test files and the child channel records. Read before changing any of them.
 
 ## BDD (`agentica test`)
 
 `agentica test` runs on the VM and is written in Agentica (phase 21; user docs and the runner protocol in `docs/bdd.md`). `std/bdd` is the public step API; `std/bdd/gherkin` and `std/bdd/match` (Gherkin parsing and step matching) and `std/test/runner` and `std/test/report` (the runner and report, shared by BDD and unit tests) are internal (importable through `std/` like any registered module, but not in the programming skill or the site). All are registered in `src/stdlib.rkt`.
 
-- `src/bdd-driver.rkt` (`run-agentica-test arguments step-files #:style
-  #:allow-run #:seed #:vm [#:test-timeout-ms]`, returns `(values code text)`) is
-  only the hand-off (§35.4 step 7)
-  - it writes a private 0600 copy of `dist/agentica-bdd-driver.agcb`
-    (`find-bdd-driver`; `make bdd-driver` builds it from `compiler/bdd.agc`) in
-    the temporary directory, runs it on the VM as `--allow-run --driver-pid
-    PID -- COPY --vm VM --version V --style S [--allow-run] [--seed N] --test-timeout-ms N
-    --agentica WORD... -- [--steps FILE]... ARGUMENTS` (a VM with
-    `--driver-pid` reads only a private file and deletes it), sends the
-    embedded `std/` sources on its stdin as `{"files": [{"path", "text"}]}`,
-    and returns its stdout and exit code; its stderr is shown at once; a
-    driver that stops on a runtime error prints nothing, and that is exit 2,
-    not 1 ("the tests failed")
-  - a missing VM, a missing driver or a temporary directory it cannot write is a
-    plain message on stderr and exit 2, as for `agentica file.agc`
-  - the tests that need a fake runner VM set `AGENTICA_VM` to a script that runs
-    the real VM unless it is asked for `runner.agcb` (`fake_vm` in
-    `tests/test_bdd.py`), since the driver runs on that VM too.
-- The Agentica command line (`compiler/cli.agc`, step 8a) does not go through the
-  hand-off: `test` calls `Driver.run_with(options, settings)` in its own process,
-  with the settings of the command line in place of the `std/` sources on stdin,
-  so `AGENTICA_VM` runs only the runner and the programs under test there. In the
-  single binary `test` answers status 2 until step 8d (the front end runs without
-  `--allow-run`). `make test-cli` runs this file on it.
-- `compiler/bdd.agc` (the driver, over `compiler/bdd_*.agc`; `bdd_options.agc`
+- `agentica test` is part of the front end of the binary (§35.4 steps 7 and 8; `compiler/cli.agc` calls
+  `Driver.run(options, settings)` in its own process, with the settings of the command line: the version, the provider
+  of the `std/` sources and `self_path`, the path of the binary). The runner and each program under test are children
+  of the same binary: `settings.self_path run --allow-run [--seed N] --driver-pid PID -- runner.agcb config.jsonl`,
+  and `self_path --allow-run ... FILE.agc` for a program under test (`std/bdd`). The front end runs with `--allow-run`
+  so it can start them; the user's program never runs in that runtime. A front end that stops on a runtime error (a
+  bug in the driver) ends the process with status 2 and the error on stderr, never the 1 of a failed test run.
+  Without `--self` (the front end started as an ordinary program) `test` says so and exits 2.
+  - the tests that need a fake runner run the front end as an ordinary program with `--self` naming a shell script
+    that fakes the runner when it is asked for `runner.agcb` and runs the real binary otherwise
+    (`front_end_command` and `fake_binary` in `tests/agentica_test.py` and `tests/test_bdd.py`);
+  - a missing binary is the driver's `cannot find agentica at PATH` infrastructure report in the chosen format.
+- `compiler/bdd_driver.agc` (the driver, over `compiler/bdd_*.agc`; `bdd_options.agc`
   reads the arguments, usage errors included)
   - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the
     temporary directory (`TMPDIR` if it is a folder, else `/var/tmp`,
@@ -50,8 +38,8 @@ How `agentica test` works: the driver (`compiler/bdd.agc`, `src/bdd-driver.rkt`)
     `Runner.main()` (`bdd_compile.agc`: the Agentica pipeline from a file to
     the bytes, or the first `Problem`) into 0600 `.agcb` files, discovers the
     feature files (`bdd_discover.agc`), writes `config.jsonl`, and runs the
-    runner VM with `--allow-run [--seed N] --driver-pid PID -- runner.agcb
-    config.jsonl` as a captured child (`bdd_runner.agc`; the child environment
+    runner with `run --allow-run [--seed N] --driver-pid PID -- runner.agcb
+    config.jsonl` of the binary, as a captured child (`bdd_runner.agc`; the child environment
     has no metrics variables, a rule of every `Process.spawn*`)
   - `Process.spawn_captured` keeps 1 MiB of each stream, and the report of a big
     run is larger, so the runner writes the report to `report.txt` of the run

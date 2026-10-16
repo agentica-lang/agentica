@@ -4,7 +4,7 @@
 
 - **Goldens.** `tests/test_vm_diff_*.py` (eight shards of
   `tests/vm_diff_support.py`) run each fixture of `tests/fixtures/vm/` on
-  `dist/agentica-vm` with `--json`. They compare the exit code, stdout, the
+  `dist/agentica run` with `--json`. They compare the exit code, stdout, the
   program's own stderr and the diagnostic code with the golden
   `<name>.expected`. A golden is JSON: `exit`, `code` (a string or `null`),
   `steps`, and `stdout` and `stderr` as lists of lines. With `--json` the
@@ -105,8 +105,8 @@ checklist is in `docs/roadmap/07-vm.md`.
 3. Strings and printing: strings, interpolation, debug forms, the write-escape
    generator, the three diagnostic formats, exit codes and the GC stress run.
    Done.
-4. macOS and Windows CI: `make vm vm-test` and the differential and bytecode
-   tests on `macos-15` and `windows-2025`. Done.
+4. macOS and Windows CI: the C tests (`make vm-test`; before 8d-2 also the
+   differential and bytecode tests) on `macos-15` and `windows-2025`. Done.
 5. Data, in five parts. Done.
    - 5a Lists: `List[T]`, list literals, `for x in xs`, indexing. Done.
    - 5b Structs, enums and `case`: user structs and enums, format version 2.

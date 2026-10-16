@@ -15,6 +15,8 @@
 
 #include "trace.h"
 
+/* The first four bytes of every .agcb file. */
+#define AGC_MAGIC "AGCB"
 #define AGC_FORMAT_VERSION 5
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000

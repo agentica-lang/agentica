@@ -5,6 +5,7 @@ tools/jscpd/node_modules/
 tests/eval/results/
 __pycache__/
 *.agcb
+!/bootstrap/stage0.agcb
 site/public/
 site/resources/
 .hugo_build.lock

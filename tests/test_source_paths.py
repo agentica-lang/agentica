@@ -3,12 +3,12 @@
 The root is the folder of the entry file. The bytes must not depend on where
 the project lives or on how the entry file is named on the command line. A
 runtime trace prints the stored name, and the CLI puts the entry's folder (as
-seen from the working directory) before it with `agentica-vm --source-root`.
+seen from the working directory) before it with `agentica run --source-root`.
 """
 import shutil
 import struct
 
-from tests.agentica_test import TestCase, cli, compile_agc, run, run_vm, vm_binary, vm_environment
+from tests.agentica_test import TestCase, cli, compile_agc, run, run_vm, vm_command, vm_environment
 
 MAIN = """import Util from "lib/util"
 import Shared from "../shared/x"
@@ -183,7 +183,7 @@ class SourcePathsTest(TestCase):
         self.assertEqual(twice.code, 2)
         # A missing folder, "--" taken as the folder, and a folder that is not UTF-8 are usage errors.
         env = vm_environment()
-        missing = run([vm_binary(), "--source-root"], env=env)
+        missing = run([*vm_command(), "--source-root"], env=env)
         taken_dashes = run_vm(bytecode, "--source-root", "--", env=env)
         not_utf8 = run_vm(bytecode, "--source-root", "\udcff", env=env)
         for usage in (missing, taken_dashes, not_utf8):
@@ -241,4 +241,4 @@ class SourcePathsTest(TestCase):
         refused = run_vm(padded, "--source-root", "r" * 100000, env=env)
         self.assertEqual(refused.code, 2)
         self.assertEqual(refused.stdout, "")
-        self.assertEqual(refused.stderr, "agentica-vm: --source-root is too long for this program\n")
+        self.assertEqual(refused.stderr, "agentica run: --source-root is too long for this program\n")

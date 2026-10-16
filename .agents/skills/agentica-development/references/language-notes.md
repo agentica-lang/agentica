@@ -9,7 +9,7 @@ What the checker enforces and the VM keeps for each core language area: Result a
 - IO.gets now returns Result[String]; IO.gets! is the old String-returning/halting form. Migrate callers in tests/eval/tasks as well as examples, without repairing intentional starter bugs or changing hidden cases. Non-bang conversions recover only their documented failures.
 - Function suffixes allow whitespace before `(`; `!=` remains an operator. Empty map inference uses `CHECK-EMPTY-MAP-TYPE`.
 - `--max-steps` counts every expression/statement entry, including loop conditions, per run. The CLI validates the input; check never executes. This is not a blocking-I/O timeout.
-- A rebase changing AST/diagnostic layouts may leave stale ignored Racket bytecode. For an instantiate-linklet struct mismatch, use `make clean && make build && make test`; rebuild the binary with make exe before evaluation.
+- A rebase changing AST/diagnostic layouts may leave stale ignored Racket bytecode. For an instantiate-linklet struct mismatch, use `make clean && make build && make test`; rebuild the binary with make before evaluation.
 - `tests/eval/diagnostics.py` counts the diagnostics agents saw in `tests/eval/results` (see `docs/eval.md`). It counts only bash commands that run `agentica` or `racket ... main.rkt`. Its tests run with `cd tests/eval && python3 -m unittest`; they are not part of `make test` or CI.
 
 ## Collections and algorithm examples (phase 5n, primitive operations)

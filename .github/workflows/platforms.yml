@@ -1,5 +1,9 @@
 name: Platforms
 
+# Since step 8d-2 the product is one Linux binary (the front end and the std/ sources are embedded with .incbin, which
+# is ELF only), so this workflow checks only that the C VM and its tests still build and pass here. The golden tests
+# run on the binary and need Linux.
+
 on:
   workflow_dispatch:
     inputs:
@@ -22,15 +26,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: Bogdanp/setup-racket@v1.15
-        with:
-          variant: CS
-          version: '9.3'
       - run: cc --version
-      - run: make vm vm-test
-      - run: make build
-      - run: make vm-diff-test JOBS=4
-      - run: raco test tests/bytecode-test.rkt
+      - run: make vm-test
 
   vm-windows:
     if: inputs.os != 'macos'
@@ -50,12 +47,5 @@ jobs:
           path-type: inherit
           update: false
           install: make mingw-w64-ucrt-x86_64-gcc
-      - uses: Bogdanp/setup-racket@v1.15
-        with:
-          variant: CS
-          version: '9.3'
       - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
-      - run: make vm vm-test
-      - run: make build
-      - run: make vm-diff-test JOBS=4
-      - run: raco test tests/bytecode-test.rkt
+      - run: make vm-test

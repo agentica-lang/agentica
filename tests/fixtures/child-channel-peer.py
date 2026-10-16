@@ -25,7 +25,7 @@ def finish(child, channel, started, extra=None):
 
 
 def serve(vm, bytecode):
-    child, channel = launch([vm, "--allow-run", "--", bytecode, "serve"])
+    child, channel = launch([vm, "run", "--allow-run", "--", bytecode, "serve"])
     reader = lines(channel)
     started = time.monotonic()
     replies = []
@@ -47,13 +47,13 @@ def serve(vm, bytecode):
 
 
 def held(vm, bytecode, mode, marker=True):
-    child, channel = launch([vm, "--allow-run", "--", bytecode, mode], marker=marker)
+    child, channel = launch([vm, "run", "--allow-run", "--", bytecode, mode], marker=marker)
     return finish(child, channel, time.monotonic())
 
 
 def marker_only(vm, bytecode, mode):
     env = dict(os.environ, AGENTICA_CHANNEL="3")
-    child = subprocess.Popen([vm, "--allow-run", "--", bytecode, mode], stdin=subprocess.DEVNULL,
+    child = subprocess.Popen([vm, "run", "--allow-run", "--", bytecode, mode], stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     return finish(child, None, time.monotonic())
 
@@ -76,7 +76,7 @@ def pinned(vm, bytecode, kind, directory):
         target = os.path.join(directory, "fifo")
         os.mkfifo(target)
         descriptor = os.open(target, os.O_RDWR)
-    child, _ = launch([vm, "--allow-run", "--", bytecode, mode], inherited=descriptor)
+    child, _ = launch([vm, "run", "--allow-run", "--", bytecode, mode], inherited=descriptor)
     os.close(descriptor)
     if kind == "fifo":
         writer = os.open(target, os.O_WRONLY)

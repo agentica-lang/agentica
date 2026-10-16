@@ -8,20 +8,20 @@ description: Install Agentica, run your first program, check it and read its err
 
 {{% release %}}
 
-Agentica programs run on a bytecode VM written in C. The `agentica` command checks a program and compiles it to bytecode with a front end written in [Racket](https://racket-lang.org/), then runs it on the VM.
+Agentica programs run on a bytecode VM written in C. The `agentica` command is one program: a front end written in Agentica itself checks a program and compiles it to bytecode in memory, and the VM runs it in the same process.
 
-To build from source you need Racket CS 9.3 or newer, a C11 compiler (gcc or clang) and `make`. On Linux the VM also needs OpenSSL 3, the Boehm GC (libgc 8.2 or newer) and `pkg-config` (Debian and Ubuntu: `libssl-dev libgc-dev pkg-config`); `make vm AGENTICA_GC=vendored` builds the Boehm GC from its submodule instead, which needs nothing else; `make vm AGENTICA_OPENSSL=vendored` builds OpenSSL from its submodule instead, which needs Perl 5 and takes a few minutes; pass either setting to every make command, or export it (`export AGENTICA_GC=vendored`). Get the source with the VM's third-party libraries, and build the `agentica` command:
+To build from source you need a C11 compiler (gcc or clang) and `make`. On Linux the VM also needs OpenSSL 3, the Boehm GC (libgc 8.2 or newer) and `pkg-config` (Debian and Ubuntu: `libssl-dev libgc-dev pkg-config`); `make AGENTICA_GC=vendored` builds the Boehm GC from its submodule instead, which needs nothing else; `make AGENTICA_OPENSSL=vendored` builds OpenSSL from its submodule instead, which needs Perl 5 and takes a few minutes; pass either setting to every make command, or export it (`export AGENTICA_GC=vendored`). The build is Linux only, and it needs no other language: it starts from the compiled front end checked in as `bootstrap/stage0.agcb`. Get the source with the VM's third-party libraries, and build the `agentica` command:
 
 ```sh
 git clone https://github.com/sonic182/agentica.git
 cd agentica
 git submodule update --init
-make exe
+make
 ```
 
-This writes `dist/agentica` and the VM next to it, `dist/agentica-vm`, and `dist/agentica-bdd-driver.agcb`, the program that `agentica test` runs. A default source build links the system OpenSSL, so `dist/` runs only on machines that have it; the release archive is portable, since its VM has OpenSSL built in. Put that directory on your `PATH`, or call the command by its full path. You can also skip `make exe`: after `make vm`, `racket src/main.rkt file.agc` does the same as `agentica file.agc`, with the VM from `dist/`.
+This writes `dist/agentica`, the only program: the VM with the front end and the standard modules inside. A default source build links the system OpenSSL, so `dist/` runs only on machines that have it; the release archive is portable, since its binary has OpenSSL built in. Put that directory on your `PATH`, or call the command by its full path.
 
-The release archive for Linux x86-64 needs none of these tools: it bundles Racket and `agentica-vm`, and runs on glibc 2.28 or newer. `agentica-bdd-driver.agcb`, the program that `agentica test` runs, sits next to the binary in `bin/`.
+The release archive for Linux x86-64 needs none of these tools: it holds the one file `bin/agentica`, and runs on glibc 2.28 or newer.
 
 ## Hello, world
 
@@ -163,7 +163,8 @@ Split text; an empty separator gives characters.
 | `--allow-run` | lets the program start other programs with `Process.spawn` |
 | `--dump` | prints the checked program tree instead of running it |
 | `--dump-ir` | prints the lowered VM IR instead of running the program |
-| `compile FILE -o OUT` | writes the program as VM bytecode; `agentica-vm -- OUT` runs it |
+| `compile FILE -o OUT` | writes the program as VM bytecode; `agentica run -- OUT` runs it |
+| `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode that `compile` wrote, with `--max-steps`, `--seed`, `--flush-timeout`, `--allow-run`, `--source-root DIR`, `--ai` or `--json` before the `--`; `run` must be the first word, and `run --version` also lists the libraries the VM links |
 | `--version` | prints the version |
 
 `agentica test` runs unit test files (`*_test.agc`, see [Test](/library/testing/test/)) and `.feature` specifications (see [BDD](/library/testing/bdd/)) in one report. With no paths it looks in `test/` and `specs/`; `--only TEXT` runs the tests and scenarios whose name contains `TEXT`.

@@ -13,7 +13,7 @@ import signal
 import stat
 import unittest
 
-from tests.agentica_test import Child, TestCase, output_lines, run_vm, start_vm, vm_binary, vm_environment
+from tests.agentica_test import Child, TestCase, output_lines, run_vm, start_vm, vm_binary, vm_command, vm_environment
 
 MODES_PROGRAM = """\
 def main() -> Void
@@ -171,7 +171,7 @@ end
 
 def run_child(vm: String, driver: Int, source: String, target: String) -> Void
   copy_private(source, target)
-  p = Result.unwrap!(Process.spawn_captured(vm, ["--driver-pid", String.from_int(driver), "--", target], ".", 5000))
+  p = Result.unwrap!(Process.spawn_captured(vm, ["run", "--driver-pid", String.from_int(driver), "--", target], ".", 5000))
   out = Result.unwrap!(Process.output(p, 10000))
   code = Result.unwrap!(Process.wait(p, 10000))
   puts("driver-pid #{driver} exit #{code} stdout #{out.stdout.trim} stderr #{out.stderr.trim}")
@@ -480,7 +480,7 @@ end
     def test_system_pid_is_the_vm_process_and_the_parent_a_child_sees(self):
         child = self.compile_text('def main() -> Void\n  puts("child ran")\nend\n', "child")
         bytecode = self.program(PID_PROGRAM, "pid")
-        vm = self.adopt(Child([vm_binary(), "--allow-run", "--", bytecode, str(vm_binary()), str(child), str(self.root)],
+        vm = self.adopt(Child([*vm_command(), "--allow-run", "--", bytecode, str(vm_binary()), str(child), str(self.root)],
                               env=vm_environment(), cwd=self.root, capture_stderr=True))
         lines = [vm.next_line() for _ in range(5)]
         self.assertEqual(vm.wait(), 0)
@@ -490,7 +490,7 @@ end
         self.assertEqual(lines[2], "parent seen by sh %d" % pid)
         # --driver-pid is checked against the parent of the child VM: this is how the driver starts the runner.
         self.assertEqual(lines[3], "driver-pid %d exit 0 stdout child ran stderr " % pid)
-        self.assertTrue(lines[4].startswith("driver-pid %d exit 2 stdout  stderr agentica-vm: --driver-pid does not "
+        self.assertTrue(lines[4].startswith("driver-pid %d exit 2 stdout  stderr agentica run: --driver-pid does not "
                                             "match the parent process" % (pid + 1)), lines[4])
 
     def test_children_never_get_the_metrics_variables_but_the_program_reads_them(self):

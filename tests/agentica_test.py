@@ -206,13 +206,29 @@ def agentica_version():
     return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
-def vm_binary():
-    """dist/agentica-vm, or AGENTICA_VM_BINARY like the Racket tests. `make test` builds it first."""
-    override = os.environ.get("AGENTICA_VM_BINARY")
-    path = (ROOT / override) if override else ROOT / "dist" / "agentica-vm"
+def binary():
+    """dist/agentica, the product. `make` builds it, and `make test` builds it first."""
+    path = ROOT / "dist" / "agentica"
     if not path.is_file():
-        _missing("the VM is not built (%s): run make vm" % path)
+        _missing("the binary is not built (%s): run make" % path)
     return path
+
+
+def vm_binary():
+    """The binary whose `run` command runs the programs: dist/agentica, or AGENTICA_VM_BINARY for another build of it
+    (the GC stress build, the vendored link, a sanitizer build). `make test` builds dist/agentica first."""
+    override = os.environ.get("AGENTICA_VM_BINARY")
+    if not override:
+        return binary()
+    path = ROOT / override
+    if not path.is_file():
+        _missing("the binary is not built (%s): run make" % path)
+    return path
+
+
+def vm_command():
+    """The words that run a compiled program: `agentica run`, followed by the flags, `--`, the file and its arguments."""
+    return [vm_binary(), "run"]
 
 
 def _missing(message):
@@ -245,25 +261,24 @@ def tool(name):
 
 
 def cli():
-    """The command that runs Agentica programs: the executable of AGENTICA_TEST_EXECUTABLE, else the Racket front end."""
+    """The command that runs Agentica programs: the executable of AGENTICA_TEST_EXECUTABLE, else dist/agentica."""
     executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
-    return [executable] if executable else ["racket", str(ROOT / "src" / "main.rkt")]
+    return [executable] if executable else [str(binary())]
 
 
-# The script that runs the Agentica command line (compiler/cli_main.agc) on the VM like the `agentica` command.
-AGCB_CLI = TESTS / "agentica-agcb"
+# The front end of the binary, as the bootstrap leaves it. `make` builds it.
+STAGE2 = ROOT / "build" / "stage" / "stage2.agcb"
 
 
-def cli_runs_tests():
-    """False for the single binary (dist/agentica-next): its front end cannot start the test runner before 8d."""
-    executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
-    return not (executable and Path(executable).name == "agentica-next")
+def front_end_command(self_path, *words):
+    """The command that runs the front end of the binary as an ordinary program, with `self_path` as the binary it
+    starts again for `agentica test`: a test can put a script there and see what the driver does with the answers.
 
-
-def cli_is_agentica():
-    """True when cli() is the command line written in Agentica (make test-cli), which is not the default yet."""
-    executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")
-    return bool(executable) and Path(executable).resolve() == AGCB_CLI.resolve()
+    Without --front-end the program has no hand-off and no embedded std/ sources: it reads them from stdlib/, and it
+    needs --allow-run because `test` starts processes (the binary does not: its front end has it)."""
+    require(STAGE2.is_file(), "the front end is not built (%s): run make" % STAGE2)
+    return [*vm_command(), "--allow-run", "--", STAGE2, "--version", agentica_version(), "--stdlib", ROOT / "stdlib",
+            "--self", self_path, "--", *words]
 
 
 def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=None, stderr_to=None):
@@ -317,8 +332,8 @@ def compile_agc(source, output):
 
 
 def run_vm(bytecode, *flags, args=(), **options):
-    """Run `dist/agentica-vm [flags] -- bytecode [args]`; options go to run()."""
-    return run([vm_binary(), *flags, "--", bytecode, *args], **options)
+    """Run `dist/agentica run [flags] -- bytecode [args]`; options go to run()."""
+    return run([*vm_command(), *flags, "--", bytecode, *args], **options)
 
 
 # The tests do not read these from their own environment: a trace or a trust store set by the caller would change
@@ -444,8 +459,8 @@ class Child:
 
 
 def start_vm(bytecode, *args, flags=(), env=None, **options):
-    """Start `dist/agentica-vm [flags] -- bytecode [args]` as a Child (stderr captured), with vm_environment()."""
-    return Child([vm_binary(), *flags, "--", bytecode, *args], env=vm_environment(env), capture_stderr=True, **options)
+    """Start `dist/agentica run [flags] -- bytecode [args]` as a Child (stderr captured), with vm_environment()."""
+    return Child([*vm_command(), *flags, "--", bytecode, *args], env=vm_environment(env), capture_stderr=True, **options)
 
 
 def output_lines(text):

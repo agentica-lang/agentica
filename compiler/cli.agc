@@ -2,10 +2,12 @@
 ## does what the first word asks: run a program, `check` it, `compile` it to a file, print `help`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
-## settings (the Agentica version, the provider of the `std/` sources), the words the user typed, the `Host` (the VM
-## and the command for `agentica test`) and `hand_off`, the function that runs a compiled program and gives back its
-## exit status. In an ordinary run (cli_main.agc) `hand_off` starts `agentica-vm` on a file; the single binary
-## (front_end_cli.agc) hands the bytes to C.
+## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
+## starts again), the words the user typed and `hand_off`, the function that runs a compiled program and gives back its
+## exit status (front_end_cli.agc hands the bytes to C).
+##
+## `agentica run [OPTIONS] -- FILE.agcb [ARGS...]`, which runs a compiled program, is not here: C answers it before it
+## starts this front end.
 ##
 ## The exit status is the one of the Racket command line: 0 on success, 1 for a diagnostic (printed on stderr in the
 ## style `--ai` or `--json` asks), 2 for a usage error or a file it cannot read or write; a program that runs gives
@@ -18,7 +20,7 @@ import SourceRoot from "bdd_source_root"
 import Problems from "check_failure"
 import CheckText from "check_text"
 import Options from "cli_options"
-import Host from "cli_host"
+import Launch from "cli_launch"
 import Help from "cli_help"
 import Reply from "cli_reply"
 import Texts from "cli_text"
@@ -32,29 +34,25 @@ import Pipeline from "pipeline"
 import Resolve from "resolve_import"
 import SaveFile from "save_file"
 import SourceFile from "source_file"
-import Spawn from "cli_spawn"
 
 # The deadline of each call that writes the output of `compile`, in milliseconds.
 SAVE_TIMEOUT = 60000
 
-# What one run is given besides the words of the user: the options read in front of them, the settings, the host and
-# the hand-off.
+# What one run is given besides the words of the user: the options read in front of them, the settings and the
+# hand-off.
 struct Session
   options: Options.Options
   settings: Env.Settings
-  host: Host.Host
-  hand_off: Fn[Host.Host, Host.Launch, Int]
+  hand_off: Fn[Launch.Launch, Int]
 end
 
 ## Runs the command line `args` (the words after the program name) and gives the exit status. Everything it writes goes
 ## to the standard streams of this process.
-export def run(
-  settings: Env.Settings, args: List[String], host: Host.Host, hand_off: Fn[Host.Host, Host.Launch, Int]
-) -> Int
+export def run(settings: Env.Settings, args: List[String], hand_off: Fn[Launch.Launch, Int]) -> Int
   case Options.parse(args, settings.version)
     Options.Parsed.Answer(reply) -> return emit(reply)
     Options.Parsed.Ready(options) ->
-      return dispatch(Session(options: options, settings: settings, host: host, hand_off: hand_off))
+      return dispatch(Session(options: options, settings: settings, hand_off: hand_off))
   end
 end
 
@@ -69,6 +67,8 @@ def dispatch(session: Session) -> Int
     return test(session, words.drop(1))
   elsif first == "help"
     return emit(Help.help(words, session.options.style))
+  elsif first == "run"
+    return emit(Reply.failed(2, Texts.run_first_text()))
   end
   rest = words
   if first == "check" or first == "compile"
@@ -121,8 +121,8 @@ def checked(session: Session, verb: String, rest: List[String], front: Pipeline.
       if verb == "compile"
         return save(rest[2], bytes)
       end
-      launch = Host.Launch(bytes: bytes, flags: vm_flags(session.options, source), arguments: rest.drop(1))
-      return session.hand_off.call(session.host, launch)
+      launch = Launch.Launch(bytes: bytes, flags: vm_flags(session.options, source), arguments: rest.drop(1))
+      return session.hand_off.call(launch)
   end
 end
 
@@ -222,19 +222,17 @@ def text_of(read: SourceFile.Read) -> String
 end
 
 # `agentica test`: the BDD driver (bdd_driver.agc), in this process. The words after `test` go to it as they are,
-# with the options in front of `test` and what only this process knows. Without a VM nothing can run: one line on
-# stderr and status 2, as for a program.
+# with the options in front of `test` and what only this process knows: the binary, which the driver starts again as
+# `agentica run` for the runner and for the programs under test (and the programs under test start it for `agentica
+# FILE`). A front end that was not told where the binary is (no --self) cannot do that: one line on stderr, status 2.
 def test(session: Session, words: List[String]) -> Int
   options = session.options
-  host = session.host
-  if host.no_tests != ""
-    return emit(Reply.failed(2, "agentica: #{host.no_tests}\n"))
-  end
-  if !Spawn.runnable?(host.vm)
-    return emit(Reply.failed(2, "#{Spawn.missing_text(host.vm)}\n"))
+  binary = session.settings.self_path
+  if binary == ""
+    return emit(Reply.failed(2, Texts.test_without_binary_text()))
   end
   driver: List[String] = [
-    "--vm", host.vm, "--version", session.settings.version, "--style", options.style,
+    "--vm", binary, "--version", session.settings.version, "--style", options.style,
     "--test-timeout-ms", "30000",
   ]
   if options.allow_run
@@ -243,10 +241,7 @@ def test(session: Session, words: List[String]) -> Int
   if options.seed != ""
     driver = driver.concat(["--seed", options.seed])
   end
-  for word in host.command
-    driver = driver.concat(["--agentica", word])
-  end
-  driver = driver.push("--")
+  driver = driver.concat(["--agentica", binary, "--"])
   for steps in options.steps
     driver = driver.concat(["--steps", steps])
   end
@@ -254,7 +249,7 @@ def test(session: Session, words: List[String]) -> Int
     Opts.Parsed.Broken(message) ->
       return emit(Reply.failed(2, "agentica: the test driver was started wrongly: #{message}\n"))
     Opts.Parsed.Usage(message, shown) -> return finish(Report.usage(message, shown))
-    Opts.Parsed.Ready(ready) -> return finish(Driver.run_with(ready, session.settings))
+    Opts.Parsed.Ready(ready) -> return finish(Driver.run(ready, session.settings))
   end
 end
 

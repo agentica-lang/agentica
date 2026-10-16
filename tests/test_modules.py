@@ -2,15 +2,14 @@
 
 Each case writes a few modules into a temporary folder and runs the root program with `--json`, or runs a CLI command
 that shows how imports resolve. The linker's and the checker's diagnostics for the same programs stay in
-modules-test.rkt until the Racket front end goes. With AGENTICA_TEST_EXECUTABLE set to a built executable these cases
-run on it (make test-exe).
+modules-test.rkt until the Racket front end goes. The cases run on dist/agentica, or on the executable that
+AGENTICA_TEST_EXECUTABLE names.
 """
 import json
 import os
 import shutil
-import unittest
 
-from tests.agentica_test import ROOT, TestCase, cli, cli_runs_tests, report_cases, run, vm_environment
+from tests.agentica_test import ROOT, TestCase, cli, report_cases, run, vm_environment
 
 EXAMPLE = ROOT / "examples" / "json-modules.agc"
 
@@ -166,7 +165,6 @@ class Modules(TestCase):
         _out, limited, _errors = self.run_root(directory, max_steps=30)
         self.assertEqual(limited["code"], "RUNTIME-STEP-LIMIT")
 
-    @unittest.skipUnless(cli_runs_tests(), "the single binary cannot start the test runner yet (step 8d)")
     def test_a_bdd_step_program_imports_its_handlers_which_share_std_bdd(self):
         directory = self.files({
             "steps.agc": "import BDD from \"std/bdd\"\nimport Assertions from \"assertions\"\n\ndef main() -> Void\n  BDD.run([BDD.step(\"it works\", &Assertions.verify)])\nend\n\n",

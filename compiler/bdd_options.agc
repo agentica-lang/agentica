@@ -1,8 +1,8 @@
 ## The arguments of the BDD driver.
 ##
-## `agentica test` (src/main.rkt, src/bdd-driver.rkt, and cli.agc, which calls the driver in its own process) gives
-## the driver `DRIVER_OPTIONS -- ARGUMENTS`. The driver options say what only the front end knows: `--vm PATH` (the VM
-## that runs the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
+## `agentica test` (cli.agc, which calls the driver in its own process) gives the driver `DRIVER_OPTIONS -- ARGUMENTS`.
+## The driver options say what only the front end knows: `--vm PATH` (the binary, which the driver starts as `agentica
+## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
 ## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`, `--allow-run`,
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
 ## `--only TEXT`, `--json`, `--ai` and `--allow-run`.

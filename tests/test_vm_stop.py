@@ -11,7 +11,7 @@ import signal
 import threading
 import time
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, cli, process_alive, scaled, start_vm, vm_binary,
+from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, cli, process_alive, scaled, start_vm, vm_command,
                                  vm_environment, wait_until)
 
 PEER = FIXTURES / "stop-peer.py"
@@ -103,7 +103,7 @@ class VmStop(TestCase):
 
     def launch(self, disposition, *argv, **options):
         """The VM started by stop-peer.py with SIGHUP, SIGINT and SIGTERM set to `disposition` (default or ignore)."""
-        return self.adopt(Child([PYTHON, PEER, "launch", disposition, vm_binary(), *argv], **options))
+        return self.adopt(Child([PYTHON, PEER, "launch", disposition, *vm_command(), *argv], **options))
 
     def check_stopped(self, pid, path, label):
         self.assertEqual(path.read_text(), "buffered", label)
@@ -165,7 +165,7 @@ class VmStop(TestCase):
 
     def test_a_driven_vm_whose_driver_died_does_not_wait_for_its_flush(self):
         fifo = self.full_fifo()
-        driver = self.adopt(Child([PYTHON, PEER, "drive", vm_binary(), "--", self.bytecode(STUCK_FLUSH), fifo]))
+        driver = self.adopt(Child([PYTHON, PEER, "drive", *vm_command(), "--", self.bytecode(STUCK_FLUSH), fifo]))
         pid = int(driver.next_line(WAIT_SECONDS))
         driver.wait(WAIT_SECONDS)
         self.assertTrue(gone_soon(pid), "the VM ends after its driver")
@@ -202,7 +202,7 @@ class VmStop(TestCase):
         source.write_text(child_program("trap '' INT TERM; "), encoding="utf-8")
         # The CLI, the VM and the child share the Child's session and process group, as a terminal's Ctrl-C reaches them.
         cli_child = self.adopt(Child(cli() + ["--allow-run", source, path, "sleep"],
-                                     env=vm_environment({"AGENTICA_VM": vm_binary()}), capture_stderr=True))
+                                     env=vm_environment(), capture_stderr=True))
         pid = int(cli_child.next_line(6 * WAIT_SECONDS))
         os.killpg(cli_child.process.pid, signal.SIGINT)
         cli_child.wait(WAIT_SECONDS)

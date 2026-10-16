@@ -1,9 +1,0 @@
-#!/bin/sh
-# The Agentica command line (compiler/cli_main.agc) as the `agentica` command: AGENTICA_TEST_EXECUTABLE for the tests
-# that run the product CLI (make test-cli). It runs dist/agentica-cli.agcb on dist/agentica-vm with the version, the
-# stdlib/ folder and the VM it needs. AGENTICA_VM_BINARY names another VM, like the Python tests.
-root=$(cd "$(dirname "$0")/.." && pwd)
-vm=${AGENTICA_VM_BINARY:-$root/dist/agentica-vm}
-program=$root/dist/agentica-cli.agcb
-exec "$vm" --allow-run -- "$program" --version "$(cat "$root/VERSION")" --stdlib "$root/stdlib" --vm "$vm" \
-  --program "$program" -- "$@"
