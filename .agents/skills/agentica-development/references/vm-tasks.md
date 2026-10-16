@@ -119,6 +119,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `error(t->crash)`; a non-`Result` item result is `RUNTIME-INTERNAL`
   - an item that ends after its deadline but before the caller runs keeps its
     result
+  - an item with a file close pending (`closing`) is not settled, as for
+    `Task.await`: `item_ended` puts the hook back on the task and
+    `agc_task_close_done` calls it when the last close ends
 - `vm/channel.c`
   - the `Channel` builtins (`agc_channel_builtins`,
     `docs/future/27-iteration-and-concurrency.md` §27.2,

@@ -652,7 +652,7 @@ Files that land after this scan and before phase 16 must be counted again by
 each PR: the programs of phase 17 (order step 7.3 for `Task.map` and row 7.2.1e
 for channels, [section
 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections)),
-with their golden fixtures, checker tests, `tests/vm-task-map-test.rkt` and site
+with their golden fixtures, checker tests, `tests/test_vm_task_map.py` and site
 pages; the programs of HTTP streaming and `TlsContext` (order step 7.4); and the
 `std/` modules of order row 7.2.4 (`std/binary`, phase 13) and of order step 7.5
 (`std/logger`, 14c), with their site pages and tests; they matter to 26.1, 26.2

@@ -238,12 +238,15 @@ section says how the scheduler and the loop keep them, as built.
     through its caller: the caller, a stepper parked on the group's timer, is
     cancelled like any parked task (the timer job is detached), cancels its
     children first, never runs the step function again, and so starts nothing
-    and writes no slot. An item that ends after its deadline but before the
-    caller runs keeps its result. The handles an item opened are closed when it
-    ends or is cancelled (Owners); an I/O job it had in flight is detached and
-    ends on its own. With more than one scheduler (not built) the hook runs on the
-    item's scheduler while the step function runs on the caller's, so the
-    group needs its small lock (10.2.3, Task.map group lock).
+    and writes no slot. An item that still has a file close pending (`closing`,
+    as `Task.await` checks) is not settled: the hook puts itself back and
+    `agc_task_close_done` calls it when the last close ends. An item that ends
+    after its deadline but before the caller runs keeps its result. The handles
+    an item opened are closed when it ends or is cancelled (Owners); an I/O job
+    it had in flight is detached and ends on its own. With more than one
+    scheduler (not built) the hook runs on the item's scheduler while the step
+    function runs on the caller's, so the group needs its small lock (10.2.3,
+    "Task.map group lock").
 - **Stall check (N=1).** If the queue is empty, no libuv handle is alive, and
   `main` is not done, the VM fails with `RUNTIME-INTERNAL` ("every task is
   waiting and nothing can wake them"). No program reaches it: every channel wait

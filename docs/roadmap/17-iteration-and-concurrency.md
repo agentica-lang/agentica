@@ -67,10 +67,10 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   program cannot reach it before channels. Appended builtin, no format bump.
   Hints for `Task.async_stream`, `Task.async`, `Parallel.map` and `Thread.new`.
   Tests: the checker tests, golden fixtures and C tests of §27.1,
-  `tests/vm-task-map-test.rkt`, planned like `tests/test_vm_latency.py` (in
-  `test-omit-paths` of `tests/info.rkt`, its own `make vm-task-map` target, a CI
-  step in the `test` job after `make vm-latency`, a line in the Commands section
-  of `AGENTS.md`), which holds every timing-dependent case of phase 17, since
+  `tests/test_vm_task_map.py`, like `tests/test_vm_latency.py` (in `PY_ALONE`
+  of the Makefile, its own `make vm-task-map` target, a CI step in the `test`
+  job after `make vm-latency`, a line in the Commands section of `AGENTS.md`),
+  which holds every timing-dependent case of phase 17, since
   golden fixtures record step counts and run the `--max-steps` sweep and must
   not depend on timing (concurrency bound, timing with safe bounds, timeout,
   cancellation of a grandchild whose parent ended and of a nested `Task.map`
@@ -79,7 +79,7 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   `http.server.ThreadingHTTPServer` counterpart (with a timed-out request that
   leaves no open socket). From 17b (decided 2026-10-14): the two
   `RUNTIME-TASK-CANCELLED` cases of §27.2 and the `Task.map` form of its
-  hand-off case, in `tests/vm-task-map-test.rkt`. Docs: `grammar.md`
+  hand-off case, in `tests/test_vm_task_map.py`. Docs: `grammar.md`
   ("Lightweight tasks", §7 hints), `references/tasks.md` (the `limit` sentence
   and the handle rules of §27.1), `site/content/library/concurrency/task.md` and
   `site/content/tour/tasks.md`, `docs/vm/10-io-scheduler.md` §10.2.1 and
@@ -96,27 +96,30 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   hook on the task (`end`, `end_data`) tells the group that an item ended; a
   cancelled caller needs no `dead` flag, since it never runs again and its items
   are cancelled children-first, and the hook ignores a cancelled item. An item
-  that ends after its deadline but before the caller runs keeps its result. The
-  result list costs one turn unit per item (`agc_charge`). The handles an item
-  opened are closed when it ends or is cancelled (24b), so the sentence above
-  about a leak no longer holds; the detached HTTP request closes its connection
-  when it ends. Checker: `Rule.TaskMap` and the catalog row, the
+  that ends after its deadline but before the caller runs keeps its result. An
+  item with a file close pending is settled when the last close ends (the hook
+  puts itself back and `agc_task_close_done` calls it again), as `Task.await`
+  waits for it. The result list costs one turn unit per item (`agc_charge`). The
+  handles an item opened are closed when it ends or is cancelled (24b), so the
+  sentence above about a leak no longer holds; the detached HTTP request closes
+  its connection when it ends. Checker: `Rule.TaskMap` and the catalog row, the
   `Slot.InferResult` slot for a block whose `Result[T]` is inferred (`try` works
   in it; `R` from the expected type or the first value; a first value of
-  `error(...)` needs the annotation, `CHECK-RESULT-TYPE`), the hints. Tests: ten
-  golden fixtures (`task-map-*` and `step-limited/task-map-runaway`), the spec
-  cases in `tests/fixtures/spec/checker-rest.json`, two C cases in
+  `error(...)` needs the annotation, `CHECK-RESULT-TYPE`), the hints. Tests:
+  eleven golden fixtures (`task-map-*`, one of them with files that the items
+  leave open, and `step-limited/task-map-runaway`), the spec cases in
+  `tests/fixtures/spec/checker-rest.json`, two C cases in
   `vm/tests/task_cancel_test.c` (a parked caller cancelled; items that run out
   of time), and `tests/test_vm_task_map.py` in place of the Racket file
   (`PY_ALONE`, `make vm-task-map`, a CI step after `make vm-latency`): the bound
   on the items in flight, HTTP against a `ThreadingHTTPServer`, timeouts, a
   grandchild, a nested map, a detached read, a timed-out HTTP item with no
   pooled connection, `RUNTIME-TASK-CANCELLED` in both cases, the argument spans,
-  `--seed`, and a hand-off case that checks the value is never lost. The hand-
-  off case of §27.2 in its sketched form (the item cancelled between the
-  reservation and its run) cannot happen with one caller timer, since the item
-  runs before the caller looks at the clock; the test checks the invariant
-  instead.
+  `--seed`, and a hand-off case that holds the CPU in one sort past the deadline
+  and checks that the item keeps the value. The hand-off case of §27.2 in its
+  sketched form (the item cancelled between the reservation and its run) does
+  not happen with one caller timer, since the item runs before the caller looks
+  at the clock; the owner accepted this in review.
 - [x] 17b `Channel[T]` (§27.2), order row 7.2.1e. Decided (2026-10-14): the
   cases that need `Task.map` move to 17a's PR, where `Task.map` exists: the two
   `RUNTIME-TASK-CANCELLED` cases and the `Task.map` form of the hand-off case.

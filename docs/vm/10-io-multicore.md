@@ -70,20 +70,23 @@ needs it.
   `awaiting` field before it parks, under the target's lock (Park and wake
   protocol), so two tasks that close a cycle at the same time cannot both miss
   it: the second to take the lock sees the first's field.
-- **Task.map group lock (17a).** Each `Task.map` group has a small lock for its
-  running list, its ended list and its counters. The step function on the
-  caller's scheduler and the end hook of an item, which `finish_task` calls on
-  the item's scheduler, take it; it is never held across a park or a cancel
-  (`agc_task_cancel` takes the locks of the tasks it reaches, so the step
-  function copies the item it expires out of the list, drops the lock and then
-  cancels). The hook adds the item to the ended list under the lock and wakes
-  the caller (a hint, as everywhere). The caller alone writes a result slot,
-  from the ended list or when it expires an item, so each slot is written once,
-  by whichever of the item's end and its deadline the caller sees first; an item
-  that ends after it timed out finds itself off the running list and does
-  nothing. With a cancelled caller the hook sees the cancel flag of the item and
-  does not wake the caller. With N=1 the lock is not needed, and the VM does not
-  take one (as built).
+- **Task.map group lock (17a, planned for N>1; not built).** Each `Task.map`
+  group will have a small lock for its running list, its ended list and its
+  counters. The step function on the caller's scheduler and the end hook of an
+  item, which `finish_task` calls on the item's scheduler, will take it; it is
+  never held across a park or a cancel (`agc_task_cancel` takes the locks of the
+  tasks it reaches, so the step function copies the item it expires out of the
+  list, drops the lock and then cancels). The hook adds the item to the ended
+  list under the lock and wakes the caller (a hint, as everywhere). The caller
+  alone writes a result slot, from the ended list or when it expires an item, so
+  each slot is written once, by whichever of the item's end and its deadline the
+  caller sees first; an item that ends after it timed out finds itself off the
+  running list and does nothing. With a cancelled caller the hook sees the
+  cancel flag of the item and does not wake the caller. An item that still has a
+  file close pending is not settled; the hook puts itself back on the task and
+  runs again from `agc_task_close_done`, on the scheduler that finishes the
+  close. With N=1 the lock is not needed, and the VM does not take one (as
+  built).
 - **State split.** As built (`vm/port.h`): `agc_runtime` (shared),
   `struct agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
   current `task`, the run queue, `loop`, `registry`, the turn counters and the

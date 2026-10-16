@@ -431,9 +431,9 @@ detached jobs, the `next_owner` hand-on), `docs/vm/10-io-multicore.md` §10.2.3
 (the group lock), the development skill's notes (`references/vm-tasks.md`
 and `references/vm-io.md`).
 
-**As built (17a).** `vm/task_map.c` (core layer) and `docs/vm/10-io-
-scheduler.md` §10.2.1, "Task.map", describe the code. It follows the plan above,
-with these choices where the plan left room or changed:
+**As built (17a).** `vm/task_map.c` (core layer) and
+`docs/vm/10-io-scheduler.md` §10.2.1, "Task.map", describe the code. It follows
+the plan above, with these choices where the plan left room or changed:
 
 - One timer, not one timer-only job for each item. The caller, parked in a
   stepper (as `File.each_line` is), starts one `agc_wait_io` job for the oldest
@@ -446,12 +446,18 @@ with these choices where the plan left room or changed:
   that is `cancelled`, so no slot is written and nobody is woken. Late ends
   cannot reach the group.
 - An item that ends after its deadline but before the caller runs keeps its
-  result. The plan's per-item timer callback would have cancelled it between
-  turns; with one timer on the caller, an item that was already ready (for
-  example a receiver that got its value) runs first. Nothing is lost either way,
-  and the hand-off case of §27.2 keeps its sketched form only as a C test of the
-  channel; its `Task.map` form checks that the value reaches exactly one
-  receiver.
+  result (accepted by the owner in the review of the PR). The plan's per-item
+  timer callback would have cancelled it between turns; with one timer on the
+  caller, an item that was already ready (for example a receiver that got its
+  value) runs first. Nothing is lost either way. The hand-off case of §27.2
+  keeps its sketched form only as a C test of the channel; its `Task.map` form
+  holds the CPU in one sort past the deadline and checks that the item keeps the
+  value.
+- An item is settled, as for `Task.await`, only when it is done and has no file
+  close pending (`closing` is 0). If its files are still closing, the end hook
+  puts itself back on the task and `agc_task_close_done` calls it again when the
+  last close ends, so a file that an item wrote is closed (and its lock
+  released) when the call returns.
 - The handles an item opened are closed when it ends or is cancelled (24b),
   which the plan did not know; see the cancellation rules above.
 - Costs: one step for each item started (`agc_count_step`), and `agc_charge(n)`
@@ -460,7 +466,9 @@ with these choices where the plan left room or changed:
   the expected `List[Result[R]]`, else `Result[Unknown]`, and `check_block_body`
   turns `Result[Unknown]` into the `Slot.InferResult` slot. A first value of
   `error(...)` has nothing to infer from, so it is `CHECK-RESULT-TYPE` and the
-  program annotates the variable (`r: List[Result[Int]] = Task.map(...)`).
+  program annotates the variable (`r: List[Result[Int]] = Task.map(...)`). A
+  later improvement could treat a first `return error(...)` as `Result[Unknown]`
+  and let a later `ok(...)` decide `R`.
 - Tests: the timing cases are in `tests/test_vm_task_map.py` (a Python module,
   since Racket is gone), run alone by `make vm-task-map`.
 
