@@ -213,6 +213,8 @@ typedef struct {
   const agc_program *program;
   agc_output out, err;
   agc_value args;
+  /* The one empty List and Map of the run, which LIST and MAP with no items return instead of allocating each time. */
+  agc_value empty_list, empty_map;
   agc_string *cwd;
   agc_value chars[AGC_ASCII_CHARS];
   bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired;

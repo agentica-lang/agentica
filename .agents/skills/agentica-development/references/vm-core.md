@@ -94,6 +94,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     local again; `frame->pc` is still written before each instruction (the
     stack trace, a park and a yield read it), and `SPAN` is the span of the
     running instruction, read where a failure or a call needs it
+  - `LIST` and `MAP` with no items return `rt->empty_list` and `rt->empty_map`
+    (made once by `agc_vm_init`), and a map literal starts from the shared empty
+    map: nothing writes a list or map after it is returned (`agc_map_put` copies
+    its path), so the sharing cannot be seen
   - one turn of the current task (`agc_run_turn`, returns yield, parked or done)
     and the budgets: the "next stop" counter of `STEP` over the turn and the
     batch taken from the runtime's atomic `steps_left` (`agc_turn_begin`,

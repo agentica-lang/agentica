@@ -92,6 +92,8 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->hash_key[0] = 0x0706050403020100ULL;
   rt->hash_key[1] = 0x0f0e0d0c0b0a0908ULL;
   rt->args = agc_list_value(agc_list_from_array(NULL, 0));
+  rt->empty_list = agc_list_value(agc_list_from_array(NULL, 0));
+  rt->empty_map = agc_map_value(agc_new_map());
   for (size_t c = 0; c < AGC_ASCII_CHARS; c++) {
     char ch = (char)c;
     rt->chars[c] = agc_string_value(agc_make_string(&ch, 1, 1));
@@ -746,7 +748,9 @@ reload:
         R[in.a] = agc_string_value(agc_debug(vm, R[in.b]));
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
-      case AGC_OP_LIST: R[in.a] = agc_list_value(agc_list_from_array(&R[in.b], in.c)); break;
+      case AGC_OP_LIST:
+        R[in.a] = in.c ? agc_list_value(agc_list_from_array(&R[in.b], in.c)) : vm->rt->empty_list;
+        break;
       case AGC_OP_LIST_LEN: R[in.a] = agc_int((int64_t)list_len(agc_as_list(vm, R[in.b]))); break;
       case AGC_OP_LIST_GET: {
         const agc_list *l = agc_as_list(vm, R[in.b]);
@@ -757,7 +761,7 @@ reload:
         break;
       }
       case AGC_OP_MAP: {
-        agc_map *m = agc_new_map();
+        agc_map *m = agc_as_map(vm, vm->rt->empty_map);
         for (uint32_t k = 0; k < in.c; k++)
           m = agc_map_put(vm, m, R[(uint32_t)in.b + 2 * k], R[(uint32_t)in.b + 2 * k + 1]);
         R[in.a] = agc_map_value(m);
