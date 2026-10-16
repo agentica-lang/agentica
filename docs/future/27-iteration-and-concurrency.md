@@ -457,7 +457,12 @@ the plan above, with these choices where the plan left room or changed:
   close pending (`closing` is 0). If its files are still closing, the end hook
   puts itself back on the task and `agc_task_close_done` calls it again when the
   last close ends, so a file that an item wrote is closed (and its lock
-  released) when the call returns.
+  released) when the call returns. This holds for an item that ended in time. A
+  timed-out item is settled at its deadline and the call does not wait for its
+  close, so the file of such an item may still be closing when the call returns
+  (the close ends on its own and the hook then finds a settled item and does
+  nothing). A crash of an item settled that way is marked observed, since
+  nobody will read it.
 - The handles an item opened are closed when it ends or is cancelled (24b),
   which the plan did not know; see the cancellation rules above.
 - Costs: one step for each item started (`agc_count_step`), and `agc_charge(n)`

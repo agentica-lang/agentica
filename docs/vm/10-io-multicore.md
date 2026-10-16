@@ -85,8 +85,9 @@ needs it.
   cancel flag of the item and does not wake the caller. An item that still has a
   file close pending is not settled; the hook puts itself back on the task and
   runs again from `agc_task_close_done`, on the scheduler that finishes the
-  close. With N=1 the lock is not needed, and the VM does not take one (as
-  built).
+  close (unless the item timed out meanwhile, when it is already settled and the
+  hook does nothing). With N=1 the lock is not needed, and the VM does not take
+  one (as built).
 - **State split.** As built (`vm/port.h`): `agc_runtime` (shared),
   `struct agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
   current `task`, the run queue, `loop`, `registry`, the turn counters and the

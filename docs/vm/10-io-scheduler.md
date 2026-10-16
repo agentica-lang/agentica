@@ -240,7 +240,10 @@ section says how the scheduler and the loop keep them, as built.
     children first, never runs the step function again, and so starts nothing
     and writes no slot. An item that still has a file close pending (`closing`,
     as `Task.await` checks) is not settled: the hook puts itself back and
-    `agc_task_close_done` calls it when the last close ends. An item that ends
+    `agc_task_close_done` calls it when the last close ends. If the deadline
+    comes first, the item is settled as timed out without waiting for the close
+    (`expire` marks its crash, if any, as observed), and the hook, when the
+    close ends, finds a settled item and does nothing. An item that ends
     after its deadline but before the caller runs keeps its result. The handles
     an item opened are closed when it ends or is cancelled (Owners); an I/O job
     it had in flight is detached and ends on its own. With more than one

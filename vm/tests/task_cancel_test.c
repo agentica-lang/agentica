@@ -20,12 +20,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 20
+#define MAX_FNS 22
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CRASH, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED, F_MAP_ITEM, F_MAP_GROUP };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED, F_MAP_ITEM, F_MAP_GROUP, F_MAP_CLOSING, F_MAP_CRASHING };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -57,6 +57,9 @@ static int released;
 static bool self_returned;
 static int owned_closed;
 static int tries;
+static int end_calls;
+static agc_task *closed[4];
+static size_t closed_count;
 static checker check;
 static agc_resource *handle;
 static agc_io_job *jobs[8];
@@ -293,7 +296,14 @@ static agc_value test_closing(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
   vm->task->closing += 2;
+  assert(closed_count < sizeof closed / sizeof closed[0]);
+  closed[closed_count++] = vm->task;
   return agc_void();
+}
+
+static agc_value test_crash(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  agc_fail(vm, "RUNTIME-INVALID-COUNT", "test crash", span);
 }
 
 static agc_value test_close_done(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -395,6 +405,7 @@ static const agc_builtin test_builtins[] = {
   {"Test.keep", 1, test_keep, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.closing", 1, test_closing, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.close_done", 1, test_close_done, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.crash", 1, test_crash, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -521,6 +532,18 @@ static void build_tasks(prog *p) {
   call_int(p, F_MAP_ITEM, B_SLEEP, 60000);
   call_int(p, F_MAP_ITEM, B_MARK, 992);
   finish_fn(p, F_MAP_ITEM);
+
+  /* An item that ends with two file closes pending and gives ok(1). */
+  uint32_t ok_one = p->program.constant_count++;
+  p->constants[ok_one] = agc_result_value(true, agc_int(1));
+  call_reg(p, F_MAP_CLOSING, B_CLOSING, 0, 1);
+  emit(p, F_MAP_CLOSING, AGC_OP_CONST, 1, ok_one, 1);
+  emit(p, F_MAP_CLOSING, AGC_OP_RETURN, 1, 0, 1);
+
+  /* The same, but it crashes before it can return. */
+  call_reg(p, F_MAP_CRASHING, B_CLOSING, 0, 1);
+  call_reg(p, F_MAP_CRASHING, B_CRASH, 0, 1);
+  finish_fn(p, F_MAP_CRASHING);
 }
 
 static void new_prog(prog *p) {
@@ -573,6 +596,8 @@ static void release_count(void *native) { (*(int *)native)++; }
 
 static void reset(void) {
   mark_count = 0;
+  end_calls = 0;
+  closed_count = 0;
   done_calls = 0;
   dropped = 0;
   cancel_calls = 0;
@@ -797,18 +822,28 @@ static void check_keep(agc_vm *vm, int64_t n) {
   }
 }
 
+static void count_end(agc_vm *vm, agc_task *t) {
+  (void)vm;
+  (void)t;
+  end_calls++;
+}
+
+/* The end hook of a task that ended with closes pending (Task.map's) runs once, when the last close is done. */
 static void check_closing(agc_vm *vm, int64_t n) {
   agc_task *closer = reg_task(vm, 0);
   agc_task *awaiter = reg_task(vm, 2);
   assert(closer->state == AGC_TASK_DONE && mark_count == 0);
   if (n == 1) {
     assert(closer->closing == 2 && closer->waiters == awaiter && awaiter->state == AGC_TASK_PARKED);
+    closer->end = count_end;
   } else if (n == 2) {
     assert(closer->closing == 2 && !closer->waiters && cancelled(awaiter));
   } else if (n == 3) {
     assert(closer->closing == 1 && !closer->waiters && cancelled(awaiter));
+    assert(end_calls == 0 && closer->end == count_end);
   } else {
     assert(closer->closing == 0 && !closer->waiters);
+    assert(end_calls == 1 && !closer->end);
   }
 }
 
@@ -1095,16 +1130,16 @@ static void test_cancel_loop_phase(void) {
   assert(fcntl(idle[0], F_GETFD) == -1 && errno == EBADF);
   close(idle[1]);
 }
-/* The function of a task that calls Task.map over [1, 2, 3] with `limit` and `timeout_ms`, whose items mark their
-   argument and then sleep for a minute, and that marks 991 if the call returns. */
-static void map_group(prog *p, int64_t limit, int64_t timeout_ms) {
+/* The function of a task that calls Task.map over [1, 2, 3] with `limit` and `timeout_ms` and the function `item`, and
+   that marks 991 if the call returns. */
+static void map_group(prog *p, uint32_t item, int64_t limit, int64_t timeout_ms) {
   agc_value items[3] = {agc_int(1), agc_int(2), agc_int(3)};
   uint32_t list = p->program.constant_count++;
   p->constants[list] = agc_list_value(agc_list_from_array(items, 3));
   emit(p, F_MAP_GROUP, AGC_OP_CONST, 1, list, 1);
   emit(p, F_MAP_GROUP, AGC_OP_CONST, 2, constant(p, limit), 1);
   emit(p, F_MAP_GROUP, AGC_OP_CONST, 3, constant(p, timeout_ms), 1);
-  emit(p, F_MAP_GROUP, AGC_OP_CLOSURE, 4, F_MAP_ITEM, 1);
+  emit(p, F_MAP_GROUP, AGC_OP_CLOSURE, 4, item, 1);
   emit(p, F_MAP_GROUP, AGC_OP_CALL_BUILTIN, 1, B_MAP, 1);
   call_int(p, F_MAP_GROUP, B_MARK, 991);
   emit(p, F_MAP_GROUP, AGC_OP_RETURN, 1, 0, 1);
@@ -1131,7 +1166,7 @@ static void check_map_cancel(agc_vm *vm, int64_t n) {
 static void test_map_caller_cancelled(void) {
   prog p;
   new_prog(&p);
-  map_group(&p, 2, 30000);
+  map_group(&p, F_MAP_ITEM, 2, 30000);
   spawn(&p, F_MAIN, 0, F_MAP_GROUP, 0);
   call_int(&p, F_MAIN, B_SLEEP, 20);
   call_int(&p, F_MAIN, B_CHECK, 1);
@@ -1142,29 +1177,114 @@ static void test_map_caller_cancelled(void) {
   run_done(&p, check_map_cancel);
 }
 
+static bool timed_out(agc_vm *vm, agc_value slot) {
+  const agc_result *r = agc_as_result(vm, slot);
+  const agc_string *message = agc_as_string(vm, r->value);
+  return !r->ok && message->bytes == 15 && memcmp(message->data, "task: timed out", 15) == 0;
+}
+
+/* The three slots of a Task.map over [1, 2, 3] whose caller returned. */
+static const agc_list *map_slots(agc_vm *vm, const agc_task *group) {
+  assert(group->state == AGC_TASK_DONE && !group->cancelled && !group->children);
+  const agc_list *slots = agc_as_list(vm, group->result);
+  assert(agc_list_len(slots) == 3);
+  return slots;
+}
+
 static void check_map_deadlines(agc_vm *vm, int64_t n) {
   (void)n;
   agc_task *group = reg_task(vm, 0);
   /* Each item ran out of time on its own, one after the other (limit 1), and its slot has the timeout error. */
-  assert(group->state == AGC_TASK_DONE && !group->cancelled && !group->children);
-  const agc_list *slots = agc_as_list(vm, group->result);
-  assert(agc_list_len(slots) == 3);
-  for (size_t k = 0; k < 3; k++) {
-    const agc_result *r = agc_as_result(vm, agc_list_get(slots, k));
-    const agc_string *message = agc_as_string(vm, r->value);
-    assert(!r->ok && message->bytes == 15 && memcmp(message->data, "task: timed out", 15) == 0);
-  }
+  const agc_list *slots = map_slots(vm, group);
+  for (size_t k = 0; k < 3; k++) assert(timed_out(vm, agc_list_get(slots, k)));
   assert(mark_count == 4 && marks[0] == 1 && marks[1] == 2 && marks[2] == 3 && marks[3] == 991);
 }
 
 static void test_map_deadlines(void) {
   prog p;
   new_prog(&p);
-  map_group(&p, 1, 30);
+  map_group(&p, F_MAP_ITEM, 1, 30);
   spawn(&p, F_MAIN, 0, F_MAP_GROUP, 0);
   call_reg(&p, F_MAIN, B_AWAIT, 0, 1);
   call_int(&p, F_MAIN, B_CHECK, 1);
   run_done(&p, check_map_deadlines);
+}
+
+/* Ends the pending file closes of a task, as the two jobs of the task would. */
+static void finish_closes(agc_vm *vm, agc_task *t) {
+  assert(t->state == AGC_TASK_DONE && t->closing == 2);
+  agc_task_close_done(vm, t);
+  assert(t->closing == 1);
+  agc_task_close_done(vm, t);
+  assert(t->closing == 0 && !t->end && !t->end_data);
+}
+
+static void check_map_closes(agc_vm *vm, int64_t n) {
+  agc_task *group = reg_task(vm, 0);
+  if (n == 1) {
+    /* Every item returned, and none is settled while its closes are pending: the caller still waits. */
+    assert(group->state == AGC_TASK_PARKED && closed_count == 3);
+    for (size_t k = 0; k < closed_count; k++) {
+      assert(closed[k]->closing == 2 && closed[k]->end && !closed[k]->cancelled);
+      finish_closes(vm, closed[k]);
+    }
+  } else {
+    const agc_list *slots = map_slots(vm, group);
+    for (size_t k = 0; k < 3; k++) {
+      const agc_result *r = agc_as_result(vm, agc_list_get(slots, k));
+      assert(r->ok && agc_as_int(vm, r->value) == 1);
+    }
+  }
+}
+
+static void test_map_closes(void) {
+  prog p;
+  new_prog(&p);
+  map_group(&p, F_MAP_CLOSING, 3, 30000);
+  spawn(&p, F_MAIN, 0, F_MAP_GROUP, 0);
+  call_int(&p, F_MAIN, B_SLEEP, 20);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  run_done(&p, check_map_closes);
+}
+
+static void check_map_late_closes(agc_vm *vm, int64_t n) {
+  agc_task *group = reg_task(vm, 0);
+  if (n == 1) {
+    /* Item 1 crashed with its closes pending and ran out of time: its slot is the timeout, and its crash, which nobody
+       will read, counts as observed. Item 2 is within its time. */
+    assert(group->state == AGC_TASK_PARKED && closed_count == 2);
+    assert(closed[0]->crashed && closed[0]->observed && !closed[1]->observed);
+    assert(vm->crash_count == 2 && vm->observed_count == 1 && vm->crashes == closed[1]);
+    /* The late end of its closes settles nothing and wakes nobody. */
+    finish_closes(vm, closed[0]);
+    assert(group->state == AGC_TASK_PARKED);
+    /* The closes of item 2 end in time: it settles with its crash as the error, and the caller wakes. */
+    finish_closes(vm, closed[1]);
+    assert(group->state == AGC_TASK_READY);
+  } else {
+    assert(closed_count == 3);
+    const agc_list *slots = map_slots(vm, group);
+    assert(timed_out(vm, agc_list_get(slots, 0)) && !timed_out(vm, agc_list_get(slots, 1)));
+    assert(!agc_as_result(vm, agc_list_get(slots, 1))->ok && timed_out(vm, agc_list_get(slots, 2)));
+    /* Every crash was read, by the caller or at the deadline, so none is reported at the end of the run. */
+    assert(vm->crash_count == 3 && vm->observed_count == 3 && !vm->crashes);
+    assert(closed[2]->closing == 2);
+    finish_closes(vm, closed[2]);
+  }
+}
+
+static void test_map_late_closes(void) {
+  prog p;
+  new_prog(&p);
+  map_group(&p, F_MAP_CRASHING, 1, 150);
+  spawn(&p, F_MAIN, 0, F_MAP_GROUP, 0);
+  call_int(&p, F_MAIN, B_SLEEP, 225);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  run_done(&p, check_map_late_closes);
 }
 #endif
 
@@ -1188,6 +1308,8 @@ int main(void) {
   test_timed_await_ends();
   test_map_caller_cancelled();
   test_map_deadlines();
+  test_map_closes();
+  test_map_late_closes();
   signal(SIGPIPE, SIG_IGN);
   test_output_waiter();
   test_pool();

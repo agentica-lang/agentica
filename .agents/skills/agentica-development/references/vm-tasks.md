@@ -121,7 +121,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     result
   - an item with a file close pending (`closing`) is not settled, as for
     `Task.await`: `item_ended` puts the hook back on the task and
-    `agc_task_close_done` calls it when the last close ends
+    `agc_task_close_done` calls it when the last close ends; if its deadline
+    comes first it is settled as timed out without waiting for the close, and
+    `expire` marks its crash, if any, as observed
 - `vm/channel.c`
   - the `Channel` builtins (`agc_channel_builtins`,
     `docs/future/27-iteration-and-concurrency.md` §27.2,

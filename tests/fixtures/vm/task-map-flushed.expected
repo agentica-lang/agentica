@@ -1,10 +1,9 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 8688,
+  "steps": 51020,
   "stdout": [
-    "one item at a time: 0 stale reads, 0 locks still held",
-    "eight items, four at a time: 8 results, 0 stale reads, 0 locks still held",
+    "0 stale reads in 1000 rounds",
     ""
   ],
   "stderr": []

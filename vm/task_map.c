@@ -109,13 +109,16 @@ static void collect(agc_vm *vm, map_group *g) {
 }
 
 /* Every item has the same timeout and starts in input order, so the deadlines grow along the running list and the
-   oldest item is the only one to look at. The slot is written before the cancel, so the end hook sees a settled item. */
+   oldest item is the only one to look at. The slot is written before the cancel, so the end hook sees a settled item.
+   An item that already ended (it crashed or returned) but is still closing its files has nothing to cancel; it is
+   settled as timed out at its deadline, and a crash of it, which nobody will read, counts as observed. */
 static void expire(agc_vm *vm, map_group *g, uint64_t now) {
   while (g->oldest && g->oldest->deadline <= now) {
     map_item *it = g->oldest;
     running_remove(g, it);
     g->slots[it->index] = agc_error_value("task: timed out");
     g->settled++;
+    if (it->task->crashed) agc_task_observe(vm, it->task);
     agc_task_cancel(vm, it->task);
   }
 }
