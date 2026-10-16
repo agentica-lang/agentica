@@ -10,11 +10,27 @@
 #include <time.h>
 #include <uv.h>
 
+#if defined(__linux__) || defined(__APPLE__)
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 typedef struct {
   long sleep_ms;
   int value;
 } task_data;
+
+#if defined(__linux__) || defined(__APPLE__)
+typedef struct {
+  agc_poller *poller;
+  int fd, calls, bytes;
+  bool eof;
+} read_probe;
+
+#endif
 
 static int dropped;
 
@@ -70,6 +86,74 @@ static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
 }
 #endif
 
+#if defined(__linux__) || defined(__APPLE__)
+static void probe_read(void *data, int status) {
+  read_probe *probe = data;
+  assert(status == 0);
+  probe->calls++;
+  char byte;
+  ssize_t n = read(probe->fd, &byte, 1);
+  if (n == 1) {
+    assert(byte == 'x');
+    probe->bytes++;
+  } else if (n == 0) {
+    probe->eof = true;
+    agc_poller_pause(probe->poller);
+  } else {
+    assert(errno == EAGAIN || errno == EWOULDBLOCK);
+  }
+}
+
+static void test_pipe_readiness_and_eof(bool named) {
+  agc_vm vm;
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  char directory[] = "/tmp/agentica-poller-XXXXXX";
+  char path[128];
+  int fds[2];
+  if (named) {
+    assert(mkdtemp(directory));
+    assert(snprintf(path, sizeof path, "%s/fifo", directory) > 0);
+    assert(mkfifo(path, 0600) == 0);
+    fds[0] = open(path, O_RDONLY | O_NONBLOCK);
+    assert(fds[0] >= 0);
+    fds[1] = open(path, O_WRONLY | O_NONBLOCK);
+    assert(fds[1] >= 0);
+  } else {
+    assert(pipe(fds) == 0);
+    assert(fcntl(fds[0], F_SETFL, O_NONBLOCK) == 0);
+  }
+  int err = 0;
+  read_probe probe = {.fd = fds[0]};
+  probe.poller = agc_poller_open(&vm, fds[0], &err);
+  assert(probe.poller && err == 0);
+  agc_poller_wait(probe.poller, false, probe_read, &probe);
+  for (int k = 0; k < 20; k++) {
+    agc_io_poll(&vm, false);
+    pause_ms(1);
+  }
+  assert(!probe.eof && probe.bytes == 0);
+  if (!named) assert(probe.calls == 0);
+  assert(write(fds[1], "x", 1) == 1);
+  for (int k = 0; k < 1000 && probe.bytes == 0; k++) {
+    agc_io_poll(&vm, false);
+    pause_ms(1);
+  }
+  assert(probe.bytes == 1 && !probe.eof);
+  close(fds[1]);
+  for (int k = 0; k < 1000 && !probe.eof; k++) {
+    agc_io_poll(&vm, false);
+    pause_ms(1);
+  }
+  assert(probe.eof && probe.bytes == 1);
+  agc_poller_close(probe.poller);
+  assert(agc_io_close(&vm));
+  if (named) {
+    assert(unlink(path) == 0);
+    assert(rmdir(directory) == 0);
+  }
+}
+#endif
+
 static int released;
 
 static void release_count(void *native) { (*(int *)native)++; }
@@ -78,6 +162,10 @@ int main(void) {
   agc_init();
   agc_vm vm;
   agc_io_init();
+#if defined(__linux__) || defined(__APPLE__)
+  test_pipe_readiness_and_eof(false);
+  test_pipe_readiness_and_eof(true);
+#endif
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
 
   agc_resource *items[1000];
