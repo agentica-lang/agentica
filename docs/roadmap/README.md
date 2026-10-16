@@ -131,13 +131,13 @@ and the other features after the JIT.
    [§44.12](../future/44-module-constants.md#4412-implementation-plan).
    Numbers, and what was tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer).
-   **Third part, the interpreter loop, done (2026-10-16, PR #319):** the
-   common value accessors are inline and the turn loop keeps the frame in
-   locals, and `[]` and `{}` with no items are shared, so `arithmetic` takes
-   0.10 to 0.13 s, not 0.276 s, loops of calls and `case` 30% to 55% less, and
+   **Third part, the interpreter loop, done (2026-10-16, PR #319):** the common
+   value accessors are inline and the turn loop keeps the frame in locals, and
+   `[]` and `{}` with no items are shared, so `arithmetic` takes 0.10 to 0.13 s,
+   not 0.276 s, loops of calls and `case` 30% to 55% less, and
    `check stdlib/bdd/gherkin.agc` 0.080 s, not 0.102 s (with the new lexer).
-   Numbers, a profile of where a check
-   spends its time now, and what was tried, in
+   Numbers, a profile of where a check spends its time now, and what was
+   tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-third-part-the-interpreter-loop).
    **VM start-up, done (2026-10-16, PR #326):** the loader of the carried
    front end took 15 ms of every start and takes 8.3 ms now (row 8.3), so a

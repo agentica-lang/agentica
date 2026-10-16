@@ -357,7 +357,8 @@ This note lists what the code chose.
   builtin_ms= gc_ms= collections=`, then the 30 functions with the most steps
   (`fn calls= steps= name= at=FILE:LINE`; the step of each pass of a range
   `each`, `times`, `upto`, `downto` or `File.each_line` loop is `<native>`,
-  while `List.map` and `List.each` add no step beyond their callbacks), the 12 source files with the most steps (`file calls=
+  while `List.map` and `List.each` add no step beyond their callbacks), the 12
+  source files with the most steps (`file calls=
   steps= name=`) and the 30 builtins that took the most time (`builtin calls=
   us= name=`). A builtin is timed for the call itself, so one that parks is
   timed until it does. `gc_ms` is Boehm's own clock of its collections, and
