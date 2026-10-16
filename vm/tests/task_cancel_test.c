@@ -1,6 +1,6 @@
 /*
  * agc_task_cancel on the real scheduler, including a running task that
- * cancels itself after it took a handle.
+ * cancels itself after it took a handle, and a task parked as the caller of Task.map.
  */
 #include "../core.h"
 
@@ -20,12 +20,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 18
+#define MAX_FNS 20
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED, F_MAP_ITEM, F_MAP_GROUP };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -75,6 +75,8 @@ static int out_pipe[2] = {-1, -1};
 static size_t junk_len, got_len;
 static char block[16384];
 static uint8_t got[1 << 20];
+
+static agc_task *seen[4];
 
 static agc_value ext_done(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
@@ -514,6 +516,11 @@ static void build_tasks(prog *p) {
   emit(p, F_TIMED, AGC_OP_CALL_BUILTIN, SCRATCH, B_AWAIT_TIMED, 1);
   call_int(p, F_TIMED, B_MARK, 993);
   finish_fn(p, F_TIMED);
+
+  mark_arg(p, F_MAP_ITEM);
+  call_int(p, F_MAP_ITEM, B_SLEEP, 60000);
+  call_int(p, F_MAP_ITEM, B_MARK, 992);
+  finish_fn(p, F_MAP_ITEM);
 }
 
 static void new_prog(prog *p) {
@@ -525,6 +532,7 @@ static void new_prog(prog *p) {
   p->builtins[B_CH_SEND] = agc_find_builtin((const uint8_t *)"Channel.send", 12, 3);
   p->builtins[B_CH_RECV] = agc_find_builtin((const uint8_t *)"Channel.recv", 12, 2);
   p->builtins[B_AWAIT_TIMED] = agc_find_builtin((const uint8_t *)"Task.await", 10, 2);
+  p->builtins[B_MAP] = agc_find_builtin((const uint8_t *)"Task.map", 8, 4);
   for (size_t k = 0; k < sizeof test_builtins / sizeof test_builtins[0]; k++) p->builtins[B_MARK + k] = &test_builtins[k];
   for (uint32_t f = 0; f < MAX_FNS; f++) {
     p->fns[f].name = agc_make_string("f", 1, 1);
@@ -1087,6 +1095,77 @@ static void test_cancel_loop_phase(void) {
   assert(fcntl(idle[0], F_GETFD) == -1 && errno == EBADF);
   close(idle[1]);
 }
+/* The function of a task that calls Task.map over [1, 2, 3] with `limit` and `timeout_ms`, whose items mark their
+   argument and then sleep for a minute, and that marks 991 if the call returns. */
+static void map_group(prog *p, int64_t limit, int64_t timeout_ms) {
+  agc_value items[3] = {agc_int(1), agc_int(2), agc_int(3)};
+  uint32_t list = p->program.constant_count++;
+  p->constants[list] = agc_list_value(agc_list_from_array(items, 3));
+  emit(p, F_MAP_GROUP, AGC_OP_CONST, 1, list, 1);
+  emit(p, F_MAP_GROUP, AGC_OP_CONST, 2, constant(p, limit), 1);
+  emit(p, F_MAP_GROUP, AGC_OP_CONST, 3, constant(p, timeout_ms), 1);
+  emit(p, F_MAP_GROUP, AGC_OP_CLOSURE, 4, F_MAP_ITEM, 1);
+  emit(p, F_MAP_GROUP, AGC_OP_CALL_BUILTIN, 1, B_MAP, 1);
+  call_int(p, F_MAP_GROUP, B_MARK, 991);
+  emit(p, F_MAP_GROUP, AGC_OP_RETURN, 1, 0, 1);
+}
+
+static void check_map_cancel(agc_vm *vm, int64_t n) {
+  agc_task *group = reg_task(vm, 0);
+  if (n == 1) {
+    // Two items run, as children of the caller, which is parked in the call; the third waits for a free place.
+    assert(group->state == AGC_TASK_PARKED && child_count(group) == 2);
+    seen[0] = group->children;
+    seen[1] = group->children->next_sibling;
+    assert(mark_count == 2 && marks[0] == 1 && marks[1] == 2);
+  } else if (n == 2) {
+    // The cancel of the caller reaches the items in flight, and nothing wakes the caller again.
+    assert(cancelled(group) && child_count(group) == 0);
+    assert(cancelled(seen[0]) && cancelled(seen[1]));
+  } else {
+    // The pending item never started, and the call never returned.
+    assert(mark_count == 2 && cancelled(group) && agc_is(group->result, AGC_T_VOID));
+  }
+}
+
+static void test_map_caller_cancelled(void) {
+  prog p;
+  new_prog(&p);
+  map_group(&p, 2, 30000);
+  spawn(&p, F_MAIN, 0, F_MAP_GROUP, 0);
+  call_int(&p, F_MAIN, B_SLEEP, 20);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  call_int(&p, F_MAIN, B_SLEEP, 30);
+  call_int(&p, F_MAIN, B_CHECK, 3);
+  run_done(&p, check_map_cancel);
+}
+
+static void check_map_deadlines(agc_vm *vm, int64_t n) {
+  (void)n;
+  agc_task *group = reg_task(vm, 0);
+  // Each item ran out of time on its own, one after the other (limit 1), and its slot has the timeout error.
+  assert(group->state == AGC_TASK_DONE && !group->cancelled && !group->children);
+  const agc_list *slots = agc_as_list(vm, group->result);
+  assert(agc_list_len(slots) == 3);
+  for (size_t k = 0; k < 3; k++) {
+    const agc_result *r = agc_as_result(vm, agc_list_get(slots, k));
+    const agc_string *message = agc_as_string(vm, r->value);
+    assert(!r->ok && message->bytes == 15 && memcmp(message->data, "task: timed out", 15) == 0);
+  }
+  assert(mark_count == 4 && marks[0] == 1 && marks[1] == 2 && marks[2] == 3 && marks[3] == 991);
+}
+
+static void test_map_deadlines(void) {
+  prog p;
+  new_prog(&p);
+  map_group(&p, 1, 30);
+  spawn(&p, F_MAIN, 0, F_MAP_GROUP, 0);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  run_done(&p, check_map_deadlines);
+}
 #endif
 
 int main(void) {
@@ -1107,6 +1186,8 @@ int main(void) {
   test_channel_waiters();
   test_timed_await_cancel();
   test_timed_await_ends();
+  test_map_caller_cancelled();
+  test_map_deadlines();
   signal(SIGPIPE, SIG_IGN);
   test_output_waiter();
   test_pool();
