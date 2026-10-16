@@ -131,4 +131,6 @@ Read only the files the task needs:
 | [references/testing.md](references/testing.md) | writes unit tests (`Test.test`, `Test.eq`, `Test.run`) |
 | [references/diagnostics.md](references/diagnostics.md) | hits a diagnostic code whose meaning or fix is unclear |
 
+For style and idiom (naming, pipe chains, `case`, errors, tables and other speed rules), use the `agentica-code-guidelines` skill.
+
 The Agentica site has the full documentation as Markdown: `https://sonic182.github.io/agentica/llms.txt` indexes the pages, and `https://sonic182.github.io/agentica/llms-full.txt` has them all. For the installed binary, `agentica help NAME` is the authority on signatures.
