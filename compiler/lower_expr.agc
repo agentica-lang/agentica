@@ -86,17 +86,23 @@ export def lower_call(
   count = node.args.size
   form = Builtins.ref(cx.catalog, node.name, count)
   key = ""
-  if form.ok?
+  target = node.name
+  prelude = form.ok? and cx.catalog.prelude.has_key?(node.name)
+  if prelude
+    # A builtin written in the prelude is an ordinary call of its function (the checker chose which), and never a tail
+    # call: the VM reports a runtime error of the callee at the frame of this call.
+    target = Ir.prelude_name(cx.bodies[node.id])
+  elsif form.ok?
     key = form.unwrap!.implementation
   end
   if key == "Task.await"
     key = try await_key(cx, node, checked, count)
   end
   builtin = key != "" and VM_BUILTINS.include?(key)
-  if form.ok? and !builtin
+  if form.ok? and !builtin and !prelude
     return error(Lowering.unsupported(cx, "the builtin #{node.name}", span))
   end
-  if !builtin and !cx.functions.has_key?(node.name)
+  if !builtin and !cx.functions.has_key?(target)
     return error(Lowering.unsupported(cx, "the call to #{node.name}", span))
   end
   if !checked
@@ -125,12 +131,17 @@ export def lower_call(
     if tail
       fx = Lowering.emit_at(fx, "return", [base], span)
     end
+  elsif prelude
+    # The span of each argument follows the span of the call, so the VM can name the argument a prelude function
+    # rejects (docs/vm/03-ir-and-bytecode.md).
+    spans = [span].concat(node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end)
+    fx = Lowering.emit(fx, "call", [base, cx.functions[target]], spans)
   else
     op = "call"
     if tail
       op = "tail-call"
     end
-    fx = Lowering.emit_at(fx, op, [base, cx.functions[node.name]], span)
+    fx = Lowering.emit_at(fx, op, [base, cx.functions[target]], span)
   end
   if want >= 0
     fx = Lowering.emit_at(fx, "move", [want, base], span)

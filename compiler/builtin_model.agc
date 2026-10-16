@@ -4,7 +4,8 @@ import Types from "types"
 
 ## The special checking rule of a builtin, the `rule` field of a catalog row. Plain is no rule: the arguments are
 ## checked against the parameters. The other variants name a special rule of the checker in CamelCase (a task spawn is
-## TaskSpawn); a test compares the two lists.
+## TaskSpawn); a test compares the two lists. Prelude is a function written in Agentica in stdlib/prelude/ (its
+## PreludeRow says which): the arguments are matched against the type variables of the row.
 export enum Rule
   Plain
   ChannelNew
@@ -43,6 +44,7 @@ export enum Rule
   MapValues
   Ok
   OkVoid
+  Prelude
   ResultDefault
   ResultMessage
   ResultOk
@@ -102,4 +104,24 @@ export struct EnumDef
   name: String
   parameters: List[String]
   variants: List[Variant]
+end
+
+## A type variable of a prelude function that only some types may take: the key of `group_by` is an Int or a String.
+## what is how the message names the value ("a key"). The variables of a row that has no Limit take any type.
+export struct Limit
+  variable: String
+  allowed: List[Types.Type]
+  what: String
+end
+
+## What the checker and the lowering need to know about a prelude function besides its catalog row (the row of the
+## same name). module is the stem of the prelude file with the body (stdlib/prelude/list.agc is "list"). The body is a
+## function of that file: bodies maps the word of the type that selector (a limited variable) is bound to, such as
+## "Int", to the function; a function that serves every allowed type has selector "" and the one entry "".
+export struct PreludeRow
+  name: String
+  module: String
+  limits: List[Limit]
+  selector: String
+  bodies: Map[String, String]
 end

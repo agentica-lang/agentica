@@ -61,7 +61,9 @@ end
 ## are checked in order. type_params are the type parameters in scope (only while the variants of a generic enum are
 ## registered). file is the file of the declaration being checked, texts the source of every file by name. expression
 ## checks an expression: the cycle between expressions and statements goes through this field (check_expr.agc puts its
-## own function here), because a module cannot import one that imports it.
+## own function here), because a module cannot import one that imports it. prelude is true while the files of the
+## compiler prelude are checked (check_prelude.agc): their type variables are opaque types, and a Map key or Set
+## element may be one.
 export struct Cx
   catalog: Builtins.Catalog
   help: Help.Tables
@@ -73,6 +75,7 @@ export struct Cx
   file: String
   texts: Map[String, String]
   expression: Fn[Cx, St, Ast.Expr, Types.Type, Bool, Result[Out]]
+  prelude: Bool
 end
 
 ## What changes while a function is checked: the type of each node in a list indexed by id (set once the run starts,
@@ -80,7 +83,8 @@ end
 ## scope, how many scopes are open, the result type, the loop depth, the block being checked, the nodes of the range
 ## chain being checked, the signature of the function (for the diagnostics) and the nesting depth (CHECK-TOO-DEEP). The
 ## names in scope are one persistent Map: a scope is a snapshot of it, so closing a scope puts the snapshot back and
-## nothing is ever deleted.
+## nothing is ever deleted. bodies is the function of the prelude that each call of a prelude builtin runs, by the id
+## of the call (the lowering reads it).
 export struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -92,6 +96,7 @@ export struct St
   range_chain: List[Int]
   signature: String
   nest: Int
+  bodies: Map[Int, String]
 end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
@@ -127,6 +132,7 @@ export def fresh() -> St
     range_chain: [],
     signature: "",
     nest: 0,
+    bodies: {},
   )
 end
 

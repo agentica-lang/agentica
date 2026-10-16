@@ -338,7 +338,7 @@ def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) ->
   end
   first = node.entries[0]
   key = try State.expr(cx, st, first.key, wanted_key)
-  if !CheckTypes.key_type?(key.type)
+  if !CheckTypes.key_here?(cx, key.type)
     return error(
       State.fail(
         cx,

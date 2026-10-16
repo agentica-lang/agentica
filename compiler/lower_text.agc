@@ -51,7 +51,7 @@ export def program_text(root_dir: String, program: Ir.Program) -> String
 end
 
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
-  case Checker.check(linked, settings.catalog)
+  case Checker.check(linked, settings)
     Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
     Checker.Checking.Done(checked) ->
       return lowered_text(linked, lower_deeper(linked, checked, settings.catalog, frames))

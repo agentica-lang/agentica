@@ -307,7 +307,7 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
   end
   list = try Args.list_argument(cx, st, site, context)
   element = T.item(list.type)
-  if !CheckTypes.key_type?(element)
+  if !CheckTypes.key_here?(cx, element)
     return error(
       State.fail(
         cx,

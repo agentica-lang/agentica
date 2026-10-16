@@ -76,6 +76,13 @@ def name_lines(catalog: Builtins.Catalog) -> List[String]
   for name in catalog.std_only.keys.sort
     std_only = std_only.push("#{name}=#{catalog.std_only[name].std_path} as #{catalog.std_only[name].alias}")
   end
+  rows: List[String] = []
+  for name in catalog.prelude.keys.sort
+    row = catalog.prelude[name]
+    types = row.limits.map do |limit: Model.Limit| "#{limit.variable} in #{limit_types(limit)}" end
+    bodies = row.bodies.keys.sort.map do |type: String| "#{type}=#{row.bodies[type]}" end
+    rows = rows.push("#{name}=#{row.module} limits=#{quoted_list(types)} bodies=#{quoted_list(bodies)}")
+  end
   return [
     "public #{quoted_list(catalog.public_names)}",
     "bare #{quoted_list(catalog.bare_names.to_a.sort)}",
@@ -83,7 +90,13 @@ def name_lines(catalog: Builtins.Catalog) -> List[String]
     "handles #{quoted_list(catalog.handles.to_a.sort)}",
     "reserved #{quoted_list(catalog.reserved.to_a.sort)}",
     "std-only #{std_only.join(", ")}",
+    "prelude-only #{quoted_list(catalog.prelude_only.to_a.sort)}",
+    "prelude #{rows.join(", ")}",
   ]
+end
+
+def limit_types(limit: Model.Limit) -> String
+  return limit.allowed.map do |type: Types.Type| Types.debug_text(type) end.join("/")
 end
 
 def probe_line(catalog: Builtins.Catalog, probe: String) -> String
@@ -208,6 +221,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.MapValues -> return "MapValues"
     Model.Rule.Ok -> return "Ok"
     Model.Rule.OkVoid -> return "OkVoid"
+    Model.Rule.Prelude -> return "Prelude"
     Model.Rule.ResultDefault -> return "ResultDefault"
     Model.Rule.ResultMessage -> return "ResultMessage"
     Model.Rule.ResultOk -> return "ResultOk"
