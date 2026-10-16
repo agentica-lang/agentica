@@ -61,6 +61,7 @@ jobs:
     runs-on: windows-2025
     env:
       AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_OPENSSL: vendored
     defaults:
       run:
         shell: msys2 {0}

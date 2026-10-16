@@ -188,7 +188,7 @@ site-serve: site-sass
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
 # make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
-# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1, no libuv off Linux)
+# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 AGC_VERSION := $(shell cat VERSION)
 GC_DIR := vm/third_party/bdwgc
@@ -231,6 +231,13 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
   unix/proctitle unix/bsd-ifaddrs unix/kqueue unix/random-getentropy unix/darwin-proctitle unix/darwin unix/fsevents
 UV_DEFS += -D_DARWIN_UNLIMITED_SELECT=1 -D_DARWIN_USE_64_BIT_INODE=1
+else ifeq ($(OS),Windows_NT)
+UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
+  win/async win/core win/detect-wakeup win/dl win/error win/fs win/fs-event win/getaddrinfo win/getnameinfo win/handle \
+  win/loop-watcher win/pipe win/thread win/poll win/process win/process-stdio win/signal win/snprintf win/stream \
+  win/tcp win/tty win/udp win/util win/winapi win/winsock
+UV_DEFS := -DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0A00 -D_CRT_DECLARE_NONSTDC_NAMES=0
+VM_LIBS += -lpsapi -luser32 -ladvapi32 -liphlpapi -luserenv -lws2_32 -ldbghelp -lole32 -lshell32 -lsynchronization
 endif
 AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
 PKG_CONFIG ?= pkg-config
