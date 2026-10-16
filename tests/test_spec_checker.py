@@ -109,6 +109,16 @@ class SpecCheckerTest(TestCase):
                 "def main() -> Void\nend\n\n")
         self.expect(text, "CHECK-VOID-TYPE", (1, 27), "Void")
 
+    def test_stream_type_propagates_through_generic_enums(self):
+        self.assert_clean(
+            "enum Box[T]\n  Wrapped(Stream[T])\nend\n\n"
+            "def accept_stream(stream: Stream[Int]) -> Int\n  return 1\nend\n\n"
+            "def use(box: Box[Int]) -> Int\n"
+            "  case box\n    Box.Wrapped(stream) -> return accept_stream(stream)\n  end\n"
+            "end\n\n"
+            "def main() -> Void\nend\n\n"
+        )
+
     def test_pipe_calls_user_functions_and_builtins(self):
         for body in ("  n: Int = 1 |> add(2) |> add(3)\n  puts(n)",
                      "  r: Result[Int] = \" 4 \".trim |> parse()\n  puts(r.unwrap!)"):
