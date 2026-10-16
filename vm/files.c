@@ -146,8 +146,13 @@ static agc_value error_of(const char *message) {
 }
 
 static const char *os_message(agc_vm *vm, int err) {
+#ifdef __linux__
   locale_t messages = vm->rt->messages_locale;
   return messages ? strerror_l(err, messages) : strerror(err);
+#else
+  (void)vm;
+  return strerror(err);
+#endif
 }
 
 static void put_system_error(agc_vm *vm, text *t, int err) {
@@ -220,12 +225,18 @@ void agc_files_init(agc_vm *vm) {
   put(&t, buf, len);
   if (len == 0 || buf[len - 1] != '/') puts_text(&t, "/");
   vm->rt->cwd = agc_make_string(t.data, t.len, 0);
+#ifdef __linux__
   if (!vm->rt->messages_locale) vm->rt->messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
+#endif
 }
 
 void agc_files_close(agc_vm *vm) {
+#ifdef __linux__
   if (vm->rt->messages_locale) freelocale(vm->rt->messages_locale);
   vm->rt->messages_locale = (locale_t)0;
+#else
+  (void)vm;
+#endif
 }
 
 static const agc_string *cwd_of(agc_vm *vm) {
