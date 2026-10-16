@@ -50,7 +50,9 @@ A simple alias is `type Names = List[String]`; it can name any type or another
 alias and is transparent in all type positions. `export type Names = ...` makes
 it available to importing modules, by module alias or by name. It adds no
 runtime type and cannot be constructed or used as an enum pattern. Cycles are
-`CHECK-TYPE-ALIAS-CYCLE`; generic aliases are not supported yet.
+`CHECK-TYPE-ALIAS-CYCLE`. Errors in expanded types point to the alias use.
+Expansions stop at 1,000 type references with `CHECK-TOO-DEEP`; generic aliases
+are not supported yet.
 
 `Option[T]` is not builtin; declare it as an enum if you need it. Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.
 

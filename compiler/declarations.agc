@@ -37,6 +37,13 @@ export def span_of(decl: Ast.Decl) -> Source.Span
   end
 end
 
+export def name_span_of(decl: Ast.Decl) -> Source.Span
+  case unwrap(decl)
+    Ast.Decl.TypeAlias(node) -> return node.name_span
+    _ -> return span_of(decl)
+  end
+end
+
 ## The name a struct, enum, alias, function or constant declares; "" for an import.
 export def name_of(decl: Ast.Decl) -> String
   case unwrap(decl)
@@ -160,8 +167,8 @@ end
 
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then
 ## constants, then struct, enum and type alias (exported or not), then export def, then def. The span is of the
-## declaration
-## out of place; the help names the group it belongs to. This is a style rule with no meaning for evaluation.
+## declaration out of place; the help names the group it belongs to. This is a style rule with no meaning for
+## evaluation.
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
   highest = 0
   for decl in declarations

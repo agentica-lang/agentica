@@ -87,7 +87,97 @@ class SpecAliasTest(TestCase):
         text = "type First = Second\n\ntype Second = First\n\ndef main() -> Void\nend\n\n"
         found = self.check(text)
         self.assertEqual(found["code"], "CHECK-TYPE-ALIAS-CYCLE")
-        self.assertEqual(found["range"]["start"]["line"], 1)
+        self.assertEqual(
+            (found["range"]["start"]["line"], found["range"]["start"]["column"]),
+            (1, 14),
+        )
+
+    def test_alias_name_collision_points_to_the_name(self):
+        text = "type Names = Int\n\ntype Names = String\n\ndef main() -> Void\nend\n\n"
+        found = self.check(text)
+        self.assertEqual(found["code"], "CHECK-REDEFINED-NAME")
+        self.assertEqual(
+            (found["range"]["start"]["line"], found["range"]["start"]["column"]),
+            (3, 6),
+        )
+
+    def test_type_is_an_ordinary_name_outside_alias_declarations(self):
+        text = (
+            "struct Holder\n"
+            "  type: Int\n"
+            "end\n\n"
+            "def type(value: Int) -> Int\n"
+            "  return value\n"
+            "end\n\n"
+            "def echo(type: Int) -> Int\n"
+            "  return type\n"
+            "end\n\n"
+            "def main() -> Void\n"
+            "  type = 7\n"
+            "  holder = Holder(type: type)\n"
+            "  puts(type(echo(holder.type)))\n"
+            "end\n\n"
+        )
+        self.assertIsNone(self.check(text))
+
+    def test_malformed_alias_declarations_report_the_code_and_span(self):
+        cases = [
+            ("type\n", "PARSE-UNEXPECTED-TOKEN", (1, 5)),
+            ("type X\n", "PARSE-UNEXPECTED-TOKEN", (1, 7)),
+            ("type X =\n", "PARSE-UNEXPECTED-TOKEN", (1, 9)),
+            ("type x = Int\n", "PARSE-UNEXPECTED-TOKEN", (1, 6)),
+            ("export type\n", "PARSE-UNEXPECTED-TOKEN", (1, 12)),
+            ("type X = Int = 3\n", "PARSE-UNEXPECTED-TOKEN", (1, 14)),
+            ("type X = Nope\n\ndef main() -> Void\nend\n\n", "CHECK-UNKNOWN-TYPE", (1, 10)),
+            (
+                "def main() -> Void\n  type X = Int\nend\n\n",
+                "PARSE-TOP-LEVEL-STATEMENT",
+                (2, 3),
+            ),
+        ]
+        for text, code, start in cases:
+            with self.subTest(text=text):
+                found = self.check(text)
+                self.assertEqual(found["code"], code)
+                self.assertEqual(
+                    (found["range"]["start"]["line"], found["range"]["start"]["column"]),
+                    start,
+                )
+
+    def test_expanded_type_errors_point_to_the_alias_use(self):
+        cases = [
+            (
+                "type Value = Void\n\ndef main() -> Void\n  values: List[Value] = []\nend\n\n",
+                "CHECK-VOID-TYPE",
+                (4, 16),
+            ),
+            (
+                "type Key = List[Int]\n\ndef main() -> Void\n  values: Map[Key, Int] = {}\nend\n\n",
+                "CHECK-MAP-KEY-TYPE",
+                (4, 15),
+            ),
+        ]
+        for text, code, start in cases:
+            with self.subTest(code=code):
+                found = self.check(text)
+                self.assertEqual(found["code"], code)
+                self.assertEqual(
+                    (found["range"]["start"]["line"], found["range"]["start"]["column"]),
+                    start,
+                )
+
+    def test_repeated_alias_expansion_is_bounded(self):
+        aliases = ["type T0 = Int"]
+        for index in range(1, 17):
+            prior = f"T{index - 1}"
+            aliases.append(f"type T{index} = Fn[{prior}, {prior}]")
+        text = "\n\n".join(aliases) + "\n\ndef main() -> Void\nend\n\n"
+        found = self.check(text)
+        self.assertEqual(found["code"], "CHECK-TOO-DEEP")
+        self.assertEqual(
+            (found["range"]["start"]["line"], found["range"]["start"]["column"]),
+            (17, 18),
+        )
 
     def test_enum_aliases_are_not_variant_constructors_or_patterns(self):
         prefix = "enum Shape\n  Circle(Int)\nend\n\ntype Figure = Shape\n\n"
@@ -104,13 +194,17 @@ class SpecAliasTest(TestCase):
             "  end\n"
             "end\n\n"
         )
-        for text, code in [
-            (constructor, "CHECK-UNKNOWN-TYPE"),
-            (pattern, "CHECK-PATTERN-TYPE"),
+        for text, code, start in [
+            (constructor, "CHECK-UNKNOWN-TYPE", (8, 12)),
+            (pattern, "CHECK-PATTERN-TYPE", (10, 5)),
         ]:
             with self.subTest(code=code):
                 found = self.check(text)
                 self.assertEqual(found["code"], code)
+                self.assertEqual(
+                    (found["range"]["start"]["line"], found["range"]["start"]["column"]),
+                    start,
+                )
                 self.assertIn("Shape.Circle", json.dumps(found))
 
     def test_alias_collision_unknown_target_constructor_and_arguments(self):

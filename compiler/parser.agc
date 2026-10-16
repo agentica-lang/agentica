@@ -1159,6 +1159,22 @@ end
 def parse_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   inner = try Base.enter(e, pos)
   kind = e.tokens[pos].kind
+  if (
+    kind == "name" and
+    e.tokens[pos].lexeme == "type" and
+    Base.kind_at(e, pos + 1) == "type-name" and
+    Base.kind_at(e, pos + 2) == "assign"
+  )
+    return error(
+      Base.bail(
+        e,
+        pos,
+        "PARSE-TOP-LEVEL-STATEMENT",
+        "type aliases are only allowed at the top level",
+        Diag.Help.NoHelp,
+      ),
+    )
+  end
   if kind == "if"
     return parse_if(inner, pos, ids)
   end
@@ -1863,6 +1879,7 @@ def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Str
     Ast.TypeAliasDecl(
       id: target.ids,
       name: e.tokens[after_word].lexeme,
+      name_span: e.tokens[after_word].span,
       target: target.node,
       doc: doc,
       span: Base.span_from(e, pos, stop),

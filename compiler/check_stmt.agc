@@ -541,10 +541,10 @@ end
 
 def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, value_type: T.Type) -> String
   if cx.aliases.has_key?(pattern.enum_name)
-    target = Types.resolve_type(cx, st, cx.aliases[pattern.enum_name], false)
+    target = Types.alias_target_text(cx, st, pattern.enum_name)
     if target.ok?
       variant = "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
-      underlying = "#{T.to_text(target.unwrap!)}.#{pattern.variant_name}"
+      underlying = "#{target.unwrap!}.#{pattern.variant_name}"
       return State.fail_help(
         cx,
         st,

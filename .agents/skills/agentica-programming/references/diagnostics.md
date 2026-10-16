@@ -66,7 +66,7 @@ A runtime trace names each file as you can open it from the working directory (`
 | `CHECK-CONSTANT-EXPRESSION` | a constant uses a call of your own function, `&f`, a block outside a builtin call, `while`, or a builtin with effects; compute it in a function instead |
 | `CHECK-CONSTANT-TYPE` | a constant expression has a type that is not data (`Channel`, `Task`, `Fn`, handles, `Void`) |
 | `CHECK-CONSTANT-CYCLE` | constants that read each other in a loop; the help lists `A -> B -> A` |
-| `CHECK-DECL-ORDER` | a declaration out of the file order (imports, constants, `struct`/`enum`, `export def`, `def`): a type after a function, a private `def` before an `export def`, an `import` after a declaration; move it to its group |
+| `CHECK-DECL-ORDER` | a declaration out of the file order (imports, constants, `struct`/`enum`/type aliases, `export def`, `def`): a type after a function, a private `def` before an `export def`, an `import` after a declaration; move it to its group |
 | `CHECK-MODULE-CONTEXT` | Raw import/export declarations need module resolution before checking |
 | `CHECK-NOT-DECODABLE` | JSON.decode/schema target is not a struct or contains unsupported field types |
 | `CHECK-NOT-ENCODABLE` | JSON.encode on a type with unsupported nested values or Int-keyed maps |
@@ -80,7 +80,8 @@ A runtime trace names each file as you can open it from the working directory (`
 | `CHECK-LOOP-CONTROL` | `break` or `next` outside a `while`/`for` body, or inside a block |
 | `CHECK-CAPTURED-ASSIGNMENT` | a block assigns to an outer variable; use a `for` loop or `reduce`. For `xs.each do |w|` on a name or field the help shows the loop, `for w in xs ... end`, which can assign the variable |
 | `CHECK-NOT-A-HANDLE` | `Task.spawn_owning` with an argument that is not a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`, at the argument (see `tasks.md`) |
-| `CHECK-TOO-DEEP` | more than 1,000 levels of expressions and statements in the tree (each counts one; a chain of operators is as deep as it is long, and nested chains are deeper than the parser counts); split the code into functions or bindings |
+| `CHECK-TYPE-ALIAS-CYCLE` | a type alias that expands to itself, directly or through other aliases; break the cycle |
+| `CHECK-TOO-DEEP` | more than 1,000 levels of expressions and statements, or more than 1,000 type references in an expanded alias; split the code or aliases into smaller parts |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
 | `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count; `Channel.new` capacity outside 1..1048576; a `Task.map` `limit` outside 1..1024; a negative `Int.shift_left`/`shift_right`/`shift_right_unsigned` count |

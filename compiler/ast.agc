@@ -148,6 +148,7 @@ end
 export struct TypeAliasDecl
   id: Int
   name: String
+  name_span: Source.Span
   target: TypeRef
   doc: Optional[String]
   span: Source.Span

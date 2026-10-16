@@ -342,7 +342,7 @@ def enter(
 end
 
 # The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is
-# CHECK-REDEFINED-NAME at the declaration.
+# CHECK-REDEFINED-NAME at the declaration name.
 def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   names: Map[String, Declarations.Kind] = {}
   public: Map[String, Declarations.Kind] = {}
@@ -355,7 +355,7 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
     if names.has_key?(name) or settings.catalog.bare_names.include?(name) or settings.catalog.reserved.include?(name)
       return error(
         Failure.fail_at(
-          Failure.Site(file: file, span: Declarations.span_of(wrapped)),
+          Failure.Site(file: file, span: Declarations.name_span_of(wrapped)),
           "CHECK-REDEFINED-NAME",
           "duplicate or reserved declaration",
           Diag.Help.NoHelp,

@@ -58,7 +58,7 @@ def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
       case decl
         Ast.Decl.TypeAlias(node) ->
           here = found.with(file: module.file)
-          try check_new_name(here, st, node.name, node.span)
+          try check_new_name(here, st, node.name, node.name_span)
           found = here.with(aliases: here.aliases.put(node.name, node.target))
         _ -> st = st
       end

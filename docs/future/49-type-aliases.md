@@ -80,7 +80,7 @@ declarations applies as it does to a struct: a blank line goes before the next
 - **No methods.** An alias has no methods of its own. A value of the alias has
   the methods of the type it names: `grid.size` is the `List` method.
 - **Cycles.** `type A = List[A]`, or `A` to `B` and back to `A`, is
-  `CHECK-TYPE-ALIAS-CYCLE` (a proposed code), at the name that closes the cycle.
+  `CHECK-TYPE-ALIAS-CYCLE` at the name that closes the cycle.
   The help is `the cycle is A -> B -> A`, as `CHECK-CONSTANT-CYCLE` gives for
   constants (`docs/grammar/06-semantics.md`).
 - **Export and import.** `export type Grid = ...` exports the alias. An
@@ -90,8 +90,21 @@ declarations applies as it does to a struct: a blank line goes before the next
   A private alias cannot be imported (`CHECK-IMPORT-NAME`).
 - **Exported aliases that name private types.** Decided in 49.5, decision 3.
 
-Proposed codes are names only until the PR lands. `CHECK-REDEFINED-NAME` and
-`CHECK-UNKNOWN-TYPE` are the existing codes for collisions and unknown names.
+### 49.2.1 As built
+
+The checker validates aliases before function signatures and expands an alias
+only when a type contains one. Expansion preserves the source span of the
+alias use for errors in the expanded type. Cycle diagnostics keep the span of
+the reference that closes the cycle. To bound repeated expansion, one type may
+expand to at most 1,000 type references; a larger expansion is
+`CHECK-TOO-DEEP` at the alias use, with help to simplify or split the aliases.
+This prevents a short chain such as `Tn = Fn[T(n-1), T(n-1)]` from growing
+exponentially during checking. `CHECK-UNKNOWN-TYPE` reports type arguments on a
+simple alias; `CHECK-TYPE-ALIAS-CYCLE` is implemented for direct and indirect
+cycles.
+
+`CHECK-REDEFINED-NAME` and `CHECK-UNKNOWN-TYPE` are the existing codes for
+collisions and unknown names.
 
 ### 49.3 Part 49b: generic aliases
 
