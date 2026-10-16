@@ -67,6 +67,20 @@ class Filesystem(TestCase):
         self.assertEqual(result.code, 0, result.stderr)
         return result.stdout
 
+    def test_urandom_reads_bytes_directly_and_through_a_symlink(self):
+        alias = self.new_dir() / "entropy"
+        os.symlink("/dev/urandom", alias)
+        output = self.run_program("""def main() -> Void
+  for path in System.args()
+    file = File.open(path, "read", 1000).unwrap!
+    bytes = File.read_bytes(file, 16, 1000).unwrap!
+    IO.inspect(bytes.size)
+    IO.inspect(File.close(file, 1000))
+  end
+end
+""", args=["/dev/urandom", str(alias)])
+        self.assertEqual(output, "16\nok()\n16\nok()\n")
+
     def stuck_fifo(self):
         """A temp dir with a FIFO that is full and has a reader that never reads; returns (root, fifo).
 

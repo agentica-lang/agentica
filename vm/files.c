@@ -313,9 +313,9 @@ static int probe(int fd, bool *polled) {
 #else
   if (S_ISCHR(info.st_mode)) {
     struct stat device;
-    if ((stat("/dev/null", &device) == 0 && info.st_rdev == device.st_rdev) ||
-        (stat("/dev/zero", &device) == 0 && info.st_rdev == device.st_rdev))
-      return 0;
+    const char *devices[] = {"/dev/null", "/dev/zero", "/dev/urandom"};
+    for (size_t k = 0; k < sizeof devices / sizeof devices[0]; k++)
+      if (stat(devices[k], &device) == 0 && info.st_rdev == device.st_rdev) return 0;
   }
   *polled = true;
   return 0;
