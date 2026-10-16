@@ -293,7 +293,7 @@ goldens stay.
 | 5 | **Done** (PR #282): Lowering (`src/lower.rkt`) | The IR in a text form of its own (not `--dump-ir`, see the status note below), or the `LOWER-` diagnostic. The port carries the lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by 44a2-2): scalar literal constants inlined, the other kept constants as zero-parameter functions, the `<start>` entry, the pruning by reachability from `main`, and the order of `Checked.constants`. The text form is `tests/frontend-lower-common.rkt` (Racket) and `compiler/lower.agc` (Agentica) |
 | 6 | **Done** (PR #286): Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal (not a text form: the test compares the bytes of `compiler/bytecode.agc` with the ones Racket writes; see the status note below). The port writes every section as `src/bytecode.rkt` does, format version 5 with the Updates and Globals sections, and has its `BYTECODE-` diagnostics |
 | 7 | **Done** (7a, the OS builtins the port needs, audited in 35.5, PR #288; 7b, the driver, PR #294): BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`, `tests/unit-test-test.rkt`). The port is `compiler/bdd.agc` over the `compiler/bdd_*.agc` modules; see the status note below |
-| 8 | **Done** (8a, 8b, 8c, 8d-1, 8d-2 and 8d-3: PRs #299, #298, #297, #301, #310 and #PR_NUMBER): CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
+| 8 | **Done** (8a, 8b, 8c, 8d-1, 8d-2 and 8d-3: PRs #299, #298, #297, #301, #310 and #311): CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
 
 Notes:
 
@@ -424,7 +424,7 @@ Notes:
   - **8d, the switch**, in three PRs. **8d-1** (done, PR #301) moved the tests
     that needed Racket for no good reason to Python. **8d-2** (done) is the
     switch, described in "Step 8d-2 status" below. **8d-3** (done, PR
-    #PR_NUMBER) removed the rackunit files with their make targets and CI steps
+    #311) removed the rackunit files with their make targets and CI steps
     (the second half of phase 3), described in "Step 8d-3 status" below.
   - No release with both front ends in between: it would keep two front ends
     alive longer (risk 1 of 35.7), and the private alpha has no external users
@@ -569,7 +569,7 @@ Notes:
     builds on Linux only. `platforms.yml` (macOS and Windows, run by hand) now
     builds only the C VM and its C tests; a port of the embedding to those
     platforms is later work (35.7).
-  - **Step 8d-3 status. Done** (PR #PR_NUMBER). It removed the rackunit files
+  - **Step 8d-3 status. Done** (PR #311). It removed the rackunit files
     (all of `tests/*.rkt`: the stage tests, `frontend-*-test.rkt`,
     `frontend-*-common.rkt`, `frontend-*-freeze.rkt`, `vm-diff-common.rkt`,
     `info.rkt`), `tests/test_cli_parity.py`, the targets that only ran Racket
@@ -1451,7 +1451,7 @@ in rackunit until phase 3.
   flags, a front end that stops with an error exits 2, a closed pipe on
   `--version`, a failing stdin read in the binary, and that `AGENTICA_VM`
   changes nothing. 8d-3 removes the rackunit files.
-  **Status: 8d-3 is done** (PR #PR_NUMBER): phase 3 and the whole migration are
+  **Status: 8d-3 is done** (PR #311): phase 3 and the whole migration are
   complete. The test suite is Python `unittest` only and needs no Racket (a
   run with `racket` and `raco` replaced by failing shims passes). Removed: all
   `tests/*.rkt` files, `tests/test_cli_parity.py`, the rackunit targets of the
