@@ -417,8 +417,87 @@ static void long_names(void) {
   free(text);
 }
 
+
+/* Prelude frames (docs/future/25-ruby-typed-idioms.md §25.6): an error raised while one runs is reported at the call
+ * of the user's frame under the run, a native frame the prelude called belongs to the run, and the stack lists no
+ * frame of the prelude. code[1] of a function is the instruction its frame last ran (pc 2). */
+static void fail_at(agc_vm *vm, int64_t argument, uint32_t span) {
+  agc_string *message = agc_make_string("boom", 4, 4);
+  if (setjmp(vm->turn) == 0) {
+    if (argument == -2)
+      agc_fail(vm, "RUNTIME-TEST", "boom", span);
+    else
+      agc_fail_argument(vm, "RUNTIME-TEST", message, argument, span);
+  }
+}
+
+static void prelude_frames(void) {
+  fixture *f = build();
+  f->fns[F_PUSH].prelude = true;
+  f->fns[F_WALK].prelude = true;
+  f->fns[F_PUSH].params = 2;
+  f->fns[F_WALK].params = 3;
+  f->code[F_MAIN][1] = (agc_instr){AGC_OP_CALL, 0, F_PUSH, 0};
+  f->code[F_BLOCK][1] = (agc_instr){AGC_OP_CALL, 0, F_WALK, 0};
+  agc_vm vm;
+  begin(&vm, f, NULL);
+  agc_task *t = vm.main;
+  agc_outcome *o = &vm.rt->outcome;
+
+  /* A prelude function, a native frame it started and the prelude block that native called form one run: the error
+     is at the call in main, and main alone is no stack. */
+  frames(t, 4);
+  frame(t, 0, F_MAIN, 2, false);
+  frame(t, 1, F_PUSH, 2, false);
+  frame(t, 2, F_SPARE, 1, false);
+  native(t, 2);
+  frame(t, 3, F_WALK, 2, false);
+  fail_at(&vm, -2, span_at(F_WALK, 2));
+  assert(o->span == span_at(F_MAIN, 2) && !o->stack.shown);
+  /* An argument has its span after the call's: argument 1 of push's two. Past the parameters it is the call. */
+  fail_at(&vm, 1, span_at(F_WALK, 2));
+  assert(o->span == span_at(F_MAIN, 2) + 2);
+  fail_at(&vm, 2, span_at(F_WALK, 2));
+  assert(o->span == span_at(F_MAIN, 2));
+  fail_at(&vm, -1, span_at(F_WALK, 2));
+  assert(o->span == span_at(F_MAIN, 2));
+  /* A prelude function that was reached by a tail call has no argument spans of its own. */
+  t->frames[1].tail = true;
+  fail_at(&vm, 1, span_at(F_WALK, 2));
+  assert(o->span == span_at(F_MAIN, 2));
+
+  /* A user block between two prelude frames ends the run: the innermost run is the last prelude function alone, and
+     the stack shows the block and main, with no prelude frame. */
+  frames(t, 4);
+  frame(t, 0, F_MAIN, 2, false);
+  frame(t, 1, F_PUSH, 2, false);
+  frame(t, 2, F_BLOCK, 2, false);
+  frame(t, 3, F_WALK, 2, false);
+  fail_at(&vm, -2, span_at(F_WALK, 2));
+  assert(o->span == span_at(F_BLOCK, 2));
+  assert(o->stack.shown && o->stack.count == 2 && o->stack.lines[0].function == F_BLOCK &&
+         o->stack.lines[0].span == span_at(F_BLOCK, 2) && o->stack.lines[1].function == F_MAIN &&
+         o->stack.lines[1].span == span_at(F_MAIN, 2));
+  fail_at(&vm, 2, span_at(F_WALK, 2));
+  assert(o->span == span_at(F_BLOCK, 2) + 3);
+
+  /* No frame of the user under the run: the span stays the instruction's own. */
+  frames(t, 1);
+  frame(t, 0, F_WALK, 2, false);
+  fail_at(&vm, 1, span_at(F_WALK, 2));
+  assert(o->span == span_at(F_WALK, 2) && !o->stack.shown);
+
+  /* An error in the user's code is not moved. */
+  frames(t, 2);
+  frame(t, 0, F_MAIN, 2, false);
+  frame(t, 1, F_BLOCK, 2, false);
+  fail_at(&vm, -2, span_at(F_BLOCK, 1));
+  assert(o->span == span_at(F_BLOCK, 1));
+}
+
 int main(void) {
   alone();
+  prelude_frames();
   nested();
   repeats();
   cap(40, 20);

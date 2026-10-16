@@ -1,0 +1,8 @@
+@fixtures/vm/prelude-error-callback.agc:4:36 error[RUNTIME-DIVISION-BY-ZERO]
+division by zero
+
+4 |   puts(numbers.flat_map do |n| [10 / n] end)
+  |                                    ^
+  = stack, innermost first:
+    block at @fixtures/vm/prelude-error-callback.agc:4:36
+    main at @fixtures/vm/prelude-error-callback.agc:4:8

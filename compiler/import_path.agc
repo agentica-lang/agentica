@@ -67,7 +67,7 @@ end
 ## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps
 ## links), so it is made canonical first, as the key of a loaded file is.
 export def stored_file(root_dir: String, file: String) -> String
-  if file.starts_with?("std/")
+  if file.starts_with?("std/") or file.starts_with?("<prelude>/")
     return file
   end
   real = Path.real(file)

@@ -4,6 +4,7 @@
 
 import Model from "builtin_model"
 import Data from "builtins_data"
+import PreludeData from "prelude_data"
 import Types from "types"
 
 ## A module only std/ may call: the std module that wraps it and the alias its help shows.
@@ -13,8 +14,10 @@ export struct StdOnly
 end
 
 ## The lookup tables of the catalog. entries holds the first form of each builtin (its alternatives are inside it).
-## public_names are the names a program may call, sorted: all but those of the std-only modules. bare_names are the
-## builtins written as a plain name (puts, ok). reserved is the set of type names no declaration may take.
+## public_names are the names a program may call, sorted: all but those of the std-only modules and the prelude-only
+## builtins. bare_names are the builtins written as a plain name (puts, ok), the prelude-only ones too, so the linker
+## keeps their name. reserved is the set of type names no declaration may take. prelude holds the PreludeRow of each
+## builtin that Rule.Prelude marks and prelude_only the names only the prelude may call.
 export struct Catalog
   entries: Map[String, Model.Builtin]
   public_names: List[String]
@@ -25,23 +28,28 @@ export struct Catalog
   handles: Set[String]
   reserved: Set[String]
   std_only: Map[String, StdOnly]
+  prelude: Map[String, Model.PreludeRow]
+  prelude_only: Set[String]
 end
 
 ## The catalog of this run.
 export def catalog() -> Catalog
   entries = entry_table()
   std_only = std_only_table()
+  prelude_only = Set.new(PreludeData.prelude_only())
   names = entries.keys
   return Catalog(
     entries: entries,
-    public_names: public_names(names, std_only),
+    public_names: public_names(names, std_only, prelude_only),
     bare_names: bare_names(names),
     records: record_table(),
     enums: enum_table(),
     opaque: Set.new(Data.opaque_types()),
     handles: Set.new(Data.handle_types()),
     reserved: Set.new(Data.reserved_type_names()),
-    std_only: std_only
+    std_only: std_only,
+    prelude: prelude_table(),
+    prelude_only: prelude_only
   )
 end
 
@@ -131,8 +139,16 @@ def std_only_table() -> Map[String, StdOnly]
 end
 
 # Map.keys is in insertion order and the rows are sorted by name, so the lists stay sorted.
-def public_names(names: List[String], std_only: Map[String, StdOnly]) -> List[String]
-  return names.filter do |name: String| !std_only.has_key?(module_of(name)) end
+def public_names(names: List[String], std_only: Map[String, StdOnly], prelude_only: Set[String]) -> List[String]
+  return names.filter do |name: String| !std_only.has_key?(module_of(name)) and !prelude_only.include?(name) end
+end
+
+def prelude_table() -> Map[String, Model.PreludeRow]
+  found: Map[String, Model.PreludeRow] = {}
+  for row in PreludeData.rows()
+    found = found.put(row.name, row)
+  end
+  return found
 end
 
 def bare_names(names: List[String]) -> Set[String]

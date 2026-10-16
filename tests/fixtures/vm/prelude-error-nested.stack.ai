@@ -1,0 +1,9 @@
+check failed: 1 error
+
+[RUNTIME-INVALID-COUNT]
+  message: each_slice needs a size of at least 1, found 0
+  at: @fixtures/vm/prelude-error-nested.agc:5:27
+  source: puts(group.each_slice(index))
+  stack:
+    block at @fixtures/vm/prelude-error-nested.agc:5:27
+    main at @fixtures/vm/prelude-error-nested.agc:3:3

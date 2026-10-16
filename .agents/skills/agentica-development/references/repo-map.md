@@ -30,7 +30,8 @@ compiler/         # the front end in Agentica (35.4, one stage per PR); lexer, p
   check_const.agc const_walk.agc  # module constants: order, CHECK-CONSTANT-CYCLE, the value and type rules; the children and reads of an initializer
   check_help.agc check_names.agc check_flow.agc check_unused.agc  # help texts, method names, what a body returns, CHECK-UNUSED-VALUE
   check_tables.agc  # method tables and foreign-name helps as data, edited by hand
-  checker.agc     # check(linked, catalog): Checking.Done(Checked: types by node id, resolved) | Failed(Problem)
+  prelude.agc prelude_data.agc check_prelude.agc  # the compiler prelude (stages.md): read, parse and check the stdlib/prelude/ functions a program calls; the table of prelude rows, by hand; the checker rule of a call of one
+  checker.agc     # check(linked, settings): Checking.Done(Checked: types by node id, resolved, the prelude files and their bodies) | Failed(Problem)
   check.agc check_text.agc  # entry: prints the text form of checking each root file argument
   ir.agc lower_tables.agc lower_state.agc  # lowering: the IR as data, the lowering tables, Cx and Fx (the function being lowered)
   lower_expr.agc lower_data.agc lower_stmt.agc  # expressions and calls; list, map, enum, struct and update chunks; functions, blocks, statements
@@ -159,6 +160,7 @@ tests/            # unittest modules (test_<area>.py); the lists of references/v
   test_vm_os.py   # unittest: the OS builtins of the BDD driver port, with real contention between VMs (references/vm-tests.md)
   test_single_binary.py  # unittest: dist/agentica: the exit status and problems of a source file, `agentica run`, the guarded FrontEnd builtins, the options of the hand-off, --front-end with fixtures/single-binary/front.agc (references/vm-tests.md); the fixed point is a CI step, not a test
   test_stdlib_modules.py  # unittest: stdlib/MODULES names each stdlib/ source once (no binary needed)
+  test_stdlib_prelude.py  # unittest: the prelude table and the files of stdlib/prelude/ agree, no O(n) builtin in a loop there, and a Python peer for the methods
   test_vm_test_protocol.py  # unittest: a Python peer plays a test runner over the child channel (references/vm-tests.md)
   test_vm_child_channel.py  # unittest: the child channel on its own, against Python peers (references/vm-tests.md)
   test_vm_tls.py  # unittest: the VM TLS builtins against independent peers (references/vm-tests.md)
@@ -177,6 +179,7 @@ tests/            # unittest modules (test_<area>.py); the lists of references/v
   bdd/            # feature specs and step handlers run by make test-bdd (references/bdd.md)
   eval/           # agent evaluation runner, not part of make test (references/bench-eval.md)
 stdlib/                 # std/ modules written in Agentica, embedded in the single binary; MODULES lists them (an explicit registry keyed "std/<path>.agc")
+  prelude/list.agc prelude/map.agc  # the compiler prelude: the bodies of List and Map methods (find, group_by ...); not modules, no program imports them (references/stages.md)
   queue.agc http.agc binary.agc logger.agc toml.agc    # std/queue, std/http, std/binary, std/logger, std/toml
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/bdd.md

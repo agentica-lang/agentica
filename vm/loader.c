@@ -300,9 +300,15 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         check_not_entry(r, p, bx);
         if (p->functions[bx].captures) reject(r, "direct call to a function with captures");
         check_window(r, in.a, p->functions[bx].params, f);
+        /* A call of a prelude function carries the span of each argument after its own (like CALL_BUILTIN), so
+           the error of a prelude function can be reported at an argument (report_span in interp.c). */
+        if (in.op == AGC_OP_CALL && p->functions[bx].prelude) check_spans(r, p, span, p->functions[bx].params + 1);
         break;
       case AGC_OP_CALL_BUILTIN:
         if (bx >= p->builtin_count) reject(r, "builtin index out of range");
+        /* __fail_arg and the other prelude-only builtins fail at a place the prelude rule picks, so only the
+           compiler prelude may call them. */
+        if (agc_builtin_prelude_only(p->builtins[bx]) && !f->prelude) reject(r, "prelude-only builtin outside the prelude");
         check_window(r, in.a, p->builtins[bx]->arity, f);
         check_spans(r, p, span, p->builtins[bx]->arity + 1);
         break;
@@ -480,7 +486,8 @@ static void load_globals(reader *r, agc_program *p) {
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
-  if (r->format != AGC_FORMAT_VERSION) reject(r, "unsupported format version");
+  if (r->format != AGC_FORMAT_VERSION && r->format != AGC_FORMAT_PREVIOUS)
+    reject(r, "unsupported format version");
   /* The version is read in both cases, so the text is validated and the file is parsed the same way. */
   if (!same_text(read_string(r), AGC_VERSION) && !r->any_version) reject(r, "built for another Agentica version");
 
@@ -557,6 +564,13 @@ static void load(reader *r, agc_program *p) {
     f->captures = read_u32(r);
     f->registers = read_u32(r);
     f->span = read_u32(r);
+    /* Version 6 added the prelude flag after the span (0 or 1); a version 5 file has no prelude function. */
+    f->prelude = false;
+    if (r->format >= AGC_FORMAT_VERSION) {
+      uint32_t flag = read_u32(r);
+      if (flag > 1) reject(r, "bad prelude flag");
+      f->prelude = flag == 1;
+    }
     if (f->registers == 0 || f->registers > 65535 || (uint64_t)f->params + f->captures > f->registers)
       reject(r, "bad register count");
     if (f->span >= p->span_count) reject(r, "span index out of range");
@@ -647,9 +661,11 @@ bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *erro
   return agc_load_traced(data, len, program, error, error_size, NULL);
 }
 
-/* A relative name that is not under std/ (those are the embedded standard modules, which have no folder). */
+/* A relative name that is not under std/ (those are the embedded standard modules, which have no folder) and not the
+ * name of a prelude file, which has no folder or text either. */
 static bool takes_root(const agc_string *name) {
   if (name->bytes > 0 && name->data[0] == '/') return false;
+  if (name->bytes >= 10 && memcmp(name->data, "<prelude>/", 10) == 0) return false;
   return !(name->bytes >= 4 && memcmp(name->data, "std/", 4) == 0);
 }
 

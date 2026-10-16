@@ -1,0 +1,1 @@
+{"code":"RUNTIME-INTEGER-OVERFLOW","file":"@fixtures/vm/prelude-error-sum.agc","message":"Int result is outside the 64-bit range","range":{"end":{"column":15,"line":4},"start":{"column":8,"line":4}}}

@@ -51,7 +51,7 @@ def compile(path: String, output: String, settings: Env.Settings) -> String
 end
 
 def check(linked: Linker.Linked, output: String, settings: Env.Settings) -> String
-  case Checker.check(linked, settings.catalog)
+  case Checker.check(linked, settings)
     Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
     Checker.Checking.Done(checked) ->
       lowered = Lowering.lower(linked, checked, settings.catalog)

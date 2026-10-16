@@ -361,6 +361,10 @@ void agc_charge_bytes(agc_vm *vm, size_t bytes);
 uint64_t agc_value_units(agc_value v);
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
 _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
+/* __fail_arg: fails at argument number `argument` of the call a prelude function was given (agc_fail's rule for the
+   span, docs/future/25-ruby-typed-idioms.md §25.6), or at the call when there is no such argument span. */
+_Noreturn void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument,
+                                 uint32_t span);
 _Noreturn void agc_exit(agc_vm *vm, int64_t code);
 size_t agc_stack_members(const agc_program *program, const agc_stack *stack, agc_json_member out[3]);
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline);

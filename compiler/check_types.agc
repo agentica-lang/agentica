@@ -49,6 +49,12 @@ export def key_type?(type: Types.Type) -> Bool
   return Types.is(type, "Int") or Types.is(type, "String")
 end
 
+## True when the type may be a Map key or a Set element where cx checks: Int and String, and in the files of the
+## prelude a type variable too (the checker has checked the types it stands for, check_prelude.agc).
+export def key_here?(cx: State.Cx, type: Types.Type) -> Bool
+  return key_type?(type) or (cx.prelude and Types.is(type, "Var"))
+end
+
 ## True for Int and Float.
 export def numeric?(type: Types.Type) -> Bool
   return Types.is(type, "Int") or Types.is(type, "Float")
@@ -222,7 +228,7 @@ end
 
 def resolve_map(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Result[Types.Type]
   key = try resolve_type(cx, st, args[0], false)
-  if !key_type?(key)
+  if !key_here?(cx, key)
     return error(
       State.fail(
         cx,
@@ -238,7 +244,7 @@ end
 
 def resolve_set(cx: State.Cx, st: State.St, arg: Ast.TypeRef) -> Result[Types.Type]
   element = try resolve_type(cx, st, arg, false)
-  if !key_type?(element)
+  if !key_here?(cx, element)
     return error(
       State.fail(
         cx,

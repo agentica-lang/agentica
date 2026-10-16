@@ -67,6 +67,26 @@ class Examples(TestCase):
                 ("constants.agc", "8 | 32\n5\nfruit | drink\n3\n"),
                 ("defaults.agc", "Level.Info start 0\nLevel.Warn slow 1\na, b, c\na-b-c\none\ntwo\n- one\n- two\n"
                                  "- three\n"),
+                ("enumerable.agc", "big order: eve\n"
+                                  "not found\n"
+                                  "cheapest: ana\n"
+                                  "most items: eve\n"
+                                  "tie: bob\n"
+                                  "ana: 5 items\n"
+                                  "bob: 1 items\n"
+                                  "eve: 5 items\n"
+                                  "{\"ana\": 2, \"bob\": 1, \"eve\": 1}\n"
+                                  "[\"ana\", \"bob\", \"eve\"]\n"
+                                  "revenue: 63.0\n"
+                                  "3 large, 1 small\n"
+                                  "[[1, 2, 3], [4, 5, 6], [7]]\n"
+                                  "[1, 2, 3]\n"
+                                  "[4, 5, 6, 7]\n"
+                                  "[\"a\", \"A\", \"b\", \"B\"]\n"
+                                  "0: x\n"
+                                  "1: y\n"
+                                  "-1\n"
+                                  "[\"ana\"]\n"),
                 ("case-guards.agc", "big circle\nempty circle\ntwin\ndot\nnegative -3\nvalue 8\nmissing\n"
                                     "timed out\n"),
                 ("heredoc.agc", "Usage: tool [options] FILE\n\n  --verbose   print more\n"

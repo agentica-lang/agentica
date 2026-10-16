@@ -1,0 +1,5 @@
+@fixtures/vm/prelude-error-sum.agc:4:8 error[RUNTIME-INTEGER-OVERFLOW]
+Int result is outside the 64-bit range
+
+4 |   puts(big.sum)
+  |        ^^^^^^^

@@ -255,9 +255,12 @@ The file lists the builtins it uses as `(key, arity)`. The key is the
 implementation key in `compiler/builtins_data.agc`, not the written name: `puts` and
 `IO.puts` both import `"puts"`. Overloads such as `Map.get` and `ok` are
 separate entries by arity. The loader resolves each pair against the C table and
-rejects unknown pairs. There are no internal helper builtins: `List.concat`,
-which the lowerer emits for long list literals, is the catalog builtin of that
-name.
+rejects unknown pairs. There are no internal helper builtins with one exception:
+`__fail_arg(code, index, message)` is a prelude-only builtin (4.7). Its name
+starts with `__`, no program can call it (the checker knows it only in the
+files of the prelude), and the loader rejects a call to it from a function
+that has no prelude flag. `List.concat`, which the lowerer emits for long list
+literals, is the catalog builtin of that name.
 
 ### 4.6 File format
 
@@ -267,7 +270,7 @@ header and the entry.
 
 | Section | Entry |
 |---|---|
-| Header | magic `"AGCB"`, `u32` format version (5), `str` Agentica version (the `VERSION` file) |
+| Header | magic `"AGCB"`, `u32` format version (6), `str` Agentica version (the `VERSION` file) |
 | Sources | `str` name, `str` full text. The name is the path from the folder of the entry file (`main.agc`, `lib/util.agc`, `../shared/x.agc`) or `std/NAME.agc` (a user file under a `std/` folder is `./std/NAME.agc`), never an absolute path, so the bytes do not depend on where the program lives (§35.4). The VM prints it in diagnostics and stack traces, under `--source-root DIR` when given (§9). |
 | Spans | `u32` source, start line, start column, end line, end column. Span 0 is the program span. |
 | Constants | `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6 String), then `i64`, `f64` bits or `str` |
@@ -277,7 +280,7 @@ header and the entry.
 | Updates | `u32` struct index, `u32` field count k (1 to the struct's field count), k `u32` field indexes, strictly increasing and below the struct's field count. One entry per distinct set of fields of a struct that a `.with(...)` changes; `STRUCT_WITH` names an entry. |
 | Globals | `u32` slot count, nothing else (at most 65,535). The slots are the module constants of [§44](../future/44-module-constants.md); the initializers are ordinary functions that the entry calls. A program without constants writes 0. |
 | Builtins | `str` name, `u32` arity |
-| Functions | `str` name, `u32` params, captures, registers, span, instruction count, the instructions, then one `u32` span index per instruction |
+| Functions | `str` name, `u32` params, captures, registers, span, prelude flag (0 or 1, 4.7), instruction count, the instructions, then one `u32` span index per instruction |
 | Entry | `u32` index of the entry function: `main`, or `<start>` in a file with module constants (§44), which sets the slots and tail-calls `main` |
 
 - The Sources section embeds the full source texts, so the VM prints diagnostics
@@ -299,7 +302,56 @@ header and the entry.
 - The VM accepts only its own format version and Agentica version (8). Any
   change to the layout or to an opcode's meaning bumps the format version.
   Version 5 added the Globals section (version 4 is the Updates section and
-  `STRUCT_WITH`, 15c). Versions 6 and 7 are reserved by the designs of §41 and
-  §42.
+  `STRUCT_WITH`, 15c). Version 6 added the prelude flag of each function
+  (4.7). Versions 7 and 8 are reserved by the designs of §42 and §41.
 - The C loader is the only reader of this format. There is no Racket reader, and
-  no compatibility shims: the Racket side and the VM ship together.
+  no compatibility shims, with one transitional exception: the loader also
+  reads format 5, which has no prelude flag, as long as `bootstrap/stage0.agcb`
+  is in format 5 (the first binary of the bootstrap runs the programs that its
+  stage0 compiler writes in that format). Refreshing stage0
+  (`references/ci.md` of the development skill) lets a later change remove it.
+
+### 4.7 The prelude
+
+The compiler prelude ([§25.6](../future/25-ruby-typed-idioms.md)) is Agentica
+code that the compiler adds to a program: the bodies of `List.find`,
+`List.group_by` and the other prelude methods. Its functions are ordinary
+functions, with differences that make an error inside them read as an error at
+the call in the program.
+
+- **The flag.** The Functions section gives each function a `u32` prelude flag,
+  0 or 1; any other value is a rejected file. The flag is 1 for the functions
+  whose source is a prelude file. The name of such a source starts with
+  `<prelude>/` (`<prelude>/list.agc`) and it has no text; every span in its
+  functions is the single span `1:1-1:1`. The VM never prints it.
+- **Argument spans.** The compiler emits a call of a prelude function as a
+  `CALL` with the spans of its arguments right after the span of the call:
+  argument `i` has span `s + 1 + i` when the call has span `s`. The loader
+  requires `s .. s + params` to be in range for a `CALL` of a function with the
+  flag. A call of a prelude function is never a `TAIL_CALL`, so the frame of the
+  caller stays on the stack, and `CALL_VALUE` has no argument spans.
+- **The error span.** A runtime error raised while a prelude frame runs is
+  reported at the call in the program. Take the innermost run of consecutive
+  prelude frames (the frame of a native function that a prelude function
+  calls is transparent). The error is at the span of the `CALL` in the caller
+  of the outermost frame of that run. When the error names an argument
+  (`__fail_arg(code, index, message)` and the builtins that fail at an
+  argument) and that call carries argument spans, the span is the one of that
+  argument; otherwise it is the span of the call. If no frame of the program is
+  below the run (a flagged `main`), the static span of the instruction is used.
+  Frames with the flag are left out of stack traces (plain, `--ai` and
+  `--json`), so a block called by a prelude function shows next the frame of
+  the program that called the prelude.
+- **`__fail_arg`.** `__fail_arg(code: String, index: Int, message: String)`
+  ends the run with a diagnostic of that code and message at argument `index`
+  of the call of the prelude function. The code must be `RUNTIME-` followed by
+  upper case letters, digits and `-` (at most 64 bytes); any other code is
+  `RUNTIME-INTERNAL`. It is the only prelude-only builtin: the loader rejects
+  a `CALL_BUILTIN` of it, or of any builtin whose name starts with `__`, from a
+  function without the flag.
+- **Cost.** The steps of a prelude function are steps of the program: the
+  budget (`--max-steps`) is the caller's. A step limit reached inside a prelude
+  function is `RUNTIME-STEP-LIMIT` at the call in the program.
+
+The loader cannot tell a `CALL` that carries argument spans from one that does
+not, so it checks only the range above.

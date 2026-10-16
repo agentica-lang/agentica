@@ -50,7 +50,7 @@ export def program_text(linked: Linker.Linked, checked: Checker.Checked) -> Stri
 end
 
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
-  case Checker.check(linked, settings.catalog)
+  case Checker.check(linked, settings)
     Checker.Checking.Done(checked) -> return program_text(linked, checked)
     Checker.Checking.Failed(problem) -> return problem_text(linked.root_dir, problem)
   end

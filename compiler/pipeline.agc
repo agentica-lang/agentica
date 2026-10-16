@@ -79,7 +79,7 @@ export def compile(path: String, settings: Env.Settings) -> Compiled
 end
 
 def check(linked: Linker.Linked, settings: Env.Settings) -> Front
-  case Checker.check(linked, settings.catalog)
+  case Checker.check(linked, settings)
     Checker.Checking.Failed(problem) -> return Front.Rejected(problem)
     Checker.Checking.Done(checked) -> return Front.Done(Checked(linked: linked, checked: checked))
   end

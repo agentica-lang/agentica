@@ -4,15 +4,15 @@ structs-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many st
 variants-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many enum variants for the VM
 fields-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many fields in one struct for the VM
 payload-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many payload items in one variant for the VM
-registers-ok ok 178 82972842
+registers-ok ok 182 964957236
 registers-over ERROR BYTECODE-LIMIT 30:1-30:5 file=b.agc the program has too many registers in one function for the VM
 types-deep-ok ok 5249 166160794
 types-deep-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many nested List and Map levels in a JSON field type for the VM
-steps-merged ok 1311018 522695981
-labels ok 274 698700407
+steps-merged ok 1311022 419613224
+labels ok 278 713575347
 unknown-op ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc
 missing-label ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc
 operand-range ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc
 operand-wide ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc
-operand-count ok 212 258327838
+operand-count ok 216 636288584
 operand-short ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc

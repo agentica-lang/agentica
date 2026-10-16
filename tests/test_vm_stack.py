@@ -25,8 +25,15 @@ CASES = [
     ("vm/stack-trace-mutual", []),
     ("vm/stack-trace-task", []),
     ("vm/stack-trace-big", []),
+    ("vm/stack-trace-prelude", []),
+    ("vm/prelude-error-slice", []),
+    ("vm/prelude-error-tail", []),
+    ("vm/prelude-error-nested", []),
+    ("vm/prelude-error-sum", []),
+    ("vm/prelude-error-callback", []),
     ("vm/step-limited/stack-trace-step-limit", ["--max-steps", "500"]),
     ("vm/step-limited/stack-trace-task-step-limit", ["--max-steps", "500"]),
+    ("vm/step-limited/stack-trace-prelude-step-limit", ["--max-steps", "500"]),
 ]
 STYLES = [("plain", []), ("ai", ["--ai"]), ("json", ["--json"])]
 

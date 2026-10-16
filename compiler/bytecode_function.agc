@@ -76,8 +76,17 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
   # The span of the function comes after those of its instructions.
   own = Spans.intern_one(span_pool, function.file, function.span)
   head = Bytes.string(function.name).concat(Bytes.u32(function.params)).concat(Bytes.u32(function.captures))
-  head = head.concat(Bytes.u32(function.slots)).concat(Bytes.u32(own.id)).concat(Bytes.u32(count))
+  head = head.concat(Bytes.u32(function.slots)).concat(Bytes.u32(own.id))
+  head = head.concat(Bytes.u32(prelude_flag(program, function))).concat(Bytes.u32(count))
   return ok(Encoded(tables: state.with(spans: own.pool), parts: [head, code, refs]))
+end
+
+# 1 for a function lowered from a file of the prelude, else 0: the VM reports an error in it at the user's call.
+def prelude_flag(program: Ir.Program, function: Ir.Function) -> Int
+  if Ir.prelude_file?(program, function.file)
+    return 1
+  end
+  return 0
 end
 
 # The operands of one instruction, which is a written run of `run` instructions when it is a `step`. The tables gain

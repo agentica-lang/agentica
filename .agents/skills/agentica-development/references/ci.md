@@ -54,6 +54,10 @@ comment), then a step that calls it. Targets that are not obvious:
   changes the format writes the commands. `make` fails with a message when
   stage0 is too old, never with a silent difference. A stage0 is a 3.7 MB
   blob: refresh it only when needed, so the history stays small.
+  Format 6 (the prelude flag) is not in the checked-in stage0 yet: the loader
+  still reads format 5 (`AGC_FORMAT_PREVIOUS` in `vm/value.h`) so that the
+  first binary of the bootstrap works. The next stage0 refresh makes it
+  unneeded; remove it then.
 - `cli` is gone (it built `dist/agentica-cli.agcb` for `tests/agentica-agcb`),
   and so are `bdd-driver` (`dist/agentica-bdd-driver.agcb`; the driver is part
   of the front end), `exe` and `vm` (the four names stay in the Makefile as
