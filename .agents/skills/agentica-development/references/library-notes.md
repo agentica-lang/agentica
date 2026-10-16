@@ -130,3 +130,6 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
   checked by `tests/test_style_line_width.py`.
 - Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into
   a few sentence-sized pieces joined with `+`, never one piece per line.
+- Several steps on one value are a pipe chain in parentheses, one
+  `|> f(args)` per line, not `x = f(x, args)` repeated three or more times in
+  a row. The lint does not check it; reviews do.

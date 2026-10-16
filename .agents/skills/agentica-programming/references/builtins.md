@@ -97,6 +97,7 @@ String.index_of(s: String, part: String) -> Result[Int]      # first match; erro
 String.at(s: String, index: Int) -> String               # one character; halts outside
 String.reverse(s: String) -> String
 String.code(c: String) -> Int                            # code point of one character; other lengths halt
+String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in the order of sort (code point); also a.compare(b)
 String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
@@ -131,9 +132,23 @@ List.any?(list: List[A], f: Fn[A, Bool]) -> Bool         # stops at the first tr
 List.all?(list: List[A], f: Fn[A, Bool]) -> Bool         # stops at the first false
 List.sort(list: List[T]) -> List[T]                      # T is Int, Float, or String; stable
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]    # key is Int, Float, or String; one call per element
+List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]    # ok(first match) or error("not found"); stops at the match
+List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void   # f(item, index), index from 0
+List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
+List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]     # [accepted, rejected]
+List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A]          # stops calling f at the first false
+List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
+List.each_slice(list: List[A], size: Int) -> List[List[A]]         # no block; size < 1 is RUNTIME-INVALID-COUNT
+List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]     # K is Int or String; first-appearance order
+List.tally(list: List[K]) -> Map[K, Int]                 # K is Int or String; first-appearance order
+List.uniq(list: List[K]) -> List[K]                      # K is Int or String; keeps the first of each
+List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
+List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]   # key Int, Float or String; first wins ties; empty is an error
+List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]   # NaN keys never win unless all are NaN
 ```
 
 - `map`, `filter`, and `reduce` cost O(n); `sort` and `sort_by` cost O(n log n); callback work is extra. Each callback runs once per element, left to right, under the caller's execution budget.
+- `find` ... `max_by` are written in Agentica (the compiler prelude) and cost O(n), 4 to 28 steps for each element (`references/performance.md`). A runtime error in one is reported at your call. Each has one name: `select`, `collect`, `detect`, `inject` and `reject` are `CHECK-UNKNOWN-METHOD` (`filter`, `map`, `find`, `reduce`, and `xs.filter do |x| !cond end`), and a `Range` has none of them (`(1..5).to_a.map do ... end`). A block after `each_slice` is `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ... end`.
 - Callback types must match exactly. A callback given as `&name`, a `Fn` variable, or a block with typed parameters (`do |x: Int|`) types empty lists and empty reduce starts.
 - Strings sort by code point, so `"B"` comes before `"a"`. Float NaN sorts last. Other element types are `CHECK-TYPE-MISMATCH`.
 - Updates return new lists and leave the input unchanged. `List.repeat(x, 0)` is an empty list of the inferred type; annotate when the context is not enough.
@@ -149,6 +164,8 @@ Map.get(map: Map[K, V], key: K) -> Result[V]             # ok(value), or error w
 Map.get(map: Map[K, V], key: K, default: V) -> V         # default is evaluated eagerly
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]   # returns a new map
 Map.delete(map: Map[K, V], key: K) -> Map[K, V]          # absent keys are ignored; O(n)
+Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void      # f(key, value) in insertion order
+Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]   # keeps the entries f accepts, in insertion order
 ```
 
 - Lookup, `has_key?`, and `put` are effectively constant time (a persistent 32-way HAMT); updates share unchanged storage. `m[key]` on a missing key is `RUNTIME-KEY-NOT-FOUND`.

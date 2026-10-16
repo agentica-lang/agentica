@@ -1,0 +1,8 @@
+@fixtures/vm/prelude-error-tail.agc:2:29 error[RUNTIME-INVALID-COUNT]
+each_slice needs a size of at least 1, found -1
+
+2 |   return numbers.each_slice(size)
+  |                             ^^^^
+  = stack, innermost first:
+    slices at @fixtures/vm/prelude-error-tail.agc:2:29
+    main at @fixtures/vm/prelude-error-tail.agc:7:8

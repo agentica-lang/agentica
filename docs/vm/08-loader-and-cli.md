@@ -22,10 +22,16 @@ branch.
   ends right after the entry. The one exception to the exact Agentica version
   is the front end that the single binary loads itself (the carried one, or
   the file of `--front-end`): its Agentica version may differ, and every other
-  check applies to it. See "The single binary" in section 9.
+  check applies to it. The format version is the binary's (6) or, until
+  `bootstrap/stage0.agcb` is refreshed, the previous one (5, with no prelude
+  flag in the functions), which the first binary of the bootstrap still writes.
+  See "The single binary" in section 9.
 - **Strings**: valid UTF-8 with no surrogates. Character counts are computed.
 - **Spans**: the source exists, `start <= end`, and each line is within the
   source's line count and each column within the line's length plus 1.
+- **Prelude**: the flag of each function is 0 or 1. A `CALL` of a function with
+  the flag has its argument spans in range, and a call of a prelude-only builtin
+  (`__fail_arg`) is in a function with the flag (03, 4.7).
 - **Tables**: constant kinds 0 to 6 only. Field counts and variant arities are
   at most 65535. The loader does not check builtin records: a builtin finds its
   record by exact name and fields at run time (5.2). Every builtin

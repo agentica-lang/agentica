@@ -1,0 +1,9 @@
+@fixtures/vm/stack-trace-prelude.agc:3:24 error[RUNTIME-DIVISION-BY-ZERO]
+division by zero
+
+3 |     puts([1, 2, 3].sum / (n - 2))
+  |                        ^
+  = stack, innermost first:
+    check at @fixtures/vm/stack-trace-prelude.agc:3:24
+    block at @fixtures/vm/stack-trace-prelude.agc:10:35
+    main at @fixtures/vm/stack-trace-prelude.agc:10:8

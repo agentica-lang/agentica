@@ -147,7 +147,7 @@ change is recorded in `docs/vm-benchmarks.md`.
 - A function that fails returns a `Result` whose error is a packed diagnostic; `try` stops at the first one. There are no exceptions in a stage, and a value that cannot happen is a `*-INTERNAL` diagnostic.
 - The VM call depth is 10,000 frames: recurse on the tree only with a bounded depth (`CHECK-TOO-DEEP` bounds the checker and lowering), or use an explicit stack and loops.
 - `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`); a comparison of types needs `Types.same`, since an enum cannot be compared with `==`.
-- Build lists with `push` and strings with `join`; `a + [x]` in a loop is quadratic.
+- Build lists with `push` and strings with `join`; `s = s + piece` in a loop is quadratic.
 
 
 ## Lexer gotcha: stray NL tokens
@@ -171,6 +171,7 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 - Lines in `compiler/*.agc` are at most 119 characters, comments included (`compiler/agentica.toml`, `[style]`), checked by `tests/test_style_line_width.py`. Break a call or list one item per line with a trailing comma, wrap a long expression in parentheses, and flow a doc block over several `##` lines.
 - Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into a few sentence-sized pieces joined with `+`, never one piece per line.
+- Several steps on one value are a pipe chain in parentheses, one `|> f(args)` per line, not `x = f(x, args)` repeated three or more times in a row. The lint does not check it; reviews do.
 
 ## The command line in Agentica (step 8a, the product since 8d-2)
 

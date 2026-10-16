@@ -132,7 +132,16 @@ Operators, from highest to lowest precedence:
 - `==` and `!=` take two values of the same primitive type (Int, Float, Bool, String, Nil), or two ranges. Lists, maps, sets, structs, Results, Json, and Fn values cannot be compared (two sets are equal when `a.subset?(b) and b.subset?(a)`).
 - `&&`, `||`, `!` take Bool and short-circuit; `and`, `or`, `not` are the same operators. `!` binds tightly, so write `!(a >= b)`. A `!` right after a name is part of the name (`read!`).
 - Operands are evaluated left to right.
-- `x |> f(a)` means `f(x, a)`. The right side must be a call with parentheses (`f(a)`, `Alias.f(a)`), optionally after `try`; pipes group to the left (`x |> f() |> g()` is `g(f(x))`). A builtin with a method form is written with `.`; see `PARSE-PIPE-TARGET` and `CHECK-PIPE-METHOD` in `diagnostics.md`.
+- `x |> f(a)` means `f(x, a)`. The right side must be a call with parentheses (`f(a)`, `Alias.f(a)`), optionally after `try`; pipes group to the left (`x |> f() |> g()` is `g(f(x))`). A builtin with a method form is written with `.`; see `PARSE-PIPE-TARGET` and `CHECK-PIPE-METHOD` in `diagnostics.md`. A chain over several lines goes in parentheses, one step per line. Prefer it to reassigning the same name in a row:
+
+  ```ruby
+  # not: out = header(v)  out = add(out, a)  out = add_all(out, b)
+  out = (
+    header(v)
+    |> add(a)
+    |> add_all(b)
+  )
+  ```
 
 ## Blocks and closures
 

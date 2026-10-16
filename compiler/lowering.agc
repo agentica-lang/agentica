@@ -13,6 +13,7 @@ import Failure from "check_failure"
 import Checker from "checker"
 import Defaults from "defaults"
 import Ir from "ir"
+import {PRELUDE_PREFIX} from "ir"
 import Const from "lower_const"
 import Expr from "lower_expr"
 import Program from "lower_program"
@@ -70,7 +71,8 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
   functions: List[Located] = []
   constants: List[LocatedConst] = []
   decls: List[Ast.Decl] = []
-  for module in linked.modules
+  modules = linked.modules.concat(checked.prelude)
+  for module in modules
     for decl in module.declarations
       decls = decls.push(decl)
       case decl
@@ -110,6 +112,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
     variants: tables.variants,
     json_structs: tables.json_structs,
     functions: by_name,
+    bodies: checked.bodies,
     fills: fills_of(functions, index_of),
     reads: reads_of(plan),
     file: linked.modules[0].file,
@@ -149,16 +152,47 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
   if start
     entry = functions.size + plan.kept.size
   end
-  sources = linked.modules.map do |module: Linker.LinkedModule| Ir.SourceFile(file: module.file, text: module.text) end
+  sources = modules.map do |module: Linker.LinkedModule| source_of(module) end
+  kept_sources = used_sources(sources, files)
   return ok(Ir.Program(
-    sources: used_sources(sources, files),
+    sources: kept_sources,
     structs: tables.structs,
     enums: tables.enums,
-    functions: built,
+    functions: pin_prelude_spans(built, kept_sources),
     entry: entry,
     globals: plan.slots.size,
     span: linked.root.span
   ))
+end
+
+# A file of the prelude is only a name in the program: no text, so no program can show its lines.
+def source_of(module: Linker.LinkedModule) -> Ir.SourceFile
+  if module.file.starts_with?(PRELUDE_PREFIX)
+    return Ir.SourceFile(file: module.file, text: "")
+  end
+  return Ir.SourceFile(file: module.file, text: module.text)
+end
+
+# Every span in a function of the prelude becomes the first character of its file: the file has no text, and the VM
+# reports a runtime error of a prelude function at the call of the program (docs/vm/03-ir-and-bytecode.md). The
+# number of spans of each instruction stays, because the loader checks it.
+def pin_prelude_spans(functions: List[Ir.Function], sources: List[Ir.SourceFile]) -> List[Ir.Function]
+  start = Source.Position(offset: 0, line: 1, column: 1)
+  pinned = Source.Span(start: start, stop: start)
+  found: List[Ir.Function] = []
+  for function in functions
+    if sources[function.file].file.starts_with?(PRELUDE_PREFIX)
+      body = function.body.map do |instr: Ir.Instr| pin_instr(instr, pinned) end
+      found = found.push(function.with(body: body, span: pinned))
+    else
+      found = found.push(function)
+    end
+  end
+  return found
+end
+
+def pin_instr(instr: Ir.Instr, pinned: Source.Span) -> Ir.Instr
+  return instr.with(spans: instr.spans.map do |span: Source.Span| pinned end)
 end
 
 # The functions that have default values, by name, with the file each is declared in.

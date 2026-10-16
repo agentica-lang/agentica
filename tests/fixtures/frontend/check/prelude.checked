@@ -1,0 +1,199 @@
+program #195 0:1:1-1167:37:1
+  module "prelude.agc"
+    declaration: struct-decl #6 0:1:1-60:6:1 name="Item"
+      field: field-decl #1 14:2:3-27:3:1 name="name"
+        type: type-ref #0 20:2:9-26:2:15 name="String"
+      field: field-decl #3 29:3:3-43:4:1 name="weight"
+        type: type-ref #2 37:3:11-42:3:16 name="Float"
+      field: field-decl #5 45:4:3-56:5:1 name="count"
+        type: type-ref #4 52:4:10-55:4:13 name="Int"
+    declaration: function-decl #194 61:7:1-1167:37:1 name="main"
+      result: type-ref #7 75:7:15-79:7:19 name="Void"
+      body: binding #23 82:8:3-171:9:1 name="items"
+        value: list-lit #22 90:8:11-170:8:91 type=List(Struct(Item))
+          element: construct #14 91:8:12-129:8:50 type="Item" type=Struct(Item)
+            arg: named-arg #9 96:8:17-105:8:26 name="name"
+              value: literal #8 102:8:23-105:8:26 value=string:"b" type=String
+            arg: named-arg #11 107:8:28-118:8:39 name="weight"
+              value: literal #10 115:8:36-118:8:39 value=float:bits:4609434218613702656 type=Float
+            arg: named-arg #13 120:8:41-128:8:49 name="count"
+              value: literal #12 127:8:48-128:8:49 value=int:2 type=Int
+          element: construct #21 131:8:52-169:8:90 type="Item" type=Struct(Item)
+            arg: named-arg #16 136:8:57-145:8:66 name="name"
+              value: literal #15 142:8:63-145:8:66 value=string:"a" type=String
+            arg: named-arg #18 147:8:68-158:8:79 name="weight"
+              value: literal #17 155:8:76-158:8:79 value=float:bits:4602678819172646912 type=Float
+            arg: named-arg #20 160:8:81-168:8:89 name="count"
+              value: literal #19 167:8:88-168:8:89 value=int:2 type=Int
+      body: binding #30 173:9:3-199:10:1 name="numbers"
+        value: list-lit #29 183:9:13-198:9:28 type=List(Int)
+          element: literal #24 184:9:14-185:9:15 value=int:3 type=Int
+          element: literal #25 187:9:17-188:9:18 value=int:1 type=Int
+          element: literal #26 190:9:20-191:9:21 value=int:4 type=Int
+          element: literal #27 193:9:23-194:9:24 value=int:1 type=Int
+          element: literal #28 196:9:26-197:9:27 value=int:5 type=Int
+      body: binding #35 201:10:3-225:11:1 name="words"
+        value: list-lit #34 209:10:11-224:10:26 type=List(String)
+          element: literal #31 210:10:12-213:10:15 value=string:"x" type=String
+          element: literal #32 215:10:17-218:10:20 value=string:"y" type=String
+          element: literal #33 220:10:22-223:10:25 value=string:"x" type=String
+      body: binding #45 227:11:3-275:12:1 name="found"
+        value: method-call #44 235:11:11-274:11:50 name="find" type=Result(Struct(Item)) resolved=call("List.find", List(Struct(Item)))
+          target: name-ref #36 235:11:11-240:11:16 name="items" type=List(Struct(Item))
+          arg: block-lit #43 246:11:22-274:11:50 type=Fn([Struct(Item)], Bool)
+            param: block-param #37 250:11:26-254:11:30 name="item"
+            body: expr-stmt #42 256:11:32-270:11:46
+              value: binary #41 256:11:32-270:11:46 op=greater op-span=267:11:43-268:11:44 type=Bool
+                left: field-access #39 256:11:32-266:11:42 name="count" type=Int
+                  target: name-ref #38 256:11:32-260:11:36 name="item" type=Struct(Item)
+                right: literal #40 269:11:45-270:11:46 value=int:1 type=Int
+      body: expr-stmt #57 277:12:3-356:15:1
+        value: method-call #56 277:12:3-355:14:6 name="each_with_index" type=Void resolved=call("List.each_with_index", List(Struct(Item)))
+          target: name-ref #46 277:12:3-282:12:8 name="items" type=List(Struct(Item))
+          arg: block-lit #55 299:12:25-355:14:6 type=Fn([Struct(Item), Int], Void)
+            param: block-param #47 303:12:29-307:12:33 name="item"
+            param: block-param #48 309:12:35-314:12:40 name="index"
+            body: expr-stmt #54 320:13:5-350:14:1
+              value: call #53 320:13:5-349:13:34 name="puts" piped=false type=Void
+                arg: interpolation #52 325:13:10-348:13:33 type=String
+                  part: name-ref #49 328:13:13-333:13:18 name="index" type=Int
+                  part: text " "
+                  part: field-access #51 337:13:22-346:13:31 name="name" type=String
+                    target: name-ref #50 337:13:22-341:13:26 name="item" type=Struct(Item)
+      body: binding #67 358:15:3-417:16:1 name="letters"
+        value: method-call #66 368:15:13-416:15:61 name="flat_map" type=List(String) resolved=call("List.flat_map", List(Struct(Item)))
+          target: name-ref #58 368:15:13-373:15:18 name="items" type=List(Struct(Item))
+          arg: block-lit #65 383:15:28-416:15:61 type=Fn([Struct(Item)], List(String))
+            param: block-param #59 387:15:32-391:15:36 name="item"
+            body: expr-stmt #64 393:15:38-412:15:57
+              value: method-call #63 393:15:38-412:15:57 name="split" type=List(String) resolved=call("String.split", String)
+                target: field-access #61 393:15:38-402:15:47 name="name" type=String
+                  target: name-ref #60 393:15:38-397:15:42 name="item" type=Struct(Item)
+                arg: literal #62 409:15:54-411:15:56 value=string:"" type=String
+      body: binding #76 419:16:3-463:17:1 name="halves"
+        value: method-call #75 428:16:12-462:16:46 name="partition" type=List(List(Int)) resolved=call("List.partition", List(Int))
+          target: name-ref #68 428:16:12-435:16:19 name="numbers" type=List(Int)
+          arg: block-lit #74 446:16:30-462:16:46 type=Fn([Int], Bool)
+            param: block-param #69 450:16:34-451:16:35 name="n"
+            body: expr-stmt #73 453:16:37-458:16:42
+              value: binary #72 453:16:37-458:16:42 op=greater op-span=455:16:39-456:16:40 type=Bool
+                left: name-ref #70 453:16:37-454:16:38 name="n" type=Int
+                right: literal #71 457:16:41-458:16:42 value=int:2 type=Int
+      body: binding #85 465:17:3-508:18:1 name="head"
+        value: method-call #84 472:17:10-507:17:45 name="take_while" type=List(Int) resolved=call("List.take_while", List(Int))
+          target: name-ref #77 472:17:10-479:17:17 name="numbers" type=List(Int)
+          arg: block-lit #83 491:17:29-507:17:45 type=Fn([Int], Bool)
+            param: block-param #78 495:17:33-496:17:34 name="n"
+            body: expr-stmt #82 498:17:36-503:17:41
+              value: binary #81 498:17:36-503:17:41 op=less op-span=500:17:38-501:17:39 type=Bool
+                left: name-ref #79 498:17:36-499:17:37 name="n" type=Int
+                right: literal #80 502:17:40-503:17:41 value=int:5 type=Int
+      body: binding #94 510:18:3-553:19:1 name="tail"
+        value: method-call #93 517:18:10-552:18:45 name="drop_while" type=List(Int) resolved=call("List.drop_while", List(Int))
+          target: name-ref #86 517:18:10-524:18:17 name="numbers" type=List(Int)
+          arg: block-lit #92 536:18:29-552:18:45 type=Fn([Int], Bool)
+            param: block-param #87 540:18:33-541:18:34 name="n"
+            body: expr-stmt #91 543:18:36-548:18:41
+              value: binary #90 543:18:36-548:18:41 op=less op-span=545:18:38-546:18:39 type=Bool
+                left: name-ref #88 543:18:36-544:18:37 name="n" type=Int
+                right: literal #89 547:18:40-548:18:41 value=int:5 type=Int
+      body: binding #98 555:19:3-585:20:1 name="pairs"
+        value: method-call #97 563:19:11-584:19:32 name="each_slice" type=List(List(Int)) resolved=call("List.each_slice", List(Int))
+          target: name-ref #95 563:19:11-570:19:18 name="numbers" type=List(Int)
+          arg: literal #96 582:19:30-583:19:31 value=int:2 type=Int
+      body: binding #106 587:20:3-638:21:1 name="by_count"
+        value: method-call #105 598:20:14-637:20:53 name="group_by" type=Map(Int, List(Struct(Item))) resolved=call("List.group_by", List(Struct(Item)))
+          target: name-ref #99 598:20:14-603:20:19 name="items" type=List(Struct(Item))
+          arg: block-lit #104 613:20:29-637:20:53 type=Fn([Struct(Item)], Int)
+            param: block-param #100 617:20:33-621:20:37 name="item"
+            body: expr-stmt #103 623:20:39-633:20:49
+              value: field-access #102 623:20:39-633:20:49 name="count" type=Int
+                target: name-ref #101 623:20:39-627:20:43 name="item" type=Struct(Item)
+      body: binding #114 640:21:3-689:22:1 name="by_name"
+        value: method-call #113 650:21:13-688:21:51 name="group_by" type=Map(String, List(Struct(Item))) resolved=call("List.group_by", List(Struct(Item)))
+          target: name-ref #107 650:21:13-655:21:18 name="items" type=List(Struct(Item))
+          arg: block-lit #112 665:21:28-688:21:51 type=Fn([Struct(Item)], String)
+            param: block-param #108 669:21:32-673:21:36 name="item"
+            body: expr-stmt #111 675:21:38-684:21:47
+              value: field-access #110 675:21:38-684:21:47 name="name" type=String
+                target: name-ref #109 675:21:38-679:21:42 name="item" type=Struct(Item)
+      body: binding #117 691:22:3-712:23:1 name="counts"
+        value: field-access #116 700:22:12-711:22:23 name="tally" type=Map(String, Int) resolved=call("List.tally", List(String))
+          target: name-ref #115 700:22:12-705:22:17 name="words" type=List(String)
+      body: binding #120 714:23:3-738:24:1 name="distinct"
+        value: field-access #119 725:23:14-737:23:26 name="uniq" type=List(Int) resolved=call("List.uniq", List(Int))
+          target: name-ref #118 725:23:14-732:23:21 name="numbers" type=List(Int)
+      body: binding #123 740:24:3-760:25:1 name="total"
+        value: field-access #122 748:24:11-759:24:22 name="sum" type=Int resolved=call("List.sum", List(Int))
+          target: name-ref #121 748:24:11-755:24:18 name="numbers" type=List(Int)
+      body: binding #132 762:25:3-809:26:1 name="mass"
+        value: field-access #131 769:25:10-808:25:49 name="sum" type=Float resolved=call("List.sum", List(Float))
+          target: method-call #130 769:25:10-804:25:45 name="map" type=List(Float) resolved=call("List.map", List(Struct(Item)))
+            target: name-ref #124 769:25:10-774:25:15 name="items" type=List(Struct(Item))
+            arg: block-lit #129 779:25:20-804:25:45 type=Fn([Struct(Item)], Float)
+              param: block-param #125 783:25:24-787:25:28 name="item"
+              body: expr-stmt #128 789:25:30-800:25:41
+                value: field-access #127 789:25:30-800:25:41 name="weight" type=Float
+                  target: name-ref #126 789:25:30-793:25:34 name="item" type=Struct(Item)
+      body: binding #140 811:26:3-861:27:1 name="lightest"
+        value: method-call #139 822:26:14-860:26:52 name="min_by" type=Result(Struct(Item)) resolved=call("List.min_by", List(Struct(Item)))
+          target: name-ref #133 822:26:14-827:26:19 name="items" type=List(Struct(Item))
+          arg: block-lit #138 835:26:27-860:26:52 type=Fn([Struct(Item)], Float)
+            param: block-param #134 839:26:31-843:26:35 name="item"
+            body: expr-stmt #137 845:26:37-856:26:48
+              value: field-access #136 845:26:37-856:26:48 name="weight" type=Float
+                target: name-ref #135 845:26:37-849:26:41 name="item" type=Struct(Item)
+      body: binding #148 863:27:3-913:28:1 name="first_name"
+        value: method-call #147 876:27:16-912:27:52 name="min_by" type=Result(Struct(Item)) resolved=call("List.min_by", List(Struct(Item)))
+          target: name-ref #141 876:27:16-881:27:21 name="items" type=List(Struct(Item))
+          arg: block-lit #146 889:27:29-912:27:52 type=Fn([Struct(Item)], String)
+            param: block-param #142 893:27:33-897:27:37 name="item"
+            body: expr-stmt #145 899:27:39-908:27:48
+              value: field-access #144 899:27:39-908:27:48 name="name" type=String
+                target: name-ref #143 899:27:39-903:27:43 name="item" type=Struct(Item)
+      body: binding #156 915:28:3-960:29:1 name="most"
+        value: method-call #155 922:28:10-959:28:47 name="max_by" type=Result(Struct(Item)) resolved=call("List.max_by", List(Struct(Item)))
+          target: name-ref #149 922:28:10-927:28:15 name="items" type=List(Struct(Item))
+          arg: block-lit #154 935:28:23-959:28:47 type=Fn([Struct(Item)], Int)
+            param: block-param #150 939:28:27-943:28:31 name="item"
+            body: expr-stmt #153 945:28:33-955:28:43
+              value: field-access #152 945:28:33-955:28:43 name="count" type=Int
+                target: name-ref #151 945:28:33-949:28:37 name="item" type=Struct(Item)
+      body: binding #164 962:29:3-992:30:1 name="numbers_by"
+        value: map-lit #163 975:29:16-991:29:32 type=Map(String, Int)
+          entry: map-entry #159 976:29:17-982:29:23
+            key: literal #157 976:29:17-979:29:20 value=string:"a" type=String
+            value: literal #158 981:29:22-982:29:23 value=int:1 type=Int
+          entry: map-entry #162 984:29:25-990:29:31
+            key: literal #160 984:29:25-987:29:28 value=string:"b" type=String
+            value: literal #161 989:29:30-990:29:31 value=int:2 type=Int
+      body: expr-stmt #175 994:30:3-1060:33:1
+        value: method-call #174 994:30:3-1059:32:6 name="each" type=Void resolved=call("Map.each", Map(String, Int))
+          target: name-ref #165 994:30:3-1004:30:13 name="numbers_by" type=Map(String, Int)
+          arg: block-lit #173 1010:30:19-1059:32:6 type=Fn([String, Int], Void)
+            param: block-param #166 1014:30:23-1017:30:26 name="key"
+            param: block-param #167 1019:30:28-1024:30:33 name="value"
+            body: expr-stmt #172 1030:31:5-1054:32:1
+              value: call #171 1030:31:5-1053:31:28 name="puts" piped=false type=Void
+                arg: interpolation #170 1035:31:10-1052:31:27 type=String
+                  part: name-ref #168 1038:31:13-1041:31:16 name="key" type=String
+                  part: text " "
+                  part: name-ref #169 1045:31:20-1050:31:25 name="value" type=Int
+      body: binding #185 1062:33:3-1116:34:1 name="big"
+        value: method-call #184 1068:33:9-1115:33:56 name="filter" type=Map(String, Int) resolved=call("Map.filter", Map(String, Int))
+          target: name-ref #176 1068:33:9-1078:33:19 name="numbers_by" type=Map(String, Int)
+          arg: block-lit #183 1086:33:27-1115:33:56 type=Fn([String, Int], Bool)
+            param: block-param #177 1090:33:31-1093:33:34 name="key"
+            param: block-param #178 1095:33:36-1100:33:41 name="value"
+            body: expr-stmt #182 1102:33:43-1111:33:52
+              value: binary #181 1102:33:43-1111:33:52 op=greater op-span=1108:33:49-1109:33:50 type=Bool
+                left: name-ref #179 1102:33:43-1107:33:48 name="value" type=Int
+                right: literal #180 1110:33:51-1111:33:52 value=int:1 type=Int
+      body: expr-stmt #190 1118:34:3-1149:35:1
+        value: call #189 1118:34:3-1148:34:33 name="puts" piped=false type=Void
+          arg: call #188 1123:34:8-1147:34:32 name="String.compare" piped=false type=Int
+            arg: literal #186 1138:34:23-1141:34:26 value=string:"a" type=String
+            arg: literal #187 1143:34:28-1146:34:31 value=string:"b" type=String
+      body: expr-stmt #193 1151:35:3-1163:36:1
+        value: call #192 1151:35:3-1162:35:14 name="puts" piped=false type=Void
+          arg: name-ref #191 1156:35:8-1161:35:13 name="found" type=Result(Struct(Item))

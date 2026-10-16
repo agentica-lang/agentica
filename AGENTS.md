@@ -30,7 +30,8 @@ docs/
 site/content/       Hugo documentation site
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agentica-development (working on this repo), agentica-programming
-                    (writing .agc), vm-c-critic (C VM PR review)
+                    (writing .agc), agentica-code-guidelines (.agc style and
+                    speed), vm-c-critic (C VM PR review)
 ```
 
 Each of `docs/grammar/`, `docs/future/`, `docs/roadmap/` and `docs/vm/` has a
@@ -69,6 +70,7 @@ phase 13).
 | a C VM PR review | `.agents/skills/vm-c-critic/` |
 | language rules | `docs/grammar/` |
 | writing `.agc` programs | `.agents/skills/agentica-programming/` |
+| writing or reviewing `.agc` style | `.agents/skills/agentica-code-guidelines/` |
 | `site/` or `benchmarks/` | `.agents/skills/agentica-development/SKILL.md` |
 | what is planned or done | `docs/roadmap/README.md` |
 

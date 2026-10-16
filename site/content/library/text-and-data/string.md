@@ -266,6 +266,29 @@ end
 b
 ```
 
+## compare
+
+```text
+String.compare(a: String, b: String) -> Int
+```
+
+Gives `-1`, `0` or `1`, in the order `sort` uses: by code point, so `"B"` comes
+before `"a"`. It is also a method: `a.compare(b)`.
+
+```agentica
+def main() -> Void
+  puts("apple".compare("banana"))
+  puts("b".compare("b"))
+  puts("B".compare("a"))
+end
+```
+
+```output
+-1
+0
+-1
+```
+
 ## from_int and from_float
 
 ```text

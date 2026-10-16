@@ -9,6 +9,7 @@ import Args from "check_args"
 import Collections from "check_collections"
 import Failure from "check_failure"
 import Lists from "check_list"
+import PreludeCalls from "check_prelude"
 import State from "check_state"
 import CheckTypes from "check_types"
 import Source from "source"
@@ -25,6 +26,8 @@ export def check_builtin_call(
 ) -> Result[State.Out]
   selected = Builtins.form_for(entry, node.args.size)
   if !selected.ok?
+    # A block after the last argument of a builtin that takes none (each_slice) is a block with no target.
+    try block_without_target(cx, st, node, entry)
     return error(arity_failure(cx, st, node, entry))
   end
   form = selected.unwrap!
@@ -62,6 +65,33 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
   return Failure.pack(base.with(callee: Builtins.signature(entry)))
 end
 
+# CHECK-BLOCK-TARGET when the call has one argument more than a form takes and that last argument is a block, so the
+# block was meant for a function parameter the form does not have.
+def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> Result[Bool]
+  if node.args.size == 0
+    return ok(true)
+  end
+  last = node.args[node.args.size - 1]
+  without = Builtins.form_for(entry, node.args.size - 1)
+  case last
+    Ast.Expr.BlockLit(block) ->
+      if without.ok?
+        return error(
+          State.fail_help(
+            cx,
+            st,
+            "CHECK-BLOCK-TARGET",
+            "\"#{entry.name}\" does not take a block: its last parameter is not a function",
+            block.span,
+            block_target_help(entry.name),
+          ),
+        )
+      end
+    _ -> return ok(true)
+  end
+  return ok(true)
+end
+
 # A block as the last argument needs a function as the last parameter.
 def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.Builtin) -> Result[Bool]
   if node.args.size == 0
@@ -78,13 +108,21 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
             "CHECK-BLOCK-TARGET",
             "\"#{form.name}\" does not take a block: its last parameter is not a function",
             block.span,
-            "a block is only allowed when the last parameter is a function (Fn[...])",
+            block_target_help(form.name),
           ),
         )
       end
     _ -> return ok(true)
   end
   return ok(true)
+end
+
+# The help of a block given to a builtin that takes none: each_slice returns the slices, which each then walks.
+def block_target_help(name: String) -> String
+  if name == "List.each_slice"
+    return "each_slice returns the slices and takes no block: xs.each_slice(2).each do |pair| ... end"
+  end
+  return "a block is only allowed when the last parameter is a function (Fn[...])"
 end
 
 # The rule of the builtin, which says how its arguments are checked and what type the call has.
@@ -101,6 +139,7 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
     Model.Rule.JsonEncode -> return check_json_encode(cx, st, site, false)
     Model.Rule.JsonFrom -> return check_json_encode(cx, st, site, true)
     Model.Rule.TestEq -> return check_test_eq(cx, st, site)
+    Model.Rule.Prelude -> return PreludeCalls.check_prelude_call(cx, st, site)
     _ -> return check_result_rule(cx, st, site, rule)
   end
 end

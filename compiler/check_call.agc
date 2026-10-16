@@ -29,7 +29,7 @@ end
 ## function of the program.
 export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
   entry = cx.catalog.entries.get(node.name)
-  if !entry.ok?
+  if !entry.ok? or (cx.catalog.prelude_only.include?(node.name) and !cx.prelude)
     return check_plain_call(cx, st, node)
   end
   out = try Rules.check_builtin_call(cx, st, node, expected, entry.unwrap!)

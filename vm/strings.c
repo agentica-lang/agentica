@@ -568,6 +568,16 @@ static agc_value builtin_to_float_bang(agc_vm *vm, agc_value *args, uint32_t spa
   return to_float(vm, args, span, true);
 }
 
+/* -1, 0 or 1 in the order List.sort gives Strings: by bytes, which is the order of the code points in UTF-8. */
+static agc_value builtin_compare(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_string *a = agc_as_string(vm, args[0]), *b = agc_as_string(vm, args[1]);
+  size_t n = a->bytes < b->bytes ? a->bytes : b->bytes;
+  int order = n ? memcmp(a->data, b->data, n) : 0;
+  if (order == 0) return agc_int(a->bytes < b->bytes ? -1 : a->bytes > b->bytes ? 1 : 0);
+  return agc_int(order < 0 ? -1 : 1);
+}
+
 const agc_builtin agc_string_builtins[] = {
   {"String.length", 1, builtin_length, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"String.upcase", 1, builtin_upcase, AGC_NATIVE_NONE, AGC_COST_SIZE},
@@ -581,6 +591,7 @@ const agc_builtin agc_string_builtins[] = {
   {"String.replace", 3, builtin_replace, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"String.slice", 3, builtin_slice, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"String.index_of", 2, builtin_index_of, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.compare", 2, builtin_compare, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"String.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"String.reverse", 1, builtin_reverse, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"String.code", 1, builtin_code, AGC_NATIVE_NONE, AGC_COST_NONE},

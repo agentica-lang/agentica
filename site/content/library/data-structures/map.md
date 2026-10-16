@@ -134,3 +134,44 @@ end
 ["x", "y"]
 [1, 2]
 ```
+
+## each
+
+```text
+Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void
+```
+
+Runs the function with each key and value, in insertion order.
+
+```agentica
+def main() -> Void
+  {"x": 1, "y": 2}.each do |key, value|
+    puts("#{key}=#{value}")
+  end
+end
+```
+
+```output
+x=1
+y=2
+```
+
+## filter
+
+```text
+Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
+```
+
+Keeps the entries for which the function gives `true`, in insertion order. Both
+`each` and `filter` take O(n) time.
+
+```agentica
+def main() -> Void
+  stock = {"apple": 3, "fig": 0, "kiwi": 7}
+  puts(stock.filter do |name, count| count > 0 end)
+end
+```
+
+```output
+{"apple": 3, "kiwi": 7}
+```

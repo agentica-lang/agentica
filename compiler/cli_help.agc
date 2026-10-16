@@ -27,7 +27,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
   catalog = Builtins.catalog()
   name = rest[1]
   entry = Builtins.lookup(catalog, name)
-  if Builtins.std_only_name?(catalog, name) or !entry.ok?
+  if Builtins.std_only_name?(catalog, name) or catalog.prelude_only.include?(name) or !entry.ok?
     return Reply.failed(2, "agentica: unknown builtin #{name}#{suggestion(name, catalog)}\n")
   end
   if as_json

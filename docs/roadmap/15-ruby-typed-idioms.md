@@ -72,7 +72,7 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   `site/content/tour/blocks.md` and the site's adapter examples, section 11.4,
   and `docs/future/15-adapters-and-json-inspection.md` (once lambdas land, the
   `getter`/`putter` helpers there are replaced by `lambda`).
-- [ ] 15f Order step 8.2, after 8d. The compiler prelude and the Enumerable
+- [x] 15f Order step 8.2, after 8d. The compiler prelude and the Enumerable
   methods on `List` and `Map` (§25.6), with no new aliases: `select`, `collect`,
   `detect`, `inject` and `reject` get `CHECK-UNKNOWN-METHOD` with the canonical
   form. Adds the public builtin `String.compare(a, b) -> Int` (-1, 0 or 1, by
@@ -100,6 +100,14 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   `site/content/library/data-structures/list.md`, `map.md` and `string.md`, the
   development skill, `docs/vm/03-ir-and-bytecode.md` (with the §4.5 sentence
   "There are no internal helper builtins") and `docs/vm/08-loader-and-cli.md`.
+  **Built (2026-10-16)**, in `compiler/`, `stdlib/prelude/` and the VM; "As
+  built" at the end of §25.6 lists the choices (the prelude is attached for each
+  program that calls it, not linked into every program), and
+  `references/performance.md` of the programming skill has the step counts.
+  Follow-up: build-time prelude. Compile `stdlib/prelude/` once, like the BDD
+  runner, and splice only the called functions (today each program that uses
+  it lexes and parses all of `list.agc`, +7-10 ms per check; or, cheaper, cut
+  the text at the top-level `def`s first).
 - 15g `unless` and 15h statement modifiers: not planned, see §25.13 (second ways
   to write `if`; `unless c` gets a help that shows `if !c ... end`, and section
   11's help for modifiers stays).

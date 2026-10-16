@@ -1350,6 +1350,19 @@ def rows_21() -> List[Model.Builtin]
       alternatives: [],
     ),
     Model.Builtin(
+      name: "List.drop_while",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      ],
+      result: Types.Type.List(Types.Type.Var("A")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Drop elements while f is true, then keep the rest; f stops being called at the first false; O(n).",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "List.each",
       parameters: [
         Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
@@ -1360,6 +1373,32 @@ def rows_21() -> List[Model.Builtin]
       implementation: "List.each",
       effects: [],
       description: "Call f on each element in order; returns nothing.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.each_slice",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "size", type: Types.Type.Int),
+      ],
+      result: Types.Type.List(Types.Type.List(Types.Type.Var("A"))),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Split into slices of size elements, the last one shorter; size below 1 halts; O(n).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.each_with_index",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Int], Types.Type.Void)),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Call f(element, index) in order, the index from 0; returns nothing.",
       alternatives: [],
     ),
   ]
@@ -1381,6 +1420,51 @@ def rows_22() -> List[Model.Builtin]
       alternatives: [],
     ),
     Model.Builtin(
+      name: "List.find",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      ],
+      result: Types.Type.Result(Types.Type.Var("A")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: (
+        "The first element f accepts, else error(\"not found\"); f stops being called at the first " +
+        "true; O(n)."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.flat_map",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.List(Types.Type.Var("B")))),
+      ],
+      result: Types.Type.List(Types.Type.Var("B")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Concatenate the lists f returns for each element, in order; O(total).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.group_by",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "key", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("K"))),
+      ],
+      result: Types.Type.Map(Types.Type.Var("K"), Types.Type.List(Types.Type.Var("A"))),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: (
+        "Group elements by an Int or String key; keys in order of first appearance, elements in " +
+        "order; O(n)."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "List.map",
       parameters: [
         Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
@@ -1391,6 +1475,51 @@ def rows_22() -> List[Model.Builtin]
       implementation: "List.map",
       effects: [],
       description: "Map each element in order without changing the input; O(n).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.max_by",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "key", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("O"))),
+      ],
+      result: Types.Type.Result(Types.Type.Var("A")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: (
+        "The element with the greatest Int, Float or String key, the first on ties; error(\"the " +
+        "list is empty\") for an empty list; O(n)."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.min_by",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "key", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("O"))),
+      ],
+      result: Types.Type.Result(Types.Type.Var("A")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: (
+        "The element with the least Int, Float or String key, the first on ties; error(\"the list " +
+        "is empty\") for an empty list; O(n)."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.partition",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      ],
+      result: Types.Type.List(Types.Type.List(Types.Type.Var("A"))),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Two lists, [accepted, rejected], each in order; f is called once per element; O(n).",
       alternatives: [],
     ),
     Model.Builtin(
@@ -1488,6 +1617,16 @@ def rows_24() -> List[Model.Builtin]
       alternatives: [],
     ),
     Model.Builtin(
+      name: "List.sum",
+      parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("N")))],
+      result: Types.Type.Var("N"),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Add the Ints or Floats of a list; an empty list gives 0 or 0.0; Int overflow halts; O(n).",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "List.take",
       parameters: [
         Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("T"))),
@@ -1498,6 +1637,39 @@ def rows_24() -> List[Model.Builtin]
       implementation: "List.take",
       effects: [],
       description: "Take up to count elements; negative counts halt.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.take_while",
+      parameters: [
+        Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+      ],
+      result: Types.Type.List(Types.Type.Var("A")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Keep elements while f is true; f stops being called at the first false; O(n).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.tally",
+      parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("K")))],
+      result: Types.Type.Map(Types.Type.Var("K"), Types.Type.Int),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Count equal Int or String elements; keys in order of first appearance; O(n).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.uniq",
+      parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("K")))],
+      result: Types.Type.List(Types.Type.Var("K")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Drop repeated Int or String elements, keeping the first of each; O(n).",
       alternatives: [],
     ),
     Model.Builtin(
@@ -1633,6 +1805,32 @@ def rows_26() -> List[Model.Builtin]
       implementation: "Map.delete",
       effects: [],
       description: "Return a new map without this key; missing keys leave it unchanged.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Map.each",
+      parameters: [
+        Model.Named(name: "map", type: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("K"), Types.Type.Var("V")], Types.Type.Void)),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Call f(key, value) for each entry in insertion order; returns nothing.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Map.filter",
+      parameters: [
+        Model.Named(name: "map", type: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V"))),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("K"), Types.Type.Var("V")], Types.Type.Bool)),
+      ],
+      result: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Keep the entries f accepts, in insertion order; O(n).",
       alternatives: [],
     ),
   ]
@@ -2378,6 +2576,19 @@ def rows_40() -> List[Model.Builtin]
       alternatives: [],
     ),
     Model.Builtin(
+      name: "String.compare",
+      parameters: [
+        Model.Named(name: "a", type: Types.Type.String),
+        Model.Named(name: "b", type: Types.Type.String),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "String.compare",
+      effects: [],
+      description: "Compare two Strings in the order of sort: -1, 0 or 1.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "String.contains?",
       parameters: [
         Model.Named(name: "s", type: Types.Type.String),
@@ -3086,6 +3297,20 @@ def rows_53() -> List[Model.Builtin]
       implementation: "Time.now_ms",
       effects: ["clock"],
       description: "Read wall-clock milliseconds since the Unix epoch; may jump.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "__fail_arg",
+      parameters: [
+        Model.Named(name: "code", type: Types.Type.String),
+        Model.Named(name: "index", type: Types.Type.Int),
+        Model.Named(name: "message", type: Types.Type.String),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "__fail_arg",
+      effects: [],
+      description: "Internal to the prelude: halt with a RUNTIME- code at the argument of the call of the program.",
       alternatives: [],
     ),
   ]

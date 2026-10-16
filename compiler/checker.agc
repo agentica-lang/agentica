@@ -12,17 +12,23 @@ import Help from "check_help"
 import Register from "check_register"
 import State from "check_state"
 import Statements from "check_stmt"
+import Env from "link_env"
 import Linker from "linker"
+import Prelude from "prelude"
 import T from "types"
 
 ## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that
 ## has none: node ids are dense, so a list is faster than a Map to write and read), what each method call or field
 ## access resolved to, by node id (the lowering reads them), and the linked names of the module constants in
-## initialization order (the lowering reads that too, and does not order them again).
+## initialization order (the lowering reads that too, and does not order them again). prelude is the files of the
+## compiler prelude that the program calls (prelude.agc), checked with it: the lowering adds them to the files of the
+## program. bodies is the prelude function each call of a prelude builtin runs, by id of the call.
 export struct Checked
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]
   constants: List[String]
+  prelude: List[Linker.LinkedModule]
+  bodies: Map[Int, String]
 end
 
 ## The result of checking: the types, or the first problem.
@@ -31,9 +37,10 @@ export enum Checking
   Failed(Failure.Problem)
 end
 
-## Checks a linked program. The catalog is the one the linker used.
-export def check(linked: Linker.Linked, catalog: Builtins.Catalog) -> Checking
-  result = run(linked, catalog)
+## Checks a linked program. The catalog of the settings is the one the linker used, and the settings tell where the
+## files of the prelude are read.
+export def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
+  result = run(linked, settings)
   if result.ok?
     return Checking.Done(result.unwrap!)
   end
@@ -73,11 +80,13 @@ def start(linked: Linker.Linked, catalog: Builtins.Catalog) -> State.Cx
     file: linked.modules[0].file,
     texts: texts,
     expression: &Expr.check_expression,
+    prelude: false,
   )
 end
 
-def run(linked: Linker.Linked, catalog: Builtins.Catalog) -> Result[Checked]
-  cx = try Register.register(start(linked, catalog), linked.modules)
+def run(linked: Linker.Linked, settings: Env.Settings) -> Result[Checked]
+  base = start(linked, settings.catalog)
+  cx = try Register.register(base, linked.modules)
   try Register.check_main(cx, linked.modules, linked.root.span)
   st = State.fresh().with(types: no_types(ids_of(linked), max_repeat()))
   done = try Constants.check_all(cx, st, linked.modules)
@@ -92,7 +101,16 @@ def run(linked: Linker.Linked, catalog: Builtins.Catalog) -> Result[Checked]
       end
     end
   end
-  return ok(Checked(types: st.types, resolved: st.resolved, constants: done.order))
+  attached = try Prelude.attach(settings, base, st)
+  return ok(
+    Checked(
+      types: attached.st.types,
+      resolved: attached.st.resolved,
+      constants: done.order,
+      prelude: attached.modules,
+      bodies: attached.st.bodies,
+    ),
+  )
 end
 
 # The number of node ids of the program, with the room the linker took for the receivers of constants (Linked.ids).

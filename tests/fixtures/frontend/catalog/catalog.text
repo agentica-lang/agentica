@@ -166,12 +166,30 @@ builtin List.concat forms=1
   List.concat(a: List[T], b: List[T]) -> List[T] shape=(List(Var(T)), List(Var(T))) -> List(Var(T)) rule=ListConcat impl="List.concat" effects=[] desc="Concatenate two lists without changing either; O(length of b) when b has at most 32 items, else O(length of a + b)."
 builtin List.drop forms=1
   List.drop(list: List[T], count: Int) -> List[T] shape=(List(Var(T)), Int) -> List(Var(T)) rule=ListCount impl="List.drop" effects=[] desc="Drop up to count elements; negative counts halt."
+builtin List.drop_while forms=1
+  List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=Prelude impl="" effects=[] desc="Drop elements while f is true, then keep the rest; f stops being called at the first false; O(n)."
 builtin List.each forms=1
   List.each(list: List[A], f: Fn[A, Void]) -> Void shape=(List(Var(A)), Fn([Var(A)], Void)) -> Void rule=ListEach impl="List.each" effects=[] desc="Call f on each element in order; returns nothing."
+builtin List.each_slice forms=1
+  List.each_slice(list: List[A], size: Int) -> List[List[A]] shape=(List(Var(A)), Int) -> List(List(Var(A))) rule=Prelude impl="" effects=[] desc="Split into slices of size elements, the last one shorter; size below 1 halts; O(n)."
+builtin List.each_with_index forms=1
+  List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void shape=(List(Var(A)), Fn([Var(A), Int], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call f(element, index) in order, the index from 0; returns nothing."
 builtin List.filter forms=1
   List.filter(list: List[A], f: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=ListFilter impl="List.filter" effects=[] desc="Keep elements whose predicate is true, in order; O(n)."
+builtin List.find forms=1
+  List.find(list: List[A], f: Fn[A, Bool]) -> Result[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="The first element f accepts, else error(\"not found\"); f stops being called at the first true; O(n)."
+builtin List.flat_map forms=1
+  List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], List(Var(B)))) -> List(Var(B)) rule=Prelude impl="" effects=[] desc="Concatenate the lists f returns for each element, in order; O(total)."
+builtin List.group_by forms=1
+  List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]] shape=(List(Var(A)), Fn([Var(A)], Var(K))) -> Map(Var(K), List(Var(A))) rule=Prelude impl="" effects=[] desc="Group elements by an Int or String key; keys in order of first appearance, elements in order; O(n)."
 builtin List.map forms=1
   List.map(list: List[A], f: Fn[A, B]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], Var(B))) -> List(Var(B)) rule=ListMap impl="List.map" effects=[] desc="Map each element in order without changing the input; O(n)."
+builtin List.max_by forms=1
+  List.max_by(list: List[A], key: Fn[A, O]) -> Result[A] shape=(List(Var(A)), Fn([Var(A)], Var(O))) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="The element with the greatest Int, Float or String key, the first on ties; error(\"the list is empty\") for an empty list; O(n)."
+builtin List.min_by forms=1
+  List.min_by(list: List[A], key: Fn[A, O]) -> Result[A] shape=(List(Var(A)), Fn([Var(A)], Var(O))) -> Result(Var(A)) rule=Prelude impl="" effects=[] desc="The element with the least Int, Float or String key, the first on ties; error(\"the list is empty\") for an empty list; O(n)."
+builtin List.partition forms=1
+  List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(List(Var(A))) rule=Prelude impl="" effects=[] desc="Two lists, [accepted, rejected], each in order; f is called once per element; O(n)."
 builtin List.reduce forms=1
   List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B shape=(List(Var(A)), Var(B), Fn([Var(B), Var(A)], Var(B))) -> Var(B) rule=ListReduce impl="List.reduce" effects=[] desc="Fold left with f(accumulator, item); empty lists return initial; O(n)."
 builtin List.repeat forms=1
@@ -186,8 +204,16 @@ builtin List.sort forms=1
   List.sort(list: List[T]) -> List[T] shape=(List(Var(T))) -> List(Var(T)) rule=ListSort impl="List.sort" effects=[] desc="Stable ascending sort of Int, Float or String; NaN goes last; O(n log n)."
 builtin List.sort_by forms=1
   List.sort_by(list: List[A], key: Fn[A, K]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Var(K))) -> List(Var(A)) rule=ListSortBy impl="List.sort_by" effects=[] desc="Stable ascending sort by an Int, Float or String key; one key call per element."
+builtin List.sum forms=1
+  List.sum(list: List[N]) -> N shape=(List(Var(N))) -> Var(N) rule=Prelude impl="" effects=[] desc="Add the Ints or Floats of a list; an empty list gives 0 or 0.0; Int overflow halts; O(n)."
 builtin List.take forms=1
   List.take(list: List[T], count: Int) -> List[T] shape=(List(Var(T)), Int) -> List(Var(T)) rule=ListCount impl="List.take" effects=[] desc="Take up to count elements; negative counts halt."
+builtin List.take_while forms=1
+  List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A] shape=(List(Var(A)), Fn([Var(A)], Bool)) -> List(Var(A)) rule=Prelude impl="" effects=[] desc="Keep elements while f is true; f stops being called at the first false; O(n)."
+builtin List.tally forms=1
+  List.tally(list: List[K]) -> Map[K, Int] shape=(List(Var(K))) -> Map(Var(K), Int) rule=Prelude impl="" effects=[] desc="Count equal Int or String elements; keys in order of first appearance; O(n)."
+builtin List.uniq forms=1
+  List.uniq(list: List[K]) -> List[K] shape=(List(Var(K))) -> List(Var(K)) rule=Prelude impl="" effects=[] desc="Drop repeated Int or String elements, keeping the first of each; O(n)."
 builtin LogRegistry.attach forms=1
   LogRegistry.attach(name: String, rank: Int, handler: Fn[LogEvent, Void]) -> Result[Void] shape=(String, Int, Fn([Struct(LogEvent)], Void)) -> Result(Void) rule=Plain impl="LogRegistry.attach" effects=["logging"] desc="Internal to std/logger: attach a named handler at a rank; a name in use is an error."
 builtin LogRegistry.detach forms=1
@@ -210,6 +236,10 @@ builtin LogRegistry.task_id forms=1
   LogRegistry.task_id() -> Int shape=() -> Int rule=Plain impl="LogRegistry.task_id" effects=["logging"] desc="Internal to std/logger: the running task's number."
 builtin Map.delete forms=1
   Map.delete(map: Map[K, V], key: K) -> Map[K, V] shape=(Map(Var(K), Var(V)), Var(K)) -> Map(Var(K), Var(V)) rule=MapDelete impl="Map.delete" effects=[] desc="Return a new map without this key; missing keys leave it unchanged."
+builtin Map.each forms=1
+  Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void shape=(Map(Var(K), Var(V)), Fn([Var(K), Var(V)], Void)) -> Void rule=Prelude impl="" effects=[] desc="Call f(key, value) for each entry in insertion order; returns nothing."
+builtin Map.filter forms=1
+  Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V] shape=(Map(Var(K), Var(V)), Fn([Var(K), Var(V)], Bool)) -> Map(Var(K), Var(V)) rule=Prelude impl="" effects=[] desc="Keep the entries f accepts, in insertion order; O(n)."
 builtin Map.get forms=2
   Map.get(map: Map[K, V], key: K) -> Result[V] shape=(Map(Var(K), Var(V)), Var(K)) -> Result(Var(V)) rule=MapGet impl="Map.get" effects=[] desc="Read a value as a Result, or supply an eagerly evaluated default as a third argument."
   Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as a Result, or supply an eagerly evaluated default as a third argument."
@@ -319,6 +349,8 @@ builtin String.at forms=1
   String.at(s: String, index: Int) -> String shape=(String, Int) -> String rule=Plain impl="String.at" effects=[] desc="Read one character at a zero-based index; invalid indexes halt."
 builtin String.code forms=1
   String.code(c: String) -> Int shape=(String) -> Int rule=Plain impl="String.code" effects=[] desc="Return the code point of a one-character string; other lengths halt."
+builtin String.compare forms=1
+  String.compare(a: String, b: String) -> Int shape=(String, String) -> Int rule=Plain impl="String.compare" effects=[] desc="Compare two Strings in the order of sort: -1, 0 or 1."
 builtin String.contains? forms=1
   String.contains?(s: String, part: String) -> Bool shape=(String, String) -> Bool rule=Plain impl="String.contains?" effects=[] desc="Check for a substring."
 builtin String.downcase forms=1
@@ -426,6 +458,8 @@ builtin Time.monotonic_ns forms=1
   Time.monotonic_ns() -> Int shape=() -> Int rule=Plain impl="Time.monotonic_ns" effects=["clock"] desc="Read nanoseconds from the clock of Time.monotonic_ms; same origin, never goes backward; use for short durations."
 builtin Time.now_ms forms=1
   Time.now_ms() -> Int shape=() -> Int rule=Plain impl="Time.now_ms" effects=["clock"] desc="Read wall-clock milliseconds since the Unix epoch; may jump."
+builtin __fail_arg forms=1
+  __fail_arg(code: String, index: Int, message: String) -> Void shape=(String, Int, String) -> Void rule=Plain impl="__fail_arg" effects=[] desc="Internal to the prelude: halt with a RUNTIME- code at the argument of the call of the program."
 builtin error forms=1
   error(message: String) -> Result[T] shape=(String) -> Result(Var(T)) rule=Error impl="error" effects=[] desc="Construct an error; needs an expected Result type."
 builtin gets forms=1
@@ -449,12 +483,14 @@ record LogEvent level: Enum(LogLevel, []), message: String, fields: Map(String, 
 record ProcessOutput stdout: String, stderr: String, truncated: Bool
 enum Await parameters=["T"] variants=Done(Var(T)) | TimedOut
 enum LogLevel parameters=[] variants=Debug | Info | Warning | Error
-public ["Channel.close", "Channel.closed?", "Channel.new", "Channel.recv", "Channel.send", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "File.append_text", "File.close", "File.each_line", "File.flush", "File.lstat", "File.open", "File.read_bytes", "File.read_line", "File.read_text", "File.stat", "File.try_lock", "File.write", "File.write_bytes", "File.write_text", "Float.from_bits", "Float.from_bits32", "Float.from_int", "Float.to_bits", "Float.to_bits32", "Float.to_int", "Float.to_int!", "FrontEnd.hand_off", "FrontEnd.std_source", "IO.eof?", "IO.flush", "IO.gets", "IO.gets!", "IO.inspect", "IO.print", "IO.puts", "IO.read", "IO.read_bytes", "IO.warn", "Int.bit_and", "Int.bit_not", "Int.bit_or", "Int.bit_xor", "Int.downto", "Int.shift_left", "Int.shift_right", "Int.shift_right_unsigned", "Int.times", "Int.upto", "JSON.array", "JSON.at", "JSON.bool", "JSON.decode", "JSON.encode", "JSON.float", "JSON.from", "JSON.get", "JSON.int", "JSON.list", "JSON.null", "JSON.null?", "JSON.object", "JSON.parse", "JSON.schema", "JSON.string", "List.all?", "List.any?", "List.append", "List.at", "List.concat", "List.drop", "List.each", "List.filter", "List.map", "List.reduce", "List.repeat", "List.reverse", "List.set", "List.size", "List.sort", "List.sort_by", "List.take", "Map.delete", "Map.get", "Map.has_key?", "Map.keys", "Map.put", "Map.size", "Map.values", "Path.cwd", "Path.join", "Path.real", "Path.remove", "Path.rename", "Path.resolve", "Process.channel_close", "Process.channel_read_line", "Process.channel_send", "Process.close", "Process.close_stdin", "Process.output", "Process.parent_read_line", "Process.parent_send", "Process.read_available", "Process.read_bytes", "Process.read_line", "Process.send", "Process.send_bytes", "Process.spawn", "Process.spawn_captured", "Process.spawn_channel", "Process.wait", "Random.float", "Random.int", "Range.each", "Range.first", "Range.include?", "Range.last", "Range.size", "Range.to_a", "Result.message", "Result.ok?", "Result.unwrap!", "Result.unwrap_or", "Set.add", "Set.delete", "Set.difference", "Set.empty?", "Set.include?", "Set.intersection", "Set.new", "Set.size", "Set.subset?", "Set.to_a", "Set.union", "String.at", "String.code", "String.contains?", "String.downcase", "String.ends_with?", "String.from_bytes", "String.from_code", "String.from_float", "String.from_int", "String.index_of", "String.join", "String.length", "String.replace", "String.reverse", "String.slice", "String.split", "String.starts_with?", "String.to_float", "String.to_float!", "String.to_int", "String.to_int!", "String.trim", "String.upcase", "System.args", "System.env", "System.exit", "System.pid", "TCP.accept", "TCP.close", "TCP.close_listener", "TCP.connect", "TCP.listen", "TCP.local_port", "TCP.read_line", "TCP.recv_bytes", "TCP.send", "TCP.send_bytes", "TLS.connect", "TLS.listen", "Task.await", "Task.map", "Task.pending_count", "Task.sleep", "Task.spawn", "Task.spawn_owning", "Task.unobserved_crash", "Test.assert", "Test.eq", "Test.error?", "Test.ok?", "Test.run", "Test.test", "Time.monotonic_ms", "Time.monotonic_ns", "Time.now_ms", "error", "gets", "gets!", "ok", "print", "puts"]
-bare ["error", "gets", "gets!", "ok", "print", "puts"]
+public ["Channel.close", "Channel.closed?", "Channel.new", "Channel.recv", "Channel.send", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "File.append_text", "File.close", "File.each_line", "File.flush", "File.lstat", "File.open", "File.read_bytes", "File.read_line", "File.read_text", "File.stat", "File.try_lock", "File.write", "File.write_bytes", "File.write_text", "Float.from_bits", "Float.from_bits32", "Float.from_int", "Float.to_bits", "Float.to_bits32", "Float.to_int", "Float.to_int!", "FrontEnd.hand_off", "FrontEnd.std_source", "IO.eof?", "IO.flush", "IO.gets", "IO.gets!", "IO.inspect", "IO.print", "IO.puts", "IO.read", "IO.read_bytes", "IO.warn", "Int.bit_and", "Int.bit_not", "Int.bit_or", "Int.bit_xor", "Int.downto", "Int.shift_left", "Int.shift_right", "Int.shift_right_unsigned", "Int.times", "Int.upto", "JSON.array", "JSON.at", "JSON.bool", "JSON.decode", "JSON.encode", "JSON.float", "JSON.from", "JSON.get", "JSON.int", "JSON.list", "JSON.null", "JSON.null?", "JSON.object", "JSON.parse", "JSON.schema", "JSON.string", "List.all?", "List.any?", "List.append", "List.at", "List.concat", "List.drop", "List.drop_while", "List.each", "List.each_slice", "List.each_with_index", "List.filter", "List.find", "List.flat_map", "List.group_by", "List.map", "List.max_by", "List.min_by", "List.partition", "List.reduce", "List.repeat", "List.reverse", "List.set", "List.size", "List.sort", "List.sort_by", "List.sum", "List.take", "List.take_while", "List.tally", "List.uniq", "Map.delete", "Map.each", "Map.filter", "Map.get", "Map.has_key?", "Map.keys", "Map.put", "Map.size", "Map.values", "Path.cwd", "Path.join", "Path.real", "Path.remove", "Path.rename", "Path.resolve", "Process.channel_close", "Process.channel_read_line", "Process.channel_send", "Process.close", "Process.close_stdin", "Process.output", "Process.parent_read_line", "Process.parent_send", "Process.read_available", "Process.read_bytes", "Process.read_line", "Process.send", "Process.send_bytes", "Process.spawn", "Process.spawn_captured", "Process.spawn_channel", "Process.wait", "Random.float", "Random.int", "Range.each", "Range.first", "Range.include?", "Range.last", "Range.size", "Range.to_a", "Result.message", "Result.ok?", "Result.unwrap!", "Result.unwrap_or", "Set.add", "Set.delete", "Set.difference", "Set.empty?", "Set.include?", "Set.intersection", "Set.new", "Set.size", "Set.subset?", "Set.to_a", "Set.union", "String.at", "String.code", "String.compare", "String.contains?", "String.downcase", "String.ends_with?", "String.from_bytes", "String.from_code", "String.from_float", "String.from_int", "String.index_of", "String.join", "String.length", "String.replace", "String.reverse", "String.slice", "String.split", "String.starts_with?", "String.to_float", "String.to_float!", "String.to_int", "String.to_int!", "String.trim", "String.upcase", "System.args", "System.env", "System.exit", "System.pid", "TCP.accept", "TCP.close", "TCP.close_listener", "TCP.connect", "TCP.listen", "TCP.local_port", "TCP.read_line", "TCP.recv_bytes", "TCP.send", "TCP.send_bytes", "TLS.connect", "TLS.listen", "Task.await", "Task.map", "Task.pending_count", "Task.sleep", "Task.spawn", "Task.spawn_owning", "Task.unobserved_crash", "Test.assert", "Test.eq", "Test.error?", "Test.ok?", "Test.run", "Test.test", "Time.monotonic_ms", "Time.monotonic_ns", "Time.now_ms", "error", "gets", "gets!", "ok", "print", "puts"]
+bare ["__fail_arg", "error", "gets", "gets!", "ok", "print", "puts"]
 opaque ["FileHandle", "HttpClient", "HttpServer", "Listener", "Process", "Socket", "TestCase"]
 handles ["FileHandle", "HttpServer", "Listener", "Process", "Socket"]
 reserved ["Await", "Bool", "Channel", "Dir", "File", "FileHandle", "FileInfo", "Float", "Fn", "Header", "HttpClient", "HttpClientOptions", "HttpRequest", "HttpResponse", "HttpServer", "HttpServerOptions", "HttpWire", "IO", "Int", "JSON", "Json", "List", "Listener", "LogEvent", "LogLevel", "LogRegistry", "Map", "Nil", "Path", "Process", "ProcessOutput", "Random", "Range", "Result", "Set", "Socket", "String", "System", "TCP", "TLS", "Task", "Test", "TestCase", "Time", "Void"]
 std-only HttpWire=std/http as HTTP, LogRegistry=std/logger as Logger
+prelude-only ["__fail_arg"]
+prelude List.drop_while=list limits=[] bodies=["=drop_while"], List.each_slice=list limits=[] bodies=["=each_slice"], List.each_with_index=list limits=[] bodies=["=each_with_index"], List.find=list limits=[] bodies=["=find"], List.flat_map=list limits=[] bodies=["=flat_map"], List.group_by=list limits=["K in Int/String"] bodies=["=group_by"], List.max_by=list limits=["O in Int/Float/String"] bodies=["Float=max_by_float", "Int=max_by_int", "String=max_by_string"], List.min_by=list limits=["O in Int/Float/String"] bodies=["Float=min_by_float", "Int=min_by_int", "String=min_by_string"], List.partition=list limits=[] bodies=["=partition"], List.sum=list limits=["N in Int/Float"] bodies=["Float=sum_float", "Int=sum_int"], List.take_while=list limits=[] bodies=["=take_while"], List.tally=list limits=["K in Int/String"] bodies=["=tally"], List.uniq=list limits=["K in Int/String"] bodies=["=uniq"], Map.each=map limits=[] bodies=["=each"], Map.filter=map limits=[] bodies=["=filter"]
 near:pust -> -
 near:put -> "did you mean \"puts\"?"
 near:prnt -> "did you mean \"print\"?"

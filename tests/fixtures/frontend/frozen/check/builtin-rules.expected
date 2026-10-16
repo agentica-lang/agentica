@@ -80,9 +80,18 @@ List.append ListAppend
 List.at ListAt
 List.concat ListConcat
 List.drop ListCount
+List.drop_while Prelude
 List.each ListEach
+List.each_slice Prelude
+List.each_with_index Prelude
 List.filter ListFilter
+List.find Prelude
+List.flat_map Prelude
+List.group_by Prelude
 List.map ListMap
+List.max_by Prelude
+List.min_by Prelude
+List.partition Prelude
 List.reduce ListReduce
 List.repeat ListRepeat
 List.reverse ListReverse
@@ -90,7 +99,11 @@ List.set ListSet
 List.size ListSize
 List.sort ListSort
 List.sort_by ListSortBy
+List.sum Prelude
 List.take ListCount
+List.take_while Prelude
+List.tally Prelude
+List.uniq Prelude
 LogRegistry.attach Plain
 LogRegistry.detach Plain
 LogRegistry.floor Plain
@@ -102,6 +115,8 @@ LogRegistry.names Plain
 LogRegistry.set_level Plain
 LogRegistry.task_id Plain
 Map.delete MapDelete
+Map.each Prelude
+Map.filter Prelude
 Map.get MapGet
 Map.has_key? MapHas
 Map.keys MapKeys
@@ -156,6 +171,7 @@ Set.to_a SetToA
 Set.union SetCombine
 String.at Plain
 String.code Plain
+String.compare Plain
 String.contains? Plain
 String.downcase Plain
 String.ends_with? Plain
@@ -209,6 +225,7 @@ Test.test Plain
 Time.monotonic_ms Plain
 Time.monotonic_ns Plain
 Time.now_ms Plain
+__fail_arg Plain
 error Error
 gets Plain
 gets! Plain

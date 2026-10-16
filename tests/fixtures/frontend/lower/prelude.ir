@@ -1,0 +1,387 @@
+program 0:1:1-9:1 entry=0 globals=0
+source 0 "prelude.agc" chars=200
+source 1 "<prelude>/list.agc" chars=0
+fn0 "main" params=0 captures=0 slots=5 entry @ 0:1:1-9:1
+    step @ 0:2:3-3:1
+    step @ 0:2:13-2:22
+    step @ 0:2:14-2:15
+    const r1 int:3 @ 0:2:14-2:15
+    step @ 0:2:17-2:18
+    const r2 int:1 @ 0:2:17-2:18
+    step @ 0:2:20-2:21
+    const r3 int:4 @ 0:2:20-2:21
+    list r0 r1 3 @ 0:2:13-2:22
+    step @ 0:3:3-4:1
+    step @ 0:3:3-3:38
+    step @ 0:3:8-3:37
+    step @ 0:3:8-3:15
+    move r2 r0 @ 0:3:8-3:15
+    step @ 0:3:21-3:37
+    closure r3 fn6 @ 0:3:21-3:37
+    call r2 fn1 @ 0:3:8-3:37 0:3:8-3:15 0:3:21-3:37
+    move r1 r2 @ 0:3:8-3:37
+    call-builtin r1 "puts" 1 @ 0:3:3-3:38 0:3:8-3:37
+    step @ 0:4:3-5:1
+    step @ 0:4:3-4:30
+    step @ 0:4:8-4:29
+    step @ 0:4:8-4:15
+    move r2 r0 @ 0:4:8-4:15
+    step @ 0:4:27-4:28
+    const r3 int:2 @ 0:4:27-4:28
+    call r2 fn2 @ 0:4:8-4:29 0:4:8-4:15 0:4:27-4:28
+    move r1 r2 @ 0:4:8-4:29
+    call-builtin r1 "puts" 1 @ 0:4:3-4:30 0:4:8-4:29
+    step @ 0:5:3-6:1
+    step @ 0:5:3-5:20
+    step @ 0:5:8-5:19
+    step @ 0:5:8-5:15
+    move r2 r0 @ 0:5:8-5:15
+    call r2 fn4 @ 0:5:8-5:19 0:5:8-5:15
+    move r1 r2 @ 0:5:8-5:19
+    call-builtin r1 "puts" 1 @ 0:5:3-5:20 0:5:8-5:19
+    step @ 0:6:3-7:1
+    step @ 0:6:3-6:45
+    step @ 0:6:8-6:44
+    step @ 0:6:8-6:18
+    step @ 0:6:9-6:12
+    const r3 "b" @ 0:6:9-6:12
+    step @ 0:6:14-6:17
+    const r4 "a" @ 0:6:14-6:17
+    list r2 r3 2 @ 0:6:8-6:18
+    step @ 0:6:26-6:44
+    closure r3 fn7 @ 0:6:26-6:44
+    call r2 fn5 @ 0:6:8-6:44 0:6:8-6:18 0:6:26-6:44
+    move r1 r2 @ 0:6:8-6:44
+    call-builtin r1 "puts" 1 @ 0:6:3-6:45 0:6:8-6:44
+    step @ 0:7:3-8:1
+    step @ 0:7:3-7:22
+    step @ 0:7:8-7:21
+    step @ 0:7:8-7:15
+    move r2 r0 @ 0:7:8-7:15
+    call r2 fn3 @ 0:7:8-7:21 0:7:8-7:15
+    move r1 r2 @ 0:7:8-7:21
+    call-builtin r1 "puts" 1 @ 0:7:3-7:22 0:7:8-7:21
+    const r1 void @ 0:1:1-9:1
+    return r1 @ 0:1:1-9:1
+fn1 "@prelude::list::find" params=2 captures=0 slots=10 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r2 r0 @ 1:1:1-1:1
+    const r3 int:0 @ 1:1:1-1:1
+    list-len r4 r2 @ 1:1:1-1:1
+    const r6 int:1 @ 1:1:1-1:1
+    jump L2 @ 1:1:1-1:1
+  L0:
+    step @ 1:1:1-1:1
+    list-get r7 r2 r3 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r8 r1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r9 r7 @ 1:1:1-1:1
+    call-value r8 1 @ 1:1:1-1:1
+    jump-if-false r8 L5 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r8 r7 @ 1:1:1-1:1
+    call-builtin r8 "ok" 1 @ 1:1:1-1:1 1:1:1-1:1
+    return r8 @ 1:1:1-1:1
+  L5:
+  L4:
+  L1:
+    add-i r3 r3 r6 @ 1:1:1-1:1
+  L2:
+    lt-i r5 r3 r4 @ 1:1:1-1:1
+    jump-if-true r5 L0 @ 1:1:1-1:1
+  L3:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r2 "not found" @ 1:1:1-1:1
+    call-builtin r2 "error" 1 @ 1:1:1-1:1 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+    const r2 void @ 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+fn2 "@prelude::list::each_slice" params=2 captures=0 slots=12 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r3 int:1 @ 1:1:1-1:1
+    lt-i r2 r1 r3 @ 1:1:1-1:1
+    jump-if-false r2 L1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r2 "RUNTIME-INVALID-COUNT" @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r3 int:1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r4 "each_slice needs a size of at least 1, found " @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r5 r1 @ 1:1:1-1:1
+    to-text r5 r5 @ 1:1:1-1:1
+    concat r4 r4 r5 @ 1:1:1-1:1
+    call-builtin r2 "__fail_arg" 3 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+  L1:
+  L0:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    list r2 r2 0 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    list r3 r3 0 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r4 r0 @ 1:1:1-1:1
+    const r5 int:0 @ 1:1:1-1:1
+    list-len r6 r4 @ 1:1:1-1:1
+    const r8 int:1 @ 1:1:1-1:1
+    jump L4 @ 1:1:1-1:1
+  L2:
+    step @ 1:1:1-1:1
+    list-get r9 r4 r5 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r10 r3 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r11 r9 @ 1:1:1-1:1
+    call-builtin r10 "List.append" 2 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+    move r3 r10 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r11 r3 @ 1:1:1-1:1
+    call-builtin r11 "List.size" 1 @ 1:1:1-1:1 1:1:1-1:1
+    step @ 1:1:1-1:1
+    eq r10 r11 r1 @ 1:1:1-1:1
+    jump-if-false r10 L7 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r10 r2 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r11 r3 @ 1:1:1-1:1
+    call-builtin r10 "List.append" 2 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+    move r2 r10 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    list r10 r10 0 @ 1:1:1-1:1
+    move r3 r10 @ 1:1:1-1:1
+  L7:
+  L6:
+  L3:
+    add-i r5 r5 r8 @ 1:1:1-1:1
+  L4:
+    lt-i r7 r5 r6 @ 1:1:1-1:1
+    jump-if-true r7 L2 @ 1:1:1-1:1
+  L5:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r5 r3 @ 1:1:1-1:1
+    call-builtin r5 "List.size" 1 @ 1:1:1-1:1 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r6 int:0 @ 1:1:1-1:1
+    lt-i r4 r6 r5 @ 1:1:1-1:1
+    jump-if-false r4 L9 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r4 r2 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r5 r3 @ 1:1:1-1:1
+    call-builtin r4 "List.append" 2 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+    move r2 r4 @ 1:1:1-1:1
+  L9:
+  L8:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+    const r4 void @ 1:1:1-1:1
+    return r4 @ 1:1:1-1:1
+fn3 "@prelude::list::tally" params=1 captures=0 slots=14 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    map r1 r1 0 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r2 r0 @ 1:1:1-1:1
+    const r3 int:0 @ 1:1:1-1:1
+    list-len r4 r2 @ 1:1:1-1:1
+    const r6 int:1 @ 1:1:1-1:1
+    jump L2 @ 1:1:1-1:1
+  L0:
+    step @ 1:1:1-1:1
+    list-get r7 r2 r3 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r8 r1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r9 r7 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r11 r1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r12 r7 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r13 int:0 @ 1:1:1-1:1
+    call-builtin r11 "Map.get" 3 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r12 int:1 @ 1:1:1-1:1
+    add-i r10 r11 r12 @ 1:1:1-1:1
+    call-builtin r8 "Map.put" 3 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+    move r1 r8 @ 1:1:1-1:1
+  L1:
+    add-i r3 r3 r6 @ 1:1:1-1:1
+  L2:
+    lt-i r5 r3 r4 @ 1:1:1-1:1
+    jump-if-true r5 L0 @ 1:1:1-1:1
+  L3:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    return r1 @ 1:1:1-1:1
+    const r2 void @ 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+fn4 "@prelude::list::sum_int" params=1 captures=0 slots=9 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r1 int:0 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r2 r0 @ 1:1:1-1:1
+    const r3 int:0 @ 1:1:1-1:1
+    list-len r4 r2 @ 1:1:1-1:1
+    const r6 int:1 @ 1:1:1-1:1
+    jump L2 @ 1:1:1-1:1
+  L0:
+    step @ 1:1:1-1:1
+    list-get r7 r2 r3 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    add-i r8 r1 r7 @ 1:1:1-1:1
+    move r1 r8 @ 1:1:1-1:1
+  L1:
+    add-i r3 r3 r6 @ 1:1:1-1:1
+  L2:
+    lt-i r5 r3 r4 @ 1:1:1-1:1
+    jump-if-true r5 L0 @ 1:1:1-1:1
+  L3:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    return r1 @ 1:1:1-1:1
+    const r2 void @ 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+fn5 "@prelude::list::min_by_string" params=2 captures=0 slots=10 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r3 r0 @ 1:1:1-1:1
+    call-builtin r3 "List.size" 1 @ 1:1:1-1:1 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r4 int:0 @ 1:1:1-1:1
+    eq r2 r3 r4 @ 1:1:1-1:1
+    jump-if-false r2 L1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r2 "the list is empty" @ 1:1:1-1:1
+    call-builtin r2 "error" 1 @ 1:1:1-1:1 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+  L1:
+  L0:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r3 int:0 @ 1:1:1-1:1
+    list-get r2 r0 r3 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r4 r1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r5 r2 @ 1:1:1-1:1
+    call-value r4 1 @ 1:1:1-1:1
+    move r3 r4 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r4 int:1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+  L2:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r6 r0 @ 1:1:1-1:1
+    call-builtin r6 "List.size" 1 @ 1:1:1-1:1 1:1:1-1:1
+    lt-i r5 r4 r6 @ 1:1:1-1:1
+    jump-if-false r5 L3 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    list-get r5 r0 r4 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r7 r1 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r8 r5 @ 1:1:1-1:1
+    call-value r7 1 @ 1:1:1-1:1
+    move r6 r7 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r8 r6 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r9 r3 @ 1:1:1-1:1
+    call-builtin r8 "String.compare" 2 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r9 int:0 @ 1:1:1-1:1
+    lt-i r7 r8 r9 @ 1:1:1-1:1
+    jump-if-false r7 L5 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r2 r5 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r3 r6 @ 1:1:1-1:1
+  L5:
+  L4:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    const r8 int:1 @ 1:1:1-1:1
+    add-i r7 r4 r8 @ 1:1:1-1:1
+    move r4 r7 @ 1:1:1-1:1
+    jump L2 @ 1:1:1-1:1
+  L3:
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r5 r2 @ 1:1:1-1:1
+    call-builtin r5 "ok" 1 @ 1:1:1-1:1 1:1:1-1:1
+    return r5 @ 1:1:1-1:1
+    const r5 void @ 1:1:1-1:1
+    return r5 @ 1:1:1-1:1
+fn6 "block@prelude.agc:3:21" params=1 captures=0 slots=3 @ 0:3:21-3:37
+    step @ 0:3:28-3:33
+    step @ 0:3:28-3:33
+    step @ 0:3:28-3:29
+    step @ 0:3:32-3:33
+    const r2 int:2 @ 0:3:32-3:33
+    lt-i r1 r2 r0 @ 0:3:30-3:31
+    return r1 @ 0:3:28-3:33
+fn7 "block@prelude.agc:6:26" params=1 captures=0 slots=1 @ 0:6:26-6:44
+    step @ 0:6:36-6:40
+    step @ 0:6:36-6:40
+    return r0 @ 0:6:36-6:40

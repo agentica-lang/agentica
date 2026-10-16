@@ -1,0 +1,6 @@
+check failed: 1 error
+
+[RUNTIME-INVALID-COUNT]
+  message: each_slice needs a size of at least 1, found 0
+  at: @fixtures/vm/prelude-error-slice.agc:4:27
+  source: puts(numbers.each_slice(0))

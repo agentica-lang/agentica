@@ -8,6 +8,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The [README](../README.
 - [`inventory.agc`](inventory.agc): maps, methods and interpolation.
 - [`strings.agc`](strings.agc): string methods in Ruby style.
 - [`blocks.agc`](blocks.agc): blocks and closures (`xs.map do |x| ... end`).
+- [`enumerable.agc`](enumerable.agc): the Enumerable methods of the compiler prelude: `find`, `group_by`, `tally`, `min_by`, `partition`, `each_slice` and more, with ties and empty lists.
 - [`dispatch.agc`](dispatch.agc): function values and `.call`.
 - [`constants.agc`](constants.agc): module constants: literals, tables built once, and constants that read each other.
 - [`defaults.agc`](defaults.agc): default parameter values: constants, `[]`, enum variants, and a last `Fn` parameter filled by a block.

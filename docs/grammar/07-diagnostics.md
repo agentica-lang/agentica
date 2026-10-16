@@ -49,6 +49,8 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `int(x)`, `float(n)`, `Int.to_float(n)` | `x.to_i`, `n.to_f` |
 | `x.lower`, `x.upper`, `x.startswith(...)` | `downcase`, `upcase`, `start_with?` |
 | `x.nil?` | `x == nil` |
+| `xs.select`, `xs.collect`, `xs.detect`, `xs.inject`, `xs.reject` | `filter`, `map`, `find`, `reduce`; `reject` is `xs.filter do \|x\| !cond end`. Each method has one name |
+| `(1..5).map`, `.select`, `.find`, `.sum` | a range has no list methods: `(1..5).to_a.map do \|x\| ... end` |
 | `None`, `null` | `nil` |
 | `elif`, `elseif`, `else if` | `elsif` |
 | `let x = 5`, `var x = 5`, `const x = 5` | `x = 5` or `x: Int = 5` |

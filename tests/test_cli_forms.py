@@ -58,14 +58,14 @@ PROGRAMS = ["ok.agc", "lex.agc", "parse.agc", "tab.agc", "crlf.agc", "unicode.ag
             "twice.agc", "helped.agc", "missing_import.agc", "std_error.agc", "sub/bad.agc", "sub/boom.agc",
             "invalid.agc", "divide.agc", "absent.agc"]
 
-BUILTINS = ["String.split", "ok", "Task.await", "Map.get"]
+BUILTINS = ["String.split", "ok", "Task.await", "Map.get", "List.group_by", "String.compare"]
 
 # Arguments with no file: the options, their mistakes and the help.
 OPTIONS = [
     ["--version"], ["-h"], ["--help"], ["-hx"], ["-xh"], ["-ab", "c"], ["--foo"], ["+x"], ["-"], ["+"], [],
     ["check"], ["compile"], ["help"], ["--json", "help"], ["help", "--json"], ["help", "Nope"],
     ["help", "Strin.split"],
-    ["help", "a", "b", "c"], ["help", "HttpWire.client"],
+    ["help", "a", "b", "c"], ["help", "HttpWire.client"], ["help", "__fail_arg"],
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
     ["--max-steps=5", "ok.agc"], ["--seed", "2147483648", "ok.agc"], ["--seed", "007", "ok.agc"],
     ["--seed", "--json", "ok.agc"], ["--seed", "1", "--seed"], ["--seed", "5", "--seed", "6", "ok.agc"],

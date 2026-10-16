@@ -29,6 +29,7 @@ typedef struct {
   const agc_instr *code;
   const uint32_t *spans;
   uint32_t count;
+  uint32_t prelude;
 } fn_spec;
 
 typedef struct {
@@ -58,6 +59,8 @@ typedef struct {
   uint32_t globals;
   fn_spec funcs[2];
   uint32_t func_count;
+  uint32_t main_prelude, helper_prelude;
+  uint32_t more_spans;
 } spec;
 
 static const agc_instr puts_code[] = {
@@ -92,14 +95,18 @@ static void float_bits(buffer *b, double f) {
   u32(b, (uint32_t)(bits >> 32));
 }
 
+/* Version 6 writes the prelude flag of each function after its span; a version 5 file has none. */
+static bool flags_written = true;
+
 /* Returns where the instruction count is. */
 static size_t function(buffer *b, const char *name, uint32_t params, uint32_t captures, uint32_t registers,
-                       const agc_instr *code, const uint32_t *spans, uint32_t count) {
+                       const agc_instr *code, const uint32_t *spans, uint32_t count, uint32_t prelude) {
   str(b, name);
   u32(b, params);
   u32(b, captures);
   u32(b, registers);
   u32(b, 0);
+  if (flags_written) u32(b, prelude);
   size_t count_at = b->len;
   u32(b, count);
   for (uint32_t i = 0; i < count; i++) {
@@ -115,12 +122,13 @@ static size_t function(buffer *b, const char *name, uint32_t params, uint32_t ca
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0, 0, 0, 0};
   return s;
 }
 
 static buffer build(spec s) {
   buffer b;
+  flags_written = s.version != AGC_FORMAT_PREVIOUS;
   b.data = malloc(4096 + (size_t)s.extra_voids + (s.tables ? s.tables->len : 0) + (s.updates ? s.updates->len : 0));
   assert(b.data);
   b.len = 0;
@@ -136,9 +144,11 @@ static buffer build(spec s) {
     str(&b, s.second_source);
   }
   b.spans_at = b.len;
-  u32(&b, 3);
+  u32(&b, 3 + s.more_spans);
   for (int i = 0; i < 3; i++)
     for (int k = 0; k < 5; k++) u32(&b, s.spans[i][k]);
+  for (uint32_t i = 0; i < s.more_spans; i++)
+    for (int k = 0; k < 5; k++) u32(&b, s.spans[0][k]);
   u32(&b, 2 + s.extra_voids + (s.extra_kind >= 0) + (s.second_float != 0));
   u8(&b, 4);
   u32(&b, 1);
@@ -179,15 +189,16 @@ static buffer build(spec s) {
     u32(&b, s.func_count);
     for (uint32_t i = 0; i < s.func_count; i++) {
       const fn_spec *f = &s.funcs[i];
-      size_t count_at = function(&b, f->name, f->params, 0, f->registers, f->code, f->spans, f->count);
+      size_t count_at = function(&b, f->name, f->params, 0, f->registers, f->code, f->spans, f->count, f->prelude);
       if (i == 0) b.count_at = count_at;
     }
   } else {
     u32(&b, s.helper_params ? 2 : 1);
-    b.count_at = function(&b, "main", s.params, s.captures, s.registers, s.code, s.code_spans, s.count);
+    b.count_at =
+        function(&b, "main", s.params, s.captures, s.registers, s.code, s.code_spans, s.count, s.main_prelude);
     if (s.helper_params)
       function(&b, "helper", s.helper_params, s.helper_captures, s.helper_params + s.helper_captures, helper_code,
-               two_spans, 2);
+               two_spans, 2, s.helper_prelude);
   }
   u32(&b, s.entry);
   if (s.trailing) u8(&b, 0);
@@ -209,6 +220,7 @@ static bool loads(spec s, const char *reason) {
   bool ok = agc_load(b.data, b.len, &p, error, sizeof error);
   assert_collector_on();
   free(b.data);
+  if (!ok && !reason) fprintf(stderr, "unexpected rejection: %s\n", error);
   if (reason && !strstr(error, reason)) {
     fprintf(stderr, "expected \"%s\", got \"%s\"\n", reason, error);
     return true;
@@ -561,8 +573,8 @@ static spec pair_spec(const agc_instr *first, uint32_t first_count, const agc_in
   s.globals = globals;
   s.entry = entry;
   s.func_count = 2;
-  s.funcs[0] = (fn_spec){"first", 0, 4, first, zero_spans, first_count};
-  s.funcs[1] = (fn_spec){"second", 0, 4, second, zero_spans, second_count};
+  s.funcs[0] = (fn_spec){"first", 0, 4, first, zero_spans, first_count, 0};
+  s.funcs[1] = (fn_spec){"second", 0, 4, second, zero_spans, second_count, 0};
   return s;
 }
 
@@ -825,6 +837,141 @@ static void source_root_tests(void) {
   assert(join_names(lone, 1, "a", lone_joined));
   assert(is_name(lone_joined[0], "a/."));
   source_root_budget_tests();
+}
+
+
+/* The prelude flag of version 6 (docs/future/25-ruby-typed-idioms.md §25.6): what the loader checks, and the span a
+ * runtime error of a prelude function is reported at. Constant 0 is the Int 1 and constant 2 the String below, which
+ * is both the code and the message of every __fail_arg call. */
+static const char fail_code[] = "RUNTIME-INVALID-COUNT";
+
+/* A prelude function of two parameters that calls __fail_arg(code, 1, message): its registers 2 to 4 are the window. */
+static const agc_instr fail_arg_code[] = {
+  {AGC_OP_STEP, 1, 0, 0},    {AGC_OP_CONST, 2, 2, 0},        {AGC_OP_CONST, 3, 0, 0},
+  {AGC_OP_CONST, 4, 2, 0},   {AGC_OP_CALL_BUILTIN, 2, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+static const uint32_t fail_arg_spans[] = {0, 0, 0, 0, 0, 0};
+
+/* main: STEP, two arguments, CALL of function 1 (the call's span is span 0, so its arguments are spans 1 and 2),
+ * RETURN. */
+static const agc_instr call_two[] = {
+  {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_CALL, 0, 1, 0},
+  {AGC_OP_RETURN, 0, 0, 0}};
+static const uint32_t call_two_spans[] = {1, 1, 1, 0, 1};
+
+static spec prelude_spec(const agc_instr *callee, const uint32_t *callee_spans, uint32_t callee_count,
+                         uint32_t callee_registers) {
+  spec s = base();
+  s.more_spans = 2;
+  s.extra_kind = 6;
+  s.extra_string = fail_code;
+  s.builtin = "__fail_arg";
+  s.builtin_arity = 3;
+  s.func_count = 2;
+  s.funcs[0] = (fn_spec){"main", 0, 3, call_two, call_two_spans, 5, 0};
+  s.funcs[1] = (fn_spec){"find", 2, callee_registers, callee, callee_spans, callee_count, 1};
+  return s;
+}
+
+static agc_outcome run_quiet(spec s) {
+  FILE *out = tmpfile();
+  assert(out);
+  agc_outcome outcome = run_spec(s, out);
+  fclose(out);
+  return outcome;
+}
+
+static void prelude_tests(void) {
+  char error[160] = "";
+  agc_program *p;
+
+  /* The flag is 0 or 1, and a file of version 5 has none: both loaders read it, with no prelude function. */
+  spec s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
+  assert(loads(s, NULL));
+  s.funcs[1].prelude = 2;
+  assert(!loads(s, "bad prelude flag"));
+  s = base();
+  s.version = AGC_FORMAT_PREVIOUS;
+  buffer old = build(s);
+  assert(agc_load(old.data, old.len, &p, error, sizeof error));
+  assert(!p->functions[0].prelude);
+  assert(agc_load_front_end(old.data, old.len, &p, error, sizeof error, NULL));
+  free(old.data);
+  s.version = AGC_FORMAT_PREVIOUS - 1;
+  old = build(s);
+  assert(!agc_load(old.data, old.len, &p, error, sizeof error) && strstr(error, "format version"));
+  free(old.data);
+  flags_written = true;
+
+  /* __fail_arg belongs to prelude functions only. */
+  s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
+  s.funcs[1].prelude = 0;
+  assert(!loads(s, "prelude-only builtin outside the prelude"));
+
+  /* A CALL of a prelude function carries the spans of its arguments after its own: they must exist. */
+  static const uint32_t last_span[] = {1, 1, 1, 4, 1};
+  s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
+  s.funcs[0].spans = last_span;
+  assert(!loads(s, "span index out of range"));
+  s.funcs[1].prelude = 0;
+  s.builtin = "puts";
+  s.builtin_arity = 1;
+  static const agc_instr puts_helper[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  s.funcs[1].code = puts_helper;
+  s.funcs[1].count = 2;
+  s.funcs[1].spans = two_spans;
+  assert(loads(s, NULL));
+
+  /* The error is reported at the argument of the call the user wrote: argument 1 is span 2, since the call is span 0.
+   The stack shows main and no frame of the prelude. */
+  s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
+  agc_outcome failed = run_quiet(s);
+  assert(failed.kind == AGC_FAILED && strcmp(failed.code, fail_code) == 0 && failed.span == 2);
+  assert(!failed.stack.shown || (failed.stack.count == 1 && failed.stack.lines[0].function == 0));
+
+  /* An argument the call does not have (6 of a call of 2 arguments) falls back to the call span. */
+  static const agc_instr far_index[] = {
+    {AGC_OP_STEP, 1, 0, 0},    {AGC_OP_CONST, 2, 2, 0},   {AGC_OP_ADD_I, 3, 1, 1}, {AGC_OP_ADD_I, 3, 3, 1},
+    {AGC_OP_ADD_I, 3, 3, 1},   {AGC_OP_ADD_I, 3, 3, 1},   {AGC_OP_ADD_I, 3, 3, 1}, {AGC_OP_CONST, 4, 2, 0},
+    {AGC_OP_CALL_BUILTIN, 2, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t far_spans[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  s = prelude_spec(far_index, far_spans, 10, 5);
+  agc_outcome past = run_quiet(s);
+  assert(past.kind == AGC_FAILED && strcmp(past.code, fail_code) == 0 && past.span == 0);
+
+  /* A tail call into the prelude, or a call through a function value, has no argument spans: the call's span. */
+  static const agc_instr via_value[] = {
+    {AGC_OP_STEP, 1, 0, 0},  {AGC_OP_CLOSURE, 0, 1, 0}, {AGC_OP_CONST, 1, 0, 0},
+    {AGC_OP_CONST, 2, 0, 0}, {AGC_OP_CALL_VALUE, 0, 2, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t via_value_spans[] = {1, 1, 1, 1, 1, 1};
+  s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
+  s.funcs[0] = (fn_spec){"main", 0, 4, via_value, via_value_spans, 6, 0};
+  agc_outcome by_value = run_quiet(s);
+  assert(by_value.kind == AGC_FAILED && strcmp(by_value.code, fail_code) == 0 && by_value.span == 1);
+  static const agc_instr tail[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
+  s.funcs[0] = (fn_spec){"main", 0, 3, tail, call_two_spans, 5, 0};
+  agc_outcome by_tail = run_quiet(s);
+  assert(by_tail.kind == AGC_FAILED && by_tail.span == 0);
+
+  /* No frame of the user below the run (a crafted file that flags main): the span stays the instruction's own. */
+  s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
+  static const agc_instr main_fails[] = {
+    {AGC_OP_STEP, 1, 0, 0},  {AGC_OP_CONST, 0, 2, 0},        {AGC_OP_CONST, 1, 0, 0},
+    {AGC_OP_CONST, 2, 2, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t main_fails_spans[] = {1, 1, 1, 1, 1, 1};
+  s.funcs[0] = (fn_spec){"main", 0, 3, main_fails, main_fails_spans, 6, 1};
+  agc_outcome crafted = run_quiet(s);
+  assert(crafted.kind == AGC_FAILED && strcmp(crafted.code, fail_code) == 0 && crafted.span == 1);
+  assert(!crafted.stack.shown);
+
+  /* The code must start with RUNTIME-: anything else is RUNTIME-INTERNAL, whatever the file asks for. */
+  static const char other_code[] = "CHECK-TYPE-MISMATCH";
+  s = prelude_spec(fail_arg_code, fail_arg_spans, 6, 5);
+  s.extra_string = other_code;
+  agc_outcome wrong = run_quiet(s);
+  assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
 }
 
 int main(void) {
@@ -1702,6 +1849,7 @@ int main(void) {
   free(updates.data);
 
   globals_tests();
+  prelude_tests();
   source_root_tests();
   line_index_tests();
   table_count_tests();
