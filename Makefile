@@ -457,8 +457,8 @@ VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LIN
 #   stage1  compiled by the first binary
 #   stage2  compiled by the first binary with stage1 as its front end (--front-end)
 #   stage3  compiled by the first binary with stage2 as its front end; it must be stage2, byte for byte
-#   dist/agentica  linked with stage2: the product
-# make fixed-point        the above, then dist/agentica compiles the front end once more; that must be stage2 as well
+#   dist/agentica  linked with stage2: the product, carrying stage2 and the two programs of `agentica test` (below)
+# make fixed-point        the above, then dist/agentica compiles the front end and the two programs again; that must be the same bytes
 # make stage0             refresh bootstrap/stage0.agcb from stage2, after the fixed point holds (references/ci.md)
 # The stages are the same bytes in every mode (release, SANITIZE=1, ...): a mode builds its own first binary, and runs the stages
 # again only when one of their inputs changed. The GC stress build is the exception: it links the stage2 that the release mode
@@ -469,6 +469,11 @@ STD_NAMES := $(shell cat stdlib/MODULES)
 STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
 # compiler/agentica.toml is not an input: it holds the style rules for the style test, and compile never reads it.
 STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES) VERSION
+# The runner and the default step program of `agentica test` (compiler/bdd_driver.agc), compiled at build time with the front
+# end of this build and carried by the binary, so `agentica test` does not compile them on every run. The first binary has
+# none (stage2 does not exist yet): its front end is stage0, whose driver compiles them from the std/ sources on every
+# `agentica test`, as it always did, and its `run --embedded` exits 2 (tests/test_bdd.py).
+EMBEDDED_PROGRAMS := $(STAGE_DIR)/runner.agcb $(STAGE_DIR)/steps.agcb
 STAGE0 := bootstrap/stage0.agcb
 BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)
 # The compiler that makes stage1: the first binary. make stage0 STAGE1_COMPILER=... names another one when stage0 cannot
@@ -477,7 +482,7 @@ STAGE1_COMPILER ?= $(BOOT)
 STAGE1_NEEDS := $(if $(filter $(BOOT),$(STAGE1_COMPILER)),$(BOOT))
 
 ifeq ($(GC_STRESS),1)
-$(STAGE_DIR)/stage2.agcb:
+$(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS):
 	@echo "$@ is missing: the GC stress build links the front end of the release build; run make first" >&2; exit 1
 else
 $(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(STAGE1_NEEDS)
@@ -496,6 +501,12 @@ $(STAGE_DIR)/stage3.agcb: $(STAGE_DIR)/stage2.agcb $(STAGE_INPUTS) $(BOOT)
 	rm -f $@
 	$(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
 	cmp $(STAGE_DIR)/stage2.agcb $@ || { echo "fixed point: stage2 and stage3 differ" >&2; exit 1; }
+
+# The first binary compiles them with stage2 as its front end, as it compiled stage3: the bytes are the ones dist/agentica
+# makes (make fixed-point checks that).
+$(EMBEDDED_PROGRAMS): $(STAGE_DIR)/%.agcb: compiler/embedded/%.agc $(STAGE_DIR)/stage2.agcb stdlib/MODULES $(STD_FILES) VERSION $(BOOT)
+	rm -f $@
+	$(BOOT) --front-end $(STAGE_DIR)/stage2.agcb compile $< -o $@
 endif
 
 stage1: $(STAGE_DIR)/stage1.agcb
@@ -504,15 +515,15 @@ stage3: $(STAGE_DIR)/stage3.agcb
 
 # The front end and the std/ sources go into the binary through a generated assembly file with .incbin (not through ccache,
 # which cannot see the files that .incbin reads). Linux and ELF only.
-$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE_DIR)/stage2.agcb $(STD_FILES)
+$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES)
 	@mkdir -p $(VM_BUILD)
-	sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES > $@
+	sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES $(EMBEDDED_PROGRAMS) > $@
 
 $(VM_BUILD)/bootstrap/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE0) $(STD_FILES)
 	@mkdir -p $(VM_BUILD)/bootstrap
 	sh vm/tools/gen-embedded.sh $(STAGE0) stdlib stdlib/MODULES > $@
 
-$(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(STD_FILES)
+$(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES)
 	@mkdir -p $(VM_OBJ)
 	$(VM_CC) -x assembler -c $< -o $@
 
@@ -539,6 +550,11 @@ fixed-point: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
 	rm -f $(STAGE_DIR)/stage4.agcb
 	dist/agentica$(EXE) compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
 	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage4.agcb || { echo "fixed point: dist/agentica compiles another front end" >&2; exit 1; }
+	for name in runner steps; do \
+	  rm -f $(STAGE_DIR)/$$name-check.agcb; \
+	  dist/agentica$(EXE) compile compiler/embedded/$$name.agc -o $(STAGE_DIR)/$$name-check.agcb; \
+	  cmp $(STAGE_DIR)/$$name.agcb $(STAGE_DIR)/$$name-check.agcb || { echo "fixed point: dist/agentica compiles another $$name" >&2; exit 1; }; \
+	done
 
 # A new stage0 is the stage2 of a checkout where the fixed point holds. The next make rebuilds everything from it.
 stage0: $(STAGE_DIR)/stage3.agcb

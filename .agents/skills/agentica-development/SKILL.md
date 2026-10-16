@@ -35,6 +35,7 @@ make                                      # build dist/agentica, the one binary,
 make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"  # unittest modules, one process each
 dist/agentica examples/hello.agc          # run a program; `check file.agc` only checks; `run -- file.agcb` runs bytecode
 make test-cli                             # the product command line tests on dist/agentica
+AGENTICA_VM_TRACE=profile dist/agentica check FILE   # where a run spends its steps: per function, source file and builtin (references/vm-build.md)
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
 make fixed-point                          # stage2 == stage3, and dist/agentica compiles the front end to stage2 again (about 25 s)
 make stage0                               # refresh bootstrap/stage0.agcb from stage2 (references/ci.md, "Refreshing stage0")

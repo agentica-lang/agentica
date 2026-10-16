@@ -171,12 +171,22 @@ byte of a file with a type table, an Updates section or Globals.
   so a value of it changes no run. The binary is the VM; a program that starts
   `agentica` again (the BDD driver) uses the path in `Settings.self_path`.
 - `agentica test` runs in the binary (`docs/bdd.md`). The BDD driver is part of
-  the front end (`compiler/bdd_driver.agc`). It compiles the step program and
-  the runner to a private run directory, starts the runner with `agentica run
-  --allow-run --driver-pid PID -- ...` (`PID` is its own), and the runner starts
-  one VM per scenario or test file with the same command. A front end that
-  stops with an error (a bug in the driver) ends the process with status 2,
-  never the 1 of a failed test run.
+  the front end (`compiler/bdd_driver.agc`). It compiles the test files to a
+  private run directory, starts the runner with `agentica run --allow-run
+  --driver-pid PID --embedded runner -- CONFIG` (`PID` is its own), and the
+  runner starts one VM per scenario or test file with the same command. The
+  runner and the default step program are not compiled by the driver: the
+  binary carries them, compiled at build time (see "The embedded data"). A
+  front end that reads the `std/` sources from a folder (`--stdlib`, the tests
+  that fake the binary) compiles both into the run directory, as before, and
+  starts the runner with `-- runner.agcb CONFIG`. The configuration names the
+  step program file in `steps_bytecode`; an empty name means the default step
+  program of the binary, which the runner starts with `--embedded steps`. The
+  first binary of the bootstrap runs the driver of stage0, which knows no
+  embedded program and compiles both from the `std/` sources, as it always
+  did. A front end that stops with
+  an error (a bug in the driver) ends the process with status 2, never the 1
+  of a failed test run.
 - `make` builds `dist/agentica` from `bootstrap/stage0.agcb` (35.3). The
   release builds it against glibc 2.28 (11).
 - Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.
@@ -208,6 +218,13 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   and runs it in one runtime. No front end is loaded. `agentica run --version`
   prints the long line (`agentica 0.3.0 (libgc ..., yyjson ..., libuv ...,
   OpenSSL ...)`); `agentica --version` prints the version alone.
+  `--embedded NAME` (hidden, like `--driver-pid`; once) runs a program that
+  the binary carries in place of the file: `runner` or `steps`, the two
+  programs of `agentica test`. The words after `--` are all the program's
+  arguments. A name that is not one of them, or a binary that carries none
+  (the first binary of the bootstrap: `agentica run: this binary carries no
+  embedded program runner`), is exit 2, and the front end may not pass the
+  option on in a hand-off.
 
 - **Two runs in one process.** `agentica [--front-end FILE.agcb] WORDS...`
   loads the front end (the carried one, or `FILE`; `--front-end` must be the
@@ -244,8 +261,9 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   exactly `--ai`, `--json`, `--allow-run`, `--max-steps N`, `--seed N`,
   `--flush-timeout MS` and `--source-root DIR`, each once, and nothing else; no
   positional word, no `--version`. `--driver-pid` is refused (exit 2): it says
-  which process started this one, and only that process can say so. The hand-off
-  takes at most 64 option words and 1,048,576 argument words
+  which process started this one, and only that process can say so. So is
+  `--embedded` (exit 2): only `agentica run` starts an embedded program. The
+  hand-off takes at most 64 option words and 1,048,576 argument words
   (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`), so the counts
   fit an `int`. The file of `--front-end` is opened with `O_NONBLOCK` and must
   be a regular file of at most 256 MiB, so a named pipe is refused at once.
@@ -272,11 +290,20 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   stay). Only `vm/agentica.c` calls it, for the front end; the program that the
   front end hands over goes through `agc_load_traced`, so it is checked like a
   file given to `agentica run`.
-- **The embedded data.** `agc_embedded_data` holds the front end, then for each
-  `std/` source its NUL-terminated path and its text. `agc_embedded_index` has
-  `[offset, length]` of the front end, the count `N`, and `N` triples
-  `[path offset, text offset, text length]`. Both are `.rodata`, built from
-  `.incbin` and label differences, so there are no relocations.
+- **The embedded data.** `agc_embedded_data` holds the front end, the BDD
+  runner and the default step program of `agentica test`, then for each `std/`
+  source its NUL-terminated path and its text. `agc_embedded_index` has
+  `[offset, length]` of the front end, of the runner and of the step program,
+  the count `N`, and `N` triples `[path offset, text offset, text length]`.
+  Both are `.rodata`, built from `.incbin` and label differences, so there are
+  no relocations. The runner and the step program are `compiler/embedded/
+  runner.agc` and `steps.agc` compiled by the first binary with `stage2` as its
+  front end (`build/stage/runner.agcb`, `steps.agcb`), against the `std/`
+  sources of the same build; `make fixed-point` checks that `dist/agentica`
+  compiles the same bytes. The first binary of the bootstrap is linked without
+  them (length 0), because it has no `stage2` yet to compile them with; its
+  front end is stage0, whose driver compiles them from the `std/` sources on
+  every `agentica test`, as before.
 
 **VM tracing (as built).** The rules are in `docs/future/24-logging.md` §24.4.
 This note lists what the code chose.
@@ -308,3 +335,21 @@ This note lists what the code chose.
   events of 10.3.1 (`tcp_connect`, `tcp_listen`, `tcp_accept`, `tcp_eof`,
   `tcp_close`, and their error forms). Field names are in `vm/trace.c` and
   `vm/loop.c`.
+- `profile` is the odd category: it is not part of `all`, and it counts
+  instead of tracing events. It is for finding where a program spends its
+  steps. With it on, each function counts its calls and the steps it ran (a
+  step is the VM's unit of budget: a `STEP` instruction adds the steps of its
+  block), and each builtin counts its calls and its time. The loop of
+  `interp.c` is built twice, with and without the hooks, so a run without the
+  category costs nothing; with it, every `STEP` takes the slow path of the
+  budget counter and the run is about a third slower. When the run ends (once
+  for each runtime: the front end hands its program over in a second one)
+  `vm/trace.c` writes `total wall_ms= steps= calls= builtin_calls=
+  builtin_ms= gc_ms= collections=`, then the 30 functions with the most steps
+  (`fn calls= steps= name= at=FILE:LINE`; the loops of `map`, `each` and the
+  like are `<native>`), the 12 source files with the most steps (`file calls=
+  steps= name=`) and the 30 builtins that took the most time (`builtin calls=
+  us= name=`). A builtin is timed for the call itself, so one that parks is
+  timed until it does. `gc_ms` is Boehm's own clock of its collections, and
+  `gc_ms` and `collections` count the whole process so far: the second report
+  of `agentica FILE.agc` includes the collections of the front end.

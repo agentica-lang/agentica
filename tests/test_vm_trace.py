@@ -7,6 +7,7 @@ started with stderr or stdout closed still behaves as before. The VM runs
 directly (not through `run`), because a fixture's stdin is a regular file, not
 a pipe, as it was for the original test.
 """
+import json
 import os
 import re
 import signal
@@ -189,6 +190,58 @@ class VmTrace(TestCase):
         self.assertTrue(lines)
         for line in lines:
             self.assertRegex(line, GC_LINE, "gc line %r" % line)
+
+    def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_each_builtin(self):
+        work = self.make_temp_dir("agentica-trace-")
+        source = work / "profile.agc"
+        source.write_text("def square(n: Int) -> Int\n  return n * n\nend\n\ndef main() -> Void\n  total = 0\n"
+                          "  for k in 0...50\n    total += square(k)\n  end\n  puts(total)\nend\n")
+        bytecode = self.compile_fixture(source)
+        path = work / "profile.trace"
+        plain = self.run_vm(bytecode)
+        traced = self.run_vm(bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path})
+        self.assertEqual(traced, plain)
+        lines = trace_lines(path)
+        number = rb"[0-9]+"
+        patterns = [
+            rb"^agc-trace \+[0-9.]+ profile total wall_ms=" + number + rb" steps=([1-9][0-9]*) calls=" + number +
+            rb" builtin_calls=1 builtin_ms=" + number + rb" gc_ms=" + number + rb" collections=" + number + rb"$",
+            rb"^agc-trace \+[0-9.]+ profile fn calls=50 steps=" + number + rb" name=square at=profile\.agc:1$",
+            rb"^agc-trace \+[0-9.]+ profile fn calls=1 steps=" + number + rb" name=main at=profile\.agc:5$",
+            rb"^agc-trace \+[0-9.]+ profile file calls=51 steps=" + number + rb" name=profile\.agc$",
+            rb"^agc-trace \+[0-9.]+ profile builtin calls=1 us=" + number + rb" name=\S*puts$",
+        ]
+        for pattern in patterns:
+            self.assertTrue(any(re.match(pattern, line) for line in lines), "%r in %r" % (pattern, lines))
+
+    def test_the_profile_stops_a_looping_program_at_the_same_step_and_counts_a_native_loop(self):
+        """Counting takes every STEP through the slow path of the budget; the run must still end where it ended."""
+        work = self.make_temp_dir("agentica-trace-")
+        source = work / "loop.agc"
+        source.write_text("def twice(n: Int) -> Int\n  return n * 2\nend\n\ndef main() -> Void\n"
+                          "  3.times do |n|\n    puts(n)\n  end\n  i = 0\n  while true\n    i = twice(i) + 1\n"
+                          "    if i > 1000\n      i = 0\n    end\n  end\nend\n")
+        bytecode = self.compile_fixture(source)
+        path = work / "loop.trace"
+        command = [*self.vm, "--json", "--max-steps", "5000", "--", bytecode]
+        plain = vm_run(command, vm_environment())
+        traced = vm_run(command, vm_environment({"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path}))
+        self.assertEqual(plain[0], 1)
+        self.assertEqual(traced[:2], plain[:2])
+        ended = json.loads(plain[2])
+        self.assertEqual(ended["code"], "RUNTIME-STEP-LIMIT")
+        self.assertEqual(json.loads(traced[2])["code"], ended["code"])
+        self.assertEqual(json.loads(traced[2])["range"], ended["range"])
+        lines = trace_lines(path)
+        self.assertTrue(any(re.match(rb"^agc-trace \S+ profile fn calls=0 steps=3 name=<native>$", line)
+                            for line in lines), lines)
+
+    def test_the_profile_is_not_part_of_all(self):
+        work = self.make_temp_dir("agentica-trace-")
+        bytecode = self.compile_fixture(VM_FIXTURES / "task-fail.agc")
+        path = work / "all.trace"
+        self.run_vm(bytecode, {"AGENTICA_VM_TRACE": "all", "AGENTICA_VM_TRACE_FILE": path})
+        self.assertFalse(any(b" profile " in line for line in trace_lines(path)))
 
     def test_a_connection_task_names_its_servers_group_as_its_parent(self):
         work = self.make_temp_dir("agentica-trace-")

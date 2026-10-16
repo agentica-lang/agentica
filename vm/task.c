@@ -237,6 +237,7 @@ static void trace_end(agc_vm *vm) {
   else if (o->kind == AGC_EXITED)
     AGC_TRACE(tr, AGC_TRACE_SCHED, "exit task=%" PRIu64 " code=%" PRId64, task, o->exit_code);
   trace_gc(vm, "end");
+  agc_profile_report(vm);
 }
 
 static uint64_t pending_tasks(const agc_vm *vm) {
@@ -350,6 +351,7 @@ static void check_stop(agc_vm *vm) {
 
 agc_outcome agc_vm_run(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
+    agc_profile_start(vm);
     agc_task_enter(vm, vm->main, vm->rt->program->entry);
     trace_spawn(vm, vm->main, NULL);
     enqueue(vm, vm->main);

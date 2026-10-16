@@ -407,6 +407,12 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
         return refuse(name, "--source-root needs a folder name in UTF-8");
       options->source_root = value;
       i += 2;
+    } else if (strcmp(arg, "--embedded") == 0) {
+      bool seen = options->embedded != NULL;
+      if (!once(name, &seen, arg)) return AGC_LAUNCH_BAD;
+      if (!value || strcmp(value, "--") == 0) return refuse(name, "--embedded needs a program name");
+      options->embedded = value;
+      i += 2;
     } else if (strcmp(arg, "--driver-pid") == 0) {
       if (!once(name, &options->seen_driver, arg)) return AGC_LAUNCH_BAD;
       if (!value || !parse_steps(value, &options->driver))

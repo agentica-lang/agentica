@@ -19,6 +19,8 @@ MAXIMUM_EXIT_CODE = 2
 export struct Config
   # The binary: the runner starts the step program and each test file with its `run` command.
   vm: String
+  # The step program is the file `steps_bytecode`, or, when it is "", the default one that the binary carries
+  # (`run --embedded steps`). A driver that does not know the embedded programs always writes a file.
   steps_bytecode: String
   steps_source: String
   steps_root: String
@@ -37,6 +39,12 @@ export struct Config
   report_path: String
 end
 
+## The program of the runner: a file of the run directory, or the one the binary carries (`run --embedded runner`).
+export enum Program
+  File(String)
+  Embedded(String)
+end
+
 ## How a runner ended: with the exit code and the report it wrote, or with a message that says why it has no report.
 export enum Ran
   Reported(Int, String)
@@ -49,15 +57,19 @@ export def config_text(config: Config, entries: List[Discover.Entry]) -> String
   return "#{lines.join("\n")}\n"
 end
 
-## Runs the runner program `runner` on `config_file` with `agentica run` of the binary of the options, waits for it,
-## and reads the report at `report_file`. The child gets this program's process id with --driver-pid, so it ends if
-## this program does.
-export def run(options: Opts.Options, runner: String, config_file: String, report_file: String) -> Ran
+## Runs the runner `program` on `config_file` with `agentica run` of the binary of the options, waits for it, and reads
+## the report at `report_file`. The child gets this program's process id with --driver-pid, so it ends if this program
+## does.
+export def run(options: Opts.Options, program: Program, config_file: String, report_file: String) -> Ran
   words = ["run", "--allow-run"]
   if options.seeded
     words = words.concat(["--seed", options.seed.to_s])
   end
-  words = words.concat(["--driver-pid", System.pid().to_s, "--", runner, config_file])
+  words = words.concat(["--driver-pid", System.pid().to_s])
+  case program
+    Program.File(path) -> words = words.concat(["--", path, config_file])
+    Program.Embedded(name) -> words = words.concat(["--embedded", name, "--", config_file])
+  end
   spawned = Process.spawn_captured(options.vm, words, ".", START_TIMEOUT)
   if !spawned.ok?
     return Ran.Failed("cannot start the BDD runner: #{spawned.message}")

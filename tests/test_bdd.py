@@ -6,15 +6,20 @@ formats. tests/bdd/handlers.agc holds the shared step handlers. The cases that
 need a runner that fails run the front end as an ordinary program with a script
 as the binary it starts again (front_end_command).
 """
+import ast
 import fcntl
 import json
 import os
+import re
 import unittest
 
-from tests.agentica_test import (TESTS, TestCase, binary, cli, front_end_command, report_cases, run,
+from tests.agentica_test import (ROOT, TESTS, TestCase, binary, cli, front_end_command, report_cases, run,
                                  vm_environment)
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
+# The first binary of the bootstrap (the Makefile links it with stage0 and builds the release mode only).
+BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / "agentica"
+ADDS_TEST = 'def main() -> Void\n  Test.run([Test.test("adds") do\n    Test.eq(1 + 1, 2)\n  end])\nend\n'
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
 
 
@@ -28,6 +33,15 @@ def file_error(report):
 
 def start_line(problem):
     return problem["range"]["start"]["line"]
+
+
+def without_chance(value):
+    """A report without what differs between two runs of the same suite: the seed and the durations."""
+    if isinstance(value, dict):
+        return {key: without_chance(item) for key, item in value.items() if key not in ("seed", "duration_ms")}
+    if isinstance(value, list):
+        return [without_chance(item) for item in value]
+    return value
 
 
 def steps_program(*parts):
@@ -72,6 +86,45 @@ class Bdd(TestCase):
                              "PASS Custom Agentica steps / Doc String and Data Table\n"
                              "PASS Custom Agentica steps / Quoted capture\n"
                              "4 passed, 0 failed, 0 not executed, 0 file errors\n")
+
+    def test_the_runner_and_the_steps_the_binary_carries_give_the_report_of_ones_compiled_from_the_sources(self):
+        """The binary starts its own compiled runner and default step program (`run --embedded`); a front end that
+        reads the std/ sources from a folder compiles them. Both must report the same."""
+        steps = ('Given the Agentica program "hello.agc"\nWhen I close stdin\n'
+                 'Then I receive the line "%s" within 5000 milliseconds\n')
+        directory = self.suite({
+            "hello.agc": 'def main() -> Void\n  puts("hi")\nend\n',
+            "a.feature": "Feature: A\nScenario: right\n" + steps % "hi" + "Scenario: wrong\n" + steps % "bye",
+            "c_test.agc": ADDS_TEST,
+            "d.feature": "Feature: D\nScenario: d\nThen an undefined step\n"})
+        carried = self.json_test(directory)
+        compiled = self.json_test(directory, binary_path=binary())
+        self.assertEqual(carried[0], compiled[0])
+        self.assertEqual(without_chance(carried[1]), without_chance(compiled[1]))
+        self.assertEqual((carried[1]["passed"], carried[1]["failed"]), (2, 2))
+
+    def test_the_programs_the_binary_carries_are_the_texts_the_driver_compiles_without_them(self):
+        """The Makefile compiles compiler/embedded/*.agc into the binary; the driver has the same two texts for a front
+        end that reads the std/ sources from a folder."""
+        driver = (ROOT / "compiler" / "bdd_driver.agc").read_text()
+        for name, constant in (("runner", "RUNNER_ROOT"), ("steps", "DEFAULT_STEPS")):
+            literal = re.search(r'^%s = "(.*)"$' % constant, driver, re.M).group(1)
+            self.assertEqual(ast.literal_eval('"%s"' % literal),
+                             (ROOT / "compiler" / "embedded" / (name + ".agc")).read_text(), name)
+
+    def test_the_first_binary_of_the_bootstrap_still_tests_with_the_driver_of_stage0(self):
+        """That binary has the driver of stage0: it compiles the runner and the steps from the std/ sources of this
+        checkout, writes the configuration it always wrote, and knows no embedded program. The current runner must
+        read that configuration."""
+        if not BOOTSTRAP.is_file():
+            self.skipTest("the first binary is not built (%s): run make" % BOOTSTRAP)
+        directory = self.suite({"c_test.agc": ADDS_TEST})
+        result = run([BOOTSTRAP, "test", "--json", directory], env=vm_environment())
+        self.assertEqual((result.code, result.stderr), (0, ""))
+        self.assertEqual(json.loads(result.stdout)["passed"], 1)
+        result = run([BOOTSTRAP, "run", "--embedded", "runner", "--", "config.jsonl"], env=vm_environment())
+        self.assertEqual((result.code, result.stdout), (2, ""))
+        self.assertNotEqual(result.stderr, "")
 
     def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(self):
         directory = self.suite({

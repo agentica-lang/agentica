@@ -22,6 +22,7 @@
     if (AGC_TRACE_ON(tr, category)) agc_trace_emit((tr), (category), __VA_ARGS__); \
   } while (0)
 
+/* The event categories. The profile counts every step and call, which slows the run, so "all" leaves it out. */
 enum {
   AGC_TRACE_SCHED = 1u << 0,
   AGC_TRACE_IO = 1u << 1,
@@ -29,6 +30,7 @@ enum {
   AGC_TRACE_TLS = 1u << 3,
   AGC_TRACE_LOADER = 1u << 4,
   AGC_TRACE_GC = 1u << 5,
+  AGC_TRACE_PROFILE = 1u << 6,
   AGC_TRACE_ALL = (1u << 6) - 1
 };
 

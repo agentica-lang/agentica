@@ -780,7 +780,12 @@ Other choices of the port:
   `release.yml` builds it with the release toolchain (`zig cc`, glibc 2.28) by
   running `make fixed-point`, checks the glibc symbol versions and the static
   libraries, runs the golden tests and the examples with it, and ships it alone
-  (8d-2).
+  (8d-2). **Added by the speed pass (post-bootstrap row 3):** the BDD runner and
+  the default step program of `agentica test` (`compiler/embedded/runner.agc`,
+  `steps.agc`) are compiled with `stage2` and embedded beside it, so
+  `agentica test` no longer compiles `std/test/runner` (0.73 s) and `std/bdd`
+  (0.15 s) on every run. `agentica run --embedded NAME` starts one of them.
+  `make fixed-point` checks that `dist/agentica` compiles the same bytes.
 - **Linking.** As the release does today (the development skill's
   `references/ci.md`, "Release"): a pinned `zig cc` against glibc 2.28, checked
   with `objdump -T`, with Boehm GC, libuv, OpenSSL, yyjson and picohttpparser
