@@ -152,11 +152,11 @@ static agc_step map_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   start(vm, g, now);
   if (g->settled == g->count) {
     agc_charge(vm, g->count);
-    return (agc_step){AGC_STEP_END, agc_list_value(agc_list_from_array(g->slots, g->count))};
+    return (agc_step){AGC_STEP_END, agc_list_value(agc_list_from_array(g->slots, g->count)), agc_void(), agc_void()};
   }
   if (!g->oldest) agc_fail(vm, "RUNTIME-INTERNAL", "Task.map has pending items and none running", g->span);
   agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(g->oldest->deadline - now));
-  return (agc_step){AGC_STEP_WAIT, agc_void()};
+  return (agc_step){AGC_STEP_WAIT, agc_void(), agc_void(), agc_void()};
 }
 
 /* The arguments are checked before any item starts, and before the empty-list shortcut. */

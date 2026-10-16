@@ -53,6 +53,22 @@ def main() -> Void
 end
 ```
 
+## Stream
+
+```text
+Stream.iterate(seed: T, next: Fn[T, T]) -> Stream[T]
+Stream.lines(path: String, buffer_bytes: Int, timeout_ms: Int) -> Stream[String]
+stream.map(f: Fn[T, U]) -> Stream[U]
+stream.filter(f: Fn[T, Bool]) -> Stream[T]
+stream.take(count: Int) -> Stream[T]
+stream.take_while(f: Fn[T, Bool]) -> Stream[T]
+stream.to_list(max: Int) -> Result[List[T]]
+stream.each(f: Fn[T, Result[Void]]) -> Result[Void]
+stream.reduce(initial: A, f: Fn[A, T, A]) -> Result[A]
+```
+
+Streams are immutable recipes, so constructing or transforming one does no work. Each terminal starts at the source again. `iterate` is endless unless limited by a step. `to_list(max)` returns an error when it sees more than `max` items and never grows beyond the bound; `take(0)` and `to_list(0)` do not pull from the source. `each` continues on `ok()` and returns the first callback error. A line source opens when a terminal starts and closes on completion, an early stop or an error; its line and timeout rules are in `files.md`.
+
 ## Int, Float
 
 ```text

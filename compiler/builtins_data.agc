@@ -17,12 +17,14 @@ BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(RO
 BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
+BUILTIN_GROUP_12 = ROWS_56
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
 BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11)
+BUILTIN_GROUPS_5 = BUILTIN_GROUPS_4.concat(BUILTIN_GROUP_12)
 export BUILTIN_ROWS: List[Model.Builtin] = BUILTIN_GROUPS_1.concat(BUILTIN_GROUPS_2).concat(
-  BUILTIN_GROUPS_3.concat(BUILTIN_GROUPS_4),
+  BUILTIN_GROUPS_3.concat(BUILTIN_GROUPS_5),
 )
 
 ## The builtin record types, sorted by name.
@@ -129,7 +131,242 @@ export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHa
 
 ## The builtin types with no structure: handles and TestCase.
 export OPAQUE_TYPES: List[String] = [
-  "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase",
+  "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "Stream", "TestCase",
+]
+
+ROWS_56: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "Stream.each",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(
+        name: "f", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Result(Types.Type.Void)),
+      ),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Call f for each item in order; stop at its first error; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Stream.iterate",
+    parameters: [
+      Model.Named(name: "seed", type: Types.Type.Var("T")),
+      Model.Named(name: "next", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Var("T"))),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("T")),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Build an endless lazy stream by applying next to each item.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Stream.lines",
+    parameters: [
+      Model.Named(name: "path", type: Types.Type.String),
+      Model.Named(name: "buffer_bytes", type: Types.Type.Int),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Stream(Types.Type.String),
+    rule: Model.Rule.Plain,
+    implementation: "Stream.lines",
+    effects: ["filesystem"],
+    description: "Build a lazy stream of file lines with bounded reads.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Stream.map",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("A"))),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("B"))),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("B")),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Lazily map each item in order; O(n) when consumed.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Stream.reduce",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "initial", type: Types.Type.Var("A")),
+      Model.Named(
+        name: "f", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Var("T")], Types.Type.Var("A")),
+      ),
+    ],
+    result: Types.Type.Result(Types.Type.Var("A")),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Fold left in order; returns the first source error; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Stream.take",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "count", type: Types.Type.Int),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("T")),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Lazily take at most count items; a negative count is an error.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Stream.take_while",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Bool)),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("T")),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Lazily take items until f first returns false.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Stream.to_list",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "max", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.List(Types.Type.Var("T"))),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Collect at most max items; error if another item exists; O(max) memory.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Stream.filter",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Bool)),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("T")),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Lazily keep items for which f returns true.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "__stream_filter",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Bool)),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("T")),
+    rule: Model.Rule.Plain,
+    implementation: "__stream_filter",
+    effects: [],
+    description: "",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "__stream_each",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(
+        name: "f", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Result(Types.Type.Void)),
+      ),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.Plain,
+    implementation: "__stream_each",
+    effects: [],
+    description: "",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "__stream_iterate",
+    parameters: [
+      Model.Named(name: "seed", type: Types.Type.Var("T")),
+      Model.Named(name: "next", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Var("T"))),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("T")),
+    rule: Model.Rule.Plain,
+    implementation: "__stream_iterate",
+    effects: [],
+    description: "",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "__stream_map",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("A"))),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Var("B"))),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("B")),
+    rule: Model.Rule.Plain,
+    implementation: "__stream_map",
+    effects: [],
+    description: "",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "__stream_reduce",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "initial", type: Types.Type.Var("A")),
+      Model.Named(
+        name: "f", type: Types.Type.Fn([Types.Type.Var("A"), Types.Type.Var("T")], Types.Type.Var("A")),
+      ),
+    ],
+    result: Types.Type.Result(Types.Type.Var("A")),
+    rule: Model.Rule.Plain,
+    implementation: "__stream_reduce",
+    effects: [],
+    description: "",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "__stream_take",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "count", type: Types.Type.Int),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("T")),
+    rule: Model.Rule.Plain,
+    implementation: "__stream_take",
+    effects: [],
+    description: "",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "__stream_take_while",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("T")], Types.Type.Bool)),
+    ],
+    result: Types.Type.Stream(Types.Type.Var("T")),
+    rule: Model.Rule.Plain,
+    implementation: "__stream_take_while",
+    effects: [],
+    description: "",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "__stream_to_list",
+    parameters: [
+      Model.Named(name: "stream", type: Types.Type.Stream(Types.Type.Var("T"))),
+      Model.Named(name: "max", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.List(Types.Type.Var("T"))),
+    rule: Model.Rule.Plain,
+    implementation: "__stream_to_list",
+    effects: [],
+    description: "",
+    alternatives: [],
+  ),
 ]
 
 ## The type names no declaration or import alias may take.

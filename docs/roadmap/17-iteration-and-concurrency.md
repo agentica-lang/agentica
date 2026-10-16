@@ -270,7 +270,7 @@ and 17b.
   `Test.run` leftover, a later `Task.map` timeout) leaves the file open until
   the end of the run, as a `File.open` handle does, until 24b; a crash of the
   task or of an ancestor closes it.
-- [ ] **In progress on `feat/lazy-streams` (owner, 2026-10-16).** `Stream[T]`
+- [ ] **17e: `Stream[T]` implementation complete in PR #339; review pending.**
   (§27.4, step 2), order step 8.2, after 15f (the prelude) and 17d, before
   `format` (15k) by the owner's decision. A builtin opaque generic and an
   immutable recipe: sources
@@ -280,11 +280,13 @@ and 17b.
   are methods (`s.filter(f)`), and `|>` only takes the path into `Stream.lines`;
   `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD` (§25.14). A file source closes
   on every terminal path, as `File.open` with a block does. Written in the
-  prelude (§25.6), so it waits for faster lists (8d). The checker and VM rules
-  are added to §27.4 before the code lands. Tests: checker tests for the
-  methods, the pipe rule and the terminals' types; golden fixtures without
-  timing (a pipeline over a small file, an early `take`, a `try` failure,
-  `to_list` over its limit, the step count). Docs: `grammar.md` (builtins),
+  prelude (§25.6), so it waits for faster lists (8d). The VM stores an
+  immutable recipe and runs one item at a time through a resumable stepper;
+  file sources reuse the `File.each_line` reader. `each` takes a callback
+  returning `Result[Void]`, so an error stops the terminal. Tests cover
+  generated pipelines, line sources, repeat terminals, zero limits, callback
+  errors, invalid paths and checker result types. Docs:
+  `grammar.md` (builtins),
   `references/files.md` and `references/builtins.md`, a new
   `site/content/library/data-structures/stream.md` with a runnable example, the
   development skill's notes (the prelude's `Stream` bodies).

@@ -155,6 +155,11 @@ Set.size
 Set.subset?
 Set.to_a
 Set.union
+Stream.each
+Stream.iterate
+Stream.lines
+Stream.reduce
+Stream.to_list
 String.at
 String.code
 String.compare
@@ -213,6 +218,14 @@ Time.monotonic_ms
 Time.monotonic_ns
 Time.now_ms
 __fail_arg
+__stream_each
+__stream_filter
+__stream_iterate
+__stream_map
+__stream_reduce
+__stream_take
+__stream_take_while
+__stream_to_list
 error
 ok
 puts

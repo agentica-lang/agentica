@@ -11,6 +11,7 @@ File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Resul
 File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
+Stream.lines(path: String, buffer_bytes: Int, timeout_ms: Int) -> Stream[String]
 File.read_text(path: String, timeout_ms: Int) -> Result[String]
 File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
@@ -45,6 +46,8 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 ## Streaming lines
 
 `File.each_line` opens `path` and calls the block once per line, never reading the whole file. The block returns `Result[Void]`: `ok()` continues; an `error(...)` stops the call and becomes its result. `try` and `return error(...)` work inside it.
+
+`Stream.lines` makes a lazy, repeatable source for pipelines. It opens the path only when a terminal starts; each terminal opens the file again. It uses the same buffer, per-read timeout, UTF-8 decoding and close behavior as `File.each_line`. Use `File.each_line` when no filtering or limiting step is needed.
 
 - A line, with its terminator, is at most `buffer_bytes` (1024..16777216). Otherwise the call gives `RUNTIME-INVALID-COUNT` at that argument, before the file opens. A longer line gives `error("filesystem: line exceeds buffer_bytes")`.
 - `timeout_ms` bounds each read, the open, and the close, not the whole call. It must be positive, else an error Result.

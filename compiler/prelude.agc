@@ -33,7 +33,7 @@ end
 
 ## The type variables the signatures of the prelude functions may use: the letters of the catalog rows.
 export def variables() -> List[String]
-  return ["A", "B", "K", "V"]
+  return ["A", "B", "K", "T", "V"]
 end
 
 ## Reads, checks and returns the prelude functions that st.bodies names. base is the context of the program before its

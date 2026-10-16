@@ -38,7 +38,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_STREAM
 } agc_tag;
 
 typedef struct {
@@ -335,6 +335,7 @@ void agc_gc_collect(void);
 
 agc_value agc_result_value(bool ok, agc_value value);
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
+agc_value agc_stream_value(void *stream);
 agc_value agc_handle_value(agc_resource *r);
 agc_value agc_task_value(agc_task *t);
 agc_value agc_process_value(agc_process *p);
@@ -509,6 +510,8 @@ static inline agc_range *agc_as_range(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_RANGE) agc_wrong_tag(vm);
   return v.as.p;
 }
+
+void *agc_as_stream(agc_vm *vm, agc_value v);
 
 static inline agc_json *agc_as_json(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_JSON) agc_wrong_tag(vm);

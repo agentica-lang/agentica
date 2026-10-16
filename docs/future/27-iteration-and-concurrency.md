@@ -80,7 +80,7 @@ own row:
 | 27.1 | `Task.map` | built | C builtin in the VM scheduler | 17a |
 | 27.2 | `Channel[T]` | built | C builtins, a builtin opaque generic | 17b |
 | 27.3 | `Task.await(task, timeout_ms)` returning `Await[T]` | built | C builtin and a builtin generic enum | 17c |
-| 27.4 | `File.each_line` (step 1) and `Stream[T]` (step 2) | step 1 built (17d); step 2 in progress (started 2026-10-16) | step 1 a C builtin; step 2 prelude code | 17d, 17e |
+| 27.4 | `File.each_line` (step 1) and `Stream[T]` (step 2) | 17d built; 17e implementation complete in PR #339, review pending | shared file-line reader and lazy VM stepper, with prelude methods | 17d, 17e |
 | 27.5 | Generators, fibers, Agent-style state, public locks and threads | decided against | help hints only, added by 17a and 17b | none |
 
 ### 27.1 `Task.map`
@@ -1144,10 +1144,8 @@ end
   `docs/vm/03-ir-and-bytecode.md` §4.3 and `docs/vm/10-io-scheduler.md` §10.2.1
   and §10.2.2, where the resumable builtins and the file reads are described.
 
-**Step 2: `Stream[T]` (roadmap 17e, order step 8.2, after the prelude of 15f;
-in progress before `format` (15k), owner decision 2026-10-16).**
-The shape below is its base. Its checker and VM rules are added to this section
-before its code lands, as 27.1 and 27.2 were.
+**Step 2: `Stream[T]` (roadmap 17e, order step 8.2, before `format` (15k),
+owner decision 2026-10-16).**
 
 **API contract for 17e:**
 
@@ -1159,7 +1157,7 @@ Stream.filter(stream: Stream[T], f: Fn[T, Bool]) -> Stream[T]
 Stream.take(stream: Stream[T], count: Int) -> Stream[T]
 Stream.take_while(stream: Stream[T], f: Fn[T, Bool]) -> Stream[T]
 Stream.to_list(stream: Stream[T], max: Int) -> Result[List[T]]
-Stream.each(stream: Stream[T], f: Fn[T, Void]) -> Result[Void]
+Stream.each(stream: Stream[T], f: Fn[T, Result[Void]]) -> Result[Void]
 Stream.reduce(stream: Stream[T], initial: A, f: Fn[A, T, A]) -> Result[A]
 ```
 
@@ -1188,6 +1186,20 @@ Stream.reduce(stream: Stream[T], initial: A, f: Fn[A, T, A]) -> Result[A]
   callback order is left to right; `filter` and `take_while` stop pulling as
   soon as their result is known. Pipeline callbacks run once per item reaching
   their stage.
+
+**As built (17e).** `Stream[T]` is a builtin opaque generic type. Its source
+and transformation methods are Agentica prelude functions in
+`stdlib/prelude/stream.agc`; the C service in `vm/lazy_stream.c` stores each
+operation as an immutable recipe node. Every terminal starts from the source
+again. `Stream.lines` uses the same resumable line reader as `File.each_line`
+(`vm/files.c`), so it keeps the buffer bound, strict UTF-8, timeout and close
+rules. The VM stepper pulls one item at a time, calls each stage in order, and
+closes a file after completion, an early stop or a callback error. `each` takes
+`Fn[T, Result[Void]]`: `ok()` continues and `error(...)` ends the terminal with
+that result. `reduce` and `to_list` also return Results. `to_list(max)` keeps
+only the output list and reports an error if it sees an item beyond `max`;
+`take(0)` and `to_list(0)` do not open or pull a source. Runtime diagnostics in
+a callback remain diagnostics and still close an open file.
 
 - `Stream[T]` is a builtin opaque generic and an immutable recipe, not a cursor:
   building one does no work and opens nothing. Only a terminal step runs it, and
@@ -1233,12 +1245,10 @@ def total_length(path: String) -> Result[Int]
 end
 ```
 
-- **One form per job.** Each line of a file, in order, is `File.each_line`. A
-  stream is for steps before a terminal (`filter`, `take`, `take_while`, `map`,
-  `reduce`, `to_list`). A stream with no step before its terminal
-  (`Stream.lines(path, ...).each`) is the same job as `File.each_line`; whether
-  the checker rejects it, with a help that shows `File.each_line`, is decided in
-  step 2's spec, as the principle of §25 asks.
+- **One form per job.** Each line of a file, in order, is `File.each_line`. Use
+  `Stream.lines` when a pipeline needs lazy steps before a terminal. A direct
+  `Stream.lines(...).each(...)` is supported and follows the same line and
+  close rules, though `File.each_line` is the shorter form for that job.
 - **Rules that stay.** Step 2 waits for the prelude (15f) and for faster lists
   (8d), since its steps are generic code over closures (§25.6). Each step passes
   the one-way test against `List`: no `list.stream`, no `Range.stream`, and no

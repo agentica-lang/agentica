@@ -10,4 +10,4 @@ Tasks are lightweight and share one VM scheduler, so they overlap while they wai
 - Use a [Channel](/library/concurrency/channel/) when tasks must pass values to each other. A producer sends and a consumer receives, which gives a pipeline. To merge several sources (fan-in), send them all into one channel of an enum type.
 - Timeouts: `Channel.send` and `Channel.recv` take a timeout in milliseconds and give an `error` when it runs out, so a task never waits forever.
 
-`Stream[T]` is in development. It will provide lazy `map`, `filter` and bounded collection over repeatable sources such as file lines; it is not available in the current release.
+Lazy pipelines over repeatable sources use [Stream](/library/data-structures/stream/). A stream is a recipe: each terminal starts at its source again, and file lines open only when consumed.

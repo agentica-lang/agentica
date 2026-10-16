@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 316,
+  "stdout": [
+    "ok([3, 5, 7])",
+    "ok(15)",
+    "ok([])",
+    "error(\"stream: exceeds max items\")",
+    ""
+  ],
+  "stderr": []
+}

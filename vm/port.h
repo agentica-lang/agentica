@@ -65,11 +65,13 @@ typedef struct {
   agc_native *native;
 } agc_frame;
 
-typedef enum { AGC_STEP_CALL, AGC_STEP_WAIT, AGC_STEP_END } agc_step_kind;
+typedef enum { AGC_STEP_CALL, AGC_STEP_CALL2, AGC_STEP_WAIT, AGC_STEP_END } agc_step_kind;
 
 typedef struct {
   agc_step_kind kind;
   agc_value value;
+  agc_value second;
+  agc_value fn;
 } agc_step;
 
 typedef struct agc_stepper agc_stepper;
@@ -323,6 +325,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);
+void agc_count_step(agc_vm *vm, uint32_t span);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
 agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);

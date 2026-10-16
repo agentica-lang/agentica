@@ -6,6 +6,7 @@ http.agc
 logger.agc
 prelude/list.agc
 prelude/map.agc
+prelude/stream.agc
 queue.agc
 test/child.agc
 test/report.agc

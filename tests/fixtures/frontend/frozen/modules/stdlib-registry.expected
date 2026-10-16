@@ -6,6 +6,7 @@ std/http.agc
 std/logger.agc
 std/prelude/list.agc
 std/prelude/map.agc
+std/prelude/stream.agc
 std/queue.agc
 std/test/child.agc
 std/test/report.agc

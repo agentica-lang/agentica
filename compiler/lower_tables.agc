@@ -37,6 +37,9 @@ export VM_BUILTINS = Set.new([
   "Process.parent_read_line", "Process.parent_send", "Task.await_result", "Task.unobserved_crash", "Test.test",
   "Test.run", "Test.eq", "Test.ok?", "Test.error?", "Test.assert", "FrontEnd.hand_off", "FrontEnd.std_source",
   "Task.map", "String.compare", "__fail_arg",
+  "Stream.iterate", "Stream.lines", "Stream.to_list", "Stream.each", "Stream.reduce", "__stream_map",
+  "__stream_filter", "__stream_take", "__stream_take_while", "__stream_iterate", "__stream_each",
+  "__stream_reduce", "__stream_to_list",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of

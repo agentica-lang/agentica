@@ -24,9 +24,9 @@ SLOW_IN_A_LOOP = re.compile(r"\.(concat|take|drop|reverse|sort|sort_by|keys|valu
 LOOP_START = re.compile(r"^(\s*)(for|while)\b")
 
 
-def table_functions() -> dict[str, str]:
-    """Return function names and file stems from compiler/prelude_data.agc rows."""
-    found = {}
+def table_functions() -> set[tuple[str, str]]:
+    """Return (file stem, function name) pairs from compiler/prelude_data.agc rows."""
+    found = set()
     row = re.compile(
         r'Model\.PreludeRow\((?:(?!Model\.PreludeRow\().)*?'
         r'module: "([a-z]+)".*?bodies: (\{[^}]*\})',
@@ -34,16 +34,16 @@ def table_functions() -> dict[str, str]:
     )
     for module, bodies in row.findall(TABLE):
         for name in re.findall(r': "([a-z_]+)"', bodies):
-            found[name] = module
+            found.add((module, name))
     return found
 
 
 def declared_functions():
-    """{function name: file stem} from the `def` lines of the files of stdlib/prelude/."""
-    found = {}
+    """(file stem, function name) pairs from the `def` lines of stdlib/prelude/."""
+    found = set()
     for path in sorted(PRELUDE.glob("*.agc")):
         for name in re.findall(r"^def ([a-z_]+)\(", path.read_text(encoding="utf-8"), flags=re.MULTILINE):
-            found[name] = path.stem
+            found.add((path.stem, name))
     return found
 
 

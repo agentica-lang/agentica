@@ -78,12 +78,19 @@ typedef struct {
 
 typedef enum { LINES_START, LINES_OPENED, LINES_SCAN, LINES_RESUME, LINES_CLOSE, LINES_CLOSED } lines_phase;
 
-typedef struct {
-  agc_stepper stepper;
+struct agc_file_lines {
   lines_phase phase;
   agc_value path, handle, outcome;
   size_t limit;
   int64_t timeout;
+};
+
+typedef struct {
+  agc_stepper stepper;
+  agc_file_lines *source;
+  agc_value outcome;
+  bool source_waiting, callback_waiting;
+  bool closing;
 } lines;
 
 typedef struct {
@@ -1544,16 +1551,16 @@ static agc_value builtin_try_lock(agc_vm *vm, agc_value *args, uint32_t span) {
   return start(vm, o, args[0], timeout);
 }
 
-static agc_step lines_wait(void) { return (agc_step){AGC_STEP_WAIT, agc_void()}; }
+static agc_step lines_wait(void) { return (agc_step){AGC_STEP_WAIT, agc_void(), agc_void(), agc_void()}; }
 
-static agc_step lines_end(agc_value result) { return (agc_step){AGC_STEP_END, result}; }
+static agc_step lines_end(agc_value result) { return (agc_step){AGC_STEP_END, result, agc_void(), agc_void()}; }
 
-static file_state *lines_file(agc_vm *vm, const lines *s) {
+static file_state *lines_file(agc_vm *vm, const agc_file_lines *s) {
   const agc_resource *r = agc_as_handle(vm, s->handle);
   return r->closing ? NULL : r->native;
 }
 
-static bool lines_take(agc_vm *vm, lines *s, file_state *st, size_t len, size_t consume, agc_value *line) {
+static bool lines_take(agc_vm *vm, agc_file_lines *s, file_state *st, size_t len, size_t consume, agc_value *line) {
   const uint8_t *data = st->buf + st->start;
   size_t chars;
   agc_charge_bytes(vm, consume);
@@ -1567,25 +1574,49 @@ static bool lines_take(agc_vm *vm, lines *s, file_state *st, size_t len, size_t 
   return valid;
 }
 
-static agc_step lines_step(agc_vm *vm, agc_stepper *self, agc_value last) {
-  lines *s = (lines *)self;
+agc_file_lines *agc_file_lines_new(agc_value path, size_t limit, int64_t timeout) {
+  agc_file_lines *source = agc_alloc(sizeof(agc_file_lines));
+  source->path = path;
+  source->handle = agc_void();
+  source->outcome = ok_void();
+  source->limit = limit;
+  source->timeout = timeout;
+  return source;
+}
+
+agc_file_line_status agc_file_lines_pull(agc_vm *vm, agc_file_lines *s, bool resumed, agc_value last,
+                                          agc_value *line) {
+  (void)resumed;
   for (;;) {
     switch (s->phase) {
       case LINES_START:
+        if (!path_string(agc_as_string(vm, s->path))) {
+          s->outcome = contract_error(complete_who, complete_expected, agc_as_string(vm, s->path));
+          s->phase = LINES_CLOSED;
+          break;
+        }
         s->phase = LINES_OPENED;
         last = start(vm, open_op(vm, OP_OPEN_READ, agc_as_string(vm, s->path)), agc_void(), s->timeout);
-        if (vm->task->parking) return lines_wait();
+        if (vm->task->parking) return AGC_FILE_LINE_WAIT;
         break;
       case LINES_OPENED: {
         const agc_result *opened = agc_as_result(vm, last);
-        if (!opened->ok) return lines_end(last);
+        if (!opened->ok) {
+          s->outcome = last;
+          s->phase = LINES_CLOSE;
+          break;
+        }
         s->handle = opened->value;
         s->phase = LINES_SCAN;
         break;
       }
       case LINES_SCAN: {
         file_state *st = lines_file(vm, s);
-        if (!st) return lines_end(error_of("filesystem: file handle is closed"));
+        if (!st) {
+          s->outcome = error_of("filesystem: file handle is closed");
+          s->phase = LINES_CLOSE;
+          break;
+        }
         line_scan found = scan_line(st, st->scan, s->limit, s->limit, st->eof);
         if (found.kind == LINE_MORE) {
           st->scan = found.scanned;
@@ -1594,7 +1625,7 @@ static agc_step lines_step(agc_vm *vm, agc_stepper *self, agc_value last) {
           o->count = s->limit;
           s->phase = LINES_RESUME;
           last = start(vm, o, s->handle, s->timeout);
-          if (vm->task->parking) return lines_wait();
+          if (vm->task->parking) return AGC_FILE_LINE_WAIT;
           break;
         }
         s->phase = LINES_CLOSE;
@@ -1603,10 +1634,10 @@ static agc_step lines_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         } else if (found.kind == LINE_END) {
           s->outcome = ok_void();
         } else {
-          agc_value line = agc_void();
-          if (lines_take(vm, s, st, found.len, found.consume, &line)) {
-            s->phase = LINES_RESUME;
-            return (agc_step){AGC_STEP_CALL, line};
+          *line = agc_void();
+          if (lines_take(vm, s, st, found.len, found.consume, line)) {
+            s->phase = LINES_SCAN;
+            return AGC_FILE_LINE_ITEM;
           }
         }
         break;
@@ -1619,15 +1650,78 @@ static agc_step lines_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         }
         break;
       case LINES_CLOSE: {
+        if (agc_is(s->handle, AGC_T_VOID)) {
+          s->phase = LINES_CLOSED;
+          break;
+        }
         agc_resource *r = agc_as_handle(vm, s->handle);
-        if (!r->native || r->closing) return lines_end(s->outcome);
+        if (!r->native || r->closing) {
+          s->phase = LINES_CLOSED;
+          break;
+        }
         s->phase = LINES_CLOSED;
         last = close_handle(vm, r, s->handle, s->timeout);
-        if (vm->task->parking) return lines_wait();
+        if (vm->task->parking) return AGC_FILE_LINE_WAIT;
         break;
       }
-      case LINES_CLOSED: return lines_end(s->outcome);
+      case LINES_CLOSED: *line = s->outcome; return AGC_FILE_LINE_END;
     }
+  }
+}
+
+agc_file_line_status agc_file_lines_close(agc_vm *vm, agc_file_lines *s, bool resumed, agc_value outcome,
+                                           agc_value *result) {
+  if (s->phase == LINES_START) {
+    s->outcome = outcome;
+    s->phase = LINES_CLOSED;
+  } else if (s->phase == LINES_CLOSE && resumed) {
+    s->phase = LINES_CLOSED;
+  } else if (s->phase != LINES_CLOSED) {
+    s->outcome = outcome;
+    s->phase = LINES_CLOSE;
+  }
+  if (s->phase == LINES_CLOSE) {
+    if (agc_is(s->handle, AGC_T_VOID)) {
+      s->phase = LINES_CLOSED;
+      *result = s->outcome;
+      return AGC_FILE_LINE_END;
+    }
+    agc_resource *r = agc_as_handle(vm, s->handle);
+    if (!r->native || r->closing) {
+      s->phase = LINES_CLOSED;
+    } else {
+      s->phase = LINES_CLOSED;
+      close_handle(vm, r, s->handle, s->timeout);
+      if (vm->task->parking) return AGC_FILE_LINE_WAIT;
+    }
+  }
+  *result = s->outcome;
+  return AGC_FILE_LINE_END;
+}
+
+static agc_step lines_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  lines *s = (lines *)self;
+  agc_value outcome = agc_void();
+  if (s->callback_waiting) {
+    s->callback_waiting = false;
+    if (!agc_as_result(vm, last)->ok) {
+      s->outcome = last;
+      s->closing = true;
+    }
+  }
+  if (s->closing) {
+    agc_file_line_status status = agc_file_lines_close(vm, s->source, s->source_waiting, s->outcome, &outcome);
+    s->source_waiting = status == AGC_FILE_LINE_WAIT;
+    return status == AGC_FILE_LINE_WAIT ? lines_wait() : lines_end(outcome);
+  }
+  for (;;) {
+    agc_value line = agc_void();
+    agc_file_line_status status = agc_file_lines_pull(vm, s->source, s->source_waiting, last, &line);
+    s->source_waiting = status == AGC_FILE_LINE_WAIT;
+    if (status == AGC_FILE_LINE_WAIT) return lines_wait();
+    if (status == AGC_FILE_LINE_END) return lines_end(line);
+    s->callback_waiting = true;
+    return (agc_step){AGC_STEP_CALL, line, agc_void(), agc_void()};
   }
 }
 
@@ -1642,11 +1736,8 @@ static agc_value builtin_each_line(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
   lines *s = agc_alloc(sizeof(lines));
   s->stepper.step = lines_step;
-  s->path = args[0];
-  s->handle = agc_void();
+  s->source = agc_file_lines_new(args[0], (size_t)limit, timeout);
   s->outcome = ok_void();
-  s->limit = (size_t)limit;
-  s->timeout = timeout;
   agc_task_stepper(vm, &s->stepper);
   return agc_void();
 }

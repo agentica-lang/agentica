@@ -217,6 +217,13 @@ agc_value agc_range_value(int64_t start, int64_t end, bool exclusive) {
   return v;
 }
 
+agc_value agc_stream_value(void *stream) {
+  agc_value v;
+  v.tag = AGC_T_STREAM;
+  v.as.p = stream;
+  return v;
+}
+
 agc_value agc_handle_value(agc_resource *r) {
   agc_value v;
   v.tag = AGC_T_HANDLE;
@@ -354,6 +361,11 @@ _Noreturn void agc_wrong_tag(agc_vm *vm) {
 
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_HANDLE) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+void *agc_as_stream(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_STREAM) agc_wrong_tag(vm);
   return v.as.p;
 }
 

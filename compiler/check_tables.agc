@@ -14,6 +14,7 @@ export def method_modules() -> Map[String, String]
     "Range": "Range",
     "Result": "Result",
     "Set": "Set",
+    "Stream": "Stream",
     "String": "String",
   }
 end

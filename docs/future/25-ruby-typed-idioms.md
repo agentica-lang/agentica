@@ -1310,10 +1310,11 @@ a length check.
 streams of unknown length without building lists. **Now in [section
 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):**
 `File.each_line` reads a big file line by line in bounded memory (§27.4, step 1,
-order row 7.2.1h), and a lazy `Stream[T]` is planned for after the prelude of
-25.6 (§27.4, step 2, order step 8.2); generators with `yield` (`Enumerator.new`,
-fibers) are decided against (§27.5), since a task that sends into a channel
-(§27.2) is the producer, and `xs.lazy` gets a help.
+order row 7.2.1h), and a lazy `Stream[T]` is implemented in PR #339 after the
+prelude of 25.6 (§27.4, step 2, order step 8.2); review is pending. Generators
+with `yield` (`Enumerator.new`, fibers) are decided against (§27.5), since a
+task that sends into a channel (§27.2) is the producer, and `xs.lazy` gets a
+help.
 
 #### 25.12.8 Declarative hygienic macros
 

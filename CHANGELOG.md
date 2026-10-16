@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The `Stream[T]` type is reserved and understood by the checker** as the first
-  step of the lazy-stream implementation (§27.4, roadmap 17e). Stream
-  construction and operations remain in development and are not available in
-  this release.
+- **Lazy `Stream[T]` pipelines** (§27.4, roadmap 17e): repeatable sources from
+  `Stream.iterate` or `Stream.lines`, lazy `map`, `filter`, `take` and
+  `take_while`, and Result-returning `to_list`, `each` and `reduce` terminals.
+  File streams share the bounded, strict-UTF-8 line reader with
+  `File.each_line`; terminals close the file on every completion path, and
+  bounded collection never retains more than its requested maximum.
 - **Transparent type aliases** (§49.2, roadmap 30a), in the front end only: `type Names = List[String]` names the same type without a runtime wrapper or conversion. Aliases can be exported, imported by name, renamed, and used in signatures or nested builtin types. Cycles are `CHECK-TYPE-ALIAS-CYCLE`; expansion stops at 1,000 type references with `CHECK-TOO-DEEP`; aliases are not constructors or enum patterns. Generic aliases remain planned for 30b.
 
 - **`AGENTICA_VM_TRACE=profile` profiles a run.** A developer tool for the VM, in the trace layer. When the run ends it writes, to the trace output, the total time, steps and calls, then the 30 functions with the most steps (and their calls), the 12 source files with the most steps, and the 30 builtins that took the most time: `AGENTICA_VM_TRACE=profile agentica check compiler/front_end.agc` shows where the front end spends its time. It is not part of `all`, a run without it is not slowed, and a run with it is about a third slower. The profile is one report for each runtime the process starts, and `gc_ms` and `collections` in it count the whole process so far (the report of the program that `agentica FILE.agc` runs includes the front end's collections).

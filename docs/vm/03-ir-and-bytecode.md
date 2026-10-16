@@ -233,6 +233,12 @@ Details that code and tests rely on:
   the call stack is resumed at the start of the task's next turn. Each block
   call costs one step, charged as for the other native frames, and the turn cost
   of the bytes read.
+- `Stream` terminals use the same stepper protocol. `AGC_STEP_CALL` can name a
+  callback in the step it returns; `AGC_STEP_CALL2` calls it with two values,
+  which lets `reduce` fold without a wrapper function. A `Void` callback field
+  keeps the original `File.each_line` behavior of using the builtin's last
+  function argument. File-backed streams share the line source with
+  `File.each_line` and close it when the terminal ends.
 - `Range.each`, `Int.times`, `Int.upto` and `Int.downto` are counting native
   frames. Before each callback they charge one step at the call span, the same
   check as `STEP`. They stop by comparing with the last value before adding, so

@@ -52,6 +52,8 @@ PIPE_HELPERS = ("def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\n"
 
 METHOD_PIPE_HELPERS = ("def f(n: Int) -> Int\n  return n\nend\n\n"
                        "def g(n: Int) -> Result[Int]\n  return ok(n)\nend\n\n")
+STREAM_PIPE_HELPERS = ("def next(n: Int) -> Int\n  return n + 1\nend\n\n"
+                       "def even(n: Int) -> Bool\n  return n % 2 == 0\nend\n\n")
 
 
 class SpecCheckerTest(TestCase):
@@ -119,6 +121,24 @@ class SpecCheckerTest(TestCase):
             "def main() -> Void\nend\n\n"
         )
 
+    def test_stream_methods_are_generic_and_terminals_have_result_types(self):
+        self.assert_clean(
+            "def next(n: Int) -> Int\n  return n + 1\nend\n\n"
+            "def even(n: Int) -> Bool\n  return n % 2 == 0\nend\n\n"
+            "def add(acc: Int, n: Int) -> Int\n  return acc + n\nend\n\n"
+            "def visit(n: Int) -> Result[Void]\n  return ok()\nend\n\n"
+            "def as_text(n: Int) -> String\n  return String.from_int(n)\nend\n\n"
+            "def main() -> Void\n"
+            "  source: Stream[Int] = Stream.iterate(1, &next)\n"
+            "  selected: Stream[Int] = source.filter(&even).take(2)\n"
+            "  mapped: Stream[String] = selected.map(&as_text)\n"
+            "  values: Result[List[String]] = mapped.to_list(2)\n"
+            "  total: Result[Int] = source.take_while(&even).reduce(0, &add)\n"
+            "  visited: Result[Void] = selected.each(&visit)\n"
+            "  puts(values)\n  puts(total)\n  puts(visited)\n"
+            "end\n\n"
+        )
+
     def test_pipe_calls_user_functions_and_builtins(self):
         for body in ("  n: Int = 1 |> add(2) |> add(3)\n  puts(n)",
                      "  r: Result[Int] = \" 4 \".trim |> parse()\n  puts(r.unwrap!)"):
@@ -142,10 +162,21 @@ class SpecCheckerTest(TestCase):
             tried + main_with("  puts(1)"),
             METHOD_PIPE_HELPERS + main_with("  xs = [1, 2]\n  ys = xs |> List.map() do |v: Int| v |> f() end"),
             main_with("  xs = [1, 2]\n  ys = (xs |> List.map()) do |v: Int| v end"),
+            STREAM_PIPE_HELPERS + main_with(
+                "  stream = Stream.iterate(1, &next)\n  result = stream |> Stream.filter(&even)\n  puts(result.take(1).to_list(1))"
+            ),
         ]
         for text in cases:
             with self.subTest(text=text):
                 self.assert_code(text, "CHECK-PIPE-METHOD")
+
+    def test_pipe_can_supply_the_path_to_stream_lines(self):
+        self.assert_clean(
+            "def main() -> Void\n"
+            "  stream: Stream[String] = \"input.txt\" |> Stream.lines(1024, 1000)\n"
+            "  puts(stream.take(0).to_list(0))\n"
+            "end\n\n"
+        )
 
     def test_expressions_and_statements_nest_at_most_1000_levels(self):
         for count in (997, 998):

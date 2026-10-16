@@ -115,7 +115,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Built (14a, 14b, 14c) |
 | 25 | Ruby typed idioms | [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md) | Part A planned (roadmap phase 15); Part B to evaluate later; Part C decided against |
 | 26 | Strict diagnostics | [`26-strict-diagnostics.md`](26-strict-diagnostics.md) | Planned (roadmap phase 16) |
-| 27 | Iteration and concurrent collections | [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md) | Channels (17b), `Task.await` (17c), `Task.map` (17a) and `File.each_line` (17d) built; `Stream[T]` (17e) in progress before `format`; generators and shared state decided against |
+| 27 | Iteration and concurrent collections | [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md) | Channels (17b), `Task.await` (17c), `Task.map` (17a) and `File.each_line` (17d) built; `Stream[T]` (17e) implementation complete in PR #339, review pending; generators and shared state decided against |
 | 28 | VM metrics | [`28-vm-metrics.md`](28-vm-metrics.md) | Planned (roadmap phase 18) |
 | 29 | TLS contexts | [`29-tls-context.md`](29-tls-context.md) | Planned (roadmap phase 19, order step 7.4) |
 | 30 | HTTP on the VM: simple, synchronous, hybrid | [`30-hybrid-http.md`](30-hybrid-http.md) | Streaming (roadmap 20e to 20g, order step 7.4) and binary bodies planned; the rest of phase 20 is built: [`docs/vm/10-io-http.md`](../vm/10-io-http.md) |

@@ -60,7 +60,6 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
 agc_task *agc_new_task(agc_vm *vm);
 void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
-void agc_count_step(agc_vm *vm, uint32_t span);
 void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
 void agc_turn_begin(agc_vm *vm);
 bool agc_turn_charge(agc_vm *vm);

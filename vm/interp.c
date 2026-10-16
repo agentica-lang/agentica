@@ -454,11 +454,15 @@ static void resume_stepper(agc_vm *vm) {
   agc_step next = st->stepper->step(vm, st->stepper, t->regs[base]);
   switch (next.kind) {
     case AGC_STEP_CALL:
+    case AGC_STEP_CALL2: {
       count_step(vm, st->span);
-      call_value(vm, t, st->fn, base + 1, &next.value, 1, base, st->span);
+      agc_value args[2] = {next.value, next.second};
+      agc_value fn = agc_is(next.fn, AGC_T_VOID) ? st->fn : next.fn;
+      call_value(vm, t, fn, base + 1, args, next.kind == AGC_STEP_CALL2 ? 2 : 1, base, st->span);
       t->turn_cost++;
       apply_cost(vm);
       return;
+    }
     case AGC_STEP_WAIT:
       if (!t->parking) agc_fail(vm, "RUNTIME-INTERNAL", "a step waited without a pending job", st->span);
       t->park_reg = base;
@@ -599,7 +603,8 @@ static void start_stepper(agc_vm *vm, const agc_builtin *b, uint32_t base, uint3
   st->stepper = t->stepper;
   st->fn = t->regs[base + b->arity - 1];
   t->stepper = NULL;
-  agc_as_fn(vm, st->fn);
+  if (agc_is(st->fn, AGC_T_FN)) agc_as_fn(vm, st->fn);
+  else st->fn = agc_void();
   push_native(vm, st, base);
 }
 

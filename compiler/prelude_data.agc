@@ -8,10 +8,23 @@ import Types from "types"
 
 ## The builtins that only the prelude may call: the checker does not know them outside a prelude file, and no help or
 ## suggestion lists them.
-export PRELUDE_ONLY = ["__fail_arg"]
+export PRELUDE_ONLY = [
+  "__fail_arg", "__stream_each", "__stream_filter", "__stream_iterate", "__stream_map", "__stream_reduce",
+  "__stream_take", "__stream_take_while", "__stream_to_list",
+]
 
 ## Every prelude function, sorted by name.
 export ROWS: List[Model.PreludeRow] = [
+  Model.PreludeRow(name: "Stream.each", module: "stream", limits: [], selector: "", bodies: {"": "each"}),
+  Model.PreludeRow(name: "Stream.filter", module: "stream", limits: [], selector: "", bodies: {"": "filter"}),
+  Model.PreludeRow(name: "Stream.iterate", module: "stream", limits: [], selector: "", bodies: {"": "iterate"}),
+  Model.PreludeRow(name: "Stream.map", module: "stream", limits: [], selector: "", bodies: {"": "map"}),
+  Model.PreludeRow(name: "Stream.reduce", module: "stream", limits: [], selector: "", bodies: {"": "reduce"}),
+  Model.PreludeRow(name: "Stream.take", module: "stream", limits: [], selector: "", bodies: {"": "take"}),
+  Model.PreludeRow(
+    name: "Stream.take_while", module: "stream", limits: [], selector: "", bodies: {"": "take_while"},
+  ),
+  Model.PreludeRow(name: "Stream.to_list", module: "stream", limits: [], selector: "", bodies: {"": "to_list"}),
   Model.PreludeRow(name: "List.drop_while", module: "list", limits: [], selector: "", bodies: {"": "drop_while"}),
   Model.PreludeRow(name: "List.each_slice", module: "list", limits: [], selector: "", bodies: {"": "each_slice"}),
   Model.PreludeRow(

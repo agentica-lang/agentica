@@ -53,6 +53,13 @@ void agc_files_init(agc_vm *vm);
 agc_file_ids agc_files_inherited(void);
 void agc_files_forget(agc_file_ids *ids, int fd);
 void agc_files_close(agc_vm *vm);
+typedef struct agc_file_lines agc_file_lines;
+typedef enum { AGC_FILE_LINE_ITEM, AGC_FILE_LINE_WAIT, AGC_FILE_LINE_END } agc_file_line_status;
+agc_file_lines *agc_file_lines_new(agc_value path, size_t limit, int64_t timeout);
+agc_file_line_status agc_file_lines_pull(agc_vm *vm, agc_file_lines *source, bool resumed, agc_value last,
+                                          agc_value *line);
+agc_file_line_status agc_file_lines_close(agc_vm *vm, agc_file_lines *source, bool resumed, agc_value outcome,
+                                           agc_value *result);
 char *agc_host_path(agc_vm *vm, const agc_string *s);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
@@ -107,6 +114,8 @@ extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
+extern const agc_builtin agc_lazy_stream_builtins[];
+extern const size_t agc_lazy_stream_builtin_count;
 extern const agc_builtin agc_process_builtins[];
 extern const size_t agc_process_builtin_count;
 extern const agc_builtin agc_duplex_builtins[];
