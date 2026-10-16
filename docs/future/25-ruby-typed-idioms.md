@@ -13,6 +13,8 @@ values) is implemented (roadmap item 15a, order row 7.5a, in `compiler/`). 25.3
 bootstrap on 2026-10-15). 25.14 (the pipe operator) is implemented (roadmap item
 15l, order row 7.2.1g). 25.10 (heredocs) is implemented (roadmap item 15j,
 post-bootstrap step 5, in `compiler/`; see "As built" at the end of 25.10).
+25.6 (the compiler prelude and the Enumerable methods) is implemented (roadmap
+item 15f; see "As built" at the end of 25.6); 25.11 (`format`) is still planned.
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
 that models already know, with the rule of [section
@@ -831,6 +833,36 @@ prelude), `docs/vm/03-ir-and-bytecode.md` (the prelude flag, the call spans,
 `__fail_arg`, the format version, and the §4.5 sentence "There are no internal
 helper builtins", which gains the guarded exceptions) and
 `docs/vm/08-loader-and-cli.md` (the loader checks).
+
+**As built (2026-10-16, roadmap item 15f, in `compiler/`, `stdlib/prelude/` and
+the VM).** The design above stands, with these choices where it left room or
+named the Racket front end:
+
+- The prelude is checked and attached for each program that calls a prelude
+  method, not linked into every program and cached at build time: the checker
+  records the function each call runs (`St.bodies`), and `compiler/prelude.agc`
+  then reads the prelude files, parses the functions the program calls, renames
+  them `@prelude::file::name` and checks them, with the node ids after those of
+  the program. A program that calls no prelude method reads no prelude file.
+  The cost is a check of those functions on each compile, and a test compiles a
+  program that calls every method.
+- A type variable of a prelude body is an opaque type (`Type.Var`), which
+  `Cx.prelude` allows as a `Map` key or `Set` element, so `group_by`, `tally`,
+  `uniq`, `Map.each` and `Map.filter` are checked once, not once for each key
+  type. The limit of a variable (`group_by` on an `Int` or `String`) is checked
+  at the call, `CHECK-TYPE-MISMATCH` at the argument that fixed the variable.
+  `sum`, `min_by` and `max_by` have one body for each allowed type (`sum_int`,
+  `min_by_string` ...), chosen by the checker.
+- The prelude flag is not a field of the IR: a function has it when its source
+  is named `<prelude>/...`. Calls of a prelude function in the IR are `call`
+  with the argument spans after the call span.
+- The loader checks that the argument spans of a call of a prelude function are
+  in range. It cannot tell, from the bytecode, a `CALL` that carries them from
+  one that does not, so it does not reject spans on a call of a function
+  without the flag.
+- The loader reads format 5 together with format 6 (the format of the
+  checked-in `bootstrap/stage0.agcb`, which the first binary of the bootstrap
+  still writes), until stage0 is refreshed.
 
 ### 25.7 `unless` (moved to Part C)
 

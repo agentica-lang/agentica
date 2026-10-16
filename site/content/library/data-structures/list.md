@@ -295,3 +295,239 @@ end
 true
 false
 ```
+
+## find
+
+```text
+List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]
+```
+
+Gives `ok` with the first element for which the function gives `true`, or
+`error("not found")`. It stops calling the function at the first match.
+
+```agentica
+def main() -> Void
+  xs = [3, 8, 5, 9]
+  puts(xs.find do |x| x > 4 end)
+  puts(xs.find do |x| x > 10 end)
+end
+```
+
+```output
+ok(8)
+error("not found")
+```
+
+## each_with_index
+
+```text
+List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
+```
+
+Runs the function with each element and its index, which starts at 0.
+
+```agentica
+def main() -> Void
+  ["a", "b"].each_with_index do |s, i|
+    puts("#{i}: #{s}")
+  end
+end
+```
+
+```output
+0: a
+1: b
+```
+
+## flat_map
+
+```text
+List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
+```
+
+Joins the lists the function gives, in order.
+
+```agentica
+def main() -> Void
+  puts([1, 2, 3].flat_map do |x| List.repeat(x, x) end)
+end
+```
+
+```output
+[1, 2, 2, 3, 3, 3]
+```
+
+## partition
+
+```text
+List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
+```
+
+Gives `[accepted, rejected]`: the elements for which the function gives `true`,
+then the others, each in order.
+
+```agentica
+def main() -> Void
+  halves = [1, 2, 3, 4, 5].partition do |x| x % 2 == 0 end
+  puts(halves[0])
+  puts(halves[1])
+end
+```
+
+```output
+[2, 4]
+[1, 3, 5]
+```
+
+## take_while and drop_while
+
+```text
+List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
+List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
+```
+
+`take_while` keeps the elements before the first one for which the function
+gives `false`; `drop_while` keeps that one and the rest. Neither calls the
+function after that first `false`.
+
+```agentica
+def main() -> Void
+  xs = [1, 2, 5, 1]
+  puts(xs.take_while do |x| x < 3 end)
+  puts(xs.drop_while do |x| x < 3 end)
+end
+```
+
+```output
+[1, 2]
+[5, 1]
+```
+
+## each_slice
+
+```text
+List.each_slice(list: List[A], size: Int) -> List[List[A]]
+```
+
+Splits the list into slices of `size` elements; the last one may be shorter.
+It has no block: a block after it is `CHECK-BLOCK-TARGET`. To walk the slices,
+call `each` on the result. A `size` below 1 is `RUNTIME-INVALID-COUNT`.
+
+```agentica
+def main() -> Void
+  [1, 2, 3, 4, 5].each_slice(2).each do |pair|
+    puts(pair)
+  end
+end
+```
+
+```output
+[1, 2]
+[3, 4]
+[5]
+```
+
+## group_by
+
+```text
+List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]
+```
+
+Groups the elements by the key the function gives, which is an `Int` or a
+`String`. The map lists the keys in the order they first appear, and each group
+keeps the order of its elements.
+
+```agentica
+def main() -> Void
+  words = ["apple", "fig", "pear", "kiwi"]
+  puts(words.group_by do |w| w.length end)
+end
+```
+
+```output
+{5: ["apple"], 3: ["fig"], 4: ["pear", "kiwi"]}
+```
+
+## tally and uniq
+
+```text
+List.tally(list: List[K]) -> Map[K, Int]
+List.uniq(list: List[K]) -> List[K]
+```
+
+`tally` counts equal items and `uniq` keeps the first of each. The items are
+`Int` or `String`. The order is the order of first appearance.
+
+```agentica
+def main() -> Void
+  xs = ["b", "a", "b"]
+  puts(xs.tally)
+  puts(xs.uniq)
+end
+```
+
+```output
+{"b": 2, "a": 1}
+["b", "a"]
+```
+
+## sum
+
+```text
+List.sum(list: List[N]) -> N
+```
+
+Adds a list of `Int` or `Float` from the left. An empty list gives `0` or
+`0.0`. An `Int` sum that leaves 64 bits is `RUNTIME-INTEGER-OVERFLOW`.
+
+```agentica
+def main() -> Void
+  puts([1, 2, 3].sum)
+  puts([0.5, 0.25].sum)
+end
+```
+
+```output
+6
+0.75
+```
+
+## min_by and max_by
+
+```text
+List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]
+List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]
+```
+
+Give `ok` with the element that has the least or the greatest key, or
+`error("the list is empty")`. The key is an `Int`, `Float` or `String`, and the
+function runs once for each element. The first element wins a tie. A `NaN` key
+never wins, unless every key is `NaN`. `String` keys compare with
+`String.compare`.
+
+```agentica
+def main() -> Void
+  words = ["fig", "apple", "kiwi", "pear"]
+  puts(words.min_by do |w| w.length end)
+  puts(words.max_by do |w| w.length end)
+  puts(words.max_by do |w| w end)
+end
+```
+
+```output
+ok("fig")
+ok("apple")
+ok("pear")
+```
+
+## Costs and names
+
+All of these take O(n) time in the length of the list, except the ones that
+stop early. They are written in Agentica (`stdlib/prelude/`), so they count the
+program's steps: `find` costs 4 steps for each element it looks at, `sum` 4,
+`tally` about 10, `min_by` about 20 and `group_by` about 14, not counting the
+function you give.
+
+Each method has one name. `select`, `collect`, `detect`, `inject` and `reject`
+are `CHECK-UNKNOWN-METHOD`: use `filter`, `map`, `find` and `reduce`, and
+`xs.filter do |x| !cond end` for `reject`.

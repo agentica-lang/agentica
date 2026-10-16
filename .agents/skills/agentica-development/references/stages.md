@@ -99,7 +99,7 @@ Names imported with `import {a, B as C} from "path"` live in a per-file table (l
 
 ## Checker (`compiler/checker.agc` and the `check_*.agc` files)
 
-`check(linked, catalog) -> Checking.Done(Checked) | Failed(Problem)`. Registration first (`check_register.agc`), then bodies, stopping at the first error:
+`check(linked, settings) -> Checking.Done(Checked) | Failed(Problem)`. Registration first (`check_register.agc`), then bodies, stopping at the first error:
 
 - Enum names are registered before struct fields resolve; struct names precede field resolution; enum payload templates resolve after all struct names exist; function signatures follow. This allows forward references and generic enum payloads.
 - Catalogued builtin function names cannot be redefined. `ok` and `error` are additionally reserved on locals, parameters, loop variables, and fields.
@@ -111,6 +111,16 @@ Names imported with `import {a, B as C} from "path"` live in a per-file table (l
 - Scopes are a stack of maps holding `name -> (type, immutable?)`. The `for` variable is immutable.
 - A plain binding to a visible name is an update and must keep its type; an annotated binding to a visible name is `CHECK-ANNOTATION-ON-EXISTING`; a fresh name that is already visible is `CHECK-SHADOWED-NAME`.
 - The result (`Checked`) holds the type of each expression and block by node id (the literal 2^63 under unary minus is never recorded; lowering handles it by rule), what each method call or field access resolved to, and the linked names of the module constants in initialization order. Lowering trusts it and does not re-check types.
+
+## Compiler prelude (`compiler/prelude.agc`, `prelude_data.agc`, `check_prelude.agc`, `stdlib/prelude/`)
+
+A prelude method is a builtin written in Agentica (`docs/future/25-ruby-typed-idioms.md` 25.6): its catalog row has `Rule.Prelude` and an empty implementation key, `prelude_data.agc` says which file and function run it (`plain`, `limited` for a variable that only some types may take, `chosen` for one function per type of the variable), and the body is a `def` in `stdlib/prelude/<file>.agc` that names its type variables (`A`, `B`, `K`, `V`) in annotations. To add one: the row in `builtins_data.agc` (sorted by name), the entry in `prelude_data.agc`, the body, and the tests of 25.6 (a spec case for each rule, a VM golden for the results and the errors, a step count in `tests/fixtures/vm/prelude-cost.agc`).
+
+- `Rule.Prelude` (`check_prelude.agc`) checks the arguments left to right, binds the type variables (a block gets the types known so far), checks the limits (`CHECK-TYPE-MISMATCH` at the argument that bound the variable) and records the body by call id (`St.bodies`, `Checked.bodies`).
+- After the program, `Prelude.attach` reads `std/prelude/<file>.agc` for the files the program used, parses it from the next free node id, keeps the functions called (named `@prelude::file::name`, `Ir.prelude_name`) and checks them with `Cx.prelude` set (a type variable may be a Map key or Set element; `__fail_arg` is known). A program that calls no prelude method reads no prelude file. `std/prelude/...` is not importable.
+- Lowering turns the call into a plain `call` (never a `tail-call`) with the span of each argument after the span of the call, adds the files as sources named `<prelude>/file.agc` with no text, and pins every span of their functions to 1:1. The VM reads the name, flags the functions (format 6) and reports an error inside a run of prelude frames at the call of the program (`docs/vm/03-ir-and-bytecode.md`).
+- A body calls builtins only (no other prelude function), never `concat`, `take`, `drop`, `reverse`, `sort`, `Map.keys`, `Map.values` or `Map.delete` inside a loop or a callback (`tests/test_stdlib_prelude.py`), and uses `__fail_arg(code, index, message)` to fail at argument `index` of the call. `__fail_arg` is unknown to a program (`CHECK-UNKNOWN-NAME`) and hidden from `agentica help`.
+- The compiler itself must not call a prelude method until `bootstrap/stage0.agcb` is refreshed.
 
 ## Lowering (`compiler/lowering.agc` and the `lower_*.agc` files)
 

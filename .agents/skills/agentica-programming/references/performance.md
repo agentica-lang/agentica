@@ -158,3 +158,40 @@ field, so do it once per token or node, not once per character.
   O(1). On text with multi-byte characters each call walks from the nearest of
   the start, the end or the last position used [vm/strings.c], so a forward
   scan is cheap and a random access can cost O(n).
+
+## Enumerable methods
+
+`find`, `each_with_index`, `flat_map`, `partition`, `take_while`, `drop_while`,
+`each_slice`, `group_by`, `tally`, `uniq`, `sum`, `min_by`, `max_by`,
+`Map.each` and `Map.filter` are written in Agentica (the compiler prelude,
+`stdlib/prelude/`) and run in your program, so their steps count against
+`--max-steps`. Each is O(n) with one pass and no copy of the list for each
+element. Steps of the method itself on 100,000 elements, not counting the
+block, measured with `AGENTICA_VM_TRACE=profile` on 2026-10-16
+[`tests/fixtures/vm/prelude-cost.agc` keeps the same figures for 2,000
+elements]:
+
+| Method | Steps | For each element |
+|---|---:|---:|
+| `find` (no match) | 400,005 | 4 |
+| `sum` (`Int` or `Float`) | 400,006 | 4 |
+| `flat_map` (1 item each) | 800,006 | 8 |
+| `partition` | 800,010 | 8 |
+| `each_with_index`, `take_while`, `drop_while` | 900,004 to 900,005 | 9 |
+| `tally` (1,000 keys) | 1,000,006 | 10 |
+| `each_slice(3)` | 1,100,019 | 11 |
+| `Map.each` | 700,005 | 7 |
+| `Map.filter` | 1,150,009 | 11.5 |
+| `group_by` (1,000 keys) | 1,400,006 | 14 |
+| `uniq` (1,000 distinct) | 508,009 | 5 |
+| `min_by` (`Int`) | 2,000,003 | 20 |
+| `max_by` (`Int`, every key a new best) | 2,399,999 | 24 |
+| `max_by` (`String`) | 2,200,113 | 22 |
+| `min_by` (`Float`) | 2,799,995 | 28 |
+
+Each block call is 4 to 6 steps more on its own `block@` row. The bodies
+avoid `concat`, `take`, `drop`, `reverse`, `sort`, `Map.keys`, `Map.values` and
+`Map.delete` inside a loop, because an O(n) builtin in a loop is quadratic in
+time while its steps still look linear (`tests/test_stdlib_prelude.py` checks
+that). Write your own loops the same way. `take_while` and `drop_while` do one
+`take` or `drop` after the scan.
