@@ -1,0 +1,9 @@
+# lf comment
+def a
+  x = "#no" # tail
+## doc one
+## doc two
+y = 1
+z = 2
+end
+# last comment

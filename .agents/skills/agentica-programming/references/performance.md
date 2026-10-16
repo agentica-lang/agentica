@@ -62,6 +62,35 @@ the same text twice or move back and forth in it.
 - Mutual tail calls also run to depth 1,000,000 when each function ends in
   `return` of the other [measured].
 
+## VM steps
+
+`AGENTICA_VM_TRACE=profile agentica check FILE` (or `run -- FILE.agcb`) counts
+the steps of a run, which do not depend on the load of the machine. Costs in
+steps, measured on 100,000 repeats of one form [PR #317]:
+
+- A scan loop `while set.include?(chars[i])` and `while chars[i] == "a"` cost 9
+  steps for each character. A guard against codes above 127 in front of a
+  `List[Bool]` table costs 15, and unrolling by two gives 8.5. A sentinel
+  after the last element (`""` or `-1`, in no set) takes `i < size` out of the
+  loop.
+- A struct with 3 fields built in place, such as a position, costs 9 steps
+  with a column `offset - start + 1` and 7 with a precomputed sum. A token with
+  its two positions, a span, a value and the `push` costs about 36. `xs.push(x)`
+  costs 4, `Map.get(k, d)` 5, and a `case` on an enum is a jump table: the first
+  and the last variant cost the same.
+- A call costs several steps (the arguments and the return), so a function
+  that runs once for each token is worth inlining when the loop makes a token
+  every few characters. The lexer went from 52 to 24 steps for each character
+  by moving the hot arms into `lex`, the tables into module constants and
+  `text.split("")` as the text instead of `String.code` of each character
+  [PR #317, `docs/vm-benchmarks.md`].
+- Scan the characters themselves: `text.split("").map do |c| String.code(c) end`
+  costs 3 steps and a builtin call for each character (about 100 ms for
+  1,000,000), and `Set[String]` tests cost as much as `Set[Int]` ones (177 and
+  184 ms for 1,000,000 tests).
+- The line lengths of `text.split("\n")` find the end of a comment or a line
+  with no scan of its characters (a CR needs the scan: it ends a line too).
+
 ## Struct updates
 
 `value.with(field: x)` copies the struct in one instruction, and a constructor

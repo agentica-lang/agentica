@@ -694,6 +694,11 @@ opcodes, 4.6 table and the version in the header row and the last bullet),
 
 ### 44.9 The tables of `compiler/`, rewritten
 
+**As built (44b, the lexer, PR #317):** the lexer's tables are module constants
+keyed by character, not by code, and `new_input` stays (it splits the text and
+adds the sentinels); `compiler/lexer.agc` is the reference, and the lexer
+sketch below is the plan it started from.
+
 The test the design must pass: the real tables of `compiler/` fit. Every
 example below uses only what 44.5 allows. The expressions of the snippets
 were checked with `racket src/main.rkt check` inside functions of a scratch
@@ -1091,7 +1096,12 @@ together; the user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
    owner's decision of 2026-10-15 and this section).
 5. **44b: the lexer.** `compiler/lexer.agc` as in 44.9. The goldens do not
    change. Measure the lexer before and after (the same program over
-   `compiler/`), and put the numbers in the PR.
+   `compiler/`), and put the numbers in the PR. **Done**, in the lexer speed
+   pass (PR #317,
+   [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer)):
+   the tables are constants (the class table is keyed by the character, not
+   the code, and operators are `Op` values), and the main loop was
+   restructured at the same time.
 6. **44c: the parser and unicode.** `NESTING_LIMIT`, `LEVELS`,
    `COMPOUND_OPERATORS`, `LITERAL_KINDS`, `GRAPHIC_RANGES` and the generator
    change. Goldens unchanged.
