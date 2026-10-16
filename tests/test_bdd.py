@@ -2,14 +2,17 @@
 
 Each case runs the CLI as a child (`agentica test --json ...`) and compares
 the JSON report: statuses, diagnostic codes, lines, and the text and --ai
-formats. tests/bdd/handlers.agc holds the shared step handlers.
+formats. tests/bdd/handlers.agc holds the shared step handlers. The cases that
+need a runner that fails run the front end as an ordinary program with a script
+as the binary it starts again (front_end_command).
 """
 import fcntl
 import json
 import os
 import unittest
 
-from tests.agentica_test import ROOT, TESTS, TestCase, cli, report_cases, run, vm_binary, vm_environment
+from tests.agentica_test import (TESTS, TestCase, binary, cli, front_end_command, report_cases, run,
+                                 vm_environment)
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
 CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
@@ -36,12 +39,16 @@ def main_running(*steps):
 
 
 class Bdd(TestCase):
-    def agentica_test(self, *args, env=None, cwd=None):
+    def agentica_test(self, *args, env=None, cwd=None, binary_path=None):
+        """`agentica test`; with binary_path, the front end runs as an ordinary program that starts that path (a
+        script) in place of the binary."""
+        if binary_path is not None:
+            return run(front_end_command(binary_path, "test", *args), env=vm_environment(env), cwd=cwd)
         return run(cli() + ["test", *args], env=vm_environment(env), cwd=cwd)
 
-    def json_test(self, *args):
+    def json_test(self, *args, **options):
         """Returns (exit code, parsed report); stderr must stay empty."""
-        result = self.agentica_test("--json", *args)
+        result = self.agentica_test("--json", *args, **options)
         self.assertEqual(result.stderr, "")
         return result.code, json.loads(result.stdout)
 
@@ -238,37 +245,25 @@ class Bdd(TestCase):
             ("bad\ufffd.feature", "RUNTIME-BDD-INFRA"), ("a.feature", None), ("big.feature", "RUNTIME-BDD-IO")]))
         self.assertEqual(report["failed"], 1)
 
-    def fake_vm(self, directory, script):
-        """A shell script for AGENTICA_VM that is the VM of the runner only: it prints the given stderr lines when it
-        is asked to run the runner, and runs the real VM for anything else (the BDD driver is a program too)."""
-        path = os.path.join(directory, "vm.sh")
-        with open(path, "w") as vm:
-            vm.write("#!/bin/sh\ncase \"$*\" in\n*runner.agcb*)\n"
-                     + "".join("  echo '%s' >&2\n" % line for line in script)
-                     + "  exit 3 ;;\nesac\nexec '%s' \"$@\"\n" % vm_binary())
+    def fake_binary(self, directory, script):
+        """A shell script for the binary that `agentica test` starts again: it prints the given stderr lines when it is
+        asked to run the runner, and runs the real binary for anything else."""
+        path = os.path.join(directory, "agentica.sh")
+        with open(path, "w") as binary_script:
+            binary_script.write("#!/bin/sh\ncase \"$*\" in\n*runner.agcb*)\n"
+                                + "".join("  echo '%s' >&2\n" % line for line in script)
+                                + "  exit 3 ;;\nesac\nexec '%s' \"$@\"\n" % binary())
         os.chmod(path, 0o700)
-        return {"AGENTICA_VM": path}
-
-    def test_a_driver_that_crashes_is_status_2_with_the_error_on_stderr_not_a_failed_test_run(self):
-        directory = self.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
-        path = os.path.join(directory, "vm.sh")
-        with open(path, "w") as vm:
-            # The step limit stops the driver (the program), not the runner it starts.
-            vm.write("#!/bin/sh\ncase \"$*\" in\n*runner.agcb*) exec '%s' \"$@\" ;;\nesac\n"
-                     "exec '%s' --max-steps 50 \"$@\"\n" % (vm_binary(), vm_binary()))
-        os.chmod(path, 0o700)
-        result = self.agentica_test(os.path.join(directory, "a.feature"), env={"AGENTICA_VM": path})
-        self.assertEqual((result.code, result.stdout), (2, ""))
-        self.assertIn("RUNTIME-STEP-LIMIT", result.stderr)
+        return path
 
     def test_a_crashed_runner_is_reported_with_the_error_not_the_last_stack_frame(self):
         directory = self.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
-        env = self.fake_vm(directory, [
+        fake = self.fake_binary(directory, [
             "runner.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]",
             "index 5 is outside a list of length 3",
             "  = stack, innermost first:",
             "    main at runner.agc:11:8"])
-        result = self.agentica_test("--json", os.path.join(directory, "a.feature"), env=env)
+        result = self.agentica_test("--json", os.path.join(directory, "a.feature"), binary_path=fake)
         self.assertEqual(result.code, 2)
         error = json.loads(result.stdout)["files"][0]["error"]
         self.assertEqual(error["code"], "RUNTIME-BDD-INFRA")
@@ -276,13 +271,13 @@ class Bdd(TestCase):
 
     def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_earlier_task_crash(self):
         directory = self.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
-        env = self.fake_vm(directory, [
+        fake = self.fake_binary(directory, [
             "runner.agc:5:9 error[RUNTIME-DIVISION-BY-ZERO] in a task",
             "division by zero",
             "runner.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]",
             "index 5 is outside a list of length 3",
             "  = stack, innermost first:"])
-        result = self.agentica_test("--json", os.path.join(directory, "a.feature"), env=env)
+        result = self.agentica_test("--json", os.path.join(directory, "a.feature"), binary_path=fake)
         self.assertEqual(result.code, 2)
         message = file_error(json.loads(result.stdout))["message"]
         self.assertRegex(message, "RUNTIME-INDEX-OUT-OF-RANGE")
@@ -307,12 +302,13 @@ class Bdd(TestCase):
             status, report = self.json_test(*arguments)
             self.assertEqual(status, 2)
             self.assertEqual(file_error(report)["code"], "RUNTIME-BDD-INFRA")
-        # Without the VM nothing can run, not even the driver: a plain message, as `agentica file.agc` gives.
+        # Without the binary nothing can run: the driver answers with its own message in the format of the report.
+        fake = path("no-binary")
         for style in ("--json", "--ai"):
-            result = self.agentica_test(style, path("a.feature"), env={"AGENTICA_VM": path("no-vm")})
-            self.assertEqual(result.code, 2)
-            self.assertEqual(result.stdout, "")
-            self.assertRegex(result.stderr, "cannot find the VM at .*no-vm")
+            result = self.agentica_test(style, path("a.feature"), binary_path=fake)
+            self.assertEqual(result.code, 2, style)
+            self.assertRegex(result.stdout, "cannot find agentica at .*no-binary", style)
+            self.assertEqual(result.stderr, "")
 
     def test_without_paths_specs_and_test_are_searched_and_the_empty_message_says_which_were_missing(self):
         scratch = self.make_suite({"nothing.txt": ""}, "agentica-bdd-default-")
@@ -393,15 +389,7 @@ class Bdd(TestCase):
         temporary.mkdir(0o500)
         self.addCleanup(os.chmod, temporary, 0o700)
         env = {"TMPDIR": temporary}
-        # The CLI cannot even write the driver's bytecode there, as for any program it runs.
         result = self.agentica_test("--json", scratch / "missing.feature", env=env, cwd=scratch)
-        self.assertEqual((result.code, result.stdout), (2, ""))
-        self.assertRegex(result.stderr, "cannot write a temporary file in .*tmp")
-        # The driver on its own, as the CLI starts it, reports its failure to make a folder (16 tries) in the format
-        # of the report.
-        driver = ROOT / "dist" / "agentica-bdd-driver.agcb"
-        result = run([vm_binary(), "--allow-run", "--", driver, "--vm", vm_binary(), "--agentica", "agentica",
-                      "--style", "json", "--", scratch / "missing.feature"], env=vm_environment(env), cwd=scratch)
         self.assertEqual((result.code, result.stderr), (2, ""))
         problem = file_error(json.loads(result.stdout))
         self.assertEqual(problem["code"], "RUNTIME-BDD-INFRA")

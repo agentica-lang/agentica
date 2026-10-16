@@ -133,8 +133,8 @@ none of them (the VM has `_WIN32` paths): the channel is Linux only.
   (`metrics_env`, matched with their `=`), so a child VM or a BDD runner never
   fights for the metrics port or file (`docs/future/28-vm-metrics.md` §28.5);
   `System.env` still shows them to the program.
-- **Child start.** `agc_parent_take` runs in `main.c` before the program does.
-  If `AGENTICA_CHANNEL` is `3` and `fstat(3)` says socket or FIFO and
+- **Child start.** `agc_parent_take` runs in `agentica.c` before the program
+  does. If `AGENTICA_CHANNEL` is `3` and `fstat(3)` says socket or FIFO and
   `fcntl(F_GETFL)` says it is open for both reading and writing (an anonymous
   pipe end never is), the VM moves the descriptor with `F_DUPFD_CLOEXEC`, closes
   3, forgets it in the table of inherited files (so no `File` call can reach

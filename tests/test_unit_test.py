@@ -8,8 +8,7 @@ import json
 import time
 from pathlib import Path
 
-from tests.agentica_test import (
-    FIXTURES, TESTS, TestCase, cli, report_cases, run, slow, vm_environment)
+from tests.agentica_test import FIXTURES, TESTS, TestCase, cli, report_cases, run, scaled, slow, vm_environment
 
 UNIT = FIXTURES / "unit"
 STD_TESTS = str(TESTS / "std")
@@ -223,10 +222,10 @@ class UnitTest(TestCase):
         self.assertTrue(flood["files"][0]["output"].startswith("xxx"))
         started = time.monotonic()
         _status, endless = self.json_test(fixture("endless_test.agc"))
-        self.assertLess(time.monotonic() - started, 15)
+        self.assertLess(time.monotonic() - started, min(scaled(15), 25))
         self.assertEqual([(item["status"], field(item, "code")) for item in report_cases(endless)],
                          [("failed", "RUNTIME-BDD-OUTPUT-LIMIT"), ("not_executed", None)])
         started = time.monotonic()
         _status, listing = self.json_test(fixture("listing_flood_test.agc"))
-        self.assertLess(time.monotonic() - started, 15)
+        self.assertLess(time.monotonic() - started, min(scaled(15), 25))
         self.assertEqual(file_codes(listing), [("tests", "RUNTIME-BDD-OUTPUT-LIMIT")])

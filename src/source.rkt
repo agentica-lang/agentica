@@ -62,7 +62,7 @@
                              (map path-element->string (drop to shared)))
                      "/"))))
 
-;; The --source-root option of agentica-vm: the folder of the entry file as a
+;; The --source-root option of agentica run: the folder of the entry file as a
 ;; user should type it, which the VM puts before the stored names it prints, so
 ;; a runtime trace names a file the way a compile-time diagnostic does. It is
 ;; relative to the working directory (built from the canonical folder, so the

@@ -165,7 +165,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   costs, `docs/vm/10-io-scheduler.md` §10.2.1). A task reading a
   `FileHandle` in a loop must let `main` close it, and the run must end.
   Every read from the VM has a 60-second timeout. The test skips when
-  `AGENTICA_VM` names another binary. The `task-*` fixtures keep tasks
+  `AGENTICA_VM_BINARY` names another binary. The `task-*` fixtures keep tasks
   from running side by side where the step-limit span matters, since with
   several runnable tasks the span depends on the interleaving. Builtins get
   `vm->task->regs + base`; `Task.spawn` builds the child's frame with

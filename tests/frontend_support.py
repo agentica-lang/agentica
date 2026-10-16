@@ -2,8 +2,8 @@
 
 Each test compiles one stage of compiler/ with the product CLI, runs it on the VM over inputs and compares what it
 prints with the frozen output of the Racket stage (tests/fixtures/frontend/frozen/, docs/future/35-self-hosting.md,
-35.10, phase 3). The frozen files are written by `make frontend-freeze` while the Racket stages exist; see
-tests/frontend-freeze-common.rkt for their layout.
+35.10, phase 3). The Racket stages wrote the frozen files once; tools/refreeze.py rewrites them from the Agentica
+stages now.
 
 The hashes of a manifest cover big outputs and big inputs. An input hash that differs means the Python side built a
 different input than the Racket writer did, which is a test bug and not a front-end bug.
@@ -18,7 +18,7 @@ import tempfile
 from collections import namedtuple
 from pathlib import Path
 
-from tests.agentica_test import FIXTURES, ROOT, TestCase, compile_agc, run_vm, vm_environment
+from tests.agentica_test import FIXTURES, ROOT, TestCase, compile_agc, run_vm, scaled, vm_environment
 
 FROZEN = FIXTURES / "frontend" / "frozen"
 
@@ -27,7 +27,7 @@ FROZEN = FIXTURES / "frontend" / "frozen"
 # how the goldens are kept once the Racket stages that wrote them are gone.
 def refreezing():
     """True while tools/refreeze.py runs the tests (read at each call, so a test can switch it)."""
-    return os.environ.get("AGENTICA_REFREEZE", "") not in ("", "0")
+    return os.environ.get("AGENTICA_REFREEZE", "") == "1"
 
 
 # The stages read the environment of the pkg/ search when they are not given the flags; the Racket writers ran with no
@@ -35,7 +35,7 @@ def refreezing():
 HERMETIC_ENVIRONMENT = vm_environment({"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"})
 
 # The default limit of one stage run over a corpus; a case that is big or slow passes its own.
-STAGE_TIMEOUT = 600
+STAGE_TIMEOUT = scaled(600)
 
 Entry = namedtuple("Entry", "output_sha size input_sha key")
 
@@ -274,8 +274,8 @@ def report(record):
 def tree_listing(files):
     """The text whose hash stands for a whole input: each path and the hash of its content, one line each, in path order.
 
-    `files` maps a path (relative to the root of the input) to text or bytes. tests/frontend-freeze-common.rkt
-    (tree-listing) writes the same text.
+    `files` maps a path (relative to the root of the input) to text or bytes. The Racket writer
+    that froze the manifests wrote the same text.
     """
     return "".join("%s %s\n" % (path, sha256(files[path])) for path in sorted(files))
 

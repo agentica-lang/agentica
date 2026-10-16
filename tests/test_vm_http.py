@@ -9,7 +9,7 @@ certificates are the ones in fixtures/tls.
 import json
 
 from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, check_lines, optional_tool, output_lines, run,
-                                 run_vm, start_vm, vm_environment)
+                                 run_vm, scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "http-peer.py"
 SERVER_PEER = FIXTURES / "http-server-peer.py"
@@ -312,11 +312,11 @@ class VmHttp(TestCase):
         node = optional_tool("node")
         vm = self.adopt(start_vm(self.compile_text(SERVER_PROGRAM, "server"), CERTS, stdin=True))
         port, tls_port = vm.next_line().split()
-        python_run = run([PYTHON, SERVER_PEER, port, "2", tls_port, CERTS], timeout=120)
+        python_run = run([PYTHON, SERVER_PEER, port, "2", tls_port, CERTS], timeout=scaled(120))
         self.assertEqual(python_run.code, 0, python_run.stderr)
         self.assertEqual(output_lines(python_run.stdout), SERVER_PYTHON_LINES)
         if node:
-            node_run = run([node, SERVER_NODE_PEER, port, "2"], timeout=120)
+            node_run = run([node, SERVER_NODE_PEER, port, "2"], timeout=scaled(120))
             self.assertEqual(node_run.code, 0, node_run.stderr)
             self.assertEqual(output_lines(node_run.stdout), SERVER_NODE_LINES)
         vm.close_stdin()

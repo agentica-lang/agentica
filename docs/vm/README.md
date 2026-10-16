@@ -3,8 +3,9 @@
 The design of the C bytecode VM, which runs every program. The language does not
 change: `docs/grammar/` (index `docs/grammar.md`) stays the contract. The VM is
 the only backend. The Racket evaluator was deleted in roadmap 7i. The VM's
-codename is Aurora, but only in these docs: the binary (`agentica-vm`), the
-`AGENTICA_VM*` variables, the `agc_` prefix, `.agcb` and `vm/` keep their names.
+codename is Aurora, but only in these docs: the binary (`agentica`), the
+`AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb` and `vm/` keep their
+names.
 
 The section numbers stay as they were, so a reference such as `§10.4` still
 finds its place. The table below gives the file for each number. The checklist
@@ -48,7 +49,7 @@ and merging or moving `STEP`s. A runaway loop must still hit
 | `src/lower.rkt` | Checked program to IR. Resolves names to slots and indexes, makes types explicit, keeps spans, converts closures. |
 | `src/bytecode.rkt` | IR to bytecode: label resolution, constant pool, builtin imports, struct, enum, JSON type and span tables, step merging, binary writer. |
 | `src/main.rkt` | `--dump-ir`, `compile`, and running every program on the VM. Printing and exit codes stay here. |
-| `vm/` | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
+| `vm/` | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica`. |
 
 The lowerer rejects a form it does not handle yet with `LOWER-UNSUPPORTED` at
 the node's span (3.5). It never guesses.
