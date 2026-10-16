@@ -110,13 +110,13 @@ int main(void) {
      wake handle of its own once the first is closed, and both closes settle. */
   agc_vm second;
   agc_vm_init(&second, NULL, stdout, stderr, INT64_MAX);
-  agc_io_watch_stop(&vm, 0);
+  agc_io_watch_stop(&vm, (int64_t)uv_os_getpid());
   assert(agc_io_close(&vm));
   assert(vm.loop == NULL);
-  agc_io_watch_stop(&second, 0);
+  agc_io_watch_stop(&second, (int64_t)uv_os_getpid());
   assert(agc_io_close(&second));
   assert(second.loop == NULL);
-  agc_io_watch_stop(&vm, 0);
+  agc_io_watch_stop(&vm, (int64_t)uv_os_getpid());
   assert(agc_io_close(&vm));
   assert(agc_io_stop_signal() == 0);
 #endif
