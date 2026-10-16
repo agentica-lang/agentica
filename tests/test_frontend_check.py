@@ -72,7 +72,7 @@ class CheckFrozenTest(StageTestCase):
 
     @slow
     @timeout(1800)
-    def test_the_programs_of_the_cases_of_the_racket_checker_tests(self):
+    def test_the_programs_of_the_cases_of_the_original_checker_tests(self):
         programs = load_json("corpus/checker-programs.json")
         self.assertGreater(len(programs), 400)
         cases = {"c%d" % n: text for n, text in enumerate(programs)}

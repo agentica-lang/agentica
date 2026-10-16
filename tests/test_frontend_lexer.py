@@ -46,8 +46,8 @@ class LexerFrozenTest(StageTestCase):
                             "lexer fixtures")
 
     def test_the_unicode_table_is_the_char_graphic_table_of_the_freeze(self):
-        # compiler/unicode_table.agc was generated once from the char-graphic? table of Racket 9.3 (Unicode 17.0); the
-        # ranges that table printed are frozen in lexer/graphic-ranges.expected.
+        # compiler/unicode_table.agc is hand-edited data (its header has the provenance, Unicode 17.0); the ranges
+        # of the original table are frozen in lexer/graphic-ranges.expected.
         text = (ROOT / "compiler" / "unicode_table.agc").read_text(encoding="utf-8")
         body = text.split("return [", 1)[1].split("]", 1)[0]
         numbers = [int(number) for number in re.findall(r"\d+", body)]
