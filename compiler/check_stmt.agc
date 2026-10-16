@@ -3,6 +3,7 @@
 
 import Ast from "ast"
 import Model from "builtin_model"
+import DefaultChecks from "check_defaults"
 import Flow from "check_flow"
 import State from "check_state"
 import Types from "check_types"
@@ -28,7 +29,8 @@ end
 export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
   signature = cx.functions[node.name]
   here = st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature))
-  inner = State.enter(here)
+  checked = try DefaultChecks.check_types(cx, here, node, signature.params)
+  inner = State.enter(checked)
   index = 0
   while index < node.params.size
     param = node.params[index]

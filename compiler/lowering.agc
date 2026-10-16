@@ -11,6 +11,7 @@ import Ast from "ast"
 import Builtins from "builtins"
 import Failure from "check_failure"
 import Checker from "checker"
+import Defaults from "defaults"
 import Ir from "ir"
 import Const from "lower_const"
 import Expr from "lower_expr"
@@ -109,6 +110,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
     variants: tables.variants,
     json_structs: tables.json_structs,
     functions: by_name,
+    fills: fills_of(functions, index_of),
     reads: reads_of(plan),
     file: linked.modules[0].file,
     index: 0,
@@ -157,6 +159,19 @@ def run(linked: Linker.Linked, checked: Checker.Checked, catalog: Builtins.Catal
     globals: plan.slots.size,
     span: linked.root.span
   ))
+end
+
+# The functions that have default values, by name, with the file each is declared in.
+def fills_of(functions: List[Located], index_of: Map[String, Int]) -> Map[String, Lowering.Fill]
+  fills: Map[String, Lowering.Fill] = {}
+  for entry in functions
+    shape = Defaults.shape(entry.function.params)
+    if Defaults.has_defaults?(shape)
+      fill = Lowering.Fill(shape: shape, params: entry.function.params, file: entry.file, index: index_of[entry.file])
+      fills = fills.put(entry.function.name, fill)
+    end
+  end
+  return fills
 end
 
 # Lowers one function into a new table whose index is the next to fill, and adds the blocks it made.

@@ -37,7 +37,9 @@ end
 def rewrite_function(cx: Resolve.Context, node: Ast.FunctionDecl) -> Result[Ast.Decl]
   params: List[Ast.Param] = []
   for param in node.params
-    params = params.push(param.with(type: try rewrite_type(cx, param.type)))
+    type = try rewrite_type(cx, param.type)
+    default = try rewrite_optional_expr(cx, param.default)
+    params = params.push(param.with(type: type, default: default))
   end
   result = try rewrite_type(cx, node.result)
   body = try rewrite_stmts(cx, node.body)

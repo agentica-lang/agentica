@@ -1,0 +1,66 @@
+program #63 0:1:1-540:16:1
+  declaration: import-decl #0 0:1:1-28:2:1 path="models" alias="Models"
+  declaration: function-decl #15 141:4:1-265:7:1 name="join" doc="Defaults after the type: a literal, a negative number, an empty list or map, an enum variant, an expression."
+    param: param #3 150:4:10-166:4:26 name="xs"
+      type: type-ref #2 154:4:14-166:4:26 name="List"
+        arg: type-ref #1 159:4:19-165:4:25 name="String"
+    param: param #6 168:4:28-186:4:46 name="sep"
+      type: type-ref #4 173:4:33-179:4:39 name="String"
+      default: literal #5 182:4:42-186:4:46 value=string:", "
+    param: param #9 188:4:48-227:4:87 name="level"
+      type: type-ref #7 195:4:55-207:4:67 name="Models.Level"
+      default: enum-constructor #8 210:4:70-227:4:87 enum="Models.Level" variant="Info"
+    result: type-ref #10 232:4:92-238:4:98 name="String"
+    body: return-stmt #14 241:5:3-261:6:1
+      value: method-call #13 248:5:10-260:5:22 name="join"
+        target: name-ref #11 248:5:10-250:5:12 name="xs"
+        arg: name-ref #12 256:5:18-259:5:21 name="sep"
+  declaration: function-decl #37 266:8:1-382:10:1 name="numbers"
+    param: param #19 278:8:13-289:8:24 name="a"
+      type: type-ref #16 281:8:16-284:8:19 name="Int"
+      default: unary #18 287:8:22-289:8:24 op=minus op-span=287:8:22-288:8:23
+        operand: literal #17 288:8:23-289:8:24 value=int:1
+    param: param #23 291:8:26-306:8:41 name="b"
+      type: type-ref #20 294:8:29-299:8:34 name="Float"
+      default: unary #22 302:8:37-306:8:41 op=minus op-span=302:8:37-303:8:38
+        operand: literal #21 303:8:38-306:8:41 value=float:bits:4612811918334230528
+    param: param #26 308:8:43-322:8:57 name="c"
+      type: type-ref #24 311:8:46-315:8:50 name="Bool"
+      default: literal #25 318:8:53-322:8:57 value=bool:true
+    param: param #31 324:8:59-348:8:83 name="d"
+      type: type-ref #29 327:8:62-343:8:78 name="Map"
+        arg: type-ref #27 331:8:66-337:8:72 name="String"
+        arg: type-ref #28 339:8:74-342:8:77 name="Int"
+      default: map-lit #30 346:8:81-348:8:83
+    param: param #35 350:8:85-367:8:102 name="e"
+      type: type-ref #33 353:8:88-362:8:97 name="List"
+        arg: type-ref #32 358:8:93-361:8:96 name="Int"
+      default: list-lit #34 365:8:100-367:8:102
+    result: type-ref #36 373:8:108-377:8:112 name="Void"
+  declaration: function-decl #48 383:11:1-465:13:1 name="blocks"
+    param: param #39 394:11:12-406:11:24 name="path"
+      type: type-ref #38 400:11:18-406:11:24 name="String"
+    param: param #42 408:11:26-430:11:48 name="timeout_ms"
+      type: type-ref #40 420:11:38-423:11:41 name="Int"
+      default: literal #41 426:11:44-430:11:48 value=int:1000
+    param: param #46 432:11:50-451:11:69 name="f"
+      type: type-ref #45 435:11:53-451:11:69 name="Fn"
+        arg: type-ref #43 438:11:56-444:11:62 name="String"
+        arg: type-ref #44 446:11:64-450:11:68 name="Void"
+    result: type-ref #47 456:11:74-460:11:78 name="Void"
+  declaration: function-decl #62 466:14:1-540:16:1 name="wrong"
+    param: param #53 476:14:11-490:14:25 name="a"
+      type: type-ref #49 479:14:14-482:14:17 name="Int"
+      default: binary #52 485:14:20-490:14:25 op=plus op-span=487:14:22-488:14:23
+        left: literal #50 485:14:20-486:14:21 value=int:1
+        right: literal #51 489:14:24-490:14:25 value=int:2
+    param: param #56 492:14:27-504:14:39 name="b"
+      type: type-ref #54 495:14:30-498:14:33 name="Int"
+      default: call #55 501:14:36-504:14:39 name="x" piped=false
+    param: param #60 506:14:41-526:14:61 name="c"
+      type: type-ref #57 509:14:44-515:14:50 name="String"
+      default: interpolation #59 518:14:53-526:14:61
+        part: text "a"
+        part: literal #58 522:14:57-523:14:58 value=int:1
+        part: text "b"
+    result: type-ref #61 531:14:66-535:14:70 name="Void"

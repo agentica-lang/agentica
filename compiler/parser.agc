@@ -1587,16 +1587,28 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int) -> Result[ParamsAt]
     after_name = try Base.expect(e, cursor, "name", "a parameter name", false)
     colon = try Base.expect(e, after_name, "colon", "\":\"", false)
     type = try Base.parse_type(e, colon, next_id)
+    default: Ast.Optional[Ast.Expr] = Ast.Optional.Absent
+    after_type = type.pos
+    param_id = type.ids
+    # Any expression is read after "=", so that the checker can say why a default is not a constant. The id of the
+    # parameter follows the ids of its default (post-order).
+    if e.tokens[after_type].kind == "assign"
+      value = try parse_expression(e, after_type + 1, type.ids)
+      default = Ast.Optional.Present(value.node)
+      after_type = value.pos
+      param_id = value.ids
+    end
     nodes = nodes.push(
       Ast.Param(
-        id: type.ids,
+        id: param_id,
         name: e.tokens[cursor].lexeme,
         type: type.node,
-        span: Base.span_from(e, cursor, type.pos),
+        default: default,
+        span: Base.span_from(e, cursor, after_type),
       ),
     )
-    cursor = type.pos
-    next_id = type.ids + 1
+    cursor = after_type
+    next_id = param_id + 1
     if e.tokens[cursor].kind == "comma"
       cursor += 1
       if e.tokens[cursor].kind == "right-paren"

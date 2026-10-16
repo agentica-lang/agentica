@@ -1,0 +1,159 @@
+program 0:1:1-31:1 entry=4 globals=0
+source 0 "default-params.agc" chars=675
+enum "Mode" v0="Fast"/0 v1="Safe"/0
+fn0 "scale" params=5 captures=0 slots=7 @ 0:6:1-9:1
+    step @ 0:7:3-8:1
+    step @ 0:7:10-7:48
+    step @ 0:7:13-7:23
+    step @ 0:7:13-7:14
+    step @ 0:7:17-7:23
+    mul-i r5 r0 r1 @ 0:7:15-7:16
+    to-text r5 r5 @ 0:7:10-7:48
+    const r6 " " @ 0:7:10-7:48
+    concat r5 r5 r6 @ 0:7:10-7:48
+    step @ 0:7:27-7:32
+    move r6 r2 @ 0:7:27-7:32
+    to-text r6 r6 @ 0:7:10-7:48
+    concat r5 r5 r6 @ 0:7:10-7:48
+    const r6 " " @ 0:7:10-7:48
+    concat r5 r5 r6 @ 0:7:10-7:48
+    step @ 0:7:36-7:38
+    move r6 r3 @ 0:7:36-7:38
+    to-text r6 r6 @ 0:7:10-7:48
+    concat r5 r5 r6 @ 0:7:10-7:48
+    const r6 " " @ 0:7:10-7:48
+    concat r5 r5 r6 @ 0:7:10-7:48
+    step @ 0:7:42-7:46
+    move r6 r4 @ 0:7:42-7:46
+    concat r5 r5 r6 @ 0:7:10-7:48
+    return r5 @ 0:7:3-8:1
+    const r5 void @ 0:6:1-9:1
+    return r5 @ 0:6:1-9:1
+fn1 "describe" params=4 captures=0 slots=7 @ 0:10:1-13:1
+    step @ 0:11:3-12:1
+    step @ 0:11:10-11:54
+    step @ 0:11:13-11:18
+    move r4 r0 @ 0:11:13-11:18
+    const r5 " " @ 0:11:10-11:54
+    concat r4 r4 r5 @ 0:11:10-11:54
+    step @ 0:11:22-11:26
+    move r5 r1 @ 0:11:22-11:26
+    to-text r5 r5 @ 0:11:10-11:54
+    concat r4 r4 r5 @ 0:11:10-11:54
+    const r5 " " @ 0:11:10-11:54
+    concat r4 r4 r5 @ 0:11:10-11:54
+    step @ 0:11:30-11:39
+    step @ 0:11:30-11:34
+    move r6 r2 @ 0:11:30-11:34
+    call-builtin r6 "List.size" 1 @ 0:11:30-11:39 0:11:30-11:34
+    move r5 r6 @ 0:11:30-11:39
+    to-text r5 r5 @ 0:11:10-11:54
+    concat r4 r4 r5 @ 0:11:10-11:54
+    const r5 " " @ 0:11:10-11:54
+    concat r4 r4 r5 @ 0:11:10-11:54
+    step @ 0:11:43-11:52
+    step @ 0:11:43-11:47
+    move r6 r3 @ 0:11:43-11:47
+    call-builtin r6 "Map.size" 1 @ 0:11:43-11:52 0:11:43-11:47
+    move r5 r6 @ 0:11:43-11:52
+    to-text r5 r5 @ 0:11:10-11:54
+    concat r4 r4 r5 @ 0:11:10-11:54
+    return r4 @ 0:11:3-12:1
+    const r4 void @ 0:10:1-13:1
+    return r4 @ 0:10:1-13:1
+fn2 "each_line" params=3 captures=0 slots=5 @ 0:14:1-17:1
+    step @ 0:15:3-16:1
+    step @ 0:15:3-15:15
+    step @ 0:15:3-15:4
+    move r3 r2 @ 0:15:3-15:4
+    step @ 0:15:10-15:14
+    move r4 r0 @ 0:15:10-15:14
+    call-value r3 1 @ 0:15:3-15:15
+    const r3 void @ 0:14:1-17:1
+    return r3 @ 0:14:1-17:1
+fn3 "show" params=1 captures=0 slots=2 @ 0:18:1-21:1
+    step @ 0:19:3-20:1
+    step @ 0:19:3-19:13
+    step @ 0:19:8-19:12
+    move r1 r0 @ 0:19:8-19:12
+    call-builtin r1 "puts" 1 @ 0:19:3-19:13 0:19:8-19:12
+    const r1 void @ 0:18:1-21:1
+    return r1 @ 0:18:1-21:1
+fn4 "main" params=0 captures=0 slots=6 entry @ 0:22:1-31:1
+    step @ 0:23:3-24:1
+    step @ 0:23:3-23:17
+    step @ 0:23:8-23:16
+    step @ 0:23:14-23:15
+    const r1 int:1 @ 0:23:14-23:15
+    step @ 0:6:33-6:34
+    const r2 int:2 @ 0:6:33-6:34
+    step @ 0:6:51-6:55
+    step @ 0:6:52-6:55
+    const r4 float:bits:4602678819172646912 @ 0:6:52-6:55
+    neg-f r3 r4 @ 0:6:51-6:52
+    step @ 0:6:68-6:72
+    const r4 true @ 0:6:68-6:72
+    step @ 0:6:89-6:92
+    const r5 "n" @ 0:6:89-6:92
+    call r1 fn0 @ 0:23:8-23:16
+    move r0 r1 @ 0:23:8-23:16
+    call-builtin r0 "puts" 1 @ 0:23:3-23:17 0:23:8-23:16
+    step @ 0:24:3-25:1
+    step @ 0:24:3-24:20
+    step @ 0:24:8-24:19
+    step @ 0:24:14-24:15
+    const r1 int:1 @ 0:24:14-24:15
+    step @ 0:24:17-24:18
+    const r2 int:3 @ 0:24:17-24:18
+    step @ 0:6:51-6:55
+    step @ 0:6:52-6:55
+    const r4 float:bits:4602678819172646912 @ 0:6:52-6:55
+    neg-f r3 r4 @ 0:6:51-6:52
+    step @ 0:6:68-6:72
+    const r4 true @ 0:6:68-6:72
+    step @ 0:6:89-6:92
+    const r5 "n" @ 0:6:89-6:92
+    call r1 fn0 @ 0:24:8-24:19
+    move r0 r1 @ 0:24:8-24:19
+    call-builtin r0 "puts" 1 @ 0:24:3-24:20 0:24:8-24:19
+    step @ 0:25:3-26:1
+    step @ 0:25:3-25:22
+    step @ 0:25:8-25:21
+    step @ 0:25:17-25:20
+    const r1 "x" @ 0:25:17-25:20
+    step @ 0:10:42-10:51
+    enum r2 r2 v1 @ 0:10:42-10:51
+    step @ 0:10:74-10:76
+    list r3 r3 0 @ 0:10:74-10:76
+    step @ 0:10:103-10:105
+    map r4 r4 0 @ 0:10:103-10:105
+    call r1 fn1 @ 0:25:8-25:21
+    move r0 r1 @ 0:25:8-25:21
+    call-builtin r0 "puts" 1 @ 0:25:3-25:22 0:25:8-25:21
+    step @ 0:26:3-29:1
+    step @ 0:26:3-28:6
+    step @ 0:26:13-26:20
+    const r0 "a.txt" @ 0:26:13-26:20
+    step @ 0:14:47-14:51
+    const r1 int:1000 @ 0:14:47-14:51
+    step @ 0:26:22-28:6
+    closure r2 fn5 @ 0:26:22-28:6
+    call r0 fn2 @ 0:26:3-28:6
+    step @ 0:29:3-30:1
+    step @ 0:29:3-29:31
+    step @ 0:29:13-29:20
+    const r0 "a.txt" @ 0:29:13-29:20
+    step @ 0:29:22-29:23
+    const r1 int:5 @ 0:29:22-29:23
+    step @ 0:29:25-29:30
+    closure r2 fn3 @ 0:29:25-29:30
+    call r0 fn2 @ 0:29:3-29:31
+    const r0 void @ 0:22:1-31:1
+    return r0 @ 0:22:1-31:1
+fn5 "block@default-params.agc:26:22" params=1 captures=0 slots=2 @ 0:26:22-28:6
+    step @ 0:27:5-28:1
+    step @ 0:27:5-27:15
+    step @ 0:27:10-27:14
+    move r1 r0 @ 0:27:10-27:14
+    call-builtin r1 "puts" 1 @ 0:27:5-27:15 0:27:10-27:14
+    return r1 @ 0:27:5-28:1

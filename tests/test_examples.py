@@ -64,7 +64,9 @@ class Examples(TestCase):
                 ("inventory.agc", "apple\nkiwi\n"),
                 ("strings.agc", "AGENTICA, HELLO\n8\n5\nAgentica, world\n"),
                 ("blocks.agc", "cocoa: 3.0\ntea: 4.0\nunits: 15\nany empty: true\n"),
-                ("constants.agc", "8 | 32\n5\nfruit | drink\n3\n")]:
+                ("constants.agc", "8 | 32\n5\nfruit | drink\n3\n"),
+                ("defaults.agc", "Level.Info start 0\nLevel.Warn slow 1\na, b, c\na-b-c\none\ntwo\n- one\n- two\n"
+                                 "- three\n")]:
             output, code = self.run_example(name)
             self.assertIsNone(code, name)
             self.assertEqual(output, expected, name)

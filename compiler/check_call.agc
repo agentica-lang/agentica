@@ -9,6 +9,7 @@ import Names from "check_names"
 import Rules from "check_rules"
 import State from "check_state"
 import Types from "check_types"
+import Defaults from "defaults"
 import Source from "source"
 import T from "types"
 
@@ -275,22 +276,30 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State
     )
   end
   signature = entry.unwrap!
-  if node.args.size != signature.params.size
+  shape = signature.shape
+  count = node.args.size
+  if count < shape.required or count > shape.total
     return error(arity_failure(cx, st, node, signature))
   end
   current = st
   index = 0
-  while index < node.args.size
-    out = try State.expr(cx, current, node.args[index], signature.params[index])
+  while index < count
+    out = try State.expr(cx, current, node.args[index], signature.params[Defaults.param_of(shape, count, index)])
     current = out.st
     index += 1
   end
   return ok(State.Out(st: current, type: signature.result))
 end
 
+# A function with defaults says the range of arguments it takes.
 def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, signature: State.Signature) -> String
   name = T.display_name(node.name)
-  message = "\"#{name}\" expects #{signature.params.size} argument(s), found #{node.args.size}"
+  shape = signature.shape
+  wanted = "#{shape.total} argument(s)"
+  if Defaults.has_defaults?(shape)
+    wanted = "#{shape.required} to #{shape.total} arguments"
+  end
+  message = "\"#{name}\" expects #{wanted}, found #{node.args.size}"
   callee = "#{name}(#{T.list_text(signature.params)}) -> #{T.to_text(signature.result)}"
   return State.fail_callee(cx, st, "CHECK-ARITY", message, node.span, callee)
 end

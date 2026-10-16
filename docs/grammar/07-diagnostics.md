@@ -74,6 +74,9 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `x.with(age: 31)` where `x` is not a struct (`CHECK-UNKNOWN-METHOD`) | `with` copies a struct with some fields changed; the value before `.with` must be a struct |
 | `CONFIG.with()` on a constant of a struct type (`CHECK-UNKNOWN-METHOD`; a lowercase `user.with()` is `PARSE-UNEXPECTED-TOKEN`) | `with` needs the fields to change, as in `.with(field: value)`; the help lists the fields |
 | a field named `with` of type `Fn[...]` (`CHECK-REDEFINED-NAME`) | rename the field: `value.with(...)` is always the struct update |
+| a parameter without a default after one with a default, such as `def f(a: Int = 1, b: Int)` (`CHECK-DEFAULT-ORDER`) | give `b` a default, or move the parameters with a default to the end; only a last `Fn` parameter may stay without one, so a block can fill it |
+| a default that is not a constant, such as `b: Int = make()`, `b: Int = a`, `b: Int = 1 + 2`, `b: List[Int] = [1]` (`CHECK-DEFAULT-VALUE`) | a default is a literal, `true`, `false`, `nil`, `[]`, `{}` or an enum variant without a payload; make the parameter required and pass the value at the call |
+| `f()` or `f(1, 2, 3)` for `def f(a: Int, b: Int = 1)` (`CHECK-ARITY`) | a call takes from the number of parameters without a default to the number of all parameters (`1 to 2 arguments`) |
 | `s.chars`, `s.each_char` | `s.split("")`, and `s.at(i)` for one character |
 | `s.matches?(...)`, `s.match?(...)`, `s.scan(...)` | no regular expressions: `contains?`, `starts_with?`, `ends_with?`, `index_of` |
 | `s.gsub`, `s.sub`, `s.substring`, `s.substr`, `s.char_at`, `s.ord`, `n.chr`, `s.empty?`, `s.isdigit` | `s.replace`, `s.slice(start, length)` (length is end - start), `s.at(i)`, `s.code`, `String.from_code(n)`, `s.length == 0`, `s.to_i.ok?` |

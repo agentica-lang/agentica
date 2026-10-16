@@ -38,7 +38,7 @@ def main() -> Void
       events: Channel[LogEvent] = Channel.new(8)
       try collect(events)
       before = Time.now_ms()
-      Logger.warning_meta("disk", {"free": "3 GB"})
+      Logger.warning("disk", {"free": "3 GB"})
       event = try events.recv(0)
       reset()
       try Test.eq(event.level, LogLevel.Warning)

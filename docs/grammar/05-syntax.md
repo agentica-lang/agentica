@@ -18,7 +18,7 @@ import_name      = ( NAME | TYPE_NAME ), [ "as", ( NAME | TYPE_NAME ) ] ;
 function_decl    = "def", NAME, "(", [ parameters ], ")",
                    "->", type, NL, block, "end", NL ;
 parameters       = parameter, { ",", parameter }, [ "," ] ;
-parameter        = NAME, ":", type ;
+parameter        = NAME, ":", type, [ "=", expression ] ;
 
 struct_decl      = "struct", TYPE_NAME, NL,
                    { field_decl }, "end", NL ;
@@ -32,6 +32,8 @@ variant_decl     = [ DOC, NL ], TYPE_NAME, [ "(", type, { ",", type }, ")" ], NL
 qualified_type   = TYPE_NAME, [ ".", TYPE_NAME ] ;
 type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
+
+A parameter may end with a default value, `NAME: type = expression`. The parser takes any expression after `=`, so that the checker can say why a default is not allowed; the rules are in section 6, "Default parameter values". A block parameter (`do |x|`) takes no default.
 
 An import is one of two forms. `import Util from "util"` gives the file the alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names into the file, each with an optional new name after `as`, and the list may span lines, may end with a comma, and may not be empty. `from` and `as` are not reserved words: the parser reads them by their text at those two places, so a parameter or a function called `from` or `as` still works, and `{as}` imports a function called `as`. One line does one thing: `import Util, {area} from "util"` is `PARSE-UNEXPECTED-TOKEN` at the comma. Writing the path first (the form of earlier versions) is `PARSE-UNEXPECTED-TOKEN` at the string, with the help `write import Alias from "path"`. What each form means is in section 5b.
 

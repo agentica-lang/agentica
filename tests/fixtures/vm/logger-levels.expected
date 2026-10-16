@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 4477,
+  "steps": 4483,
   "stdout": [
     "true",
     "no handler named \"console\" is attached",
