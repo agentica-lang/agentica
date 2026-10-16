@@ -454,7 +454,11 @@ static void test_a_final_notice_is_written_straight_or_dropped(void) {
   for (int k = 0; k < 3000; k++) fputs("final notice line\n", file);
   agc_notice_end(&n, AGC_NOTICE_FINAL);
   read_pipe();
-  assert(collected_len == (size_t)3000 * 18 && out()->len == 0);
+  assert(collected_len + out()->len == (size_t)3000 * 18);
+  pump_until((size_t)3000 * 18);
+  assert(out()->len == 0);
+  for (size_t k = 0; k < 3000; k++)
+    assert(memcmp(collected + k * 18, "final notice line\n", 18) == 0);
   finish();
   close_pipe();
   open_pipe();
