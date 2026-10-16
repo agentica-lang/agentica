@@ -84,7 +84,7 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   and the handle rules of §27.1), `site/content/library/concurrency/task.md` and
   `site/content/tour/tasks.md`, `docs/vm/10-io-scheduler.md` §10.2.1 and
   §10.2.2, `docs/vm/10-io-multicore.md` §10.2.3.
-  Done: `Task.map` in `vm/task_map.c` (core layer, a stepper like
+  Done (PR #316): `Task.map` in `vm/task_map.c` (core layer, a stepper like
   `File.each_line`): the caller parks in the call and, each time it wakes,
   collects the items that ended, expires the oldest item whose deadline has
   passed (cancel, slot `error("task: timed out")`), starts items up to `limit`
