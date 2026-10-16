@@ -271,7 +271,7 @@ static agc_map *set_with(agc_vm *vm, const agc_map *set, agc_value x) {
 
 static agc_value builtin_set_new(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  agc_map *set = agc_new_map();
+  agc_map *set = agc_as_set(vm, vm->rt->empty_set);
   agc_list_cursor cursor;
   agc_value item;
   agc_list_cursor_begin(&cursor, agc_as_list(vm, args[0]), 0);
@@ -333,7 +333,7 @@ static agc_value set_filter(agc_vm *vm, agc_value *args, uint32_t span, bool in_
   for (size_t k = 0; k < a->size; k++)
     if (agc_map_get(vm, b, keys[k], &present) == in_b) kept++;
   if (kept == a->size) return args[0];
-  agc_map *out = agc_new_map();
+  agc_map *out = agc_as_set(vm, vm->rt->empty_set);
   for (size_t k = 0; k < a->size; k++) {
     uint64_t hash = agc_key_hash(vm, keys[k]);
     if (agc_map_get_hash(vm, b, hash, keys[k], &present) == in_b)
