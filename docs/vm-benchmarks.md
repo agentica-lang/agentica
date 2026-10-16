@@ -523,29 +523,32 @@ time, so the lexer comes first, then the loader.
 ### Speed pass, second part: the lexer
 
 Before is master (2b5f3f3e, with the profiler of the first part), after is this
-PR, which changes `compiler/lexer.agc` only. Both binaries ran alternately (A B
+PR, which changes `compiler/lexer.agc` only (the files checked are the ones of
+the merged tree, so both binaries lex and check the same text). Both binaries ran alternately (A B
 A B, 5 rounds of 7 to 9 runs for `hello` and gherkin, 5 rounds of 3 for
 `parser.agc`, 3 rounds of 3 for `front_end.agc`, the median of the round
 medians) on an AMD Ryzen 5 3550H (4 cores, 8 threads), Debian 13, gcc 14.2.
-**Measured under load**: the load average was 2.4 to 3.1, because another job
-was building on the machine. The steps do not depend on the load. A first run
-of gherkin at load 1.0 gave 127.0 and 98.5 ms. The resident size went down
+**Measured under load**: the load average was 2.1 to 2.5, because another job
+was building on the machine. The steps do not depend on the load. An earlier
+run of gherkin at load 1.0 gave 127.0 and 98.5 ms. The resident size went down
 (`front_end.agc` 100.5 to 92.0 MB, gherkin 21.4 to 21.1 MB, `hello` 15.0 to
 14.8 MB).
 
 | command | steps before | steps after | `lexer.agc` steps before | after | s before | s after |
 |---|---:|---:|---:|---:|---:|---:|
-| `check examples/hello.agc` | 27,946 | 26,096 | 11,127 | 9,511 | 0.0282 | 0.0284 |
-| `check stdlib/bdd/gherkin.agc` | 2,833,726 | 1,923,585 | 1,647,836 | 867,097 | 0.1238 | 0.0984 |
-| `check compiler/parser.agc` | 11,153,906 | 7,420,407 | 6,682,444 | 3,431,804 | 0.401 | 0.301 |
-| `check compiler/front_end.agc` | 77,090,543 | 54,397,775 | 39,137,343 | 19,429,944 | 3.154 | 2.459 |
+| `check examples/hello.agc` | 27,946 | 26,172 | 11,127 | 9,511 | 0.0272 | 0.0279 |
+| `check stdlib/bdd/gherkin.agc` | 2,833,726 | 1,923,661 | 1,647,836 | 867,097 | 0.1264 | 0.0993 |
+| `check compiler/parser.agc` | 11,153,906 | 7,420,483 | 6,682,444 | 3,431,804 | 0.401 | 0.304 |
+| `check compiler/front_end.agc` | 77,669,291 | 54,796,784 | 39,430,947 | 19,570,418 | 3.137 | 2.413 |
 
-`Source.position` (`source.agc`, 3.2 M steps in `front_end.agc`) is not called
-any more, so the lexer part of `front_end.agc` is 42.4 M steps before and 19.4 M
-after, 54% fewer, and the whole check has 29% fewer. The lexer is 36% of the
-steps of `front_end.agc` now, against 51%. The gherkin check meets the target of
-100 ms (§35.2) on this machine; `hello` is the start-up cost (the loader,
-15 to 16 ms), which this PR does not touch.
+The lexer no longer calls `Source.position` (`source.agc`, 3.2 M steps in
+`front_end.agc`), so the lexer part of `front_end.agc` is 42.7 M steps before
+and 19.6 M after, 54% fewer, and the whole check has 29% fewer. The lexer is
+36% of the steps of `front_end.agc` now, against 51%. The gherkin check takes
+99 ms, which meets the target of 100 ms (§35.2) on this machine, under load;
+`hello` is the start-up cost (the loader, 15 to 16 ms, and 4 ms of
+`agentica --version`), which this PR does not touch, and it moved by less than
+1% (the tables are built when the program starts).
 
 The lexer alone, on the 112 files of `compiler/` and `stdlib/` (989,891
 characters), a program that calls `Lexer.lex` on each text:

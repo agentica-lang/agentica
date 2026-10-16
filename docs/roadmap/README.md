@@ -122,9 +122,9 @@ and the other features after the JIT.
    [vm-benchmarks](../vm-benchmarks.md#front-end-post-bootstrap-row-3)).
    **Second part, the lexer, done (2026-10-16, PR #PRNUM):** the lexer was
    51% of the steps of a check of the whole front end, and its steps are
-   halved (`lexer.agc` 39.1 M to 19.4 M in `check compiler/front_end.agc`; the
+   halved (`lexer.agc` 39.4 M to 19.6 M in `check compiler/front_end.agc`; the
    lexer alone 52 to 24 steps for each character), so `check
-   stdlib/bdd/gherkin.agc` takes 98 ms, not 124 (measured under load). Its
+   stdlib/bdd/gherkin.agc` takes 99 ms, not 126 (measured under load). Its
    tables are module constants, which is 44b of
    [§44.12](../future/44-module-constants.md#4412-implementation-plan).
    Numbers, and what was tried, in
