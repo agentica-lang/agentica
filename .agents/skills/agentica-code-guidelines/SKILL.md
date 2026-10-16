@@ -56,7 +56,7 @@ Marks: `[CODE]` means the front end refuses the code with that diagnostic. `[tes
 ## Pipes
 
 - Three or more steps on one value are a pipe chain in parentheses, one `|> f(args)` per line, not `x = f(x, args)` repeated. Review checks it; nothing else does.
-- Start the chain with a bare value (a name or a literal), not a call. A chain of one step is a plain call: `f(x)`, not `x |> f()`.
+- Start the chain with the value: a name, a literal, or the call that makes it (`header(version)`). A chain of one step is a plain call: `f(x)`, not `x |> f()`.
 - Pipe into your own functions only. A builtin with a method form uses the dot, and a pipe into it is refused `[CHECK-PIPE-METHOD]`: `xs.sort.join(",")`.
 - Use a pipe instead of nested calls three deep: `h(g(f(x)))` is `x |> f() |> g() |> h()`.
 

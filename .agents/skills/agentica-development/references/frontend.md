@@ -147,7 +147,7 @@ change is recorded in `docs/vm-benchmarks.md`.
 - A function that fails returns a `Result` whose error is a packed diagnostic; `try` stops at the first one. There are no exceptions in a stage, and a value that cannot happen is a `*-INTERNAL` diagnostic.
 - The VM call depth is 10,000 frames: recurse on the tree only with a bounded depth (`CHECK-TOO-DEEP` bounds the checker and lowering), or use an explicit stack and loops.
 - `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`); a comparison of types needs `Types.same`, since an enum cannot be compared with `==`.
-- Build lists with `push` and strings with `join`; `a + [x]` in a loop is quadratic.
+- Build lists with `push` and strings with `join`; `s = s + piece` in a loop is quadratic.
 
 
 ## Lexer gotcha: stray NL tokens

@@ -320,7 +320,7 @@ end
 
 ## Pipes
 
-Three or more steps on one value: a chain in parentheses, a bare value first, one step per line.
+Three or more steps on one value: a chain in parentheses, the value first (a name, a literal or the call that makes it), one step per line.
 
 ```ruby
 # bad
