@@ -236,10 +236,12 @@ export struct CaseStmt
   span: Source.Span
 end
 
-## One arm of a case: a pattern and a body.
+## One arm of a case: a pattern, an optional guard (`pattern if condition ->`) and a body. The guard is a Bool
+## expression that may read the names the pattern binds.
 export struct CaseArm
   id: Int
   pattern: Pattern
+  guard: Optional[Expr]
   body: List[Stmt]
   span: Source.Span
 end
@@ -264,13 +266,22 @@ export struct LiteralPattern
   span: Source.Span
 end
 
-## An enum variant pattern, or ok(...) and error(...) as Result variants. A binding is Absent for _.
+## An enum variant pattern, or ok(...) and error(...) as Result variants, with one slot for each payload position.
 export struct VariantPattern
   id: Int
   enum_name: String
   variant_name: String
-  bindings: List[Optional[String]]
+  slots: List[Slot]
   span: Source.Span
+end
+
+## One payload position of a variant pattern: a name that binds the value, `_` that drops it, or a nested pattern (a
+## literal, or another variant, to any depth). A name and `_` have no node id of their own, so a pattern with no nested
+## part numbers the nodes of the tree as it did before nested patterns existed.
+export enum Slot
+  Bind(String)
+  Skip
+  Nested(Pattern)
 end
 
 ## An expression.

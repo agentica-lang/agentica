@@ -1,0 +1,5 @@
+def main() -> Void
+  case x
+    Shape.Pair(1, Option.Some(a),) -> puts(1)
+  end
+end

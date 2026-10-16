@@ -1,0 +1,36 @@
+enum Option
+  Some(Int)
+  None
+end
+
+enum Shape
+  Dot
+  Circle(Int)
+  Pair(Int, Int)
+  Boxed(Option)
+end
+
+def describe(shape: Shape, r: Result[Option]) -> String
+  case shape
+    Shape.Circle(0) -> return "empty"
+    Shape.Circle(n) if n > 100 and n < 1000 -> return "big"
+    Shape.Pair(1, y) if y != 2 ->
+      puts(y)
+      return "one"
+    Shape.Pair(-2, -2.5) -> return "negative"
+    Shape.Boxed(Option.Some(9)) -> return "nine"
+    Shape.Boxed(Option.Some(n)) if n > 5 -> return "some"
+    Shape.Boxed(Option.None) -> return "none"
+    _ if r.ok? -> return "ok"
+    _ -> return "other"
+  end
+end
+
+def results(r: Result[Option]) -> Void
+  case r
+    ok(Option.Some(n)) -> puts(n)
+    ok(Option.None) -> puts(0)
+    error("boom") -> puts("boom")
+    error(_) -> puts("error")
+  end
+end

@@ -68,9 +68,25 @@ export struct PatternAt
   ids: Int
 end
 
-struct BindingsAt
-  names: List[Ast.Optional[String]]
+# The payload slots of a variant pattern, with the next position and the next free node id.
+struct SlotsAt
+  slots: List[Ast.Slot]
   pos: Int
+  ids: Int
+end
+
+# One slot with the next position and the next free node id.
+struct SlotAt
+  slot: Ast.Slot
+  pos: Int
+  ids: Int
+end
+
+# Where a pattern item ends in the look-ahead: the index after a leaf or after the `(` of a variant that opens a list
+# of slots, or -1 when the tokens are no pattern.
+struct Scanned
+  next: Int
+  opens: Bool
 end
 
 ## The deepest nesting the parser accepts (PARSE-TOO-DEEP beyond it). Each statement, expression, prefix operator and
@@ -367,11 +383,17 @@ export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   return error(unexpected(e, pos, "expected a pattern"))
 end
 
-## Whether the tokens at pos start a case arm, that is, a pattern followed by ->. A case body ends there, because arms
-## have no closing token.
+## Whether the tokens at pos start a case arm, that is, a pattern, an optional `if` guard and ->. A case body ends
+## there, because arms have no closing token. A guard is looked for up to the end of its line.
 export def case_arm_start?(e: Env, pos: Int) -> Bool
   stop = pattern_end(e, pos)
-  return stop >= 0 and kind_at(e, stop) == "arrow"
+  if stop < 0
+    return false
+  end
+  if kind_at(e, stop) == "if"
+    return guard_arrow(e, stop + 1) >= 0
+  end
+  return kind_at(e, stop) == "arrow"
 end
 
 def is_kind(e: Env, pos: Int, kind: String) -> Bool
@@ -423,30 +445,63 @@ def decorated?(lexeme: String) -> Bool
   return lexeme.ends_with?("?") or lexeme.ends_with?("!")
 end
 
-# A binding of `_` is Absent: it binds no name.
-def binding_name(e: Env, pos: Int) -> Result[Ast.Optional[String]]
-  advanced = try expect(e, pos, "name", "a pattern binding or _", false)
-  lexeme = e.tokens[pos].lexeme
-  if lexeme == "_"
-    return ok(Ast.Optional.Absent)
+# One payload slot: a name binds the value, `_` drops it, and a literal, a variant, ok(...) or error(...) is a nested
+# pattern. A nested variant counts one level of nesting, which bounds the calls of the parser on a deep pattern.
+def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
+  token = e.tokens[pos]
+  kind = token.kind
+  if kind == "name"
+    lexeme = token.lexeme
+    if (lexeme == "ok" or lexeme == "error") and is_kind(e, pos + 1, "left-paren")
+      return nested_slot(e, pos, ids)
+    end
+    advanced = try expect(e, pos, "name", "a pattern binding or _", false)
+    slot = Ast.Slot.Bind(lexeme)
+    if lexeme == "_"
+      slot = Ast.Slot.Skip
+    end
+    return ok(SlotAt(slot: slot, pos: advanced, ids: ids))
   end
-  return ok(Ast.Optional.Present(lexeme))
+  if kind == "integer" or kind == "float" or kind == "string" or kind == "true" or kind == "false" or kind == "nil"
+    return nested_slot(e, pos, ids)
+  end
+  if kind == "type-name"
+    return nested_slot(e, pos, ids)
+  end
+  if kind == "minus" and (kind_at(e, pos + 1) == "integer" or kind_at(e, pos + 1) == "float")
+    return nested_slot(e, pos, ids)
+  end
+  return error(found(e, pos, "a pattern binding or _"))
 end
 
-def parse_pattern_bindings(e: Env, pos: Int, empty_help: String) -> Result[BindingsAt]
+def nested_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
+  inner = try enter(e, pos)
+  parsed = try parse_pattern(inner, pos, ids)
+  return ok(SlotAt(slot: Ast.Slot.Nested(parsed.node), pos: parsed.pos, ids: parsed.ids))
+end
+
+# The slots of the parentheses that open at pos: one or more, separated by commas.
+def parse_slots(e: Env, pos: Int, ids: Int, empty_help: String) -> Result[SlotsAt]
   if is_kind(e, pos + 1, "right-paren")
     return error(unexpected_help(e, pos + 1, "a pattern with parentheses needs a binding or _", empty_help))
   end
-  names: List[Ast.Optional[String]] = []
+  slots: List[Ast.Slot] = []
   cursor = pos + 1
-  names = names.push(try binding_name(e, cursor))
-  cursor += 1
-  while is_kind(e, cursor, "comma")
-    names = names.push(try binding_name(e, cursor + 1))
-    cursor += 2
+  next_id = ids
+  looping = true
+  while looping
+    parsed = try parse_slot(e, cursor, next_id)
+    slots = slots.push(parsed.slot)
+    cursor = parsed.pos
+    next_id = parsed.ids
+    if is_kind(e, cursor, "comma")
+      cursor += 1
+    else
+      looping = false
+    end
   end
   cursor = try expect(e, cursor, "right-paren", ")", false)
-  return ok(BindingsAt(names: names, pos: cursor))
+  return ok(SlotsAt(slots: slots, pos: cursor, ids: next_id))
 end
 
 def pattern_node(
@@ -454,7 +509,7 @@ def pattern_node(
   id: Int,
   enum_name: String,
   variant_name: String,
-  bindings: List[Ast.Optional[String]],
+  slots: List[Ast.Slot],
   start: Int,
   cursor: Int,
 ) -> Ast.Pattern
@@ -463,7 +518,7 @@ def pattern_node(
       id: id,
       enum_name: enum_name,
       variant_name: variant_name,
-      bindings: bindings,
+      slots: slots,
       span: span_from(e, start, cursor),
     ),
   )
@@ -492,13 +547,14 @@ def parse_name_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     return ok(PatternAt(node: node, pos: pos + 1, ids: ids + 1))
   end
   if (lexeme == "ok" or lexeme == "error") and is_kind(e, pos + 1, "left-paren")
-    parsed = try parse_pattern_bindings(e, pos + 1, "write #{lexeme}(_) to match without binding the value")
+    parsed = try parse_slots(e, pos + 1, ids, "write #{lexeme}(_) to match without binding the value")
     variant = "Err"
     if lexeme == "ok"
       variant = "Ok"
     end
-    node = pattern_node(e, ids, "Result", variant, parsed.names, pos, parsed.pos)
-    return ok(PatternAt(node: node, pos: parsed.pos, ids: ids + 1))
+    # The node follows the ids of its nested patterns (post-order); with none, its id is `ids`, as it always was.
+    node = pattern_node(e, parsed.ids, "Result", variant, parsed.slots, pos, parsed.pos)
+    return ok(PatternAt(node: node, pos: parsed.pos, ids: parsed.ids + 1))
   end
   if lexeme == "when"
     return error(
@@ -542,33 +598,21 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     variant_name = e.tokens[cursor + 1].lexeme
     cursor = last
   end
-  bindings: List[Ast.Optional[String]] = []
+  slots: List[Ast.Slot] = []
+  next_id = ids
   if is_kind(e, cursor, "left-paren")
-    parsed = try parse_pattern_bindings(e, cursor, variant_help(enum_name, variant_name))
-    bindings = parsed.names
+    parsed = try parse_slots(e, cursor, ids, variant_help(enum_name, variant_name))
+    slots = parsed.slots
     cursor = parsed.pos
+    next_id = parsed.ids
   end
-  node = pattern_node(e, ids, enum_name, variant_name, bindings, pos, cursor)
-  return ok(PatternAt(node: node, pos: cursor, ids: ids + 1))
+  node = pattern_node(e, next_id, enum_name, variant_name, slots, pos, cursor)
+  return ok(PatternAt(node: node, pos: cursor, ids: next_id + 1))
 end
 
-# The case_arm_start? helpers look ahead without consuming; they return the
-# index after the pattern, or -1.
-def binders_end(e: Env, at: Int) -> Int
-  cursor = at + 1
-  while kind_at(e, cursor) == "name"
-    if kind_at(e, cursor + 1) == "comma"
-      cursor += 2
-    elsif kind_at(e, cursor + 1) == "right-paren"
-      return cursor + 2
-    else
-      return -1
-    end
-  end
-  return -1
-end
-
-def variant_end(e: Env, index: Int) -> Int
+# The case_arm_start? helpers look ahead without consuming; they return the index after the pattern, or -1.
+# The index after the segments of a qualified variant (`Enum.Variant`, or one more segment for a module alias), or -1.
+def variant_head_end(e: Env, index: Int) -> Int
   at = index + 1
   segments = 1
   while kind_at(e, at) == "dot"
@@ -581,36 +625,86 @@ def variant_end(e: Env, index: Int) -> Int
   if segments < 2
     return -1
   end
-  if kind_at(e, at) == "left-paren"
-    return binders_end(e, at)
-  end
   return at
 end
 
-def pattern_end(e: Env, start: Int) -> Int
-  token = e.tokens[start]
+# One item of a pattern at `at`: a leaf ends at `next`; a variant with parentheses `opens` a list of slots, and `next`
+# is the index after its `(`. A name is an item only inside such a list, where it binds (a `_` is one anywhere).
+def scan_item(e: Env, at: Int, inside: Bool) -> Scanned
+  token = e.tokens[at]
   kind = token.kind
   if kind == "name"
-    if token.lexeme == "_"
-      return start + 1
+    if (token.lexeme == "ok" or token.lexeme == "error") and kind_at(e, at + 1) == "left-paren"
+      return Scanned(next: at + 2, opens: true)
     end
-    if (token.lexeme == "ok" or token.lexeme == "error") and kind_at(e, start + 1) == "left-paren"
-      return binders_end(e, start + 1)
+    if token.lexeme == "_" or inside
+      return Scanned(next: at + 1, opens: false)
     end
-    return -1
-  end
-  if kind == "integer" or kind == "float" or kind == "string" or kind == "true" or kind == "false" or kind == "nil"
-    return start + 1
-  end
-  if kind == "minus"
-    following = kind_at(e, start + 1)
+  elsif kind == "integer" or kind == "float" or kind == "string" or kind == "true" or kind == "false" or kind == "nil"
+    return Scanned(next: at + 1, opens: false)
+  elsif kind == "minus"
+    following = kind_at(e, at + 1)
     if following == "integer" or following == "float"
-      return start + 2
+      return Scanned(next: at + 2, opens: false)
     end
-    return -1
+  elsif kind == "type-name"
+    head = variant_head_end(e, at)
+    if head >= 0 and kind_at(e, head) == "left-paren"
+      return Scanned(next: head + 1, opens: true)
+    elsif head >= 0
+      return Scanned(next: head, opens: false)
+    end
   end
-  if kind == "type-name"
-    return variant_end(e, start)
+  return Scanned(next: -1, opens: false)
+end
+
+# The index after the pattern that starts at `start`, or -1. One pass over the tokens with a count of open
+# parentheses, no recursion: a long run of nested patterns costs no stack here, before the parser has counted its
+# depth.
+def pattern_end(e: Env, start: Int) -> Int
+  cursor = start
+  open = 0
+  while true
+    item = scan_item(e, cursor, open > 0)
+    if item.next < 0
+      return -1
+    end
+    cursor = item.next
+    if item.opens
+      open += 1
+    else
+      closing = true
+      while closing
+        if open == 0
+          return cursor
+        end
+        following = kind_at(e, cursor)
+        if following == "comma"
+          cursor += 1
+          closing = false
+        elsif following == "right-paren"
+          cursor += 1
+          open -= 1
+        else
+          return -1
+        end
+      end
+    end
+  end
+  return -1
+end
+
+# The index of the `->` that ends a guard on its line, or -1. A guard is an expression, so no `->` is inside it.
+def guard_arrow(e: Env, from: Int) -> Int
+  cursor = from
+  while true
+    kind = kind_at(e, cursor)
+    if kind == "arrow"
+      return cursor
+    elsif kind == "NL" or kind == "EOF"
+      return -1
+    end
+    cursor += 1
   end
   return -1
 end

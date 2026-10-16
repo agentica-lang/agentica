@@ -110,10 +110,23 @@ end
 
 def arm_names(written: List[String], arms: List[Ast.CaseArm], watched: Set[String]) -> List[String]
   for arm in arms
-    case arm.pattern
-      Ast.Pattern.Variant(pattern) -> written = named(written, pattern.enum_name, watched)
-      _ -> written = written
-    end
+    written = pattern_names(written, arm.pattern, watched)
   end
   return written
+end
+
+# The enums a pattern names: its own, and those of the variants nested in its slots.
+def pattern_names(written: List[String], pattern: Ast.Pattern, watched: Set[String]) -> List[String]
+  case pattern
+    Ast.Pattern.Variant(node) ->
+      written = named(written, node.enum_name, watched)
+      for slot in node.slots
+        case slot
+          Ast.Slot.Nested(inner) -> written = pattern_names(written, inner, watched)
+          _ -> written = written
+        end
+      end
+      return written
+    _ -> return written
+  end
 end

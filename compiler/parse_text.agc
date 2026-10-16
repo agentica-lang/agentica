@@ -354,8 +354,8 @@ def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Patt
       head(at, role, "literal-pattern", node.id, node.span, " value=#{value_text(node.value)}"),
     )
     Ast.Pattern.Variant(node) ->
-      names = node.bindings.map do |binding| binding_text(binding) end
-      return out.push(
+      names = node.slots.map do |slot| slot_text(slot) end
+      lines = out.push(
         head(
           at,
           role,
@@ -365,13 +365,22 @@ def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Patt
           " enum=#{Text.quote(node.enum_name)} variant=#{Text.quote(node.variant_name)} bindings=#{list_text(names)}",
         ),
       )
+      for slot in node.slots
+        case slot
+          Ast.Slot.Nested(inner) -> lines = print_pattern(lines, deeper(at), "nested", inner)
+          _ -> lines = lines
+        end
+      end
+      return lines
   end
 end
 
-def binding_text(binding: Ast.Optional[String]) -> String
-  case binding
-    Ast.Optional.Present(name) -> return Text.quote(name)
-    Ast.Optional.Absent -> return "-"
+# A name is quoted, `_` is -, and a nested pattern is * (its own line follows the variant, in the order of the slots).
+def slot_text(slot: Ast.Slot) -> String
+  case slot
+    Ast.Slot.Bind(name) -> return Text.quote(name)
+    Ast.Slot.Skip -> return "-"
+    Ast.Slot.Nested(inner) -> return "*"
   end
 end
 
@@ -384,6 +393,10 @@ end
 def print_arm(out: List[String], at: Margin, arm: Ast.CaseArm) -> List[String]
   lines = out.push(head(at, "arm", "case-arm", arm.id, arm.span, ""))
   lines = print_pattern(lines, deeper(at), "pattern", arm.pattern)
+  case arm.guard
+    Ast.Optional.Present(condition) -> lines = print_expr(lines, deeper(at), "guard", condition)
+    Ast.Optional.Absent -> lines = lines
+  end
   return print_stmts(lines, deeper(at), "body", arm.body)
 end
 

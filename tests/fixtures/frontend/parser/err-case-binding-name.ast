@@ -1,1 +1,11 @@
-ERROR PARSE-UNEXPECTED-TOKEN 44:3:17-45:3:18 "expected a pattern binding or _, found \"1\"" -
+program #10 0:1:1-68:6:1
+  declaration: function-decl #9 0:1:1-68:6:1 name="main"
+    result: type-ref #0 14:1:15-18:1:19 name="Void"
+    body: case-stmt #8 21:2:3-64:5:1
+      value: name-ref #1 26:2:8-27:2:9 name="x"
+      arm: case-arm #7 32:3:5-58:4:1
+        pattern: variant-pattern #3 32:3:5-46:3:19 enum="Option" variant="Some" bindings=[*]
+          nested: literal-pattern #2 44:3:17-45:3:18 value=int:1
+        body: expr-stmt #6 50:3:23-58:4:1
+          value: call #5 50:3:23-57:3:30 name="puts" piped=false
+            arg: literal #4 55:3:28-56:3:29 value=int:1

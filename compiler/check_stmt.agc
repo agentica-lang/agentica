@@ -351,11 +351,12 @@ def check_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.S
   return ok(current)
 end
 
+# A guarded arm covers nothing: it may fail at run time, so it adds no variant, no literal and no catch-all to `arms`.
 def check_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, value_type: T.Type, arms: Arms) -> Result[ArmDone]
   case arm.pattern
     Ast.Pattern.Wildcard(pattern) ->
-      body = try arm_body(cx, st, arm.body)
-      return ok(ArmDone(st: body, arms: arms.with(wildcard: true)))
+      body = try arm_body(cx, st, arm)
+      return ok(ArmDone(st: body, arms: arms.with(wildcard: arms.wildcard or !guarded?(arm))))
     Ast.Pattern.Literal(pattern) -> return check_literal_arm(cx, st, arm, pattern, value_type, arms)
     Ast.Pattern.Variant(pattern) -> return check_variant_arm(cx, st, arm, pattern, value_type, arms)
   end
@@ -369,6 +370,19 @@ def check_literal_arm(
   value_type: T.Type,
   arms: Arms,
 ) -> Result[ArmDone]
+  try check_literal(cx, st, pattern, value_type)
+  if arms.literals.any? do |seen: Ast.LitValue| same_literal(seen, pattern.value) end
+    return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate literal case arm", arm.span))
+  end
+  body = try arm_body(cx, st, arm)
+  if guarded?(arm)
+    return ok(ArmDone(st: body, arms: arms))
+  end
+  return ok(ArmDone(st: body, arms: arms.with(literals: arms.literals.push(pattern.value))))
+end
+
+# A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested.
+def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[Bool]
   pattern_type = literal_type(pattern.value)
   if !Types.primitive?(value_type) or !T.same(value_type, pattern_type)
     return error(
@@ -381,11 +395,7 @@ def check_literal_arm(
       ),
     )
   end
-  if arms.literals.any? do |seen: Ast.LitValue| same_literal(seen, pattern.value) end
-    return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate literal case arm", arm.span))
-  end
-  body = try arm_body(cx, st, arm.body)
-  return ok(ArmDone(st: body, arms: arms.with(literals: arms.literals.push(pattern.value))))
+  return ok(true)
 end
 
 def check_variant_arm(
@@ -404,44 +414,97 @@ def check_variant_arm(
     return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate enum variant arm", arm.span))
   end
   types = payload.unwrap!
-  if pattern.bindings.size != types.size
+  bound = try bind_pattern(cx, State.enter(st), pattern, types)
+  body = try check_arm_body(cx, bound, arm)
+  # Only an arm that cannot fail covers its variant: no guard, and nothing but names and _ in the payload.
+  if guarded?(arm) or !irrefutable?(pattern)
+    return ok(ArmDone(st: State.leave(body, st), arms: arms))
+  end
+  return ok(ArmDone(st: State.leave(body, st), arms: arms.with(covered: arms.covered.push(pattern.variant_name))))
+end
+
+def guarded?(arm: Ast.CaseArm) -> Bool
+  case arm.guard
+    Ast.Optional.Present(condition) -> return true
+    Ast.Optional.Absent -> return false
+  end
+end
+
+# A pattern with no literal and no variant in its payload matches every value of its variant.
+def irrefutable?(pattern: Ast.VariantPattern) -> Bool
+  return pattern.slots.all? do |slot: Ast.Slot| !nested?(slot) end
+end
+
+def nested?(slot: Ast.Slot) -> Bool
+  case slot
+    Ast.Slot.Nested(inner) -> return true
+    _ -> return false
+  end
+end
+
+# Checks the slots of a variant pattern against the payload types and introduces the names in the scope of the arm; a
+# Void payload must be discarded with _. A nested pattern is checked against the type of its position.
+def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types: List[T.Type]) -> Result[State.St]
+  if pattern.slots.size != types.size
     return error(
       State.fail(
         cx,
         st,
         "CHECK-ARITY",
-        "variant pattern expects #{types.size} binding(s), found #{pattern.bindings.size}",
+        "variant pattern expects #{types.size} binding(s), found #{pattern.slots.size}",
         pattern.span,
       ),
     )
   end
-  bound = try bind_pattern(cx, State.enter(st), pattern, types)
-  body = try check_block(cx, bound, arm.body)
-  return ok(ArmDone(st: State.leave(body, st), arms: arms.with(covered: arms.covered.push(pattern.variant_name))))
-end
-
-# Introduces the names of a pattern; a Void payload must be discarded with _.
-def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types: List[T.Type]) -> Result[State.St]
   current = st
   index = 0
   while index < types.size
-    case pattern.bindings[index]
-      Ast.Optional.Present(name) ->
+    case pattern.slots[index]
+      Ast.Slot.Bind(name) ->
         if T.is(types[index], "Void")
           return error(
             State.fail(cx, current, "CHECK-VOID-TYPE", "a Void payload must be discarded with _", pattern.span),
           )
         end
         current = try State.introduce(cx, current, name, types[index], pattern.span, false)
-      Ast.Optional.Absent -> current = current
+      Ast.Slot.Skip -> current = current
+      Ast.Slot.Nested(inner) -> current = try check_nested(cx, current, inner, types[index])
     end
     index += 1
   end
   return ok(current)
 end
 
-def arm_body(cx: State.Cx, st: State.St, body: List[Ast.Stmt]) -> Result[State.St]
-  inner = try check_block(cx, State.enter(st), body)
+# A pattern in a payload position of the given type: a literal of that type, or a variant of the enum it has.
+def check_nested(cx: State.Cx, st: State.St, inner: Ast.Pattern, type: T.Type) -> Result[State.St]
+  case inner
+    Ast.Pattern.Literal(pattern) ->
+      try check_literal(cx, st, pattern, type)
+      return ok(st)
+    Ast.Pattern.Variant(pattern) ->
+      payload = payload_types(cx, pattern, type)
+      if !payload.ok?
+        return error(variant_mismatch(cx, st, pattern, type))
+      end
+      return bind_pattern(cx, st, pattern, payload.unwrap!)
+    Ast.Pattern.Wildcard(pattern) -> return ok(st)
+  end
+end
+
+# The guard, a Bool that may read the names of the pattern, then the body, in the scope of the arm that `bound` opened.
+def check_arm_body(cx: State.Cx, bound: State.St, arm: Ast.CaseArm) -> Result[State.St]
+  current = bound
+  case arm.guard
+    Ast.Optional.Present(condition) ->
+      checked = try State.expr(cx, bound, condition, T.Type.Bool)
+      current = checked.st
+    Ast.Optional.Absent -> current = bound
+  end
+  return check_block(cx, current, arm.body)
+end
+
+def arm_body(cx: State.Cx, st: State.St, arm: Ast.CaseArm) -> Result[State.St]
+  inner = try check_arm_body(cx, State.enter(st), arm)
   return ok(State.leave(inner, st))
 end
 

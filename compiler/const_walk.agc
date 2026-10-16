@@ -138,7 +138,7 @@ end
 def case_children(node: Ast.CaseStmt) -> List[Node]
   out: List[Node] = [Node.Expr(node.value)]
   for arm in node.arms
-    out = out.concat(stmts(arm.body))
+    out = out.concat(optional_value(arm.guard)).concat(stmts(arm.body))
   end
   return out
 end
