@@ -8,31 +8,20 @@ import State from "check_state"
 import Source from "source"
 import Types from "types"
 
+struct Expansion
+  ref: Ast.TypeRef
+  remaining: Int
+end
+
 ## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item
 ## of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or
 ## CHECK-UNKNOWN-TYPE.
 export def resolve_type(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
-  name = ref.name
-  args = ref.args
-  if args.size == 0
-    return resolve_plain(cx, st, ref, completion)
+  if !contains_alias(cx, ref)
+    return resolve_expanded(cx, st, ref, completion)
   end
-  if name == "Result" and args.size == 1
-    return ok(Types.Type.Result(try resolve_type(cx, st, args[0], true)))
-  elsif name == "Task" and args.size == 1
-    return ok(Types.Type.Task(try resolve_type(cx, st, args[0], true)))
-  elsif name == "Channel" and args.size == 1
-    return ok(Types.Type.Channel(try resolve_type(cx, st, args[0], false)))
-  elsif name == "Fn"
-    return resolve_function(cx, st, args)
-  elsif name == "List" and args.size == 1
-    return ok(Types.Type.List(try resolve_type(cx, st, args[0], false)))
-  elsif name == "Map" and args.size == 2
-    return resolve_map(cx, st, args)
-  elsif name == "Set" and args.size == 1
-    return resolve_set(cx, st, args[0])
-  end
-  return resolve_generic(cx, st, ref)
+  expanded = try expand_alias(cx, st, ref, [], State.nesting_limit(), ref.span)
+  return resolve_expanded(cx, st, expanded.ref, completion)
 end
 
 ## The types of several type references, in order.
@@ -42,6 +31,11 @@ export def resolve_all(cx: State.Cx, st: State.St, refs: List[Ast.TypeRef]) -> R
     out = out.push(try resolve_type(cx, st, ref, false))
   end
   return ok(out)
+end
+
+export def alias_target_text(cx: State.Cx, st: State.St, name: String) -> Result[String]
+  target = try resolve_type(cx, st, cx.aliases[name], true)
+  return ok(Types.to_text(target))
 end
 
 ## True for Int and String, the types of a Map key or a Set element.
@@ -185,6 +179,131 @@ export def unify(
   return ok(substitutions)
 end
 
+def contains_alias(cx: State.Cx, ref: Ast.TypeRef) -> Bool
+  if !cx.type_params.any? do |item: String| item == ref.name end and cx.aliases.has_key?(ref.name)
+    return true
+  end
+  return ref.args.any? do |arg: Ast.TypeRef| contains_alias(cx, arg) end
+end
+
+def expand_alias(
+  cx: State.Cx,
+  st: State.St,
+  ref: Ast.TypeRef,
+  seen: List[String],
+  remaining: Int,
+  limit_span: Source.Span,
+) -> Result[Expansion]
+  if remaining <= 0
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-TOO-DEEP",
+        "expanded type contains more than #{State.nesting_limit()} type references",
+        limit_span,
+        "simplify the type or split its aliases",
+      ),
+    )
+  end
+  left = remaining - 1
+  name = ref.name
+  parameter = cx.type_params.any? do |item: String| item == name end
+  if !parameter and cx.aliases.has_key?(name)
+    if ref.args.size > 0
+      return error(
+        State.fail(
+          cx,
+          st,
+          "CHECK-UNKNOWN-TYPE",
+          "type alias #{Types.display_name(name)} takes no type arguments",
+          ref.span,
+        ),
+      )
+    end
+    if seen.any? do |entry: String| entry == name end
+      cycle = cycle_text(seen, name)
+      return error(
+        State.fail_help(
+          cx,
+          st,
+          "CHECK-TYPE-ALIAS-CYCLE",
+          "type alias has a cycle",
+          ref.span,
+          "the cycle is #{cycle}",
+        ),
+      )
+    end
+    if seen.size >= State.nesting_limit()
+      return error(
+        State.fail_help(
+          cx,
+          st,
+          "CHECK-TOO-DEEP",
+          "nesting is deeper than #{State.nesting_limit()} levels",
+          ref.span,
+          "split the type aliases into a shallower chain",
+        ),
+      )
+    end
+    budget_span = limit_span
+    if seen.size == 0
+      budget_span = ref.span
+    end
+    expanded = try expand_alias(cx, st, cx.aliases[name], seen.push(name), left, budget_span)
+    return ok(Expansion(ref: relocate(expanded.ref, ref.span), remaining: expanded.remaining))
+  end
+  args: List[Ast.TypeRef] = []
+  for arg in ref.args
+    expanded = try expand_alias(cx, st, arg, seen, left, limit_span)
+    args = args.push(expanded.ref)
+    left = expanded.remaining
+  end
+  return ok(Expansion(ref: ref.with(args: args), remaining: left))
+end
+
+def relocate(ref: Ast.TypeRef, span: Source.Span) -> Ast.TypeRef
+  args = ref.args.map do |arg: Ast.TypeRef| relocate(arg, span) end
+  return ref.with(args: args, span: span)
+end
+
+def cycle_text(seen: List[String], repeated: String) -> String
+  names: List[String] = []
+  copying = false
+  for name in seen
+    if copying or name == repeated
+      copying = true
+      names = names.push(name)
+    end
+  end
+  names = names.push(repeated).map do |name: String| Types.display_name(name) end
+  return names.join(" -> ")
+end
+
+def resolve_expanded(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
+  name = ref.name
+  args = ref.args
+  if args.size == 0
+    return resolve_plain(cx, st, ref, completion)
+  end
+  if name == "Result" and args.size == 1
+    return ok(Types.Type.Result(try resolve_expanded(cx, st, args[0], true)))
+  elsif name == "Task" and args.size == 1
+    return ok(Types.Type.Task(try resolve_expanded(cx, st, args[0], true)))
+  elsif name == "Channel" and args.size == 1
+    return ok(Types.Type.Channel(try resolve_expanded(cx, st, args[0], false)))
+  elsif name == "Fn"
+    return resolve_function(cx, st, args)
+  elsif name == "List" and args.size == 1
+    return ok(Types.Type.List(try resolve_expanded(cx, st, args[0], false)))
+  elsif name == "Map" and args.size == 2
+    return resolve_map(cx, st, args)
+  elsif name == "Set" and args.size == 1
+    return resolve_set(cx, st, args[0])
+  end
+  return resolve_generic(cx, st, ref)
+end
+
 # The type resolved when it has no arguments: a type parameter, Void, a primitive, a handle, an enum or a struct.
 def resolve_plain(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
   name = ref.name
@@ -219,15 +338,15 @@ def resolve_function(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Res
   params: List[Types.Type] = []
   index = 0
   while index < args.size - 1
-    params = params.push(try resolve_type(cx, st, args[index], false))
+    params = params.push(try resolve_expanded(cx, st, args[index], false))
     index += 1
   end
-  result = try resolve_type(cx, st, args[args.size - 1], true)
+  result = try resolve_expanded(cx, st, args[args.size - 1], true)
   return ok(Types.Type.Fn(params, result))
 end
 
 def resolve_map(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Result[Types.Type]
-  key = try resolve_type(cx, st, args[0], false)
+  key = try resolve_expanded(cx, st, args[0], false)
   if !key_here?(cx, key)
     return error(
       State.fail(
@@ -239,11 +358,11 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Result[T
       ),
     )
   end
-  return ok(Types.Type.Map(key, try resolve_type(cx, st, args[1], false)))
+  return ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
 end
 
 def resolve_set(cx: State.Cx, st: State.St, arg: Ast.TypeRef) -> Result[Types.Type]
-  element = try resolve_type(cx, st, arg, false)
+  element = try resolve_expanded(cx, st, arg, false)
   if !key_here?(cx, element)
     return error(
       State.fail(
@@ -275,7 +394,11 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: Ast.TypeRef) -> Result[Type
         ),
       )
     end
-    return ok(Types.Type.Enum(name, try resolve_all(cx, st, ref.args)))
+    args: List[Types.Type] = []
+    for arg in ref.args
+      args = args.push(try resolve_expanded(cx, st, arg, false))
+    end
+    return ok(Types.Type.Enum(name, args))
   elsif cx.structs.has_key?(name) and ref.args.size == 0
     return ok(Types.Type.Struct(name))
   end

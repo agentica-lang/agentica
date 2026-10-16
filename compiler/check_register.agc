@@ -15,8 +15,10 @@ import T from "types"
 
 ## The context with the enums, structs and functions of the program added to the builtin ones.
 export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
-  found = try register_enum_names(cx, modules)
+  found = try register_aliases(cx, modules)
+  found = try register_enum_names(found, modules)
   found = try register_structs(found, modules)
+  try check_alias_targets(found, modules)
   found = try register_enum_variants(found, modules)
   found = try register_functions(found, modules)
   return ok(found)
@@ -46,6 +48,37 @@ export def check_main(cx: State.Cx, modules: List[Linker.LinkedModule], root: So
       root,
     ),
   )
+end
+
+def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
+  st = State.fresh()
+  found = cx
+  for module in modules
+    for decl in module.declarations
+      case decl
+        Ast.Decl.TypeAlias(node) ->
+          here = found.with(file: module.file)
+          try check_new_name(here, st, node.name, node.name_span)
+          found = here.with(aliases: here.aliases.put(node.name, node.target))
+        _ -> st = st
+      end
+    end
+  end
+  return ok(found)
+end
+
+def check_alias_targets(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[Bool]
+  st = State.fresh()
+  for module in modules
+    here = cx.with(file: module.file)
+    for decl in module.declarations
+      case decl
+        Ast.Decl.TypeAlias(node) -> try Types.resolve_type(here, st, node.target, true)
+        _ -> st = st
+      end
+    end
+  end
+  return ok(true)
 end
 
 def main_signature(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[Bool]
@@ -100,12 +133,13 @@ def register_enum_name(cx: State.Cx, st: State.St, node: Ast.EnumDecl) -> Result
   )
 end
 
-# CHECK-REDEFINED-NAME when a struct or enum name is reserved or already taken.
+# CHECK-REDEFINED-NAME when a declared type name is reserved or already taken.
 def check_new_name(cx: State.Cx, st: State.St, name: String, span: Source.Span) -> Result[Bool]
   if (
     cx.catalog.reserved.include?(name) or
     cx.structs.has_key?(name) or
     cx.enums.has_key?(name) or
+    cx.aliases.has_key?(name) or
     cx.functions.has_key?(name)
   )
     return error(
@@ -227,7 +261,8 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Res
     cx.catalog.entries.has_key?(node.name) or
     cx.functions.has_key?(node.name) or
     cx.structs.has_key?(node.name) or
-    cx.enums.has_key?(node.name)
+    cx.enums.has_key?(node.name) or
+    cx.aliases.has_key?(node.name)
   )
   if taken
     return error(

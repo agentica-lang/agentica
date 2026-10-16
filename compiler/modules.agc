@@ -238,8 +238,8 @@ def bind_name(
   return ok(named.put(entry.local, Named(target: target.key, name: entry.name)))
 end
 
-# A struct or an enum is renamed to a type name (a capital first letter), a function to a lowercase one, a constant to
-# another constant name.
+# A struct, enum or type alias is renamed to a type name (a capital first letter), a function to a lowercase one, a
+# constant to another constant name.
 def rename_ok?(local: String, kind: Declarations.Kind) -> Bool
   if Declarations.constant?(kind)
     return Declarations.constant_name?(local)
@@ -253,6 +253,8 @@ def rename_help(kind: Declarations.Kind) -> String
   case kind
     Declarations.Kind.Struct -> return "a struct is renamed to another type name, which starts with a capital letter"
     Declarations.Kind.Enum -> return "an enum is renamed to another type name, which starts with a capital letter"
+    Declarations.Kind.TypeAlias ->
+      return "a type alias is renamed to another type name, which starts with a capital letter"
     Declarations.Kind.Constant -> return "a constant is renamed to another constant name, in capitals with underscores"
     _ -> return "a function is renamed to another lowercase name"
   end
@@ -340,7 +342,7 @@ def enter(
 end
 
 # The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is
-# CHECK-REDEFINED-NAME at the declaration.
+# CHECK-REDEFINED-NAME at the declaration name.
 def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   names: Map[String, Declarations.Kind] = {}
   public: Map[String, Declarations.Kind] = {}
@@ -353,7 +355,7 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
     if names.has_key?(name) or settings.catalog.bare_names.include?(name) or settings.catalog.reserved.include?(name)
       return error(
         Failure.fail_at(
-          Failure.Site(file: file, span: Declarations.span_of(wrapped)),
+          Failure.Site(file: file, span: Declarations.name_span_of(wrapped)),
           "CHECK-REDEFINED-NAME",
           "duplicate or reserved declaration",
           Diag.Help.NoHelp,
