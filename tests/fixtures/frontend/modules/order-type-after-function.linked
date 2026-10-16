@@ -1,1 +1,1 @@
-ERROR CHECK-DECL-ORDER 24:4:1-49:7:1 "declaration is out of order" "structs and enums come before functions" file="root.agc"
+ERROR CHECK-DECL-ORDER 24:4:1-49:7:1 "declaration is out of order" "structs, enums and type aliases come before functions" file="root.agc"

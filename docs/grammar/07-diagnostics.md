@@ -65,7 +65,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | a tab in the indentation of a heredoc (`LEX-HEREDOC-INDENT`), a heredoc with no end line (`LEX-UNTERMINATED-HEREDOC`) | indent with spaces; end the heredoc with a line that holds only its name |
 | `// note`, `/* note */` (`PARSE-UNEXPECTED-TOKEN`) | comments start with `#`; `4 // 2` has no `//` operator, `/` on two Ints truncates |
 | a `##` doc block that is not directly above a `def`, `struct`, `enum`, field or variant (`PARSE-DETACHED-DOC`) | put the doc block on the lines just above what it documents, with no blank line or `#` comment between; use `#` for a note that documents nothing |
-| a function before a `struct` or `enum`, a private `def` before an `export def`, a constant after a declaration that is not an import or a constant, an `import` after a declaration (`CHECK-DECL-ORDER`) | keep the file order: module doc and imports, then constants, then `struct` and `enum`, then `export def`, then `def` |
+| a function before a `struct`, `enum` or type alias, a private `def` before an `export def`, a constant after a declaration that is not an import or a constant, an `import` after a declaration (`CHECK-DECL-ORDER`) | keep the file order: module doc and imports, then constants, then `struct`, `enum` and type aliases, then `export def`, then `def` |
 | `Limit = 1`, `X = 1`, `maxDepth = 1` at the top level (`PARSE-CONSTANT-NAME`) | a constant name is capitals, digits and `_`, at least two characters: `LIMIT`; the help suggests `MAX_DEPTH` for `MaxDepth` |
 | `LIMIT = make()` with a `def`, `&make`, a `while` loop, or a builtin with effects such as `IO.gets!()` in a constant (`CHECK-CONSTANT-EXPRESSION`) | a constant is built from literals, constructors, operators, other constants and builtins without effects; compute anything else in a function |
 | `JOBS: Channel[Int] = Channel.new(1)` in a constant (`CHECK-CONSTANT-TYPE`) | a constant holds data: numbers, text, collections, structs and enums of those; functions, tasks, channels and handles are not data |
@@ -118,6 +118,8 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `HTTP.get(...)` or another `HTTP.` call without the import | `import HTTP from "std/http"` |
 | `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`) | a handler that returns its whole response: `return ok(HttpResponse(status: 200, headers: [], body: text))` |
 | `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`) | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
+| a type alias cycle (`CHECK-TYPE-ALIAS-CYCLE`) | break the cycle; aliases expand to the type they name, so `type Names = List[String]` is valid |
+| `Grid(...)` when `Grid` is a type alias (`CHECK-UNKNOWN-TYPE`) | construct the struct named by the alias, or use a value of the aliased builtin type |
 | `Task.async_stream(...)`, `Parallel.map(...)` | `Task.map(items, limit, timeout_ms) do |x| ... end`, where the block gives a `Result` |
 | `Task.async(...)`, `Thread.new(...)` | `Task.spawn(&f, arg)`, then `Task.await(task)` for its result |
 | `Enumerator.new(...)`, `Fiber.new(...)` | a producer task that sends into a channel: `Task.spawn(&produce, ch)`, then `ch.recv(timeout_ms)` |

@@ -12,27 +12,8 @@ import Types from "types"
 ## of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or
 ## CHECK-UNKNOWN-TYPE.
 export def resolve_type(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
-  name = ref.name
-  args = ref.args
-  if args.size == 0
-    return resolve_plain(cx, st, ref, completion)
-  end
-  if name == "Result" and args.size == 1
-    return ok(Types.Type.Result(try resolve_type(cx, st, args[0], true)))
-  elsif name == "Task" and args.size == 1
-    return ok(Types.Type.Task(try resolve_type(cx, st, args[0], true)))
-  elsif name == "Channel" and args.size == 1
-    return ok(Types.Type.Channel(try resolve_type(cx, st, args[0], false)))
-  elsif name == "Fn"
-    return resolve_function(cx, st, args)
-  elsif name == "List" and args.size == 1
-    return ok(Types.Type.List(try resolve_type(cx, st, args[0], false)))
-  elsif name == "Map" and args.size == 2
-    return resolve_map(cx, st, args)
-  elsif name == "Set" and args.size == 1
-    return resolve_set(cx, st, args[0])
-  end
-  return resolve_generic(cx, st, ref)
+  expanded = try expand_alias(cx, st, ref, [])
+  return resolve_expanded(cx, st, expanded, completion)
 end
 
 ## The types of several type references, in order.
@@ -183,6 +164,99 @@ export def unify(
   end
   try State.ensure(cx, st, actual, template, span)
   return ok(substitutions)
+end
+
+def expand_alias(
+  cx: State.Cx,
+  st: State.St,
+  ref: Ast.TypeRef,
+  seen: List[String],
+) -> Result[Ast.TypeRef]
+  name = ref.name
+  parameter = cx.type_params.any? do |item: String| item == name end
+  if !parameter and cx.aliases.has_key?(name)
+    if ref.args.size > 0
+      return error(
+        State.fail(
+          cx,
+          st,
+          "CHECK-UNKNOWN-TYPE",
+          "type alias #{Types.display_name(name)} takes no type arguments",
+          ref.span,
+        ),
+      )
+    end
+    if seen.any? do |entry: String| entry == name end
+      cycle = cycle_text(seen, name)
+      return error(
+        State.fail_help(
+          cx,
+          st,
+          "CHECK-TYPE-ALIAS-CYCLE",
+          "type alias has a cycle",
+          ref.span,
+          "the cycle is #{cycle}",
+        ),
+      )
+    end
+    if seen.size >= State.nesting_limit()
+      return error(
+        State.fail_help(
+          cx,
+          st,
+          "CHECK-TOO-DEEP",
+          "nesting is deeper than #{State.nesting_limit()} levels",
+          ref.span,
+          "split the type aliases into a shallower chain",
+        ),
+      )
+    end
+    return expand_alias(cx, st, cx.aliases[name], seen.push(name))
+  end
+  args: List[Ast.TypeRef] = []
+  for arg in ref.args
+    args = args.push(try expand_alias(cx, st, arg, seen))
+  end
+  return ok(ref.with(args: args))
+end
+
+def cycle_text(seen: List[String], repeated: String) -> String
+  start = 0
+  while start < seen.size and seen[start] != repeated
+    start += 1
+  end
+  names: List[String] = []
+  index = start
+  while index < seen.size
+    names = names.push(Types.display_name(seen[index]))
+    index += 1
+  end
+  names = names.push(Types.display_name(repeated))
+  return names.join(" -> ")
+end
+
+def resolve_expanded(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
+  name = ref.name
+  args = ref.args
+  if args.size == 0
+    return resolve_plain(cx, st, ref, completion)
+  end
+  if name == "Result" and args.size == 1
+    return ok(Types.Type.Result(try resolve_type(cx, st, args[0], true)))
+  elsif name == "Task" and args.size == 1
+    return ok(Types.Type.Task(try resolve_type(cx, st, args[0], true)))
+  elsif name == "Channel" and args.size == 1
+    return ok(Types.Type.Channel(try resolve_type(cx, st, args[0], false)))
+  elsif name == "Fn"
+    return resolve_function(cx, st, args)
+  elsif name == "List" and args.size == 1
+    return ok(Types.Type.List(try resolve_type(cx, st, args[0], false)))
+  elsif name == "Map" and args.size == 2
+    return resolve_map(cx, st, args)
+  elsif name == "Set" and args.size == 1
+    return resolve_set(cx, st, args[0])
+  end
+  return resolve_generic(cx, st, ref)
 end
 
 # The type resolved when it has no arguments: a type parameter, Void, a primitive, a handle, an enum or a struct.

@@ -74,6 +74,7 @@ def start(linked: Linker.Linked, catalog: Builtins.Catalog) -> State.Cx
     help: Help.tables(),
     structs: catalog.records,
     enums: catalog.enums,
+    aliases: {},
     functions: {},
     constants: {},
     type_params: [],

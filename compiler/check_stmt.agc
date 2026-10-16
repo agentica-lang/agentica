@@ -540,6 +540,21 @@ def variant_payload(definition: Model.EnumDef, variant_name: String, args: List[
 end
 
 def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, value_type: T.Type) -> String
+  if cx.aliases.has_key?(pattern.enum_name)
+    target = Types.resolve_type(cx, st, cx.aliases[pattern.enum_name], false)
+    if target.ok?
+      variant = "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
+      underlying = "#{T.to_text(target.unwrap!)}.#{pattern.variant_name}"
+      return State.fail_help(
+        cx,
+        st,
+        "CHECK-PATTERN-TYPE",
+        "variant pattern \"#{variant}\" does not match #{T.to_text(value_type)}",
+        pattern.span,
+        "#{variant} names #{underlying}; match the underlying enum variant instead",
+      )
+    end
+  end
   if T.is(value_type, "Enum") and pattern.enum_name == T.name(value_type)
     return State.fail(
       cx,

@@ -1,0 +1,10 @@
+type Names = List[String]
+
+export type Labels = Names
+
+def main() -> Void
+  labels: Labels = ["red", "blue"]
+  puts(labels.size)
+end
+
+\n

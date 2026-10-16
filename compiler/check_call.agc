@@ -53,6 +53,21 @@ export def check_enum_constructor(
 ) -> Result[State.Out]
   definition = cx.enums.get(enum_name)
   if !definition.ok?
+    if cx.aliases.has_key?(enum_name)
+      target = try Types.resolve_type(cx, st, cx.aliases[enum_name], false)
+      variant = "#{T.display_name(enum_name)}.#{variant_name}"
+      underlying = "#{T.to_text(target)}.#{variant_name}"
+      return error(
+        State.fail_help(
+          cx,
+          st,
+          "CHECK-UNKNOWN-TYPE",
+          "a type alias is not a declared enum",
+          span,
+          "#{variant} names #{underlying}; construct the underlying enum variant instead",
+        ),
+      )
+    end
     return error(
       State.fail_maybe(
         cx,
@@ -429,6 +444,19 @@ end
 
 def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> Result[State.Out]
   name = node.type_name
+  if cx.aliases.has_key?(name)
+    target = try Types.resolve_type(cx, st, cx.aliases[name], false)
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-UNKNOWN-TYPE",
+        "a type alias is not a declared struct",
+        node.span,
+        "#{T.display_name(name)} names #{T.to_text(target)}; construct the underlying type instead",
+      ),
+    )
+  end
   fields = cx.structs.get(name)
   if !fields.ok?
     return error(

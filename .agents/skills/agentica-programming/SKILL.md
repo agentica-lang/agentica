@@ -76,7 +76,7 @@ end
 
 Common Ruby forms that work: `s.length`, `s.strip`, `s.split(" ")`, `s.upcase`, `s.include?("x")`, `s.to_i` (a Result), `s.to_i!`, `n.to_s`, `n.to_f`, `xs.size`, `xs.push(v)`, `xs.sort`, `xs.join(",")` (a `List[String]`), `m.keys`, `m.put(k, v)`, `m.get(k)` (a Result), `(1..3).to_a`, `n.times do |i| ... end`. The full list is in `references/builtins.md`.
 
-Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`, `Map[K, V]` (K is `Int` or `String`), `Set[T]` (T is `Int` or `String`: `Set.new([1, 2])`, `s.add(x)`, `s.include?(x)`), `Result[T]`, `Range`, `Json`, `Fn[A, ..., R]`, `Task[R]`, `Await[T]`, `Channel[T]`, `Process`, and your own `struct` and `enum` names. Type names start with an uppercase letter; variables, functions, and fields start with a lowercase letter or `_`. Details: `references/language.md`.
+Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`, `Map[K, V]` (K is `Int` or `String`), `Set[T]` (T is `Int` or `String`: `Set.new([1, 2])`, `s.add(x)`, `s.include?(x)`), `Result[T]`, `Range`, `Json`, `Fn[A, ..., R]`, `Task[R]`, `Await[T]`, `Channel[T]`, `Process`, and your own `struct`, `enum` and alias names. `type Names = List[String]` gives a long type a short, transparent name. Type names start with an uppercase letter; variables, functions, and fields start with a lowercase letter or `_`. Details: `references/language.md`.
 
 ## Rules agents break
 

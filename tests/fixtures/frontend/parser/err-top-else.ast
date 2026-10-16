@@ -1,1 +1,1 @@
-ERROR PARSE-TOP-LEVEL-STATEMENT 0:1:1-4:1:5 "expected a top-level declaration (def, struct, enum, constant, or import), found \"else\"" "this else has no matching if"
+ERROR PARSE-TOP-LEVEL-STATEMENT 0:1:1-4:1:5 "expected a top-level declaration (def, struct, enum, type alias, constant, or import), found \"else\"" "this else has no matching if"

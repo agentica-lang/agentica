@@ -189,3 +189,12 @@ answers status 2. A front end that stops with an error exits 2. `tests/test_cli_
 the command line of the binary against `tests/fixtures/cli/forms.json`. `cli_text.agc` keeps the help texts as data. To try a change to `compiler/` without the
 build chain, run the front end as a program: `dist/agentica run --allow-run -- build/stage/stage2.agcb --version V
 --stdlib stdlib --self PATH -- WORDS` (`tests.agentica_test.front_end_command` builds that command).
+
+Simple type aliases (49a) are `Ast.Decl.TypeAlias` nodes with a target `TypeRef`.
+The parser reads contextual `type` only at the top level; `Declarations.Kind`
+lets the linker export, import and rename aliases as type names, and `Rewrite`
+resolves the target in the declaring module. `check_register.agc` registers all
+alias targets before signatures and validates them with `check_types.agc`,
+which expands aliases before ordinary type resolution. Expansion is
+transparent, detects cycles (`CHECK-TYPE-ALIAS-CYCLE`), and leaves lowering and
+bytecode unchanged. Parser output has a dedicated `type-alias-decl` golden.

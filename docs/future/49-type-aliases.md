@@ -1,9 +1,10 @@
 ## 49. Type aliases
 
-**Status:** planned (owner, 2026-10-16). Two parts: simple aliases (49a), then
+**Status:** 49a implemented; 49b planned. Two parts: simple aliases (49a), then
 generic aliases (49b). Roadmap row 7.12 and phase 30
 ([`docs/roadmap/30-type-aliases.md`](../roadmap/30-type-aliases.md)) record it.
-Nothing is implemented. The owner decided the three questions of 49.5 on
+Simple aliases are implemented in the compiler; generic aliases remain
+planned. The owner decided the three questions of 49.5 on
 2026-10-16, with the recommendations of this section.
 
 ### 49.1 Goal and why

@@ -9,7 +9,7 @@ it waits for nothing: the bootstrap is done. The three questions of §49.5 are
 decided. Item 30b waits for 30a, because its parameters use the same parser and
 checker paths.
 
-- [ ] **30a: simple aliases (§49.2).** `type Name = Type` and
+- [x] **30a: simple aliases (§49.2).** `type Name = Type` and
   `export type Name = Type` at the top level, with `type` a contextual word.
   - **Syntax:** the `alias_decl` rule of `docs/grammar/05-syntax.md`, in the
     struct and enum group of the declaration order.

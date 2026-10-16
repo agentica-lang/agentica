@@ -10,6 +10,7 @@ import Base from "parse_base"
 export enum Kind
   Struct
   Enum
+  TypeAlias
   Function
   Constant
   Import
@@ -31,16 +32,18 @@ export def span_of(decl: Ast.Decl) -> Source.Span
     Ast.Decl.Function(node) -> return node.span
     Ast.Decl.Struct(node) -> return node.span
     Ast.Decl.Enum(node) -> return node.span
+    Ast.Decl.TypeAlias(node) -> return node.span
     Ast.Decl.Constant(node) -> return node.span
   end
 end
 
-## The name a struct, enum, function or constant declares; "" for an import.
+## The name a struct, enum, alias, function or constant declares; "" for an import.
 export def name_of(decl: Ast.Decl) -> String
   case unwrap(decl)
     Ast.Decl.Function(node) -> return node.name
     Ast.Decl.Struct(node) -> return node.name
     Ast.Decl.Enum(node) -> return node.name
+    Ast.Decl.TypeAlias(node) -> return node.name
     Ast.Decl.Constant(node) -> return node.name
     _ -> return ""
   end
@@ -52,6 +55,7 @@ export def kind_of(decl: Ast.Decl) -> Kind
     Ast.Decl.Function(node) -> return Kind.Function
     Ast.Decl.Struct(node) -> return Kind.Struct
     Ast.Decl.Enum(node) -> return Kind.Enum
+    Ast.Decl.TypeAlias(node) -> return Kind.TypeAlias
     Ast.Decl.Constant(node) -> return Kind.Constant
     _ -> return Kind.Import
   end
@@ -77,6 +81,13 @@ end
 export def enum?(kind: Kind) -> Bool
   case kind
     Kind.Enum -> return true
+    _ -> return false
+  end
+end
+
+export def type_alias?(kind: Kind) -> Bool
+  case kind
+    Kind.TypeAlias -> return true
     _ -> return false
   end
 end
@@ -148,7 +159,8 @@ export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
 end
 
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then
-## constants, then struct and enum (exported or not), then export def, then def. The span is that of the declaration
+## constants, then struct, enum and type alias (exported or not), then export def, then def. The span is of the
+## declaration
 ## out of place; the help names the group it belongs to. This is a style rule with no meaning for evaluation.
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
   highest = 0
@@ -176,10 +188,12 @@ def rank(decl: Ast.Decl) -> Int
     Ast.Decl.Constant(node) -> return 1
     Ast.Decl.Struct(node) -> return 2
     Ast.Decl.Enum(node) -> return 2
+    Ast.Decl.TypeAlias(node) -> return 2
     Ast.Decl.Export(node) ->
       case node.declaration
         Ast.Decl.Struct(inner) -> return 2
         Ast.Decl.Enum(inner) -> return 2
+        Ast.Decl.TypeAlias(inner) -> return 2
         _ -> return 3
       end
     Ast.Decl.Function(node) -> return 4
@@ -188,9 +202,9 @@ end
 
 def order_help(group: Int) -> String
   case group
-    0 -> return "imports come first, before any constant, struct, enum or function"
+    0 -> return "imports come first, before any constant, struct, enum, type alias or function"
     1 -> return "constants come right after the imports"
-    2 -> return "structs and enums come before functions"
+    2 -> return "structs, enums and type aliases come before functions"
     _ -> return "exported functions come before private functions"
   end
 end
