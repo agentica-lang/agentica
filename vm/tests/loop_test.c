@@ -52,6 +52,7 @@ static void drop(void *data) {
 
 static const agc_io_kind kind = {slow_work, finished, expired, drop, false, "test", NULL};
 
+#ifdef __linux__
 static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
   task_data *t = calloc(1, sizeof(task_data));
   assert(t);
@@ -68,6 +69,7 @@ static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
   task->state = AGC_TASK_RUNNING;
   return agc_as_int(vm, result);
 }
+#endif
 
 static void release_count(void *native) { (*(int *)native)++; }
 
