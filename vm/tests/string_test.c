@@ -64,8 +64,50 @@ static char *repeat_text(const char *head, char fill, size_t count, const char *
   return s;
 }
 
+/* The references for the eight-bytes-at-a-time paths of agc_utf8_chars and agc_utf8_count: one character, one byte. */
+static bool chars_by_one(const uint8_t *s, size_t len, size_t *chars) {
+  size_t count = 0;
+  for (size_t i = 0; i < len; count++) {
+    size_t n = agc_utf8_valid(s + i, len - i);
+    if (n == 0) return false;
+    i += n;
+  }
+  *chars = count;
+  return true;
+}
+
+static size_t count_by_one(const uint8_t *s, size_t len) {
+  size_t count = 0;
+  for (size_t i = 0; i < len; i++) count += (s[i] & 0xC0) != 0x80;
+  return count;
+}
+
+/* ASCII filler with one piece (valid, truncated, stray or overlong bytes) at every offset, for every length around the
+ * word size: both paths must agree with the references on the answer and the count. */
+static void utf8_word_paths(void) {
+  static const char *const pieces[] = {"a", "\xc3\xa9", "\xe2\x82\xac", "\xf0\x9f\x98\x80", "\x80", "\xc3", "\xe2\x82",
+                                       "\xf0\x9f\x98", "\xc0\xaf", "\xf5\x80\x80\x80", "\xed\xa0\x80", "\xff"};
+  for (size_t len = 0; len <= 40; len++) {
+    for (size_t at = 0; at < (len ? len : 1); at++) {
+      for (size_t k = 0; k < sizeof pieces / sizeof *pieces; k++) {
+        uint8_t buf[64];
+        memset(buf, 'a', sizeof buf);
+        size_t piece = strlen(pieces[k]);
+        if (at + piece > len) continue;
+        memcpy(buf + at, pieces[k], piece);
+        size_t want = 0, got = 0;
+        bool valid = chars_by_one(buf, len, &want);
+        assert(agc_utf8_chars(buf, len, &got) == valid);
+        if (valid) assert(got == want);
+        if (valid) assert(agc_utf8_count(buf, len) == count_by_one(buf, len));
+      }
+    }
+  }
+}
+
 int main(void) {
   agc_init();
+  utf8_word_paths();
   char buf[4];
   for (uint32_t cp = 0; cp <= 0x10FFFF; cp++) {
     if (cp >= 0xD800 && cp <= 0xDFFF) continue;

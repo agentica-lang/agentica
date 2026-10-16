@@ -53,11 +53,19 @@ static _Noreturn void reject(reader *r, const char *format, ...) {
 
 static size_t left(const reader *r) { return r->len - r->pos; }
 
-static const uint8_t *take(reader *r, size_t n) {
+static inline const uint8_t *take(reader *r, size_t n) {
   if (n > left(r)) reject(r, "truncated file");
   const uint8_t *p = r->data + r->pos;
   r->pos += n;
   return p;
+}
+
+/* A little-endian field at p. The caller has taken the bytes, so there is no bounds check here; the loops that read
+ * a whole table of fixed-size entries take each entry (or the whole table) once and decode it with these. */
+static inline uint16_t get_u16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
+
+static inline uint32_t get_u32(const uint8_t *p) {
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
 static void *load_alloc(reader *r, size_t size, bool atomic) {
@@ -69,15 +77,7 @@ static void *load_alloc(reader *r, size_t size, bool atomic) {
 
 static uint8_t read_u8(reader *r) { return *take(r, 1); }
 
-static uint16_t read_u16(reader *r) {
-  const uint8_t *p = take(r, 2);
-  return (uint16_t)(p[0] | (p[1] << 8));
-}
-
-static uint32_t read_u32(reader *r) {
-  const uint8_t *p = take(r, 4);
-  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
+static inline uint32_t read_u32(reader *r) { return get_u32(take(r, 4)); }
 
 static uint64_t read_u64(reader *r) {
   uint64_t lo = read_u32(r);
@@ -108,28 +108,42 @@ static bool same_text(const agc_string *s, const char *text) {
   return s->bytes == n && memcmp(s->data, text, n) == 0;
 }
 
+/* The number of '\n' bytes in s, eight at a time: the exact zero-byte test sets 0x80 in the bytes of w ^ 0x0A0A.. that
+ * are zero, which are the newlines of w, and the multiplication adds those eight flags in its top byte. */
+static size_t count_newlines(const uint8_t *s, size_t len) {
+  const uint64_t low = UINT64_C(0x7F7F7F7F7F7F7F7F), ones = UINT64_C(0x0101010101010101);
+  size_t count = 0, i = 0;
+  for (; len - i >= 8; i += 8) {
+    uint64_t w;
+    memcpy(&w, s + i, sizeof w);
+    w ^= ones * '\n';
+    uint64_t zero_bytes = ~(((w & low) + low) | w | low);
+    count += (size_t)(((zero_bytes >> 7) * ones) >> 56);
+  }
+  for (; i < len; i++) count += s[i] == '\n';
+  return count;
+}
+
+/* Where each line starts and how many characters it has, for the checks of the spans and for the diagnostics. The text
+ * is valid UTF-8 (read_string), so the characters of a line are its bytes less its continuation bytes; when the text
+ * is all ASCII (chars equals bytes), they are its bytes. */
 static void index_lines(reader *r, agc_source *source) {
-  const agc_string *text = source->text;
-  size_t lines = 1;
-  for (size_t i = 0; i < text->bytes; i++)
-    if (text->data[i] == '\n') lines++;
+  const uint8_t *text = (const uint8_t *)source->text->data;
+  const uint8_t *end = text + source->text->bytes;
+  bool ascii = source->text->chars == source->text->bytes;
+  size_t lines = 1 + count_newlines(text, source->text->bytes);
   source->lines = (uint32_t)lines;
   source->line_start = load_alloc(r, agc_size_mul(lines, sizeof(uint32_t)), true);
   source->line_chars = load_alloc(r, agc_size_mul(lines, sizeof(uint32_t)), true);
-  size_t line = 0, chars = 0;
+  size_t line = 0;
+  const uint8_t *start = text;
   source->line_start[0] = 0;
-  for (size_t i = 0; i < text->bytes; i++) {
-    uint8_t c = (uint8_t)text->data[i];
-    if (c == '\n') {
-      source->line_chars[line] = (uint32_t)chars;
-      line++;
-      source->line_start[line] = (uint32_t)(i + 1);
-      chars = 0;
-    } else if ((c & 0xC0) != 0x80) {
-      chars++;
-    }
+  for (const uint8_t *at; (at = memchr(start, '\n', (size_t)(end - start))); start = at + 1) {
+    source->line_chars[line] = (uint32_t)(ascii ? (size_t)(at - start) : agc_utf8_count(start, (size_t)(at - start)));
+    line++;
+    source->line_start[line] = (uint32_t)(at + 1 - text);
   }
-  source->line_chars[line] = (uint32_t)chars;
+  source->line_chars[line] = (uint32_t)(ascii ? (size_t)(end - start) : agc_utf8_count(start, (size_t)(end - start)));
 }
 
 static void check_position(reader *r, const agc_source *source, uint32_t line, uint32_t column) {
@@ -482,12 +496,13 @@ static void load(reader *r, agc_program *p) {
   if (p->span_count == 0) reject(r, "missing program span");
   p->spans = load_alloc(r, agc_size_mul(p->span_count, sizeof(agc_span)), true);
   for (uint32_t i = 0; i < p->span_count; i++) {
+    const uint8_t *e = take(r, 20);
     agc_span s;
-    s.source = read_u32(r);
-    s.start_line = read_u32(r);
-    s.start_column = read_u32(r);
-    s.end_line = read_u32(r);
-    s.end_column = read_u32(r);
+    s.source = get_u32(e);
+    s.start_line = get_u32(e + 4);
+    s.start_column = get_u32(e + 8);
+    s.end_line = get_u32(e + 12);
+    s.end_column = get_u32(e + 16);
     if (s.source >= p->source_count) reject(r, "span source out of range");
     const agc_source *source = &p->sources[s.source];
     check_position(r, source, s.start_line, s.start_column);
@@ -548,14 +563,17 @@ static void load(reader *r, agc_program *p) {
     f->count = read_count(r, 12, "instruction");
     if (f->count == 0) reject(r, "empty function");
     f->code = load_alloc(r, agc_size_mul(f->count, sizeof(agc_instr)), true);
-    for (uint32_t k = 0; k < f->count; k++) {
-      f->code[k].op = read_u16(r);
-      f->code[k].a = read_u16(r);
-      f->code[k].b = read_u16(r);
-      f->code[k].c = read_u16(r);
+    /* read_count has shown that 12 bytes per instruction are in the file, so these two bounds checks cannot fail. */
+    const uint8_t *words = take(r, (size_t)f->count * 8);
+    for (uint32_t k = 0; k < f->count; k++, words += 8) {
+      f->code[k].op = get_u16(words);
+      f->code[k].a = get_u16(words + 2);
+      f->code[k].b = get_u16(words + 4);
+      f->code[k].c = get_u16(words + 6);
     }
     f->spans = load_alloc(r, agc_size_mul(f->count, sizeof(uint32_t)), true);
-    for (uint32_t k = 0; k < f->count; k++) f->spans[k] = read_u32(r);
+    const uint8_t *indexes = take(r, (size_t)f->count * 4);
+    for (uint32_t k = 0; k < f->count; k++) f->spans[k] = get_u32(indexes + (size_t)k * 4);
   }
 
   p->entry = read_u32(r);

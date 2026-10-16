@@ -221,6 +221,50 @@ static buffer make_tables(uint32_t arity) {
   return t;
 }
 
+/* The line index decides which columns a span may name: a line of N characters takes the columns 1 to N + 1. The
+ * texts have lines of every length around the eight-byte words that the indexing reads, and multi-byte characters. */
+static void expect_columns(const char *text, const uint32_t *chars, uint32_t lines) {
+  for (uint32_t line = 1; line <= lines + 1; line++) {
+    for (uint32_t column = 1; column <= 22; column++) {
+      spec s = base();
+      s.second_source = text;
+      s.spans[2][0] = 1;
+      s.spans[2][1] = s.spans[2][3] = line;
+      s.spans[2][2] = s.spans[2][4] = column;
+      if (line > lines)
+        assert(!loads(s, "line out of range"));
+      else if (column <= chars[line - 1] + 1)
+        assert(loads(s, NULL));
+      else
+        assert(!loads(s, "column out of range"));
+    }
+  }
+}
+
+static void line_index_tests(void) {
+  char ascii[512];
+  uint32_t ascii_chars[24];
+  size_t at = 0;
+  uint32_t lines = 0;
+  for (uint32_t len = 0; len <= 18; len++) {
+    memset(ascii + at, 'x', len);
+    at += len;
+    ascii[at++] = '\n';
+    ascii_chars[lines++] = len;
+  }
+  memcpy(ascii + at, "tail", 5);
+  ascii_chars[lines++] = 4;
+  expect_columns(ascii, ascii_chars, lines);
+
+  /* a (1), empty (0), e-acute twice (2), a mix of 1 to 4 byte characters (8), an empty last line (0) */
+  static const uint32_t mixed_chars[] = {1, 0, 2, 8, 0};
+  expect_columns("a\n\n\xC3\xA9\xC3\xA9\nab\xC3\xA9" "cd\xE2\x82\xAC\xF0\x9F\x98\x80z\n", mixed_chars, 5);
+  static const uint32_t wide_chars[] = {9, 3};
+  expect_columns("\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\n\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80", wide_chars, 2);
+  static const uint32_t none_chars[] = {0};
+  expect_columns("", none_chars, 1);
+}
+
 static bool loads_tables(uint32_t arity, const char *reason) {
   buffer t = make_tables(arity);
   spec s = base();
@@ -1583,6 +1627,7 @@ int main(void) {
 
   globals_tests();
   source_root_tests();
+  line_index_tests();
 
   puts("loader tests passed");
   return 0;
