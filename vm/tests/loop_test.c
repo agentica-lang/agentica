@@ -8,8 +8,9 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <time.h>
+#include <uv.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 typedef struct {
   long sleep_ms;
   int value;
@@ -18,8 +19,7 @@ typedef struct {
 static int dropped;
 
 static void pause_ms(long ms) {
-  struct timespec delay = {ms / 1000, (ms % 1000) * 1000000};
-  while (nanosleep(&delay, &delay) != 0) {}
+  uv_sleep((unsigned)ms);
 }
 
 static void slow_work(void *data) {
@@ -86,7 +86,7 @@ int main(void) {
   agc_unregister(&vm, items[0]);
   for (int k = 0; k < 1000; k++) assert((k % 2 == 0) == (items[k]->slot == SIZE_MAX));
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   assert(agc_uv_version());
   assert(run_one(&vm, 0, 5000) == 107);
   assert(run_one(&vm, 300, 20) == -1);

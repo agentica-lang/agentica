@@ -11,12 +11,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <errno.h>
 #include <fcntl.h>
+#include <uv.h>
+#if !defined(_WIN32)
 #include <signal.h>
 #include <unistd.h>
-#include <uv.h>
+#endif
 #endif
 
 struct agc_registry {
@@ -25,15 +27,17 @@ struct agc_registry {
   agc_resource **items;
 };
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 typedef struct agc_io_job job;
 
+#if !defined(_WIN32)
 typedef struct {
   atomic_int signal, now;
   atomic_bool held;
   pid_t driver;
   uv_async_t *wake;
 } stop_state;
+#endif
 
 struct agc_loop {
   uv_loop_t uv;
@@ -56,12 +60,14 @@ struct agc_io_job {
   bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush, on_loop;
 };
 
+#if !defined(_WIN32)
 struct agc_poller {
   uv_poll_t handle;
   int fd;
   void (*ready)(void *data, int status);
   void *data;
 };
+#endif
 #endif
 
 static agc_registry *registry_of(agc_vm *vm) {
@@ -171,14 +177,14 @@ void agc_unregister(agc_vm *vm, agc_resource *r) {
   agc_resource *last = reg->items[--reg->count];
   reg->items[r->slot] = last;
   last->slot = r->slot;
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   if (last->kind == AGC_RESOURCE_JOB && last->native) ((job *)last->native)->slot = last->slot;
 #endif
   reg->items[reg->count] = NULL;
   r->slot = SIZE_MAX;
 }
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static job *timer_job(uv_handle_t *handle) { return (job *)(void *)((char *)handle - offsetof(job, timer)); }
 
 static void run_work(uv_work_t *req) {
@@ -372,6 +378,7 @@ static void drain(agc_vm *vm) {
   }
 }
 
+#if !defined(_WIN32)
 #define STOP_SIGNALS 3
 #define STOP_GRACE_SECONDS 3
 
@@ -460,15 +467,30 @@ void agc_io_children_stopped(void) {
   stop_at_once(now);
   _exit(128 + now);
 }
+#else
+void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
+  (void)vm;
+  (void)driver;
+}
+
+int agc_io_stop_signal(void) { return 0; }
+
+void agc_io_children_stopped(void) {}
+#endif
 
 static int queue_work(agc_loop *loop, job *j) {
+#if !defined(_WIN32)
   sigset_t saved;
   agc_io_block_stop(&saved);
+#endif
   int rc = uv_queue_work(&loop->uv, &j->work, run_work, work_finished);
+#if !defined(_WIN32)
   pthread_sigmask(SIG_SETMASK, &saved, NULL);
+#endif
   return rc;
 }
 
+#ifdef __linux__
 static void poll_ready(uv_poll_t *handle, int status, int events) {
   (void)events;
   agc_poller *p = (agc_poller *)(void *)handle;
@@ -522,11 +544,16 @@ void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int 
 void agc_poller_pause(agc_poller *p) { uv_poll_stop(&p->handle); }
 
 void agc_poller_close(agc_poller *p) { uv_close((uv_handle_t *)&p->handle, poller_closed); }
+#endif
 
 bool agc_io_init(void) {
+#ifdef __linux__
   if (getenv("UV_USE_IO_URING")) return false;
   setenv("UV_USE_IO_URING", "0", 1);
   return true;
+#else
+  return false;
+#endif
 }
 
 const char *agc_uv_version(void) { return uv_version_string(); }
@@ -781,12 +808,16 @@ void agc_io_flush_files(agc_vm *vm) {
  * threads have the stop signals blocked, see queue_work), so blocking them here keeps it from sending to a handle
  * that is being closed. */
 static void unwatch_stop(agc_loop *loop) {
+#if !defined(_WIN32)
   if (stop.wake != &loop->wake) return;
   sigset_t saved;
   agc_io_block_stop(&saved);
   stop.wake = NULL;
   pthread_sigmask(SIG_SETMASK, &saved, NULL);
   uv_close((uv_handle_t *)&loop->wake, NULL);
+#else
+  (void)loop;
+#endif
 }
 
 static bool close_all(agc_vm *vm) {
