@@ -1,13 +1,12 @@
 ## 34. Shared small values in the VM
 
-**Status:** a candidate (roadmap 7g), kept only if a measurement shows it helps.
-Partly built by the list performance PR
-([§17.11](../vm/17-lists.md)): `agc_runtime` has the 128 one-character ASCII
-Strings (`chars`, made in `agc_vm_init`) and `String.split` uses them, which
-took `split(big, "")` of a million characters from 85 ms to 9 ms. `LIST` and
-`MAP` with no items return the runtime's one empty list and map too (the speed
-pass, PR #319; `agc_runtime.empty_list` and `empty_map`, made in `agc_vm_init`).
-The other paths and the empty string are still open.
+**Status:** built (roadmap 7g). The 128 one-character ASCII Strings and the
+empty List and Map came first, with the list performance PR
+([§17.11](../vm/17-lists.md)) and the speed pass (PR #319). The empty String,
+the empty Set, and the other paths that compute these values landed with the
+PR "VM: shared small values (§34)"; [§34.6](#346-as-built) says what is shared
+where, what was left out, and the numbers are in
+[`docs/vm-benchmarks.md`](../vm-benchmarks.md).
 An implementation proposal with no language change, in the spirit of CPython's
 small-int cache: the VM makes some values once and returns the same object every
 time a program computes them.
@@ -21,9 +20,9 @@ Ints are not part of this. An `agc_value` (`vm/value.h:29-32`) holds `Int`,
 `Float`, `Bool` and `nil` inline in 16 bytes and never allocates them, so a
 small-int cache would save nothing.
 
-### 34.1 Today
+### 34.1 Before
 
-Checked at `5fb7ed7`:
+Checked at `5fb7ed7`, before any of it was built:
 
 - Some values are shared already. The bytecode writer keeps one constant per
   distinct value (`constant!`, `src/bytecode.rkt:110-118`) and the loader reads
@@ -55,7 +54,9 @@ they are: builders fill and grow the objects they return. New helpers in
 `vm/value.c` return the shared object or fall back to them:
 `agc_small_string(vm, data, bytes, chars)` (shared when `bytes == 0`, or
 `bytes == 1` and the byte is below 0x80), `agc_empty_list(vm)`,
-`agc_empty_map(vm)` and `agc_empty_set(vm)`. The paths that switch to them:
+`agc_empty_map(vm)` and `agc_empty_set(vm)`. The paths that switch to them
+(the design as written, with the line numbers of that time;
+[§34.6](#346-as-built) says what was built):
 
 | Value | Paths |
 |---|---|
@@ -67,11 +68,11 @@ they are: builders fill and grow the objects they return. New helpers in
 Other paths may keep allocating: nothing depends on sharing, so coverage can
 grow with the numbers.
 
-**Related, separate candidate.** `filter` allocates its output list as long as
-its input and only lowers `len` at the end (`vm/interp.c:341`), so a filter that
-keeps few items holds the whole allocation. The fix to evaluate is shrinking the
-list to the kept length (`GC_REALLOC`) or copying the kept items into a new
-list; it needs its own measurement, peak RSS above all, with the same benchmark.
+**Related candidate, already done.** The design noticed that `filter`
+allocated its output as long as its input and only lowered `len` at the end.
+The list rewrite (§17) fixed it: `filter` keeps its items in a staging array
+and builds the result with `agc_list_from_array`, so the result is as long as
+what was kept.
 
 ### 34.3 Why it is safe
 
@@ -108,7 +109,9 @@ list; it needs its own measurement, peak RSS above all, with the same benchmark.
 - The gain may be small: Boehm already takes small atomic objects from a free
   list, and short-lived ones die cheaply. Drop the idea if the new program gains
   less than 10% wall time, or if any existing program slows by more than 2%.
-  Record the numbers in `docs/vm-benchmarks.md` either way.
+  Record the numbers in `docs/vm-benchmarks.md` either way. The result: the
+  new program takes 23% less time, and the existing programs stay within the
+  noise of the link layout (§34.6).
 
 ### 34.5 Tests
 
@@ -118,3 +121,49 @@ list; it needs its own measurement, peak RSS above all, with the same benchmark.
   character, two `split("")` items, and two empty lists from `LIST` share
   storage; a non-ASCII character does not; the table still holds the right text
   after `GC_gcollect` (`make vm-gc-stress`).
+
+### 34.6 As built
+
+The table is in `agc_runtime` (`vm/port.h`) and `agc_vm_init` (`vm/interp.c`)
+makes it: `empty_list`, `empty_map` and `empty_set` (values; the Map and the
+Set are one `agc_map` under two tags), `empty_string` and `chars[128]`
+(`agc_string *`). Nothing writes them. `agc_small_string(vm, data, bytes,
+chars)` in `vm/value.c` returns the shared String for no bytes or one ASCII
+byte, else a new one; the paths below call it, or read the table. There are no
+`agc_empty_list`, `agc_empty_map` or `agc_empty_set` helpers: one field read
+needs no function.
+
+| Value | Paths |
+|---|---|
+| One-character or empty String | `String.at`, `slice` (a length of 0 returns before any scan), `trim` (it also returns its argument when there is nothing to trim), `from_code`, `from_bytes` (`[]` and one ASCII byte), `upcase` and `downcase` (the empty String is its own result, one ASCII character maps by itself), `reverse` (fewer than two characters is its own result), `join` and `replace` with nothing left, the pieces of `split`, the text of a one-digit number (`to_s`, `"#{3}"`), `Result.message` of `ok`, the strings and keys of `JSON.parse` and `JSON.decode` (`agc_json_parse` takes the vm), and the lines of `IO.gets`, `IO.read`, `File.each_line` and a stream |
+| `[]` | `split("")` of the empty String, `take` of 0, `drop` of everything, `repeat` of 0, `Map.keys`, `Map.values` and `Set.to_a` of an empty collection, `Range.to_a` of an empty range; `reverse` of fewer than two items returns its argument |
+| `Set.new([])` | `Set.new` with no items, `Set.delete` of the last element, `intersection` and `difference` with nothing left |
+| `{}` | `Map.delete` of the last key, and the start of a typed JSON map |
+
+`Set.new`, the set filters and the typed JSON map start from the shared empty
+value: `agc_map_put` and `agc_map_add_hash` never write their input.
+
+Left out, after a measurement or because the gain is small:
+
+- `CONCAT` with an empty side returning the other String. A loop of
+  `(s + "")` allocates 198 MB before and 6.7 MB after, but
+  `check compiler/parser.agc` allocates the same bytes, so no real program
+  gains.
+- `filter` and `map` with nothing to return. It saves one list of about 40
+  bytes for each call. The edit is in `resume_native`, which also runs
+  `File.each_line`, and in one link layout it moved that loop by +12%; the
+  layouts differ by that much without any edit
+  ([`docs/vm-benchmarks.md`](../vm-benchmarks.md), "Shared small values").
+- The strings of `agc_utf8_decode` (process output, TCP reads, `read_text`),
+  HTTP bodies and `Dir.list`: they allocate once for each I/O operation.
+- The `[]` of a Json array: `agc_json_container` has no vm.
+
+Every shared path keeps the turn cost it had, since the cost rule reads sizes
+and not objects, and `make goldens` rewrites nothing.
+
+Tests: `shared_strings` in `vm/tests/string_test.c`, `shared_empties` in
+`vm/tests/map_test.c` and the keys of a parse in `vm/tests/json_test.c` check
+that the builtins return the shared objects (and not for a non-ASCII or longer
+result), and that a shared String still holds its text after a collection. The
+golden `shared-small-values` builds on every shared value across tasks and
+prints them again at the end.

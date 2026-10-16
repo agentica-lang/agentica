@@ -40,7 +40,9 @@ loop of n pushes takes 0.41 s for n = 10,000, 6.0 s for 40,000 and 88 s for
   site goes through the API of §17.4, that step changes `vm/list.c` and little
   else. It is built: §17.12. The VM decides the kind of a list by itself from
   its values, so the front end passes nothing.
-- No shared empty list ([§34](../future/34-shared-small-values.md) is separate).
+- No empty list of its own: `[]` and the builtins that return nothing give the
+  runtime's one shared empty list
+  ([§34.6](../future/34-shared-small-values.md#346-as-built)).
 - No cursor opcode for `for` (§17.3, row 4).
 
 ### 17.2 Representation
