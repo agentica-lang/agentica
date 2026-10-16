@@ -1,14 +1,12 @@
-"""The parser rules of the language, through the product CLI (ported from tests/parser-test.rkt).
+"""The parser rules of the language, through the product CLI (rescued from the deleted tests/parser-test.rkt).
 
 Each case writes a program to a temp file and runs the CLI on it. A rejected program is asserted by its diagnostic
-code and, where the Racket test asserted a position, by the start (and end) of its range. A valid program is
-asserted by a clean `check`, or by the output of a run where the output shows the rule (a precedence, a
-desugaring, an evaluation order). Help and message texts are not asserted (AGENTS.md). The CLI runs of one test
-go in parallel, one process each.
+code and, where a position is part of the rule, by the start (and end) of its range. A valid program is asserted by
+a clean `check`, or by the output of a run where the output shows the rule (a precedence, a desugaring, an
+evaluation order). Help and message texts are not asserted (AGENTS.md).
 """
 import json
 from collections import namedtuple
-from concurrent.futures import ThreadPoolExecutor
 
 from tests.agentica_test import TestCase, cli, output_lines, run, vm_environment
 
@@ -19,7 +17,6 @@ Reject = namedtuple("Reject", "text code span files", defaults=(None, None))
 Accept = namedtuple("Accept", "text files parses_only", defaults=(None, False))
 Output = namedtuple("Output", "text lines files", defaults=(None,))
 
-WORKERS = 8
 PARSE_CODES = ("LEX-", "PARSE-")
 
 ALPHA = "export def one() -> Int\n  return 1\nend\n"
@@ -31,7 +28,7 @@ def main_of(body):
 
 
 def in_function(statement):
-    """A program with one function f() whose body is `statement`, as the Racket tests wrote them."""
+    """A program with one function f() whose body is `statement`."""
     return "def f() -> Void\n  " + statement + "\nend\n\n"
 
 
@@ -132,15 +129,13 @@ class SpecParser(TestCase):
     def run_all(self, programs, *command):
         """Run the CLI with `command` on each program (text, files) and return the results in order.
 
-        Each program is main.agc in a temp directory, with its files beside it. The directories are made here, in
-        the test's thread; the CLI runs go in parallel.
+        Each program is main.agc in a temp directory, with its files beside it.
         """
-        paths = []
+        results = []
         for text, files in programs:
             directory = self.make_suite({"main.agc": text, **(files or {})})
-            paths.append(str(directory / "main.agc"))
-        with ThreadPoolExecutor(WORKERS) as pool:
-            return list(pool.map(lambda path: run(cli() + [*command, path], env=vm_environment()), paths))
+            results.append(run(cli() + [*command, str(directory / "main.agc")], env=vm_environment()))
+        return results
 
     def check_rejected(self, cases):
         results = self.run_all([(case.text, case.files) for case in cases], "--json", "check")
@@ -389,10 +384,10 @@ class SpecParser(TestCase):
         update = "  ana.with(age: 31, name: \"Bea\",)"
         unused = person + main_of("  ana = Person(name: \"Ana\", age: 30)\n" + update + "\n")
         line = unused.split("\n").index(update) + 1
-        for text in ["ana.with()", "ana.with(31)", "ana.with(age)", "ana.with(age: 1, 2)", "ana.with(age?: 1)"]:
-            with self.subTest(expression=text):
-                self.check_rejected([Reject(in_function("x = " + text), "PARSE-UNEXPECTED-TOKEN")])
         self.check_rejected([
+            Reject(in_function("x = " + text), "PARSE-UNEXPECTED-TOKEN")
+            for text in ["ana.with()", "ana.with(31)", "ana.with(age)", "ana.with(age: 1, 2)", "ana.with(age?: 1)"]
+        ] + [
             Reject(in_function("x = a |> b.with(c: 1)"), "PARSE-PIPE-TARGET"),
             Reject(person + main_of("  ana = Person(name: \"Ana\", age: 30)\n  x = ana.within(1)\n"),
                    "CHECK-UNKNOWN-METHOD"),
