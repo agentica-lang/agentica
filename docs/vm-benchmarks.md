@@ -773,6 +773,14 @@ runs as above):
   read the cost over it: 70 ns for each call with a `{}` argument before and 15
   ns after.
 
+  Default parameters (PR #318) make every `Logger.debug("message")` build a
+  `{}` at the call site. `benchmarks/programs/logger-disabled.agc` (1,000,000
+  calls, median of 7 interleaved runs, milliseconds; the bytecode was compiled
+  once with the master front end): the empty loop takes 159 on master and 54 to
+  63 here, an empty user call 223 and 104 to 108, and a disabled
+  `Logger.debug` 393 on master, 197 with the loop changes alone and 148 with
+  the shared empty map too.
+
 The link layout moves single programs by a lot here. The same loop code built
 with the empty-value change (a few instructions in two cases, and a comment in
 `port.h`) ran `arithmetic` in 0.133 s where the build before it took 0.103 s
