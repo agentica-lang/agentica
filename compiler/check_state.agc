@@ -21,9 +21,12 @@ export struct Binding
 end
 
 ## The result type of the function or block being checked. Infer is a block whose result is not known yet: the first
-## return or the last expression gives it.
+## return or the last expression gives it. InferResult is a block that must give a Result of a type not known yet (the
+## block of Task.map): the first return or the last expression gives the whole type, which must be a Result, and
+## `try` works in it, since the outer type is a Result whatever the inner one is.
 export enum Slot
   Infer
+  InferResult
   Known(Types.Type)
 end
 

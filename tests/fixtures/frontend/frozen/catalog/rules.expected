@@ -49,6 +49,7 @@ SetToA
 Show
 TaskAwait
 TaskAwaitTimeout
+TaskMap
 TaskSpawn
 TaskSpawnOwning
 TestEq

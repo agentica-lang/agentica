@@ -192,7 +192,8 @@ def check_invoke(cx: State.Cx, st: State.St, node: Ast.Invoke) -> Result[State.O
   return ok(State.Out(st: current, type: T.result(target.type)))
 end
 
-# try needs a function (not an inferring block) that returns a Result, and an operand that is a Result.
+# try needs a function, or a block, that returns a Result (a block with an inferred result qualifies only when it must
+# give a Result), and an operand that is a Result.
 def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -> Result[State.Out]
   if !result_context?(st)
     return error(
@@ -220,6 +221,7 @@ end
 def result_context?(st: State.St) -> Bool
   case st.result
     State.Slot.Known(type) -> return T.is(type, "Result")
+    State.Slot.InferResult -> return true
     State.Slot.Infer -> return false
   end
 end
