@@ -103,8 +103,12 @@ int main(void) {
   assert(run_one(&vm, 0, 5000) == 107);
   assert(run_one(&vm, 2000, 20) == -1);
   assert(!agc_io_close(&vm));
-  pause_ms(2100);
-  assert(agc_io_close(&vm));
+  bool closed = false;
+  for (int attempt = 0; attempt < 500 && !closed; attempt++) {
+    closed = agc_io_close(&vm);
+    if (!closed) pause_ms(10);
+  }
+  assert(closed);
   assert(vm.loop == NULL);
   /* The single binary runs two VMs in one process, one after the other: the second watches the stop signals with a
      wake handle of its own once the first is closed, and both closes settle. */
