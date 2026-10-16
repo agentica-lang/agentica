@@ -46,6 +46,10 @@ is shared with CI, so the numbers are rough.
 | maps | 5 rounds of 6,000 `put` and `get` over 1,009 keys | 0.094 | 0.024 | 3.9 |
 | calls | recursive `fib` and 40,000 small helper calls | 0.021 | 0.037 | 0.6 |
 | case | an enum instruction list run 5,000 times through `case` | 0.022 | 0.069 | 0.3 |
+| small-values | one-character and empty Strings, empty Lists, Maps and Sets, 2 rounds | 0.111 | 0.093 | 1.2 |
+
+The `small-values` row is from 2026-10-16 (`--runs 7`, the shared small values
+of roadmap 7g, below); VM peak RSS 7.1 MB, Python 10.1 MB.
 
 At size 1 each run takes 20 to 100 ms, so the ratios are rough. The VM rows for
 knight-tour, maze-bfs, traveling-salesman and maps come from a run on the PR #80
@@ -912,3 +916,119 @@ cause is not the start of the function; it is most likely the indirect jump of
 the `switch` and the predictor, which the position of the code changes. The
 tables above are the final build; read a difference below 10% as noise, and
 `arithmetic` as a range, 0.10 to 0.13 s here, against 0.276 s on master.
+
+### Speed pass, shared small values (§34)
+
+The VM now returns one shared object for `""`, the one-character ASCII Strings,
+`[]`, `{}` and the empty `Set` from the builtins that compute them (the list
+of paths is in `docs/future/34-shared-small-values.md`, §34.6). Output, steps,
+turn costs and every golden are the same. The master binary (61d7c188) was
+built apart and kept; to count bytes, both binaries got one throwaway line that
+adds `total_bytes=` (`GC_get_total_bytes`) to the total line of
+`AGENTICA_VM_TRACE=profile`. That line is not in the tree.
+
+Machine: AMD Ryzen 5 3550H (8 logical CPUs), 12 GB, Debian 13, gcc 14.2. The
+runs were interleaved (A B A B), the unit is the median of the round medians,
+and the load average was 0.9 to 2.7, mostly 1.1 to 1.7. A set of runs at a load
+of 3 to 7 was thrown away and done again, so the numbers below are not "measured
+under load", but a few runs touched 2.7: compare the two columns of a row.
+
+Micro programs, each a loop of 0.1 to 3 million iterations over one path (3
+rounds of 3 runs, bytecode compiled once; the megabytes and collections come
+from the profile line):
+
+| Path | Master s | This PR s | Ratio | Master MB (GCs) | This PR MB (GCs) |
+|---|---:|---:|---:|---:|---:|
+| `text.at(i)` | 0.422 | 0.321 | 0.76 | 104.0 (18) | 8.1 (3) |
+| `text.slice(i, 1)` | 0.443 | 0.334 | 0.76 | 104.1 | 8.0 |
+| `String.from_code` of ASCII | 0.452 | 0.336 | 0.74 | 102.8 (28) | 6.8 (3) |
+| `trim` with nothing to trim | 0.313 | 0.218 | 0.70 | 102.8 | 6.7 |
+| `reverse` of short Strings | 0.513 | 0.393 | 0.77 | 134.8 (36) | 6.8 (3) |
+| `upcase` and `downcase` of one character | 2.176 | 1.318 | 0.61 | 403.8 (107) | 7.0 (3) |
+| `to_s` of a digit | 0.499 | 0.444 | 0.89 | 70.8 (20) | 6.7 (3) |
+| empties: `slice(0, 0)`, `trim` of blanks, `join` of `[]`, `replace` to nothing | 0.677 | 0.545 | 0.81 | 135.3 (37) | 7.2 (3) |
+| `split` with empty pieces | 0.256 | 0.230 | 0.90 | 99.7 (28) | 61.3 (17) |
+| `split("\n")` with empty lines | 0.098 | 0.087 | 0.89 | 31.6 (7) | 21.9 (5) |
+| `String.from_bytes([])` | 0.281 | 0.236 | 0.84 | 70.9 (20) | 38.9 (11) |
+| `String.from_bytes` of one byte | 0.420 | 0.348 | 0.83 | 118.9 (32) | 86.9 (24) |
+| `JSON.parse` of small Strings and keys | 0.150 | 0.113 | 0.76 | 94.2 (28) | 67.3 (20) |
+| `File.each_line` over short lines | 0.488 | 0.463 | 0.95 | 151.1 (41) | 119.0 (32) |
+| `IO.gets` over short lines | 0.056 | 0.052 | 0.92 | 14.0 (5) | 12.3 (5) |
+| sets: `Set.new([])`, `delete` of the last element, `difference`, `intersection`, `Map.delete` | 1.885 | 1.647 | 0.87 | 455.5 (123) | 263.5 (72) |
+| empty Lists: `take(0)`, `drop`, `keys`, `to_a`, `split`, `reverse`, `filter` | 2.357 | 1.952 | 0.83 | 952.0 (258) | 743.9 (202) |
+
+The time falls less than the bytes: Boehm already takes small atomic objects
+from a free list, and a short-lived one dies cheaply (§34.4 expected this). The
+loops that keep allocating something else (the lines, the JSON nodes, the
+sets) gain 5% to 24%.
+
+The new program `benchmarks/programs/small-values.agc` (and its Python twin)
+does a bit of each: `at`, `slice`, `from_code` and `split("")` over a text,
+empty pieces, `m.get(k, [])`, a `reduce` with a `{}` seed, a `filter` that
+keeps nothing, and `Set.new`, `delete` and `difference`. The checksum is the
+same in both languages (`small-values 2: checksum 18761848`). To get past the
+link layout (below), each side was built seven times with 0, 64, 128, 192, 256,
+512 and 1216 bytes of padding in the text, and the median of the seven medians
+is the figure:
+
+| Program | Master s (range) | This PR s (range) | Ratio |
+|---|---:|---:|---:|
+| small-values | 0.1448 (0.1336 to 0.1511) | 0.1111 (0.1058 to 0.1188) | 0.77 |
+
+That is 23% less time, so the gate of §34.4 (at least 10%) is met. The program
+allocates 75.6 MB in 16 collections on master and 64.1 MB in 17 here, with
+3,946,184 steps on both.
+
+The ten existing programs and the front end, same method (seven layouts, size
+1; the ratio is this PR over master):
+
+| Program | Ratio | Program | Ratio |
+|---|---:|---|---:|
+| knight-tour | 0.97 | string-library | 0.93 |
+| maze-bfs | 1.04 (0.96 on a repeat) | strings | 0.92 |
+| traveling-salesman | 0.93 | list-build | 0.92 |
+| arithmetic | 1.01 | list-bulk | 1.00 |
+| lists | 1.08 (1.02) | maps | 1.00 |
+| sets | 1.05 (1.01) | case | 0.99 |
+| calls | 1.07 (1.07; 1.02 at size 10) | logger-disabled | 1.02 |
+
+`calls` is the one row above the 2% of the gate. It runs recursive `fib` and
+small helpers and no builtin that changed, so the +7% is not a path of this
+PR; at ten times the size, where start-up weighs less, it shows +2%. The
+start-up of `hello.agc` (6.1 ms) differs by 0.1 to 0.2 ms; `agc_vm_init` makes
+one object more (the empty String; the empty Set is the empty Map).
+
+The front end does not gain, as the count says: `check compiler/parser.agc`
+allocates 46.25 MB on master and 46.19 MB here (-0.15%), 8 collections on both,
+7,762,160 steps on both. Its time is 0.2292 s against 0.2312 s (+0.9%) and
+0.2276 s against 0.2289 s (+0.6%) in two runs, and `check
+stdlib/bdd/gherkin.agc` 0.0701 s against 0.0705 s (+0.5%): neutral.
+
+**The link layout hides small differences.** Adding bytes of padding to the
+text of the master binary alone, 64 to 1216 of them, moves the empty loop of
+`logger-disabled` between 53 and 98 ms, an empty user call between 102 and 172
+ms and a disabled `Logger.debug` between 144 and 250 ms. The slow empty loop
+of the first build of this PR (98 ms against 60) was found again on master with
+128 bytes of padding. It is not the offsets of the fields in `agc_runtime`
+(a build that kept them gave the same slowdown), not the heap offsets (extra
+allocations of 16 to 1008 bytes at start-up changed nothing), and not the size
+of `agc_run_turn`, which is the same in both. As in the third part above, read
+a pure-interpreter difference below 10% from one layout as noise, and look at
+more than one layout before blaming a change.
+
+Kept: every part of the list above, since each one shows fewer bytes and less
+time in a loop of its own. Tried and dropped:
+
+- **`CONCAT` with an empty side returns the other String.** A loop of
+  `(s + "")` allocates 198 MB before and 6.7 MB after, but real programs do not
+  add empty Strings: `check compiler/parser.agc` allocated 45.89 MB with the
+  change and 45.95 MB without. A branch in the hottest opcode for nothing.
+- **`filter` and `map` return the shared empty List when nothing is kept.** It
+  saves one list of about 40 bytes for each call. The code is in
+  `resume_native` of `vm/interp.c`, which `File.each_line` also runs through;
+  in one layout that loop took 0.487 s on master and 0.548 s with the edit
+  (+12%), and 0.462 s without it (-5%), so it was taken out again.
+- **Not done** (one allocation for each I/O operation, so little to save):
+  the Strings made by `agc_utf8_decode` for process output, TCP reads and
+  `read_text`, HTTP bodies, `Dir.list`; and the `[]` of a JSON array, whose
+  builder has no vm.

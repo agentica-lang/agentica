@@ -144,6 +144,13 @@ and the other features after the JIT.
    hello check is 17.5 ms, not 24.3, and `check stdlib/bdd/gherkin.agc` is
    about 8 ms faster. Numbers in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-vm-start-up-row-83).
+   **Shared small values, done (2026-10-16,
+   [§34](../future/34-shared-small-values.md)):** one empty String and one
+   empty Set join the one-character Strings, the empty List and the empty Map,
+   and the builtins that end with one of them return it, so a loop of `at` or
+   `slice` allocates 92% fewer bytes and the new `small-values` program takes
+   23% less time. Numbers, the layout noise and what was dropped in
+   [vm-benchmarks](../vm-benchmarks.md#speed-pass-shared-small-values-34).
    Still to do: the parser, for room under the 100 ms for
    `stdlib/bdd/gherkin.agc`.
 4. **Done (2026-10-16)**: default parameter values (row 7.5a,
