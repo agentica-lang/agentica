@@ -29,8 +29,10 @@ comment), then a step that calls it. Targets that are not obvious:
   with `stage2`. The stages are the same bytes in every mode, and a mode
   builds only its own first binary. `make stage1`, `stage2` and `stage3` build
   the stages alone. `fixed-point` adds one check: `dist/agentica` compiles the
-  front end with its own embedded sources, and that must be `stage2` again
-  (about 25 s).
+  front end with its own embedded sources, and that must be `stage2` again,
+  and compiles `compiler/embedded/runner.agc` and `steps.agc` to the bytes
+  that the binary carries (about 25 s). The first binary of the bootstrap
+  carries no runner and no step program, because it has no `stage2` yet.
 - Refreshing stage0 (`make stage0`). `bootstrap/stage0.agcb` is a stage2 that
   was checked in; it is the only seed of the build. Refresh it (1) after a
   change that the old stage0 cannot compile or load, and (2) before a

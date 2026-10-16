@@ -9,12 +9,14 @@ How `agentica test` works: the driver (`compiler/bdd_driver.agc`, part of the fr
 - `agentica test` is part of the front end of the binary (§35.4 steps 7 and 8; `compiler/cli.agc` calls
   `Driver.run(options, settings)` in its own process, with the settings of the command line: the version, the provider
   of the `std/` sources and `self_path`, the path of the binary). The runner and each program under test are children
-  of the same binary: `settings.self_path run --allow-run [--seed N] --driver-pid PID -- runner.agcb config.jsonl`,
+  of the same binary: `settings.self_path run --allow-run [--seed N] --driver-pid PID --embedded runner -- config.jsonl`
+  (the binary carries the compiled runner; see "Embedded programs" below),
   and `self_path --allow-run ... FILE.agc` for a program under test (`std/bdd`). The front end runs with `--allow-run`
   so it can start them; the user's program never runs in that runtime. A front end that stops on a runtime error (a
   bug in the driver) ends the process with status 2 and the error on stderr, never the 1 of a failed test run.
   Without `--self` (the front end started as an ordinary program) `test` says so and exits 2.
-  - the tests that need a fake runner run the front end as an ordinary program with `--self` naming a shell script
+  - the tests that need a fake runner run the front end as an ordinary program (the `std/` sources from a folder, so
+    the runner is compiled into the run dir) with `--self` naming a shell script
     that fakes the runner when it is asked for `runner.agcb` and runs the real binary otherwise
     (`front_end_command` and `fake_binary` in `tests/agentica_test.py` and `tests/test_bdd.py`);
   - a missing binary is the driver's `cannot find agentica at PATH` infrastructure report in the chosen format.
@@ -34,13 +36,27 @@ How `agentica test` works: the driver (`compiler/bdd_driver.agc`, part of the fr
     an `agentica-bdd-new-<hex>` with a free `lock` goes too, once its mtime
     is over an hour old (a live run is in that state only for a moment)
   - it writes the `std/` sources into `std/` of the run dir, compiles the
-    step program (or a default `BDD.run([])` one) and a tiny root that calls
-    `Runner.main()` (`bdd_compile.agc`: the Agentica pipeline from a file to
-    the bytes, or the first `Problem`) into 0600 `.agcb` files, discovers the
-    feature files (`bdd_discover.agc`), writes `config.jsonl`, and runs the
-    runner with `run --allow-run [--seed N] --driver-pid PID -- runner.agcb
-    config.jsonl` of the binary, as a captured child (`bdd_runner.agc`; the child environment
-    has no metrics variables, a rule of every `Process.spawn*`)
+    step program and discovers the feature files (`bdd_discover.agc`;
+    `bdd_compile.agc` is the Agentica pipeline from a file to the bytes, or the
+    first `Problem`) into 0600 `.agcb` files, writes `config.jsonl`, and runs
+    the runner with `run --allow-run [--seed N] --driver-pid PID --embedded
+    runner -- config.jsonl` of the binary, as a captured child (`bdd_runner.agc`;
+    the child environment has no metrics variables, a rule of every
+    `Process.spawn*`)
+  - Embedded programs: the runner (`compiler/embedded/runner.agc`: a root that
+    calls `Runner.main()`) and the default step program (`steps.agc`:
+    `BDD.run([])`) are compiled at build time and carried by the binary
+    (`vm/embedded.h`, `make` rule on `EMBEDDED_PROGRAMS`), so `agentica test`
+    does not compile the runner (about 0.7 s) on every run. The driver uses
+    them when the provider of `std/` is `Embedded`
+    (`Program.Embedded("runner")` in `bdd_runner.agc`, `steps_embedded` in the
+    runner config, and `--embedded steps` instead of the step bytecode path).
+    With a folder provider (the tests with a fake runner) or in the first
+    binary of the bootstrap (it carries none: `agentica test` exits 2) it
+    compiles both into the run dir as before. The texts of the two roots are
+    constants in `bdd_driver.agc`; `tests/test_bdd.py` checks that the files
+    equal them, and that a run with the embedded programs reports the same as
+    one with the compiled ones
   - `Process.spawn_captured` keeps 1 MiB of each stream, and the report of a big
     run is larger, so the runner writes the report to `report.txt` of the run
     dir (`report_path` in the config) and the driver prints that file; stderr

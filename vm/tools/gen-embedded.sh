@@ -1,6 +1,9 @@
 #!/bin/sh
-# Writes the assembly file that puts the front end and the std/ sources into the single binary (docs/vm/08-loader-and-cli.md).
-# usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE > embedded.s
+# Writes the assembly file that puts the front end, the std/ sources and two programs of `agentica test` into the single
+# binary (docs/vm/08-loader-and-cli.md).
+# usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE [RUNNER.agcb STEPS.agcb] > embedded.s
+# The runner and the default step program are optional: without them (the first binary of the bootstrap, which cannot
+# compile them yet) their length is 0 and `agentica test` compiles them as it did before.
 # The files are named relative to the directory the assembler runs in (the repository root). The index uses only
 # differences between labels of one section, which the assembler turns into constants, so the binary needs no relocations
 # for it. The layout is the one that vm/embedded.h describes.
@@ -12,11 +15,14 @@ set -euf
 front_end="${1:?usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE}"
 stdlib="${2:?}"
 modules="${3:?}"
-for f in "$front_end" "$stdlib" "$modules"; do
+runner="${4:-}"
+steps="${5:-}"
+for f in "$front_end" "$stdlib" "$modules" "$runner" "$steps"; do
   case "$f" in
-    *[!A-Za-z0-9_./-]*|'') echo "gen-embedded: $f is not a plain path" >&2; exit 1 ;;
+    *[!A-Za-z0-9_./-]*) echo "gen-embedded: $f is not a plain path" >&2; exit 1 ;;
   esac
 done
+[ -z "$runner" ] && [ -n "$steps" ] && { echo "gen-embedded: a step program needs a runner" >&2; exit 1; }
 digest() { sha256sum "$1" | cut -d ' ' -f 1; }
 names="$(sed '/^$/d' "$modules")"
 for name in $names; do
@@ -34,6 +40,17 @@ printf '\t.type agc_embedded_data, %%object\n'
 printf 'agc_embedded_data:\n'
 printf '/* sha256 %s %s */\n' "$(digest "$front_end")" "$front_end"
 printf '.Lfront_end:\n\t.incbin "%s"\n.Lfront_end_end:\n' "$front_end"
+# An absent program is an empty range between two labels.
+embed() {
+  printf '.L%s:\n' "$1"
+  if [ -n "$2" ]; then
+    printf '/* sha256 %s %s */\n' "$(digest "$2")" "$2"
+    printf '\t.incbin "%s"\n' "$2"
+  fi
+  printf '.L%s_end:\n' "$1"
+}
+embed runner "$runner"
+embed steps "$steps"
 k=0
 for name in $names; do
   printf '.Lpath%d:\n\t.asciz "%s"\n' "$k" "$name"
@@ -46,7 +63,10 @@ printf '\t.balign 8\n'
 printf '\t.globl agc_embedded_index\n'
 printf '\t.type agc_embedded_index, %%object\n'
 printf 'agc_embedded_index:\n'
-printf '\t.quad .Lfront_end - agc_embedded_data\n\t.quad .Lfront_end_end - .Lfront_end\n\t.quad %d\n' "$count"
+printf '\t.quad .Lfront_end - agc_embedded_data\n\t.quad .Lfront_end_end - .Lfront_end\n'
+printf '\t.quad .Lrunner - agc_embedded_data\n\t.quad .Lrunner_end - .Lrunner\n'
+printf '\t.quad .Lsteps - agc_embedded_data\n\t.quad .Lsteps_end - .Lsteps\n'
+printf '\t.quad %d\n' "$count"
 k=0
 for name in $names; do
   printf '\t.quad .Lpath%d - agc_embedded_data\n\t.quad .Ltext%d - agc_embedded_data\n\t.quad .Ltext%d_end - .Ltext%d\n' "$k" "$k" "$k" "$k"

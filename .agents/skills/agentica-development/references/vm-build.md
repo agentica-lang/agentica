@@ -17,7 +17,7 @@ make vm-third-party                  # only libgc (the vendored gc.o, or the sys
 make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make stage1 stage2 stage3            # the front end (compiler/front_end.agc) in build/stage/: a first binary linked with bootstrap/stage0.agcb compiles stage1; stage1 compiles stage2; stage2 compiles stage3 (--front-end); stage2 == stage3
-make fixed-point                     # the stages, dist/agentica (Linux: the VM, vm/agentica.c, stage2 and the std/ sources embedded by vm/tools/gen-embedded.sh), and dist/agentica compiling the front end gives stage2 again (about 25 s after the VM objects are built); CI runs it in `test` and in `vm-sanitizers`
+make fixed-point                     # the stages, dist/agentica (Linux: the VM, vm/agentica.c, stage2, the BDD runner and step program, and the std/ sources embedded by vm/tools/gen-embedded.sh), and dist/agentica compiling the front end gives stage2 again (about 25 s after the VM objects are built); CI runs it in `test` and in `vm-sanitizers`
 make stage0                          # refresh bootstrap/stage0.agcb from stage2 (references/ci.md, "Refreshing stage0")
 make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
 make CCACHE=                         # without ccache (used when installed and its cache dir is writable)
@@ -54,12 +54,14 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
   handles it when `run` is the first word, with the VM flags (`--max-steps`,
   `--seed`, `--flush-timeout`, `--allow-run`, `--ai`, `--json`, `--source-root`,
-  `--version`) and the hidden `--driver-pid PID`. The VM then deletes its
+  `--version`) and the hidden `--driver-pid PID` and `--embedded NAME` (run
+  the `runner` or `steps` program that the binary carries; the front end may
+  not pass it on in a hand-off). The VM then deletes its
   input right after reading it (only a private file is read with that flag); on
   Linux it first resets `SIGTERM` to its default, sets `PR_SET_PDEATHSIG` to
   `SIGTERM` and exits 2 when `getppid()` is not `PID`. `agentica test` runs the
   BDD driver in the front end; it starts the runner with `self_path run
-  --driver-pid ...` (see `references/bdd.md`). A new VM option goes in
+  --driver-pid ... --embedded runner` (see `references/bdd.md`). A new VM option goes in
   `agc_launch_parse` and in the pass-through list of the front end
   (`compiler/cli_options.agc` and the hand-off check in
   `vm/agentica.c`). A new builtin goes into `VM_BUILTINS` with its C

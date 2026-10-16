@@ -31,15 +31,30 @@ static const char usage[] =
 
 /* The std/ sources of the binary, from the index that make wrote. */
 static agc_std_source *std_sources(size_t *count) {
-  size_t n = (size_t)agc_embedded_index[2];
+  size_t n = (size_t)agc_embedded_index[6];
   agc_std_source *sources = agc_alloc(agc_size_mul(n ? n : 1, sizeof *sources));
   for (size_t k = 0; k < n; k++) {
-    const uint64_t *row = agc_embedded_index + 3 + 3 * k;
+    const uint64_t *row = agc_embedded_index + 7 + 3 * k;
     const char *path = (const char *)agc_embedded_data + row[0];
     sources[k] = (agc_std_source){path, agc_embedded_data + row[1], (size_t)row[2]};
   }
   *count = n;
   return sources;
+}
+
+/* The program that `run --embedded WHICH` runs: the BDD runner or the default step program of `agentica test`, compiled
+ * when the binary was built. NULL for another name; the length is 0 when this binary carries none (the first binary of
+ * the bootstrap, which cannot compile them). */
+static const uint8_t *embedded_program(const char *which, size_t *len) {
+  size_t slot;
+  if (strcmp(which, "runner") == 0)
+    slot = 2;
+  else if (strcmp(which, "steps") == 0)
+    slot = 4;
+  else
+    return NULL;
+  *len = (size_t)agc_embedded_index[slot + 1];
+  return agc_embedded_data + agc_embedded_index[slot];
 }
 
 /* The path the front end gets as --self, to start this binary again (the `test` command of the full CLI does). On Linux
@@ -144,6 +159,10 @@ static int run_program(agc_launch *launch, const agc_front_end *fe) {
             name);
     return 2;
   }
+  if (options.embedded) {
+    fprintf(stderr, "%s: the front end passed --embedded, which only %s takes\n", name, run_name);
+    return 2;
+  }
   if (!agc_launch_flush_env(name, &options)) return 2;
   agc_program *program = NULL;
   char error[160];
@@ -176,7 +195,8 @@ static void print_version(void) {
 
 /* `agentica run`: argv[2] and on are the options, then `--` (or the first word that is not an option), the file and
  * the program's arguments. The steps and their order are those of a run of the front end's program, with the options
- * typed here instead of handed over: a start that fails is status 2. */
+ * typed here instead of handed over: a start that fails is status 2. With `--embedded NAME` there is no file: the
+ * program is one the binary carries, and every word after `--` is its argument. */
 static int run_command(agc_launch *launch, int argc, char **argv) {
   agc_launch_options options;
   int i = 2;
@@ -186,11 +206,10 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
     return fflush(stdout) == 0 ? 0 : 1;
   }
   if (status == AGC_LAUNCH_BAD) return 2;
-  if (i >= argc) {
+  if (i >= argc && !options.embedded) {
     fputs(usage, stderr);
     return 2;
   }
-  const char *path = argv[i];
   if (!agc_launch_flush_env(run_name, &options)) return 2;
   if (options.seen_driver && !agc_launch_bind(options.driver)) {
     fprintf(stderr, "%s: --driver-pid does not match the parent process\n", run_name);
@@ -198,9 +217,18 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
   }
   agc_launch_trace(launch);
   size_t len = 0;
-  uint8_t *data = read_file(path, options.seen_driver, &len);
-  if (!data) {
-    fprintf(stderr, "%s: cannot read %s\n", run_name, path);
+  const uint8_t *data = NULL;
+  /* The file is the first word; the arguments of an embedded program start where the file would have been. */
+  int first = i + 1;
+  if (options.embedded) {
+    data = embedded_program(options.embedded, &len);
+    first = i;
+    if (!data || len == 0) {
+      fprintf(stderr, "%s: this binary carries no embedded program %s\n", run_name, options.embedded);
+      return 2;
+    }
+  } else if (!(data = read_file(argv[i], options.seen_driver, &len))) {
+    fprintf(stderr, "%s: cannot read %s\n", run_name, argv[i]);
     return 2;
   }
   agc_program *program = NULL;
@@ -208,15 +236,16 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
   if (!agc_load_traced(data, len, &program, error, sizeof error, &launch->trace)) {
     fprintf(stderr, "%s: invalid bytecode: %s\n", run_name, error);
     /* The usual mistake: a source file given to run. */
-    if (len < 4 || memcmp(data, AGC_MAGIC, 4) != 0)
-      fprintf(stderr, "%s: %s is not compiled bytecode; to run a source file, use agentica %s\n", run_name, path, path);
+    if (!options.embedded && (len < 4 || memcmp(data, AGC_MAGIC, 4) != 0))
+      fprintf(stderr, "%s: %s is not compiled bytecode; to run a source file, use agentica %s\n", run_name, argv[i],
+              argv[i]);
     return 2;
   }
   if (!agc_program_set_source_root(program, options.source_root, options.source_root_chars)) {
     fprintf(stderr, "%s: --source-root is too long for this program\n", run_name);
     return 2;
   }
-  agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(argc, argv, i + 1), NULL);
+  agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(argc, argv, first), NULL);
   agc_launch_end(vm, agc_vm_run(vm));
 }
 

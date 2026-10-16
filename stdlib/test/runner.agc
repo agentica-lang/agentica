@@ -13,6 +13,7 @@ struct Config
   # The binary, started as `run ...` for the step program and for each scenario.
   vm: String
   steps_bytecode: String
+  steps_embedded: Bool
   steps_source: String
   steps_root: String
   steps_error: String
@@ -191,6 +192,7 @@ def seeded(config: Config, seed: Int) -> Config
   return Config(
     vm: config.vm,
     steps_bytecode: config.steps_bytecode,
+    steps_embedded: config.steps_embedded,
     steps_source: config.steps_source,
     steps_root: config.steps_root,
     steps_error: config.steps_error,
@@ -533,7 +535,7 @@ def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Erro
 end
 
 def vm_args(config: Config, steps: Int, mode: String) -> List[String]
-  return [
+  options = [
     "run",
     "--allow-run",
     "--json",
@@ -543,11 +545,11 @@ def vm_args(config: Config, steps: Int, mode: String) -> List[String]
     config.seed.to_s,
     "--source-root",
     config.steps_root,
-    "--",
-    config.steps_bytecode,
-    "--agentica-bdd",
-    mode,
   ]
+  if config.steps_embedded
+    return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode])
+  end
+  return options.concat(["--", config.steps_bytecode, "--agentica-bdd", mode])
 end
 
 def failure(code: String, message: String, span: Report.Span) -> Report.Verdict

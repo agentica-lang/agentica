@@ -171,12 +171,17 @@ byte of a file with a type table, an Updates section or Globals.
   so a value of it changes no run. The binary is the VM; a program that starts
   `agentica` again (the BDD driver) uses the path in `Settings.self_path`.
 - `agentica test` runs in the binary (`docs/bdd.md`). The BDD driver is part of
-  the front end (`compiler/bdd_driver.agc`). It compiles the step program and
-  the runner to a private run directory, starts the runner with `agentica run
-  --allow-run --driver-pid PID -- ...` (`PID` is its own), and the runner starts
-  one VM per scenario or test file with the same command. A front end that
-  stops with an error (a bug in the driver) ends the process with status 2,
-  never the 1 of a failed test run.
+  the front end (`compiler/bdd_driver.agc`). It compiles the test files to a
+  private run directory, starts the runner with `agentica run --allow-run
+  --driver-pid PID --embedded runner -- CONFIG` (`PID` is its own), and the
+  runner starts one VM per scenario or test file with the same command. The
+  runner and the default step program are not compiled by the driver: the
+  binary carries them, compiled at build time (see "The embedded data"). A
+  front end that reads the `std/` sources from a folder (`--stdlib`, the tests
+  that fake the binary) compiles both into the run directory, as before, and
+  starts the runner with `-- runner.agcb CONFIG`. A front end that stops with
+  an error (a bug in the driver) ends the process with status 2, never the 1
+  of a failed test run.
 - `make` builds `dist/agentica` from `bootstrap/stage0.agcb` (35.3). The
   release builds it against glibc 2.28 (11).
 - Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.
@@ -208,6 +213,12 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   and runs it in one runtime. No front end is loaded. `agentica run --version`
   prints the long line (`agentica 0.3.0 (libgc ..., yyjson ..., libuv ...,
   OpenSSL ...)`); `agentica --version` prints the version alone.
+  `--embedded NAME` (hidden, like `--driver-pid`; once) runs a program that
+  the binary carries in place of the file: `runner` or `steps`, the two
+  programs of `agentica test`. The words after `--` are all the program's
+  arguments. A name that is not one of them, or a binary that carries none
+  (the first binary of the bootstrap), is exit 2, and the front end may not
+  pass the option on in a hand-off.
 
 - **Two runs in one process.** `agentica [--front-end FILE.agcb] WORDS...`
   loads the front end (the carried one, or `FILE`; `--front-end` must be the
@@ -244,8 +255,9 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   exactly `--ai`, `--json`, `--allow-run`, `--max-steps N`, `--seed N`,
   `--flush-timeout MS` and `--source-root DIR`, each once, and nothing else; no
   positional word, no `--version`. `--driver-pid` is refused (exit 2): it says
-  which process started this one, and only that process can say so. The hand-off
-  takes at most 64 option words and 1,048,576 argument words
+  which process started this one, and only that process can say so. So is
+  `--embedded` (exit 2): only `agentica run` starts an embedded program. The
+  hand-off takes at most 64 option words and 1,048,576 argument words
   (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`), so the counts
   fit an `int`. The file of `--front-end` is opened with `O_NONBLOCK` and must
   be a regular file of at most 256 MiB, so a named pipe is refused at once.
@@ -272,11 +284,18 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   stay). Only `vm/agentica.c` calls it, for the front end; the program that the
   front end hands over goes through `agc_load_traced`, so it is checked like a
   file given to `agentica run`.
-- **The embedded data.** `agc_embedded_data` holds the front end, then for each
-  `std/` source its NUL-terminated path and its text. `agc_embedded_index` has
-  `[offset, length]` of the front end, the count `N`, and `N` triples
-  `[path offset, text offset, text length]`. Both are `.rodata`, built from
-  `.incbin` and label differences, so there are no relocations.
+- **The embedded data.** `agc_embedded_data` holds the front end, the BDD
+  runner and the default step program of `agentica test`, then for each `std/`
+  source its NUL-terminated path and its text. `agc_embedded_index` has
+  `[offset, length]` of the front end, of the runner and of the step program,
+  the count `N`, and `N` triples `[path offset, text offset, text length]`.
+  Both are `.rodata`, built from `.incbin` and label differences, so there are
+  no relocations. The runner and the step program are `compiler/embedded/
+  runner.agc` and `steps.agc` compiled by the first binary with `stage2` as its
+  front end (`build/stage/runner.agcb`, `steps.agcb`), against the `std/`
+  sources of the same build; `make fixed-point` checks that `dist/agentica`
+  compiles the same bytes. The first binary of the bootstrap is linked without
+  them (length 0), because it has no `stage2` yet to compile them with.
 
 **VM tracing (as built).** The rules are in `docs/future/24-logging.md` §24.4.
 This note lists what the code chose.

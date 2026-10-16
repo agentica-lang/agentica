@@ -39,9 +39,10 @@ compiler/         # the front end in Agentica (35.4, one stage per PR); lexer, p
   bytecode_tables.agc bytecode_bytes.agc bytecode_pool.agc  # bytecode writer: format constants and opcode numbers, little-endian integers, UTF-8 and chunk lists, interned tables
   bytecode_spans.agc bytecode_types.agc bytecode_function.agc bytecode_failure.agc  # the span table, the Types and Decodable sections, one function (constants, updates, builtins, labels), BYTECODE- problems
   bytecode_writer.agc  # write(root_dir, program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
-  bdd_driver.agc  # the BDD driver (35.4 step 7), part of the front end: run(options, settings) -> Ending, the runner and tests compiled into the run directory
+  bdd_driver.agc  # the BDD driver (35.4 step 7), part of the front end: run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
   bdd_options.agc bdd_report.agc bdd_files.agc bdd_source_root.agc  # the arguments (driver options, then the user's words); the usage and infrastructure reports; private 0600 writes in pieces; the VM's --source-root of a file
   bdd_discover.agc bdd_compile.agc bdd_rundir.agc bdd_runner.agc  # the walk over the test paths; file -> Compiled.Bytes | Rejected(Problem); the temporary directory, lock and sweep; the runner as a captured child and its report file
+  embedded/runner.agc embedded/steps.agc  # not stage inputs: the roots of the BDD runner and the default step program, compiled by `make` with stage2 and embedded in the binary
   diagnostic_json.agc  # the --json object of a Problem
   diagnostic_plain.agc diagnostic_ai.agc save_file.agc  # the plain text of a Problem and its --ai text; a file written in pieces (compile -o)
   pipeline.agc  # read_root, check_file, build, compile: link, check, lower and write, shared by the CLI and the BDD driver
@@ -76,7 +77,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   trace.h         # the trace categories (references/vm-builtins.md)
   launch.c launch.h  # shared by both runs of agentica.c: the option parser, seeds, a runtime from a program, SIGPIPE, the end of the run and the exit code (references/vm-io.md)
   agentica.c      # the binary's main: `run` (the VM with its flags), else the front end in a first runtime, retired at the hand-off, then the program in a second (references/vm-core.md)
-  embedded.h      # the symbols of the generated embedded.s: the front end and the std/ sources (references/vm-build.md)
+  embedded.h      # the symbols of the generated embedded.s: the front end, the BDD runner and step program, and the std/ sources (references/vm-build.md)
   loop.c          # libuv event loop and resource registry (references/vm-io.md)
   files.c         # File, Dir and Path builtins (Linux) (references/vm-io.md)
   tree.c          # agc_tree_refused and agc_remove_tree for Path.remove: a tree walk that never follows a link (references/vm-io.md)

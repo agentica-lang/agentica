@@ -10,12 +10,14 @@
 #include "port.h"
 
 /* The options that the VM takes before the program. max_steps and flush_timeout are the values after the defaults
- * and the flags; the seen_ flags say what was typed (the environment may still set the flush timeout). */
+ * and the flags; the seen_ flags say what was typed (the environment may still set the flush timeout). embedded is the
+ * word after --embedded, which only `agentica run` takes: the program is one the binary carries, not a file. */
 typedef struct {
   int64_t max_steps, flush_timeout, driver;
   uint32_t seed;
   agc_style style;
   const char *source_root;
+  const char *embedded;
   size_t source_root_chars;
   bool seen_flush, seen_seed, seen_driver, allow_run;
 } agc_launch_options;
