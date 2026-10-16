@@ -23,7 +23,13 @@ for f in "$front_end" "$stdlib" "$modules" "$runner" "$steps"; do
   esac
 done
 [ -z "$runner" ] && [ -n "$steps" ] && { echo "gen-embedded: a step program needs a runner" >&2; exit 1; }
-digest() { sha256sum "$1" | cut -d ' ' -f 1; }
+digest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d ' ' -f 1
+  else
+    shasum -a 256 "$1" | cut -d ' ' -f 1
+  fi
+}
 names="$(sed '/^$/d' "$modules")"
 for name in $names; do
   case "$name" in
@@ -33,11 +39,18 @@ for name in $names; do
 done
 count=0
 for name in $names; do count=$((count + 1)); done
-printf '\t.section .rodata\n'
+format="${AGENTICA_OBJECT_FORMAT:-$(uname -s)}"
+prefix=
+case "$format" in
+  Linux|elf) format=elf; printf '\t.section .rodata\n' ;;
+  Darwin|macho) format=macho; prefix=_; printf '\t.section __TEXT,__const\n' ;;
+  MINGW*|MSYS*|coff) format=coff; printf '\t.section .rdata,"dr"\n' ;;
+  *) echo "gen-embedded: unsupported object format: $format" >&2; exit 1 ;;
+esac
 printf '\t.balign 16\n'
-printf '\t.globl agc_embedded_data\n'
-printf '\t.type agc_embedded_data, %%object\n'
-printf 'agc_embedded_data:\n'
+printf '\t.globl %sagc_embedded_data\n' "$prefix"
+if [ "$format" = elf ]; then printf '\t.type agc_embedded_data, %%object\n'; fi
+printf '%sagc_embedded_data:\n' "$prefix"
 printf '/* sha256 %s %s */\n' "$(digest "$front_end")" "$front_end"
 printf '.Lfront_end:\n\t.incbin "%s"\n.Lfront_end_end:\n' "$front_end"
 # An absent program is an empty range between two labels.
@@ -58,19 +71,19 @@ for name in $names; do
   printf '.Ltext%d:\n\t.incbin "%s/%s"\n.Ltext%d_end:\n' "$k" "$stdlib" "$name" "$k"
   k=$((k + 1))
 done
-printf '\t.size agc_embedded_data, . - agc_embedded_data\n\n'
+if [ "$format" = elf ]; then printf '\t.size agc_embedded_data, . - agc_embedded_data\n\n'; fi
 printf '\t.balign 8\n'
-printf '\t.globl agc_embedded_index\n'
-printf '\t.type agc_embedded_index, %%object\n'
-printf 'agc_embedded_index:\n'
-printf '\t.quad .Lfront_end - agc_embedded_data\n\t.quad .Lfront_end_end - .Lfront_end\n'
-printf '\t.quad .Lrunner - agc_embedded_data\n\t.quad .Lrunner_end - .Lrunner\n'
-printf '\t.quad .Lsteps - agc_embedded_data\n\t.quad .Lsteps_end - .Lsteps\n'
+printf '\t.globl %sagc_embedded_index\n' "$prefix"
+if [ "$format" = elf ]; then printf '\t.type agc_embedded_index, %%object\n'; fi
+printf '%sagc_embedded_index:\n' "$prefix"
+printf '\t.quad .Lfront_end - %sagc_embedded_data\n\t.quad .Lfront_end_end - .Lfront_end\n' "$prefix"
+printf '\t.quad .Lrunner - %sagc_embedded_data\n\t.quad .Lrunner_end - .Lrunner\n' "$prefix"
+printf '\t.quad .Lsteps - %sagc_embedded_data\n\t.quad .Lsteps_end - .Lsteps\n' "$prefix"
 printf '\t.quad %d\n' "$count"
 k=0
 for name in $names; do
-  printf '\t.quad .Lpath%d - agc_embedded_data\n\t.quad .Ltext%d - agc_embedded_data\n\t.quad .Ltext%d_end - .Ltext%d\n' "$k" "$k" "$k" "$k"
+  printf '\t.quad .Lpath%d - %sagc_embedded_data\n\t.quad .Ltext%d - %sagc_embedded_data\n\t.quad .Ltext%d_end - .Ltext%d\n' "$k" "$prefix" "$k" "$prefix" "$k" "$k"
   k=$((k + 1))
 done
-printf '\t.size agc_embedded_index, . - agc_embedded_index\n\n'
-printf '\t.section .note.GNU-stack,"",%%progbits\n'
+if [ "$format" = elf ]; then printf '\t.size agc_embedded_index, . - agc_embedded_index\n\n'; fi
+if [ "$format" = elf ]; then printf '\t.section .note.GNU-stack,"",%%progbits\n'; fi
