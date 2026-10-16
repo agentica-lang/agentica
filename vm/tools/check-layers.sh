@@ -7,7 +7,7 @@ bad() { printf 'vm layers: %s\n' "$*" >&2; fail=1; }
 for tool in rg nm; do command -v "$tool" >/dev/null || { bad "$tool is not installed"; exit 1; }; done
 obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
 cd "$(dirname "$0")/.."
-core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c channel.c loop.c input.c output.c random.c loader.c builtins.c diag.c trace.c"
+core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c task_map.c channel.c loop.c input.c output.c random.c loader.c builtins.c diag.c trace.c"
 services="strings.c numbers.c json.c json_typed.c files.c tree.c stream.c duplex.c process.c tcp.c http_fields.c http_client.c http_server.c logger.c testing.c front_end.c"
 adapters="tls_openssl.c http_pico.c http_body.c"
 driver="launch.c agentica.c builtin_tables.c fuzz.c fuzz_main.c"

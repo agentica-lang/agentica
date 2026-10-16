@@ -4,8 +4,11 @@
 import Ast from "ast"
 import Model from "builtin_model"
 import Args from "check_args"
+import Lists from "check_list"
 import State from "check_state"
+import Stmt from "check_stmt"
 import CheckTypes from "check_types"
+import Source from "source"
 import T from "types"
 
 ## Checks a call of a Task, Channel, Map or Set builtin by its rule. Any other rule is the caller's.
@@ -15,6 +18,7 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.TaskSpawnOwning -> return check_spawn(cx, st, site, true)
     Model.Rule.TaskAwait -> return check_await(cx, st, site)
     Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
+    Model.Rule.TaskMap -> return check_task_map(cx, st, site)
     Model.Rule.ChannelNew -> return check_channel_new(cx, st, site)
     Model.Rule.ChannelSend -> return check_channel_send(cx, st, site)
     Model.Rule.ChannelRecv -> return check_channel_recv(cx, st, site)
@@ -82,6 +86,69 @@ def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[
   end
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: timeout.st, type: T.Type.Enum("Await", [T.item(target.type)])))
+end
+
+# Task.map(items, limit, timeout_ms, f): the callback is a block (which gets the item type from the list) or a function
+# value of one parameter, and gives a Result; the call gives one Result per item. A block whose Result type the
+# expected type does not give takes it from its body (Slot.InferResult), so try works in it.
+def check_task_map(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  callback = site.args[3]
+  case callback
+    Ast.Expr.BlockLit(block) -> return task_map_block(cx, st, site, block)
+    _ -> return task_map_function(cx, st, site, callback)
+  end
+end
+
+def task_map_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.BlockLit) -> Result[State.Out]
+  annotated = try Lists.annotated_parameter(cx, st, block, 0)
+  items = try Args.list_argument(cx, st, site, T.list_of(annotated))
+  counts = try task_map_counts(cx, items.st, site)
+  checked = try Stmt.check_block_body(
+    cx,
+    counts.st,
+    block,
+    Ast.Optional.Present([T.item(items.type)]),
+    task_map_block_result(site.expected),
+    Ast.Optional.Absent,
+  )
+  return task_map_result(cx, checked.st, checked.type, block.span)
+end
+
+def task_map_function(cx: State.Cx, st: State.St, site: State.Site, callback: Ast.Expr) -> Result[State.Out]
+  checked = try State.expr(cx, st, callback, T.Type.Unknown)
+  span = Ast.expr_span(callback)
+  if !T.is(checked.type, "Fn") or T.params(checked.type).size != 1
+    return error(
+      State.fail(cx, checked.st, "CHECK-TYPE-MISMATCH", "Task.map requires a function with one parameter", span),
+    )
+  end
+  items = try Args.list_argument(cx, checked.st, site, T.Type.List(T.params(checked.type)[0]))
+  counts = try task_map_counts(cx, items.st, site)
+  return task_map_result(cx, counts.st, checked.type, span)
+end
+
+# limit and timeout_ms are Ints; their values are checked when the call runs.
+def task_map_counts(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  limit = try State.expr(cx, st, site.args[1], T.Type.Int)
+  return State.expr(cx, limit.st, site.args[2], T.Type.Int)
+end
+
+# The Result type the block must give: the item of the expected list when that is a Result, else Result[Unknown], which
+# says the body decides the inner type.
+def task_map_block_result(expected: T.Type) -> T.Type
+  if T.is(expected, "List") and T.is(T.item(expected), "Result")
+    return T.item(expected)
+  end
+  return T.Type.Result(T.Type.Unknown)
+end
+
+# The call gives a list of the callback's Results; a callback that gives anything else is CHECK-TYPE-MISMATCH.
+def task_map_result(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Span) -> Result[State.Out]
+  result = T.result(callback)
+  if !T.is(result, "Result")
+    return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), result, span))
+  end
+  return ok(State.Out(st: st, type: T.Type.List(result)))
 end
 
 # Channel.new needs the channel type from its context.

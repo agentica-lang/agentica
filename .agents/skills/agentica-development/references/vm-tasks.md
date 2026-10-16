@@ -1,6 +1,6 @@
 # VM tasks, channels and Test builtins
 
-The scheduler, task cancellation, `Channel` and the `Test` builtins.
+The scheduler, task cancellation, `Task.map`, `Channel` and the `Test` builtins.
 
 Read first: `references/vm.md` and `references/vm-c.md`.
 
@@ -9,6 +9,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 | Path | Owns |
 |---|---|
 | `vm/task.c` | The scheduler (run queue, turns, park and wake), task cancellation and the `Task` builtins. |
+| `vm/task_map.c` | `Task.map`: a stepper on the caller that starts, times and cancels the items. |
 | `vm/channel.c` | The `Channel` builtins: a ring buffer, waiter queues and reservations. |
 | `vm/testing.c` | The `Test` builtins for unit tests, such as `Test.test`. |
 
@@ -90,6 +91,39 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - a crash keeps `crash_code`, `crash_message` and `crash_span` for `Test.run`,
     and `finish_task` sets `left_children` when a task ends with running
     children
+- `vm/task_map.c`
+  - `Task.map` (`agc_task_map_builtins`, 17a,
+    `docs/future/27-iteration-and-concurrency.md` §27.1,
+    `docs/vm/10-io-scheduler.md` §10.2.1, "Task.map"; core layer): a GC
+    `map_group` whose first member is the `agc_stepper`, installed on the caller
+    by `agc_task_stepper` (as `File.each_line` does)
+  - the arguments are checked first and in order: `limit` (1 to 1024,
+    `RUNTIME-INVALID-COUNT` at `span + 2`), `timeout_ms` (above 0,
+    `RUNTIME-INVALID-DURATION` at `span + 3`), then the empty list returns the
+    list itself
+  - `map_step` runs on the caller at each wake: `collect` the ended items into
+    their slots, `expire` the oldest running item whose deadline passed (slot
+    `error("task: timed out")`, then `agc_task_cancel`), `start` items up to
+    `limit` (one `agc_count_step` each, `agc_task_spawn_seeded` with the caller
+    as parent), and, if every slot is set, charge `count` and end with the list;
+    else one `agc_wait_io` timer job for the oldest deadline
+  - one timer is enough because every item has the same timeout and starts in
+    input order, so the deadlines grow along the running list
+  - an item tells the group through the task hook (`end`, `end_data`, called by
+    `finish_task` for a return, a crash and a cancel): `item_ended` ignores an
+    item that already timed out and an item that is `cancelled` (its caller was
+    cancelled, so the group is gone), else moves it to the ended list and wakes
+    the caller. There is no dead flag: a cancelled caller never runs `map_step`
+    again
+  - a crashed item is observed (`agc_task_observe`) and its slot is
+    `error(t->crash)`; a non-`Result` item result is `RUNTIME-INTERNAL`
+  - an item that ends after its deadline but before the caller runs keeps its
+    result
+  - an item with a file close pending (`closing`) is not settled, as for
+    `Task.await`: `item_ended` puts the hook back on the task and
+    `agc_task_close_done` calls it when the last close ends; if its deadline
+    comes first it is settled as timed out without waiting for the close, and
+    `expire` marks its crash, if any, as observed
 - `vm/channel.c`
   - the `Channel` builtins (`agc_channel_builtins`,
     `docs/future/27-iteration-and-concurrency.md` §27.2,
@@ -154,6 +188,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Gotchas
 
+- Tasks: `make vm-task-map` runs `tests/test_vm_task_map.py` alone, the timing
+  cases of `Task.map` (the bound on the items in flight, timeouts, a grandchild,
+  a detached read, HTTP against a `ThreadingHTTPServer`,
+  `RUNTIME-TASK-CANCELLED`); CI runs it right after `make vm-latency`. Its
+  bounds are one-sided or generous (`scaled()`), and it skips when
+  `AGENTICA_VM_BINARY` names another binary. The golden fixtures of `Task.map`
+  (`task-map-*`) never race a timeout against work: they record step counts and
+  run the `--max-steps` sweep.
 - Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept
   out of `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it right
   after `make test`). A sleeping task and a stdin reader must wake within

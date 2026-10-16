@@ -2892,6 +2892,25 @@ def rows_50() -> List[Model.Builtin]
       ],
     ),
     Model.Builtin(
+      name: "Task.map",
+      parameters: [
+        Model.Named(name: "items", type: Types.Type.List(Types.Type.Var("A"))),
+        Model.Named(name: "limit", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Result(Types.Type.Var("R")))),
+      ],
+      result: Types.Type.List(Types.Type.Result(Types.Type.Var("R"))),
+      rule: Model.Rule.TaskMap,
+      implementation: "Task.map",
+      effects: ["concurrency"],
+      description: (
+        "Run the block for each item in its own task, at most limit (1 to 1024) at a time, each with its own " +
+        "timeout_ms (positive, from the start of that item); gives one Result per item in input order, an error " +
+        "(task: timed out) for an item that ran out of time, which is cancelled; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Task.pending_count",
       parameters: [],
       result: Types.Type.Int,

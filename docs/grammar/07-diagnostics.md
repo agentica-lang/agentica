@@ -109,6 +109,8 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `HTTP.get(...)` or another `HTTP.` call without the import | `import HTTP from "std/http"` |
 | `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`) | a handler that returns its whole response: `return ok(HttpResponse(status: 200, headers: [], body: text))` |
 | `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`) | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
+| `Task.async_stream(...)`, `Parallel.map(...)` | `Task.map(items, limit, timeout_ms) do |x| ... end`, where the block gives a `Result` |
+| `Task.async(...)`, `Thread.new(...)` | `Task.spawn(&f, arg)`, then `Task.await(task)` for its result |
 | `Enumerator.new(...)`, `Fiber.new(...)` | a producer task that sends into a channel: `Task.spawn(&produce, ch)`, then `ch.recv(timeout_ms)` |
 | `xs.lazy` on a list or a range | lists are eager; read a source that is too big for a list in a `while` loop |
 | `Agent.start_link(...)` and other `Agent.` calls | return values from tasks and combine them with `reduce`, or keep the state in one task that receives on a `Channel` |

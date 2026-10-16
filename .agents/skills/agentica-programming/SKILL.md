@@ -118,7 +118,7 @@ Read only the files the task needs:
 | [references/json.md](references/json.md) | reads or writes JSON |
 | [references/files.md](references/files.md) | reads or writes files, directories, or paths, locks a file, makes private files and directories, or removes or renames a path or a tree |
 | [references/processes.md](references/processes.md) | starts other programs and talks to them (`Process`) |
-| [references/tasks.md](references/tasks.md) | runs work concurrently, waits for a task with a timeout, passes values between tasks, or uses `Channel` |
+| [references/tasks.md](references/tasks.md) | runs work concurrently, maps a block over a list a few items at a time (`Task.map`), waits for a task with a timeout, passes values between tasks, or uses `Channel` |
 | [references/binary.md](references/binary.md) | packs or unpacks binary numbers in a `List[Int]` of bytes (`std/binary`: `u8` to `i64`, `f32`, `f64`, byte order, framing) |
 | [references/toml.md](references/toml.md) | reads or writes TOML (`std/toml`: `Toml.parse`, `Toml.encode`, the `Toml.Value` enum, decoding a config into a struct) |
 | [references/logger.md](references/logger.md) | logs with levels, fields, handlers, text or JSON lines (`std/logger`) |

@@ -1,0 +1,10 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 97,
+  "stdout": [
+    "[ok([ok(1), ok(4), ok(9)]), ok([ok(16), ok(25), ok(36)])]",
+    ""
+  ],
+  "stderr": []
+}

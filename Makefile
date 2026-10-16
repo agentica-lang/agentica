@@ -8,7 +8,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # end and the std/ sources are linked in with .incbin).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: dist/agentica
 
@@ -37,8 +37,8 @@ PYTHON ?= python3
 # (tests/eval/test_*.py are not unittest modules for this runner).
 TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
-# Modules that only run when named (make vm-latency): a directory in TESTS does not pick them up
-PY_ALONE = tests/test_vm_latency.py
+# Modules that only run when named (make vm-latency, make vm-task-map): a directory in TESTS does not pick them up
+PY_ALONE = tests/test_vm_latency.py tests/test_vm_task_map.py
 PY_TESTS = $(sort $(PY_FILES) $(filter-out $(PY_ALONE),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
 # A file that is not tests/test_<area>.py (a file of another kind, or a .py file elsewhere) would build a wrong module name below
 PY_NOT_DIR = $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(if $(wildcard $(t)/.),,$(t)))
@@ -107,6 +107,10 @@ eval-references:
 # Task wake latency next to busy tasks (docs/vm/10-io-scheduler.md 10.2.1), alone so it has the CPU to itself
 vm-latency: dist/agentica
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_latency.py
+
+# The timing cases of Task.map (docs/future/27-iteration-and-concurrency.md 27.1), alone for the same reason
+vm-task-map: dist/agentica
+	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_task_map.py
 
 test-bdd: dist/agentica
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
@@ -193,7 +197,7 @@ PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie

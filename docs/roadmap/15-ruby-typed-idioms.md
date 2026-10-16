@@ -104,8 +104,8 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   when the block ends (§25.9), and the builtin
   `File.eof?(handle, timeout_ms) -> Result[Bool]`, so the canonical example does
   not match error text. `try` in the block uses the checker rule for builtins
-  whose block result is `Result[T]`, when `T` is inferred, which the first of
-  17a (§27.1) and this item adds, the other reusing it; 17d added only the
+  whose block result is `Result[T]`, when `T` is inferred, which 17a (§27.1,
+  built) added and this item reuses; 17d added only the
   completion-value check and its help. The block form becomes the canonical way
   to use a file handle in the skill and the site. The block follows phase 16
   (`CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`, `CHECK-UNUSED-RESULT`; the

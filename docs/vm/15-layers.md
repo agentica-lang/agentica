@@ -38,7 +38,7 @@ before it moved; the header split moved no line of a `.c` file except the
 
 | Layer | Files | May use |
 |---|---|---|
-| **Core** | `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
+| **Core** | `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
 | **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `tree.c`, `stream.c`, `duplex.c`, `process.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
 | **Adapters** | `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c` (`http_parse.h`) | their own header, their library, and from `value.h` only the memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`, `agc_size_mul`, `agc_out_of_memory`) |
 | **Driver** (not a layer: it wires them) | `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6 V2), `fuzz.c`, `fuzz_main.c` | everything |
@@ -58,6 +58,12 @@ Notes on the choices:
   `agc_channel_leave` (`task.c`), so the code cannot sit in a service the core
   may not name. Its builtin table is declared in `core.h`, as
   `agc_task_builtins` is.
+- **`task_map.c` is core.** `Task.map` spawns, cancels and times tasks, and
+  parks its caller in a stepper on the scheduler's own timer job, so it can
+  use only what the core offers (`agc_task_spawn_seeded`, `agc_task_cancel`,
+  `agc_task_stepper`, the end hook of a task, `agc_count_step`). Its builtin
+  table (`agc_task_map_builtins`) is declared in `core.h` and listed in
+  `builtin_tables.c`.
 - **`input.c`, `output.c` and `builtins.c` are core.** stdin's waiters and the
   waiters of stdout and stderr are lists the scheduler owns (§14.1), and
   `agc_task_cancel` takes a task out of them (`task.c:129`). `builtins.c` holds
@@ -235,7 +241,8 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   loader (`agc_load`, `agc_load_traced`); `agc_find_builtin`, the builtin table
   list (`agc_builtin_tables` with `agc_builtin_table_count`, defined in
   `builtin_tables.c`), `agc_core_builtins` with its count (defined in
-  `builtins.c`) and `agc_task_builtins` with its count (defined in `task.c`);
+  `builtins.c`), `agc_task_builtins` with its count (defined in `task.c`) and
+  `agc_task_map_builtins` with its count (defined in `task_map.c`);
   stdin (`agc_input_open`, `agc_input_close`, `agc_input_peek`,
   `agc_input_line`, `agc_input_all`, `agc_input_bytes`); stdout and stderr
   (`agc_output_open`, `agc_output_close`, `agc_output_leave`, `agc_output_busy`,

@@ -138,8 +138,8 @@ here are measured, not only derived. The model is not in the repository.
   run it fills (`next`, `stop`; the run is the new array, then the tail), so
   `push` is a compare and a store, inline in `value.h`, and so is the cursor
   read. `finish` aborts unless both runs are full.
-- **Unknown count.** `filter`, and the planned `Task.map`
-  ([§27.1](../future/27-iteration-and-concurrency.md#271-taskmap), results
+- **Unknown count.** `filter`, and `Task.map` (`vm/task_map.c`,
+  [§27.1](../future/27-iteration-and-concurrency.md#271-taskmap), results
   arrive out of order), fill a flat staging array of the input length and call
   `agc_list_from_array(items, n)` at the end. `filter` already allocates its
   output this way, then lowers `len` in place (`vm/interp.c:365`). After the
@@ -180,7 +180,7 @@ no list; the stepper protocol (`File.each_line` installs an `agc_stepper` and no
 list, `interp.c:283-302`). There is no `List.contains?`, `index`, `first`,
 `last` or `join` in the catalog (`src/builtins.rkt:139-155`): `String.join` is
 the only join (row 15). A new builtin that returns a list follows rows 13 and
-14; the planned `Task.map` follows §17.2, "Unknown count".
+14; `Task.map` follows §17.2, "Unknown count".
 
 ### 17.4 The C API
 

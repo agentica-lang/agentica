@@ -12,6 +12,10 @@ def parse(text: String) -> Result[Int]
   return ok(n + 1)
 end
 
+def twice(n: Int) -> Result[Int]
+  return ok(n * 2)
+end
+
 def main() -> Void
   scores: Map[String, Int] = {"a": 3, "b": 1}
   scores = scores.put("c", 2)
@@ -26,6 +30,13 @@ def main() -> Void
   puts(JSON.schema(Reading))
   task = Task.spawn(&square, 4)
   puts(Task.await(task))
+  doubled = Task.map([1, 2], 2, 100) do |n|
+    twice_n = try twice(n)
+    ok(twice_n + 1)
+  end
+  puts(doubled)
+  named: List[Result[Int]] = Task.map([3], 1, 100, &twice)
+  puts(named)
   channel: Channel[Int] = Channel.new(2)
   Channel.send(channel, 1, 100)
   got = Channel.recv(channel, 10)
