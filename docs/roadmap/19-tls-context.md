@@ -52,7 +52,17 @@ one PR with its own tests and docs.
   `docs/grammar.md`, `references/network.md`,
   `site/content/library/io-and-system/network.md`, `docs/vm/10-io-tls.md` §10.3,
   CHANGELOG ("Added").
-- Not in this phase: the later options of §29.7 (`min_version`, ALPN, client
+- [ ] 19c **ALPN** (§29.7, §30.13), decided by the owner on 2026-10-16: an
+  `alpn: List[String]` field on both options records and
+  `TLS.alpn(socket) -> String` (`""` when nothing was agreed), through
+  OpenSSL's ALPN callbacks. It lets an HTTP/2 or gRPC library written in
+  Agentica reach HTTPS servers. Tests: a golden fixture with both sides in one
+  program, and a Python `ssl` peer (`set_alpn_protocols`,
+  `selected_alpn_protocol`) for each side in `tests/test_vm_tls.py`. Docs:
+  `docs/grammar.md`, `references/network.md`,
+  `site/content/library/io-and-system/network.md`, `docs/vm/10-io-tls.md`,
+  CHANGELOG ("Added").
+- Not in this phase: the other later options of §29.7 (`min_version`, client
   certificates, `ca_data`, peer certificate info), each its own item after
   15c (built), so adding a field does not break the canonical
   `TLS.client_options().with(...)` form. Never: a verify-off path, cipher or

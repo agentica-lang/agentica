@@ -119,3 +119,28 @@ uploads to an Agentica server); each would need its own one-way test.
   its `ca_file`.
 - **STARTTLS** (`TLS.upgrade`) comes with `TlsContext` (§29.3): simple HTTP does
   not need it, since HTTPS is TLS from the first byte.
+
+### 30.13 A small client with open low layers (owner, 2026-10-16)
+
+The client stays small on purpose: connection, TLS, the per-origin pool,
+keep-alive, one deadline and size limits. Redirects, cookies, compression, a
+DNS cache, HTTP/2 and a "renew after N requests" rule are not added to the C
+client (a server that wants to recycle a connection sends `Connection: close`,
+which the client already honors). Like Python's `urllib` and `http.client`, it
+instead exposes its lower layers, so a program or a library written in
+Agentica can build what it needs:
+
+1. **ALPN in TLS** (item 19c, §29.7): the `alpn` option and `TLS.alpn(socket)`.
+   Without it an HTTP/2 or gRPC library written in Agentica cannot reach
+   HTTPS servers, which offer `h2` only through ALPN; with it, such a library
+   needs only the public `TCP`, `TLS` and `std/binary` (then `Bytes`, phase 13).
+2. **A public HTTP/1.1 connection** (designed with 20e): open one connection
+   outside the pool, send a request, read the response head, then read the
+   body piece by piece, like `http.client.HTTPConnection`. `HTTP.open` of 20e
+   is the first form of it; its design should keep the connection usable for
+   a second request when the body was read to the end, so a program can drive
+   one connection itself. `HTTP.get` and the pooled client stay the easy layer
+   on top. `HttpWire` itself stays private to `std/http`.
+
+Redirects and cookies, if a program needs them, are a loop over a request in
+Agentica code, not a C feature.
