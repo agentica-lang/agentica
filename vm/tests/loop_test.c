@@ -3,6 +3,9 @@
  * and agc_io_close, which frees the loop or refuses while a job is stuck. Also the stop-signal watch across
  * two VMs of one process, as the single binary runs them.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "../core.h"
 
 #include <assert.h>
