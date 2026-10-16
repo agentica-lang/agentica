@@ -8,7 +8,16 @@ branch.
 - **Input**: a regular file of at most 256 MiB, read with bounds checks. Every
   count is checked against the bytes left before anything is allocated. Index
   and size sums use `uint64_t`. The loader has a memory budget of 4 times the
-  file length plus 1 MiB, and every allocation is charged to it first.
+  file length plus 1 MiB, and every allocation is charged to it first. A table
+  of fixed-size entries (the spans, the instruction words and the span
+  indexes of a function) is taken once, since the count check has shown that
+  it fits, and decoded without more bounds checks; a rejection and its reason
+  are the same as with a check for each field. The text of a source is checked
+  and indexed eight ASCII bytes at a time. The collector is held off while a
+  program loads (`agc_gc_pause`, and `agc_gc_resume` after a load that
+  succeeded or failed), because everything the loader allocates is live until
+  the load ends: the front end is 3.8 MB, and the collections it triggered
+  only marked it again (the GC-stress build ignores the pause).
 - **Header**: magic, format version and Agentica version match exactly. The file
   ends right after the entry. The one exception to the exact Agentica version
   is the front end that the single binary loads itself (the carried one, or

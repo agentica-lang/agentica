@@ -318,6 +318,8 @@ size_t agc_size_add(size_t a, size_t b);
 size_t agc_size_mul(size_t a, size_t b);
 void agc_out_of_memory(void);
 unsigned agc_gc_version(void);
+void agc_gc_pause(void);
+void agc_gc_resume(void);
 bool agc_gc_stats(agc_gc_info *info);
 void agc_gc_measure(void);
 void agc_gc_collect(void);

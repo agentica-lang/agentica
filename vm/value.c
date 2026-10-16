@@ -72,6 +72,21 @@ unsigned agc_gc_version(void) {
 #endif
 }
 
+/* The loader holds the collector off while it builds a program: everything it allocates stays live until the load ends
+ * (or fails and the program is dropped), so a collection can only mark it again, and the program is megabytes for the
+ * front end. Pauses nest. The GC-stress build ignores them, so it still collects while loading. */
+void agc_gc_pause(void) {
+#if !defined(AGC_NO_GC) && !defined(AGC_GC_STRESS)
+  GC_disable();
+#endif
+}
+
+void agc_gc_resume(void) {
+#if !defined(AGC_NO_GC) && !defined(AGC_GC_STRESS)
+  GC_enable();
+#endif
+}
+
 bool agc_gc_stats(agc_gc_info *info) {
 #ifdef AGC_NO_GC
   (void)info;
@@ -442,15 +457,39 @@ size_t agc_utf8_valid(const uint8_t *s, size_t len) {
   return n + 1;
 }
 
+/* The characters of valid UTF-8: every byte but the continuation bytes (10xxxxxx). A word of eight ASCII bytes is
+ * eight characters. */
 size_t agc_utf8_count(const uint8_t *s, size_t len) {
-  size_t count = 0;
-  for (size_t i = 0; i < len; i++) count += (s[i] & 0xC0) != 0x80;
+  size_t count = 0, i = 0;
+  while (i < len) {
+    uint64_t word;
+    if (len - i >= sizeof word) {
+      memcpy(&word, s + i, sizeof word);
+      if (!(word & UINT64_C(0x8080808080808080))) {
+        i += sizeof word;
+        count += sizeof word;
+        continue;
+      }
+    }
+    count += (s[i] & 0xC0) != 0x80;
+    i++;
+  }
   return count;
 }
 
+/* Most text is ASCII, so a run of it is skipped eight bytes at a time (no byte with the high bit set) and the
+ * characters are decoded one by one only where a word has a byte of 0x80 or more. */
 bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {
   size_t count = 0, i = 0;
   while (i < len) {
+    uint64_t word;
+    while (len - i >= sizeof word) {
+      memcpy(&word, s + i, sizeof word);
+      if (word & UINT64_C(0x8080808080808080)) break;
+      i += sizeof word;
+      count += sizeof word;
+    }
+    if (i == len) break;
     size_t n = agc_utf8_valid(s + i, len - i);
     if (n == 0) return false;
     i += n;
