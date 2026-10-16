@@ -79,6 +79,7 @@ runs everything else (`references/ci.md`, "What CI runs").
 | `std/` module | `stdlib/<name>.agc`, listed in `stdlib/MODULES` (what the single binary embeds), a doc on the module and every export, comments and code style (line width, strings) as `references/library-notes.md` says |
 | test | `tests/test_<area>.py` (unittest, only; a language rule is `tests/test_spec_<area>.py` through `--json check FILE`, code and span, no message text; `tests/agentica_test.py` helpers, product CLI as a child: `cli()`, `AGENTICA_TEST_EXECUTABLE`); VM behavior: a fixture in `tests/fixtures/vm/` with its `.expected` |
 | language rule | `docs/grammar/`, the site page, and the programming skill (`.agents/skills/agentica-programming/`) |
+| style or idiom of `.agc` code (naming, pipes, `case`, errors, speed) | the code guidelines skill (`.agents/skills/agentica-code-guidelines/`) |
 
 ## VM rules in short
 
