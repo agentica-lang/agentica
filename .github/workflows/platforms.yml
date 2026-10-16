@@ -65,6 +65,23 @@ jobs:
       - run: cc --version
       - run: make vm-test
 
+  vm-macos-intel:
+    if: inputs.os != 'windows'
+    runs-on: macos-15-intel
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - if: env.AGENTICA_OPENSSL == 'system'
+        run: brew install openssl@3 pkg-config
+      - if: env.AGENTICA_OPENSSL == 'system'
+        run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - run: cc --version
+      - run: make vm-test
+
   vm-windows:
     if: inputs.os != 'macos'
     runs-on: windows-2025
