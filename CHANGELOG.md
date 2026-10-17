@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1-beta.1] - 2026-10-17
+
 ### Added
 
 - Native Windows files, imports, environment, driver and compiler bootstrap.
@@ -118,7 +120,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - Improved operator diagnostics and internal error reporting.
 - `main` returns `Void`; maps preserve insertion order and support fallible lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.4.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.4.1-beta.1...HEAD
+[0.4.1-beta.1]: https://github.com/sonic182/agentica/compare/0.4.0...0.4.1-beta.1
 [0.4.0]: https://github.com/sonic182/agentica/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/sonic182/agentica/compare/0.2.0...0.3.0
 [0.2.0]: https://github.com/sonic182/agentica/compare/0.1.0...0.2.0
