@@ -137,6 +137,10 @@ int agc_fs_fstat(int fd, agc_fs_info *info) {
 }
 
 int agc_fs_mkdir(const char *path, bool private) {
+  if (!path || !*path) {
+    errno = EINVAL;
+    return -1;
+  }
 #ifdef _WIN32
   if (private) return agc_fs_private_create(path, true);
 #endif
@@ -147,6 +151,10 @@ int agc_fs_mkdir(const char *path, bool private) {
 }
 
 int agc_fs_unlink(const char *path) {
+  if (!path || !*path) {
+    errno = EINVAL;
+    return -1;
+  }
   uv_fs_t req;
   int result = uv_fs_unlink(NULL, &req, path, NULL);
   uv_fs_req_cleanup(&req);

@@ -77,6 +77,11 @@ int main(void) {
   }
   assert(agc_fs_open(NULL, AGC_FS_WRITE) == -1 && errno == EINVAL);
   assert(agc_fs_open("", AGC_FS_WRITE) == -1 && errno == EINVAL);
+  assert(agc_fs_mkdir(NULL, false) == -1 && errno == EINVAL);
+  assert(agc_fs_mkdir("", false) == -1 && errno == EINVAL);
+  assert(agc_fs_unlink(NULL) == -1 && errno == EINVAL);
+  assert(agc_fs_unlink("") == -1 && errno == EINVAL);
+  check_text(file, text);
   agc_value bad_paths[] = {string(""), agc_string_value(agc_make_string(path, strlen(path) + 1, 0))};
   for (size_t k = 0; k < sizeof bad_paths / sizeof bad_paths[0]; k++) {
     args[0] = bad_paths[k];
