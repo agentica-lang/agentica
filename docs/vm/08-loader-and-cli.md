@@ -212,9 +212,10 @@ byte of a file with a type table, an Updates section or Globals.
   release builds it against glibc 2.28 (11).
 - Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.
   On macOS there is no parent-death signal, so the closest safe thing is the
-  delete-after-load flag alone, or a pipe the VM watches. On macOS the flag
-  skips only the parent check. The `O_NOFOLLOW`, privacy and inode checks run on
-  every non-Windows system. The VM driver is tested on Linux only.
+  delete-after-load flag alone, or a pipe the VM watches. All three systems
+  check the parent PID. On Windows, a temporary loop initializes libuv before
+  the early parent query; no VM loop exists yet. The `O_NOFOLLOW`, privacy and
+  inode checks run on every non-Windows system.
 - `PR_SET_PDEATHSIG` follows the OS thread that forked the VM, so the driver
   must call `subprocess` from the main thread.
 - On Linux, `main` first ignores `SIGPIPE`, so a closed pipe on the standard

@@ -119,7 +119,11 @@ bool agc_launch_bind(int64_t driver) {
 bool agc_launch_bind(int64_t driver) { return (int64_t)getppid() == driver; }
 #else
 bool agc_launch_bind(int64_t driver) {
-  return (int64_t)uv_os_getppid() == driver;
+  uv_loop_t loop;
+  if (uv_loop_init(&loop) != 0) return false;
+  uv_pid_t parent = uv_os_getppid();
+  if (uv_loop_close(&loop) != 0) return false;
+  return parent > 0 && (int64_t)parent == driver;
 }
 #endif
 
