@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Native Windows files, environment, driver and compiler bootstrap.
+- Native Windows files, imports, environment, driver and compiler bootstrap.
 
 - Type aliases, default parameter values, heredocs, case guards and nested patterns.
 - Enumerable methods for lists and maps, plus `String.compare`.

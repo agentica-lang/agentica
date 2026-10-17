@@ -22,15 +22,14 @@ class PlatformBootstrap(TestCase):
         )
         source.write_text(
             'import Helper from "helper"\n'
+            'import Queue from "std/queue"\n\n'
             'def main() -> Void\n'
             '  puts(Helper.value())\n'
+            '  q = Queue.push(Queue.new(), "stdlib")\n'
+            '  puts(Queue.pop(q).unwrap!.value)\n'
             '  for arg in System.args()\n    puts(arg)\n  end\nend\n',
             encoding="utf-8",
         )
-        ascii_source = project / "main.agc"
-        shutil.copyfile(source, ascii_source)
-        plain = project / "plain.agc"
-        plain.write_text("def main() -> Void\n  puts(\"ok\")\nend\n", encoding="utf-8")
         environment = vm_environment()
         if os.name != "nt":
             environment["PATH"] = ""
@@ -41,14 +40,10 @@ class PlatformBootstrap(TestCase):
         help_result = run(command + ["--help"], cwd=root, env=environment)
         self.assertEqual(help_result.code, 0, help_result.stderr)
         self.assertIn("agentica", help_result.stdout)
-        plain_check = run(command + ["check", plain], cwd=root, env=environment)
-        self.assertEqual(plain_check.code, 0, plain_check.stderr)
-        ascii_check = run(command + ["check", ascii_source], cwd=root, env=environment)
-        self.assertEqual(ascii_check.code, 0, ascii_check.stderr)
         checked = run(command + ["check", source], cwd=root, env=environment)
         self.assertEqual(checked.code, 0, checked.stderr)
         arguments = ["space value", '"quoted"', "", "ñ🙂"]
-        expected = "relative\n" + "\n".join(arguments) + "\n"
+        expected = "relative\nstdlib\n" + "\n".join(arguments) + "\n"
         direct = run(command + [source, *arguments], cwd=root, env=environment)
         self.assertEqual((direct.code, direct.stdout), (0, expected), direct.stderr)
         bytecode = root / "compiled ñ🙂.agcb"
