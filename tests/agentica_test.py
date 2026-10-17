@@ -92,7 +92,8 @@ def _terminate(signum, frame):
 # reach them. Turning those signals into KeyboardInterrupt runs the cleanups like Ctrl-C does, which stop the children.
 if threading.current_thread() is threading.main_thread():
     signal.signal(signal.SIGTERM, _terminate)
-    signal.signal(signal.SIGHUP, _terminate)
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, _terminate)
 
 Result = namedtuple("Result", "code stdout stderr")
 
@@ -313,12 +314,25 @@ def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=Non
     return Result(process.returncode, (out or b"").decode(errors="replace"), (err or b"").decode(errors="replace"))
 
 
-def _kill_and_collect(process):
+def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
     # Called before the process is reaped, so its pid (the group id) cannot belong to anyone else yet.
     try:
-        os.killpg(process.pid, signal.SIGKILL)
+        if os.name == "nt":
+            taskkill = Path(os.environ["SystemRoot"]) / "System32" / "taskkill.exe"
+            killed = subprocess.run(
+                [str(taskkill), "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True, timeout=30, check=False,
+            )
+            if killed.returncode and process.poll() is None:
+                raise AssertionError(killed.stderr.decode(errors="replace"))
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
+
+
+def _kill_and_collect(process):
+    _kill_process_tree(process)
     return process.communicate()
 
 
@@ -445,10 +459,7 @@ class Child:
 
     def stop(self):
         if self.process.poll() is None:
-            try:
-                os.killpg(self.process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            _kill_process_tree(self.process)
         self.process.wait()
         for thread in self._threads:
             thread.join(5)

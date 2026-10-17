@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Native Windows driver file reads, Unicode arguments and private handoff.
+- Native Windows files, environment, driver and compiler bootstrap.
 
 - Type aliases, default parameter values, heredocs, case guards and nested patterns.
 - Enumerable methods for lists and maps, plus `String.compare`.

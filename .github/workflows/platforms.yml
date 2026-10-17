@@ -85,7 +85,7 @@ jobs:
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
       - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py"
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_platform_bootstrap.py"
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:
@@ -140,7 +140,7 @@ jobs:
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
       - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py"
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_platform_bootstrap.py"
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:
@@ -172,6 +172,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
       - uses: msys2/setup-msys2@v2.33.0
         with:
           msystem: UCRT64
@@ -197,8 +200,8 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
-      - run: make build/vm/release/bootstrap/agentica.exe
-      - run: build/vm/release/bootstrap/agentica.exe --version
+      - run: make fixed-point
+      - run: make test PYTHON=python TESTS="tests/test_platform_bootstrap.py"
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:

@@ -107,6 +107,8 @@ extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
+char *agc_system_env(const char *name);
+
 extern const agc_builtin agc_system_builtins[];
 extern const size_t agc_system_builtin_count;
 extern const agc_builtin agc_process_builtins[];

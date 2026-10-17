@@ -11,9 +11,16 @@
 #include <io.h>
 #include <string.h>
 #include <stdlib.h>
+#include <wchar.h>
 #include <uv.h>
 #include <windows.h>
 #include <aclapi.h>
+
+typedef struct {
+  TOKEN_USER *user;
+  PACL acl;
+  SECURITY_DESCRIPTOR descriptor;
+} private_security;
 
 void agc_fs_set_error(int result) {
   switch (result) {
@@ -101,22 +108,33 @@ static bool owner_only(HANDLE file) {
   return valid;
 }
 
+static void free_security(private_security *security) {
+  free(security->acl);
+  free(security->user);
+}
+
+static bool make_security(private_security *security, bool directory) {
+  memset(security, 0, sizeof *security);
+  security->user = current_user();
+  if (!security->user) return false;
+  PSID sid = security->user->User.Sid;
+  DWORD bytes = sizeof(ACL) + sizeof(ACCESS_ALLOWED_ACE) - sizeof(DWORD) + GetLengthSid(sid);
+  security->acl = malloc(bytes);
+  return security->acl && InitializeAcl(security->acl, bytes, ACL_REVISION) &&
+         AddAccessAllowedAceEx(security->acl, ACL_REVISION, directory ? OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE : 0,
+                               FILE_ALL_ACCESS, sid) &&
+         InitializeSecurityDescriptor(&security->descriptor, SECURITY_DESCRIPTOR_REVISION) &&
+         SetSecurityDescriptorOwner(&security->descriptor, sid, FALSE) &&
+         SetSecurityDescriptorDacl(&security->descriptor, TRUE, security->acl, FALSE) &&
+         SetSecurityDescriptorControl(&security->descriptor, SE_DACL_PROTECTED, SE_DACL_PROTECTED);
+}
+
 int agc_fs_private_create(const char *path, bool directory) {
   wchar_t *wide = native_path(path);
   if (!wide) return -1;
-  TOKEN_USER *user = current_user();
-  if (!user) { free(wide); errno = EACCES; return -1; }
-  DWORD bytes = sizeof(ACL) + sizeof(ACCESS_ALLOWED_ACE) - sizeof(DWORD) + GetLengthSid(user->User.Sid);
-  PACL acl = malloc(bytes);
-  SECURITY_DESCRIPTOR security;
-  bool valid = acl && InitializeAcl(acl, bytes, ACL_REVISION) &&
-               AddAccessAllowedAceEx(acl, ACL_REVISION, directory ? OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE : 0,
-                                     FILE_ALL_ACCESS, user->User.Sid) &&
-               InitializeSecurityDescriptor(&security, SECURITY_DESCRIPTOR_REVISION) &&
-               SetSecurityDescriptorOwner(&security, user->User.Sid, FALSE) &&
-               SetSecurityDescriptorDacl(&security, TRUE, acl, FALSE) &&
-               SetSecurityDescriptorControl(&security, SE_DACL_PROTECTED, SE_DACL_PROTECTED);
-  SECURITY_ATTRIBUTES attributes = {sizeof attributes, &security, FALSE};
+  private_security security;
+  bool valid = make_security(&security, directory);
+  SECURITY_ATTRIBUTES attributes = {sizeof attributes, &security.descriptor, FALSE};
   HANDLE file = INVALID_HANDLE_VALUE;
   bool made = false;
   if (valid) {
@@ -129,8 +147,7 @@ int agc_fs_private_create(const char *path, bool directory) {
     }
   }
   DWORD error = valid ? GetLastError() : ERROR_ACCESS_DENIED;
-  free(acl);
-  free(user);
+  free_security(&security);
   free(wide);
   if (!made) {
     agc_fs_set_error(uv_translate_sys_error((int)error));
@@ -175,6 +192,70 @@ int agc_fs_private_read(const char *path, size_t maximum, size_t *size) {
   }
   *size = (size_t)bytes;
   return fd;
+}
+
+int agc_fs_pipepair(int fds[2]) {
+  if (!fds) return UV_EINVAL;
+  fds[0] = fds[1] = -1;
+  uint8_t random[16];
+  int rc = uv_random(NULL, NULL, random, sizeof random, 0, NULL);
+  if (rc) return rc;
+  wchar_t name[80] = L"\\\\.\\pipe\\agentica-";
+  size_t prefix = wcslen(name);
+  static const wchar_t hex[] = L"0123456789abcdef";
+  for (size_t k = 0; k < sizeof random; k++) {
+    name[prefix + 2 * k] = hex[random[k] >> 4];
+    name[prefix + 2 * k + 1] = hex[random[k] & 15];
+  }
+  name[prefix + 2 * sizeof random] = 0;
+  private_security security;
+  if (!make_security(&security, false)) { free_security(&security); return UV_EACCES; }
+  SECURITY_ATTRIBUTES attributes = {sizeof attributes, &security.descriptor, FALSE};
+  HANDLE server = CreateNamedPipeW(name, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                                   PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                                   1, 65536, 65536, 0, &attributes);
+  DWORD error = GetLastError();
+  free_security(&security);
+  if (server == INVALID_HANDLE_VALUE) return uv_translate_sys_error((int)error);
+  HANDLE client = CreateFileW(name, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+  if (client == INVALID_HANDLE_VALUE) {
+    error = GetLastError();
+    CloseHandle(server);
+    return uv_translate_sys_error((int)error);
+  }
+  if (!ConnectNamedPipe(server, NULL) && GetLastError() != ERROR_PIPE_CONNECTED) {
+    error = GetLastError();
+    CloseHandle(client);
+    CloseHandle(server);
+    return uv_translate_sys_error((int)error);
+  }
+  fds[0] = _open_osfhandle((intptr_t)server, _O_RDWR | _O_BINARY | _O_NOINHERIT);
+  if (fds[0] < 0) {
+    CloseHandle(server);
+    CloseHandle(client);
+    return UV_EMFILE;
+  }
+  fds[1] = _open_osfhandle((intptr_t)client, _O_RDWR | _O_BINARY | _O_NOINHERIT);
+  if (fds[1] < 0) {
+    _close(fds[0]);
+    fds[0] = -1;
+    CloseHandle(client);
+    return UV_EMFILE;
+  }
+  return 0;
+}
+
+int agc_fs_take_channel(int fd) {
+  if (uv_guess_handle(fd) != UV_NAMED_PIPE) return -1;
+  int taken = _dup(fd);
+  if (taken < 0) return -1;
+  if (!SetHandleInformation((HANDLE)_get_osfhandle(taken), HANDLE_FLAG_INHERIT, 0)) {
+    _close(taken);
+    return -1;
+  }
+  _setmode(taken, _O_BINARY);
+  _close(fd);
+  return taken;
 }
 
 char *agc_fs_absolute(const char *path) {

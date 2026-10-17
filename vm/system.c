@@ -22,6 +22,21 @@ static bool same_name(const agc_string *name, const char *expected) {
   return true;
 }
 
+char *agc_system_env(const char *name) {
+  size_t size = 256;
+  char *value = NULL;
+  int rc;
+  do {
+    free(value);
+    value = malloc(size);
+    if (!value) agc_out_of_memory();
+    rc = uv_os_getenv(name, value, &size);
+  } while (rc == UV_ENOBUFS);
+  if (rc == 0) return value;
+  free(value);
+  return NULL;
+}
+
 static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *name = agc_as_string(vm, args[0]);
@@ -30,21 +45,10 @@ static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
   if (same_name(name, AGC_CHANNEL_ENV) || (vm->rt->drop_uring_env && same_name(name, "UV_USE_IO_URING")))
     return agc_error_value("system: environment variable is not set");
   char *key = agc_cstr(name);
-  size_t size = 256;
-  char *value = NULL;
-  int rc;
-  do {
-    free(value);
-    value = malloc(size);
-    if (!value) { free(key); agc_out_of_memory(); }
-    rc = uv_os_getenv(key, value, &size);
-  } while (rc == UV_ENOBUFS);
+  char *value = agc_system_env(key);
   free(key);
-  if (rc != 0) {
-    free(value);
-    return agc_error_value("system: environment variable is not set");
-  }
-  agc_string *text = agc_utf8_decode((const uint8_t *)value, size, "\xEF\xBF\xBD", false);
+  if (!value) return agc_error_value("system: environment variable is not set");
+  agc_string *text = agc_utf8_decode((const uint8_t *)value, strlen(value), "\xEF\xBF\xBD", false);
   free(value);
   return agc_result_value(true, agc_string_value(text));
 }
