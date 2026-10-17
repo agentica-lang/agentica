@@ -106,7 +106,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     - `agc_poller_*` (a `malloc`'d `uv_poll_t` that owns a descriptor that can
       wait forever: open (returns the libuv error), wait readable or writable
       with a callback, pause, close, which closes the descriptor),
-    - `agc_fs_realpath` (`Path.real`: `uv_fs_realpath` without a callback, so it
+    - `agc_fs_realpath` (in the `file_io.c` adapter, for `Path.real`:
+      `uv_fs_realpath` without a callback, so it
       runs on the calling pool thread; it returns a `malloc`'d string, or NULL
       with errno; `files.c` includes no libuv header), `agc_io_start_then` (a
       pool job's `more` step, run on the loop thread after its work, may keep
@@ -348,3 +349,8 @@ before checking it would erase the evidence needed to refuse it.
 self-hosted compiler: text and all-byte round trips, append/flush/close,
 Unicode paths, invalid writes that leave data intact, Windows path roots and
 refused Windows removal. All native `vm-test` jobs run it.
+
+New filesystem adapter files and headers belong in the explicit lists of
+`vm/tools/check-layers.sh`. Keep `file_io.h` forbidden to core files, keep
+adapters independent of VM values, and run `make vm-layers` including its
+planted-violation self-tests before pushing changes to these boundaries.

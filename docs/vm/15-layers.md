@@ -40,7 +40,7 @@ before it moved; the header split moved no line of a `.c` file except the
 |---|---|---|
 | **Core** | `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
 | **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `tree.c`, `stream.c`, `duplex.c`, `process.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
-| **Adapters** | `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c` (`http_parse.h`) | their own header, their library, and from `value.h` only the memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`, `agc_size_mul`, `agc_out_of_memory`) |
+| **Adapters** | `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c` (`http_parse.h`), `file_io.c` and `file_windows.c` (`file_io.h`) | their own header, their library, and from `value.h` only the memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`, `agc_size_mul`, `agc_out_of_memory`) |
 | **Driver** (not a layer: it wires them) | `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6 V2), `fuzz.c`, `fuzz_main.c` | everything |
 
 `vm/tests/*.c` may use everything. `trace.h` (tracing; `agc_trace_emit` is used
@@ -91,9 +91,14 @@ Notes on the choices:
   from the yyjson tree (`convert`, `json.c:107`); a separate adapter would need
   an extra tree or VM values, so it would add code and replace none. Instead,
   the check (§15.5) keeps `yyjson.h` to `json.c`.
-- **libuv is not wrapped.** The services own their own `uv_tcp_t`, `uv_pipe_t`
-  and timers through `agc_io_uv`. A wrapper would be a second API over one
-  library.
+- **libuv streams stay in their owning services.** Services own their
+  `uv_tcp_t`, `uv_pipe_t` and timers through `agc_io_uv`.
+- **Files have a platform adapter.** `file_io.c` owns synchronous libuv file
+  requests and `file_windows.c` owns native path conversion and error mapping.
+  Their plain `file_io.h` interface carries no VM values. `files.c` retains
+  validation, buffers, ownership and pool scheduling. Core files cannot
+  include this header or call the adapter. The driver may use libuv directly
+  in `launch.c` for executable discovery; `agentica.c` does not include it.
 - **Services may call each other.** `http_client.c` and `http_server.c` use
   `tcp.c` through `net.h` (`http_server.c` calls `agc_conn_observe`,
   `agc_conn_unobserve`, `agc_conn_retain`, `agc_conn_release`, `agc_conn_read`,
@@ -114,7 +119,6 @@ field of V3, which PR 1 added; it has its own header, `port.h`.
 |---|---|
 | Park and wake a task | `agc_task_park` (`task.c:65`), `agc_task_enqueue` (`task.c:31`), `agc_task_wake` (`task.c:25`), `agc_task_wake_all` (`task.c:40`); `agc_task_stepper` (`task.c:70`) for a builtin that calls its block and also parks between the calls: it installs an `agc_stepper` on the task, and the interpreter then asks its `agc_step_fn` what to do next (call the block, park, or end), so no C code calls the interpreter (`docs/vm/03-ir-and-bytecode.md` §4.3, `File.each_line`) |
 | Submit a job (loop or pool), with its timeout | `agc_io_start` with an `agc_io_kind` (`work`, `done`, `expired`, `drop`, `cancel`), `agc_io_ready`, `agc_io_detached` (its context is the handle a close job holds, or void), `agc_io_start_then` (a pool job's `more` step, which may keep it waiting on the loop), `agc_io_extend` (20c: restart the job's own timer, for `read_request`'s deadline from the first byte) |
-| Resolve a path in pool work | `agc_real_path` (`loop.c`, the only file that includes `uv.h` for it): `uv_fs_realpath` called without a callback, so it runs on the calling pool thread and returns a `malloc`'d string, or NULL and the errno; `files.c` calls it from the `work` half of `Path.real` |
 | Wait on a descriptor on the loop | `agc_poller_open`, `agc_poller_wait`, `agc_poller_pause`, `agc_poller_close` (a `uv_poll_t` that owns its descriptor; `files.c`, and `input.c` in the core) |
 | Set a timer | no own function: a timer is the job's `timeout_ms` (§14.2); `Task.sleep` is a job with no work. The three other timers of §14.2 use libuv through `agc_io_uv` and stay exceptions |
 | Register, own and close a handle | `agc_register`, `agc_own` with an `agc_close_fn` (it takes the task that ends, which only the file close uses) and `agc_disown` (a server takes its listener off its owner's list), `agc_unregister` (it also takes the handle off its owner's list), `agc_resource_id`; the handle's lock FIFO: `agc_handle_wait`; the resource's `goodbye` hook (a release-shaped function the exit path calls through `agc_io_goodbye`; `tcp.c` sets it for TLS `close_notify`); the V3 field `keep_detached` (`process.c` sets it on a process's resource, so `discard` in `loop.c` does not release the process when a detached job's result is dropped) |
