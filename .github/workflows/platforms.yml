@@ -200,6 +200,11 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: make build/vm/release/bootstrap/agentica.exe
+      - name: Bootstrap driver smoke
+        env:
+          AGENTICA_VM_BINARY: build/vm/release/bootstrap/agentica.exe
+        run: python -m unittest tests.test_platform_bootstrap
       - run: make fixed-point
       - run: make test PYTHON=python TESTS="tests/test_platform_bootstrap.py"
       - run: ccache --show-stats
@@ -215,6 +220,7 @@ jobs:
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
       - uses: actions/cache/save@v6
+        if: ${{ !cancelled() }}
         with:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}

@@ -4,7 +4,8 @@ import json
 import os
 import shutil
 
-from tests.agentica_test import Child, PYTHON, TestCase, binary, run, vm_environment
+from tests.agentica_test import PYTHON, Child, TestCase, run, vm_environment
+from tests.agentica_test import vm_binary as binary
 
 
 class PlatformBootstrap(TestCase):
