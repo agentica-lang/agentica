@@ -6,11 +6,10 @@
  */
 #define _GNU_SOURCE
 #include "../services.h"
-#include "remove_sandbox.h"
-
 #include <stdio.h>
 
 #ifdef __linux__
+#include "remove_sandbox.h"
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
