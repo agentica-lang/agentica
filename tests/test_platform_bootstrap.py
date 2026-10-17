@@ -10,7 +10,7 @@ from tests.agentica_test import vm_binary as binary
 
 class PlatformBootstrap(TestCase):
     def test_copied_binary_compiles_and_runs_outside_the_checkout(self) -> None:
-        root = self.make_temp_dir("agentica native ñ🙂-")
+        root = self.make_temp_dir("agentica-native-")
         executable = root / binary().name
         shutil.copy2(binary(), executable)
         project = root / "project with spaces ñ🙂"
@@ -30,6 +30,8 @@ class PlatformBootstrap(TestCase):
             '  for arg in System.args()\n    puts(arg)\n  end\nend\n',
             encoding="utf-8",
         )
+        plain = project / "plain.agc"
+        plain.write_text("def main() -> Void\n  puts(\"ok\")\nend\n", encoding="utf-8")
         environment = vm_environment()
         if os.name != "nt":
             environment["PATH"] = ""
@@ -40,6 +42,8 @@ class PlatformBootstrap(TestCase):
         help_result = run(command + ["--help"], cwd=root, env=environment)
         self.assertEqual(help_result.code, 0, help_result.stderr)
         self.assertIn("agentica", help_result.stdout)
+        plain_check = run(command + ["check", plain], cwd=root, env=environment)
+        self.assertEqual(plain_check.code, 0, plain_check.stderr)
         checked = run(command + ["check", source], cwd=root, env=environment)
         self.assertEqual(checked.code, 0, checked.stderr)
         arguments = ["space value", '"quoted"', "", "ñ🙂"]
