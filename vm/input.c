@@ -1,7 +1,8 @@
 /*
  * Standard input, the only stdin reader: gets, read, read_bytes and eof?
- * share one buffer. On Linux a pipe, FIFO, terminal or socket is read on the
- * loop, and any other stdin by a pool job. Core layer. Design:
+ * share one buffer. On Unix a pipe, FIFO, terminal or socket is read on the
+ * loop when possible; other stdin, including Windows stdin, uses one pool job.
+ * Windows stop signals still run on the loop, not the blocking reader. Core layer. Design:
  * docs/vm/10-io-scheduler.md §10.2.2.
  */
 #ifdef __APPLE__

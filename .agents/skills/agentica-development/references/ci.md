@@ -189,6 +189,34 @@ comment), then a step that calls it. Targets that are not obvious:
   (`tests/test_stdlib_distribution.py` copies `dist/agentica` alone away from
   the checkout and runs it, `agentica test` included).
 
+## Manual Windows console smoke
+
+Piped-input tests do not exercise console input or keyboard signals. After
+changing Windows stdin or stop handling, use a native Windows terminal (not
+Wine) and save this as `console-input.agc` in a scratch directory:
+
+```agentica
+def main() -> Void
+  puts("waiting")
+  IO.flush()
+  puts(IO.gets())
+end
+```
+
+1. Run `dist/agentica.exe console-input.agc` without redirecting stdin. After
+   `waiting`, type `hello` and Enter. Expect `ok("hello")` and exit 0.
+2. Run it again, wait for `waiting`, then press Ctrl+C without entering text.
+   Expect a prompt return, no read-error diagnostic and no surviving VM.
+   libuv handles the signal on the loop even if `_read` remains blocked in
+   the pool; retrying an interrupted `_read` must not be the signal handler.
+3. Repeat step 2 with Ctrl+Break when the terminal supports it.
+
+The fast `test_platform_bootstrap.py` cases separately check binary stdin
+(NUL, CR/LF, Ctrl+Z and 0xff), an empty open pipe while a timer runs and the
+program exits, and builtin lock repetition, contention and close/reacquire.
+The native C file test also checks Windows-enforced read exclusion. A console
+smoke is still required: pipes and Wine do not prove keyboard signal behavior.
+
 ## Pull requests (`.github/workflows/ci.yml`)
 
 CI runs its checks on pull requests and pushes to `master`, on GitHub-hosted

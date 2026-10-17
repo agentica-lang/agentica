@@ -58,7 +58,7 @@ typedef enum {
 
 typedef struct {
   int fd;
-  bool readable, writable, polled, eof;
+  bool readable, writable, polled, eof, locked;
   agc_poller *poller;
   uint8_t *buf;
   size_t start, end, cap, scan;
@@ -772,10 +772,9 @@ static void work_remove(op *o) {
 #endif
 }
 
-/* flock ties the lock to the open file description, which is the handle's descriptor: closing the handle
-   or ending the process releases it, and descriptors are close-on-exec, so no child keeps it. Only a regular
-   file locks: a device or a pipe would take the lock too (or fail in ways that say little), and nothing could
-   contend for it. LOCK_NB never blocks, so it is never interrupted. */
+/* Closing the descriptor releases the lock, and children do not inherit it. Unix flock is advisory;
+   Windows LockFileEx locks the whole byte range against other handles' I/O too. Remember success so a
+   repeated call on this handle stays idempotent (LockFileEx would try to lock the range again). */
 static void work_try_lock(op *o) {
   agc_fs_info info;
   if (agc_fs_fstat(o->st->fd, &info) != 0) {
@@ -786,10 +785,14 @@ static void work_try_lock(op *o) {
     fail_op(o, FS_NOT_LOCKABLE, 0);
     return;
   }
+  if (o->st->locked) {
+    o->locked = true;
+    return;
+  }
 #ifdef _WIN32
   if (agc_fs_try_lock(o->st->fd) == 0)
     o->locked = true;
-  else if (errno != EACCES)
+  else if (errno != EAGAIN)
     fail_op(o, FS_LOCK, errno);
 #else
   if (flock(o->st->fd, LOCK_EX | LOCK_NB) == 0)
@@ -797,6 +800,7 @@ static void work_try_lock(op *o) {
   else if (errno != EWOULDBLOCK)
     fail_op(o, FS_LOCK, errno);
 #endif
+  if (o->locked) o->st->locked = true;
 }
 
 /* One renameat2 with RENAME_NOREPLACE: an existing target is EEXIST and is never overwritten (plain rename

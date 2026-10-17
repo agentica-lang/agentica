@@ -149,7 +149,7 @@ end
 File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
 ```
 
-Takes an exclusive lock on the open file without waiting: `ok(true)` when it is yours (also when you already had it on this handle), and `ok(false)` when another handle or another process holds it. The lock belongs to the open file, so it ends when the handle is closed, when the task that opened it ends, or when the program ends, even if it is killed. A program started with `Process.spawn` does not keep it. The lock stops only code that also asks for it. Any handle mode works, and a read handle can lock too. Only a regular file can be locked: a pipe, a FIFO or a device (such as `/dev/null`) is an error. There is no unlock call: close the handle. VM only.
+Takes an exclusive lock on the open file without waiting: `ok(true)` when it is yours (also when you already had it on this handle), and `ok(false)` when another handle or another process holds it. The lock belongs to the open file, so it ends when the handle is closed, when the task that opened it ends, or when the program ends, even if it is killed. A program started with `Process.spawn` does not keep it. On Unix the lock is advisory (`flock`): it stops only code that also asks for it. On Windows it locks the whole byte range with `LockFileEx`, and the OS also rejects reads and writes through other handles while it is held. Any handle mode works, and a read handle can lock too. Only a regular file can be locked: a pipe, a FIFO or a device (such as `/dev/null`) is an error. There is no unlock call: close the handle. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void

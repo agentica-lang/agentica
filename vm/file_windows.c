@@ -275,6 +275,11 @@ int agc_fs_take_channel(int fd) {
 }
 
 int agc_fs_try_lock(int fd) {
+  /* Avoid the CRT invalid-parameter handler for a closed descriptor. */
+  if (fd < 0) {
+    errno = EBADF;
+    return -1;
+  }
   intptr_t raw = _get_osfhandle(fd);
   if (raw == -1) {
     errno = EBADF;
@@ -283,10 +288,10 @@ int agc_fs_try_lock(int fd) {
   OVERLAPPED range = {0};
   if (LockFileEx((HANDLE)raw, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD, &range))
     return 0;
-  /* A held range is EACCES, as _locking reports it; anything else is a real failure. */
+  /* Keep contention distinct from access denied: only a held range means try_lock returns false. */
   DWORD error = GetLastError();
   if (error == ERROR_LOCK_VIOLATION)
-    errno = EACCES;
+    errno = EAGAIN;
   else
     agc_fs_set_error(uv_translate_sys_error((int)error));
   return -1;

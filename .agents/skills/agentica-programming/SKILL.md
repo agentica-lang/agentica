@@ -120,7 +120,7 @@ Read only the files the task needs:
 | [references/performance.md](references/performance.md) | a program is too slow or must process 100,000+ items or about 1 MB; choosing `while`, recursion, `.with` or a collection for a hot path; finding where its steps go (`AGENTICA_VM_TRACE=profile`) |
 | [references/modules.md](references/modules.md) | spans several files, shares constants between files, or imports `std/` or `pkg/` modules |
 | [references/json.md](references/json.md) | reads or writes JSON |
-| [references/files.md](references/files.md) | reads or writes files, directories, or paths, locks a file, makes private files and directories, or removes or renames a path or a tree |
+| [references/files.md](references/files.md) | reads or writes files, directories, or paths, locks a file (advisory on Unix; enforced against other handles' I/O on Windows), makes private files and directories, or removes or renames a path or a tree |
 | [references/processes.md](references/processes.md) | starts other programs and talks to them (`Process`) |
 | [references/tasks.md](references/tasks.md) | runs work concurrently, maps a block over a list a few items at a time (`Task.map`), waits for a task with a timeout, passes values between tasks, or uses `Channel` |
 | [references/binary.md](references/binary.md) | packs or unpacks binary numbers in a `List[Int]` of bytes (`std/binary`: `u8` to `i64`, `f32`, `f64`, byte order, framing) |

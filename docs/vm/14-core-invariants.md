@@ -45,6 +45,15 @@ knows (§14.3).
 
 Known exceptions, as built:
 
+- **Windows stdin.** Every stdin kind uses one blocking `_read` in the pool
+  because the Unix poller setup cannot watch Windows console handles. At most
+  one read is in flight, shared by all readers; it can occupy one pool thread
+  indefinitely. Timers and stop signals still run on the loop. Cancelling a
+  reader detaches the job rather than interrupting the OS read. Process exit
+  does not wait for it, but an in-process harness must supply data or EOF before
+  it can close the loop. This is a portability exception, not a pattern for
+  other I/O (§10.2.2, Stdin). With `UV_THREADPOOL_SIZE=1`, a pending stdin read
+  leaves no worker for file I/O; keep spare pool capacity when stdin may wait.
 - **Fallbacks that still use a pool thread.** stdin stays a pool job with a
   blocking read when it cannot be made non-blocking: the reopen through
   `/proc/self/fd/N` fails (no `/proc`, or `EACCES` after `su` or `sudo -u`), a
@@ -111,8 +120,9 @@ job's completion and a crash also unlink a task, but they end a wait; they do
 not cancel one.
 
 A cancelled job is detached (`agc_io_detach`). A loop job is stopped by its
-`cancel` half. A pool job runs to its end, which §14.1 keeps bounded. A pool job
-that goes on to wait on the loop (`agc_io_start_then`, a whole-file call on a
+`cancel` half. A pool job runs to its end, which §14.1 keeps bounded except for
+its explicit stdin exceptions. A pool job that goes on to wait on the loop
+(`agc_io_start_then`, a whole-file call on a
 FIFO) is cancelled only in that loop phase: `cancellable` in `vm/loop.c` calls
 the `cancel` half only for a job with no `work`, or one past it (`on_loop`). A
 pool kind with a `cancel` half that is started with no `more` step is

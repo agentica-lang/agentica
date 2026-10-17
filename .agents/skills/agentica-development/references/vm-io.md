@@ -13,7 +13,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 | `vm/file_io.c`, `vm/file_io.h` | Synchronous libuv filesystem adapter: UTF-8 paths, binary descriptors, metadata, directory names and canonical paths. Called by existing pool jobs; no VM state. |
 | `vm/file_windows.c` | Windows UTF-8/native path conversion, drive and UNC resolution, and OS error mapping. |
 | `vm/tree.c` | `agc_tree_refused` (the pure test of the names never removed) and `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with `O_NOFOLLOW`, `unlinkat`, an explicit stack of at most 128 levels, no VM state. |
-| `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux a pipe, FIFO, terminal or socket stdin is read on the loop (`watch_stdin`: a pipe or terminal reopened through `/proc/self/fd/N` with `O_NONBLOCK` so the inherited description keeps its flags, a socket read with `MSG_DONTWAIT`; an `agc_poller` and an `external` job), any other stdin by one pool job; the job's `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; non-Linux keeps a blocking read |
+| `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux a pipe, FIFO, terminal or socket stdin is read on the loop (`watch_stdin`: a pipe or terminal reopened through `/proc/self/fd/N` with `O_NONBLOCK` so the inherited description keeps its flags, a socket read with `MSG_DONTWAIT`; an `agc_poller` and an `external` job), any other stdin by one pool job; the job's `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; Windows uses one blocking `_read` pool job for every stdin kind, including the console; it occupies one pool thread until data or EOF, cancellation detaches it, and process exit does not wait for it (the explicit exception in §14.1) |
 | `vm/output.c` | The writer of stdout and stderr, with a buffer and a waiting queue per stream. |
 
 - `vm/loop.c`
@@ -339,7 +339,15 @@ native path conversion. Do not put `uv.h` or Win32 headers in the driver to
 reach these operations. Regular files use binary descriptors and UTF-8 paths;
 `Path.resolve` preserves drive and UNC roots and normalizes separators.
 
-Windows special streams, locks, rename and
+Windows locks use non-blocking `LockFileEx` over the whole file: unlike Unix
+advisory `flock`, this also prevents other handles from reading or writing the
+locked range. `file_state.locked` makes repeat calls on the same handle succeed
+without locking the range again. Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`
+(contention); access denied and other failures remain errors. The C builtin
+tests and portable bootstrap smoke cover read-handle locking, repeat calls,
+contention and close/reacquire.
+
+Windows special file streams, rename and
 `Path.remove` are not enabled by this increment. Removal returns an error
 without changing the path. Keep it disabled until native no-follow traversal,
 raw root/dot validation and junction tests are implemented; normalizing `.`
