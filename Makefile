@@ -1,16 +1,20 @@
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
-EXE := $(if $(filter Windows_NT,$(OS)),.exe)
+# The platform the VM is built for: the host, or a cross target. `make windows-docker-check` sets it to Windows_NT on a
+# Linux host, which selects the Windows sources, libraries, linker flags and embedded object format. `OS` is Windows_NT
+# on Windows and empty elsewhere, so the default is the host.
+VM_OS ?= $(OS)
+EXE := $(if $(filter Windows_NT,$(VM_OS)),.exe)
 PRODUCT := dist/agentica$(EXE)
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
 # `make` builds the product, dist/agentica: the VM with the front end inside (docs/future/35-self-hosting.md, 35.3 and
-# 35.6). It needs only a C toolchain: the bootstrap below starts from bootstrap/stage0.agcb. Linux only for now (the front
-# end and the std/ sources are linked in with .incbin).
+# 35.6). It needs only a C toolchain: the bootstrap below starts from bootstrap/stage0.agcb. The host is the default
+# target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries windows-docker-check vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -205,7 +209,7 @@ VM_PIC := -fPIE
 VM_PIE := -pie
 VM_HARDEN_LDFLAGS := $(VM_PIE) -Wl,-z,relro,-z,now
 VM_LIBS := -lpthread -lm
-ifeq ($(OS),Windows_NT)
+ifeq ($(VM_OS),Windows_NT)
 ifeq ($(origin CC),default)
 CC := gcc
 endif
@@ -220,7 +224,13 @@ VM_HARDEN_LDFLAGS :=
 endif
 UV_NAMES :=
 AGENTICA_GC_DEFAULT := vendored
-ifeq ($(shell uname -s),Linux)
+ifeq ($(VM_OS),Windows_NT)
+UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
+  win/async win/core win/detect-wakeup win/dl win/error win/fs win/fs-event win/getaddrinfo win/getnameinfo win/handle \
+  win/loop-watcher win/pipe win/thread win/poll win/process win/process-stdio win/signal win/snprintf win/stream \
+  win/tcp win/tty win/udp win/util win/winapi win/winsock
+VM_LIBS += -lpsapi -luser32 -ladvapi32 -liphlpapi -luserenv -lws2_32 -ldbghelp -lole32 -lshell32 -lsynchronization
+else ifeq ($(shell uname -s),Linux)
 AGENTICA_GC_DEFAULT := system
 UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
   unix/async unix/core unix/dl unix/fs unix/getaddrinfo unix/getnameinfo unix/loop-watcher unix/loop unix/pipe unix/poll \
@@ -232,12 +242,6 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   unix/async unix/core unix/dl unix/fs unix/getaddrinfo unix/getnameinfo unix/loop-watcher unix/loop unix/pipe unix/poll \
   unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
   unix/proctitle unix/bsd-ifaddrs unix/kqueue unix/random-getentropy unix/darwin-proctitle unix/darwin unix/fsevents
-else ifeq ($(OS),Windows_NT)
-UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
-  win/async win/core win/detect-wakeup win/dl win/error win/fs win/fs-event win/getaddrinfo win/getnameinfo win/handle \
-  win/loop-watcher win/pipe win/thread win/poll win/process win/process-stdio win/signal win/snprintf win/stream \
-  win/tcp win/tty win/udp win/util win/winapi win/winsock
-VM_LIBS += -lpsapi -luser32 -ladvapi32 -liphlpapi -luserenv -lws2_32 -ldbghelp -lole32 -lshell32 -lsynchronization
 endif
 AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
 PKG_CONFIG ?= pkg-config
@@ -246,10 +250,10 @@ ifeq ($(filter $(AGENTICA_GC),system vendored),)
 $(error AGENTICA_GC must be system or vendored, not '$(AGENTICA_GC)')
 endif
 UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -D_POSIX_C_SOURCE=200112
-ifeq ($(shell uname -s),Darwin)
-UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_DARWIN_UNLIMITED_SELECT=1 -D_DARWIN_USE_64_BIT_INODE=1
-else ifeq ($(OS),Windows_NT)
+ifeq ($(VM_OS),Windows_NT)
 UV_DEFS := -DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0A00 -D_CRT_DECLARE_NONSTDC_NAMES=0
+else ifeq ($(shell uname -s),Darwin)
+UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_DARWIN_UNLIMITED_SELECT=1 -D_DARWIN_USE_64_BIT_INODE=1
 endif
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS) -I $(UV_DIR)/include -I $(PICO_DIR)
 DEBUG_MAPS = -fdebug-prefix-map=$(CURDIR)=. $(if $(filter-out $(CURDIR),$(PWD)),$(if $(filter $(CURDIR),$(shell cd '$(PWD)' 2>/dev/null && pwd -P)),-fdebug-prefix-map=$(PWD)=.))
@@ -332,7 +336,7 @@ OSSL_STAMP := $(VM_BUILD)/openssl-flags
 OSSL_OPTS := no-shared no-tests no-docs no-apps no-module no-dso no-engine no-legacy no-autoload-config no-async no-comp \
   no-ssl3 no-dtls no-srp no-quic no-ui-console no-cmp no-ts no-ct no-ocsp no-http no-deprecated
 OSSL_TARGET :=
-ifeq ($(OS),Windows_NT)
+ifeq ($(VM_OS),Windows_NT)
 OSSL_TARGET := mingw64
 endif
 OSSL_ENV := env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL -u MAKEOVERRIDES -u CC -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS -u LDLIBS
@@ -537,15 +541,22 @@ stage1: $(STAGE_DIR)/stage1.agcb
 stage2: $(STAGE_DIR)/stage2.agcb
 stage3: $(STAGE_DIR)/stage3.agcb
 
+# The object format of the embedded data, for the cross build (vm/tools/gen-embedded.sh). Empty lets the script pick
+# the format of the host.
+EMBEDDED_FORMAT :=
+ifeq ($(VM_OS),Windows_NT)
+EMBEDDED_FORMAT := coff
+endif
+
 # The front end and the std/ sources go into the binary through a generated assembly file with .incbin (not through ccache,
-# which cannot see the files that .incbin reads). Linux and ELF only.
+# which cannot see the files that .incbin reads).
 $(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES)
 	@mkdir -p $(VM_BUILD)
-	sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES $(EMBEDDED_PROGRAMS) > $@
+	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES $(EMBEDDED_PROGRAMS) > $@
 
 $(VM_BUILD)/bootstrap/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE0) $(STD_FILES)
 	@mkdir -p $(VM_BUILD)/bootstrap
-	sh vm/tools/gen-embedded.sh $(STAGE0) stdlib stdlib/MODULES > $@
+	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE0) stdlib stdlib/MODULES > $@
 
 $(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES)
 	@mkdir -p $(VM_OBJ)
@@ -592,6 +603,31 @@ $(VM_BUILD)/%-test$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM
 
 vm-test: $(VM_TESTS)
 	printf '%s\n' $(VM_TESTS) | xargs -P $(JOBS) -n 1 env
+
+# The C tests as programs, without running them: windows-docker-check builds them in a container.
+vm-test-binaries: $(VM_TESTS)
+
+# Cross-build the Windows VM and run its C tests without a Windows machine: llvm-mingw (Clang targeting
+# x86_64-w64-windows-gnu) compiles the test programs in one container and Wine runs them in another. Both mount this
+# checkout, so the objects land in build/vm/release/ as usual, and a later host build rebuilds them (the flags stamp
+# changes). Only docker, the network for the two images and about 2 GB of disk are needed. The images are pinned; pass
+# WINDOWS_BUILD_IMAGE or WINDOWS_RUN_IMAGE to try another.
+WINDOWS_BUILD_IMAGE ?= mstorsjo/llvm-mingw:20261006
+WINDOWS_RUN_IMAGE ?= scottyhardy/docker-wine:stable
+WINDOWS_CROSS := VM_OS=Windows_NT CC=x86_64-w64-mingw32-gcc AR=llvm-ar AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored
+# The Wine prefix lives in build/ so it is made once (a fresh one costs about a minute) and the containers keep this
+# user's file ownership: files made by root in the checkout would need sudo to remove.
+WINDOWS_WINE_HOME := $(CURDIR)/build/wine-home
+WINDOWS_DOCKER := docker run --rm -v '$(CURDIR):$(CURDIR)' -w '$(CURDIR)' --user "$$(id -u):$$(id -g)"
+
+windows-docker-check:
+	@command -v docker >/dev/null || { echo "windows-docker-check needs docker" >&2; exit 1; }
+	@mkdir -p $(WINDOWS_WINE_HOME)/tmp $(WINDOWS_WINE_HOME)/xdg
+	$(WINDOWS_DOCKER) -e HOME=/tmp -e TMPDIR=/tmp $(WINDOWS_BUILD_IMAGE) make -j$(JOBS) $(WINDOWS_CROSS) vm-test-binaries
+	$(WINDOWS_DOCKER) -e HOME=$(WINDOWS_WINE_HOME) -e WINEPREFIX=$(WINDOWS_WINE_HOME)/.wine \
+	  -e TMPDIR=$(WINDOWS_WINE_HOME)/tmp -e XDG_RUNTIME_DIR=$(WINDOWS_WINE_HOME)/xdg \
+	  -e WINEDEBUG=-all -e WINEDLLOVERRIDES=mscoree,mshtml= --entrypoint sh $(WINDOWS_RUN_IMAGE) \
+	  -c 'set -e; for test in $(VM_TESTS); do echo "== $$test"; wine "$$test"; echo "$$test passed"; done'
 
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)

@@ -157,6 +157,24 @@ comment), then a step that calls it. Targets that are not obvious:
   and `vendored-check`, so they do not replace `dist/agentica`).
   `AGENTICA_VM_BINARY=path` makes the Python tests run another build of the
   binary (`path run ...`).
+- `VM_OS` is the platform the VM is built for: the host by default, or
+  `Windows_NT` for the cross build below. It selects the sources, libraries,
+  linker flags and the embedded object format; `OS`, which Windows sets and no
+  other host does, stays the "is this Windows" test for the rest of the
+  Makefile.
+- `vm-test-binaries` is the C test programs of `vm-test` without running
+  them, for a builder that cannot execute them itself.
+  `windows-docker-check` cross-builds the Windows VM on a Linux or macOS host
+  and runs those programs under Wine, so a Windows-only regression (the file
+  lock, the standard-input pool, a path with a drive letter) is caught
+  without a Windows runner. It compiles in one container (llvm-mingw, Clang
+  for `x86_64-w64-windows-gnu`) and runs the result in another (Wine), each
+  mounting this checkout as the current user, with `VM_OS=Windows_NT`,
+  `AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored` and
+  `AGENTICA_OBJECT_FORMAT=coff`. The Wine prefix stays in `build/wine-home`,
+  so it is made once. It needs docker and the two pinned images (about 2 GB)
+  and no Windows machine; `WINDOWS_BUILD_IMAGE` and `WINDOWS_RUN_IMAGE` pick
+  other ones. No CI job calls it.
 - `vm-diff-build` and `vm-diff-test` are the golden tests (`tests/test_vm_diff_*.py`);
   `sweep-full` runs them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`).
   `test-distribution` is the release's relocated-executable test
