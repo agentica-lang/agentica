@@ -1,5 +1,5 @@
 /*
- * The File, Dir and Path builtins (Linux only): the argument checks, host
+ * The File, Dir and Path builtins on Unix: the argument checks, host
  * paths, and file handles with their read and write buffers, including the
  * owner-only creates, lstat, the handle lock, the removals and the no-replace
  * rename. Work runs on the libuv pool. Service layer. Design:
@@ -7,20 +7,34 @@
  */
 /* glibc declares renameat2 and RENAME_NOREPLACE only for _GNU_SOURCE. */
 #define _GNU_SOURCE
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "services.h"
+#include "file_io.h"
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+#ifndef _WIN32
 #include <dirent.h>
+#endif
 #include <errno.h>
 #include <fcntl.h>
+#ifdef __linux__
 #include <linux/magic.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __linux__
 #include <sys/epoll.h>
+#endif
+#ifndef _WIN32
 #include <sys/file.h>
+#endif
 #include <sys/stat.h>
+#ifdef __linux__
 #include <sys/vfs.h>
+#endif
 #include <unistd.h>
 
 #define LIMIT ((size_t)1048576)
@@ -71,7 +85,7 @@ typedef struct {
 } op;
 
 typedef struct {
-  struct stat pipe;
+  agc_fs_info pipe;
   int fd;
   bool found;
 } pipe_search;
@@ -137,8 +151,13 @@ static agc_value error_of(const char *message) {
 }
 
 static const char *os_message(agc_vm *vm, int err) {
+#ifdef __linux__
   locale_t messages = vm->rt->messages_locale;
   return messages ? strerror_l(err, messages) : strerror(err);
+#else
+  (void)vm;
+  return strerror(err);
+#endif
 }
 
 static void put_system_error(agc_vm *vm, text *t, int err) {
@@ -191,32 +210,37 @@ static bool same_text(const char *data, size_t len, const char *word) {
   return len == strlen(word) && memcmp(data, word, len) == 0;
 }
 
-static bool path_string(const agc_string *s) { return s->bytes > 0 && !memchr(s->data, 0, s->bytes); }
+static bool path_string(const agc_string *s) {
+  if (!s->bytes || memchr(s->data, 0, s->bytes)) return false;
+#ifdef _WIN32
+  if (s->bytes >= 4 && (s->data[0] == '/' || s->data[0] == '\\') &&
+      (s->data[1] == '/' || s->data[1] == '\\') && (s->data[2] == '.' || s->data[2] == '?')) return false;
+#endif
+  return true;
+}
 
 void agc_files_init(agc_vm *vm) {
-  size_t cap = 256;
-  char *buf = NULL;
-  for (;;) {
-    buf = agc_alloc_atomic(cap);
-    if (getcwd(buf, cap)) break;
-    if (errno != ERANGE) {
-      buf[0] = '/';
-      buf[1] = '\0';
-      break;
-    }
-    cap = agc_size_mul(cap, 2);
-  }
+  char *buf = agc_fs_cwd();
+  if (!buf) buf = strdup("/");
+  if (!buf) agc_out_of_memory();
   size_t len = strlen(buf);
   text t = {0};
   put(&t, buf, len);
   if (len == 0 || buf[len - 1] != '/') puts_text(&t, "/");
   vm->rt->cwd = agc_make_string(t.data, t.len, 0);
+  free(buf);
+#ifdef __linux__
   if (!vm->rt->messages_locale) vm->rt->messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
+#endif
 }
 
 void agc_files_close(agc_vm *vm) {
+#ifdef __linux__
   if (vm->rt->messages_locale) freelocale(vm->rt->messages_locale);
   vm->rt->messages_locale = (locale_t)0;
+#else
+  (void)vm;
+#endif
 }
 
 static const agc_string *cwd_of(agc_vm *vm) {
@@ -225,6 +249,14 @@ static const agc_string *cwd_of(agc_vm *vm) {
 }
 
 char *agc_host_path(agc_vm *vm, const agc_string *s) {
+#ifdef _WIN32
+  (void)vm;
+  char *given = agc_cstr(s);
+  char *resolved = given ? agc_fs_absolute(given) : NULL;
+  if (!resolved) return given;
+  free(given);
+  return resolved;
+#else
   const agc_string *cwd = s->data[0] == '/' ? NULL : cwd_of(vm);
   text t = {0};
   for (size_t part = 0; part < 2; part++) {
@@ -237,6 +269,7 @@ char *agc_host_path(agc_vm *vm, const agc_string *s) {
   char *path = agc_cstr(agc_make_string(t.data, t.len, 0));
   if (!path) agc_fail(vm, "RUNTIME-INTERNAL", "a path contains NUL", 0);
   return path;
+#endif
 }
 
 static op *new_op(agc_vm *vm, op_kind kind) {
@@ -262,7 +295,7 @@ static void free_state(file_state *st) {
   if (st->poller)
     agc_poller_close(st->poller);
   else if (st->fd >= 0)
-    close(st->fd);
+    agc_fs_close(st->fd);
   free(st->buf);
   free(st);
 }
@@ -278,28 +311,45 @@ static void free_op(op *o) {
 /* What can wait forever waits on the loop; epoll refuses (EPERM) only
    what never waits (docs/vm/14-core-invariants.md, 14.1). */
 static int probe(int fd, bool *polled) {
-  struct stat info;
+  agc_fs_info info;
   *polled = false;
-  if (fstat(fd, &info) != 0) return errno;
-  if (S_ISREG(info.st_mode) || S_ISBLK(info.st_mode) || S_ISDIR(info.st_mode)) return 0;
+  if (agc_fs_fstat(fd, &info) != 0) return errno;
+  if (AGC_FS_ISREG(info.mode) || AGC_FS_ISBLK(info.mode) || AGC_FS_ISDIR(info.mode)) return 0;
+#ifdef _WIN32
+  return ENOTSUP;
+#elif defined(__linux__)
   int ep = epoll_create1(EPOLL_CLOEXEC);
   if (ep < 0) return errno;
   struct epoll_event event = {.events = EPOLLIN};
   int err = epoll_ctl(ep, EPOLL_CTL_ADD, fd, &event) == 0 ? 0 : errno;
-  close(ep);
+  agc_fs_close(ep);
   *polled = err == 0;
   return err == EPERM ? 0 : err;
+#else
+  if (AGC_FS_ISCHR(info.mode)) {
+    agc_fs_info device;
+    const char *devices[] = {"/dev/null", "/dev/zero", "/dev/urandom"};
+    for (size_t k = 0; k < sizeof devices / sizeof devices[0]; k++)
+      if (agc_fs_stat(devices[k], &device, true) == 0 && info.rdev == device.rdev) return 0;
+  }
+  *polled = true;
+  return 0;
+#endif
 }
 
 static void blocking(int fd) {
+#ifdef _WIN32
+  (void)fd;
+#else
   int flags = fcntl(fd, F_GETFL);
   if (flags >= 0) fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+#endif
 }
 
 static bool read_all(int fd, uint8_t *buf, size_t want, size_t *got, int *err) {
   size_t done = 0;
   while (done < want) {
-    ssize_t n = read(fd, buf + done, want - done);
+    int64_t n = agc_fs_read(fd, buf + done, want - done);
     if (n < 0 && errno == EINTR) continue;
     if (n < 0) {
       *err = errno;
@@ -316,7 +366,7 @@ static bool read_all(int fd, uint8_t *buf, size_t want, size_t *got, int *err) {
 static bool write_all(int fd, const uint8_t *data, size_t len, int *err) {
   size_t done = 0;
   while (done < len) {
-    ssize_t n = write(fd, data + done, len - done);
+    int64_t n = agc_fs_write(fd, data + done, len - done);
     if (n < 0 && errno == EINTR) continue;
     if (n <= 0) {
       *err = n < 0 ? errno : EIO;
@@ -340,13 +390,18 @@ static void fail_op(op *o, fs_status status, int err) {
 }
 
 static bool write_target(const char *path) {
-  struct stat info;
-  if (stat(path, &info) == 0) return !S_ISDIR(info.st_mode);
+  agc_fs_info info;
+  if (agc_fs_stat(path, &info, true) == 0) return !AGC_FS_ISDIR(info.mode);
   return errno != ELOOP;
 }
 
+#ifndef _WIN32
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data) {
+#ifdef __linux__
   DIR *dir = opendir("/proc/self/fd");
+#else
+  DIR *dir = opendir("/dev/fd");
+#endif
   if (!dir) return false;
   int own = dirfd(dir);
   for (struct dirent *e = readdir(dir); e; e = readdir(dir)) {
@@ -359,14 +414,21 @@ bool agc_each_fd(bool (*visit)(int fd, void *data), void *data) {
   return true;
 }
 
-static bool same_file(int fd, const struct stat *file) {
-  struct stat info;
-  return fstat(fd, &info) == 0 && info.st_dev == file->st_dev && info.st_ino == file->st_ino;
+static bool same_file(int fd, const agc_fs_info *file) {
+  agc_fs_info info;
+  return agc_fs_fstat(fd, &info) == 0 && info.dev == file->dev && info.ino == file->ino;
 }
 
-static bool pipe_info(int fd, struct stat *info) {
+static bool pipe_info(int fd, agc_fs_info *info) {
+#ifdef __linux__
   struct statfs fs;
-  return fstat(fd, info) == 0 && S_ISFIFO(info->st_mode) && fstatfs(fd, &fs) == 0 && fs.f_type == PIPEFS_MAGIC;
+  return agc_fs_fstat(fd, info) == 0 && AGC_FS_ISFIFO(info->mode) && fstatfs(fd, &fs) == 0 && fs.f_type == PIPEFS_MAGIC;
+#elif defined(__APPLE__)
+  char path[PATH_MAX];
+  return agc_fs_fstat(fd, info) == 0 && AGC_FS_ISFIFO(info->mode) && fcntl(fd, F_GETPATH, path) != 0;
+#else
+  return agc_fs_fstat(fd, info) == 0 && AGC_FS_ISFIFO(info->mode);
+#endif
 }
 
 static bool same_pipe(int fd, void *data) {
@@ -377,7 +439,7 @@ static bool same_pipe(int fd, void *data) {
 
 static bool note_pipe(int fd, void *data) {
   agc_file_ids *ids = data;
-  struct stat info;
+  agc_fs_info info;
   if (!pipe_info(fd, &info)) return false;
   if (ids->count == ids->cap) {
     size_t cap = ids->cap ? agc_size_mul(ids->cap, 2) : 8;
@@ -386,7 +448,7 @@ static bool note_pipe(int fd, void *data) {
     ids->ids = grown;
     ids->cap = cap;
   }
-  ids->ids[ids->count++] = (agc_file_id){(uint64_t)info.st_dev, (uint64_t)info.st_ino};
+  ids->ids[ids->count++] = (agc_file_id){(uint64_t)info.dev, (uint64_t)info.ino};
   return false;
 }
 
@@ -397,16 +459,16 @@ agc_file_ids agc_files_inherited(void) {
 }
 
 void agc_files_forget(agc_file_ids *ids, int fd) {
-  struct stat info;
+  agc_fs_info info;
   if (!pipe_info(fd, &info)) return;
   for (size_t k = ids->count; k-- > 0;)
-    if (ids->ids[k].dev == (uint64_t)info.st_dev && ids->ids[k].ino == (uint64_t)info.st_ino)
+    if (ids->ids[k].dev == (uint64_t)info.dev && ids->ids[k].ino == (uint64_t)info.ino)
       ids->ids[k] = ids->ids[--ids->count];
 }
 
-static bool inherited(const agc_file_ids *ids, const struct stat *info) {
+static bool inherited(const agc_file_ids *ids, const agc_fs_info *info) {
   for (size_t k = 0; k < ids->count; k++)
-    if (ids->ids[k].dev == (uint64_t)info->st_dev && ids->ids[k].ino == (uint64_t)info->st_ino) return true;
+    if (ids->ids[k].dev == (uint64_t)info->dev && ids->ids[k].ino == (uint64_t)info->ino) return true;
   return false;
 }
 
@@ -419,16 +481,32 @@ static bool private_pipe(const agc_runtime *rt, int fd) {
   return !agc_each_fd(same_pipe, &s) || s.found;
 }
 
+#else
+agc_file_ids agc_files_inherited(void) { return (agc_file_ids){0}; }
+
+void agc_files_forget(agc_file_ids *ids, int fd) {
+  (void)ids;
+  (void)fd;
+}
+
+static bool private_pipe(const agc_runtime *rt, int fd) {
+  (void)rt;
+  (void)fd;
+  return false;
+}
+#endif
+
 static int checked(op *o, int fd) {
   if (fd < 0 || !private_pipe(o->rt, fd)) return fd;
-  close(fd);
+  agc_fs_close(fd);
   fail_op(o, FS_NOT_REGULAR, 0);
   return -1;
 }
 
-static bool same_directory(const struct stat *info, const char *path) {
-  struct stat other;
-  return stat(path, &other) == 0 && other.st_dev == info->st_dev && other.st_ino == info->st_ino;
+#ifndef _WIN32
+static bool same_directory(const agc_fs_info *info, const char *path) {
+  agc_fs_info other;
+  return agc_fs_stat(path, &other, true) == 0 && other.dev == info->dev && other.ino == info->ino;
 }
 
 static bool names_output_fd(const op *o) {
@@ -442,15 +520,23 @@ static bool names_output_fd(const op *o) {
   if (len >= sizeof copy) return false;
   memcpy(copy, o->path, len);
   copy[len] = '\0';
-  struct stat info;
-  if (stat(slash ? (len ? copy : "/") : ".", &info) != 0) return false;
+  agc_fs_info info;
+  if (agc_fs_stat(slash ? (len ? copy : "/") : ".", &info, true) != 0) return false;
+#ifdef __linux__
   return same_directory(&info, "/proc/self/fd") || same_directory(&info, "/proc/thread-self/fd");
+#else
+  return same_directory(&info, "/dev/fd");
+#endif
 }
+
+#else
+static bool names_output_fd(const op *o) { (void)o; return false; }
+#endif
 
 static int open_for(op *o, bool reading, bool append) {
   if (o->kind == OP_OPEN_CREATE) {
     /* O_EXCL fails on any existing entry, a dangling link included, and never follows one. */
-    int fd = open(o->path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600);
+    int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE);
     if (fd < 0) fail_op(o, FS_OPEN, errno);
     return fd;
   }
@@ -459,19 +545,19 @@ static int open_for(op *o, bool reading, bool append) {
     return -1;
   }
   if (reading) {
-    struct stat info;
-    if (stat(o->path, &info) != 0 || S_ISDIR(info.st_mode)) {
+    agc_fs_info info;
+    if (agc_fs_stat(o->path, &info, true) != 0 || AGC_FS_ISDIR(info.mode)) {
       fail_op(o, FS_NOT_REGULAR, 0);
       return -1;
     }
     if (o->kind == OP_READ_TEXT) {
-      if ((uint64_t)info.st_size > LIMIT) {
+      if ((uint64_t)info.size > LIMIT) {
         fail_op(o, FS_TOO_BIG, 0);
         return -1;
       }
-      o->count = (size_t)info.st_size + 1;
+      o->count = (size_t)info.size + 1;
     }
-    int fd = open(o->path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    int fd = agc_fs_open(o->path, AGC_FS_READ);
     if (fd < 0) fail_op(o, FS_OPEN, errno);
     return checked(o, fd);
   }
@@ -484,7 +570,7 @@ static int open_for(op *o, bool reading, bool append) {
     fail_op(o, FS_IS_DIR, 0);
     return -1;
   }
-  int fd = open(o->path, O_WRONLY | O_CREAT | O_NONBLOCK | O_CLOEXEC | (append ? O_APPEND : O_TRUNC), 0666);
+  int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | (append ? AGC_FS_APPEND : AGC_FS_TRUNCATE));
   if (fd < 0) fail_op(o, errno == EISDIR ? FS_IS_DIR : FS_OPEN, errno);
   return checked(o, fd);
 }
@@ -493,7 +579,7 @@ static bool on_loop(op *o, int fd) {
   bool polled;
   int err = probe(fd, &polled);
   if (err) {
-    close(fd);
+    agc_fs_close(fd);
     fail_op(o, FS_OPEN, err);
     return true;
   }
@@ -520,7 +606,7 @@ static void step_read_text(op *o) {
       fail_op(o, FS_READ, ENOMEM);
       return;
     }
-    ssize_t n = read(o->fd, o->out + o->out_len, o->out_cap - o->out_len);
+    int64_t n = agc_fs_read(o->fd, o->out + o->out_len, o->out_cap - o->out_len);
     if (n < 0 && errno == EINTR) continue;
     if (n < 0) {
       fail_op(o, FS_READ, errno);
@@ -535,12 +621,12 @@ static void work_read_text(op *o) {
   int fd = open_for(o, true, false);
   if (fd < 0 || on_loop(o, fd)) return;
   blocking(fd);
-  struct stat info;
-  if (o->count == 1 && fstat(fd, &info) == 0 && S_ISREG(info.st_mode)) {
+  agc_fs_info info;
+  if (o->count == 1 && agc_fs_fstat(fd, &info) == 0 && AGC_FS_ISREG(info.mode)) {
     o->fd = fd;
     step_read_text(o);
     o->fd = -1;
-    close(fd);
+    agc_fs_close(fd);
     return;
   }
   o->out = malloc(o->count);
@@ -549,7 +635,7 @@ static void work_read_text(op *o) {
   } else if (!read_all(fd, o->out, o->count, &o->out_len, &o->err)) {
     o->status = FS_READ;
   }
-  close(fd);
+  agc_fs_close(fd);
 }
 
 static void work_write_text(op *o) {
@@ -557,55 +643,29 @@ static void work_write_text(op *o) {
   if (fd < 0 || on_loop(o, fd)) return;
   blocking(fd);
   if (!write_all(fd, o->in, o->in_len, &o->err)) o->status = FS_WRITE;
-  close(fd);
+  agc_fs_close(fd);
 }
 
 static void work_stat(op *o) {
-  struct stat info;
-  if ((o->kind == OP_LSTAT ? lstat(o->path, &info) : stat(o->path, &info)) != 0) {
+  agc_fs_info info;
+  if ((o->kind == OP_LSTAT ? agc_fs_stat(o->path, &info, false) : agc_fs_stat(o->path, &info, true)) != 0) {
     fail_op(o, errno == ELOOP ? FS_LINK : FS_MISSING, 0);
     return;
   }
-  bool dir = S_ISDIR(info.st_mode);
-  o->file_type = dir ? "directory" : S_ISLNK(info.st_mode) ? "link" : "file";
-  o->size = dir ? 0 : (int64_t)info.st_size;
-  o->mtime = (int64_t)info.st_mtim.tv_sec;
-  o->mode = (int64_t)(info.st_mode & 07777);
-  o->user_id = (int64_t)info.st_uid;
-  o->group_id = (int64_t)info.st_gid;
+  bool dir = AGC_FS_ISDIR(info.mode);
+  o->file_type = dir ? "directory" : AGC_FS_ISLNK(info.mode) ? "link" : "file";
+  o->size = dir ? 0 : (int64_t)info.size;
+  o->mtime = info.mtime;
+  o->mode = (int64_t)(info.mode & 07777);
+  o->user_id = (int64_t)info.uid;
+  o->group_id = (int64_t)info.gid;
 }
 
 static void work_list(op *o) {
-  int fd = open(o->path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  if (fd < 0) {
-    fail_op(o, FS_OPEN, errno);
-    return;
-  }
-  DIR *dir = fdopendir(fd);
-  if (!dir) {
-    fail_op(o, FS_OPEN, errno);
-    close(fd);
-    return;
-  }
-  for (;;) {
-    errno = 0;
-    const struct dirent *entry = readdir(dir);
-    if (!entry) {
-      if (errno) fail_op(o, FS_READ, errno);
-      break;
-    }
-    const char *name = entry->d_name;
-    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) continue;
-    size_t len = strlen(name) + 1;
-    if (!grow_out(o, len)) {
-      fail_op(o, FS_READ, ENOMEM);
-      break;
-    }
-    memcpy(o->out + o->out_len, name, len);
-    o->out_len += len;
-    o->count++;
-  }
-  closedir(dir);
+  char *names;
+  if (agc_fs_list(o->path, &names, &o->out_len, &o->count) != 0) fail_op(o, FS_OPEN, errno);
+  o->out = (uint8_t *)names;
+  o->out_cap = o->out_len;
 }
 
 static size_t parent_len(const char *path, size_t len) {
@@ -619,8 +679,8 @@ static size_t parent_len(const char *path, size_t len) {
 static bool is_dir_prefix(char *path, size_t len) {
   char saved = path[len];
   path[len] = '\0';
-  struct stat info;
-  bool dir = stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+  agc_fs_info info;
+  bool dir = agc_fs_stat(path, &info, true) == 0 && AGC_FS_ISDIR(info.mode);
   path[len] = saved;
   return dir;
 }
@@ -642,7 +702,7 @@ static void work_mkdir(op *o) {
     if (is_dir_prefix(o->path, chain[k])) continue;
     char saved = o->path[chain[k]];
     o->path[chain[k]] = '\0';
-    int failed = mkdir(o->path, 0777);
+    int failed = agc_fs_mkdir(o->path, false);
     int err = errno;
     o->path[chain[k]] = saved;
     if (failed != 0 && err != EEXIST) {
@@ -655,10 +715,9 @@ static void work_mkdir(op *o) {
 }
 
 static void work_real(op *o) {
-  int err = 0;
-  char *resolved = agc_real_path(o->path, &err);
+  char *resolved = agc_fs_realpath(o->path);
   if (!resolved) {
-    fail_op(o, FS_RESOLVE, err);
+    fail_op(o, FS_RESOLVE, errno);
     return;
   }
   o->out = (uint8_t *)resolved;
@@ -667,7 +726,7 @@ static void work_real(op *o) {
 
 /* Exactly one directory, owner only: an existing path is the caller's error, never a success. */
 static void work_mkdir_private(op *o) {
-  if (mkdir(o->path, 0700) == 0) return;
+  if (agc_fs_mkdir(o->path, true) == 0) return;
   fail_op(o, FS_MKDIR, errno);
   o->fail_at = strlen(o->path);
 }
@@ -678,13 +737,22 @@ static void work_mkdir_private(op *o) {
    slash ("link/") gives the same error and must never report ok. When the walk fails inside the tree, the error
    names the entry that failed, not the root. */
 static void work_remove(op *o) {
+#ifdef _WIN32
+  fail_op(o, FS_REMOVE, ENOTSUP);
+#else
   int rc;
   do {
     rc = unlink(o->path);
   } while (rc != 0 && errno == EINTR);
   if (rc == 0 || errno == ENOENT) return;
-  if (errno != EISDIR) {
-    fail_op(o, FS_REMOVE, errno);
+  int err = errno;
+  bool directory = err == EISDIR;
+#ifdef __APPLE__
+  agc_fs_info info;
+  if (err == EPERM) directory = agc_fs_stat(o->path, &info, false) == 0 && AGC_FS_ISDIR(info.mode);
+#endif
+  if (!directory) {
+    fail_op(o, FS_REMOVE, err);
     return;
   }
   char *failed;
@@ -701,6 +769,7 @@ static void work_remove(op *o) {
       o->path = failed;
     }
   }
+#endif
 }
 
 /* flock ties the lock to the open file description, which is the handle's descriptor: closing the handle
@@ -708,26 +777,41 @@ static void work_remove(op *o) {
    file locks: a device or a pipe would take the lock too (or fail in ways that say little), and nothing could
    contend for it. LOCK_NB never blocks, so it is never interrupted. */
 static void work_try_lock(op *o) {
-  struct stat info;
-  if (fstat(o->st->fd, &info) != 0) {
+  agc_fs_info info;
+  if (agc_fs_fstat(o->st->fd, &info) != 0) {
     fail_op(o, FS_LOCK, errno);
     return;
   }
-  if (!S_ISREG(info.st_mode)) {
+  if (!AGC_FS_ISREG(info.mode)) {
     fail_op(o, FS_NOT_LOCKABLE, 0);
     return;
   }
+#ifdef _WIN32
+  fail_op(o, FS_LOCK, ENOTSUP);
+#else
   if (flock(o->st->fd, LOCK_EX | LOCK_NB) == 0)
     o->locked = true;
   else if (errno != EWOULDBLOCK)
     fail_op(o, FS_LOCK, errno);
+#endif
 }
 
 /* One renameat2 with RENAME_NOREPLACE: an existing target is EEXIST and is never overwritten (plain rename
    replaces a file and an empty directory), and a final link is moved as a link, as rename never follows one. A file
    system without RENAME_NOREPLACE answers EINVAL, which is reported, not worked around with a racy check. */
 static void work_rename(op *o) {
+#ifdef _WIN32
+  fail_op(o, FS_RENAME, ENOTSUP);
+#elif defined(__APPLE__)
+  agc_fs_info info;
+  if (agc_fs_stat(o->to, &info, false) == 0) {
+    fail_op(o, FS_RENAME, EEXIST);
+    return;
+  }
+  if (renameatx_np(AT_FDCWD, o->path, AT_FDCWD, o->to, RENAME_EXCL) != 0) fail_op(o, FS_RENAME, errno);
+#else
   if (renameat2(AT_FDCWD, o->path, AT_FDCWD, o->to, RENAME_NOREPLACE) != 0) fail_op(o, FS_RENAME, errno);
+#endif
 }
 
 static void work_open(op *o) {
@@ -735,7 +819,7 @@ static void work_open(op *o) {
   if (fd < 0) return;
   int err = probe(fd, &o->st->polled);
   if (err) {
-    close(fd);
+    agc_fs_close(fd);
     fail_op(o, FS_OPEN, err);
     return;
   }
@@ -770,7 +854,7 @@ static void compact(file_state *st) {
 static bool read_more(file_state *st, size_t most, int *err, bool *eof) {
   size_t room = st->cap - st->end < most ? st->cap - st->end : most;
   for (;;) {
-    ssize_t n = read(st->fd, st->buf + st->end, room);
+    int64_t n = agc_fs_read(st->fd, st->buf + st->end, room);
     if (n < 0 && errno == EINTR) continue;
     if (n < 0) {
       *err = errno;
@@ -870,7 +954,7 @@ static void work_close(op *o) {
   file_state *st = o->st;
   if (st->writable && st->end && !write_all(st->fd, st->buf, st->end, &o->err)) o->status = FS_WRITE;
   st->end = 0;
-  close(st->fd);
+  agc_fs_close(st->fd);
   st->fd = -1;
 }
 
@@ -907,7 +991,7 @@ static void drop(void *data) {
   if (o->poller)
     agc_poller_close(o->poller);
   else if (o->fd >= 0)
-    close(o->fd);
+    agc_fs_close(o->fd);
   free_op(o);
 }
 
@@ -919,7 +1003,7 @@ static agc_poller *poller_of(const op *o) { return o->st && o->st->poller ? o->s
 
 static void send_rest(op *o, int fd, const uint8_t *data, size_t len) {
   while (o->sent < len) {
-    ssize_t n = write(fd, data + o->sent, len - o->sent);
+    int64_t n = agc_fs_write(fd, data + o->sent, len - o->sent);
     if (n < 0 && errno == EINTR) continue;
     if (n <= 0) {
       fail_op(o, FS_WRITE, n < 0 ? errno : EIO);
@@ -1623,10 +1707,15 @@ static agc_value builtin_cwd(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static bool collapse_leading(const text *t) {
+#ifdef _WIN32
+  (void)t;
+  return false;
+#else
   if (t->len < 3 || t->data[0] != '/' || t->data[1] != '/' || t->data[2] == '/') return false;
   for (size_t k = 3; k < t->len; k++)
     if (t->data[k] == '/') return k + 1 == t->len || t->data[k + 1] != '/';
   return true;
+#endif
 }
 
 static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1644,7 +1733,7 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_list_cursor_begin(&cursor, parts, 1);
   while (agc_list_cursor_next(&cursor, &item)) {
     const agc_string *part = agc_as_string(vm, item);
-    if (part->data[0] == '/') {
+    if (agc_fs_rooted(part->data, part->bytes)) {
       text t = {0};
       puts_text(&t, "build-path: absolute path cannot be added to a path\n  absolute path: ");
       put_form(&t, part);
@@ -1660,10 +1749,17 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
         memmove(t.data, t.data + 1, t.len - 1);
         t.len--;
       }
-      if (t.data[t.len - 1] != '/') puts_text(&t, "/");
+      if (t.data[t.len - 1] != '/'
+#ifdef _WIN32
+          && t.data[t.len - 1] != '\\'
+#endif
+      ) puts_text(&t, "/");
     }
     put(&t, part->data, part->bytes);
   }
+#ifdef _WIN32
+  for (size_t k = 0; k < t.len; k++) if (t.data[k] == '\\') t.data[k] = '/';
+#endif
   return agc_result_value(true, agc_string_value(lossy(t.data, t.len)));
 }
 
@@ -1671,6 +1767,16 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   const agc_string *path = agc_as_string(vm, args[0]);
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+#ifdef _WIN32
+  char *given = agc_cstr(path);
+  char *resolved = agc_fs_absolute(given);
+  int err = errno;
+  free(given);
+  if (!resolved) return os_error(vm, "filesystem: cannot resolve path", path->data, path->bytes, err);
+  agc_value result = agc_result_value(true, agc_string_value(lossy(resolved, strlen(resolved))));
+  free(resolved);
+  return result;
+#else
   text full = {0};
   if (path->data[0] != '/') {
     const agc_string *cwd = cwd_of(vm);
@@ -1709,6 +1815,7 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
   }
   if (dir_form && depth > 0) puts_text(&out, "/");
   return agc_result_value(true, agc_string_value(lossy(out.data, out.len)));
+#endif
 }
 
 const agc_builtin agc_file_builtins[] = {

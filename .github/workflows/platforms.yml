@@ -1,9 +1,5 @@
 name: Platforms
 
-# Since step 8d-2 the product is one Linux binary (the front end and the std/ sources are embedded with .incbin, which
-# is ELF only), so this workflow checks only that the C VM and its tests still build and pass here. The golden tests
-# run on the binary and need Linux.
-
 on:
   pull_request:
   push:
@@ -15,40 +11,216 @@ on:
         type: choice
         options: [both, macos, windows]
         default: both
+      openssl:
+        description: OpenSSL linkage mode for a manual run
+        type: choice
+        options: [system, vendored]
+        default: system
 
 permissions:
   contents: read
 
 jobs:
+  embedded-object:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: sh vm/tools/gen-embedded.sh bootstrap/stage0.agcb stdlib stdlib/MODULES > embedded.s
+      - run: cc -c embedded.s -o embedded.o
+
+  embedded-object-windows:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: msys2/setup-msys2@v2.33.0
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          update: false
+          install: make mingw-w64-ucrt-x86_64-gcc
+      - run: sh vm/tools/gen-embedded.sh bootstrap/stage0.agcb stdlib stdlib/MODULES > embedded.s
+      - run: gcc -c embedded.s -o embedded.o
+
   vm-macos:
     if: inputs.os != 'windows'
-    runs-on: macos-15
+    runs-on: macos-15-intel
     env:
       AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      CCACHE_DIR: ${{ github.workspace }}/build/ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
+      - if: env.AGENTICA_OPENSSL == 'system'
+        run: brew install make openssl@3 pkg-config ccache
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        run: brew install make ccache
+      - if: env.AGENTICA_OPENSSL == 'system'
+        run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
+      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/restore@v6
+        with:
+          path: build/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: gmake fixed-point
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_platform_bootstrap.py"
+      - run: ccache --show-stats
+      - uses: actions/cache/save@v6
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/save@v6
+        with:
+          path: build/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+
+  vm-macos-latest:
+    if: inputs.os != 'windows'
+    runs-on: macos-latest
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      CCACHE_DIR: ${{ github.workspace }}/build/ccache
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - if: env.AGENTICA_OPENSSL == 'system'
+        run: brew install make openssl@3 pkg-config ccache
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        run: brew install make ccache
+      - if: env.AGENTICA_OPENSSL == 'system'
+        run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - run: cc --version
+      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/restore@v6
+        with:
+          path: build/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
+      - run: make vm-test
+      - run: gmake fixed-point
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_platform_bootstrap.py"
+      - run: ccache --show-stats
+      - uses: actions/cache/save@v6
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/save@v6
+        with:
+          path: build/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
 
   vm-windows:
     if: inputs.os != 'macos'
     runs-on: windows-2025
     env:
       AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      CCACHE_DIR: ${{ github.workspace }}/build/ccache
     defaults:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: msys2/setup-msys2@v2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: msys2/setup-msys2@v2.33.0
         with:
           msystem: UCRT64
           path-type: inherit
           update: false
-          install: make mingw-w64-ucrt-x86_64-gcc
+          install: make perl mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ccache mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
       - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
+      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/restore@v6
+        with:
+          path: build/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: make build/vm/release/bootstrap/agentica.exe
+      - name: Bootstrap driver smoke
+        env:
+          AGENTICA_VM_BINARY: build/vm/release/bootstrap/agentica.exe
+        run: python -m unittest tests.test_platform_bootstrap
+      - run: make fixed-point
+      - run: make test PYTHON=python TESTS="tests/test_platform_bootstrap.py"
+      - run: ccache --show-stats
+      - uses: actions/cache/save@v6
+        with:
+          path: |
+            build/vm/release/uv
+            build/vm/release/libuv.a
+            build/vm/release/third-party-flags
+            build/vm/release/yyjson.o
+            build/vm/release/picohttpparser.o
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
+      - uses: actions/cache/save@v6
+        if: ${{ !cancelled() }}
+        with:
+          path: build/ccache
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}

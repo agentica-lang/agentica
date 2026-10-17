@@ -8,8 +8,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 | Path | Owns |
 |---|---|
-| `vm/duplex.c` | The child channel (fd 3) and the duplex stream of `Process.spawn_channel` (Linux only). |
-| `vm/process.c` | The `Process` builtins, `System.env` and `System.pid`; the `Process` ones are behind `--allow-run` (Linux only). |
+| `vm/duplex.c` | The child channel (fd 3) and the duplex stream of `Process.spawn_channel` over Unix socket pairs or owner-only native Windows named pipes. |
+| `vm/process.c` | The `Process` builtins behind `--allow-run`, using libuv on Unix and Windows. `System.env` and `System.pid` live separately in `system.c`. |
 | `vm/stream.c` | what processes and TCP share (`docs/vm/10-io-tls.md` §10.3.1): `agc_inbuf` (one `malloc`'d input buffer with EOF and a sticky read error; `agc_inbuf_room` for libuv's alloc callback, `agc_inbuf_got` for its read callback, `agc_inbuf_ready`, `agc_inbuf_want` for the read size: 4 KiB or what a byte read still needs), `agc_inbuf_take` (drop the first bytes of the pending data and keep `scanned` right), `agc_inbuf_line` (LF in the first 1 MiB + 1 bytes, searched once per byte through `scanned`, CRLF stripped, a final line only at EOF, the read error when bytes without LF end in an error, the caller's texts for too long and end of input; it says when the line was too long so the caller closes) and `agc_inbuf_bytes`, `agc_stream_write` (`uv_try_write`, then one `uv_write` of a `malloc`'d copy in buffers of at most 1 GiB; 0 written, 1 queued, or a libuv error), `agc_new_lock` and `agc_stream_lock` (an unregistered lock record, and the timeout check plus `agc_handle_wait`), and the `network:` timeout texts |
 | `vm/tcp.c` | the `TCP` and `TLS` builtins (`agc_tcp_builtins`, Linux only; §10.3.1, TLS in §10.3): one `malloc`'d `net` for a socket or a listener (users: the resource and each request; callbacks: a DNS lookup in flight and one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its `uv_connect_t` that finds the `net` through `owner`), registered when the call starts, so a crash or the in-process harnesses' `agc_io_close` closes it; the VM's own end of the run closes no socket one by one (`_exit` does), and only calls the `goodbye` hook for TLS `close_notify`; requests park on `external` jobs (`park`): connect resolves with `uv_getaddrinfo` and tries each address with a fresh link (`attempt` takes its callback as an argument, so no prototype is needed), listen binds every resolved address on one port (one link per address, chained through `next`; `bind_all` retries a port-0 listen when a later address finds the port taken), accept is one FIFO for all links whose head is marked served by a link's connection callback (`chosen`) and calls `uv_accept` in its `done` half (a failed `uv_accept` closes the listener, since libuv stops watching that link), reads and writes use the `agc_socket` reader and writer locks and `vm/stream.c`; `shut` is the one close (trace `why`), and wakes every waiting request; `no_files` (the fuzzer) makes connect and listen fail with `RUNTIME-INTERNAL` |
 | `vm/net.h` | tcp.c's connection object for other C modules (`agc_conn`, `docs/vm/10-io-http.md` §10.7.1): `agc_conn_open` (DNS, connect, TLS with a borrowed `agc_tls_config`) with a watch callback that runs on every state change, `agc_conn_send`/`agc_conn_sent`, `agc_conn_input`/`agc_conn_read` (the `agc_inbuf`), `agc_conn_ready`/`agc_conn_failed`/`agc_conn_error`, `agc_conn_shut` and `agc_conn_release`; also `agc_tls_load_error` |
@@ -56,21 +56,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_parent_line` and `agc_parent_send`, which park the calling task with
     `task->retry`, without a timeout)
 - `vm/process.c`
-  - the `Process` builtins and `System.env` (`agc_process_builtins`, Linux only;
-    `docs/vm/10-io-processes.md` §10.4): `System.env` (`builtin_env`) scans
-    `host_env()` (the one block-scope `extern char **environ`) for the first
-    `name=` entry and decodes the value with U+FFFD per bad byte
-  - a name that is empty, or has `=` or NUL, and an unset name are error Results
-  - `own_env` says which entries the VM keeps for itself (`AGENTICA_CHANNEL`,
-    and `UV_USE_IO_URING` when `drop_uring_env`), and both `builtin_env` and
-    `child_env` skip them
-  - `metrics_env` names `AGENTICA_VM_METRICS=` and `AGENTICA_VM_METRICS_FILE=`
-    (each with its `=`): `child_env` drops them and `builtin_env` does not, so
-    a BDD runner or a child VM never meets the metrics port or file of its
-    parent (`docs/future/28-vm-metrics.md` §28.5)
-  - `System.pid` (`builtin_pid`) is `getpid()`
-  - no flag and no `no_files` check, since
-    `File.read_text("/proc/self/environ")` already reads the same data
+  - the `Process` builtins (`agc_process_builtins`,
+    `docs/vm/10-io-processes.md` §10.4) use libuv on Unix and Windows.
+    `System.env` and `System.pid` live in `system.c`; environment lookup uses
+    libuv UTF-8 APIs and rejects empty names, `=` and NUL.
+  - `own_env` filters `AGENTICA_CHANNEL` and `UV_USE_IO_URING` when
+    `drop_uring_env`; `metrics_env` also filters the two metrics variables
+    from child environments. Windows comparisons are case-insensitive.
+  - child environments own copies of the snapshot from `uv_os_environ`.
   - a GC `agc_process` with the registered `state` resource and two unregistered
     lock records (`reader`, `writer`) for `agc_handle_wait`
   - a `malloc`'d `proc` with the `uv_process_t`, three `uv_pipe_t` (real pipes
@@ -391,3 +384,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     byte is retried once on a new one (`retry`).
   - A close-delimited body over TLS needs `close_notify` (`agc_conn_clean_eof`)
   - a bare FIN gives "truncated HTTP body".
+
+Native process regression tests use their own C executable as the child. They
+cover quoted and empty arguments, UTF-8 environment values, filtering the
+private marker, binary stdio, a duplex channel round trip and guard cleanup.
+Windows executable lookup searches nonempty PATH entries separated by `;`,
+accepts drive and UNC paths, and resolves `.exe` files without an implicit shell.
+The child environment comes from `uv_os_environ` and owns its copied strings;
+Windows private names are filtered case-insensitively. Windows channel pairs
+have random names, one local instance and a protected owner-only DACL.

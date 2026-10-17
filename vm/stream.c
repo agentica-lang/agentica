@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <limits.h>
 #include <uv.h>
 #endif
@@ -75,7 +75,7 @@ agc_value agc_utf8_error(const uint8_t *data, size_t len) {
   return agc_result_value(false, agc_string_value(decoded));
 }
 
-#ifndef __linux__
+#if !defined(__linux__) && !defined(__APPLE__) && !defined(_WIN32)
 agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
   (void)vm;
   (void)err;
@@ -205,7 +205,7 @@ agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
   return agc_result_value(true, agc_list_value(agc_list_builder_finish(&out)));
 }
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static unsigned chunk(size_t len) { return (unsigned)(len < WRITE_CHUNK ? len : WRITE_CHUNK); }
 
 int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t **copy, const uint8_t *data,

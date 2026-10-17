@@ -46,12 +46,12 @@ jobs:
     env:
       AGENTICA_GC: vendored
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             build/vm/release/openssl/include
@@ -67,8 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -86,7 +86,7 @@ jobs:
       vm: ${{ steps.changes.outputs.vm }}
       trace: ${{ steps.changes.outputs.trace }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
           fetch-depth: 2
@@ -117,11 +117,14 @@ jobs:
           echo "vm=$vm trace=$trace"
           echo "vm=$vm" >> "$GITHUB_OUTPUT"
           echo "trace=$trace" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: tools/jscpd/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
       - run: |
           python3 --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
@@ -141,7 +144,7 @@ jobs:
         run: make smoke
       - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
       - id: vendored
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             build/vm/release/openssl/include
@@ -166,12 +169,15 @@ jobs:
       AGENTICA_SWEEP: sampled
       SANITIZE: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
       - run: |
           clang --version
           python3 --version

@@ -7,15 +7,20 @@
  * the tree is crossed, as rm -rf does. No VM state; Path.remove in files.c runs
  * it on a pool thread. Service layer. Design: docs/vm/02-reference-behavior.md.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "services.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <dirent.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 /* One open directory of the walk. `removed` counts the entries this pass deleted; `name` is the directory's
@@ -109,9 +114,16 @@ static int walk(const char *root, level *levels, char **failed) {
         continue;
       }
       if (errno == ENOENT) continue;
-      if (errno != EISDIR) {
+      int err = errno;
+      bool directory = err == EISDIR;
+#ifdef __APPLE__
+      struct stat info;
+      if (err == EPERM)
+        directory = fstatat(dir_fd, entry->d_name, &info, AT_SYMLINK_NOFOLLOW) == 0 && S_ISDIR(info.st_mode);
+#endif
+      if (!directory) {
         culprit = entry->d_name;
-        rc = errno;
+        rc = err;
         break;
       }
       if (top + 1 == AGC_TREE_MAX_DEPTH) {

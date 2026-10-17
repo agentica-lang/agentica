@@ -17,7 +17,7 @@ typedef struct {
   agc_tls_failure client_failure, server_failure;
 } pair;
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 static void pass(agc_tls *from, agc_tls *to, size_t step) {
   const uint8_t *data;
   size_t len;

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Native Windows files, imports, environment, driver and compiler bootstrap.
+
 - Type aliases, default parameter values, heredocs, case guards and nested patterns.
 - Enumerable methods for lists and maps, plus `String.compare`.
 - `Task.map` with bounded concurrency and per-item timeouts.
@@ -24,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Windows and macOS VM builds and Linux CI toolchain compatibility.
+- Native Windows file I/O, environment access and Unicode path handling.
 - BDD runner selection in bootstrap and replacement front ends.
 
 ### Removed

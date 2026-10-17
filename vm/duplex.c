@@ -1,16 +1,22 @@
 /*
- * The child channel (Linux only): one bidirectional libuv pipe over a socket,
+ * The private child channel: one bidirectional libuv pipe,
  * with line reads and writes, for a child process that talks to its parent.
  * Service layer. Design: docs/vm/10-io-processes.md §10.4.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "services.h"
+#include "file_io.h"
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 #include <uv.h>
 
 #define LIMIT ((size_t)1048576)
@@ -92,7 +98,7 @@ void agc_duplex_shut(agc_duplex *d) {
   if (d->attached) {
     if (!uv_is_closing((uv_handle_t *)&d->pipe)) uv_close((uv_handle_t *)&d->pipe, handle_closed);
   } else if (d->fd >= 0) {
-    close(d->fd);
+    agc_fs_close(d->fd);
     d->fd = -1;
   }
   agc_inbuf_free(&d->in);
@@ -113,7 +119,7 @@ void agc_duplex_release(agc_duplex *d) {
 agc_duplex *agc_duplex_new(agc_vm *vm, int fd) {
   agc_duplex *d = make(fd);
   if (attach(vm, d) == 0) return d;
-  if (d->fd >= 0) close(d->fd);
+  if (d->fd >= 0) agc_fs_close(d->fd);
   d->fd = -1;
   agc_duplex_release(d);
   return NULL;
@@ -287,7 +293,7 @@ agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, 
 static agc_duplex *parent_of(agc_vm *vm) {
   agc_duplex *d = vm->parent ? vm->parent->native : NULL;
   if (d && !d->attached && !d->closed && attach(vm, d) != 0) {
-    close(d->fd);
+    agc_fs_close(d->fd);
     d->fd = -1;
     agc_duplex_shut(d);
   }
@@ -298,17 +304,21 @@ static void release_parent(void *native) { agc_duplex_release(native); }
 
 void agc_parent_take(agc_vm *vm) {
   const char *marker = getenv(AGC_CHANNEL_ENV);
+  if (!marker || strcmp(marker, AGC_CHANNEL_VALUE) != 0) return;
+#ifdef _WIN32
+  int fd = agc_fs_take_channel(AGC_CHANNEL_FD);
+  if (fd < 0) return;
+#else
   struct stat info;
-  if (!marker || strcmp(marker, AGC_CHANNEL_VALUE) != 0 || fstat(AGC_CHANNEL_FD, &info) != 0 ||
-      !(S_ISFIFO(info.st_mode) || S_ISSOCK(info.st_mode)))
-    return;
+  if (fstat(AGC_CHANNEL_FD, &info) != 0 || !(S_ISFIFO(info.st_mode) || S_ISSOCK(info.st_mode))) return;
   int mode = fcntl(AGC_CHANNEL_FD, F_GETFL);
   if (mode < 0 || (mode & O_ACCMODE) != O_RDWR) return;
   int fd = fcntl(AGC_CHANNEL_FD, F_DUPFD_CLOEXEC, AGC_CHANNEL_FD);
   if (fd < 0) return;
   agc_files_forget(&vm->rt->inherited, AGC_CHANNEL_FD);
   close(AGC_CHANNEL_FD);
-  unsetenv(AGC_CHANNEL_ENV);
+#endif
+  uv_os_unsetenv(AGC_CHANNEL_ENV);
   vm->parent = agc_register(vm, make(fd), release_parent);
   vm->parent_locks = (agc_lines){agc_new_lock(vm), agc_new_lock(vm)};
 }

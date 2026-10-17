@@ -59,7 +59,7 @@ agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 bool agc_tree_refused(const char *path);
 /* Removes the tree at path; on a failure inside it, *failed is a malloc'd path of the entry that failed, else NULL. */
 int agc_remove_tree(const char *path, char **failed);
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 #endif
 
@@ -107,6 +107,10 @@ extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
+char *agc_system_env(const char *name);
+
+extern const agc_builtin agc_system_builtins[];
+extern const size_t agc_system_builtin_count;
 extern const agc_builtin agc_process_builtins[];
 extern const size_t agc_process_builtin_count;
 extern const agc_builtin agc_duplex_builtins[];

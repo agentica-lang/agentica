@@ -2,13 +2,16 @@
  * The File.each_line stepper paths that bytecode cannot reach, driven by hand:
  * buffer argument errors and a FIFO read that times out.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "../core.h"
 #include "../services.h"
 
 #include <assert.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <dirent.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -48,10 +51,10 @@ static size_t descriptors(void) {
 
 static bool match_path(int fd, void *data) {
   open_path *search = data;
-  char link[64], target[4096];
-  snprintf(link, sizeof link, "/proc/self/fd/%d", fd);
-  ssize_t n = readlink(link, target, sizeof target - 1);
-  if (n > 0 && (size_t)n == strlen(search->path) && memcmp(target, search->path, (size_t)n) == 0) search->found++;
+  struct stat info, wanted;
+  if (fstat(fd, &info) == 0 && stat(search->path, &wanted) == 0 &&
+      info.st_dev == wanted.st_dev && info.st_ino == wanted.st_ino)
+    search->found++;
   return false;
 }
 

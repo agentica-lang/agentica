@@ -162,6 +162,12 @@ byte of a file with a type table, an Updates section or Globals.
   deleted after loading, but only if the path still names the file it opened
   (same device and inode). The driver also deletes the file when the VM never
   ran, or failed before loading.
+- Windows checks the parent PID through libuv. Bytecode reads use binary
+  descriptors and UTF-8 paths. A private handoff opens the file without following
+  its final reparse point, then requires a regular disk file with one link,
+  this process user's owner SID, and a protected DACL granting only that user.
+  Only after those checks and the size limit pass does it mark the opened
+  handle for deletion on close. A failed check leaves the file intact.
 - On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the process that runs
   `agentica test`), the run ends on the first signal and `agc_launch_settle`
   (`vm/launch.c`) calls `agc_processes_stop` (`vm/process.c`) before anything
@@ -206,9 +212,10 @@ byte of a file with a type table, an Updates section or Globals.
   release builds it against glibc 2.28 (11).
 - Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.
   On macOS there is no parent-death signal, so the closest safe thing is the
-  delete-after-load flag alone, or a pipe the VM watches. On macOS the flag
-  skips only the parent check. The `O_NOFOLLOW`, privacy and inode checks run on
-  every non-Windows system. The VM driver is tested on Linux only.
+  delete-after-load flag alone, or a pipe the VM watches. All three systems
+  check the parent PID. On Windows, a temporary loop initializes libuv before
+  the early parent query; no VM loop exists yet. The `O_NOFOLLOW`, privacy and
+  inode checks run on every non-Windows system.
 - `PR_SET_PDEATHSIG` follows the OS thread that forked the VM, so the driver
   must call `subprocess` from the main thread.
 - On Linux, `main` first ignores `SIGPIPE`, so a closed pipe on the standard

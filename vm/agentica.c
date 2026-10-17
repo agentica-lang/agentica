@@ -7,18 +7,18 @@
  * options and the heap are the program's alone. `--front-end FILE.agcb` (build-only) loads another front
  * end in place of the carried one. Design: docs/vm/08-loader-and-cli.md.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "core.h"
 #include "embedded.h"
 #include "launch.h"
 #include "services.h"
 #include "tls.h"
 
-#include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 static const char name[] = "agentica";
 static const char run_name[] = "agentica run";
@@ -57,37 +57,6 @@ static const uint8_t *embedded_program(const char *which, size_t *len) {
   return agc_embedded_data + agc_embedded_index[slot];
 }
 
-/* The path the front end gets as --self, to start this binary again (the `test` command of the full CLI does). On Linux
- * /proc/self/exe is exact; the name in argv[0] is what is left without /proc. */
-static const char *self_path(const char *argv0, char *buffer, size_t size) {
-  ssize_t n = readlink("/proc/self/exe", buffer, size - 1);
-  if (n <= 0 || (size_t)n >= size - 1) return argv0;
-  buffer[n] = '\0';
-  return buffer;
-}
-
-/* A regular file of at most AGC_MAX_FILE_BYTES. O_NONBLOCK keeps the open of a named pipe from waiting for a writer;
- * the S_ISREG test then refuses it. A program that a driver started this process for (--driver-pid) is read from a
- * private file only (this user's, one link, no group or other bits, not reached through a link in the last place of
- * the path) and is removed once read, which is how the driver passes it without leaving it behind if it is killed. */
-static uint8_t *read_file(const char *path, bool driven, size_t *len) {
-  int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK | (driven ? O_NOFOLLOW : 0));
-  if (fd < 0) return NULL;
-  struct stat info;
-  if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
-      (uint64_t)info.st_size > AGC_MAX_FILE_BYTES ||
-      (driven && (info.st_uid != geteuid() || info.st_nlink != 1 || (info.st_mode & 077) != 0))) {
-    close(fd);
-    return NULL;
-  }
-  if (driven) {
-    struct stat now;
-    if (lstat(path, &now) == 0 && now.st_dev == info.st_dev && now.st_ino == info.st_ino) unlink(path);
-  }
-  *len = (size_t)info.st_size;
-  return agc_launch_read(fd, *len);
-}
-
 /* The first run. It leaves this function only when the front end handed a program over and its run ended cleanly;
  * every other end (a usage error, a problem in the user's file, a crash of the front end, a stop signal) is the
  * end of the process. The status is the one the front end gave, except for a crash: a runtime error in the front end
@@ -101,7 +70,7 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
                           agc_front_end *fe) {
   size_t len = (size_t)agc_embedded_index[1];
   const uint8_t *bytes = agc_embedded_data + agc_embedded_index[0];
-  if (replacement && !(bytes = read_file(replacement, false, &len))) {
+  if (replacement && !(bytes = agc_launch_file(replacement, false, &len))) {
     fprintf(stderr, "%s: cannot read %s\n", name, replacement);
     exit(2);
   }
@@ -232,7 +201,7 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
       fprintf(stderr, "%s: this binary carries no embedded program %s\n", run_name, options.embedded);
       return 2;
     }
-  } else if (!(data = read_file(argv[i], options.seen_driver, &len))) {
+  } else if (!(data = agc_launch_file(argv[i], options.seen_driver, &len))) {
     fprintf(stderr, "%s: cannot read %s\n", run_name, argv[i]);
     return 2;
   }
@@ -264,6 +233,10 @@ int main(int argc, char **argv) {
   }
   agc_launch launch;
   agc_launch_init(&launch);
+  if (!agc_launch_utf8_args(&argc, &argv)) {
+    fprintf(stderr, "%s: cannot decode command line arguments\n", name);
+    return 2;
+  }
   if (argc > 1 && strcmp(argv[1], "run") == 0) return run_command(&launch, argc, argv);
   /* The environment is checked before the trace file is opened and before the front end spends its time compiling;
    * run_program applies the value. */
@@ -283,8 +256,8 @@ int main(int argc, char **argv) {
   }
   agc_front_end fe;
   memset(&fe, 0, sizeof fe);
-  char self[PATH_MAX];
-  const char *self_name = self_path(argc > 0 ? argv[0] : "", self, sizeof self);
+  char self[32768];
+  const char *self_name = agc_launch_self_path(argc, argv, argc > 0 ? argv[0] : "", self, sizeof self);
   run_front_end(&launch, self_name, replacement, argc - first, argv + first, &fe);
   return run_program(&launch, &fe);
 }

@@ -10,6 +10,7 @@ import errno
 import json
 import os
 import re
+import sys
 import threading
 import time
 
@@ -21,6 +22,7 @@ STOP_PEER = FIXTURES / "stop-peer.py"
 FIFO_PEER = FIXTURES / "fifo-peer.py"
 OS_PEER = FIXTURES / "os-peer.py"
 VM_WAIT_SECONDS = scaled(10)
+FD_ROOT = "/dev/fd" if sys.platform == "darwin" else "/proc/self/fd"
 
 # Path.real or System.env of every argument after the mode, one line each.
 OS_PROGRAM = r"""def line(r: Result[String]) -> String
@@ -60,10 +62,24 @@ class Filesystem(TestCase):
         """Run an Agentica program through the CLI; asserts exit 0 and returns its stdout."""
         directory = self.new_dir()
         source = directory / "program.agc"
-        source.write_text(text, encoding="utf-8")
+        source.write_text(text.replace("@FD_ROOT@", FD_ROOT), encoding="utf-8")
         result = run(cli() + [source, *args], cwd=cwd, env=env or vm_environment())
         self.assertEqual(result.code, 0, result.stderr)
         return result.stdout
+
+    def test_urandom_reads_bytes_directly_and_through_a_symlink(self):
+        alias = self.new_dir() / "entropy"
+        os.symlink("/dev/urandom", alias)
+        output = self.run_program("""def main() -> Void
+  for path in System.args()
+    file = File.open(path, "read", 1000).unwrap!
+    bytes = File.read_bytes(file, 16, 1000).unwrap!
+    IO.inspect(bytes.size)
+    IO.inspect(File.close(file, 1000))
+  end
+end
+""", args=["/dev/urandom", str(alias)])
+        self.assertEqual(output, "16\nok()\n16\nok()\n")
 
     def stuck_fifo(self):
         """A temp dir with a FIFO that is full and has a reader that never reads; returns (root, fifo).
@@ -107,7 +123,7 @@ class Filesystem(TestCase):
         so the cases with one pool thread still cover a pipe on the loop.
         """
         source = root / "program.agc"
-        source.write_text(text, encoding="utf-8")
+        source.write_text(text.replace("@FD_ROOT@", FD_ROOT), encoding="utf-8")
         bytecode = compile_agc(source, root / "program.agcb")
         command = [*vm_command(), "--allow-run", "--", bytecode, *arguments]
         if peer:
@@ -324,7 +340,7 @@ def parent(path: String) -> Int
 end
 
 def count() -> Int
-  return Dir.list("/proc/self/fd", 1000).unwrap!.length
+  return Dir.list("@FD_ROOT@", 1000).unwrap!.length
 end
 
 def main() -> Void
@@ -363,9 +379,9 @@ end
     def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock(self):
         root = self.new_dir()
         code, output, errors = self.run_vm_bounded(root, r"""def main() -> Void
-  for name in Dir.list("/proc/self/fd", 1000).unwrap!
+  for name in Dir.list("@FD_ROOT@", 1000).unwrap!
     if name != "0" and name != "1" and name != "2"
-      path = "/proc/self/fd/" + name
+      path = "@FD_ROOT@/" + name
       IO.inspect([File.read_text(path, 100).ok?, File.open(path, "append", 100).ok?])
     end
   end
@@ -531,8 +547,11 @@ end
             os.symlink(target, root.joinpath(*parts))
         os.symlink(str(root / "real" / "dir"), root / "abs")
 
-        def repeat(part):
-            return part * 1500
+        def repeat(part: str) -> str:
+            count = 1500
+            if sys.platform == "darwin":
+                count = max(1, (os.pathconf(root, "PC_PATH_MAX") - len(directory) - 32) // len(part))
+            return part * count
 
         items = [".", "./", "..", "../", "real", "real/", "real/dir/file.txt", "real/dir/../dir/./file.txt",
                  "real/rel", "real/dir/up", "real/dir/up/real", "link1", "link1/", "link1/file.txt", "link1/..",
@@ -560,6 +579,9 @@ end
         self.assertEqual(table["real/dir/file.txt/x"], "error")
         self.assertEqual(seen[len(items) - 2], ok_at("/real"))
         self.assertEqual(seen[-1], ok_at("/real/dir"))
+        if sys.platform == "darwin":
+            overlong = ["real" + "/dir/.." * 1500, "real/dir" + "/../dir" * 1500]
+            self.assertEqual(self.os_lines("real", overlong, cwd=root), ["error", "error"])
 
     def test_system_env_gives_what_pythons_os_environ_gives_decoding_bytes_that_are_not_utf_8_with_u_fffd(self):
         env = vm_environment()

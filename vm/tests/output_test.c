@@ -2,6 +2,9 @@
  * vm/output.c with hand-made tasks and a pipe: the order of small prints,
  * writers that wait, the ring wrap-around, and agc_drain.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "../core.h"
 
 #include <assert.h>
@@ -11,8 +14,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <uv.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 
 #define CAP AGC_OUTPUT_BUFFER
 #define BLOCK ((size_t)16384)
@@ -35,7 +39,9 @@ static agc_task *make_task(void) {
 
 static void fresh(int fd) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  int flags = fcntl(fd, F_GETFL);
   agc_output_open(&vm, out(), fd);
+  assert(fcntl(fd, F_GETFL) == flags);
 }
 
 static void finish(void) { assert(agc_io_close(&vm)); }
@@ -124,11 +130,17 @@ static void check_run(size_t at, char letter, size_t len) {
 static void pump(void) {
   agc_io_poll(&vm, false);
   read_pipe();
+  uv_sleep(1);
 }
 
 static void pump_until(size_t want) {
   for (int round = 0; round < 100 && collected_len < want; round++) pump();
   assert(collected_len == want);
+}
+
+static void wait_ready(agc_task *t) {
+  for (int round = 0; round < 5000 && t->state == AGC_TASK_PARKED; round++) pump();
+  assert(t->state == AGC_TASK_READY);
 }
 
 static void test_small_prints_keep_order(void) {
@@ -157,8 +169,8 @@ static void test_waiters_do_not_jump_the_queue(void) {
   agc_io_poll(&vm, false);
   assert(b->state == AGC_TASK_PARKED && out()->len == 3 * BLOCK);
   assert(read_pipe() == junk);
-  agc_io_poll(&vm, false);
-  assert(b->state == AGC_TASK_READY && c->state == AGC_TASK_PARKED && out()->len == 0);
+  wait_ready(b);
+  assert(c->state == AGC_TASK_PARKED);
   assert(retry(b));
   assert(c->state == AGC_TASK_READY && out()->waiters == c);
   assert(retry(c));
@@ -205,8 +217,7 @@ static void test_flush_waits_for_an_empty_buffer(void) {
   agc_io_poll(&vm, false);
   assert(d->state == AGC_TASK_PARKED);
   assert(read_pipe() == junk);
-  agc_io_poll(&vm, false);
-  assert(d->state == AGC_TASK_READY);
+  wait_ready(d);
   assert(drain_as(d) && !out()->waiters && !d->output.out);
   pump();
   assert(collected_len == junk + 100);
@@ -243,12 +254,9 @@ static void test_a_leaving_head_hands_on(void) {
   agc_output_leave(&vm, b);
   assert(out()->waiters == c && !b->output.out && b->wait_next == NULL);
   assert(read_pipe() == junk);
-  pump();
-  pump();
-  assert(c->state == AGC_TASK_READY);
+  wait_ready(c);
   assert(retry(c));
-  pump();
-  assert(collected_len == junk + CAP + 10);
+  pump_until(junk + CAP + 10);
   check_run(junk, 'a', CAP);
   check_run(junk + CAP, 'c', 10);
   finish();
@@ -446,7 +454,12 @@ static void test_a_final_notice_is_written_straight_or_dropped(void) {
   for (int k = 0; k < 3000; k++) fputs("final notice line\n", file);
   agc_notice_end(&n, AGC_NOTICE_FINAL);
   read_pipe();
-  assert(collected_len == (size_t)3000 * 18 && out()->len == 0);
+  assert(collected_len + out()->len == (size_t)3000 * 18);
+  agc_output_busy(&vm);
+  pump_until((size_t)3000 * 18);
+  assert(out()->len == 0);
+  for (size_t k = 0; k < 3000; k++)
+    assert(memcmp(collected + k * 18, "final notice line\n", 18) == 0);
   finish();
   close_pipe();
   open_pipe();

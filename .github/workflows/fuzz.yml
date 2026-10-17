@@ -19,7 +19,7 @@ jobs:
       SANITIZE: '1'
       RUNS: ${{ inputs.runs || 5000000 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - run: echo "FUZZ_SEED=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')" >> "$GITHUB_ENV"

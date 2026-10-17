@@ -2,13 +2,16 @@
  * agc_task_cancel on the real scheduler, including a running task that
  * cancels itself after it took a handle, and a task parked as the caller of Task.map.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "../core.h"
 
 #include <assert.h>
 #include <string.h>
 #include <time.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1289,7 +1292,7 @@ static void test_map_late_closes(void) {
 #endif
 
 int main(void) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   agc_init();
   agc_io_init();
   quiet = fopen("/dev/null", "w");

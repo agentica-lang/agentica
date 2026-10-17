@@ -5,6 +5,9 @@
  * that differ (a run of the front end, `agentica run`) stay in agentica.c.
  * Design: docs/vm/08-loader-and-cli.md and docs/vm/14-core-invariants.md, 14.4.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #ifdef _WIN32
 #define _CRT_RAND_S
 #endif
@@ -12,6 +15,7 @@
 
 #include "core.h"
 #include "services.h"
+#include "file_io.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -20,6 +24,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <uv.h>
 
 #ifdef __linux__
 #include <sys/prctl.h>
@@ -29,6 +34,7 @@
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
+#include <shellapi.h>
 
 #define TRACE_OPEN (_O_WRONLY | _O_APPEND | _O_CREAT | _O_NOINHERIT | _O_BINARY)
 #define TRACE_MODE (_S_IREAD | _S_IWRITE)
@@ -109,12 +115,25 @@ bool agc_launch_bind(int64_t driver) {
   if (prctl(PR_SET_PDEATHSIG, SIGTERM) != 0) return false;
   return (int64_t)getppid() == driver;
 }
+#elif defined(__APPLE__)
+bool agc_launch_bind(int64_t driver) { return (int64_t)getppid() == driver; }
 #else
 bool agc_launch_bind(int64_t driver) {
-  (void)driver;
-  return true;
+  uv_loop_t loop;
+  if (uv_loop_init(&loop) != 0) return false;
+  uv_pid_t parent = uv_os_getppid();
+  if (uv_loop_close(&loop) != 0) return false;
+  return parent > 0 && (int64_t)parent == driver;
 }
 #endif
+
+const char *agc_launch_self_path(int argc, char **argv, const char *fallback, char *buffer, size_t size) {
+  uv_setup_args(argc, argv);
+  size_t len = size;
+  if (!size || uv_exepath(buffer, &len) != 0 || len >= size) return fallback;
+  buffer[len] = '\0';
+  return buffer;
+}
 
 static bool flush_stream(FILE *stream) {
   while (fflush(stream) != 0) {
@@ -192,7 +211,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
 }
 
 void agc_launch_exit(int code) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   sigset_t saved;
   agc_io_block_stop(&saved);
   int sig = agc_io_stop_signal();
@@ -228,7 +247,7 @@ static int private_trace_fd(int fd) {
 }
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 static void fill_standard_fds(void) {
   for (int fd = 0; fd <= 2; fd++) {
     if (fcntl(fd, F_GETFD) != -1 || errno != EBADF) continue;
@@ -247,13 +266,44 @@ void agc_launch_ignore_sigpipe(void) {
 }
 
 void agc_launch_init(agc_launch *launch) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
   fill_standard_fds();
 #endif
   agc_launch_ignore_sigpipe();
+#ifdef _WIN32
+  for (int fd = 0; fd <= 2; fd++)
+    if (uv_guess_handle(fd) != UV_UNKNOWN_HANDLE) _setmode(fd, _O_BINARY);
+  setvbuf(stdout, NULL, _IONBF, 0);
+#endif
   agc_init();
   memset(launch, 0, sizeof *launch);
   launch->inherited = agc_files_inherited();
+}
+
+bool agc_launch_utf8_args(int *argc, char ***argv) {
+#ifdef _WIN32
+  int count = 0;
+  wchar_t **wide = CommandLineToArgvW(GetCommandLineW(), &count);
+  if (!wide) return false;
+  char **words = agc_alloc(agc_size_mul(agc_size_add((size_t)count, 1), sizeof(char *)));
+  for (int k = 0; k < count; k++) {
+    int len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide[k], -1, NULL, 0, NULL, NULL);
+    if (!len) { LocalFree(wide); return false; }
+    words[k] = agc_alloc_atomic((size_t)len);
+    if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide[k], -1, words[k], len, NULL, NULL)) {
+      LocalFree(wide);
+      return false;
+    }
+  }
+  words[count] = NULL;
+  LocalFree(wide);
+  *argc = count;
+  *argv = words;
+#else
+  (void)argc;
+  (void)argv;
+#endif
+  return true;
 }
 
 void agc_launch_trace(agc_launch *launch) {
@@ -284,16 +334,22 @@ agc_value agc_launch_args(int argc, char **argv, int first) {
 }
 
 uint8_t *agc_launch_read(int fd, size_t size) {
+  if (size > AGC_MAX_FILE_BYTES) { agc_fs_close(fd); return NULL; }
   uint8_t *data = agc_alloc_atomic(size);
   size_t done = 0;
   while (done < size) {
-    ssize_t n = read(fd, data + done, size - done);
+    int64_t n = agc_fs_read(fd, data + done, size - done);
     if (n < 0 && errno == EINTR) continue;
     if (n <= 0) break;
     done += (size_t)n;
   }
-  close(fd);
+  agc_fs_close(fd);
   return done == size ? data : NULL;
+}
+
+uint8_t *agc_launch_file(const char *path, bool driven, size_t *size) {
+  int fd = agc_fs_bytecode_open(path, driven, AGC_MAX_FILE_BYTES, size);
+  return fd < 0 ? NULL : agc_launch_read(fd, *size);
 }
 
 static bool once(const char *name, bool *seen, const char *option) {

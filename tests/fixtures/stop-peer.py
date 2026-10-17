@@ -42,7 +42,8 @@ def inherit(command):
     read, write = os.pipe()
     os.write(write, b"inherited\n")
     os.close(write)
-    relay(command + ["/proc/self/fd/%d" % read], pass_fds=(read,))
+    directory = "/dev/fd" if sys.platform == "darwin" else "/proc/self/fd"
+    relay(command + [f"{directory}/{read}"], pass_fds=(read,))
 
 
 if __name__ == "__main__":

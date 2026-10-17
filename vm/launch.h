@@ -39,6 +39,7 @@ void agc_launch_ignore_sigpipe(void);
 /* Starts the process: fills closed standard descriptors, ignores SIGPIPE, starts the allocator and notes the pipes
  * that came with the process. Call it first. */
 void agc_launch_init(agc_launch *launch);
+bool agc_launch_utf8_args(int *argc, char ***argv);
 
 /* Reads the options at argv[*at] and on, up to a "--" (skipped), the first word that is not an option, or argc.
  * *at is left on the first word that was not read. On AGC_LAUNCH_BAD the message is already on stderr, started
@@ -55,6 +56,8 @@ bool agc_launch_flush_env(const char *name, agc_launch_options *options);
 /* --driver-pid: false when the parent process is not the driver that named itself. */
 bool agc_launch_bind(int64_t driver);
 
+const char *agc_launch_self_path(int argc, char **argv, const char *fallback, char *buffer, size_t size);
+
 /* Reads AGENTICA_VM_TRACE and AGENTICA_VM_TRACE_FILE into launch->trace. */
 void agc_launch_trace(agc_launch *launch);
 
@@ -64,6 +67,7 @@ agc_value agc_launch_args(int argc, char **argv, int first);
 /* Reads a whole regular file of at most AGC_MAX_FILE_BYTES from an open descriptor of known size. NULL when it
  * cannot be read in full; the descriptor is closed either way. */
 uint8_t *agc_launch_read(int fd, size_t size);
+uint8_t *agc_launch_file(const char *path, bool driven, size_t *size);
 
 /* A runtime for PROGRAM, ready to run: output on descriptors 1 and 2, the stop signals watched, the seed and the
  * options applied. A front end (FRONT_END not NULL, the compiler of the single binary) gets that structure in its

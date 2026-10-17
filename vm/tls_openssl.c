@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <openssl/bio.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>

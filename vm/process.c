@@ -1,20 +1,27 @@
 /*
- * The Process builtins, System.env and System.pid (Linux only): spawning and
+ * The Process builtins: spawning and
  * watching child processes, their pipes, and the environment entries that the VM
  * keeps for itself. Service layer. Design: docs/vm/10-io-processes.md §10.4.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "services.h"
+#include "file_io.h"
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <unistd.h>
+#endif
 #include <uv.h>
 
 #define LIMIT ((size_t)1048576)
@@ -29,7 +36,7 @@
 #define STDIO_SLOTS 4
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
-typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE } req_kind;
+typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE } req_kind;
 typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 
 typedef struct proc proc;
@@ -330,6 +337,31 @@ static agc_value waited(agc_vm *vm, const proc *p, req_kind kind) {
   return kind == REQ_WAIT ? agc_result_value(true, agc_int(p->status)) : output_value(vm, p);
 }
 
+static size_t whole_prefix(const uint8_t *data, size_t n) {
+  size_t back = 0;
+  while (back < 3 && back < n && (data[n - 1 - back] & 0xC0) == 0x80) back++;
+  if (back == n) return n;
+  uint8_t lead = data[n - 1 - back];
+  size_t need = 1;
+  if (lead >= 0xF0 && lead <= 0xF4)
+    need = 4;
+  else if (lead >= 0xE0 && lead < 0xF0)
+    need = 3;
+  else if (lead >= 0xC2 && lead < 0xE0)
+    need = 2;
+  return back + 1 < need ? n - (back + 1) : n;
+}
+
+static agc_value available(agc_vm *vm, proc *p) {
+  if (p->out_cut || p->err_cut) return agc_error_value(over_text);
+  size_t n = agc_inbuf_pending(&p->out_buf);
+  if (!p->out_buf.eof && !p->out_buf.error) n = whole_prefix(pending_data(&p->out_buf), n);
+  agc_charge_bytes(vm, n);
+  agc_string *text = agc_utf8_decode(pending_data(&p->out_buf), n, "\xEF\xBF\xBD", false);
+  agc_inbuf_take(&p->out_buf, n);
+  return agc_result_value(true, agc_string_value(text));
+}
+
 static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   request *q = data;
@@ -344,6 +376,8 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     agc_charge(vm, agc_value_units(result));
   } else if (p->closed) {
     result = agc_error_value(closed_text);
+  } else if (q->kind == REQ_AVAILABLE) {
+    result = available(vm, p);
   } else if (q->kind == REQ_WAIT || q->kind == REQ_OUTPUT) {
     result = waited(vm, p, q->kind);
   } else {
@@ -413,12 +447,15 @@ void agc_processes_stop(agc_vm *vm) {
   if (vm->process_guard && vm->process_guard->native) close_children(vm->process_guard->native);
 }
 
+#ifndef _WIN32
 static bool keep_private(int fd, void *data) {
   (void)data;
   int flags = fd > 2 ? fcntl(fd, F_GETFD) : -1;
   if (flags >= 0 && !(flags & FD_CLOEXEC)) fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
   return false;
 }
+
+#endif
 
 static guard *guard_of(agc_vm *vm) {
   if (vm->process_guard) return vm->process_guard->native;
@@ -427,7 +464,9 @@ static guard *guard_of(agc_vm *vm) {
   if (!g) agc_out_of_memory();
   g->trace = vm->rt->trace;
   g->loop = agc_io_uv(vm);
+#ifndef _WIN32
   agc_each_fd(keep_private, NULL);
+#endif
   r->native = g;
   vm->process_guard = r;
   return g;
@@ -495,8 +534,8 @@ static void start_reading(proc *p) {
    copied, so a kept buffer never grows past 1 MiB of capacity. */
 static void alloc_kept(proc *p, agc_inbuf *b, bool cut, uv_buf_t *buf) {
   size_t size = sizeof p->err_buf;
-  bool near = agc_inbuf_pending(b) > LIMIT - size;
-  uint8_t *room = cut || near ? p->err_buf : agc_inbuf_room(b, size);
+  bool near_limit = agc_inbuf_pending(b) > LIMIT - size;
+  uint8_t *room = cut || near_limit ? p->err_buf : agc_inbuf_room(b, size);
   *buf = room ? uv_buf_init((char *)room, (unsigned)size) : uv_buf_init(NULL, 0);
 }
 
@@ -569,8 +608,12 @@ static int start_kept(proc *p) {
 }
 
 static bool runnable(const char *path) {
-  struct stat info;
-  return stat(path, &info) == 0 && !S_ISDIR(info.st_mode);
+#ifdef _WIN32
+  size_t size = strlen(path);
+  if (size < 4 || _stricmp(path + size - 4, ".exe") != 0) return false;
+#endif
+  agc_fs_info info;
+  return agc_fs_stat(path, &info, true) == 0 && !AGC_FS_ISDIR(info.mode);
 }
 
 static char *candidate(agc_vm *vm, const char *dir, size_t dir_len, const agc_string *name) {
@@ -582,25 +625,42 @@ static char *candidate(agc_vm *vm, const char *dir, size_t dir_len, const agc_st
   return agc_host_path(vm, joined);
 }
 
+static char *executable(char *path) {
+  if (runnable(path)) return path;
+#ifdef _WIN32
+  size_t size = strlen(path);
+  char *with_suffix = realloc(path, agc_size_add(size, 5));
+  if (!with_suffix) { free(path); agc_out_of_memory(); }
+  path = with_suffix;
+  memcpy(path + size, ".exe", 5);
+  if (runnable(path)) return path;
+#endif
+  free(path);
+  return NULL;
+}
+
 static char *resolve(agc_vm *vm, const agc_string *command) {
-  if (memchr(command->data, '/', command->bytes)) {
-    char *path = agc_host_path(vm, command);
-    if (runnable(path)) return path;
-    free(path);
-    return NULL;
-  }
-  const char *search = getenv("PATH");
-  for (const char *at = search; at;) {
-    const char *end = strchr(at, ':');
+  bool explicit = memchr(command->data, '/', command->bytes) != NULL;
+#ifdef _WIN32
+  explicit = explicit || memchr(command->data, '\\', command->bytes) || memchr(command->data, ':', command->bytes);
+  const char separator = ';';
+#else
+  const char separator = ':';
+#endif
+  if (explicit) return executable(agc_host_path(vm, command));
+  char *search = agc_system_env("PATH");
+  char *found = NULL;
+  for (const char *at = search; at && !found;) {
+    const char *end = strchr(at, separator);
     size_t len = end ? (size_t)(end - at) : strlen(at);
-    if (len) {
-      char *path = candidate(vm, at, len, command);
-      if (runnable(path)) return path;
-      free(path);
-    }
+#ifdef _WIN32
+    if (len >= 2 && at[0] == '"' && at[len - 1] == '"') { at++; len -= 2; }
+#endif
+    if (len) found = executable(candidate(vm, at, len, command));
     at = end ? end + 1 : NULL;
   }
-  return NULL;
+  free(search);
+  return found;
 }
 
 static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
@@ -614,38 +674,59 @@ static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
   return argv;
 }
 
-static char **host_env(void) {
-  extern char **environ; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-  return environ;
+static bool env_prefix(const char *entry, const char *prefix) {
+#ifdef _WIN32
+  return _strnicmp(entry, prefix, strlen(prefix)) == 0;
+#else
+  return strncmp(entry, prefix, strlen(prefix)) == 0;
+#endif
 }
 
 static bool own_env(bool drop_uring, const char *entry) {
-  bool uring = drop_uring && strncmp(entry, URING_ENV, sizeof URING_ENV - 1) == 0;
-  return uring || strncmp(entry, CHANNEL_PREFIX, sizeof CHANNEL_PREFIX - 1) == 0;
+  bool uring = drop_uring && env_prefix(entry, URING_ENV);
+  return uring || env_prefix(entry, CHANNEL_PREFIX);
 }
 
 /* One VM owns the metrics port and file (docs/future/28-vm-metrics.md 28.5): a child VM, or a runner the BDD
    driver starts, would fight for them. Each name is matched with its "=", so the first never catches the second. */
 static bool metrics_env(const char *entry) {
-  return strncmp(entry, METRICS_ENV, sizeof METRICS_ENV - 1) == 0 ||
-         strncmp(entry, METRICS_FILE_ENV, sizeof METRICS_FILE_ENV - 1) == 0;
+  return env_prefix(entry, METRICS_ENV) ||
+         env_prefix(entry, METRICS_FILE_ENV);
 }
 
-static char **child_env(bool drop_uring, char *marker) {
-  char **host = host_env();
-  size_t n = 0;
-  while (host[n]) n++;
-  char **env = calloc(agc_size_add(n, 2), sizeof(char *));
-  if (!env) agc_out_of_memory();
+static char **child_env(bool drop_uring, const char *marker) {
+  uv_env_item_t *host = NULL;
+  int count = 0;
+  if (uv_os_environ(&host, &count) != 0) return NULL;
+  char **env = calloc(agc_size_add((size_t)count, 2), sizeof(char *));
+  if (!env) { uv_os_free_environ(host, count); agc_out_of_memory(); }
   size_t kept = 0;
-  for (size_t k = 0; k < n; k++)
-    if (!own_env(drop_uring, host[k]) && !metrics_env(host[k])) env[kept++] = host[k];
-  if (marker) env[kept] = marker;
+  for (int k = 0; k < count; k++) {
+    size_t name = strlen(host[k].name), value = strlen(host[k].value);
+    char *entry = malloc(agc_size_add(agc_size_add(name, value), 2));
+    if (!entry) agc_out_of_memory();
+    memcpy(entry, host[k].name, name);
+    entry[name] = '=';
+    memcpy(entry + name + 1, host[k].value, value + 1);
+    if (own_env(drop_uring, entry) || metrics_env(entry)) free(entry);
+    else env[kept++] = entry;
+  }
+  uv_os_free_environ(host, count);
+  if (marker) {
+    env[kept] = strdup(marker);
+    if (!env[kept]) agc_out_of_memory();
+  }
   return env;
 }
 
+static void free_env(char **env) {
+  if (!env) return;
+  for (size_t k = 0; env[k]; k++) free(env[k]);
+  free(env);
+}
+
 static void close_fd(int *fd) {
-  if (*fd >= 0) close(*fd);
+  if (*fd >= 0) agc_fs_close(*fd);
   *fd = -1;
 }
 
@@ -660,8 +741,21 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
   int fds[6] = {-1, -1, -1, -1, -1, -1};
   int link[2] = {-1, -1};
   int rc = 0;
-  for (size_t k = 0; !rc && k < 3; k++) rc = uv_pipe(fds + 2 * k, 0, 0);
-  if (!rc && channel) rc = uv_socketpair(SOCK_STREAM, 0, link, 0, 0);
+  for (size_t k = 0; !rc && k < 3; k++) {
+    int read_flags = 0, write_flags = 0;
+#ifdef _WIN32
+    read_flags = k == 0 ? 0 : UV_NONBLOCK_PIPE;
+    write_flags = k == 0 ? UV_NONBLOCK_PIPE : 0;
+#endif
+    rc = uv_pipe(fds + 2 * k, read_flags, write_flags);
+  }
+  if (!rc && channel) {
+#ifdef _WIN32
+    rc = agc_fs_pipepair(link);
+#else
+    rc = uv_socketpair(SOCK_STREAM, 0, link, 0, 0);
+#endif
+  }
   if (!rc) {
     uv_stdio_container_t stdio[STDIO_SLOTS];
     for (size_t k = 0; k < 3; k++) {
@@ -723,8 +817,8 @@ static char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   *found = true;
   if (!dir || (dir->bytes == 1 && dir->data[0] == '.')) return NULL;
   char *path = agc_host_path(vm, dir);
-  struct stat info;
-  *found = stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+  agc_fs_info info;
+  *found = agc_fs_stat(path, &info, true) == 0 && AGC_FS_ISDIR(info.mode);
   return path;
 }
 
@@ -787,7 +881,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   p->trace = vm->rt->trace;
   p->forward = vm->rt->err.file;
   p->captured = dir != NULL;
-  int rc = start_child(vm, g, p, argv, env, cwd, channel);
+  int rc = env ? start_child(vm, g, p, argv, env, cwd, channel) : UV_ENOMEM;
   if (rc)
     AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", path, rc);
   else
@@ -795,7 +889,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
               path, agc_list_len(list), p->captured ? 1 : 0, channel ? 1 : 0);
   for (size_t k = 0; argv[k]; k++) free(argv[k]);
   free(argv);
-  free(env);
+  free_env(env);
   free(marker);
   free(cwd);
   if (rc) {
@@ -982,6 +1076,7 @@ static agc_value builtin_channel_close(agc_vm *vm, agc_value *args, uint32_t spa
   return d ? agc_duplex_close_write(vm, d, pr->channel.writer, agc_as_int(vm, args[1])) : result;
 }
 
+#ifndef _WIN32
 static void drain_out(proc *p) {
   uv_os_fd_t fd;
   size_t total = 0;
@@ -1002,21 +1097,7 @@ static void drain_out(proc *p) {
     total += (size_t)n;
   }
 }
-
-static size_t whole_prefix(const uint8_t *data, size_t n) {
-  size_t back = 0;
-  while (back < 3 && back < n && (data[n - 1 - back] & 0xC0) == 0x80) back++;
-  if (back == n) return n;
-  uint8_t lead = data[n - 1 - back];
-  size_t need = 1;
-  if (lead >= 0xF0 && lead <= 0xF4)
-    need = 4;
-  else if (lead >= 0xE0 && lead < 0xF0)
-    need = 3;
-  else if (lead >= 0xC2 && lead < 0xE0)
-    need = 2;
-  return back + 1 < need ? n - (back + 1) : n;
-}
+#endif
 
 static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -1027,36 +1108,16 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
   proc *p = live(pr);
   if (!p) return agc_error_value(closed_text);
   if (!p->captured) return agc_error_value("process: output is not captured");
+#ifdef _WIN32
+  request *q = new_request(p, REQ_AVAILABLE);
+  p->reader = q;
+  q->job = agc_io_start(vm, &process_io, q, agc_handle_value(pr->reader), timeout);
+  agc_io_ready(q->job);
+  return agc_void();
+#else
   drain_out(p);
-  if (p->out_cut || p->err_cut) return agc_error_value(over_text);
-  size_t n = agc_inbuf_pending(&p->out_buf);
-  if (!p->out_buf.eof && !p->out_buf.error) n = whole_prefix(pending_data(&p->out_buf), n);
-  agc_charge_bytes(vm, n);
-  agc_string *text = agc_utf8_decode(pending_data(&p->out_buf), n, "\xEF\xBF\xBD", false);
-  agc_inbuf_take(&p->out_buf, n);
-  return agc_result_value(true, agc_string_value(text));
-}
-
-static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  const agc_string *name = agc_as_string(vm, args[0]);
-  if (name->bytes == 0 || !no_nul(name) || memchr(name->data, '=', name->bytes))
-    return agc_error_value("system: environment variable name must be nonempty and cannot contain = or NUL");
-  for (char **entry = host_env(); *entry; entry++) {
-    if (strncmp(*entry, name->data, name->bytes) != 0 || (*entry)[name->bytes] != '=') continue;
-    if (own_env(vm->rt->drop_uring_env, *entry)) break;
-    const char *value = *entry + name->bytes + 1;
-    agc_string *text = agc_utf8_decode((const uint8_t *)value, strlen(value), "\xEF\xBF\xBD", false);
-    return agc_result_value(true, agc_string_value(text));
-  }
-  return agc_error_value("system: environment variable is not set");
-}
-
-static agc_value builtin_pid(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)vm;
-  (void)args;
-  (void)span;
-  return agc_int((int64_t)getpid());
+  return available(vm, p);
+#endif
 }
 
 const agc_builtin agc_process_builtins[] = {
@@ -1075,8 +1136,6 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"System.pid", 0, builtin_pid, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];

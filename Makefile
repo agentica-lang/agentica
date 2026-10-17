@@ -1,5 +1,7 @@
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
+EXE := $(if $(filter Windows_NT,$(OS)),.exe)
+PRODUCT := dist/agentica$(EXE)
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
@@ -10,9 +12,9 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
 .PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
-all: dist/agentica
+all: $(PRODUCT)
 
-agentica: dist/agentica
+agentica: $(PRODUCT)
 
 # Targets that step 8d-2 removed. They fail on purpose: without a rule, `make vm` would find the vm/ folder and say nothing to do.
 .PHONY: vm exe cli bdd-driver
@@ -48,13 +50,13 @@ PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a te
 PY_MODULE = $(subst /,.,$(patsubst %.py,%,$(1)))
 
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
-test: dist/agentica
+test: $(PRODUCT)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=
 
 # The slow tier: the @slow cases of the .py files (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after
 # make test; a local run does not. With the flag a .py file runs only its @slow cases.
-test-slow: dist/agentica
+test-slow: $(PRODUCT)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=1
 
@@ -94,49 +96,49 @@ py-test/%: FORCE
 # diagnostics, the programs, `agentica test`, `agentica run`.
 CLI_TESTS ?= tests/test_cli_forms.py tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
   tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
-test-cli: dist/agentica
-	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/dist/agentica" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
+test-cli: $(PRODUCT)
+	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(PRODUCT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
-bench: dist/agentica
+bench: $(PRODUCT)
 	python3 benchmarks/run.py $(BENCH_ARGS)
 
 eval-references:
 	python3 tests/eval/run.py --check-references --jobs 8
 
 # Task wake latency next to busy tasks (docs/vm/10-io-scheduler.md 10.2.1), alone so it has the CPU to itself
-vm-latency: dist/agentica
+vm-latency: $(PRODUCT)
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_latency.py
 
 # The timing cases of Task.map (docs/future/27-iteration-and-concurrency.md 27.1), alone for the same reason
-vm-task-map: dist/agentica
+vm-task-map: $(PRODUCT)
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_task_map.py
 
-test-bdd: dist/agentica
-	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
+test-bdd: $(PRODUCT)
+	$(PRODUCT) test tests/bdd/specs/ --steps tests/bdd/handlers.agc
 
 # Example smoke runs on dist/agentica, in parallel (tests/smoke.sh).
-smoke: dist/agentica
+smoke: $(PRODUCT)
 	tests/smoke.sh
 
 # ci.yml, sweep.yml and the release tests run their checks as the targets below, so the same command works locally.
 
 # The built binary, copied away from the checkout, still imports its std/ modules
-test-distribution: dist/agentica
-	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/dist/agentica $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
+test-distribution: $(PRODUCT)
+	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/$(PRODUCT) $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
 
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
 # Without FIXTURES it also rewrites the CLI output golden tests/fixtures/cli/forms.json (tests/test_cli_forms.py) and the
 # front-end goldens of tests/fixtures/frontend/ from the Agentica stages (tools/refreeze.py, fast tier only: run
 # `python3 tools/refreeze.py` with no flag to rewrite the frozen manifests of the slow tier too, slow).
-goldens: dist/agentica
+goldens: $(PRODUCT)
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.test_vm_stack
 	test -n "$(FIXTURES)" || $(PYTHON) -m tests.test_cli_forms freeze
 	test -n "$(FIXTURES)" || $(PYTHON) tools/refreeze.py --fast-only
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
-vm-golden-check: dist/agentica
+vm-golden-check: $(PRODUCT)
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support check
 
 JSCPD ?= tools/jscpd/node_modules/.bin/jscpd
@@ -188,7 +190,7 @@ site-serve: site-sass
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
 # make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
-# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1, no libuv off Linux)
+# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 AGC_VERSION := $(shell cat VERSION)
 GC_DIR := vm/third_party/bdwgc
@@ -197,7 +199,7 @@ PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/system.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -225,6 +227,17 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
   unix/linux unix/procfs-exepath unix/random-getrandom unix/random-sysctl-linux unix/proctitle
 VM_LIBS += -ldl -lrt
+else ifeq ($(shell uname -s),Darwin)
+UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
+  unix/async unix/core unix/dl unix/fs unix/getaddrinfo unix/getnameinfo unix/loop-watcher unix/loop unix/pipe unix/poll \
+  unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
+  unix/proctitle unix/bsd-ifaddrs unix/kqueue unix/random-getentropy unix/darwin-proctitle unix/darwin unix/fsevents
+else ifeq ($(OS),Windows_NT)
+UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
+  win/async win/core win/detect-wakeup win/dl win/error win/fs win/fs-event win/getaddrinfo win/getnameinfo win/handle \
+  win/loop-watcher win/pipe win/thread win/poll win/process win/process-stdio win/signal win/snprintf win/stream \
+  win/tcp win/tty win/udp win/util win/winapi win/winsock
+VM_LIBS += -lpsapi -luser32 -ladvapi32 -liphlpapi -luserenv -lws2_32 -ldbghelp -lole32 -lshell32 -lsynchronization
 endif
 AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
 PKG_CONFIG ?= pkg-config
@@ -233,6 +246,11 @@ ifeq ($(filter $(AGENTICA_GC),system vendored),)
 $(error AGENTICA_GC must be system or vendored, not '$(AGENTICA_GC)')
 endif
 UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -D_POSIX_C_SOURCE=200112
+ifeq ($(shell uname -s),Darwin)
+UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_DARWIN_UNLIMITED_SELECT=1 -D_DARWIN_USE_64_BIT_INODE=1
+else ifeq ($(OS),Windows_NT)
+UV_DEFS := -DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0A00 -D_CRT_DECLARE_NONSTDC_NAMES=0
+endif
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS) -I $(UV_DIR)/include -I $(PICO_DIR)
 DEBUG_MAPS = -fdebug-prefix-map=$(CURDIR)=. $(if $(filter-out $(CURDIR),$(PWD)),$(if $(filter $(CURDIR),$(shell cd '$(PWD)' 2>/dev/null && pwd -P)),-fdebug-prefix-map=$(PWD)=.))
 ifeq ($(SANITIZE),1)
@@ -293,7 +311,8 @@ SUBMODULE_KEY = if [ "$$(git -C $(1) rev-parse --show-toplevel 2>/dev/null)" = '
   else echo 'no git checkout: $(1)'; find $(1) -type f ! -path '*/.git/*' -print0 | LC_ALL=C sort -z | xargs -0r cksum | cksum; fi
 GC_SYSTEM_KEY = { $(PKG_CONFIG) --modversion bdw-gc 2>/dev/null; echo '$(GC_INC) $(GC_LINK)'; }
 GC_KEY = { echo '$(GC_COMPILE)'; $(CC) --version 2>/dev/null | head -n 1; $(call SUBMODULE_KEY,$(GC_DIR)); }
-TP_KEY = { echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) | $(AR) rcs'; $(VM_CC) --version 2>/dev/null | head -n 1; \
+TP_KEY = { echo '$(shell uname -s) $(shell uname -m) $(OS)'; \
+  echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) | $(AR) rcs'; $(VM_CC) --version 2>/dev/null | head -n 1; \
   $(AR) --version 2>/dev/null | head -n 1; \
   $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); }
 ifeq ($(origin CCACHE),undefined)
@@ -312,12 +331,17 @@ OSSL_BUILD := $(VM_BUILD)/openssl
 OSSL_STAMP := $(VM_BUILD)/openssl-flags
 OSSL_OPTS := no-shared no-tests no-docs no-apps no-module no-dso no-engine no-legacy no-autoload-config no-async no-comp \
   no-ssl3 no-dtls no-srp no-quic no-ui-console no-cmp no-ts no-ct no-ocsp no-http no-deprecated
+OSSL_TARGET :=
+ifeq ($(OS),Windows_NT)
+OSSL_TARGET := mingw64
+endif
 OSSL_ENV := env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL -u MAKEOVERRIDES -u CC -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS -u LDLIBS
 OSSL_LAUNCH = $(CCACHE)
-OSSL_CONFIGURE = $(OSSL_ENV) CC='$(strip $(OSSL_LAUNCH) $(VM_CC))' perl $(CURDIR)/$(OSSL_DIR)/Configure $(OSSL_OPTS) $(OSSL_CFLAGS)
+OSSL_CONFIGURE = $(OSSL_ENV) CC='$(strip $(OSSL_LAUNCH) $(VM_CC))' perl $(CURDIR)/$(OSSL_DIR)/Configure $(OSSL_TARGET) $(OSSL_OPTS) $(OSSL_CFLAGS)
 OSSL_SUBMAKE = $(OSSL_ENV) make -C $(OSSL_BUILD) CC='$(strip $(OSSL_LAUNCH) $(VM_CC))' build_libs
 OSSL_RECIPE = $(subst ','\'',$(subst $(CURDIR)/,,$(OSSL_CONFIGURE) | $(OSSL_SUBMAKE)))
-OSSL_KEY = { echo '$(OSSL_RECIPE)'; $(VM_CC) --version 2>/dev/null | head -n 1; cat $(OSSL_DIR)/VERSION.dat; \
+OSSL_KEY = { echo '$(shell uname -s) $(shell uname -m) $(OS)'; echo '$(OSSL_RECIPE)'; \
+  $(VM_CC) --version 2>/dev/null | head -n 1; cat $(OSSL_DIR)/VERSION.dat; \
   if [ "$$(git -C $(OSSL_DIR) rev-parse --show-toplevel 2>/dev/null)" = '$(CURDIR)/$(OSSL_DIR)' ]; then git -C $(OSSL_DIR) rev-parse HEAD; fi; }
 AGENTICA_OPENSSL ?= system
 OSSL_MIN := 3.0.0
