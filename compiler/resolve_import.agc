@@ -11,10 +11,7 @@ import {IO_TIMEOUT_MS} from "link_env"
 
 ## True for the key of a standard module, which no canonical path can look like.
 export def embedded?(key: String) -> Bool
-  if key.starts_with?("/") or windows_absolute?(key)
-    return false
-  end
-  return true
+  return !Paths.rooted?(key)
 end
 
 ## Reads the source of the module with this key: a file, or a std/ module from the provider of the settings (a
@@ -67,19 +64,6 @@ end
 def file?(path: String) -> Bool
   info = File.stat(path, IO_TIMEOUT_MS)
   return info.ok? and info.unwrap!.kind != "directory"
-end
-
-def windows_absolute?(path: String) -> Bool
-  if path.length < 3
-    return false
-  end
-  drive = String.code(path.at(0))
-  separator = path.at(2)
-  letter = drive >= 65 and drive <= 90 or drive >= 97 and drive <= 122
-  if !letter
-    return false
-  end
-  return path.at(1) == ":" and (separator == "/" or separator == "\\")
 end
 
 def directory?(path: String) -> Bool

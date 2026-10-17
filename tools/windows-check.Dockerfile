@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.6
+
 # A local Windows check without a Windows machine: Wine runs the programs, and the llvm-mingw cross toolchain builds
 # them for x86_64-w64-windows-gnu. `make windows-docker-build` and `make windows-docker-check` build and use this
 # image; no CI job does.
@@ -17,7 +19,7 @@ ADD --checksum=sha256:5f9c6ed95b2d4bdb2869a488c5fd5857fbdabcf288a0aa3eb1da43f6a0
     https://github.com/mstorsjo/llvm-mingw/releases/download/20261006/llvm-mingw-20261006-ucrt-ubuntu-22.04-x86_64.tar.xz \
     /tmp/llvm-mingw.tar.xz
 RUN apt-get update \
- && apt-get install -y --no-install-recommends make python3 xz-utils \
+ && apt-get install -y --no-install-recommends make perl python3 xz-utils \
  && tar -xf /tmp/llvm-mingw.tar.xz -C /opt \
  && rm /tmp/llvm-mingw.tar.xz \
  && rm -rf /var/lib/apt/lists/*

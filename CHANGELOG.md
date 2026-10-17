@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Relative source paths containing a colon no longer gain an absolute source
+  root; Windows drive paths require a letter, colon and separator.
+- The Windows Docker check explicitly requires BuildKit/buildx for the
+  checksum-verified toolchain download and installs its Perl dependency.
 - Repeated `File.try_lock` calls on the same Windows handle succeed, and only
   lock contention returns `ok(false)`; access failures remain errors.
 

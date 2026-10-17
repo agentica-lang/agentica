@@ -34,13 +34,19 @@ export def join(base: String, rest: String) -> String
   return "#{base}/#{rest}"
 end
 
-## A path that does not start at the working directory: one at "/", a Windows drive ("D:/x") or a UNC share ("//s/p");
-## the canonical paths of the host use "/" separators, so the drive is the only form "/" does not already cover.
+## Whether a path starts at "/", an absolute Windows drive path or a UNC share. A drive needs an ASCII letter,
+## a colon and a separator: "C:" and "C:file" depend on a working directory and are not absolute paths.
 export def rooted?(path: String) -> Bool
-  if path.starts_with?("/")
+  if path.starts_with?("/") or path.starts_with?("\\\\")
     return true
   end
-  return path.length > 1 and path.slice(1, 1) == ":"
+  if path.length < 3
+    return false
+  end
+  drive = String.code(path.at(0))
+  separator = path.at(2)
+  letter = drive >= 65 and drive <= 90 or drive >= 97 and drive <= 122
+  return letter and path.at(1) == ":" and (separator == "/" or separator == "\\")
 end
 
 ## The path a file is stored under in the program and in the .agcb, and printed by the text forms. root_dir is the

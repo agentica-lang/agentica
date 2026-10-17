@@ -628,8 +628,8 @@ vm-test-binaries: $(VM_TESTS)
 # tools/windows-check.Dockerfile) builds dist/agentica.exe and the C test programs, and a second container runs them.
 # The bootstrap runs the Windows binary it links, because the front end is written in Agentica and compiles itself,
 # so the build container needs Wine too. Both containers mount this checkout as the current user, so the objects land
-# in build/vm/release/ and a later host build rebuilds them (the flags stamp changes). Only docker, the network for
-# the image and about 6 GB of disk are needed.
+# in build/vm/release/ and a later host build rebuilds them (the flags stamp changes). Docker with BuildKit/buildx,
+# the network for the image and about 6 GB of disk are needed.
 WINDOWS_IMAGE ?= agentica-windows-check
 WINDOWS_DOCKERFILE ?= tools/windows-check.Dockerfile
 # The Wine prefix lives in build/, so it is made once (a fresh one costs about a minute) and no root-owned file lands
@@ -648,7 +648,8 @@ WINDOWS_DOCKER := docker run --rm -v '$(CURDIR):$(CURDIR)' -w '$(CURDIR)' --user
 
 windows-docker-image:
 	@command -v docker >/dev/null || { echo "make windows-docker-* needs docker" >&2; exit 1; }
-	docker build -t $(WINDOWS_IMAGE) -f $(WINDOWS_DOCKERFILE) tools
+	@docker buildx version >/dev/null 2>&1 || { echo "make windows-docker-* needs Docker BuildKit with the buildx plugin" >&2; exit 1; }
+	DOCKER_BUILDKIT=1 docker build -t $(WINDOWS_IMAGE) -f $(WINDOWS_DOCKERFILE) tools
 
 # The wrappers run a Windows program through Wine. They name Wine by its absolute path, so a test that clears PATH
 # (test_platform_bootstrap does) still starts it.

@@ -177,9 +177,9 @@ comment), then a step that calls it. Targets that are not obvious:
   checkout as the current user; `VM_OS=Windows_NT`,
   `AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored` and the COFF embedding
   are selected for the cross build. The Wine prefix stays in
-  `build/wine-home`, so it is made once. It needs Docker, the network for the
-  pinned toolchain archive and base image, and about 6 GB of disk; no Windows
-  machine. Override `WINDOWS_IMAGE` or `WINDOWS_DOCKERFILE` to use another
+  `build/wine-home`, so it is made once. It needs Docker with BuildKit and
+  the buildx plugin, the network for the pinned toolchain archive and base
+  image, and about 6 GB of disk; no Windows machine. Override `WINDOWS_IMAGE` or `WINDOWS_DOCKERFILE` to use another
   image. No CI job calls these targets. Wine is not a substitute for native
   Windows CI; tests relying on Windows process creation, command-line UTF-16
   conversion or symlink resolution can differ under Wine.

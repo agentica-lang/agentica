@@ -9,7 +9,7 @@ import os
 import shutil
 import struct
 
-from tests.agentica_test import TARGET_OS, TestCase, cli, compile_agc, run, run_vm, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, TARGET_OS, TestCase, cli, compile_agc, run, run_vm, vm_command, vm_environment
 
 MAIN = """import Util from "lib/util"
 import Shared from "../shared/x"
@@ -110,6 +110,43 @@ class SourcePathsTest(TestCase):
         result = run(cli() + ["compile", source, "-o", output], cwd=cwd)
         self.assertEqual(result.code, 0, result.stderr)
         return output.read_bytes()
+
+    def test_absolute_paths_require_a_drive_and_separator(self) -> None:
+        cases = (
+            ("", False),
+            ("main.agc", False),
+            ("std/queue.agc", False),
+            ("/", True),
+            ("/tmp/main.agc", True),
+            ("C:/main.agc", True),
+            ("z:\\main.agc", True),
+            ("//server/share/main.agc", True),
+            ("\\\\server\\share\\main.agc", True),
+            ("C:", False),
+            ("C:main.agc", False),
+            ("1:/main.agc", False),
+            ("é:/main.agc", False),
+        )
+        result = run(
+            [*cli(), FIXTURES / "source-paths" / "rooted.agc", *(path for path, _ in cases)],
+            env=vm_environment(),
+        )
+        expected = ["true false" if rooted else "false true" for _, rooted in cases]
+        self.assertEqual(result.code, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), expected)
+
+    def test_a_relative_colon_path_keeps_a_relative_source_root(self) -> None:
+        if TARGET_OS == "windows":
+            self.skipTest("Windows filenames cannot contain a colon")
+        program = 'def main() -> Void\n  xs = [1]\n  puts(xs[3])\nend\n'
+        for folder in ("1:", "C:relative"):
+            with self.subTest(folder=folder):
+                entry = f"{folder}/main.agc"
+                base = self.project({entry: program})
+                result = run([*cli(), entry], cwd=base, env=vm_environment())
+                self.assertEqual(result.code, 1, result.stderr)
+                self.assertTrue(result.stderr.startswith(f"{entry}:"), result.stderr)
+                self.assertNotIn(str(base), result.stderr)
 
     def test_bytes_do_not_depend_on_the_checkout_location(self):
         first, second = self.project(), self.project()
