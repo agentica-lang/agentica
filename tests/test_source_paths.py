@@ -230,15 +230,17 @@ class SourcePathsTest(TestCase):
     def test_a_source_root_past_the_cap_is_refused(self):
         base = self.project({"app/main.agc": HELLO})
         data = compile_agc(base / "app" / "main.agc", base / "out.agcb").read_bytes()
-        # 700 empty names, none under std/ or absolute, each get the root: 700 * 100001 bytes pass the 64 MiB cap.
+        # Every padded name is empty, relative and not under std/, so each gets the root and the guard refuses once
+        # count * (root + "/") passes 64 MiB. 4000 names and a 17000-character root keep the command line under the
+        # 32767-character limit of CreateProcess, so the case runs on Windows too.
         padded = base / "padded.agcb"
-        padded.write_bytes(pad_source_names(data, 700))
+        padded.write_bytes(pad_source_names(data, 4000))
         env = vm_environment()
         plain = run_vm(padded, env=env)
         self.assertEqual((plain.code, plain.stdout), (0, "hi\n"), plain.stderr)
         short = run_vm(padded, "--source-root", "app", env=env)
         self.assertEqual((short.code, short.stdout), (0, "hi\n"), short.stderr)
-        refused = run_vm(padded, "--source-root", "r" * 100000, env=env)
+        refused = run_vm(padded, "--source-root", "r" * 17000, env=env)
         self.assertEqual(refused.code, 2)
         self.assertEqual(refused.stdout, "")
         self.assertEqual(refused.stderr, "agentica run: --source-root is too long for this program\n")
