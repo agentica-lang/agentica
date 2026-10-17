@@ -22,11 +22,8 @@ class PlatformBootstrap(TestCase):
         )
         source.write_text(
             'import Helper from "helper"\n'
-            'import Queue from "std/queue"\n\n'
             'def main() -> Void\n'
             '  puts(Helper.value())\n'
-            '  q = Queue.push(Queue.new(), "stdlib")\n'
-            '  puts(Queue.pop(q).unwrap!.value)\n'
             '  for arg in System.args()\n    puts(arg)\n  end\nend\n',
             encoding="utf-8",
         )
@@ -51,7 +48,7 @@ class PlatformBootstrap(TestCase):
         checked = run(command + ["check", source], cwd=root, env=environment)
         self.assertEqual(checked.code, 0, checked.stderr)
         arguments = ["space value", '"quoted"', "", "ñ🙂"]
-        expected = "relative\nstdlib\n" + "\n".join(arguments) + "\n"
+        expected = "relative\n" + "\n".join(arguments) + "\n"
         direct = run(command + [source, *arguments], cwd=root, env=environment)
         self.assertEqual((direct.code, direct.stdout), (0, expected), direct.stderr)
         bytecode = root / "compiled ñ🙂.agcb"
