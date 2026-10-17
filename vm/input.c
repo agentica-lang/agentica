@@ -175,6 +175,24 @@ static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true,
 #endif
 #endif
 
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+/* The request of a read, or NULL when this task waits for the one already in flight. */
+static read_request *begin_read(agc_vm *vm, agc_input *in) {
+  if (in->reading) {
+    agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
+    agc_task_park(vm, true);
+    return NULL;
+  }
+  size_t room = read_room(in);
+  if (in->flush_out) agc_flush(vm);
+  read_request *q = calloc(1, sizeof(read_request) + room);
+  if (!q) agc_out_of_memory();
+  q->room = room;
+  in->reading = true;
+  return q;
+}
+#endif
+
 #if defined(__linux__) || defined(__APPLE__)
 static bool read_once(read_request *q) {
   for (;;) {
@@ -249,21 +267,12 @@ void agc_input_close(agc_vm *vm) {
 }
 
 static int start_read(agc_vm *vm, agc_input *in) {
-  if (in->reading) {
-    agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
-    agc_task_park(vm, true);
-    return FILL_WAIT;
-  }
-  size_t room = read_room(in);
-  if (in->flush_out) agc_flush(vm);
+  read_request *q = begin_read(vm, in);
+  if (!q) return FILL_WAIT;
   watch_stdin(vm, in);
-  read_request *q = calloc(1, sizeof(read_request) + room);
-  if (!q) agc_out_of_memory();
   q->fd = in->poller ? in->poll_fd : in->fd;
   q->socket = in->poll_socket;
   q->poller = in->poller;
-  q->room = room;
-  in->reading = true;
   if (!in->poller) {
     agc_io_start(vm, &read_io, q, agc_void(), -1);
   } else {
@@ -278,18 +287,9 @@ static int start_read(agc_vm *vm, agc_input *in) {
 }
 #elif defined(_WIN32)
 static int start_read(agc_vm *vm, agc_input *in) {
-  if (in->reading) {
-    agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
-    agc_task_park(vm, true);
-    return FILL_WAIT;
-  }
-  size_t room = read_room(in);
-  if (in->flush_out) agc_flush(vm);
-  read_request *q = calloc(1, sizeof(read_request) + room);
-  if (!q) agc_out_of_memory();
+  read_request *q = begin_read(vm, in);
+  if (!q) return FILL_WAIT;
   q->fd = in->fd;
-  q->room = room;
-  in->reading = true;
   agc_io_start(vm, &read_io, q, agc_void(), -1);
   vm->task->retry = true;
   return FILL_WAIT;
