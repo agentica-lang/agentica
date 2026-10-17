@@ -1,5 +1,5 @@
 /* Native child processes: literal arguments, inherited environment, pipes, private channel and guard cleanup. */
-#include "../core.h"
+#include "builtin_test.h"
 #include "../services.h"
 
 #include <assert.h>
@@ -25,18 +25,7 @@ static agc_value call(const char *name, agc_value *args) {
     if (strcmp(agc_process_builtins[k].name, name) == 0) builtin = &agc_process_builtins[k];
   for (size_t k = 0; k < agc_duplex_builtin_count; k++)
     if (strcmp(agc_duplex_builtins[k].name, name) == 0) builtin = &agc_duplex_builtins[k];
-  assert(builtin);
-  task->state = AGC_TASK_RUNNING;
-  task->parking = false;
-  vm.task = task;
-  agc_value result = builtin->fn(&vm, args, 0);
-  if (!task->parking) return result;
-  task->parking = false;
-  task->state = AGC_TASK_PARKED;
-  while (task->state == AGC_TASK_PARKED) assert(agc_io_poll(&vm, true));
-  vm.ready = vm.ready_tail = NULL;
-  task->state = AGC_TASK_RUNNING;
-  return agc_io_finish(&vm, task);
+  return agc_test_call(&vm, task, builtin, args);
 }
 
 static agc_value ok(agc_value result) {
