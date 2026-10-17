@@ -128,8 +128,10 @@ jobs:
       - run: |
           python3 --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
-      - name: Build the binary from bootstrap/stage0.agcb, the C tests, and the BDD specs on the binary
-        run: make -j"$(nproc)" vm-test test-bdd
+      - name: Build the binary and C tests, then run the BDD specs in Docker
+        run: make -j"$(nproc)" vm-test test-bdd REMOVE_SANDBOX_BASE=ubuntu:24.04
+      - name: Isolated filesystem removal regressions
+        run: make windows-docker-remove-check REMOVE_SANDBOX_BASE=ubuntu:24.04
       - name: make test
         run: make test JOBS=6
       - name: Fixed point of the front end from bootstrap/stage0.agcb (stage2 == stage3, the binary compiles stage2)

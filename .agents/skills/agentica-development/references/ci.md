@@ -183,6 +183,16 @@ comment), then a step that calls it. Targets that are not obvious:
   image. No CI job calls these targets. Wine is not a substitute for native
   Windows CI; tests relying on Windows process creation, command-line UTF-16
   conversion or symlink resolution can differ under Wine.
+  `make windows-docker-remove-check` builds a small runtime image (Ubuntu
+  24.04 by default; `REMOVE_SANDBOX_BASE` selects the base) and runs only the
+  explicitly isolated Linux filesystem removal/rename regressions. The test
+  container has a read-only root and checkout, no network/capabilities, bounded
+  memory/processes/time, and disposable `/tmp`; the launcher probes these
+  mounts before invoking any backend and always removes only its uniquely
+  named container. `--mode probe` checks boundaries without running tests.
+  The general `windows-docker-check` mount remains writable and is not a
+  removal-test sandbox. Docker/Wine does not establish native NTFS, ACL, or
+  reparse-point behavior.
 - `vm-diff-build` and `vm-diff-test` are the golden tests (`tests/test_vm_diff_*.py`);
   `sweep-full` runs them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`).
   `test-distribution` is the release's relocated-executable test

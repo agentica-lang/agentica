@@ -20,7 +20,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-image windows-docker-remove-check windows-docker-remove-wine-check vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -51,7 +51,9 @@ TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency, make vm-task-map): a directory in TESTS does not pick them up
 PY_ALONE = tests/test_vm_latency.py tests/test_vm_task_map.py
-PY_TESTS = $(sort $(PY_FILES) $(filter-out $(PY_ALONE),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
+ISOLATED_PY_TESTS = tests/test_vm_os_remove.py tests/test_bdd_cleanup.py tests/test_windows_remove_refusal.py
+PY_ISOLATED_SELECTED = $(filter $(ISOLATED_PY_TESTS),$(PY_FILES))
+PY_TESTS = $(sort $(filter-out $(ISOLATED_PY_TESTS),$(PY_FILES)) $(filter-out $(PY_ALONE) $(ISOLATED_PY_TESTS),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
 # A file that is not tests/test_<area>.py (a file of another kind, or a .py file elsewhere) would build a wrong module name below
 PY_NOT_DIR = $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(if $(wildcard $(t)/.),,$(t)))
 PY_BAD = $(PY_NOT_DIR) $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
@@ -81,6 +83,9 @@ MODULE_LIMIT = $(shell awk -v scale='$(or $(AGENTICA_TEST_TIMEOUT_SCALE),1)' -v 
 # CI (CI is set) fails when Python is missing; a local run reports a skip.
 test-py:
 	@: $(PY_CHECK)
+	@if [ -n "$(PY_ISOLATED_SELECTED)" ]; then \
+	  echo "$(PY_ISOLATED_SELECTED) requires make windows-docker-remove-check; refusing host execution" >&2; exit 1; \
+	fi
 	@if [ -n "$(PY_TESTS)" ]; then \
 	  if ! command -v $(PYTHON) >/dev/null 2>&1; then \
 	    test -z "$$CI" || { echo "$(PYTHON) is required in CI" >&2; exit 1; }; \
@@ -124,8 +129,8 @@ vm-latency: $(PRODUCT)
 vm-task-map: $(PRODUCT)
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_task_map.py
 
-test-bdd: $(PRODUCT)
-	$(PRODUCT) test tests/bdd/specs/ --steps tests/bdd/handlers.agc
+test-bdd: windows-docker-remove-image $(PRODUCT)
+	tools/windows-remove-sandbox.sh --image "$(REMOVE_SANDBOX_IMAGE)" --mode bdd-check
 
 # Example smoke runs on dist/agentica, in parallel (tests/smoke.sh).
 smoke: $(PRODUCT)
@@ -618,8 +623,10 @@ VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/
 $(VM_BUILD)/%-test$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/tests/%_test.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
 
+VM_TESTS_NORMAL := $(filter-out $(VM_BUILD)/tree-test$(EXE) $(VM_BUILD)/files_private-test$(EXE),$(VM_TESTS))
+
 vm-test: $(VM_TESTS)
-	printf '%s\n' $(VM_TESTS) | xargs -P $(JOBS) -n 1 $(VM_TEST_RUNNER)
+	printf '%s\n' $(VM_TESTS_NORMAL) | xargs -P $(JOBS) -n 1 $(VM_TEST_RUNNER)
 
 # The C tests as programs, without running them: windows-docker-build builds them in a container.
 vm-test-binaries: $(VM_TESTS)
@@ -674,6 +681,24 @@ windows-docker-check: windows-docker-build
 	  python3 -m unittest tests.test_platform_bootstrap; \
 	  export AGENTICA_VM_BINARY="$(WINDOWS_WRAPPER_DIR)/agentica"; \
 	  $(MAKE) $(WINDOWS_CROSS) test-py TESTS="$(WINDOWS_TEST_MODULES)" PYTHON=python3'
+
+# Prepare a small runtime image; this is separate from networkless test execution.
+REMOVE_SANDBOX_IMAGE ?= agentica-remove-sandbox
+REMOVE_SANDBOX_BASE ?= ubuntu:24.04
+
+windows-docker-remove-image:
+	@command -v docker >/dev/null 2>&1 || { echo "windows-docker-remove-image requires Docker" >&2; exit 1; }
+	docker build --build-arg REMOVE_SANDBOX_BASE="$(REMOVE_SANDBOX_BASE)" -t "$(REMOVE_SANDBOX_IMAGE)" -f tools/remove-sandbox.Dockerfile tools
+
+# Run only tests whose specific cases are explicitly gated for this sandbox.
+windows-docker-remove-check: windows-docker-remove-image $(PRODUCT) $(VM_BUILD)/tree-test$(EXE) $(VM_BUILD)/files_private-test$(EXE)
+	tools/windows-remove-sandbox.sh --image "$(REMOVE_SANDBOX_IMAGE)" --mode remove-tests
+
+REMOVE_WINE_IMAGE ?= agentica-remove-wine-sandbox
+
+windows-docker-remove-wine-check:
+	$(MAKE) --no-print-directory windows-docker-remove-image REMOVE_SANDBOX_BASE="$(WINDOWS_IMAGE)" REMOVE_SANDBOX_IMAGE="$(REMOVE_WINE_IMAGE)"
+	tools/windows-remove-sandbox.sh --image "$(REMOVE_WINE_IMAGE)" --mode windows-wine-tests
 
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)

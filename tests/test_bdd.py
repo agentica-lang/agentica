@@ -7,11 +7,15 @@ need a runner that fails run the front end as an ordinary program with a script
 as the binary it starts again (front_end_command).
 """
 import ast
-import fcntl
 import json
 import os
 import re
 import unittest
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 from tests.agentica_test import (ROOT, TESTS, TestCase, binary, cli, front_end_command, report_cases, run,
                                  vm_environment)
@@ -52,13 +56,17 @@ def main_running(*steps):
     return "def main() -> Void\n  BDD.run([\n%s\n  ])\nend\n" % ",\n".join("    " + step for step in steps)
 
 
-class Bdd(TestCase):
+class BddBase(TestCase):
     def agentica_test(self, *args, env=None, cwd=None, binary_path=None):
         """`agentica test`; with binary_path, the front end runs as an ordinary program that starts that path (a
         script) in place of the binary."""
+        test_env = dict(env or {})
+        if "TMPDIR" not in test_env:
+            # A normal case never sweeps another case's private handoff folder.
+            test_env["TMPDIR"] = str(self.make_temp_dir("agentica-bdd-run-tmp-"))
         if binary_path is not None:
-            return run(front_end_command(binary_path, "test", *args), env=vm_environment(env), cwd=cwd)
-        return run(cli() + ["test", *args], env=vm_environment(env), cwd=cwd)
+            return run(front_end_command(binary_path, "test", *args), env=vm_environment(test_env), cwd=cwd)
+        return run(cli() + ["test", *args], env=vm_environment(test_env), cwd=cwd)
 
     def json_test(self, *args, **options):
         """Returns (exit code, parsed report); stderr must stay empty."""
@@ -70,6 +78,7 @@ class Bdd(TestCase):
         """A temp directory with the given files (name -> text); returns its path as a string."""
         return str(self.make_suite(files, "agentica-bdd-"))
 
+class Bdd(BddBase):
     def test_the_custom_suite_passes_in_the_three_formats_with_outline_names_and_quiet_handlers(self):
         status, report = self.json_test(CUSTOM, CUSTOM, "--steps", HANDLERS)
         self.assertEqual(status, 0)
@@ -388,7 +397,7 @@ class Bdd(TestCase):
         report = json.loads(result.stdout)
         self.assertEqual([item["name"] for item in report_cases(report)], names)
 
-    def test_a_later_run_removes_the_folders_of_ended_runs_and_keeps_live_linked_and_malformed_ones(self):
+    def _later_run_removes_private_run_folders(self):
         scratch = self.make_suite({"nothing.txt": ""}, "agentica-bdd-sweep-")
         temporary = scratch / "tmp"
         temporary.mkdir(0o700)
@@ -417,6 +426,7 @@ class Bdd(TestCase):
         os.utime(old_without_lock, (1, 1))
         # A held lock is what tells a live run from an ended one.
         with open(live / "lock", "w") as held:
+            assert fcntl is not None
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
             result = self.agentica_test(scratch / "missing.feature", env={"TMPDIR": temporary}, cwd=scratch)
         self.assertEqual(result.code, 2)
