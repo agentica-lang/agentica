@@ -52,7 +52,6 @@ jobs:
     if: inputs.os != 'windows'
     runs-on: macos-15-intel
     env:
-      AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
@@ -89,6 +88,8 @@ jobs:
       - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions
+        env:
+          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:
@@ -110,7 +111,6 @@ jobs:
     if: inputs.os != 'windows'
     runs-on: macos-latest
     env:
-      AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
@@ -147,6 +147,8 @@ jobs:
       - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions
+        env:
+          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:
@@ -168,7 +170,6 @@ jobs:
     if: inputs.os != 'macos'
     runs-on: windows-2025
     env:
-      AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
@@ -216,6 +217,8 @@ jobs:
       - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions PYTHON=python
+        env:
+          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:
