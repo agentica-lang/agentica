@@ -181,9 +181,9 @@ tests-wine:
 	  *) echo "make tests WINE=1 runs KIND=fast or KIND=files" >&2; exit 2 ;; \
 	esac
 
-test-bdd:
+test-bdd: $(if $(filter true,$(GITHUB_ACTIONS)),$(PRODUCT))
 	@if [ "$${GITHUB_ACTIONS:-}" = true ]; then \
-	  $(MAKE) --no-print-directory $(PRODUCT) && $(PYTHON) tools/run_remove_actions.py bdd; \
+	  $(PYTHON) tools/run_remove_actions.py bdd; \
 	else \
 	  $(MAKE) --no-print-directory docker-test-image && \
 	  tools/docker-tests.sh --image "$(TEST_IMAGE)" --mode bdd; \
