@@ -652,7 +652,7 @@ static void poll_tick(uv_timer_t *timer) {
   struct pollfd fd = {.fd = p->fd, .events = p->writing ? POLLOUT : POLLIN};
   int rc = poll(&fd, 1, 0);
   if (rc < 0 && errno != EINTR) p->ready(p->data, -errno);
-  else if (rc > 0 || (rc == 0 && p->named && !p->writing))
+  else if (rc > 0 || (rc == 0 && p->named))
     p->ready(p->data, fd.revents & POLLNVAL ? UV_EBADF : 0);
 }
 #endif
