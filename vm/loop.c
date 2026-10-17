@@ -843,6 +843,15 @@ bool agc_io_poll(agc_vm *vm, bool wait) {
   return true;
 }
 
+/* libuv owns the platform-specific monotonic clock. Keep its header inside the loop layer, and preserve errno because
+   tracing is observational and must not change the error of the operation it records. */
+uint64_t agc_trace_now(void) {
+  int saved = errno;
+  uint64_t now = uv_hrtime();
+  errno = saved;
+  return now;
+}
+
 uint64_t agc_io_now(agc_vm *vm) {
   agc_loop *loop = loop_of(vm);
   uv_update_time(&loop->uv);

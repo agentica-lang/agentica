@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <uv.h>
 
 #define CUT_MARK "..."
 #define CUT_BYTES (sizeof CUT_MARK - 1)
@@ -276,15 +275,6 @@ static unsigned category_bit(const char *name, size_t n) {
   for (size_t k = 0; k < sizeof category_names / sizeof category_names[0]; k++)
     if (strlen(category_names[k]) == n && memcmp(category_names[k], name, n) == 0) return 1u << k;
   return 0;
-}
-
-/* The monotonic clock of the loop, through libuv: clock_gettime(CLOCK_MONOTONIC) is a POSIX call that the Windows CRT
-   does not have (mingw reaches a winpthread one), while uv_hrtime is the same reading on every platform. */
-uint64_t agc_trace_now(void) {
-  int saved = errno;
-  uint64_t now = uv_hrtime();
-  errno = saved;
-  return now;
 }
 
 void agc_trace_message(int fd, const char *text, const char *value, size_t len, bool quoted) {
