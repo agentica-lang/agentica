@@ -30,6 +30,8 @@ class PlatformBootstrap(TestCase):
             '  for arg in System.args()\n    puts(arg)\n  end\nend\n',
             encoding="utf-8",
         )
+        ascii_source = project / "main.agc"
+        shutil.copyfile(source, ascii_source)
         plain = project / "plain.agc"
         plain.write_text("def main() -> Void\n  puts(\"ok\")\nend\n", encoding="utf-8")
         environment = vm_environment()
@@ -44,6 +46,8 @@ class PlatformBootstrap(TestCase):
         self.assertIn("agentica", help_result.stdout)
         plain_check = run(command + ["check", plain], cwd=root, env=environment)
         self.assertEqual(plain_check.code, 0, plain_check.stderr)
+        ascii_check = run(command + ["check", ascii_source], cwd=root, env=environment)
+        self.assertEqual(ascii_check.code, 0, ascii_check.stderr)
         checked = run(command + ["check", source], cwd=root, env=environment)
         self.assertEqual(checked.code, 0, checked.stderr)
         arguments = ["space value", '"quoted"', "", "ñ🙂"]
