@@ -18,7 +18,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - `vm/loop.c`
   - the event loop and the resource registry (`docs/vm/10-io-scheduler.md`
-    §10.2.2), with `vm/stream.c`, `vm/process.c`, `vm/tcp.c` and
+    §10.2.2), with `vm/stream.c`, `vm/process.c`, `vm/system.c`, `vm/tcp.c` and
     `vm/http_client.c` the only files that include `uv.h` (`vm/http_server.c`
     reaches libuv only through `vm/net.h` and jobs)
     - `agc_io_init` (
@@ -354,3 +354,8 @@ New filesystem adapter files and headers belong in the explicit lists of
 `vm/tools/check-layers.sh`. Keep `file_io.h` forbidden to core files, keep
 adapters independent of VM values, and run `make vm-layers` including its
 planted-violation self-tests before pushing changes to these boundaries.
+
+`System.env` and `System.pid` live in `vm/system.c`, independent of process
+spawning. Environment lookup uses libuv's native UTF-8 implementation, keeps
+empty values, rejects NUL and `=`, and hides the private channel marker
+(case-insensitively on Windows). `vm/tests/system_test.c` runs on all hosts.

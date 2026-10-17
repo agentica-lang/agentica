@@ -63,10 +63,13 @@ int main(void) {
   assert(directory);
   uv_fs_req_cleanup(&req);
   char path[4300];
-  assert(snprintf(path, sizeof path, "%s/space-\xC3\xB1-\xF0\x9F\x99\x82.bin", directory) > 0);
+  assert(snprintf(path, sizeof path, "%s/space name-\xC3\xB1-\xF0\x9F\x99\x82.bin", directory) > 0);
   agc_value file = string(path);
   const char *text = "one\r\ntwo\n\xC3\xB1\xF0\x9F\x99\x82";
-  agc_value args[] = {file, string(text), agc_int(5000)};
+  agc_value args[] = {file, string(""), agc_int(5000)};
+  ok(call("File.write_text", args));
+  check_text(file, "");
+  args[1] = string(text);
   ok(call("File.write_text", args));
   check_text(file, text);
   args[1] = string("\nend");
@@ -116,11 +119,23 @@ int main(void) {
   args[0] = handle;
   args[1] = string("must not write");
   assert(!agc_as_result(&vm, call("File.write", args))->ok);
-  args[1] = agc_int(256);
-  const agc_list *read = agc_as_list(&vm, ok(call("File.read_bytes", args)));
-  assert(agc_list_len(read) == 256);
-  for (size_t k = 0; k < 256; k++) assert(agc_as_int(&vm, agc_list_get(read, k)) == (int64_t)k);
-  agc_value original = agc_list_value((agc_list *)read);
+  agc_list_builder read_bytes;
+  agc_list_builder_sized(&read_bytes, 256);
+  for (size_t at = 0; at < 256;) {
+    size_t count = 256 - at < 17 ? 256 - at : 17;
+    args[1] = agc_int((int64_t)count);
+    const agc_list *read = agc_as_list(&vm, ok(call("File.read_bytes", args)));
+    assert(agc_list_len(read) == count);
+    for (size_t k = 0; k < count; k++) {
+      agc_value byte = agc_list_get(read, k);
+      assert(agc_as_int(&vm, byte) == (int64_t)(at + k));
+      agc_list_builder_push(&read_bytes, byte);
+    }
+    at += count;
+  }
+  args[1] = agc_int(1);
+  assert(agc_list_len(agc_as_list(&vm, ok(call("File.read_bytes", args)))) == 0);
+  agc_value original = agc_list_value(agc_list_builder_finish(&read_bytes));
   args[1] = agc_int(5000);
   ok(call("File.close", args));
   args[0] = file;
@@ -152,6 +167,19 @@ int main(void) {
   uint8_t data[257];
   assert(fd >= 0 && agc_fs_read(fd, data, sizeof data) == 256);
   for (int k = 0; k < 256; k++) assert(data[k] == k);
+  assert(agc_fs_close(fd) == 0);
+  args[0] = file;
+  args[1] = string("append");
+  handle = ok(call("File.open", args));
+  args[0] = handle;
+  args[1] = string("tail");
+  ok(call("File.write", args));
+  agc_close_owned(&vm, task);
+  while (task->closing) agc_io_poll(&vm, true);
+  fd = agc_fs_open(path, AGC_FS_READ);
+  uint8_t final[260];
+  assert(fd >= 0 && agc_fs_read(fd, final, sizeof final) == 260);
+  assert(memcmp(final + 256, "tail", 4) == 0);
   assert(agc_fs_close(fd) == 0);
   assert(agc_fs_unlink(path) == 0);
   assert(uv_fs_rmdir(NULL, &req, directory, NULL) == 0);

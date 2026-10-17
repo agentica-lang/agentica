@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Windows and macOS VM builds and Linux CI toolchain compatibility.
-- Native Windows file I/O and Unicode path handling.
+- Native Windows file I/O, environment access and Unicode path handling.
 - BDD runner selection in bootstrap and replacement front ends.
 
 ### Removed

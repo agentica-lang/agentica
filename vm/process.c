@@ -1,5 +1,5 @@
 /*
- * The Process builtins, System.env and System.pid (Linux only): spawning and
+ * The Process builtins on Unix: spawning and
  * watching child processes, their pipes, and the environment entries that the VM
  * keeps for itself. Service layer. Design: docs/vm/10-io-processes.md §10.4.
  */
@@ -1047,28 +1047,6 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_result_value(true, agc_string_value(text));
 }
 
-static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  const agc_string *name = agc_as_string(vm, args[0]);
-  if (name->bytes == 0 || !no_nul(name) || memchr(name->data, '=', name->bytes))
-    return agc_error_value("system: environment variable name must be nonempty and cannot contain = or NUL");
-  for (char **entry = host_env(); *entry; entry++) {
-    if (strncmp(*entry, name->data, name->bytes) != 0 || (*entry)[name->bytes] != '=') continue;
-    if (own_env(vm->rt->drop_uring_env, *entry)) break;
-    const char *value = *entry + name->bytes + 1;
-    agc_string *text = agc_utf8_decode((const uint8_t *)value, strlen(value), "\xEF\xBF\xBD", false);
-    return agc_result_value(true, agc_string_value(text));
-  }
-  return agc_error_value("system: environment variable is not set");
-}
-
-static agc_value builtin_pid(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)vm;
-  (void)args;
-  (void)span;
-  return agc_int((int64_t)getpid());
-}
-
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
@@ -1085,8 +1063,6 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"System.pid", 0, builtin_pid, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];
