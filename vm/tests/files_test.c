@@ -181,6 +181,52 @@ int main(void) {
   assert(fd >= 0 && agc_fs_read(fd, final, sizeof final) == 260);
   assert(memcmp(final + 256, "tail", 4) == 0);
   assert(agc_fs_close(fd) == 0);
+  size_t file_size = 0;
+  fd = agc_fs_bytecode_open(path, false, sizeof final, &file_size);
+  assert(fd >= 0 && file_size == sizeof final);
+  assert(agc_fs_close(fd) == 0);
+  assert(agc_fs_bytecode_open(path, false, sizeof final - 1, &file_size) == -1);
+  assert(agc_fs_bytecode_open(directory, false, sizeof final, &file_size) == -1);
+  assert(agc_fs_bytecode_open(NULL, false, sizeof final, &file_size) == -1);
+  assert(agc_fs_bytecode_open("", false, sizeof final, &file_size) == -1);
+  assert(agc_fs_bytecode_open(path, false, sizeof final, NULL) == -1);
+  assert(agc_fs_stat(path, &info, true) == 0 && info.size == sizeof final);
+#ifdef _WIN32
+  assert(agc_fs_bytecode_open(path, true, sizeof final, &file_size) == -1);
+  assert(agc_fs_stat(path, &info, true) == 0 && info.size == sizeof final);
+  if (getenv("CI")) {
+    char private_path[4400];
+    assert(snprintf(private_path, sizeof private_path, "%s/private", directory) > 0);
+    assert(agc_fs_mkdir(private_path, true) == 0);
+    assert(agc_fs_mkdir(private_path, true) == -1 && errno == EEXIST);
+    assert(uv_fs_rmdir(NULL, &req, private_path, NULL) == 0);
+    uv_fs_req_cleanup(&req);
+    unsigned flags = AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE;
+    assert(agc_fs_open(NULL, flags) == -1);
+    assert(agc_fs_open("", flags) == -1);
+    fd = agc_fs_open(private_path, flags);
+    assert(fd >= 0 && agc_fs_write(fd, final, sizeof final) == sizeof final);
+    assert(agc_fs_close(fd) == 0);
+    assert(agc_fs_open(private_path, flags) == -1 && errno == EEXIST);
+    char alias[4400];
+    assert(snprintf(alias, sizeof alias, "%s/alias", directory) > 0);
+    assert(uv_fs_link(NULL, &req, private_path, alias, NULL) == 0);
+    uv_fs_req_cleanup(&req);
+    assert(agc_fs_bytecode_open(private_path, true, sizeof final, &file_size) == -1);
+    assert(agc_fs_stat(private_path, &info, true) == 0 && info.size == sizeof final);
+    assert(agc_fs_stat(alias, &info, true) == 0 && info.size == sizeof final);
+    assert(agc_fs_unlink(alias) == 0);
+    assert(agc_fs_bytecode_open(private_path, true, sizeof final - 1, &file_size) == -1);
+    assert(agc_fs_stat(private_path, &info, true) == 0 && info.size == sizeof final);
+    fd = agc_fs_bytecode_open(private_path, true, sizeof final, &file_size);
+    assert(fd >= 0 && file_size == sizeof final);
+    uint8_t handed[260];
+    assert(agc_fs_read(fd, handed, sizeof handed) == sizeof handed);
+    assert(memcmp(handed, final, sizeof final) == 0);
+    assert(agc_fs_close(fd) == 0);
+    assert(agc_fs_stat(private_path, &info, false) == -1 && errno == ENOENT);
+  }
+#endif
   assert(agc_fs_unlink(path) == 0);
   assert(uv_fs_rmdir(NULL, &req, directory, NULL) == 0);
   uv_fs_req_cleanup(&req);

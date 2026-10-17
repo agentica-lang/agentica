@@ -28,6 +28,7 @@ enum {
 };
 
 int agc_fs_open(const char *path, unsigned flags);
+int agc_fs_bytecode_open(const char *path, bool private, size_t maximum, size_t *size);
 int agc_fs_close(int fd);
 int64_t agc_fs_read(int fd, void *data, size_t size);
 int64_t agc_fs_write(int fd, const void *data, size_t size);
@@ -40,6 +41,8 @@ char *agc_fs_cwd(void);
 char *agc_fs_realpath(const char *path);
 #ifdef _WIN32
 void agc_fs_set_error(int result);
+int agc_fs_private_create(const char *path, bool directory);
+int agc_fs_private_read(const char *path, size_t maximum, size_t *size);
 char *agc_fs_absolute(const char *path);
 #endif
 bool agc_fs_rooted(const char *path, size_t size);

@@ -339,7 +339,7 @@ native path conversion. Do not put `uv.h` or Win32 headers in the driver to
 reach these operations. Regular files use binary descriptors and UTF-8 paths;
 `Path.resolve` preserves drive and UNC roots and normalizes separators.
 
-Windows special streams, private creates/directories, locks, rename and
+Windows special streams, locks, rename and
 `Path.remove` are not enabled by this increment. Removal returns an error
 without changing the path. Keep it disabled until native no-follow traversal,
 raw root/dot validation and junction tests are implemented; normalizing `.`
@@ -359,3 +359,10 @@ planted-violation self-tests before pushing changes to these boundaries.
 spawning. Environment lookup uses libuv's native UTF-8 implementation, keeps
 empty values, rejects NUL and `=`, and hides the private channel marker
 (case-insensitively on Windows). `vm/tests/system_test.c` runs on all hosts.
+
+Bytecode file reads are opened by `file_io.c` and consumed in `launch.c`;
+`agentica.c` contains no native file APIs. Windows private creates and
+directories use a protected owner-only DACL. Private handoff checks the owner,
+DACL, regular type and single link on the opened handle before marking that
+same handle for deletion. Failed checks preserve the file. Native Windows
+handoff deletion tests run only when `CI` is set, in test-owned directories.

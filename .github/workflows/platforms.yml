@@ -197,6 +197,8 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - run: make build/vm/release/bootstrap/agentica.exe
+      - run: build/vm/release/bootstrap/agentica.exe --version
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:

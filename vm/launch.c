@@ -15,6 +15,7 @@
 
 #include "core.h"
 #include "services.h"
+#include "file_io.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -33,6 +34,7 @@
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
+#include <shellapi.h>
 
 #define TRACE_OPEN (_O_WRONLY | _O_APPEND | _O_CREAT | _O_NOINHERIT | _O_BINARY)
 #define TRACE_MODE (_S_IREAD | _S_IWRITE)
@@ -117,8 +119,7 @@ bool agc_launch_bind(int64_t driver) {
 bool agc_launch_bind(int64_t driver) { return (int64_t)getppid() == driver; }
 #else
 bool agc_launch_bind(int64_t driver) {
-  (void)driver;
-  return true;
+  return (int64_t)uv_os_getppid() == driver;
 }
 #endif
 
@@ -265,9 +266,40 @@ void agc_launch_init(agc_launch *launch) {
   fill_standard_fds();
 #endif
   agc_launch_ignore_sigpipe();
+#ifdef _WIN32
+  for (int fd = 0; fd <= 2; fd++)
+    if (uv_guess_handle(fd) != UV_UNKNOWN_HANDLE) _setmode(fd, _O_BINARY);
+  setvbuf(stdout, NULL, _IONBF, 0);
+#endif
   agc_init();
   memset(launch, 0, sizeof *launch);
   launch->inherited = agc_files_inherited();
+}
+
+bool agc_launch_utf8_args(int *argc, char ***argv) {
+#ifdef _WIN32
+  int count = 0;
+  wchar_t **wide = CommandLineToArgvW(GetCommandLineW(), &count);
+  if (!wide) return false;
+  char **words = agc_alloc(agc_size_mul(agc_size_add((size_t)count, 1), sizeof(char *)));
+  for (int k = 0; k < count; k++) {
+    int len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide[k], -1, NULL, 0, NULL, NULL);
+    if (!len) { LocalFree(wide); return false; }
+    words[k] = agc_alloc_atomic((size_t)len);
+    if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide[k], -1, words[k], len, NULL, NULL)) {
+      LocalFree(wide);
+      return false;
+    }
+  }
+  words[count] = NULL;
+  LocalFree(wide);
+  *argc = count;
+  *argv = words;
+#else
+  (void)argc;
+  (void)argv;
+#endif
+  return true;
 }
 
 void agc_launch_trace(agc_launch *launch) {
@@ -298,16 +330,22 @@ agc_value agc_launch_args(int argc, char **argv, int first) {
 }
 
 uint8_t *agc_launch_read(int fd, size_t size) {
+  if (size > AGC_MAX_FILE_BYTES) { agc_fs_close(fd); return NULL; }
   uint8_t *data = agc_alloc_atomic(size);
   size_t done = 0;
   while (done < size) {
-    ssize_t n = read(fd, data + done, size - done);
+    int64_t n = agc_fs_read(fd, data + done, size - done);
     if (n < 0 && errno == EINTR) continue;
     if (n <= 0) break;
     done += (size_t)n;
   }
-  close(fd);
+  agc_fs_close(fd);
   return done == size ? data : NULL;
+}
+
+uint8_t *agc_launch_file(const char *path, bool driven, size_t *size) {
+  int fd = agc_fs_bytecode_open(path, driven, AGC_MAX_FILE_BYTES, size);
+  return fd < 0 ? NULL : agc_launch_read(fd, *size);
 }
 
 static bool once(const char *name, bool *seen, const char *option) {

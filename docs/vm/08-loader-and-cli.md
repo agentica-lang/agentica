@@ -162,6 +162,12 @@ byte of a file with a type table, an Updates section or Globals.
   deleted after loading, but only if the path still names the file it opened
   (same device and inode). The driver also deletes the file when the VM never
   ran, or failed before loading.
+- Windows checks the parent PID through libuv. Bytecode reads use binary
+  descriptors and UTF-8 paths. A private handoff opens the file without following
+  its final reparse point, then requires a regular disk file with one link,
+  this process user's owner SID, and a protected DACL granting only that user.
+  Only after those checks and the size limit pass does it mark the opened
+  handle for deletion on close. A failed check leaves the file intact.
 - On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the process that runs
   `agentica test`), the run ends on the first signal and `agc_launch_settle`
   (`vm/launch.c`) calls `agc_processes_stop` (`vm/process.c`) before anything
