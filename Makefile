@@ -1,5 +1,6 @@
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
+TESTS_EXPLICIT = $(if $(filter file,$(origin TESTS)),,1)
 # The platform the VM is built for: the host, or a cross target. `make windows-docker-check` sets it to Windows_NT on a
 # Linux host, which selects the Windows sources, libraries, linker flags and embedded object format. `OS` is Windows_NT
 # on Windows and empty elsewhere, so the default is the host.
@@ -20,7 +21,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-image windows-docker-remove-check windows-docker-remove-wine-check vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -41,8 +42,8 @@ version:
 
 # The tests are Python unittest modules, tests/test_<area>.py (docs/future/35-self-hosting.md section 35.10,
 # references/ci.md). TESTS names modules, or directories that hold them (the default is tests/).
-# All tests, in parallel:      make test
-# A subset:                    make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"
+# Fast Python tests:           make test [TESTS="tests/test_vm_bits.py ..."]
+# Test groups:                 make tests KIND=fast|files|slow|all [DOCKER=1|WINE=1]
 # More or fewer workers:       make test JOBS=8
 PYTHON ?= python3
 # TESTS without a leading ./ or a trailing /. A directory contributes its own test_*.py files, not those of subdirectories
@@ -84,7 +85,7 @@ MODULE_LIMIT = $(shell awk -v scale='$(or $(AGENTICA_TEST_TIMEOUT_SCALE),1)' -v 
 test-py:
 	@: $(PY_CHECK)
 	@if [ -n "$(PY_ISOLATED_SELECTED)" ]; then \
-	  echo "$(PY_ISOLATED_SELECTED) requires its Docker sandbox target (Linux: make windows-docker-remove-check; Windows/Wine: make windows-docker-remove-wine-check); refusing host execution" >&2; exit 1; \
+	  echo "$(PY_ISOLATED_SELECTED) is isolated: run make tests KIND=files (Docker) or make test-remove-actions in CI" >&2; exit 1; \
 	fi
 	@if [ -n "$(PY_TESTS)" ]; then \
 	  if ! command -v $(PYTHON) >/dev/null 2>&1; then \
@@ -129,8 +130,64 @@ vm-latency: $(PRODUCT)
 vm-task-map: $(PRODUCT)
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_task_map.py
 
-test-bdd: windows-docker-remove-image $(PRODUCT)
-	tools/windows-remove-sandbox.sh --image "$(REMOVE_SANDBOX_IMAGE)" --mode bdd-check
+# The test groups (references/ci.md): make tests KIND=fast|files|slow|all, DOCKER=1, WINE=1
+#   fast   the default tier, the same as make test
+#   files  the filesystem-destructive cases: the local Docker sandbox, or the Actions scratch in CI
+#   slow   the @slow cases, the same as make test-slow
+#   all    fast, then slow, then files
+# DOCKER=1 puts the group in the Ubuntu test container; WINE=1 runs the Windows checks of it under Wine.
+# TESTS= narrows only a host fast/slow selection; it is rejected with files, all, Docker or Wine.
+KIND ?= fast
+DOCKER ?=
+WINE ?=
+
+tests:
+	@case "$(KIND)" in fast|files|slow|all) ;; *) echo "make tests: KIND must be fast, files, slow or all (got '$(KIND)')" >&2; exit 2 ;; esac
+	@if [ -n "$(DOCKER)" ] && [ -n "$(WINE)" ]; then \
+	  echo "make tests: choose either DOCKER=1 or WINE=1, not both" >&2; exit 2; \
+	fi
+	@if [ -n "$(TESTS_EXPLICIT)" ] && { [ -n "$(DOCKER)" ] || [ -n "$(WINE)" ] || [ "$(KIND)" = files ] || [ "$(KIND)" = all ]; }; then \
+	  echo "make tests: TESTS= is supported only with KIND=fast or slow on the host" >&2; exit 2; \
+	fi
+	@if [ -n "$(WINE)" ]; then $(MAKE) --no-print-directory tests-wine KIND=$(KIND); \
+	elif [ -n "$(DOCKER)" ]; then $(MAKE) --no-print-directory tests-docker KIND=$(KIND); \
+	else $(MAKE) --no-print-directory tests-host KIND=$(KIND); fi
+
+# A group on the host. `files` is never one: it always goes through Docker or the Actions scratch.
+tests-host:
+	@case "$(KIND)" in \
+	  fast) $(MAKE) --no-print-directory test ;; \
+	  slow) $(MAKE) --no-print-directory test-slow ;; \
+	  files) $(MAKE) --no-print-directory tests-files ;; \
+	  all) $(MAKE) --no-print-directory test && $(MAKE) --no-print-directory test-slow && \
+	       $(MAKE) --no-print-directory tests-files ;; \
+	esac
+
+# The destructive group: only the Actions scratch of an ephemeral runner, or the local Docker sandbox.
+tests-files:
+	@if [ "$${GITHUB_ACTIONS:-}" = true ]; then $(PYTHON) tools/run_remove_actions.py all; \
+	else $(MAKE) --no-print-directory tests-docker KIND=files; fi
+
+# A group in the Ubuntu test container: the checkout is read-only there and build/ and dist/ are own volumes.
+tests-docker: docker-test-image
+	tools/docker-tests.sh --image "$(TEST_IMAGE)" --mode $(KIND)
+
+# The Windows group under Wine: the cross build runs first and the tests run in the Windows image.
+tests-wine:
+	@case "$(KIND)" in \
+	  fast) $(MAKE) --no-print-directory windows-docker-check ;; \
+	  files) $(MAKE) --no-print-directory windows-docker-build && \
+	         tools/docker-tests.sh --image "$(WINDOWS_IMAGE)" --mode windows-wine-tests ;; \
+	  *) echo "make tests WINE=1 runs KIND=fast or KIND=files" >&2; exit 2 ;; \
+	esac
+
+test-bdd:
+	@if [ "$${GITHUB_ACTIONS:-}" = true ]; then \
+	  $(MAKE) --no-print-directory $(PRODUCT) && $(PYTHON) tools/run_remove_actions.py bdd; \
+	else \
+	  $(MAKE) --no-print-directory docker-test-image && \
+	  tools/docker-tests.sh --image "$(TEST_IMAGE)" --mode bdd; \
+	fi
 
 # Example smoke runs on dist/agentica, in parallel (tests/smoke.sh).
 smoke: $(PRODUCT)
@@ -682,23 +739,28 @@ windows-docker-check: windows-docker-build
 	  export AGENTICA_VM_BINARY="$(WINDOWS_WRAPPER_DIR)/agentica"; \
 	  $(MAKE) $(WINDOWS_CROSS) test-py TESTS="$(WINDOWS_TEST_MODULES)" PYTHON=python3'
 
-# Prepare a small runtime image; this is separate from networkless test execution.
-REMOVE_SANDBOX_IMAGE ?= agentica-remove-sandbox
-REMOVE_SANDBOX_BASE ?= ubuntu:24.04
+# The Ubuntu test container of `make tests DOCKER=1` and `make tests KIND=files`. It builds the checkout with the
+# distribution libgc and OpenSSL (no vendored dependency build), so a cold volume still finishes in a couple of
+# minutes. TEST_BASE selects another Ubuntu base; `docker volume ls` lists the cached build volumes.
+TEST_IMAGE ?= agentica-ubuntu-test
+TEST_BASE ?= ubuntu:26.04
+TEST_DOCKERFILE ?= tools/ubuntu-test.Dockerfile
 
-windows-docker-remove-image:
-	@command -v docker >/dev/null 2>&1 || { echo "windows-docker-remove-image requires Docker" >&2; exit 1; }
-	docker build --build-arg REMOVE_SANDBOX_BASE="$(REMOVE_SANDBOX_BASE)" -t "$(REMOVE_SANDBOX_IMAGE)" -f tools/remove-sandbox.Dockerfile tools
+docker-test-image:
+	@command -v docker >/dev/null 2>&1 || { echo "make tests DOCKER=1 requires Docker" >&2; exit 1; }
+	docker build --build-arg TEST_BASE="$(TEST_BASE)" -t "$(TEST_IMAGE)" -f "$(TEST_DOCKERFILE)" tools
 
-# Run only tests whose specific cases are explicitly gated for this sandbox.
-windows-docker-remove-check: windows-docker-remove-image $(PRODUCT) $(VM_BUILD)/tree-test$(EXE) $(VM_BUILD)/files_private-test$(EXE)
-	tools/windows-remove-sandbox.sh --image "$(REMOVE_SANDBOX_IMAGE)" --mode remove-tests
+# The Linux removal/rename cases of the destructive group, in the local Docker sandbox (Actions uses its own route).
+windows-docker-remove-check:
+	$(MAKE) --no-print-directory tests-docker KIND=files
 
-REMOVE_WINE_IMAGE ?= agentica-remove-wine-sandbox
-
+# The Windows removal refusal case under Wine, the optional local compatibility check of KIND=files.
 windows-docker-remove-wine-check:
-	$(MAKE) --no-print-directory windows-docker-remove-image REMOVE_SANDBOX_BASE="$(WINDOWS_IMAGE)" REMOVE_SANDBOX_IMAGE="$(REMOVE_WINE_IMAGE)"
-	tools/windows-remove-sandbox.sh --image "$(REMOVE_WINE_IMAGE)" --mode windows-wine-tests
+	$(MAKE) --no-print-directory tests-wine KIND=files
+
+# Native destructive regressions run only on ephemeral GitHub Actions runners.
+test-remove-actions:
+	$(PYTHON) tools/run_remove_actions.py all
 
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)

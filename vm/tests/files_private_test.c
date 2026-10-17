@@ -1,4 +1,4 @@
-/* Private-file handoff validation; every consume and cleanup runs in the Docker sandbox. */
+/* Private-file handoff validation in the local Docker sandbox or ephemeral Actions scratch. */
 #include "../file_io.h"
 #include "remove_sandbox.h"
 
@@ -9,10 +9,10 @@
 #include <uv.h>
 
 int main(void) {
-  if (!agc_test_remove_sandbox()) return 1;
   char temporary[4096];
   size_t size = sizeof temporary;
   assert(uv_os_tmpdir(temporary, &size) == 0);
+  if (!agc_test_remove_sandbox(temporary)) return 1;
   char pattern[4200];
   assert(snprintf(pattern, sizeof pattern, "%s/agentica-private-XXXXXX", temporary) > 0);
   uv_fs_t request;

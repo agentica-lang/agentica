@@ -1,8 +1,8 @@
 """Non-destructive OS builtin tests for private files, metadata, locks and process state.
 
 Mutating Path.remove/Path.rename and private-bytecode-consumption regressions live in
-`tests/test_vm_os_remove.py`; that module is excluded from ordinary host test routing and
-requires the physical Docker sandbox before it creates any test paths.
+`tests/test_vm_os_remove.py`; local runs require the physical Docker sandbox, while
+GitHub Actions runs them in per-job scratch after checking the runner boundary.
 """
 import os
 import signal

@@ -19,6 +19,7 @@ except ImportError:
 
 from tests.agentica_test import (ROOT, TESTS, TestCase, binary, cli, front_end_command, report_cases, run,
                                  vm_environment)
+from tests.remove_sandbox_support import require_remove_sandbox
 
 HANDLERS = str(TESTS / "bdd" / "handlers.agc")
 # The first binary of the bootstrap (the Makefile links it with stage0 and builds the release mode only).
@@ -399,6 +400,7 @@ class Bdd(BddBase):
 
     def _later_run_removes_private_run_folders(self):
         scratch = self.make_suite({"nothing.txt": ""}, "agentica-bdd-sweep-")
+        require_remove_sandbox(scratch)
         temporary = scratch / "tmp"
         temporary.mkdir(0o700)
         ended = temporary / "agentica-bdd-0123456789abcdef"

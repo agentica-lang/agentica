@@ -33,6 +33,9 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 ```sh
 make                                      # build dist/agentica, the one binary, from bootstrap/stage0.agcb (git submodule update --init first; needs only a C toolchain)
 make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"  # unittest modules, one process each
+make tests KIND=files                     # the filesystem-destructive group, only in Docker (locally) or Actions scratch (CI)
+make tests KIND=fast DOCKER=1             # a group in the Ubuntu test container (tools/ubuntu-test.Dockerfile); KIND=slow, all too
+make tests KIND=files WINE=1              # the Windows removal refusal under Wine, optional local compatibility coverage
 dist/agentica examples/hello.agc          # run a program; `check file.agc` only checks; `run -- file.agcb` runs bytecode
 make test-cli                             # the product command line tests on dist/agentica
 AGENTICA_VM_TRACE=profile dist/agentica check FILE   # where a run spends its steps: per function, source file and builtin (references/vm-build.md)
@@ -50,8 +53,11 @@ Run the tests the change touches (`make test TESTS=...`, which builds the
 binary first) and run the affected example with `dist/agentica`. Two tiers:
 put fast cases in a `tests/test_<area>.py` module (unittest,
 `references/ci.md`) and slow ones (frozen corpus, generated inputs, stress)
-marked `@slow`. Locally run only the fast tier; CI runs the slow tier with `make test-slow` after `make test`. CI
-runs everything else (`references/ci.md`, "What CI runs").
+marked `@slow`. Locally run only the fast tier; CI runs the slow tier with `make test-slow` after `make test`. The
+destructive filesystem cases never run on the host: `make tests KIND=files`
+uses the local Docker sandbox and CI uses its own scratch runner
+(`references/ci.md`). CI runs everything else (`references/ci.md`, "What CI
+runs").
 
 ## Stage contract
 

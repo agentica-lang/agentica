@@ -1,4 +1,4 @@
-"""Windows Path.remove refusal regression, gated to the Docker/Wine sandbox."""
+"""Windows Path.remove refusal regression in disposable local Docker or Actions scratch."""
 
 from __future__ import annotations
 
@@ -16,13 +16,13 @@ end
 
 
 class WindowsRemoveRefusalTests(TestCase):
-    """Ensure unsupported Windows removal refuses without altering its scratch victim."""
+    """Ensure unsupported Windows removal preserves a runner-owned victim and sentinel."""
 
     def setUp(self) -> None:
-        require_remove_sandbox()
         if os.environ.get("AGENTICA_TEST_TARGET_OS") != "windows":
-            self.fail("this regression requires the Windows binary running under the Docker/Wine sandbox")
+            self.fail("this regression requires the Windows VM")
         self.root = self.make_temp_dir("agentica-windows-remove-").resolve()
+        require_remove_sandbox(self.root)
 
     def test_refusal_preserves_victim_and_sibling_sentinel(self) -> None:
         victim = self.root / "victim"

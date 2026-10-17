@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Isolated Docker routing for filesystem removal regressions, including a
-  read-only checkout, disposable test storage and resource-limited containers.
+- `make tests KIND=fast|files|slow|all` runs a whole test group, with
+  `KIND=files` for the destructive filesystem cases, `DOCKER=1` to run a group
+  in the Ubuntu test container (`tools/ubuntu-test.Dockerfile`) and `WINE=1`
+  for the Windows checks under Wine.
+- Docker-backed local reproduction for filesystem removal regressions and
+  native Actions-runner coverage using per-job scratch directories, sentinels
+  and bounded cleanup.
 - `make windows-docker-build` and `make windows-docker-check`: cross-build the
   Windows VM, then run its C tests and the Windows CI fast Python modules under
   Wine, without a Windows machine.

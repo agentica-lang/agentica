@@ -10,7 +10,8 @@ class BddCleanup(bdd_tests.BddBase):
     """Run the private handoff deletion regression only inside the sandbox."""
 
     def setUp(self) -> None:
-        require_remove_sandbox()
+        self.root = self.make_temp_dir("agentica-bdd-cleanup-").resolve()
+        require_remove_sandbox(self.root)
         super().setUp()
 
     def test_later_run_removes_only_ended_private_folders(self) -> None:

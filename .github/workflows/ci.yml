@@ -80,6 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
+      AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: sampled
     outputs:
@@ -128,10 +129,10 @@ jobs:
       - run: |
           python3 --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
-      - name: Build the binary and C tests, then run the BDD specs in Docker
-        run: make -j"$(nproc)" vm-test test-bdd REMOVE_SANDBOX_BASE=ubuntu:24.04
-      - name: Isolated filesystem removal regressions
-        run: make windows-docker-remove-check REMOVE_SANDBOX_BASE=ubuntu:24.04
+      - name: Build the binary and C tests, then run the BDD specs on the Actions runner
+        run: make -j"$(nproc)" vm-test test-bdd
+      - name: Filesystem removal regressions in Actions-owned scratch
+        run: make test-remove-actions
       - name: make test
         run: make test JOBS=6
       - name: Fixed point of the front end from bootstrap/stage0.agcb (stage2 == stage3, the binary compiles stage2)

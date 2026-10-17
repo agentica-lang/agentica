@@ -369,12 +369,13 @@ static void run_case(void (*test)(const char *), const char *base) {
 }
 
 int main(void) {
-  if (!agc_test_remove_sandbox()) return 1;
   /* A walk that never ends fails the test instead of hanging the build. */
   alarm(60);
   const char *tmp = getenv("TMPDIR");
+  if (!tmp || !*tmp) tmp = "/tmp";
+  if (!agc_test_remove_sandbox(tmp)) return 1;
   char base[PATH_SIZE];
-  int n = snprintf(base, sizeof base, "%s/agc-tree-test-XXXXXX", tmp && *tmp ? tmp : "/tmp");
+  int n = snprintf(base, sizeof base, "%s/agc-tree-test-XXXXXX", tmp);
   assert(n > 0 && n < PATH_SIZE);
   assert(base[0] == '/');
   assert(mkdtemp(base));

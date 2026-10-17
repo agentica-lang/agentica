@@ -80,6 +80,16 @@ comment), then a step that calls it. Targets that are not obvious:
   in the Makefile (`tests/test_vm_latency.py`, `tests/test_vm_task_map.py`) lists
   modules that a directory does not pick up: they run when named, as
   `make vm-latency` and `make vm-task-map` do.
+- `make tests KIND=fast|files|slow|all` is the group selector over those
+  tiers: `fast` is `make test`, `slow` is `make test-slow`, `files` is the
+  destructive filesystem group (Docker locally, Actions scratch in CI) and
+  `all` is the three of them in that order. `DOCKER=1` runs a group in the
+  Ubuntu test container and `WINE=1` runs the Windows checks of it under Wine
+  (`kind=fast` and `files` only). `TESTS=` narrows only host fast/slow runs;
+  Make rejects it for `files`, `all`, Docker and Wine rather than ignoring it.
+  `make test`, `test-slow`, `test-bdd`, `windows-docker-check`, `windows-docker-remove-check` and
+  `windows-docker-remove-wine-check` stay as the explicit forms and delegate
+  to the same routes; an unknown `KIND` fails before anything runs.
 - `make goldens` also rewrites `tests/fixtures/cli/forms.json`.
   `tools/refreeze.py` (Python; `make goldens` runs its `--fast-only`
   tier, the full run also rewrites the slow-tier manifests) rewrites the frozen
@@ -183,16 +193,32 @@ comment), then a step that calls it. Targets that are not obvious:
   image. No CI job calls these targets. Wine is not a substitute for native
   Windows CI; tests relying on Windows process creation, command-line UTF-16
   conversion or symlink resolution can differ under Wine.
-  `make windows-docker-remove-check` builds a small runtime image (Ubuntu
-  24.04 by default; `REMOVE_SANDBOX_BASE` selects the base) and runs only the
-  explicitly isolated Linux filesystem removal/rename regressions. The test
-  container has a read-only root and checkout, no network/capabilities, bounded
-  memory/processes/time, and disposable `/tmp`; the launcher probes these
-  mounts before invoking any backend and always removes only its uniquely
-  named container. `--mode probe` checks boundaries without running tests.
-  The general `windows-docker-check` mount remains writable and is not a
-  removal-test sandbox. Docker/Wine does not establish native NTFS, ACL, or
-  reparse-point behavior.
+  Docker is the local isolation layer for the destructive filesystem group
+  (`make tests KIND=files`, `make test-bdd`). `docker-test-image` builds the
+  Ubuntu test container from `tools/ubuntu-test.Dockerfile` (Ubuntu 26.04;
+  `TEST_BASE` selects the base) with `build-essential`, `libgc-dev`,
+  `libssl-dev`, `nodejs`, `pkg-config`, `perl` and `python3`, so the container
+  builds the checkout against the distribution libgc/OpenSSL instead of the
+  vendored ones. `tools/docker-tests.sh
+  --mode fast|files|slow|all|bdd|probe` runs one group in one owned container:
+  read-only root and checkout, disposable `/tmp` tmpfs, two named volumes over
+  `/source/build` and `/source/dist` (named after the image id, so a rebuilt
+  image builds again; `docker volume ls` lists them), no capabilities, no
+  network for the destructive modes, bounded memory/processes/time. The
+  launcher probes those mounts first and always removes only its uniquely
+  named container; it never falls back to the host. Isolated modules cannot be
+  selected through ordinary local `test-py`: the Makefile points them to
+  `make tests KIND=files`. `make test-remove-actions` is CI-only: it fails
+  unless running on a GitHub-hosted Actions runner; each case gets a unique
+  `RUNNER_TEMP` subtree and an outside sentinel detects an escape, with
+  bounded subprocesses and cleanup. This is a regression guard on an ephemeral
+  OS-enforced sandbox. The Linux, macOS and Windows platform jobs use that
+  native route, including Windows private-handoff deletion and refusal tests. Wine
+  (`make tests KIND=files WINE=1`, `windows-docker-remove-wine-check`) is
+  optional local compatibility coverage, not proof of native NTFS, ACL or
+  reparse-point behavior, and the container writes its Wine prefix in the
+  disposable `/tmp`. The general `windows-docker-check` mount remains writable
+  and is not the destructive-test sandbox.
 - `vm-diff-build` and `vm-diff-test` are the golden tests (`tests/test_vm_diff_*.py`);
   `sweep-full` runs them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`).
   `test-distribution` is the release's relocated-executable test

@@ -32,11 +32,11 @@ end
 
 
 class OsRemoveBuiltins(os_tests.OsBuiltinsBase):
-    """Exercise mutating Path APIs only after a physical sandbox check."""
+    """Exercise mutating Path APIs only inside Docker locally or Actions scratch in CI."""
 
     def setUp(self) -> None:
-        require_remove_sandbox()
         super().setUp()
+        require_remove_sandbox(self.root)
 
     def prepare_trees(self) -> None:
         outside = self.root / "outside"
@@ -181,9 +181,6 @@ end
 
     def test_rename_never_replaces_and_moves_a_link_as_a_link(self) -> None:
         os_tests.OsBuiltins._rename_never_replaces_and_moves_a_link_as_a_link(self)
-
-    def test_rename_race_has_exactly_one_winner_and_preserves_losing_sources(self) -> None:
-        os_tests.OsBuiltins._rename_has_exactly_one_winner_when_processes_race_for_a_name(self)
 
     def test_rename_race_has_one_winner_and_preserves_all_losing_sources(self) -> None:
         bytecode = self.program(os_tests.RACE_PROGRAM, "race")
