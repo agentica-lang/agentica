@@ -787,7 +787,10 @@ static void work_try_lock(op *o) {
     return;
   }
 #ifdef _WIN32
-  fail_op(o, FS_LOCK, ENOTSUP);
+  if (agc_fs_try_lock(o->st->fd) == 0)
+    o->locked = true;
+  else if (errno != EACCES)
+    fail_op(o, FS_LOCK, errno);
 #else
   if (flock(o->st->fd, LOCK_EX | LOCK_NB) == 0)
     o->locked = true;

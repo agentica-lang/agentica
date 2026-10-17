@@ -146,6 +146,14 @@ int main(void) {
   const agc_string *resolved = agc_as_string(&vm, ok(call("Path.real", path_arg)));
   assert(resolved->bytes > 0 && memchr(resolved->data, '\\', resolved->bytes) == NULL);
 #ifdef _WIN32
+  int first_lock = agc_fs_open(path, AGC_FS_WRITE);
+  int second_lock = agc_fs_open(path, AGC_FS_WRITE);
+  assert(first_lock >= 0 && second_lock >= 0);
+  assert(agc_fs_try_lock(first_lock) == 0);
+  assert(agc_fs_try_lock(second_lock) == -1 && errno == EACCES);
+  assert(agc_fs_close(first_lock) == 0);
+  assert(agc_fs_try_lock(second_lock) == 0);
+  assert(agc_fs_close(second_lock) == 0);
   const char *given[] = {"C:\\one\\..\\two", "\\\\server\\share\\dir\\..\\file"};
   const char *expected[] = {"C:/two", "//server/share/file"};
   for (size_t k = 0; k < 2; k++) {

@@ -274,6 +274,19 @@ int agc_fs_take_channel(int fd) {
   return taken;
 }
 
+int agc_fs_try_lock(int fd) {
+  intptr_t raw = _get_osfhandle(fd);
+  if (raw == -1) {
+    errno = EBADF;
+    return -1;
+  }
+  OVERLAPPED range = {0};
+  if (LockFileEx((HANDLE)raw, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD, &range))
+    return 0;
+  agc_fs_set_error(uv_translate_sys_error((int)GetLastError()));
+  return -1;
+}
+
 char *agc_fs_absolute(const char *path) {
   wchar_t *wide = native_path(path);
   if (!wide) return NULL;
