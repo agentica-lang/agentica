@@ -3,6 +3,9 @@
  * Requests execute synchronously on the existing I/O workers.
  * Platform adapter; no VM state or scheduling.
  */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #define _GNU_SOURCE
 #include "file_io.h"
 
