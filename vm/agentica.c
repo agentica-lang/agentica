@@ -227,6 +227,7 @@ int main(int argc, char **argv) {
   /* Answered here, before the allocator starts or anything is opened: no front end runs and no trace file is
    * created. A closed pipe on the standard output must not end the process with a signal. */
   agc_launch_ignore_sigpipe();
+  agc_launch_init_streams();
   if (argc == 2 && strcmp(argv[1], "--version") == 0) {
     puts(AGC_VERSION);
     return fflush(stdout) == 0 ? 0 : 1;

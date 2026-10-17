@@ -39,6 +39,11 @@ void agc_launch_ignore_sigpipe(void);
 /* Starts the process: fills closed standard descriptors, ignores SIGPIPE, starts the allocator and notes the pipes
  * that came with the process. Call it first. */
 void agc_launch_init(agc_launch *launch);
+
+/* Puts the standard streams in binary mode, so a "\n" the VM writes stays one byte (Windows would otherwise write
+ * "\r\n"). agc_launch_init calls it; a caller that answers something before agc_launch_init (agentica --version,
+ * whose answer must not gain a "\r") calls this first. */
+void agc_launch_init_streams(void);
 bool agc_launch_utf8_args(int *argc, char ***argv);
 
 /* Reads the options at argv[*at] and on, up to a "--" (skipped), the first word that is not an option, or argc.

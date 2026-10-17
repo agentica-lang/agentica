@@ -161,20 +161,28 @@ comment), then a step that calls it. Targets that are not obvious:
   `Windows_NT` for the cross build below. It selects the sources, libraries,
   linker flags and the embedded object format; `OS`, which Windows sets and no
   other host does, stays the "is this Windows" test for the rest of the
-  Makefile.
-- `vm-test-binaries` is the C test programs of `vm-test` without running
-  them, for a builder that cannot execute them itself.
-  `windows-docker-check` cross-builds the Windows VM on a Linux or macOS host
-  and runs those programs under Wine, so a Windows-only regression (the file
-  lock, the standard-input pool, a path with a drive letter) is caught
-  without a Windows runner. It compiles in one container (llvm-mingw, Clang
-  for `x86_64-w64-windows-gnu`) and runs the result in another (Wine), each
-  mounting this checkout as the current user, with `VM_OS=Windows_NT`,
-  `AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored` and
-  `AGENTICA_OBJECT_FORMAT=coff`. The Wine prefix stays in `build/wine-home`,
-  so it is made once. It needs docker and the two pinned images (about 2 GB)
-  and no Windows machine; `WINDOWS_BUILD_IMAGE` and `WINDOWS_RUN_IMAGE` pick
-  other ones. No CI job calls it.
+  Makefile. `RUN_PROGRAM` prefixes build recipes that must execute a program
+  they have just compiled; `VM_TEST_RUNNER` prefixes each C test binary.
+- `vm-test-binaries` builds the C test programs of `vm-test` without running
+  them. `windows-docker-build` uses the pinned image in
+  `tools/windows-check.Dockerfile` (llvm-mingw's UCRT toolchain and Wine) to
+  cross-build `dist/agentica.exe` and those programs. Wine is required in the
+  build container too: the self-hosting bootstrap runs each Windows binary to
+  compile the next stage. `windows-docker-check` uses a second container from
+  the same image to run the C tests and the Windows `platforms.yml` Python
+  modules (`test_single_binary.py`, `test_source_paths.py` and
+  `test_platform_bootstrap.py`) against wrappers that launch the Windows
+  executable through Wine. To add fast modules, pass
+  `WINDOWS_TEST_MODULES="tests/test_foo.py ..."`. Each container mounts the
+  checkout as the current user; `VM_OS=Windows_NT`,
+  `AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored` and the COFF embedding
+  are selected for the cross build. The Wine prefix stays in
+  `build/wine-home`, so it is made once. It needs Docker, the network for the
+  pinned toolchain archive and base image, and about 6 GB of disk; no Windows
+  machine. Override `WINDOWS_IMAGE` or `WINDOWS_DOCKERFILE` to use another
+  image. No CI job calls these targets. Wine is not a substitute for native
+  Windows CI; tests relying on Windows process creation, command-line UTF-16
+  conversion or symlink resolution can differ under Wine.
 - `vm-diff-build` and `vm-diff-test` are the golden tests (`tests/test_vm_diff_*.py`);
   `sweep-full` runs them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`).
   `test-distribution` is the release's relocated-executable test

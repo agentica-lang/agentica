@@ -4,6 +4,12 @@ TESTS ?= tests/
 # Linux host, which selects the Windows sources, libraries, linker flags and embedded object format. `OS` is Windows_NT
 # on Windows and empty elsewhere, so the default is the host.
 VM_OS ?= $(OS)
+# The words a recipe puts before a program it built but cannot run itself: empty on the host and on Windows, `wine` in
+# the container of `make windows-docker-check`, which runs the Windows programs it builds.
+RUN_PROGRAM ?=
+# What runs one C test binary, the word xargs puts before each path: `env` on the host, `wine` in that container (env
+# would be taken for the program to run).
+VM_TEST_RUNNER ?= env
 EXE := $(if $(filter Windows_NT,$(VM_OS)),.exe)
 PRODUCT := dist/agentica$(EXE)
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
@@ -14,7 +20,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries windows-docker-check vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -177,6 +183,9 @@ site-serve: site-sass
 # The C VM (docs/vm/11-build-ci-supply-chain.md section 11). On Linux libgc and OpenSSL are the system ones by default.
 # make                    dist/agentica, the binary (the bootstrap below builds it)
 # make vm-test            C tests in vm/tests/, run in parallel
+# make windows-docker-build  cross-build dist/agentica.exe and the C test binaries with llvm-mingw + Wine
+# make windows-docker-check  also run the C tests and the Windows CI fast Python modules through Wine
+#                           (WINDOWS_TEST_MODULES="tests/test_foo.py ..." selects other fast modules)
 # make SANITIZE=1         clang with ASan and UBSan, no libgc: the same binary, built in that mode
 # Each mode compiles vm/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
@@ -516,25 +525,25 @@ else
 $(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(STAGE1_NEEDS)
 	@mkdir -p $(STAGE_DIR)
 	rm -f $@
-	$(STAGE1_COMPILER) compile $(FRONT_END_SRC) -o $@ || { \
+	$(RUN_PROGRAM) $(STAGE1_COMPILER) compile $(FRONT_END_SRC) -o $@ || { \
 	  echo "STAGE1_COMPILER ($(STAGE1_COMPILER)) cannot compile $(FRONT_END_SRC)." >&2; \
 	  echo "If it is the first binary, linked from $(STAGE0), then $(STAGE0) may be too old for this change (or the VM no longer loads it):" >&2; \
 	  echo "run make stage0 STAGE1_COMPILER=<a binary that can compile compiler/>, as references/ci.md says" >&2; exit 1; }
 
 $(STAGE_DIR)/stage2.agcb: $(STAGE_DIR)/stage1.agcb $(STAGE_INPUTS) $(BOOT)
 	rm -f $@
-	$(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
+	$(RUN_PROGRAM) $(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
 
 $(STAGE_DIR)/stage3.agcb: $(STAGE_DIR)/stage2.agcb $(STAGE_INPUTS) $(BOOT)
 	rm -f $@
-	$(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
+	$(RUN_PROGRAM) $(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
 	cmp $(STAGE_DIR)/stage2.agcb $@ || { echo "fixed point: stage2 and stage3 differ" >&2; exit 1; }
 
 # The first binary compiles them with stage2 as its front end, as it compiled stage3: the bytes are the ones dist/agentica
 # makes (make fixed-point checks that).
 $(EMBEDDED_PROGRAMS): $(STAGE_DIR)/%.agcb: compiler/embedded/%.agc $(STAGE_DIR)/stage2.agcb stdlib/MODULES $(STD_FILES) VERSION $(BOOT)
 	rm -f $@
-	$(BOOT) --front-end $(STAGE_DIR)/stage2.agcb compile $< -o $@
+	$(RUN_PROGRAM) $(BOOT) --front-end $(STAGE_DIR)/stage2.agcb compile $< -o $@
 endif
 
 stage1: $(STAGE_DIR)/stage1.agcb
@@ -548,13 +557,21 @@ ifeq ($(VM_OS),Windows_NT)
 EMBEDDED_FORMAT := coff
 endif
 
+# The generated assembly carries the format, so a switch between the host and a cross target has to regenerate it even
+# though its inputs did not change: the stamp holds the format and follows the pattern of the other flags stamps.
+EMBEDDED_STAMP := $(VM_BUILD)/embedded-format
+
+$(EMBEDDED_STAMP): FORCE
+	@mkdir -p $(VM_BUILD)
+	@printf '%s\n' '$(EMBEDDED_FORMAT)' > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+
 # The front end and the std/ sources go into the binary through a generated assembly file with .incbin (not through ccache,
 # which cannot see the files that .incbin reads).
-$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES)
+$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES) $(EMBEDDED_STAMP)
 	@mkdir -p $(VM_BUILD)
 	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES $(EMBEDDED_PROGRAMS) > $@
 
-$(VM_BUILD)/bootstrap/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE0) $(STD_FILES)
+$(VM_BUILD)/bootstrap/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE0) $(STD_FILES) $(EMBEDDED_STAMP)
 	@mkdir -p $(VM_BUILD)/bootstrap
 	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE0) stdlib stdlib/MODULES > $@
 
@@ -583,11 +600,11 @@ $(VM_BUILD)/agentica$(EXE): $(AGENTICA_OBJS) $(VM_OBJ)/embedded.o
 
 fixed-point: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
 	rm -f $(STAGE_DIR)/stage4.agcb
-	dist/agentica$(EXE) compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
+	$(RUN_PROGRAM) dist/agentica$(EXE) compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
 	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage4.agcb || { echo "fixed point: dist/agentica compiles another front end" >&2; exit 1; }
 	for name in runner steps; do \
 	  rm -f $(STAGE_DIR)/$$name-check.agcb; \
-	  dist/agentica$(EXE) compile compiler/embedded/$$name.agc -o $(STAGE_DIR)/$$name-check.agcb; \
+	  $(RUN_PROGRAM) dist/agentica$(EXE) compile compiler/embedded/$$name.agc -o $(STAGE_DIR)/$$name-check.agcb; \
 	  cmp $(STAGE_DIR)/$$name.agcb $(STAGE_DIR)/$$name-check.agcb || { echo "fixed point: dist/agentica compiles another $$name" >&2; exit 1; }; \
 	done
 
@@ -602,32 +619,60 @@ $(VM_BUILD)/%-test$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM
 	$(VM_LINK)
 
 vm-test: $(VM_TESTS)
-	printf '%s\n' $(VM_TESTS) | xargs -P $(JOBS) -n 1 env
+	printf '%s\n' $(VM_TESTS) | xargs -P $(JOBS) -n 1 $(VM_TEST_RUNNER)
 
-# The C tests as programs, without running them: windows-docker-check builds them in a container.
+# The C tests as programs, without running them: windows-docker-build builds them in a container.
 vm-test-binaries: $(VM_TESTS)
 
-# Cross-build the Windows VM and run its C tests without a Windows machine: llvm-mingw (Clang targeting
-# x86_64-w64-windows-gnu) compiles the test programs in one container and Wine runs them in another. Both mount this
-# checkout, so the objects land in build/vm/release/ as usual, and a later host build rebuilds them (the flags stamp
-# changes). Only docker, the network for the two images and about 2 GB of disk are needed. The images are pinned; pass
-# WINDOWS_BUILD_IMAGE or WINDOWS_RUN_IMAGE to try another.
-WINDOWS_BUILD_IMAGE ?= mstorsjo/llvm-mingw:20261006
-WINDOWS_RUN_IMAGE ?= scottyhardy/docker-wine:stable
-WINDOWS_CROSS := VM_OS=Windows_NT CC=x86_64-w64-mingw32-gcc AR=llvm-ar AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored
-# The Wine prefix lives in build/ so it is made once (a fresh one costs about a minute) and the containers keep this
-# user's file ownership: files made by root in the checkout would need sudo to remove.
+# A local Windows check without a Windows machine. One image (llvm-mingw's UCRT toolchain and Wine,
+# tools/windows-check.Dockerfile) builds dist/agentica.exe and the C test programs, and a second container runs them.
+# The bootstrap runs the Windows binary it links, because the front end is written in Agentica and compiles itself,
+# so the build container needs Wine too. Both containers mount this checkout as the current user, so the objects land
+# in build/vm/release/ and a later host build rebuilds them (the flags stamp changes). Only docker, the network for
+# the image and about 6 GB of disk are needed.
+WINDOWS_IMAGE ?= agentica-windows-check
+WINDOWS_DOCKERFILE ?= tools/windows-check.Dockerfile
+# The Wine prefix lives in build/, so it is made once (a fresh one costs about a minute) and no root-owned file lands
+# in the checkout. The wrappers live there too: the Python tests take the program to run in AGENTICA_TEST_EXECUTABLE
+# and AGENTICA_VM_BINARY, one word each, so they cannot carry "wine" themselves.
 WINDOWS_WINE_HOME := $(CURDIR)/build/wine-home
-WINDOWS_DOCKER := docker run --rm -v '$(CURDIR):$(CURDIR)' -w '$(CURDIR)' --user "$$(id -u):$$(id -g)"
+WINDOWS_WRAPPER_DIR := build/windows
+WINDOWS_CROSS := VM_OS=Windows_NT CC=x86_64-w64-mingw32-gcc AR=llvm-ar RUN_PROGRAM=wine VM_TEST_RUNNER=wine \
+  AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored
+# The modules the vm-windows job of platforms.yml runs: the bootstrap binary alone, then the product. TESTS= picks
+# others (test_cli_forms.py drives only the command line, for instance).
+WINDOWS_TEST_MODULES ?= tests/test_single_binary.py tests/test_source_paths.py tests/test_platform_bootstrap.py
+WINDOWS_DOCKER := docker run --rm -v '$(CURDIR):$(CURDIR)' -w '$(CURDIR)' --user "$$(id -u):$$(id -g)" \
+  -e HOME=$(WINDOWS_WINE_HOME) -e WINEPREFIX=$(WINDOWS_WINE_HOME)/.wine -e TMPDIR=$(WINDOWS_WINE_HOME)/tmp \
+  -e XDG_RUNTIME_DIR=$(WINDOWS_WINE_HOME)/xdg -e WINEDEBUG=-all -e WINEDLLOVERRIDES=mscoree,mshtml=
 
-windows-docker-check:
-	@command -v docker >/dev/null || { echo "windows-docker-check needs docker" >&2; exit 1; }
+windows-docker-image:
+	@command -v docker >/dev/null || { echo "make windows-docker-* needs docker" >&2; exit 1; }
+	docker build -t $(WINDOWS_IMAGE) -f $(WINDOWS_DOCKERFILE) tools
+
+# The wrappers run a Windows program through Wine. They name Wine by its absolute path, so a test that clears PATH
+# (test_platform_bootstrap does) still starts it.
+windows-docker-wrappers:
+	@mkdir -p $(WINDOWS_WRAPPER_DIR)
+	@printf '#!/bin/sh\nexec /usr/bin/wine $(CURDIR)/dist/agentica.exe "$$@"\n' > $(WINDOWS_WRAPPER_DIR)/agentica
+	@printf '#!/bin/sh\nexec /usr/bin/wine $(CURDIR)/build/vm/release/bootstrap/agentica.exe "$$@"\n' > $(WINDOWS_WRAPPER_DIR)/bootstrap
+	@chmod +x $(WINDOWS_WRAPPER_DIR)/agentica $(WINDOWS_WRAPPER_DIR)/bootstrap
+
+windows-docker-build: windows-docker-image windows-docker-wrappers
 	@mkdir -p $(WINDOWS_WINE_HOME)/tmp $(WINDOWS_WINE_HOME)/xdg
-	$(WINDOWS_DOCKER) -e HOME=/tmp -e TMPDIR=/tmp $(WINDOWS_BUILD_IMAGE) make -j$(JOBS) $(WINDOWS_CROSS) vm-test-binaries
-	$(WINDOWS_DOCKER) -e HOME=$(WINDOWS_WINE_HOME) -e WINEPREFIX=$(WINDOWS_WINE_HOME)/.wine \
-	  -e TMPDIR=$(WINDOWS_WINE_HOME)/tmp -e XDG_RUNTIME_DIR=$(WINDOWS_WINE_HOME)/xdg \
-	  -e WINEDEBUG=-all -e WINEDLLOVERRIDES=mscoree,mshtml= --entrypoint sh $(WINDOWS_RUN_IMAGE) \
-	  -c 'set -e; for test in $(VM_TESTS); do echo "== $$test"; wine "$$test"; echo "$$test passed"; done'
+	$(WINDOWS_DOCKER) $(WINDOWS_IMAGE) make -j$(JOBS) $(WINDOWS_CROSS) dist/agentica.exe vm-test-binaries
+
+# The vm-windows job of platforms.yml, in its order: the C tests, the bootstrap binary on its own, then the product on
+# the Python modules. AGENTICA_VM_BINARY is relative to the repository, as the tests resolve it.
+windows-docker-check: windows-docker-build
+	$(WINDOWS_DOCKER) $(WINDOWS_IMAGE) sh -c 'set -e; \
+	  export AGENTICA_TEST_TARGET_OS=windows AGENTICA_TEST_WINE=1; \
+	  export AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(WINDOWS_WRAPPER_DIR)/agentica"; \
+	  export AGENTICA_VM_BINARY="$(WINDOWS_WRAPPER_DIR)/bootstrap"; \
+	  $(MAKE) $(WINDOWS_CROSS) vm-test; \
+	  python3 -m unittest tests.test_platform_bootstrap; \
+	  export AGENTICA_VM_BINARY="$(WINDOWS_WRAPPER_DIR)/agentica"; \
+	  $(MAKE) $(WINDOWS_CROSS) test-py TESTS="$(WINDOWS_TEST_MODULES)" PYTHON=python3'
 
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)

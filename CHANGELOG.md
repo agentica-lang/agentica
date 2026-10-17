@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `make windows-docker-check`: cross-build the Windows VM and run its C tests
-  under Wine, without a Windows machine.
+- `make windows-docker-build` and `make windows-docker-check`: cross-build the
+  Windows VM, then run its C tests and the Windows CI fast Python modules under
+  Wine, without a Windows machine.
 
 ## [0.4.1-beta.1] - 2026-10-17
 

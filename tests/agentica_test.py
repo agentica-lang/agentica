@@ -26,6 +26,15 @@ FIXTURES = TESTS / "fixtures"
 # The interpreter that runs the tests also runs the Python peers and is the `python3` that VM programs spawn.
 PYTHON = sys.executable
 
+# The platform the program under test was built for: the host, or "windows" when a Linux or macOS host runs a Windows
+# build through Wine (`make windows-docker-check` sets AGENTICA_TEST_TARGET_OS). A few behaviours belong to the build,
+# not to the machine that starts it, so a test reads this instead of os.name.
+TARGET_OS = os.environ.get("AGENTICA_TEST_TARGET_OS") or ("windows" if os.name == "nt" else sys.platform)
+
+# The VM builds the TLS adapter on Linux and macOS only (the Windows trust store is phase 11), so the long version
+# line names OpenSSL exactly there.
+TLS_BUILT = TARGET_OS in ("linux", "darwin")
+
 
 
 def _timeout_scale():
@@ -207,8 +216,14 @@ def agentica_version():
 
 
 def binary():
-    """dist/agentica, the product. `make` builds it, and `make test` builds it first."""
-    path = ROOT / "dist" / ("agentica.exe" if os.name == "nt" else "agentica")
+    """The product, or the executable wrapper named by AGENTICA_TEST_EXECUTABLE."""
+    override = os.environ.get("AGENTICA_TEST_EXECUTABLE")
+    if override:
+        path = Path(override)
+        if not path.is_absolute():
+            path = ROOT / path
+    else:
+        path = ROOT / "dist" / ("agentica.exe" if os.name == "nt" else "agentica")
     if not path.is_file():
         _missing("the binary is not built (%s): run make" % path)
     return path

@@ -13,8 +13,8 @@ import re
 import struct
 import subprocess
 
-from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TestCase, binary, compile_agc, require, run, run_vm, scaled,
-                                 vm_environment)
+from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, TLS_BUILT, TestCase, binary, compile_agc, require,
+                                 run, run_vm, scaled, vm_environment)
 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
@@ -26,15 +26,21 @@ LOOP = "def main() -> Void\n  i = 0\n  while true\n    i += 1\n  end\nend\n"
 RANDOM = "def main() -> Void\n  puts(Random.int(0, 1000000))\nend\n"
 STDIN_AND_ARGS = (
     'def main() -> Void\n  puts("args #{System.args()}")\n  puts("line #{IO.gets()}")\n  System.exit(3)\nend\n')
+SPAWN_CALL = (
+    'Process.spawn_captured("cmd", ["/c", "echo child"], ".", 5000)'
+    if TARGET_OS == "windows"
+    else 'Process.spawn_captured("sh", ["-c", "echo child"], ".", 5000)'
+)
 SPAWN = (
     "def main() -> Void\n"
-    '  r = Process.spawn_captured("sh", ["-c", "echo child"], ".", 5000)\n'
+    f"  r = {SPAWN_CALL}\n"
     "  if r.ok?\n"
     '    puts("spawned")\n'
     "  else\n"
     "    puts(r.message)\n"
     "  end\n"
-    "end\n")
+    "end\n"
+)
 STD_SOURCE = 'def main() -> Void\n  puts(FrontEnd.std_source("queue.agc").ok?)\nend\n'
 HAND_OFF = "def main() -> Void\n  puts(FrontEnd.hand_off([1], [], []).ok?)\nend\n"
 BROKEN_STD = '\nexport def broken() -> Int\n  return "text"\nend\n'
@@ -129,7 +135,9 @@ class SingleBinary(TestCase):
                                      env=vm_environment(), timeout=scaled(10))
         finally:
             os.close(writer)
-        self.assertEqual(process.returncode, 1, process.stderr)
+        # Wine reports a closed stdout pipe as a successful process exit; native POSIX and Windows report the failed
+        # flush. The important shared contract is that the process does not die from a broken-pipe signal.
+        self.assertEqual(process.returncode, 0 if os.environ.get("AGENTICA_TEST_WINE") else 1, process.stderr)
 
     def test_compile_writes_what_the_vm_loads(self):
         """What compile writes is what the VM loads: the same output as running the file in one step. The bytes are the
@@ -184,9 +192,10 @@ class SingleBinary(TestCase):
         # The long version line is the VM's (the libraries it links); `agentica --version` is the version alone.
         long = self.agentica("run", "--version")
         self.assertEqual(long.code, 0)
-        # The sanitizer build has no libgc: "(sanitizer build, no libgc, yyjson ...)".
-        self.assertRegex(long.stdout, r"^agentica %s \((libgc |sanitizer build, no libgc).*yyjson .*libuv .*OpenSSL "
-                                      % re.escape(version()))
+        # The sanitizer build has no libgc: "(sanitizer build, no libgc, yyjson ...)". The Windows build has no TLS
+        # adapter yet (phase 11), so it does not name OpenSSL.
+        self.assertRegex(long.stdout, r"^agentica %s \((libgc |sanitizer build, no libgc).*yyjson .*libuv .*%s"
+                                      % (re.escape(version()), "OpenSSL " if TLS_BUILT else ""))
         self.assertEqual(self.agentica("--version").stdout, version() + "\n")
 
     def test_run_embedded_starts_a_program_the_binary_carries(self):
@@ -240,7 +249,10 @@ class SingleBinary(TestCase):
         other.write_bytes(with_version(data, ANOTHER_VERSION))
         loaded = self.agentica("--front-end", other, "inputs", "x")
         # The binary names itself with the real path of its file, for the commands that start it again.
-        inputs = "--version %s --self %s -- inputs x\n" % (version(), os.path.realpath(self.binary))
+        self_path = os.path.realpath(self.binary)
+        if os.environ.get("AGENTICA_TEST_WINE"):
+            self_path = "Z:" + str(ROOT / "dist" / "agentica.exe").replace("/", "\\")
+        inputs = "--version %s --self %s -- inputs x\n" % (version(), self_path)
         self.assertEqual((loaded.code, loaded.stdout, loaded.stderr), (0, inputs, ""))
         refused = run_vm(other, env=vm_environment())
         self.assertEqual(refused.code, 2)
@@ -302,13 +314,24 @@ class SingleBinary(TestCase):
                 self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
 
     def test_a_missing_front_end_is_a_usage_error(self):
-        pipe = self.make_temp_dir() / "front.agcb"
-        os.mkfifo(pipe)
-        for words, message in (
-                (["--front-end", "/nonexistent/front.agcb"], "agentica: cannot read /nonexistent/front.agcb\n"),
-                # A named pipe is refused at once, not waited for.
-                (["--front-end", pipe], "agentica: cannot read %s\n" % pipe),
-                (["--front-end"], "agentica: --front-end needs a file\n")):
+        cases = [
+            (["--front-end", "/nonexistent/front.agcb"], "agentica: cannot read /nonexistent/front.agcb\n"),
+            (["--front-end"], "agentica: --front-end needs a file\n"),
+        ]
+        if TARGET_OS == "windows":
+            # A directory is a portable non-file that the loader must refuse before reading.
+            directory = self.make_temp_dir() / "front.agcb"
+            directory.mkdir()
+            cases.append((
+                ["--front-end", directory],
+                "agentica: cannot read %s\n" % directory,
+            ))
+        else:
+            pipe = self.make_temp_dir() / "front.agcb"
+            os.mkfifo(pipe)
+            # A named pipe is refused at once, not waited for.
+            cases.append((["--front-end", pipe], "agentica: cannot read %s\n" % pipe))
+        for words, message in cases:
             got = self.agentica(*words, timeout=scaled(10))
             self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
 
