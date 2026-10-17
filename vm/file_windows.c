@@ -283,7 +283,12 @@ int agc_fs_try_lock(int fd) {
   OVERLAPPED range = {0};
   if (LockFileEx((HANDLE)raw, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD, &range))
     return 0;
-  agc_fs_set_error(uv_translate_sys_error((int)GetLastError()));
+  /* A held range is EACCES, as _locking reports it; anything else is a real failure. */
+  DWORD error = GetLastError();
+  if (error == ERROR_LOCK_VIOLATION)
+    errno = EACCES;
+  else
+    agc_fs_set_error(uv_translate_sys_error((int)error));
   return -1;
 }
 
