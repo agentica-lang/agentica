@@ -1045,6 +1045,29 @@ static void unwatch_stop(agc_loop *loop) {
 #endif
 }
 
+static void close_tick(uv_timer_t *timer) { (void)timer; }
+
+static void close_bound(uv_handle_t *handle) { free(handle); }
+
+static bool finish_native_close(agc_loop *loop) {
+  uv_timer_t *bound = malloc(sizeof *bound);
+  if (!bound) agc_out_of_memory();
+  if (uv_timer_init(&loop->uv, bound) != 0) { free(bound); return false; }
+  uint64_t deadline = uv_hrtime() + UINT64_C(1000000000);
+  while (uv_loop_alive(&loop->uv)) {
+    uint64_t now = uv_hrtime();
+    if (now >= deadline) break;
+    uint64_t remaining = (deadline - now + 999999) / 1000000;
+    uv_update_time(&loop->uv);
+    if (uv_timer_start(bound, close_tick, remaining, 0) != 0) break;
+    uv_run(&loop->uv, UV_RUN_ONCE);
+    uv_timer_stop(bound);
+  }
+  uv_close((uv_handle_t *)bound, close_bound);
+  uv_run(&loop->uv, UV_RUN_NOWAIT);
+  return uv_loop_close(&loop->uv) == 0;
+}
+
 static bool close_all(agc_vm *vm) {
   agc_io_flush_files(vm);
   for (size_t k = registry_count(vm); k-- > 0;) {
@@ -1071,6 +1094,11 @@ static bool close_all(agc_vm *vm) {
       vm->loop = NULL;
       return true;
     }
+  }
+  if (!registry_count(vm) && finish_native_close(vm->loop)) {
+    free(vm->loop);
+    vm->loop = NULL;
+    return true;
   }
   return false;
 }

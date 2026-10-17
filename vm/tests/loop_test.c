@@ -184,6 +184,25 @@ static void test_pipe_readiness_and_eof(bool named) {
 }
 #endif
 
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+static void native_close(uv_timer_t *timer) {
+  *(bool *)timer->data = true;
+  uv_close((uv_handle_t *)timer, NULL);
+}
+
+static void test_deferred_native_close(void) {
+  agc_vm vm;
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  uv_timer_t timer;
+  bool done = false;
+  assert(uv_timer_init(agc_io_uv(&vm), &timer) == 0);
+  timer.data = &done;
+  assert(uv_timer_start(&timer, native_close, 50, 0) == 0);
+  assert(agc_io_close(&vm));
+  assert(done && vm.loop == NULL);
+}
+#endif
+
 static int released;
 
 static void release_count(void *native) { (*(int *)native)++; }
@@ -192,6 +211,9 @@ int main(void) {
   agc_init();
   agc_vm vm;
   agc_io_init();
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+  test_deferred_native_close();
+#endif
 #if defined(__linux__) || defined(__APPLE__)
   test_reopen_preserves_flags_and_offsets();
   test_pipe_readiness_and_eof(false);

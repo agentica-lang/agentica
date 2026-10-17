@@ -110,7 +110,9 @@ int main(int argc, char **argv) {
   agc_value args[] = {text(self), agc_list_value(agc_list_from_array(rest, 1)), agc_int(5000), agc_int(5000)};
   ok(call("Process.spawn", args));
   agc_unregister(&vm, spare);
-  assert(agc_io_close(&vm) && vm.loop == NULL);
+  bool closed = agc_io_close(&vm);
+  if (!closed) uv_print_all_handles(agc_io_uv(&vm), stderr);
+  assert(closed && vm.loop == NULL);
   init();
   assert(uv_os_setenv("AGENTICA_PROCESS_TEST", "\xC3\xB1\xF0\x9F\x99\x82") == 0);
   assert(uv_os_setenv(AGC_CHANNEL_ENV, "private") == 0);
