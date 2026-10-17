@@ -82,6 +82,23 @@ int main(void) {
   assert(agc_fs_unlink(NULL) == -1 && errno == EINVAL);
   assert(agc_fs_unlink("") == -1 && errno == EINVAL);
   check_text(file, text);
+  char child[4300];
+  assert(snprintf(child, sizeof child, "%s/child", directory) > 0);
+  agc_value dir_args[] = {string(child), agc_int(5000)};
+  ok(call("Dir.mkdir", dir_args));
+  agc_fs_info child_info;
+  assert(agc_fs_stat(child, &child_info, true) == 0 && AGC_FS_ISDIR(child_info.mode));
+  agc_value list_args[] = {string(directory), agc_int(5000)};
+  const agc_list *names = agc_as_list(&vm, ok(call("Dir.list", list_args)));
+  assert(agc_list_len(names) == 2);
+  bool found_child = false;
+  for (size_t k = 0; k < agc_list_len(names); k++) {
+    const agc_string *name = agc_as_string(&vm, agc_list_get(names, k));
+    if (name->bytes == 5 && memcmp(name->data, "child", 5) == 0) found_child = true;
+  }
+  assert(found_child);
+  assert(uv_fs_rmdir(NULL, &req, child, NULL) == 0);
+  uv_fs_req_cleanup(&req);
   agc_value bad_paths[] = {string(""), agc_string_value(agc_make_string(path, strlen(path) + 1, 0))};
   for (size_t k = 0; k < sizeof bad_paths / sizeof bad_paths[0]; k++) {
     args[0] = bad_paths[k];

@@ -98,6 +98,18 @@ class PlatformBootstrap(TestCase):
         )
         self.assertEqual(output.read_bytes(), b"abcdefgh" * (1 << 17) + b"x")
 
+    def test_standard_input_uses_a_pipe(self) -> None:
+        root = self.make_temp_dir("agentica-native-stdin-")
+        source = root / "stdin.agc"
+        source.write_text(
+            'def main() -> Void\n'
+            '  puts(IO.gets())\n'
+            'end\n',
+            encoding="utf-8",
+        )
+        result = run([binary(), source], cwd=root, env=vm_environment(), stdin=b"from pipe\n")
+        self.assertEqual((result.code, result.stdout), (0, 'ok("from pipe")\n'), result.stderr)
+
     def test_harness_stops_native_children_on_timeout(self) -> None:
         command = [PYTHON, "-c", "import time; time.sleep(60)"]
         child = self.adopt(Child(command, capture_stderr=True))

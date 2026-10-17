@@ -34,14 +34,16 @@
 #define INPUT_ROOM ((size_t)4096)
 #define FILL_WAIT 3
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 typedef struct {
   int fd;
+#if defined(__linux__) || defined(__APPLE__)
   bool socket;
   agc_io_job *job;
   agc_poller *poller;
+#endif
   size_t room;
-  ssize_t got;
+  int64_t got;
   uint8_t data[];
 } read_request;
 #endif
@@ -126,7 +128,24 @@ static void read_work(void *data) {
     return;
   }
 }
+#elif defined(_WIN32)
+static void read_work(void *data) {
+  read_request *q = data;
+  for (;;) {
+    int n = _read(q->fd, q->data, (unsigned)q->room);
+    if (n >= 0) {
+      q->got = n;
+      return;
+    }
+    if (errno != EINTR) {
+      q->got = -1;
+      return;
+    }
+  }
+}
+#endif
 
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   read_request *q = data;
@@ -151,8 +170,12 @@ static void read_drop(void *data) { free(data); }
 
 static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin", NULL};
 
+#if defined(__linux__) || defined(__APPLE__)
 static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", NULL};
+#endif
+#endif
 
+#if defined(__linux__) || defined(__APPLE__)
 static bool read_once(read_request *q) {
   for (;;) {
 #ifdef __APPLE__
@@ -253,6 +276,26 @@ static int start_read(agc_vm *vm, agc_input *in) {
   vm->task->retry = true;
   return FILL_WAIT;
 }
+#elif defined(_WIN32)
+static int start_read(agc_vm *vm, agc_input *in) {
+  if (in->reading) {
+    agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
+    agc_task_park(vm, true);
+    return FILL_WAIT;
+  }
+  size_t room = read_room(in);
+  if (in->flush_out) agc_flush(vm);
+  read_request *q = calloc(1, sizeof(read_request) + room);
+  if (!q) agc_out_of_memory();
+  q->fd = in->fd;
+  q->room = room;
+  in->reading = true;
+  agc_io_start(vm, &read_io, q, agc_void(), -1);
+  vm->task->retry = true;
+  return FILL_WAIT;
+}
+
+void agc_input_close(agc_vm *vm) { (void)vm; }
 #else
 static int start_read(agc_vm *vm, agc_input *in) {
   size_t room = read_room(in);
