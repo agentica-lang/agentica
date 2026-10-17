@@ -84,7 +84,7 @@ MODULE_LIMIT = $(shell awk -v scale='$(or $(AGENTICA_TEST_TIMEOUT_SCALE),1)' -v 
 test-py:
 	@: $(PY_CHECK)
 	@if [ -n "$(PY_ISOLATED_SELECTED)" ]; then \
-	  echo "$(PY_ISOLATED_SELECTED) requires make windows-docker-remove-check; refusing host execution" >&2; exit 1; \
+	  echo "$(PY_ISOLATED_SELECTED) requires its Docker sandbox target (Linux: make windows-docker-remove-check; Windows/Wine: make windows-docker-remove-wine-check); refusing host execution" >&2; exit 1; \
 	fi
 	@if [ -n "$(PY_TESTS)" ]; then \
 	  if ! command -v $(PYTHON) >/dev/null 2>&1; then \
