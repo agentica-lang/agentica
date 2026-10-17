@@ -36,7 +36,7 @@
 #define STDIO_SLOTS 4
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
-typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE } req_kind;
+typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE } req_kind;
 typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 
 typedef struct proc proc;
@@ -337,6 +337,31 @@ static agc_value waited(agc_vm *vm, const proc *p, req_kind kind) {
   return kind == REQ_WAIT ? agc_result_value(true, agc_int(p->status)) : output_value(vm, p);
 }
 
+static size_t whole_prefix(const uint8_t *data, size_t n) {
+  size_t back = 0;
+  while (back < 3 && back < n && (data[n - 1 - back] & 0xC0) == 0x80) back++;
+  if (back == n) return n;
+  uint8_t lead = data[n - 1 - back];
+  size_t need = 1;
+  if (lead >= 0xF0 && lead <= 0xF4)
+    need = 4;
+  else if (lead >= 0xE0 && lead < 0xF0)
+    need = 3;
+  else if (lead >= 0xC2 && lead < 0xE0)
+    need = 2;
+  return back + 1 < need ? n - (back + 1) : n;
+}
+
+static agc_value available(agc_vm *vm, proc *p) {
+  if (p->out_cut || p->err_cut) return agc_error_value(over_text);
+  size_t n = agc_inbuf_pending(&p->out_buf);
+  if (!p->out_buf.eof && !p->out_buf.error) n = whole_prefix(pending_data(&p->out_buf), n);
+  agc_charge_bytes(vm, n);
+  agc_string *text = agc_utf8_decode(pending_data(&p->out_buf), n, "\xEF\xBF\xBD", false);
+  agc_inbuf_take(&p->out_buf, n);
+  return agc_result_value(true, agc_string_value(text));
+}
+
 static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   request *q = data;
@@ -351,6 +376,8 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     agc_charge(vm, agc_value_units(result));
   } else if (p->closed) {
     result = agc_error_value(closed_text);
+  } else if (q->kind == REQ_AVAILABLE) {
+    result = available(vm, p);
   } else if (q->kind == REQ_WAIT || q->kind == REQ_OUTPUT) {
     result = waited(vm, p, q->kind);
   } else {
@@ -507,8 +534,8 @@ static void start_reading(proc *p) {
    copied, so a kept buffer never grows past 1 MiB of capacity. */
 static void alloc_kept(proc *p, agc_inbuf *b, bool cut, uv_buf_t *buf) {
   size_t size = sizeof p->err_buf;
-  bool near = agc_inbuf_pending(b) > LIMIT - size;
-  uint8_t *room = cut || near ? p->err_buf : agc_inbuf_room(b, size);
+  bool near_limit = agc_inbuf_pending(b) > LIMIT - size;
+  uint8_t *room = cut || near_limit ? p->err_buf : agc_inbuf_room(b, size);
   *buf = room ? uv_buf_init((char *)room, (unsigned)size) : uv_buf_init(NULL, 0);
 }
 
@@ -1042,12 +1069,8 @@ static agc_value builtin_channel_close(agc_vm *vm, agc_value *args, uint32_t spa
   return d ? agc_duplex_close_write(vm, d, pr->channel.writer, agc_as_int(vm, args[1])) : result;
 }
 
-static void drain_out(agc_vm *vm, proc *p) {
-#ifdef _WIN32
-  (void)p;
-  agc_io_poll(vm, false);
-#else
-  (void)vm;
+#ifndef _WIN32
+static void drain_out(proc *p) {
   uv_os_fd_t fd;
   size_t total = 0;
   if (p->out_buf.eof || p->out_buf.error || uv_fileno((uv_handle_t *)&p->out, &fd) != 0) return;
@@ -1066,23 +1089,8 @@ static void drain_out(agc_vm *vm, proc *p) {
     if (n < 0) return;
     total += (size_t)n;
   }
+}
 #endif
-}
-
-static size_t whole_prefix(const uint8_t *data, size_t n) {
-  size_t back = 0;
-  while (back < 3 && back < n && (data[n - 1 - back] & 0xC0) == 0x80) back++;
-  if (back == n) return n;
-  uint8_t lead = data[n - 1 - back];
-  size_t need = 1;
-  if (lead >= 0xF0 && lead <= 0xF4)
-    need = 4;
-  else if (lead >= 0xE0 && lead < 0xF0)
-    need = 3;
-  else if (lead >= 0xC2 && lead < 0xE0)
-    need = 2;
-  return back + 1 < need ? n - (back + 1) : n;
-}
 
 static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -1093,14 +1101,16 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
   proc *p = live(pr);
   if (!p) return agc_error_value(closed_text);
   if (!p->captured) return agc_error_value("process: output is not captured");
-  drain_out(vm, p);
-  if (p->out_cut || p->err_cut) return agc_error_value(over_text);
-  size_t n = agc_inbuf_pending(&p->out_buf);
-  if (!p->out_buf.eof && !p->out_buf.error) n = whole_prefix(pending_data(&p->out_buf), n);
-  agc_charge_bytes(vm, n);
-  agc_string *text = agc_utf8_decode(pending_data(&p->out_buf), n, "\xEF\xBF\xBD", false);
-  agc_inbuf_take(&p->out_buf, n);
-  return agc_result_value(true, agc_string_value(text));
+#ifdef _WIN32
+  request *q = new_request(p, REQ_AVAILABLE);
+  p->reader = q;
+  q->job = agc_io_start(vm, &process_io, q, agc_handle_value(pr->reader), timeout);
+  agc_io_ready(q->job);
+  return agc_void();
+#else
+  drain_out(p);
+  return available(vm, p);
+#endif
 }
 
 const agc_builtin agc_process_builtins[] = {

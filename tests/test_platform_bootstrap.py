@@ -4,7 +4,7 @@ import json
 import os
 import shutil
 
-from tests.agentica_test import TestCase, binary, run, vm_environment
+from tests.agentica_test import Child, PYTHON, TestCase, binary, run, vm_environment
 
 
 class PlatformBootstrap(TestCase):
@@ -96,3 +96,11 @@ class PlatformBootstrap(TestCase):
             result.stderr,
         )
         self.assertEqual(output.read_bytes(), b"abcdefgh" * (1 << 17) + b"x")
+
+    def test_harness_stops_native_children_on_timeout(self) -> None:
+        command = [PYTHON, "-c", "import time; time.sleep(60)"]
+        child = self.adopt(Child(command, capture_stderr=True))
+        child.stop()
+        self.assertIsNotNone(child.process.poll())
+        with self.assertRaisesRegex(AssertionError, "timed out"):
+            run(command, timeout=0.2)

@@ -90,6 +90,33 @@ static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
 #endif
 
 #if defined(__linux__) || defined(__APPLE__)
+static void test_reopen_preserves_flags_and_offsets(void) {
+  char path[] = "/tmp/agentica-reopen-XXXXXX";
+  int fd = mkstemp(path);
+  assert(fd >= 0 && write(fd, "abc", 3) == 3);
+  assert(lseek(fd, 1, SEEK_SET) == 1);
+  int flags = fcntl(fd, F_GETFL);
+  int reopened = agc_fd_reopen(fd, O_RDONLY);
+  assert(reopened >= 0 && (fcntl(reopened, F_GETFD) & FD_CLOEXEC));
+  char byte;
+  assert(read(reopened, &byte, 1) == 1 && byte == 'a');
+  assert(lseek(fd, 0, SEEK_CUR) == 1 && fcntl(fd, F_GETFL) == flags);
+  close(reopened);
+  close(fd);
+  assert(unlink(path) == 0);
+  int fds[2];
+  assert(pipe(fds) == 0);
+  flags = fcntl(fds[0], F_GETFL);
+  assert(agc_fd_reopen(fds[0], O_WRONLY) == -1 && errno == EBADF);
+  reopened = agc_fd_reopen(fds[0], O_RDONLY);
+  assert(reopened >= 0 && (fcntl(reopened, F_GETFD) & FD_CLOEXEC));
+  assert(fcntl(fds[0], F_GETFL) == flags);
+  assert(write(fds[1], "x", 1) == 1 && read(reopened, &byte, 1) == 1 && byte == 'x');
+  close(reopened);
+  close(fds[0]);
+  close(fds[1]);
+}
+
 static void probe_read(void *data, int status) {
   read_probe *probe = data;
   assert(status == 0);
@@ -166,6 +193,7 @@ int main(void) {
   agc_vm vm;
   agc_io_init();
 #if defined(__linux__) || defined(__APPLE__)
+  test_reopen_preserves_flags_and_offsets();
   test_pipe_readiness_and_eof(false);
   test_pipe_readiness_and_eof(true);
 #endif

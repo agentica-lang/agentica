@@ -657,19 +657,25 @@ static void poll_tick(uv_timer_t *timer) {
 }
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 int agc_fd_reopen(int fd, int access) {
-  char path[32];
-  snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
-  return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
-}
-#elif defined(__APPLE__)
-int agc_fd_reopen(int fd, int access) {
+  int flags = fcntl(fd, F_GETFL);
+  if (flags < 0) return -1;
+  int given = flags & O_ACCMODE, wanted = access & O_ACCMODE;
+  if ((given == O_RDONLY && wanted != O_RDONLY) || (given == O_WRONLY && wanted != O_WRONLY)) {
+    errno = EBADF;
+    return -1;
+  }
+#ifdef __APPLE__
   struct stat info;
   if (fstat(fd, &info) != 0) return -1;
   if (S_ISFIFO(info.st_mode)) return fcntl(fd, F_DUPFD_CLOEXEC, 3);
   char path[1024];
   if (fcntl(fd, F_GETPATH, path) != 0) return -1;
+#else
+  char path[32];
+  snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
+#endif
   return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
 }
 #endif

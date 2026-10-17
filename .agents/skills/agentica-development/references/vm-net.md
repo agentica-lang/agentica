@@ -56,21 +56,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_parent_line` and `agc_parent_send`, which park the calling task with
     `task->retry`, without a timeout)
 - `vm/process.c`
-  - the `Process` builtins and `System.env` (`agc_process_builtins`, Linux only;
-    `docs/vm/10-io-processes.md` §10.4): `System.env` (`builtin_env`) scans
-    `host_env()` (the one block-scope `extern char **environ`) for the first
-    `name=` entry and decodes the value with U+FFFD per bad byte
-  - a name that is empty, or has `=` or NUL, and an unset name are error Results
-  - `own_env` says which entries the VM keeps for itself (`AGENTICA_CHANNEL`,
-    and `UV_USE_IO_URING` when `drop_uring_env`), and both `builtin_env` and
-    `child_env` skip them
-  - `metrics_env` names `AGENTICA_VM_METRICS=` and `AGENTICA_VM_METRICS_FILE=`
-    (each with its `=`): `child_env` drops them and `builtin_env` does not, so
-    a BDD runner or a child VM never meets the metrics port or file of its
-    parent (`docs/future/28-vm-metrics.md` §28.5)
-  - `System.pid` (`builtin_pid`) is `getpid()`
-  - no flag and no `no_files` check, since
-    `File.read_text("/proc/self/environ")` already reads the same data
+  - the `Process` builtins (`agc_process_builtins`,
+    `docs/vm/10-io-processes.md` §10.4) use libuv on Unix and Windows.
+    `System.env` and `System.pid` live in `system.c`; environment lookup uses
+    libuv UTF-8 APIs and rejects empty names, `=` and NUL.
+  - `own_env` filters `AGENTICA_CHANNEL` and `UV_USE_IO_URING` when
+    `drop_uring_env`; `metrics_env` also filters the two metrics variables
+    from child environments. Windows comparisons are case-insensitive.
+  - child environments own copies of the snapshot from `uv_os_environ`.
   - a GC `agc_process` with the registered `state` resource and two unregistered
     lock records (`reader`, `writer`) for `agc_handle_wait`
   - a `malloc`'d `proc` with the `uv_process_t`, three `uv_pipe_t` (real pipes
