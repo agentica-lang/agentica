@@ -135,9 +135,9 @@ class SingleBinary(TestCase):
                                      env=vm_environment(), timeout=scaled(10))
         finally:
             os.close(writer)
-        # Wine reports a closed stdout pipe as a successful process exit; native POSIX and Windows report the failed
-        # flush. The important shared contract is that the process does not die from a broken-pipe signal.
-        self.assertEqual(process.returncode, 0 if os.environ.get("AGENTICA_TEST_WINE") else 1, process.stderr)
+        # POSIX reports the failed flush. Windows' CRT reports success for this closed standard handle, including
+        # under Wine; either way, the process must not be killed by a broken-pipe signal.
+        self.assertEqual(process.returncode, 0 if TARGET_OS == "windows" else 1, process.stderr)
 
     def test_compile_writes_what_the_vm_loads(self):
         """What compile writes is what the VM loads: the same output as running the file in one step. The bytes are the
