@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Native Windows files, imports, environment, driver and compiler bootstrap.
+- Native compiler bootstrap and copied-binary checks on Windows and macOS.
 
 - Type aliases, default parameter values, heredocs, case guards and nested patterns.
 - Enumerable methods for lists and maps, plus `String.compare`.
@@ -26,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Windows and macOS VM builds and Linux CI toolchain compatibility.
+- macOS FIFO completion after a reader closes.
 - Native Windows file I/O, environment access and Unicode path handling.
 - BDD runner selection in bootstrap and replacement front ends.
 
