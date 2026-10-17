@@ -110,6 +110,36 @@ class PlatformBootstrap(TestCase):
         result = run([binary(), source], cwd=root, env=vm_environment(), stdin=b"from pipe\n")
         self.assertEqual((result.code, result.stdout), (0, 'ok("from pipe")\n'), result.stderr)
 
+    def test_regular_files_directories_and_metadata_work_together(self) -> None:
+        root = self.make_temp_dir("agentica-native-files-")
+        source = root / "files.agc"
+        source.write_text(
+            'def main() -> Void\n'
+            '  base = System.args()[0]\n'
+            '  dir = base + "/nested/data"\n'
+            '  path = dir + "/notes.txt"\n'
+            '  puts(Dir.mkdir(dir, 5000).ok?)\n'
+            '  puts(Dir.mkdir(dir, 5000).ok?)\n'
+            '  file = File.open(path, "write", 5000).unwrap!\n'
+            '  File.write(file, "alpha\\n", 5000).unwrap!\n'
+            '  File.write_bytes(file, [98, 101, 116, 97], 5000).unwrap!\n'
+            '  File.close(file, 5000).unwrap!\n'
+            '  File.append_text(path, "\\nend", 5000).unwrap!\n'
+            '  puts(File.read_text(path, 5000).unwrap!)\n'
+            '  stat = File.stat(path, 5000).unwrap!\n'
+            '  lstat = File.lstat(path, 5000).unwrap!\n'
+            '  puts("#{stat.kind} #{stat.size_bytes} #{lstat.kind}")\n'
+            '  puts(Dir.list(dir, 5000).unwrap![0])\n'
+            'end\n',
+            encoding="utf-8",
+        )
+        result = run([binary(), source, root], cwd=root, env=vm_environment())
+        self.assertEqual(
+            (result.code, result.stdout),
+            (0, "true\ntrue\nalpha\nbeta\nend\nfile 14 file\nnotes.txt\n"),
+            result.stderr,
+        )
+
     def test_harness_stops_native_children_on_timeout(self) -> None:
         command = [PYTHON, "-c", "import time; time.sleep(60)"]
         child = self.adopt(Child(command, capture_stderr=True))
