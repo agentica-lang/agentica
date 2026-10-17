@@ -741,7 +741,14 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
   int fds[6] = {-1, -1, -1, -1, -1, -1};
   int link[2] = {-1, -1};
   int rc = 0;
-  for (size_t k = 0; !rc && k < 3; k++) rc = uv_pipe(fds + 2 * k, 0, 0);
+  for (size_t k = 0; !rc && k < 3; k++) {
+    int read_flags = 0, write_flags = 0;
+#ifdef _WIN32
+    read_flags = k == 0 ? 0 : UV_NONBLOCK_PIPE;
+    write_flags = k == 0 ? UV_NONBLOCK_PIPE : 0;
+#endif
+    rc = uv_pipe(fds + 2 * k, read_flags, write_flags);
+  }
   if (!rc && channel) {
 #ifdef _WIN32
     rc = agc_fs_pipepair(link);

@@ -202,6 +202,7 @@ int main(void) {
     assert(uv_fs_rmdir(NULL, &req, private_path, NULL) == 0);
     uv_fs_req_cleanup(&req);
     unsigned flags = AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE;
+    assert(agc_fs_open("NUL", flags) == -1);
     assert(agc_fs_open(NULL, flags) == -1);
     assert(agc_fs_open("", flags) == -1);
     fd = agc_fs_open(private_path, flags);

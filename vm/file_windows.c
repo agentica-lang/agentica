@@ -129,6 +129,14 @@ static bool make_security(private_security *security, bool directory) {
          SetSecurityDescriptorControl(&security->descriptor, SE_DACL_PROTECTED, SE_DACL_PROTECTED);
 }
 
+static bool private_object(HANDLE file, bool directory) {
+  BY_HANDLE_FILE_INFORMATION info;
+  return GetFileType(file) == FILE_TYPE_DISK && GetFileInformationByHandle(file, &info) &&
+         !(info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) &&
+         ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) == directory &&
+         (directory || info.nNumberOfLinks == 1) && owner_only(file);
+}
+
 int agc_fs_private_create(const char *path, bool directory) {
   wchar_t *wide = native_path(path);
   if (!wide) return -1;
@@ -140,8 +148,11 @@ int agc_fs_private_create(const char *path, bool directory) {
   if (valid) {
     if (directory) {
       made = CreateDirectoryW(wide, &attributes);
+      if (made)
+        file = CreateFileW(wide, READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                           FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
     } else {
-      file = CreateFileW(wide, GENERIC_WRITE | READ_CONTROL, FILE_SHARE_READ, &attributes, CREATE_NEW,
+      file = CreateFileW(wide, GENERIC_WRITE | READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, &attributes, CREATE_NEW,
                          FILE_ATTRIBUTE_NORMAL, NULL);
       made = file != INVALID_HANDLE_VALUE;
     }
@@ -153,7 +164,12 @@ int agc_fs_private_create(const char *path, bool directory) {
     agc_fs_set_error(uv_translate_sys_error((int)error));
     return -1;
   }
-  if (directory) return 0;
+  if (file == INVALID_HANDLE_VALUE || !private_object(file, directory)) {
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    errno = EACCES;
+    return -1;
+  }
+  if (directory) { CloseHandle(file); return 0; }
   int fd = _open_osfhandle((intptr_t)file, _O_WRONLY | _O_BINARY | _O_NOINHERIT);
   if (fd < 0) CloseHandle(file);
   return fd;
