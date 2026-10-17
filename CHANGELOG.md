@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `make windows-docker-build` and `make windows-docker-check`: cross-build the
+  Windows VM, then run its C tests and the Windows CI fast Python modules under
+  Wine, without a Windows machine.
+
+### Changed
+
+- Windows stdin reads run in the I/O pool, keeping tasks and timers responsive.
+  A pending read can occupy one worker until input arrives, but process exit
+  does not wait for it.
+- `File.try_lock` is available on Windows. Unlike Unix advisory locks, Windows
+  locks also prevent reads and writes through other handles while held.
+
+### Fixed
+
+- Relative source paths containing a colon no longer gain an absolute source
+  root; Windows drive paths require a letter, colon and separator.
+- The Windows Docker check explicitly requires BuildKit/buildx for the
+  checksum-verified toolchain download and installs its Perl dependency.
+- Repeated `File.try_lock` calls on the same Windows handle succeed, and only
+  lock contention returns `ok(false)`; access failures remain errors.
+
 ## [0.4.1-beta.1] - 2026-10-17
 
 ### Added

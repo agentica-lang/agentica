@@ -296,7 +296,9 @@ section says how the scheduler and the loop keep them, as built.
   is no `AGENTICA_*` variable). It is read once, when the pool is created, so it
   must be set before the VM starts. The default is 4, and the cap 1024. The pool
   runs regular-file I/O, opens and path calls, DNS (`getaddrinfo`), and the TLS
-  setup jobs. Nothing that can wait forever runs there.
+  setup jobs. Blocking stdin is the exception: a failed Unix poller setup or
+  any Windows stdin read can keep one pool thread until input arrives (Stdin
+  below). All other work must finish without waiting indefinitely for input.
 - **We only wait where the loop can cancel** (§14.1). Files open with
   `O_CLOEXEC` and `O_NONBLOCK`, so opening a FIFO never waits for a peer. The
   pool job then picks the path by `fstat` and an `epoll_ctl` probe, never by
@@ -476,7 +478,14 @@ section says how the scheduler and the loop keep them, as built.
   poller stays a pool job with one blocking `read`, which keeps a pool thread
   until data comes (§14.1). One read of up to 1 MiB is in flight at a time. A
   second reader parks in the input's FIFO. A read with no data at the end of the
-  run is not waited for. Non-Linux builds keep the blocking read.
+  run is not waited for. On Windows, all stdin kinds (including pipes and the
+  console) use one blocking `_read` in the pool, in binary mode. This keeps the
+  interpreter and its timers responsive but occupies one pool thread until
+  data or EOF arrives; cancellation detaches the job and does not interrupt
+  `_read`. Windows stop signals are handled by libuv on the loop, independently
+  of the reader. The process exits without waiting for that read; in-process
+  harnesses must finish the read before `agc_io_close` can release its loop.
+  Other unsupported hosts keep a blocking read on the interpreter thread.
 - **stdout and stderr (row 7.2.1f, `vm/output.c`).** Each stream has one output
   buffer, a `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of
   waiting writers. `puts`, `print`, `IO.inspect` and `IO.warn` copy their whole

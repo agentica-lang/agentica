@@ -274,6 +274,29 @@ int agc_fs_take_channel(int fd) {
   return taken;
 }
 
+int agc_fs_try_lock(int fd) {
+  /* Avoid the CRT invalid-parameter handler for a closed descriptor. */
+  if (fd < 0) {
+    errno = EBADF;
+    return -1;
+  }
+  intptr_t raw = _get_osfhandle(fd);
+  if (raw == -1) {
+    errno = EBADF;
+    return -1;
+  }
+  OVERLAPPED range = {0};
+  if (LockFileEx((HANDLE)raw, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD, MAXDWORD, &range))
+    return 0;
+  /* Keep contention distinct from access denied: only a held range means try_lock returns false. */
+  DWORD error = GetLastError();
+  if (error == ERROR_LOCK_VIOLATION)
+    errno = EAGAIN;
+  else
+    agc_fs_set_error(uv_translate_sys_error((int)error));
+  return -1;
+}
+
 char *agc_fs_absolute(const char *path) {
   wchar_t *wide = native_path(path);
   if (!wide) return NULL;

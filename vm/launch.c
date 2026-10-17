@@ -265,16 +265,20 @@ void agc_launch_ignore_sigpipe(void) {
 #endif
 }
 
-void agc_launch_init(agc_launch *launch) {
-#if defined(__linux__) || defined(__APPLE__)
-  fill_standard_fds();
-#endif
-  agc_launch_ignore_sigpipe();
+void agc_launch_init_streams(void) {
 #ifdef _WIN32
   for (int fd = 0; fd <= 2; fd++)
     if (uv_guess_handle(fd) != UV_UNKNOWN_HANDLE) _setmode(fd, _O_BINARY);
   setvbuf(stdout, NULL, _IONBF, 0);
 #endif
+}
+
+void agc_launch_init(agc_launch *launch) {
+#if defined(__linux__) || defined(__APPLE__)
+  fill_standard_fds();
+#endif
+  agc_launch_ignore_sigpipe();
+  agc_launch_init_streams();
   agc_init();
   memset(launch, 0, sizeof *launch);
   launch->inherited = agc_files_inherited();

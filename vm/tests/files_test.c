@@ -82,6 +82,23 @@ int main(void) {
   assert(agc_fs_unlink(NULL) == -1 && errno == EINVAL);
   assert(agc_fs_unlink("") == -1 && errno == EINVAL);
   check_text(file, text);
+  char child[4300];
+  assert(snprintf(child, sizeof child, "%s/child", directory) > 0);
+  agc_value dir_args[] = {string(child), agc_int(5000)};
+  ok(call("Dir.mkdir", dir_args));
+  agc_fs_info child_info;
+  assert(agc_fs_stat(child, &child_info, true) == 0 && AGC_FS_ISDIR(child_info.mode));
+  agc_value list_args[] = {string(directory), agc_int(5000)};
+  const agc_list *names = agc_as_list(&vm, ok(call("Dir.list", list_args)));
+  assert(agc_list_len(names) == 2);
+  bool found_child = false;
+  for (size_t k = 0; k < agc_list_len(names); k++) {
+    const agc_string *name = agc_as_string(&vm, agc_list_get(names, k));
+    if (name->bytes == 5 && memcmp(name->data, "child", 5) == 0) found_child = true;
+  }
+  assert(found_child);
+  assert(uv_fs_rmdir(NULL, &req, child, NULL) == 0);
+  uv_fs_req_cleanup(&req);
   agc_value bad_paths[] = {string(""), agc_string_value(agc_make_string(path, strlen(path) + 1, 0))};
   for (size_t k = 0; k < sizeof bad_paths / sizeof bad_paths[0]; k++) {
     args[0] = bad_paths[k];
@@ -145,7 +162,34 @@ int main(void) {
   agc_value path_arg[] = {file};
   const agc_string *resolved = agc_as_string(&vm, ok(call("Path.real", path_arg)));
   assert(resolved->bytes > 0 && memchr(resolved->data, '\\', resolved->bytes) == NULL);
+  agc_value lock_open[] = {file, string("read"), agc_int(5000)};
+  agc_value first = ok(call("File.open", lock_open));
+  agc_value second = ok(call("File.open", lock_open));
+  agc_value lock_args[] = {first, agc_int(5000)};
+  assert(agc_as_bool(&vm, ok(call("File.try_lock", lock_args))));
+  assert(agc_as_bool(&vm, ok(call("File.try_lock", lock_args))));
+  lock_args[0] = second;
+  assert(!agc_as_bool(&vm, ok(call("File.try_lock", lock_args))));
+  lock_args[0] = first;
+  ok(call("File.close", lock_args));
+  lock_args[0] = second;
+  assert(agc_as_bool(&vm, ok(call("File.try_lock", lock_args))));
+  ok(call("File.close", lock_args));
 #ifdef _WIN32
+  assert(agc_fs_try_lock(-1) == -1 && errno == EBADF);
+  int first_lock = agc_fs_open(path, AGC_FS_WRITE);
+  int second_lock = agc_fs_open(path, AGC_FS_WRITE);
+  assert(first_lock >= 0 && second_lock >= 0);
+  assert(agc_fs_try_lock(first_lock) == 0);
+  assert(agc_fs_try_lock(second_lock) == -1 && errno == EAGAIN);
+  int locked_reader = agc_fs_open(path, AGC_FS_READ);
+  uint8_t locked_byte;
+  assert(locked_reader >= 0 && agc_fs_read(locked_reader, &locked_byte, 1) == -1);
+  assert(agc_fs_close(first_lock) == 0);
+  assert(agc_fs_read(locked_reader, &locked_byte, 1) == 1 && locked_byte == 0);
+  assert(agc_fs_close(locked_reader) == 0);
+  assert(agc_fs_try_lock(second_lock) == 0);
+  assert(agc_fs_close(second_lock) == 0);
   const char *given[] = {"C:\\one\\..\\two", "\\\\server\\share\\dir\\..\\file"};
   const char *expected[] = {"C:/two", "//server/share/file"};
   for (size_t k = 0; k < 2; k++) {

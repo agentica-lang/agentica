@@ -11,7 +11,7 @@ import os
 import select
 import time
 
-from tests.agentica_test import ROOT, Child, TestCase, cli, run, scaled, slow, vm_environment
+from tests.agentica_test import ROOT, Child, TestCase, agentica_version, cli, run, scaled, slow, vm_environment
 
 EXAMPLES = ROOT / "examples"
 STEP_BUDGET = "5000000"
@@ -323,7 +323,7 @@ class Examples(TestCase):
             self.assertEqual(self.cli("--max-steps", value, path).code, 2, value)
 
     def test_cli_version_prints_the_version_and_exits_0(self):
-        self.assertEqual(self.cli("--version"), (0, "0.4.0\n", ""))
+        self.assertEqual(self.cli("--version"), (0, agentica_version() + "\n", ""))
 
     def test_cli_seed_repeats_random_and_rejects_bad_seeds(self):
         path = self.program("def main() -> Void\n  IO.inspect([Random.int(1, 1000000), Random.int(1, 1000000)])\nend\n\n")

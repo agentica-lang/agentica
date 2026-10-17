@@ -13,7 +13,7 @@ export def option(entry: String) -> String
     return ""
   end
   folder = Paths.directory_of(real.unwrap!)
-  if entry.starts_with?("/")
+  if Paths.rooted?(entry)
     return folder
   end
   here = Path.cwd()

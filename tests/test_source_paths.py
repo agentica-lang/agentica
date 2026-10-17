@@ -5,10 +5,11 @@ the project lives or on how the entry file is named on the command line. A
 runtime trace prints the stored name, and the CLI puts the entry's folder (as
 seen from the working directory) before it with `agentica run --source-root`.
 """
+import os
 import shutil
 import struct
 
-from tests.agentica_test import TestCase, cli, compile_agc, run, run_vm, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, TARGET_OS, TestCase, cli, compile_agc, run, run_vm, vm_command, vm_environment
 
 MAIN = """import Util from "lib/util"
 import Shared from "../shared/x"
@@ -110,6 +111,43 @@ class SourcePathsTest(TestCase):
         self.assertEqual(result.code, 0, result.stderr)
         return output.read_bytes()
 
+    def test_absolute_paths_require_a_drive_and_separator(self) -> None:
+        cases = (
+            ("", False),
+            ("main.agc", False),
+            ("std/queue.agc", False),
+            ("/", True),
+            ("/tmp/main.agc", True),
+            ("C:/main.agc", True),
+            ("z:\\main.agc", True),
+            ("//server/share/main.agc", True),
+            ("\\\\server\\share\\main.agc", True),
+            ("C:", False),
+            ("C:main.agc", False),
+            ("1:/main.agc", False),
+            ("é:/main.agc", False),
+        )
+        result = run(
+            [*cli(), FIXTURES / "source-paths" / "rooted.agc", *(path for path, _ in cases)],
+            env=vm_environment(),
+        )
+        expected = ["true false" if rooted else "false true" for _, rooted in cases]
+        self.assertEqual(result.code, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), expected)
+
+    def test_a_relative_colon_path_keeps_a_relative_source_root(self) -> None:
+        if TARGET_OS == "windows":
+            self.skipTest("Windows filenames cannot contain a colon")
+        program = 'def main() -> Void\n  xs = [1]\n  puts(xs[3])\nend\n'
+        for folder in ("1:", "C:relative"):
+            with self.subTest(folder=folder):
+                entry = f"{folder}/main.agc"
+                base = self.project({entry: program})
+                result = run([*cli(), entry], cwd=base, env=vm_environment())
+                self.assertEqual(result.code, 1, result.stderr)
+                self.assertTrue(result.stderr.startswith(f"{entry}:"), result.stderr)
+                self.assertNotIn(str(base), result.stderr)
+
     def test_bytes_do_not_depend_on_the_checkout_location(self):
         first, second = self.project(), self.project()
         self.assertNotEqual(first, second)
@@ -186,13 +224,24 @@ class SourcePathsTest(TestCase):
         missing = run([*vm_command(), "--source-root"], env=env)
         taken_dashes = run_vm(bytecode, "--source-root", "--", env=env)
         not_utf8 = run_vm(bytecode, "--source-root", "\udcff", env=env)
-        for usage in (missing, taken_dashes, not_utf8):
+        for usage in (missing, taken_dashes):
             self.assertEqual(usage.code, 2)
             self.assertIn("--source-root needs a folder name in UTF-8", usage.stderr)
+        # Native Windows reads the command line as UTF-16 and refuses a lone surrogate before reading the
+        # option. Under Wine, Unix execve passes its encoded byte instead, so the Windows conversion path is not
+        # exercised.
+        if os.environ.get("AGENTICA_TEST_WINE"):
+            self.assertEqual(not_utf8.code, 1, not_utf8.stderr)
+        else:
+            self.assertEqual(not_utf8.code, 2)
+            self.assertIn("cannot decode command line arguments" if TARGET_OS == "windows" else
+                          "--source-root needs a folder name in UTF-8", not_utf8.stderr)
 
     def test_the_cli_prints_paths_as_seen_from_the_working_directory(self):
         base = self.project()
-        app = str(base / "app") + "/"
+        # The product prints canonical paths with "/" separators. Wine exposes the Linux filesystem as drive Z:.
+        prefix = "Z:" if os.environ.get("AGENTICA_TEST_WINE") else ""
+        app = prefix + (base / "app").as_posix() + "/"
         for cwd, entry, folder in (
             (base, "app/main.agc", "app/"),
             (base / "app", "main.agc", ""),
@@ -202,10 +251,12 @@ class SourcePathsTest(TestCase):
             self.assertEqual(result.code, 1, result.stderr)
             self.assertIn("\n    boom at %slib/util.agc:" % folder, result.stderr)
             self.assertIn("\n    main at %smain.agc:" % folder, result.stderr)
-        # An entry typed through a link prints the real folder, relative to the working directory.
+        # An entry typed through a link prints the real folder on native hosts. Wine does not resolve the symlink in
+        # the Windows path API, so it preserves the name the caller typed.
         (base / "linkapp").symlink_to(base / "app", target_is_directory=True)
         result = run(cli() + ["linkapp/main.agc"], cwd=base)
-        self.assertIn("\n    boom at app/lib/util.agc:", result.stderr)
+        expected = "linkapp" if os.environ.get("AGENTICA_TEST_WINE") else "app"
+        self.assertIn("\n    boom at %s/lib/util.agc:" % expected, result.stderr)
 
     def test_a_user_std_folder_is_not_a_standard_module(self):
         files = {"app/main.agc": STD_MAIN, "app/std/helper.agc": STD_FAIL, "app/stdx.agc": STD_FAIL}
@@ -230,15 +281,17 @@ class SourcePathsTest(TestCase):
     def test_a_source_root_past_the_cap_is_refused(self):
         base = self.project({"app/main.agc": HELLO})
         data = compile_agc(base / "app" / "main.agc", base / "out.agcb").read_bytes()
-        # 700 empty names, none under std/ or absolute, each get the root: 700 * 100001 bytes pass the 64 MiB cap.
+        # Every padded name is empty, relative and not under std/, so each gets the root and the guard refuses once
+        # count * (root + "/") passes 64 MiB. 4000 names and a 17000-character root keep the command line under the
+        # 32767-character limit of CreateProcess, so the case runs on Windows too.
         padded = base / "padded.agcb"
-        padded.write_bytes(pad_source_names(data, 700))
+        padded.write_bytes(pad_source_names(data, 4000))
         env = vm_environment()
         plain = run_vm(padded, env=env)
         self.assertEqual((plain.code, plain.stdout), (0, "hi\n"), plain.stderr)
         short = run_vm(padded, "--source-root", "app", env=env)
         self.assertEqual((short.code, short.stdout), (0, "hi\n"), short.stderr)
-        refused = run_vm(padded, "--source-root", "r" * 100000, env=env)
+        refused = run_vm(padded, "--source-root", "r" * 17000, env=env)
         self.assertEqual(refused.code, 2)
         self.assertEqual(refused.stdout, "")
         self.assertEqual(refused.stderr, "agentica run: --source-root is too long for this program\n")

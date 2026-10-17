@@ -157,11 +157,65 @@ comment), then a step that calls it. Targets that are not obvious:
   and `vendored-check`, so they do not replace `dist/agentica`).
   `AGENTICA_VM_BINARY=path` makes the Python tests run another build of the
   binary (`path run ...`).
+- `VM_OS` is the platform the VM is built for: the host by default, or
+  `Windows_NT` for the cross build below. It selects the sources, libraries,
+  linker flags and the embedded object format; `OS`, which Windows sets and no
+  other host does, stays the "is this Windows" test for the rest of the
+  Makefile. `RUN_PROGRAM` prefixes build recipes that must execute a program
+  they have just compiled; `VM_TEST_RUNNER` prefixes each C test binary.
+- `vm-test-binaries` builds the C test programs of `vm-test` without running
+  them. `windows-docker-build` uses the pinned image in
+  `tools/windows-check.Dockerfile` (llvm-mingw's UCRT toolchain and Wine) to
+  cross-build `dist/agentica.exe` and those programs. Wine is required in the
+  build container too: the self-hosting bootstrap runs each Windows binary to
+  compile the next stage. `windows-docker-check` uses a second container from
+  the same image to run the C tests and the Windows `platforms.yml` Python
+  modules (`test_single_binary.py`, `test_source_paths.py` and
+  `test_platform_bootstrap.py`) against wrappers that launch the Windows
+  executable through Wine. To add fast modules, pass
+  `WINDOWS_TEST_MODULES="tests/test_foo.py ..."`. Each container mounts the
+  checkout as the current user; `VM_OS=Windows_NT`,
+  `AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored` and the COFF embedding
+  are selected for the cross build. The Wine prefix stays in
+  `build/wine-home`, so it is made once. It needs Docker with BuildKit and
+  the buildx plugin, the network for the pinned toolchain archive and base
+  image, and about 6 GB of disk; no Windows machine. Override `WINDOWS_IMAGE` or `WINDOWS_DOCKERFILE` to use another
+  image. No CI job calls these targets. Wine is not a substitute for native
+  Windows CI; tests relying on Windows process creation, command-line UTF-16
+  conversion or symlink resolution can differ under Wine.
 - `vm-diff-build` and `vm-diff-test` are the golden tests (`tests/test_vm_diff_*.py`);
   `sweep-full` runs them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`).
   `test-distribution` is the release's relocated-executable test
   (`tests/test_stdlib_distribution.py` copies `dist/agentica` alone away from
   the checkout and runs it, `agentica test` included).
+
+## Manual Windows console smoke
+
+Piped-input tests do not exercise console input or keyboard signals. After
+changing Windows stdin or stop handling, use a native Windows terminal (not
+Wine) and save this as `console-input.agc` in a scratch directory:
+
+```agentica
+def main() -> Void
+  puts("waiting")
+  IO.flush()
+  puts(IO.gets())
+end
+```
+
+1. Run `dist/agentica.exe console-input.agc` without redirecting stdin. After
+   `waiting`, type `hello` and Enter. Expect `ok("hello")` and exit 0.
+2. Run it again, wait for `waiting`, then press Ctrl+C without entering text.
+   Expect a prompt return, no read-error diagnostic and no surviving VM.
+   libuv handles the signal on the loop even if `_read` remains blocked in
+   the pool; retrying an interrupted `_read` must not be the signal handler.
+3. Repeat step 2 with Ctrl+Break when the terminal supports it.
+
+The fast `test_platform_bootstrap.py` cases separately check binary stdin
+(NUL, CR/LF, Ctrl+Z and 0xff), an empty open pipe while a timer runs and the
+program exits, and builtin lock repetition, contention and close/reacquire.
+The native C file test also checks Windows-enforced read exclusion. A console
+smoke is still required: pipes and Wine do not prove keyboard signal behavior.
 
 ## Pull requests (`.github/workflows/ci.yml`)
 

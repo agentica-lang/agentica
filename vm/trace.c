@@ -13,7 +13,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 
 #define CUT_MARK "..."
@@ -276,15 +275,6 @@ static unsigned category_bit(const char *name, size_t n) {
   for (size_t k = 0; k < sizeof category_names / sizeof category_names[0]; k++)
     if (strlen(category_names[k]) == n && memcmp(category_names[k], name, n) == 0) return 1u << k;
   return 0;
-}
-
-uint64_t agc_trace_now(void) {
-  int saved = errno;
-  struct timespec ts;
-  uint64_t now = 0;
-  if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) now = (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
-  errno = saved;
-  return now;
 }
 
 void agc_trace_message(int fd, const char *text, const char *value, size_t len, bool quoted) {

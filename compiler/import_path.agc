@@ -34,12 +34,27 @@ export def join(base: String, rest: String) -> String
   return "#{base}/#{rest}"
 end
 
+## Whether a path starts at "/", an absolute Windows drive path or a UNC share. A drive needs an ASCII letter,
+## a colon and a separator: "C:" and "C:file" depend on a working directory and are not absolute paths.
+export def rooted?(path: String) -> Bool
+  if path.starts_with?("/") or path.starts_with?("\\\\")
+    return true
+  end
+  if path.length < 3
+    return false
+  end
+  drive = String.code(path.at(0))
+  separator = path.at(2)
+  letter = drive >= 65 and drive <= 90 or drive >= 97 and drive <= 122
+  return letter and path.at(1) == ":" and (separator == "/" or separator == "\\")
+end
+
 ## The path a file is stored under in the program and in the .agcb, and printed by the text forms. root_dir is the
 ## folder of the root file. A file inside it is its path from there, with no "./"; a file above it keeps the ".." parts
 ## ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a std/ folder is "./std/NAME.agc". The
 ## bytes of an .agcb then do not depend on where the project lives.
 export def stored_name(root_dir: String, file: String) -> String
-  if root_dir == "" or !file.starts_with?("/")
+  if root_dir == "" or !rooted?(file)
     return file
   end
   from = path_parts(root_dir)

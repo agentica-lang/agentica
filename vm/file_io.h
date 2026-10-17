@@ -43,6 +43,7 @@ char *agc_fs_realpath(const char *path);
 void agc_fs_set_error(int result);
 int agc_fs_pipepair(int fds[2]);
 int agc_fs_take_channel(int fd);
+int agc_fs_try_lock(int fd);
 int agc_fs_private_create(const char *path, bool directory);
 int agc_fs_private_read(const char *path, size_t maximum, size_t *size);
 char *agc_fs_absolute(const char *path);

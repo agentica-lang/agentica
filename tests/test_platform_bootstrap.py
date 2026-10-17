@@ -4,7 +4,7 @@ import json
 import os
 import shutil
 
-from tests.agentica_test import PYTHON, Child, TestCase, run, vm_environment
+from tests.agentica_test import PYTHON, Child, TestCase, run, scaled, vm_environment
 from tests.agentica_test import vm_binary as binary
 
 
@@ -97,6 +97,116 @@ class PlatformBootstrap(TestCase):
             result.stderr,
         )
         self.assertEqual(output.read_bytes(), b"abcdefgh" * (1 << 17) + b"x")
+
+    def test_standard_input_uses_a_pipe(self) -> None:
+        root = self.make_temp_dir("agentica-native-stdin-")
+        source = root / "stdin.agc"
+        source.write_text(
+            'def main() -> Void\n'
+            '  puts(IO.gets())\n'
+            'end\n',
+            encoding="utf-8",
+        )
+        result = run([binary(), source], cwd=root, env=vm_environment(), stdin=b"from pipe\n")
+        self.assertEqual((result.code, result.stdout), (0, 'ok("from pipe")\n'), result.stderr)
+
+    def test_standard_input_preserves_binary_bytes(self) -> None:
+        root = self.make_temp_dir("agentica-native-stdin-bytes-")
+        source = root / "stdin.agc"
+        source.write_text(
+            'def main() -> Void\n'
+            '  puts(IO.read_bytes(5).unwrap!)\n'
+            'end\n',
+            encoding="utf-8",
+        )
+        result = run(
+            [binary(), source], cwd=root, env=vm_environment(),
+            stdin=b"\x00\r\n\x1a\xff",
+        )
+        self.assertEqual(
+            (result.code, result.stdout),
+            (0, "[0, 13, 10, 26, 255]\n"),
+            result.stderr,
+        )
+
+    def test_pending_standard_input_does_not_block_timers_or_exit(self) -> None:
+        root = self.make_temp_dir("agentica-native-stdin-pending-")
+        source = root / "stdin.agc"
+        source.write_text(
+            'def read_input(_arg: Int) -> Result[String]\n'
+            '  return IO.gets()\n'
+            'end\n\n'
+            'def main() -> Void\n'
+            '  reader = Task.spawn(&read_input, 0)\n'
+            f'  case Task.await(reader, {scaled(100)})\n'
+            '    Await.TimedOut -> puts("pending")\n'
+            '    Await.Done(_) -> puts("unexpected input")\n'
+            '  end\n'
+            'end\n',
+            encoding="utf-8",
+        )
+        child = self.adopt(Child(
+            [binary(), source], cwd=root, env=vm_environment(),
+            stdin=True, capture_stderr=True,
+        ))
+        self.addCleanup(child.close_stdin)
+        # Keep the pipe open and empty even while waiting for process exit.
+        self.assertEqual(child.next_line(), "pending")
+        self.assertEqual(child.wait(), 0, child.stderr_text())
+
+    def test_file_locks_are_idempotent_and_released_by_close(self) -> None:
+        root = self.make_temp_dir("agentica-native-lock-")
+        source = root / "lock.agc"
+        source.write_text(
+            'def main() -> Void\n'
+            '  path = System.args()[0]\n'
+            '  first = File.open(path, "create_private", 5000).unwrap!\n'
+            '  second = File.open(path, "read", 5000).unwrap!\n'
+            '  puts(File.try_lock(first, 5000))\n'
+            '  puts(File.try_lock(first, 5000))\n'
+            '  puts(File.try_lock(second, 5000))\n'
+            '  File.close(first, 5000).unwrap!\n'
+            '  puts(File.try_lock(second, 5000))\n'
+            '  File.close(second, 5000).unwrap!\n'
+            'end\n',
+            encoding="utf-8",
+        )
+        result = run([binary(), source, root / "lock"], cwd=root, env=vm_environment())
+        self.assertEqual(
+            (result.code, result.stdout),
+            (0, "ok(true)\nok(true)\nok(false)\nok(true)\n"),
+            result.stderr,
+        )
+
+    def test_regular_files_directories_and_metadata_work_together(self) -> None:
+        root = self.make_temp_dir("agentica-native-files-")
+        source = root / "files.agc"
+        source.write_text(
+            'def main() -> Void\n'
+            '  base = System.args()[0]\n'
+            '  dir = base + "/nested/data"\n'
+            '  path = dir + "/notes.txt"\n'
+            '  puts(Dir.mkdir(dir, 5000).ok?)\n'
+            '  puts(Dir.mkdir(dir, 5000).ok?)\n'
+            '  file = File.open(path, "write", 5000).unwrap!\n'
+            '  File.write(file, "alpha\\n", 5000).unwrap!\n'
+            '  File.write_bytes(file, [98, 101, 116, 97], 5000).unwrap!\n'
+            '  File.close(file, 5000).unwrap!\n'
+            '  File.append_text(path, "\\nend", 5000).unwrap!\n'
+            '  puts(File.read_text(path, 5000).unwrap!)\n'
+            '  stat = File.stat(path, 5000).unwrap!\n'
+            '  lstat = File.lstat(path, 5000).unwrap!\n'
+            '  puts("#{stat.kind} #{stat.size_bytes} #{lstat.kind}")\n'
+            '  puts(Dir.list(dir, 5000).unwrap![0])\n'
+            'end\n',
+            encoding="utf-8",
+        )
+        result = run([binary(), source, root], cwd=root, env=vm_environment())
+        self.assertEqual(
+            (result.code, result.stdout),
+            (0, "true\ntrue\nalpha\nbeta\nend\nfile 14 file\nnotes.txt\n"),
+            result.stderr,
+        )
 
     def test_harness_stops_native_children_on_timeout(self) -> None:
         command = [PYTHON, "-c", "import time; time.sleep(60)"]
