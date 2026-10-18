@@ -721,6 +721,48 @@ def test_symlinks_are_removed_and_renamed_without_touching_their_targets(root, w
 
 
 @REQUIRES_NATIVE_WINDOWS
+@pytest.mark.parametrize("directory", [False, True], ids=["file", "directory"])
+def test_existing_and_broken_link_targets_are_never_replaced_or_followed(root, work, directory):
+    referent = root / "referent"
+    if directory:
+        referent.mkdir()
+    else:
+        referent.write_text("referent sentinel", encoding="utf-8")
+    link = root / "link"
+    made = subprocess.run(
+        ["cmd.exe", "/d", "/c", "mklink", *(["/D"] if directory else []), str(link), str(referent)],
+        capture_output=True, text=True, check=False,
+    )
+    assert made.returncode == 0, made.stdout + made.stderr
+    source = root / "source"
+    source.write_text("source sentinel", encoding="utf-8")
+    identity = link.lstat().st_ino
+    destination = os.readlink(link)
+    rename = compile_work_text(work, RACE_PROGRAM, "windows-rename-existing-link")
+    for broken in (False, True):
+        if broken:
+            if directory:
+                referent.rmdir()
+            else:
+                referent.unlink()
+        run_with_stdout(rename, [str(source), str(link)], root, "false\n")
+        assert link.lstat().st_ino == identity
+        assert os.readlink(link) == destination
+        assert source.read_text(encoding="utf-8") == "source sentinel"
+        if not broken and not directory:
+            assert referent.read_text(encoding="utf-8") == "referent sentinel"
+    moved = root / "broken-moved"
+    run_with_stdout(rename, [str(link), str(moved)], root, "true\n")
+    assert not os.path.lexists(link)
+    assert moved.lstat().st_ino == identity
+    assert os.readlink(moved) == destination
+    remove = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-broken-link")
+    run_with_stdout(remove, [str(moved)], root, "true\n")
+    assert not os.path.lexists(moved)
+    assert source.read_text(encoding="utf-8") == "source sentinel"
+
+
+@REQUIRES_NATIVE_WINDOWS
 def test_cross_volume_rename_fails_without_losing_the_source(root, work):
     box = root / "cross-volume"
     box.mkdir()
