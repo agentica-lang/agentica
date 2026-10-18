@@ -192,6 +192,19 @@ end
 """
 
 
+def _ordinary_file_output(tmp_path, data, program, name, *args):
+    target = tmp_path / "case.txt"
+    target.write_bytes(data)
+    source = tmp_path / f"{name}.agc"
+    source.write_text(program, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / f"{name}.agcb")
+    result = run_vm(
+        bytecode, args=[str(target), *args], env=vm_environment(), cwd=tmp_path
+    )
+    assert result.code == 0, result.stderr
+    return result.stdout.splitlines()
+
+
 @pytest.mark.parametrize("data,count,successful", (
     (b"", 1, []),
     (b"one\ntwo\nlast\n", 4, ['ok("one")', 'ok("two")', 'ok("last")']),
@@ -203,14 +216,9 @@ end
 ), ids=("empty", "lf", "crlf-unterminated", "blank-line", "invalid-utf8", "truncated-utf8",
           "overlong-line"))
 def test_read_line_on_ordinary_files_decodes_strips_and_reports_end_of_file(tmp_path, data, count, successful):
-    target = tmp_path / "case.txt"
-    target.write_bytes(data)
-    source = tmp_path / "read.agc"
-    source.write_text(READ_ORDINARY_PROGRAM, encoding="utf-8")
-    bytecode = compile_agc(source, tmp_path / "read.agcb")
-    result = run_vm(bytecode, args=[str(target), str(count)], env=vm_environment(), cwd=tmp_path)
-    assert result.code == 0, result.stderr
-    lines = result.stdout.splitlines()
+    lines = _ordinary_file_output(
+        tmp_path, data, READ_ORDINARY_PROGRAM, "read", str(count)
+    )
     assert lines[:len(successful)] == successful
     assert lines[-2].startswith("error("), lines
     assert lines[-1] == "true"
@@ -225,14 +233,7 @@ def test_read_line_on_ordinary_files_decodes_strips_and_reports_end_of_file(tmp_
     (b"a" * 2000 + b"\nshort\n", [], False),
 ), ids=("lf", "crlf-unterminated", "empty", "block-error-stops", "invalid-utf8", "overlong-line"))
 def test_each_line_on_ordinary_files_passes_lines_and_stops_on_errors(tmp_path, data, delivered, ends_ok):
-    target = tmp_path / "case.txt"
-    target.write_bytes(data)
-    source = tmp_path / "each.agc"
-    source.write_text(EACH_ORDINARY_PROGRAM, encoding="utf-8")
-    bytecode = compile_agc(source, tmp_path / "each.agcb")
-    result = run_vm(bytecode, args=[str(target)], env=vm_environment(), cwd=tmp_path)
-    assert result.code == 0, result.stderr
-    lines = result.stdout.splitlines()
+    lines = _ordinary_file_output(tmp_path, data, EACH_ORDINARY_PROGRAM, "each")
     assert lines[:len(delivered)] == delivered
     tail = lines[len(delivered):]
     if ends_ok:
@@ -247,14 +248,7 @@ def test_each_line_on_ordinary_files_passes_lines_and_stops_on_errors(tmp_path, 
     (b"a\nstop\nc\n", ['"a"', '"stop"']),
 ), ids=("clean", "block-error"))
 def test_each_line_frees_its_descriptor_on_every_return_path(tmp_path, data, delivered):
-    target = tmp_path / "case.txt"
-    target.write_bytes(data)
-    source = tmp_path / "count.agc"
-    source.write_text(COUNT_FDS_PROGRAM, encoding="utf-8")
-    bytecode = compile_agc(source, tmp_path / "count.agcb")
-    result = run_vm(bytecode, args=[str(target)], env=vm_environment(), cwd=tmp_path)
-    assert result.code == 0, result.stderr
-    lines = result.stdout.splitlines()
+    lines = _ordinary_file_output(tmp_path, data, COUNT_FDS_PROGRAM, "count")
     assert lines[:len(delivered)] == delivered
     assert lines[-1] == "true"
 
