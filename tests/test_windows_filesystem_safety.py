@@ -14,8 +14,12 @@ from tests.remove_sandbox_support import require_remove_sandbox
 
 REMOVE_PROGRAM = """\
 def main() -> Void
-  result = Path.remove(System.args()[0], 5000)
-  puts(result.ok?)
+  case Path.remove(System.args()[0], 5000)
+    ok(_) -> puts("true")
+    error(message) ->
+      IO.warn(message)
+      puts("false")
+  end
 end
 """
 
@@ -77,7 +81,7 @@ class WindowsFilesystemMutationTests(TestCase):
 
         bytecode = self.compile_text(REMOVE_PROGRAM, "windows-remove-tree")
         result = run_vm(bytecode, args=[str(victim)], env=vm_environment(), cwd=self.root)
-        self.assertEqual((result.code, result.stdout, result.stderr), (0, "true\n", ""))
+        self.assertEqual((result.code, result.stdout, result.stderr), (0, "true\n", ""), result.stderr)
         self.assertFalse(victim.exists())
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "outside sentinel")
 
@@ -111,7 +115,7 @@ class WindowsFilesystemMutationTests(TestCase):
             self.assertTrue(kernel32.CloseHandle(handle))
 
         removed = run_vm(bytecode, args=[str(victim)], env=vm_environment(), cwd=self.root)
-        self.assertEqual((removed.code, removed.stdout), (0, "true\n"))
+        self.assertEqual((removed.code, removed.stdout), (0, "true\n"), removed.stderr)
         self.assertFalse(victim.exists())
 
     def test_remove_refuses_a_reparse_ancestor(self) -> None:
@@ -130,7 +134,7 @@ class WindowsFilesystemMutationTests(TestCase):
 
         bytecode = self.compile_text(REMOVE_PROGRAM, "windows-remove-reparse-ancestor")
         result = run_vm(bytecode, args=[str(ancestor / "target")], env=vm_environment(), cwd=self.root)
-        self.assertEqual((result.code, result.stdout), (0, "false\n"))
+        self.assertEqual((result.code, result.stdout), (0, "false\n"), result.stderr)
         self.assertEqual(target.read_text(encoding="utf-8"), "outside sentinel")
 
     def test_remove_deletes_files_and_treats_missing_paths_as_success(self) -> None:
@@ -267,4 +271,4 @@ class WindowsPathRefusalTests(TestCase):
         for path in paths:
             with self.subTest(path=path):
                 result = run_vm(bytecode, args=[path], env=vm_environment(), cwd=os.getcwd())
-                self.assertEqual((result.code, result.stdout, result.stderr), (0, "false\n", ""))
+                self.assertEqual((result.code, result.stdout), (0, "false\n"), result.stderr)
