@@ -5,15 +5,12 @@ This index tracks future proposals; the current language contract is in
 spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
-Sections 19, 21 and 22 are VM implementation proposals, not language changes.
-Section 20 adds crypto without changing the grammar; binary data (§23) and
-logging (§24) are built and live in the grammar. Sections 25–34 cover Ruby
-idioms, diagnostics, concurrency, VM metrics, TLS, HTTP, BDD, doc comments and
-VM values. Sections 38–40 cover value representation, semantic CLI and native
-code; unit tests (§36) and task crash isolation (§37) are built. Sections 41–43
-cover date/time types, sized numerics and an unscheduled language server. The
-Files index carries current status; linked sections keep requirements, rationale
-and alternatives.
+Sections 19 and 22 are VM implementation proposals, not language changes;
+section 20 adds crypto without changing the grammar. Sections 23, 24, 31,
+36 and 37 are built and live in the grammar, `docs/bdd.md` or `docs/vm/`;
+§34 stays as the VM record of built small-value sharing. The Files index
+carries current status; linked sections keep requirements, rationale and
+alternatives.
 
 
 ## Files
@@ -49,23 +46,23 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 13
   - Title: Shared tables (ATS)
   - File: [`13-ats.md`](13-ats.md)
-  - Status: On demand (roadmap phase 9)
+  - Status: On demand (row 17)
 
 - §: 15
   - Title: Adapters and JSON inspection
   - File:
     [`15-adapters-and-json-inspection.md`](15-adapters-and-json-inspection.md)
-  - Status: Planned (roadmap phase 10)
+  - Status: Planned (row 7.6)
 
 - §: 16
   - Title: Binary serialization (CBOR)
   - File: [`16-cbor.md`](16-cbor.md)
-  - Status: On demand (roadmap phase 11)
+  - Status: On demand (row 18)
 
 - §: 17
   - Title: Optional and nullable JSON fields
   - File: [`17-optional-json-fields.md`](17-optional-json-fields.md)
-  - Status: Planned (roadmap 10e)
+  - Status: Planned (item 10e, row 7.6)
 
 - §: 18
   - Title: Front-end implementation language (self-hosting; done)
@@ -80,60 +77,60 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 20
   - Title: Crypto module
   - File: [`20-crypto.md`](20-crypto.md)
-  - Status: Planned after 7i (roadmap order step 7.5)
+  - Status: Planned (row 7.5)
 
 - §: 22
   - Title: JIT
   - File: [`22-jit.md`](22-jit.md)
-  - Status: Required (roadmap 7m)
+  - Status: Required (row 9.1)
 
 - §: 25
   - Title: Ruby typed idioms
   - File: [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md)
   - Status: 25.1, 25.3, 25.6, 25.10, 25.12.1 and 25.14 built (the grammar and
     the programming skill are the contract); 25.2, 25.4, 25.5, 25.9 and 25.11
-    planned (roadmap phase 15); Part B to evaluate later; Part C decided against
+    planned (row 7.6); Part B to evaluate later; Part C decided against
 
 - §: 26
   - Title: Strict diagnostics
   - File: [`26-strict-diagnostics.md`](26-strict-diagnostics.md)
-  - Status: Planned (roadmap phase 16)
+  - Status: Planned (row 7.6)
 
 - §: 27
   - Title: Iteration and concurrent collections
   - File:
     [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md)
-  - Status: Channels (17b) and `Task.await` with a timeout (17c) built;
-    `Task.map` planned (roadmap phase 17); `File.each_line` built (17d),
-    `Stream[T]` planned (17e); generators and shared state decided against
+  - Status: `Task.map` (17a), channels (17b), `Task.await` with a timeout
+    (17c) and `File.each_line` (17d) built; `Stream[T]` planned (17e, row
+    8.2); generators and shared state decided against
 
 - §: 28
   - Title: VM metrics
   - File: [`28-vm-metrics.md`](28-vm-metrics.md)
-  - Status: Planned (roadmap phase 18)
+  - Status: Planned (row 7.7)
 
 - §: 29
   - Title: TLS contexts
   - File: [`29-tls-context.md`](29-tls-context.md)
-  - Status: Planned (roadmap phase 19, order step 7.4)
+  - Status: Planned (row 7.4)
 
 - §: 30
   - Title: HTTP on the VM: simple, synchronous, hybrid
   - File: [`30-hybrid-http.md`](30-hybrid-http.md)
-  - Status: Streaming (roadmap 20e to 20g, order step 7.4) and binary bodies
+  - Status: Streaming (20e to 20g, order step 7.4) and binary bodies
     planned; the rest of phase 20 is built:
     [`docs/vm/10-io-http.md`](../vm/10-io-http.md)
 
 - §: 32
   - Title: Doc comments
   - File: [`32-doc-comments.md`](32-doc-comments.md)
-  - Status: 22a built (roadmap phase 22, order step 7.2a); 22b (`agentica
-    doc`) waits until after the bootstrap (row 22b)
+  - Status: 22a built (row 7.2a); 22b (`agentica doc`) waits until after
+    the bootstrap (row 22b)
 
 - §: 34
   - Title: Shared small values in the VM
   - File: [`34-shared-small-values.md`](34-shared-small-values.md)
-  - Status: Built (roadmap 7g, 2026-10-16)
+  - Status: Built (row 7g, 2026-10-16); kept as the VM design record
 
 - §: 38
   - Title: Value representation
@@ -144,13 +141,13 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 39
   - Title: Semantic CLI for agents
   - File: [`39-semantic-cli.md`](39-semantic-cli.md)
-  - Status: Planned (roadmap phase 26, order step 7.2b)
+  - Status: Planned (row 7.2b)
 
 - §: 40
   - Title: Native code and FFI
   - File: [`40-native-code.md`](40-native-code.md)
   - Status: Decided by the owner on 2026-10-15: the FFI before the JIT
-    (roadmap 9.1), after the bootstrap; AOT last, only if measurements ask for
+    (row 9.1), after the bootstrap; AOT last, only if measurements ask for
     it
 
 - §: 41
@@ -190,28 +187,27 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 47
   - Title: Code formatter (`agentica fmt`)
   - File: [`47-formatter.md`](47-formatter.md)
-  - Status: Deferred until after the bootstrap (port step 8, roadmap row 7.9,
-    phase 28), decided by the owner on 2026-10-15; 47d waits for the LSP (§43)
+  - Status: Deferred until after the bootstrap (port step 8, row 7.9),
+    decided by the owner on 2026-10-15; 47d waits for the LSP (§43)
 
 - §: 48
   - Title: Regular expressions
   - File: [`48-regex.md`](48-regex.md)
   - Status: Decided by the owner on 2026-10-15; deferred until after the
-    bootstrap (roadmap row 7.10, phase 29): `std/regex` in Agentica first, then
+    bootstrap (row 7.10): `std/regex` in Agentica first, then
     the regex literal `/pattern/flags`
 
 - §: 49
   - Title: Type aliases
   - File: [`49-type-aliases.md`](49-type-aliases.md)
-  - Status: Planned by the owner on 2026-10-16 (roadmap row 7.12, phase 30):
+  - Status: Planned by the owner on 2026-10-16 (row 7.12):
     simple transparent aliases (49a), then generic ones (49b); compiler/ only
 
 - §: 50
   - Title: Test functions without `main`
   - File: [`50-test-functions.md`](50-test-functions.md)
-  - Status: Planned (roadmap phase 31, order row 7.11, post-bootstrap step
-    6): a `*_test.agc` file may have no `main`; its top-level `test_*` functions
-    are its tests
+  - Status: Planned (row 7.11, post-bootstrap step 6): a `*_test.agc` file may
+    have no `main`; its top-level `test_*` functions are its tests
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no second
 implementation ([roadmap
