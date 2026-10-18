@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Windows `File.stat` documents what it really reports: `mode` carries only the
+  read-only attribute (438 or 292) and `user_id` and `group_id` are always 0, so
+  neither is an owner or an ACL. `create_private` and `mkdir_private` document
+  their Windows owner-and-DACL guarantee instead of a Unix mode.
+- Windows file locks are checked natively: contention across processes, release
+  when the holder process is killed, and release when the owning task or handle
+  ends.
 - Windows filesystem errors preserve cross-device, unsupported-operation,
   cancellation, timeout, again, fault and character-encoding errors instead of
   reporting a generic I/O error.

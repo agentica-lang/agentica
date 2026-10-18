@@ -13,7 +13,7 @@ builtin Dir.list forms=1
 builtin Dir.mkdir forms=1
   Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void] shape=(String, Int) -> Result(Void) rule=Plain impl="Dir.mkdir" effects=["filesystem"] desc="Create a directory and missing parents; existing directories succeed."
 builtin Dir.mkdir_private forms=1
-  Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void] shape=(String, Int) -> Result(Void) rule=Plain impl="Dir.mkdir_private" effects=["filesystem"] desc="Create one directory with mode 0700; an existing path or a missing parent is an error; VM only."
+  Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void] shape=(String, Int) -> Result(Void) rule=Plain impl="Dir.mkdir_private" effects=["filesystem"] desc="Create one directory only the current user can use; an existing path or a missing parent is an error; VM only."
 builtin File.append_text forms=1
   File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void] shape=(String, String, Int) -> Result(Void) rule=Plain impl="File.append_text" effects=["filesystem"] desc="Append at most 1 MiB of UTF-8 text."
 builtin File.close forms=1
@@ -25,7 +25,7 @@ builtin File.flush forms=1
 builtin File.lstat forms=1
   File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo] shape=(String, Int) -> Result(Struct(FileInfo)) rule=Plain impl="File.lstat" effects=["filesystem"] desc="Like File.stat, but a symbolic link is described itself and has kind \"link\"; VM only."
 builtin File.open forms=1
-  File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle] shape=(String, String, Int) -> Result(Opaque(FileHandle)) rule=Plain impl="File.open" effects=["filesystem"] desc="Open a regular file for read, write, append or create_private with a deadline; create_private makes a new file with mode 0600 and fails when the path exists."
+  File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle] shape=(String, String, Int) -> Result(Opaque(FileHandle)) rule=Plain impl="File.open" effects=["filesystem"] desc="Open a regular file for read, write, append or create_private with a deadline; create_private makes a new file only the current user can use and fails when the path exists."
 builtin File.read_bytes forms=1
   File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]] shape=(Opaque(FileHandle), Int, Int) -> Result(List(Int)) rule=Plain impl="File.read_bytes" effects=["filesystem"] desc="Read up to max_bytes; empty means EOF."
 builtin File.read_line forms=1

@@ -41,8 +41,10 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
   writes its own stdout or stderr through is refused.
 - Modes: `read` needs an existing path that is not a directory; `write` creates
   or truncates; `append` creates or appends; `create_private` creates a new
-  write-only file with mode 0600 and fails if the path exists (a dangling link
-  too; it never follows a link).
+  write-only file that only you can use and fails if the path exists (a dangling
+  link too; it never follows a link). Unix: mode 0600. Windows: no mode, a
+  protected DACL that grants only the current user, checked on the opened
+  object.
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are
   limited to 1 MiB. `read_bytes` takes 1..1048576 bytes and returns `ok([])` at
   EOF. Bytes are 0..255.
@@ -51,12 +53,16 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 - `File.stat` follows symlinks and returns `FileInfo(kind: String, size_bytes:
   Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int)`;
   directory sizes are zero; `mode` is the permission bits with setuid, setgid
-  and sticky (384 is `rw-------`). `File.lstat` is the same without following a
-  final symlink: `kind` is `"link"`.
+  and sticky (384 is `rw-------`). On Windows there are no permission bits and
+  no owner ids: `mode` is only the read-only attribute (438 octal 666 writable,
+  292 octal 444 read-only) and `user_id` and `group_id` are always 0, which is
+  not the owner and says nothing about the ACL or DACL. `File.lstat` is the same
+  without following a final symlink: `kind` is `"link"`.
 - `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates
   parents and succeeds if the directory exists. `Dir.mkdir_private` makes one
-  directory with mode 0700 and fails if the path exists or the parent is
-  missing.
+  directory only you can use and fails if the path exists or the parent is
+  missing (Unix: mode 0700; Windows: the same owner-and-DACL check as
+  `create_private`).
 - `File.try_lock(handle, ms)` takes an exclusive lock on an open file without
   waiting: `ok(true)` if taken, `ok(false)` if another handle or process holds
   it. Only a regular file can be locked (a pipe, FIFO or device such as

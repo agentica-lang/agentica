@@ -293,7 +293,10 @@ ROWS_3: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "Dir.mkdir_private",
       effects: ["filesystem"],
-      description: "Create one directory with mode 0700; an existing path or a missing parent is an error; VM only.",
+      description: (
+        "Create one directory only the current user can use; an existing path or a missing parent is an error; " +
+        "VM only."
+      ),
       alternatives: [],
     ),
     Model.Builtin(
@@ -386,7 +389,7 @@ ROWS_5: List[Model.Builtin] = [
       effects: ["filesystem"],
       description: (
         "Open a regular file for read, write, append or create_private with a deadline; create_private makes a new " +
-        "file with mode 0600 and fails when the path exists."
+        "file only the current user can use and fails when the path exists."
       ),
       alternatives: [],
     ),
