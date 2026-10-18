@@ -44,7 +44,8 @@ phase 13).
   a first binary with `bootstrap/stage0.agcb`, compiles the front end three
   times and links the final binary. `make fixed-point` checks it once more.
   `make vm-test`: the C tests. `make test-cli`: the command line tests on the
-  binary. `make stage0` refreshes `bootstrap/stage0.agcb` (see `references/ci.md`
+  binary. `make stage0` refreshes `bootstrap/stage0.agcb` (see
+`references/ci.md`
   of the development skill).
 - `make test TESTS="tests/test_vm_bits.py"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
@@ -58,7 +59,8 @@ phase 13).
   (`DOCKER=1` puts any group there, `WINE=1` runs its Windows checks under
   Wine) and in the scratch of an ephemeral CI runner. Encapsulation and the
   Actions route: `references/ci.md` of the development skill.
-- `make vm-task-map`: the timing cases of `Task.map` (`tests/test_vm_task_map.py`), alone like `make vm-latency`.
+- `make vm-task-map`: the timing cases of `Task.map`
+  (`tests/test_vm_task_map.py`), alone like `make vm-latency`.
 - `make smoke`, `make site` (before merging a site change).
 - `make goldens` rewrites the VM goldens, the CLI output golden
   (`tests/fixtures/cli/forms.json`) and the fast-tier front-end goldens; commit
@@ -69,15 +71,27 @@ phase 13).
 
 ## Where to read
 
-| Task | Read |
-|---|---|
-| any change to compiler/, vm/, tests/, CI | `.agents/skills/agentica-development/SKILL.md`, then only the references it names |
-| a C VM PR review | `.agents/skills/vm-c-critic/` |
-| language rules | `docs/grammar/` |
-| writing `.agc` programs | `.agents/skills/agentica-programming/` |
-| writing or reviewing `.agc` style | `.agents/skills/agentica-code-guidelines/` |
-| `site/` or `benchmarks/` | `.agents/skills/agentica-development/SKILL.md` |
-| what is planned or done | `docs/roadmap/README.md` |
+- **Task:** any change to compiler/, vm/, tests/, CI
+  - **Read:** `.agents/skills/agentica-development/SKILL.md`, then only the
+    references it names
+
+- **Task:** a C VM PR review
+  - **Read:** `.agents/skills/vm-c-critic/`
+
+- **Task:** language rules
+  - **Read:** `docs/grammar/`
+
+- **Task:** writing `.agc` programs
+  - **Read:** `.agents/skills/agentica-programming/`
+
+- **Task:** writing or reviewing `.agc` style
+  - **Read:** `.agents/skills/agentica-code-guidelines/`
+
+- **Task:** `site/` or `benchmarks/`
+  - **Read:** `.agents/skills/agentica-development/SKILL.md`
+
+- **Task:** what is planned or done
+  - **Read:** `docs/roadmap/README.md`
 
 ## Rules
 
