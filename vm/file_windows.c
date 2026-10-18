@@ -18,21 +18,11 @@
 #include <aclapi.h>
 #include <winternl.h>
 
-typedef NTSTATUS (NTAPI *remove_nt_create_file_fn)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK,
-                                                   PLARGE_INTEGER, ULONG, ULONG, ULONG, ULONG, PVOID, ULONG);
-typedef ULONG (NTAPI *remove_nt_status_to_error_fn)(NTSTATUS);
-
 typedef struct {
   TOKEN_USER *user;
   PACL acl;
   SECURITY_DESCRIPTOR descriptor;
 } private_security;
-
-typedef struct {
-  remove_nt_create_file_fn create_file;
-  remove_nt_status_to_error_fn status_to_error;
-  char **failed;
-} remove_state;
 
 void agc_fs_set_error(int result) {
   switch (result) {
@@ -312,14 +302,14 @@ static int remove_handle(HANDLE file) {
   return errno;
 }
 
-static int remove_nt_error(remove_state *state, NTSTATUS status) {
-  ULONG error = state->status_to_error(status);
+static int remove_nt_error(NTSTATUS status) {
+  ULONG error = RtlNtStatusToDosError(status);
   if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) errno = ENOENT;
   else agc_fs_set_error(uv_translate_sys_error((int)error));
   return errno;
 }
 
-static HANDLE remove_open_relative(remove_state *state, HANDLE parent, const wchar_t *name, size_t length,
+static HANDLE remove_open_relative(HANDLE parent, const wchar_t *name, size_t length,
                                    bool directory, bool list_directory, bool delete_access) {
   if (!length || length > USHRT_MAX / sizeof(wchar_t)) { errno = ENAMETOOLONG; return INVALID_HANDLE_VALUE; }
   UNICODE_STRING object_name = {
@@ -336,10 +326,10 @@ static HANDLE remove_open_relative(remove_state *state, HANDLE parent, const wch
   if (delete_access) access |= DELETE;
   if (directory) { access |= FILE_TRAVERSE; options |= FILE_DIRECTORY_FILE; }
   if (list_directory) access |= FILE_LIST_DIRECTORY;
-  NTSTATUS status = state->create_file(&file, access, &attributes, &status_block, NULL, FILE_ATTRIBUTE_NORMAL,
-                                        FILE_SHARE_READ, FILE_OPEN, options, NULL, 0);
+  NTSTATUS status = NtCreateFile(&file, access, &attributes, &status_block, NULL, FILE_ATTRIBUTE_NORMAL,
+                                 FILE_SHARE_READ, FILE_OPEN, options, NULL, 0);
   if (status < 0) {
-    remove_nt_error(state, status);
+    remove_nt_error(status);
     return INVALID_HANDLE_VALUE;
   }
   return file;
@@ -388,9 +378,9 @@ static bool remove_valid_entry_name(const FILE_ID_BOTH_DIR_INFO *entry) {
   return remove_valid_component(entry->FileName, length);
 }
 
-static int remove_tree_entry(remove_state *state, HANDLE parent, const wchar_t *name, size_t name_length,
+static int remove_tree_entry(char **failed, HANDLE parent, const wchar_t *name, size_t name_length,
                              const wchar_t *display_path, unsigned depth, uint64_t expected_id, bool check_id) { // NOLINT(misc-no-recursion)
-  HANDLE file = remove_open_relative(state, parent, name, name_length, false, false, true);
+  HANDLE file = remove_open_relative(parent, name, name_length, false, false, true);
   if (file == INVALID_HANDLE_VALUE) return errno == ENOENT ? 0 : errno;
   int result = 0;
   unsigned char *buffer = NULL;
@@ -404,7 +394,7 @@ static int remove_tree_entry(remove_state *state, HANDLE parent, const wchar_t *
     goto done;
   }
   if (depth >= REMOVE_MAX_DEPTH) { result = AGC_FS_REMOVE_TOO_DEEP; goto done; }
-  HANDLE directory_handle = remove_open_relative(state, parent, name, name_length, true, true, true);
+  HANDLE directory_handle = remove_open_relative(parent, name, name_length, true, true, true);
   if (directory_handle == INVALID_HANDLE_VALUE) { result = errno; goto done; }
   BY_HANDLE_FILE_INFORMATION directory_info;
   if (!remove_file_info(directory_handle, &directory_info)) {
@@ -452,7 +442,7 @@ static int remove_tree_entry(remove_state *state, HANDLE parent, const wchar_t *
           wchar_t *child_path = remove_child_path(display_path, entry->FileName, name_length);
           if (!child_path) { result = errno; goto done; }
           uint64_t expected_id = (uint64_t)entry->FileId.QuadPart;
-          result = remove_tree_entry(state, file, entry->FileName, name_length, child_path, depth + 1,
+          result = remove_tree_entry(failed, file, entry->FileName, name_length, child_path, depth + 1,
                                      expected_id, true);
           free(child_path);
           if (result != 0) goto done;
@@ -473,7 +463,7 @@ static int remove_tree_entry(remove_state *state, HANDLE parent, const wchar_t *
   }
   result = EBUSY;
 done:
-  if (result != 0) remove_failed_path(state->failed, display_path);
+  if (result != 0) remove_failed_path(failed, display_path);
   free(buffer);
   CloseHandle(file);
   if (result == AGC_FS_REMOVE_TOO_DEEP) return result;
@@ -495,17 +485,6 @@ int agc_fs_remove_tree(const char *path, char **failed) {
     errno = EINVAL;
     return AGC_FS_REMOVE_REFUSED;
   }
-
-  HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
-  remove_nt_create_file_fn create_file = ntdll ? (remove_nt_create_file_fn)GetProcAddress(ntdll, "NtCreateFile") : NULL;
-  remove_nt_status_to_error_fn status_to_error =
-      ntdll ? (remove_nt_status_to_error_fn)GetProcAddress(ntdll, "RtlNtStatusToDosError") : NULL;
-  if (!create_file || !status_to_error) {
-    free(wide);
-    errno = ENOSYS;
-    return ENOSYS;
-  }
-  remove_state state = {.create_file = create_file, .status_to_error = status_to_error, .failed = failed};
 
   size_t root_prefix;
   HANDLE root;
@@ -591,7 +570,7 @@ int agc_fs_remove_tree(const char *path, char **failed) {
       errno = EINVAL;
       return AGC_FS_REMOVE_REFUSED;
     }
-    HANDLE parent = remove_open_relative(&state, parents[parent_count - 1], component, component_length, true, false, false);
+    HANDLE parent = remove_open_relative(parents[parent_count - 1], component, component_length, true, false, false);
     if (parent == INVALID_HANDLE_VALUE) {
       int error = errno;
       close_handles(parents, parent_count);
@@ -631,7 +610,7 @@ int agc_fs_remove_tree(const char *path, char **failed) {
     errno = EINVAL;
     return AGC_FS_REMOVE_REFUSED;
   }
-  int rc = remove_tree_entry(&state, parents[parent_count - 1], last_sep + 1, target_length, wide, 0, 0, false);
+  int rc = remove_tree_entry(failed, parents[parent_count - 1], last_sep + 1, target_length, wide, 0, 0, false);
   if (rc != 0) remove_failed_path(failed, wide);
   close_handles(parents, parent_count);
   free(parents);

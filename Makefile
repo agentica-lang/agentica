@@ -300,7 +300,7 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   win/async win/core win/detect-wakeup win/dl win/error win/fs win/fs-event win/getaddrinfo win/getnameinfo win/handle \
   win/loop-watcher win/pipe win/thread win/poll win/process win/process-stdio win/signal win/snprintf win/stream \
   win/tcp win/tty win/udp win/util win/winapi win/winsock
-VM_LIBS += -lpsapi -luser32 -ladvapi32 -liphlpapi -luserenv -lws2_32 -ldbghelp -lole32 -lshell32 -lsynchronization
+VM_LIBS += -lpsapi -luser32 -ladvapi32 -liphlpapi -luserenv -lws2_32 -ldbghelp -lole32 -lshell32 -lsynchronization -lntdll
 else ifeq ($(shell uname -s),Linux)
 AGENTICA_GC_DEFAULT := system
 UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
