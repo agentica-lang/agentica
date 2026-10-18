@@ -442,7 +442,7 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.2.8
   - **Next work:** **Started (2026-10-15, 44a0-1 PR #262, 44a0-2 PR #268, 44a2
-    PRs #270 and #271; design: [§44](../future/44-module-constants.md)), decided
+    PRs #270 and #271), decided
     by the owner on 2026-10-15; it relaxes the freeze of row 7.2.7**, like
     `Set[T]` (8b) and `value.with(...)` (15c), because `compiler/` needs it. Two
     parts. **Imports (44a0, lands first):** `import Mod from "path"` replaces
@@ -831,7 +831,7 @@ and the other features after the JIT.
    lexer alone 52 to 24 steps for each character), so `check
    stdlib/bdd/gherkin.agc` takes 99 ms, not 126 (measured under load). Its
    tables are module constants, which is 44b of
-   [§44.12](../future/44-module-constants.md#4412-implementation-plan).
+   the module-constants work.
    Numbers, and what was tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer).
    **Third part, the interpreter loop, done (2026-10-16, PR #319):** the common
@@ -875,7 +875,7 @@ and the other features after the JIT.
 6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
    diagnostics (row 7.6), `agentica doc` and `help` (row 22b), and the 44b to
    44d table rewrites (**done 2026-10-16**;
-   [§44.12](../future/44-module-constants.md#4412-implementation-plan)), type
+   the module-constants work), type
    aliases (row 7.12, §49: simple first, 49a, then generic, 49b), then test
    functions without `main` (row 7.11, §50). `Task.map` (row 7.3) was small
    and is **done** (17a, PR #316).

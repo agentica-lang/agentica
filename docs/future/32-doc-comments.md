@@ -1,91 +1,21 @@
 ## 32. Doc comments
 
-**Status:** 22a is built (§32.2 to §32.4: the `##` syntax, the parser side table
-and the `std/` docs); 22b (§32.5, §32.6) waits until after the bootstrap
-(roadmap [row 22b](../roadmap/README.md)). Decided on 2026-10-12: Agentica gets
+**Status:** 22a is built; 22b (§32.5, §32.6) waits until after the bootstrap
+(roadmap [row 22b](../roadmap/README.md)). Decided on 2026-10-12: Agentica has
 documentation comments written as `##` lines, in the style of Rust's `///`, so
-that a later tool can generate documentation from the code. Phase 22 is front
-end only. 22a comes after 7i, HTTP 20b, task crash isolation, unit tests
-(phase 25) and HTTP 20c (roadmap order step 7.2.1), and after the evaluation
-pilot
-(order step 7.2.2, §32.7).
+that a later tool generates documentation from the code. The `##` syntax, the
+`DOC` token, the parser side table and the `std/` docs of 22a are in the grammar
+([`04-lexical.md`](../grammar/04-lexical.md#doc-comments) for the token and
+section 5 for where a block may stand); the parser keeps each block with its
+declaration in a side table, so the AST, the bytecode and the VM do not change
+and a program with doc comments runs as before.
 
 The idea in one paragraph: a run of lines that start with `##` documents the
 declaration on the next line. `#` stays an ordinary comment that tools ignore.
-The text is Markdown. A `##` run at the top of a file documents the module. The
-parser keeps each run with its declaration, and two tools read it:
-`agentica doc`, which prints a module's exported API with its docs, and
-`agentica help`, which learns to show `std/` functions. No tags such as `@param`
-are needed, because the types are in the signature.
-
-### 32.1 Today
-
-Checked at `650f689`:
-
-- A comment starts with `#` and ends at the end of the line
-  (`docs/grammar/04-lexical.md`). The lexer drops it (`src/lexer.rkt:166-168`),
-  so nothing after the lexer sees comments.
-- A line with only a comment counts as blank for the blank-line rule between
-  declarations (`docs/grammar/05-syntax.md`, `PARSE-MISSING-BLANK-LINE` at
-  `src/parser.rkt:114`).
-- `agentica help NAME [--json]` shows only builtins, from the catalog in
-  `src/builtins.rkt` (`src/main.rkt:199-212`). It cannot show a function of a
-  `std/` module or of a user file.
-- `stdlib/*.agc` documents itself with plain `#` comments, if at all
-  (`stdlib/queue.agc:1`). The CLI holds a copy of each file in `stdlib-sources`
-  (`src/stdlib.rkt:17`).
-- No `.agc` file in the repo has a line that starts with `##`, so the new rule
-  of §32.2 breaks no existing program here.
-
-### 32.2 Syntax
-
-- A **doc line** is a line whose first non-blank characters are `##`. The text
-  is the rest of the line after `##` and one optional space. `##` alone is an
-  empty doc line, which separates paragraphs.
-- Only the first two `#`s are the marker: `### Heading` is a doc line whose text
-  is `# Heading`, a Markdown heading.
-- A `##` after code on the same line (`x = 1 ## note`) is an ordinary comment,
-  not a doc line.
-- A **doc block** is one or more consecutive doc lines. There is nothing between
-  them; an ordinary `#` comment line ends the block.
-- A doc block documents what comes on the next line, which must be one of:
-  - a declaration: `def`, `struct`, `enum`, with or without `export`;
-  - a field inside a `struct`;
-  - a variant inside an `enum`.
-- The **module doc** is the first doc block of the file when only blank lines
-  and ordinary `#` comment lines come before it. A blank line must follow it. A
-  `#` comment line right after it does not count as that blank line, so that
-  case is `PARSE-DETACHED-DOC`. A file has at most one module doc.
-- Any other doc block is an error, `PARSE-DETACHED-DOC`, at its first line. That
-  covers:
-  - a doc block followed by a blank line (other than the module doc);
-  - a doc block followed by an ordinary `#` comment line;
-  - a doc block followed by an `import`;
-  - a doc block inside a function body;
-  - a doc block at the end of the file.
-
-  Agentica has no warnings (§26), so a detached doc is an error rather than a
-  silent comment.
-- **Blank-line rule:** a doc line does not count as blank, because it belongs to
-  the declaration after it. The blank line that `PARSE-MISSING-BLANK-LINE` asks
-  for goes before the doc block. When a doc block follows a declaration's `end`
-  without a blank line, `PARSE-MISSING-BLANK-LINE` is reported at the doc
-  block's first line.
-
-```agentica
-## Adds two numbers.
-def add(a: Int, b: Int) -> Int
-  return a + b
-end
-
-## Subtracts `b` from `a`.
-def sub(a: Int, b: Int) -> Int
-  return a - b
-end
-```
-
-- **Strings:** `##` inside a string literal or an interpolation is text, as
-  today.
+The text is Markdown. A `##` run at the top of a file documents the module. Two
+tools read it: `agentica doc`, which prints a module's exported API with its
+docs, and `agentica help`, which learns to show `std/` functions. No tags such
+as `@param` are needed, because the types are in the signature.
 
 ### 32.3 Content
 
@@ -97,7 +27,7 @@ end
   them; doctests are an option to evaluate later (§32.8).
 - There are no tags. Parameter names, types and the result come from the
   signature. When a parameter needs explaining, the text names it in backticks.
-- Docs are optional. No diagnostic asks for them. One repo test (22a) requires a
+- Docs are optional. No diagnostic asks for them. One repo test requires a
   module doc in every `stdlib/*.agc` and a doc on each of its exports.
 - Example of a documented module:
 
@@ -118,23 +48,6 @@ export def new() -> QueueState
 end
 ```
 
-### 32.4 Where the docs live
-
-- The lexer keeps doc lines instead of dropping them and emits one `DOC` token
-  per doc block. The token carries the text and the span of the whole block.
-  Inside parentheses, brackets or braces, where no `NL` is emitted, a doc line
-  is still an error (`PARSE-DETACHED-DOC`).
-- The parser attaches each `DOC` token to the declaration, field or variant on
-  the next line, or makes it the module doc.
-- The docs do not go into the existing AST structs. The parser returns them in a
-  side table on `program`: a map from the span of each documented declaration,
-  field or variant to its doc text, plus the module doc. So the checker,
-  lowering and the bytecode see the same AST as before, and the `.agcb` format
-  does not change.
-- `agentica doc` and `help` read the table straight from the parser (§32.5), so
-  they need no linking. `src/modules.rkt` only copies the root file's table and
-  module doc into the linked `program`.
-
 ### 32.5 `agentica doc`
 
 - `agentica doc PATH` prints the exported API of one module as Markdown:
@@ -145,11 +58,11 @@ end
 - `PATH` is a source file or a `std/` module name (`std/http`).
 - **Parse only.** `agentica doc` lexes and parses one module. It does not link
   it, resolve its imports or type-check it, so it cannot fail on a dependency.
-  For a `std/` name the source is the embedded copy in `stdlib-sources`.
+  For a `std/` name the source is the copy embedded in the binary.
   - A lex or parse error gives that diagnostic and exit 1.
   - An unknown file or `std/` module gives exit 2, as `help` does.
 - **Signatures.** A signature is one normalized line built from the AST, in the
-  form of `builtin-signature` (`src/builtins.rkt:264-272`):
+  form the builtin catalog uses:
   - a function: `add(a: Int, b: Int) -> Int`;
   - a struct: `struct QueueState`;
   - an enum: `enum Option[T]`.
@@ -170,8 +83,7 @@ end
   - `signature`: the line above;
   - `span`: the declaration's span, an object
     `{file, range: {start: {line, column}, end: {line, column}}}`, the two keys
-    `diagnostic->jsexpr` puts at the top level of a diagnostic
-    (`src/diagnostic.rkt:130`), in an object of their own;
+    a diagnostic JSON puts at its top level, in an object of their own;
   - a function item also has `parameters`, a list of `{name, type}`, and
     `result`, its result type;
   - a struct item also has `fields`: `[{name, type, doc}]`;
@@ -185,10 +97,10 @@ end
 - `agentica help std/http.get` (module path, `.`, export name) shows that
   function's signature and doc, in text or `--json`. It reads the module the
   same way as `agentica doc` (§32.5).
-- `agentica help std/MOD.NAME --json` uses the builtin help fields that apply
-  (`src/builtins.rkt:274-283`): `name`, `arity`, `parameters`, `result` and
-  `signature`, with `description` set to the whole doc (or `null`) and `summary`
-  added (§32.5). It has no `effects`.
+- `agentica help std/MOD.NAME --json` uses the builtin help fields that apply:
+  `name`, `arity`, `parameters`, `result` and `signature`, with `description`
+  set to the whole doc (or `null`) and `summary` added (§32.5). It has no
+  `effects`.
 - `agentica help std/http` lists the module's exports with their summaries. With
   `--json` it prints `{module, doc, items: [{kind, name, summary}]}`, with the
   fields of §32.5.
@@ -197,30 +109,19 @@ end
 - Builtins keep today's help, from the catalog.
 - User files are not covered: `agentica doc file.agc` serves them.
 
-### 32.7 Order and the evaluator
+### 32.7 Not built yet
 
 - **Front end only.** Doc comments change only the lexer, the parser and the
-  CLI, and the AST keeps its shape (§32.4).
-- **When.** Decided by the user on 2026-10-13: 22a comes after 7i, at
-  roadmap order step 7.2a: after order step 7.2.1 (HTTP 20b, task crash
-  isolation (phase 24), unit tests (phase 25), then HTTP 20c, which also took
-  what
-  was
-  left of 20d; placed there by the owner on 2026-10-13) and after the evaluation
-  pilot (order step 7.2.2, added by the owner on 2026-10-13), and before digit
-  separators and before `Task.map` (order step 7.3); channels come
-  earlier, at row 7.2.1e. 22a is no longer an exception to "new features are
-  VM-only and come after 7i". 22b waits until after the bootstrap (decided by
-  the owner on 2026-10-15, roadmap row 22b).
-  - `stdlib/http.agc` (HTTP 20a and 20c) is documented in 22a.
-- **How the VM is affected.** It runs programs with doc comments as before,
-  because docs never reach it.
+  CLI. The VM runs programs with doc comments as before, because docs never
+  reach it.
+- **When.** 22b waits until after the bootstrap (decided by the owner on
+  2026-10-15, roadmap row 22b).
 
 ### 32.8 Later, to evaluate
 
 - **Doctests:** run the fenced `agentica` examples of `std/` docs in a test, as
-  `tests/site-examples-test.rkt` does for the site. They would need an `output`
-  block convention.
+  the site examples test does for the site. They would need an `output` block
+  convention.
 - **Site pages:** generate the Library pages of `std/` modules in
   `site/content/library/` from `agentica doc --json`, instead of writing them by
   hand.

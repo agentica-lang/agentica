@@ -171,14 +171,6 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
   - Status: Idea, not scheduled (the owner asked on 2026-10-15 to note it);
     reuses §39 and §32
 
-- §: 44
-  - Title: Module constants and imports
-  - File: [`44-module-constants.md`](44-module-constants.md)
-  - Status: Planned (roadmap row 7.2.8): new import forms (`import Mod from
-    "path"`, `import {A} from "path"`) first, then module constants; before the
-    bootstrap, by the owner's decision of 2026-10-15; relaxes the freeze of row
-    7.2.7
-
 - §: 45
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)

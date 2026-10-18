@@ -144,8 +144,9 @@ here are measured, not only derived. The model is not in the repository.
   arrive out of order), fill a flat staging array of the input length and call
   `agc_list_from_array(items, n)` at the end. `filter` already allocates its
   output this way, then lowers `len` in place (`vm/interp.c:365`). After the
-  change the result is right-sized, which also closes the "related candidate" in
-  [§34.2](../future/34-shared-small-values.md#342-design).
+  change the result is right-sized, which also closes the "related candidate" of
+  the sharing design
+  ([§34.6](../future/34-shared-small-values.md#346-as-built)).
 
 ### 17.3 Operations
 
@@ -607,9 +608,10 @@ Rules: `AGENTS.md` (`rackunit` for Racket; C tests are plain-assert files in
     new leaf per 32 pushes took six times as long for a million items, and a
     GC-stress test that builds a 1 MB string through `List.repeat` ran out of
     its time window.
-  - No other benchmark is slower than 2% in either PR
-    ([§34.4](../future/34-shared-small-values.md#344-measurement-first) uses the
-    same figure). If a `for` or `at` heavy program is, the first fix is an
+  - No other benchmark is slower than 2% in either PR (the measurement gate of
+    the shared-value work uses the same figure,
+    [`docs/vm-benchmarks.md`](../vm-benchmarks.md)). If a `for` or `at` heavy
+    program is, the first fix is an
     inline fast path for `agc_list_get` and `agc_list_len`; it is not a reason
     to change the design. PR 1 did it for the two opcodes that run once per item
     of a `for` loop: `struct agc_list` and the inline versions are in the
