@@ -702,9 +702,9 @@ after them may run in parallel when needed and keep their relative order.
   - **Outcome:** Long types get one name, with no runtime cost
 
 - **Order:** 8.1
-  - **Next work:** The rest of the VM layers (7l, `docs/future/21-vm-layers.md`
-    §21: opcode helpers, builtin metadata flags, the callback-builtin protocol;
-    the header split is row 7.2.1b); after the tasks PR, next to 7k
+  - **Next work:** The rest of the VM layers (7l: opcode helpers, builtin
+    metadata flags, the callback-builtin protocol; the header split is row
+    7.2.1b); after the tasks PR, next to 7k
   - **Outcome:** The prerequisites of the JIT
 
 - **Order:** 9

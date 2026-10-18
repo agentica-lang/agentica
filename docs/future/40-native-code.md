@@ -56,9 +56,9 @@ functions become native code and give the same results. There is no language
 change.
 
 **c. AOT, maybe later.** `agentica build --native` compiles a whole program to
-native code. It reuses the opcode helpers of the VM layers ([section
-21](21-vm-layers.md)), which the JIT also uses. Build it only if measurements
-ask for it.
+native code. It reuses the opcode helpers of the VM layers (roadmap
+[7l](../roadmap/07-vm.md#7l-vm-layers)), which the JIT also uses. Build it only
+if measurements ask for it.
 
 ### 40.3.1 The native module header and its three call kinds
 
@@ -67,7 +67,8 @@ that helps integrate C and C++ libraries. It belongs to part 40.3a, so it comes
 before the JIT (40.5).
 
 The header is the stable public form of the VM's internal callback-builtin
-protocol (roadmap row 8.1, [section 21](21-vm-layers.md)). The callback builtins
+protocol (roadmap row 8.1, [7l](../roadmap/07-vm.md#7l-vm-layers)). The callback
+builtins
 (`map`, `filter`, `reduce` and the rest) already switch out only between their
 callbacks ([`10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1,
 "Builtins"). A native module uses the same mechanism, so there is one mechanism,

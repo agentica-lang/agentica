@@ -249,7 +249,8 @@ Items in the plan to re-check with this rule before they start:
     add on the allocation path while nobody asks (§28.12): it must pass the
     overhead check or change rule 4 of §28.2 first.
 
-- **Item:** VM layers (7l, §21; its first part is row 7.2.1b, §15)
+- **Item:** VM layers (7l in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers);
+  its first part is row 7.2.1b, §15)
   - **Question:** Does each layer replace code, or only add a boundary? (§15
     answers for the first part.)
 

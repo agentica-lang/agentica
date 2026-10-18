@@ -19,10 +19,11 @@ Words. §14 calls everything under the scheduler "the VM core" (`task.c`,
 **core** is narrower: the scheduler, the loop, the values and what they need.
 §14's five rules hold for the core and the services alike.
 
-This is the first part of 7l ([§21](../future/21-vm-layers.md#21-vm-layers)): it
-replaces §21's first item (the `core`/`rt`/`lib` header split) with the split
-below. Opcode helpers, builtin metadata flags and the callback-builtin protocol
-stay in 7l at step 8.1. §14.6 asks of the layers: "Does each layer replace code,
+This is the first part of 7l (roadmap
+[`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)): it replaces the
+`core`/`rt`/`lib` header split first planned with the split below. Opcode
+helpers, builtin metadata flags and the callback-builtin protocol stay in 7l at
+step 8.1. §14.6 asks of the layers: "Does each layer replace code,
 or only add a boundary?" Answer: mostly a boundary, checked by CI. It adds no
 runtime concept and replaces two pieces of code: `testing.c`'s hand-made wait
 becomes the port's `agc_task_join` (V5), and `loop.c`'s process tag check

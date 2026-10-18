@@ -101,11 +101,6 @@ decided, and their content lives in the grammar, `docs/vm/`, the roadmap or
   - File: [`20-crypto.md`](20-crypto.md)
   - Status: Planned after 7i (roadmap order step 7.5)
 
-- §: 21
-  - Title: VM layers
-  - File: [`21-vm-layers.md`](21-vm-layers.md)
-  - Status: Planned (roadmap 7l)
-
 - §: 22
   - Title: JIT
   - File: [`22-jit.md`](22-jit.md)
