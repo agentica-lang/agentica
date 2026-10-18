@@ -99,6 +99,8 @@ jobs:
           if [ "$EVENT" != pull_request ]; then
             vm=true
             trace=true
+          # HEAD is the merge commit on pull_request, so HEAD^1 is the base tip:
+          # this diffs the whole PR, not just the tip commit.
           elif ! files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD); then
             vm=true
             trace=true
@@ -192,6 +194,8 @@ jobs:
           if [ "$EVENT" != pull_request ]; then
             vm=true
             trace=true
+          # HEAD is the merge commit on pull_request, so HEAD^1 is the base tip:
+          # this diffs the whole PR, not just the tip commit.
           elif ! files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD); then
             vm=true
             trace=true
