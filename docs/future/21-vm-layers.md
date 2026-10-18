@@ -4,10 +4,10 @@
 the VM inherited from Racket (7k). A prerequisite for the JIT (section 22). No
 behavior change.
 
-- Split `vm/agc.h` into layer headers. Done as row 7.2.1b of the roadmap, in
-  [`docs/vm/15-layers.md`](../vm/15-layers.md) (§15): core, services and
-  adapters, with `value.h`, `port.h`, `core.h` and `services.h` and a CI check.
-  It replaced the core/rt/lib split first planned here.
+- **Done (row 7.2.1b):** The header split is documented in
+  [`docs/vm/15-layers.md`](../vm/15-layers.md) (§15), which defines the
+  core/services/adapters boundaries, one-way dependencies and CI check. It
+  replaces the `core`/`rt`/`lib` split first proposed here.
 - Move each opcode's semantics out of the `vm/interp.c` switch into helpers
   (`agc_op_concat`, `agc_op_eq`, ...) that both the interpreter and a JIT call.
 - Add metadata flags to the builtin table: `pure`, `may_fail`, `allocates`,
