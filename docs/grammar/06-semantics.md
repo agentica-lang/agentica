@@ -105,8 +105,12 @@ The first assignment introduces a variable in the current scope, and an
 annotation is allowed only there. Later assignments change its value, not its
 type. Each function and control block is a lexical scope. An assignment without
 annotation updates a visible variable of that name, or else introduces a local
-in the current block. A new name cannot shadow a visible one. Parameters and the
-`for` variable are initialized bindings; the `for` variable cannot be
+in the current block. A new name cannot shadow a visible one. One name means one
+variable in a scope:
+`x = ...` without an annotation updates the visible variable or creates a new
+one, and a block captures by value, so a shadowed name would make it unclear
+which `x` the block captured. The rule also keeps diagnostics clear. Parameters
+and the `for` variable are initialized bindings; the `for` variable cannot be
 reassigned. Variables created in a block are not visible after its `end`.
 
 ### Module constants
@@ -159,6 +163,18 @@ unknown name in capitals is `CHECK-UNKNOWN-NAME`, with a `did you mean` help
 over the constants the file can read: its own, declared above or below, and the
 ones it imports by name, by the name written. The nesting limit
 (`CHECK-TOO-DEEP`) counts initializers too.
+
+**Decided against.** Literals only, with no evaluation: it cannot express the
+compiler's own tables (`Set.new(...)` is a call, the character classes are a
+fold, the builtin rows are struct constructors). Compile-time evaluation: it
+would put the semantics of every allowed builtin in the compiler and the VM
+both. Lazy initialization on first read: an initializer error would surface in
+the middle of a run, a read would need a branch, and tasks could race on the
+first read. Calls of user functions in an initializer. An Elixir-style `@name`
+attribute or a `const` keyword, since the capitals already mark a constant. A
+constant in a `case` pattern: patterns are literals and variants. Folding
+literal arithmetic. One line holding both import forms. A static data form for
+the initializers is a later option, only if start-up numbers ask for it.
 
 ### Void completion
 

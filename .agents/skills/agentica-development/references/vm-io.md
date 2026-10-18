@@ -219,8 +219,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     handle request after its timeout), `Path.join` and `Path.resolve` as pure
     string code
   - the owner-only and lock builtins of the BDD driver port
-    (`docs/future/35-self-hosting.md`
-    §35.5, step 7a), all pool jobs in `work`:
+    (`docs/future/18-front-end-language.md`
+    §18.4, port step 7a), all pool jobs in `work`:
     - `File.open(path, "create_private")` is `OP_OPEN_CREATE`, which
       `open_for` handles first with `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW`
       and mode 0600, then goes the way of `write`

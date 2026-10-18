@@ -9,8 +9,9 @@ the existing `Time` module. Every name here is a proposal for the owner to
 review. The precision is microseconds, as the owner decided on 2026-10-15
 (41.8).
 
-Programs compute with dates and times: a due date, the timestamp of a log line
-(§24), an expiry, a time from a JSON API. Today a program has `Time.now_ms()`
+Programs compute with dates and times: a due date, the timestamp of a log
+line (the grammar's logging section), an expiry, a time from a JSON API.
+Today a program has `Time.now_ms()`
 (wall clock) and `Time.monotonic_ms()`, and nothing else. It turns milliseconds
 into a date by hand, and it cannot tell a value with an offset from one without.
 `File.stat` already gives `modified_seconds` as Unix seconds (`vm/files.c`), so
@@ -235,7 +236,7 @@ Examples: 19:05:42.201337 UTC on 2026-10-14 formats as
 Format decisions:
 
 - Offset 0 is written `Z`, and other offsets as `+hh:mm` or `-hh:mm`. This is
-  the form the examples of §24 use, and RFC 3339 writes it for UTC.
+  the form the logger's examples use, and RFC 3339 writes it for UTC.
 - Always six fraction digits, `.000000` included. The value has microsecond
   precision, and a fixed width keeps the length of the text the same, so strings
   from one offset sort by time. Trimming zeros would make `.2` and `.200000` two
@@ -350,7 +351,7 @@ Not in v1: `add_months` and `add_years` (41.16), and arithmetic on `TimeOfDay`.
   leap seconds is as much work as the zone data of 41.16.
 - Precision is microseconds, as in Python and Elixir. The field `microsecond`
   is 0 to 999999. `Time.now_ms` and `Time.monotonic_ms` keep milliseconds, and
-  so does the input of `std/logger` (`time_ms`, §24.2), which the logger turns
+  so does the input of `std/logger` (`time_ms`), which the logger turns
   into microseconds with `* 1000` (41.11). Nanoseconds would not fit an Int over
   the whole range: the latest value is about 2.5e20 ns since 1970, and an Int
   holds 9.2e18 (`Int` is 64 bits on every target, §42.4), so Unix nanoseconds
@@ -422,27 +423,29 @@ end
   name, and it would hide which clock it reads. The existing code
   (`stdlib/test/runner.agc`) writes the subtraction, and it stays that way.
 
-### 41.11 Relation to `std/logger` (§24)
+### 41.11 Relation to `std/logger`
 
 `Logger.time_text(ms)` becomes
 `Time.format(Time.from_unix_us(ms * 1000).unwrap!)`: the log's text and the
 `Time` formatter are one code path, and the log time is one native call instead
-of the integer arithmetic §24.2 describes. A value outside years 1 to 9999
+of the integer arithmetic the logger describes. A value outside years 1 to
+9999
 halts, as any `!` form does, and so does a `ms * 1000` that overflows an Int
 (`*` halts on overflow, as `docs/grammar/06b-builtins.md` says). The log's own
 time always comes from `Time.now_ms()`, which is in range, and the vectors cover
 the edges.
 
 The text changes with this. The time has six fraction digits
-(`2026-10-12T10:15:02.345000Z`), where §24 shows three. §24's examples and its
-"with milliseconds" are updated in the implementation PR (41.14), and the owner
-decides the digits (41.20). §24.2 has a cross-reference to this section.
+(`2026-10-12T10:15:02.345000Z`), where the logger shows three. The logger's
+examples and its "with milliseconds" are updated in the implementation PR
+(41.14), and the owner decides the digits (41.20). The grammar's logging section
+is updated there too.
 
 ### 41.12 Cost
 
 - Each conversion (civil to days, days to civil, Unix time to fields, text) is a
   few dozen C integer operations and one builtin call, which costs one step plus
-  its arguments (§23.6).
+  its arguments.
 - Allocation: one record for each date or time value, and one `String` for text.
   Parsing scans the text once.
 - The record has a fixed size; no field is a list or a nested record.
@@ -453,23 +456,23 @@ The parts land under different rules:
 
 - **Part:** Types, reserved names, the construction rule and its code
   - **Files:** `compiler/` (the Agentica front end)
-  - **Rule:** A checker change in the Agentica front end (§35), decided by the
+  - **Rule:** A checker change in the Agentica front end (§18), decided by the
     owner on 2026-10-15. Not a table row.
 
 - **Part:** `Time.*` functions (41.3 to 41.7)
-  - **Files:** `compiler/` (the Agentica catalog, §35.4), `vm/dates.c`
-  - **Rule:** With the types, in the Agentica front end (§35): most of the
+  - **Files:** `compiler/` (the Agentica catalog, §18.3), `vm/dates.c`
+  - **Rule:** With the types, in the Agentica front end (§18): most of the
     functions return the new types, so their catalog rows wait for it.
 
 - **Part:** `Time.monotonic_ns` (41.10)
   - **Files:** `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin
-    catalog, if §35 step 4 is done), `vm/numbers.c`
+    catalog, if port step 4 is done), `vm/numbers.c`
   - **Rule:** Independent of the types, so it landed first (#248). After row
     7.2.7 the freeze allows its table row and its `vm-builtins` name.
 
 Most of the functions return the new types, so they cannot land before the
 types. The owner decided on 2026-10-15 that the types come after the Agentica
-front end (§35), where the same rules are written in Agentica, so the `Time.*`
+front end (§18), where the same rules are written in Agentica, so the `Time.*`
 functions wait for it too. `Time.monotonic_ns` is the only part that landed
 earlier (#248). The order table is not changed by this section; the roadmap's
 "Designed, not scheduled" paragraph says where the types wait.
@@ -481,7 +484,7 @@ The two parts land in two PRs (41.10 and 41.13).
 The monotonic clock (41.10), which landed first (#248):
 
 - `src/builtins.rkt`: one row next to the `Time` rows. `src/lower.rkt`: its
-  `vm-builtins` name, or, if §35 step 4 is done, the Agentica builtin catalog
+  `vm-builtins` name, or, if port step 4 is done, the Agentica builtin catalog
   instead. `vm/numbers.c`: the builtin.
 - `docs/grammar/06b-builtins.md`: `Time.monotonic_ns` next to
   `Time.monotonic_ms` (the `Time` line).
@@ -498,7 +501,7 @@ Agentica front end:
 
 - `compiler/`: the four records, the reserved names, the construction rule and
   its code `CHECK-NOT-CONSTRUCTIBLE`, and the `Time.*` rows of the Agentica
-  catalog (§35.4, step 4).
+  catalog (§18.3, step 4).
 - JSON (41.18): option B adds four type-table kinds (`AGC_TYPE_*` in
   `vm/value.h`, `load_types` in `vm/loader.c`), a text branch in
   `vm/json_typed.c` and `vm/json_value.c`, and the encode and decode rules in
@@ -509,8 +512,8 @@ Agentica front end:
 - Grammar: `docs/grammar/04-lexical.md` (reserved builtin names),
   `docs/grammar/06b-builtins.md` (the records, the `Time` functions and the
   construction rule), `docs/grammar/07-diagnostics.md` (the new code).
-- `docs/future/24-logging.md` (§24.2 and its examples): the log time with six
-  fraction digits (41.11).
+- `docs/grammar/06d-io-and-network.md` (the logging section) and the logger
+  site page: the log time with six fraction digits (41.11).
 - Programming skill: `.agents/skills/agentica-programming/references/dates.md`
   (new), with its row in the "When to read a reference" table of `SKILL.md`;
   `references/builtins.md` (the other `Time` lines) and
@@ -528,7 +531,7 @@ deleted from `docs/future/`, following the working rule of
 
 ### 41.15 Tests
 
-The Python vectors are the independent counterpart, as in §23.7.
+The Python vectors are the independent counterpart, as in the binary work.
 `tests/fixtures/dates-vectors.py` uses only the standard library (`datetime` and
 `timedelta`), with a fixed random seed, and writes
 `tests/fixtures/vm/dates-vectors.stdin`. The fixture `dates-vectors.agc` reads
@@ -596,7 +599,7 @@ an aware argument gives `CHECK-TYPE-MISMATCH`; and an `enum` with variants
 Monotonic clock: 41.10.
 
 The vectors fixture may be slow under the `--max-steps` sweep; if so, it goes in
-`heavy-fixtures` in `tests/vm-diff-common.rkt`, as §23.7 says.
+`heavy-fixtures` in `tests/vm-diff-common.rkt`, as the binary work does.
 
 ### 41.16 Later
 
@@ -645,8 +648,8 @@ chosen.
     `vm/json_value.c`) get a text branch for each kind. If §42 lands first,
     these kinds are added to its version 7 (42.11). If §41 lands first, it sets
     version 7, and §42 sets version 8. (Version 4 is the struct update `with`
-    of 15c, version 5 is the module constants of §44, and version 6 is the
-    compiler prelude of §25.6.)
+    of 15c, version 5 is module constants, and version 6 is the
+    compiler prelude.)
   - Top level: `JSON.decode(text, DateTime)` reads a JSON string with
     `Time.parse` and gives `Result[DateTime]`; text that is not a JSON string is
     an error. `JSON.encode` of a `DateTime` gives the JSON string.
@@ -707,5 +710,5 @@ The costs, to be accepted when it lands:
   `LocalTime`, which says what the value lacks, as `NaiveDateTime` does for the
   offset. Recommendation: `TimeOfDay`.
 - **Log digits (41.11).** Six fraction digits, as `Time.format` writes them, or
-  three, as §24 shows now (which needs a second formatter for the log).
+  three, as the logger shows now (which needs a second formatter for the log).
   Recommendation: six.

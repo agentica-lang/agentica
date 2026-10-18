@@ -14,7 +14,8 @@ the tag and values order. The codec lands in both backends in one PR, with
 "When to read a reference" table (the skill is not published).
 
 Needs: `Bytes`, not repeated here. It is the Phase 8 "Later" item
-(`docs/future/12-data-structures.md` §12.5); plan it there and land it first.
+([`08-data-structures.md`](08-data-structures.md)); plan it there and land it
+first.
 
 - [ ] 11a `Term.encode(value: T) -> Result[Bytes]` and
   `Term.decode(data: Bytes, type: T) -> Result[T]` in the evaluator (Racket, no

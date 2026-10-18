@@ -1,8 +1,10 @@
 ## Phase 14: Logging and debugging
 
-Specified in [`docs/future/24-logging.md` section
-24](../future/24-logging.md#24-logging-and-debugging). Three small PRs, on the
-VM only. 14a is in order step 7.1, right after 7h processes and before TCP and
+Three small PRs, on the VM only; all three are done. The behavior is in the
+grammar's logging section (`docs/grammar/06d-io-and-network.md`), the tracing
+rules in `docs/vm/08-loader-and-cli.md` §9, and the stack-line shape in
+`docs/vm/02-reference-behavior.md`. 14a is in order step 7.1, right after 7h
+processes and before TCP and
 TLS, to speed up debugging of the rest of 7h; 14b is order row 7.2.5 (taken out
 of row 7.5 by the owner on 2026-10-14, before the freeze of row 7.2.7), and it
 goes first: it adds no API, and agents get the most from it. 14c is order step
@@ -12,10 +14,10 @@ goes first: it adds no API, and agents get the most from it. 14c is order step
 follows the library rule (after the order table): the module is Agentica code,
 and its native part is the std-only registry `LogRegistry`, a new exception to
 the std-first rule (decided on 2026-10-15; the rule lists it now). Its two
-builtin types, the record `LogEvent` and the enum `LogLevel`, are builtins too
-(§24.2, "Types").
+builtin types, the record `LogEvent` and the enum `LogLevel`, are builtins
+too.
 
-- [x] 14a VM tracing (`docs/future/24-logging.md` §24.4): `vm/trace.h` and
+- [x] 14a VM tracing: `vm/trace.h` and
   `vm/trace.c`, `AGENTICA_VM_TRACE` (and `AGENTICA_VM_TRACE_FILE`) with the
   categories `sched`, `io`, `proc`, `tls` (its trace points came with the TLS
   PR; the TCP PR added its events to `io`), `loader` and `gc`; one `write(2)`
@@ -24,10 +26,10 @@ builtin types, the record `LogEvent` and the enum `LogLevel`, are builtins too
   Makefile `unexport`s both variables and the VM test runners remove them;
   `tests/test_vm_trace.py` traces to a file and checks that exit code, stdout
   and stderr do not change. Docs: `docs/vm/` and the development skill. Done: as
-  built in `docs/vm/08-loader-and-cli.md` §9 ("VM tracing (as built)"); `tls` is
-  defined and has no trace points yet.
-- [x] 14b Stack traces on runtime errors (`docs/future/24-logging.md` §24.3),
-  always on in the plain, `--ai` and `--json` formats: names and places per
+  built in `docs/vm/08-loader-and-cli.md` §9 ("VM tracing (as built)"); `tls`
+  is defined and has no trace points yet.
+- [x] 14b Stack traces on runtime errors, always on in the plain, `--ai` and
+  `--json` formats: names and places per
   frame, the tail-call mark, merged repeats, at most 20 lines, the spawn place
   of a failing task. Fixed expected stderr in the three formats. Docs:
   `grammar.md` §7, `docs/vm/02-reference-behavior.md` §2.5 and
@@ -40,7 +42,7 @@ builtin types, the record `LogEvent` and the enum `LogLevel`, are builtins too
   `tests/vm-stack-test.rkt` with the exact stderr of the fixtures
   `tests/fixtures/vm/stack-trace-*.agc` in the three formats (`make goldens`
   rewrites them), and the 32 goldens with a task crash line now hold its stack.
-- [x] 14c `std/logger` (`docs/future/24-logging.md` §24.2): `stdlib/logger.agc`
+- [x] 14c `std/logger`: `stdlib/logger.agc`
   (the levels `debug`, `info`, `warning` and `err`, one function and one `_meta`
   function per level (the `_meta` functions were replaced by a `fields` default
   in 15a), `log` and `log_meta`, `enabled?`, `level`, `set_level`,
@@ -54,7 +56,7 @@ builtin types, the record `LogEvent` and the enum `LogLevel`, are builtins too
   `src/modules.rkt`, which names `std/logger` for `LogRegistry`. Each line is
   one `IO.warn` call (24.1). No flags, no grammar change, and no change to
   `CHECK-IMPORT-NAME` in this PR (the "did you mean" help landed as its own PR,
-  D9, §24.2, "The freeze"). Tests: goldens with exact stderr (levels, handler
+  D9). Tests: goldens with exact stderr (levels, handler
   levels, quoting, field order), attach and detach across tasks, a handler that
   halts crashes only its task, the async handler example end to end, a Python
   peer for the JSON lines, and `Logger.time_text` against Python `datetime`
@@ -62,12 +64,12 @@ builtin types, the record `LogEvent` and the enum `LogLevel`, are builtins too
   Docs: `references/logger.md` of the programming skill with its row in the
   table, `site/content/library/io-and-system/logger.md` with runnable examples,
   the VM notes on the runtime field, and the CHANGELOG entry. Its Racket parts
-  are data under the freeze (§24.2, "The freeze"), so the PR may land before,
-  during or after row 7.2.7. The registry exception and the freeze are the
-  owner's decisions of §24.2. Its two-line change in `src/lower.rkt` for the
-  enum field of `LogEvent` relaxes that list for those lines, and the PR says so
-  and why (§24.2, "Decided"). Done: `vm/logger.c` (the ten `LogRegistry`
-  builtins over `vm->rt->log`), `stdlib/logger.agc`, goldens
+  are data under the freeze, so the PR may land before, during or after row
+  7.2.7. The registry exception and the freeze are the owner's decisions of
+  2026-10-15. Its two-line change in `src/lower.rkt` for the enum field of
+  `LogEvent` relaxes that list for those lines, and the PR says so and why.
+  Done: `vm/logger.c` (the ten `LogRegistry` builtins over `vm->rt->log`),
+  `stdlib/logger.agc`, goldens
   `tests/fixtures/vm/logger-*.agc`, `tests/std/logger_test.agc` for the
   registry, `tests/test_vm_logger.py` with the Python peer
   `tests/fixtures/logger-peer.py`, and the benchmark

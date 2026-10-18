@@ -16,8 +16,8 @@ PRODUCT := dist/agentica$(EXE)
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
-# `make` builds the product, dist/agentica: the VM with the front end inside (docs/future/35-self-hosting.md, 35.3 and
-# 35.6). It needs only a C toolchain: the bootstrap below starts from bootstrap/stage0.agcb. The host is the default
+# `make` builds the product, dist/agentica: the VM with the front end inside (docs/future/18-front-end-language.md §18.2 and
+# §18.8). It needs only a C toolchain: the bootstrap below starts from bootstrap/stage0.agcb. The host is the default
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
@@ -41,7 +41,8 @@ version:
 	@printf '%s' '$(AGC_VERSION)'
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
-# TESTS names modules, or directories that hold them (the default is tests/).
+# TESTS names modules, or directories that hold them (the default is tests/). Design: references/ci.md,
+# docs/future/18-front-end-language.md §18.7.
 # Fast Python tests:           make test [TESTS="tests/test_vm_bits.py ..."]
 # Test groups:                 make tests KIND=fast|files|slow|all [DOCKER=1|WINE=1]
 # More or fewer workers:       make test JOBS=8
@@ -553,7 +554,7 @@ $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
 VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
 VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(GC_LINK) $(VM_LDFLAGS)
 
-# The binary and its bootstrap (docs/future/35-self-hosting.md, 35.3 and 35.6; docs/vm/08-loader-and-cli.md). The front end is
+# The binary and its bootstrap (docs/future/18-front-end-language.md §18.2 and §18.8; docs/vm/08-loader-and-cli.md). The front end is
 # compiler/front_end.agc, a program that the binary carries as data. Each stage is its .agcb, in build/stage/. The seed is
 # bootstrap/stage0.agcb, a stage2 that was checked in (make stage0 refreshes it):
 #   first binary  linked with stage0 and the std/ sources of this checkout (build/vm/<mode>/bootstrap/agentica)

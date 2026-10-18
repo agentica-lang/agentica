@@ -370,7 +370,7 @@ the data.
     `Process.read_bytes` returns fewer at EOF. EOF before the end is an error;
   - a small helper module (for example `std/frame`) can hold these two loops
     once `Bytes` lands; it is not part of this plan. The 4-byte length itself
-    needs no new module: `std/binary` (§23.5) writes it and checks it against a
+    needs no new module: `std/binary` writes it and checks it against a
     limit.
 
 ### 16.8 Dependencies

@@ -1,7 +1,8 @@
 ## 28. VM metrics
 
 **Status:** planned (roadmap phase 18). A tool inside the VM (`agentica run`)
-for operators, like VM tracing (§24.4) is for VM developers: the VM exports
+for operators, like VM tracing (`docs/vm/08-loader-and-cli.md` §9) is for VM
+developers: the VM exports
 numbers about itself (the GC, tasks, the scheduler, I/O, processes, TCP) in the
 Prometheus text format, so Prometheus can scrape them and Grafana can graph
 them. It is not a language feature: no grammar change, no builtin, nothing in
@@ -72,7 +73,8 @@ Checked at `12df0f8`:
 
 ### 28.2 Rules
 
-The same rules as tracing (§24.4), plus one about cost:
+The same rules as tracing (`docs/vm/08-loader-and-cli.md` §9), plus one about
+cost:
 
 1. **It never changes what the program sees.** Exit code, stdout, stderr (except
    the one-line start-up warnings of 28.5, only when the setting is wrong), step
@@ -691,9 +693,10 @@ newline.
   already edits a child's environment for `UV_USE_IO_URING` (`drop_uring_env`).
   The removal is done, with its test (`metrics_env` in `child_env`,
   `vm/process.c`; `tests/test_vm_os.py`), in the OS builtins of the BDD driver
-  port (§35.5 of `docs/future/35-self-hosting.md`, step 7a), because the driver
-  port can no longer edit the runner's environment. It is a breaking change for
-  a program that passed these variables to a child on purpose. The text below is
+  port (§18.4 of `docs/future/18-front-end-language.md`, step 7a), because
+  the driver port can no longer edit the runner's environment. It is a
+  breaking change for a program that passed these variables to a child on
+  purpose. The text below is
   the rule it follows. `child_env()` in `vm/process.c` becomes `child_env(bool
   drop_uring)` and runs when `drop_uring_env` is set or either metrics variable
   is present. It removes `UV_USE_IO_URING=` only when `drop_uring` is true (the
@@ -783,7 +786,7 @@ same endpoint (a `Metrics` builtin module or `std/metrics`)?
 and HTTP on the VM. Reasons:
 
 - A counter is shared mutable state. Agentica values are immutable. Apart from
-  the logger registry (§24.2), the language has no shared mutable state: shared
+  the logger registry, the language has no shared mutable state: shared
   tables (`docs/future/13-ats.md` §13, phase 9) are the planned way, on demand.
   A `Metrics` builtin with hidden mutable state would be a second special form
   for sharing state between tasks, against the one-way rule, next to the logger
@@ -994,7 +997,7 @@ Expected values come from fixtures whose numbers are known.
 
 ### 28.10 Tracing and metrics
 
-Tracing (§24.4) and metrics share the rules (never crash, never change the
+Tracing and metrics share the rules (never crash, never change the
 program, environment variables read once at start-up, compiled out by a build
 flag, removed in tests), the owner rule for files (each with its own check:
 `fstat` after open for the trace file, `lstat` before `rename` for the `.prom`

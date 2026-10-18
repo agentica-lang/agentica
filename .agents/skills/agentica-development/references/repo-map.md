@@ -5,7 +5,7 @@ short tree is in `AGENTS.md`; read this to find which file owns something.
 
 ```text
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (make stage0 refreshes it; references/ci.md)
-compiler/         # the front end in Agentica (35.4, one stage per PR); lexer, parser, modules, linker, checker, lowering, bytecode writer and BDD driver so far; agentica.toml holds its [style] (lines at most 119 characters)
+compiler/         # the front end in Agentica (§18.3, one stage per PR); lexer, parser, modules, linker, checker, lowering, bytecode writer and BDD driver so far; agentica.toml holds its [style] (lines at most 119 characters)
   source.agc token.agc diagnostic.agc  # Position and Span, Token and its Value, Diagnostic and Outcome[T]
   lexer.agc       # lex: String -> Outcome[List[Token]]; 
   unicode.agc unicode_table.agc  # graphic? and the char write form for LEX-UNEXPECTED-CHAR; the table is hand-edited data (from Racket's `char-graphic?`, Unicode 17.0)
@@ -42,17 +42,17 @@ compiler/         # the front end in Agentica (35.4, one stage per PR); lexer, p
   bytecode_tables.agc bytecode_bytes.agc bytecode_pool.agc  # bytecode writer: format constants and opcode numbers, little-endian integers, UTF-8 and chunk lists, interned tables
   bytecode_spans.agc bytecode_types.agc bytecode_function.agc bytecode_failure.agc  # the span table, the Types and Decodable sections, one function (constants, updates, builtins, labels), BYTECODE- problems
   bytecode_writer.agc  # write(root_dir, program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
-  bdd_driver.agc  # the BDD driver (35.4 step 7), part of the front end: run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
+  bdd_driver.agc  # the BDD driver (§18.3, port step 7), part of the front end: run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
   bdd_options.agc bdd_report.agc bdd_files.agc bdd_source_root.agc  # the arguments (driver options, then the user's words); the usage and infrastructure reports; private 0600 writes in pieces; the VM's --source-root of a file
   bdd_discover.agc bdd_compile.agc bdd_rundir.agc bdd_runner.agc  # the walk over the test paths; file -> Compiled.Bytes | Rejected(Problem); the temporary directory, lock and sweep; the runner as a captured child and its report file
   embedded/runner.agc embedded/steps.agc  # not stage inputs: the roots of the BDD runner and the default step program, compiled by `make` with stage2 and embedded in the binary
   diagnostic_json.agc  # the --json object of a Problem
   diagnostic_plain.agc diagnostic_ai.agc save_file.agc  # the plain text of a Problem and its --ai text; a file written in pieces (compile -o)
   pipeline.agc  # read_root, check_file, build, compile: link, check, lower and write, shared by the CLI and the BDD driver
-  cli.agc  # the command line (35.4 step 8a): run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
+  cli.agc  # the command line (§18.3, port step 8a): run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
   cli_options.agc cli_help.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; the fixed texts; what a command answers; Launch
   bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc, and `--version=V` for the header)
-  front_end.agc front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (35.3, 8b): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off; make's stages build it
+  front_end.agc front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2, 8b): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off; make's stages build it
 vm/               # the C11 bytecode VM, linked into dist/agentica; layers in references/vm.md
   value.h         # values and the agc_ value API, shared by all layers (references/vm-core.md)
   port.h          # what services call into the core: park, wake, jobs, handles (references/vm-core.md)

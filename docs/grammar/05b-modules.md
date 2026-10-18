@@ -152,7 +152,13 @@ With the alias `Binary`:
   type's range. `Binary.write_i64_{be,le}`, `write_f32_{be,le}` and
   `write_f64_{be,le}` cannot fail and return a plain `List[Int]`. `write_f32_*`
   rounds to binary32; every NaN is written as the canonical NaN
-  (`Float.to_bits`, `Float.to_bits32`).
+  (`Float.to_bits`, `Float.to_bits32`). This module is written in Agentica;
+  bit operations and the `Float` bit conversions are `Int` and `Float` builtins,
+  because in Agentica each one is a 64-bit loop or an exact scaling by powers of
+  two with special cases for `-0.0`, NaN and subnormals. Binary data stays a
+  `List[Int]` with each item in `0 .. 255`, like `IO.read_bytes` and
+  `File.read_bytes`. If a compact `Bytes` type ever lands, the API moves to it
+  in the same change as the `*_bytes` builtins.
 - `Binary.concat(parts: List[List[Int]]) -> List[Int]` joins any number of parts
   in order, in O(n log k) for n bytes in k parts. `Binary.frame(payload:
   List[Int]) -> Result[List[Int]]` puts the payload's 4-byte big-endian length
@@ -175,7 +181,9 @@ With the alias `Binary`:
   u16`, `payload of 4294967296 bytes does not fit in a u32 length`, `frame
   length 70000 is above the limit 65536`, `frame limit -1 is negative`.
 - Writers return new lists and no buffer is ever changed. Offset writers into an
-  existing list and the compact `Bytes` type are not part of the module.
+  existing list and the compact `Bytes` type are not part of the module. Half
+  floats (f16), varints (LEB128), hex and Base64 come later, each when a real
+  program needs it; hex and Base64 stay open in the crypto section.
 
 #### TOML (`std/toml`)
 

@@ -52,7 +52,7 @@ example are two separate programs; see "Done when" below.
 - [ ] 10c Generic structs (`struct Box[T]`): inference at construction,
   substituted field types, the generic enum diagnostics; a field named `with`
   whose type is a type parameter is `CHECK-REDEFINED-NAME`
-  (`docs/future/25-ruby-typed-idioms.md` §25.3); a type parameter used as a
+  (`docs/grammar/06-semantics.md`); a type parameter used as a
   `Map` key is `CHECK-MAP-KEY-TYPE` at the declaration, tested for both a
   generic struct and a generic enum (`enum E[K]` with `Map[K, Int]`), since no
   test covers the enum case today; `data-type?` is checked after substitution.

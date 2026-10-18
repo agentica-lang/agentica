@@ -1,8 +1,7 @@
 """What the tests of the Agentica front end share (tests/test_frontend_<stage>.py).
 
 Each test compiles one stage of compiler/ with the product CLI, runs it on the VM over inputs and compares what it
-prints with the frozen output of the original stage (tests/fixtures/frontend/frozen/, docs/future/35-self-hosting.md,
-35.10, phase 3). The original stages wrote the frozen files once; tools/refreeze.py rewrites them from the Agentica
+prints with the frozen output of the original stage (tests/fixtures/frontend/frozen/, docs/future/18-front-end-language.md §18.7). The original stages wrote the frozen files once; tools/refreeze.py rewrites them from the Agentica
 stages now.
 
 The hashes of a manifest cover big outputs and big inputs. An input hash that differs means the Python side built a

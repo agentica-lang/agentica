@@ -52,9 +52,8 @@
   Channels are planned in phase 17
   ([`docs/future/27-iteration-and-concurrency.md`
   §27.2](../future/27-iteration-and-concurrency.md#272-channels)); CPU
-  parallelism remains unscheduled, and [`docs/future/08-concurrency.md` section
-  8](../future/08-concurrency.md#8-concurrency-and-parallelism) records its
-  remaining decisions.
+  parallelism remains unscheduled, and its remaining decisions are in
+  [§27.6](../future/27-iteration-and-concurrency.md#276-open-questions).
 
 ### Open decisions
 
@@ -64,8 +63,7 @@
   like `Result[T]`) for nullable values.
 - [x] Front-end implementation language: decided by the owner on 2026-10-13:
   self-hosting, for one binary and a fast start, as an item in the roadmap order
-  from row 7.2.7 on ([`docs/future/35-self-hosting.md` section
-35](../future/35-self-hosting.md#35-self-hosted-front-end-and-a-single-binary)).
+  from row 7.2.7 on ([§18](../future/18-front-end-language.md)).
   Section 18 keeps the history of the question.
 
 The open items in this section are outside the current implementation order.

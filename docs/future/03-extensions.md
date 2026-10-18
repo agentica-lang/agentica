@@ -5,9 +5,9 @@
   - **Pending decisions:** Syntax, inference, and constraints
 
 - **Extension:** Closures and methods
-  - **Direction:** Blocks and methods on builtin types are specified in [section
-    11](11-ruby-ergonomics.md#11-ruby-style-ergonomics); standalone lambdas are
-    planned in [section 25.5](25-ruby-typed-idioms.md#255-standalone-lambdas);
+  - **Direction:** Blocks and methods on builtin types are specified in
+    `grammar.md`; standalone lambdas are planned in [section
+    25.5](25-ruby-typed-idioms.md#255-standalone-lambdas);
     user methods and mixins were decided against ([section
     25.13](25-ruby-typed-idioms.md#2513-decided-against-part-c))
   - **Pending decisions:** None open: standalone lambdas are planned (§25.5);
@@ -27,7 +27,7 @@
 
 - **Extension:** Async and fibers
   - **Direction:** Suspend execution on I/O; initially one thread. See [section
-    8](08-concurrency.md#8-concurrency-and-parallelism)
+    27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections)
   - **Pending decisions:** API, cancellation, and error propagation
 
 - **Extension:** Actors

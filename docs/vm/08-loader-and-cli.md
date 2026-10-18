@@ -209,7 +209,7 @@ following
   did. A front end that stops with
   an error (a bug in the driver) ends the process with status 2, never the 1
   of a failed test run.
-- `make` builds `dist/agentica` from `bootstrap/stage0.agcb` (35.3). The
+- `make` builds `dist/agentica` from `bootstrap/stage0.agcb` (§18.2). The
   release builds it against glibc 2.28 (11).
 - Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.
   On macOS there is no parent-death signal, so the closest safe thing is the
@@ -230,8 +230,8 @@ following
 `dist/agentica`: the VM objects, `vm/agentica.c` as its `main`, and the front
 end with the `std/` sources as data (`vm/embedded.h`, written by
 `vm/tools/gen-embedded.sh`). It is the only program of the product
-(docs/future/35-self-hosting.md, 35.3 and 35.6). `make` links a first copy with
-`bootstrap/stage0.agcb` in place of the front end
+(docs/future/18-front-end-language.md, §18.2 and §18.8). `make` links a first
+copy with `bootstrap/stage0.agcb` in place of the front end
 (build/vm/<mode>/bootstrap/agentica, never shipped) to compile the stages.
 
 - **`agentica run`.** When the first word is `run`, `vm/agentica.c` parses the
@@ -333,7 +333,7 @@ end with the `std/` sources as data (`vm/embedded.h`, written by
   front end is stage0, whose driver compiles them from the `std/` sources on
   every `agentica test`, as before.
 
-**VM tracing (as built).** The rules are in `docs/future/24-logging.md` §24.4.
+**VM tracing (as built).**
 This note lists what the code chose.
 
 - `AGENTICA_VM_TRACE` lists the categories to trace: `sched`, `io`, `proc`,

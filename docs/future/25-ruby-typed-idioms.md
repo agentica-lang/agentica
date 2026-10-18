@@ -1,36 +1,31 @@
 ## 25. Ruby typed idioms
 
-**Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator
-(order 7.2): 25.1 (defaults, front end only) as order row 7.5a, built after the
-bootstrap; 25.2, 25.4, 25.5, 25.9 and 25.10 at order step 7.6, after the strict
-diagnostics of [section 26](26-strict-diagnostics.md#26-strict-diagnostics); and
-the prelude part, 25.6 and 25.11, at order step 8.2, after faster lists (8d).
-25.7 and 25.8 were moved to Part C. Part B (25.12) lists ideas to evaluate
-later. Part C (25.13) lists ideas that were decided against, so they are not
-proposed again. Decided by the user on 2026-10-12. 25.1 (default parameter
-values) is implemented (roadmap item 15a, order row 7.5a, in `compiler/`). 25.3
-(struct update `with`) is implemented (roadmap item 15c, moved before the
-bootstrap on 2026-10-15). 25.14 (the pipe operator) is implemented (roadmap item
-15l, order row 7.2.1g). 25.10 (heredocs) is implemented (roadmap item 15j,
-post-bootstrap step 5, in `compiler/`; see "As built" at the end of 25.10).
-25.6 (the compiler prelude and the Enumerable methods) is implemented (roadmap
-item 15f; see "As built" at the end of 25.6); 25.11 (`format`) is still planned.
+**Status:** the built parts are 25.1 (default parameter values, 15a), 25.3
+(struct update `with`, 15c), 25.6 (the compiler prelude and the Enumerable
+methods, 15f), 25.10 (heredocs, 15j), 25.12.1 (`case` guards and nested
+patterns, 15k) and 25.14 (the pipe operator `|>`); their rules live in
+[`docs/grammar/`](../grammar.md) and the programming skill, which are the
+contract. What remains here: 25.2 (re-exports), 25.4 (value equality), 25.5
+(standalone lambdas), 25.9 (`File.open` with a block) and 25.11 (`format`), all
+in roadmap [phase 15](../roadmap/15-ruby-typed-idioms.md). Part B (25.12) lists
+ideas to evaluate later, and Part C (25.13) lists what was decided against, so
+it is not proposed again. Decided by the user on 2026-10-12.
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
-that models already know, with the rule of [section
-11](11-ruby-ergonomics.md#11-ruby-style-ergonomics): accept a form when it is
-real Ruby (or a typed version of it) or when it makes Agentica consistent with
-itself, and keep static checking and immutable values. Three limits do not move:
-no OOP (no classes, no inheritance, no user methods on user types), no user
-generics, and values stay immutable.
+that models already know, with this rule: accept a form when it is real Ruby (or
+a typed version of it) or when it makes Agentica consistent with itself, and
+keep static checking and immutable values. A form from another language is not
+accepted: its hint names the Agentica form, and a newly accepted form is checked
+with a second model in an evaluation round. Three limits do not move: no OOP (no
+classes, no inheritance, no user methods on user types), no user generics, and
+values stay immutable.
 
 **Principle: one way to do each thing.** Strictness wins, so agents are precise.
 A Ruby form is worth adding only when it does not create a second way to write
 something the language already has. Where it would, it is not accepted: the
 parser or the checker gives a diagnostic whose help shows the canonical form.
-This sharpens section 11's rule, [Which forms to
-accept](11-ruby-ergonomics.md#11-ruby-style-ergonomics). The same principle is
-why Agentica has no warnings: a diagnostic is an error or it does not exist
+The same principle is why Agentica has no warnings: a diagnostic is an error
+or it does not exist
 ([section 26](26-strict-diagnostics.md#26-strict-diagnostics)).
 
 The test: a form fails when it only renames or negates an existing call, its
@@ -43,213 +38,12 @@ whose seed, `0` or `0.0`, the caller picks), `find`, `each_with_index`,
 methods (each is `to_a` and then one `List` call). By the same test `unless` and
 statement modifiers (re-spellings of `if`), `loop do` (`while true`), keyword
 arguments (a second way to pass the same argument) and new method aliases are in
-Part C, and each Part A item that overlaps an existing form names the canonical
-one.
+Part C.
 
-**How Part A lands.**
-
-- Everything here comes after 7i deletes the evaluator (order 7.2); the prelude
-  part (25.6, 25.11) also waits for faster lists (8d, order step 8), because its
-  cost contract needs them. Each item changes the front end (`src/lexer.rkt`,
-  `src/parser.rkt`, `src/modules.rkt`, `src/checker.rkt`) and `src/lower.rkt`,
-  and runs on the C VM. No item touches `src/evaluator.rkt`.
-- Most items are sugar that `lower.rkt` turns into code the VM already runs, so
-  the bytecode format and the VM do not change. Five items change the VM, and
-  three of them bump the bytecode format version, since any change to the layout
-  or to an opcode's meaning does (`docs/vm/03-ir-and-bytecode.md` §4): 25.3 adds
-  the `STRUCT_WITH` opcode and the Updates section (format version 4, built);
-  25.4 widens the `EQ` and `NE` opcodes (format version bump); 25.6 adds a
-  prelude flag on functions, argument spans on prelude calls, a name-only source
-  entry per prelude file, the error-span rule, the prelude-only builtin
-  `__fail_arg` and the public builtin `String.compare` (format version bump);
-  25.9 appends the builtin `File.eof?` (no bump); and 25.11 appends the
-  prelude-only builtin `__float_fixed` (no bump).
-- Library work follows the roadmap rule [New library features: `std/`
-  first](../roadmap/README.md#new-library-features-std-first): pure computation
-  is written in Agentica, and C is only for its exceptions. 25.6 and 25.11 need
-  one small mechanism for this, the compiler prelude (25.6).
-- **The skill's budget.** `SKILL.md` stays near 5,000 tokens, so it gets only
-  the core-language items, each in a few lines: defaults, `with`, equality,
-  lambdas and heredocs. Library detail (the Enumerable methods, `format`,
-  `File.open` with a block, re-exports) goes to the matching `references/` file
-  (`builtins.md`, `files.md`, `modules.md`).
-- Each item is its own PR, with the grammar (`docs/grammar.md`), the programming
-  skill (`.agents/skills/agentica-programming/SKILL.md` and the matching
-  `references/` file), the site page, the development skill's notes and tests.
-  When an item lands, its text moves to `grammar.md` and is deleted here.
-- **Tests** in each PR: parser, lexer and checker tests that assert the
-  diagnostic code and span (`tests/parser-test.rkt`, `tests/lexer-test.rkt`,
-  `tests/checker-test.rkt`, `tests/modules-test.rkt`); the golden fixtures
-  (`tests/fixtures/vm/*.expected`: exit code, stdout, stderr and diagnostic code
-  on the VM); and the runnable `agentica` blocks of the site page, which
-  `tests/site-examples-test.rkt` checks.
-- **Evaluation.** Section 11's rule holds: before the programming skill teaches
-  a new form as the main style, an evaluation round with a second model checks
-  that agents use it well (`tests/eval/run.py`).
-
-- **§:** 25.1
-  - **Item:** Default parameter values
-  - **Layers:** parser, linker, checker, lowering
-  - **New diagnostic codes:** `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`
-
-- **§:** 25.2
-  - **Item:** Re-exports
-  - **Layers:** parser, linker
-  - **New diagnostic codes:** none
-
-- **§:** 25.3
-  - **Item:** `value.with(field: x)`
-  - **Layers:** parser, linker, checker, lowering, VM `STRUCT_WITH`
-  - **New diagnostic codes:** none
-
-- **§:** 25.4
-  - **Item:** Value equality for data
-  - **Layers:** checker, VM `EQ`/`NE`
-  - **New diagnostic codes:** none
-
-- **§:** 25.5
-  - **Item:** Standalone lambdas
-  - **Layers:** lexer (`lambda` reserved), parser, linker, checker, lowering
-  - **New diagnostic codes:** none
-
-- **§:** 25.6
-  - **Item:** More Enumerable methods (after 8d)
-  - **Layers:** catalog, prelude, checker, lowering, VM error spans
-  - **New diagnostic codes:** none
-
-- **§:** 25.7
-  - **Item:** `unless`: moved to Part C
-
-- **§:** 25.8
-  - **Item:** Statement modifiers: moved to Part C
-
-- **§:** 25.9
-  - **Item:** `File.open` with a block
-  - **Layers:** catalog, checker, lowering, VM builtin (`File.eof?`)
-  - **New diagnostic codes:** none
-
-- **§:** 25.10
-  - **Item:** Heredocs `<<~NAME`
-  - **Layers:** lexer, parser (heredoc flag on the AST string node)
-  - **New diagnostic codes:** `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
-    `LEX-HEREDOC-ONE-LINE`
-
-- **§:** 25.11
-  - **Item:** `format` (after 8d)
-  - **Layers:** catalog (linker name), checker, prelude, lowering, one
-    prelude-only builtin
-  - **New diagnostic codes:** `CHECK-FORMAT-LITERAL`, `CHECK-FORMAT-SPEC`
-
-- **§:** 25.14
-  - **Item:** Pipe operator `\|>`
-  - **Layers:** lexer, parser, checker
-  - **New diagnostic codes:** `PARSE-PIPE-TARGET`, `CHECK-PIPE-METHOD`
-
-### 25.1 Default parameter values
-
-Implemented in 15a: the rules are in `grammar` ("Default parameter values" in
-`docs/grammar/06-semantics.md`). This section keeps the design notes. It was
-built in `compiler/` (the Racket front end named below is gone): the parser
-reads `= expression` after the type (`Ast.Param.default`), the linker resolves
-the default in the declaring module (`rewrite.agc`), `check_defaults.agc` has
-the order and value checks and the type check, `defaults.agc` has the argument
-rules that the checker and the lowering share, and `lowering` emits the missing
-arguments at the call site (`lower_expr.agc`). The simplest choices where the
-design left room: the order and value checks run when the function is
-registered, the type check with the function; a default may not read a module
-constant; the arity message gives the range only for a function with defaults.
-
-```agentica
-def join(xs: List[String], sep: String = ", ") -> String
-  return xs.join(sep)
-end
-
-def main() -> Void
-  puts(join(["a", "b"]))         # a, b
-  puts(join(["a", "b"], "-"))    # a-b
-end
-```
-
-**Syntax:**
-
-```ebnf
-parameter        = NAME, ":", type, [ "=", expression ] ;
-```
-
-The parser takes any expression after `=`, so the checker can give a clear
-diagnostic for one that is not allowed.
-
-**Checker rules:**
-
-- **Defaults only at the end.** After a parameter with a default, every
-  parameter has a default, except a last parameter of type `Fn[...]`, which
-  stays without one so a block can still fill it (an `Fn` parameter has no
-  default):
-  `def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) ->
-Void`.
-  Anything else is `CHECK-DEFAULT-ORDER` at the parameter without a default.
-- **A default is a constant:** an `Int`, `Float` or `String` literal (a minus
-  sign allowed before a number; no `#{...}` in the string), `true`, `false`,
-  `nil`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `LogLevel.Info`
-  for a builtin enum, or `Models.Level.Info` through an import alias). Anything
-  else (a call, a variable, `&name`, a struct, an interpolated string) is
-  `CHECK-DEFAULT-VALUE` at the expression, with a help that says to make the
-  parameter required.
-- **Its type** is checked against the parameter type, like an initializer: `[]`
-  and `{}` take the parameter type as their expected type, and a mismatch is
-  `CHECK-TYPE-MISMATCH` at the default.
-- **Fresh at each call.** The default is built at each call; no call shares a
-  value with another. Since values are immutable, Python's shared mutable
-  default cannot happen anyway.
-- **Calls** to a function with `N` required parameters and `M` in all take `N`
-  to `M` arguments; otherwise `CHECK-ARITY`, whose message says the range
-  ("expects 1 to 2 arguments"). Arguments fill parameters from the left. When
-  the last parameter is a `Fn` without a default, the block, or else the last
-  argument, always goes to it, and the other arguments fill the parameters
-  before it from the left: with `each_line` above,
-  `each_line("a.txt") do |l| ... end` and `each_line("a.txt", 50, &show)` both
-  work.
-- Defaults apply to direct calls, through an import alias too (`Util.join(xs)`).
-  An import-alias call that drops its parentheses (`grammar.md`, "Expressions
-  and precedence") may fill all its defaults: `x = Util.connect` is valid when
-  every parameter of `connect` has a default. A function value always takes
-  every argument: `&join` has type `Fn[List[String], String, String]`, and
-  `.call` needs both.
-- Defaults are part of an exported signature. `main` still takes no parameters.
-  Blocks and lambdas (25.5) take no defaults.
-- This replaces overloading by arity, which user functions do not get (25.13).
-  The builtin catalog keeps its few arity overloads (`Map.get`, `HTTP.client`,
-  `ok`/`ok()`, and the 4-argument `File.open` of 25.9).
-
-**Linker:** a default such as `Level.Info` (or `Models.Level.Info` through an
-alias) is resolved in the module that declares the function, by the linker like
-any other name there, before `lower.rkt` copies it to a call site in another
-module; so the copy never depends on the caller's aliases.
-
-**Lowering:** the checker records the full argument list on the call;
-`lower.rkt` emits the missing arguments as constants at the call site (a
-constant load, an empty list or map, or an `enum` instruction for a nullary enum
-variant). Every call in the bytecode passes all its arguments, so the bytecode
-and the VM do not change.
-
-**`std/logger`:** this item did not block it. The logger had two functions per
-level (`info` and `info_meta`, [section 24.2](24-logging.md#242-stdlogger)).
-When this item landed, `std/logger` dropped its `_meta` functions, and each
-level function takes an optional `fields` parameter with the default `{}`. That
-was a breaking change, which the owner accepted, since the language has no
-outside users.
-
-**Tests:** parsing and spans; each code; `each_line("a.txt", 50)` with no block,
-which passes `50` to `f` and gives `CHECK-TYPE-MISMATCH`, not `CHECK-ARITY`;
-`CHECK-ARITY` with a range; `[]` and `{}` typed by the parameter; a block after
-defaulted parameters; a call through an import alias, and `x = Util.connect`
-without parentheses when every parameter has a default; an exported function
-with an enum default (`level: Level = Level.Info`) called from another module
-that does not import the enum's file; a golden fixture with calls that leave out
-0, 1 and 2 arguments. **Docs:** `grammar.md` (the `parameter` rule; "Functions
-and entry point" drops "no default values"), the programming skill (`SKILL.md`,
-functions, and `references/diagnostics.md` for the new codes),
-`site/content/tour/functions.md`.
+**How an item lands.** Each remaining item changes the front end (`compiler/`)
+and runs on the VM; most are sugar that lowering turns into code the VM already
+runs, so the bytecode format does not change. A real program or an evaluation
+round must ask for it first.
 
 ### 25.2 Re-exports
 
@@ -303,7 +97,7 @@ the checker cannot reject a hand-written wrapper, as with `with`.
 - The alias must be an import of this file: otherwise `CHECK-IMPORT-NAME` with
   the help "unknown module alias", decided in the linker. The name must be
   exported by that module (`CHECK-IMPORT-NAME`, with the "did you mean" help
-  that §24.2 (D9) added).
+  that the logger added).
 - Re-exports are resolved after the file's imports are visited. Today the
   linker's `visit` fills a module's exports before it visits its imports, so
   this changes the order: the plain exports are filled first, the imports are
@@ -342,95 +136,6 @@ alias); a golden fixture. **Docs:** `grammar.md` ("File modules and imports":
 "Imports cannot be re-exported" changes), the programming skill
 (`references/modules.md`), `site/content/tour/modules.md`.
 
-### 25.3 Struct update with `with`
-
-Implemented in 15c: the rules are in `grammar.md` ("Structs and lists"). This
-section keeps the design notes. The owner moved it before the bootstrap
-(2026-10-15), because `compiler/` uses immutable struct updates. It relaxes the
-freeze of row 7.2.7 (it adds syntax to both parsers and rules to the checker),
-and the checker port carries it.
-
-Like Ruby's `Data#with`: a copy of a struct with some fields changed. The
-original is unchanged.
-
-```agentica
-struct User
-  name: String
-  age: Int
-end
-
-def main() -> Void
-  ana = User(name: "Ana", age: 30)
-  older = ana.with(age: 31)
-  puts(older)     # User(name: "Ana", age: 31)
-  puts(ana.age)   # 30
-end
-```
-
-**Syntax:** `postfix_expr` gets one more form,
-`".", "with", "(", named_arguments, ")"`. `with` is not a reserved word; it has
-this meaning only after a `.` and before `(` in the postfix loop, and its
-arguments are always named. `Alias.with(...)` (a `TYPE_NAME` before the dot)
-stays a module call, since a module call is parsed as a primary, not in the
-postfix loop.
-
-**One way:** `with` is the canonical way to change some fields of an existing
-value; a constructor with every field is the way to build a new one. The checker
-does not reject a constructor that copies fields by hand, since it cannot tell
-intent, but the skill teaches `with`.
-
-**Checker rules:**
-
-- The receiver must be a struct (`CHECK-UNKNOWN-METHOD` on any other type, with
-  a help for structs). Each name must be a field of it (`CHECK-UNKNOWN-FIELD`),
-  given at most once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type
-  (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take the field type).
-- A bare `ana.with(...)` whose result is dropped is `CHECK-UNUSED-VALUE`, like a
-  bare `xs.push(4)`: values are immutable, so the call would change nothing.
-- At least one field: `ana.with()` is `PARSE-UNEXPECTED-TOKEN`, since
-  `named_arguments` needs at least one argument. A positional argument
-  (`ana.with(31)`) is `PARSE-UNEXPECTED-TOKEN`, with a help that shows
-  `with(age: 31)`.
-- `with` builds a new value of the struct's type, so it follows the rules of
-  construction: for a type that another module keeps private, it gives the same
-  diagnostic as constructing it (`CHECK-IMPORT-NAME`; the linker gives the node
-  a `visible` predicate: the structs of the file, and the exported structs of
-  the modules it imports directly; a closure in the node today, so the
-  self-hosted linker turns it into data, §35.4 step 3). With generic structs
-  (15.3) the type arguments stay, so a field's new value has the same type as
-  before: `.with(` always parses as the update, and each field is checked after
-  the struct's type arguments are substituted.
-- A field named `with` whose type is `Fn[...]` is `CHECK-REDEFINED-NAME`. (A
-  field named `with` whose type is a type parameter is banned where generic
-  structs land, [section
-  15.3](15-adapters-and-json-inspection.md#153-generic-structs), roadmap 10c.)
-  The rule is added here, in advance, so that calling `Fn` fields without
-  `.call` (10a, §15.1) stays a non-breaking change; otherwise `user.with(...)`
-  would clash with calling an `Fn` field without `.call` (15.1). A data field
-  named `with` stays valid, so a JSON object with a `"with"` key still decodes
-  into a struct; `value.with` without parentheses reads that field, and
-  `value.with(...)` is always the update.
-- **Named arguments appear only here and in struct construction**
-  (`User(name: ..., age: ...)`). Calls to functions stay positional; keyword
-  arguments are decided against (25.13).
-
-**Lowering:** the receiver is evaluated once, then the new values left to right;
-every value sees the old struct. The first plan was today's construction
-instruction, reading the fields that do not change from the receiver, with no VM
-change. It was measured against one new instruction, `STRUCT_WITH`, which copies
-the struct and writes the given fields (the field indexes are resolved at lower
-time and kept in the Updates section of the bytecode, format version 4). The
-instruction is about 8 percent slower for a 2-field struct and 15 to 34 percent
-faster for a struct of 4 to 16 fields (the lexer-state case), so the instruction
-stayed (numbers in the PR of 15c, and in `docs/vm-benchmarks.md`).
-
-**Tests:** each code; a struct from an imported module; nested use
-(`a.with(address: a.address.with(city: "Lima"))`); evaluation order with calls
-that print; a golden fixture, with an independent Python peer; the loader rules
-of the Updates section and a hostile receiver in `loader_test.c`. **Docs:**
-`grammar.md` ("Structs and lists"), the programming skill (`SKILL.md`),
-`site/content/tour/structs.md`.
-
 ### 25.4 Value equality for data
 
 Like Ruby's `Data`, two values of the same struct type are equal when their
@@ -468,8 +173,9 @@ open is never cached. A generic enum's equality depends on its type arguments:
 `Option[Int]` has it, `Option[Fn[Int, Int]]` does not; a user enum is checked
 per use, with its type arguments filled in.
 
-`List.member?` (planned in section 5) uses this wider equality: it takes any
-element type that has equality.
+`List.member?` (a prelude method, in the builtin catalog) uses this wider
+equality: it takes any element type
+that has equality.
 
 Lists, maps and Results are in this item because a struct with a
 `tags: List[String]` field is common, and struct equality without them would
@@ -541,8 +247,7 @@ ranges" text, and the turn cost of the wider `EQ`).
 
 ### 25.5 Standalone lambdas
 
-Listed in [section 11.4](11-ruby-ergonomics.md#114-blocks-and-closures), which
-points here; planned here.
+Planned here.
 
 ```agentica
 inc = lambda do |x: Int| x + 1 end
@@ -605,318 +310,7 @@ closures", the reserved words, the §7 hint row), the programming skill
 (`SKILL.md` and its adapter examples), `site/content/tour/blocks.md` and the
 site's adapter examples, and [section
 15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call),
-whose `getter`/`putter` helpers are replaced by `lambda` once lambdas land;
-section 11.4 then says nothing is open there.
-
-### 25.6 More Enumerable methods
-
-**What exists today:** the `List`, `Range` and `Map` functions and methods are
-in [`docs/grammar/06b-builtins.md`](../grammar/06b-builtins.md) and
-[`06-semantics.md`](../grammar/06-semantics.md) ("Ranges"), and in
-`src/builtins.rkt`. `tally` and `zip` do not exist yet. This item adds the
-missing ones:
-
-```text
-List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]
-List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
-List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
-List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
-List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
-List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
-List.each_slice(list: List[A], size: Int) -> List[List[A]]
-List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]       # K is Int or String
-List.tally(list: List[K]) -> Map[K, Int]                              # K is Int or String
-List.uniq(list: List[K]) -> List[K]                                   # K is Int or String
-List.sum(list: List[N]) -> N                                          # N is Int or Float
-List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]                # O is Int, Float or String
-List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]
-Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void
-Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
-```
-
-**Rules:**
-
-- All are methods by the existing rule (`xs.find do |x| ... end`), keep their
-  inputs, run callbacks once per element left to right (`find`, `take_while` and
-  `drop_while` stop where the answer is known), and use the caller's step
-  budget.
-- **No new aliases.** Each method has one name. Where Ruby has two names, the
-  one Agentica already has wins: `filter` (not `select`), `map` (not `collect`),
-  `find` (not `detect`), `reduce` (not `inject`). The other name is
-  `CHECK-UNKNOWN-METHOD` with a help that names the canonical method, in the
-  foreign-habit hint table of `grammar.md` §7. The aliases that section 11.2
-  already shipped (`length`, `push`, `strip`, `to_i`, ...) stay as they are; no
-  new ones are added.
-- **No second ways.** `reject` is not added: it is `filter` with `!` (help:
-  `xs.filter do |x| !cond end`). The `Range` methods that Ruby's `Enumerable`
-  gives (`select`, `map`, `find`, `sum`) are not added: they are `r.to_a` and
-  then the `List` method (help: `(1..5).to_a.map do ... end`). `each_slice` has
-  no block form: it returns the slices, and a block after it is
-  `CHECK-BLOCK-TARGET` with a help that shows
-  `xs.each_slice(2).each do |pair| ... end`.
-- Ruby returns `nil` from `find`, `min_by` and `max_by` when nothing matches;
-  here they return `error("not found")` or `error("the list is empty")`, like
-  `Range.first`. Ties in `min_by` and `max_by` go to the first element, as
-  `sort_by` keeps equal keys in order. A NaN key never wins `min_by` or `max_by`
-  unless every key is NaN (then the first element wins), which matches `sort_by`
-  putting NaN last. String keys compare by code point with the new builtin
-  `String.compare(a: String, b: String) -> Int` (-1, 0 or 1, the order `sort`
-  uses), since `<` takes only numbers; it is public and also a method
-  (`a.compare(b)`), under exception 5 of the std-first rule (a basic operation
-  on a core type).
-- `partition` returns two lists, `[yes, no]`, since there are no tuples (12.5);
-  with destructuring (Part B) it would read like Ruby.
-- `each_slice(n)` returns the slices. `n < 1` is `RUNTIME-INVALID-COUNT`. The
-  last slice may be shorter.
-- `group_by` and `tally` keep the order in which keys first appear; `uniq` keeps
-  the first copy of each value. The restrictions are written per catalog entry
-  (the comments above): `group_by`, `tally` and `uniq` take the map key types,
-  `sum` takes `Int` or `Float`, and `min_by` and `max_by` take `List.sort_by`'s
-  key types; another type is `CHECK-TYPE-MISMATCH`, as for `sort`.
-- `sum` of an empty list is `0` or `0.0`; an `Int` sum that does not fit is
-  `RUNTIME-INTEGER-OVERFLOW`. Section 5's planned `List.sum` is this one.
-- `Map.each` and `Map.filter` go in insertion order; their blocks take two
-  parameters (`do |k, v|`).
-- **Not here:** `zip` needs tuples to be typed (`List[(A, B)]`); it waits for
-  them (12.5, and destructuring in Part B). `List.member?` is already planned in
-  section 5. `count` stays out (section 5 keeps `size` as the only count).
-
-**Where the code lives: the compiler prelude.** By the std-first rule these are
-Agentica code, not C. But a `std/` module cannot hold them today, for two
-reasons: a user function cannot be generic, and a user function cannot be called
-as a method. So this item adds one small mechanism, the **compiler prelude**:
-
-1. Each function above has a normal entry in the builtin catalog
-   (`src/builtins.rkt`): signature with the catalog's type variables, help text,
-   and a mark that its body is a prelude function. The checker checks calls
-   against the entry like any builtin (methods are resolved by receiver type in
-   `resolve-method`, `src/checker.rkt`), so call sites, methods, aliases, blocks
-   and `agentica help` work as for `List.map`. Nothing new for users.
-2. The bodies live in `stdlib/prelude/list.agc` (and `map.agc`), written in
-   Agentica on the existing builtins. Only prelude files may use the catalog's
-   type variables (`A`, `B`, `K`, ...); user code still cannot. The checker
-   checks a prelude body with each type variable as an opaque type: a value of
-   type `A` can be stored, put in a list, a map value or a Result, used as a map
-   key when the variable is limited to the map key types, returned, and passed
-   to an `Fn` that takes `A`, and nothing else. In the prelude, `Map`'s key
-   variable is always limited to the map key types, so `Map.filter` and
-   `Map.each` are checked once per allowed key type, like `uniq`. Type-variable
-   restrictions belong to each catalog entry, not to a letter (the same letter
-   can mean different things in two entries): an entry may restrict a variable
-   to a short list of types (`group_by`'s key to `Int` or `String`), and such an
-   entry may have one body per allowed type, and the catalog entry names the
-   body for each type: `List.sum` has `sum_int` and `sum_float`, since `0` and
-   `0.0` and the two additions differ. A body that works for every allowed type
-   (`uniq`, which only uses the value as a map key) may be one body, checked
-   once per allowed type.
-3. **Always linked, checked once.** The linker cannot know which prelude
-   functions a program uses: methods and `format` are resolved by the checker,
-   after linking. So the prelude modules are always linked into every program.
-   They are checked once, when the compiler is built, and the result is cached
-   with the embedded source (as `embed-source` embeds `std/` files in
-   `src/stdlib.rkt`), so checking a user program does not pay for them.
-   `lower.rkt` emits only the prelude functions reachable from the checked
-   program (one copy per allowed type that is used, for restricted ones) and
-   calls them like user functions. Prelude files are not importable through
-   `std/`, and their names cannot clash with user names.
-
-**Runtime errors inside prelude code** must look like errors of a builtin, never
-of a file the user did not write. Two definitions first: blocks written in
-prelude files are lowered with the prelude flag, like the prelude functions; and
-a native frame (a `List.map`, `List.reduce`, `Int.times` or `Range.each` running
-a block, `docs/vm/03-ir-and-bytecode.md` §4.3) whose caller is a prelude frame
-belongs to the run of prelude frames: it is transparent to the rule, and its
-call span is replaced the same way a prelude instruction's span is.
-
-- A runtime diagnostic raised while a prelude function runs is reported at the
-  user's call site, or at the argument the builtin rule names (as `List.take`
-  reports `RUNTIME-INVALID-COUNT` at its count argument). For this, `lower.rkt`
-  gives a call to a prelude function the call span and the argument spans, as
-  `call-builtin` already has (`docs/vm/03-ir-and-bytecode.md`), and marks
-  prelude functions in the bytecode. When the VM raises a diagnostic in a
-  prelude frame, it uses the call site of the outermost frame of the innermost
-  run of prelude frames: the call the user wrote. Example: user code calls
-  `each_with_index` (prelude), which calls the user's block, which calls
-  `xs.each_slice(0)` (prelude). The innermost run of prelude frames is
-  `each_slice` alone, so the error points at the `each_slice` call inside the
-  block, not at `each_with_index`.
-- Prelude frames are skipped in stack traces (14b, [section
-  24.3](24-logging.md#243-stack-traces-on-runtime-errors)), like native frames.
-  A user block called from a prelude function keeps its own frame, so an error
-  in the block shows the block and then the user's call.
-- A prelude-only intrinsic, `__fail_arg(code, index, message)`, raises the given
-  `RUNTIME-` code at argument `index` of the current prelude call. The current
-  prelude call is the outermost frame of the innermost run of prelude frames, as
-  in the span rule: the call the user wrote, even when one prelude function
-  calls another. `each_slice` uses it for `RUNTIME-INVALID-COUNT` when `n < 1`
-  (argument 1). It is a catalog entry in `src/builtins.rkt` with a prelude-only
-  flag, so the linker keeps its name; the checker rejects it outside prelude
-  modules (`CHECK-UNKNOWN-NAME`), and the loader check below stays. Prelude-only
-  entries (`__fail_arg` and `__float_fixed`) are left out of `agentica help`,
-  `agentica help --json` and every "did you mean" candidate list; a test checks
-  all three.
-- An overflow inside a prelude body (`sum`) is raised by the VM's own add
-  instruction, so it is reported at the user's call by the first rule.
-- **No tail calls into the prelude.** A call from user code to a prelude
-  function always lowers to `call`, never `tail-call`, as `call-builtin` never
-  is one: a tail call would replace the user's frame, and the span rule would
-  lose the user's call. `return xs.each_slice(0)` in a user function reports the
-  error at that call. A tail call from one prelude function to another may stay,
-  since the frame it replaces is also a prelude frame. A prelude body never
-  tail-calls the user's `Fn` either: `f.call(...)` in prelude code lowers to
-  `call`, never `tail-call`, so the prelude frame stays under the user's block
-  for the span rule.
-
-**Cost contract, and why the prelude waits for 8d.** Every prelude function is
-O(n) in its input, plus its callbacks, and each callback runs once per element
-(`find`, `take_while` and `drop_while` stop early). On today's VM, lists are
-flat arrays: `LIST_GET` is O(1), but `List.append`, `List.concat`, `List.take`
-and `List.drop` copy (`builtin_list_concat` copies both lists, and `take` and
-`drop` go through `list_slice`). So any Agentica loop that builds a list one
-element at a time is O(n²) today, whatever the technique. Until faster lists
-(8d) land, the existing native `List.map`, `List.filter` and `List.reduce` stay
-the only list builders, and the prelude does not start.
-
-After 8d, a list is a persistent vector ([section
-12.4](12-data-structures.md#124-faster-lists)): `push` (`List.append`), `set`
-and indexing are O(log32 n), near constant. Section 12.4 states nothing for the
-other list operations, so the prelude counts `concat`, `take`, `drop`,
-`reverse`, `sort` and `sort_by` as O(n), as today. The bodies:
-
-- build their result with `push` in one pass, or on `map`, `filter` and `reduce`
-  where they fit (`each_with_index` walks with `reduce` and a counter);
-- read with indexing or `List.at` where needed;
-- never call `concat`, `take`, `drop`, `reverse`, `sort`, `sort_by`, `Map.keys`,
-  `Map.values` or `Map.delete` inside a loop or a callback (all O(n)); once,
-  outside any loop, they are fine.
-
-The `grammar.md` table lists each function's cost, as it does for today's list
-operations.
-
-**VM and bytecode format.** This item changes the bytecode format, so it bumps
-the format version (`docs/vm/03-ir-and-bytecode.md` §4):
-
-- `src/bytecode.rkt` writes a prelude flag on each function, and the call span
-  and argument spans on each call to a prelude function (as `call-builtin`
-  already carries several spans).
-- `__fail_arg` is a builtin in the VM's builtin table, called with
-  `call-builtin`, not a new opcode: that is the simplest, since a builtin can
-  already read the current frames and raise a diagnostic, and the interpreter
-  loop does not change. With `__float_fixed` (25.11), it is one of the guarded
-  exceptions to "no internal helper builtins" (`docs/vm/03-ir-and-bytecode.md`
-  §4.5), and the loader guards both.
-- The loader (`vm/loader.c`) checks the flag (0 or 1) and rejects a file that
-  calls a prelude-only builtin (`__fail_arg`, `__float_fixed`) from a function
-  without the prelude flag (`docs/vm/08-loader-and-cli.md`).
-- **Static spans.** Prelude source text is not embedded. Each prelude file gets
-  one entry in the Sources section with its name (`<prelude>/list.agc`) and
-  empty text, and one span on it, `1:1-1:1`; that span is each prelude
-  function's declaration span and the span of all its instructions. The loader
-  accepts it as it is: an empty text has one line of length 0, and column 1 is
-  valid (`docs/vm/08-loader-and-cli.md`, "Spans"). Span index 0 was the other
-  choice, but it is the program's span and would point into user code.
-- **The VM always replaces that span at run time** with the span rule above.
-  Every reader of an instruction's span applies the rule when the frame is a
-  prelude frame: `RUNTIME-STEP-LIMIT` at a `STEP` (including the extra spans
-  `s + k` of a merged step) and at the step a counting native frame charges at
-  its call's span, `RUNTIME-INTERNAL`, every other runtime diagnostic
-  (`agc_fail`), 14a tracing where a trace line names a place, and 14b stack
-  traces (which skip prelude frames). If the rule finds no user frame (a crafted
-  `.agcb` that puts the prelude flag on `main`, or on the entry of a task
-  spawned from user code), the VM falls back to the static prelude span; a VM
-  test loads such a file and checks that the run fails with that span and does
-  not crash. Other crafted inputs, each with a VM or loader test: `__fail_arg`'s
-  index is checked at run time, and an index past the call's argument spans
-  falls back to the call span, or to the static prelude span when there is no
-  call span; its code must start with `RUNTIME-`, or the result is
-  `RUNTIME-INTERNAL`; the loader rejects argument spans on a `CALL` whose target
-  lacks the prelude flag; and a prelude-flagged function reached through
-  `CALL_VALUE` or `TAIL_CALL` from a non-prelude frame uses the call-span
-  fallback. A test runs a prelude function with `--max-steps` small enough to
-  stop inside it and checks the span. Golden tests also cover an overflow inside
-  a `reduce`-based `sum` (the run is `sum`, the native `reduce`, the prelude
-  block: the error points at the user's `sum` call) and a step limit hit inside
-  an `Int.times` or `Range.each` loop of a prelude body.
-
-These, with the span rule, are the only VM changes of this item: the prelude
-flag, the argument spans on prelude calls, the name-only sources, `__fail_arg`,
-and the public builtin `String.compare`.
-
-This is not user generics: only files that ship with the compiler use type
-variables, and only behind catalog signatures. A function moves to C later only
-when a measurement shows it is hot, as the std-first rule says; its catalog
-entry stays the same.
-
-**Tests:** each function on lists of `Int`, `String` and structs, empty lists
-and the edge cases above, golden fixtures, the site examples, and checker tests
-for the restricted type variables and for a prelude body that misuses an opaque
-type. Runtime errors, with fixed expected stderr (span and stack):
-`each_slice(0)` (count error at the argument), an `Int` `sum` that overflows (at
-the call), and an error inside the user's block reached through a prelude
-function (the block's frame, then the user's call; no prelude frame).
-`return xs.each_slice(0)` inside a user function (the error at that call, not
-lost to a tail call). Cost: a golden fixture runs each function on a
-100,000-element list and records the step count, so a body that loops more than
-once per element changes the golden; and a test reads the prelude sources and
-rejects `concat`, `take`, `drop`, `reverse`, `sort`, `sort_by`, `Map.keys`,
-`Map.values` and `Map.delete` inside a loop, a block or a callback, since an
-O(n) builtin in a loop is quadratic in time but not in steps. Checker tests for
-the hints: `select`, `collect`, `detect`, `inject` and `reject`
-(`CHECK-UNKNOWN-METHOD` with the canonical name), and a block after `each_slice`
-(`CHECK-BLOCK-TARGET`). `min_by` and `max_by` with ties (first wins), with NaN
-keys (NaN never wins unless all keys are NaN) and with String keys;
-`String.compare` on equal strings, prefixes and non-ASCII text against Python's
-code-point order. The nested case of the span rule (user, `each_with_index`,
-block, `each_slice(0)`). A test that `__fail_arg` in user code is
-`CHECK-UNKNOWN-NAME`, and a loader test that rejects a file calling it from a
-function without the prelude flag. **Docs:** `grammar.md` (the `List` and `Map`
-tables with each function's cost, and the §7 hint table), the programming skill
-(`references/builtins.md`), `site/content/library/data-structures/list.md`,
-`map.md` and `string.md` (`String.compare`), the development skill (the
-prelude), `docs/vm/03-ir-and-bytecode.md` (the prelude flag, the call spans,
-`__fail_arg`, the format version, and the §4.5 sentence "There are no internal
-helper builtins", which gains the guarded exceptions) and
-`docs/vm/08-loader-and-cli.md` (the loader checks).
-
-**As built (2026-10-16, roadmap item 15f, in `compiler/`, `stdlib/prelude/` and
-the VM).** The design above stands, with these choices where it left room or
-named the Racket front end:
-
-- The prelude is checked and attached for each program that calls a prelude
-  method, not linked into every program and cached at build time: the checker
-  records the function each call runs (`St.bodies`), and `compiler/prelude.agc`
-  then reads the prelude files, parses the functions the program calls, renames
-  them `@prelude::file::name` and checks them, with the node ids after those of
-  the program. A program that calls no prelude method reads no prelude file.
-  The cost is a check of those functions on each compile, and a test compiles a
-  program that calls every method.
-- A type variable of a prelude body is an opaque type (`Type.Var`), which
-  `Cx.prelude` allows as a `Map` key or `Set` element, so `group_by`, `tally`,
-  `uniq`, `Map.each` and `Map.filter` are checked once, not once for each key
-  type. The limit of a variable (`group_by` on an `Int` or `String`) is checked
-  at the call, `CHECK-TYPE-MISMATCH` at the argument that fixed the variable.
-  `sum`, `min_by` and `max_by` have one body for each allowed type (`sum_int`,
-  `min_by_string` ...), chosen by the checker.
-- The prelude flag is not a field of the IR: a function has it when its source
-  is named `<prelude>/...`. Calls of a prelude function in the IR are `call`
-  with the argument spans after the call span.
-- The loader checks that the argument spans of a call of a prelude function are
-  in range. It cannot tell, from the bytecode, a `CALL` that carries them from
-  one that does not, so it does not reject spans on a call of a function
-  without the flag.
-- The loader reads format 5 together with format 6 (the format of the
-  checked-in `bootstrap/stage0.agcb`, which the first binary of the bootstrap
-  still writes), until stage0 is refreshed.
-
-### 25.7 `unless` (moved to Part C)
-
-Decided against by the one-way principle: `unless c` is a second way to write
-`if !c`. See 25.13 for the hint that replaces it.
-
-### 25.8 Statement modifiers (moved to Part C)
-
-Decided against by the one-way principle: `S if c` is a second way to write an
-`if` statement. Section 11's rejection stays, with its help. See 25.13.
+whose `getter`/`putter` helpers are replaced by `lambda` once lambdas land.
 
 ### 25.9 `File.open` with a block
 
@@ -968,7 +362,7 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
   fails (it flushes writes, so its error matters). If the block returned an
   error, the call returns that error, and a close error is dropped.
 - A runtime diagnostic inside the block ends the task (the whole run only in
-  `main`, §37); the handle, owned by the task, is closed by the crash, or by the
+  `main`); the handle, owned by the task, is closed by the crash, or by the
   run's end in `main`, as today. A handle that leaves the block (returned inside
   the Result or captured by a lambda) is closed; using it gives the error
   `Result` of a closed handle, as today.
@@ -1011,138 +405,6 @@ result above. **Docs:** `grammar.md` ("Files and paths", with `File.eof?`), the
 programming skill (`references/files.md`, which teaches the block form as
 canonical, and says that `File.eof?` returns `Result[Bool]`, unlike `IO.eof?`,
 so the loop needs `try`), `site/content/library/io-and-system/files.md`.
-
-### 25.10 Heredocs
-
-Ruby's squiggly heredoc: a multi-line string whose common indentation is
-removed.
-
-```agentica
-def help_text(name: String) -> String
-  text = <<~TEXT
-    Usage: #{name} [options]
-
-      --verbose   print more
-    Exit code 0 on success.
-  TEXT
-  return text
-end
-```
-
-The value is
-`"Usage: tool [options]\n\n  --verbose   print more\nExit code 0 on success.\n"`
-for `name = "tool"`.
-
-**One way:** a heredoc is the canonical form for text of two or more lines. A
-heredoc with one body line (or none) is `LEX-HEREDOC-ONE-LINE`, with a help that
-shows a normal string literal (`"text\n"`). Escapes such as `\n` in normal
-strings stay: this is a deliberate, stated exception to the one-way rule for
-short text. The threshold: a heredoc is never required (`"a\nb"` stays valid),
-and a heredoc needs two or more body lines.
-
-**Lexer, and two small checks.** The lexer turns a heredoc into today's token
-kinds (`string`, `interp-start`, `interp-middle`, `interp-end`), with a
-`heredoc?` field set on each token, so later stages can tell a heredoc apart.
-The parser builds the usual string (or interpolation) node and carries the field
-to it as a heredoc flag, so the flag is kept for the `case` pattern, import path
-and `format` checks; 15j adds the flag. Lowering and the VM do not change.
-
-- **Start:** `<<~` followed directly by an uppercase name (`[A-Z][A-Z0-9_]*`).
-  The rest of the line is lexed as usual (`puts(<<~TEXT)` works); the body
-  starts on the next line. Several heredocs on one line take their bodies one
-  after the other, in order, as in Ruby.
-- **End:** a line with only optional spaces and the same name. A tab before the
-  name is `LEX-HEREDOC-INDENT`, as in the body. The body lines and the end line
-  produce no `NL` tokens; the line that holds `<<~NAME` ends with its `NL`, when
-  the lexer would emit one there (not inside delimiters).
-- **Indentation:** the smallest number of leading spaces among the body lines
-  that are not blank is removed from every line. A blank line (spaces only)
-  becomes an empty line. A tab in a line's leading whitespace is
-  `LEX-HEREDOC-INDENT`, with a help to use spaces, because tab widths make the
-  result unclear. Each body line ends with `\n`, the last included. A CR before
-  the LF of a body line is dropped, as the lexer already turns CRLF into LF.
-- **Token order.** At the place of `<<~NAME`, the lexer emits the heredoc's
-  tokens: one `string` token without interpolation, or `interp-start`, the
-  tokens of each `#{...}` expression, `interp-middle` and `interp-end`, as for a
-  normal string. Then come the tokens of the rest of the opener line, then its
-  `NL`, when the lexer would emit one there, then the tokens after the end line.
-  So the parser sees one string primary where `<<~NAME` stands.
-- **Spans.** The string piece tokens (`string`, `interp-start`, `interp-middle`,
-  `interp-end`) all take the span of `<<~NAME`, so every node that `span-from`
-  builds in `src/parser.rkt` (the start of its first token to the end of the
-  last consumed token) stays on the opener line, with start before end. The
-  tokens inside `#{...}` keep their real line and column in the body: the lexer
-  finds the indentation with a first pass over the body lines, then lexes each
-  line from its real position after the indentation, so the indentation is cut
-  from the text, not from the source positions. These spans lie after their
-  parent's span, so spans are not monotonic here: a child may lie outside its
-  parent. The PR checks that no code assumes a child span lies inside its
-  parent's (diagnostics print each span on its own line, which works).
-- **Inside parentheses:** `foo(<<~A, x)` works, and so does `foo(<<~A,` with the
-  next argument on the line after the end line: inside delimiters no `NL` is
-  emitted, the body is read when the opener line ends, and the call goes on
-  after the end line, as in Ruby.
-- **Escapes and interpolation** are those of a normal string: `\n`, `\r`, `\t`,
-  `\"`, `\\`, `\#`, and `#{...}`, which must end on its line; a bad escape is
-  `LEX-INVALID-ESCAPE`. A `"` needs no escape. The indentation is removed from
-  the source text before escapes and interpolation, so an interpolated value is
-  never re-indented.
-- **Errors:** end of file before the end line is `LEX-UNTERMINATED-HEREDOC` at
-  `<<~NAME`. A name that is not uppercase (`<<~text`) is `LEX-UNEXPECTED-CHAR`
-  at `<<~`, with a help that shows `<<~TEXT`. Only the squiggly form exists:
-  `<<NAME`, `<<-NAME` and the quoted forms (`<<~'NAME'`) are
-  `LEX-UNEXPECTED-CHAR` with a help that shows `<<~NAME` (and `\#` for text
-  without interpolation). Every other `<<` keeps today's tokens (two `<`).
-  Ruby's push, `xs << x`, gets a new `grammar.md` §7 hint row:
-  `xs = xs.push(x)`.
-- `case` patterns and `import` paths take plain string literals only: a heredoc
-  there is `PARSE-UNEXPECTED-TOKEN`, with a help to use a `"..."` literal.
-  `format` rejects a heredoc format string with `CHECK-FORMAT-LITERAL` (25.11),
-  because spans inside a heredoc are not exact columns of a one-line literal.
-
-**Tests:** in `tests/lexer-test.rkt`: indentation, blank lines, interpolation
-and escapes, two heredocs on one line, a heredoc inside a call,
-`LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE` (for
-one body line and for none) and `LEX-UNEXPECTED-CHAR` (`<<~text`, `<<NAME`,
-`<<-NAME`, `<<~'NAME'`) with their spans, a CRLF body, a tab before the end
-name, a heredoc as a `case` pattern and an import path; a golden fixture; a site
-example. **Docs:** `grammar.md` (Literals: "no multiline strings" changes; the
-§7 hint row for `xs << x`), the programming skill (`SKILL.md`, and
-`references/diagnostics.md` for the new codes), `site/content/tour/strings.md`.
-
-**As built** (post-bootstrap step 5, part A; the Racket front end was gone, so
-all of it is in `compiler/`). The rules above hold. Where the design left room:
-
-- No `heredoc?` field on the token and no flag on the string node. The lexeme
-  of a heredoc token is its opener (`<<~NAME`) and the lexeme of a string
-  literal starts with `"`, so `Base.heredoc?` tells them apart in the two
-  places that need it today (the `case` pattern and the import path). The flag
-  is added with `format` (15k), the only other reader.
-- The lexer gives `<` a character class of its own (`CharClass.Less`), so the
-  hot operator arm does not test for `<<`. The main loop became `lex_from`,
-  which `lex` calls once; a heredoc calls it again for each `#{...}` of its
-  body, started on the body line with the `#` frame pushed, and it returns at
-  the `}` that closes that frame. So the tokens inside an interpolation are the
-  ones of a normal string, with real positions.
-- The jump over the bodies is a `resume` point of the main loop: the heredoc
-  sets it, and the line break of the opener line emits its `NL` and goes to
-  it. A second heredoc on the same line starts at the point the first left.
-- The end line is exact: optional spaces, the name, then the line break (or the
-  end of the file). Text after the name makes it a body line. Body lines count
-  for the "two or more lines" rule when blank, too.
-- `<<NAME` is `LEX-UNEXPECTED-CHAR` when a capital follows `<<` (or `<<-`);
-  `<<` before anything else is two `<` tokens, as before. The span of
-  `<<NAME` is `<<`, of `<<-NAME` and `<<~text` the three characters.
-- A heredoc inside any `#{...}` is `LEX-UNTERMINATED-STRING`, as the line
-  break that ends the interpolation would be.
-- `xs << x` gets its help in `primary_help` of the parser (the second `<` is
-  where an expression should start).
-- No `format` exists yet (15k), so `CHECK-FORMAT-LITERAL` for a heredoc waits
-  for it.
-- Spans inside a body lie after the spans of the nodes that hold them. The
-  parser, the checker, the lowering and the diagnostic printers take each span
-  as it is, and the goldens `heredoc`, `heredoc-type-error` and
-  `tests/fixtures/vm/heredoc-error` show a diagnostic inside a body.
 
 ### 25.11 `format`
 
@@ -1229,9 +491,10 @@ between literals.
   (name, signature, effects: none, description), with the arity given as "2 or
   more" (a format with no conversion is rejected).
 
-**Where the code lives.** It waits for 8d with the prelude (25.6). By the
+**Where the code lives.** It waits for 8d with the compiler prelude. By the
 std-first rule, padding, decimal and hex text are Agentica code in a prelude
-file, `stdlib/prelude/format.agc` (25.6; these functions use no type variables).
+file, `stdlib/prelude/format.agc` (the design is in the development skill's
+`references/stages.md`).
 One part is a builtin under exception 5 of the rule:
 `__float_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise
 `RUNTIME-INVALID-COUNT`; NaN and the infinities give Ruby's `NaN`, `Inf` and
@@ -1276,69 +539,6 @@ another feature first. None is planned; each needs its own spec before a phase
 takes it, and each must also pass the one-way principle (top of this section)
 before it is planned.
 
-#### 25.12.1 `case/in` pattern matching
-
-**What:** Ruby 3's `case value in pattern`: nested patterns
-(`Shape.Box(Point(x, 0), _)`), struct patterns by field (`User(name:, age:)`),
-list patterns (`[first, *rest]`), and guards (`in x if x > 0`). **Why:** the
-most valuable item of this part; it removes nested `case` statements and lets
-agents write the Ruby they know. Before step 5, patterns were one level deep
-with no guards. **Why not now:** high complexity: exhaustiveness and
-unreachable-arm checks for nested patterns, list patterns with a rest,
-bindings in guards, and the lowering to a decision tree. **Open questions:**
-keep `->` arms or take `in`; how list rests fit immutable lists; which patterns
-`Map` gets; whether `case ... in` becomes an expression.
-
-**As decided (post-bootstrap step 5).** Guards and nested patterns are built,
-in `compiler/` only, as a smaller form of this idea; the rest stays "to
-evaluate later" and out of scope: struct patterns by field, list patterns with a
-rest, `case ... in` and `case` as an expression. The owner approved guards and
-nested patterns on 2026-10-15 ("multi-clause Elixir-style functions are not
-wanted; a case with guards covers them"); the details below were decided under
-the owner's delegation.
-
-1. **Guards.** `pattern if condition -> ...`, like Ruby's `in x if x > 0`.
-   `if` is already a keyword, so there is no new reserved word, and `when`
-   stays unreserved. The condition is a `Bool` (`CHECK-TYPE-MISMATCH`) and may
-   use the bindings of its arm. A guarded arm never counts toward
-   exhaustiveness, and the same pattern may come again in a later arm, guarded
-   or not, without `CHECK-UNREACHABLE-CASE-ARM`. A guarded catch-all
-   `_ if c ->` is allowed and does not make the case exhaustive; a catch-all
-   must be last only when it has no guard. The parser looks for the guard of an
-   arm up to the first `->` of its line.
-2. **Nested patterns.** In a payload position (of a qualified variant,
-   `ok(...)` or `error(...)`) any pattern may appear: a literal (a negative
-   number too), `_`, a name, or a nested variant, `ok(...)` or `error(...)`,
-   to any depth, within the parser's nesting limit (a nested variant is one
-   level). Payloads stay positional. A name may appear once in an arm
-   (`CHECK-SHADOWED-NAME`, the code that a repeated binding already had).
-3. **Exhaustiveness and reachability** stay simple and conservative. An arm
-   covers its top-level variant only when it has no guard and every
-   sub-pattern is irrefutable (a name or `_`); an arm with a literal or a
-   nested variant is treated like a guarded one. An arm is unreachable when an
-   earlier unguarded arm already covers its variant with irrefutable
-   sub-patterns, or after an unguarded catch-all. There is no deeper analysis:
-   a case on `ok(Option.Some(n))` and `ok(Option.None)` still needs `ok(_)`.
-4. **Lowering.** The sequential test-and-jump chain of each arm gains the
-   nested tests (the payload is read into a temporary register, then its tag
-   or literal is tested) and the guard, after the bindings, as one more
-   condition. A failed test falls through to the next arm. The bytecode and
-   the VM do not change.
-
-**Built (2026-10-16).** The grammar is in `docs/grammar/05-syntax.md` and
-`06-semantics.md`; the example is `examples/case-guards.agc`. `compiler/` does
-not use the syntax yet, because stage0 cannot compile it (the two-step refresh
-of §35.3, a later PR).
-
-#### 25.12.2 Keyword arguments (moved to Part C)
-
-Decided against by the one-way test: a second way to pass the same argument. See
-25.13.
-
-#### 25.12.3 `loop do ... end` (moved to Part C)
-
-Decided against by the one-way test: `while true` already does it. See 25.13.
-
 #### 25.12.4 `then` and `tap`
 
 **What:** `x.then do |v| ... end` and `x.tap do |v| ... end`. **Why:** pipelines
@@ -1358,7 +558,7 @@ all, and how it relates to user `Option[T]` and to `JsonField` (§17).
 
 **What:** `a, b = pair`, block parameters `|(k, v)|`, multiple return values.
 **Why:** `partition`, `zip` and `Map` iteration read better. **Why not now:** it
-needs tuples ([section 12.5](12-data-structures.md#125-later)). **Open
+needs tuples (roadmap 8's "Later" list). **Open
 questions:** tuple syntax and types, and whether lists can be destructured with
 a length check.
 
@@ -1369,7 +569,8 @@ streams of unknown length without building lists. **Now in [section
 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):**
 `File.each_line` reads a big file line by line in bounded memory (§27.4, step 1,
 order row 7.2.1h), and a lazy `Stream[T]` is planned for after the prelude of
-25.6 (§27.4, step 2, order step 8.2); generators with `yield` (`Enumerator.new`,
+the prelude (§27.4, step 2, order step 8.2); generators with `yield`
+(`Enumerator.new`,
 fibers) are decided against (§27.5), since a task that sends into a channel
 (§27.2) is the producer, and `xs.lazy` gets a help.
 
@@ -1404,7 +605,7 @@ one exists.
   (the former §7) are not planned: user types have no methods; a struct of `Fn`
   fields and wrapper functions compose behavior while retaining static checking.
   The §7 proposal's method-attachment syntax adds no need beyond that
-  pattern. For chaining user functions, use `|>` (§25.14).
+  pattern. For chaining user functions, use `|>` (in the grammar).
 - **Duck typing:** a struct of `Fn` fields is the interface, checked by name
   (15.1).
 - **Symbols:** `String` keys and enums cover them.
@@ -1417,7 +618,7 @@ one exists.
   already the map literal.
 - **Keyword arguments** (was 25.12.2): `connect("a", port: 8080)` would be a
   second way to pass an argument that can already be passed by position. Calls
-  stay positional; `with` (25.3) and struct construction stay the only places
+  stay positional; `with` and struct construction stay the only places
   with named arguments.
 - **`loop do ... end`** (was 25.12.3): `while true ... end` already does it, and
   `break` cannot leave a block, so it would be a statement that looks like a
@@ -1435,17 +636,17 @@ one exists.
   then `end`).
 - **New method aliases** (`select`, `collect`, `detect`, `inject`) and **second
   ways** (`reject`, the `Range` Enumerable methods, the block form of
-  `each_slice`): see 25.6; each gets `CHECK-UNKNOWN-METHOD` (or
+  `each_slice`): see the compiler prelude; each gets `CHECK-UNKNOWN-METHOD` (or
   `CHECK-BLOCK-TARGET`) with the canonical form.
-- **`*args` and `**opts` splats:** a `List` or a struct parameter, and defaults
-  (25.1).
+- **`*args` and `**opts` splats:** a `List` or a struct parameter, and
+  defaults.
 - **`%w[...]`:** a list literal.
 - **`raise`/`rescue`/`ensure`:** errors are `Result` values with `try`;
   `File.open` with a block (25.9) covers `ensure`.
 - **User operator overloading, and overloading by argument type or by arity:**
   it breaks the inference of blocks and of empty literals (`[]`, `{}`) from the
   expected parameter type, makes diagnostics worse (which overload did you
-  mean), and needs name mangling in the VM and the linker; defaults (25.1) cover
+  mean), and needs name mangling in the VM and the linker; defaults cover
   arity. Struct equality (25.4) is provided by the compiler, not by the user.
 - **General and procedural macros:** agents write worse code in custom DSLs,
   diagnostics land in expanded code, and they need a new stage; blocks,
@@ -1460,106 +661,7 @@ one exists.
    for example `Storage` with `get` and `put`.
 2. A wrapper (decorator) function takes a base value and returns a new one with
    some fields replaced, keeping the others:
-   `def logged(base: Storage) -> Storage` returns `base.with(get: ...)` (25.3),
+   `def logged(base: Storage) -> Storage` returns `base.with(get: ...)`,
    where the new `get` logs and then calls `base.get`.
 3. A facade module passes on names from other modules with re-exports (25.2),
    like Elixir's `defdelegate`.
-
-### 25.14 Pipe operator `|>`
-
-**What.** `x |> f(a, b)` means `f(x, a, b)`: the left value becomes the first
-argument of the call on the right. Example:
-
-```agentica
-def parse(text: String) -> Result[Int]
-  return text.trim.to_int
-end
-
-def validate(n: Int) -> Result[Int]
-  if n < 0
-    return error("negative")
-  end
-  return ok(n)
-end
-
-def load(path: String) -> Result[Int]
-  return path |> try File.read_text(1000) |> try parse() |> validate()
-end
-```
-
-**Why.** Builtins already chain with `.`: `s.trim.split(",")`. User functions
-cannot be called as methods, so code nests: `validate(parse(s.trim))`. `|>`
-reads left to right, with no change to types or the VM. Ruby tried `|>` in its
-2.7 development (Feature #15799) and took it out before the release, because
-there it only repeated `.`. Here user functions have no method form, so `|>`
-adds what `.` cannot.
-
-**Rules:**
-
-- The right side is a call with parentheses: `name(args)` or `Alias.name(args)`
-  (a user function, an imported function or a builtin), optionally preceded by
-  `try`: `x |> try f(a)` means `try f(x, a)`. Anything else on the right (a bare
-  name, a field, an index, a method chain such as `f(1).g`, a literal) is
-  `PARSE-PIPE-TARGET` at the right side, a new code. Its help says to wrap the
-  expression in parentheses and use `.` on the result, for example
-  `(x |> f()).unwrap!`.
-- A call with a trailing block works: `xs |> each_pair() do |a, b| ... end`
-  passes `xs` first. Here `each_pair` is a user function whose last parameter is
-  a `Fn` that takes two values.
-- **One way.** A builtin call that has a method form for the left value's type
-  is `CHECK-PIPE-METHOD`, a new code, at the right side. Its help shows the
-  method form: `x |> String.trim()` gives the help `x.trim`. So a builtin with a
-  method form is always written with `.`, and `|>` is for user functions and for
-  builtins without a method form. Mixing is fine:
-  `s.trim |> try parse() |> try validate()`.
-- **Precedence.** `|>` binds lower than `+` and `-`, and higher than the
-  comparisons `<`, `<=`, `>` and `>=`. So `a + 1 |> f()` is `f(a + 1)`, and
-  `x |> f() == y` is `f(x) == y`. It groups from left to right:
-  `x |> f() |> g()` is `g(f(x))`. `try` and unary operators bind tighter:
-  `try x |> f()` is `f(try x)`. To propagate a step's error, put `try` on the
-  right: `s |> try parse() |> try validate()` is `try validate(try parse(s))`.
-- **Evaluation order** is the call's: the left value first, then the other
-  arguments left to right, as in `f(x, a, b)`.
-- **Lines.** No implicit continuation
-  ([docs/grammar/04-lexical.md](../grammar/04-lexical.md), section 4): a chain
-  over several lines goes in parentheses, one step per line:
-
-  ```agentica
-  config = (path
-    |> try File.read_text(1000)
-    |> try parse()
-    |> try validate())
-  ```
-
-- **Diagnostics** of the call (arity, types, unknown name) are the normal ones
-  for `f(x, a, b)`. The inserted argument's span is the left expression's span,
-  so a type error on it points at the left side.
-
-**Left out:** a placeholder for other argument positions (`x |> f(a, _)`); `|>`
-into a bare function value (`x |> f`); a reverse pipe. Each waits for a real
-need.
-
-**Where it lives.** Lexer: a new `|>` token (longest match, next to `|` and
-`||`; block parameters `do |x|` are unaffected). Parser: a binary level between
-`+ -` and the comparisons; it builds the ordinary call node with the left
-expression as argument 0 and a `piped` flag (or an equivalent marker), so the
-checker can apply `CHECK-PIPE-METHOD`; `PARSE-PIPE-TARGET` comes from the
-parser. Checker: the method-form rule only. No change to lowering, bytecode or
-the VM.
-
-**Tests** (codes and spans, not message text): in `tests/lexer-test.rkt`, the
-token, and that `do |x|` and `||` still lex; in `tests/parser-test.rkt`,
-precedence against `+`, `==`, `try` and unary minus, left associativity, a
-trailing block, and `PARSE-PIPE-TARGET` for a bare name, a field, an index and
-`f(1).g`, with spans; in `tests/checker-test.rkt`, `CHECK-PIPE-METHOD` with its
-span and help for `s |> String.trim()`, no error for a builtin without a method
-form, a type error on the piped value at the left span, and an arity error; one
-golden VM fixture in `tests/fixtures/vm/` with a chain of user functions, a
-`try` step and a multi-line parenthesized chain; and a site example, which
-`tests/site-examples-test.rkt` checks. **Docs** when it lands:
-`docs/grammar/04-lexical.md` (the token), `docs/grammar/05-syntax.md` (the
-precedence table and the rule), `docs/grammar/07-diagnostics.md` (the two
-codes), the programming skill (`.agents/skills/agentica-programming/SKILL.md`:
-its precedence table and one short paragraph; `references/diagnostics.md` for
-the two codes), and a site page (`site/content/tour/functions.md`) with a
-runnable example.

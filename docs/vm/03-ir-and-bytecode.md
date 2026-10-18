@@ -317,7 +317,8 @@ behavior.
   - **Opcodes:** `GLOBAL a bx`, `GLOBAL_SET a bx`
   - **Meaning:** `R[a] = G[bx]` and `G[bx] = R[a]`, where `G` is the table of
     the Globals section (4.6), the module constants of
-    [§44](../future/44-module-constants.md). `GLOBAL` of a slot that was never
+    the grammar's `Module constants` section. `GLOBAL` of a slot that was
+    never
     set is `RUNTIME-INTERNAL`.
 
 There are 52 opcodes. Everything else, including `ok`, `error`, `puts` and every
@@ -452,7 +453,7 @@ header and the entry.
     of the entry file (`main.agc`, `lib/util.agc`, `../shared/x.agc`) or
     `std/NAME.agc` (a user file under a `std/` folder is `./std/NAME.agc`),
     never an absolute path, so the bytes do not depend on where the program
-    lives (§35.4). The VM prints it in diagnostics and stack traces, under
+    lives (§18.3). The VM prints it in diagnostics and stack traces, under
     `--source-root DIR` when given (§9).
 
 - **Section:** Spans
@@ -486,7 +487,7 @@ header and the entry.
 
 - **Section:** Globals
   - **Entry:** `u32` slot count, nothing else (at most 65,535). The slots are
-    the module constants of [§44](../future/44-module-constants.md); the
+    the module constants (the grammar's `Module constants` section); the
     initializers are ordinary functions that the entry calls. A program without
     constants writes 0.
 
@@ -500,7 +501,7 @@ header and the entry.
 
 - **Section:** Entry
   - **Entry:** `u32` index of the entry function: `main`, or `<start>` in a file
-    with module constants (§44), which sets the slots and tail-calls `main`
+    with module constants, which sets the slots and tail-calls `main`
 
 - The Sources section embeds the full source texts, so the VM prints diagnostics
   without reading files. A linked program has one entry per file a span points
@@ -533,7 +534,8 @@ distinct type
 
 ### 4.7 The prelude
 
-The compiler prelude ([§25.6](../future/25-ruby-typed-idioms.md)) is Agentica
+The compiler prelude (see the development skill's `references/stages.md`) is
+Agentica
 code that the compiler adds to a program: the bodies of `List.find`,
 `List.group_by` and the other prelude methods. Its functions are ordinary
 functions, with differences that make an error inside them read as an error at

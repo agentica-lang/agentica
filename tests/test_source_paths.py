@@ -1,4 +1,4 @@
-"""The source paths stored in an .agcb are relative to the project root (docs/future/35-self-hosting.md, 35.4).
+"""The source paths stored in an .agcb are relative to the project root (docs/future/18-front-end-language.md §18.3).
 
 The root is the folder of the entry file. The bytes must not depend on where
 the project lives or on how the entry file is named on the command line. A

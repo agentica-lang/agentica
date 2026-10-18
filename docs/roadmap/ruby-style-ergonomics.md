@@ -1,14 +1,15 @@
 ## Ruby-style ergonomics
 
-Specified in [`docs/future/11-ruby-ergonomics.md` section
-11](../future/11-ruby-ergonomics.md#11-ruby-style-ergonomics). Agents write Ruby
+The rules are in `grammar.md` and the programming reference; the rule for
+which forms to accept, and the open items, are in
+[§25](../future/25-ruby-typed-idioms.md#25-ruby-typed-idioms). Agents write Ruby
 and Python habits (`docs/eval.md`); accept the Ruby forms that keep static
 checking and immutable values. One pull request per step, each stacked on the
-previous one and moving its part of section 11 into `grammar.md` and the
-programming reference.
+previous one and moving its part into `grammar.md` and the programming
+reference.
 
 - [x] Specify operators, methods on builtins, interpolation, blocks and
-  closures, and hints in `docs/future/11-ruby-ergonomics.md` section 11.
+  closures, and hints.
 - [x] Operators: `!`, `&&`, `||`, and compound assignment (`+=`, `-=`, `*=`,
   `/=`, `%=`).
 - [x] Methods on builtin types with the Ruby aliases, and `CHECK-UNUSED-VALUE`

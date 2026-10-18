@@ -6,8 +6,9 @@ signals of its container, send signals to its children and to a pid it did not
 start, and drain `std/http` on a stop. Its items keep the numbers of §46.7
 (46a to 46d), so the spec and this file match. It is row 7.8 of the
 [roadmap](README.md) order. Items 46c and 46d wait for the bootstrap of the
-self-hosted front end ([§35](../future/35-self-hosting.md), step 8). Items 46a
-and 46b may run earlier, as VM-only rows, when no other VM PR is waiting.
+self-hosted front end ([§18](../future/18-front-end-language.md), step 8).
+Items 46a and 46b may run earlier, as VM-only rows, when no other VM PR is
+waiting.
 
 46a and 46b are VM C code and builtin table rows, which row 7.2.7 allows. That
 holds for option (B) of §46.3.1. Option (A), or an enum parameter the checker
@@ -29,7 +30,7 @@ docs.
     `src/builtin-types.rkt` and the `vm-builtins` names in `src/lower.rkt`
     (row 7.2.7 data). The compiler catalog is regenerated in the same PR, and
     `tests/frontend-catalog-test.rkt` checks it. If this PR lands after step 8
-    of §35, the builtin data lives in `compiler/` and the catalog is
+    of §18, the builtin data lives in `compiler/` and the catalog is
     regenerated with the generator of that time; the `src/` names above apply
     to a PR before the bootstrap.
   - **Fixture:** `struct Signal` in `tests/fixtures/vm/http-server-close.agc`
@@ -61,7 +62,7 @@ docs.
 - [ ] **46c: the driver (§46.7, §46.8 question 7).**
   - **Driver:** the driver starts the VM in its own process group and forwards
     the signal once (§46.8, question 7, option (c)), in place of the 2-second
-    wait, which stays until then. It changes the driver of step 8 of §35, so
+    wait, which stays until then. It changes the driver of step 8 of §18, so
     it comes after the bootstrap.
   - **Tests:** a test with terminal input, written first (§46.7). §46.6 names
     no case for it, so the 46c PR specifies it.

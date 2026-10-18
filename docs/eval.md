@@ -599,8 +599,8 @@ Rounds 9 to 12 together cost $4.85 of the $10 budget.
 - With 3 reps, these are directions, not claims.
 
 Round 12 is the last evaluation round until after the bootstrap of the
-self-hosted front end ([§35](future/35-self-hosting.md), roadmap row 7.2.7) and
-any improvements that follow it. The owner decided this on 2026-10-14. The full
+self-hosted front end ([§18](future/18-front-end-language.md), roadmap row
+7.2.7) and any improvements that follow it. The owner decided this on 2026-10-14. The full
 6c round (roadmap row 10) waits for that too. See the
 [roadmap](roadmap/README.md).
 

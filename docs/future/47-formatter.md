@@ -1,6 +1,6 @@
 ## 47. Code formatter (`agentica fmt`)
 
-**Status:** Deferred until after the bootstrap (§35 step 8), decided by the
+**Status:** Deferred (the bootstrap is done), decided by the
 owner on 2026-10-15: roadmap row 7.9 and phase 28
 ([`docs/roadmap/28-formatter.md`](../roadmap/28-formatter.md)). The owner also
 asked for this plan on the same day. Nothing is implemented. The facts in 47.1
@@ -119,13 +119,13 @@ Checked on `origin/master` at `95a45635`:
 
 ### 47.3 Where it lives
 
-- It is written in Agentica in `compiler/`, after step 8 of §35.4. It reuses the
+- It is written in Agentica in `compiler/`, after step 8 of §18.3. It reuses the
   self-hosted lexer (`compiler/lexer.agc`) and parser (`compiler/parser.agc`).
   That is why it waits. With one parser there is no second grammar to keep in
   sync. Before step 8 the front end is Racket, and row 7.2.7 freezes it: `src/`
   takes no new syntax. A Racket formatter would be a second parser in that
   frozen tree.
-- Step 8 ports the CLI driver (§35.4), so the subcommand goes into the Agentica
+- Step 8 ports the CLI driver (§18.3), so the subcommand goes into the Agentica
   CLI. These files are proposed, flat like the other stages in `compiler/`:
   - `compiler/format.agc`: the driver, text in and text or a diagnostic out;
   - `compiler/format_comments.agc`: the comment list and its attachment (47.4);
@@ -421,7 +421,7 @@ Each syntax change after the bootstrap changes the printer in the same PR. That
 is the rule for this plan: a node without a layout rule makes fmt refuse the
 file with `FMT-UNSUPPORTED` (a proposal), and it never guesses.
 
-- **Heredocs `<<~NAME`** (§25.10, roadmap row 7.6, phase 15 items 15b to 15j).
+- **Heredocs `<<~NAME`** (roadmap row 7.6, phase 15 items 15b to 15j).
   Row 7.6 is ordered before row 7.9, so 47b covers heredocs when it starts. The
   body is printed byte for byte, including its indent, and the end line stays
   where it is. A heredoc is a hard break, so the enclosing call is laid out as a
@@ -531,7 +531,7 @@ Each question has options and a recommendation.
    `agentica check`. The owner should accept that difference, or ask for the
    check to use 119 too.
 2. **Literal text.** Options: (a) keep each literal exactly as written; (b)
-   normalize quotes, escapes, hex case or digit separators (§33).
+   normalize quotes, escapes, hex case or digit separators.
    **Recommendation:** (a). Literals have no layout, and changing them adds
    diffs that no width rule asks for. The normal form stays exact.
 3. **Which files.** Options: (a) only the paths named, the current folder by

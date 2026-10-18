@@ -728,7 +728,7 @@ CPU.
 ## Front end (post-bootstrap row 3)
 
 With the `exe` runner, `benchmarks/run.py` also times the front end inside
-`dist/agentica` (§35.2): `check` of `examples/hello.agc`, of
+`dist/agentica` (§18.5): `check` of `examples/hello.agc`, of
 `stdlib/bdd/gherkin.agc` and of `compiler/parser.agc` (both have no `main`, so
 `check` ends with `CHECK-MAIN`, exit 1, after lexing, parsing, linking and
 registering the declarations), of a three-line `main` that imports gherkin (the
@@ -800,7 +800,7 @@ and `agentica help` takes 28 ms. The difference is the loader, which reads and
 checks the 3.6 MB `stage2` (1,336 functions, 87,333 spans) in 15 to 16 ms
 (`AGENTICA_VM_TRACE=loader` prints `loader done us=15140`; five runs), and
 about 5 ms for the run of the front end itself (`check examples/hello.agc` is
-27,946 steps). Against the target of 100 ms for gherkin (§35.2), 130 ms then,
+27,946 steps). Against the target of 100 ms for gherkin (§18.5), 130 ms then,
 the lexer is 58% of the steps of that check and the loader is 12% of its
 time, so the lexer comes first, then the loader.
 
@@ -977,7 +977,7 @@ The lexer no longer calls `Source.position` (`source.agc`, 3.2 M steps in
 `front_end.agc`), so the lexer part of `front_end.agc` is 42.7 M steps before
 and 19.6 M after, 54% fewer, and the whole check has 29% fewer. The lexer is
 36% of the steps of `front_end.agc` now, against 51%. The gherkin check takes
-99 ms, which meets the target of 100 ms (§35.2) on this machine, under load;
+99 ms, which meets the target of 100 ms (§18.5) on this machine, under load;
 `hello` is the start-up cost (the loader, 15 to 16 ms, and 4 ms of
 `agentica --version`), which this PR does not touch, and it moved by less than
 1% (the tables are built when the program starts).
@@ -1021,7 +1021,8 @@ each:
 1. **Tables are module constants** (`CLASSES`, `NAME_CHARS`, `WORD_ACTIONS`,
    `SINGLE_OPS`, `PAIR_OPS`, ...). `new_input` built eight tables on every
    `lex` call (128 `Map.put` and `classify` calls among them), and `Input`
-   carried them to every `scan_*` function. This is the lexer part of §44.9
+   carried them to every `scan_*` function. This is the lexer part of the
+   module-constants work
    (44b). The main loop does the work of names, operators, brackets and line
    breaks in place, with no call per token: one lookup in `WORD_ACTIONS` tells
    a keyword, a block opener and `end` in one step, an operator is one `Op`

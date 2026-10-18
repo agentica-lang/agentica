@@ -3,12 +3,11 @@
 **Status:** roadmap item 8d
 ([`08-data-structures.md`](../roadmap/08-data-structures.md)) is built: PR 1 of
 §17.9 (the API over the flat array), PR 2 (the trie behind it) and step 3, the
-unboxed leaves of Int and Float lists (§17.12). It fills in
-[`docs/future/12-data-structures.md`
-§12.4](../future/12-data-structures.md#124-faster-lists) for the C VM, which is
-the only backend since 7i. Line numbers are from master at 5713a2c, before PR 1
-moved the code. The implementation PRs were built from this file. A line that no
-longer matches means the code moved, not that the design changed.
+unboxed leaves of Int and Float lists (§17.12). It is the design of the 8d item
+of [`docs/roadmap/08-data-structures.md`](../roadmap/08-data-structures.md).
+Line numbers are from master at 5713a2c, before PR 1 moved the code. The
+implementation PRs were built from this file. A line that no longer matches
+means the code moved, not that the design changed.
 
 ### 17.1 Goal and non-goals
 
@@ -145,8 +144,9 @@ here are measured, not only derived. The model is not in the repository.
   arrive out of order), fill a flat staging array of the input length and call
   `agc_list_from_array(items, n)` at the end. `filter` already allocates its
   output this way, then lowers `len` in place (`vm/interp.c:365`). After the
-  change the result is right-sized, which also closes the "related candidate" in
-  [§34.2](../future/34-shared-small-values.md#342-design).
+  change the result is right-sized, which also closes the "related candidate" of
+  the sharing design
+  ([§34.6](../future/34-shared-small-values.md#346-as-built)).
 
 ### 17.3 Operations
 
@@ -608,9 +608,10 @@ Rules: `AGENTS.md` (`rackunit` for Racket; C tests are plain-assert files in
     new leaf per 32 pushes took six times as long for a million items, and a
     GC-stress test that builds a 1 MB string through `List.repeat` ran out of
     its time window.
-  - No other benchmark is slower than 2% in either PR
-    ([§34.4](../future/34-shared-small-values.md#344-measurement-first) uses the
-    same figure). If a `for` or `at` heavy program is, the first fix is an
+  - No other benchmark is slower than 2% in either PR (the measurement gate of
+    the shared-value work uses the same figure,
+    [`docs/vm-benchmarks.md`](../vm-benchmarks.md)). If a `for` or `at` heavy
+    program is, the first fix is an
     inline fast path for `agc_list_get` and `agc_list_len`; it is not a reason
     to change the design. PR 1 did it for the two opcodes that run once per item
     of a `for` loop: `struct agc_list` and the inline versions are in the
@@ -655,8 +656,7 @@ Two PRs, in this order. Recommended over one.
    (`site/content/vm.md:24`, `site/content/library/data-structures/list.md`),
    the catalog texts (`src/builtins.rkt:140-141`, `149`, `152-153`),
    `docs/vm/05-values-execution-builtins.md` §5.1,
-   `docs/future/12-data-structures.md` §12.4 ("both backends"), the 8d tick in
-   the roadmap and the development skill.
+   the 8d tick in the roadmap and the development skill.
 
 Why two. PR 1 is mechanical and the compiler checks it: the opaque type turns a
 missed site into a compile error, and the goldens plus the new fixture show that

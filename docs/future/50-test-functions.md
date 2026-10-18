@@ -3,13 +3,13 @@
 **Status:** planned (2026-10-16), one part (50a). Roadmap phase 31
 ([`docs/roadmap/31-test-functions.md`](../roadmap/31-test-functions.md)) is row
 7.11 of the [roadmap](../roadmap/README.md) order, in post-bootstrap step 6.
-Nothing is implemented. The `main` and `Test.run` form of
-[§36](36-unit-tests.md) stays valid.
+Nothing is implemented. The `main` and `Test.run` form of the grammar's
+`Unit tests (Test)` and `agentica test` sections stays valid.
 
 ### 50.1 Today
 
 - A test file is a `*_test.agc` program whose `main` calls `Test.run` with a
-  list of `Test.test(name) do ... end` blocks (§36.2).
+  list of `Test.test(name) do ... end` blocks (the grammar's `Test` rules).
 - Every program needs `main() -> Void`: `check_main` in
   `compiler/check_register.agc` reports CHECK-MAIN otherwise. So a test file
   with no `main` is CHECK-MAIN today.

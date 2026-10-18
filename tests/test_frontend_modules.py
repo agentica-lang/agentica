@@ -274,7 +274,7 @@ def test_a_root_file_that_cannot_be_read_is_check_import_io_at_the_start_of_the_
 
 
 def test_a_file_above_the_root_folder_is_printed_with_dotdot_parts(stage):
-    # Resolution allows "../", and the stored name of such a file keeps the .. part (35.4, "Source paths").
+    # Resolution allows "../", and the stored name of such a file keeps the .. part (§18.3).
     output = stage.link_tree({"above/app/root.agc": SHARED_ROOT, "above/shared/x.agc": SHARED_X}, "above/app/root.agc")
     assert '\n  module "../shared/x.agc"\n' in output
     assert_golden(output, FROZEN / "modules" / "above.expected")

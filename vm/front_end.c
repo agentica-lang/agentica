@@ -5,7 +5,7 @@
  * source that the binary carries. A user program, or a front end that is run as
  * an ordinary program with `agentica run`, has no agc_front_end in its runtime
  * and fails with RUNTIME-FRONT-END-ONLY. Service layer.
- * Design: docs/vm/08-loader-and-cli.md and docs/future/35-self-hosting.md §35.5.
+ * Design: docs/vm/08-loader-and-cli.md and docs/future/18-front-end-language.md §18.4.
  */
 #include "services.h"
 

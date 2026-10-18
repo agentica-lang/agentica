@@ -5,7 +5,7 @@ They were built on the Racket evaluator, which the VM replaced (phase 7, 7i);
 the language they define is specified in [`docs/grammar.md`](../grammar.md) and
 its files in `docs/grammar/`, and the tests of each stage are in
 `tests/<stage>-test.rkt`. The full checklists and design notes that used to be
-in `done.md` are in git history. The current order is in
+of this period are in git history. The current order is in
 [`README.md`](README.md).
 
 **Still open from this period** (both tracked here until they are done or
@@ -201,5 +201,4 @@ it stays manual and out of CI.
     kept (O(n) indexing and updates, O(n) `Map.delete`); the knight tour,
     traveling salesman and maze BFS examples with functional tests; `List`
     chosen as the collection module (no `Enum` beside the `enum` keyword)
-  - **Where:** [`06b-builtins.md`](../grammar/06b-builtins.md),
-    `docs/future/05-list-operations.md`
+  - **Where:** [`06b-builtins.md`](../grammar/06b-builtins.md)

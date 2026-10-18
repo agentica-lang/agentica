@@ -29,7 +29,7 @@ order.
 
 The owner set the order of 2026-10-14 for the rows from 7.2.3 on. Rows 7.2.4 to
 7.2.6 and 8 are the prerequisites of the bootstrap of the self-hosted front end
-(§35), which starts at row 7.2.7 (the freeze of the Racket front end). The rows
+(§18), which starts at row 7.2.7 (the freeze of the Racket front end). The rows
 marked deferred wait until after the bootstrap. The VM-only and C-only rows
 after them may run in parallel when needed and keep their relative order.
 
@@ -80,7 +80,7 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.1
   - **Next work:** **Complete, catch-up:** 7h processes, then VM tracing (14a,
-    `docs/future/24-logging.md` §24.4), then TCP, then TLS (today's API), then
+    `docs/vm/08-loader-and-cli.md` §9), then TCP, then TLS (today's API), then
     HTTP 20a (phase 20, `docs/vm/10-io-http.md` §10.7: hybrid and synchronous,
     whole messages, C for parsing, framing and the pool, `std/http` in Agentica,
     imported as `HTTP`), then BDD in Agentica ([phase
@@ -101,10 +101,12 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 7.2.1
   - **Next work:** **Complete:** HTTP 20b (the task cancellation core, done),
     then task crash isolation ([phase 24](24-task-crash-isolation.md),
-    [§37](../future/37-task-crash-isolation.md#37-task-crash-isolation): a crash
+    crash isolation (phase 24): a crash
     in a task other than `main` ends only that task; it needs 20b; done), then
     unit tests ([phase 25](25-unit-tests.md),
-    [§36](../future/36-unit-tests.md#36-unit-tests-test): the builtin `Test`
+    the grammar's
+    [`Test` rules](../grammar/06c-tasks-and-tests.md#unit-tests-test): the
+    builtin `Test`
     module and `*_test.agc` files in `agentica test`; after phase 24, so a crash
     fails one test; done), then HTTP 20c (done: the `std/http` server, which
     brings back an HTTP server and `examples/http_server.agc`, and also takes
@@ -184,10 +186,11 @@ after them may run in parallel when needed and keep their relative order.
     mechanism for bounded buffers
 
 - **Order:** 7.2.1g
-  - **Next work:** **Complete:** Pipe operator `\|>` (15l,
-    [§25.14](../future/25-ruby-typed-idioms.md#2514-pipe-operator-)), decided by
-    the owner on 2026-10-14: a small front-end PR (lexer, parser, one checker
-    rule; no VM change) after channels (row 7.2.1e) and before stdout and stderr
+  - **Next work:** **Complete:** Pipe operator `\|>` (15l, in the
+    [grammar's expression rules][grammar-syntax-precedence]), decided by the
+    owner on 2026-10-14: a small front-end PR (lexer, parser,
+    one checker rule; no VM change) after channels (row 7.2.1e) and before
+    stdout and stderr
     on the loop (row 7.2.1f). The owner chose it over methods on structs or
     Lua-style metatables, which stay decided against
     ([§25.13](../future/25-ruby-typed-idioms.md#2513-decided-against-part-c))
@@ -223,7 +226,7 @@ after them may run in parallel when needed and keep their relative order.
     7.2.1b) and rows 7.2.1d to 7.2.1f (the owner's order of 2026-10-13), and
     before the pilot, two small PRs: first the child protocol on its own channel
     (**done**, [25c](25-unit-tests.md),
-    [§36.6][agentica-link-2]):
+    [a task per test][agentica-link-2]):
     `Process.spawn_channel` (a sibling of `spawn_captured`) opens an extra
     bidirectional socket pair (fd 3 and the environment marker
     `AGENTICA_CHANNEL=3`) with the builtins `channel_read_line`, `channel_send`,
@@ -233,7 +236,7 @@ after them may run in parallel when needed and keep their relative order.
     and list modes) use it, and the VM dropped 25b's token, reserved stdin,
     private fd 0 and `mid_line` with `agc_write_record`; then one
     handle-ownership rule (**done**, [24b](24-task-crash-isolation.md),
-    [§37.5][agentica-link-3],
+    [handle ownership][task-rules],
     §14.5): a handle belongs to the task that opened it, is closed when that
     task ends, and moves to another task only explicitly, with
     `Task.spawn_owning`, replacing three mechanisms (the spawn move,
@@ -281,7 +284,8 @@ after them may run in parallel when needed and keep their relative order.
     [§32](../future/32-doc-comments.md#32-doc-comments): `##` lines, front end
     only; `agentica doc` is row 22b, after the bootstrap), then digit separators
     ([phase 23](23-digit-separators.md),
-    [§33](../future/33-digit-separators.md#33-digit-separators): `1_000`, lexer
+    the grammar's [literal rules](../grammar/04-lexical.md#literals): `1_000`,
+    lexer
     only). This is the last new language feature in the Racket front end; row
     7.2.7 freezes that front end after it
   - **Outcome:** Programs carry `##` docs in their source, and write long
@@ -300,37 +304,36 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.2.4
   - **Next work:** **Complete** (PRs #220 and #223): Binary data (phase 13,
-    [`docs/future/23-binary-data.md`
-    §23](../future/23-binary-data.md#23-binary-data)), taken out of row 7.5 by
+    [grammar](../grammar/05b-modules.md#binary-data-stdbinary)), taken out of
+    row 7.5 by
     the owner on 2026-10-14: the `Int` and `Float` bit builtins (13a) and
     `std/binary` (13b), with their tests and docs ([phase
     13](13-binary-data.md)). It comes before the freeze, because the bytecode
     writer of the self-hosted front end needs it
-    ([§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites))
+    ([§18.4](../future/18-front-end-language.md#184-prerequisites))
   - **Outcome:** Programs read and write binary numbers with `std/binary`
 
 - **Order:** 7.2.5
   - **Next work:** **Complete** (2026-10-14, PR #225): Stack traces on runtime
-    errors (14b, [`docs/future/24-logging.md`
-    §24.3](../future/24-logging.md#243-stack-traces-on-runtime-errors)), taken
+    errors (14b, `docs/vm/02-reference-behavior.md`), taken
     out of row 7.5 by the owner on 2026-10-14: [phase 14](14-logging.md), always
     on in the plain, `--ai` and `--json` formats. It comes before the freeze,
     since agents and the self-hosted compiler both need the call stack
-    ([§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites))
+    ([§18.4](../future/18-front-end-language.md#184-prerequisites))
   - **Outcome:** Agents see the call stack of a runtime error, and a crash in
     the self-hosted compiler shows where it happened
 
 - **Order:** 7.2.6
   - **Next work:** **Complete** (2026-10-14, PR #222): OS builtins the
     self-hosted front end needs, from
-    [§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites),
+    [§18.4](../future/18-front-end-language.md#184-prerequisites),
     decided by the owner on 2026-10-14: reading environment variables
     (`AGENTICA_PATH`, `XDG_DATA_HOME` and the home directory) and a real-path
     builtin that resolves symbolic links (module identity and the `pkg/` escape
     check). Both are OS builtins in C (exception 1 of the std-first rule),
     listed in the `src/builtins.rkt` table: `System.env(name) -> Result[String]`
     and `Path.real(path) -> Result[String]`, with no new flag. The other partly
-    missing items of §35.5 (binary output, the BDD driver's process and file
+    missing items of §18.4 (binary output, the BDD driver's process and file
     calls, the hand-off to the VM) are needed from step 6 on, so they are not in
     this row
   - **Outcome:** The linker of the self-hosted front end finds `std/` and `pkg/`
@@ -340,13 +343,14 @@ after them may run in parallel when needed and keep their relative order.
   - **Next work:** **Done (2026-10-16; started 2026-10-15; the Racket front end
     is deleted, post-bootstrap step 2); PRs #237, #245, #254, #258, #263, #282,
     #286, #288, #294, #297, #298, #299, #301, #310, #311):** the freeze is in
-    force and §35 steps 1 (the lexer), 2 (the parser, with `PARSE-TOO-DEEP`), 3
+    force and the port’s steps 1 (the lexer), 2 (the parser, with
+    `PARSE-TOO-DEEP`), 3
     (the modules and linker) and 4 (the builtin catalog, PR #258, and the
     checker, with `CHECK-TOO-DEEP`, PR #263; module constants, row 7.2.8,
     excepted), 5 (lowering, with module constants, PR #282) and 6 (the bytecode
     writer, PR #286), all in `compiler/`, and 7 (the BDD driver: 7a, the OS
     builtins it needs, PR #288, audited in
-    [§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites); 7b,
+    [§18.4](../future/18-front-end-language.md#184-prerequisites); 7b,
     the driver itself, `compiler/bdd.agc`, PR #294, which relaxes the freeze
     only for the hand-off in `src/bdd-driver.rkt` and `src/main.rkt`) are done;
     step 8 follows, 8a (the command line in Agentica, PR #299, which relaxes the
@@ -367,8 +371,9 @@ after them may run in parallel when needed and keep their relative order.
     left `compiler/builtins_data.agc`, `check_tables.agc` and
     `unicode_table.agc` as hand-edited sources; the parent commit of its merge
     is tagged `bootstrap-racket`. The text below is the history of the freeze.
-    **Freeze the Racket front end and start §35 step 1** (the port of the lexer,
-    [§35.4](../future/35-self-hosting.md#354-stages-to-port)), decided by the
+    **Freeze the Racket front end and start the port’s step 1** (the port of the
+    lexer,
+    [§18.3](../future/18-front-end-language.md#183-port)), decided by the
     owner on 2026-10-14. Freeze means, by default: from this row on, the Racket
     front end (`src/`) takes no new syntax and no new checker rules. Its only
     changes are bug fixes and the data this row lists: new rows in the
@@ -381,12 +386,12 @@ after them may run in parallel when needed and keep their relative order.
     `src/stdlib.rkt`; the `std-only-modules` list and, for a std-only module,
     its name in the reserved type names of `src/checker.rkt`; and message texts
     that name the right std module (a message fix, not a rule). The 2026-10-15
-    items are the owner's decision (§24.2, "The freeze"), and so is the change
+    items are the owner's decision (the freeze), and so is the change
     in `src/lower.rkt` for an enum field of a builtin record, which relaxes this
     list for those lines. A new checker rule, tag, syntax or construction rule
     is not data. Every language change after this row goes into the Agentica
     front end (`compiler/`,
-    [§35.3](../future/35-self-hosting.md#353-bootstrap)). These rules are
+    [§18.2](../future/18-front-end-language.md#182-bootstrap)). These rules are
     defaults and may be relaxed when following them costs more than it saves;
     the PR says which rule it relaxes and why. Relaxed so far:
     `CHECK-DECL-ORDER`, the fixed declaration order of a file (a small style
@@ -398,7 +403,7 @@ after them may run in parallel when needed and keep their relative order.
     in the linker and the `STRUCT_WITH` opcode with bytecode format version 4,
     on the owner's decision of 2026-10-15 because `compiler/` uses immutable
     struct updates; the checker and modules ports carry it); `CHECK-TOO-DEEP`
-    (§35 step 4: a limit of 1,000 levels of expressions and statements in
+    (port step 4: a limit of 1,000 levels of expressions and statements in
     `src/checker.rkt`, the checker's counterpart of `PARSE-TOO-DEEP`, because a
     tree can be deeper than the parser's limit and the Agentica checker recurses
     on it within the VM call limit of 10,000; with it, a fix for a Racket
@@ -407,12 +412,13 @@ after them may run in parallel when needed and keep their relative order.
     linker, both checkers and the lowering in `src/lower.rkt` with bytecode
     format version 5, on the owner's decision of 2026-10-15 because `compiler/`
     keeps its tables as constants; the Agentica checker and the Agentica
-    lowering of step 5 carry them); the std list (§35 step 8b, PR #298: the
+    lowering of step 5 carry them); the std list (port step 8b, PR #298: the
     module registry of `src/stdlib.rkt` is built by a macro from the plain file
     `stdlib/MODULES`, one path per line, instead of one line per module, because
     the Makefile embeds the same list in the single binary; a test checks the
     file against `stdlib/`, and the two builtin rows of `FrontEnd.*` with their
-    `vm-builtins` names are the data the freeze already allows); the switch (§35
+    `vm-builtins` names are the data the freeze already allows); the switch
+    (port
     step 8d-2, PR #310: it relaxes the rule "only bug fixes and data" for
     `src/main.rkt` alone, because `agentica-vm` is gone and the oracle still has
     to run programs. `src/vm-launch.rkt` and `src/bdd-driver.rkt` are deleted,
@@ -423,20 +429,20 @@ after them may run in parallel when needed and keep their relative order.
     they match the binary's), and a stub for `test` that says that `test` is the
     binary's and exits 2. The oracle runs a program with `dist/agentica run`. No
     syntax, checker or lowering rule changes, and everything goes with Racket);
-    the version file (§35 step 8a, PR #299: `src/version.rkt` embeds the one
+    the version file (port step 8a, PR #299: `src/version.rkt` embeds the one
     line of `VERSION` when it is compiled, instead of holding the number, and
     `src/bdd-driver.rkt` passes it to the driver as `--version`, because the
     writer in `compiler/` takes the version as an input and the Makefile, the
     release and the VM read the same file)
   - **Outcome:** The Racket front end stops growing; each later language change
-    is written once, in Agentica, and the ports of §35.4 run in order, one PR
+    is written once, in Agentica, and the ports of §18.3 run in order, one PR
     per step Step 8 lands as four PRs, 8a to 8d
-    ([§35.4](../future/35-self-hosting.md#354-stages-to-port)), decided by the
+    ([§18.3](../future/18-front-end-language.md#183-port)), decided by the
     owner on 2026-10-15
 
 - **Order:** 7.2.8
   - **Next work:** **Started (2026-10-15, 44a0-1 PR #262, 44a0-2 PR #268, 44a2
-    PRs #270 and #271; design: [§44](../future/44-module-constants.md)), decided
+    PRs #270 and #271), decided
     by the owner on 2026-10-15; it relaxes the freeze of row 7.2.7**, like
     `Set[T]` (8b) and `value.with(...)` (15c), because `compiler/` needs it. Two
     parts. **Imports (44a0, lands first):** `import Mod from "path"` replaces
@@ -476,14 +482,15 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 7.2.9
   - **Next work:** **Done (2026-10-16; phase 0 PR #261, phase 1 PRs #264, #266,
     #267, #269, #274, #276, #279, phase 3 PRs #297, #301, #310 and #311; design:
-    [§35.10](../future/35-self-hosting.md#3510-tests-move-to-python-unittest),
+    [§18.7](../future/18-front-end-language.md#187-tests),
     decided by the owner on 2026-10-15).** The tests move from rackunit to
     Python `unittest` (standard library only, no packages), in four phases: 0,
     the shared helper and the make targets, with one small area as the proof; 1,
     the VM and runtime, network and process, BDD and CLI areas, one per PR; 2,
     the golden parts of the front-end tests; 3, with 8c and 8d of step 8 (8c,
     8d-1, 8d-2 and 8d-3 are done: 8d-3 removed rackunit), the live comparisons
-    frozen into goldens and rackunit removed. The phases run beside §35 steps 4
+    frozen into goldens and rackunit removed. The phases run beside the port’s
+    steps 4
     to 8 and §44; phase 3 is 8c (done: the live comparisons are frozen under
     `tests/fixtures/frontend/frozen/`, the golden comparisons of phase 2 for the
     front end moved with them, and `tools/refreeze.py` rewrites the goldens
@@ -518,11 +525,11 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 7.5a
   - **Next work:** **Done (2026-10-16)**, in `compiler/` after the bootstrap (it
     was deferred because it would have changed the Racket front end). Default
-    parameter values (15a, [`docs/future/25-ruby-typed-idioms.md`
-    §25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)):
-    front end only; split out of row 7.5 on 2026-10-14. `std/logger` (14c, row
-    7.5) did not need it: until it landed, the API had two functions per level
-    (decided on 2026-10-15, [§24.2](../future/24-logging.md#242-stdlogger)), and
+    parameter values (15a, in the
+    [grammar's default parameters][grammar-defaults]): front end only; split
+    out of row 7.5 on 2026-10-14. `std/logger` (14c, row 7.5) did not need it:
+    until it landed, the API had two functions per level
+    (decided on 2026-10-15), and
     the `_meta` functions are gone now
   - **Outcome:** Functions take default parameter values, checked at compile
     time, and `std/logger` replaces its `_meta` functions with a `fields`
@@ -549,10 +556,10 @@ after them may run in parallel when needed and keep their relative order.
     (2026-10-16)**, in `compiler/`, `stdlib/prelude/` and the VM; `format` (15k)
     and `Stream[T]` (17e) are still deferred. It was deferred until after the
     bootstrap, because the prelude changes the Racket front end, which the port
-    would then redo. Ruby typed idioms, prelude part (15f, 15k;
-    `docs/future/25-ruby-typed-idioms.md` §25.6 and §25.11): the compiler
-    prelude with the Enumerable methods, then `format`; after faster lists (8d),
-    since the prelude's cost contract needs them; then `Stream[T]` (17e,
+    would then redo. Ruby typed idioms, prelude part (15f, 15k): the compiler
+    prelude with the Enumerable methods, then `format` (which is still
+    [§25.11](../future/25-ruby-typed-idioms.md#2511-format)); after faster lists
+    (8d), since the prelude's cost contract needs them; then `Stream[T]` (17e,
     `docs/future/27-iteration-and-concurrency.md` §27.4 step 2), which comes
     with the prelude
   - **Outcome:** Enumerable methods, `format` and `Stream[T]`, written in
@@ -562,7 +569,7 @@ after them may run in parallel when needed and keep their relative order.
   - **Next work:** **Done (2026-10-16, PR #326)**, after the bootstrap, because
     the bootstrap embeds the front end in the VM binary and the cut was measured
     on that build
-    ([§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria)). VM
+    ([§18.5](../future/18-front-end-language.md#185-goals-and-targets)). VM
     start-up cost, a small perf item ([7g](07-vm.md#7g-speed-check)). A sampling
     profile and timers between the sections of the load (`perf` is blocked)
     showed that the about 15 ms of each start were the loader reading the 3.8 MB
@@ -608,9 +615,9 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.5
   - **Next work:** New features, VM-only (cont.): UDP, then logging and
-    debugging (14c, **done**: `std/logger` of `docs/future/24-logging.md` §24.2,
-    with no default parameter values and no flags; its Racket parts are data
-    under the freeze of row 7.2.7 (§24.2, "The freeze")), then the `Crypto`
+    debugging (14c, **done**: `std/logger`, with no default parameter values and
+    no flags; its Racket parts were data under the freeze of row 7.2.7), then
+    the `Crypto`
     module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare,
     random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`). Binary
     data (row 7.2.4) and stack traces (row 7.2.5) moved to their own rows
@@ -698,9 +705,9 @@ after them may run in parallel when needed and keep their relative order.
   - **Outcome:** Long types get one name, with no runtime cost
 
 - **Order:** 8.1
-  - **Next work:** The rest of the VM layers (7l, `docs/future/21-vm-layers.md`
-    §21: opcode helpers, builtin metadata flags, the callback-builtin protocol;
-    the header split is row 7.2.1b); after the tasks PR, next to 7k
+  - **Next work:** The rest of the VM layers (7l: opcode helpers, builtin
+    metadata flags, the callback-builtin protocol; the header split is row
+    7.2.1b); after the tasks PR, next to 7k
   - **Outcome:** The prerequisites of the JIT
 
 - **Order:** 9
@@ -724,7 +731,7 @@ after them may run in parallel when needed and keep their relative order.
     by the owner's decision of 2026-10-16 (it was right after step 9 by the
     decision of 2026-10-14); the work stops before it so the owner reviews the
     next steps. The front end is decided: self-hosting, in this table from row
-    7.2.7 on ([§35](../future/35-self-hosting.md))
+    7.2.7 on ([§18](../future/18-front-end-language.md))
   - **Outcome:** Build multicore only if the numbers ask for it
 
 - **Order:** 10
@@ -787,9 +794,11 @@ after them may run in parallel when needed and keep their relative order.
     baseline
 
 The self-hosted front end and a single binary
-([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13, are
+([§18](../future/18-front-end-language.md)), decided by the owner on 2026-10-13,
+are
 in the order from row 7.2.7 on, after their prerequisites (rows 8 and 7.2.4 to
-7.2.6; [§35.9](../future/35-self-hosting.md#359-order)). Its steps (§35.4) are
+7.2.6; [§18.6](../future/18-front-end-language.md#186-order)). Its steps (§18.3)
+are
 PRs, not rows of this table. The release cut right after step 7b was 0.3.0,
 the last one with the Racket front end (owner decision, 2026-10-15).
 
@@ -799,16 +808,16 @@ then the path to the JIT (row 9.1, which should also speed up `agentica test`),
 and the other features after the JIT.
 
 1. **Done (2026-10-16, PR #312)**: release 0.4.0, the first release with the
-   single binary ([§35.4](../future/35-self-hosting.md#354-stages-to-port)).
+   single binary ([§18.3](../future/18-front-end-language.md#183-port)).
    Racket can be deleted only after one release has the self-hosted front end
-   as its default ([§35.3](../future/35-self-hosting.md#353-bootstrap)).
+   as its default ([§18.2](../future/18-front-end-language.md#182-bootstrap)).
 2. **Done (2026-10-16, PR #313)**: delete the Racket front end (`src/*.rkt`),
    freeze `vm/unicode_data.c` as checked-in source (a later PR may add a
    generator over pinned Unicode Character Database files that reproduces it
    byte for byte) and tag `bootstrap-racket` on the parent commit of the merge
-   (§35.3).
+   (§18.2).
 3. A speed pass on the self-hosted front end: the targets of
-   [§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria), the
+   [§18.5](../future/18-front-end-language.md#185-goals-and-targets), the
    precompiled BDD runner (about 0.7 s that step 7b added to `agentica test`),
    and maybe a VM profiler and the start-up cut of row 8.3 (done, below).
    **First part done (2026-10-16, PR #315):** the timing rows of
@@ -822,7 +831,7 @@ and the other features after the JIT.
    lexer alone 52 to 24 steps for each character), so `check
    stdlib/bdd/gherkin.agc` takes 99 ms, not 126 (measured under load). Its
    tables are module constants, which is 44b of
-   [§44.12](../future/44-module-constants.md#4412-implementation-plan).
+   the module-constants work.
    Numbers, and what was tried, in
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-second-part-the-lexer).
    **Third part, the interpreter loop, done (2026-10-16, PR #319):** the common
@@ -847,18 +856,18 @@ and the other features after the JIT.
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-shared-small-values-34).
    Still to do: the parser, for room under the 100 ms for
    `stdlib/bdd/gherkin.agc`.
-4. **Done (2026-10-16)**: default parameter values (row 7.5a,
-   [§25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)),
-   in `compiler/`, which does not use them yet.
+4. **Done (2026-10-16)**: default parameter values (row 7.5a, in the
+   [grammar's default parameters][grammar-defaults]), in `compiler/`, which
+   does not use them yet.
 5. `case` guards, nested patterns and the `<<~NAME` heredoc
-   ([§25.10](../future/25-ruby-typed-idioms.md#2510-heredocs),
-   [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
-   in `compiler/` only. The first of steps 4 and 5 to land is the first use of
-   the two-step stage0 refresh of §35.3. Part A, the heredoc (15j), is **done
+   ([`docs/grammar/05-syntax.md`](../grammar/05-syntax.md#statements-and-blocks)
+   and [`04-lexical.md`](../grammar/04-lexical.md#heredocs)), in `compiler/`
+   only. The first of steps 4 and 5 to land is the first use of
+   the two-step stage0 refresh of §18.2. Part A, the heredoc (15j), is **done
    (2026-10-16, PR #322)**: the lexer, `LEX-UNTERMINATED-HEREDOC`,
    `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE`, the parser refuses a heredoc
    as a `case` pattern or an import path. Part B, `case` guards and nested
-   patterns (§25.12.1, "As decided (post-bootstrap step 5)"), is **done
+   patterns (post-bootstrap step 5, in the grammar), is **done
    (2026-10-16, PR #325)**: `pattern if condition ->` and any pattern in a
    payload position, a conservative exhaustiveness rule, no bytecode change.
    `compiler/` does not use them yet (the two-step stage0 refresh is a later
@@ -866,7 +875,7 @@ and the other features after the JIT.
 6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
    diagnostics (row 7.6), `agentica doc` and `help` (row 22b), and the 44b to
    44d table rewrites (**done 2026-10-16**;
-   [§44.12](../future/44-module-constants.md#4412-implementation-plan)), type
+   the module-constants work), type
    aliases (row 7.12, §49: simple first, 49a, then generic, 49b), then test
    functions without `main` (row 7.11, §50). `Task.map` (row 7.3) was small
    and is **done** (17a, PR #316).
@@ -903,12 +912,12 @@ after the bootstrap, in the Agentica front end (§42.14).
 Idea, not scheduled: a language server ([§43](../future/43-language-server.md)).
 It has no row in this table. It would reuse the §39 commands and the §32 doc
 comments, so it can only start after them (and is easiest on the self-hosted
-front end of §35).
+front end of §18).
 
 Designed, not scheduled: packages (§45,
 [`docs/future/45-packages.md`](../future/45-packages.md)). It has no row in this
 table. Its first step, the TOML parser `std/toml` (45-0), is a std module and
-landed before the bootstrap (done). The manager waits for step 8 of §35.4.
+landed before the bootstrap (done). The manager waits for step 8 of §18.3.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
@@ -925,7 +934,7 @@ work appears after the completed foundations below.
 - New features are VM-only. They have no Racket twin.
 - The Racket front end is deleted (row 7.2.7, post-bootstrap step 2).
   Every language change goes into the Agentica front end (`compiler/`,
-  [§35](../future/35-self-hosting.md)); a PR may relax a default rule when
+  [§18](../future/18-front-end-language.md)); a PR may relax a default rule when
   following it costs more than it saves, and says which rule and why.
 - A PR that changes the VM core keeps the [VM core
   invariants](../vm/14-core-invariants.md#14-vm-core-invariants) (§14), or
@@ -966,25 +975,28 @@ programming reference contain the current signatures.
      insides of `Map` and `List`.
   5. Basic operations on the core types, at the level of operators, which would
      be loops or fragile code in Agentica: for example the `Int` bit operations
-     and `Float` bit conversions of `docs/future/23-binary-data.md` §23.
+     and `Float` bit conversions of the grammar's
+     [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary).
   6. Log registry state: the handler table and the global log level, which the
-     VM runtime holds for `std/logger` (`docs/future/24-logging.md`, §24.2).
-     It is runtime state, not computation. It is the first state the language
+     VM runtime holds for `std/logger` (the grammar's logging section). It is
+     runtime state, not computation. It is the first state the language
      keeps between calls, so it is limited to this registry and reached only
      through the `Logger` functions. Its two builtin types, the record
-     `LogEvent` and the enum `LogLevel`, are builtins because handlers take them
-     (§24.2).
+     `LogEvent` and the enum `LogLevel`, are builtins because handlers take
+     them.
 - Library code that must be generic over the builtin type variables, or that
   must be called as a method on a builtin type (`xs.find do ... end`), cannot be
   a `std/` module; it goes in the compiler prelude (`stdlib/prelude/*.agc`,
-  `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica. The
-  prelude has guarded exceptions to "no internal helper builtins": `__fail_arg`
-  and `__float_fixed` (§25.6, §25.11), which the loader accepts only in prelude
-  functions. A concurrency helper that needs the scheduler is a C builtin
+  see the development skill's `references/stages.md`), still written in
+  Agentica. The prelude has guarded exceptions to "no internal helper builtins":
+  `__fail_arg` and `__float_fixed`
+  ([§25.11](../future/25-ruby-typed-idioms.md#2511-format)), which the loader
+  accepts only in prelude functions. A concurrency helper that needs the
+  scheduler is a C builtin
   instead (`Task.await` with a timeout, §27.3).
 - Two builtin modules are std-only: `HttpWire` (phase 20,
   `docs/vm/10-io-http.md` §10.7), the framing layer under `std/http`, and
-  `LogRegistry` (`docs/future/24-logging.md` §24.2), the registry under
+  `LogRegistry` (the grammar's logging section), the registry under
   `std/logger`. A public raw layer next to `std/http` would be a second way to
   do HTTP, and a public registry would let user code change the handlers without
   the `Logger` functions. So the linker lets only modules embedded from
@@ -1108,7 +1120,9 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 Planned syntax is in [`docs/future/`](../future/README.md).
 
 [agentica-link-1]: ../future/27-iteration-and-concurrency.md
-[agentica-link-2]: ../future/36-unit-tests.md
-[agentica-link-3]: ../future/37-task-crash-isolation.md
+[agentica-link-2]: ../grammar/06c-tasks-and-tests.md#agentica-test
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
 [agentica-link-4]: ../future/30-hybrid-http.md
 [agentica-link-5]: pending-general-programming-and-mcp.md
+[grammar-defaults]: ../grammar/06-semantics.md#default-parameter-values
+[grammar-syntax-precedence]: ../grammar/05-syntax.md#expressions-and-precedence

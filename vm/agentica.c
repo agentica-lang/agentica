@@ -1,5 +1,5 @@
 /*
- * The agentica binary (dist/agentica, docs/future/35-self-hosting.md 35.6), the only program of the
+ * The agentica binary (dist/agentica, docs/future/18-front-end-language.md §18.8), the only program of the
  * product. `agentica run [OPTIONS] -- FILE.agcb [ARGS...]` runs a compiled program with the VM flags and
  * starts no front end. Anything else is the command line of the front end, a compiled program carried in
  * the binary: it runs in a first runtime, compiles in memory and hands the program over

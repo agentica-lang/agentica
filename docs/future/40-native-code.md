@@ -38,11 +38,14 @@ use `extern "C"`. The rules are:
 
 - Native code gets immutable values. It returns new values through the API. It
   may change only its own buffers.
+- A native function that returns nothing maps to the completion concept of the
+  grammar's process rules (`ok()` for a `Result[Void]`), once the FFI's ABI and
+  ownership rules land.
 - It never stores GC pointers in `malloc` memory. This is the VM's existing rule
   ([`16-architecture.md`](../vm/16-architecture.md) §16.5).
 - Conversions come first for `Int`, `Float`, `Bool`, `String`, `List`, `Map` and
   structs. `Bytes` can follow when the compact type of [section
-  23](23-binary-data.md) lands.
+  binary data (phase 13) lands.
 
 Each native function declares a call kind, which says where it runs (40.3.1).
 Only its task waits, and the scheduler keeps running. The libuv pool takes only
@@ -56,9 +59,9 @@ functions become native code and give the same results. There is no language
 change.
 
 **c. AOT, maybe later.** `agentica build --native` compiles a whole program to
-native code. It reuses the opcode helpers of the VM layers ([section
-21](21-vm-layers.md)), which the JIT also uses. Build it only if measurements
-ask for it.
+native code. It reuses the opcode helpers of the VM layers (roadmap
+[7l](../roadmap/07-vm.md#7l-vm-layers)), which the JIT also uses. Build it only
+if measurements ask for it.
 
 ### 40.3.1 The native module header and its three call kinds
 
@@ -67,7 +70,8 @@ that helps integrate C and C++ libraries. It belongs to part 40.3a, so it comes
 before the JIT (40.5).
 
 The header is the stable public form of the VM's internal callback-builtin
-protocol (roadmap row 8.1, [section 21](21-vm-layers.md)). The callback builtins
+protocol (roadmap row 8.1, [7l](../roadmap/07-vm.md#7l-vm-layers)). The callback
+builtins
 (`map`, `filter`, `reduce` and the rest) already switch out only between their
 callbacks ([`10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1,
 "Builtins"). A native module uses the same mechanism, so there is one mechanism,
@@ -133,7 +137,7 @@ only, immutable inputs, new values through the API, and no GC pointer in
   as `--allow-run` does for processes
   ([`10-io-processes.md`](../vm/10-io-processes.md)).
 - **Distribution.** Shared libraries conflict with the one-binary goal of
-  [section 35](35-self-hosting.md). Either link native modules statically into
+  [§18](18-front-end-language.md). Either link native modules statically into
   the binary at build time, or load `.so` files only when the flag is set.
 - **Multicore.** If more schedulers come
   ([`16-architecture.md`](../vm/16-architecture.md)), the C API must follow its

@@ -127,7 +127,7 @@ Text-form notes:
   gives the function `Shape` and which parameter an argument fills. The checker
   and `lower_argument` use the same functions, so they agree. Compiler code must
   not use defaults until `bootstrap/stage0.agcb` can compile them (the two-step
-  refresh, §35.3).
+  refresh in `references/ci.md`).
 - Import forms: `import Alias from "path"`, `import {a, B as C} from "path"`.
   `ImportDecl` has `alias` and `names`; the linker keeps a `named` table
   (`bind_names`, `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`). The path-first

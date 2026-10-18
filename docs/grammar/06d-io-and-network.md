@@ -111,6 +111,14 @@ written as a JSON string. The JSON form is one object per line with the keys
 `task`. `Logger.time_text(ms)` formats milliseconds since the Unix epoch as that
 time text.
 
+Not planned for `std/logger`: log files and rotation, syslog, sampling,
+per-module levels, `Json` field values, configuration through environment
+variables, and lazy log arguments (a block given to `attach` is a handler, not a
+lazy message). Not planned for tracing: a language-level trace, trace lines on
+stdout, counters inside the tracer, a flag to turn stack traces off, and a stack
+of the parent task at spawn time; VM tracing is a developer tool of the VM, not
+a language feature.
+
 ### Files and paths
 
 `File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. A file handle

@@ -5,7 +5,7 @@
 - `make` compiles `vm/*.c` with `$(CC) -std=c11 -O2 -Wall -Wextra -Werror`
   and the hardening flags `-fstack-protector-strong -D_FORTIFY_SOURCE=2`, and
   links `dist/agentica` (the VM with the front end inside, the one product;
-  35.3). On Linux it links PIE with full RELRO. The binary embeds the front end
+  §18.2). On Linux it links PIE with full RELRO. The binary embeds the front end
   with `.incbin` in ELF assembly, so only Linux builds it; `make vm-test` builds
   the C VM and its tests on macOS and MinGW too (`platforms.yml`). The Makefile
   picks the platform from `OS=Windows_NT` or `uname -s`. The warning flags apply
@@ -147,15 +147,13 @@
   - **Runner:** GitHub-hosted `ubuntu-latest`, clang
   - **Runs:** sanitizer build, 5 million mutants, random `FUZZ_SEED`
 
-- The Linux jobs run on every pull request that changes more than docs. No job
-  installs Racket. `vm/unicode_data.c` is frozen source (its header gives the
-  provenance), so no CI step checks or regenerates it.
-- `platforms.yml` runs on pull requests and pushes to `master`; it can also be
-  started by hand for one platform or both.
-- No job installs Racket (the Racket front end was deleted, PR #313). The macOS
-  and
-  Windows jobs build the C tests only, since the binary and the process and
-  network tests are not portable yet.
+- The Linux jobs run on every pull request that changes more than docs;
+  `platforms.yml` runs on pull requests and pushes to `master`, and either can
+  be started by hand. No job installs Racket (the Racket front end was deleted,
+  PR #313), and no step checks or regenerates the frozen `vm/unicode_data.c`
+  (its header gives the provenance). The macOS and Windows jobs build and run
+  the C tests only: the binary and the process and network tests are not
+  portable yet.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,
   and git detects the `string-inspect.agc` fixture as binary from its NUL bytes.
   So Windows sees the same sources, spans and output as Linux.

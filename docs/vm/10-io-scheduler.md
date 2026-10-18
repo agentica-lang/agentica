@@ -137,7 +137,7 @@ section says how the scheduler and the loop keep them, as built.
     path (End of run) does not wait for their jobs. `System.exit`, a failure in
     `main`, `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL` in any task end the run
     at once.
-  - **Crashes (phase 24, `docs/future/37-task-crash-isolation.md` §37).** Any
+  - **Crashes (phase 24, [task rules][task-rules]).** Any
     failure in a task other than `main` crashes that task. The text
     `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE` joins the run's unobserved
     crashes. Crashes of `hidden` tasks (the HTTP connection tasks of 20c) join
@@ -162,7 +162,7 @@ section says how the scheduler and the loop keep them, as built.
     `HttpClient` have no owner. `Task.spawn` moves nothing, and nothing goes to
     the parent when a task ends, so a handle returned by a helper task is closed
     when the helper ends. The one hand-off is `Task.spawn_owning(&f, handle)`
-([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends)):
+([handle ownership][task-rules]):
     `agc_task_spawn_owning` checks that the calling task owns the handle and
     that it is open (else `RUNTIME-HANDLE-NOT-OWNED` at the handle argument,
     before any task is made), spawns the task and moves the owner to it.
@@ -637,3 +637,5 @@ section says how the scheduler and the loop keep them, as built.
     held by a cut print, a record that starts a line after a cut print, final
     notices). The waiter case of `agc_task_cancel` is in
     `vm/tests/task_cancel_test.c` (§14.3).
+
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

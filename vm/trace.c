@@ -3,8 +3,7 @@
  * and line formatting, and the emitter that writes one line with one write(2).
  * The profile category (calls and steps of each function, time in each builtin)
  * is counted by interp.c and written here at the end of a run.
- * Core layer. Design: docs/vm/08-loader-and-cli.md §9 and
- * docs/future/24-logging.md §24.4.
+ * Core layer. Design: docs/vm/08-loader-and-cli.md §9.
  */
 #include "core.h"
 

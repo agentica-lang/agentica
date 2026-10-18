@@ -4,7 +4,7 @@
 for some point. The dependencies are technical: it reuses the semantic CLI
 (§39, roadmap [phase 26](../roadmap/26-semantic-cli.md)) and the doc comments
 (§32), so it can only start after them, and it is easiest on the self-hosted
-front end (§35). Nothing here is designed yet; this section only keeps the plan
+front end (§18). Nothing here is designed yet; this section only keeps the plan
 and the open questions in one place.
 
 ### 43.1 Goal (possible scope, not decided)
@@ -24,10 +24,10 @@ Editors would show what the checker already knows, without a shell round trip:
   define the answers. The server would give the same answers, so an agent and
   an editor never see different things.
 - **Doc comments (§32).** Hover text is the `##` text of a declaration.
-- **The self-hosted front end (§35, `compiler/`).** The server is probably
+- **The self-hosted front end (§18, `compiler/`).** The server is probably
   written on the Agentica front end, not on the Racket one, which has been
   frozen since row 7.2.7 and would be redone by the port.
-- **The single binary (§35.6, step 8 of §35.4).** An editor would start one
+- **The single binary (§18.8, step 8 of §18.3).** An editor would start one
   executable with the front end inside.
 
 ### 43.3 Open questions

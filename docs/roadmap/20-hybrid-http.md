@@ -14,8 +14,8 @@ Decided by the user on 2026-10-12. Two parts:
   deleted the builtin `HTTP` module with the evaluator, server included, so
   `HTTP` is the free import alias of `std/http` and only its client (20a)
   exists; the order is now 7i, 20b, task crash isolation ([phase
-  24](24-task-crash-isolation.md), §37), unit tests ([phase
-  25](25-unit-tests.md), §36), then 20c (order step 7.2.1), and 20c brings the
+  24](24-task-crash-isolation.md)), unit tests ([phase
+  25](25-unit-tests.md)), then 20c (order step 7.2.1), and 20c brings the
   server back. The switch that 20d planned was done by 7i; what was left of 20d
   moved into 20c. They replace roadmap 7h's C-only HTTP item
   ([`07-vm.md`](07-vm.md)). Whole requests and whole responses, `String` bodies
@@ -217,7 +217,8 @@ the server).
   exists, so no program can pass it in), so that golden case is the C test of
   `agc_task_drop` on a running task in `vm/tests/task_cancel_test.c`, and the
   other `close_server` cases are goldens that close from `main`; a handler crash
-  ends only its connection (§37.5) instead of the whole run that the first
+  ends only its connection (handle ownership) instead of the whole run that the
+  first
   design planned before phase 24; a request that times out is closed with no
   408; its CHANGELOG entry is in the 0.2.0 section.
 - [ ] 20c-bench **Record the HTTP benchmark numbers** from an idle-machine run

@@ -1,7 +1,8 @@
 ## 48. Regular expressions
 
 **Status:** Decided by the owner on 2026-10-15: a linear-time matcher with no
-backtracking (48.2), std first (48.3), after the bootstrap of §35 (step 8), and
+backtracking (48.2), std first (48.3), after the bootstrap (§18, port step 8),
+and
 a Ruby-style regex literal `/pattern/flags` (48.6). Roadmap row 7.10 and phase
 29 ([`docs/roadmap/29-regex.md`](../roadmap/29-regex.md)) record it. Nothing is
 implemented. The decisions are in 48.10, with four open questions.
@@ -290,7 +291,8 @@ of phase 29, after 48a. `Regex.compile(String)` stays for patterns built at run
 time. A raw string literal is not planned. The options weighed: (a) `"\\d+"`,
 which doubles every backslash; (b) a raw string `r"..."`, a general text form
 that cannot hold `"`, not planned; (c) `/.../flags`, decided; (d) a heredoc,
-which needs two or more lines and keeps the escapes (§25.10), so it does not
+which needs two or more lines and keeps the escapes (heredocs, in the
+grammar), so it does not
 help a one-line pattern.
 
 **Body.** The body is the pattern, with no string escapes. The body scanner
@@ -444,7 +446,7 @@ Each item has its own PR, with its own tests and docs, as phase 27 does.
 - **48d: Unicode classes and case folding.** `\p{L}`, `\pN`, scripts, and `(?i)`
   with simple Unicode folding. The tables are generated like
   `vm/unicode_data.c`, from `vm/tools/gen-unicode.rkt`, which is Racket. Whether
-  that generator stays after the bootstrap is open (§35).
+  that generator stays after the bootstrap is open (§18).
 
 Not planned: raw string literals.
 
@@ -473,7 +475,7 @@ Not planned: raw string literals.
    wraps.
 2. **The method form.** Options: (A) module functions only,
    `Regex.find_all(text, re)` and `text |> Regex.split(re)`; (B) a method on
-   String, `text.scan(re)`, which needs the compiler prelude (§25.6, row 8.2),
+   String, `text.scan(re)`, which needs the compiler prelude (row 8.2),
    since a std module cannot add methods to a builtin type. **Recommendation:**
    (A) in 48a, and (B) with row 8.2.
 3. **The import for the literal.** Options: (A) a file that uses a literal

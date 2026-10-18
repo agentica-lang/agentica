@@ -307,9 +307,9 @@ end
   are checked like enum type arguments.
 - A field named `with` whose type is a type parameter is `CHECK-REDEFINED-NAME`
   at the declaration, since the parameter could be an `Fn`, and
-  `value.with(...)` is the struct update of [section
-  25.3](25-ruby-typed-idioms.md#253-struct-update-with-with) (which already bans
-  `Fn` fields named `with`).
+  `value.with(...)` is the struct update of
+  [`docs/grammar/06-semantics.md`](../grammar/06-semantics.md#structs-and-lists)
+  (which already bans `Fn` fields named `with`).
 - `Map` keys must still be `Int` or `String`. A type parameter used as a `Map`
   key (`items: Map[K, V]`) is rejected at the declaration with
   `CHECK-MAP-KEY-TYPE`, as for generic enums today.

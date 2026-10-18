@@ -9,31 +9,20 @@ The earlier design, C-only `HttpBody` and `HttpWriter` streams, was replaced by
 whole messages because a `String` body is simple for programs and keeps all byte
 work in C.
 
-What is built is specified here, not in this file:
-
-- **What:** The API, options, limits, answers and the migration from the builtin
-  `HTTP` module
-  - **Where:**
-    [`docs/grammar/06d-io-and-network.md`](../grammar/06d-io-and-network.md),
-    "HTTP client and server (`std/http`)"; the migration table in
-    [`site/content/library/io-and-system/network.md`][agentica-link-1];
-    the hints for removed names in
-    [`07-diagnostics.md`](../grammar/07-diagnostics.md)
-
-- **What:** Parsing rules, the design decisions, the client, the server, errors
-  and status codes, the tests
-  - **Where:** [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7
-
-- **What:** Task cancellation for `close_server`
-  - **Where:** [`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1
-    and §10.2.2
-
-- **What:** Programs and the site
-  - **Where:** the programming skill's `references/network.md` and
-    `site/content/library/io-and-system/network.md`
+What is built is not in this file. The API, options, limits and answers are in
+the grammar ([`06d-io-and-network.md`](../grammar/06d-io-and-network.md), "HTTP
+client and server (`std/http`)"), with the migration table in the site's
+[network page][agentica-link-1] and the hints for removed names in
+[`07-diagnostics.md`](../grammar/07-diagnostics.md); the parsing rules, the
+design decisions, the client, the server, the errors, the status codes and the
+tests are in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7;
+task cancellation for `close_server` is in
+[`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1 and §10.2.2;
+and the programs are in the programming skill's `references/network.md` and the
+site's network page. Sections 30.1 to 30.10 moved to those places.
 
 This file keeps what is not built: streaming on channels (20e to 20g, 30.11) and
-what comes later (30.12). Sections 30.1 to 30.10 moved to the places above.
+what comes later (30.12).
 
 **Streaming** is a new feature, VM-only, at order step 7.4 ([the order
 table](../roadmap/README.md#current-implementation-order)): after phase 17
@@ -133,7 +122,7 @@ uploads to an Agentica server); each would need its own one-way test.
 
 ### 30.12 Later: binary bodies and `TlsContext`
 
-- **Binary bodies** come after `Bytes` (phase 13, §23): byte forms of the body
+- **Binary bodies** come after `Bytes` (phase 13): byte forms of the body
   fields and of the stream pieces. They pass the one-way test because a `String`
   cannot hold arbitrary bytes. Their shape is decided with phase 13; until then
   a binary body is an `error` (client) or 400 (server).

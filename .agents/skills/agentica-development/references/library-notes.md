@@ -73,7 +73,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - Entrypoint return cancels pending work and closes the run's resources. A
   diagnostic in `main`, RUNTIME-STEP-LIMIT, RUNTIME-INTERNAL or System.exit ends
   the run; any other diagnostic in a task is a crash that ends only that task
-  (phase 24, §37), and an unobserved crash makes the run exit 1 when `main`
+  (phase 24), and an unobserved crash makes the run exit 1 when `main`
   returns. Tasks inherit ports and arguments; cross-task stream ordering is
   unspecified.
 - `std/bdd` fails a step with RUNTIME-BDD-PENDING-TASKS when

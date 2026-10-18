@@ -5,30 +5,25 @@ This index tracks future proposals; the current language contract is in
 spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
-Section 14 records decided and rejected ideas; §18 preserves the front-end
-language history, settled by §35. Sections 19, 21 and 22 are VM implementation
-proposals, not language changes. Sections 23–24 add binary data and logging
-without changing the grammar.
-Sections 25–40 cover Ruby idioms, diagnostics, concurrency, VM metrics, TLS,
-HTTP, BDD, doc comments, digit separators, VM values, self-hosting, unit tests,
-crash isolation, value representation, semantic CLI, and native code. The Files
-index carries current status; linked sections keep requirements, rationale and
-alternatives.
-Sections 41–43 cover date/time types, sized numerics and an unscheduled language
-server; their specs record the requirements and dependencies.
+Sections 19, 21 and 22 are VM implementation proposals, not language changes.
+Section 20 adds crypto without changing the grammar; binary data (§23) and
+logging (§24) are built and live in the grammar. Sections 25–34 cover Ruby
+idioms, diagnostics, concurrency, VM metrics, TLS, HTTP, BDD, doc comments and
+VM values. Sections 38–40 cover value representation, semantic CLI and native
+code; unit tests (§36) and task crash isolation (§37) are built. Sections 41–43
+cover date/time types, sized numerics and an unscheduled language server. The
+Files index carries current status; linked sections keep requirements, rationale
+and alternatives.
 
 
 ## Files
 
-Each section links to its proposal or current home. Landed and decided notes
-may share [`done.md`](done.md); §6 points to the VM design, and §7 to §25.13.
-Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
+Each section links to its proposal or current home; §6 points to the VM design,
+§7 to §25.13, and §18 records the front-end language decision and the
+self-hosted bootstrap. Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33 and 35–37
+have no file of their own: they are built or decided, and their content lives in
+the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
 [`docs/bdd.md`](../bdd.md).
-
-- §: 2
-  - Title: Landed: enums and pattern matching
-  - File: [`done.md`](done.md#2-landed-enums-and-pattern-matching)
-  - Status: Landed; spec in `docs/grammar/`
 
 - §: 3
   - Title: Extensions without a normative grammar
@@ -41,11 +36,6 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
     [`04-stdlib-and-function-values.md`](04-stdlib-and-function-values.md)
   - Status: Mostly landed; the rest is planned
 
-- §: 5
-  - Title: Remaining `List` operations
-  - File: [`05-list-operations.md`](05-list-operations.md)
-  - Status: Mostly landed; other gaps listed
-
 - §: 6
   - Title: Native runtime
   - File: [`VM design`](../vm/README.md)
@@ -56,43 +46,10 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - File: [Decided against](25-ruby-typed-idioms.md#2513-decided-against-part-c)
   - Status: Not planned; rationale in §25.13
 
-- §: 8
-  - Title: Concurrency and parallelism
-  - File: [`08-concurrency.md`](08-concurrency.md)
-  - Status: Tasks landed; channels built (§27.2); open questions only; CPU
-    parallelism proposed
-
-- §: 9
-  - Title: Files and paths
-  - File: [`done.md`](done.md#9-files-and-paths-implemented)
-  - Status: Implemented
-
-- §: 10
-  - Title: Void and processes
-  - File: [`done.md`](done.md#10-void-and-processes-implemented)
-  - Status: Implemented
-
-- §: 11
-  - Title: Ruby-style ergonomics
-  - File: [`11-ruby-ergonomics.md`](11-ruby-ergonomics.md)
-  - Status: Implemented; its rule for new forms still applies; a few items
-    open
-
-- §: 12
-  - Title: Data structures
-  - File: [`12-data-structures.md`](12-data-structures.md)
-  - Status: Ranges landed; sets, queues and faster lists planned (roadmap
-    phase 8)
-
 - §: 13
   - Title: Shared tables (ATS)
   - File: [`13-ats.md`](13-ats.md)
   - Status: On demand (roadmap phase 9)
-
-- §: 14
-  - Title: Decided: no shadowing
-  - File: [`done.md`](done.md#14-decided-no-shadowing)
-  - Status: Decided
 
 - §: 15
   - Title: Adapters and JSON inspection
@@ -111,9 +68,9 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - Status: Planned (roadmap 10e)
 
 - §: 18
-  - Title: Front-end implementation language
+  - Title: Front-end implementation language (self-hosting; done)
   - File: [`18-front-end-language.md`](18-front-end-language.md)
-  - Status: Decided in §35: self-hosting
+  - Status: Decision and bootstrap done; the remaining work is in the roadmap
 
 - §: 19
   - Title: SIMD in the VM
@@ -125,31 +82,17 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - File: [`20-crypto.md`](20-crypto.md)
   - Status: Planned after 7i (roadmap order step 7.5)
 
-- §: 21
-  - Title: VM layers
-  - File: [`21-vm-layers.md`](21-vm-layers.md)
-  - Status: Planned (roadmap 7l)
-
 - §: 22
   - Title: JIT
   - File: [`22-jit.md`](22-jit.md)
   - Status: Required (roadmap 7m)
 
-- §: 23
-  - Title: Binary data
-  - File: [`23-binary-data.md`](23-binary-data.md)
-  - Status: Done (roadmap phase 13)
-
-- §: 24
-  - Title: Logging and debugging
-  - File: [`24-logging.md`](24-logging.md)
-  - Status: Built (14a, 14b, 14c)
-
 - §: 25
   - Title: Ruby typed idioms
   - File: [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md)
-  - Status: Part A planned (roadmap phase 15); Part B to evaluate later;
-    Part C decided against
+  - Status: 25.1, 25.3, 25.6, 25.10, 25.12.1 and 25.14 built (the grammar and
+    the programming skill are the contract); 25.2, 25.4, 25.5, 25.9 and 25.11
+    planned (roadmap phase 15); Part B to evaluate later; Part C decided against
 
 - §: 26
   - Title: Strict diagnostics
@@ -187,32 +130,10 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - Status: 22a built (roadmap phase 22, order step 7.2a); 22b (`agentica
     doc`) waits until after the bootstrap (row 22b)
 
-- §: 33
-  - Title: Digit separators
-  - File: [`33-digit-separators.md`](33-digit-separators.md)
-  - Status: Done (roadmap phase 23, 23a)
-
 - §: 34
   - Title: Shared small values in the VM
   - File: [`34-shared-small-values.md`](34-shared-small-values.md)
   - Status: Built (roadmap 7g, 2026-10-16)
-
-- §: 35
-  - Title: Self-hosted front end and a single binary
-  - File: [`35-self-hosting.md`](35-self-hosting.md)
-  - Status: Planned, in the roadmap order from row 7.2.7 on
-
-- §: 36
-  - Title: Unit tests (`Test`)
-  - File: [`36-unit-tests.md`](36-unit-tests.md)
-  - Status: `Test` module done (25a); `agentica test` for test files planned
-    (25b)
-
-- §: 37
-  - Title: Task crash isolation
-  - File: [`37-task-crash-isolation.md`](37-task-crash-isolation.md)
-  - Status: Planned (roadmap phase 24, after 7i and 20b); semantics for the
-    owner to review
 
 - §: 38
   - Title: Value representation
@@ -236,13 +157,13 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - Title: Dates and times
   - File: [`41-dates-and-times.md`](41-dates-and-times.md)
   - Status: Designed by the owner's scope of 2026-10-14; the types wait
-    until after the bootstrap (§35, 41.13); `Time.monotonic_ns` may land earlier
+    until after the bootstrap (§18, 41.13); `Time.monotonic_ns` may land earlier
 
 - §: 42
   - Title: Sized numeric types
   - File: [`42-sized-numeric-types.md`](42-sized-numeric-types.md)
   - Status: Designed by the owner's scope of 2026-10-14; implement after the
-    bootstrap (§35)
+    bootstrap (§18)
 
 - §: 43
   - Title: Language server (LSP)
@@ -250,21 +171,13 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - Status: Idea, not scheduled (the owner asked on 2026-10-15 to note it);
     reuses §39 and §32
 
-- §: 44
-  - Title: Module constants and imports
-  - File: [`44-module-constants.md`](44-module-constants.md)
-  - Status: Planned (roadmap row 7.2.8): new import forms (`import Mod from
-    "path"`, `import {A} from "path"`) first, then module constants; before the
-    bootstrap, by the owner's decision of 2026-10-15; relaxes the freeze of row
-    7.2.7
-
 - §: 45
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)
   - Status: Design, not scheduled; decided by the owner on 2026-10-15:
     `std/toml` first (45-0, may land before the bootstrap), TOML manifest and
     lock, `Toml.Value` decode, `owner/repo` imports; the manager waits for after
-    the bootstrap (§35 step 8); asked by the owner on 2026-10-15
+    the bootstrap (port step 8); asked by the owner on 2026-10-15
 
 - §: 46
   - Title: Signals
@@ -277,7 +190,7 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
 - §: 47
   - Title: Code formatter (`agentica fmt`)
   - File: [`47-formatter.md`](47-formatter.md)
-  - Status: Deferred until after the bootstrap (§35 step 8, roadmap row 7.9,
+  - Status: Deferred until after the bootstrap (port step 8, roadmap row 7.9,
     phase 28), decided by the owner on 2026-10-15; 47d waits for the LSP (§43)
 
 - §: 48

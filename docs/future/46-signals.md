@@ -1,7 +1,7 @@
 ## 46. Signals
 
 **Status:** Scheduled on 2026-10-15 in [phase 27](../roadmap/27-signals.md),
-after the bootstrap of §35 (step 8). 46a and 46b may come earlier when no
+after the bootstrap (§18, port step 8). 46a and 46b may come earlier when no
 other VM PR is waiting. Nothing is implemented yet.
 
 The owner asked for a way to catch the OS stop signal in an Agentica program. A
@@ -120,7 +120,7 @@ Signal.number(sig: Signal) -> Int
 (`src/builtin-types.rkt`). Its variants are `Signal.Term`, `Signal.Int`,
 `Signal.Hup`, `Signal.Usr1`, `Signal.Usr2`, `Signal.Quit` and `Signal.Kill`.
 The spelling follows `Await.TimedOut` and `LogLevel.Info`. ALLCAPS names are
-constant names from §44, so they are not used here. 46a checks that
+constant names, so they are not used here. 46a checks that
 `Signal.Int` is accepted, since `Int` is also a builtin type name.
 
 - The first five can be subscribed to. `Quit` is the VM's force path (46.3.3),
@@ -427,10 +427,10 @@ The program below is the `Supervisor` and the `main` flow of the gh-runner
 script, in the proposed API. It does not compile today. `Signal`,
 `Signal.channel`, `Signal.Term`, `Process.spawn_group`, `Process.signal_group`,
 `System.signal` and `File.copy` do not exist yet. `Path.remove` does: it came
-with the OS builtins of the BDD driver port (§35.5, step 7a), as
+with the OS builtins of the BDD driver port (§18.4, step 7a), as
 `Path.remove(path, timeout_ms)`, which deletes a file, a link or a directory
 tree without following links and treats a missing path as `ok()`. Constants are
-functions until module constants (§44) land.
+module constants (the grammar's `Module constants` section).
 
 The mapping from Python is short. `handle_signal` becomes `first_signal`. It
 returns the first value. Later values stay queued and unread, which is the
@@ -447,7 +447,7 @@ import Logger from "std/logger"
 
 # Proposed API (46a, 46b): Signal, Signal.channel, Process.spawn_group,
 # Process.signal_group, System.signal and File.copy. Path.remove exists.
-# Constants are functions until module constants (§44) land.
+# Constants are module constants (the grammar's `Module constants`).
 
 struct Settings
   url: String
@@ -900,7 +900,7 @@ signal work, so they go to their own change.
 
 - **Need:** Path: unlink
   - **Status:** exists
-  - **Note:** `Path.remove(path, ms)` (§35.5, step 7a). A missing path is `ok`,
+  - **Note:** `Path.remove(path, ms)` (§18.4, step 7a). A missing path is `ok`,
     as with `unlink(missing_ok=True)`. A link is removed itself.
 
 - **Need:** Path: rmtree
@@ -920,7 +920,7 @@ signal work, so they go to their own change.
 
 - **Need:** Path: iterdir with is_dir and is_symlink
   - **Status:** exists
-  - **Note:** `Dir.list` gives names. `File.lstat` (§35.5, step 7a) does not
+  - **Note:** `Dir.list` gives names. `File.lstat` (§18.4, step 7a) does not
     follow a link and gives `kind` `"link"`; `File.stat` follows it.
 
 - **Need:** Path: os.access (writable)
@@ -1036,11 +1036,11 @@ are the default-path cases.
   Agentica code, and it does not need the VM work of 46a or 46b in full.
 - **Separate changes, outside §46:** `File.copy` that keeps the mode, and
   `System.hostname`. Reaping orphans as PID 1 is also separate (46.8, question
-  10). Two of the others are done, in the OS builtins of §35.5 (step 7a):
+  10). Two of the others are done, in the OS builtins of §18.4 (step 7a):
   `Path.remove`, and the kind check that does not follow links, which is
   `File.lstat`.
 
-The bootstrap question. The compiler catalog exists (§35 step 4, PR #258).
+The bootstrap question. The compiler catalog exists (port step 4, PR #258).
 `compiler/builtins_data.agc` is generated from `src/builtins.rkt` and
 `src/builtin-types.rkt` by `tools/gen-builtins-data.rkt`, and
 `tests/frontend-catalog-test.rkt` fails when it is stale. So each 46a and 46b PR
@@ -1049,8 +1049,8 @@ allows the table rows and the `vm-builtins` names. The naming choice of 46.3.1
 is the case that needs care, since option (A) needs a front-end change. The
 sentences above describe landing before the bootstrap. 46a and 46b may land
 before the bootstrap when no other VM PR is waiting. 46c changes the driver,
-which §35 step 8 ports, so it waits for that port. 46d is Agentica code and
-comes after 46b by the owner's order.
+which the port's step 8 moved into `compiler/`. 46d is Agentica code and comes
+after 46b by the owner's order.
 
 ### 46.8 Open questions
 

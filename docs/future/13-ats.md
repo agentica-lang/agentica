@@ -10,8 +10,8 @@ A `Channel[T]` ([§27.2](27-iteration-and-concurrency.md#272-channels)) passes
 messages between tasks; a table is state that many tasks read and update. The
 table waits for a program that needs it. `Table` becomes a reserved type and
 module name, a breaking change: a user `struct Table`, `enum Table` or
-`import ... as Table` becomes `CHECK-REDEFINED-NAME`, as §12 says for `Range`,
-`Set` and `Queue`.
+`import ... as Table` becomes `CHECK-REDEFINED-NAME`, as for `Range` and
+`Set` (and 8c's `Queue`).
 
 ```agentica
 def count_visit(hits: Table[String, Int]) -> Void
@@ -107,7 +107,7 @@ first-insertion order; a key deleted and then put again goes to the end, as in
     `Json`), so to pass a table between steps capture it from `main`; to pass
     data, use the JSON state.
 - **Ownership:** a table is not an OS resource, so the owner rule of
-  [§37.5](37-task-crash-isolation.md#375-handles-of-a-task-that-ends) does not
+  [handle ownership][task-rules] does not
   apply to it. The task that creates a table does not own it, and ending that
   task (a return, a crash or a cancel) does not close it. It lives while any
   value refers to it, and the garbage collector frees it then. A `Channel` is
@@ -145,6 +145,8 @@ first-insertion order; a key deleted and then put again goes to the end, as in
   goes into `src/` as written if phase 9 starts before the freeze of the Racket
   front end (roadmap row 7.2.7, [roadmap](../roadmap/README.md)). If it starts
   after the freeze, the checker part goes into the Agentica front end
-  ([§35](35-self-hosting.md)) instead, since the Racket front end takes no new
-  checker rules then.
+  ([§18](18-front-end-language.md)) instead, since the Racket front end takes
+  no new checker rules then.
 
+
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

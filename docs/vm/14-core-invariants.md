@@ -13,7 +13,7 @@ Each rule says what is **as built** today and what is **being built** or is a
 **target**. The mechanisms are in §10.2.1 and §10.2.2
 ([`10-io-scheduler.md`](10-io-scheduler.md)), §10.4
 ([`10-io-processes.md`](10-io-processes.md)), §10.7.2
-([`10-io-http.md`](10-io-http.md)) and §37.
+([`10-io-http.md`](10-io-http.md)) and [task rules][task-rules].
 
 ### 14.1 Waiting
 
@@ -114,8 +114,10 @@ reason here.
 **Rule.** One way: `agc_task_cancel` (20b's core, §10.2.1, Cancellation). It
 knows every place a task can park (§14.1) and takes the task out of each one. A
 new kind of wait adds its case to `agc_task_cancel` and to
-`vm/tests/task_cancel_test.c` in the same PR. A crash (§37.6) and `Test.run`'s
-leftovers (§36.6) cancel through it. Nothing else cancels a wait. A timer, a
+`vm/tests/task_cancel_test.c` in the same PR. A crash (cancellation) and
+`Test.run`'s
+leftovers (a test's tasks) cancel through it. Nothing else cancels a wait. A
+timer, a
 job's completion and a crash also unlink a task, but they end a wait; they do
 not cancel one.
 
@@ -192,13 +194,15 @@ any other handle. If that task ends, in any way
 (return, crash, cancel), without closing it, the handle is closed. There is one
 close path: `finish_task` (`vm/task.c`) ends every task and closes the handles
 it still owns through `agc_close_owned`. Handing a handle to another task is
-always explicit, through one hand-off form, `Task.spawn_owning` (§37.5): it
+always explicit, through one hand-off form, `Task.spawn_owning`
+([handle ownership][task-rules]): it
 gives a handle the caller owns to the task it spawns, in the same call.
 `HttpWire.spawn` (20c, §10.7.2) is the same hand-off into the server's task
 group, through the one port function `agc_task_spawn_owning`; it has no group
 registration of its own. Ownership decides who closes a handle, not who may use
-it. Other tasks still use a shared handle (§37.5, "Shared handles"), and
-`HttpClient` stays exempt (§37.5). Planned (phase 9,
+it. Other tasks still use a shared handle (handle ownership, "Shared
+handles"), and
+`HttpClient` stays exempt (handle ownership). Planned (phase 9,
 [§13](../future/13-ats.md)): a `Table` is exempt too. It is not an OS resource,
 so no task owns it, and a task's end never closes it.
 
@@ -249,7 +253,8 @@ Items in the plan to re-check with this rule before they start:
     add on the allocation path while nobody asks (§28.12): it must pass the
     overhead check or change rule 4 of §28.2 first.
 
-- **Item:** VM layers (7l, §21; its first part is row 7.2.1b, §15)
+- **Item:** VM layers (7l in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers);
+  its first part is row 7.2.1b, §15)
   - **Question:** Does each layer replace code, or only add a boundary? (§15
     answers for the first part.)
 
@@ -267,3 +272,5 @@ Items in the plan to re-check with this rule before they start:
   - **Question:** Only if measurements ask. Does the model of §16 stop being
     enough, and does the change keep one way to wake a task and one place for
     each handle?
+
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

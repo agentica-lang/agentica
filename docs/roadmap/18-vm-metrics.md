@@ -47,7 +47,7 @@ that starts at the first scrape; with metrics off the cost is zero, and
   `tasks_finished_total` as `tasks_done`, plus main in the end-of-run snapshot;
   `Process.spawn` removes the variables from a child's environment (done early,
   with its test in `tests/test_vm_os.py`, in the OS builtins of the BDD driver
-  port, §35.5 step 7a: `metrics_env` in `child_env` of `vm/process.c`);
+  port, §18.4 step 7a: `metrics_env` in `child_env` of `vm/process.c`);
   `make vm METRICS=0` (built in the `vm-sanitizers` job) and `metrics off` in
   `--version`; the Makefile and the test runners remove the variables. Tests: C
   tests of the renderer and the path checks, an independent Python parser of the

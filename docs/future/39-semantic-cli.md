@@ -347,8 +347,8 @@ usual three formats.
   Shared dependencies are linked and checked once. So a command costs about one
   `agentica check` of the files of `PATH...` together, less when no check is
   needed.
-- No daemon, no cache, no watch mode. Start-up is the Racket start-up of every
-  command today; the single binary of §35 makes it faster for all of them.
+- No daemon, no cache, no watch mode. Start-up is the single binary's (§18),
+  already much faster than Racket's was.
 
 ### 39.9 Builtins and `agentica help`
 

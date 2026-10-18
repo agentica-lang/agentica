@@ -3,7 +3,7 @@
  * sources and the two programs of `agentica test` (its runner and its default
  * step program). make generates embedded.s, which .incbin's the files and
  * defines these two symbols; agentica.c is the only reader. Driver header.
- * Design: docs/future/35-self-hosting.md §35.6 and docs/vm/08-loader-and-cli.md.
+ * Design: docs/future/18-front-end-language.md §18.8 and docs/vm/08-loader-and-cli.md.
  */
 #ifndef AGC_EMBEDDED_H
 #define AGC_EMBEDDED_H
