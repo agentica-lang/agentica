@@ -476,24 +476,30 @@ between literals.
   imported module would be renamed. The one   entry covers linking, the name
   reservation (the linker's duplicate check uses   `builtin-ref`) and `agentica
   help format`. Only the function name is reserved:   a user `def format` is
-  `CHECK-REDEFINED-NAME`, a breaking change accepted   before 1.0. Variables,
-  parameters and fields named `format` stay valid, since   `format(...)` is a
-  call and a variable is not callable. - The first argument must be a plain
-  one-line string literal, without `#{...}`   and not a heredoc:
-  `CHECK-FORMAT-LITERAL` otherwise, with a help to use   interpolation for text
-  that is built at run time. - A bad conversion (unknown type, an unknown flag,
-  a `%` at the end, `precision`   on `d`, `x` or `s`, `0` on `s`, a width or
-  precision out of range) is   `CHECK-FORMAT-SPEC`, with the span of the
-  conversion inside the literal. - A wrong number of arguments is `CHECK-ARITY`;
-  an argument of the wrong type is   `CHECK-TYPE-MISMATCH` at the argument, with
-  a secondary span at its   conversion. - `sprintf(...)`, `"%d" % x` and
-  `String.format(...)` get a help that shows   `format(...)`. - `agentica help
-  format` shows a help entry like a builtin's: the form   `format(fmt: String
-  literal, args...) -> String`, the conversions and flags,   and an example.
-  `agentica help format --json` has the same fields as a builtin   (name,
-  signature, effects: none, description), with the arity given as "2 or   more"
-  (a format with no conversion is rejected).
+`CHECK-REDEFINED-NAME`, a breaking change accepted before 1.0. Variables,
+parameters and fields named `format` stay valid, since `format(...)` is a call
+and a variable is not callable.
 
+- The first argument must be a plain one-line string literal, without `#{...}`
+  and not a heredoc: `CHECK-FORMAT-LITERAL` otherwise, with a help to use
+  interpolation for text that is built at run time.
+
+- A bad conversion (unknown type, an unknown flag, a `%` at the end, `precision`
+  on `d`, `x` or `s`, `0` on `s`, a width or precision out of range) is
+  `CHECK-FORMAT-SPEC`, with the span of the conversion inside the literal.
+
+- A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type is
+  `CHECK-TYPE-MISMATCH` at the argument, with a secondary span at its
+  conversion.
+
+- `sprintf(...)`, `"%d" % x` and `String.format(...)` get a help that shows
+  `format(...)`.
+
+- `agentica help format` shows a help entry like a builtin's: the form
+  `format(fmt: String literal, args...) -> String`, the conversions and flags,
+  and an example. `agentica help format --json` has the same fields as a builtin
+  (name, signature, effects: none, description), with the arity given as "2 or
+  more" (a format with no conversion is rejected).
 
 **Where the code lives.** It waits for 8d with the compiler prelude. By the
 std-first rule, padding, decimal and hex text are Agentica code in a prelude

@@ -228,7 +228,7 @@ name: set to Ana
   nullary forms `JsonField.Absent` and `JsonField.Null` (which arrive as
   `type-expression`s). It adds one thing: `JsonField` has a type parameter, so
   its table entry is generic like a user generic enum. For type references,
-  adding `JsonField` to `reserved-type-names` (in `compiler/`) is what keeps
+  adding `JsonField` to `reserved-type-names` (`compiler/builtins_data.agc`) is what keeps
   a field type like `age: JsonField[Int]` unchanged when linking
   an imported module.
 - **Encode** (VM only, since 7i deleted the evaluator): a `JsonField` value

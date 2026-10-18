@@ -53,9 +53,10 @@ prelude, not in `std/`, because they need the catalog's type variables. Each
 future helper still needs its own spec and must pass the one-way test.
 `Task.map` stays a C builtin because it must cancel timed-out items, which no
 primitive can do, and because it lands at order step 7.3, before the prelude
-(see 27.1, "Why a builtin"). `Task.await` with a timeout (27.3) is a C builtin
-too, by the owner's decision of 2026-10-14: the timeout lives in the scheduler,
-as a timer on the job (`docs/vm/14-core-invariants.md` §14.2), and the prelude
+(see 27.1, "Why a builtin, not prelude code"). `Task.await` with a timeout
+(27.3) is a C builtin too, by the owner's decision of 2026-10-14: the timeout
+lives in the scheduler, as a timer on the job (`docs/vm/14-core-invariants.md`
+§14.2), and the prelude
 it would have waited for does not exist yet.
 
 **One way for each job.** After this section, the programming skill teaches
@@ -415,7 +416,8 @@ timeout and return a `Result`, and `close` and `closed?` are added.
   answer is stale at once with other tasks); `try_send` and `try_recv` (a
   timeout of 0); separate send-only and receive-only types.
 
-**Is `Task.map` built on channels?** No (see 27.1, "Why a builtin"): a channel
+**Is `Task.map` built on channels?** No (see 27.1, "Why a builtin, not
+prelude code"): a channel
 cannot stop a timed-out item's work. And channels do not replace `Task.map`: for
 "the same I/O for each item of a list", `Task.map` is the one form; channels are
 for flows of unknown length, long-lived workers and results in the order they

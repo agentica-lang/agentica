@@ -1,6 +1,6 @@
 ## 26. Strict diagnostics
 
-**Status:** planned (roadmap phase 16), after 7i deletes the evaluator (order
+**Status:** planned (roadmap phase 16), after 7i deleted the evaluator (order
 7.2), as the first items of order step 7.6, before the phase 15 items of that
 step, in the order 26.1, 26.3, 26.2, 26.4 (roadmap 16a, 16c, 16b, 16d). Decided
 by the user on 2026-10-12; 26.4 was added after review the same day. Each
@@ -17,14 +17,16 @@ behind them is the principle below.
 
 **Principle: no warnings.** Agentica has no warnings, by design, as in Go: a
 diagnostic is an error or it does not exist. There are three reasons:
-
 1. **Agents ignore warnings.** An LLM agent reads the exit code and the first
    error. A warning does not stop the run, so the agent does not fix it, and the
-   mistake stays in the code. 2. **A warning means "wrong, but allowed".** That
-   is a second accepted way to    write the code, against the one-way rule of
-   [section    25](25-ruby-typed-idioms.md#25-ruby-typed-idioms): if a form is
-   wrong, the    language rejects it; if it is right, the language says nothing.
-   3. **One diagnostic per stage.** Each stage returns its output or exactly one
+   mistake stays in the code.
+
+2. **A warning means "wrong, but allowed".** That is a second accepted way to
+   write the code, against the one-way rule of [section
+   25](25-ruby-typed-idioms.md#25-ruby-typed-idioms): if a form is wrong, the
+   language rejects it; if it is right, the language says nothing.
+
+3. **One diagnostic per stage.** Each stage returns its output or exactly one
    diagnostic, and stops at the first error (`AGENTS.md`, "Conventions"). The
    diagnostic format has only `error` (`compiler/diagnostic.agc`). Warnings
    would    need a list of diagnostics next to a successful result, which breaks
@@ -60,35 +62,38 @@ with `_` is the one way to keep a name that is unused on purpose (26.2).
   be counted (26.2, "Code that never runs"); and 26.4 last, because its one
   explicit discard, `_ = f(...)`, comes with 26.2 (before 26.2, `sent = f(...)`
   would silence 26.4 and leave no trace). Each PR comes after 7i (order 7.2), so
-  the Racket evaluator and its tests are gone and need no migration. All four
-  are front end only: the linker (`compiler/linker.agc`) for 26.1, the checker
-  (`compiler/checker.agc`) for 26.2, 26.3 and 26.4. Only the discard of 26.2
-  touches   the parser and `compiler/lowering.agc`, in a few lines; the bytecode
-  format and the VM   do not change. - Each PR is a breaking change and migrates
-  the repo in the same PR: the   programs in `examples/`, `stdlib/`,
-  `benchmarks/`, `tests/` (the `.agc`   fixtures and the Agentica programs
-  written inline in the Racket tests), the   `agentica` blocks of
-  `site/content`, and the examples of the programming   skill. The impact list
-  at the end of this section says what each item breaks   today. The
-  `CHANGELOG.md` gets one "Changed" entry per item. The 26.1 entry   also speaks
-  to package authors: an unused import in a `pkg/` library now fails   the build
-  of every program that uses the library, so a library should be   checked with
-  the new release before its users update. - **Tests** in each PR cover each
-  code three ways: checker or linker tests that   assert the code and the span
-  (`tests/test_spec_checker.py`,   `tests/test_spec_modules.py`), never the
-  message text; an `{expect="CODE"}` site   example, which
-  `tests/test_site_examples.py` runs end to end; and one   CLI-level check:
-  `dist/agentica --json check file.agc` exits 1 and its   JSON diagnostic has
-  the code (next to the CLI checks of   `tests/test_examples.py`, which already
-  runs the CLI with `--json`). There is   no golden fixture per code: the
-  goldens in `tests/fixtures/vm/` compile and   run on the VM, and compiling
-  stops with an error on any front-end diagnostic,   so a program that fails
-  checking cannot be one. - **Docs** in each PR: `docs/grammar.md` (the rule,
-  and §7 "Diagnostics for   agents" gets the no-warnings principle with
-  whichever item lands first), the   programming skill
-  (`references/diagnostics.md` for the code, and one line in   `SKILL.md`, since
-  these rules apply to every program), the matching site page,   and the
-  development skill's notes. When an item lands, its text moves to
+the Racket evaluator and its tests are gone and need no migration. All four are
+front end only: the linker (`compiler/linker.agc`) for 26.1, the checker
+(`compiler/checker.agc`) for 26.2, 26.3 and 26.4. Only the discard of 26.2
+touches the parser and `compiler/lowering.agc`, in a few lines; the bytecode
+format and the VM do not change.
+
+- Each PR is a breaking change and migrates the repo in the same PR: the
+  programs in `examples/`, `stdlib/`, `benchmarks/`, `tests/` (the `.agc`
+  fixtures and the Agentica programs written inline in the Python tests
+  (`tests/test_*.py`), the `agentica` blocks of `site/content`, and the examples
+  of the programming skill. The impact list at the end of this section says what
+  each item breaks today. The `CHANGELOG.md` gets one "Changed" entry per item.
+  The 26.1 entry also speaks to package authors: an unused import in a `pkg/`
+  library now fails the build of every program that uses the library, so a
+  library should be checked with the new release before its users update.
+
+- **Tests** in each PR cover each code three ways: checker or linker tests that
+  assert the code and the span (`tests/test_spec_checker.py`,
+  `tests/test_spec_modules.py`), never the message text; an `{expect="CODE"}`
+  site example, which `tests/test_site_examples.py` runs end to end; and one
+  CLI-level check: `dist/agentica --json check file.agc` exits 1 and its JSON
+  diagnostic has the code (next to the CLI checks of `tests/test_examples.py`,
+  which already runs the CLI with `--json`). There is no golden fixture per
+  code: the goldens in `tests/fixtures/vm/` compile and run on the VM, and
+  compiling stops with an error on any front-end diagnostic, so a program that
+  fails checking cannot be one.
+
+- **Docs** in each PR: `docs/grammar.md` (the rule, and §7 "Diagnostics for
+  agents" gets the no-warnings principle with whichever item lands first), the
+  programming skill (`references/diagnostics.md` for the code, and one line in
+  `SKILL.md`, since these rules apply to every program), the matching site page,
+  and the development skill's notes. When an item lands, its text moves to
   `grammar.md` and is deleted here.
 
 - **§:** 26.1
@@ -317,19 +322,21 @@ captures, since a block can read captured values but never assign them
   not count either, so `xs = xs.map do |v| v + xs.length end` alone leaves `xs`
   unused. The reason: values are immutable, so the only way the new value of `x`
   leaves such an assignment is through a later read of `x`. A counter that is
-  only incremented, or a list that is only appended to, is lost work, and
-  usually a bug (the result was meant to be printed or returned). Rust warns the
-  same way (`variable is assigned to, but never used`). A call in such a value
-  still runs; if a loop calls a function with effects only to feed its own state
-  (`n = tick(n)`), the name is `_n`. - **Reassignment before any read.** The
-  rule is per variable, not per   assignment: `x = 1`, then `x = 2`, then
-  `puts(x)` is valid. The first value is   never read, but finding that needs a
-  flow analysis of every path; the checker   does not do one, and Go does not
-  reject it either. A variable is unused only   when no read of it exists at
-  all. - **Code that never runs.** A read in a statement after a `return` does
-  not   count. 26.3 lands before this item, so the checker rejects that
-  statement   first and the question never comes up.
+only incremented, or a list that is only appended to, is lost work, and usually
+a bug (the result was meant to be printed or returned). Rust warns the same way
+(`variable is assigned to, but never used`). A call in such a value still runs;
+if a loop calls a function with effects only to feed its own state (`n =
+tick(n)`), the name is `_n`.
 
+- **Reassignment before any read.** The rule is per variable, not per
+  assignment: `x = 1`, then `x = 2`, then `puts(x)` is valid. The first value is
+  never read, but finding that needs a flow analysis of every path; the checker
+  does not do one, and Go does not reject it either. A variable is unused only
+  when no read of it exists at all.
+
+- **Code that never runs.** A read in a statement after a `return` does not
+  count. 26.3 lands before this item, so the checker rejects that statement
+  first and the question never comes up.
 
 **`_` names.** Names that start with `_` and have more after it are already
 valid: `NAME = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }` (`grammar.md`,
@@ -727,59 +734,66 @@ and 26.4.
     parameter; 3 `for _ in` loops in `tests/fixtures/vm/random.agc`, which stay
     valid as discards
 
-- **Where:** Inline programs in Racket tests, before 7i   - **26.1 imports:** 1
-  (`tests/test_spec_modules.py`)   - **26.2 variables:** 36: 24 in
-  `test_spec_checker.py` (23 of the 33 `check-ok`     programs the scan could
-  read, and one more), 6 in `test_frontend_bytecode.py`,     2 in
-  `test_bdd_integration.py`, 1 each in `test_spec_modules.py`,
+- **Where:** Inline programs in tests (Racket, before 7i)
+
+- **26.1 imports:** 1 (`tests/test_spec_modules.py`)
+
+- **26.2 variables:** 36: 24 in `test_spec_checker.py` (23 of the 33 `check-ok`
+  programs the scan could read, and one more), 6 in `test_frontend_bytecode.py`,
+  2 in `test_bdd_integration.py`, 1 each in `test_spec_modules.py`,
   `test_examples.py`, `vm/tests/task_*_test.c` and `tests/vm_diff_support.py`
-  - **26.3 unreachable:** 0   - **26.4 results:** 1 (a `check-ok` program in
-  `test_spec_checker.py` that drops     `HTTP.respond`)
 
+- **26.3 unreachable:** 0
 
-The inline counts are for the tests as they are before 7i. 7i deletes the
-evaluator and the tests that only exercise it, so the implementing PRs, which
-come after 7i, will find the same number or fewer.
+- **26.4 results:** 1 (a `check-ok` program in `test_spec_checker.py` that drops
+  `HTTP.respond`) The inline counts are for the tests as they are before 7i. 7i
+  deletes the evaluator and the tests that only exercise it, so the implementing
+  PRs, which come after 7i, will find the same number or fewer. What the hits
+  are, and their fix:
 
-What the hits are, and their fix:
+- **Variables.** Most are tasks spawned and never awaited (`t =
+  Task.spawn(...)`), values computed to test a step limit or preemption (`x +=
+  1` in `while true`, 5 hits that only the compound-assignment rule finds),
+  unused `for` and block variables in fixtures, and, on the site, `Result`
+  values of `TCP.send`, `Process.send`, `Process.close_stdin` and `Process.wait`
+  assigned and never read. The fix is the discard `_` (`for _`, `|_, v|`,
+  `error(_)`), a `_name`, a bare call statement (only for a value that is not a
+  `Result`), or using the value; the site's `Result` values get a 26.4 handling
+  form or `_ = ...`. The `test_spec_checker.py` programs mostly introduce a
+  variable only to check its type (`x: Int = i`); they get `_x` names or a
+  `puts`. In `tests/test_spec_modules.py`, `funcs.agc` assigns `n = C.go()` and
+  never reads it; its `main` is checked before the imported file's error that
+  the test expects, so the PR uses `n`.
 
-- **Variables.** Most are tasks spawned and never awaited   (`t =
-  Task.spawn(...)`), values computed to test a step limit or preemption   (`x +=
-  1` in `while true`, 5 hits that only the compound-assignment rule   finds),
-  unused `for` and block variables in fixtures, and, on the site,   `Result`
-  values of `TCP.send`, `Process.send`, `Process.close_stdin` and
-  `Process.wait` assigned and never read. The fix is the discard `_` (`for _`,
-  `|_, v|`, `error(_)`), a `_name`, a bare call statement (only for a value that
-  is not a `Result`), or using the value; the site's `Result` values get a 26.4
-  handling form or `_ = ...`. The `test_spec_checker.py` programs mostly
-  introduce a   variable only to check its type (`x: Int = i`); they get `_x`
-  names or a   `puts`. In `tests/test_spec_modules.py`, `funcs.agc` assigns `n =
-  C.go()` and   never reads it; its `main` is checked before the imported file's
-  error that   the test expects, so the PR uses `n`. - **The one unreachable
-  statement** is   the golden fixture   `tests/fixtures/vm/calls.agc`, which
-  checks that code   after `return` does not   run; the PR removes that line and
-  the new checker   test covers the case. (A   program in
-  `tests/test_frontend_parser.py` also has   a statement after `return`, but
-  parser tests never run the checker.) - **The   one unused import** is in
-  `tests/test_spec_modules.py`: `types.agc`   imports   `bad.agc` as `B` and
-  never uses it, and the test expects   `CHECK-UNKNOWN-TYPE` from `bad.agc`.
-  Under 26.1 the linker would stop first   with `CHECK-UNUSED-IMPORT`. The PR
-  gives `B` a use (for example a parameter of   type `B.Pair`, once `Pair` is
-  exported), so the test keeps checking that a   checker error in an imported
-  file is reported in that file. The other module   tests with an unused alias
-  fail earlier in the linker (missing file, bad path,   duplicate or reserved
-  alias, import cycle) and are not affected. - **Ignored   results.** All 12 are
-  calls with effects used as statements:   `File.close`,   `File.write_text` and
-  `File.write_bytes` in the file fixtures,   and   `HTTP.respond` and `TCP.send`
-  in two examples and one checker test. The   fixtures that test error cases on
-  purpose use a `case` or `_ = ...`; the   others use `try` or `.unwrap!`. The
-  188 `IO.inspect` statements on a `Result`   are not hits (the exception
-  above). -   `tests/eval/tasks/t5-scope-return/start.agc` has an unused `last`,
-  but it is   broken on purpose (agents fix it) and fails earlier with
-  `CHECK-MISSING-RETURN`; it needs no edit. - `{expect="..."}` site blocks that
-  fail earlier with another checker code are   not affected;
-  `tour/results-and-try.md`'s `RUNTIME-UNWRAP-ERROR` block is,   since a check
-  error now comes before the run.
+- **The one unreachable statement** is the golden fixture
+  `tests/fixtures/vm/calls.agc`, which checks that code after `return` does not
+  run; the PR removes that line and the new checker test covers the case. (A
+  program in `tests/test_frontend_parser.py` also has a statement after
+  `return`, but parser tests never run the checker.)
+
+- **The one unused import** is in `tests/test_spec_modules.py`: `types.agc`
+  imports `bad.agc` as `B` and never uses it, and the test expects
+  `CHECK-UNKNOWN-TYPE` from `bad.agc`. Under 26.1 the linker would stop first
+  with `CHECK-UNUSED-IMPORT`. The PR gives `B` a use (for example a parameter of
+  type `B.Pair`, once `Pair` is exported), so the test keeps checking that a
+  checker error in an imported file is reported in that file. The other module
+  tests with an unused alias fail earlier in the linker (missing file, bad path,
+  duplicate or reserved alias, import cycle) and are not affected.
+
+- **Ignored results.** All 12 are calls with effects used as statements:
+  `File.close`, `File.write_text` and `File.write_bytes` in the file fixtures,
+  and `HTTP.respond` and `TCP.send` in two examples and one checker test. The
+  fixtures that test error cases on purpose use a `case` or `_ = ...`; the
+  others use `try` or `.unwrap!`. The 188 `IO.inspect` statements on a `Result`
+  are not hits (the exception above).
+
+- `tests/eval/tasks/t5-scope-return/start.agc` has an unused `last`, but it is
+  broken on purpose (agents fix it) and fails earlier with
+  `CHECK-MISSING-RETURN`; it needs no edit.
+
+- `{expect="..."}` site blocks that fail earlier with another checker code are
+  not affected; `tour/results-and-try.md`'s `RUNTIME-UNWRAP-ERROR` block is,
+  since a check error now comes before the run.
 
 
 So 26.2 is the large migration (about 30 program and test files, and 17 site
