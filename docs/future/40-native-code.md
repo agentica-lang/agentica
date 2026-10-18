@@ -38,6 +38,9 @@ use `extern "C"`. The rules are:
 
 - Native code gets immutable values. It returns new values through the API. It
   may change only its own buffers.
+- A native function that returns nothing maps to the completion concept of the
+  grammar's process rules (`ok()` for a `Result[Void]`), once the FFI's ABI and
+  ownership rules land.
 - It never stores GC pointers in `malloc` memory. This is the VM's existing rule
   ([`16-architecture.md`](../vm/16-architecture.md) §16.5).
 - Conversions come first for `Int`, `Float`, `Bool`, `String`, `List`, `Map` and

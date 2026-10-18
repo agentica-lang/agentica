@@ -206,7 +206,7 @@ end
   was
   left of 20d; placed there by the owner on 2026-10-13) and after the evaluation
   pilot (order step 7.2.2, added by the owner on 2026-10-13), and before digit
-  separators (§33) and before `Task.map` (order step 7.3); channels come
+  separators and before `Task.map` (order step 7.3); channels come
   earlier, at row 7.2.1e. 22a is no longer an exception to "new features are
   VM-only and come after 7i". 22b waits until after the bootstrap (decided by
   the owner on 2026-10-15, roadmap row 22b).

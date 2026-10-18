@@ -8,8 +8,8 @@ to `docs/grammar/` and delete it here, preserving section numbers.
 Sections 19, 21 and 22 are VM implementation proposals, not language changes.
 Sections 20 and 23 add crypto and binary data without changing the grammar;
 logging (§24) is built and lives in the grammar. Sections 25–34 cover Ruby
-idioms, diagnostics, concurrency, VM metrics, TLS, HTTP, BDD, doc comments,
-digit separators and VM values. Sections 36 and 38–40 cover unit tests, value
+idioms, diagnostics, concurrency, VM metrics, TLS, HTTP, BDD, doc comments and
+VM values. Sections 36 and 38–40 cover unit tests, value
 representation, semantic CLI and native code; task crash isolation (§37) is
 built. Sections 41–43 cover date/time types, sized numerics and an unscheduled
 language server. The Files index carries current status; linked sections keep
@@ -18,17 +18,12 @@ requirements, rationale and alternatives.
 
 ## Files
 
-Each section links to its proposal or current home. Landed and decided notes
-may share [`done.md`](done.md); §6 points to the VM design, §7 to §25.13, and
-§18 records the front-end language decision and the self-hosted bootstrap.
-Sections 1, 5, 8, 11, 12, 21, 24, 35 and 37 have no file of their own: they
-are built or decided, and their content lives in the grammar, `docs/vm/`, the
-roadmap or §18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md).
-
-- §: 2
-  - Title: Landed: enums and pattern matching
-  - File: [`done.md`](done.md#2-landed-enums-and-pattern-matching)
-  - Status: Landed; spec in `docs/grammar/`
+Each section links to its proposal or current home; §6 points to the VM design,
+§7 to §25.13, and §18 records the front-end language decision and the
+self-hosted bootstrap. Sections 1, 2, 5, 8–12, 14, 21, 24, 33, 35 and 37 have no
+file of their own: they are built or decided, and their content lives in the
+grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
+[`docs/bdd.md`](../bdd.md).
 
 - §: 3
   - Title: Extensions without a normative grammar
@@ -51,25 +46,10 @@ roadmap or §18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md)
   - File: [Decided against](25-ruby-typed-idioms.md#2513-decided-against-part-c)
   - Status: Not planned; rationale in §25.13
 
-- §: 9
-  - Title: Files and paths
-  - File: [`done.md`](done.md#9-files-and-paths-implemented)
-  - Status: Implemented
-
-- §: 10
-  - Title: Void and processes
-  - File: [`done.md`](done.md#10-void-and-processes-implemented)
-  - Status: Implemented
-
 - §: 13
   - Title: Shared tables (ATS)
   - File: [`13-ats.md`](13-ats.md)
   - Status: On demand (roadmap phase 9)
-
-- §: 14
-  - Title: Decided: no shadowing
-  - File: [`done.md`](done.md#14-decided-no-shadowing)
-  - Status: Decided
 
 - §: 15
   - Title: Adapters and JSON inspection
@@ -154,11 +134,6 @@ roadmap or §18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md)
   - File: [`32-doc-comments.md`](32-doc-comments.md)
   - Status: 22a built (roadmap phase 22, order step 7.2a); 22b (`agentica
     doc`) waits until after the bootstrap (row 22b)
-
-- §: 33
-  - Title: Digit separators
-  - File: [`33-digit-separators.md`](33-digit-separators.md)
-  - Status: Done (roadmap phase 23, 23a)
 
 - §: 34
   - Title: Shared small values in the VM

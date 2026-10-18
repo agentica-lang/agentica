@@ -282,7 +282,8 @@ after them may run in parallel when needed and keep their relative order.
     [§32](../future/32-doc-comments.md#32-doc-comments): `##` lines, front end
     only; `agentica doc` is row 22b, after the bootstrap), then digit separators
     ([phase 23](23-digit-separators.md),
-    [§33](../future/33-digit-separators.md#33-digit-separators): `1_000`, lexer
+    the grammar's [literal rules](../grammar/04-lexical.md#literals): `1_000`,
+    lexer
     only). This is the last new language feature in the Racket front end; row
     7.2.7 freezes that front end after it
   - **Outcome:** Programs carry `##` docs in their source, and write long

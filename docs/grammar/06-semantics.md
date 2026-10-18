@@ -105,8 +105,12 @@ The first assignment introduces a variable in the current scope, and an
 annotation is allowed only there. Later assignments change its value, not its
 type. Each function and control block is a lexical scope. An assignment without
 annotation updates a visible variable of that name, or else introduces a local
-in the current block. A new name cannot shadow a visible one. Parameters and the
-`for` variable are initialized bindings; the `for` variable cannot be
+in the current block. A new name cannot shadow a visible one. One name means one
+variable in a scope:
+`x = ...` without an annotation updates the visible variable or creates a new
+one, and a block captures by value, so a shadowed name would make it unclear
+which `x` the block captured. The rule also keeps diagnostics clear. Parameters
+and the `for` variable are initialized bindings; the `for` variable cannot be
 reassigned. Variables created in a block are not visible after its `end`.
 
 ### Module constants

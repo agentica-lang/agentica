@@ -101,7 +101,7 @@ commit, and with `racket src/main.rkt check` on small probe programs.
   exponent (`docs/grammar/04-lexical.md`). A float literal of 401 digits checks
   today (probe). The value it runs with is not checked here, so §42.5 settles
   the range.
-- Integer literals take `_` separators (§33). `0xFF`, `200u8` and `1e3` are
+- Integer literals take `_` separators. `0xFF`, `200u8` and `1e3` are
   `PARSE-UNEXPECTED-TOKEN` (probes).
 - An integer literal above the 64-bit range is `CHECK-INT-RANGE`
   (`src/checker.rkt:598`, probe). `-9223372036854775808` checks (probe), so the
@@ -261,7 +261,7 @@ conversion.
   does it with untyped constants.
 - **Consequences.** `x = 200` is `Int`, since there is no context; annotate it
   to get `UInt8`. `[1, 2]` with no context stays `List[Int]`. `1_000` follows
-  the same rule, since its `_` is only visual (§33). For `b + 1`, the
+  the same rule, since its `_` is only visual. For `b + 1`, the
   checker checks `b` first and then checks the literal with `b`'s type as the
   expected type (the existing code is `check-binary`, `src/checker.rkt:706`).
 - **Operators, calls and sign (recommended; open owner question, §42.17).** A
@@ -288,7 +288,8 @@ conversion.
   context covers every case a suffix would, a suffix is a second spelling, and
   the lexer rejects `200u8` today.
 - **No hex, octal or binary literals in this design.** Reason: they are a
-  grammar change with their own review, and the `_` rules of §33 would have to
+  grammar change with their own review, and the `_` rules in the grammar would
+  have to
   cover hex digits. Masks stay in decimal, as §23 says. Hex is the one literal
   form that binary code would want, so it is the first candidate for a separate
   proposal (§42.16).

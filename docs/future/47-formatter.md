@@ -531,7 +531,7 @@ Each question has options and a recommendation.
    `agentica check`. The owner should accept that difference, or ask for the
    check to use 119 too.
 2. **Literal text.** Options: (a) keep each literal exactly as written; (b)
-   normalize quotes, escapes, hex case or digit separators (§33).
+   normalize quotes, escapes, hex case or digit separators.
    **Recommendation:** (a). Literals have no layout, and changing them adds
    diffs that no width rule asks for. The normal form stays exact.
 3. **Which files.** Options: (a) only the paths named, the current folder by
