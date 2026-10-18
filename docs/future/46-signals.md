@@ -120,7 +120,7 @@ Signal.number(sig: Signal) -> Int
 (`src/builtin-types.rkt`). Its variants are `Signal.Term`, `Signal.Int`,
 `Signal.Hup`, `Signal.Usr1`, `Signal.Usr2`, `Signal.Quit` and `Signal.Kill`.
 The spelling follows `Await.TimedOut` and `LogLevel.Info`. ALLCAPS names are
-constant names from §44, so they are not used here. 46a checks that
+constant names, so they are not used here. 46a checks that
 `Signal.Int` is accepted, since `Int` is also a builtin type name.
 
 - The first five can be subscribed to. `Quit` is the VM's force path (46.3.3),
@@ -430,7 +430,7 @@ script, in the proposed API. It does not compile today. `Signal`,
 with the OS builtins of the BDD driver port (§18.4, step 7a), as
 `Path.remove(path, timeout_ms)`, which deletes a file, a link or a directory
 tree without following links and treats a missing path as `ok()`. Constants are
-functions until module constants (§44) land.
+module constants (the grammar's `Module constants` section).
 
 The mapping from Python is short. `handle_signal` becomes `first_signal`. It
 returns the first value. Later values stay queued and unread, which is the
@@ -447,7 +447,7 @@ import Logger from "std/logger"
 
 # Proposed API (46a, 46b): Signal, Signal.channel, Process.spawn_group,
 # Process.signal_group, System.signal and File.copy. Path.remove exists.
-# Constants are functions until module constants (§44) land.
+# Constants are module constants (the grammar's `Module constants`).
 
 struct Settings
   url: String

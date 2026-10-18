@@ -197,8 +197,9 @@ needs it.
   shared tables of `docs/future/13-ats.md` §13, must use locks and atomics. A
   table call does not yield, so it is atomic with N=1. Once N>1, each table call
   needs a lock, or a persistent structure installed with compare-and-swap.
-- **The Globals table** (module constants, `docs/future/44-module-constants.md`
-  §44.8) is the one place a loaded program is written (`agc_program.globals`).
+- **The Globals table** (module constants, the grammar's `Module constants`
+  section) is the one place a loaded program is written
+  (`agc_program.globals`).
   The loader lets only the entry function write it, in code with no backward
   jump, and refuses any call or closure of the entry in a file with slots. So
   each `GLOBAL_SET` runs at most once, in the main task, before it tail-calls

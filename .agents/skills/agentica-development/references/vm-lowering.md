@@ -58,8 +58,9 @@ functions up by name.
 
 ## Gotchas
 
-- Module constants (format version 5, `docs/future/44-module-constants.md`
-  §44.8): the Globals section is only a `u32` slot count (at most 65,535, else
+- Module constants (format version 5; the rules are in the grammar's `Module
+  constants` section): the Globals section is only a `u32` slot count (at most
+  65,535, else
   `BYTECODE-LIMIT`; `ir-program-globals`). `GLOBAL a bx` reads slot `bx`
   into `R[a]` and `GLOBAL_SET a bx` writes it. The loader allows `GLOBAL_SET`
   only in the entry function, and only in a function with no backward jump, and

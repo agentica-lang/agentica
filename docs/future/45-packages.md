@@ -384,7 +384,7 @@ question 2).
 
 **No code runs at install.** A package is data until a program imports it.
 Importing it runs what any import runs: a module has no top-level statements,
-so only its module constants (§44) are evaluated, and only when the program
+so only its module constants are evaluated, and only when the program
 uses it.
 
 ### 45.9 Commands and errors

@@ -1021,7 +1021,8 @@ each:
 1. **Tables are module constants** (`CLASSES`, `NAME_CHARS`, `WORD_ACTIONS`,
    `SINGLE_OPS`, `PAIR_OPS`, ...). `new_input` built eight tables on every
    `lex` call (128 `Map.put` and `classify` calls among them), and `Input`
-   carried them to every `scan_*` function. This is the lexer part of §44.9
+   carried them to every `scan_*` function. This is the lexer part of the
+   module-constants work
    (44b). The main loop does the work of names, operators, brackets and line
    breaks in place, with no call per token: one lookup in `WORD_ACTIONS` tells
    a keyword, a block opener and `end` in one step, an operator is one `Op`

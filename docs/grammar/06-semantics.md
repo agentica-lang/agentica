@@ -164,6 +164,18 @@ over the constants the file can read: its own, declared above or below, and the
 ones it imports by name, by the name written. The nesting limit
 (`CHECK-TOO-DEEP`) counts initializers too.
 
+**Decided against.** Literals only, with no evaluation: it cannot express the
+compiler's own tables (`Set.new(...)` is a call, the character classes are a
+fold, the builtin rows are struct constructors). Compile-time evaluation: it
+would put the semantics of every allowed builtin in the compiler and the VM
+both. Lazy initialization on first read: an initializer error would surface in
+the middle of a run, a read would need a branch, and tasks could race on the
+first read. Calls of user functions in an initializer. An Elixir-style `@name`
+attribute or a `const` keyword, since the capitals already mark a constant. A
+constant in a `case` pattern: patterns are literals and variants. Folding
+literal arithmetic. One line holding both import forms. A static data form for
+the initializers is a later option, only if start-up numbers ask for it.
+
 ### Void completion
 
 `Void` has no literal and no usable payload. It is allowed as a function's
