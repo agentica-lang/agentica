@@ -42,13 +42,16 @@ phase 13).
 ## Commands
 
 - `poetry install --only test --no-root`: install the pytest test environment.
-- `make`: build `dist/agentica` (`git submodule update --init` first). It links
-  a first binary with `bootstrap/stage0.agcb`, compiles the front end three
-  times and links the final binary. `make fixed-point` checks it once more.
-  `make vm-test`: the C tests. `make test-cli`: the command line tests on the
-  binary. `make stage0` refreshes `bootstrap/stage0.agcb` (see
-`references/ci.md`
-  of the development skill).
+- `make`: build `dist/agentica` (`git submodule update --init` first). On Linux
+  it uses system libgc and OpenSSL by default; the Makefile checks them with
+  `pkg-config`. Use `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored` to
+  link the vendored versions of those two libraries statically. This is not a
+  fully static binary. The build links a first binary with
+  `bootstrap/stage0.agcb`, compiles the front end three times and links the
+  final binary. `make fixed-point` checks it once more. `make vm-test`: the C
+  tests. `make test-cli`: the command line tests on the binary. `make stage0`
+  refreshes `bootstrap/stage0.agcb` (see `references/ci.md` of the development
+  skill).
 - `make test TESTS="tests/test_vm_bits.py"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
 - `dist/agentica file.agc` runs a program; `... check file.agc` checks;

@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 from tests.agentica_test import TestCase, cli, run, vm_environment
+from tests.module_support import write_module_files
 
 # No AGENTICA_PATH roots and no user data folder, so only the files of a case resolve.
 HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"}
@@ -30,13 +31,7 @@ class ModuleRules(TestCase):
         self.cwd = self.make_temp_dir("agentica-cwd-")
 
     def files(self, files):
-        """A resolved temp folder holding the given files (name -> text; names may have folders)."""
-        directory = self.make_temp_dir("agentica-modules-").resolve()
-        for name, text in files.items():
-            path = directory / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
-        return directory
+        return write_module_files(self, files)
 
     def checks(self, cases):
         """Check several programs side by side: each case is (files, root, env), and the result is a list of

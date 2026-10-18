@@ -480,9 +480,11 @@ takes it as an input
 
 ## Copy-paste check (jscpd)
 
-- `make dup-check` runs jscpd over `vm/*.c`, `vm/*.h` and
-  `vm/tests/*.c` with `.jscpd.json`. Its `weak` mode skips comments, so
-  similar file header comments are not clones.
+- `make dup-check` runs jscpd over C in `vm/` and Python in `tests/` with
+  `.jscpd.json`. The Python scan skips `tests/eval/tasks/`, whose reference and
+  candidate programs are intentionally paired, and triple-quoted text such as
+  embedded Agentica programs. Its `weak` mode skips comments, so similar file
+  header comments are not clones.
 - jscpd is pinned with its whole dependency tree by
   `tools/jscpd/package-lock.json` and installed by `npm ci --ignore-scripts`
   into `tools/jscpd/node_modules`.
