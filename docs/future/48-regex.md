@@ -291,7 +291,8 @@ of phase 29, after 48a. `Regex.compile(String)` stays for patterns built at run
 time. A raw string literal is not planned. The options weighed: (a) `"\\d+"`,
 which doubles every backslash; (b) a raw string `r"..."`, a general text form
 that cannot hold `"`, not planned; (c) `/.../flags`, decided; (d) a heredoc,
-which needs two or more lines and keeps the escapes (§25.10), so it does not
+which needs two or more lines and keeps the escapes (heredocs, in the
+grammar), so it does not
 help a one-line pattern.
 
 **Body.** The body is the pattern, with no string escapes. The body scanner
@@ -474,7 +475,7 @@ Not planned: raw string literals.
    wraps.
 2. **The method form.** Options: (A) module functions only,
    `Regex.find_all(text, re)` and `text |> Regex.split(re)`; (B) a method on
-   String, `text.scan(re)`, which needs the compiler prelude (§25.6, row 8.2),
+   String, `text.scan(re)`, which needs the compiler prelude (row 8.2),
    since a std module cannot add methods to a builtin type. **Recommendation:**
    (A) in 48a, and (B) with row 8.2.
 3. **The import for the literal.** Options: (A) a file that uses a literal

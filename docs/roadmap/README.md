@@ -184,10 +184,11 @@ after them may run in parallel when needed and keep their relative order.
     mechanism for bounded buffers
 
 - **Order:** 7.2.1g
-  - **Next work:** **Complete:** Pipe operator `\|>` (15l,
-    [§25.14](../future/25-ruby-typed-idioms.md#2514-pipe-operator-)), decided by
-    the owner on 2026-10-14: a small front-end PR (lexer, parser, one checker
-    rule; no VM change) after channels (row 7.2.1e) and before stdout and stderr
+  - **Next work:** **Complete:** Pipe operator `\|>` (15l, in the
+    [grammar's expression rules][grammar-syntax-precedence]), decided by the
+    owner on 2026-10-14: a small front-end PR (lexer, parser,
+    one checker rule; no VM change) after channels (row 7.2.1e) and before
+    stdout and stderr
     on the loop (row 7.2.1f). The owner chose it over methods on structs or
     Lua-style metatables, which stay decided against
     ([§25.13](../future/25-ruby-typed-idioms.md#2513-decided-against-part-c))
@@ -521,10 +522,10 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 7.5a
   - **Next work:** **Done (2026-10-16)**, in `compiler/` after the bootstrap (it
     was deferred because it would have changed the Racket front end). Default
-    parameter values (15a, [`docs/future/25-ruby-typed-idioms.md`
-    §25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)):
-    front end only; split out of row 7.5 on 2026-10-14. `std/logger` (14c, row
-    7.5) did not need it: until it landed, the API had two functions per level
+    parameter values (15a, in the
+    [grammar's default parameters][grammar-defaults]): front end only; split
+    out of row 7.5 on 2026-10-14. `std/logger` (14c, row 7.5) did not need it:
+    until it landed, the API had two functions per level
     (decided on 2026-10-15), and
     the `_meta` functions are gone now
   - **Outcome:** Functions take default parameter values, checked at compile
@@ -552,10 +553,10 @@ after them may run in parallel when needed and keep their relative order.
     (2026-10-16)**, in `compiler/`, `stdlib/prelude/` and the VM; `format` (15k)
     and `Stream[T]` (17e) are still deferred. It was deferred until after the
     bootstrap, because the prelude changes the Racket front end, which the port
-    would then redo. Ruby typed idioms, prelude part (15f, 15k;
-    `docs/future/25-ruby-typed-idioms.md` §25.6 and §25.11): the compiler
-    prelude with the Enumerable methods, then `format`; after faster lists (8d),
-    since the prelude's cost contract needs them; then `Stream[T]` (17e,
+    would then redo. Ruby typed idioms, prelude part (15f, 15k): the compiler
+    prelude with the Enumerable methods, then `format` (which is still
+    [§25.11](../future/25-ruby-typed-idioms.md#2511-format)); after faster lists
+    (8d), since the prelude's cost contract needs them; then `Stream[T]` (17e,
     `docs/future/27-iteration-and-concurrency.md` §27.4 step 2), which comes
     with the prelude
   - **Outcome:** Enumerable methods, `format` and `Stream[T]`, written in
@@ -852,18 +853,18 @@ and the other features after the JIT.
    [vm-benchmarks](../vm-benchmarks.md#speed-pass-shared-small-values-34).
    Still to do: the parser, for room under the 100 ms for
    `stdlib/bdd/gherkin.agc`.
-4. **Done (2026-10-16)**: default parameter values (row 7.5a,
-   [§25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)),
-   in `compiler/`, which does not use them yet.
+4. **Done (2026-10-16)**: default parameter values (row 7.5a, in the
+   [grammar's default parameters][grammar-defaults]), in `compiler/`, which
+   does not use them yet.
 5. `case` guards, nested patterns and the `<<~NAME` heredoc
-   ([§25.10](../future/25-ruby-typed-idioms.md#2510-heredocs),
-   [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
-   in `compiler/` only. The first of steps 4 and 5 to land is the first use of
+   ([`docs/grammar/05-syntax.md`](../grammar/05-syntax.md#statements-and-blocks)
+   and [`04-lexical.md`](../grammar/04-lexical.md#heredocs)), in `compiler/`
+   only. The first of steps 4 and 5 to land is the first use of
    the two-step stage0 refresh of §18.2. Part A, the heredoc (15j), is **done
    (2026-10-16, PR #322)**: the lexer, `LEX-UNTERMINATED-HEREDOC`,
    `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE`, the parser refuses a heredoc
    as a `case` pattern or an import path. Part B, `case` guards and nested
-   patterns (§25.12.1, "As decided (post-bootstrap step 5)"), is **done
+   patterns (post-bootstrap step 5, in the grammar), is **done
    (2026-10-16, PR #325)**: `pattern if condition ->` and any pattern in a
    payload position, a conservative exhaustiveness rule, no bytecode change.
    `compiler/` does not use them yet (the two-step stage0 refresh is a later
@@ -982,10 +983,12 @@ programming reference contain the current signatures.
 - Library code that must be generic over the builtin type variables, or that
   must be called as a method on a builtin type (`xs.find do ... end`), cannot be
   a `std/` module; it goes in the compiler prelude (`stdlib/prelude/*.agc`,
-  `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica. The
-  prelude has guarded exceptions to "no internal helper builtins": `__fail_arg`
-  and `__float_fixed` (§25.6, §25.11), which the loader accepts only in prelude
-  functions. A concurrency helper that needs the scheduler is a C builtin
+  see the development skill's `references/stages.md`), still written in
+  Agentica. The prelude has guarded exceptions to "no internal helper builtins":
+  `__fail_arg` and `__float_fixed`
+  ([§25.11](../future/25-ruby-typed-idioms.md#2511-format)), which the loader
+  accepts only in prelude functions. A concurrency helper that needs the
+  scheduler is a C builtin
   instead (`Task.await` with a timeout, §27.3).
 - Two builtin modules are std-only: `HttpWire` (phase 20,
   `docs/vm/10-io-http.md` §10.7), the framing layer under `std/http`, and
@@ -1117,3 +1120,5 @@ Planned syntax is in [`docs/future/`](../future/README.md).
 [agentica-link-3]: ../future/37-task-crash-isolation.md
 [agentica-link-4]: ../future/30-hybrid-http.md
 [agentica-link-5]: pending-general-programming-and-mcp.md
+[grammar-defaults]: ../grammar/06-semantics.md#default-parameter-values
+[grammar-syntax-precedence]: ../grammar/05-syntax.md#expressions-and-precedence

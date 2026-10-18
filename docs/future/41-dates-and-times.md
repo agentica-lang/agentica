@@ -649,7 +649,7 @@ chosen.
     these kinds are added to its version 7 (42.11). If §41 lands first, it sets
     version 7, and §42 sets version 8. (Version 4 is the struct update `with`
     of 15c, version 5 is the module constants of §44, and version 6 is the
-    compiler prelude of §25.6.)
+    compiler prelude.)
   - Top level: `JSON.decode(text, DateTime)` reads a JSON string with
     `Time.parse` and gives `Result[DateTime]`; text that is not a JSON string is
     an error. `JSON.encode` of a `DateTime` gives the JSON string.

@@ -98,7 +98,7 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
   work (`src/builtins.rkt:68`). A new option is a new field, never a new
   argument or a new builder, so default parameter values (15a) never have to
   change these calls. A new field does break code that constructs the record
-  with every field named, so the skill teaches `with` (§25.3, 15c, built):
+  with every field named, so the skill teaches `with` (15c, built):
   `TLS.client_options().with(ca_file: "ca.pem")` keeps working when a field is
   added, and the later options of 29.7 come after it.
 - **One type, two roles.** `TlsContext` is one opaque type, like `SSLContext`,

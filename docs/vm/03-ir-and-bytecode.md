@@ -533,7 +533,8 @@ distinct type
 
 ### 4.7 The prelude
 
-The compiler prelude ([§25.6](../future/25-ruby-typed-idioms.md)) is Agentica
+The compiler prelude (see the development skill's `references/stages.md`) is
+Agentica
 code that the compiler adds to a program: the bodies of `List.find`,
 `List.group_by` and the other prelude methods. Its functions are ordinary
 functions, with differences that make an error inside them read as an error at

@@ -47,7 +47,7 @@ help shows it.
 set of C builtins: `Task.spawn`, `Task.await`, `Task.sleep`, `Channel` (27.2)
 and `Task.map` (27.1). Higher-level concurrency helpers, such as future ones
 like "the first of several tasks" or "all settled", are written in Agentica in
-the compiler prelude (§25.6) over those primitives, as the [std-first
+the compiler prelude over those primitives, as the [std-first
 rule](../roadmap/README.md#new-library-features-std-first) asks; they go in the
 prelude, not in `std/`, because they need the catalog's type variables. Each
 future helper still needs its own spec and must pass the one-way test.
@@ -313,7 +313,7 @@ decision.
 ([roadmap](../roadmap/README.md#new-library-features-std-first)) is for pure
 computation over types that exist. `Task.map` is runtime work: it schedules
 tasks, starts timers (exception 1 of the rule: time) and cancels tasks. It also
-cannot be prelude code (§25.6) on the primitives, and it should not wait for the
+cannot be prelude code on the primitives, and it should not wait for the
 prelude:
 
 - With `Task.spawn` and `Task.await` (even with 27.3's timeout) there is no way
@@ -1213,11 +1213,10 @@ before its code lands, as 27.1 and 27.2 were.
 - Costs: each element pulled costs one step plus its callbacks, like
   `Range.each`, and a terminal can be switched out between elements (a resumable
   native frame, §10.2.1).
-- **Form.** Stream steps are methods on `Stream[T]`, since methods come from the
-  receiver's module (§25.6). So the one form of a step is `s.filter(f)`, and
-  `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD`, with the help `s.filter(...)`
-  (§25.14). A source is a plain call; `|>` is for user functions between them
-  (§25.14):
+- **Form.** Stream steps are methods on `Stream[T]`, since methods come from
+  the receiver's module. So the one form of a step is `s.filter(f)`, and
+  `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD`, with the help `s.filter(...)`.
+  A source is a plain call; `|>` is for user functions between them:
 
 ```agentica
 def is_valid(line: String) -> Bool
@@ -1240,7 +1239,7 @@ end
   the checker rejects it, with a help that shows `File.each_line`, is decided in
   step 2's spec, as the principle of §25 asks.
 - **Rules that stay.** Step 2 waits for the prelude (15f) and for faster lists
-  (8d), since its steps are generic code over closures (§25.6). Each step passes
+  (8d), since its steps are generic code over closures. Each step passes
   the one-way test against `List`: no `list.stream`, no `Range.stream`, and no
   step that only re-spells a `List` method over a source that a list can hold.
 - **Generators stay decided against** (§27.5): a task that sends into a channel

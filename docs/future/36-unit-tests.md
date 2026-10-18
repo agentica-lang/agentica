@@ -149,7 +149,7 @@ import:
 
 - `Test.eq`, `Test.ok?` and `Test.error?` are generic over any type. `std/`
   modules have no generics, and the compiler prelude, which may be generic
-  (§25.6), starts only at order step 8.2.
+  (the compiler prelude), starts only at order step 8.2.
 - Every assertion needs the span of its own call. Builtins get it from
   `CALL_BUILTIN`; Agentica code cannot (stack traces are phase 14b, later).
 - `Test.run` works on runtime state no Agentica code can see: the assertion

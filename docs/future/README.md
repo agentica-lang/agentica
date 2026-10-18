@@ -115,8 +115,9 @@ roadmap or §18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md)
 - §: 25
   - Title: Ruby typed idioms
   - File: [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md)
-  - Status: Part A planned (roadmap phase 15); Part B to evaluate later;
-    Part C decided against
+  - Status: 25.1, 25.3, 25.6, 25.10, 25.12.1 and 25.14 built (the grammar and
+    the programming skill are the contract); 25.2, 25.4, 25.5, 25.9 and 25.11
+    planned (roadmap phase 15); Part B to evaluate later; Part C decided against
 
 - §: 26
   - Title: Strict diagnostics

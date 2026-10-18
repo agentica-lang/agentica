@@ -421,7 +421,7 @@ Each syntax change after the bootstrap changes the printer in the same PR. That
 is the rule for this plan: a node without a layout rule makes fmt refuse the
 file with `FMT-UNSUPPORTED` (a proposal), and it never guesses.
 
-- **Heredocs `<<~NAME`** (§25.10, roadmap row 7.6, phase 15 items 15b to 15j).
+- **Heredocs `<<~NAME`** (roadmap row 7.6, phase 15 items 15b to 15j).
   Row 7.6 is ordered before row 7.9, so 47b covers heredocs when it starts. The
   body is printed byte for byte, including its indent, and the end line stays
   where it is. A heredoc is a hard break, so the enclosing call is laid out as a

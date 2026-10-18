@@ -275,9 +275,9 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   `Stream.iterate(seed, f)`; lazy `map`, `filter`, `take(n)` and `take_while`;
   terminals `to_list(max)`, `each` and `reduce`, which return a `Result`. Steps
   are methods (`s.filter(f)`), and `|>` only takes the path into `Stream.lines`;
-  `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD` (§25.14). A file source closes
+  `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD`. A file source closes
   on every terminal path, as `File.open` with a block does. Written in the
-  prelude (§25.6), so it waits for faster lists (8d). The checker and VM rules
+  prelude, so it waits for faster lists (8d). The checker and VM rules
   are added to §27.4 before the code lands. Tests: checker tests for the
   methods, the pipe rule and the terminals' types; golden fixtures without
   timing (a pipeline over a small file, an early `take`, a `try` failure,
