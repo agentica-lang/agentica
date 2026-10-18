@@ -35,7 +35,24 @@ static void check_text(agc_value path, const char *text) {
   assert(got->bytes == strlen(text) && memcmp(got->data, text, got->bytes) == 0);
 }
 
+#ifdef _WIN32
+static void test_error_mapping(void) {
+  const struct { int uv_error, expected_errno; } cases[] = {
+    {UV_EBUSY, EBUSY}, {UV_ECANCELED, ECANCELED}, {UV_EXDEV, EXDEV},
+    {UV_ENOTSUP, ENOTSUP}, {UV_ETIMEDOUT, ETIMEDOUT}
+  };
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    errno = 0;
+    agc_fs_set_error(cases[i].uv_error);
+    assert(errno == cases[i].expected_errno);
+  }
+}
+#endif
+
 int main(void) {
+#ifdef _WIN32
+  test_error_mapping();
+#endif
   agc_init();
   agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);

@@ -29,6 +29,8 @@ void agc_fs_set_error(int result) {
     case UV_EACCES: errno = EACCES; break;
     case UV_EBADF: errno = EBADF; break;
     case UV_EBUSY: errno = EBUSY; break;
+    case UV_ECANCELED: errno = ECANCELED; break;
+    case UV_EXDEV: errno = EXDEV; break;
     case UV_EEXIST: errno = EEXIST; break;
     case UV_EINTR: errno = EINTR; break;
     case UV_EINVAL: errno = EINVAL; break;
@@ -39,11 +41,13 @@ void agc_fs_set_error(int result) {
     case UV_ENOENT: errno = ENOENT; break;
     case UV_ENOMEM: errno = ENOMEM; break;
     case UV_ENOSPC: errno = ENOSPC; break;
+    case UV_ENOTSUP: errno = ENOTSUP; break;
     case UV_ENOTDIR: errno = ENOTDIR; break;
     case UV_ENOTEMPTY: errno = ENOTEMPTY; break;
     case UV_EPERM: errno = EPERM; break;
     case UV_EPIPE: errno = EPIPE; break;
     case UV_EROFS: errno = EROFS; break;
+    case UV_ETIMEDOUT: errno = ETIMEDOUT; break;
     default: errno = EIO; break;
   }
 }
