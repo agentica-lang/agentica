@@ -8,8 +8,10 @@ certificates are the ones in fixtures/tls.
 """
 import json
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, check_lines, optional_tool, output_lines, run,
-                                 run_vm, scaled, start_vm, vm_environment)
+import pytest
+
+from tests.agentica_test import (FIXTURES, PYTHON, Child, compile_agc, optional_tool, output_lines, run, run_vm,
+                                 scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "http-peer.py"
 SERVER_PEER = FIXTURES / "http-server-peer.py"
@@ -236,91 +238,120 @@ SERVER_NODE_LINES = [
 ]
 
 
+@pytest.fixture
+def adopt(request):
+    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
+    def register(child):
+        request.addfinalizer(child.stop)
+        return child
 
-class VmHttp(TestCase):
-    def start_peer(self):
-        """http-peer.py serves until its stdin closes, so the pipe stays open; returns the ports it prints."""
-        peer = self.adopt(Child([PYTHON, PEER], stdin=True))
-        return json.loads(peer.next_line())
+    return register
 
-    def run_program(self, name, text, ports):
-        bytecode = self.compile_text(PRELUDE + text, name)
-        result = run_vm(bytecode, env=vm_environment(), args=[CERTS] + [ports[key] for key in ("plain", "tls", "raw")])
-        self.assertEqual(result.code, 0, result.stderr)
-        return result.stdout
 
-    def test_client_against_threading_http_server_keep_alive_chunked_close_delimited_timeout_pool_limits(self):
-        ports = self.start_peer()
-        check_lines(self, self.run_program("plain", PLAIN_PROGRAM, ports), [
-            '200 hello 127.0.0.1 ["a", "b"]',
-            "200 ñandú chunks 12",
-            "200 form 8 a=1&b=ñ 14",
-            "true",
-            "200 until the end 13",
-            "true",
-            "404 missing 7",
-            "network: operation timed out",
-            "true",
-            "true",
-            'error("http: client is closed")'], "plain")
+def check_lines(text, expected, message):
+    """One output line per expectation: a string is equal, ("prefix", text) is a prefix."""
+    lines = output_lines(text)
+    assert len(lines) == len(expected), message + "\n" + text
+    for line, want in zip(lines, expected):
+        if isinstance(want, str):
+            assert line == want, message
+        else:
+            assert line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1])
 
-    def test_client_against_a_python_ssl_server_with_the_clients_ca_file(self):
-        ports = self.start_peer()
-        check_lines(self, self.run_program("tls", TLS_PROGRAM, ports), [
-            "200 hello localhost 15",
-            "200 hello localhost 15",
-            "200 None 8 over tls 15",
-            "200 closed cleanly 14",
-            "http: truncated HTTP body",
-            ("prefix", "error reading from stream port | "),
-            ("prefix", "ssl-connect: connect failed (certificate verify failed"),
-            ("prefix", "ssl-load-verify-source!: load failed from: ")], "tls")
 
-    def test_client_against_hostile_raw_responses_and_a_413_that_comes_before_the_upload_ends(self):
-        ports = self.start_peer()
-        check_lines(self, self.run_program("raw", RAW_PROGRAM, ports), [
-            "413 big! 4",
-            "200 stale 5",
-            "http: connection closed before the response was complete",
-            "200 stale 5",
-            "200 ok 2",
-            "200  0",
-            "200 reused 6",
-            "http: HTTP version is unsupported",
-            "http: invalid HTTP head",
-            "http: invalid response status",
-            "http: protocol upgrades are unsupported",
-            "200 ok 2",
-            "http: too many interim responses",
-            "http: invalid chunk size",
-            "200 xxxxxxxxxxxxxxxxxxxx 1000",
-            "http: body exceeds max_body_bytes",
-            "http: body exceeds max_body_bytes",
-            "http: HTTP requires CRLF",
-            "http: folded HTTP header lines are not allowed",
-            "http: invalid content length",
-            "http: ambiguous HTTP body framing",
-            "http: unsupported transfer encoding",
-            "http: invalid trailer",
-            "http: truncated HTTP body",
-            "http: connection closed before the response was complete",
-            "204  0",
-            "200 ok 2"], "raw")
+def start_peer(adopt):
+    """http-peer.py serves until its stdin closes, so the pipe stays open; returns the ports it prints."""
+    peer = adopt(Child([PYTHON, PEER], stdin=True))
+    return json.loads(peer.next_line())
 
-    def test_server_against_python_raw_sockets_python_http_client_and_node_http_clients(self):
-        # Node is optional locally (that part is left out, like the original test); CI fails without it.
-        node = optional_tool("node")
-        vm = self.adopt(start_vm(self.compile_text(SERVER_PROGRAM, "server"), CERTS, stdin=True))
-        port, tls_port = vm.next_line().split()
-        python_run = run([PYTHON, SERVER_PEER, port, "2", tls_port, CERTS], timeout=scaled(120))
-        self.assertEqual(python_run.code, 0, python_run.stderr)
-        self.assertEqual(output_lines(python_run.stdout), SERVER_PYTHON_LINES)
-        if node:
-            node_run = run([node, SERVER_NODE_PEER, port, "2"], timeout=scaled(120))
-            self.assertEqual(node_run.code, 0, node_run.stderr)
-            self.assertEqual(output_lines(node_run.stdout), SERVER_NODE_LINES)
-        vm.close_stdin()
-        self.assertEqual(vm.wait(), 0, "the VM server finishes")
-        self.assertEqual(vm.next_line(), "ok()")
-        self.assertEqual(vm.next_line(), "ok()")
-        self.assertEqual(vm.stderr_text(), "")
+
+def run_program(tmp_path, name, text, ports):
+    source = tmp_path / (name + ".agc")
+    source.write_text(PRELUDE + text, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / (name + ".agcb"))
+    result = run_vm(bytecode, env=vm_environment(), args=[CERTS] + [ports[key] for key in ("plain", "tls", "raw")])
+    assert result.code == 0, result.stderr
+    return result.stdout
+
+
+def test_client_against_threading_http_server_keep_alive_chunked_close_delimited_timeout_pool_limits(tmp_path, adopt):
+    ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "plain", PLAIN_PROGRAM, ports), [
+        '200 hello 127.0.0.1 ["a", "b"]',
+        "200 ñandú chunks 12",
+        "200 form 8 a=1&b=ñ 14",
+        "true",
+        "200 until the end 13",
+        "true",
+        "404 missing 7",
+        "network: operation timed out",
+        "true",
+        "true",
+        'error("http: client is closed")'], "plain")
+
+
+def test_client_against_a_python_ssl_server_with_the_clients_ca_file(tmp_path, adopt):
+    ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "tls", TLS_PROGRAM, ports), [
+        "200 hello localhost 15",
+        "200 hello localhost 15",
+        "200 None 8 over tls 15",
+        "200 closed cleanly 14",
+        "http: truncated HTTP body",
+        ("prefix", "error reading from stream port | "),
+        ("prefix", "ssl-connect: connect failed (certificate verify failed"),
+        ("prefix", "ssl-load-verify-source!: load failed from: ")], "tls")
+
+
+def test_client_against_hostile_raw_responses_and_a_413_that_comes_before_the_upload_ends(tmp_path, adopt):
+    ports = start_peer(adopt)
+    check_lines(run_program(tmp_path, "raw", RAW_PROGRAM, ports), [
+        "413 big! 4",
+        "200 stale 5",
+        "http: connection closed before the response was complete",
+        "200 stale 5",
+        "200 ok 2",
+        "200  0",
+        "200 reused 6",
+        "http: HTTP version is unsupported",
+        "http: invalid HTTP head",
+        "http: invalid response status",
+        "http: protocol upgrades are unsupported",
+        "200 ok 2",
+        "http: too many interim responses",
+        "http: invalid chunk size",
+        "200 xxxxxxxxxxxxxxxxxxxx 1000",
+        "http: body exceeds max_body_bytes",
+        "http: body exceeds max_body_bytes",
+        "http: HTTP requires CRLF",
+        "http: folded HTTP header lines are not allowed",
+        "http: invalid content length",
+        "http: ambiguous HTTP body framing",
+        "http: unsupported transfer encoding",
+        "http: invalid trailer",
+        "http: truncated HTTP body",
+        "http: connection closed before the response was complete",
+        "204  0",
+        "200 ok 2"], "raw")
+
+
+def test_server_against_python_raw_sockets_python_http_client_and_node_http_clients(tmp_path, adopt):
+    # Node is optional locally (that part is left out, like the original test); CI fails without it.
+    node = optional_tool("node")
+    source = tmp_path / "server.agc"
+    source.write_text(SERVER_PROGRAM, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "server.agcb")
+    vm = adopt(start_vm(bytecode, CERTS, stdin=True))
+    port, tls_port = vm.next_line().split()
+    python_run = run([PYTHON, SERVER_PEER, port, "2", tls_port, CERTS], timeout=scaled(120))
+    assert python_run.code == 0, python_run.stderr
+    assert output_lines(python_run.stdout) == SERVER_PYTHON_LINES
+    if node:
+        node_run = run([node, SERVER_NODE_PEER, port, "2"], timeout=scaled(120))
+        assert node_run.code == 0, node_run.stderr
+        assert output_lines(node_run.stdout) == SERVER_NODE_LINES
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+    assert vm.next_line() == "ok()"
+    assert vm.next_line() == "ok()"
+    assert vm.stderr_text() == ""

@@ -10,7 +10,9 @@ import json
 import re
 import time
 
-from tests.agentica_test import FIXTURES, PYTHON, TestCase, run, scaled, vm_command, vm_environment
+import pytest
+
+from tests.agentica_test import FIXTURES, PYTHON, compile_agc, run, scaled, vm_command, vm_environment
 
 PEER = FIXTURES / "stdout-peer.py"
 PEER_LIMIT = scaled(90)
@@ -273,202 +275,231 @@ def row_total(count):
     return sum(1 + len("row %d %s" % (n, FILLER)) for n in range(count))
 
 
-class VmStdout(TestCase):
-    def run_case(self, name, program, peer=(), vm=(), env=None):
-        """Run the program through stdout-peer.py; returns (summary, stdout bytes, stderr text)."""
-        bytecode = self.compile_text(program, name)
-        out_file = bytecode.with_suffix(".out")
-        err_file = bytecode.with_suffix(".err")
-        result = run([PYTHON, PEER, "--stdout-file", out_file, "--stderr-file", err_file, *peer,
-                      "--", *vm_command(), *vm, "--", bytecode],
-                     timeout=PEER_LIMIT, env=vm_environment(env))
-        self.assertEqual(result.code, 0, "%s: the peer ends: %s" % (name, result.stderr))
-        return json.loads(result.stdout), out_file.read_bytes(), err_file.read_text(errors="replace")
+def compile_text(program, name, tmp_path):
+    source = tmp_path / (name + ".agc")
+    source.write_text(program, encoding="utf-8")
+    return compile_agc(source, tmp_path / (name + ".agcb"))
 
-    def run_to_file(self, name, program, stderr_file=None):
-        """Run the VM with stdout on a file. stderr_file: None captures it, True sends it to a file, a string is a path.
 
-        Returns (exit code, seconds, stdout text, stderr text).
-        """
-        bytecode = self.compile_text(program, name)
-        out_file = bytecode.with_suffix(".out")
-        err_file = bytecode.with_suffix(".err") if stderr_file is True else stderr_file
-        start = time.monotonic()
-        result = run([*vm_command(), "--allow-run", "--flush-timeout", "20000", "--", bytecode], timeout=PEER_LIMIT,
-                     env=vm_environment(), stdout_to=out_file, stderr_to=err_file)
-        elapsed = time.monotonic() - start
-        if stderr_file is None:
-            errors = result.stderr
-        else:
-            errors = bytecode.with_suffix(".err").read_text(errors="replace") if stderr_file is True else ""
-        return result.code, elapsed, out_file.read_text(errors="replace"), errors
+def run_case(tmp_path, name, program, peer=(), vm=(), env=None):
+    """Run the program through stdout-peer.py; returns (summary, stdout bytes, stderr text)."""
+    bytecode = compile_text(program, name, tmp_path)
+    out_file = bytecode.with_suffix(".out")
+    err_file = bytecode.with_suffix(".err")
+    result = run([PYTHON, PEER, "--stdout-file", out_file, "--stderr-file", err_file, *peer,
+                  "--", *vm_command(), *vm, "--", bytecode],
+                 timeout=PEER_LIMIT, env=vm_environment(env))
+    assert result.code == 0, "%s: the peer ends: %s" % (name, result.stderr)
+    return json.loads(result.stdout), out_file.read_bytes(), err_file.read_text(errors="replace")
 
-    def lines_of(self, data):
-        """The lines of a byte string, which must end with a whole line (latin-1, one character per byte)."""
-        text = data.decode("latin-1")
-        self.assertTrue(text == "" or text.endswith("\n"), "the output ends with a whole line")
-        return text.split("\n")[:-1] if text else []
 
-    def check_rows(self, lines, count):
-        self.assertEqual(len(lines), count)
-        for n, line in enumerate(lines):
-            if line != "row %d %s" % (n, FILLER):
-                self.fail("row %d is not whole or not in order" % n)
+def run_to_file(tmp_path, name, program, stderr_file=None):
+    """Run the VM with stdout on a file. stderr_file: None captures it, True sends it to a file, a string is a path.
 
-    def check_alternating(self, lines):
-        self.assertEqual(len(lines), 300)
-        for k, line in enumerate(lines):
-            if line != "%s%d %s" % ("o" if k % 2 == 0 else "e", k // 2, FILLER):
-                self.fail("line %d is not in the order of the calls" % k)
+    Returns (exit code, seconds, stdout text, stderr text).
+    """
+    bytecode = compile_text(program, name, tmp_path)
+    out_file = bytecode.with_suffix(".out")
+    err_file = bytecode.with_suffix(".err") if stderr_file is True else stderr_file
+    start = time.monotonic()
+    result = run([*vm_command(), "--allow-run", "--flush-timeout", "20000", "--", bytecode], timeout=PEER_LIMIT,
+                 env=vm_environment(), stdout_to=out_file, stderr_to=err_file)
+    elapsed = time.monotonic() - start
+    if stderr_file is None:
+        errors = result.stderr
+    else:
+        errors = bytecode.with_suffix(".err").read_text(errors="replace") if stderr_file is True else ""
+    return result.code, elapsed, out_file.read_text(errors="replace"), errors
 
-    def test_a_pipe_nobody_reads_does_not_stop_a_timer_task_and_the_run_ends_once_the_reader_drains(self):
-        summary, out, err = self.run_case("ticker", TICKER_PROGRAM % 400,
-                                          peer=["--delay", "1.0", "--chunk", "16384", "--pause", "0.001"])
-        self.assertEqual(summary["status"], 0)
-        self.assertGreaterEqual(summary["ticks_before_read"], 5, "the ticker ran while stdout was stuck")
-        self.check_rows(self.lines_of(out), 400)
-        self.assertEqual(err.count("tick"), 40)
 
-    def test_two_tasks_printing_long_lines_into_a_slow_pipe_never_interleave_and_each_keeps_its_order(self):
-        summary, out, _ = self.run_case("writers", TWO_WRITERS_PROGRAM,
-                                        peer=["--delay", "0.3", "--chunk", "16384", "--pause", "0.002"])
-        self.assertEqual(summary["status"], 0)
-        lines = self.lines_of(out)
-        self.assertEqual(len(lines), 80)
-        following = {"A": 0, "B": 0}
-        for line in lines:
-            m = re.fullmatch(r"([AB])([0-9]+) x{8192}", line)
-            if not m:
-                self.fail("a line is not whole")
-            self.assertEqual(int(m.group(2)), following[m.group(1)], "the order of one task")
-            following[m.group(1)] += 1
+def lines_of(data):
+    """The lines of a byte string, which must end with a whole line (latin-1, one character per byte)."""
+    text = data.decode("latin-1")
+    assert text == "" or text.endswith("\n"), "the output ends with a whole line"
+    return text.split("\n")[:-1] if text else []
 
-    def test_a_print_longer_than_the_buffer_holds_the_stream_until_it_is_all_copied(self):
-        summary, out, _ = self.run_case("long", LONG_PRINT_PROGRAM,
-                                        peer=["--delay", "0.3", "--chunk", "16384", "--pause", "0.002"])
-        self.assertEqual(summary["status"], 0)
-        lines = self.lines_of(out)
-        self.assertEqual(len(lines), 202)
-        big = "z" * 262144
-        self.assertEqual(len([line for line in lines if line == big]), 2)
-        self.assertEqual([line for line in lines if line != big], ["short-%d" % n for n in range(200)])
 
-    def test_the_end_of_the_run_drains_standard_output_within_the_flush_limit(self):
-        summary, out, err = self.run_case("drain", ROWS_PROGRAM % 100, peer=["--delay", "1.0"], vm=["--json"])
-        self.assertEqual(summary["status"], 0)
-        self.assertGreaterEqual(summary["exit"], summary["read_start"], "the run waited for the reader")
-        self.check_rows(self.lines_of(out), 100)
-        self.assertEqual(err, "")
+def check_rows(lines, count):
+    assert len(lines) == count
+    for n, line in enumerate(lines):
+        if line != "row %d %s" % (n, FILLER):
+            pytest.fail("row %d is not whole or not in order" % n)
 
-    def test_a_reader_that_never_reads_ends_the_run_after_the_flush_timeout_with_the_warning(self):
-        summary, out, err = self.run_case("stuck", ROWS_PROGRAM % 100, peer=["--read-after-exit"],
-                                          vm=["--json", "--flush-timeout", "500"])
-        self.assertEqual(summary["status"], 0)
-        self.assertTrue(0.4 <= summary["exit"] <= 20, "the run waits for the flush limit")
-        self.assertIn('"flush_timeout_ms":500', err)
-        self.assertTrue(0 < len(out) < row_total(100), "the data that fits the pipe arrives")
 
-    def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_exit_code(self):
-        summary, out, _ = self.run_case("merged", ROWS_PROGRAM % 100, peer=["--read-after-exit", "--merge"],
-                                        vm=["--json", "--flush-timeout", "500"])
-        self.assertEqual(summary["status"], 0)
-        self.assertTrue(0.4 <= summary["exit"] <= 20, "the run waits for the flush limit")
-        self.assertTrue(0 < len(out) < row_total(100))
-        self.assertNotIn(b"flush_timeout_ms", out, "the warning is dropped, not mixed into the data")
+def check_alternating(lines):
+    assert len(lines) == 300
+    for k, line in enumerate(lines):
+        if line != "%s%d %s" % ("o" if k % 2 == 0 else "e", k // 2, FILLER):
+            pytest.fail("line %d is not in the order of the calls" % k)
 
-    def test_a_socket_as_stdout_is_written_on_the_loop(self):
-        summary, out, _ = self.run_case("socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "1.0"])
-        self.assertEqual(summary["status"], 0)
-        self.assertGreaterEqual(summary["ticks_before_read"], 5, "the ticker ran while stdout was stuck")
-        self.check_rows(self.lines_of(out), 800)
 
-    def test_stdout_and_stderr_on_one_pipe_keep_the_order_of_the_calls_under_a_slow_reader(self):
-        summary, out, _ = self.run_case("alternate", ALTERNATE_PROGRAM,
-                                        peer=["--delay", "0.5", "--merge", "--chunk", "16384", "--pause", "0.001"])
-        self.assertEqual(summary["status"], 0)
-        self.check_alternating(self.lines_of(out))
+def test_a_pipe_nobody_reads_does_not_stop_a_timer_task_and_the_run_ends_once_the_reader_drains(tmp_path):
+    summary, out, err = run_case(tmp_path, "ticker", TICKER_PROGRAM % 400,
+                                 peer=["--delay", "1.0", "--chunk", "16384", "--pause", "0.001"])
+    assert summary["status"] == 0
+    assert summary["ticks_before_read"] >= 5, "the ticker ran while stdout was stuck"
+    check_rows(lines_of(out), 400)
+    assert err.count("tick") == 40
 
-    def test_stdout_and_stderr_on_one_terminal_keep_the_order_of_the_calls_under_a_slow_reader(self):
-        summary, out, _ = self.run_case("terminal", ALTERNATE_PROGRAM,
-                                        peer=["--delay", "0.5", "--pty", "--chunk", "1024", "--pause", "0.0005"])
-        self.assertEqual(summary["status"], 0)
-        self.check_alternating(self.lines_of(out.replace(b"\r", b"")))
 
-    def test_io_flush_returns_once_a_slow_reader_has_taken_the_data(self):
-        summary, out, err = self.run_case("flush", FLUSH_PROGRAM, peer=["--delay", "1.0"])
-        self.assertEqual(summary["status"], 0)
-        self.check_rows(self.lines_of(out), 100)
-        self.assertEqual(err, "flushed\n")
-        self.assertGreaterEqual(summary["first_error_at"], summary["read_start"], "flush waited for the reader")
+def test_two_tasks_printing_long_lines_into_a_slow_pipe_never_interleave_and_each_keeps_its_order(tmp_path):
+    summary, out, _ = run_case(tmp_path, "writers", TWO_WRITERS_PROGRAM,
+                               peer=["--delay", "0.3", "--chunk", "16384", "--pause", "0.002"])
+    assert summary["status"] == 0
+    lines = lines_of(out)
+    assert len(lines) == 80
+    following = {"A": 0, "B": 0}
+    for line in lines:
+        m = re.fullmatch(r"([AB])([0-9]+) x{8192}", line)
+        if not m:
+            pytest.fail("a line is not whole")
+        assert int(m.group(2)) == following[m.group(1)], "the order of one task"
+        following[m.group(1)] += 1
 
-    def test_a_crash_notice_waits_for_a_stderr_that_is_full_and_then_arrives_whole(self):
-        summary, _, err = self.run_case("crash-notice", CRASH_WHILE_STUCK_PROGRAM, peer=["--error-delay", "1.0"],
-                                        vm=["--json"])
-        self.assertEqual(summary["status"], 1)
-        self.assertGreaterEqual(summary["first_error_at"], 0.9, "stderr was stuck while the task crashed")
-        lines = err.split("\n")
-        crash = [line for line in lines if line.startswith('{"code":"RUNTIME-DIVISION-BY-ZERO"')]
-        self.assertEqual(len(crash), 1)
-        self.assertIs(json.loads(crash[0])["task"], True)
-        self.assertEqual(len([line for line in lines if re.fullmatch(r"warn [0-9]+ w+", line)]), 200)
 
-    def test_a_stderr_that_cannot_be_written_makes_the_exit_code_1(self):
-        status, _, out, _ = self.run_to_file("full-stderr", WARN_LAST_PROGRAM, stderr_file="/dev/full")
-        self.assertEqual(status, 1)
-        self.assertEqual(out, "done\n")
+def test_a_print_longer_than_the_buffer_holds_the_stream_until_it_is_all_copied(tmp_path):
+    summary, out, _ = run_case(tmp_path, "long", LONG_PRINT_PROGRAM,
+                               peer=["--delay", "0.3", "--chunk", "16384", "--pause", "0.002"])
+    assert summary["status"] == 0
+    lines = lines_of(out)
+    assert len(lines) == 202
+    big = "z" * 262144
+    assert len([line for line in lines if line == big]) == 2
+    assert [line for line in lines if line != big] == ["short-%d" % n for n in range(200)]
 
-    def test_a_long_diagnostic_reaches_a_slow_stderr_pipe_whole(self):
-        summary, _, err = self.run_case("slow-diagnostic", BIG_UNWRAP_PROGRAM % 17, peer=["--error-delay", "1.0"],
-                                        vm=["--json"])
-        self.assertEqual(summary["status"], 1)
-        self.assertIn("RUNTIME-UNWRAP-ERROR", err)
-        self.assertGreater(len(err), 262144, "the whole text arrives")
 
-    def test_a_print_cut_by_the_end_of_the_run_does_not_hold_a_queued_notice_or_the_exit(self):
-        summary, out, _ = self.run_case("stuck-print", STUCK_PRINT_PROGRAM, peer=["--delay", "1.0", "--merge"],
-                                        vm=["--json", "--flush-timeout", "6000"])
-        self.assertEqual(summary["status"], 1)
-        self.assertLess(summary["exit"], 4, "the run does not wait for the flush limit")
-        self.assertNotIn(b"flush_timeout_ms", out)
-        self.assertIn(b"RUNTIME-DIVISION-BY-ZERO", out)
+def test_the_end_of_the_run_drains_standard_output_within_the_flush_limit(tmp_path):
+    summary, out, err = run_case(tmp_path, "drain", ROWS_PROGRAM % 100, peer=["--delay", "1.0"], vm=["--json"])
+    assert summary["status"] == 0
+    assert summary["exit"] >= summary["read_start"], "the run waited for the reader"
+    check_rows(lines_of(out), 100)
+    assert err == ""
 
-    def test_blocking_stdout_and_stderr_on_one_pipe_the_program_output_comes_before_the_diagnostic(self):
-        summary, out, _ = self.run_case("blocking-order", OUTPUT_THEN_CRASH_PROGRAM, peer=["--merge"],
-                                        vm=["--json"], env={"AGENTICA_VM_TEST_BLOCKING_OUTPUT": "1"})
-        self.assertEqual(summary["status"], 1)
-        self.assertRegex(out, rb"\Abefore\npartial[^\n]*RUNTIME-DIVISION-BY-ZERO")
 
-    def test_file_calls_on_dev_stdout_and_dev_stderr_still_work_when_they_are_pipes(self):
-        summary, out, err = self.run_case("dev-stdout", DEV_STDOUT_PROGRAM)
-        self.assertEqual(summary["status"], 0)
-        self.assertEqual(out, b"via file\nnormal\n")
-        self.assertEqual(err, "via stderr\nafter\n")
+def test_a_reader_that_never_reads_ends_the_run_after_the_flush_timeout_with_the_warning(tmp_path):
+    summary, out, err = run_case(tmp_path, "stuck", ROWS_PROGRAM % 100, peer=["--read-after-exit"],
+                                 vm=["--json", "--flush-timeout", "500"])
+    assert summary["status"] == 0
+    assert 0.4 <= summary["exit"] <= 20, "the run waits for the flush limit"
+    assert '"flush_timeout_ms":500' in err
+    assert 0 < len(out) < row_total(100), "the data that fits the pipe arrives"
 
-    def test_a_long_error_text_reaches_a_stderr_file_whole(self):
-        status, _, out, err = self.run_to_file("big-error", BIG_UNWRAP_PROGRAM % 16, stderr_file=True)
-        self.assertEqual(status, 1)
-        self.assertEqual(out, "")
-        self.assertIn("RUNTIME-UNWRAP-ERROR", err)
-        self.assertGreater(len(err), 131072, "the whole text is written")
 
-    def test_a_regular_file_written_by_the_pool_is_drained_while_a_child_is_stopped_at_the_end_of_the_run(self):
-        status, elapsed, out, err = self.run_to_file("live-child", LIVE_CHILD_PROGRAM)
-        self.assertEqual(status, 0)
-        self.assertLess(elapsed, min(scaled(10), 25), "the run does not wait for the flush limit")
-        self.assertEqual(err, "")
-        self.assertRegex(out, re.compile(r"\Achild started\n.*\ndone\n\Z", re.S))
+def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_exit_code(tmp_path):
+    summary, out, _ = run_case(tmp_path, "merged", ROWS_PROGRAM % 100, peer=["--read-after-exit", "--merge"],
+                               vm=["--json", "--flush-timeout", "500"])
+    assert summary["status"] == 0
+    assert 0.4 <= summary["exit"] <= 20, "the run waits for the flush limit"
+    assert 0 < len(out) < row_total(100)
+    assert b"flush_timeout_ms" not in out, "the warning is dropped, not mixed into the data"
 
-    def test_a_reader_that_goes_away_fails_the_print_not_the_vm(self):
-        summary, _, err = self.run_case("gone", ROWS_PROGRAM % 400, peer=["--close-after", "100000"], vm=["--json"])
-        self.assertEqual(summary["status"], 1)
-        self.assertIn('"code":"RUNTIME-INTERNAL"', err)
 
-    def test_a_crashed_parent_cancels_a_child_waiting_to_print_and_nothing_partial_is_written(self):
-        summary, out, err = self.run_case("crash", CRASHED_PARENT_PROGRAM, peer=["--delay", "1.0"], vm=["--json"])
-        self.assertEqual(summary["status"], 1)
-        self.assertIn('"code":"RUNTIME-DIVISION-BY-ZERO"', err)
-        lines = self.lines_of(out)
-        self.assertGreater(len(lines), 50, "the child filled the buffers before it was cancelled")
-        for n, line in enumerate(lines):
-            if line != "C%d %s" % (n, FILLER):
-                self.fail("line %d is partial or out of order" % n)
+def test_a_socket_as_stdout_is_written_on_the_loop(tmp_path):
+    summary, out, _ = run_case(tmp_path, "socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "1.0"])
+    assert summary["status"] == 0
+    assert summary["ticks_before_read"] >= 5, "the ticker ran while stdout was stuck"
+    check_rows(lines_of(out), 800)
+
+
+def test_stdout_and_stderr_on_one_pipe_keep_the_order_of_the_calls_under_a_slow_reader(tmp_path):
+    summary, out, _ = run_case(tmp_path, "alternate", ALTERNATE_PROGRAM,
+                               peer=["--delay", "0.5", "--merge", "--chunk", "16384", "--pause", "0.001"])
+    assert summary["status"] == 0
+    check_alternating(lines_of(out))
+
+
+def test_stdout_and_stderr_on_one_terminal_keep_the_order_of_the_calls_under_a_slow_reader(tmp_path):
+    summary, out, _ = run_case(tmp_path, "terminal", ALTERNATE_PROGRAM,
+                               peer=["--delay", "0.5", "--pty", "--chunk", "1024", "--pause", "0.0005"])
+    assert summary["status"] == 0
+    check_alternating(lines_of(out.replace(b"\r", b"")))
+
+
+def test_io_flush_returns_once_a_slow_reader_has_taken_the_data(tmp_path):
+    summary, out, err = run_case(tmp_path, "flush", FLUSH_PROGRAM, peer=["--delay", "1.0"])
+    assert summary["status"] == 0
+    check_rows(lines_of(out), 100)
+    assert err == "flushed\n"
+    assert summary["first_error_at"] >= summary["read_start"], "flush waited for the reader"
+
+
+def test_a_crash_notice_waits_for_a_stderr_that_is_full_and_then_arrives_whole(tmp_path):
+    summary, _, err = run_case(tmp_path, "crash-notice", CRASH_WHILE_STUCK_PROGRAM, peer=["--error-delay", "1.0"],
+                               vm=["--json"])
+    assert summary["status"] == 1
+    assert summary["first_error_at"] >= 0.9, "stderr was stuck while the task crashed"
+    lines = err.split("\n")
+    crash = [line for line in lines if line.startswith('{"code":"RUNTIME-DIVISION-BY-ZERO"')]
+    assert len(crash) == 1
+    assert json.loads(crash[0])["task"] is True
+    assert len([line for line in lines if re.fullmatch(r"warn [0-9]+ w+", line)]) == 200
+
+
+def test_a_stderr_that_cannot_be_written_makes_the_exit_code_1(tmp_path):
+    status, _, out, _ = run_to_file(tmp_path, "full-stderr", WARN_LAST_PROGRAM, stderr_file="/dev/full")
+    assert status == 1
+    assert out == "done\n"
+
+
+def test_a_long_diagnostic_reaches_a_slow_stderr_pipe_whole(tmp_path):
+    summary, _, err = run_case(tmp_path, "slow-diagnostic", BIG_UNWRAP_PROGRAM % 17, peer=["--error-delay", "1.0"],
+                               vm=["--json"])
+    assert summary["status"] == 1
+    assert "RUNTIME-UNWRAP-ERROR" in err
+    assert len(err) > 262144, "the whole text arrives"
+
+
+def test_a_print_cut_by_the_end_of_the_run_does_not_hold_a_queued_notice_or_the_exit(tmp_path):
+    summary, out, _ = run_case(tmp_path, "stuck-print", STUCK_PRINT_PROGRAM, peer=["--delay", "1.0", "--merge"],
+                               vm=["--json", "--flush-timeout", "6000"])
+    assert summary["status"] == 1
+    assert summary["exit"] < 4, "the run does not wait for the flush limit"
+    assert b"flush_timeout_ms" not in out
+    assert b"RUNTIME-DIVISION-BY-ZERO" in out
+
+
+def test_blocking_stdout_and_stderr_on_one_pipe_the_program_output_comes_before_the_diagnostic(tmp_path):
+    summary, out, _ = run_case(tmp_path, "blocking-order", OUTPUT_THEN_CRASH_PROGRAM, peer=["--merge"],
+                               vm=["--json"], env={"AGENTICA_VM_TEST_BLOCKING_OUTPUT": "1"})
+    assert summary["status"] == 1
+    assert re.search(rb"\Abefore\npartial[^\n]*RUNTIME-DIVISION-BY-ZERO", out)
+
+
+def test_file_calls_on_dev_stdout_and_dev_stderr_still_work_when_they_are_pipes(tmp_path):
+    summary, out, err = run_case(tmp_path, "dev-stdout", DEV_STDOUT_PROGRAM)
+    assert summary["status"] == 0
+    assert out == b"via file\nnormal\n"
+    assert err == "via stderr\nafter\n"
+
+
+def test_a_long_error_text_reaches_a_stderr_file_whole(tmp_path):
+    status, _, out, err = run_to_file(tmp_path, "big-error", BIG_UNWRAP_PROGRAM % 16, stderr_file=True)
+    assert status == 1
+    assert out == ""
+    assert "RUNTIME-UNWRAP-ERROR" in err
+    assert len(err) > 131072, "the whole text is written"
+
+
+def test_a_regular_file_written_by_the_pool_is_drained_while_a_child_is_stopped_at_the_end_of_the_run(tmp_path):
+    status, elapsed, out, err = run_to_file(tmp_path, "live-child", LIVE_CHILD_PROGRAM)
+    assert status == 0
+    assert elapsed < min(scaled(10), 25), "the run does not wait for the flush limit"
+    assert err == ""
+    assert re.search(re.compile(r"\Achild started\n.*\ndone\n\Z", re.S), out)
+
+
+def test_a_reader_that_goes_away_fails_the_print_not_the_vm(tmp_path):
+    summary, _, err = run_case(tmp_path, "gone", ROWS_PROGRAM % 400, peer=["--close-after", "100000"], vm=["--json"])
+    assert summary["status"] == 1
+    assert '"code":"RUNTIME-INTERNAL"' in err
+
+
+def test_a_crashed_parent_cancels_a_child_waiting_to_print_and_nothing_partial_is_written(tmp_path):
+    summary, out, err = run_case(tmp_path, "crash", CRASHED_PARENT_PROGRAM, peer=["--delay", "1.0"], vm=["--json"])
+    assert summary["status"] == 1
+    assert '"code":"RUNTIME-DIVISION-BY-ZERO"' in err
+    lines = lines_of(out)
+    assert len(lines) > 50, "the child filled the buffers before it was cancelled"
+    for n, line in enumerate(lines):
+        if line != "C%d %s" % (n, FILLER):
+            pytest.fail("line %d is partial or out of order" % n)
