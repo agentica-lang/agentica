@@ -808,7 +808,7 @@ static void work_try_lock(op *o) {
    system without RENAME_NOREPLACE answers EINVAL, which is reported, not worked around with a racy check. */
 static void work_rename(op *o) {
 #ifdef _WIN32
-  fail_op(o, FS_RENAME, ENOTSUP);
+  if (agc_fs_rename_noreplace(o->path, o->to) != 0) fail_op(o, FS_RENAME, errno);
 #elif defined(__APPLE__)
   agc_fs_info info;
   if (agc_fs_stat(o->to, &info, false) == 0) {

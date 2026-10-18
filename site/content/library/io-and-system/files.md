@@ -356,7 +356,7 @@ end
 Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Renames a file, a symbolic link or a directory to a path that does not exist yet, in one step. It never replaces anything: when `to` exists, even as an empty directory, the call is an error and nothing changes, so two programs that race for a name have exactly one winner. A symbolic link is moved as a link, and what it names is left alone. Both paths must be on the same file system, and a file system that cannot refuse to replace (some network file systems) gives an error. VM only.
+Renames a file, a symbolic link or a directory to a path that does not exist yet, in one step. It never replaces anything: when `to` exists, even as an empty directory, the call is an error and nothing changes, so two programs that race for a name have exactly one winner. A symbolic link is moved as a link, and what it names is left alone. Both paths must be on the same file system; there is no copy/delete fallback across volumes. Linux, macOS and Windows use native no-replace operations. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void

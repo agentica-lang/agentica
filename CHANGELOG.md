@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Path.rename` now works on Windows with native no-replace semantics: an
+  existing destination is preserved.
 - Windows stdin reads run in the I/O pool, keeping tasks and timers responsive.
   A pending read can occupy one worker until input arrives, but process exit
   does not wait for it.

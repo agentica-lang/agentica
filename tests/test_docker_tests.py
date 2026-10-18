@@ -118,7 +118,7 @@ raise SystemExit(64)
             self.assertIn(f"type=volume,src={name},dst={target}", create)
         self.assertIn("/tmp:rw,nosuid,nodev,exec,size=1g,mode=1777", create)
         self.assertIn("/var/tmp:rw,nosuid,nodev,exec,size=512m,mode=1777", create)
-        for setting in ("HOME=/tmp/home", "TEMP=/tmp/temp", "WINEPREFIX=/tmp/wine"):
+        for setting in ("HOME=/tmp/home", "TEMP=/tmp/temp", "WINEPREFIX=/tmp/wine", "XDG_RUNTIME_DIR=/tmp/xdg"):
             self.assertIn(setting, create)
         self.assertTrue(any(setting.startswith("JOBS=") for setting in create))
         self.assertIn("mount_options", create[-1])

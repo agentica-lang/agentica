@@ -72,7 +72,8 @@ done
 """
 PROBE_COMMAND = r"""
 set -eu
-mkdir -p "$HOME" "$TEMP" "$TMPDIR" "$WINEPREFIX"
+mkdir -p "$HOME" "$TEMP" "$TMPDIR" "$WINEPREFIX" "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
 """ + PROBE_MOUNTS + PROBE_TMPFS
 
 BUILD_COMMAND = r"""
@@ -259,6 +260,8 @@ def _container_arguments(
         "TMPDIR=/tmp/temp",
         "-e",
         "WINEPREFIX=/tmp/wine",
+        "-e",
+        "XDG_RUNTIME_DIR=/tmp/xdg",
         "-e",
         f"JOBS={os.environ.get('JOBS', '4')}",
     ]

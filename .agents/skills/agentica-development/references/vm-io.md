@@ -202,9 +202,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       negative returns `AGC_TREE_TOO_DEEP` and `AGC_TREE_REFUSED` become
       `FS_TREE_DEEP` and `FS_REFUSED`; a failure inside the tree comes with the
       path of the failed entry (`failed`), which replaces `o->path` in the error
-    - `Path.rename` (`OP_RENAME`): `renameat2` with `RENAME_NOREPLACE`;
-      `files.c` defines `_GNU_SOURCE` for it; the second path is `op.to`; the
-      error is `FS_RENAME` with both paths
+    - `Path.rename` (`OP_RENAME`): Unix uses `renameat2` with
+      `RENAME_NOREPLACE` (macOS: `renameatx_np` with `RENAME_EXCL`); Windows
+      uses `MoveFileW`, which fails if the destination exists; there is no
+      cross-volume copy fallback. The second path is `op.to`; the error is
+      `FS_RENAME` with both paths
   - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_fs_realpath`, the job
     has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`, `filesystem:
     cannot resolve path` with the path and the OS error text, and the result is
@@ -347,11 +349,13 @@ without locking the range again. Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`
 tests and portable bootstrap smoke cover read-handle locking, repeat calls,
 contention and close/reacquire.
 
-Windows special file streams, rename and
-`Path.remove` are not enabled by this increment. Removal returns an error
-without changing the path. Keep it disabled until native no-follow traversal,
-raw root/dot validation and junction tests are implemented; normalizing `.`
-before checking it would erase the evidence needed to refuse it.
+Windows special file streams and `Path.remove` are not enabled by this
+increment. Removal returns an error without changing the path. Keep it disabled
+until native no-follow traversal, raw root/dot validation and junction tests are
+implemented; normalizing `.` before checking it would erase the evidence needed
+to refuse it. Windows `Path.rename` uses `MoveFileW`, which is atomic on one
+volume and fails rather than replacing an existing destination; it has no
+copy/delete fallback.
 
 `vm/tests/files_test.c` exercises real builtin calls without needing a
 self-hosted compiler: text and all-byte round trips, append/flush/close,

@@ -274,6 +274,26 @@ int agc_fs_take_channel(int fd) {
   return taken;
 }
 
+int agc_fs_rename_noreplace(const char *from, const char *to) {
+  wchar_t *wide_from = native_path(from);
+  if (!wide_from) return -1;
+  wchar_t *wide_to = native_path(to);
+  if (!wide_to) {
+    free(wide_from);
+    return -1;
+  }
+  if (MoveFileW(wide_from, wide_to)) {
+    free(wide_from);
+    free(wide_to);
+    return 0;
+  }
+  DWORD error = GetLastError();
+  free(wide_from);
+  free(wide_to);
+  agc_fs_set_error(uv_translate_sys_error((int)error));
+  return -1;
+}
+
 int agc_fs_try_lock(int fd) {
   /* Avoid the CRT invalid-parameter handler for a closed descriptor. */
   if (fd < 0) {

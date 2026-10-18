@@ -39,7 +39,7 @@ def _require_docker_sandbox(scratch: Path) -> None:
     if not _is_within(scratch, Path("/tmp")):
         raise AssertionError("Docker destructive-test scratch must be below /tmp")
 
-    for variable in ("HOME", "TEMP", "TMP", "TMPDIR", "WINEPREFIX"):
+    for variable in ("HOME", "TEMP", "TMP", "TMPDIR", "WINEPREFIX", "XDG_RUNTIME_DIR"):
         value = os.environ.get(variable)
         if value and not _is_within(Path(value).resolve(), Path("/tmp")):
             raise AssertionError(f"{variable} must be inside disposable /tmp storage")
