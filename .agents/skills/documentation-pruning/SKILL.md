@@ -32,7 +32,7 @@ editing. Discover three things, in order:
    concatenates files, an adapter with a hard file count). Never assume a
    specific repository layout.
 3. **Size outliers.** Record Markdown file count, bytes, lines, and estimated
-   tokens by area, and rank the largest files. Treat the top outliers as the
+   tokens by area (measure with `scripts/tokens.sh`, tiktoken `o200k_base`), and rank the largest files. Treat the top outliers as the
    first candidates: a big always-loaded index or a big plan document is where
    pruning pays most.
 
@@ -257,7 +257,7 @@ Report:
 - Pairs unified into one home, and intentional duplication kept, with its
   context-loading justification.
 - Before/after files, lines, bytes, and estimated tokens, using the same
-  scope. Always-loaded and activated-skill token savings separately.
+  scope (`scripts/tokens.sh`). Always-loaded and activated-skill token savings separately.
 - Broken references found and fixed, unresolved conflicts, and validation
   results.
 - This skill itself: activated tokens and the references a task pulls in.
