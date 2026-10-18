@@ -1,16 +1,28 @@
 # Task: repair a CSV report pipeline
 
-`start.agc` (or `start.py` for Python) turns an orders CSV file into a JSON report, and it produces the wrong files. Fix it and save the result as `solution.agc` (or `solution.py`). Keep the files and the output exactly as specified below.
+`start.agc` (or `start.py` for Python) turns an orders CSV file into a JSON
+report, and it produces the wrong files. Fix it and save the result as
+`solution.agc` (or `solution.py`). Keep the files and the output exactly as
+specified below.
 
 ## Usage
 
-The program gets two command-line arguments, the input path and the output path (`System.args()` in Agentica, `sys.argv[1:]` in Python). Paths are relative to the current directory. It reads the input file, writes the output file, and writes nothing else to disk. It never changes the input file.
+The program gets two command-line arguments, the input path and the output path
+(`System.args()` in Agentica, `sys.argv[1:]` in Python). Paths are relative to
+the current directory. It reads the input file, writes the output file, and
+writes nothing else to disk. It never changes the input file.
 
 ## The input
 
-A CSV file in UTF-8. The first line is a header and is always skipped. Every other line is an order, `order_id,customer,sku,quantity,unit_cents`. There is no quoting: a comma always separates fields. Spaces around a field are ignored. A blank line is ignored (it is neither a row nor skipped). Lines end with `\n`; a line may end with `\r\n`, and the last line may have no end of line.
+A CSV file in UTF-8. The first line is a header and is always skipped. Every
+other line is an order, `order_id,customer,sku,quantity,unit_cents`. There is no
+quoting: a comma always separates fields. Spaces around a field are ignored. A
+blank line is ignored (it is neither a row nor skipped). Lines end with `\n`; a
+line may end with `\r\n`, and the last line may have no end of line.
 
-An order line is valid when it has exactly 5 fields, `order_id`, `customer` and `sku` are not empty, `quantity` is an integer of 1 or more and `unit_cents` is an integer of 0 or more. Any other order line is skipped.
+An order line is valid when it has exactly 5 fields, `order_id`, `customer` and
+`sku` are not empty, `quantity` is an integer of 1 or more and `unit_cents` is
+an integer of 0 or more. Any other order line is skipped.
 
 ## The output file
 
@@ -20,7 +32,10 @@ One line of compact JSON (no spaces) followed by `\n`:
 {"customers":[{"customer":"ana","rows":2,"items":5,"total_cents":860}],"skipped":3}
 ```
 
-- `customers` has one object per customer that has at least one valid order, sorted by customer name (plain character order), with the fields in this order: `customer`; `rows`, the number of valid orders; `items`, the sum of their `quantity`; `total_cents`, the sum of `quantity * unit_cents`.
+- `customers` has one object per customer that has at least one valid order,
+  sorted by customer name (plain character order), with the fields in this
+  order: `customer`; `rows`, the number of valid orders; `items`, the sum of
+  their `quantity`; `total_cents`, the sum of `quantity * unit_cents`.
 - `skipped` is the number of skipped order lines.
 - With no valid order, `customers` is `[]`.
 

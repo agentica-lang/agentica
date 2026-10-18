@@ -1,10 +1,14 @@
 # Task: fix scope and return errors
 
-`start.agc` (or `start.py` for Python) should classify numbers, but it is broken. Fix it so it meets this spec, and save the result as `solution.agc` (or `solution.py`).
+`start.agc` (or `start.py` for Python) should classify numbers, but it is
+broken. Fix it so it meets this spec, and save the result as `solution.agc` (or
+`solution.py`).
 
-Input: integers, one per line, until the end of input. There may be no lines at all.
+Input: integers, one per line, until the end of input. There may be no lines at
+all.
 
-Output: one line per number, `negative`, `zero`, or `positive`. Then a last line, `negatives: <how many numbers were negative>`.
+Output: one line per number, `negative`, `zero`, or `positive`. Then a last
+line, `negatives: <how many numbers were negative>`.
 
 Example input:
 
