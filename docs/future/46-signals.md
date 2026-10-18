@@ -1,7 +1,7 @@
 ## 46. Signals
 
-**Status:** Scheduled on 2026-10-15 in [phase 27](../roadmap/27-signals.md),
-after the bootstrap (§18, port step 8). 46a and 46b may come earlier when no
+**Status:** Scheduled on 2026-10-15 (row 7.8), after the bootstrap (§18,
+port step 8, done). 46a and 46b may come earlier when no
 other VM PR is waiting. Nothing is implemented yet.
 
 The owner asked for a way to catch the OS stop signal in an Agentica program. A
@@ -1168,3 +1168,21 @@ Each question has options and a recommendation.
     **Decided (2026-10-15):** (B) is the starting point, not a final choice.
     The 46a PR makes the final choice between (A) and (B), as 46.3.1 and 46.7
     say.
+
+### 46.9 Implementation (row 7.8)
+
+- One PR per item, each with its own tests and docs. 46a subscription
+  and 46b sending are VM C code and may run earlier, when no other VM PR
+  is waiting; 46c (the driver) and 46d (`std/http` drain) come after the
+  bootstrap, 46d after 46b.
+- Tests: the Python cases of §46.6 in `tests/test_vm_signals.py`, the C
+  tests, goldens, a terminal-input test for 46c, hermetic localhost
+  fixtures with port 0 and everything cleaned up.
+- Docs: the grammar (tasks, Processes, reserved names), the site Process
+  and Test pages, the programming skill, `docs/vm/10-io-processes.md`
+  §10.4, and CHANGELOG entries (46a breaking).
+- Done when: a program handles TERM, INT, HUP, USR1 and USR2 and stops
+  its children before it exits, with QUIT as the force path; it sends
+  signals to its own children and to a pid it did not start; the driver
+  forwards a stop at once; `std/http` drains its handlers on a stop; and
+  the tests of §46.6 pass.

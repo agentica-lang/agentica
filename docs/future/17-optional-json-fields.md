@@ -3,12 +3,12 @@
 APIs with JSON Schema inputs (tool calls, PATCH bodies, config files) often tell
 three states of a key apart: the key is absent, the key is `null`, or the key
 has a real value. Typed JSON cannot show this today. `JSON.decode`
-(`src/json-typed.rkt`) fails on a missing key ("required field") and on `null`;
+fails on a missing key ("required field") and on `null`;
 `JSON.schema` lists every field in `required`; `JSON.encode` and `JSON.from`
 always write every field. `nil` does not help: `Nil` is not a nullable wildcard
 (`grammar.md`). The only way is dynamic `Json`: `JSON.get` returns an error for
 an absent key and `JSON.null?` finds `null`. This section adds a typed way. It
-is roadmap item 10e.
+is item 10e (row 7.6); the plan checklist lives in §15.6.
 
 ```agentica
 struct UpdateUser

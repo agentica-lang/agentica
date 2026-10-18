@@ -1059,3 +1059,16 @@ allocation functions (every caller changes); a thread-local variable (one
 documented exception to the no-globals rule); or counting in the callers that
 have the scheduler (builtins and opcodes), which misses allocations made deeper
 in helpers.
+
+### 28.13 Implementation (row 7.7)
+
+- Three small PRs, and a fourth (18d) after 17b: 18a metrics from the
+  VM's own state to a `.prom` file; 18b the `GET /metrics` endpoint;
+  18c the enabled-only hooks with the overhead check; 18d memory
+  diagnosis (§28.12).
+- Not in this phase: a GC pause histogram and program-defined metrics
+  (§28.11).
+- Done when: Prometheus scrapes a running Agentica server and Grafana
+  graphs GC, tasks, run-queue delay and I/O; a cron script leaves its
+  exit code and totals in a `.prom` file; goldens give the same output
+  with metrics on.

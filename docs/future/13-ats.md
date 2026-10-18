@@ -142,11 +142,20 @@ first-insertion order; a key deleted and then put again goes to the end, as in
     example a balanced tree: a persistent hash from key to (sequence, value),
     plus a persistent sorted map from sequence to key.
 - **Front end:** the checker part (`CHECK-TABLE-VALUE` and the reserved name)
-  goes into `src/` as written if phase 9 starts before the freeze of the Racket
-  front end (roadmap row 7.2.7, [roadmap](../roadmap/README.md)). If it starts
-  after the freeze, the checker part goes into the Agentica front end
-  ([§18](18-front-end-language.md)) instead, since the Racket front end takes
-  no new checker rules then.
+  goes into the Agentica front end ([§18](18-front-end-language.md)).
+
+### Implementation (row 17)
+
+- One PR on the VM: the `Table` builtins (`new`, `put`, `put_new`, `get`,
+  `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`) with
+  `CHECK-TABLE-VALUE` and the reserved name, and the concurrency tests:
+  many tasks sharing one table, no leak under stress, a fresh table per
+  scenario. Later, each after a real program needs it: ordered tables,
+  duplicate keys, a block-based `update`, a bounded cache as `std/`.
+- Starts when a real program needs it (7h is done); the order-9 server
+  measurement is the natural point to check.
+- Done when: an example with several tasks sharing a cache and a counter
+  runs on the VM with golden output.
 
 
 [task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

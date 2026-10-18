@@ -719,8 +719,8 @@ python3 benchmarks/http_bench.py                                          # 4000
 python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
 ```
 
-Results are not recorded yet. They need an idle-machine run (roadmap
-[20c-bench](roadmap/20-hybrid-http.md)), and the script marks any round that ran
+Results are not recorded yet. They need an idle-machine run (§30.14, item
+20c-bench), and the script marks any round that ran
 on a busy machine. The results include connection count, server, requests per
 second, min-to-max latency, p50 and p99 latency, server CPU and maximum client
 CPU.

@@ -2,7 +2,7 @@
 
 **Status:** idea, not scheduled. The owner asked on 2026-10-15 to note an LSP
 for some point. The dependencies are technical: it reuses the semantic CLI
-(§39, roadmap [phase 26](../roadmap/26-semantic-cli.md)) and the doc comments
+(§39, row 7.2b) and the doc comments
 (§32), so it can only start after them, and it is easiest on the self-hosted
 front end (§18). Nothing here is designed yet; this section only keeps the plan
 and the open questions in one place.

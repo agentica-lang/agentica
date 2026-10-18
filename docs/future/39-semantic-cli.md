@@ -1,7 +1,7 @@
 ## 39. Semantic CLI for agents
 
-**Status:** planned (roadmap [phase 26](../roadmap/26-semantic-cli.md), order
-step 7.2b, after doc comments and digit separators). Agreed with the owner on
+**Status:** planned (row 7.2b, after doc comments and digit separators).
+Agreed with the owner on
 2026-10-13: agents program better when they can ask the compiler about the code,
 not only read the docs. The front end already builds a linked and checked
 program with types and spans; four CLI commands expose it, JSON first. No
@@ -363,7 +363,7 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
   (`agentica doc`, phase 22), before iteration and concurrent collections
   (row 7.3). Front end and CLI only, VM-only in the sense of the
   roadmap rule (no Racket twin of anything; nothing to run).
-- After row 22b, so `outline` uses `src/docs.rkt` and shows doc summaries.
+- After row 22b, so `outline` uses the 22b docs engine and shows doc summaries.
 - Before the full 6c round (order step 10), so it can measure the commands
   (§39.12). The 6c pilot (order step 7.2.2) comes before it and does not have
   them.
@@ -437,4 +437,19 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
   - `QUERY-USAGE` for each case of §39.7, with the `<arguments>` span.
 - No golden fixtures: nothing runs on the VM.
 
-The docs to update are listed in [phase 26](../roadmap/26-semantic-cli.md).
+The docs to update: `docs/grammar/06b-builtins.md` (a Code queries
+paragraph) and `07-diagnostics.md` (`QUERY-`), AGENTS.md, the programming
+skill (`references/queries.md`, `references/diagnostics.md`),
+`site/content/getting-started.md` and the site page, and the development
+skill.
+
+### 39.14 Implementation (row 7.2b)
+
+- One PR per command group (26a–26c): `outline` first, then `symbol` and
+  `refs` on declarations, then `type-at` with field and local refs.
+- Done when: an agent can list a file's declarations, find where a name
+  is defined, list every reference to a declaration across a program, and
+  get the checked type at a position, each in text and in JSON with
+  `version` 1; a broken root is `skipped`, not fatal; a command that needs
+  a check gives the first diagnostic and exit 1; the `QUERY-` codes and
+  exit codes of §39.7 hold; and the tests of §39.13 pass.

@@ -1,21 +1,7 @@
 ## Later extensions
 
-- [x] Faster maps: replaced association lists in `src/evaluator.rkt` with Racket
-  immutable equal?-based hashes plus reversed insertion-order keys;
-  `mapping-put` remains the only writer. Lookup/update are effectively
-  constant-time in map size (technically O(log n), excluding key
-  hashing/comparison), Map.size is O(1), and Map.keys is O(n). Replacement
-  preserves first-insertion order, old maps stay unchanged, and missing keys
-  keep their diagnostic spans. Extended evaluator coverage for replacements,
-  equal String keys, Int keys, false/nil payloads, empty maps, and nested debug
-  order. `racket benchmarks/maps.rkt` compares checked build/build+read
-  workloads at 1k/10k/50k entries (three-sample medians, no CI timing
-  thresholds). Completed before JSON (5f). Lists retain O(n) indexing; favor
-  `for`, with no runtime rewrite. Local benchmark on Racket CS 9.3: three-sample
-  medians, baseline `27c8cd4` versus hash-backed maps. Timings include
-  evaluation only; build+read includes construction followed by one membership
-  check and indexed read per entry. These are observations, not CI limits or
-  timing guarantees.
+- [x] Faster maps (done before JSON, 5f): hash-backed maps with
+  insertion-order keys; numbers stay in git.
 
   | Entries | Build before / after (ms) | Build+read before / after (ms) |
   |---|---|---|

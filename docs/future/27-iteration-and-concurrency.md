@@ -1361,4 +1361,15 @@ results.
   come later, so a loop can alternate requests with polling child output. It is
   not part of the task work, and no application has needed it yet.
 
+### 27.7 Implementation (rows 7.3, 8.2)
+
+- 17a `Task.map` is built (PR #316); 17b channels, 17c `Task.await`
+  with a timeout and 17d `File.each_line` are built (records in §27.1–
+  §27.4 and the grammar). 17e `Stream[T]` (§27.4, step 2, order step
+  8.2, after the prelude) is one item with its own tests and docs.
+- Done when: the site examples run on the VM; timed-out items leave no
+  open socket, task or shared handle; the pipeline, await-cycle and
+  `Await.TimedOut` cases hold; and agents pick `Task.map` for fan-out
+  and channels for pipelines (§27.5).
+
 [task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

@@ -3,8 +3,8 @@
 Small language items for adapters (one interface, several backends), facades,
 and JSON of unknown shape. 15.1 and 15.3 serve adapters; 15.2 reads unknown
 JSON; 15.4 gives enums a JSON form, which typed decoding lacks today. Each lands
-in the evaluator and the VM in the same PR, with the grammar, the programming
-skill, the site docs and tests (roadmap Phase 10).
+on the VM in the same PR, with the grammar, the programming
+skill, the site docs and tests (row 7.6).
 
 ### 15.1 Calling `Fn` fields without `.call`
 
@@ -104,8 +104,8 @@ end
   memory backend is read-only: its map is fixed when it is created, `get` reads
   it, and `put` returns `error("read-only")`. A test can pass the memory backend
   to code that only reads, and the program passes the disk one. The two backends
-  live in separate programs; see the "Done when" of [roadmap phase
-  10](../roadmap/10-adapters-and-json.md#phase-10-adapters-and-json-inspection).
+  live in separate programs; see "Done when" in
+  [§15.6 Implementation](#156-implementation-row-76) below.
   A block can only be written as the last argument of a call, so each block goes
   through a small function that returns it (`getter`, `putter` above);
   standalone lambdas are planned in [section
@@ -433,4 +433,20 @@ a type name, calling a function by a name in a string) is not planned: it breaks
 static checking and makes the VM keep names and types at run time; use
 `JSON.from` to see a value's fields and a `Map[String, Fn[...]]` to dispatch by
 name.
+
+### 15.6 Implementation (row 7.6)
+
+- One PR per item (10a–10e), each with its own tests and docs. 10a needs
+  `.call` on the VM (done); 10b, 10d and 10e, and the JSON part of 10c,
+  need the VM JSON work; 10e also needs 10b. The VM check and the disk
+  example are two separate programs.
+- 10a `Fn` fields without `.call` (§15.1); 10b `JSON.kind` with the
+  `JsonValue` enum (§15.2); 10c generic structs (§15.3); 10d JSON for
+  enums (§15.4); 10e optional and nullable JSON fields (§17).
+- Done when: two programs run. The VM program has a `Storage` adapter
+  with a read-only memory backend and a walker over unknown JSON, using
+  only builtin library calls (golden check). The disk program uses the
+  same `Storage` shape with a disk backend whose `get` and `put` check
+  each key with an allow-list (`error("bad key")` otherwise, e.g.
+  `../x`), in a temporary directory passed as an argument.
 
