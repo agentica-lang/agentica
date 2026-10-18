@@ -223,13 +223,13 @@ name: set to Ana
   `struct JsonField`, `enum JsonField` or `import ... as JsonField` is
   `CHECK-REDEFINED-NAME`. This is a breaking change; say so in the changelog.
 - **Builtin enum path.** `JsonField` reuses the builtin-enum path that
-  `JsonValue` adds in §15.2 (10b): the checker's enum table, lowering, and
-  `src/modules.rkt` import linking for patterns, constructors and the bare
+  `JsonValue` adds in §15.2 (10b): the checker's enum table, lowering, and the
+  import linking in `compiler/` for patterns, constructors and the bare
   nullary forms `JsonField.Absent` and `JsonField.Null` (which arrive as
   `type-expression`s). It adds one thing: `JsonField` has a type parameter, so
   its table entry is generic like a user generic enum. For type references,
-  adding `JsonField` to `reserved-type-names` (`src/checker.rkt`) is what keeps
-  a field type like `age: JsonField[Int]` unchanged when `src/modules.rkt` links
+  adding `JsonField` to `reserved-type-names` (in `compiler/`) is what keeps
+  a field type like `age: JsonField[Int]` unchanged when linking
   an imported module.
 - **Encode** (VM only, since 7i deleted the evaluator): a `JsonField` value
   writes nothing for `Absent` (the key is left out), `null` for `Null` and `x`
@@ -248,8 +248,8 @@ name: set to Ana
   layout does not change and there is no bump. The JSON PR adds no placeholder
   for it.
 - **Planned tests:**
-  - decode of the three states (key absent, `null`, a value), in the evaluator
-    test and as a site example;
+  - decode of the three states (key absent, `null`, a value), in the VM goldens
+    and as a site example;
   - path errors through a nested struct (`address: JsonField[Address]` with a
     bad `address.zip`, message `address.zip: expected String`) and a bad value
     type (`age: "x"`, message `age: expected signed 64-bit Int or null`, since
@@ -281,5 +281,5 @@ name: set to Ana
     `JsonField[...]` in the imported module, field types, patterns,
     `JsonField.Value(x)`, bare `JsonField.Absent` and `JsonField.Null`), checked
     and run through an `import`;
-  - evaluator against VM (`tests/vm-diff-*-test.rkt`) once the VM has JSON.
+  - VM differential test (`tests/test_vm_diff_*.py`), since the VM has JSON.
 

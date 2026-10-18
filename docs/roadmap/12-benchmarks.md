@@ -39,8 +39,7 @@ types" pitch, not to win a contest.
   `getrusage(RUSAGE_CHILDREN)` is used only from a fresh wrapper per child,
   since `ru_maxrss` keeps the maximum of all waited children. Crystal's compile
   time and Agentica's `compile` to `.agcb` are timed apart from the run time. It
-  runs Agentica on the VM and, for reference, on the evaluator; the evaluator's
-  time includes Racket start-up, and the report says so. When a language's tool
+  runs Agentica on the VM. When a language's tool
   (`ruby`, `crystal`, `python3`) is missing, it skips that language and says so
   in its report.
 - [ ] 12d Report: record the machine, OS, tool versions, wall time and peak
