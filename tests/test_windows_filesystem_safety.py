@@ -7,6 +7,7 @@ import ctypes
 import os
 import re
 import stat
+import struct
 import subprocess
 import threading
 import time
@@ -550,6 +551,67 @@ def test_rename_moves_a_junction_not_its_target(root, work):
     assert target.is_junction()
     assert sentinel.read_text(encoding="utf-8") == "target sentinel"
     assert (target / "keep").read_text(encoding="utf-8") == "target sentinel"
+
+
+# A third-party reparse tag the VM and the OS do not implement: the entry
+# must be deleted and moved as an opaque link, never traversed.
+UNKNOWN_REPARSE_TAG = 0xA000C10D
+FSCTL_SET_REPARSE_POINT = 0x900A4
+FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+
+
+def tag_as_unknown_reparse_point(path):
+    """Stamp a directory with an unknown reparse tag; return True when the OS kept it."""
+    kernel32 = kernel32_file_api()
+    kernel32.DeviceIoControl.argtypes = [
+        ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32,
+        ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p,
+    ]
+    kernel32.DeviceIoControl.restype = ctypes.c_int
+    payload = b"agentica-test-target\x00"
+    buffer = struct.pack("<IHH", UNKNOWN_REPARSE_TAG, len(payload), 0) + payload
+    handle = kernel32.CreateFileW(
+        str(path), 0x40000000, 0x00000007, None, 3,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, None)
+    if handle == ctypes.c_void_p(-1).value:
+        return False
+    try:
+        written = ctypes.c_uint32(0)
+        ok = kernel32.DeviceIoControl(
+            handle, FSCTL_SET_REPARSE_POINT, buffer, len(buffer),
+            None, 0, ctypes.byref(written), None)
+        return bool(ok)
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def has_reparse_point(path):
+    kernel32 = kernel32_file_api()
+    kernel32.GetFileAttributesW.argtypes = [ctypes.c_wchar_p]
+    kernel32.GetFileAttributesW.restype = ctypes.c_uint32
+    return bool(kernel32.GetFileAttributesW(str(path)) & FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+@REQUIRES_NATIVE_WINDOWS
+def test_unknown_reparse_tags_are_deleted_and_moved_as_links(root, work):
+    link = root / "unknown-link"
+    link.mkdir()
+    (link / "inside.txt").write_text("inside", encoding="utf-8")
+    if not tag_as_unknown_reparse_point(link):
+        pytest.skip("the runner cannot stamp third-party reparse tags")
+    assert has_reparse_point(link)
+    moved = root / "unknown-moved"
+    bytecode = compile_work_text(work, RACE_PROGRAM, "windows-rename-unknown-tag")
+    run_with_stdout(bytecode, [str(link), str(moved)], root, "true\n")
+    assert not link.exists()
+    assert has_reparse_point(moved)
+    assert (moved / "inside.txt").read_text(encoding="utf-8") == "inside"
+    remove = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-unknown-tag")
+    result = run_vm(remove, args=[str(moved)], env=vm_environment(), cwd=root)
+    assert (result.code, result.stdout) == (0, "true\n"), result.stderr
+    assert not moved.exists()
 
 
 @REQUIRES_NATIVE_WINDOWS
