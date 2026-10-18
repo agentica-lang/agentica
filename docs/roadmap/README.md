@@ -200,7 +200,7 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.2a
   - **Next work:** New features, VM-only, after rows 7.2.1 and 7.2.2: doc
-    comments ([phase 22](22-doc-comments.md), part 22a,
+    comments ([§32](../future/32-doc-comments.md#32-doc-comments), part 22a,
     [§32](../future/32-doc-comments.md#32-doc-comments): `##` lines, front end
     only; `agentica doc` is row 22b, after the bootstrap), then digit separators
     ([phase 23](23-digit-separators.md),
@@ -308,7 +308,7 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 22b
   - **Next work:** **After the bootstrap** (owner, 2026-10-15). New features,
     front end only, in `compiler/`: `agentica doc PATH` and
-    `agentica help std/MODULE` ([phase 22](22-doc-comments.md), part 22b; [§32.5
+    `agentica help std/MODULE` ([§32](../future/32-doc-comments.md#32-doc-comments), part 22b; [§32.5
     and §32.6](../future/32-doc-comments.md#32-doc-comments))
   - **Outcome:** Agents and people read a module's API with `agentica doc
     std/http`, in text or JSON
@@ -467,8 +467,7 @@ after them may run in parallel when needed and keep their relative order.
     `Test.test` blocks
 
 - **Order:** 7.12
-  - **Next work:** **30a implemented; 30b planned** (phase 30,
-    [`docs/roadmap/30-type-aliases.md`](30-type-aliases.md); design:
+  - **Next work:** **30a implemented; 30b planned** (design and plan:
     [§49](../future/49-type-aliases.md#49-type-aliases)): simple transparent
     aliases (`type Grid = List[List[Float]]`) are compiler-only, with no
     bytecode or VM change. Next, generic aliases (`type Matrix[T] =
@@ -776,10 +775,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
   - **Contents:** Phase 21: BDD in Agentica (`std/bdd`, a runner and a child VM
     per scenario; catch-up item 7h)
 
-- **File:** [`22-doc-comments.md`](22-doc-comments.md)
-  - **Contents:** Phase 22: doc comments (`##` lines, `agentica doc`, `help` for
-    `std/`)
-
 - **File:** [`23-digit-separators.md`](23-digit-separators.md)
   - **Contents:** Phase 23: digit separators in number literals (`1_000`)
 
@@ -805,9 +800,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 - **File:** [`29-regex.md`](29-regex.md)
   - **Contents:** Phase 29: regular expressions (`std/regex` in Agentica, then
     the regex literal; design in §48)
-
-- **File:** [`30-type-aliases.md`](30-type-aliases.md)
-  - **Contents:** Phase 30: type aliases (simple, then generic; design in §49)
 
 - **File:**
   [`pending-general-programming-and-mcp.md`][agentica-link-5]

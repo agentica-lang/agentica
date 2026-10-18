@@ -5,8 +5,8 @@ Specified in [`docs/future/39-semantic-cli.md` section
 commands that answer questions about the code, JSON first: `agentica outline`,
 `agentica symbol`, `agentica refs` and `agentica type-at`. It is front end and
 CLI only: no language change, nothing in lowering or the VM. It comes after row
-22b of [phase 22](22-doc-comments.md), whose docs engine (22b) it reuses,
-and after
+22b of [phase 22](../future/32-doc-comments.md#32-doc-comments), whose docs
+engine (22b) it reuses, and after
 digit separators ([phase 23](23-digit-separators.md)), at order step 7.2b of the
 [roadmap](README.md). It waits until after the bootstrap,
 because it extends the front end in `compiler/`, and it comes before the
