@@ -20,7 +20,7 @@ ELF checks, the archive). A new check in
 comment), then a step that calls it. Targets that are not obvious:
 
 - `all` (the default goal, also `agentica`) builds `dist/agentica`, the one
-  binary (`docs/future/35-self-hosting.md` §35.3). The chain, all in
+  binary (`docs/future/18-front-end-language.md` §18.2). The chain, all in
   `build/stage/` and `build/vm/<mode>/`: a first binary
   (`build/vm/<mode>/bootstrap/agentica`, never shipped) is linked with
   `bootstrap/stage0.agcb` and the `std/` sources; it compiles `stage1`;
@@ -43,7 +43,7 @@ comment), then a step that calls it. Targets that are not obvious:
   check that the diff is only the one binary file, run `make` again (it must
   build from the new file) and commit it. (b) If it cannot (the change needs
   the new stage0: a syntax or builtin that `compiler/` itself uses, a new
-  bytecode format version), split it in two PRs, as 35.3 says: the first adds
+  bytecode format version), split it in two PRs, as §18.2 says: the first adds
   the feature without using it in `compiler/`, and refreshes stage0; the
   second uses it. When that is not possible, compile `stage1` with another
   compiler and say so in the PR: `make stage0
@@ -71,7 +71,7 @@ STAGE1_COMPILER="path/to/agentica"`
   the VM goldens; `make goldens` rewrites it after an intended change, and the
   diff is the review).
 - `test` and `test-slow` run Python `unittest` modules only (design in
-  `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of
+  `docs/future/18-front-end-language.md` §18.7). `TESTS` is a list of
   `tests/test_<area>.py` files or directories (the default `tests/`). A leading
   `./` and a trailing `/` are ignored; any other path (a file of another kind, a
 `.py`

@@ -1,6 +1,6 @@
 ## 47. Code formatter (`agentica fmt`)
 
-**Status:** Deferred until after the bootstrap (§35 step 8), decided by the
+**Status:** Deferred (the bootstrap is done), decided by the
 owner on 2026-10-15: roadmap row 7.9 and phase 28
 ([`docs/roadmap/28-formatter.md`](../roadmap/28-formatter.md)). The owner also
 asked for this plan on the same day. Nothing is implemented. The facts in 47.1
@@ -119,13 +119,13 @@ Checked on `origin/master` at `95a45635`:
 
 ### 47.3 Where it lives
 
-- It is written in Agentica in `compiler/`, after step 8 of §35.4. It reuses the
+- It is written in Agentica in `compiler/`, after step 8 of §18.3. It reuses the
   self-hosted lexer (`compiler/lexer.agc`) and parser (`compiler/parser.agc`).
   That is why it waits. With one parser there is no second grammar to keep in
   sync. Before step 8 the front end is Racket, and row 7.2.7 freezes it: `src/`
   takes no new syntax. A Racket formatter would be a second parser in that
   frozen tree.
-- Step 8 ports the CLI driver (§35.4), so the subcommand goes into the Agentica
+- Step 8 ports the CLI driver (§18.3), so the subcommand goes into the Agentica
   CLI. These files are proposed, flat like the other stages in `compiler/`:
   - `compiler/format.agc`: the driver, text in and text or a diagnostic out;
   - `compiler/format_comments.agc`: the comment list and its attachment (47.4);

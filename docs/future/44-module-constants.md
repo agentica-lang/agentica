@@ -3,7 +3,7 @@
 **Status:** planned, roadmap row 7.2.8. Requested by the owner on 2026-10-15
 and wanted before the bootstrap, so the Agentica front end (`compiler/`) can
 use them. It relaxes the freeze of the Racket front end (row 7.2.7,
-[§35](35-self-hosting.md)) in both front ends, as `Set[T]` (8b) and
+[§18](18-front-end-language.md)) in both front ends, as `Set[T]` (8b) and
 `value.with(...)` (15c) did. The same owner decision of 2026-10-15 changes
 the import syntax (44.2), which lands first. This section is the design; the
 implementation PRs are listed in 44.12.
@@ -1035,7 +1035,7 @@ together; the user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
    limit); all existing goldens still
    pass (their bytes change by the version and the zero count); `make vm-test`.
    A C change, so the `vm-c-critic` review applies. This is the "new format"
-   step of 35.3 done before anything uses it.
+   step of §18.2 done before anything uses it.
 
    **44a1 relaxes two rules, on purpose.** The development skill
    (`references/vm-lowering.md`, "New opcode") says "No opcodes for later PRs",
@@ -1126,7 +1126,7 @@ together; the user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
 44b to 44d are independent of each other after 44a2. Each deletes the zero-
 argument functions and threaded structs it replaces and no other code.
 
-### 44.13 Interaction with §35
+### 44.13 Interaction with §18
 
 - **The freeze.** Row 7.2.7 allows only bug fixes and data. 44a0 (the import
   syntax) and 44a1 and 44a2 (constants) relax it, like `Set[T]` (8b) and
@@ -1136,8 +1136,9 @@ argument functions and threaded structs it replaces and no other code.
   bootstrap.
 - **Where the port stands.** Step 4a (PR #258, the builtin catalog as data) and
   the performance guide (PR #257) are merged on master. Step 4b has started,
-  in parallel with this design. 35.7 says no language change touches a stage
-  while its port is open, so the rule for these PRs is the one of the
+  in parallel with this design. No language change touches a stage while its
+  port is open (the rule of the port, now done), so the rule for these PRs is
+the one of the
   bug-fix case:
   - 44a1 changes `vm/` and `src/bytecode.rkt` only (no ported stage), so it
     goes in parallel with 4b and 4c.
@@ -1177,11 +1178,11 @@ argument functions and threaded structs it replaces and no other code.
     through the migration of 44a0).
 - **stage0.** (The Racket front end is deleted since PR #313; this is the plan
   as written.) There is no `stage0` yet, and `compiler/` is compiled by Racket
-  (35.3), so 44b to 44d can use constants as soon as 44a2 merges, with no
+  (§18.2), so 44b to 44d can use constants as soon as 44a2 merges, with no
   two-step refresh. The first `stage0` is made by a compiler that already uses
   them. The format change needs no extra step for the same reason (the "new
-  `.agcb` format" case of 35.3 applies once `stage0` exists).
-- **35.4, step 4** gets one sentence that points here (changed in this PR).
+  `.agcb` format" case of §18.2 applies once `stage0` exists).
+- **§18.3, port step 4** gets one sentence pointing here (changed in this PR).
 
 ### 44.14 Open questions for the owner
 

@@ -199,5 +199,5 @@ Each PR holds its own tests and docs.
 
 Neither PR needs a refresh of `bootstrap/stage0.agcb` while `compiler/` does
 not use aliases. If `compiler/` starts to use them, the syntax takes the two
-steps of [§35.3](35-self-hosting.md#353-bootstrap) for new syntax: one PR
+steps of [§18.2](18-front-end-language.md#182-bootstrap) for new syntax: one PR
 teaches the compiler the syntax and refreshes stage0, and a later PR uses it.

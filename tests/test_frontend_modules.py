@@ -261,7 +261,7 @@ class ModulesFrozenTest(StageTestCase):
         self.assertRegex(output, r"^ERROR CHECK-IMPORT-IO 0:1:1-0:1:1 ")
 
     def test_a_file_above_the_root_folder_is_printed_with_dotdot_parts(self):
-        # Resolution allows "../", and the stored name of such a file keeps the .. part (35.4, "Source paths").
+        # Resolution allows "../", and the stored name of such a file keeps the .. part (§18.3).
         output = self.link_tree({"above/app/root.agc": SHARED_ROOT, "above/shared/x.agc": SHARED_X}, "above/app/root.agc")
         self.assertIn('\n  module "../shared/x.agc"\n', output)
         self.assert_golden(output, FROZEN / "modules" / "above.expected")

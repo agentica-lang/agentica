@@ -162,8 +162,8 @@ have type `Fn[LogEvent, Void]`, and the `LogRegistry` rows use the same concrete
 types, so no type variable is needed. Both names are reserved in every program:
 a program that declares a struct or an enum with either name gets
 `CHECK-REDEFINED-NAME`. This is a small breaking change for a program that
-already uses either name. Once the checker is in Agentica (§35), the two could
-move into `std/logger`; that would rename them for callers.
+already uses either name. With the checker now in Agentica (§18.3), the two
+could move into `std/logger`; that would rename them for callers.
 
 **Rejected options for the handler types.**
 
@@ -172,7 +172,7 @@ move into `std/logger`; that would rename them for callers.
   path, and the types are weaker.
 - C: a new generic checker rule for the registry. Rejected: the freeze (row
   7.2.7) forbids new checker rules, so it would wait for the Agentica checker
-  (§35, step 4).
+  (§18.3, port step 4).
 - A `String` level (the level's name). Rejected: a misspelled level name
   compiles silently.
 - An `Int` level (the rank). Rejected: the numbers read badly in a handler.

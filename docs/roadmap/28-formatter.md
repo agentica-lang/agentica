@@ -7,7 +7,7 @@ Specified in [`docs/future/47-formatter.md` section
 `tests/test_style_line_width.py`. Its items keep the numbers of §47.8 (47a to
 47d), so the spec and this file match. It is row 7.9 of the [roadmap](README.md)
 order, deferred until after the bootstrap of the self-hosted front end
-([§35](../future/35-self-hosting.md), step 8): the formatter is written in
+([§18](../future/18-front-end-language.md), step 8): the formatter is written in
 Agentica in `compiler/`, on its lexer and parser. Item 47d is outside that
 order: it waits for the language server (§43, not scheduled). Each item has its
 own PR, with its own tests and docs. The open questions of §47.9 need the

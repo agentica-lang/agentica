@@ -18,9 +18,9 @@ their own place in the order (step 8).
   with nil values under its own tag (`docs/vm/05-values-execution-builtins.md`
   §5.1), so it reuses the HAMT of `vm/map.c`; `agc_map_add_hash` leaves a member
   alone. Done by the owner's decision of 2026-10-15 in the Racket front end,
-  which relaxes the freeze of row 7.2.7 (`compiler/` uses `Set`, and has no
-  checker yet; the port of step 4 in `docs/future/35-self-hosting.md` must
-  handle `Set[T]`). Tests: the goldens `sets` and `set-vectors` (a Python peer,
+  which relaxes the freeze of row 7.2.7 (`compiler/` uses `Set`; the Agentica
+  checker handles `Set[T]`, `docs/future/18-front-end-language.md` §18.3).
+  Tests: the goldens `sets` and `set-vectors` (a Python peer,
   `tests/fixtures/set-vectors.py`), the checker tests, and `map_test.c`. Numbers
   in `docs/vm-benchmarks.md`; the `sets` benchmark has a Python twin.
 - [ ] 8c `Queue[T]`; `std/queue` stays deprecated under the alias `StringQueue`

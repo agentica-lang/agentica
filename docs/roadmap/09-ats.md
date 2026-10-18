@@ -24,10 +24,11 @@ the programming skill, the site docs and tests.
   `CHECK-TABLE-VALUE` check that `V` is not `Void` or `Nil` and that
   `data-type?` holds for `V`. If phase 9 starts after the freeze of the Racket
   front end (row 7.2.7), this checker part goes into the Agentica front end
-  ([§35](../future/35-self-hosting.md)), not `src/`; before the freeze, it goes
-  into `src/` as written. `CHECK-MAP-KEY-TYPE` keeps its code for `Table` keys;
-  its message must mention `Table` too. Build the insertion-order layout (§13,
-  Layout) as a persistent ordered map, for example a balanced tree, on the VM.
+  ([§18](../future/18-front-end-language.md)), not `src/`; before the freeze,
+  it goes into `src/` as written. `CHECK-MAP-KEY-TYPE` keeps its code for
+  `Table` keys; its message must mention `Table` too. Build the
+  insertion-order layout (§13, Layout) as a persistent ordered map, for example
+  a balanced tree, on the VM.
   In the BDD docs (`docs/bdd.md`, the programming skill's `references/bdd.md`),
   say that a table created in `main` is fresh in each scenario, since each
   scenario is its own VM run after phase 21 (`docs/bdd.md`, "How a run works").

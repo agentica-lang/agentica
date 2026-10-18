@@ -6,9 +6,9 @@ Specified in [`docs/future/48-regex.md` section
 matcher and no backtracking, and then a regex literal, `/pattern/flags`. Its
 items keep the numbers of §48.9 (48a to 48d). It is row 7.10 of the
 [roadmap](README.md) order and waits until after the bootstrap of the
-self-hosted front end ([§35](../future/35-self-hosting.md), step 8). The open
-questions of §48.10 (1, 2, 3 and 4) need the owner's answers before the items
-that depend on them.
+self-hosted front end ([§18](../future/18-front-end-language.md), step 8).
+The open questions of §48.10 (1, 2, 3 and 4) need the owner's answers before
+the items that depend on them.
 
 - [ ] **48a: `std/regex` in Agentica (§48.3 to §48.5, §48.7, §48.8).**
   - **Std module:** `stdlib/regex.agc`, embedded as `std/regex` and registered
@@ -29,7 +29,7 @@ that depend on them.
     The diagnostic code names are proposals until this item lands. Each literal
     is a constant, built before `main`.
   - **Where:** `compiler/` only, after the bootstrap. The Racket front end gets
-    no change, as §35 and row 7.2.7 require.
+    no change, as §18 and row 7.2.7 require.
   - **Tests:** lexer goldens for each case of §48.6, a golden for each new code
     with its span, and a check that a literal equals `Regex.compile` of the same
     body with its flags mapped.
@@ -42,7 +42,7 @@ that depend on them.
   the threshold.
 - [ ] **48d: Unicode classes and case folding (§48.4, §48.10 decision 5).** The
   tables are generated like `vm/unicode_data.c`. Whether the generator, which is
-  Racket, stays after the bootstrap is open (§35).
+  Racket, stays after the bootstrap is open (§18).
 
 Each item has its own PR, with its own tests and docs. 48b waits for 48a,
 because the literal's checker runs the parser of `std/regex`.

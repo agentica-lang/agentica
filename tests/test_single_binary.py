@@ -1,4 +1,4 @@
-"""The single binary dist/agentica (35.3 and 35.6): the front end it carries compiles in memory and hands the program
+"""The single binary dist/agentica (§18.2 and §18.8): the front end it carries compiles in memory and hands the program
 to C, which runs it in a new runtime; `agentica run` runs a compiled file with the VM flags.
 
 The binary is all this module needs, so the sanitizer job can run it on its own build: the command line forms are

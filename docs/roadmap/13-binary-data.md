@@ -5,7 +5,7 @@ Specified in [`docs/future/23-binary-data.md` section
 row 7.5 by the owner on 2026-10-14): a new feature after 7i, VM-only, before the
 freeze of the Racket front end (row 7.2.7), so the bytecode writer of the
 self-hosted front end can use it
-([§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites)). UDP
+([§18.4](../future/18-front-end-language.md#184-prerequisites)). UDP
 (row 7.5) comes after this phase, since UDP programs pack their headers with
 `std/binary`. This phase has no technical need for TCP or TLS: `std/` imports
 already run on the VM, so it can move earlier if a real program needs it. It

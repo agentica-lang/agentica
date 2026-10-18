@@ -15,7 +15,7 @@ exit codes as BDD. Each test file runs in its own child VM through the BDD
 runner (`docs/bdd.md`, "How a run works"), and each test runs as its own task,
 so with §37 a crash fails only that test.
 
-**Why.** Above all for the planned self-hosted front end (§35) and the `std/`
+**Why.** Above all for the self-hosted front end (§18) and the `std/`
 modules, which today are tested only through whole-output golden fixtures.
 
 ### 36.1 Today
@@ -328,7 +328,7 @@ or with the others.
 - **First users,** in the same phase: unit tests for `std/queue` and
   `std/http`'s pure helpers in `tests/std/`, run by a rackunit test through
   `agentica test --json`. The internal `std/bdd/*` modules and the self-hosted
-  front end (§35) follow in their own PRs.
+  front end (§18) follow in their own PRs.
 
 ### 36.10 Later: doctests
 

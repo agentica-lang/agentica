@@ -29,7 +29,7 @@ order.
 
 The owner set the order of 2026-10-14 for the rows from 7.2.3 on. Rows 7.2.4 to
 7.2.6 and 8 are the prerequisites of the bootstrap of the self-hosted front end
-(§35), which starts at row 7.2.7 (the freeze of the Racket front end). The rows
+(§18), which starts at row 7.2.7 (the freeze of the Racket front end). The rows
 marked deferred wait until after the bootstrap. The VM-only and C-only rows
 after them may run in parallel when needed and keep their relative order.
 
@@ -306,7 +306,7 @@ after them may run in parallel when needed and keep their relative order.
     `std/binary` (13b), with their tests and docs ([phase
     13](13-binary-data.md)). It comes before the freeze, because the bytecode
     writer of the self-hosted front end needs it
-    ([§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites))
+    ([§18.4](../future/18-front-end-language.md#184-prerequisites))
   - **Outcome:** Programs read and write binary numbers with `std/binary`
 
 - **Order:** 7.2.5
@@ -316,21 +316,21 @@ after them may run in parallel when needed and keep their relative order.
     out of row 7.5 by the owner on 2026-10-14: [phase 14](14-logging.md), always
     on in the plain, `--ai` and `--json` formats. It comes before the freeze,
     since agents and the self-hosted compiler both need the call stack
-    ([§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites))
+    ([§18.4](../future/18-front-end-language.md#184-prerequisites))
   - **Outcome:** Agents see the call stack of a runtime error, and a crash in
     the self-hosted compiler shows where it happened
 
 - **Order:** 7.2.6
   - **Next work:** **Complete** (2026-10-14, PR #222): OS builtins the
     self-hosted front end needs, from
-    [§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites),
+    [§18.4](../future/18-front-end-language.md#184-prerequisites),
     decided by the owner on 2026-10-14: reading environment variables
     (`AGENTICA_PATH`, `XDG_DATA_HOME` and the home directory) and a real-path
     builtin that resolves symbolic links (module identity and the `pkg/` escape
     check). Both are OS builtins in C (exception 1 of the std-first rule),
     listed in the `src/builtins.rkt` table: `System.env(name) -> Result[String]`
     and `Path.real(path) -> Result[String]`, with no new flag. The other partly
-    missing items of §35.5 (binary output, the BDD driver's process and file
+    missing items of §18.4 (binary output, the BDD driver's process and file
     calls, the hand-off to the VM) are needed from step 6 on, so they are not in
     this row
   - **Outcome:** The linker of the self-hosted front end finds `std/` and `pkg/`
@@ -340,13 +340,14 @@ after them may run in parallel when needed and keep their relative order.
   - **Next work:** **Done (2026-10-16; started 2026-10-15; the Racket front end
     is deleted, post-bootstrap step 2); PRs #237, #245, #254, #258, #263, #282,
     #286, #288, #294, #297, #298, #299, #301, #310, #311):** the freeze is in
-    force and §35 steps 1 (the lexer), 2 (the parser, with `PARSE-TOO-DEEP`), 3
+    force and the port’s steps 1 (the lexer), 2 (the parser, with
+    `PARSE-TOO-DEEP`), 3
     (the modules and linker) and 4 (the builtin catalog, PR #258, and the
     checker, with `CHECK-TOO-DEEP`, PR #263; module constants, row 7.2.8,
     excepted), 5 (lowering, with module constants, PR #282) and 6 (the bytecode
     writer, PR #286), all in `compiler/`, and 7 (the BDD driver: 7a, the OS
     builtins it needs, PR #288, audited in
-    [§35.5](../future/35-self-hosting.md#355-language-and-vm-prerequisites); 7b,
+    [§18.4](../future/18-front-end-language.md#184-prerequisites); 7b,
     the driver itself, `compiler/bdd.agc`, PR #294, which relaxes the freeze
     only for the hand-off in `src/bdd-driver.rkt` and `src/main.rkt`) are done;
     step 8 follows, 8a (the command line in Agentica, PR #299, which relaxes the
@@ -367,8 +368,9 @@ after them may run in parallel when needed and keep their relative order.
     left `compiler/builtins_data.agc`, `check_tables.agc` and
     `unicode_table.agc` as hand-edited sources; the parent commit of its merge
     is tagged `bootstrap-racket`. The text below is the history of the freeze.
-    **Freeze the Racket front end and start §35 step 1** (the port of the lexer,
-    [§35.4](../future/35-self-hosting.md#354-stages-to-port)), decided by the
+    **Freeze the Racket front end and start the port’s step 1** (the port of the
+    lexer,
+    [§18.3](../future/18-front-end-language.md#183-port)), decided by the
     owner on 2026-10-14. Freeze means, by default: from this row on, the Racket
     front end (`src/`) takes no new syntax and no new checker rules. Its only
     changes are bug fixes and the data this row lists: new rows in the
@@ -386,7 +388,7 @@ after them may run in parallel when needed and keep their relative order.
     list for those lines. A new checker rule, tag, syntax or construction rule
     is not data. Every language change after this row goes into the Agentica
     front end (`compiler/`,
-    [§35.3](../future/35-self-hosting.md#353-bootstrap)). These rules are
+    [§18.2](../future/18-front-end-language.md#182-bootstrap)). These rules are
     defaults and may be relaxed when following them costs more than it saves;
     the PR says which rule it relaxes and why. Relaxed so far:
     `CHECK-DECL-ORDER`, the fixed declaration order of a file (a small style
@@ -398,7 +400,7 @@ after them may run in parallel when needed and keep their relative order.
     in the linker and the `STRUCT_WITH` opcode with bytecode format version 4,
     on the owner's decision of 2026-10-15 because `compiler/` uses immutable
     struct updates; the checker and modules ports carry it); `CHECK-TOO-DEEP`
-    (§35 step 4: a limit of 1,000 levels of expressions and statements in
+    (port step 4: a limit of 1,000 levels of expressions and statements in
     `src/checker.rkt`, the checker's counterpart of `PARSE-TOO-DEEP`, because a
     tree can be deeper than the parser's limit and the Agentica checker recurses
     on it within the VM call limit of 10,000; with it, a fix for a Racket
@@ -407,12 +409,13 @@ after them may run in parallel when needed and keep their relative order.
     linker, both checkers and the lowering in `src/lower.rkt` with bytecode
     format version 5, on the owner's decision of 2026-10-15 because `compiler/`
     keeps its tables as constants; the Agentica checker and the Agentica
-    lowering of step 5 carry them); the std list (§35 step 8b, PR #298: the
+    lowering of step 5 carry them); the std list (port step 8b, PR #298: the
     module registry of `src/stdlib.rkt` is built by a macro from the plain file
     `stdlib/MODULES`, one path per line, instead of one line per module, because
     the Makefile embeds the same list in the single binary; a test checks the
     file against `stdlib/`, and the two builtin rows of `FrontEnd.*` with their
-    `vm-builtins` names are the data the freeze already allows); the switch (§35
+    `vm-builtins` names are the data the freeze already allows); the switch
+    (port
     step 8d-2, PR #310: it relaxes the rule "only bug fixes and data" for
     `src/main.rkt` alone, because `agentica-vm` is gone and the oracle still has
     to run programs. `src/vm-launch.rkt` and `src/bdd-driver.rkt` are deleted,
@@ -423,15 +426,15 @@ after them may run in parallel when needed and keep their relative order.
     they match the binary's), and a stub for `test` that says that `test` is the
     binary's and exits 2. The oracle runs a program with `dist/agentica run`. No
     syntax, checker or lowering rule changes, and everything goes with Racket);
-    the version file (§35 step 8a, PR #299: `src/version.rkt` embeds the one
+    the version file (port step 8a, PR #299: `src/version.rkt` embeds the one
     line of `VERSION` when it is compiled, instead of holding the number, and
     `src/bdd-driver.rkt` passes it to the driver as `--version`, because the
     writer in `compiler/` takes the version as an input and the Makefile, the
     release and the VM read the same file)
   - **Outcome:** The Racket front end stops growing; each later language change
-    is written once, in Agentica, and the ports of §35.4 run in order, one PR
+    is written once, in Agentica, and the ports of §18.3 run in order, one PR
     per step Step 8 lands as four PRs, 8a to 8d
-    ([§35.4](../future/35-self-hosting.md#354-stages-to-port)), decided by the
+    ([§18.3](../future/18-front-end-language.md#183-port)), decided by the
     owner on 2026-10-15
 
 - **Order:** 7.2.8
@@ -476,14 +479,15 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 7.2.9
   - **Next work:** **Done (2026-10-16; phase 0 PR #261, phase 1 PRs #264, #266,
     #267, #269, #274, #276, #279, phase 3 PRs #297, #301, #310 and #311; design:
-    [§35.10](../future/35-self-hosting.md#3510-tests-move-to-python-unittest),
+    [§18.7](../future/18-front-end-language.md#187-tests),
     decided by the owner on 2026-10-15).** The tests move from rackunit to
     Python `unittest` (standard library only, no packages), in four phases: 0,
     the shared helper and the make targets, with one small area as the proof; 1,
     the VM and runtime, network and process, BDD and CLI areas, one per PR; 2,
     the golden parts of the front-end tests; 3, with 8c and 8d of step 8 (8c,
     8d-1, 8d-2 and 8d-3 are done: 8d-3 removed rackunit), the live comparisons
-    frozen into goldens and rackunit removed. The phases run beside §35 steps 4
+    frozen into goldens and rackunit removed. The phases run beside the port’s
+    steps 4
     to 8 and §44; phase 3 is 8c (done: the live comparisons are frozen under
     `tests/fixtures/frontend/frozen/`, the golden comparisons of phase 2 for the
     front end moved with them, and `tools/refreeze.py` rewrites the goldens
@@ -562,7 +566,7 @@ after them may run in parallel when needed and keep their relative order.
   - **Next work:** **Done (2026-10-16, PR #326)**, after the bootstrap, because
     the bootstrap embeds the front end in the VM binary and the cut was measured
     on that build
-    ([§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria)). VM
+    ([§18.5](../future/18-front-end-language.md#185-goals-and-targets)). VM
     start-up cost, a small perf item ([7g](07-vm.md#7g-speed-check)). A sampling
     profile and timers between the sections of the load (`perf` is blocked)
     showed that the about 15 ms of each start were the loader reading the 3.8 MB
@@ -724,7 +728,7 @@ after them may run in parallel when needed and keep their relative order.
     by the owner's decision of 2026-10-16 (it was right after step 9 by the
     decision of 2026-10-14); the work stops before it so the owner reviews the
     next steps. The front end is decided: self-hosting, in this table from row
-    7.2.7 on ([§35](../future/35-self-hosting.md))
+    7.2.7 on ([§18](../future/18-front-end-language.md))
   - **Outcome:** Build multicore only if the numbers ask for it
 
 - **Order:** 10
@@ -787,9 +791,11 @@ after them may run in parallel when needed and keep their relative order.
     baseline
 
 The self-hosted front end and a single binary
-([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13, are
+([§18](../future/18-front-end-language.md)), decided by the owner on 2026-10-13,
+are
 in the order from row 7.2.7 on, after their prerequisites (rows 8 and 7.2.4 to
-7.2.6; [§35.9](../future/35-self-hosting.md#359-order)). Its steps (§35.4) are
+7.2.6; [§18.6](../future/18-front-end-language.md#186-order)). Its steps (§18.3)
+are
 PRs, not rows of this table. The release cut right after step 7b was 0.3.0,
 the last one with the Racket front end (owner decision, 2026-10-15).
 
@@ -799,16 +805,16 @@ then the path to the JIT (row 9.1, which should also speed up `agentica test`),
 and the other features after the JIT.
 
 1. **Done (2026-10-16, PR #312)**: release 0.4.0, the first release with the
-   single binary ([§35.4](../future/35-self-hosting.md#354-stages-to-port)).
+   single binary ([§18.3](../future/18-front-end-language.md#183-port)).
    Racket can be deleted only after one release has the self-hosted front end
-   as its default ([§35.3](../future/35-self-hosting.md#353-bootstrap)).
+   as its default ([§18.2](../future/18-front-end-language.md#182-bootstrap)).
 2. **Done (2026-10-16, PR #313)**: delete the Racket front end (`src/*.rkt`),
    freeze `vm/unicode_data.c` as checked-in source (a later PR may add a
    generator over pinned Unicode Character Database files that reproduces it
    byte for byte) and tag `bootstrap-racket` on the parent commit of the merge
-   (§35.3).
+   (§18.2).
 3. A speed pass on the self-hosted front end: the targets of
-   [§35.2](../future/35-self-hosting.md#352-goal-and-success-criteria), the
+   [§18.5](../future/18-front-end-language.md#185-goals-and-targets), the
    precompiled BDD runner (about 0.7 s that step 7b added to `agentica test`),
    and maybe a VM profiler and the start-up cut of row 8.3 (done, below).
    **First part done (2026-10-16, PR #315):** the timing rows of
@@ -854,7 +860,7 @@ and the other features after the JIT.
    ([§25.10](../future/25-ruby-typed-idioms.md#2510-heredocs),
    [§25.12.1](../future/25-ruby-typed-idioms.md#25121-casein-pattern-matching)),
    in `compiler/` only. The first of steps 4 and 5 to land is the first use of
-   the two-step stage0 refresh of §35.3. Part A, the heredoc (15j), is **done
+   the two-step stage0 refresh of §18.2. Part A, the heredoc (15j), is **done
    (2026-10-16, PR #322)**: the lexer, `LEX-UNTERMINATED-HEREDOC`,
    `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE`, the parser refuses a heredoc
    as a `case` pattern or an import path. Part B, `case` guards and nested
@@ -903,12 +909,12 @@ after the bootstrap, in the Agentica front end (§42.14).
 Idea, not scheduled: a language server ([§43](../future/43-language-server.md)).
 It has no row in this table. It would reuse the §39 commands and the §32 doc
 comments, so it can only start after them (and is easiest on the self-hosted
-front end of §35).
+front end of §18).
 
 Designed, not scheduled: packages (§45,
 [`docs/future/45-packages.md`](../future/45-packages.md)). It has no row in this
 table. Its first step, the TOML parser `std/toml` (45-0), is a std module and
-landed before the bootstrap (done). The manager waits for step 8 of §35.4.
+landed before the bootstrap (done). The manager waits for step 8 of §18.3.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
@@ -925,7 +931,7 @@ work appears after the completed foundations below.
 - New features are VM-only. They have no Racket twin.
 - The Racket front end is deleted (row 7.2.7, post-bootstrap step 2).
   Every language change goes into the Agentica front end (`compiler/`,
-  [§35](../future/35-self-hosting.md)); a PR may relax a default rule when
+  [§18](../future/18-front-end-language.md)); a PR may relax a default rule when
   following it costs more than it saves, and says which rule and why.
 - A PR that changes the VM core keeps the [VM core
   invariants](../vm/14-core-invariants.md#14-vm-core-invariants) (§14), or

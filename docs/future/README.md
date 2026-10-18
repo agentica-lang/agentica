@@ -5,15 +5,16 @@ This index tracks future proposals; the current language contract is in
 spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
-Section 14 records decided and rejected ideas; §18 preserves the front-end
-language history, settled by §35. Sections 19, 21 and 22 are VM implementation
+Section 14 records decided and rejected ideas; §18 records the front-end
+language decision and the self-hosted bootstrap, both done. Sections 19, 21 and
+22 are VM implementation
 proposals, not language changes. Sections 23–24 add binary data and logging
 without changing the grammar.
-Sections 25–40 cover Ruby idioms, diagnostics, concurrency, VM metrics, TLS,
-HTTP, BDD, doc comments, digit separators, VM values, self-hosting, unit tests,
-crash isolation, value representation, semantic CLI, and native code. The Files
-index carries current status; linked sections keep requirements, rationale and
-alternatives.
+Sections 25–34 cover Ruby idioms, diagnostics, concurrency, VM metrics, TLS,
+HTTP, BDD, doc comments, digit separators and VM values. Sections 36–40 cover
+unit tests, crash isolation, value representation, semantic CLI and native code.
+The Files index carries current status; linked sections keep requirements,
+rationale and alternatives.
 Sections 41–43 cover date/time types, sized numerics and an unscheduled language
 server; their specs record the requirements and dependencies.
 
@@ -111,9 +112,9 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - Status: Planned (roadmap 10e)
 
 - §: 18
-  - Title: Front-end implementation language
+  - Title: Front-end implementation language (self-hosting; done)
   - File: [`18-front-end-language.md`](18-front-end-language.md)
-  - Status: Decided in §35: self-hosting
+  - Status: Decision and bootstrap done; the remaining work is in the roadmap
 
 - §: 19
   - Title: SIMD in the VM
@@ -197,11 +198,6 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - File: [`34-shared-small-values.md`](34-shared-small-values.md)
   - Status: Built (roadmap 7g, 2026-10-16)
 
-- §: 35
-  - Title: Self-hosted front end and a single binary
-  - File: [`35-self-hosting.md`](35-self-hosting.md)
-  - Status: Planned, in the roadmap order from row 7.2.7 on
-
 - §: 36
   - Title: Unit tests (`Test`)
   - File: [`36-unit-tests.md`](36-unit-tests.md)
@@ -236,13 +232,13 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - Title: Dates and times
   - File: [`41-dates-and-times.md`](41-dates-and-times.md)
   - Status: Designed by the owner's scope of 2026-10-14; the types wait
-    until after the bootstrap (§35, 41.13); `Time.monotonic_ns` may land earlier
+    until after the bootstrap (§18, 41.13); `Time.monotonic_ns` may land earlier
 
 - §: 42
   - Title: Sized numeric types
   - File: [`42-sized-numeric-types.md`](42-sized-numeric-types.md)
   - Status: Designed by the owner's scope of 2026-10-14; implement after the
-    bootstrap (§35)
+    bootstrap (§18)
 
 - §: 43
   - Title: Language server (LSP)
@@ -264,7 +260,7 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - Status: Design, not scheduled; decided by the owner on 2026-10-15:
     `std/toml` first (45-0, may land before the bootstrap), TOML manifest and
     lock, `Toml.Value` decode, `owner/repo` imports; the manager waits for after
-    the bootstrap (§35 step 8); asked by the owner on 2026-10-15
+    the bootstrap (port step 8); asked by the owner on 2026-10-15
 
 - §: 46
   - Title: Signals
@@ -277,7 +273,7 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
 - §: 47
   - Title: Code formatter (`agentica fmt`)
   - File: [`47-formatter.md`](47-formatter.md)
-  - Status: Deferred until after the bootstrap (§35 step 8, roadmap row 7.9,
+  - Status: Deferred until after the bootstrap (port step 8, roadmap row 7.9,
     phase 28), decided by the owner on 2026-10-15; 47d waits for the LSP (§43)
 
 - §: 48

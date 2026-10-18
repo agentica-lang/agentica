@@ -396,7 +396,7 @@ intent, but the skill teaches `with`.
   diagnostic as constructing it (`CHECK-IMPORT-NAME`; the linker gives the node
   a `visible` predicate: the structs of the file, and the exported structs of
   the modules it imports directly; a closure in the node today, so the
-  self-hosted linker turns it into data, §35.4 step 3). With generic structs
+  self-hosted linker turns it into data, §18.3 step 3). With generic structs
   (15.3) the type arguments stay, so a field's new value has the same type as
   before: `.with(` always parses as the update, and each field is checked after
   the struct's type arguments are substituted.
@@ -1328,7 +1328,7 @@ the owner's delegation.
 **Built (2026-10-16).** The grammar is in `docs/grammar/05-syntax.md` and
 `06-semantics.md`; the example is `examples/case-guards.agc`. `compiler/` does
 not use the syntax yet, because stage0 cannot compile it (the two-step refresh
-of §35.3, a later PR).
+of §18.2, a later PR).
 
 #### 25.12.2 Keyword arguments (moved to Part C)
 

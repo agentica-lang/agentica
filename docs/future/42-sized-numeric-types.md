@@ -1,7 +1,7 @@
 ## 42. Sized numeric types
 
 **Status:** designed, not scheduled. The owner's scope of 2026-10-14 is in this
-section. It is implemented after the bootstrap (§35), in the Agentica front end
+section. It is implemented after the bootstrap (§18), in the Agentica front end
 (`compiler/`), and not in the Racket front end, which freezes at row 7.2.7
 (`docs/roadmap/README.md`). It is a checker change, so it is not VM-only. Every
 name and every choice is a proposal for the owner to review. Each open choice
@@ -84,7 +84,7 @@ rules that keep them safe for agents to write.
   - **Recommendation:** 1 integers, 2 Float32, 3 binary API, 4 storage (gated)
 
 - **Choice:** Freeze
-  - **Recommendation:** Starts after step 8 of §35.4; nothing in `src/` changes
+  - **Recommendation:** Starts after step 8 of §18.3; nothing in `src/` changes
 
 - **Choice:** Int and Float width
   - **Recommendation:** 64 bits on every target (§42.4, §42.16)
@@ -559,7 +559,7 @@ conversion.
 - **`Bytes` (§12.5): not added (recommended).** Reason: `List[UInt8]`, with the
   typed storage of step 4, is the compact byte sequence that `Bytes` was meant
   to be, and a second type would double every `*_bytes` builtin. The docs that
-  name `Bytes` as a prerequisite (§12.5, §16, §20, §23, §35.5, §40 and others,
+  name `Bytes` as a prerequisite (§12.5, §16, §20, §23, §18.4, §40 and others,
   22 files in all, from `rg -l '\bBytes\b'`) are updated when step 3 lands.
 - **Range (§12.1).** Stays `Int` only (recommended). Reason: a range over a
   sized type has no natural end type, and `for` over `Int` is the common loop. A
@@ -628,10 +628,9 @@ With (C), the operations are:
   would round twice. So the format goes to version 7 (version 4 is the struct
   update `with` of 15c, version 5 is the module constants of §44, version 6 is
   the compiler prelude of §25.6; version 8 if §41 lands first, 41.18). The
-  writer of the
-  Agentica compiler emits that version, and the steps of §35.3 ("New `.agcb`
-  format") apply: the old `stage0` compiles the new compiler, which then
-  compiles itself. The Racket writer is not changed, since it is frozen.
+  writer of the Agentica compiler emits that version, so the format-version
+  rule of §18.2 applies: the old `stage0` compiles the new compiler, which
+  then compiles itself. The Racket writer is not changed, since it is frozen.
 - **GC.** The sized values are not pointers, like `Int` (§38.1). No change to
   the collector's setup.
 
@@ -713,7 +712,7 @@ independent Python peer, with the standard library only.
 no new rule goes into it,
   and its rackunit tests are not extended for these checks. The new checks are
   tested by the goldens of the Agentica front end, against
-  `agentica check --json`. The stage goldens of §35.4 cover the compiler
+  `agentica check --json`. The stage goldens of §18.3 cover the compiler
   itself.
 - **Docs in each step.** `docs/grammar/` (`04-lexical.md` for the literal and
   reserved-name rules, `06-semantics.md` for the types and operators,
@@ -736,13 +735,9 @@ still frozen.*
 - **Where it lands.** The Agentica front end (`compiler/`), after the bootstrap.
   Nothing in `src/` changes: the Racket checker and lowering are frozen at row
   7.2.7, which allows only bug fixes and `src/builtins.rkt` rows.
-- **When it starts.** After step 8 of §35.4, when the Agentica front end is the
-  default and no port is open. §35.7 says that no language change lands in a
-  stage while its port is open, so §42 waits for the last port. The bootstrap
-  ends when the self-hosted front end is embedded and is the default (§35.3,
-  step 3, and §35.4 step 8), so user programs never see a window in which the
-  Racket front end lacks the types.
-- **Catalog.** The sized rows go into the Agentica catalog, since §35.4 (step 4)
+- **When it starts.** The port is done (§18.3) and the Agentica front end is
+  the default, so §42 may start.
+- **Catalog.** The sized rows go into the Agentica catalog, since §18.3 (step 4)
   moves the builtin catalog to Agentica data. They are written there once.
 - **Preparing before the bootstrap is not worth it.** A builtin row needs a type
   name that the Racket checker knows, and the freeze forbids checker changes, so
@@ -751,14 +746,13 @@ still frozen.*
   nothing is gained by starting early.
 - **`stage0`.** Step 1 adds no syntax, and the compiler's own code does not use
   the new types, so no `stage0` refresh is needed for it. Step 3 may change the
-  compiler's use of the byte lists, which is a `stage0` change under §35.3 if it
-  does. The format change (§42.11) is the `stage0` path of §35.3.
-- **Risk to watch (§35.5).** The bootstrap writes the `.agcb` output as a
-  `List[Int]`. §35.5 notes that a 2 MB file is 32 MB of values, and that if the
+  compiler's use of the byte lists, which is a `stage0` change under §18.2 if it
+  does. The format change (§42.11) is the `stage0` path of §18.2.
+- **Risk to watch (§18.4).** The bootstrap writes the `.agcb` output as a
+  `List[Int]`. §18.4 notes that a 2 MB file is 32 MB of values, and that if the
   check fails, `Bytes` becomes a prerequisite. If that check fails, typed byte
   storage (step 4) would have to come before the bootstrap, and the owner would
-  decide that then. This design does not change §35's order unless the check
-  fails.
+  decide that then.
 
 ### 42.15 Breaking changes
 
@@ -827,7 +821,7 @@ Not planned:
   it is a choice of API, not of correctness.
 - **Trigger for step 4.** The measurement in §42.12 is a proposal. The owner may
   prefer a fixed trigger, for example a benchmark row of roadmap 14.
-- **The §35.5 `.agcb` check.** If it fails, typed byte storage moves before the
+- **The §18.4 `.agcb` check.** If it fails, typed byte storage moves before the
   bootstrap (§42.14).
 - **Hex literals.** Keep them later (recommended), or bring them into step 1
   when the literal rules are written, since the `0xFF` form is what binary code

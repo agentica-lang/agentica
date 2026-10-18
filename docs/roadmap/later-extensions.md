@@ -64,8 +64,7 @@
   like `Result[T]`) for nullable values.
 - [x] Front-end implementation language: decided by the owner on 2026-10-13:
   self-hosting, for one binary and a fast start, as an item in the roadmap order
-  from row 7.2.7 on ([`docs/future/35-self-hosting.md` section
-35](../future/35-self-hosting.md#35-self-hosted-front-end-and-a-single-binary)).
+  from row 7.2.7 on ([§18](../future/18-front-end-language.md)).
   Section 18 keeps the history of the question.
 
 The open items in this section are outside the current implementation order.

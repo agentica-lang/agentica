@@ -14,8 +14,8 @@ and unit tests) are internal (importable through `std/` like any registered
 module, but not in the programming skill or the site). All are registered in
 `src/stdlib.rkt`.
 
-- `agentica test` is part of the front end of the binary (§35.4 steps 7 and 8;
-  `compiler/cli.agc` calls
+- `agentica test` is part of the front end of the binary (port steps 7 and 8,
+  §18.3; `compiler/cli.agc` calls
   `Driver.run(options, settings)` in its own process, with the settings of the
 command line: the version, the provider
   of the `std/` sources and `self_path`, the path of the binary). The runner and
@@ -93,7 +93,7 @@ binary otherwise
     stays captured
   - the run dir is removed with `Path.remove` and the lock closed at the end of
     every run that ends normally; a stop signal does not unwind the VM, so the
-    dir stays until a later run sweeps it (35.5)
+    dir stays until a later run sweeps it (§18.4)
   - Discovery lives here, not in the runner, because `File.stat` follows links:
     `File.lstat` sees links, folder links are skipped, and an unreadable folder,
     an unreadable entry, a broken `.feature` link or a name with U+FFFD (the

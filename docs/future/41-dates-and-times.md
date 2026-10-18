@@ -453,23 +453,23 @@ The parts land under different rules:
 
 - **Part:** Types, reserved names, the construction rule and its code
   - **Files:** `compiler/` (the Agentica front end)
-  - **Rule:** A checker change in the Agentica front end (§35), decided by the
+  - **Rule:** A checker change in the Agentica front end (§18), decided by the
     owner on 2026-10-15. Not a table row.
 
 - **Part:** `Time.*` functions (41.3 to 41.7)
-  - **Files:** `compiler/` (the Agentica catalog, §35.4), `vm/dates.c`
-  - **Rule:** With the types, in the Agentica front end (§35): most of the
+  - **Files:** `compiler/` (the Agentica catalog, §18.3), `vm/dates.c`
+  - **Rule:** With the types, in the Agentica front end (§18): most of the
     functions return the new types, so their catalog rows wait for it.
 
 - **Part:** `Time.monotonic_ns` (41.10)
   - **Files:** `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin
-    catalog, if §35 step 4 is done), `vm/numbers.c`
+    catalog, if port step 4 is done), `vm/numbers.c`
   - **Rule:** Independent of the types, so it landed first (#248). After row
     7.2.7 the freeze allows its table row and its `vm-builtins` name.
 
 Most of the functions return the new types, so they cannot land before the
 types. The owner decided on 2026-10-15 that the types come after the Agentica
-front end (§35), where the same rules are written in Agentica, so the `Time.*`
+front end (§18), where the same rules are written in Agentica, so the `Time.*`
 functions wait for it too. `Time.monotonic_ns` is the only part that landed
 earlier (#248). The order table is not changed by this section; the roadmap's
 "Designed, not scheduled" paragraph says where the types wait.
@@ -481,7 +481,7 @@ The two parts land in two PRs (41.10 and 41.13).
 The monotonic clock (41.10), which landed first (#248):
 
 - `src/builtins.rkt`: one row next to the `Time` rows. `src/lower.rkt`: its
-  `vm-builtins` name, or, if §35 step 4 is done, the Agentica builtin catalog
+  `vm-builtins` name, or, if port step 4 is done, the Agentica builtin catalog
   instead. `vm/numbers.c`: the builtin.
 - `docs/grammar/06b-builtins.md`: `Time.monotonic_ns` next to
   `Time.monotonic_ms` (the `Time` line).
@@ -498,7 +498,7 @@ Agentica front end:
 
 - `compiler/`: the four records, the reserved names, the construction rule and
   its code `CHECK-NOT-CONSTRUCTIBLE`, and the `Time.*` rows of the Agentica
-  catalog (§35.4, step 4).
+  catalog (§18.3, step 4).
 - JSON (41.18): option B adds four type-table kinds (`AGC_TYPE_*` in
   `vm/value.h`, `load_types` in `vm/loader.c`), a text branch in
   `vm/json_typed.c` and `vm/json_value.c`, and the encode and decode rules in

@@ -1,4 +1,4 @@
-"""Reading a source file: strict UTF-8 and no size limit (docs/future/35-self-hosting.md, 35.4).
+"""Reading a source file: strict UTF-8 and no size limit (docs/future/18-front-end-language.md §18.3).
 
 The front end decodes the bytes itself, so an invalid byte is LEX-INVALID-UTF8 at the first byte of the first
 sequence that does not decode, not a U+FFFD in the text. Python's strict decoder is the independent oracle of that

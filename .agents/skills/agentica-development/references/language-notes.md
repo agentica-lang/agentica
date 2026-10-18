@@ -112,8 +112,8 @@ section for the area you are changing.
   first argument of `add`, `delete`, `union`, `intersection` and `difference`
   takes the expected set type.
 - The owner relaxed the freeze of row 7.2.7 for this item, since `compiler/`
-  uses `Set` and has no checker yet; the step-4 port of the checker must handle
-  `Set[T]` (`docs/future/35-self-hosting.md`).
+  uses `Set`, and the Agentica checker handles `Set[T]`
+  (`docs/future/18-front-end-language.md` §18.3).
 - `for x in set` lowers to `Set.to_a` into the hidden list slot and then the
   list loop (`compiler/lower_stmt.agc`). The VM keeps a set as an `agc_map` with
   nil values under `AGC_T_SET` (`references/vm-core.md`).

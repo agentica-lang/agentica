@@ -133,7 +133,7 @@ only, immutable inputs, new values through the API, and no GC pointer in
   as `--allow-run` does for processes
   ([`10-io-processes.md`](../vm/10-io-processes.md)).
 - **Distribution.** Shared libraries conflict with the one-binary goal of
-  [section 35](35-self-hosting.md). Either link native modules statically into
+  [§18](18-front-end-language.md). Either link native modules statically into
   the binary at build time, or load `.so` files only when the flag is set.
 - **Multicore.** If more schedulers come
   ([`16-architecture.md`](../vm/16-architecture.md)), the C API must follow its

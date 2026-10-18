@@ -145,6 +145,6 @@ first-insertion order; a key deleted and then put again goes to the end, as in
   goes into `src/` as written if phase 9 starts before the freeze of the Racket
   front end (roadmap row 7.2.7, [roadmap](../roadmap/README.md)). If it starts
   after the freeze, the checker part goes into the Agentica front end
-  ([§35](35-self-hosting.md)) instead, since the Racket front end takes no new
-  checker rules then.
+  ([§18](18-front-end-language.md)) instead, since the Racket front end takes
+  no new checker rules then.
 

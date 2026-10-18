@@ -1,7 +1,7 @@
 ## 45. Packages
 
 **Status:** Design, not scheduled: the code waits until after the bootstrap
-(§35 step 8), except 45-0 (`std/toml`), which may land before it. Asked by the
+(port step 8), except 45-0 (`std/toml`), which may land before it. Asked by the
 owner on 2026-10-15 ("Shall we plan this?").
 
 Decided by the owner on 2026-10-15:
@@ -32,9 +32,9 @@ program, never beside a dependency (05b, line 26).
 Two parts of the design already fit packages. The unused-import rule of §26 has
 no exception for `pkg/` libraries
 ([`26-strict-diagnostics.md`](26-strict-diagnostics.md), line 156), so packages
-get it too. The `.agcb` file stores absolute source paths today (§35.1). PR
-#273 (in flight) makes project files relative to the entry file's folder, which
-§35.4 asks for before step 6. Package files are stored differently (45.8).
+get it too. The `.agcb` file stores project source paths relative to the entry
+file's folder (§18.3), which PR #273 landed. Package files are
+stored differently (45.8).
 
 ### 45.2 Goals
 
@@ -120,7 +120,7 @@ because the manager needs it and any program can use it.
   features: std first"). The only changes in `src/` are one line in the module
   registry of `src/stdlib.rkt` and the std list in the `src/main.rkt` help
   text. Row 7.2.7 allows both, as data and messages. There is no parser,
-  checker or VM change. So the module can land before the bootstrap (§35 step
+  checker or VM change. So the module can land before the bootstrap (port step
   8): the Racket front end compiles it like any other std module.
 - **Scope.** All of TOML 1.0: basic, literal and multi-line strings with
   escapes; integers in decimal, hex, octal and binary, with `_`; floats,
@@ -185,7 +185,7 @@ because the manager needs it and any program can use it.
 The manifest is `agentica.toml`. Its directory is the manifest directory:
 `agentica.lock` and `agc_libs/` sit beside it. For a package, that is the root
 of its repository. Without a manifest, nothing changes. Stored paths of project
-files follow PR #273 (the entry file's folder, §35.4). Packages, vendored ones
+files follow PR #273 (the entry file's folder, §18.3). Packages, vendored ones
 included, use the logical path of 45.8.
 
 ```toml
@@ -222,7 +222,8 @@ max_line_width = 119
     `agentica fmt` does not enforce it: a line it cannot break stays long.
   - Today `compiler/agentica.toml` and `stdlib/agentica.toml` set it to 119, and
     `tests/test_style_line_width.py` enforces it. `agentica check` reads
-    `[style]` after step 8 of 35.4, with `std/toml`, and phase 28 (47c) moves
+    `[style]` after port step 8 (§18.3), with `std/toml`, and phase 28 (47c)
+moves
     the check there and removes the test.
     The manager accepts `[style]` and its known keys, and an unknown style key
     is `PKG-MANIFEST-INVALID` like any other unknown key.
@@ -355,7 +356,7 @@ requires = ["gitlab.com/team/json-tools@0.4.1"]
   `PKG-HASH-MISMATCH`, and nothing is overwritten. The folder is read-only after
   the fill.
 - **Stored paths.** Project files are stored as PR #273 (in flight) defines:
-  relative to the entry file's folder, as §35.4 asks. Package files live in the
+  relative to the entry file's folder, as §18.3 asks. Package files live in the
   cache, outside any project. A path relative to the entry file would depend on
   how deep that file is, so a package file is stored under its logical path:
   `<key>@<version>/path/in/repo.agc`, for example
@@ -389,7 +390,7 @@ uses it.
 ### 45.9 Commands and errors
 
 These commands are in the single `agentica` binary, written in Agentica, after
-step 8 of §35.4:
+step 8 of §18.3:
 
 - `agentica add owner/repo[@version]` and
   `agentica add host/owner/repo[@version]` pick the version (the newest tag by
@@ -510,7 +511,7 @@ binaries with hashes in the lock. A build step would break "no code at install"
 ### 45.12 Phases
 
 Phase 45-0 comes first and may land before the bootstrap. The manager phases
-come after §35 step 8.
+come after port step 8.
 
 - **45-0. `std/toml`.** The parser, the encoder, the goldens and the peer tests
   of 45.4 and 45.11. The PR also touches the std module list in the help text of

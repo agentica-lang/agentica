@@ -452,7 +452,7 @@ header and the entry.
     of the entry file (`main.agc`, `lib/util.agc`, `../shared/x.agc`) or
     `std/NAME.agc` (a user file under a `std/` folder is `./std/NAME.agc`),
     never an absolute path, so the bytes do not depend on where the program
-    lives (§35.4). The VM prints it in diagnostics and stack traces, under
+    lives (§18.3). The VM prints it in diagnostics and stack traces, under
     `--source-root DIR` when given (§9).
 
 - **Section:** Spans

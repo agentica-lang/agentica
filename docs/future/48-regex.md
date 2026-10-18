@@ -1,7 +1,8 @@
 ## 48. Regular expressions
 
 **Status:** Decided by the owner on 2026-10-15: a linear-time matcher with no
-backtracking (48.2), std first (48.3), after the bootstrap of §35 (step 8), and
+backtracking (48.2), std first (48.3), after the bootstrap (§18, port step 8),
+and
 a Ruby-style regex literal `/pattern/flags` (48.6). Roadmap row 7.10 and phase
 29 ([`docs/roadmap/29-regex.md`](../roadmap/29-regex.md)) record it. Nothing is
 implemented. The decisions are in 48.10, with four open questions.
@@ -444,7 +445,7 @@ Each item has its own PR, with its own tests and docs, as phase 27 does.
 - **48d: Unicode classes and case folding.** `\p{L}`, `\pN`, scripts, and `(?i)`
   with simple Unicode folding. The tables are generated like
   `vm/unicode_data.c`, from `vm/tools/gen-unicode.rkt`, which is Racket. Whether
-  that generator stays after the bootstrap is open (§35).
+  that generator stays after the bootstrap is open (§18).
 
 Not planned: raw string literals.
 
