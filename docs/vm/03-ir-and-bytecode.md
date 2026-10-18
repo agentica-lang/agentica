@@ -1,6 +1,7 @@
 ## 3. IR
 
-The lowerer (`compiler/lowering.agc`) turns the checked program into IR. Each stage
+The lowerer (`compiler/lowering.agc`) turns the checked program into IR. Each
+stage
 returns data or one diagnostic.
 
 ### 3.1 Types from the checker
@@ -33,37 +34,149 @@ typed op still checks its tags at run time (4.2).
 
 ### 3.3 Lowering rules
 
-| Form | Lowering |
-|---|---|
-| Statements, expressions | `step` with the node span, then the node's code. |
-| Literals, names | `const` for a literal. A local is read from its slot. Only call windows need `move`. |
-| `-` over literal 2^63 | `step`, `step`, `const INT64_MIN`. |
-| `and` / `or` | Left side into the target, `jump-if-false` / `jump-if-true` past the right side. |
-| Arithmetic, ordering | Typed ops. `a > b` is `lt b a`, `a >= b` is `le b a` (NaN stays false). |
-| `if` / `elsif` / `else` | Conditional jumps over each branch. |
-| `while` | Head label, condition (starts with its `step`), `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the head, `break` to the exit. |
-| `for x in a..b`, `a...b` | No `Range` value. The counter `i` starts at `a`, `last` is `b`. The test `le-i` (`lt-i` for `...`) runs before the body. For `...`, `last` is `b - 1` (`sub-i`, after the nonempty test; b is above a, so no overflow). The loop top is a `step` with the `for` span, one per iteration. After the body (the target of `next`) the loop compares `i` with `last` and only then adds 1, so a range ending at the largest Int never overflows. |
-| `for x in r` (a `Range` value) | `range-bounds` once into the counter, `last` and non-empty flag, then the same loop. Assigning `r` in the body does not change the loop. |
-| `a..b`, `a...b` as a value | `step`, then `range dst w kind` (kind 0 for `..`, 1 for `...`). |
-| `for x in s` (a `Set` value) | `call-builtin Set.to_a` on the hidden slot, then the loop of `for x in xs` over the list. The set is read once, so assigning `s` in the body does not change the loop. |
-| `for x in xs` | The iterable goes into a hidden slot (a `move`, even for a local, since the body may assign it). Hidden index, length and one. The body starts with the `step` of its first statement, then `list-get`. The backward jump lands on a `STEP`. `next` jumps to the increment, `break` past the test. An empty body charges nothing. |
-| Functions | One IR function each. Falling off the end returns Void. |
-| Calls | A builtin gives `call-builtin` (including the higher-order `List` functions, 4.3). A user function gives `call`, or `tail-call` when it is the value of a `return`. |
-| Structs, enums | `step` (construct span), fields evaluated in written order straight into their declared slots, then `struct`. An enum constructor is `step`, payload, `enum` with the global variant id; a nullary variant is `enum dst dst v`. Field access is `step`, target, `field` with the declared index. |
-| Struct update `v.with(f: x)` | `step` (the update span), a window with the receiver in its first slot and the new values after it, in the order of the struct's fields (each value is evaluated in written order into its slot), then `struct-with dst window s fields`: one instruction copies the receiver and overwrites those fields. The receiver is evaluated once, before the values. |
-| Lists, maps | `list` / `map` from consecutive slots (a map's key before its value). A literal longer than 255 elements is built in chunks joined with `List.concat`; a longer map literal is extended with `Map.put`. Literals need at most 256 slots (list) or 511 (map) beside their elements. An empty literal is `list dst dst 0` or `map dst dst 0`. |
-| Indexing | `list-get` or `map-get` by the target's checked type, after a `step` for the index node. `RUNTIME-INDEX-OUT-OF-RANGE` and `RUNTIME-KEY-NOT-FOUND` point at the index expression's span. |
-| `case` | The scrutinee is evaluated once. Each arm has a test (`const` + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next arm, payload into arm slots (`_` skipped), then the body. Patterns charge no steps. `_` has no test. An Int literal outside 64 bits can never match, so its test is a plain `jump`. A Result pattern tests `is-ok`, and its binding reads `result-value` (the value or the message). |
-| `try` | `step` (the `try` span), the operand, then `try dst src`: on an error, return that Result from the function (the block, inside a block). `return try f(...)` is not a tail call. |
-| `ok`, `error`, `Result.*` | Builtin calls. `Result.Ok(x)` and `Result.Err(m)` are `ok` and `error` calls after parsing. |
-| Interpolation | `step`, then the first part into the target and each later part into the next slot, then `concat`. An expression part that is not a String is followed by `to-text`. String parts charge no step. |
-| `.inspect`, `.to_s` | `inspect`. `.to_s` follows the checker's resolution: the receiver for String, `String.from_int` or `String.from_float` for Int and Float, a one-part interpolation otherwise. |
-| `JSON.decode(s, T)`, `JSON.schema(T)` | The type argument is charged one step and lowers to a String constant with the struct's linked name (`@2::User` when imported). The builtin finds the struct by that name in the Types section. A target that is not decodable is rejected by the checker (`CHECK-NOT-DECODABLE`). |
-| `&name` | `step`, then `closure dst fn` with no captures. |
-| `f.call(...)` | `step` (invoke span), the target into the window base, the arguments after it, then `call-value base n`. |
-| Blocks | `step` (block span), then closure conversion (3.4). |
-| `return` | The value, or a Void constant. Inside a block it leaves the block. A direct call to a user function (local or imported) ends in `tail-call` instead of `call`, wherever the `return` is: in branches, `case` arms and loop bodies. Builtin calls, calls inside a larger expression (`return 1 + f(n)`) and `return try f(...)` are not tail calls. |
-| Assignment to an existing local | Value into a temporary, then `move`. Lowering straight into the local would let `x = y and x` read the new `x`. A new local is lowered straight into its slot. |
+- **Form:** Statements, expressions
+  - **Lowering:** `step` with the node span, then the node's code.
+
+- **Form:** Literals, names
+  - **Lowering:** `const` for a literal. A local is read from its slot. Only
+    call windows need `move`.
+
+- **Form:** `-` over literal 2^63
+  - **Lowering:** `step`, `step`, `const INT64_MIN`.
+
+- **Form:** `and` / `or`
+  - **Lowering:** Left side into the target, `jump-if-false` / `jump-if-true`
+    past the right side.
+
+- **Form:** Arithmetic, ordering
+  - **Lowering:** Typed ops. `a > b` is `lt b a`, `a >= b` is `le b a` (NaN
+    stays false).
+
+- **Form:** `if` / `elsif` / `else`
+  - **Lowering:** Conditional jumps over each branch.
+
+- **Form:** `while`
+  - **Lowering:** Head label, condition (starts with its `step`),
+    `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the
+    head, `break` to the exit.
+
+- **Form:** `for x in a..b`, `a...b`
+  - **Lowering:** No `Range` value. The counter `i` starts at `a`, `last` is
+    `b`. The test `le-i` (`lt-i` for `...`) runs before the body. For `...`,
+    `last` is `b - 1` (`sub-i`, after the nonempty test; b is above a, so no
+    overflow). The loop top is a `step` with the `for` span, one per iteration.
+    After the body (the target of `next`) the loop compares `i` with `last` and
+    only then adds 1, so a range ending at the largest Int never overflows.
+
+- **Form:** `for x in r` (a `Range` value)
+  - **Lowering:** `range-bounds` once into the counter, `last` and non-empty
+    flag, then the same loop. Assigning `r` in the body does not change the
+    loop.
+
+- **Form:** `a..b`, `a...b` as a value
+  - **Lowering:** `step`, then `range dst w kind` (kind 0 for `..`, 1 for
+    `...`).
+
+- **Form:** `for x in s` (a `Set` value)
+  - **Lowering:** `call-builtin Set.to_a` on the hidden slot, then the loop of
+    `for x in xs` over the list. The set is read once, so assigning `s` in the
+    body does not change the loop.
+
+- **Form:** `for x in xs`
+  - **Lowering:** The iterable goes into a hidden slot (a `move`, even for a
+    local, since the body may assign it). Hidden index, length and one. The body
+    starts with the `step` of its first statement, then `list-get`. The backward
+    jump lands on a `STEP`. `next` jumps to the increment, `break` past the
+    test. An empty body charges nothing.
+
+- **Form:** Functions
+  - **Lowering:** One IR function each. Falling off the end returns Void.
+
+- **Form:** Calls
+  - **Lowering:** A builtin gives `call-builtin` (including the higher-order
+    `List` functions, 4.3). A user function gives `call`, or `tail-call` when it
+    is the value of a `return`.
+
+- **Form:** Structs, enums
+  - **Lowering:** `step` (construct span), fields evaluated in written order
+    straight into their declared slots, then `struct`. An enum constructor is
+    `step`, payload, `enum` with the global variant id; a nullary variant is
+    `enum dst dst v`. Field access is `step`, target, `field` with the declared
+    index.
+
+- **Form:** Struct update `v.with(f: x)`
+  - **Lowering:** `step` (the update span), a window with the receiver in its
+    first slot and the new values after it, in the order of the struct's fields
+    (each value is evaluated in written order into its slot), then `struct-with
+    dst window s fields`: one instruction copies the receiver and overwrites
+    those fields. The receiver is evaluated once, before the values.
+
+- **Form:** Lists, maps
+  - **Lowering:** `list` / `map` from consecutive slots (a map's key before its
+    value). A literal longer than 255 elements is built in chunks joined with
+    `List.concat`; a longer map literal is extended with `Map.put`. Literals
+    need at most 256 slots (list) or 511 (map) beside their elements. An empty
+    literal is `list dst dst 0` or `map dst dst 0`.
+
+- **Form:** Indexing
+  - **Lowering:** `list-get` or `map-get` by the target's checked type, after a
+    `step` for the index node. `RUNTIME-INDEX-OUT-OF-RANGE` and
+    `RUNTIME-KEY-NOT-FOUND` point at the index expression's span.
+
+- **Form:** `case`
+  - **Lowering:** The scrutinee is evaluated once. Each arm has a test (`const`
+    + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next
+    arm, payload into arm slots (`_` skipped), then the body. Patterns charge no
+    steps. `_` has no test. An Int literal outside 64 bits can never match, so
+    its test is a plain `jump`. A Result pattern tests `is-ok`, and its binding
+    reads `result-value` (the value or the message).
+
+- **Form:** `try`
+  - **Lowering:** `step` (the `try` span), the operand, then `try dst src`: on
+    an error, return that Result from the function (the block, inside a block).
+    `return try f(...)` is not a tail call.
+
+- **Form:** `ok`, `error`, `Result.*`
+  - **Lowering:** Builtin calls. `Result.Ok(x)` and `Result.Err(m)` are `ok` and
+    `error` calls after parsing.
+
+- **Form:** Interpolation
+  - **Lowering:** `step`, then the first part into the target and each later
+    part into the next slot, then `concat`. An expression part that is not a
+    String is followed by `to-text`. String parts charge no step.
+
+- **Form:** `.inspect`, `.to_s`
+  - **Lowering:** `inspect`. `.to_s` follows the checker's resolution: the
+    receiver for String, `String.from_int` or `String.from_float` for Int and
+    Float, a one-part interpolation otherwise.
+
+- **Form:** `JSON.decode(s, T)`, `JSON.schema(T)`
+  - **Lowering:** The type argument is charged one step and lowers to a String
+    constant with the struct's linked name (`@2::User` when imported). The
+    builtin finds the struct by that name in the Types section. A target that is
+    not decodable is rejected by the checker (`CHECK-NOT-DECODABLE`).
+
+- **Form:** `&name`
+  - **Lowering:** `step`, then `closure dst fn` with no captures.
+
+- **Form:** `f.call(...)`
+  - **Lowering:** `step` (invoke span), the target into the window base, the
+    arguments after it, then `call-value base n`.
+
+- **Form:** Blocks
+  - **Lowering:** `step` (block span), then closure conversion (3.4).
+
+- **Form:** `return`
+  - **Lowering:** The value, or a Void constant. Inside a block it leaves the
+    block. A direct call to a user function (local or imported) ends in
+    `tail-call` instead of `call`, wherever the `return` is: in branches, `case`
+    arms and loop bodies. Builtin calls, calls inside a larger expression
+    (`return 1 + f(n)`) and `return try f(...)` are not tail calls.
+
+- **Form:** Assignment to an existing local
+  - **Lowering:** Value into a temporary, then `move`. Lowering straight into
+    the local would let `x = y and x` read the new `x`. A new local is lowered
+    straight into its slot.
 
 The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
 `HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`) join the struct table
@@ -94,15 +207,29 @@ lower like user structs (`compiler/lower_program.agc`).
 The lowerer and the emitter never raise. Their codes have their own prefixes, so
 they cannot clash with the language codes.
 
-| Code | Raised by | Meaning |
-|---|---|---|
-| `LOWER-UNSUPPORTED` | `compiler/lowering.agc` | A form or a type the lowerer does not handle yet (`vm_type?` in `compiler/lower_state.agc`). The span is the first such node. |
-| `LOWER-INTERNAL` | `compiler/lowering.agc` | A failed internal assumption inside the lowerer (a bug), at the program span. |
-| `BYTECODE-LIMIT` | `compiler/bytecode_writer.agc` | A function needs more than 65535 registers, or the program has more than 65535 structs or variants (4.4). |
-| `BYTECODE-INTERNAL` | `compiler/bytecode_writer.agc` | An impossible IR reaches the writer (a bug), at the program span. |
+- **Code:** `LOWER-UNSUPPORTED`
+  - **Raised by:** `compiler/lowering.agc`
+  - **Meaning:** A form or a type the lowerer does not handle yet (`vm_type?` in
+    `compiler/lower_state.agc`). The span is the first such node.
+
+- **Code:** `LOWER-INTERNAL`
+  - **Raised by:** `compiler/lowering.agc`
+  - **Meaning:** A failed internal assumption inside the lowerer (a bug), at the
+    program span.
+
+- **Code:** `BYTECODE-LIMIT`
+  - **Raised by:** `compiler/bytecode_writer.agc`
+  - **Meaning:** A function needs more than 65535 registers, or the program has
+    more than 65535 structs or variants (4.4).
+
+- **Code:** `BYTECODE-INTERNAL`
+  - **Raised by:** `compiler/bytecode_writer.agc`
+  - **Meaning:** An impossible IR reaches the writer (a bug), at the program
+    span.
 
 A builtin call lowers only when its implementation key is in `VM_BUILTINS`
-(`compiler/lower_tables.agc`). A builtin outside that list is `LOWER-UNSUPPORTED` at the
+(`compiler/lower_tables.agc`). A builtin outside that list is
+`LOWER-UNSUPPORTED` at the
 call span. Today the list covers every catalog key.
 
 `agentica compile` and `--dump-ir` print them like other diagnostics and exit 1.
@@ -132,24 +259,71 @@ span index `s`. An instruction that needs several spans (`STEP n`,
 checked accessors (5.2). A wrong tag is `RUNTIME-INTERNAL`, never undefined
 behavior.
 
-| Group | Opcodes | Meaning |
-|---|---|---|
-| Move | `MOVE a b`, `CONST a bx` | `R[a] = R[b]`, `R[a] = K[bx]` |
-| Budget | `STEP a` | Charge `a` steps. With `k < a` left, fail at span `s + k`. |
-| Int | `ADD_I SUB_I MUL_I DIV_I MOD_I`, `NEG_I` | Checked int64 ops. Fail at the operator span. |
-| Float | `ADD_F SUB_F MUL_F DIV_F`, `NEG_F` | IEEE. `DIV_F` fails on a zero divisor. |
-| Text | `CONCAT`, `TO_TEXT`, `INSPECT` | String `+`; text form (2.4); debug form (2.4). |
-| Logic, compare | `NOT`; `LT_I LE_I LT_F LE_F`; `EQ NE`; `SAME` | Bool not; ordering; `=` for numbers and `equal?` for String, Bool, Nil and Range; `SAME` is the `case` literal test (`eqv?` for Float). |
-| Jump | `JUMP bx`, `JUMP_IF_FALSE a bx`, `JUMP_IF_TRUE a bx` | Go to `bx`; test Bool `R[a]`. |
-| Call | `CALL a bx`, `CALL_VALUE a b`, `CALL_BUILTIN a bx`, `TAIL_CALL a bx`, `RETURN a`, `CLOSURE a bx` | 4.3. |
-| Data | `LIST a b c`, `LIST_LEN a b`, `LIST_GET a b c`, `MAP a b c`, `MAP_GET a b c`, `STRUCT a b c`, `STRUCT_WITH a b c`, `FIELD a b c`, `ENUM a b c`, `IS_VARIANT a b c`, `PAYLOAD a b c` | Lists, maps, structs and enums. `LIST_GET` and `MAP_GET` fail at the index span. `STRUCT_WITH`: `R[a]` is a copy of the struct in `R[b]` whose fields listed in update entry `c` (4.6) are overwritten by `R[b+1]`, `R[b+2]`, ... in that order. |
-| Result | `TRY a b`, `IS_OK a b`, `RESULT_VALUE a b` | `TRY`: if `R[b]` is an error, return it, else `R[a]` = its value. |
-| Range | `RANGE a b c`, `RANGE_BOUNDS a b` | `RANGE` from Int `R[b]` to `R[b+1]`, `c` 0 for `..`, 1 for `...`. `RANGE_BOUNDS`: first value into `R[a]`, last included value into `R[a+1]`, non-empty flag into `R[a+2]`. |
-| Global | `GLOBAL a bx`, `GLOBAL_SET a bx` | `R[a] = G[bx]` and `G[bx] = R[a]`, where `G` is the table of the Globals section (4.6), the module constants of [§44](../future/44-module-constants.md). `GLOBAL` of a slot that was never set is `RUNTIME-INTERNAL`. |
+- **Group:** Move
+  - **Opcodes:** `MOVE a b`, `CONST a bx`
+  - **Meaning:** `R[a] = R[b]`, `R[a] = K[bx]`
+
+- **Group:** Budget
+  - **Opcodes:** `STEP a`
+  - **Meaning:** Charge `a` steps. With `k < a` left, fail at span `s + k`.
+
+- **Group:** Int
+  - **Opcodes:** `ADD_I SUB_I MUL_I DIV_I MOD_I`, `NEG_I`
+  - **Meaning:** Checked int64 ops. Fail at the operator span.
+
+- **Group:** Float
+  - **Opcodes:** `ADD_F SUB_F MUL_F DIV_F`, `NEG_F`
+  - **Meaning:** IEEE. `DIV_F` fails on a zero divisor.
+
+- **Group:** Text
+  - **Opcodes:** `CONCAT`, `TO_TEXT`, `INSPECT`
+  - **Meaning:** String `+`; text form (2.4); debug form (2.4).
+
+- **Group:** Logic, compare
+  - **Opcodes:** `NOT`; `LT_I LE_I LT_F LE_F`; `EQ NE`; `SAME`
+  - **Meaning:** Bool not; ordering; `=` for numbers and `equal?` for String,
+    Bool, Nil and Range; `SAME` is the `case` literal test (`eqv?` for Float).
+
+- **Group:** Jump
+  - **Opcodes:** `JUMP bx`, `JUMP_IF_FALSE a bx`, `JUMP_IF_TRUE a bx`
+  - **Meaning:** Go to `bx`; test Bool `R[a]`.
+
+- **Group:** Call
+  - **Opcodes:** `CALL a bx`, `CALL_VALUE a b`, `CALL_BUILTIN a bx`, `TAIL_CALL
+    a bx`, `RETURN a`, `CLOSURE a bx`
+  - **Meaning:** 4.3.
+
+- **Group:** Data
+  - **Opcodes:** `LIST a b c`, `LIST_LEN a b`, `LIST_GET a b c`, `MAP a b c`,
+    `MAP_GET a b c`, `STRUCT a b c`, `STRUCT_WITH a b c`, `FIELD a b c`, `ENUM a
+    b c`, `IS_VARIANT a b c`, `PAYLOAD a b c`
+  - **Meaning:** Lists, maps, structs and enums. `LIST_GET` and `MAP_GET` fail
+    at the index span. `STRUCT_WITH`: `R[a]` is a copy of the struct in `R[b]`
+    whose fields listed in update entry `c` (4.6) are overwritten by `R[b+1]`,
+    `R[b+2]`, ... in that order.
+
+- **Group:** Result
+  - **Opcodes:** `TRY a b`, `IS_OK a b`, `RESULT_VALUE a b`
+  - **Meaning:** `TRY`: if `R[b]` is an error, return it, else `R[a]` = its
+    value.
+
+- **Group:** Range
+  - **Opcodes:** `RANGE a b c`, `RANGE_BOUNDS a b`
+  - **Meaning:** `RANGE` from Int `R[b]` to `R[b+1]`, `c` 0 for `..`, 1 for
+    `...`. `RANGE_BOUNDS`: first value into `R[a]`, last included value into
+    `R[a+1]`, non-empty flag into `R[a+2]`.
+
+- **Group:** Global
+  - **Opcodes:** `GLOBAL a bx`, `GLOBAL_SET a bx`
+  - **Meaning:** `R[a] = G[bx]` and `G[bx] = R[a]`, where `G` is the table of
+    the Globals section (4.6), the module constants of
+    [§44](../future/44-module-constants.md). `GLOBAL` of a slot that was never
+    set is `RUNTIME-INTERNAL`.
 
 There are 52 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
-by `OPCODES` in `compiler/bytecode_tables.agc` and `agc_opcode` in `vm/value.h`. New opcodes
+by `OPCODES` in `compiler/bytecode_tables.agc` and `agc_opcode` in `vm/value.h`.
+New opcodes
 are appended at the end. An appended opcode does not bump the format version,
 and an older VM rejects it as unknown.
 
@@ -252,7 +426,8 @@ stops with `RUNTIME-STEP-LIMIT`. The optimization items are in
 ### 4.5 Builtin imports
 
 The file lists the builtins it uses as `(key, arity)`. The key is the
-implementation key in `compiler/builtins_data.agc`, not the written name: `puts` and
+implementation key in `compiler/builtins_data.agc`, not the written name: `puts`
+and
 `IO.puts` both import `"puts"`. Overloads such as `Map.get` and `ok` are
 separate entries by arity. The loader resolves each pair against the C table and
 rejects unknown pairs. There are no internal helper builtins with one exception:
@@ -268,20 +443,64 @@ All integers are little-endian. `str` is a `u32` byte length plus UTF-8 bytes.
 Sections come in this fixed order. Each starts with a `u32` count, except the
 header and the entry.
 
-| Section | Entry |
-|---|---|
-| Header | magic `"AGCB"`, `u32` format version (6), `str` Agentica version (the `VERSION` file) |
-| Sources | `str` name, `str` full text. The name is the path from the folder of the entry file (`main.agc`, `lib/util.agc`, `../shared/x.agc`) or `std/NAME.agc` (a user file under a `std/` folder is `./std/NAME.agc`), never an absolute path, so the bytes do not depend on where the program lives (§35.4). The VM prints it in diagnostics and stack traces, under `--source-root DIR` when given (§9). |
-| Spans | `u32` source, start line, start column, end line, end column. Span 0 is the program span. |
-| Constants | `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6 String), then `i64`, `f64` bits or `str` |
-| Structs | `str` display name, `u32` field count, each field's `str` name |
-| Types | `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2 Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct) and, for 4 to 6, a `u32` operand: the item or value type index (smaller than the entry's own) or the struct index. Then a `u32` count of decodable structs, each a `u32` struct index (increasing), the `str` linked name and one `u32` type index per field. |
-| Enums | `str` display name, `u32` variant count, each `str` name and `u32` arity. Variants are numbered globally in file order. |
-| Updates | `u32` struct index, `u32` field count k (1 to the struct's field count), k `u32` field indexes, strictly increasing and below the struct's field count. One entry per distinct set of fields of a struct that a `.with(...)` changes; `STRUCT_WITH` names an entry. |
-| Globals | `u32` slot count, nothing else (at most 65,535). The slots are the module constants of [§44](../future/44-module-constants.md); the initializers are ordinary functions that the entry calls. A program without constants writes 0. |
-| Builtins | `str` name, `u32` arity |
-| Functions | `str` name, `u32` params, captures, registers, span, prelude flag (0 or 1, 4.7), instruction count, the instructions, then one `u32` span index per instruction |
-| Entry | `u32` index of the entry function: `main`, or `<start>` in a file with module constants (§44), which sets the slots and tail-calls `main` |
+- **Section:** Header
+  - **Entry:** magic `"AGCB"`, `u32` format version (6), `str` Agentica version
+    (the `VERSION` file)
+
+- **Section:** Sources
+  - **Entry:** `str` name, `str` full text. The name is the path from the folder
+    of the entry file (`main.agc`, `lib/util.agc`, `../shared/x.agc`) or
+    `std/NAME.agc` (a user file under a `std/` folder is `./std/NAME.agc`),
+    never an absolute path, so the bytes do not depend on where the program
+    lives (§35.4). The VM prints it in diagnostics and stack traces, under
+    `--source-root DIR` when given (§9).
+
+- **Section:** Spans
+  - **Entry:** `u32` source, start line, start column, end line, end column.
+    Span 0 is the program span.
+
+- **Section:** Constants
+  - **Entry:** `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6
+    String), then `i64`, `f64` bits or `str`
+
+- **Section:** Structs
+  - **Entry:** `str` display name, `u32` field count, each field's `str` name
+
+- **Section:** Types
+  - **Entry:** `u32` type count. Each entry is a `u8` kind (0 Int, 1 Float, 2
+    Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct) and, for 4 to 6, a
+    `u32` operand: the item or value type index (smaller than the entry's own)
+    or the struct index. Then a `u32` count of decodable structs, each a `u32`
+    struct index (increasing), the `str` linked name and one `u32` type index
+    per field.
+
+- **Section:** Enums
+  - **Entry:** `str` display name, `u32` variant count, each `str` name and
+    `u32` arity. Variants are numbered globally in file order.
+
+- **Section:** Updates
+  - **Entry:** `u32` struct index, `u32` field count k (1 to the struct's field
+    count), k `u32` field indexes, strictly increasing and below the struct's
+    field count. One entry per distinct set of fields of a struct that a
+    `.with(...)` changes; `STRUCT_WITH` names an entry.
+
+- **Section:** Globals
+  - **Entry:** `u32` slot count, nothing else (at most 65,535). The slots are
+    the module constants of [§44](../future/44-module-constants.md); the
+    initializers are ordinary functions that the entry calls. A program without
+    constants writes 0.
+
+- **Section:** Builtins
+  - **Entry:** `str` name, `u32` arity
+
+- **Section:** Functions
+  - **Entry:** `str` name, `u32` params, captures, registers, span, prelude flag
+    (0 or 1, 4.7), instruction count, the instructions, then one `u32` span
+    index per instruction
+
+- **Section:** Entry
+  - **Entry:** `u32` index of the entry function: `main`, or `<start>` in a file
+    with module constants (§44), which sets the slots and tail-calls `main`
 
 - The Sources section embeds the full source texts, so the VM prints diagnostics
   without reading files. A linked program has one entry per file a span points
@@ -289,7 +508,8 @@ header and the entry.
   them. Each keeps the name the front end gave it (`std/` modules by their
   `std/...` key), so a diagnostic in imported code names that file.
 - Only struct entries can make cycles in the Types section, and they go through
-  the decodable struct records. `compiler/bytecode_types.agc` interns each distinct type
+  the decodable struct records. `compiler/bytecode_types.agc` interns each
+distinct type
   once, children first. A program without a JSON type argument writes two zero
   counts.
 - The Globals section holds only a count because a slot has no bytes of its

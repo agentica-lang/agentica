@@ -96,11 +96,25 @@ The three call kinds:
    thread per handle, with a cancel exit (40.3a). The handle belongs to the task
    that opened it (§14.5).
 
-| Kind | Runs on | Waits how | Cancel | Internal precedent |
-|---|---|---|---|---|
-| Fast | the scheduler thread, in the task's turn | does not wait; charged as a long builtin | none: it runs to its end, as a builtin does | `String.*`, `Int.bit_*` (ordinary builtins) |
-| Compute | a compute pool of the VM, not the libuv pool | the task parks on a job; other tasks run | a cancel flag, polled by the native code | file work on the libuv pool, which is bounded; compute needs a pool of its own |
-| I/O | the I/O thread for a descriptor; a thread per handle for a library that can only block | the task parks on the handle's job (§14.1) | the job is detached and its cancel half stops the watch (§14.3) | TCP and HTTP on the loop; `Process.*` |
+- **Kind:** Fast
+  - **Runs on:** the scheduler thread, in the task's turn
+  - **Waits how:** does not wait; charged as a long builtin
+  - **Cancel:** none: it runs to its end, as a builtin does
+  - **Internal precedent:** `String.*`, `Int.bit_*` (ordinary builtins)
+
+- **Kind:** Compute
+  - **Runs on:** a compute pool of the VM, not the libuv pool
+  - **Waits how:** the task parks on a job; other tasks run
+  - **Cancel:** a cancel flag, polled by the native code
+  - **Internal precedent:** file work on the libuv pool, which is bounded;
+    compute needs a pool of its own
+
+- **Kind:** I/O
+  - **Runs on:** the I/O thread for a descriptor; a thread per handle for a
+    library that can only block
+  - **Waits how:** the task parks on the handle's job (§14.1)
+  - **Cancel:** the job is detached and its cancel half stops the watch (§14.3)
+  - **Internal precedent:** TCP and HTTP on the loop; `Process.*`
 
 A compute pool is a new part of the core, so it must pass the entry rule of
 §14.6: a use case, and an answer for how it waits, times out, is cancelled, ends

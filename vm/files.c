@@ -118,6 +118,9 @@ static const char line_too_long[] = "filesystem: line exceeds buffer_bytes";
 static const char bad_timeout[] = "filesystem: timeout must be positive milliseconds";
 static const char too_deep[] = "filesystem: directory tree is deeper than 128 levels";
 static const char refused_path[] = "filesystem: refusing to remove /, . or ..";
+#ifdef _WIN32
+static const char refused_windows_path[] = "filesystem: refusing to remove an unsafe Windows path";
+#endif
 static const char not_lockable[] = "filesystem: only a regular file can be locked";
 static const char rename_who[] = "rename-file-or-directory";
 static const char complete_who[] = "path->complete-path";
@@ -218,6 +221,35 @@ static bool path_string(const agc_string *s) {
 #endif
   return true;
 }
+
+#ifdef _WIN32
+static bool windows_remove_input_valid(const agc_string *s) {
+  size_t len = s->bytes;
+  if (s->data[len - 1] == '/' || s->data[len - 1] == '\\' ||
+      (len == 2 && ((s->data[0] >= 'A' && s->data[0] <= 'Z') ||
+                    (s->data[0] >= 'a' && s->data[0] <= 'z')) && s->data[1] == ':')) return false;
+  size_t start = len;
+  while (start && s->data[start - 1] != '/' && s->data[start - 1] != '\\') start--;
+  size_t last = len - start;
+  if (last == 0 || (last == 1 && s->data[start] == '.') ||
+      (last == 2 && s->data[start] == '.' && s->data[start + 1] == '.')) return false;
+  if (len >= 2 && s->data[1] == ':' && start == 2) return false;
+  bool drive_colon = len >= 3 && ((s->data[0] >= 'A' && s->data[0] <= 'Z') ||
+                                  (s->data[0] >= 'a' && s->data[0] <= 'z')) && s->data[1] == ':';
+  size_t component = 0;
+  for (size_t k = 0; k <= len; k++) {
+    if (k < len && s->data[k] == ':' && !(drive_colon && k == 1)) return false;
+    if (k == len || s->data[k] == '/' || s->data[k] == '\\') {
+      size_t part = k - component;
+      bool dot = part == 1 && s->data[component] == '.';
+      bool dotdot = part == 2 && s->data[component] == '.' && s->data[component + 1] == '.';
+      if (part && !dot && !dotdot && (s->data[k - 1] == '.' || s->data[k - 1] == ' ')) return false;
+      component = k + 1;
+    }
+  }
+  return true;
+}
+#endif
 
 void agc_files_init(agc_vm *vm) {
   char *buf = agc_fs_cwd();
@@ -738,7 +770,21 @@ static void work_mkdir_private(op *o) {
    names the entry that failed, not the root. */
 static void work_remove(op *o) {
 #ifdef _WIN32
-  fail_op(o, FS_REMOVE, ENOTSUP);
+  char *failed = NULL;
+  int rc = agc_fs_remove_tree(o->path, &failed);
+  if (rc == 0) return;
+  if (rc == AGC_FS_REMOVE_TOO_DEEP) {
+    free(failed);
+    fail_op(o, FS_TREE_DEEP, 0);
+  } else if (rc == AGC_FS_REMOVE_REFUSED) {
+    fail_op(o, FS_REFUSED, 0);
+  } else {
+    fail_op(o, FS_REMOVE, rc);
+    if (failed) {
+      free(o->path);
+      o->path = failed;
+    }
+  }
 #else
   int rc;
   do {
@@ -808,7 +854,7 @@ static void work_try_lock(op *o) {
    system without RENAME_NOREPLACE answers EINVAL, which is reported, not worked around with a racy check. */
 static void work_rename(op *o) {
 #ifdef _WIN32
-  fail_op(o, FS_RENAME, ENOTSUP);
+  if (agc_fs_rename_noreplace(o->path, o->to) != 0) fail_op(o, FS_RENAME, errno);
 #elif defined(__APPLE__)
   agc_fs_info info;
   if (agc_fs_stat(o->to, &info, false) == 0) {
@@ -1390,8 +1436,11 @@ static agc_value builtin_dir_mkdir_private(agc_vm *vm, agc_value *args, uint32_t
 
 static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
-  return path_op(vm, OP_REMOVE, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "delete-directory/files",
-                 "path-string?");
+  const agc_string *path = agc_as_string(vm, args[0]);
+#ifdef _WIN32
+  if (path_string(path) && !windows_remove_input_valid(path)) return error_of(refused_windows_path);
+#endif
+  return path_op(vm, OP_REMOVE, path, agc_as_int(vm, args[1]), "delete-directory/files", "path-string?");
 }
 
 static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {

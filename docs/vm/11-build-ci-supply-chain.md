@@ -124,20 +124,36 @@
 
 ### CI
 
-| Job | Runner | Runs |
-|---|---|---|
-| Linux (`ci.yml`) | GitHub-hosted `ubuntu-latest`, submodules | the binary from `bootstrap/stage0.agcb` and `make vm-test`, `make test` (with the differential tests), the fixed point, smoke tests |
-| Linux sanitizers (`ci.yml`) | GitHub-hosted `ubuntu-latest`, clang and `libclang-rt-dev` | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run |
-| macOS (`platforms.yml`) | GitHub-hosted `macos-15` (Apple clang, arm64), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
-| Windows (`platforms.yml`) | GitHub-hosted `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm-test` (the C VM only: the binary is Linux only) |
-| Fuzz (`fuzz.yml`, by hand) | GitHub-hosted `ubuntu-latest`, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` |
+- **Job:** Linux (`ci.yml`)
+  - **Runner:** GitHub-hosted `ubuntu-latest`, submodules
+  - **Runs:** the binary from `bootstrap/stage0.agcb` and `make vm-test`, `make
+    test` (with the differential tests), the fixed point, smoke tests
+
+- **Job:** Linux sanitizers (`ci.yml`)
+  - **Runner:** GitHub-hosted `ubuntu-latest`, clang and `libclang-rt-dev`
+  - **Runs:** sanitizer build, `vm-test`, differential and bytecode tests, fuzz
+    run, GC stress run
+
+- **Job:** macOS (`platforms.yml`)
+  - **Runner:** GitHub-hosted `macos-15` (Apple clang, arm64), submodules
+  - **Runs:** `make vm-test` (the C VM only: the binary is Linux only)
+
+- **Job:** Windows (`platforms.yml`)
+  - **Runner:** GitHub-hosted `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc,
+    make), submodules
+  - **Runs:** `make vm-test` (the C VM only: the binary is Linux only)
+
+- **Job:** Fuzz (`fuzz.yml`, by hand)
+  - **Runner:** GitHub-hosted `ubuntu-latest`, clang
+  - **Runs:** sanitizer build, 5 million mutants, random `FUZZ_SEED`
 
 - The Linux jobs run on every pull request that changes more than docs. No job
   installs Racket. `vm/unicode_data.c` is frozen source (its header gives the
   provenance), so no CI step checks or regenerates it.
 - `platforms.yml` runs on pull requests and pushes to `master`; it can also be
   started by hand for one platform or both.
-- No job installs Racket (the Racket front end was deleted, PR #313). The macOS and
+- No job installs Racket (the Racket front end was deleted, PR #313). The macOS
+  and
   Windows jobs build the C tests only, since the binary and the process and
   network tests are not portable yet.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,

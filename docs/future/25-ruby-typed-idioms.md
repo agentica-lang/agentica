@@ -87,20 +87,63 @@ one.
   a new form as the main style, an evaluation round with a second model checks
   that agents use it well (`tests/eval/run.py`).
 
-| § | Item | Layers | New diagnostic codes |
-|---|---|---|---|
-| 25.1 | Default parameter values | parser, linker, checker, lowering | `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE` |
-| 25.2 | Re-exports | parser, linker | none |
-| 25.3 | `value.with(field: x)` | parser, linker, checker, lowering, VM `STRUCT_WITH` | none |
-| 25.4 | Value equality for data | checker, VM `EQ`/`NE` | none |
-| 25.5 | Standalone lambdas | lexer (`lambda` reserved), parser, linker, checker, lowering | none |
-| 25.6 | More Enumerable methods (after 8d) | catalog, prelude, checker, lowering, VM error spans | none |
-| 25.7 | `unless`: moved to Part C | | |
-| 25.8 | Statement modifiers: moved to Part C | | |
-| 25.9 | `File.open` with a block | catalog, checker, lowering, VM builtin (`File.eof?`) | none |
-| 25.10 | Heredocs `<<~NAME` | lexer, parser (heredoc flag on the AST string node) | `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE` |
-| 25.11 | `format` (after 8d) | catalog (linker name), checker, prelude, lowering, one prelude-only builtin | `CHECK-FORMAT-LITERAL`, `CHECK-FORMAT-SPEC` |
-| 25.14 | Pipe operator `\|>` | lexer, parser, checker | `PARSE-PIPE-TARGET`, `CHECK-PIPE-METHOD` |
+- **§:** 25.1
+  - **Item:** Default parameter values
+  - **Layers:** parser, linker, checker, lowering
+  - **New diagnostic codes:** `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`
+
+- **§:** 25.2
+  - **Item:** Re-exports
+  - **Layers:** parser, linker
+  - **New diagnostic codes:** none
+
+- **§:** 25.3
+  - **Item:** `value.with(field: x)`
+  - **Layers:** parser, linker, checker, lowering, VM `STRUCT_WITH`
+  - **New diagnostic codes:** none
+
+- **§:** 25.4
+  - **Item:** Value equality for data
+  - **Layers:** checker, VM `EQ`/`NE`
+  - **New diagnostic codes:** none
+
+- **§:** 25.5
+  - **Item:** Standalone lambdas
+  - **Layers:** lexer (`lambda` reserved), parser, linker, checker, lowering
+  - **New diagnostic codes:** none
+
+- **§:** 25.6
+  - **Item:** More Enumerable methods (after 8d)
+  - **Layers:** catalog, prelude, checker, lowering, VM error spans
+  - **New diagnostic codes:** none
+
+- **§:** 25.7
+  - **Item:** `unless`: moved to Part C
+
+- **§:** 25.8
+  - **Item:** Statement modifiers: moved to Part C
+
+- **§:** 25.9
+  - **Item:** `File.open` with a block
+  - **Layers:** catalog, checker, lowering, VM builtin (`File.eof?`)
+  - **New diagnostic codes:** none
+
+- **§:** 25.10
+  - **Item:** Heredocs `<<~NAME`
+  - **Layers:** lexer, parser (heredoc flag on the AST string node)
+  - **New diagnostic codes:** `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
+    `LEX-HEREDOC-ONE-LINE`
+
+- **§:** 25.11
+  - **Item:** `format` (after 8d)
+  - **Layers:** catalog (linker name), checker, prelude, lowering, one
+    prelude-only builtin
+  - **New diagnostic codes:** `CHECK-FORMAT-LITERAL`, `CHECK-FORMAT-SPEC`
+
+- **§:** 25.14
+  - **Item:** Pipe operator `\|>`
+  - **Layers:** lexer, parser, checker
+  - **New diagnostic codes:** `PARSE-PIPE-TARGET`, `CHECK-PIPE-METHOD`
 
 ### 25.1 Default parameter values
 
@@ -142,7 +185,8 @@ diagnostic for one that is not allowed.
   parameter has a default, except a last parameter of type `Fn[...]`, which
   stays without one so a block can still fill it (an `Fn` parameter has no
   default):
-  `def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void`.
+  `def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) ->
+Void`.
   Anything else is `CHECK-DEFAULT-ORDER` at the parameter without a default.
 - **A default is a constant:** an `Int`, `Float` or `String` literal (a minus
   sign allowed before a number; no `#{...}` in the string), `true`, `false`,
@@ -1109,13 +1153,27 @@ puts(format("%-8s|%6.2f|%03d|%x", "apple", 2.5, 7, 255))   # apple   |  2.50|007
 **Spec.** `format(fmt, args...)` returns a `String`, like Ruby's
 `Kernel#format`. A conversion is `%[flags][width][.precision]type`:
 
-| Type | Argument | Text |
-|---|---|---|
-| `d` | `Int` | decimal |
-| `x` | `Int` | lowercase hex; a negative number is `-` and the hex of its magnitude (`-ff`, as in Python; Ruby writes `..f01`) |
-| `f` | `Float` | fixed point, 6 digits after the point unless `.precision` says otherwise; `NaN`, `Inf` and `-Inf` as in Ruby |
-| `s` | any value with `to_s` | its `to_s`, as `puts` writes it |
-| `%%` | none | a `%` |
+- **Type:** `d`
+  - **Argument:** `Int`
+  - **Text:** decimal
+
+- **Type:** `x`
+  - **Argument:** `Int`
+  - **Text:** lowercase hex; a negative number is `-` and the hex of its
+    magnitude (`-ff`, as in Python; Ruby writes `..f01`)
+
+- **Type:** `f`
+  - **Argument:** `Float`
+  - **Text:** fixed point, 6 digits after the point unless `.precision` says
+    otherwise; `NaN`, `Inf` and `-Inf` as in Ruby
+
+- **Type:** `s`
+  - **Argument:** any value with `to_s`
+  - **Text:** its `to_s`, as `puts` writes it
+
+- **Type:** `%%`
+  - **Argument:** none
+  - **Text:** a `%`
 
 Flags: `0` pads numbers with zeros after the sign (`%05d` of `-42` is `-0042`);
 `-` pads on the right with spaces. With both (`%-05d`), `0` is ignored, as in C
@@ -1397,7 +1455,7 @@ one exists.
 **Composition instead of inheritance.** To "inherit" behavior:
 
 1. The interface is a struct of `Fn` fields ([section
-   15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call)),
+15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call)),
    for example `Storage` with `get` and `put`.
 2. A wrapper (decorator) function takes a base value and returns a new one with
    some fields replaced, keeping the others:

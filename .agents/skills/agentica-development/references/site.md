@@ -17,9 +17,15 @@ rule that a site page shows.
 
 ## Version
 
-- The site shows the version of the `VERSION` file in the header, the footer, `llms.txt`, `llms-full.txt` and the Install section of Getting started, with links to the GitHub release of that tag and to all releases.
-- `make site` and `make site-serve` read it (`AGC_VERSION`) and pass it to Hugo as `HUGO_PARAMS_VERSION`; `pages.yml` builds with `make site`, so it follows. `_partials/version.html` fails the build when it is missing (plain `hugo` without the variable). Never type the version in `site/`.
-- The Getting started text comes from the `release` shortcode (`layouts/_shortcodes/release.md`).
+- The site shows the version of the `VERSION` file in the header, the footer,
+  `llms.txt`, `llms-full.txt` and the Install section of Getting started, with
+  links to the GitHub release of that tag and to all releases.
+- `make site` and `make site-serve` read it (`AGC_VERSION`) and pass it to Hugo
+  as `HUGO_PARAMS_VERSION`; `pages.yml` builds with `make site`, so it follows.
+  `_partials/version.html` fails the build when it is missing (plain `hugo`
+  without the variable). Never type the version in `site/`.
+- The Getting started text comes from the `release` shortcode
+  (`layouts/_shortcodes/release.md`).
 
 ## Search
 
@@ -51,7 +57,10 @@ rule that a site page shows.
   mount (`hugo.toml`) and joins them, in file-name order, into one page. A new
   file in `docs/grammar/` appears there by itself; the adapter fails the build
   when fewer than 10 files are found, so change that number with the files.
-- The adapter rewrites two kinds of joined link: a sibling grammar link `](NN-name.md#anchor)` becomes `](#anchor)`, and `](../../site/content/library/TOPIC/NAME.md)` becomes `](/library/TOPIC/NAME/)`; other relative links stay as written.
+- The adapter rewrites two kinds of joined link: a sibling grammar link
+  `](NN-name.md#anchor)` becomes `](#anchor)`, and
+  `](../../site/content/library/TOPIC/NAME.md)` becomes
+  `](/library/TOPIC/NAME/)`; other relative links stay as written.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
 - When the language or a builtin changes, update the matching site page too.

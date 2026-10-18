@@ -163,7 +163,8 @@ byte of a file with a type table, an Updates section or Globals.
   (same device and inode). The driver also deletes the file when the VM never
   ran, or failed before loading.
 - Windows checks the parent PID through libuv. Bytecode reads use binary
-  descriptors and UTF-8 paths. A private handoff opens the file without following
+  descriptors and UTF-8 paths. A private handoff opens the file without
+following
   its final reparse point, then requires a regular disk file with one link,
   this process user's owner SID, and a protected DACL granting only that user.
   Only after those checks and the size limit pass does it mark the opened

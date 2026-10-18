@@ -13,15 +13,53 @@ I/O and networking remain separate follow-up work. `Path.remove` on Windows
 returns an error without deleting anything. Cross-platform release packaging
 and runtime DLL checks have not yet replaced the Linux release pipeline.
 
-| Dependency | Choice |
-|---|---|
-| C compiler | C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks `__builtin_*_overflow`, and one compiler family keeps one Makefile. |
-| libc | Dynamic. A static glibc breaks NSS, and macOS forbids a static libc. |
-| Boehm GC | Vendored submodule `vm/third_party/bdwgc`, tag v8.2.12. With `AGENTICA_GC=vendored` (the release, the GC-stress build, and the default off Linux) `make` compiles its single-file amalgamation (`extra/gc.c`) and links it statically. The Linux default, `system`, links the distro's libgc 8.2.0 or newer dynamically (`pkg-config bdw-gc`, Debian: `libgc-dev`), as OpenSSL does (11). |
-| yyjson | Vendored submodule `vm/third_party/yyjson` (MIT), tag 0.13.0. Only the reader is built, with the writer, file API, JSON Pointer and extensions disabled. The reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers. In the `AGC_NO_GC` build (sanitizer and fuzz), `vm/json.c` routes its allocations through `agc_alloc_atomic`, so its documents count toward the fuzzer's 256 MB limit (11, Fuzzing). In the GC build the document is freed right after its copy into GC nodes (2.6). The encoder is our own (2.4), since yyjson formats floats and escapes differently. |
-| libuv | Vendored submodule `vm/third_party/libuv` (MIT, with BSD-2-Clause and ISC parts in its `LICENSE-extra`), tag v1.53.0. The native Linux, Darwin or Windows source list is built per mode into `$(VM_BUILD)/uv/` and linked statically. System libraries are selected for each host. |
-| picohttpparser | Vendored submodule `vm/third_party/picohttpparser` (dual MIT or Perl; we take MIT), tag v1.4. It parses and validates request and response heads behind our adapter (10.6). `phr_decode_chunked` is not used, since it knows no limits. It is built at the baseline, without `-msse4.2`. Its SSE4.2 path is a SIMD candidate (`docs/future/19-simd.md` §19). |
-| OpenSSL 3.5 LTS | Vendored submodule `vm/third_party/openssl` (Apache-2.0), shallow, tag `openssl-3.5.9`. Linked statically in the release (`AGENTICA_OPENSSL=vendored`, 10.0). The default, `system`, links the system OpenSSL 3.0 or newer dynamically, so a fresh checkout does not spend minutes building OpenSSL. Only `vm/tls_openssl.c` includes OpenSSL headers (10.3). |
+- **Dependency:** C compiler
+  - **Choice:** C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks
+    `__builtin_*_overflow`, and one compiler family keeps one Makefile.
+
+- **Dependency:** libc
+  - **Choice:** Dynamic. A static glibc breaks NSS, and macOS forbids a static
+    libc.
+
+- **Dependency:** Boehm GC
+  - **Choice:** Vendored submodule `vm/third_party/bdwgc`, tag v8.2.12. With
+    `AGENTICA_GC=vendored` (the release, the GC-stress build, and the default
+    off Linux) `make` compiles its single-file amalgamation (`extra/gc.c`) and
+    links it statically. The Linux default, `system`, links the distro's libgc
+    8.2.0 or newer dynamically (`pkg-config bdw-gc`, Debian: `libgc-dev`), as
+    OpenSSL does (11).
+
+- **Dependency:** yyjson
+  - **Choice:** Vendored submodule `vm/third_party/yyjson` (MIT), tag 0.13.0.
+    Only the reader is built, with the writer, file API, JSON Pointer and
+    extensions disabled. The reader does not recurse and is fuzzed on OSS-Fuzz.
+    It allocates with `malloc` and holds no GC pointers. In the `AGC_NO_GC`
+    build (sanitizer and fuzz), `vm/json.c` routes its allocations through
+    `agc_alloc_atomic`, so its documents count toward the fuzzer's 256 MB limit
+    (11, Fuzzing). In the GC build the document is freed right after its copy
+    into GC nodes (2.6). The encoder is our own (2.4), since yyjson formats
+    floats and escapes differently.
+
+- **Dependency:** libuv
+  - **Choice:** Vendored submodule `vm/third_party/libuv` (MIT, with
+    BSD-2-Clause and ISC parts in its `LICENSE-extra`), tag v1.53.0. The native
+    Linux, Darwin or Windows source list is built per mode into
+    `$(VM_BUILD)/uv/` and linked statically. System libraries are selected for
+    each host.
+
+- **Dependency:** picohttpparser
+  - **Choice:** Vendored submodule `vm/third_party/picohttpparser` (dual MIT or
+    Perl; we take MIT), tag v1.4. It parses and validates request and response
+    heads behind our adapter (10.6). `phr_decode_chunked` is not used, since it
+    knows no limits. It is built at the baseline, without `-msse4.2`. Its SSE4.2
+    path is a SIMD candidate (`docs/future/19-simd.md` §19).
+
+- **Dependency:** OpenSSL 3.5 LTS
+  - **Choice:** Vendored submodule `vm/third_party/openssl` (Apache-2.0),
+    shallow, tag `openssl-3.5.9`. Linked statically in the release
+    (`AGENTICA_OPENSSL=vendored`, 10.0). The default, `system`, links the system
+    OpenSSL 3.0 or newer dynamically, so a fresh checkout does not spend minutes
+    building OpenSSL. Only `vm/tls_openssl.c` includes OpenSSL headers (10.3).
 
 Every submodule is pinned to a release tag and upgraded only by a reviewed PR
 that bumps it (11).

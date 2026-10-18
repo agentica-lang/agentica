@@ -6,10 +6,10 @@
  */
 #define _GNU_SOURCE
 #include "../services.h"
-
 #include <stdio.h>
 
 #ifdef __linux__
+#include "remove_sandbox.h"
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -372,8 +372,10 @@ int main(void) {
   /* A walk that never ends fails the test instead of hanging the build. */
   alarm(60);
   const char *tmp = getenv("TMPDIR");
+  if (!tmp || !*tmp) tmp = "/tmp";
+  if (!agc_test_remove_sandbox(tmp)) return 1;
   char base[PATH_SIZE];
-  int n = snprintf(base, sizeof base, "%s/agc-tree-test-XXXXXX", tmp && *tmp ? tmp : "/tmp");
+  int n = snprintf(base, sizeof base, "%s/agc-tree-test-XXXXXX", tmp);
   assert(n > 0 && n < PATH_SIZE);
   assert(base[0] == '/');
   assert(mkdtemp(base));

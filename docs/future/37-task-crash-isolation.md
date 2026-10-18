@@ -126,7 +126,8 @@ end
 ```
 
 This prints
-`failed: task crashed: RUNTIME-DIVISION-BY-ZERO at parse.agc:3:17: division by zero`,
+`failed: task crashed: RUNTIME-DIVISION-BY-ZERO at parse.agc:3:17: division by
+zero`,
 then `still running`, and exits 0: the crash was observed. Its diagnostic is
 also on stderr.
 

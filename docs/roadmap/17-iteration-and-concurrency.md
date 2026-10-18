@@ -1,7 +1,7 @@
 ## Phase 17: Iteration and concurrent collections
 
 Specified in [`docs/future/27-iteration-and-concurrency.md` section
-27](../future/27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections),
+27](../future/27-iteration-and-concurrency.md),
 with the one-way principle of §25, its table of one form for each job, and its
 rule that the concurrency primitives are C builtins and higher-level helpers are
 Agentica code in the compiler prelude. All items come after 7i (order 7.2) and

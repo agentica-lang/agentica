@@ -36,12 +36,33 @@ as in RE2 and Go's `regexp`. It has no backtracking, so no input makes it blow
 up. The matcher is ordinary Agentica code (48.3), so each loop charges steps and
 `--max-steps` stops a runaway pattern with `RUNTIME-STEP-LIMIT`.
 
-| Engine | Kind | Backrefs and lookaround | Worst case | Dependency | Notes |
-|---|---|---|---|---|---|
-| Pike VM (decided) | NFA, leftmost-first | no | O(n·m·g) per search | none | Same results as RE2 and Go on the subset |
-| PCRE2 | backtracking, optional JIT | yes | exponential (ReDoS) | new `vm/third_party` submodule | Perl syntax, large C code |
-| Oniguruma | backtracking | yes | exponential | new submodule | Ruby's engine, many syntaxes |
-| POSIX `regcomp` (libc) | leftmost-longest | no (ERE) | depends on libc | libc, no submodule | Byte-based; classes and results vary by libc and locale |
+- **Engine:** Pike VM (decided)
+  - **Kind:** NFA, leftmost-first
+  - **Backrefs and lookaround:** no
+  - **Worst case:** O(n·m·g) per search
+  - **Dependency:** none
+  - **Notes:** Same results as RE2 and Go on the subset
+
+- **Engine:** PCRE2
+  - **Kind:** backtracking, optional JIT
+  - **Backrefs and lookaround:** yes
+  - **Worst case:** exponential (ReDoS)
+  - **Dependency:** new `vm/third_party` submodule
+  - **Notes:** Perl syntax, large C code
+
+- **Engine:** Oniguruma
+  - **Kind:** backtracking
+  - **Backrefs and lookaround:** yes
+  - **Worst case:** exponential
+  - **Dependency:** new submodule
+  - **Notes:** Ruby's engine, many syntaxes
+
+- **Engine:** POSIX `regcomp` (libc)
+  - **Kind:** leftmost-longest
+  - **Backrefs and lookaround:** no (ERE)
+  - **Worst case:** depends on libc
+  - **Dependency:** libc, no submodule
+  - **Notes:** Byte-based; classes and results vary by libc and locale
 
 Each new submodule needs the owner's approval (AGENTS.md). RE2 is C++, so it is
 the reference design, not an option for the C core.

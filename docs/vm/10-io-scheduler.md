@@ -162,7 +162,7 @@ section says how the scheduler and the loop keep them, as built.
     `HttpClient` have no owner. `Task.spawn` moves nothing, and nothing goes to
     the parent when a task ends, so a handle returned by a helper task is closed
     when the helper ends. The one hand-off is `Task.spawn_owning(&f, handle)`
-    ([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends)):
+([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends)):
     `agc_task_spawn_owning` checks that the calling task owns the handle and
     that it is open (else `RUNTIME-HANDLE-NOT-OWNED` at the handle argument,
     before any task is made), spawns the task and moves the owner to it.

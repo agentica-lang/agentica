@@ -214,7 +214,7 @@ dropped (see "Done").
     `tcp-crash-delegate.agc`, which rely on the spawn move and `agc_give_owned`,
     switch to the explicit form.
   - **Done.** As built (spec in
-    [§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends)):
+[§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends)):
     - The one hand-off is the builtin `Task.spawn_owning(&f, handle)`
       (`Task.spawn` plus the hand-off of a handle the caller owns, in one call).
       The checker accepts only a handle type as its argument (`FileHandle`,
@@ -288,7 +288,7 @@ dropped (see "Done").
       their handles in the task that uses them.
 
 - [x] **24c: a channel can have an owner
-  ([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends),
+([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends),
   [§14.5](../vm/14-core-invariants.md#145-handles)).** Decided by the owner on
   2026-10-14. `Task.spawn_owning(&f, ch)` makes the spawned task the owner of a
   `Channel`. When that task ends in any way (return, crash, cancel),

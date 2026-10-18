@@ -59,7 +59,7 @@ with status 100 to 199 is returned without framing, and the caller counts the
 interim responses. A `Content-Length` body is reserved whole after the limit
 check. Only `vm/http_pico.c` and the Makefile know picohttpparser.
 
-### 10.7 HTTP on the VM: the hybrid split (phase 20; the client and the server are built)
+### 10.7 HTTP on the VM: the hybrid split
 
 HTTP is split between the C builtin module `HttpWire` and the Agentica module
 `std/http.agc`, which programs import as `HTTP`. The API, options, limits and
@@ -128,7 +128,8 @@ the tests 10.7.4. Streaming is planned in `docs/future/30-hybrid-http.md`.
 - **`HttpWire` is std-only.** A public raw layer would be a second way to do
   HTTP. The linker (`compiler/resolve.agc`) gives `CHECK-UNKNOWN-NAME` for a
   qualified `HttpWire.f` in any module not embedded from `stdlib/`
-  (the std-only modules of `compiler/builtins_data.agc`), and `help` leaves it out. The
+  (the std-only modules of `compiler/builtins_data.agc`), and `help` leaves it
+out. The
   loader does not guard it: a crafted `.agcb` gets nothing `TCP` and `TLS` do
   not give (the trust model of `docs/vm/README.md` §1). `HttpWire` is a reserved
   name.
@@ -234,7 +235,7 @@ HttpWire.local_port(server: HttpServer) -> Int
   `max_connections` are open, and parks otherwise. A TLS socket is returned
   before its handshake, which runs under the first read's or write's timeout.
 - `spawn` is the hand-off of `Task.spawn_owning`
-  ([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends))
+([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends))
   into the server's group, through the port function `agc_task_spawn_owning`: it
   starts `f(socket)` as a child of the group and gives it the socket, which the
   caller (the accept loop of `std/http`) must own, or the call fails with
@@ -269,22 +270,71 @@ HttpWire.local_port(server: HttpServer) -> Int
 
 **Server side**, in the order they can happen:
 
-| Case | Who | Answer |
-|---|---|---|
-| Malformed or hostile head or body: bad start line, bare LF, obs-fold, bad target or method, bad framing, or not exactly one non-empty `Host` header | C | 400, `Connection: close`, empty body, then close. The handler never runs |
-| A line, the head, the header count or the trailers over their limits | C | 431, then close |
-| A body over `max_body_bytes` (a `Content-Length` over it is answered before any body byte is read) | C | 413, then close |
-| A version `HTTP/[0-9.]+` other than `HTTP/1.1` | C | 505, then close |
-| `CONNECT`, `Upgrade`, a `Transfer-Encoding` other than one `chunked` | C | 501, then close |
-| An `Expect` other than `100-continue` | C | 417, then close |
-| `Expect: 100-continue` with a `Content-Length` over `max_body_bytes` | C | 413, then close, with no 100 Continue first |
-| A request body that is not UTF-8 | C | 400, then close |
-| The client is too slow for `request_timeout_ms` (request or response), or the idle wait ends | C | The connection is closed |
-| The handler returns `error(message)` | `std/http` | 500, `Connection: close`, empty body. The message is not sent. `http: handler error: <message>` goes to stderr |
-| The handler returns a response that cannot be sent (status outside 200 to 599, a bad or framing header, a body with 204 or 304) | C refuses, `std/http` answers | 500, `Connection: close`, and `http: invalid response: <reason>` on stderr |
-| A runtime diagnostic in the handler | The VM | The connection task crashes (§37.5). The client sees the close, and the server goes on |
-| A handler that runs a long time | None | Never stopped. Its reply is still sent, with a fresh `request_timeout_ms` for the write |
-| Writing the response fails (the client left) | C | The connection is closed quietly |
+- **Case:** Malformed or hostile head or body: bad start line, bare LF,
+  obs-fold, bad target or method, bad framing, or not exactly one non-empty
+  `Host` header
+  - **Who:** C
+  - **Answer:** 400, `Connection: close`, empty body, then close. The handler
+    never runs
+
+- **Case:** A line, the head, the header count or the trailers over their limits
+  - **Who:** C
+  - **Answer:** 431, then close
+
+- **Case:** A body over `max_body_bytes` (a `Content-Length` over it is answered
+  before any body byte is read)
+  - **Who:** C
+  - **Answer:** 413, then close
+
+- **Case:** A version `HTTP/[0-9.]+` other than `HTTP/1.1`
+  - **Who:** C
+  - **Answer:** 505, then close
+
+- **Case:** `CONNECT`, `Upgrade`, a `Transfer-Encoding` other than one `chunked`
+  - **Who:** C
+  - **Answer:** 501, then close
+
+- **Case:** An `Expect` other than `100-continue`
+  - **Who:** C
+  - **Answer:** 417, then close
+
+- **Case:** `Expect: 100-continue` with a `Content-Length` over `max_body_bytes`
+  - **Who:** C
+  - **Answer:** 413, then close, with no 100 Continue first
+
+- **Case:** A request body that is not UTF-8
+  - **Who:** C
+  - **Answer:** 400, then close
+
+- **Case:** The client is too slow for `request_timeout_ms` (request or
+  response), or the idle wait ends
+  - **Who:** C
+  - **Answer:** The connection is closed
+
+- **Case:** The handler returns `error(message)`
+  - **Who:** `std/http`
+  - **Answer:** 500, `Connection: close`, empty body. The message is not sent.
+    `http: handler error: <message>` goes to stderr
+
+- **Case:** The handler returns a response that cannot be sent (status outside
+  200 to 599, a bad or framing header, a body with 204 or 304)
+  - **Who:** C refuses, `std/http` answers
+  - **Answer:** 500, `Connection: close`, and `http: invalid response: <reason>`
+    on stderr
+
+- **Case:** A runtime diagnostic in the handler
+  - **Who:** The VM
+  - **Answer:** The connection task crashes (§37.5). The client sees the close,
+    and the server goes on
+
+- **Case:** A handler that runs a long time
+  - **Who:** None
+  - **Answer:** Never stopped. Its reply is still sent, with a fresh
+    `request_timeout_ms` for the write
+
+- **Case:** Writing the response fails (the client left)
+  - **Who:** C
+  - **Answer:** The connection is closed quietly
 
 The codes that the hostile-case goldens fix are those 10.6 marks as fixed.
 `IO.warn` lines are program stderr, so the golden fixtures record them.

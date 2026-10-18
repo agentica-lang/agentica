@@ -103,12 +103,18 @@ puts(seen.size)            # 3
 
   | Function | Result |
   |---|---|
-  | `Set.new(items: List[T]) -> Set[T]` | duplicates dropped, first one kept; `Set.new([])` needs an expected type, like an empty list. One arity, so the builtins catalog needs no overloads. |
-  | `Set.add(s: Set[T], x: T) -> Set[T]`, `Set.delete(s: Set[T], x: T) -> Set[T]` | a new set; the input is unchanged |
-  | `Set.include?(s: Set[T], x: T) -> Bool`, `Set.size(s) -> Int`, `Set.empty?(s) -> Bool` | |
+  | `Set.new(items: List[T]) -> Set[T]` | duplicates dropped, first one kept;
+`Set.new([])` needs an expected type, like an empty list. One arity, so the
+builtins catalog needs no overloads. |
+  | `Set.add(s: Set[T], x: T) -> Set[T]`, `Set.delete(s: Set[T], x: T) ->
+Set[T]` | a new set; the input is unchanged |
+  | `Set.include?(s: Set[T], x: T) -> Bool`, `Set.size(s) -> Int`,
+`Set.empty?(s) -> Bool` | |
   | `Set.to_a(s: Set[T]) -> List[T]` | first-insertion order |
-  | `Set.union(a, b)`, `Set.intersection(a, b)`, `Set.difference(a, b) -> Set[T]` | order: `a` first, then new elements of `b` |
-  | `Set.subset?(a: Set[T], b: Set[T]) -> Bool` | every element of `a` is in `b` |
+  | `Set.union(a, b)`, `Set.intersection(a, b)`, `Set.difference(a, b) ->
+Set[T]` | order: `a` first, then new elements of `b` |
+  | `Set.subset?(a: Set[T], b: Set[T]) -> Bool` | every element of `a` is in `b`
+|
 
 - `for x in set` iterates in order.
 - Text form: `Set[1, 2]`. No `==` at first, like `List` and `Map` (`grammar.md`

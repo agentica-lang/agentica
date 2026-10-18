@@ -58,12 +58,30 @@ they are: builders fill and grow the objects they return. New helpers in
 (the design as written, with the line numbers of that time;
 [§34.6](#346-as-built) says what was built):
 
-| Value | Paths |
-|---|---|
-| One-character or empty String | `split("")` `vm/strings.c:304`; `split` parts `vm/strings.c:131`; `trim` `:291`; `slice` `:421`; `at` `:440`; `from_code` `:469`; `join` of `[]` `:328`; `Result.message` of `ok` `vm/builtins.c:317`; empty input `vm/input.c:247`; JSON strings and keys `vm/json.c:170`, `:180`; `to_s` of a digit `vm/text.c:290` |
-| `[]` | `LIST` with no items `vm/interp.c:552`; `filter`, `map`, `sort_by` with no result `vm/interp.c:341`; `take` `vm/builtins.c:200`; `drop` `:206`; `concat` `:134`; `repeat` `:187`; `reverse` `:212`; `Map.keys`, `values` `:237`; `Range.to_a` `:344`; `sort` `vm/interp.c:274`; JSON arrays `vm/json.c:138` |
-| `Set.new([])` | `Set.new` with no items, `Set.delete` of the last element, and an `intersection` or `difference` with no element left (`builtin_set_new`, `builtin_set_delete`, `set_filter` in `vm/builtins.c`); the VM has no empty-set literal. |
-| `{}` | `MAP` `vm/interp.c:566` (also as the start of a non-empty literal: `agc_map_put` never writes its input); `Map.delete` of the last key `vm/map.c:273`; typed JSON maps `vm/json_typed.c:93` |
+- **Value:** One-character or empty String
+  - **Paths:** `split("")` `vm/strings.c:304`; `split` parts `vm/strings.c:131`;
+    `trim` `:291`; `slice` `:421`; `at` `:440`; `from_code` `:469`; `join` of
+    `[]` `:328`; `Result.message` of `ok` `vm/builtins.c:317`; empty input
+    `vm/input.c:247`; JSON strings and keys `vm/json.c:170`, `:180`; `to_s` of a
+    digit `vm/text.c:290`
+
+- **Value:** `[]`
+  - **Paths:** `LIST` with no items `vm/interp.c:552`; `filter`, `map`,
+    `sort_by` with no result `vm/interp.c:341`; `take` `vm/builtins.c:200`;
+    `drop` `:206`; `concat` `:134`; `repeat` `:187`; `reverse` `:212`;
+    `Map.keys`, `values` `:237`; `Range.to_a` `:344`; `sort` `vm/interp.c:274`;
+    JSON arrays `vm/json.c:138`
+
+- **Value:** `Set.new([])`
+  - **Paths:** `Set.new` with no items, `Set.delete` of the last element, and an
+    `intersection` or `difference` with no element left (`builtin_set_new`,
+    `builtin_set_delete`, `set_filter` in `vm/builtins.c`); the VM has no
+    empty-set literal.
+
+- **Value:** `{}`
+  - **Paths:** `MAP` `vm/interp.c:566` (also as the start of a non-empty
+    literal: `agc_map_put` never writes its input); `Map.delete` of the last key
+    `vm/map.c:273`; typed JSON maps `vm/json_typed.c:93`
 
 Other paths may keep allocating: nothing depends on sharing, so coverage can
 grow with the numbers.
@@ -137,12 +155,29 @@ byte, else a new one; the paths below call it, or read the table. There are no
 `agc_empty_list`, `agc_empty_map` or `agc_empty_set` helpers: one field read
 needs no function.
 
-| Value | Paths |
-|---|---|
-| One-character or empty String | `String.at`, `slice` (a length of 0 returns before any scan), `trim` (it also returns its argument when there is nothing to trim), `from_code`, `from_bytes` (`[]` and one ASCII byte), `upcase` and `downcase` (the empty String is its own result, one ASCII character maps by itself), `reverse` (fewer than two characters is its own result), `join` and `replace` with nothing left, the pieces of `split`, the text of a one-digit number (`to_s`, `"#{3}"`), `Result.message` of `ok`, the strings and keys of `JSON.parse` and `JSON.decode` (`agc_json_parse` takes the vm), and the lines of `IO.gets`, `IO.read`, `File.each_line` and a stream |
-| `[]` | `split("")` of the empty String, `take` of 0, `drop` of everything, `repeat` of 0, `Map.keys`, `Map.values` and `Set.to_a` of an empty collection, `Range.to_a` of an empty range; `reverse` of fewer than two items returns its argument |
-| `Set.new([])` | `Set.new` with no items, `Set.delete` of the last element, `intersection` and `difference` with nothing left |
-| `{}` | `Map.delete` of the last key, and the start of a typed JSON map |
+- **Value:** One-character or empty String
+  - **Paths:** `String.at`, `slice` (a length of 0 returns before any scan),
+    `trim` (it also returns its argument when there is nothing to trim),
+    `from_code`, `from_bytes` (`[]` and one ASCII byte), `upcase` and `downcase`
+    (the empty String is its own result, one ASCII character maps by itself),
+    `reverse` (fewer than two characters is its own result), `join` and
+    `replace` with nothing left, the pieces of `split`, the text of a one-digit
+    number (`to_s`, `"#{3}"`), `Result.message` of `ok`, the strings and keys of
+    `JSON.parse` and `JSON.decode` (`agc_json_parse` takes the vm), and the
+    lines of `IO.gets`, `IO.read`, `File.each_line` and a stream
+
+- **Value:** `[]`
+  - **Paths:** `split("")` of the empty String, `take` of 0, `drop` of
+    everything, `repeat` of 0, `Map.keys`, `Map.values` and `Set.to_a` of an
+    empty collection, `Range.to_a` of an empty range; `reverse` of fewer than
+    two items returns its argument
+
+- **Value:** `Set.new([])`
+  - **Paths:** `Set.new` with no items, `Set.delete` of the last element,
+    `intersection` and `difference` with nothing left
+
+- **Value:** `{}`
+  - **Paths:** `Map.delete` of the last key, and the start of a typed JSON map
 
 `Set.new`, the set filters and the typed JSON map start from the shared empty
 value: `agc_map_put` and `agc_map_add_hash` never write their input.

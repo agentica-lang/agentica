@@ -1,7 +1,18 @@
 ---
 name: vm-c-critic
-description: Review a pull request or diff that changes the Agentica C VM (vm/*.c, vm/*.h, vm/tests, the bytecode loader or the interpreter) for memory safety, undefined behavior, hostile-bytecode safety, Boehm GC rules, scheduler and task semantics, hot-path efficiency, and keeping the C core small and layered. Drives the investigation with the gmem code tools (code_diff, code_outline, find_symbol, code_imports), then proves suspicions by running small programs. Use when asked for a critic, security review or safety review of a VM or C PR in the agentica repository. Not for writing or fixing the C code, front-end-only changes (compiler/), Agentica programs, or docs-only PRs.
-compatibility: Agentica repository checkout or worktree with git, gh, rg, ast-grep and make; gmem MCP code tools when listed.
+description: >-
+  Review a pull request or diff that changes the Agentica C VM (vm/*.c, vm/*.h,
+  vm/tests, the bytecode loader or the interpreter) for memory safety, undefined
+  behavior, hostile-bytecode safety, Boehm GC rules, scheduler and task
+  semantics, hot-path efficiency, and keeping the C core small and layered.
+  Drives the investigation with the gmem code tools (code_diff, code_outline,
+  find_symbol, code_imports), then proves suspicions by running small programs.
+  Use when asked for a critic, security review or safety review of a VM or C PR
+  in the agentica repository. Not for writing or fixing the C code,
+  front-end-only changes (compiler/), Agentica programs, or docs-only PRs.
+compatibility: >-
+  Agentica repository checkout or worktree with git, gh, rg, ast-grep and make;
+  gmem MCP code tools when listed.
 ---
 
 # VM C critic
@@ -24,16 +35,37 @@ edits, say so and review the PR head through a scratch worktree instead.
 
 ## Tool ladder (stop at the first that answers)
 
-| Need | First | Fallback |
-|---|---|---|
-| What changed, by symbol | gmem `code_diff` (`base: origin/<base>`, `root: <worktree>`) | `git diff --stat` and `git diff origin/<base>...HEAD` |
-| Exact hunks | `git diff origin/<base>...HEAD -- <path>` | none |
-| Shape of a file | gmem `code_outline` | `rg -n '^[a-z].*\(' <file>` |
-| Where X is defined | gmem `find_symbol` (`query`, `root`) | `rg -nw X vm/` |
-| What a file includes | gmem `code_imports` | `rg -n '^#include' <file>` |
-| Who calls X, every `memcpy` or cast | `ast-grep run --lang c -p 'memcpy($D, $S, $N)' vm/` | `rg -nw X vm/` |
-| A symbol's body | read its exact line range | the whole file only if small |
-| A deleted symbol | `git show origin/<base>:<path>` and the line range | the diff hunk |
+- **Need:** What changed, by symbol
+  - **First:** gmem `code_diff` (`base: origin/<base>`, `root: <worktree>`)
+  - **Fallback:** `git diff --stat` and `git diff origin/<base>...HEAD`
+
+- **Need:** Exact hunks
+  - **First:** `git diff origin/<base>...HEAD -- <path>`
+  - **Fallback:** none
+
+- **Need:** Shape of a file
+  - **First:** gmem `code_outline`
+  - **Fallback:** `rg -n '^[a-z].*\(' <file>`
+
+- **Need:** Where X is defined
+  - **First:** gmem `find_symbol` (`query`, `root`)
+  - **Fallback:** `rg -nw X vm/`
+
+- **Need:** What a file includes
+  - **First:** gmem `code_imports`
+  - **Fallback:** `rg -n '^#include' <file>`
+
+- **Need:** Who calls X, every `memcpy` or cast
+  - **First:** `ast-grep run --lang c -p 'memcpy($D, $S, $N)' vm/`
+  - **Fallback:** `rg -nw X vm/`
+
+- **Need:** A symbol's body
+  - **First:** read its exact line range
+  - **Fallback:** the whole file only if small
+
+- **Need:** A deleted symbol
+  - **First:** `git show origin/<base>:<path>` and the line range
+  - **Fallback:** the diff hunk
 
 The gmem tools index definitions and includes, never uses. An empty result is
 not proof of absence: confirm with `rg`. Pass the worktree as `root`, or the
@@ -78,7 +110,8 @@ line ranges will not match the diff.
 - `malloc` memory: freed on every path, including a `longjmp` from
   `agc_fail` that skips the cleanup, a cancelled task, a detached job and the
   end of the run. libuv requests get `uv_*_req_cleanup`.
-- Type punning goes through `memcpy`. Only `value.c` and the inline constructors and accessors of `value.h` read the value union.
+- Type punning goes through `memcpy`. Only `value.c` and the inline constructors
+  and accessors of `value.h` read the value union.
 
 ### Hostile bytecode (trust model)
 

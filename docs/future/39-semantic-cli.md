@@ -204,11 +204,13 @@ signatures are strings.
   and `"builtin"` (with `help`, and `span` and `module` set to `null`). `module`
   is the module's file name (§39.4).
 - `refs`:
-  `{version, command, query, definition, references: [{kind, function, span}], skipped: [...]}`,
+  `{version, command, query, definition, references: [{kind, function, span}],
+skipped: [...]}`,
   with `definition` a `symbol` match, or `null` for a builtin. `function` is the
   name of the enclosing function, or `null` at the top level.
 - `type-at`:
-  `{version, command, position: {file, line, column}, kind, text, type, span, definition}`.
+  `{version, command, position: {file, line, column}, kind, text, type, span,
+definition}`.
   `kind` is `"expression"` or `"name"`; `definition` is a span or `null`.
 - `skipped`: the roots left out (§39.6), each as `{file, diagnostic}`,
   `diagnostic` being the `--json` diagnostic object.
@@ -222,13 +224,26 @@ fields and cannot drift.
 Agents ask these questions while a program is half edited, so the commands ask
 for as little as they can:
 
-| Command | Needs | Why |
-|---|---|---|
-| `outline` | parse of `FILE` | declarations are syntax |
-| `symbol` | parse and link | declarations, fields and variants are syntax; aliases are resolved by the linker |
-| `refs` on a function, struct, enum or variant | parse and link | the linker resolves every top-level and alias-qualified name |
-| `refs` on a field, the position form on a local | check | `user.email` needs the type of `user` |
-| `type-at` | check of `FILE` and its imports | it is a type |
+- **Command:** `outline`
+  - **Needs:** parse of `FILE`
+  - **Why:** declarations are syntax
+
+- **Command:** `symbol`
+  - **Needs:** parse and link
+  - **Why:** declarations, fields and variants are syntax; aliases are resolved
+    by the linker
+
+- **Command:** `refs` on a function, struct, enum or variant
+  - **Needs:** parse and link
+  - **Why:** the linker resolves every top-level and alias-qualified name
+
+- **Command:** `refs` on a field, the position form on a local
+  - **Needs:** check
+  - **Why:** `user.email` needs the type of `user`
+
+- **Command:** `type-at`
+  - **Needs:** check of `FILE` and its imports
+  - **Why:** it is a type
 
 - **Linking each root on its own.** `symbol` and `refs` link the roots one at a
   time into shared tables (§39.8). A root whose own lex, parse or link fails is
@@ -261,12 +276,26 @@ The commands are a new front-end stage, `src/query.rkt`, so its codes have their
 own prefix, `QUERY-`. They are stable, carry a span, and print on stderr in the
 usual three formats.
 
-| Code | When | Span |
-|---|---|---|
-| `QUERY-USAGE` | a missing or extra argument, an unknown option, a bad `FILE:LINE:COL`, an unreadable path, a `PATH...` with no `*.agc` file | `<arguments>`, line 1, column 1 |
-| `QUERY-NOT-FOUND` | `symbol` or `refs` names nothing in the linked modules or the catalog; the help has "did you mean" | `<arguments>`, line 1, column 1 |
-| `QUERY-AMBIGUOUS-NAME` | `refs` NAME matches more than one declaration; the help lists the candidates | `<arguments>`, line 1, column 1 |
-| `QUERY-NO-EXPRESSION` | `type-at` or `refs` at a position outside the file or not on an expression or name | the position; past the end of a line, the line's end; past the last line, the end of the file |
+- **Code:** `QUERY-USAGE`
+  - **When:** a missing or extra argument, an unknown option, a bad
+    `FILE:LINE:COL`, an unreadable path, a `PATH...` with no `*.agc` file
+  - **Span:** `<arguments>`, line 1, column 1
+
+- **Code:** `QUERY-NOT-FOUND`
+  - **When:** `symbol` or `refs` names nothing in the linked modules or the
+    catalog; the help has "did you mean"
+  - **Span:** `<arguments>`, line 1, column 1
+
+- **Code:** `QUERY-AMBIGUOUS-NAME`
+  - **When:** `refs` NAME matches more than one declaration; the help lists the
+    candidates
+  - **Span:** `<arguments>`, line 1, column 1
+
+- **Code:** `QUERY-NO-EXPRESSION`
+  - **When:** `type-at` or `refs` at a position outside the file or not on an
+    expression or name
+  - **Span:** the position; past the end of a line, the line's end; past the
+    last line, the end of the file
 
 - The `<arguments>` span follows `RUNTIME-BDD-USAGE` (`src/bdd-driver.rkt:20`,
   `:37`): a name typed on the command line has no place in a file. Usage errors

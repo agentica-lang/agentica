@@ -36,6 +36,12 @@ int agc_fs_stat(const char *path, agc_fs_info *info, bool follow);
 int agc_fs_fstat(int fd, agc_fs_info *info);
 int agc_fs_mkdir(const char *path, bool private);
 int agc_fs_unlink(const char *path);
+#ifdef _WIN32
+#define AGC_FS_REMOVE_TOO_DEEP (-1)
+#define AGC_FS_REMOVE_REFUSED (-2)
+int agc_fs_rename_noreplace(const char *from, const char *to);
+int agc_fs_remove_tree(const char *path, char **failed);
+#endif
 int agc_fs_list(const char *path, char **names, size_t *size, size_t *count);
 char *agc_fs_cwd(void);
 char *agc_fs_realpath(const char *path);

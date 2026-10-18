@@ -39,7 +39,7 @@ their own place in the order (step 8).
   tests, PR plan). Steps 1 to 3 (the API, the trie, the unboxed leaves) are
   done.
 - [x] 8d step 3: unboxed leaves for `List[Int]` and `List[Float]`
-  ([§38.6](../future/38-value-representation.md#386-direction-use-the-static-types)
+([§38.6][agentica-link-1]
   item 1), scheduled by the owner on 2026-10-14. The trie leaves and the tail of
   a list whose items are all Ints, or all Floats, hold 8 bytes per item in an
   atomic array that the GC does not scan. The VM decides by itself when it
@@ -62,3 +62,5 @@ their own place in the order (step 8).
 **Done when:** ranges, sets, queues and the faster lists run on both backends,
 and an evaluation round shows agents use ranges without `while` workarounds.
 
+
+[agentica-link-1]: ../future/38-value-representation.md

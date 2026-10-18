@@ -53,6 +53,11 @@ phase 13).
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: each
   `tests/test_<area>.py` file runs as one unittest process.
 - `make test-slow`: the `@slow` cases; CI only.
+- `make tests KIND=fast|files|slow|all` selects a whole group: `files` holds
+  the destructive filesystem cases, which run only in the local Docker sandbox
+  (`DOCKER=1` puts any group there, `WINE=1` runs its Windows checks under
+  Wine) and in the scratch of an ephemeral CI runner. Encapsulation and the
+  Actions route: `references/ci.md` of the development skill.
 - `make vm-task-map`: the timing cases of `Task.map` (`tests/test_vm_task_map.py`), alone like `make vm-latency`.
 - `make smoke`, `make site` (before merging a site change).
 - `make goldens` rewrites the VM goldens, the CLI output golden
@@ -126,9 +131,9 @@ phase 13).
   self-contained and does not read the grammar.
 - A user-visible change adds an entry under `## [Unreleased]` in
   `CHANGELOG.md`; mark a breaking change `**Breaking:**`.
-- Prose wrapping: `site/content/` and `docs/grammar/` keep one line per
-  paragraph or list item (code blocks keep their line breaks); other `docs/`
-  files wrap at 80 characters.
+- Prose wrapping: `site/content/` keeps one line per paragraph or list item.
+  Markdown prose in `docs/` and `.agents/skills/` wraps at 80 characters;
+  code blocks keep their line breaks.
 
 ## Working style
 

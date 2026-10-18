@@ -86,6 +86,10 @@ jobs:
       - run: make vm-test
       - run: gmake fixed-point
       - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_platform_bootstrap.py"
+      - name: Destructive filesystem regressions in Actions-owned scratch
+        run: make test-remove-actions
+        env:
+          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:
@@ -141,6 +145,10 @@ jobs:
       - run: make vm-test
       - run: gmake fixed-point
       - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_platform_bootstrap.py"
+      - name: Destructive filesystem regressions in Actions-owned scratch
+        run: make test-remove-actions
+        env:
+          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:
@@ -207,6 +215,10 @@ jobs:
         run: python -m unittest tests.test_platform_bootstrap
       - run: make fixed-point
       - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_platform_bootstrap.py"
+      - name: Destructive filesystem regressions in Actions-owned scratch
+        run: make test-remove-actions PYTHON=python
+        env:
+          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       - run: ccache --show-stats
       - uses: actions/cache/save@v6
         with:

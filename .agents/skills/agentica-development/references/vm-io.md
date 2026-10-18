@@ -1,20 +1,54 @@
 # VM loop, stdin, stdout and files
 
-The libuv loop, the resource registry, stdin, stdout and stderr, and the `File`, `Dir` and `Path` builtins.
+The libuv loop, the resource registry, stdin, stdout and stderr, and the `File`,
+`Dir` and `Path` builtins.
 
 Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Files
 
-| Path | Owns |
-|---|---|
-| `vm/loop.c` | The libuv event loop and the resource registry. Details below. |
-| `vm/files.c` | The shared `File`, `Dir` and `Path` builtins (Unix and Windows regular files). Details below. |
-| `vm/file_io.c`, `vm/file_io.h` | Synchronous libuv filesystem adapter: UTF-8 paths, binary descriptors, metadata, directory names and canonical paths. Called by existing pool jobs; no VM state. |
-| `vm/file_windows.c` | Windows UTF-8/native path conversion, drive and UNC resolution, and OS error mapping. |
-| `vm/tree.c` | `agc_tree_refused` (the pure test of the names never removed) and `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with `O_NOFOLLOW`, `unlinkat`, an explicit stack of at most 128 levels, no VM state. |
-| `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux a pipe, FIFO, terminal or socket stdin is read on the loop (`watch_stdin`: a pipe or terminal reopened through `/proc/self/fd/N` with `O_NONBLOCK` so the inherited description keeps its flags, a socket read with `MSG_DONTWAIT`; an `agc_poller` and an `external` job), any other stdin by one pool job; the job's `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; Windows uses one blocking `_read` pool job for every stdin kind, including the console; it occupies one pool thread until data or EOF, cancellation detaches it, and process exit does not wait for it (the explicit exception in §14.1) |
-| `vm/output.c` | The writer of stdout and stderr, with a buffer and a waiting queue per stream. |
+- **Path:** `vm/loop.c`
+  - **Owns:** The libuv event loop and the resource registry. Details below.
+
+- **Path:** `vm/files.c`
+  - **Owns:** The shared `File`, `Dir` and `Path` builtins (Unix and Windows
+    regular files). Details below.
+
+- **Path:** `vm/file_io.c`, `vm/file_io.h`
+  - **Owns:** Synchronous libuv filesystem adapter: UTF-8 paths, binary
+    descriptors, metadata, directory names and canonical paths. Called by
+    existing pool jobs; no VM state.
+
+- **Path:** `vm/file_windows.c`
+  - **Owns:** Windows UTF-8/native path conversion, drive and UNC resolution,
+    and OS error mapping.
+
+- **Path:** `vm/tree.c`
+  - **Owns:** `agc_tree_refused` (the pure test of the names never removed) and
+    `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with
+    `O_NOFOLLOW`, `unlinkat`, an explicit stack of at most 128 levels, no VM
+    state.
+
+- **Path:** `vm/input.c`
+  - **Owns:** the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or
+    FAILED): one growing buffer in the runtime shared by `gets`, `read`,
+    `read_bytes` and `eof?`; on Linux a pipe, FIFO, terminal or socket stdin is
+    read on the loop (`watch_stdin`: a pipe or terminal reopened through
+    `/proc/self/fd/N` with `O_NONBLOCK` so the inherited description keeps its
+    flags, a socket read with `MSG_DONTWAIT`; an `agc_poller` and an `external`
+    job), any other stdin by one pool job; the job's `done` half appends the
+    bytes and wakes the readers waiting in the input's FIFO, and the builtin
+    re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each
+    task gets it once (`input_seen`); a `scanned` offset keeps line search
+    linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek;
+    Windows uses one blocking `_read` pool job for every stdin kind, including
+    the console; it occupies one pool thread until data or EOF, cancellation
+    detaches it, and process exit does not wait for it (the explicit exception
+    in §14.1)
+
+- **Path:** `vm/output.c`
+  - **Owns:** The writer of stdout and stderr, with a buffer and a waiting queue
+    per stream.
 
 - `vm/loop.c`
   - the event loop and the resource registry (`docs/vm/10-io-scheduler.md`
@@ -81,7 +115,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         closed error)
     - the one exit path (
       - `docs/vm/10-io-scheduler.md` §10.2.2 "End of run"
-      - `agc_launch_settle` in `vm/launch.c` (then `agc_launch_exit`): `agc_processes_stop` kills the children,
+      - `agc_launch_settle` in `vm/launch.c` (then `agc_launch_exit`):
+        `agc_processes_stop` kills the children,
         `agc_io_children_stopped` acts on a second signal recorded meanwhile,
         `agc_io_goodbye` calls each resource's `goodbye` hook (TCP: one TLS
         `close_notify` by `uv_try_write`), stdout and stderr flush (retried on
@@ -125,7 +160,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     loses only the job in hand, not the rest of the batch
   - jobs readied while it runs wait for the next drain
 - `vm/files.c`
-  - the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, shared with Windows;
+  - the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, shared with
+    Windows;
     `docs/vm/02-reference-behavior.md` §2.8)
     - argument checks in the evaluator's order (
       - for a handle: arguments and timeout, then the lock, then open and mode)
@@ -182,7 +218,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     here, `owns_st` saying which request frees the state (open, close, or a
     handle request after its timeout), `Path.join` and `Path.resolve` as pure
     string code
-  - the owner-only and lock builtins of the BDD driver port (`docs/future/35-self-hosting.md`
+  - the owner-only and lock builtins of the BDD driver port
+    (`docs/future/35-self-hosting.md`
     §35.5, step 7a), all pool jobs in `work`:
     - `File.open(path, "create_private")` is `OP_OPEN_CREATE`, which
       `open_for` handles first with `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW`
@@ -192,7 +229,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     - `Dir.mkdir_private` is one `mkdir(0700)` (`OP_MKDIR_PRIVATE`, the
       `FS_MKDIR` error)
     - `File.try_lock` (`OP_TRY_LOCK`) is `flock(LOCK_EX | LOCK_NB)` on the
-      handle's `st->fd` after the handle's own lock wait (`blocked`); `open_state`
+      handle's `st->fd` after the handle's own lock wait (`blocked`);
+`open_state`
       is `usable` without the direction check; a handle with a poller (pipe,
       FIFO) is refused at once, and any other kind that `fstat` in the job says
       is not a regular file (a device) is `FS_NOT_LOCKABLE`; `done` returns
@@ -202,10 +240,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       negative returns `AGC_TREE_TOO_DEEP` and `AGC_TREE_REFUSED` become
       `FS_TREE_DEEP` and `FS_REFUSED`; a failure inside the tree comes with the
       path of the failed entry (`failed`), which replaces `o->path` in the error
-    - `Path.rename` (`OP_RENAME`): `renameat2` with `RENAME_NOREPLACE`;
-      `files.c` defines `_GNU_SOURCE` for it; the second path is `op.to`; the
-      error is `FS_RENAME` with both paths
-  - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_fs_realpath`, the job
+    - `Path.rename` (`OP_RENAME`): Unix uses `renameat2` with
+      `RENAME_NOREPLACE` (macOS: `renameatx_np` with `RENAME_EXCL`); Windows
+      uses `MoveFileW`, which fails if the destination exists; there is no
+      cross-volume copy fallback. The second path is `op.to`; the error is
+      `FS_RENAME` with both paths
+  - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_fs_realpath`, the
+    job
     has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`, `filesystem:
     cannot resolve path` with the path and the OS error text, and the result is
     decoded with `lossy`, one U+FFFD per bad byte)
@@ -312,9 +353,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Gotchas
 
-- Stdout and stderr: `vm/output.c` writes them, with one exception: `vm/process.c` forwards the stderr of a child process (`Process.spawn`) to `err.file` with a blocking `fwrite` in its read callback. That text is not in the buffer or in the order of the calls, and it can block the loop when stderr is stuck. `agc_vm_init` leaves
-  both on the blocking `FILE *` it was given (`base` is null), so the C tests and
-  the fuzzer never depend on the loop; `agc_launch_vm` (`vm/launch.c`) calls `agc_output_open`
+- Stdout and stderr: `vm/output.c` writes them, with one exception:
+  `vm/process.c` forwards the stderr of a child process (`Process.spawn`) to
+  `err.file` with a blocking `fwrite` in its read callback. That text is not in
+  the buffer or in the order of the calls, and it can block the loop when stderr
+  is stuck. `agc_vm_init` leaves
+  both on the blocking `FILE *` it was given (`base` is null), so the C tests
+and
+  the fuzzer never depend on the loop; `agc_launch_vm` (`vm/launch.c`) calls
+`agc_output_open`
   after `agc_input_open`. Never `fwrite` to `vm->rt->out.file` or
   `err.file` from builtin code: use `agc_write`, which parks the task and
   expects to be run again, so a builtin must work out its text before the
@@ -323,7 +370,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   VM itself prints goes through `agc_notice_begin` and `agc_notice_end`.
 - Stdin and arguments: only `vm/input.c` reads fd 0; `agc_vm_init` leaves
   the input closed (`fd = -1`, always EOF) and `System.args` empty, and
-  `agc_launch_vm` opens fd 0 (not for the front end of the single binary, which reads nothing) and fills `vm->rt->args`, so the C tests and the
+  `agc_launch_vm` opens fd 0 (not for the front end of the single binary, which
+reads nothing) and fills `vm->rt->args`, so the C tests and the
   fuzzer never block on stdin. Stdin text decodes each invalid byte to
   U+FFFD (Racket ports); arguments decode each invalid byte to `?` and an
   incomplete sequence at the end to one `?` (Racket in a UTF-8 locale,
@@ -347,11 +395,13 @@ without locking the range again. Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`
 tests and portable bootstrap smoke cover read-handle locking, repeat calls,
 contention and close/reacquire.
 
-Windows special file streams, rename and
-`Path.remove` are not enabled by this increment. Removal returns an error
-without changing the path. Keep it disabled until native no-follow traversal,
-raw root/dot validation and junction tests are implemented; normalizing `.`
-before checking it would erase the evidence needed to refuse it.
+Windows special file streams and `Path.remove` are not enabled by this
+increment. Removal returns an error without changing the path. Keep it disabled
+until native no-follow traversal, raw root/dot validation and junction tests are
+implemented; normalizing `.` before checking it would erase the evidence needed
+to refuse it. Windows `Path.rename` uses `MoveFileW`, which is atomic on one
+volume and fails rather than replacing an existing destination; it has no
+copy/delete fallback.
 
 `vm/tests/files_test.c` exercises real builtin calls without needing a
 self-hosted compiler: text and all-byte round trips, append/flush/close,

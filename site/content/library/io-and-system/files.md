@@ -341,7 +341,7 @@ false
 Path.remove(path: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Deletes what is at the path: a file, a symbolic link, or a directory with everything in it. It never follows a symbolic link. A link given as the path is deleted itself, a link inside a directory is deleted as a link, and what it names is left alone. A path that is not there is `ok()`. It refuses `/`, `.` and `..` (and a path that ends in one of them, such as `dir/..`), and a tree more than 128 levels deep, which it leaves partly deleted. A link with a trailing slash (`"link/"`) is an error, and so is a path under a file (`"file/child"`): both are `Not a directory`, on purpose, so that `"link/"` never reports `ok()`. When a call fails, what it already deleted stays deleted, and the error names the path or, for a failure inside the tree, the entry that failed, with the system error. It deletes across mount points, as `rm -rf` does. A timeout gives an error but does not stop a removal that has started: it runs on until it ends. VM only.
+Deletes what is at the path: a file, a symbolic link, or a directory with everything in it. It never follows a symbolic link. A link given as the path is deleted itself, a link inside a directory is deleted as a link, and what it names is left alone. A path that is not there is `ok()`. It refuses a filesystem root, a trailing separator, `.` or `..` (also as the final component of `dir/..`), and a tree more than 128 levels deep, which it leaves partly deleted. A link with a trailing separator (`"link/"`) is an error, and so is a path under a file (`"file/child"`): both are `Not a directory`, on purpose, so that `"link/"` never reports `ok()`. When a call fails, what it already deleted stays deleted, and the error names the path or, for a failure inside the tree, the entry that failed, with the system error. Unix removal crosses mount points as `rm -rf` does; on Windows, reparse-point entries such as junctions are removed themselves and not traversed. Windows drive and UNC paths use native syntax, and drive or share roots are refused. To avoid Win32 path aliases, Windows also refuses input paths with alternate-data-stream syntax or a component ending in a dot or space. A timeout gives an error but does not stop a removal that has started: it runs on until it ends. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -356,7 +356,7 @@ end
 Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Renames a file, a symbolic link or a directory to a path that does not exist yet, in one step. It never replaces anything: when `to` exists, even as an empty directory, the call is an error and nothing changes, so two programs that race for a name have exactly one winner. A symbolic link is moved as a link, and what it names is left alone. Both paths must be on the same file system, and a file system that cannot refuse to replace (some network file systems) gives an error. VM only.
+Renames a file, a symbolic link or a directory to a path that does not exist yet, in one step. It never replaces anything: when `to` exists, even as an empty directory, the call is an error and nothing changes, so two programs that race for a name have exactly one winner. A symbolic link is moved as a link, and what it names is left alone. Both paths must be on the same file system; there is no copy/delete fallback across volumes. Linux, macOS and Windows use native no-replace operations. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void

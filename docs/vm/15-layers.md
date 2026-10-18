@@ -36,12 +36,31 @@ before it moved; the header split moved no line of a `.c` file except the
 
 ### 15.1 Layers
 
-| Layer | Files | May use |
-|---|---|---|
-| **Core** | `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
-| **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `tree.c`, `stream.c`, `duplex.c`, `process.c`, `system.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
-| **Adapters** | `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c` (`http_parse.h`), `file_io.c` and `file_windows.c` (`file_io.h`) | their own header, their library, and from `value.h` only the memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`, `agc_size_mul`, `agc_out_of_memory`) |
-| **Driver** (not a layer: it wires them) | `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6 V2), `fuzz.c`, `fuzz_main.c` | everything |
+- **Layer:** **Core**
+  - **Files:** `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`,
+    `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`,
+    `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`,
+    `loader.c`, `builtins.c`, `diag.c`, `trace.c`
+  - **May use:** `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv
+
+- **Layer:** **Services**
+  - **Files:** `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`,
+    `tree.c`, `stream.c`, `duplex.c`, `process.c`, `system.c`, `tcp.c`,
+    `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c`
+  - **May use:** `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter
+    headers, libuv, yyjson (`json.c` only)
+
+- **Layer:** **Adapters**
+  - **Files:** `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c`
+    (`http_parse.h`), `file_io.c` and `file_windows.c` (`file_io.h`)
+  - **May use:** their own header, their library, and from `value.h` only the
+    memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`,
+    `agc_size_mul`, `agc_out_of_memory`)
+
+- **Layer:** **Driver** (not a layer: it wires them)
+  - **Files:** `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6 V2),
+    `fuzz.c`, `fuzz_main.c`
+  - **May use:** everything
 
 `vm/tests/*.c` may use everything. `trace.h` (tracing; `agc_trace_emit` is used
 by `http_client.c`, `process.c` and `tcp.c`) is shared by every layer but the
@@ -115,18 +134,79 @@ The port is what a service needs from the core to do I/O and to wait, as §14
 allows it. It existed before PR 1, except `agc_task_join` (V5) and the resource
 field of V3, which PR 1 added; it has its own header, `port.h`.
 
-| Job | Functions |
-|---|---|
-| Park and wake a task | `agc_task_park` (`task.c:65`), `agc_task_enqueue` (`task.c:31`), `agc_task_wake` (`task.c:25`), `agc_task_wake_all` (`task.c:40`); `agc_task_stepper` (`task.c:70`) for a builtin that calls its block and also parks between the calls: it installs an `agc_stepper` on the task, and the interpreter then asks its `agc_step_fn` what to do next (call the block, park, or end), so no C code calls the interpreter (`docs/vm/03-ir-and-bytecode.md` §4.3, `File.each_line`) |
-| Submit a job (loop or pool), with its timeout | `agc_io_start` with an `agc_io_kind` (`work`, `done`, `expired`, `drop`, `cancel`), `agc_io_ready`, `agc_io_detached` (its context is the handle a close job holds, or void), `agc_io_start_then` (a pool job's `more` step, which may keep it waiting on the loop), `agc_io_extend` (20c: restart the job's own timer, for `read_request`'s deadline from the first byte) |
-| Wait on a descriptor on the loop | `agc_poller_open`, `agc_poller_wait`, `agc_poller_pause`, `agc_poller_close` (a `uv_poll_t` that owns its descriptor; `files.c`, and `input.c` in the core) |
-| Set a timer | no own function: a timer is the job's `timeout_ms` (§14.2); `Task.sleep` is a job with no work. The three other timers of §14.2 use libuv through `agc_io_uv` and stay exceptions |
-| Register, own and close a handle | `agc_register`, `agc_own` with an `agc_close_fn` (it takes the task that ends, which only the file close uses) and `agc_disown` (a server takes its listener off its owner's list), `agc_unregister` (it also takes the handle off its owner's list), `agc_resource_id`; the handle's lock FIFO: `agc_handle_wait`; the resource's `goodbye` hook (a release-shaped function the exit path calls through `agc_io_goodbye`; `tcp.c` sets it for TLS `close_notify`); the V3 field `keep_detached` (`process.c` sets it on a process's resource, so `discard` in `loop.c` does not release the process when a detached job's result is dropped) |
-| Reach the loop and signals | `agc_io_uv` (`loop.c:488`), `agc_io_block_stop` (around a fork or a thread start). The list of stop signals is static in `loop.c`: since the blocked-read fix no service reads it (`process.c` has no signal watchers) |
-| Spawn, wait for, cancel and observe tasks (for `Test.run`) | `agc_task_spawn`, `agc_task_spawn_owning` (24b: spawn a task and give it a handle that the caller owns; `Task.spawn_owning` and `HttpWire.spawn` call it), `agc_task_spawn_seeded` (spawn under a parent with the caller's random seed; every builtin spawn uses it), `agc_task_owns` (whether the calling task owns a handle value), `agc_task_close_done` (a file close job of an ended task has finished), `agc_task_cancel`, `agc_task_observe`, `agc_report_unobserved`, `agc_task_join` (V5) |
-| Task groups (20c, for `http_server.c`) | `agc_task_group` (a parent node that never runs), `agc_task_spawn_in` (spawn under a given parent), `agc_task_cancel` to drop a subtree (every cancelled task closes the handles it owns as it ends, so there is no separate drop), and three task fields the service sets on its own tasks: the `end` hook with `end_data` (`agc_end_fn`, called once when the task ends in any way) and `hidden` (no await can observe the task, so its unobserved crashes keep one entry per test, §10.2.1) |
-| Charge, fail, write | `agc_charge`, `agc_charge_bytes` (`interp.c:80`, `86`), `agc_value_units`, `agc_fail`, `agc_fail_text`, `agc_exit`, `agc_write`, `agc_output_waiting`, `agc_drain`, `agc_flush` (`agc_write` takes the `agc_output` of stdout or stderr, the text and a flag for a trailing newline, and returns false when the task must park and retry; `agc_output_waiting` tells a builtin that its text already waits in the stream's FIFO, so it passes no text) |
-| Program lookups | `agc_builtin_struct` (`builtins.c:438`) |
+- **Job:** Park and wake a task
+  - **Functions:** `agc_task_park` (`task.c:65`), `agc_task_enqueue`
+    (`task.c:31`), `agc_task_wake` (`task.c:25`), `agc_task_wake_all`
+    (`task.c:40`); `agc_task_stepper` (`task.c:70`) for a builtin that calls its
+    block and also parks between the calls: it installs an `agc_stepper` on the
+    task, and the interpreter then asks its `agc_step_fn` what to do next (call
+    the block, park, or end), so no C code calls the interpreter
+    (`docs/vm/03-ir-and-bytecode.md` §4.3, `File.each_line`)
+
+- **Job:** Submit a job (loop or pool), with its timeout
+  - **Functions:** `agc_io_start` with an `agc_io_kind` (`work`, `done`,
+    `expired`, `drop`, `cancel`), `agc_io_ready`, `agc_io_detached` (its context
+    is the handle a close job holds, or void), `agc_io_start_then` (a pool job's
+    `more` step, which may keep it waiting on the loop), `agc_io_extend` (20c:
+    restart the job's own timer, for `read_request`'s deadline from the first
+    byte)
+
+- **Job:** Wait on a descriptor on the loop
+  - **Functions:** `agc_poller_open`, `agc_poller_wait`, `agc_poller_pause`,
+    `agc_poller_close` (a `uv_poll_t` that owns its descriptor; `files.c`, and
+    `input.c` in the core)
+
+- **Job:** Set a timer
+  - **Functions:** no own function: a timer is the job's `timeout_ms` (§14.2);
+    `Task.sleep` is a job with no work. The three other timers of §14.2 use
+    libuv through `agc_io_uv` and stay exceptions
+
+- **Job:** Register, own and close a handle
+  - **Functions:** `agc_register`, `agc_own` with an `agc_close_fn` (it takes
+    the task that ends, which only the file close uses) and `agc_disown` (a
+    server takes its listener off its owner's list), `agc_unregister` (it also
+    takes the handle off its owner's list), `agc_resource_id`; the handle's lock
+    FIFO: `agc_handle_wait`; the resource's `goodbye` hook (a release-shaped
+    function the exit path calls through `agc_io_goodbye`; `tcp.c` sets it for
+    TLS `close_notify`); the V3 field `keep_detached` (`process.c` sets it on a
+    process's resource, so `discard` in `loop.c` does not release the process
+    when a detached job's result is dropped)
+
+- **Job:** Reach the loop and signals
+  - **Functions:** `agc_io_uv` (`loop.c:488`), `agc_io_block_stop` (around a
+    fork or a thread start). The list of stop signals is static in `loop.c`:
+    since the blocked-read fix no service reads it (`process.c` has no signal
+    watchers)
+
+- **Job:** Spawn, wait for, cancel and observe tasks (for `Test.run`)
+  - **Functions:** `agc_task_spawn`, `agc_task_spawn_owning` (24b: spawn a task
+    and give it a handle that the caller owns; `Task.spawn_owning` and
+    `HttpWire.spawn` call it), `agc_task_spawn_seeded` (spawn under a parent
+    with the caller's random seed; every builtin spawn uses it), `agc_task_owns`
+    (whether the calling task owns a handle value), `agc_task_close_done` (a
+    file close job of an ended task has finished), `agc_task_cancel`,
+    `agc_task_observe`, `agc_report_unobserved`, `agc_task_join` (V5)
+
+- **Job:** Task groups (20c, for `http_server.c`)
+  - **Functions:** `agc_task_group` (a parent node that never runs),
+    `agc_task_spawn_in` (spawn under a given parent), `agc_task_cancel` to drop
+    a subtree (every cancelled task closes the handles it owns as it ends, so
+    there is no separate drop), and three task fields the service sets on its
+    own tasks: the `end` hook with `end_data` (`agc_end_fn`, called once when
+    the task ends in any way) and `hidden` (no await can observe the task, so
+    its unobserved crashes keep one entry per test, §10.2.1)
+
+- **Job:** Charge, fail, write
+  - **Functions:** `agc_charge`, `agc_charge_bytes` (`interp.c:80`, `86`),
+    `agc_value_units`, `agc_fail`, `agc_fail_text`, `agc_exit`, `agc_write`,
+    `agc_output_waiting`, `agc_drain`, `agc_flush` (`agc_write` takes the
+    `agc_output` of stdout or stderr, the text and a flag for a trailing
+    newline, and returns false when the task must park and retry;
+    `agc_output_waiting` tells a builtin that its text already waits in the
+    stream's FIFO, so it passes no text)
+
+- **Job:** Program lookups
+  - **Functions:** `agc_builtin_struct` (`builtins.c:438`)
 
 Behind the port sit the two queues of
 [§16.4](16-architecture.md#164-two-directions): waking and enqueueing a task is
@@ -294,7 +374,8 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
 `http_fields.h` include `services.h`; `net.h` also includes `tls.h`. `tls.h`,
 `http_parse.h` and `trace.h` keep their content. What named `vm/agc.h` now names
 the header that holds the item: `tests/test_frontend_bytecode.py` reads
-`agc_opcode` from `value.h`, `unicode_data.c` includes `core.h`, and the development skill lists the
+`agc_opcode` from `value.h`, `unicode_data.c` includes `core.h`, and the
+development skill lists the
 layers.
 
 ### 15.5 The layer check
@@ -317,7 +398,8 @@ if not. The script fails when:
 5. a third-party header is included outside its place: `<gc.h>` only in
    `value.c`; `<openssl/...>` only in `tls_openssl.c`; `<picohttpparser.h>` only
    in `http_pico.c`; `"yyjson.h"` only in `json.c`; `<uv.h>` only in `loop.c`
-   and the stream services (`stream.c`, `duplex.c`, `process.c`, `system.c`, `tcp.c`,
+   and the stream services (`stream.c`, `duplex.c`, `process.c`, `system.c`,
+`tcp.c`,
    `http_client.c`). `input.c` and `files.c` put stdin, FIFOs and character
    devices on loop handles through `agc_poller_*` (§15.2) and include no libuv
    header;
@@ -369,23 +451,140 @@ done; their lines cite where the code was before it moved. Each row is a place
 where the core names a service or service data, or a layer reaches past the
 port.
 
-| # | Where | What | Fix |
-|---|---|---|---|
-| V1 | `text.c:149`, `281`, `286`; `equal.c:66` | `to_s`, `inspect` and `==` of a `Json` value call `agc_json_encode` in `json.c` (a service) | **Move (done).** The Json value is a core type (`AGC_T_JSON`), so its code is in a new core file, `json_value.c`: the writer (`agc_json_put`, the string and scalar writers, `agc_json_encode`), `agc_json_from` and its frame walker, `agc_json_leaf`, `agc_json_number`, `agc_json_pair`, `agc_json_object`, `agc_json_array`, `agc_json_find`, `agc_json_ascii`, `agc_json_grow`, and the node code shared with the parser: `agc_json_container`, `agc_json_store` and `agc_json_finish` (which sorts the members by key bytes and drops repeated keys), the former statics `container`, `store` and `finish`. The parser's `leaf` is `agc_json_leaf`. `json.c` keeps the yyjson parser (`convert`, `agc_json_parse`), `agc_json_status_message`, `agc_json_to_float` and the `JSON.*` builtins; `agc_json_decode` and `agc_json_schema` stay in `json_typed.c` |
-| V2 | `builtins.c:433-444` | the builtin table list names every service's table (`agc_file_builtins`, `agc_tcp_builtins`, `agc_test_builtins`, ...) | **Move (done)** of the list, in the same order (`agc_find_builtin` returns the first match), to a new driver file, `builtin_tables.c`: `agc_builtin_tables` and `agc_builtin_table_count`. `agc_find_builtin` stays in `builtins.c` (`builtins.c:428`) and reads the list through `core.h`. `builtins.c` exports its own table as `agc_core_builtins` with `agc_core_builtin_count`, like the other libraries. The list is the one place that wires the services in, like `main.c` |
-| V3 | `loop.c:284-290` | `discard` (a detached job's result) skipped `AGC_T_PROCESS` by name: a process rule in the loop | **Port data (done).** The tag check became a new `agc_resource` field, `keep_detached`, that `process.c` sets when it registers the process (`process.c:781`); `discard` reads the field, not the tag (`loop.c:287`) |
-| V4 | `task.c:461`, `505` | `await_task` and `builtin_unobserved_crash` build their error with `agc_error_value`, which was defined in `stream.c` (a service) | **Move (done)** of `agc_error_value` (four lines) to `value.c`, next to `agc_make_string` |
-| V5 | `testing.c:276` | `Test.run` had a `wait_for` that set `vm->task->awaiting`, put the task on `target->waiters` and parked: the waiting half of `await_task`, without its crashed and cancelled branches | **Port function (done)** `bool agc_task_join(agc_vm *vm, agc_task *target)` in `task.c:443`: if the target is done, clear `awaiting` and return false; else set `awaiting`, enqueue the task on the target's waiters, park (with retry) and return true. `wait_for` is gone: `Test.run` calls `agc_task_join`, and `await_task` (`task.c:452`) calls it and, after false, handles the result (crashed, cancelled, value) as before |
-| V6 | `testing.c:186-206` | `cancel_leftovers`, `unobserved_of` and `observe_test` walk `caller->children` and `vm->crashes` and read `t->test` | **Accepted for now.** Reads only, and every change goes through `agc_task_cancel` and `agc_task_observe`. 24b's one hand-off form may give a task group to replace them; if it does, they move behind the port then |
-| V7 | `loop.c` (`agc_owned_of`) | the core reads the `state` field of `agc_socket`, `agc_listener` and `agc_process` | **Accepted**: those handle values are declared in `value.h`, since ownership (§14.5) must find a value's resource. As built in 24b, its callers are `agc_task_spawn_owning` in `task.c` and `discard` in `loop.c` |
-| V8 | `value.h` (`agc_tag` and the inline constructors and `agc_as_*`), `value.c` (the service resources'); `text.c:105-112` | the tag enum, constructors, `agc_as_*` and the printed names (`<Socket>`, `<Process>`, ...) of service values live in the core | **Accepted**: the tag set is one closed enum that the loader, `text.c` and `equal.c` need; no service code is called |
-| V9 | `port.h` (`struct agc_task`, `struct agc_vm`, `agc_runtime`), `task.c:409` | service state in core structs: `agc_task`'s `test`, `note` and `test_run` (a spawned task inherits `test`), `agc_vm.process_guard`, and the `allow_run`, `drop_uring_env` and `no_files` settings | **Accepted**: opaque pointers and settings, no calls. The driver sets the settings |
-| V10 | `output.c:78`, `output.c:528`, `input.c:268`, `input.c:375` | 25b's `mid_line` and `agc_write_record`, the reserved stdin and `agc_protocol_line` (core code that exists for `testing.c`) | **Removed (done, 25c, row 7.2.1a):** the child protocol moved to fd 3 (`vm/duplex.c`); `mid_line`, `agc_write_record`, the reserved stdin and `agc_protocol_line` are gone |
-| V11 | `main.c:189`, `385-392`, `482`, `488` (now `agentica.c` and `launch.c`) | the driver calls `agc_files_init`, `agc_files_close`, `agc_parent_take`, `agc_tls_version` and `agc_json_version` | **Accepted**: `agentica.c` is the driver |
-| V12 | `http_body.c:142-146` | an adapter calls `agc_size_mul` and `agc_out_of_memory` | **Accepted**: memory only, so out of memory keeps its exit code (§6.3); rule 8 of §15.5 keeps it to memory |
-| V13 | `loop.c` (`agc_owned_of`), 20c | the core reads the `state` field of `agc_http_server` too, so a server passed to `Task.spawn_owning` can be handed over | **Accepted with V7**, for the same reason. 24b kept the lookup in `agc_task_spawn_owning`; the fix, if it is ever wanted, is a resource found through a field the service sets at `agc_register`, not a tag list in the core |
-| V14 | `task.c:264` (`quiet_slot`), 20c | the crash list reads `hidden` and `t->test` to keep one entry per test for HTTP connection tasks | **Accepted with V6**: a flag the service sets, read by the core; no service call |
-| V15 | `json_value.c` (`agc_json_encode`) | found by PR 1: once V1 moved the Json writer into the core, it counted the characters of its output with `agc_utf8_count`, which `strings.c` (a service) defined | **Move (done)** of `agc_utf8_count` (four lines) to `value.c`, with the other UTF-8 functions; `strings.c`, `json.c` and `json_typed.c` call it from there. It is in `value.h`, not `services.h` (§15.4) |
+- **#:** V1
+  - **Where:** `text.c:149`, `281`, `286`; `equal.c:66`
+  - **What:** `to_s`, `inspect` and `==` of a `Json` value call
+    `agc_json_encode` in `json.c` (a service)
+  - **Fix:** **Move (done).** The Json value is a core type (`AGC_T_JSON`), so
+    its code is in a new core file, `json_value.c`: the writer (`agc_json_put`,
+    the string and scalar writers, `agc_json_encode`), `agc_json_from` and its
+    frame walker, `agc_json_leaf`, `agc_json_number`, `agc_json_pair`,
+    `agc_json_object`, `agc_json_array`, `agc_json_find`, `agc_json_ascii`,
+    `agc_json_grow`, and the node code shared with the parser:
+    `agc_json_container`, `agc_json_store` and `agc_json_finish` (which sorts
+    the members by key bytes and drops repeated keys), the former statics
+    `container`, `store` and `finish`. The parser's `leaf` is `agc_json_leaf`.
+    `json.c` keeps the yyjson parser (`convert`, `agc_json_parse`),
+    `agc_json_status_message`, `agc_json_to_float` and the `JSON.*` builtins;
+    `agc_json_decode` and `agc_json_schema` stay in `json_typed.c`
+
+- **#:** V2
+  - **Where:** `builtins.c:433-444`
+  - **What:** the builtin table list names every service's table
+    (`agc_file_builtins`, `agc_tcp_builtins`, `agc_test_builtins`, ...)
+  - **Fix:** **Move (done)** of the list, in the same order (`agc_find_builtin`
+    returns the first match), to a new driver file, `builtin_tables.c`:
+    `agc_builtin_tables` and `agc_builtin_table_count`. `agc_find_builtin` stays
+    in `builtins.c` (`builtins.c:428`) and reads the list through `core.h`.
+    `builtins.c` exports its own table as `agc_core_builtins` with
+    `agc_core_builtin_count`, like the other libraries. The list is the one
+    place that wires the services in, like `main.c`
+
+- **#:** V3
+  - **Where:** `loop.c:284-290`
+  - **What:** `discard` (a detached job's result) skipped `AGC_T_PROCESS` by
+    name: a process rule in the loop
+  - **Fix:** **Port data (done).** The tag check became a new `agc_resource`
+    field, `keep_detached`, that `process.c` sets when it registers the process
+    (`process.c:781`); `discard` reads the field, not the tag (`loop.c:287`)
+
+- **#:** V4
+  - **Where:** `task.c:461`, `505`
+  - **What:** `await_task` and `builtin_unobserved_crash` build their error with
+    `agc_error_value`, which was defined in `stream.c` (a service)
+  - **Fix:** **Move (done)** of `agc_error_value` (four lines) to `value.c`,
+    next to `agc_make_string`
+
+- **#:** V5
+  - **Where:** `testing.c:276`
+  - **What:** `Test.run` had a `wait_for` that set `vm->task->awaiting`, put the
+    task on `target->waiters` and parked: the waiting half of `await_task`,
+    without its crashed and cancelled branches
+  - **Fix:** **Port function (done)** `bool agc_task_join(agc_vm *vm, agc_task
+    *target)` in `task.c:443`: if the target is done, clear `awaiting` and
+    return false; else set `awaiting`, enqueue the task on the target's waiters,
+    park (with retry) and return true. `wait_for` is gone: `Test.run` calls
+    `agc_task_join`, and `await_task` (`task.c:452`) calls it and, after false,
+    handles the result (crashed, cancelled, value) as before
+
+- **#:** V6
+  - **Where:** `testing.c:186-206`
+  - **What:** `cancel_leftovers`, `unobserved_of` and `observe_test` walk
+    `caller->children` and `vm->crashes` and read `t->test`
+  - **Fix:** **Accepted for now.** Reads only, and every change goes through
+    `agc_task_cancel` and `agc_task_observe`. 24b's one hand-off form may give a
+    task group to replace them; if it does, they move behind the port then
+
+- **#:** V7
+  - **Where:** `loop.c` (`agc_owned_of`)
+  - **What:** the core reads the `state` field of `agc_socket`, `agc_listener`
+    and `agc_process`
+  - **Fix:** **Accepted**: those handle values are declared in `value.h`, since
+    ownership (§14.5) must find a value's resource. As built in 24b, its callers
+    are `agc_task_spawn_owning` in `task.c` and `discard` in `loop.c`
+
+- **#:** V8
+  - **Where:** `value.h` (`agc_tag` and the inline constructors and `agc_as_*`),
+    `value.c` (the service resources'); `text.c:105-112`
+  - **What:** the tag enum, constructors, `agc_as_*` and the printed names
+    (`<Socket>`, `<Process>`, ...) of service values live in the core
+  - **Fix:** **Accepted**: the tag set is one closed enum that the loader,
+    `text.c` and `equal.c` need; no service code is called
+
+- **#:** V9
+  - **Where:** `port.h` (`struct agc_task`, `struct agc_vm`, `agc_runtime`),
+    `task.c:409`
+  - **What:** service state in core structs: `agc_task`'s `test`, `note` and
+    `test_run` (a spawned task inherits `test`), `agc_vm.process_guard`, and the
+    `allow_run`, `drop_uring_env` and `no_files` settings
+  - **Fix:** **Accepted**: opaque pointers and settings, no calls. The driver
+    sets the settings
+
+- **#:** V10
+  - **Where:** `output.c:78`, `output.c:528`, `input.c:268`, `input.c:375`
+  - **What:** 25b's `mid_line` and `agc_write_record`, the reserved stdin and
+    `agc_protocol_line` (core code that exists for `testing.c`)
+  - **Fix:** **Removed (done, 25c, row 7.2.1a):** the child protocol moved to fd
+    3 (`vm/duplex.c`); `mid_line`, `agc_write_record`, the reserved stdin and
+    `agc_protocol_line` are gone
+
+- **#:** V11
+  - **Where:** `main.c:189`, `385-392`, `482`, `488` (now `agentica.c` and
+    `launch.c`)
+  - **What:** the driver calls `agc_files_init`, `agc_files_close`,
+    `agc_parent_take`, `agc_tls_version` and `agc_json_version`
+  - **Fix:** **Accepted**: `agentica.c` is the driver
+
+- **#:** V12
+  - **Where:** `http_body.c:142-146`
+  - **What:** an adapter calls `agc_size_mul` and `agc_out_of_memory`
+  - **Fix:** **Accepted**: memory only, so out of memory keeps its exit code
+    (§6.3); rule 8 of §15.5 keeps it to memory
+
+- **#:** V13
+  - **Where:** `loop.c` (`agc_owned_of`), 20c
+  - **What:** the core reads the `state` field of `agc_http_server` too, so a
+    server passed to `Task.spawn_owning` can be handed over
+  - **Fix:** **Accepted with V7**, for the same reason. 24b kept the lookup in
+    `agc_task_spawn_owning`; the fix, if it is ever wanted, is a resource found
+    through a field the service sets at `agc_register`, not a tag list in the
+    core
+
+- **#:** V14
+  - **Where:** `task.c:264` (`quiet_slot`), 20c
+  - **What:** the crash list reads `hidden` and `t->test` to keep one entry per
+    test for HTTP connection tasks
+  - **Fix:** **Accepted with V6**: a flag the service sets, read by the core; no
+    service call
+
+- **#:** V15
+  - **Where:** `json_value.c` (`agc_json_encode`)
+  - **What:** found by PR 1: once V1 moved the Json writer into the core, it
+    counted the characters of its output with `agc_utf8_count`, which
+    `strings.c` (a service) defined
+  - **Fix:** **Move (done)** of `agc_utf8_count` (four lines) to `value.c`, with
+    the other UTF-8 functions; `strings.c`, `json.c` and `json_typed.c` call it
+    from there. It is in `value.h`, not `services.h` (§15.4)
 
 Not violations: `loader.c:460` calls `agc_find_builtin` (core); the core's other
 cross-file calls stay inside the core; the services call the core only through

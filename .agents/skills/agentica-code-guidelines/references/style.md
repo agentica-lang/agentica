@@ -1,10 +1,15 @@
 # Style rules with examples
 
-Read this when a rule in SKILL.md needs a bad/good pair, or a review needs an example to quote. Every example here was run with the release binary: a `bad` one is accepted by the checker unless its first line names a diagnostic, and then it is refused with that code. A `bad` one with no code is bad style only; the checker does not see it.
+Read this when a rule in SKILL.md needs a bad/good pair, or a review needs an
+example to quote. Every example here was run with the release binary: a `bad`
+one is accepted by the checker unless its first line names a diagnostic, and
+then it is refused with that code. A `bad` one with no code is bad style only;
+the checker does not see it.
 
 ## Layout
 
-Wrap a long call one item per line with a trailing comma, and a long expression in parentheses.
+Wrap a long call one item per line with a trailing comma, and a long expression
+in parentheses.
 
 ```ruby
 # bad
@@ -93,7 +98,8 @@ def main() -> Void
 end
 ```
 
-Say it positively. Put the positive branch first and never combine a negated test with `else`.
+Say it positively. Put the positive branch first and never combine a negated
+test with `else`.
 
 ```ruby
 # bad
@@ -184,7 +190,8 @@ end
 
 ## Functions
 
-Group many parameters in a struct, and use guard returns so the main path stays flat.
+Group many parameters in a struct, and use guard returns so the main path stays
+flat.
 
 ```ruby
 # bad
@@ -320,7 +327,8 @@ end
 
 ## Pipes
 
-Three or more steps on one value: a chain in parentheses, the value first (a name, a literal or the call that makes it), one step per line.
+Three or more steps on one value: a chain in parentheses, the value first (a
+name, a literal or the call that makes it), one step per line.
 
 ```ruby
 # bad
@@ -440,7 +448,8 @@ end
 
 ## case and if
 
-List every variant of an enum and leave out `_`: a new variant then fails the check where it must be handled.
+List every variant of an enum and leave out `_`: a new variant then fails the
+check where it must be handled.
 
 ```ruby
 # bad

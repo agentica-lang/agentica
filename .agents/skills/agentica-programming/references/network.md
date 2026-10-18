@@ -72,11 +72,15 @@ HTTP.request(client: HttpClient, method: String, url: String, headers: List[Head
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 ```
 
-| Record | Fields |
-| --- | --- |
-| Header | name: String, value: String |
-| HttpResponse | status: Int, headers: List[Header], body: String |
-| HttpClientOptions | timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String |
+- **Record:** Header
+  - **Fields:** name: String, value: String
+
+- **Record:** HttpResponse
+  - **Fields:** status: Int, headers: List[Header], body: String
+
+- **Record:** HttpClientOptions
+  - **Fields:** timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int,
+    max_body_bytes: Int, ca_file: String
 
 Every call is whole: it returns after the whole response body was read, and
 the body must be valid UTF-8 (at most `max_body_bytes`). `client_options()`
@@ -118,10 +122,13 @@ HTTP.wait(server: HttpServer) -> Result[Void]
 HTTP.close_server(server: HttpServer) -> Void
 ```
 
-| Record | Fields |
-| --- | --- |
-| HttpRequest | method: String, target: String, path: String, headers: List[Header], body: String |
-| HttpServerOptions | request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int |
+- **Record:** HttpRequest
+  - **Fields:** method: String, target: String, path: String, headers:
+    List[Header], body: String
+
+- **Record:** HttpServerOptions
+  - **Fields:** request_timeout_ms: Int, idle_timeout_ms: Int, max_connections:
+    Int, max_body_bytes: Int
 
 A handler takes the whole request and returns the whole response:
 
@@ -174,4 +181,15 @@ server stops with the run. A server belongs to the task that called
 server is closed and its port is free, so call `listen` in the task that keeps
 the server, such as `main`.
 
-Earlier releases' `HTTP` API is gone, and the checker's help names the replacement for each name. `HTTP.client()` is `HTTP.client(HTTP.client_options())`; `HTTP.text(response.body, t)` is `response.body`; `read`, `trailers`, `close_body`, and `request_stream` no longer exist. A handler takes an `HttpRequest` and returns `ok(HttpResponse(...))` instead of calling `HTTP.respond(writer, ...)`. `HTTP.begin`, `write`, `write_bytes`, and `finish` are gone. `HttpServerOptions.header_timeout_ms` is now `request_timeout_ms`. The `Request`, `Response`, `HttpBody`, and `HttpWriter` types are gone. Binary bodies have no replacement yet: a body that is not UTF-8 is an error. `max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers the whole response, not only the headers.
+Earlier releases' `HTTP` API is gone, and the checker's help names the
+replacement for each name. `HTTP.client()` is
+`HTTP.client(HTTP.client_options())`; `HTTP.text(response.body, t)` is
+`response.body`; `read`, `trailers`, `close_body`, and `request_stream` no
+longer exist. A handler takes an `HttpRequest` and returns
+`ok(HttpResponse(...))` instead of calling `HTTP.respond(writer, ...)`.
+`HTTP.begin`, `write`, `write_bytes`, and `finish` are gone.
+`HttpServerOptions.header_timeout_ms` is now `request_timeout_ms`. The
+`Request`, `Response`, `HttpBody`, and `HttpWriter` types are gone. Binary
+bodies have no replacement yet: a body that is not UTF-8 is an error.
+`max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers the
+whole response, not only the headers.

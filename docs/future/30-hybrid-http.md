@@ -11,12 +11,26 @@ work in C.
 
 What is built is specified here, not in this file:
 
-| What | Where |
-|---|---|
-| The API, options, limits, answers and the migration from the builtin `HTTP` module | [`docs/grammar/06d-io-and-network.md`](../grammar/06d-io-and-network.md), "HTTP client and server (`std/http`)"; the migration table in [`site/content/library/io-and-system/network.md`](../../site/content/library/io-and-system/network.md); the hints for removed names in [`07-diagnostics.md`](../grammar/07-diagnostics.md) |
-| Parsing rules, the design decisions, the client, the server, errors and status codes, the tests | [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7 |
-| Task cancellation for `close_server` | [`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1 and §10.2.2 |
-| Programs and the site | the programming skill's `references/network.md` and `site/content/library/io-and-system/network.md` |
+- **What:** The API, options, limits, answers and the migration from the builtin
+  `HTTP` module
+  - **Where:**
+    [`docs/grammar/06d-io-and-network.md`](../grammar/06d-io-and-network.md),
+    "HTTP client and server (`std/http`)"; the migration table in
+    [`site/content/library/io-and-system/network.md`][agentica-link-1];
+    the hints for removed names in
+    [`07-diagnostics.md`](../grammar/07-diagnostics.md)
+
+- **What:** Parsing rules, the design decisions, the client, the server, errors
+  and status codes, the tests
+  - **Where:** [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7
+
+- **What:** Task cancellation for `close_server`
+  - **Where:** [`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1
+    and §10.2.2
+
+- **What:** Programs and the site
+  - **Where:** the programming skill's `references/network.md` and
+    `site/content/library/io-and-system/network.md`
 
 This file keeps what is not built: streaming on channels (20e to 20g, 30.11) and
 what comes later (30.12). Sections 30.1 to 30.10 moved to the places above.
@@ -52,7 +66,8 @@ the options of the client or server it runs on, so default parameter values
 
 **How errors reach the reader.** A channel can only end, not fail. So a streamed
 response carries the body channel and a task:
-`HttpStream(status: Int, headers: List[Header], body: Channel[String], done: Task[Result[Void]])`.
+`HttpStream(status: Int, headers: List[Header], body: Channel[String], done:
+Task[Result[Void]])`.
 The task feeds the channel and closes it on every path (§27.2's rule), and its
 result says whether the body ended cleanly. The reader runs the canonical
 receive loop and then `Task.await(stream.done)`. To stop early, the reader
@@ -66,16 +81,19 @@ closes the connection (never back to the pool) and ends with an error.
   and sends each piece with the client's `timeout_ms`. Big downloads, progress,
   and reading an SSE stream line by line.
 - **20f Streamed uploads** (client):
-  `HTTP.upload(client, method, url, headers, length: Int, body: Channel[String]) -> Result[HttpResponse]`:
+  `HTTP.upload(client, method, url, headers, length: Int, body: Channel[String])
+-> Result[HttpResponse]`:
   the caller's other task feeds the channel and closes it; `length` is the exact
   byte count, or -1 for chunked (the rule of the removed `HTTP.request_stream`);
   the response is whole. It replaces `HTTP.request_stream` without a generic
   producer: the closure or task that feeds the channel carries whatever data it
   needs. The chunked encoder for requests comes back in C for it.
 - **20g Streamed responses** (server, SSE included):
-  `HTTP.listen_stream(host, port, handler: Fn[HttpRequest, Result[HttpStreamResponse]], options)`
+  `HTTP.listen_stream(host, port, handler: Fn[HttpRequest,
+Result[HttpStreamResponse]], options)`
   and `HTTP.listen_stream_tls(...)`, with
-  `HttpStreamResponse(status: Int, headers: List[Header], body: Channel[String])`.
+  `HttpStreamResponse(status: Int, headers: List[Header], body:
+Channel[String])`.
   The handler returns at once with the channel; a task it spawned feeds it. The
   connection sends chunked, or `Content-Length` when the channel is already
   closed with everything buffered when the handler returns; it writes each piece
@@ -88,13 +106,22 @@ closes the connection (never back to the pool) and ends with an error.
 
 **One way for each job** (the table the skill teaches):
 
-| Job | The one form |
-|---|---|
-| Send a request and use its whole response (up to 64 MiB) | `HTTP.get`, `post`, `request` |
-| Read a response as it arrives: bigger than 64 MiB, endless, or events (SSE) | `HTTP.open` |
-| Upload a body produced as it goes, or bigger than 64 MiB | `HTTP.upload` |
-| A server whose every route answers with one whole text | `HTTP.listen` |
-| A server with at least one route that streams (SSE, big downloads) | `HTTP.listen_stream`, with `HTTP.whole(text)` for its other routes |
+- **Job:** Send a request and use its whole response (up to 64 MiB)
+  - **The one form:** `HTTP.get`, `post`, `request`
+
+- **Job:** Read a response as it arrives: bigger than 64 MiB, endless, or events
+  (SSE)
+  - **The one form:** `HTTP.open`
+
+- **Job:** Upload a body produced as it goes, or bigger than 64 MiB
+  - **The one form:** `HTTP.upload`
+
+- **Job:** A server whose every route answers with one whole text
+  - **The one form:** `HTTP.listen`
+
+- **Job:** A server with at least one route that streams (SSE, big downloads)
+  - **The one form:** `HTTP.listen_stream`, with `HTTP.whole(text)` for its
+    other routes
 
 The checker cannot stop `HTTP.open` on a small response, so these pass the
 one-way test by job, as `Task.map` and channels do (§27): each form exists for
@@ -144,3 +171,5 @@ Agentica can build what it needs:
 
 Redirects and cookies, if a program needs them, are a loop over a request in
 Agentica code, not a C feature.
+
+[agentica-link-1]: ../../site/content/library/io-and-system/network.md

@@ -139,7 +139,8 @@ field, so do it once per token or node, not once per character.
 - `Map` and `Set` lookups and inserts (`get`, `put`, `include?`, `add`) take
   effectively constant time: both are one 32-way HAMT.
 - A table keyed by dense `Int` ids (node ids, indexes) is faster as a `List`
-  indexed by id (`List.repeat` once, then `set` and `[]`) than as a `Map[Int, T]`:
+  indexed by id (`List.repeat` once, then `set` and `[]`) than as a `Map[Int,
+T]`:
   `List.set` took about 1.6 µs and `Map.put` about 5 µs at 5,000 entries, and
   keeping the types of a checker in a list instead of a map took a 630,000
   character program from 1.83 s to 1.24 s and `std/bdd/gherkin` from 38 to

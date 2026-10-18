@@ -17,16 +17,46 @@ enforces it.
 
 ### 16.1 Components
 
-| Component | What it is |
-|---|---|
-| **Runtime** | `agc_runtime`: the program, the arguments, the settings. Shared by every thread and read-only after start-up, except the atomics and locks that §10.2.3 lists (`steps_left`, `outcome`, one lock per output stream) and the Globals table of the program, which the entry writes before `main` (§16.7). |
-| **Schedulers** | N threads that run the interpreter. A scheduler takes a ready task from the global run queue, runs one turn (§10.2.1), and then parks it, ends it or puts it back. It never calls libuv, except `uv_async_send` on the inbox's handle. |
-| **Global run queue** | The FIFO of ready tasks. Many producers, N consumers (§16.3). |
-| **I/O thread** | The main thread after start-up. It runs the only libuv loop. It has an inbox of requests from the schedulers (§16.4). |
-| **libuv thread pool** | Bounded blocking work only: regular files and directories, DNS, and the TLS setup jobs that load CA, certificate and key files (§14.1). One pool per process, driven by the loop. Its threads never touch GC memory. |
-| **Handles and their owner tasks** | A socket, listener, pipe, terminal, process or poller is a libuv handle on the I/O loop for its whole life. The task that opened it owns it (§14.5). A regular file is not a libuv handle on the loop: it is a descriptor that pool jobs use. |
-| **Jobs** | A task's pending operation: `malloc` memory with raw bytes and up to three libuv pieces (pool work, the one timer, a wait on the loop), owned by a GC resource in the registry (§16.5). |
-| **GC** | Boehm, built for threads. Every scheduler thread and the I/O thread are registered with it. |
+- **Component:** **Runtime**
+  - **What it is:** `agc_runtime`: the program, the arguments, the settings.
+    Shared by every thread and read-only after start-up, except the atomics and
+    locks that §10.2.3 lists (`steps_left`, `outcome`, one lock per output
+    stream) and the Globals table of the program, which the entry writes before
+    `main` (§16.7).
+
+- **Component:** **Schedulers**
+  - **What it is:** N threads that run the interpreter. A scheduler takes a
+    ready task from the global run queue, runs one turn (§10.2.1), and then
+    parks it, ends it or puts it back. It never calls libuv, except
+    `uv_async_send` on the inbox's handle.
+
+- **Component:** **Global run queue**
+  - **What it is:** The FIFO of ready tasks. Many producers, N consumers
+    (§16.3).
+
+- **Component:** **I/O thread**
+  - **What it is:** The main thread after start-up. It runs the only libuv loop.
+    It has an inbox of requests from the schedulers (§16.4).
+
+- **Component:** **libuv thread pool**
+  - **What it is:** Bounded blocking work only: regular files and directories,
+    DNS, and the TLS setup jobs that load CA, certificate and key files (§14.1).
+    One pool per process, driven by the loop. Its threads never touch GC memory.
+
+- **Component:** **Handles and their owner tasks**
+  - **What it is:** A socket, listener, pipe, terminal, process or poller is a
+    libuv handle on the I/O loop for its whole life. The task that opened it
+    owns it (§14.5). A regular file is not a libuv handle on the loop: it is a
+    descriptor that pool jobs use.
+
+- **Component:** **Jobs**
+  - **What it is:** A task's pending operation: `malloc` memory with raw bytes
+    and up to three libuv pieces (pool work, the one timer, a wait on the loop),
+    owned by a GC resource in the registry (§16.5).
+
+- **Component:** **GC**
+  - **What it is:** Boehm, built for threads. Every scheduler thread and the I/O
+    thread are registered with it.
 
 ```text
  +------------------+  request: start, cancel, release...       +--------------------+
@@ -251,15 +281,44 @@ ready again. The woken task always comes back through the run queue. Each wait
 kind has a usual waker, but a wait can also end by its timeout or by a cancel,
 so a task can have two wakers at once.
 
-| Parked on | Usual waker | Also ends it | The list it sits in, and its owner |
-|---|---|---|---|
-| A pool job (a regular file, DNS, TLS setup loads) | the I/O thread, in `after_work` (outcome, push) | the job's timer; a cancel | none; the job is on the loop |
-| A loop job (socket, pipe, FIFO, terminal, poller, a child's exit) | the I/O thread, when it calls `ready` (outcome, push) | the job's timer; a cancel | none; the job is on the loop |
-| A timer (`Task.sleep`, a timer-only job) | the I/O thread, in the timer callback (outcome, push) | a cancel | none |
-| A handle's lock FIFO | the scheduler that ends the holder's job (hand-on, push) | the lock wait's deadline (a timer job); a cancel | the handle's FIFO; open (§16.11) |
-| `Task.await` | the scheduler that ends the target task (push) | a cancel of the awaiter | the target task's awaiters list, under that task's lock (§10.2.3) |
-| A stdin read that another task already started | the scheduler that ends that read's job (push) | a cancel | the input's FIFO; open (§16.11) |
-| A channel (`send` or `recv`, 17b) | the scheduler of the task that sends, receives or closes (push) | the deadline (a timer); a cancel | the channel's waiter lists; under the channel's short lock (§27.2) |
+- **Parked on:** A pool job (a regular file, DNS, TLS setup loads)
+  - **Usual waker:** the I/O thread, in `after_work` (outcome, push)
+  - **Also ends it:** the job's timer; a cancel
+  - **The list it sits in, and its owner:** none; the job is on the loop
+
+- **Parked on:** A loop job (socket, pipe, FIFO, terminal, poller, a child's
+  exit)
+  - **Usual waker:** the I/O thread, when it calls `ready` (outcome, push)
+  - **Also ends it:** the job's timer; a cancel
+  - **The list it sits in, and its owner:** none; the job is on the loop
+
+- **Parked on:** A timer (`Task.sleep`, a timer-only job)
+  - **Usual waker:** the I/O thread, in the timer callback (outcome, push)
+  - **Also ends it:** a cancel
+  - **The list it sits in, and its owner:** none
+
+- **Parked on:** A handle's lock FIFO
+  - **Usual waker:** the scheduler that ends the holder's job (hand-on, push)
+  - **Also ends it:** the lock wait's deadline (a timer job); a cancel
+  - **The list it sits in, and its owner:** the handle's FIFO; open (§16.11)
+
+- **Parked on:** `Task.await`
+  - **Usual waker:** the scheduler that ends the target task (push)
+  - **Also ends it:** a cancel of the awaiter
+  - **The list it sits in, and its owner:** the target task's awaiters list,
+    under that task's lock (§10.2.3)
+
+- **Parked on:** A stdin read that another task already started
+  - **Usual waker:** the scheduler that ends that read's job (push)
+  - **Also ends it:** a cancel
+  - **The list it sits in, and its owner:** the input's FIFO; open (§16.11)
+
+- **Parked on:** A channel (`send` or `recv`, 17b)
+  - **Usual waker:** the scheduler of the task that sends, receives or closes
+    (push)
+  - **Also ends it:** the deadline (a timer); a cancel
+  - **The list it sits in, and its owner:** the channel's waiter lists; under
+    the channel's short lock (§27.2)
 
 **The first to set the outcome wins** (§16.5). Two wakers can race, for example
 a hand-on and a lock deadline. The winner does the state CAS from PARKED to
@@ -280,13 +339,28 @@ request (§16.5). A ready task is ended without running (§16.11).
 
 The rules of §14 and the component that enforces each:
 
-| Rule | Enforced by |
-|---|---|
-| §14.1 Waiting: a task only parks, and nothing waits where the loop cannot cancel | The schedulers never wait on a descriptor. The I/O thread never blocks on one: every descriptor that can wait is non-blocking on the loop. The pool takes only bounded work. |
-| §14.2 Timeouts: one timer on the job | The I/O thread owns the job's single `uv_timer_t` and arms it when it starts the request. |
-| §14.3 Cancelling: `agc_task_cancel` | It runs on the scheduler of the canceller. It sets the cancel flag, takes the task out of the wait lists a scheduler owns and does the state CAS; it never touches the job. The resumed task detaches the job and posts the cancel request to the I/O thread. |
-| §14.4 Ending: one exit path | `end_run` runs on the I/O thread, the main thread. |
-| §14.5 Handles: owned by the task that opened them | The owner is recorded in the resource. A close is a request to the I/O thread, the only thread that touches handles. |
+- **Rule:** §14.1 Waiting: a task only parks, and nothing waits where the loop
+  cannot cancel
+  - **Enforced by:** The schedulers never wait on a descriptor. The I/O thread
+    never blocks on one: every descriptor that can wait is non-blocking on the
+    loop. The pool takes only bounded work.
+
+- **Rule:** §14.2 Timeouts: one timer on the job
+  - **Enforced by:** The I/O thread owns the job's single `uv_timer_t` and arms
+    it when it starts the request.
+
+- **Rule:** §14.3 Cancelling: `agc_task_cancel`
+  - **Enforced by:** It runs on the scheduler of the canceller. It sets the
+    cancel flag, takes the task out of the wait lists a scheduler owns and does
+    the state CAS; it never touches the job. The resumed task detaches the job
+    and posts the cancel request to the I/O thread.
+
+- **Rule:** §14.4 Ending: one exit path
+  - **Enforced by:** `end_run` runs on the I/O thread, the main thread.
+
+- **Rule:** §14.5 Handles: owned by the task that opened them
+  - **Enforced by:** The owner is recorded in the resource. A close is a request
+    to the I/O thread, the only thread that touches handles.
 
 ### 16.7 Sharing
 

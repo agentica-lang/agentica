@@ -62,24 +62,66 @@ these forms, and only these, for each job. The skill updates of 17a and 17b
 teach only the rows whose forms exist when they land; each later item adds its
 own row:
 
-| Job | The one form |
-|---|---|
-| Change, select or combine the items of a list | `List.map`, `filter`, `reduce` and the other `List` methods (eager) |
-| Keep a running total, or build a value in a loop | `reduce`, or a `for` or `while` loop that reassigns a local variable |
-| Run the same I/O for each item of a list, at most N at a time, each with a timeout | `Task.map` (27.1) |
-| Long-lived workers, producer and consumer, a flow of unknown length, results in the order they end | tasks and a `Channel` (27.2) |
-| Wait for a task's result, for at most N ms | `Task.await(task, timeout_ms)` (27.3), matched as `Await.Done(v)` or `Await.TimedOut`; the task keeps running after a timeout |
-| Read a big file line by line | `File.each_line` (27.4, step 1, built) |
-| An endless sequence, or the lines of a file that a step filters, takes or folds | a `while` loop; `Stream[T]` (27.4, step 2) once 17e lands |
-| State that several tasks update | one owner task that receives messages on a channel (27.5); a shared table (§13) when a program needs it |
+- **Job:** Change, select or combine the items of a list
+  - **The one form:** `List.map`, `filter`, `reduce` and the other `List`
+    methods (eager)
 
-| § | Item | Decision | Where it lives | Roadmap |
-|---|---|---|---|---|
-| 27.1 | `Task.map` | planned | C builtin in the VM scheduler | 17a |
-| 27.2 | `Channel[T]` | built | C builtins, a builtin opaque generic | 17b |
-| 27.3 | `Task.await(task, timeout_ms)` returning `Await[T]` | built | C builtin and a builtin generic enum | 17c |
-| 27.4 | `File.each_line` (step 1) and `Stream[T]` (step 2) | step 1 built (17d); step 2 planned (owner, 2026-10-14) | step 1 a C builtin; step 2 prelude code | 17d, 17e |
-| 27.5 | Generators, fibers, Agent-style state, public locks and threads | decided against | help hints only, added by 17a and 17b | none |
+- **Job:** Keep a running total, or build a value in a loop
+  - **The one form:** `reduce`, or a `for` or `while` loop that reassigns a
+    local variable
+
+- **Job:** Run the same I/O for each item of a list, at most N at a time, each
+  with a timeout
+  - **The one form:** `Task.map` (27.1)
+
+- **Job:** Long-lived workers, producer and consumer, a flow of unknown length,
+  results in the order they end
+  - **The one form:** tasks and a `Channel` (27.2)
+
+- **Job:** Wait for a task's result, for at most N ms
+  - **The one form:** `Task.await(task, timeout_ms)` (27.3), matched as
+    `Await.Done(v)` or `Await.TimedOut`; the task keeps running after a timeout
+
+- **Job:** Read a big file line by line
+  - **The one form:** `File.each_line` (27.4, step 1, built)
+
+- **Job:** An endless sequence, or the lines of a file that a step filters,
+  takes or folds
+  - **The one form:** a `while` loop; `Stream[T]` (27.4, step 2) once 17e lands
+
+- **Job:** State that several tasks update
+  - **The one form:** one owner task that receives messages on a channel (27.5);
+    a shared table (§13) when a program needs it
+
+- **§:** 27.1
+  - **Item:** `Task.map`
+  - **Decision:** planned
+  - **Where it lives:** C builtin in the VM scheduler
+  - **Roadmap:** 17a
+
+- **§:** 27.2
+  - **Item:** `Channel[T]`
+  - **Decision:** built
+  - **Where it lives:** C builtins, a builtin opaque generic
+  - **Roadmap:** 17b
+
+- **§:** 27.3
+  - **Item:** `Task.await(task, timeout_ms)` returning `Await[T]`
+  - **Decision:** built
+  - **Where it lives:** C builtin and a builtin generic enum
+  - **Roadmap:** 17c
+
+- **§:** 27.4
+  - **Item:** `File.each_line` (step 1) and `Stream[T]` (step 2)
+  - **Decision:** step 1 built (17d); step 2 planned (owner, 2026-10-14)
+  - **Where it lives:** step 1 a C builtin; step 2 prelude code
+  - **Roadmap:** 17d, 17e
+
+- **§:** 27.5
+  - **Item:** Generators, fibers, Agent-style state, public locks and threads
+  - **Decision:** decided against
+  - **Where it lives:** help hints only, added by 17a and 17b
+  - **Roadmap:** none
 
 ### 27.1 `Task.map`
 

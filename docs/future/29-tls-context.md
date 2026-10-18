@@ -41,13 +41,26 @@ rules of `docs/vm/10-io-tls.md` §10.3 do not move: certificates are always
 verified, the hostname is always checked, there is no path that turns
 verification off.
 
-| § | Item | Roadmap |
-|---|---|---|
-| 29.1 | `TlsContext`, `TlsClientOptions`, `TlsServerOptions` and the context builders | 19a |
-| 29.3 | `TLS.upgrade` (STARTTLS) | 19b |
-| 29.4 | `HTTP` takes contexts | 19a |
-| 29.5 | One breaking step: the file-path forms are removed | 19a |
-| 29.7 | Later options, each with the one-way test | none yet |
+- **§:** 29.1
+  - **Item:** `TlsContext`, `TlsClientOptions`, `TlsServerOptions` and the
+    context builders
+  - **Roadmap:** 19a
+
+- **§:** 29.3
+  - **Item:** `TLS.upgrade` (STARTTLS)
+  - **Roadmap:** 19b
+
+- **§:** 29.4
+  - **Item:** `HTTP` takes contexts
+  - **Roadmap:** 19a
+
+- **§:** 29.5
+  - **Item:** One breaking step: the file-path forms are removed
+  - **Roadmap:** 19a
+
+- **§:** 29.7
+  - **Item:** Later options, each with the one-way test
+  - **Roadmap:** none yet
 
 ### 29.1 The API
 
@@ -70,10 +83,13 @@ TLS.listen(host: String, port: Int, context: TlsContext) -> Result[Listener]
 TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) -> Result[Socket]   # 19b, 29.3
 ```
 
-| Record | Fields | Defaults helper |
-|---|---|---|
-| `TlsClientOptions` | `ca_file: String` | `TLS.client_options()`: `ca_file: ""`, system trust |
-| `TlsServerOptions` | `cert_file: String`, `key_file: String` | none: a server has no default key pair |
+- **Record:** `TlsClientOptions`
+  - **Fields:** `ca_file: String`
+  - **Defaults helper:** `TLS.client_options()`: `ca_file: ""`, system trust
+
+- **Record:** `TlsServerOptions`
+  - **Fields:** `cert_file: String`, `key_file: String`
+  - **Defaults helper:** none: a server has no default key pair
 
 **Decisions:**
 
@@ -199,13 +215,23 @@ HTTP.listen_stream_tls(host: String, port: Int, tls: TlsContext, handler: Fn[Htt
 **One way:** the file-path forms are removed, not kept beside the context forms.
 Phase 19a changes, in one PR:
 
-| Before | After |
-|---|---|
-| `TLS.connect(host, port, ca_file, timeout_ms)` | `TLS.connect(host, port, context, timeout_ms)` |
-| `TLS.listen(host, port, cert_file, key_file)` | `TLS.listen(host, port, context)` |
-| `HttpClientOptions(..., ca_file: path)` and `HTTP.client(options)` | `HttpClientOptions(...)` without `ca_file`, and `HTTP.client(options, tls)` |
-| `HTTP.listen_tls(host, port, cert_file, key_file, handler, options)` | `HTTP.listen_tls(host, port, tls, handler, options)` |
-| `HTTP.listen_stream_tls(host, port, cert_file, key_file, handler, options)` | `HTTP.listen_stream_tls(host, port, tls, handler, options)` |
+- **Before:** `TLS.connect(host, port, ca_file, timeout_ms)`
+  - **After:** `TLS.connect(host, port, context, timeout_ms)`
+
+- **Before:** `TLS.listen(host, port, cert_file, key_file)`
+  - **After:** `TLS.listen(host, port, context)`
+
+- **Before:** `HttpClientOptions(..., ca_file: path)` and `HTTP.client(options)`
+  - **After:** `HttpClientOptions(...)` without `ca_file`, and
+    `HTTP.client(options, tls)`
+
+- **Before:** `HTTP.listen_tls(host, port, cert_file, key_file, handler,
+  options)`
+  - **After:** `HTTP.listen_tls(host, port, tls, handler, options)`
+
+- **Before:** `HTTP.listen_stream_tls(host, port, cert_file, key_file, handler,
+  options)`
+  - **After:** `HTTP.listen_stream_tls(host, port, tls, handler, options)`
 
 - The old calls are `CHECK-TYPE-MISMATCH` or `CHECK-ARITY` at their arguments,
   with a help that shows the context form
@@ -291,14 +317,39 @@ migration is mechanical.
 new field of the options records (never a new argument), and each passes the
 one-way test because nothing else can express it:
 
-| Option | Record | One-way test |
-|---|---|---|
-| `min_version` (`"1.2"` or `"1.3"`) | both | passes: today the floor is fixed at 1.2 |
-| `alpn: List[String]`, with `TLS.alpn(socket) -> String` to read the result (planned as item 19c, §30.13) | both | passes: no other way to offer protocols |
-| Client certificates (mTLS): `cert_file` and `key_file` on `TlsClientOptions`; `client_ca_file` on `TlsServerOptions`, which makes the server require and verify a client certificate | both | passes |
-| `ca_data` (PEM text in memory, for a CA that ships inside the program) | client | passes only if it is the one way for in-memory PEM; it does not replace `ca_file` for files |
-| Peer certificate info (`TLS.peer_certificate(socket)`: subject, names, validity) | none, a socket builtin | passes |
-| Session reuse (resumption) | client: a per-host session store inside the client context, keyed by host and port, with no API | passes (no other way); it needs its own item with a test that a second connection to the same host resumes (Python `ssl` reports `session_reused`) and that a context never offers one host's session to another |
+- **Option:** `min_version` (`"1.2"` or `"1.3"`)
+  - **Record:** both
+  - **One-way test:** passes: today the floor is fixed at 1.2
+
+- **Option:** `alpn: List[String]`, with `TLS.alpn(socket) -> String` to read
+  the result (planned as item 19c, §30.13)
+  - **Record:** both
+  - **One-way test:** passes: no other way to offer protocols
+
+- **Option:** Client certificates (mTLS): `cert_file` and `key_file` on
+  `TlsClientOptions`; `client_ca_file` on `TlsServerOptions`, which makes the
+  server require and verify a client certificate
+  - **Record:** both
+  - **One-way test:** passes
+
+- **Option:** `ca_data` (PEM text in memory, for a CA that ships inside the
+  program)
+  - **Record:** client
+  - **One-way test:** passes only if it is the one way for in-memory PEM; it
+    does not replace `ca_file` for files
+
+- **Option:** Peer certificate info (`TLS.peer_certificate(socket)`: subject,
+  names, validity)
+  - **Record:** none, a socket builtin
+  - **One-way test:** passes
+
+- **Option:** Session reuse (resumption)
+  - **Record:** client: a per-host session store inside the client context,
+    keyed by host and port, with no API
+  - **One-way test:** passes (no other way); it needs its own item with a test
+    that a second connection to the same host resumes (Python `ssl` reports
+    `session_reused`) and that a context never offers one host's session to
+    another
 
 **Never** (decided, not proposed again): `SSL_VERIFY_NONE` or any "insecure"
 flag, an "optional" verify mode, a hostname-check switch, cipher strings, curve

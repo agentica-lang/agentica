@@ -9,12 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `make tests KIND=fast|files|slow|all` runs a whole test group, with
+  `KIND=files` for the destructive filesystem cases, `DOCKER=1` to run a group
+  in the Ubuntu test container (`tools/ubuntu-test.Dockerfile`) and `WINE=1`
+  for the Windows checks under Wine.
+- Docker-backed local reproduction for filesystem removal regressions and
+  native Actions-runner coverage using per-job scratch directories, sentinels
+  and bounded cleanup.
 - `make windows-docker-build` and `make windows-docker-check`: cross-build the
   Windows VM, then run its C tests and the Windows CI fast Python modules under
   Wine, without a Windows machine.
 
 ### Changed
 
+- `Path.remove` now works on Windows, using native paths and removing
+  reparse-point entries without traversing them.
+- `Path.rename` now works on Windows with native no-replace semantics: an
+  existing destination is preserved.
 - Windows stdin reads run in the I/O pool, keeping tasks and timers responsive.
   A pending read can occupy one worker until input arrives, but process exit
   does not wait for it.

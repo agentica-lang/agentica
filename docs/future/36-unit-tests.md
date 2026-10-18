@@ -188,7 +188,8 @@ closes its stdin at once; the records and the indexes go on the channel, which
 the child finds on descriptor 3 (`docs/vm/10-io-processes.md` §10.4):
 
 1. **List child:**
-   `VM --allow-run --json --max-steps 1000000 --seed N -- FILE.agcb --agentica-test list`.
+   `VM --allow-run --json --max-steps 1000000 --seed N -- FILE.agcb
+--agentica-test list`.
    `Test.run` sends one `{"event":"test","name":...,"line":...,"column":...}`
    record per test on the channel, in order, then `ready`. A crash or exit here
    is a file error (as built in 25a, an unobserved crash outside the tests makes
@@ -198,7 +199,8 @@ the child finds on descriptor 3 (`docs/vm/10-io-processes.md` §10.4):
    the file never called `Test.run`; the file error shows the lines the file
    printed and its stderr.
 2. **Run child**, one per file:
-   `VM --allow-run --json --max-steps M --seed N -- FILE.agcb --agentica-test run`,
+   `VM --allow-run --json --max-steps M --seed N -- FILE.agcb --agentica-test
+run`,
    with `M` = 1,000,000 × (the number of tests + 1). The runner sends the index
    of each test to run on the channel, one per line, and the child answers
    `{"event":"pass"}` or `{"event":"fail", ...}` with the fields of the report's
