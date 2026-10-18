@@ -343,6 +343,7 @@ def test_rename_denied_delete_preserves_source_and_target(root, work):
         # grants), then grant the parent read/write rights without deletion.
         acl(box, "/grant:r", f"*{sid}:(RX,W)")
         acl(box, "/inheritance:r")
+        acl(box, "/deny", f"*{sid}:(DC)")
         acl(source, "/deny", f"*{sid}:(D)")
         assert delete_is_denied(source), "DELETE was not denied"
         result = run_vm(
