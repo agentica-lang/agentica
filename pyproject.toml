@@ -22,4 +22,3 @@ pytest-xdist = "^3.8.0"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 markers = ["slow: slow tests, run by make test-slow and CI"]
-
