@@ -145,6 +145,10 @@ phase 13).
   self-contained and does not read the grammar.
 - A user-visible change adds an entry under `## [Unreleased]` in
   `CHANGELOG.md`; mark a breaking change `**Breaking:**`.
+- Do not create new files under `docs/` (the Markdown tree outside Hugo's
+  `site/content/`) unless the user asks for them or suggests one and accepts
+  it. Record progress and evidence in the PR, the roadmap checklist or the
+  CHANGELOG instead. Existing files are updated in place.
 - Prose wrapping: `site/content/` keeps one line per paragraph or list item.
   Markdown prose in `docs/` and `.agents/skills/` wraps at 80 characters;
   code blocks keep their line breaks.
