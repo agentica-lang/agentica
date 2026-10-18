@@ -1,8 +1,7 @@
 ## 47. Code formatter (`agentica fmt`)
 
 **Status:** Deferred (the bootstrap is done), decided by the
-owner on 2026-10-15: roadmap row 7.9 and phase 28
-([`docs/roadmap/28-formatter.md`](../roadmap/28-formatter.md)). The owner also
+owner on 2026-10-15: roadmap row 7.9. The owner also
 asked for this plan on the same day. Nothing is implemented. The facts in 47.1
 were checked on `origin/master` at `95a45635`. The open questions in 47.9 need
 the owner's answers before phase 47b starts. Phase 47d also waits for the
@@ -576,3 +575,19 @@ Each question has options and a recommendation.
    the Python test beside the checker. **Recommendation:** (a). It is the one
    enforcer, it covers the lines `fmt` cannot break (a long identifier, a URL),
    and §45.5 says the same. The owner confirms the code when 47c lands.
+
+### 47.10 Implementation (row 7.9)
+
+- One PR per item, each with its own tests and docs. The §47.9 open
+  questions need the owner's answers before 47b starts; 47d waits for the
+  language server (§43, not scheduled) and is outside this order.
+- 47a comments and the side list (§47.4); the (node, role) table of §47.7.
+- 47b printer and `--check` (§47.5–§47.7) with `--tree`; `make fmt-check`
+  over `compiler/` and `stdlib/`; the one-time reformat (run
+  `make goldens` for moved `std/` lines); the trailing-comma note.
+- 47c CLI, `[style]` and the width check (§47.2, §47.9): write mode, `-`,
+  exit codes, `FMT-USAGE`; `max_line_width` only; `CHECK-LINE-TOO-LONG`
+  in `agentica check`, replacing `tests/test_style_line_width.py`.
+- Done when: `agentica fmt` rewrites a file in place, `fmt --check` passes
+  in CI over `compiler/` and `stdlib/`, `agentica check` reports the
+  width, and the round-trip, idempotence and peer tests pass.

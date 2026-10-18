@@ -430,8 +430,8 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.9
   - **Next work:** **Deferred until after the bootstrap**, decided by the owner
-    on 2026-10-15 (phase 28, [`docs/roadmap/28-formatter.md`](28-formatter.md);
-    design: [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)): a
+    on 2026-10-15 (design and plan:
+    [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)): a
     code formatter, `agentica fmt`, written in Agentica on the self-hosted lexer
     and parser. 47a, comments kept in a side list and attached to nodes; 47b,
     the printer and `--check` over `compiler/` and `stdlib/`; 47c, the CLI, the
@@ -446,7 +446,7 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.10
   - **Next work:** **Deferred until after the bootstrap**, decided by the owner
-    on 2026-10-15 (phase 29, [`docs/roadmap/29-regex.md`](29-regex.md); design:
+    on 2026-10-15 (design and plan:
     [§48](../future/48-regex.md#48-regular-expressions)): regular expressions,
     new library features, std first: `std/regex` in Agentica (a parser and a
     linear-time Pike VM, no backtracking), then the regex literal
@@ -792,14 +792,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 - **File:** [`27-signals.md`](27-signals.md)
   - **Contents:** Phase 27: signals (stop signals a program handles, signals to
     children, the driver's stop, graceful HTTP stop; design in §46)
-
-- **File:** [`28-formatter.md`](28-formatter.md)
-  - **Contents:** Phase 28: code formatter (`agentica fmt`, `--check`, the
-    `[style]` keys; design in §47)
-
-- **File:** [`29-regex.md`](29-regex.md)
-  - **Contents:** Phase 29: regular expressions (`std/regex` in Agentica, then
-    the regex literal; design in §48)
 
 - **File:**
   [`pending-general-programming-and-mcp.md`][agentica-link-5]
