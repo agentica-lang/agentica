@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -250,6 +251,47 @@ def acl(path, *arguments):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@contextmanager
+def without_backup_restore_privileges():
+    """Prevent the runner's restore privilege from bypassing ACLs in children."""
+    from ctypes import wintypes
+
+    class Luid(ctypes.Structure):
+        _fields_ = [("low", wintypes.DWORD), ("high", wintypes.LONG)]
+
+    class Privileges(ctypes.Structure):
+        _fields_ = [("count", wintypes.DWORD), ("luid", Luid), ("attributes", wintypes.DWORD)]
+
+    kernel32 = kernel32_file_api()
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    advapi32.LookupPrivilegeValueW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.POINTER(Luid)]
+    advapi32.AdjustTokenPrivileges.argtypes = [
+        wintypes.HANDLE, wintypes.BOOL, ctypes.POINTER(Privileges), wintypes.DWORD,
+        ctypes.POINTER(Privileges), ctypes.POINTER(wintypes.DWORD),
+    ]
+    token = wintypes.HANDLE()
+    assert advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x28, ctypes.byref(token))
+    previous = []
+    try:
+        for name in ("SeBackupPrivilege", "SeRestorePrivilege"):
+            requested = Privileges(count=1)
+            assert advapi32.LookupPrivilegeValueW(None, name, ctypes.byref(requested.luid))
+            old = Privileges()
+            size = wintypes.DWORD()
+            assert advapi32.AdjustTokenPrivileges(
+                token, False, ctypes.byref(requested), ctypes.sizeof(old),
+                ctypes.byref(old), ctypes.byref(size),
+            )
+            previous.append(old)
+        yield
+    finally:
+        for old in reversed(previous):
+            assert advapi32.AdjustTokenPrivileges(token, False, ctypes.byref(old), 0, None, None)
+        kernel32.CloseHandle(token)
+
+
 def delete_is_denied(path):
     kernel32 = kernel32_file_api()
     handle = kernel32.CreateFileW(str(path), 0x10000, 7, None, 3, 0, None)
@@ -346,9 +388,10 @@ def test_rename_denied_delete_preserves_source_and_target(root, work):
         acl(box, "/deny", f"*{sid}:(DC)")
         acl(source, "/deny", f"*{sid}:(D)")
         assert delete_is_denied(source), "DELETE was not denied"
-        result = run_vm(
-            rename, args=[str(source), str(target)], env=vm_environment(), cwd=root
-        )
+        with without_backup_restore_privileges():
+            result = run_vm(
+                rename, args=[str(source), str(target)], env=vm_environment(), cwd=root
+            )
         assert (result.code, result.stdout) == (0, "false\n"), result.stderr
     finally:
         acl(box, "/grant:r", f"*{sid}:(F)")
