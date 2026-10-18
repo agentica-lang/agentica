@@ -73,7 +73,7 @@ class WindowsFilesystemMutationTests(TestCase):
         bytecode = self.compile_text(RENAME_PROGRAM, "windows-rename")
         result = run_vm(bytecode, args=[str(self.root)], env=vm_environment(), cwd=self.root)
 
-        self.assertEqual((result.code, result.stdout, result.stderr), (0, "false\\ntrue\\ntrue\\nfalse\\n", ""))
+        self.assertEqual((result.code, result.stdout, result.stderr), (0, "false\ntrue\ntrue\nfalse\n", ""))
         self.assertEqual(occupied.read_text(encoding="utf-8"), "keep destination")
         self.assertEqual((occupied.stat().st_dev, occupied.stat().st_ino), occupied_identity)
         self.assertFalse(source.exists())
