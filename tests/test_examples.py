@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import ROOT, Child, adopt, agentica_version, cli, run, scaled, vm_environment
+from tests.agentica_test import ROOT, Child, agentica_version, cli, run, scaled, vm_environment
 
 EXAMPLES = ROOT / "examples"
 STEP_BUDGET = "5000000"

@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, adopt, check_lines, compile_text, node, output_lines,
+from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_text, output_lines,
                                  run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"

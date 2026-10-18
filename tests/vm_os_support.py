@@ -76,7 +76,7 @@ def copy_private(source: String, target: String) -> Void
   input = Result.unwrap!(File.open(source, "read", 5000))
   out = Result.unwrap!(File.open(target, "create_private", 5000))
   bytes = Result.unwrap!(File.read_bytes(input, 1048576, 5000))
-  out = Result.unwrap!(File.write_bytes(out, bytes, 5000))
+  Result.unwrap!(File.write_bytes(out, bytes, 5000))
   Result.unwrap!(File.close(input, 5000))
   Result.unwrap!(File.close(out, 5000))
 end

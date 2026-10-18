@@ -7,7 +7,7 @@ import shutil
 
 import pytest
 
-from tests.agentica_test import PYTHON, Child, adopt, run, scaled, vm_environment
+from tests.agentica_test import PYTHON, Child, run, scaled, vm_environment
 from tests.agentica_test import vm_binary as binary
 
 

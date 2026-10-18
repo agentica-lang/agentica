@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import adopt, compile_agc, run_vm, start_vm, vm_environment
+from tests.agentica_test import compile_agc, run_vm, start_vm, vm_environment
 from tests.remove_sandbox_support import require_remove_sandbox
 from tests.vm_os_support import _RaceCase, compile_text, sandbox_root as root, work
 from tests.windows_support import assert_rename_race, kernel32_file_api

@@ -8,7 +8,7 @@ import stat
 
 import pytest
 
-from tests.agentica_test import TARGET_OS, adopt, compile_agc, run_vm, start_vm, vm_environment
+from tests.agentica_test import TARGET_OS, compile_agc, run_vm, start_vm, vm_environment
 from tests.vm_os_support import compile_text, root, work
 from tests.windows_support import kernel32_file_api
 
@@ -279,9 +279,9 @@ def test_a_killed_holder_frees_the_lock(root, work, adopt):
 @REQUIRES_WINDOWS_VM
 def test_cancelled_owner_releases_its_lock_without_ending_the_process(root, work):
     target, bytecode = _lock_case(root, work)
-    bytecode = compile_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lock")
+    cancelled = compile_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lock")
     result = run_vm(
-        bytecode, args=[str(target)], env=vm_environment(), cwd=root
+        cancelled, args=[str(target)], env=vm_environment(), cwd=root
     )
     assert result.code == 0, result.stderr
     assert "RUNTIME-UNWRAP-ERROR" in result.stderr
@@ -291,8 +291,8 @@ def test_cancelled_owner_releases_its_lock_without_ending_the_process(root, work
 @REQUIRES_WINDOWS_VM
 def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(root, work):
     target, bytecode = _lock_case(root, work)
-    bytecode = compile_text(work, TASK_LOCK_PROGRAM, "windows-task-lock")
-    result = run_vm(bytecode, args=[str(target)], env=vm_environment(), cwd=root)
+    task = compile_text(work, TASK_LOCK_PROGRAM, "windows-task-lock")
+    result = run_vm(task, args=[str(target)], env=vm_environment(), cwd=root)
     assert (result.code, result.stderr) == (0, ""), result.stderr
     # The first task takes it and ends, so a later handle takes it; that handle then blocks another task until it
     # is closed. Every line is sequenced by an await.

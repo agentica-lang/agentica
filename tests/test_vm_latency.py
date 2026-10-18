@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, Child, adopt, compile_agc, scaled, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, Child, compile_agc, scaled, vm_command, vm_environment
 
 LIMIT_MS = 250
 WAIT_SECONDS = scaled(60)

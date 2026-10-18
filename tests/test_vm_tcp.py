@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, WAIT_SECONDS, Child, adopt, compile_text, node, run, run_vm, scaled,
+from tests.agentica_test import (FIXTURES, WAIT_SECONDS, Child, compile_text, run, run_vm, scaled,
                                  start_vm, vm_environment)
 
 PEER = FIXTURES / "tcp-peer.js"

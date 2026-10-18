@@ -5,7 +5,7 @@ import stat
 
 import pytest
 
-from tests.agentica_test import adopt, run_vm, start_vm, vm_environment
+from tests.agentica_test import run_vm, start_vm, vm_environment
 from tests.vm_os_support import (CONTENTION_PROGRAM, PROTOCOL_PROGRAM, RACE_PROGRAM, _RaceCase, compile_text,
                                  rename_never_replaces_and_moves_a_link_as_a_link, run_program,
                                  sandbox_root as root, system_pid_is_the_vm_process_and_the_parent_a_child_sees,

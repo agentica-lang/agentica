@@ -10,7 +10,7 @@ import stat
 
 import pytest
 
-from tests.agentica_test import adopt, run_vm, start_vm, vm_environment
+from tests.agentica_test import run_vm, start_vm, vm_environment
 from tests.vm_os_support import CONTENTION_PROGRAM, compile_text, root, run_program, work
 
 MODES_PROGRAM = """\

@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, adopt, check_lines, compile_agc, optional_tool, output_lines, run, run_vm,
+from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_agc, optional_tool, output_lines, run, run_vm,
                                  scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "http-peer.py"

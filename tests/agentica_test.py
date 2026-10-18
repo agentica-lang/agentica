@@ -16,8 +16,6 @@ import tempfile
 import threading
 import time
 import unittest
-
-import pytest
 from collections import namedtuple
 from pathlib import Path
 
@@ -516,22 +514,6 @@ def write_files(directory, files):
 def report_cases(report):
     """The scenarios of an `agentica test --json` report, in file order."""
     return [scenario for file in report["files"] for scenario in file["scenarios"]]
-
-
-@pytest.fixture
-def node():
-    """The Node.js tool for peer servers."""
-    return tool("node")
-
-
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
 
 
 def check_lines(text, expected, message):

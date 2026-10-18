@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, adopt, cli, compile_agc, process_alive, scaled, start_vm,
+from tests.agentica_test import (FIXTURES, PYTHON, Child, cli, compile_agc, process_alive, scaled, start_vm,
                                  vm_command, vm_environment, wait_until)
 
 PEER = FIXTURES / "stop-peer.py"

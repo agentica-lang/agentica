@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, Child, adopt, cli, compile_agc, output_lines, run, scaled,
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, Child, cli, compile_agc, output_lines, run, scaled,
                                  vm_command, vm_environment)
 
 EXAMPLES = ROOT / "examples"

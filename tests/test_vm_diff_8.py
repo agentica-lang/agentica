@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (RUN_TIMEOUT, TESTS, Child, adopt, cli, compile_agc, process_alive, scaled, vm_binary,
+from tests.agentica_test import (RUN_TIMEOUT, TESTS, Child, cli, compile_agc, process_alive, scaled, vm_binary,
                                  vm_command, vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
