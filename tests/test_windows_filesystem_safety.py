@@ -480,6 +480,27 @@ class WindowsFilesystemMutationTests(TestCase):
         source = root / "source.txt"
         source.write_text("cross-volume sentinel", encoding="utf-8")
         bytecode = self.compile_text(RACE_PROGRAM, "windows-cross-volume-rename")
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetVolumePathNameW.argtypes = [
+            ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32,
+        ]
+        kernel32.GetVolumePathNameW.restype = ctypes.c_int
+        kernel32.GetVolumeInformationW.argtypes = [
+            ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32),
+            ctypes.POINTER(ctypes.c_uint32), ctypes.c_wchar_p, ctypes.c_uint32,
+        ]
+        kernel32.GetVolumeInformationW.restype = ctypes.c_int
+
+        def volume_serial(path: str) -> tuple[str, int]:
+            root_path = ctypes.create_unicode_buffer(32768)
+            self.assertTrue(kernel32.GetVolumePathNameW(path, root_path, len(root_path)))
+            serial = ctypes.c_uint32()
+            self.assertTrue(kernel32.GetVolumeInformationW(
+                root_path.value, None, 0, ctypes.byref(serial), None, None, None, 0
+            ))
+            return root_path.value, serial.value
+
         mounted = False
         try:
             output = manage("create")
@@ -487,6 +508,12 @@ class WindowsFilesystemMutationTests(TestCase):
             match = re.search(r"^AGENTICA_DRIVE=([A-Z]:\\)$", output, re.MULTILINE)
             self.assertIsNotNone(match, output)
             target = match.group(1) + name + ".txt"
+            source_volume = volume_serial(str(source))
+            target_volume = volume_serial(target)
+            self.assertNotEqual(
+                source_volume[1], target_volume[1],
+                f"VHD must be a distinct volume: {source_volume} vs {target_volume}",
+            )
             result = run_vm(
                 bytecode, args=[str(source), target],
                 env=vm_environment(), cwd=self.root,
