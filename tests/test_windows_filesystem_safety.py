@@ -25,6 +25,16 @@ def main() -> Void
 end
 """
 
+PAUSED_REMOVE_PROGRAM = """\
+def main() -> Void
+  outcome = Path.remove(System.args()[0], 5000)
+  puts(outcome.ok?)
+  puts("ready")
+  IO.flush()
+  IO.gets()
+end
+"""
+
 RENAME_PROGRAM = """\
 def main() -> Void
   base = System.args()[0]
@@ -231,6 +241,24 @@ class WindowsFilesystemMutationTests(TestCase):
             # DELETE_CHILD on its parent. Reading the sentinel remains allowed.
             acl(box, "/deny", f"*{sid}:(DC)")
             acl(victim, "/deny", f"*{sid}:(D)")
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.CreateFileW.argtypes = [
+                ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
+                ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+            ]
+            kernel32.CreateFileW.restype = ctypes.c_void_p
+            kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+            # Establish actual denial with an independent Win32 open before
+            # invoking either mutation; elevated privileges may override a DACL.
+            handle = kernel32.CreateFileW(str(victim), 0x10000, 7, None, 3, 0, None)
+            if handle != ctypes.c_void_p(-1).value:
+                kernel32.CloseHandle(handle)
+                details = subprocess.run(
+                    ["icacls.exe", str(victim)], capture_output=True,
+                    text=True, check=False,
+                )
+                self.fail("ACL fixture did not deny DELETE: " + details.stdout)
+            self.assertEqual(ctypes.get_last_error(), 5)
             for bytecode, arguments in (
                 (remove, [str(victim)]),
                 (rename, [str(victim), str(box / "moved")]),
@@ -238,12 +266,18 @@ class WindowsFilesystemMutationTests(TestCase):
                 result = run_vm(
                     bytecode, args=arguments, env=vm_environment(), cwd=self.root
                 )
-                self.assertEqual((result.code, result.stdout), (0, "false\n"))
+                self.assertEqual(
+                    (result.code, result.stdout), (0, "false\n"),
+                    f"{arguments}: {result.stderr}",
+                )
                 self.assertEqual(victim.read_text(encoding="utf-8"), "acl sentinel")
                 self.assertFalse((box / "moved").exists())
         finally:
-            acl(victim, "/remove:d", f"*{sid}")
-            acl(box, "/remove:d", f"*{sid}")
+            try:
+                if victim.exists():
+                    acl(victim, "/remove:d", f"*{sid}")
+            finally:
+                acl(box, "/remove:d", f"*{sid}")
         result = run_vm(
             remove, args=[str(victim)], env=vm_environment(), cwd=self.root
         )
@@ -257,16 +291,20 @@ class WindowsFilesystemMutationTests(TestCase):
             current = current / "d"
         sentinel = current.parent / "keep"
         sentinel.write_text("deep sentinel", encoding="utf-8")
-        bytecode = self.compile_text(REMOVE_PROGRAM, "windows-remove-depth")
-        result = run_vm(
-            bytecode, args=[str(victim)], env=vm_environment(), cwd=self.root
-        )
-        self.assertEqual((result.code, result.stdout), (0, "false\n"))
-        self.assertEqual(sentinel.read_text(encoding="utf-8"), "deep sentinel")
-        # Renaming the tree proves traversal handles were closed on failure.
-        moved = self.root / "deep-moved"
-        victim.rename(moved)
-        self.assertTrue(moved.is_dir())
+        bytecode = self.compile_text(PAUSED_REMOVE_PROGRAM, "windows-remove-depth")
+        child = self.adopt(start_vm(bytecode, str(victim), stdin=True, cwd=self.root))
+        try:
+            self.assertEqual(child.next_line(), "false")
+            self.assertEqual(child.next_line(), "ready")
+            self.assertIsNone(child.process.poll())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "deep sentinel")
+            # The process is still alive: exit cannot hide leaked traversal handles.
+            moved = self.root / "deep-moved"
+            victim.rename(moved)
+            self.assertTrue(moved.is_dir())
+        finally:
+            child.close_stdin()
+        self.assertEqual(child.wait(), 0)
 
     def test_remove_pins_ancestors_during_concurrent_replacement(self) -> None:
         anchor = self.root / "anchor"
@@ -416,6 +454,32 @@ class WindowsFilesystemMutationTests(TestCase):
 @unittest.skipUnless(os.environ.get("AGENTICA_TEST_TARGET_OS") == "windows", "requires the Windows VM")
 class WindowsPathRefusalTests(TestCase):
     """Check root and dot-component refusals without mutating the filesystem."""
+
+    def test_empty_nul_and_invalid_timeout_do_not_mutate_the_entry(self) -> None:
+        root = self.make_temp_dir("agentica-windows-invalid-path-")
+        require_remove_sandbox(root)
+        victim = root / "keep"
+        victim.write_text("argument sentinel", encoding="utf-8")
+        source = """\
+def main() -> Void
+  path = System.args()[0]
+  invalid = path + String.from_code(0) + "suffix"
+  puts(Path.remove("", 5000).ok?)
+  puts(Path.remove(invalid, 5000).ok?)
+  puts(Path.remove(path, 0).ok?)
+  puts(Path.rename(path, path + "-moved", 0).ok?)
+  puts(Path.rename(invalid, path + "-moved", 5000).ok?)
+  puts(Path.rename(path, invalid, 5000).ok?)
+end
+"""
+        bytecode = self.compile_text(source, "windows-invalid-path")
+        result = run_vm(
+            bytecode, args=[str(victim)], env=vm_environment(), cwd=root
+        )
+        self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ["false"] * 6)
+        self.assertEqual(victim.read_text(encoding="utf-8"), "argument sentinel")
+        self.assertFalse((root / "keep-moved").exists())
 
     def test_roots_and_final_dot_components_are_refused(self) -> None:
         bytecode = self.compile_text(REMOVE_PROGRAM, "windows-remove-refusal")
