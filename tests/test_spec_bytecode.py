@@ -6,121 +6,278 @@ original writer, checked by tests/test_frontend_bytecode.py, cover it. The CLI i
 AGENTICA_TEST_EXECUTABLE runs the same cases on the single binary.
 """
 import json
+import textwrap
 
-from tests.agentica_test import TestCase, cli, run, vm_environment
+from tests.agentica_test import cli, run, vm_environment
 
 MAP_ENTRIES = ", ".join("%d: %d" % (key, key) for key in range(257))
 # Close to the parser's nesting limit, so the type is deep but still parses.
 DEEP_TYPE_DEPTH = 990
 
 
+def source(text):
+    """Normalize a readable, indented Agentica source literal."""
+    return textwrap.dedent(text).lstrip("\n")
+
+
 def deep_struct(depth):
     return "struct Deep\n  xs: %sInt%s\nend\n\n" % ("List[" * depth, "]" * depth)
 
 
-class BytecodeRules(TestCase):
-    def run_program(self, text, *flags):
-        source = self.make_temp_dir() / "program.agc"
-        source.write_text(text, encoding="utf-8")
-        return run(cli() + list(flags) + [str(source)], env=vm_environment())
+def run_program(text, tmp_path, *flags):
+    program = tmp_path / "program.agc"
+    program.write_text(text, encoding="utf-8")
+    return run(cli() + list(flags) + [str(program)], env=vm_environment())
 
-    def assert_prints(self, text, expected):
-        result = self.run_program(text)
-        self.assertEqual((result.code, result.stdout), (0, expected), result.stderr)
 
-    def assert_fails(self, text, code):
-        """A run that stops with a diagnostic: its code in the --json form on stderr, and what was printed before it."""
-        result = self.run_program(text, "--json")
-        self.assertEqual(result.code, 1, result.stdout + result.stderr)
-        try:
-            diagnostic = json.loads(result.stderr)
-        except ValueError:
-            self.fail("stderr is not a --json diagnostic: %r" % result.stderr)
-        self.assertEqual(diagnostic.get("code") if isinstance(diagnostic, dict) else None, code, result.stderr)
-        return result.stdout
+def assert_prints(text, expected, tmp_path):
+    result = run_program(text, tmp_path)
+    assert (result.code, result.stdout) == (0, expected), result.stderr
 
-    def test_task_await_takes_the_result_entry_only_for_a_result(self):
-        self.assert_prints(
-            "def f(n: Int) -> Result[Int]\n  return ok(n + 1)\nend\n\n"
-            "def g(n: Int) -> Int\n  return n + 1\nend\n\n"
-            "def main() -> Void\n"
-            "  puts(Task.await(Task.spawn(&f, 1)))\n"
-            "  puts(Task.await(Task.spawn(&f, 2), 10))\n"
-            "  puts(Task.await(Task.spawn(&g, 3)) + 1)\n"
-            "end\n",
-            "ok(2)\nAwait.Done(ok(3))\n5\n")
 
-    def test_a_returned_call_is_a_tail_call_and_a_nested_call_is_not(self):
-        loop = ("def loop(n: Int, acc: Int) -> Int\n  if n == 0\n    return acc\n  end\n"
-                "  return loop(n - 1, acc + 1)\nend\n\n")
-        self.assert_prints(loop + "def main() -> Void\n  puts(loop(1000000, 0))\nend\n", "1000000\n")
-        nested = ("def sum(n: Int) -> Int\n  if n == 0\n    return 0\n  end\n"
-                  "  return 1 + sum(n - 1)\nend\n\ndef main() -> Void\n  puts(sum(20000))\nend\n")
-        self.assertEqual(self.assert_fails(nested, "RUNTIME-STACK-OVERFLOW"), "")
+def assert_fails(text, code, tmp_path):
+    """Assert a JSON diagnostic and return what the program printed before it."""
+    result = run_program(text, tmp_path, "--json")
+    assert result.code == 1, result.stdout + result.stderr
+    diagnostic = json.loads(result.stderr)
+    assert diagnostic.get("code") == code, result.stderr
+    return result.stdout
 
-    def test_a_returned_try_passes_the_inner_result_up(self):
-        self.assert_prints(
-            "def h(n: Int) -> Result[Result[Int]]\n  return ok(ok(n))\nend\n\n"
-            "def g(n: Int) -> Result[Int]\n  return try h(n)\nend\n\n"
-            "def main() -> Void\n  puts(g(2))\nend\n",
-            "ok(2)\n")
 
-    def test_a_map_literal_above_255_entries_holds_every_entry(self):
-        self.assert_prints(
-            "def main() -> Void\n  m = {%s}\n  puts(m.size)\n  puts(m[256])\n  puts(m[0])\nend\n" % MAP_ENTRIES,
-            "257\n256\n0\n")
+def test_task_await_takes_the_result_entry_only_for_a_result(tmp_path):
+    assert_prints(
+        source("""
+            def f(n: Int) -> Result[Int]
+              return ok(n + 1)
+            end
 
-    def test_a_block_sees_its_parameters_and_its_captures(self):
-        self.assert_prints(
-            "def ap(f: Fn[Int, Int]) -> Int\n  return f.call(2)\nend\n\n"
-            "def main() -> Void\n  n = 1\n  m = 2\n"
-            "  xs = [1].map do |x| x + m + n end\n  puts(ap(&ap2))\n  puts(xs)\nend\n\n"
-            "def ap2(x: Int) -> Int\n  return x\nend\n",
-            "2\n[4]\n")
+            def g(n: Int) -> Int
+              return n + 1
+            end
 
-    def test_for_counts_over_a_range_literal_and_over_a_range_value(self):
-        self.assert_prints(
-            "def main() -> Void\n  for i in 0...3\n    puts(i)\n  end\n"
-            "  r = 1..2\n  for j in r\n    puts(j)\n  end\nend\n",
-            "0\n1\n2\n1\n2\n")
+            def main() -> Void
+              puts(Task.await(Task.spawn(&f, 1)))
+              puts(Task.await(Task.spawn(&f, 2), 10))
+              puts(Task.await(Task.spawn(&g, 3)) + 1)
+            end
+        """),
+        "ok(2)\nAwait.Done(ok(3))\n5\n",
+        tmp_path,
+    )
 
-    def test_struct_updates_chain_and_leave_the_old_values(self):
-        self.assert_prints(
-            "struct P\n  a: Int\n  b: Int\n  c: Int\nend\n\n"
-            "def main() -> Void\n  p = P(a: 1, b: 2, c: 3)\n  q = p.with(c: 4, a: 5)\n"
-            "  r = q.with(a: 6, c: 7)\n  s = r.with(b: 8)\n"
-            "  puts(\"#{s.a} #{s.b} #{s.c}\")\n  puts(\"#{p.a} #{p.b} #{p.c}\")\n"
-            "  puts(\"#{q.a} #{q.b} #{q.c}\")\nend\n",
-            "6 8 7\n1 2 3\n5 2 4\n")
 
-    def test_module_constants_are_built_in_dependency_order(self):
-        self.assert_prints(
-            "SIZE = 4\nTABLE = {\"a\": SIZE}\nSQUARES = [1, 2].map do |n| n * SIZE end\nLATE = SQUARES.size\n"
-            "UNUSED = [9]\n\n"
-            "def main() -> Void\n  puts(TABLE[\"a\"])\n  puts(SIZE)\n  puts(LATE)\n  [1].each do |n|\n"
-            "    puts(n + LATE)\n  end\nend\n\n"
-            "def unreachable() -> Int\n  return UNUSED.size\nend\n",
-            "4\n4\n2\n3\n")
+def test_a_returned_call_is_a_tail_call_and_a_nested_call_is_not(tmp_path):
+    loop = source("""
+        def loop(n: Int, acc: Int) -> Int
+          if n == 0
+            return acc
+          end
+          return loop(n - 1, acc + 1)
+        end
 
-    def test_literal_constants_read_in_a_string(self):
-        self.assert_prints(
-            "SIZE = 4\nNAME = \"x\"\n\ndef main() -> Void\n  puts(\"#{NAME}#{SIZE}\")\nend\n",
-            "x4\n")
+        def main() -> Void
+          puts(loop(1000000, 0))
+        end
+    """)
+    assert_prints(loop, "1000000\n", tmp_path)
 
-    def test_a_constant_that_nothing_reachable_reads_never_runs(self):
-        self.assert_prints(
-            "BAD = [1][5]\n\ndef main() -> Void\n  puts(1)\nend\n\ndef never() -> Int\n  return BAD\nend\n",
-            "1\n")
+    nested = source("""
+        def sum(n: Int) -> Int
+          if n == 0
+            return 0
+          end
+          return 1 + sum(n - 1)
+        end
 
-    def test_a_failing_constant_stops_the_program_before_main_prints(self):
-        printed = self.assert_fails("BAD = [1][5]\n\ndef main() -> Void\n  puts(1)\n  puts(BAD)\nend\n",
-                                    "RUNTIME-INDEX-OUT-OF-RANGE")
-        self.assertEqual(printed, "")
+        def main() -> Void
+          puts(sum(20000))
+        end
+    """)
+    assert assert_fails(nested, "RUNTIME-STACK-OVERFLOW", tmp_path) == ""
 
-    def test_deep_json_field_types_still_compile_and_run(self):
-        result = self.run_program(deep_struct(DEEP_TYPE_DEPTH)
-                                  + "def main() -> Void\n  puts(JSON.schema(Deep).to_s)\nend\n")
-        self.assertEqual(result.code, 0, result.stderr)
-        schema = json.loads(result.stdout)
-        self.assertEqual((schema["type"], schema["required"]), ("object", ["xs"]), result.stdout[:200])
-        self.assertEqual(schema["properties"]["xs"]["type"], "array")
+
+def test_a_returned_try_passes_the_inner_result_up(tmp_path):
+    assert_prints(
+        source("""
+            def h(n: Int) -> Result[Result[Int]]
+              return ok(ok(n))
+            end
+
+            def g(n: Int) -> Result[Int]
+              return try h(n)
+            end
+
+            def main() -> Void
+              puts(g(2))
+            end
+        """),
+        "ok(2)\n",
+        tmp_path,
+    )
+
+
+def test_a_map_literal_above_255_entries_holds_every_entry(tmp_path):
+    text = source("""
+        def main() -> Void
+          m = {%s}
+          puts(m.size)
+          puts(m[256])
+          puts(m[0])
+        end
+    """) % MAP_ENTRIES
+    assert_prints(text, "257\n256\n0\n", tmp_path)
+
+
+def test_a_block_sees_its_parameters_and_its_captures(tmp_path):
+    assert_prints(
+        source("""
+            def ap(f: Fn[Int, Int]) -> Int
+              return f.call(2)
+            end
+
+            def main() -> Void
+              n = 1
+              m = 2
+              xs = [1].map do |x| x + m + n end
+              puts(ap(&ap2))
+              puts(xs)
+            end
+
+            def ap2(x: Int) -> Int
+              return x
+            end
+        """),
+        "2\n[4]\n",
+        tmp_path,
+    )
+
+
+def test_for_counts_over_a_range_literal_and_over_a_range_value(tmp_path):
+    assert_prints(
+        source("""
+            def main() -> Void
+              for i in 0...3
+                puts(i)
+              end
+              r = 1..2
+              for j in r
+                puts(j)
+              end
+            end
+        """),
+        "0\n1\n2\n1\n2\n",
+        tmp_path,
+    )
+
+
+def test_struct_updates_chain_and_leave_the_old_values(tmp_path):
+    assert_prints(
+        source("""
+            struct P
+              a: Int
+              b: Int
+              c: Int
+            end
+
+            def main() -> Void
+              p = P(a: 1, b: 2, c: 3)
+              q = p.with(c: 4, a: 5)
+              r = q.with(a: 6, c: 7)
+              s = r.with(b: 8)
+              puts("#{s.a} #{s.b} #{s.c}")
+              puts("#{p.a} #{p.b} #{p.c}")
+              puts("#{q.a} #{q.b} #{q.c}")
+            end
+        """),
+        "6 8 7\n1 2 3\n5 2 4\n",
+        tmp_path,
+    )
+
+
+def test_module_constants_are_built_in_dependency_order(tmp_path):
+    assert_prints(
+        source("""
+            SIZE = 4
+            TABLE = {"a": SIZE}
+            SQUARES = [1, 2].map do |n| n * SIZE end
+            LATE = SQUARES.size
+            UNUSED = [9]
+
+            def main() -> Void
+              puts(TABLE["a"])
+              puts(SIZE)
+              puts(LATE)
+              [1].each do |n|
+                puts(n + LATE)
+              end
+            end
+
+            def unreachable() -> Int
+              return UNUSED.size
+            end
+        """),
+        "4\n4\n2\n3\n",
+        tmp_path,
+    )
+
+
+def test_literal_constants_read_in_a_string(tmp_path):
+    assert_prints(
+        source("""
+            SIZE = 4
+            NAME = "x"
+
+            def main() -> Void
+              puts("#{NAME}#{SIZE}")
+            end
+        """),
+        "x4\n",
+        tmp_path,
+    )
+
+
+def test_a_constant_that_nothing_reachable_reads_never_runs(tmp_path):
+    assert_prints(
+        source("""
+            BAD = [1][5]
+
+            def main() -> Void
+              puts(1)
+            end
+
+            def never() -> Int
+              return BAD
+            end
+        """),
+        "1\n",
+        tmp_path,
+    )
+
+
+def test_a_failing_constant_stops_the_program_before_main_prints(tmp_path):
+    printed = assert_fails(
+        source("""
+            BAD = [1][5]
+
+            def main() -> Void
+              puts(1)
+              puts(BAD)
+            end
+        """),
+        "RUNTIME-INDEX-OUT-OF-RANGE",
+        tmp_path,
+    )
+    assert printed == ""
+
+
+def test_deep_json_field_types_still_compile_and_run(tmp_path):
+    program = deep_struct(DEEP_TYPE_DEPTH) + source("""
+        def main() -> Void
+          puts(JSON.schema(Deep).to_s)
+        end
+    """)
+    result = run_program(program, tmp_path)
+    assert result.code == 0, result.stderr
+    schema = json.loads(result.stdout)
+    assert (schema["type"], schema["required"]) == ("object", ["xs"]), result.stdout[:200]
+    assert schema["properties"]["xs"]["type"] == "array"

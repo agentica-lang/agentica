@@ -82,6 +82,8 @@ def timeout(seconds):
 class TestTimeout(AssertionError):
     """A test that outlived its limit: unittest reports that test as failed and goes on with the next."""
 
+    __test__ = False
+
 
 # The time limit of a run, as in the VM golden harness (tests/vm_diff_support.py).
 RUN_TIMEOUT = scaled(60)

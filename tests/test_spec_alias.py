@@ -98,22 +98,26 @@ def test_alias_name_collision_points_to_the_name(agentica_check):
 
 
 def test_type_is_an_ordinary_name_outside_alias_declarations(agentica_check):
-    text = (
-        "struct Holder\n"
-        "  type: Int\n"
-        "end\n\n"
-        "def type(value: Int) -> Int\n"
-        "  return value\n"
-        "end\n\n"
-        "def echo(type: Int) -> Int\n"
-        "  return type\n"
-        "end\n\n"
-        "def main() -> Void\n"
-        "  type = 7\n"
-        "  holder = Holder(type: type)\n"
-        "  puts(type(echo(holder.type)))\n"
-        "end\n\n"
-    )
+    text = """\
+struct Holder
+  type: Int
+end
+
+def type(value: Int) -> Int
+  return value
+end
+
+def echo(type: Int) -> Int
+  return type
+end
+
+def main() -> Void
+  type = 7
+  holder = Holder(type: type)
+  puts(type(echo(holder.type)))
+end
+
+"""
     assert agentica_check(text) is None
 
 

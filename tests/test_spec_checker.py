@@ -10,7 +10,7 @@ Agentica checker is compared with.
 """
 import json
 
-from tests.agentica_test import TestCase, cli, run
+from tests.agentica_test import cli, run
 from tests.spec_support import covered
 
 
@@ -45,87 +45,88 @@ METHOD_PIPE_HELPERS = ("def f(n: Int) -> Int\n  return n\nend\n\n"
                        "def g(n: Int) -> Result[Int]\n  return ok(n)\nend\n\n")
 
 
-class SpecCheckerTest(TestCase):
-    def setUp(self):
-        self.work = self.make_temp_dir()
+def problem(text, tmp_path):
+    """Return the JSON diagnostic, or None when the program checks clean."""
+    path = tmp_path / "program.agc"
+    path.write_text(text, encoding="utf-8")
+    result = run(cli() + ["--json", "check", str(path)])
+    assert result.code in (0, 1), result.stderr
+    return json.loads(result.stderr) if result.code else None
 
-    def problem(self, text):
-        """The JSON diagnostic that `check` gives the program, or None when the program checks clean."""
-        path = self.work / "program.agc"
-        path.write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(path)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
 
-    def assert_clean(self, text):
-        self.assertIsNone(self.problem(text), text)
+def assert_clean(text, tmp_path):
+    assert problem(text, tmp_path) is None, text
 
-    def assert_code(self, text, code):
-        found = self.problem(text)
-        self.assertIsNotNone(found, "%s expected for:\n%s" % (code, text))
-        self.assertEqual(found["code"], code, text)
-        return found
 
-    def expect(self, text, code, start, covers=None):
-        """The program fails with `code` at `start` (line, column); `covers` is the span's source text, if given."""
-        found = self.assert_code(text, code)
-        self.assertEqual(position(found["range"]["start"]), start, text)
-        if covers is not None:
-            self.assertEqual(covered(text, found["range"]), covers, text)
-        return found
+def assert_code(text, code, tmp_path):
+    found = problem(text, tmp_path)
+    assert found is not None, f"{code} expected for:\n{text}"
+    assert found["code"] == code, text
+    return found
 
-    def test_diagnostics_point_at_the_offending_source(self):
-        cases = [
-            (main_with("  x: Int = \"s\""), "CHECK-TYPE-MISMATCH", (2, 12), "\"s\""),
-            (main_with("  x = missing"), "CHECK-UNKNOWN-NAME", (2, 7), "missing"),
-            (main_with("  x = 1 + \"a\""), "CHECK-TYPE-MISMATCH", (2, 9), "+"),
-        ]
-        for text, code, start, covers in cases:
-            with self.subTest(text=text):
-                self.expect(text, code, start, covers)
 
-    def test_a_field_named_with_cannot_hold_a_function(self):
-        self.expect("struct Hooks\n  with: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n",
-                    "CHECK-REDEFINED-NAME", (2, 3), "with: Fn[Int, Int]\n")
-        self.assert_clean("struct Hooks\n  with: Int\n  run: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n")
+def expect(text, code, start, tmp_path, covers=None):
+    """Assert a diagnostic code, start position, and optional covered source text."""
+    found = assert_code(text, code, tmp_path)
+    assert position(found["range"]["start"]) == start, text
+    if covers is not None:
+        assert covered(text, found["range"]) == covers, text
+    return found
 
-    def test_pipe_calls_user_functions_and_builtins(self):
-        for body in ("  n: Int = 1 |> add(2) |> add(3)\n  puts(n)",
-                     "  r: Result[Int] = \" 4 \".trim |> parse()\n  puts(r.unwrap!)"):
-            with self.subTest(body=body):
-                self.assert_clean(PIPE_HELPERS + main_with(body))
-        self.expect(PIPE_HELPERS + main_with("  n = \"a\" |> add(1)"), "CHECK-TYPE-MISMATCH", (15, 7), "\"a\"")
-        for body, code in (("  n = 1 |> add()\n  puts(n)", "CHECK-ARITY"),
-                           ("  n = 1 |> missing()", "CHECK-UNKNOWN-NAME")):
-            with self.subTest(body=body):
-                self.assert_code(PIPE_HELPERS + main_with(body), code)
 
-    def test_pipe_into_a_builtin_with_a_method_form_is_pipe_method(self):
-        self.expect(main_with("  s = \" a \"\n  t = s |> String.trim()\n  puts(t)"),
-                    "CHECK-PIPE-METHOD", (3, 12), "String.trim()")
-        tried = (METHOD_PIPE_HELPERS + "def h() -> Result[String]\n  z = 1 |> try g() |> String.from_int()\n"
-                 "  return ok(z)\nend\n\n")
-        cases = [
-            main_with("  s = \"a,b\"\n  xs = s.trim |> String.split(\",\")\n  puts(xs.size)"),
-            main_with("  n = \"a\" + \"b\" |> String.length()"),
-            METHOD_PIPE_HELPERS + main_with("  z = 1 |> f() |> String.from_int()"),
-            tried + main_with("  puts(1)"),
-            METHOD_PIPE_HELPERS + main_with("  xs = [1, 2]\n  ys = xs |> List.map() do |v: Int| v |> f() end"),
-            main_with("  xs = [1, 2]\n  ys = (xs |> List.map()) do |v: Int| v end"),
-        ]
-        for text in cases:
-            with self.subTest(text=text):
-                self.assert_code(text, "CHECK-PIPE-METHOD")
+def test_diagnostics_point_at_the_offending_source(tmp_path):
+    cases = [
+        (main_with('  x: Int = "s"'), "CHECK-TYPE-MISMATCH", (2, 12), '"s"'),
+        (main_with("  x = missing"), "CHECK-UNKNOWN-NAME", (2, 7), "missing"),
+        (main_with('  x = 1 + "a"'), "CHECK-TYPE-MISMATCH", (2, 9), "+"),
+    ]
+    for text, code, start, covers in cases:
+        expect(text, code, start, tmp_path, covers)
 
-    def test_expressions_and_statements_nest_at_most_1000_levels(self):
-        for count in (997, 998):
-            with self.subTest(links=count):
-                self.assert_clean(main_with("  x = 1\n  y = x" + links(count) + "\n  puts(y)"))
-        deep = main_with("  x = 1\n  y = " + nested_chains(3, 500) + "\n  puts(y)")
-        found = self.expect(deep, "CHECK-TOO-DEEP", (3, 12))
-        self.assertTrue(covered(deep, found["range"]).startswith("x "), deep)
-        nested_ifs = ("".join("  if x == 1\n" for _ in range(300)) + "  y = " + nested_chains(2, 500) + "\n"
-                      + "".join("  end\n" for _ in range(300)))
-        self.expect(main_with("  x = 1\n" + nested_ifs), "CHECK-TOO-DEEP", (303, 12))
+
+def test_a_field_named_with_cannot_hold_a_function(tmp_path):
+    expect("struct Hooks\n  with: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n",
+           "CHECK-REDEFINED-NAME", (2, 3), tmp_path, "with: Fn[Int, Int]\n")
+    assert_clean("struct Hooks\n  with: Int\n  run: Fn[Int, Int]\nend\n\ndef main() -> Void\nend\n\n", tmp_path)
+
+
+def test_pipe_calls_user_functions_and_builtins(tmp_path):
+    bodies = (
+        "  n: Int = 1 |> add(2) |> add(3)\n  puts(n)",
+        '  r: Result[Int] = " 4 ".trim |> parse()\n  puts(r.unwrap!)',
+    )
+    for body in bodies:
+        assert_clean(PIPE_HELPERS + main_with(body), tmp_path)
+    expect(PIPE_HELPERS + main_with('  n = "a" |> add(1)'),
+           "CHECK-TYPE-MISMATCH", (15, 7), tmp_path, '"a"')
+    for body, code in (("  n = 1 |> add()\n  puts(n)", "CHECK-ARITY"),
+                       ("  n = 1 |> missing()", "CHECK-UNKNOWN-NAME")):
+        assert_code(PIPE_HELPERS + main_with(body), code, tmp_path)
+
+
+def test_pipe_into_a_builtin_with_a_method_form_is_pipe_method(tmp_path):
+    expect(main_with('  s = " a "\n  t = s |> String.trim()\n  puts(t)'),
+           "CHECK-PIPE-METHOD", (3, 12), tmp_path, "String.trim()")
+    tried = (METHOD_PIPE_HELPERS + "def h() -> Result[String]\n  z = 1 |> try g() |> String.from_int()\n"
+             "  return ok(z)\nend\n\n")
+    cases = [
+        main_with('  s = "a,b"\n  xs = s.trim |> String.split(",")\n  puts(xs.size)'),
+        main_with('  n = "a" + "b" |> String.length()'),
+        METHOD_PIPE_HELPERS + main_with("  z = 1 |> f() |> String.from_int()"),
+        tried + main_with("  puts(1)"),
+        METHOD_PIPE_HELPERS + main_with("  xs = [1, 2]\n  ys = xs |> List.map() do |v: Int| v |> f() end"),
+        main_with("  xs = [1, 2]\n  ys = (xs |> List.map()) do |v: Int| v end"),
+    ]
+    for text in cases:
+        assert_code(text, "CHECK-PIPE-METHOD", tmp_path)
+
+
+def test_expressions_and_statements_nest_at_most_1000_levels(tmp_path):
+    for count in (997, 998):
+        assert_clean(main_with("  x = 1\n  y = x" + links(count) + "\n  puts(y)"), tmp_path)
+    deep = main_with("  x = 1\n  y = " + nested_chains(3, 500) + "\n  puts(y)")
+    found = expect(deep, "CHECK-TOO-DEEP", (3, 12), tmp_path)
+    assert covered(deep, found["range"]).startswith("x "), deep
+    nested_ifs = ("".join("  if x == 1\n" for _ in range(300)) + "  y = " + nested_chains(2, 500) + "\n"
+                  + "".join("  end\n" for _ in range(300)))
+    expect(main_with("  x = 1\n" + nested_ifs), "CHECK-TOO-DEEP", (303, 12), tmp_path)

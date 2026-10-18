@@ -8,7 +8,9 @@ evaluation order). Help and message texts are not asserted (AGENTS.md).
 import json
 from collections import namedtuple
 
-from tests.agentica_test import TestCase, cli, output_lines, run, vm_environment
+import pytest
+
+from tests.agentica_test import cli, output_lines, run, vm_environment
 
 # span: (line, column) of the start, (line, column, line, column) with the end too, (line,) for the line only,
 # or None when the rule is not about a position.
@@ -126,7 +128,22 @@ PIPE_TARGETS = [
 ]
 
 
-class SpecParser(TestCase):
+class TestSpecParser:
+    @pytest.fixture(autouse=True)
+    def set_up(self, tmp_path):
+        self._tmp_path = tmp_path
+        self._temp_dir_count = 0
+
+    def make_suite(self, files):
+        self._temp_dir_count += 1
+        directory = self._tmp_path / f"case-{self._temp_dir_count}"
+        directory.mkdir()
+        for name, text in files.items():
+            path = directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        return directory
+
     def run_all(self, programs, *command):
         """Run the CLI with `command` on each program (text, files) and return the results in order.
 
@@ -141,30 +158,27 @@ class SpecParser(TestCase):
     def check_rejected(self, cases):
         results = self.run_all([(case.text, case.files) for case in cases], "--json", "check")
         for case, result in zip(cases, results):
-            with self.subTest(program=case.text):
-                if result.code != 1:
-                    self.fail("expected %s, the program was not rejected: %s" % (case.code, result.stdout))
-                diagnostic = json.loads(result.stderr)
-                self.assertEqual(diagnostic["code"], case.code, diagnostic.get("message"))
-                if case.span is not None:
-                    self.assertEqual(span_of(diagnostic)[:len(case.span)], case.span, diagnostic.get("message"))
+            if result.code != 1:
+                pytest.fail("expected %s, the program was not rejected: %s" % (case.code, result.stdout))
+            diagnostic = json.loads(result.stderr)
+            assert (diagnostic["code"]) == (case.code), diagnostic.get("message")
+            if case.span is not None:
+                assert (span_of(diagnostic)[:len(case.span)]) == (case.span), diagnostic.get("message")
 
     def check_accepted(self, cases):
         results = self.run_all([(case.text, case.files) for case in cases], "--json", "check")
         for case, result in zip(cases, results):
-            with self.subTest(program=case.text):
-                if case.parses_only:
-                    code = json.loads(result.stderr)["code"] if result.code else ""
-                    self.assertFalse(code.startswith(PARSE_CODES), result.stderr)
-                else:
-                    self.assertEqual((result.code, result.stdout), (0, '{"ok":true}\n'), result.stderr)
+            if case.parses_only:
+                code = json.loads(result.stderr)["code"] if result.code else ""
+                assert not (code.startswith(PARSE_CODES)), result.stderr
+            else:
+                assert ((result.code, result.stdout)) == ((0, '{"ok":true}\n')), result.stderr
 
     def check_output(self, cases):
         results = self.run_all([(case.text, case.files) for case in cases])
         for case, result in zip(cases, results):
-            with self.subTest(program=case.text):
-                self.assertEqual(result.code, 0, result.stderr)
-                self.assertEqual(output_lines(result.stdout), case.lines)
+            assert (result.code) == (0), result.stderr
+            assert (output_lines(result.stdout)) == (case.lines)
 
     def test_ranges_bind_loosest_and_do_not_chain(self):
         self.check_output([
