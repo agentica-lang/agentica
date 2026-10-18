@@ -1,40 +1,28 @@
 #### 10.2.3 Multicore: threads and the rules per thread
 
-The design lets the VM use all CPU cores. The model (the threads, the queues and
-who owns what) is in §16 ([`16-architecture.md`](16-architecture.md)): N
-scheduler threads that pull ready tasks from one global run queue, and one I/O
-thread, the main thread, with the only libuv loop. This section keeps the rules
-that follow from it. The first design was M:N as in BEAM (a loop, run queue and
-registry per scheduler, a home scheduler per task, work stealing). The owner
-replaced it with §16 on 2026-10-13. It is gated: the roadmap builds more than
-one scheduler only after the server measurement (7j), which decides it (order
-step 11, right after step 9 and before the JIT), and only if CPU-bound work
+The multicore model (threads, queues and ownership) is in §16
+([`16-architecture.md`](16-architecture.md)); this section keeps the rules
+that still apply. §16 replaces the earlier BEAM-style plan (a loop, run queue
+and registry per scheduler, home schedulers and work stealing) with one I/O
+loop, one global queue and no home scheduler. Multicore is gated on the server
+measurement (roadmap 7j, order step 11) and proceeds only if CPU-bound work
 needs it.
 
-- **Schedulers.** N scheduler threads. The default is
-  `uv_available_parallelism()`, which respects CPU affinity. `--schedulers N`
-  sets it, capped at 1024 (not built yet). 0, negative or non-numeric values
-  exit 2, like other bad VM flags. `--schedulers 1` gives the N=1 order, which
-  still depends on timer and pool timing. `--seed` does not imply
-  `--schedulers 1`: a repeatable run needs it given explicitly. At N>1 only each
-  task's random values repeat (7.4). The schedulers share one global run queue
-  and have no loop: the only `uv_loop_t` belongs to the I/O thread (§16.2).
-  Tasks are green VM stacks, and reductions and turns work as in 10.2.1. The
-  thread pool is one per process, driven by that loop, and its size is
-  `UV_THREADPOOL_SIZE` (10.2.1).
-- **Run queue and idle schedulers.** One global run queue (§16.3). New, yielded
-  and woken tasks are pushed at its tail. A scheduler pops one task under the
-  queue's lock, never a batch. An idle scheduler waits on the queue's condvar
-  and never spins. A push signals one. Requeueing a preempted task does not
-  touch the packed word of the Stall check, since the task never stops being
-  live.
-- **Waking.** Whoever wakes a task pushes it on the global run queue, after
-  publishing what the task needs to see (§16.3, wake after publish): the I/O
-  thread when a job ends, a scheduler when an await finishes or a lock passes,
-  or a cancel. There is no home scheduler and no per-scheduler wake handle. A
-  task's results and state changes are published with release/acquire or under a
-  small per-task lock, so an awaiting task on another scheduler sees the whole
-  result.
+- **Schedulers.** `N` defaults to `uv_available_parallelism()` (respects CPU
+  affinity); `--schedulers N` sets it, capped at 1024 (not built). Invalid
+  values exit 2. `--schedulers 1` gives the N=1 order, which still depends on
+  timer and pool timing. `--seed` does not imply one scheduler; at N>1 only
+  per-task random values repeat (7.4). The thread split and shared queue are in
+  §16.2–16.3. Tasks are green VM stacks; turns and reductions are in §10.2.1,
+  thread-pool details in §10.2.2.
+- **Run queue and idle schedulers.** FIFO order, push/pop and condvar rules are
+  specified in §16.3. Requeueing a preempted task does not change the packed
+  Stall-check word: it remains live.
+- **Waking.** State/results are published before enqueueing (§16.3–16.4):
+  the I/O thread on job completion, or a scheduler after await/lock completion
+  or cancellation. Release/acquire ordering or the per-task lock makes results
+  visible to the resumed scheduler. The park and wake protocol below handles
+  races while a task is still parking.
 - **Cancel and stop flags.** The task's cancel flag and the run's stop flag are
   atomics, checked only on the `STEP` slow path, when the "next stop" counter
   runs out. The fast path still touches no atomic. A cancel or stop takes effect
@@ -128,27 +116,21 @@ needs it.
     idle schedulers. The others stop at their next `STEP` slow path or when they
     wake. The exit path (§14.4) runs on the I/O thread. Whether it waits for the
     schedulers first is open (§16.11).
-- **I/O ownership.** Every libuv handle belongs to the one loop, on the I/O
-  thread, for its whole life. A task on any scheduler reaches a handle by
-  posting a request to the I/O inbox and parking (§16.4). The result wakes it
-  through the run queue. No task moves to the scheduler that owns a handle.
-  Thread-pool threads never touch GC memory (10.2).
+- **I/O ownership.** Handles stay on the I/O loop. Schedulers request
+  operations through its inbox and tasks resume via the global queue, not a
+  handle-owning scheduler (§16.2, §16.4). Pool threads never touch GC memory
+  (§16.1).
 - **Stdin.** A handle on the I/O loop like any other. Reads from any scheduler
   are requests. Each read stays whole, because the input keeps a FIFO of waiting
   readers and serves one read at a time. No OS mutex or spinlock is held across
   a park.
-- **Output.** Each print to stdout or stderr is copied whole into the stream's
-  buffer, or waits whole in the stream's FIFO, so lines from different tasks
-  never mix mid-line (§10.2.2, "stdout and stderr (row 7.2.1f)", built for N=1
-  without a lock). A stream on the loop is written only by the loop. Stdout and
-  stderr on one target share one buffer and one FIFO, so they share the lock
-  too. With N>1 the buffer and the FIFO get a short lock around each access,
-  never held across a park, since an OS lock held for the whole write could not
-  survive a park. The blocking fallbacks (§14.1) keep a lock across the write:
-  under it, a short write or `ferror` is retried, and once the outcome is set,
-  writes are dropped (checked under the stream lock). The final diagnostic of
-  `vm/launch.c` is exempt. Only the order in which output from different tasks
-  interleaves is not repeatable.
+- **Output.** A print is copied whole into a stream buffer or waits whole in
+  its FIFO; lines never mix mid-line (§10.2.2). Streams to one target share a
+  buffer, FIFO and lock, with the loop as sole writer. For N>1 a short lock
+  protects each access and is never held across a park. Blocking fallbacks
+  (§14.1) hold it across writes, retry short writes and `ferror`, then drop
+  writes once the outcome is set. The final `vm/launch.c` diagnostic is exempt.
+  Only interleaving order between tasks is not repeatable (§16.8).
 - **The I/O thread blocks in its loop.** With nothing to do it blocks in
   `uv_run(UV_RUN_ONCE)`. The inbox's `uv_async_t` is ref'd while schedulers run,
   so the loop stays alive with no other handle, and a request calls
@@ -168,14 +150,8 @@ needs it.
   change that makes idle == N and live == 0. The thread that makes that change,
   if tasks are still parked, fails the run with `RUNTIME-INTERNAL` and wakes the
   other schedulers (10.2.1, Stall check).
-- **Main thread.** It does the start-up work (`GC_INIT`,
-  `GC_allow_register_threads`, the `setenv`, the SipHash keys, the messages
-  locale), starts the N scheduler threads, and then becomes the I/O thread
-  (§16.2). It runs the loop and the one exit path (§14.4). It joins no
-  scheduler.
-- **Shutdown.** The run ends through the exit path of §14.4, on the I/O thread.
-  It does not close the handles one by one, and does not free the loop (10.2.2,
-  End of run).
+- **Shutdown.** `end_run` runs on the I/O thread; it does not close each handle
+  or free the loop (§14.4; §10.2.2, "End of run").
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
   `THREAD_LOCAL_ALLOC`. Scheduler threads are created with `GC_pthread_create`
   or register with `GC_register_my_thread`. The libuv pool threads stay

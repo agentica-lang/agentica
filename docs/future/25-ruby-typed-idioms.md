@@ -981,7 +981,7 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
   roadmap 17a) and this item adds it, and the other reuses it. `try` in a block
   with a fixed `Result` type already works (`Test.test`, and `File.each_line`,
   [section
-  27.4](27-iteration-and-concurrency.md#274-streams-fileeach_line-and-streamt),
+  27.4](27-iteration-and-concurrency.md#274-streams-fileeachline-and-streamt),
   roadmap 17d, which added only the completion-value check and its help).
 - The strict rules of [section
   26](26-strict-diagnostics.md#26-strict-diagnostics) hold in the block: an
@@ -1400,10 +1400,11 @@ one exists.
   write a function.
 - **Hooks** (`included`, `inherited`, `method_added`): there are no classes or
   mixins to hook.
-- **Mixins** (`include`, `extend`, `Comparable`) **and the metatables idea of
-  [section 7](07-metatables.md):** user types have no methods; a struct of `Fn`
-  fields and wrapper functions cover the same need (the pattern below). For
-  chaining user functions, use `|>` (§25.14).
+- **Mixins** (`include`, `extend`, `Comparable`) and metatable-style methods
+  (the former §7) are not planned: user types have no methods; a struct of `Fn`
+  fields and wrapper functions compose behavior while retaining static checking.
+  The §7 proposal's method-attachment syntax adds no need beyond that
+  pattern. For chaining user functions, use `|>` (§25.14).
 - **Duck typing:** a struct of `Fn` fields is the interface, checked by name
   (15.1).
 - **Symbols:** `String` keys and enums cover them.
