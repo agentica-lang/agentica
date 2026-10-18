@@ -473,6 +473,50 @@ class WindowsFilesystemMutationTests(TestCase):
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "target sentinel")
         self.assertEqual((target / "keep").read_text(encoding="utf-8"), "target sentinel")
 
+    def test_symlinks_are_removed_and_renamed_without_touching_their_targets(self) -> None:
+        target_dir = self.root / "symlink-target-dir"
+        target_dir.mkdir()
+        (target_dir / "keep").write_text("dir target", encoding="utf-8")
+        target_file = self.root / "symlink-target.txt"
+        target_file.write_text("file target", encoding="utf-8")
+        dir_link, file_link = self.root / "dir-link", self.root / "file-link"
+        for link, target, flags in (
+            (dir_link, target_dir, ["/D"]),
+            (file_link, target_file, []),
+        ):
+            made = subprocess.run(
+                ["cmd.exe", "/d", "/c", "mklink", *flags, str(link), str(target)],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(made.returncode, 0, made.stdout + made.stderr)
+
+        remove = self.compile_text(REMOVE_PROGRAM, "windows-remove-symlink")
+        for link in (file_link, dir_link):
+            result = run_vm(
+                remove, args=[str(link)], env=vm_environment(), cwd=self.root
+            )
+            self.assertEqual((result.code, result.stdout), (0, "true\n"), result.stderr)
+            self.assertFalse(os.path.lexists(link))
+        self.assertEqual(target_file.read_text(encoding="utf-8"), "file target")
+        self.assertEqual((target_dir / "keep").read_text(encoding="utf-8"), "dir target")
+
+        # A symlink renames as a link: the target keeps its contents.
+        made = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/D", str(dir_link), str(target_dir)],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(made.returncode, 0, made.stdout + made.stderr)
+        moved = self.root / "moved-dir-link"
+        rename = self.compile_text(RACE_PROGRAM, "windows-rename-symlink")
+        result = run_vm(
+            rename, args=[str(dir_link), str(moved)],
+            env=vm_environment(), cwd=self.root,
+        )
+        self.assertEqual((result.code, result.stdout), (0, "true\n"), result.stderr)
+        self.assertFalse(os.path.lexists(dir_link))
+        self.assertTrue(os.path.islink(moved))
+        self.assertEqual((moved / "keep").read_text(encoding="utf-8"), "dir target")
+
     def test_cross_volume_rename_fails_without_losing_the_source(self) -> None:
         root = self.root / "cross-volume"
         root.mkdir()
