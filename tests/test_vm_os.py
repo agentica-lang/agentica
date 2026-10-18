@@ -8,7 +8,9 @@ import os
 import signal
 import stat
 
-from tests.agentica_test import Child, TestCase, output_lines, run_vm, start_vm, vm_binary, vm_command, vm_environment
+import pytest
+
+from tests.agentica_test import Child, compile_agc, output_lines, run_vm, start_vm, vm_binary, vm_command, vm_environment
 from tests.windows_support import assert_rename_race
 
 MODES_PROGRAM = """\
@@ -179,192 +181,249 @@ end
 """
 
 
-class OsBuiltinsBase(TestCase):
-    def setUp(self):
-        self.root = self.make_temp_dir("agentica-os-").resolve()
-
-    def program(self, text, name):
-        return self.compile_text(text, name)
-
-    def run_program(self, text, name, *args, flags=(), env=None, cwd=None):
-        """Run a program in the scratch directory and return its output lines."""
-        result = run_vm(self.program(text, name), *flags, args=[str(arg) for arg in args],
-                        env=vm_environment(env), cwd=cwd or self.root)
-        self.assertEqual((result.code, result.stderr), (0, ""), result.stdout)
-        return output_lines(result.stdout)
+@pytest.fixture
+def root(tmp_path):
+    """A fresh scratch directory for the test (resolved, like make_temp_dir was)."""
+    path = (tmp_path / "scratch").resolve()
+    path.mkdir()
+    return path
 
 
-class OsBuiltins(OsBuiltinsBase):
-    def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(self):
-        # With umask 0 only the mode the VM asks for can explain 0600 and 0700.
-        self.addCleanup(os.umask, os.umask(0))
-        os.symlink(self.root / "dangling-target", self.root / "dangling")
-        lines = self.run_program(MODES_PROGRAM, "modes", self.root)
-        self.assertEqual(lines[:9], ["true", "false", "false", "true", "true", "true", "false", "false", "false"])
-        self.assertEqual(lines[9], 'error("filesystem: mode must be read, write, append, or create_private")')
-        self.assertEqual(stat.S_IMODE((self.root / "private").stat().st_mode), 0o700)
-        secret = self.root / "private" / "secret.bin"
-        self.assertEqual(stat.S_IMODE(secret.stat().st_mode), 0o600)
-        self.assertEqual(secret.read_bytes(), b"top secret\n\x01\x02\xff")
+@pytest.fixture
+def work(tmp_path):
+    """A fresh directory for compiled programs, separate from the scratch files."""
+    path = tmp_path / "work"
+    path.mkdir()
+    return path.resolve()
+
+
+@pytest.fixture
+def adopt(request):
+    """Stop a Child when the test ends (also after a failure); return it."""
+    def register(child):
+        request.addfinalizer(child.stop)
+        return child
+
+    return register
+
+
+def compile_text(work, text, name="program"):
+    """Compile Agentica source text; return the bytecode path."""
+    source = work / (name + ".agc")
+    source.write_text(text, encoding="utf-8")
+    return compile_agc(source, work / (name + ".agcb"))
+
+
+def run_program(root, work, text, name, *args, flags=(), env=None, cwd=None):
+    """Run a program in the scratch directory and return its output lines."""
+    result = run_vm(compile_text(work, text, name), *flags, args=[str(arg) for arg in args],
+                    env=vm_environment(env), cwd=cwd or root)
+    assert (result.code, result.stderr) == (0, ""), result.stdout
+    return output_lines(result.stdout)
+
+
+class _RaceCase:
+    """Duck-typed TestCase for tests.windows_support helpers (they only use adopt and asserts)."""
+
+    def __init__(self, adopt):
+        self._adopt = adopt
+
+    def adopt(self, child):
+        return self._adopt(child)
+
+    def assertEqual(self, first, second, message=None):
+        assert first == second, message or "%r != %r" % (first, second)
+
+    def assertFalse(self, value, message=None):
+        assert not value, message or "%r is not false" % (value,)
+
+
+def rename_never_replaces_and_moves_a_link_as_a_link(root, work):
+    """Shared with tests/test_vm_os_remove.py: rename never replaces, and moves a link as a link."""
+    (root / "a.txt").write_text("a")
+    (root / "c.txt").write_text("c")
+    (root / "d.txt").write_text("d")
+    (root / "dir").mkdir()
+    (root / "dir" / "inside.txt").write_text("inside")
+    (root / "empty").mkdir()
+    (root / "target.txt").write_text("target")
+    os.symlink("target.txt", root / "link")
+    lines = run_program(root, work, RENAME_PROGRAM, "rename", root)
+    exists = 'error("filesystem: cannot rename path\\n  from: %s/c.txt\\n  to: %s/d.txt\\n  system error: ' \
+             'File exists; errno=17")' % (root, root)
+    assert lines == ["true", exists, "false", "false", "true", "true", "false", "false"]
+    assert (root / "b.txt").read_text() == "a"
+    assert not (root / "a.txt").exists()
+    # The target of a name that exists is never replaced, an empty directory included.
+    assert (root / "c.txt").read_text() == "c"
+    assert (root / "d.txt").read_text() == "d"
+    assert list((root / "empty").iterdir()) == []
+    assert (root / "moved" / "inside.txt").read_text() == "inside"
+    assert not (root / "dir").exists()
+    # A link moves as a link; what it names stays.
+    assert (root / "link2").is_symlink()
+    assert os.readlink(root / "link2") == "target.txt"
+    assert not os.path.lexists(root / "link")
+    assert (root / "target.txt").read_text() == "target"
+
+
+def rename_race_has_exactly_one_winner(root, work, adopt):
+    """Shared rename-race check (previously dead code on OsBuiltins; kept for the remove tests)."""
+    bytecode = compile_text(work, RACE_PROGRAM, "race")
+    assert_rename_race(_RaceCase(adopt), bytecode, root, lambda number: "source%d" % number)
+
+
+def system_pid_is_the_vm_process_and_the_parent_a_child_sees(root, work, adopt):
+    """Shared with tests/test_vm_os_remove.py: the driver-pid handoff only accepts the real parent."""
+    child = compile_text(work, 'def main() -> Void\n  puts("child ran")\nend\n', "child")
+    bytecode = compile_text(work, PID_PROGRAM, "pid")
+    vm = adopt(Child([*vm_command(), "--allow-run", "--", bytecode, str(vm_binary()), str(child), str(root)],
+                     env=vm_environment(), cwd=root, capture_stderr=True))
+    lines = [vm.next_line() for _ in range(5)]
+    assert vm.wait() == 0
+    pid = vm.process.pid
+    assert lines[0] == "pid %d" % pid
+    assert lines[1] == "stable true"
+    assert lines[2] == "parent seen by sh %d" % pid
+    # --driver-pid is checked against the parent of the child VM: this is how the driver starts the runner.
+    assert lines[3] == "driver-pid %d exit 0 stdout child ran stderr " % pid
+    assert lines[4].startswith("driver-pid %d exit 2 stdout  stderr agentica run: --driver-pid does not "
+                               "match the parent process" % (pid + 1)), lines[4]
+
+
+def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(root, work):
+    # With umask 0 only the mode the VM asks for can explain 0600 and 0700.
+    old_umask = os.umask(0)
+    try:
+        os.symlink(root / "dangling-target", root / "dangling")
+        lines = run_program(root, work, MODES_PROGRAM, "modes", root)
+        assert lines[:9] == ["true", "false", "false", "true", "true", "true", "false", "false", "false"]
+        assert lines[9] == 'error("filesystem: mode must be read, write, append, or create_private")'
+        assert stat.S_IMODE((root / "private").stat().st_mode) == 0o700
+        secret = root / "private" / "secret.bin"
+        assert stat.S_IMODE(secret.stat().st_mode) == 0o600
+        assert secret.read_bytes() == b"top secret\n\x01\x02\xff"
         # O_EXCL does not follow the dangling link, so the target was not created through it.
-        self.assertFalse((self.root / "dangling-target").exists())
-        self.assertTrue((self.root / "dangling").is_symlink())
-        self.assertFalse((self.root / "no").exists())
+        assert not (root / "dangling-target").exists()
+        assert (root / "dangling").is_symlink()
+        assert not (root / "no").exists()
+    finally:
+        os.umask(old_umask)
 
-    def test_lstat_describes_links_themselves_and_reports_mode_and_owner_like_python(self):
-        (self.root / "file").write_text("hello")
-        os.chmod(self.root / "file", 0o640)
-        (self.root / "dir").mkdir()
-        (self.root / "sticky").mkdir()
-        os.chmod(self.root / "sticky", 0o1777)
-        os.symlink("file", self.root / "link-file")
-        os.symlink("dir", self.root / "link-dir")
-        os.symlink("nowhere", self.root / "dangling")
-        names = ["file", "dir", "sticky", "link-file", "link-dir", "dangling", "missing"]
-        lines = self.run_program(LSTAT_PROGRAM, "lstat", self.root, *names)
 
-        def expected(label, info):
-            if info is None:
-                return "%s error" % label
-            kind = "directory" if stat.S_ISDIR(info.st_mode) else "link" if stat.S_ISLNK(info.st_mode) else "file"
-            size = 0 if kind == "directory" else info.st_size
-            return "%s %s %d %d %d %d %d" % (label, kind, size, stat.S_IMODE(info.st_mode), info.st_uid, info.st_gid,
-                                              info.st_mtime_ns // 10**9)
+def test_lstat_describes_links_themselves_and_reports_mode_and_owner_like_python(root, work):
+    (root / "file").write_text("hello")
+    os.chmod(root / "file", 0o640)
+    (root / "dir").mkdir()
+    (root / "sticky").mkdir()
+    os.chmod(root / "sticky", 0o1777)
+    os.symlink("file", root / "link-file")
+    os.symlink("dir", root / "link-dir")
+    os.symlink("nowhere", root / "dangling")
+    names = ["file", "dir", "sticky", "link-file", "link-dir", "dangling", "missing"]
+    lines = run_program(root, work, LSTAT_PROGRAM, "lstat", root, *names)
 
-        def seen(call, name):
-            try:
-                return call(self.root / name)
-            except OSError:
-                return None
+    def expected(label, info):
+        if info is None:
+            return "%s error" % label
+        kind = "directory" if stat.S_ISDIR(info.st_mode) else "link" if stat.S_ISLNK(info.st_mode) else "file"
+        size = 0 if kind == "directory" else info.st_size
+        return "%s %s %d %d %d %d %d" % (label, kind, size, stat.S_IMODE(info.st_mode), info.st_uid, info.st_gid,
+                                        info.st_mtime_ns // 10**9)
 
-        want = []
-        for name in names:
-            want.append(expected("lstat " + name, seen(os.lstat, name)))
-            want.append(expected("stat " + name, seen(os.stat, name)))
-        self.assertEqual(lines, want)
-        # The spot checks the TMPDIR check and the sweep depend on: a link is itself, the sticky bit is in the mode.
-        self.assertTrue(lines[0].startswith("lstat file file 5 416 "), lines[0])
-        self.assertTrue(lines[4].startswith("lstat sticky directory 0 1023 "), lines[4])
-        self.assertTrue(lines[6].startswith("lstat link-file link 4 "), lines[6])
-        self.assertTrue(lines[7].startswith("stat link-file file 5 "), lines[7])
-        self.assertTrue(lines[8].startswith("lstat link-dir link 3 "), lines[8])
-        self.assertTrue(lines[9].startswith("stat link-dir directory 0 "), lines[9])
-        self.assertTrue(lines[10].startswith("lstat dangling link 7 "), lines[10])
-        self.assertEqual(lines[11:], ["stat dangling error", "lstat missing error", "stat missing error"])
+    def seen(call, name):
+        try:
+            return call(root / name)
+        except OSError:
+            return None
 
-    def test_try_lock_on_two_handles_of_one_file_is_released_by_close(self):
-        lines = self.run_program(LOCK_PROGRAM, "lock", self.root / "lock")
-        self.assertEqual(lines, ["ok(true)", "ok(true)", "ok(false)", "true", "ok(true)", "false", "false"])
-        self.assertEqual(stat.S_IMODE((self.root / "lock").stat().st_mode), 0o600)
+    want = []
+    for name in names:
+        want.append(expected("lstat " + name, seen(os.lstat, name)))
+        want.append(expected("stat " + name, seen(os.stat, name)))
+    assert lines == want
+    # The spot checks the TMPDIR check and the sweep depend on: a link is itself, the sticky bit is in the mode.
+    assert lines[0].startswith("lstat file file 5 416 "), lines[0]
+    assert lines[4].startswith("lstat sticky directory 0 1023 "), lines[4]
+    assert lines[6].startswith("lstat link-file link 4 "), lines[6]
+    assert lines[7].startswith("stat link-file file 5 "), lines[7]
+    assert lines[8].startswith("lstat link-dir link 3 "), lines[8]
+    assert lines[9].startswith("stat link-dir directory 0 "), lines[9]
+    assert lines[10].startswith("lstat dangling link 7 "), lines[10]
+    assert lines[11:] == ["stat dangling error", "lstat missing error", "stat missing error"]
 
-    def test_try_lock_contends_across_processes_and_dies_with_its_holder(self):
-        path = self.root / "lock"
-        path.write_text("")
-        bytecode = self.program(CONTENTION_PROGRAM, "contention")
 
-        def probe():
-            result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment(), cwd=self.root)
-            self.assertEqual((result.code, result.stderr), (0, ""))
-            return result.stdout.strip()
+def test_try_lock_on_two_handles_of_one_file_is_released_by_close(root, work):
+    lines = run_program(root, work, LOCK_PROGRAM, "lock", root / "lock")
+    assert lines == ["ok(true)", "ok(true)", "ok(false)", "true", "ok(true)", "false", "false"]
+    assert stat.S_IMODE((root / "lock").stat().st_mode) == 0o600
 
-        self.assertEqual(probe(), "true")
-        # The holder never closes the file: ending the process releases the lock.
-        holder = self.adopt(start_vm(bytecode, str(path), "hold", stdin=True, cwd=self.root))
-        self.assertEqual(holder.next_line(), "true")
-        self.assertEqual(probe(), "false")
-        holder.close_stdin()
-        self.assertEqual(holder.wait(), 0)
-        self.assertEqual(probe(), "true")
-        # A killed holder releases it too.
-        killed = self.adopt(start_vm(bytecode, str(path), "hold", stdin=True, cwd=self.root))
-        self.assertEqual(killed.next_line(), "true")
-        self.assertEqual(probe(), "false")
-        os.killpg(killed.process.pid, signal.SIGKILL)
-        killed.wait()
-        self.assertEqual(probe(), "true")
 
-    def test_a_child_does_not_keep_the_lock_after_the_handle_closes(self):
-        path = self.root / "lock"
-        path.write_text("")
-        bytecode = self.program(CONTENTION_PROGRAM, "contention")
-        holder = self.adopt(start_vm(bytecode, str(path), "spawn", flags=("--allow-run",), stdin=True, cwd=self.root))
-        self.assertEqual(holder.next_line(), "true")
-        self.assertEqual(holder.next_line(), "closed")
-        # The `sleep` child is alive and was started after the lock was taken, yet the lock is free.
-        result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment(), cwd=self.root)
-        self.assertEqual(result.stdout.strip(), "true")
-        holder.close_stdin()
-        self.assertEqual(holder.wait(), 0)
+def test_try_lock_contends_across_processes_and_dies_with_its_holder(root, work, adopt):
+    path = root / "lock"
+    path.write_text("")
+    bytecode = compile_text(work, CONTENTION_PROGRAM, "contention")
 
-    def test_try_lock_refuses_what_is_not_a_regular_file(self):
-        os.mkfifo(self.root / "fifo")
-        lines = self.run_program(DEVICE_LOCK_PROGRAM, "devicelock", self.root)
-        self.assertEqual(lines, ['error("filesystem: only a regular file can be locked")'] * 2)
+    def probe():
+        result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment(), cwd=root)
+        assert (result.code, result.stderr) == (0, "")
+        return result.stdout.strip()
 
-    def _rename_never_replaces_and_moves_a_link_as_a_link(self):
-        (self.root / "a.txt").write_text("a")
-        (self.root / "c.txt").write_text("c")
-        (self.root / "d.txt").write_text("d")
-        (self.root / "dir").mkdir()
-        (self.root / "dir" / "inside.txt").write_text("inside")
-        (self.root / "empty").mkdir()
-        (self.root / "target.txt").write_text("target")
-        os.symlink("target.txt", self.root / "link")
-        lines = self.run_program(RENAME_PROGRAM, "rename", self.root)
-        exists = 'error("filesystem: cannot rename path\\n  from: %s/c.txt\\n  to: %s/d.txt\\n  system error: ' \
-                 'File exists; errno=17")' % (self.root, self.root)
-        self.assertEqual(lines, ["true", exists, "false", "false", "true", "true", "false", "false"])
-        self.assertEqual((self.root / "b.txt").read_text(), "a")
-        self.assertFalse((self.root / "a.txt").exists())
-        # The target of a name that exists is never replaced, an empty directory included.
-        self.assertEqual((self.root / "c.txt").read_text(), "c")
-        self.assertEqual((self.root / "d.txt").read_text(), "d")
-        self.assertEqual(list((self.root / "empty").iterdir()), [])
-        self.assertEqual((self.root / "moved" / "inside.txt").read_text(), "inside")
-        self.assertFalse((self.root / "dir").exists())
-        # A link moves as a link; what it names stays.
-        self.assertTrue((self.root / "link2").is_symlink())
-        self.assertEqual(os.readlink(self.root / "link2"), "target.txt")
-        self.assertFalse(os.path.lexists(self.root / "link"))
-        self.assertEqual((self.root / "target.txt").read_text(), "target")
+    assert probe() == "true"
+    # The holder never closes the file: ending the process releases the lock.
+    holder = adopt(start_vm(bytecode, str(path), "hold", stdin=True, cwd=root))
+    assert holder.next_line() == "true"
+    assert probe() == "false"
+    holder.close_stdin()
+    assert holder.wait() == 0
+    assert probe() == "true"
+    # A killed holder releases it too.
+    killed = adopt(start_vm(bytecode, str(path), "hold", stdin=True, cwd=root))
+    assert killed.next_line() == "true"
+    assert probe() == "false"
+    os.killpg(killed.process.pid, signal.SIGKILL)
+    killed.wait()
+    assert probe() == "true"
 
-    def _rename_has_exactly_one_winner_when_processes_race_for_a_name(self):
-        bytecode = self.program(RACE_PROGRAM, "race")
-        assert_rename_race(self, bytecode, self.root, lambda number: "source%d" % number)
 
-    def test_make_directory_error_names_the_path_and_os_reason(self):
-        text = """\
+def test_a_child_does_not_keep_the_lock_after_the_handle_closes(root, work, adopt):
+    path = root / "lock"
+    path.write_text("")
+    bytecode = compile_text(work, CONTENTION_PROGRAM, "contention")
+    holder = adopt(start_vm(bytecode, str(path), "spawn", flags=("--allow-run",), stdin=True, cwd=root))
+    assert holder.next_line() == "true"
+    assert holder.next_line() == "closed"
+    # The `sleep` child is alive and was started after the lock was taken, yet the lock is free.
+    result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment(), cwd=root)
+    assert result.stdout.strip() == "true"
+    holder.close_stdin()
+    assert holder.wait() == 0
+
+
+def test_try_lock_refuses_what_is_not_a_regular_file(root, work):
+    os.mkfifo(root / "fifo")
+    lines = run_program(root, work, DEVICE_LOCK_PROGRAM, "devicelock", root)
+    assert lines == ['error("filesystem: only a regular file can be locked")'] * 2
+
+
+def test_make_directory_error_names_the_path_and_os_reason(root, work):
+    text = """\
 def main() -> Void
   base = System.args()[0]
   IO.inspect(Dir.mkdir_private(base + "/missing/x", 5000))
 end
 """
-        lines = self.run_program(text, "make-directory-error", self.root)
-        self.assertEqual(lines, [
-            'error("make-directory: cannot make directory\\n  path: %s/missing/x\\n  system error: '
-            'No such file or directory; errno=2")' % self.root])
-        self.assertFalse((self.root / "missing").exists())
+    lines = run_program(root, work, text, "make-directory-error", root)
+    assert lines == [
+        'error("make-directory: cannot make directory\\n  path: %s/missing/x\\n  system error: '
+        'No such file or directory; errno=2")' % root]
+    assert not (root / "missing").exists()
 
-    def _system_pid_is_the_vm_process_and_the_parent_a_child_sees(self):
-        child = self.compile_text('def main() -> Void\n  puts("child ran")\nend\n', "child")
-        bytecode = self.program(PID_PROGRAM, "pid")
-        vm = self.adopt(Child([*vm_command(), "--allow-run", "--", bytecode, str(vm_binary()), str(child), str(self.root)],
-                              env=vm_environment(), cwd=self.root, capture_stderr=True))
-        lines = [vm.next_line() for _ in range(5)]
-        self.assertEqual(vm.wait(), 0)
-        pid = vm.process.pid
-        self.assertEqual(lines[0], "pid %d" % pid)
-        self.assertEqual(lines[1], "stable true")
-        self.assertEqual(lines[2], "parent seen by sh %d" % pid)
-        # --driver-pid is checked against the parent of the child VM: this is how the driver starts the runner.
-        self.assertEqual(lines[3], "driver-pid %d exit 0 stdout child ran stderr " % pid)
-        self.assertTrue(lines[4].startswith("driver-pid %d exit 2 stdout  stderr agentica run: --driver-pid does not "
-                                            "match the parent process" % (pid + 1)), lines[4])
 
-    def test_children_never_get_the_metrics_variables_but_the_program_reads_them(self):
-        extra = {"AGENTICA_VM_METRICS": "9465", "AGENTICA_VM_METRICS_FILE": "/nowhere/metrics.prom",
-                 "AGENTICA_VM_METRICS_KEPT": "kept", "OTHER_VARIABLE": "stays"}
-        lines = self.run_program(ENV_PROGRAM, "env", flags=("--allow-run",), env=extra)
-        self.assertEqual(lines[0], "own 9465 /nowhere/metrics.prom")
-        # Only the exact names go; a longer name that starts with them is an ordinary variable.
-        self.assertEqual(sorted(lines[1:]), ["AGENTICA_VM_METRICS_KEPT=kept", "OTHER_VARIABLE=stays"])
+def test_children_never_get_the_metrics_variables_but_the_program_reads_them(root, work):
+    extra = {"AGENTICA_VM_METRICS": "9465", "AGENTICA_VM_METRICS_FILE": "/nowhere/metrics.prom",
+             "AGENTICA_VM_METRICS_KEPT": "kept", "OTHER_VARIABLE": "stays"}
+    lines = run_program(root, work, ENV_PROGRAM, "env", flags=("--allow-run",), env=extra)
+    assert lines[0] == "own 9465 /nowhere/metrics.prom"
+    # Only the exact names go; a longer name that starts with them is an ordinary variable.
+    assert sorted(lines[1:]) == ["AGENTICA_VM_METRICS_KEPT=kept", "OTHER_VARIABLE=stays"]

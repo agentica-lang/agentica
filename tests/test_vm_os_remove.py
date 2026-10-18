@@ -2,7 +2,8 @@
 
 import os
 import stat
-import unittest
+
+import pytest
 
 from tests import test_vm_os as os_tests
 from tests.agentica_test import run_vm, start_vm, vm_environment
@@ -32,157 +33,196 @@ end
 """
 
 
-class OsRemoveBuiltins(os_tests.OsBuiltinsBase):
-    """Exercise mutating Path APIs only inside Docker locally or Actions scratch in CI."""
+@pytest.fixture
+def root(tmp_path):
+    """A fresh scratch directory for the test, inside the Docker or Actions sandbox."""
+    path = (tmp_path / "scratch").resolve()
+    path.mkdir()
+    require_remove_sandbox(path)
+    return path
 
-    def setUp(self) -> None:
-        super().setUp()
-        require_remove_sandbox(self.root)
 
-    def prepare_trees(self) -> None:
-        outside = self.root / "outside"
-        (outside / "keep-dir").mkdir(parents=True)
-        (outside / "keep.txt").write_text("keep")
-        tree = self.root / "tree"
-        (tree / "sub" / "deeper").mkdir(parents=True)
-        (tree / "sub" / "deeper" / "f.txt").write_text("f")
-        (tree / "top.txt").write_text("top")
-        os.symlink(outside, tree / "to-dir")
-        os.symlink("../../outside/keep.txt", tree / "sub" / "to-file")
-        os.symlink("/does/not/exist", tree / "dangling")
-        os.mkfifo(tree / "pipe")
-        os.symlink(outside, self.root / "root-link")
-        os.symlink(outside, self.root / "other-link")
-        os.symlink(outside / "keep.txt", self.root / "file-link")
-        (self.root / "plain.txt").write_text("plain")
-        (self.root / "real-dir" / "sub").mkdir(parents=True)
-        (self.root / "real-dir" / "sub" / "b.txt").write_text("b")
-        (self.root / "guarded" / "sub").mkdir(parents=True)
-        (self.root / "guarded" / "sub" / "keep.txt").write_text("keep")
-        deep = self.root / "deep"
-        deep.mkdir()
-        path = str(deep)
-        for _ in range(TREE_DEPTH):
-            path += "/d"
-            os.mkdir(path)
+@pytest.fixture
+def work(tmp_path):
+    """A fresh directory for compiled programs, separate from the scratch files."""
+    path = tmp_path / "work"
+    path.mkdir()
+    return path.resolve()
 
-    def test_private_bytecode_handoff_is_consumed_only_inside_sandbox(self) -> None:
-        os_tests.OsBuiltins._system_pid_is_the_vm_process_and_the_parent_a_child_sees(self)
 
-    def test_remove_deletes_links_as_links_never_follows_them_and_refuses_unsafe_roots(self) -> None:
-        self.prepare_trees()
-        lines = self.run_program(
-            REMOVE_PROGRAM,
-            "remove",
-            self.root,
-            cwd=self.root / "guarded" / "sub",
-        )
-        refused = 'error("filesystem: refusing to remove /, . or ..")'
-        self.assertEqual(
-            lines,
-            [
-                "ok()",
-                "ok()",
-                "ok()",
-                "false",
-                "ok()",
-                "false",
-                refused,
-                refused,
-                refused,
-                refused,
-                refused,
-                'error("filesystem: directory tree is deeper than 128 levels")',
-                "ok()",
-                "ok()",
-                "ok()",
-            ],
-        )
-        self.assertEqual((self.root / "guarded" / "sub" / "keep.txt").read_text(), "keep")
-        self.assertFalse((self.root / "tree").exists())
-        self.assertEqual((self.root / "outside" / "keep.txt").read_text(), "keep")
-        self.assertTrue((self.root / "outside" / "keep-dir").is_dir())
-        self.assertFalse((self.root / "root-link").is_symlink())
-        self.assertTrue((self.root / "other-link").is_symlink())
-        self.assertFalse((self.root / "file-link").is_symlink())
-        self.assertFalse((self.root / "plain.txt").exists())
-        self.assertFalse((self.root / "real-dir").exists())
-        self.assertTrue((self.root / "deep").is_dir())
+@pytest.fixture
+def adopt(request):
+    """Stop a Child when the test ends (also after a failure); return it."""
+    def register(child):
+        request.addfinalizer(child.stop)
+        return child
 
-    @unittest.skipIf(os.geteuid() == 0, "root ignores the permission bits")
-    def test_remove_names_the_entry_that_failed_and_leaves_the_rest(self) -> None:
-        tree = self.root / "tree"
-        (tree / "a" / "locked").mkdir(parents=True)
-        (tree / "a" / "locked" / "f.txt").write_text("f")
-        (tree / "z.txt").write_text("z")
-        os.chmod(tree / "a" / "locked", 0o500)
-        self.addCleanup(os.chmod, tree / "a" / "locked", 0o700)
+    return register
+
+
+class _RaceCase:
+    """Duck-typed TestCase for tests.windows_support helpers (they only use adopt and asserts)."""
+
+    def __init__(self, adopt):
+        self._adopt = adopt
+
+    def adopt(self, child):
+        return self._adopt(child)
+
+    def assertEqual(self, first, second, message=None):
+        assert first == second, message or "%r != %r" % (first, second)
+
+    def assertFalse(self, value, message=None):
+        assert not value, message or "%r is not false" % (value,)
+
+
+def prepare_trees(root):
+    """Build the link-rich trees the removal cases delete (links only, targets stay outside)."""
+    outside = root / "outside"
+    (outside / "keep-dir").mkdir(parents=True)
+    (outside / "keep.txt").write_text("keep")
+    tree = root / "tree"
+    (tree / "sub" / "deeper").mkdir(parents=True)
+    (tree / "sub" / "deeper" / "f.txt").write_text("f")
+    (tree / "top.txt").write_text("top")
+    os.symlink(outside, tree / "to-dir")
+    os.symlink("../../outside/keep.txt", tree / "sub" / "to-file")
+    os.symlink("/does/not/exist", tree / "dangling")
+    os.mkfifo(tree / "pipe")
+    os.symlink(outside, root / "root-link")
+    os.symlink(outside, root / "other-link")
+    os.symlink(outside / "keep.txt", root / "file-link")
+    (root / "plain.txt").write_text("plain")
+    (root / "real-dir" / "sub").mkdir(parents=True)
+    (root / "real-dir" / "sub" / "b.txt").write_text("b")
+    (root / "guarded" / "sub").mkdir(parents=True)
+    (root / "guarded" / "sub" / "keep.txt").write_text("keep")
+    deep = root / "deep"
+    deep.mkdir()
+    path = str(deep)
+    for _ in range(TREE_DEPTH):
+        path += "/d"
+        os.mkdir(path)
+
+
+def test_private_bytecode_handoff_is_consumed_only_inside_sandbox(root, work, adopt):
+    os_tests.system_pid_is_the_vm_process_and_the_parent_a_child_sees(root, work, adopt)
+
+
+def test_remove_deletes_links_as_links_never_follows_them_and_refuses_unsafe_roots(root, work):
+    prepare_trees(root)
+    lines = os_tests.run_program(
+        root,
+        work,
+        REMOVE_PROGRAM,
+        "remove",
+        root,
+        cwd=root / "guarded" / "sub",
+    )
+    refused = 'error("filesystem: refusing to remove /, . or ..")'
+    assert lines == [
+        "ok()",
+        "ok()",
+        "ok()",
+        "false",
+        "ok()",
+        "false",
+        refused,
+        refused,
+        refused,
+        refused,
+        refused,
+        'error("filesystem: directory tree is deeper than 128 levels")',
+        "ok()",
+        "ok()",
+        "ok()",
+    ]
+    assert (root / "guarded" / "sub" / "keep.txt").read_text() == "keep"
+    assert not (root / "tree").exists()
+    assert (root / "outside" / "keep.txt").read_text() == "keep"
+    assert (root / "outside" / "keep-dir").is_dir()
+    assert not (root / "root-link").is_symlink()
+    assert (root / "other-link").is_symlink()
+    assert not (root / "file-link").is_symlink()
+    assert not (root / "plain.txt").exists()
+    assert not (root / "real-dir").exists()
+    assert (root / "deep").is_dir()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the permission bits")
+def test_remove_names_the_entry_that_failed_and_leaves_the_rest(root, work):
+    tree = root / "tree"
+    (tree / "a" / "locked").mkdir(parents=True)
+    (tree / "a" / "locked" / "f.txt").write_text("f")
+    (tree / "z.txt").write_text("z")
+    os.chmod(tree / "a" / "locked", 0o500)
+    try:
         text = """\
 def main() -> Void
   IO.inspect(Path.remove(System.args()[0] + "/tree", 5000))
 end
 """
-        lines = self.run_program(text, "named", self.root)
-        self.assertEqual(
-            lines,
-            [
-                'error("filesystem: cannot remove path\\n  path: %s/tree/a/locked/f.txt\\n  system error: '
-                'Permission denied; errno=13")' % self.root
-            ],
-        )
-        self.assertTrue((tree / "a" / "locked" / "f.txt").exists())
+        lines = os_tests.run_program(root, work, text, "named", root)
+        assert lines == [
+            'error("filesystem: cannot remove path\\n  path: %s/tree/a/locked/f.txt\\n  system error: '
+            'Permission denied; errno=13")' % root
+        ]
+        assert (tree / "a" / "locked" / "f.txt").exists()
+    finally:
+        os.chmod(tree / "a" / "locked", 0o700)
 
-    def test_remove_error_path_preserves_file_and_names_the_os_reason(self) -> None:
-        path = self.root / "plain.txt"
-        path.write_text("plain")
-        text = """\
+
+def test_remove_error_path_preserves_file_and_names_the_os_reason(root, work):
+    path = root / "plain.txt"
+    path.write_text("plain")
+    text = """\
 def main() -> Void
   IO.inspect(Path.remove(System.args()[0] + "/plain.txt/x", 5000))
 end
 """
-        lines = self.run_program(text, "remove-error", self.root)
-        self.assertEqual(
-            lines,
-            [
-                'error("filesystem: cannot remove path\\n  path: %s/plain.txt/x\\n  system error: '
-                'Not a directory; errno=20")' % self.root
-            ],
+    lines = os_tests.run_program(root, work, text, "remove-error", root)
+    assert lines == [
+        'error("filesystem: cannot remove path\\n  path: %s/plain.txt/x\\n  system error: '
+        'Not a directory; errno=20")' % root
+    ]
+    assert path.read_text() == "plain"
+
+
+def test_rename_keeps_lock_owner_across_the_final_name(root, work, adopt):
+    bytecode = os_tests.compile_text(work, os_tests.CONTENTION_PROGRAM, "contention")
+
+    def probe(name: str) -> str:
+        result = run_vm(
+            bytecode,
+            args=[str(root / name / "lock"), "probe"],
+            env=vm_environment(),
+            cwd=root,
         )
-        self.assertEqual(path.read_text(), "plain")
+        assert (result.code, result.stderr) == (0, "")
+        return result.stdout.strip()
 
-    def test_rename_keeps_lock_owner_across_the_final_name(self) -> None:
-        bytecode = self.program(os_tests.CONTENTION_PROGRAM, "contention")
-
-        def probe(name: str) -> str:
-            result = run_vm(
-                bytecode,
-                args=[str(self.root / name / "lock"), "probe"],
-                env=vm_environment(),
-                cwd=self.root,
-            )
-            self.assertEqual((result.code, result.stderr), (0, ""))
-            return result.stdout.strip()
-
-        holder = self.adopt(
-            start_vm(
-                self.program(os_tests.PROTOCOL_PROGRAM, "protocol"),
-                str(self.root),
-                stdin=True,
-                cwd=self.root,
-            )
+    holder = adopt(
+        start_vm(
+            os_tests.compile_text(work, os_tests.PROTOCOL_PROGRAM, "protocol"),
+            str(root),
+            stdin=True,
+            cwd=root,
         )
-        self.assertEqual(holder.next_line(), "true")
-        self.assertEqual(holder.next_line(), "renamed")
-        self.assertFalse((self.root / "new-dir").exists())
-        self.assertEqual(stat.S_IMODE((self.root / "final-dir").stat().st_mode), 0o700)
-        self.assertEqual(probe("final-dir"), "false")
-        holder.close_stdin()
-        self.assertEqual(holder.wait(), 0)
-        self.assertEqual(probe("final-dir"), "true")
+    )
+    assert holder.next_line() == "true"
+    assert holder.next_line() == "renamed"
+    assert not (root / "new-dir").exists()
+    assert stat.S_IMODE((root / "final-dir").stat().st_mode) == 0o700
+    assert probe("final-dir") == "false"
+    holder.close_stdin()
+    assert holder.wait() == 0
+    assert probe("final-dir") == "true"
 
-    def test_rename_never_replaces_and_moves_a_link_as_a_link(self) -> None:
-        os_tests.OsBuiltins._rename_never_replaces_and_moves_a_link_as_a_link(self)
 
-    def test_rename_race_has_one_winner_and_preserves_all_losing_sources(self) -> None:
-        bytecode = self.program(os_tests.RACE_PROGRAM, "race")
-        assert_rename_race(self, bytecode, self.root, lambda number: f"source{number}")
+def test_rename_never_replaces_and_moves_a_link_as_a_link(root, work):
+    os_tests.rename_never_replaces_and_moves_a_link_as_a_link(root, work)
+
+
+def test_rename_race_has_one_winner_and_preserves_all_losing_sources(root, work, adopt):
+    bytecode = os_tests.compile_text(work, os_tests.RACE_PROGRAM, "race")
+    assert_rename_race(_RaceCase(adopt), bytecode, root, lambda number: f"source{number}")
