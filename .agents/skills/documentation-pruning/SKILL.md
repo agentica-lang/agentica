@@ -66,7 +66,11 @@ Find:
 
 Classify candidates as `keep`, `shorten`, `merge`, `delete`, or `investigate`.
 
-Verify behavior before removing claims. Similar topics do not necessarily mean
+For each nontrivial candidate, record the exact location, claim, repository
+evidence, confidence (high/medium/low), and proposed disposition. Verify factual
+claims against current code, tests, config, history, or a later decision. If
+intent and implementation conflict without a clear superseding authority, mark
+it unresolved; do not silently rewrite it. Similar topics alone do not prove
 duplication.
 
 ## 3. Optimize for token efficiency
@@ -143,8 +147,7 @@ Code describes behavior; it does not automatically explain intent.
   context cost.
 - Do not change product behavior to accommodate documentation cleanup.
 
-When sources conflict, verify against implementation and tests; report
-uncertainty instead of inventing consensus.
+Handle source conflicts as in §2; never invent consensus.
 
 ## 7. Validate and report
 
@@ -154,6 +157,8 @@ documentation changed.
 
 Report:
 
+- For each material edit, its location, claim, evidence, confidence and
+  disposition; list unresolved findings separately.
 - Before/after files, lines, bytes, and estimated tokens, using the same scope.
 - Always-loaded and activated-skill token savings separately.
 - Deleted, merged, shortened, and retained documents.
