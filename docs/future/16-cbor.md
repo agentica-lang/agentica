@@ -326,14 +326,11 @@ the data.
 
 ### 16.7 Backends
 
-- **Evaluator:** a small codec in Racket, in its own module (for example
-  `src/term.rkt`), with no library. CBOR is small: one head byte, then 0, 1, 2,
-  4 or 8 bytes of argument.
-- **VM:** an in-house C codec in `vm/`, with no new dependency. It needs the VM
-  maps (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 5d) and `Bytes` on the
-  VM. It lands with the evaluator codec in one PR.
-- **Same bytes:** both backends give byte-identical output and the same error
-  messages for the same input. `tests/vm-diff-*-test.rkt` checks it.
+- **VM:** an in-house C codec in `vm/`, with no new dependency. It needs the
+  VM maps (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 5d) and `Bytes` on
+  the VM. CBOR is small: one head byte, then 0, 1, 2, 4 or 8 bytes of argument.
+- **Same bytes:** byte-identical output for the same input, checked by the
+  RFC 8949 vectors and `tests/test_vm_diff_*.py`.
 - **Tests:**
   - round trips: `decode(encode(v))` gives `v`; `encode(decode(b))` gives `b`
     for canonical `b`; for `b` with reordered or extra struct keys it gives the
@@ -342,7 +339,7 @@ the data.
     `tests/fixtures/`; they come from the RFC, not from our encoder, so they are
     the independent counterpart;
   - depth: an enum nested 10,000 levels encodes and decodes, and one more level
-    is an error on both sides;
+    is an error;
   - encode errors: a value past the depth limit returns
     `$: depth limit exceeded`, one with more than `TERM_MAX_ITEMS` values
     returns `$: too many items`, and one past 64 MiB returns its path;
@@ -359,8 +356,7 @@ the data.
 - **Framing:** decode rejects trailing bytes, so a stream of messages needs
   framing. A message can be up to 64 MiB, but `Process.send_bytes` and
   `TCP.send_bytes` take at most 1 MiB per call, and `Process.read_bytes` and
-  `TCP.recv_bytes` take a count of at most 1,048,576 (`src/process.rkt`,
-  `src/network.rkt`). So:
+  `TCP.recv_bytes` take a count of at most 1,048,576. So:
   - the sender writes a fixed 4-byte big-endian length, then the bytes in slices
     of at most 1 MiB, one send per slice;
   - the receiver reads the 4 bytes and rejects a length above its own limit (at
@@ -398,4 +394,17 @@ the data.
 - **Erlang distribution** (transparent messages between nodes): Agentica
   processes talk through pipes or TCP with explicit `Term.encode` and
   `Term.decode`, so failures stay visible as Results.
+
+### 16.10 Implementation (row 18)
+
+- One PR on the VM: `Term.encode`/`Term.decode` per §16.4 with enums as
+  `[tag, values]` (§16.5 for hostile input); the Term type check with
+  substituted type arguments; `Term` becomes a reserved name. Needs
+  `Bytes`, generic structs (10c) and the JSON form of enums (10d) first.
+- Tests: round trips, the RFC 8949 Appendix A vectors, byte-identical
+  output, hostile input (§16.5), the item cap boundary, a decode target
+  for `make vm-fuzz`.
+- Done when: an example writes a struct with an `Int`-keyed map, a Float
+  NaN and an enum to bytes and reads it back, with the same bytes and
+  output on the VM; every hostile-input case returns `error(...)`.
 

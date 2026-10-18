@@ -3,7 +3,12 @@
 **Status:** planned (roadmap phase 16), after 7i deletes the evaluator (order
 7.2), as the first items of order step 7.6, before the phase 15 items of that
 step, in the order 26.1, 26.3, 26.2, 26.4 (roadmap 16a, 16c, 16b, 16d). Decided
-by the user on 2026-10-12; 26.4 was added after review the same day.
+by the user on 2026-10-12; 26.4 was added after review the same day. Each
+item is a breaking change: migrate affected programs and follow the spec's
+tests, spans, docs and changelog requirements; no flag disables these
+checks. Done when: all four codes are documented in the grammar,
+programming skill and site; repo programs are migrated; no code disables
+the checks.
 
 This section adds four errors that other languages give as warnings, or do not
 check at all: an unused import, an unused variable, unreachable code and an

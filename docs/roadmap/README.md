@@ -746,14 +746,8 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 - **File:** [`08-data-structures.md`](08-data-structures.md)
   - **Contents:** Phase 8: core data structures
 
-- **File:** [`09-ats.md`](09-ats.md)
-  - **Contents:** Phase 9: shared tables (ATS)
-
 - **File:** [`10-adapters-and-json.md`](10-adapters-and-json.md)
   - **Contents:** Phase 10: adapters and JSON inspection
-
-- **File:** [`11-cbor.md`](11-cbor.md)
-  - **Contents:** Phase 11: binary serialization (CBOR)
 
 - **File:** [`12-benchmarks.md`](12-benchmarks.md)
   - **Contents:** Phase 12: cross-language benchmarks
@@ -763,12 +757,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 
 - **File:** [`14-logging.md`](14-logging.md)
   - **Contents:** Phase 14: logging and debugging
-
-- **File:** [`15-ruby-typed-idioms.md`](15-ruby-typed-idioms.md)
-  - **Contents:** Phase 15: Ruby typed idioms
-
-- **File:** [`16-strict-diagnostics.md`](16-strict-diagnostics.md)
-  - **Contents:** Phase 16: strict diagnostics (no warnings)
 
 - **File:** [`17-iteration-and-concurrency.md`](17-iteration-and-concurrency.md)
   - **Contents:** Phase 17: iteration and concurrent collections (`Task.map`,

@@ -6,10 +6,14 @@ methods, 15f), 25.10 (heredocs, 15j), 25.12.1 (`case` guards and nested
 patterns, 15k) and 25.14 (the pipe operator `|>`); their rules live in
 [`docs/grammar/`](../grammar.md) and the programming skill, which are the
 contract. What remains here: 25.2 (re-exports), 25.4 (value equality), 25.5
-(standalone lambdas), 25.9 (`File.open` with a block) and 25.11 (`format`), all
-in roadmap [phase 15](../roadmap/15-ruby-typed-idioms.md). Part B (25.12) lists
+(standalone lambdas), 25.9 (`File.open` with a block) and 25.11 (`format`),
+one PR per item, row 7.6 of the [roadmap order](../roadmap/README.md):
+15a after the bootstrap (done); 15b, 15d, 15e, 15i and 15j after phase 16;
+15f and 15k after faster lists (8d). Part B (25.12) lists
 ideas to evaluate later, and Part C (25.13) lists what was decided against, so
 it is not proposed again. Decided by the user on 2026-10-12.
+Done when: site examples run on the VM and evaluation confirms agents use
+the forms with the same diagnostic quality as the forms they replace.
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
 that models already know, with this rule: accept a form when it is real Ruby (or
