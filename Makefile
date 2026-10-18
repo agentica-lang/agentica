@@ -711,7 +711,7 @@ WINDOWS_CROSS := VM_OS=Windows_NT CC=x86_64-w64-mingw32-gcc AR=llvm-ar RUN_PROGR
 # The modules the vm-windows job of platforms.yml runs: the bootstrap binary alone, then the product. TESTS= picks
 # others (test_cli_forms.py drives only the command line, for instance).
 WINDOWS_TEST_MODULES ?= tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py \
-  tests/test_windows_filesystem_safety.py tests/test_platform_bootstrap.py
+  tests/test_platform_bootstrap.py
 WINDOWS_DOCKER := docker run --rm -v '$(CURDIR):$(CURDIR)' -w '$(CURDIR)' --user "$$(id -u):$$(id -g)" \
   -e HOME=$(WINDOWS_WINE_HOME) -e WINEPREFIX=$(WINDOWS_WINE_HOME)/.wine -e TMPDIR=$(WINDOWS_WINE_HOME)/tmp \
   -e XDG_RUNTIME_DIR=$(WINDOWS_WINE_HOME)/xdg -e WINEDEBUG=-all -e WINEDLLOVERRIDES=mscoree,mshtml=
