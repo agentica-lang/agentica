@@ -1,83 +1,21 @@
 # Agentica: future grammar
 
-Status: proposals only. This document is not normative; implemented language
-behavior is specified in [`grammar.md`](../grammar.md).
+This index tracks future proposals; the current language contract is in
+[`grammar.md`](../grammar.md). Requirements and rationale stay in each linked
+spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
+to `docs/grammar/` and delete it here, preserving section numbers.
 
-Working rule: when a phase of the [roadmap](../roadmap/README.md) finishes, its
-syntax moves from this document to the language reference in `docs/grammar/`
-(index: [`grammar.md`](../grammar.md)) and is deleted from here.
-
-Section 14 records ideas that were decided or rejected, so they are not proposed
-again. Section 18 records the history of the front-end language question, which
-section 35 decides. Sections 19 (SIMD in the VM), 21 (VM layers) and 22 (JIT)
-are implementation proposals with no language change. Section 23 (binary data)
-adds `Int` and `Float` builtins and the `std/binary` module, with no grammar
-change. Section 24 (logging and debugging) adds the `std/logger` module with a
-std-only registry for its handlers, stack traces on runtime errors and tracing
-inside the VM, with no grammar change.
-Section 25 (Ruby typed idioms) plans more Ruby forms for after 7i, lists others
-to evaluate later, and records the ones decided against. Section 26 (strict
-diagnostics) records that Agentica has no warnings and plans four new errors:
-unused imports, unused variables, unreachable code and ignored `Result` values.
-Section 27 (iteration and concurrent collections) plans `Task.map`, channels and
-`Task.await` with a timeout (returning the builtin enum `Await[T]`) as C
-builtins, and `File.each_line` (C) and a lazy `Stream[T]` (prelude code) in two
-steps, and records generators, fibers, Agent-style shared state and public locks
-as decided against. Section 28 (VM metrics) plans Prometheus metrics for
-`agentica run`, with no language change. Section 29 (TLS contexts) plans
-`TlsContext`, an immutable handle built once and shared by connections, which
-replaces the TLS file paths of `TLS` and `HTTP` in one breaking step, and
-`TLS.upgrade` (STARTTLS). Section 30 (HTTP on the VM) keeps the pending
-streaming bodies on channels and the later binary bodies; the simple,
-synchronous HTTP of 20a to 20c is built and specified in
-[`docs/vm/10-io-http.md`](../vm/10-io-http.md) and
-[`docs/grammar/06d-io-and-network.md`](../grammar/06d-io-and-network.md). BDD in
-Agentica (formerly section 31) is built and specified in
-[`docs/bdd.md`](../bdd.md). Section 32 (doc comments) plans `##` documentation
-lines attached to declarations, `agentica doc` and `help` for `std/` modules;
-front end only, after 7i, HTTP 20b, sections 37 and 36, and HTTP 20c. Section 33
-(digit separators) plans `_` between digits in number literals (`1_000`); lexer
-only, right after section 32. Section 34 (shared small values) is a VM
-implementation with no language change, built: one shared object per run for
-`""`, the one-character ASCII strings, `[]`, `{}` and the empty `Set`,
-kept because a benchmark shows it helps. Section 35 (self-hosted front end)
-records the owner's decision of 2026-10-13: the front end is rewritten in
-Agentica and embedded in the VM, so the release is one binary that starts in
-tens of milliseconds; a long-term item after the current roadmap order. Section
-36 (unit tests) plans the builtin `Test` module (`Test.test`, `Test.run` and
-four assertions that return `Result[Void]`) and runs `*_test.agc` files with
-`agentica test` next to the features, a child VM per file and a task per test.
-Section 37 (task crash isolation) proposes, in the style of Erlang, that a
-runtime error in a task other than `main` ends only that task: its awaiters get
-an error `Result`, its descendants are cancelled and the handles it owns are
-closed. Section 38 (value representation) records why `agc_value` is 16 bytes,
-the smaller layouts that were weighed, and the direction if it ever changes:
-unboxed storage from the static types (unboxed `List[Int]` and `List[Float]`,
-step 3 of 8d, are built; the rest is a note). Section 39 (semantic CLI for
-agents) plans
-`agentica outline`, `symbol`, `refs` and `type-at`: questions about checked code
-answered as text or versioned JSON, with `QUERY-` codes; front end and CLI only,
-no LSP in this phase (a separate, unscheduled idea, §43), no language change.
-Section 40 (native code and FFI), decided by the owner on 2026-10-15: the FFI
-before the JIT, after the bootstrap. The FFI is an `extern def` into native
-libraries behind an explicit flag, with a native module header that declares
-three call kinds (§40.3.1); its first module waits for a library that asks for
-it. The JIT (section 22) comes next, and AOT last, only if measurements ask for
-it. The JIT changes no language, and the FFI syntax is only a sketch.
-
-Section 41 (dates and times) designs the calendar types `Date`, `TimeOfDay`,
-`NaiveDateTime` and `DateTime`, their conversions and their text, as native
-`Time` functions.
-The types are checker changes, so they come after the bootstrap (§35).
-`Time.monotonic_ns` is independent and may land earlier. Section 42 (sized
-numeric types) designs `Int8` to `UInt64` and `Float32`, with explicit
-conversions and rules for literals. It is implemented after the bootstrap, in
-the Agentica front end. `Int` and `Float` stay 64 bits on every target.
-
-Section 43 (language server) records the owner's request of 2026-10-15 to note
-an LSP for some point. It is not scheduled. It reuses the §39 commands and the
-§32 doc comments, so it can only start after them, and it is easiest on the
-self-hosted front end (§35). It is an idea with no design yet.
+Section 14 records decided and rejected ideas; §18 preserves the front-end
+language history, settled by §35. Sections 19, 21 and 22 are VM implementation
+proposals, not language changes. Sections 23–24 add binary data and logging
+without changing the grammar.
+Sections 25–40 cover Ruby idioms, diagnostics, concurrency, VM metrics, TLS,
+HTTP, BDD, doc comments, digit separators, VM values, self-hosting, unit tests,
+crash isolation, value representation, semantic CLI, and native code. The Files
+index carries current status; linked sections keep requirements, rationale and
+alternatives.
+Sections 41–43 cover date/time types, sized numerics and an unscheduled language
+server; their specs record the requirements and dependencies.
 
 
 ## Files
