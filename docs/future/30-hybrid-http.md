@@ -161,4 +161,22 @@ Agentica can build what it needs:
 Redirects and cookies, if a program needs them, are a loop over a request in
 Agentica code, not a C feature.
 
+### 30.14 Implementation (row 7.4)
+
+- One PR per item (20e–20g), each with its own tests and docs; 20c-bench
+  records the HTTP benchmark numbers from an idle-machine run
+  (`benchmarks/http_bench.py`).
+- 20e streamed downloads (`HttpStream`, `HTTP.open`); 20f streamed
+  uploads (`HTTP.upload`, fixed length or chunked); 20g streamed
+  responses and SSE (`HttpStreamResponse`, `listen_stream`, `whole`).
+  Tests: goldens plus Node peers (no Python server for chunked uploads);
+  docs: grammar, `references/network.md`, the site network page,
+  `docs/vm/10-io-http.md`, CHANGELOG.
+- Done when: `examples/http_get.agc` and `examples/http_server.agc` run
+  on the VM; every hostile case of §10.6 is rejected with its code;
+  client and server work with Python and Node peers over HTTP and
+  HTTPS; the benchmark check is recorded; and a download bigger than
+  64 MiB, a chunked upload and an SSE stream run through channels with
+  one form for each job.
+
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md

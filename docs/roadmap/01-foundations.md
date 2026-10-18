@@ -151,7 +151,7 @@ through injectable ports, so tests do not touch the real network.
     retries or redirects; verified HTTPS both ways. The builtin `HTTP` module
     was replaced by `std/http` in phase 20
   - **Where:** [`06d-io-and-network.md`](../grammar/06d-io-and-network.md),
-    `docs/vm/10-io-http.md`, [`20-hybrid-http.md`](20-hybrid-http.md)
+    `docs/vm/10-io-http.md`, [`§30`](../future/30-hybrid-http.md)
 
 **Independent integration fixtures** (the rule that came with 5g and 5h, kept in
 `AGENTS.md`): TCP/HTTP interoperability tests use a protocol implementation

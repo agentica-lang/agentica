@@ -112,7 +112,8 @@ after them may run in parallel when needed and keep their relative order.
     fails one test; done), then HTTP 20c (done: the `std/http` server, which
     brings back an HTTP server and `examples/http_server.agc`, and also takes
     what was left of 20d, since 7i did the switch; it does not depend on phases
-    24 and 25 and could go before them; [phase 20](20-hybrid-http.md)); VM-only.
+    24 and 25 and could go before them;
+    [§30](../future/30-hybrid-http.md#30-http-on-the-vm-simple-synchronous-hybrid)); VM-only.
     The owner set this order on 2026-10-13: 7i, then HTTP 20b, then [phase
     24](24-task-crash-isolation.md), then [phase 25](25-unit-tests.md), then
     20c, then doc comments (phase 22) and digit separators (phase 23); the 6c
@@ -752,14 +753,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 
 - **File:** [`14-logging.md`](14-logging.md)
   - **Contents:** Phase 14: logging and debugging
-
-- **File:** [`17-iteration-and-concurrency.md`](17-iteration-and-concurrency.md)
-  - **Contents:** Phase 17: iteration and concurrent collections (`Task.map`,
-    channels, `Task.await` with a timeout)
-
-- **File:** [`20-hybrid-http.md`](20-hybrid-http.md)
-  - **Contents:** Phase 20: HTTP on the VM, simple and synchronous (C framing,
-    `std/http` in Agentica), then streaming on channels
 
 - **File:** [`21-bdd-in-agentica.md`](21-bdd-in-agentica.md)
   - **Contents:** Phase 21: BDD in Agentica (`std/bdd`, a runner and a child VM
