@@ -11,6 +11,7 @@ Agentica checker is compared with.
 import json
 
 from tests.agentica_test import TestCase, cli, run
+from tests.spec_support import covered
 
 
 def main_with(body):
@@ -31,16 +32,6 @@ def nested_chains(levels, length):
 
 def position(point):
     return point["line"], point["column"]
-
-
-def covered(text, span):
-    """The source text from the start of a JSON range to its end (exclusive)."""
-    lines = text.split("\n")
-
-    def offset(point):
-        return sum(len(line) + 1 for line in lines[:point["line"] - 1]) + point["column"] - 1
-
-    return text[offset(span["start"]):offset(span["end"])]
 
 
 PIPE_HELPERS = ("def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\n"

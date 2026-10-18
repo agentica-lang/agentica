@@ -59,6 +59,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install poetry==2.1.2
+      - run: poetry install --only test --no-root
       - if: env.AGENTICA_OPENSSL == 'system'
         run: brew install make openssl@3 pkg-config ccache
       - if: env.AGENTICA_OPENSSL == 'vendored'
@@ -118,6 +123,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install poetry==2.1.2
+      - run: poetry install --only test --no-root
       - if: env.AGENTICA_OPENSSL == 'system'
         run: brew install make openssl@3 pkg-config ccache
       - if: env.AGENTICA_OPENSSL == 'vendored'
@@ -183,6 +193,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - run: python -m pip install poetry==2.1.2
+      - run: poetry install --only test --no-root
       - uses: msys2/setup-msys2@v2.33.0
         with:
           msystem: UCRT64

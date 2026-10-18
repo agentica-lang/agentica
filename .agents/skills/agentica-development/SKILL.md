@@ -48,8 +48,9 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 ## Commands while you work
 
 ```sh
+poetry install --only test --no-root               # pytest test dependencies
 make                                      # build dist/agentica, the one binary, from bootstrap/stage0.agcb (git submodule update --init first; needs only a C toolchain)
-make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"  # unittest modules, one process each
+make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"  # pytest modules, one process each
 make tests KIND=files                     # the filesystem-destructive group, only in Docker (locally) or Actions scratch (CI)
 make tests KIND=fast DOCKER=1             # a group in the Ubuntu test container (tools/ubuntu-test.Dockerfile); KIND=slow, all too
 make tests KIND=files WINE=1              # the Windows removal refusal under Wine, optional local compatibility coverage
@@ -68,10 +69,11 @@ make site                                 # before merging a site change
 
 Run the tests the change touches (`make test TESTS=...`, which builds the
 binary first) and run the affected example with `dist/agentica`. Two tiers:
-put fast cases in a `tests/test_<area>.py` module (unittest,
-`references/ci.md`) and slow ones (frozen corpus, generated inputs, stress)
-marked `@slow`. Locally run only the fast tier; CI runs the slow tier with `make
-test-slow` after `make test`. The
+put fast cases in a `tests/test_<area>.py` module (pytest; existing
+`unittest.TestCase` modules remain supported, see `references/ci.md`) and slow
+ones (frozen corpus, generated inputs, stress) marked `@slow` for unittest or
+`pytest.mark.slow` for pytest functions. Locally run only the fast tier; CI runs
+the slow tier with `make test-slow` after `make test`. The
 destructive filesystem cases never run on the host: `make tests KIND=files`
 uses the local Docker sandbox and CI uses its own scratch runner
 (`references/ci.md`). CI runs everything else (`references/ci.md`, "What CI
@@ -138,8 +140,9 @@ runs").
     code style (line width, strings) as `references/library-notes.md` says
 
 - **Add:** test
-  - **Location:** `tests/test_<area>.py` (unittest, only; a language rule is
-    `tests/test_spec_<area>.py` through `--json check FILE`, code and span, no
+  - **Location:** `tests/test_<area>.py` (pytest; existing `unittest.TestCase`
+    modules are supported; a language rule is `tests/test_spec_<area>.py`
+    through `--json check FILE`, code and span, no
     message text; `tests/agentica_test.py` helpers, product CLI as a child:
     `cli()`, `AGENTICA_TEST_EXECUTABLE`); VM behavior: a fixture in
     `tests/fixtures/vm/` with its `.expected`

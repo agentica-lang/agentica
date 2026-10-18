@@ -134,8 +134,8 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     text_test.c          # text forms
     tls_test.c           # TLS adapter
     trace_test.c         # trace points
-tests/            # unittest modules (test_<area>.py); the lists of references/vm-tests.md say which covers what
-  test_spec_<area>.py  # unittest: the language rules through the CLI (code and span from the --json output, never message text): the lexer (test_spec_lexer.py), the parser (test_spec_parser.py), the module linker (test_spec_modules.py), the checker (test_spec_checker.py: spans, pipes, nesting; test_spec_checker_rest.py: the other rules, cases in fixtures/spec/checker-rest.json), the bytecode writer through program runs (test_spec_bytecode.py), the text form of a diagnostic (test_spec_diagnostic.py)
+tests/            # pytest modules (test_<area>.py; existing unittest.TestCase modules remain supported); the lists of references/vm-tests.md say which covers what
+  test_spec_<area>.py  # language rules through the CLI (code and span from --json, never message text): test_spec_alias.py is pytest with tmp_path and a conftest fixture; other modules are unittest.TestCase for now. Covers lexer, parser, module linker, checker, bytecode writer and diagnostic text.
   test_cli_forms.py  # unittest: the options, the three diagnostic forms, runs, compile and help of dist/agentica against fixtures/cli/forms.json (`python3 -m tests.test_cli_forms freeze` rewrites it; references/ci.md)
   test_modules.py  # unittest: programs of several files, pkg roots, the JSON example and step handlers through the CLI (references/language-notes.md)
   test_examples.py  # unittest: examples/*.agc, rejected fragments, CLI exit codes; slow: every malformed input of the algorithm examples (references/stages.md)

@@ -40,14 +40,15 @@ vm exe cli bdd-driver:
 version:
 	@printf '%s' '$(AGC_VERSION)'
 
-# The tests are Python unittest modules, tests/test_<area>.py (docs/future/35-self-hosting.md section 35.10,
-# references/ci.md). TESTS names modules, or directories that hold them (the default is tests/).
+# Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
+# TESTS names modules, or directories that hold them (the default is tests/).
 # Fast Python tests:           make test [TESTS="tests/test_vm_bits.py ..."]
 # Test groups:                 make tests KIND=fast|files|slow|all [DOCKER=1|WINE=1]
 # More or fewer workers:       make test JOBS=8
 PYTHON ?= python3
+POETRY ?= poetry
 # TESTS without a leading ./ or a trailing /. A directory contributes its own test_*.py files, not those of subdirectories
-# (tests/eval/test_*.py are not unittest modules for this runner).
+# (tests/eval/test_*.py are not part of this runner).
 TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency, make vm-task-map): a directory in TESTS does not pick them up
@@ -59,16 +60,12 @@ PY_TESTS = $(sort $(filter-out $(ISOLATED_PY_TESTS),$(PY_FILES)) $(filter-out $(
 PY_NOT_DIR = $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(if $(wildcard $(t)/.),,$(t)))
 PY_BAD = $(PY_NOT_DIR) $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
 PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a tests/test_<area>.py file))
-# tests/test_x.py -> tests.test_x (run from the repository root, so tests/agentica_test.py imports as tests.agentica_test)
-PY_MODULE = $(subst /,.,$(patsubst %.py,%,$(1)))
-
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
 test: $(PRODUCT)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=
 
-# The slow tier: the @slow cases of the .py files (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after
-# make test; a local run does not. With the flag a .py file runs only its @slow cases.
+# The slow tier: @slow TestCase methods and pytest functions marked slow. CI runs it after make test; locally do not run it.
 test-slow: $(PRODUCT)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=1
@@ -79,18 +76,17 @@ test-slow: $(PRODUCT)
 MODULE_BASE_LIMIT = $(if $(filter-out 0,$(AGENTICA_TEST_SLOW)),1800,600)
 MODULE_LIMIT = $(shell awk -v scale='$(or $(AGENTICA_TEST_TIMEOUT_SCALE),1)' -v base=$(MODULE_BASE_LIMIT) 'BEGIN { printf "%d", base * scale }')
 
-# One unittest process per module, run by make itself: -j gives the workers, -O (GNU make 4.0 or newer) keeps each
-# module's output together, -k runs the other modules after a failure. A failing module shows its unittest report and a make error line.
-# CI (CI is set) fails when Python is missing; a local run reports a skip.
+# One pytest process per module, run by make itself: -j gives the workers, -O (GNU make 4.0 or newer) keeps each
+# module's output together, -k runs the other modules after a failure. CI fails when Poetry is missing; locally it skips.
 test-py:
 	@: $(PY_CHECK)
 	@if [ -n "$(PY_ISOLATED_SELECTED)" ]; then \
 	  echo "$(PY_ISOLATED_SELECTED) is isolated: run make tests KIND=files (Docker) or make test-remove-actions in CI" >&2; exit 1; \
 	fi
 	@if [ -n "$(PY_TESTS)" ]; then \
-	  if ! command -v $(PYTHON) >/dev/null 2>&1; then \
-	    test -z "$$CI" || { echo "$(PYTHON) is required in CI" >&2; exit 1; }; \
-	    echo "SKIP the Python tests: $(PYTHON) is unavailable"; exit 0; \
+	  if ! command -v $(POETRY) >/dev/null 2>&1; then \
+	    test -z "$$CI" || { echo "$(POETRY) is required in CI" >&2; exit 1; }; \
+	    echo "SKIP the Python tests: $(POETRY) is unavailable"; exit 0; \
 	  fi; \
 	  $(MAKE) --no-print-directory -k -O -j$(JOBS) $(addprefix py-test/,$(PY_TESTS)) \
 	    || { echo "The Python tests failed" >&2; exit 1; }; \
@@ -99,14 +95,14 @@ test-py:
 # `timeout` (coreutils) ends a hung module: exit 124, or 137 when it had to send KILL after the 10 s of grace. Without
 # the command the module runs unguarded; the per-test limit and the job timeout remain.
 py-test/%: FORCE
-	@echo "unittest $*"
+	@echo "pytest $*"
 	@if command -v timeout >/dev/null 2>&1; then \
-	  timeout -k 10 $(MODULE_LIMIT) $(PYTHON) -m unittest $(call PY_MODULE,$*); status=$$?; \
+	  timeout -k 10 $(MODULE_LIMIT) $(POETRY) run py.test "$*"; status=$$?; \
 	  if [ $$status -eq 124 ] || [ $$status -eq 137 ]; then \
-	    echo "unittest $*: hung, stopped after $(MODULE_LIMIT) s (the module limit)" >&2; \
+	    echo "pytest $*: hung, stopped after $(MODULE_LIMIT) s (the module limit)" >&2; \
 	  fi; \
 	  exit $$status; \
-	else $(PYTHON) -m unittest $(call PY_MODULE,$*); fi
+	else $(POETRY) run py.test "$*"; fi
 
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
 # diagnostics, the programs, `agentica test`, `agentica run`.

@@ -4,10 +4,9 @@ Each case writes a program (one file, or several for the import-alias rules) and
 program is asserted by its diagnostic code and the source text its range covers; a good one checks clean. Message and
 help texts are not asserted (AGENTS.md).
 """
-import json
+import pytest
 
-from tests.agentica_test import TestCase, cli, run
-from tests.test_spec_checker import covered
+from tests.spec_support import covered
 
 JOIN = 'def join(xs: List[String], sep: String = ", ") -> String\n  return xs.join(sep)\nend\n\n'
 
@@ -173,37 +172,27 @@ MODULES = [
 ]
 
 
-class SpecCheckerDefaultsTest(TestCase):
-    def setUp(self):
-        super().setUp()
-        self.work = self.make_temp_dir()
+@pytest.mark.parametrize(
+    ("title", "program", "code", "text"),
+    SINGLE_FILE,
+    ids=[case[0] for case in SINGLE_FILE],
+)
+def test_single_file_programs(title, program, code, text, agentica_check):
+    found = agentica_check(program, "program.agc")
+    assert (found and found["code"]) == code, program
+    if text is not None:
+        assert covered(program, found["range"]) == text
 
-    def diagnostic(self, files, root="program.agc"):
-        """The JSON diagnostic that `check` gives the files {name: text}, or None when they check clean."""
-        for name, text in files.items():
-            (self.work / name).write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(self.work / root)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
 
-    def test_single_file_programs(self):
-        for title, program, code, text in SINGLE_FILE:
-            with self.subTest(title):
-                found = self.diagnostic({"program.agc": program})
-                self.assertEqual(found and found["code"], code, program)
-                if text is not None:
-                    self.assertEqual(covered(program, found["range"]), text)
-
-    def test_programs_of_several_files(self):
-        for title, files, code, file, text in MODULES:
-            with self.subTest(title):
-                folder = self.make_temp_dir()
-                self.work = folder
-                found = self.diagnostic(files, "root.agc")
-                self.assertEqual(found and found["code"], code, files)
-                if found is None:
-                    continue
-                self.assertTrue(found["file"].endswith(file), found["file"])
-                self.assertEqual(covered(files[file], found["range"]), text)
+@pytest.mark.parametrize(
+    ("title", "files", "code", "file", "text"),
+    MODULES,
+    ids=[case[0] for case in MODULES],
+)
+def test_programs_of_several_files(title, files, code, file, text, agentica_check):
+    found = agentica_check(files, "root.agc")
+    assert (found and found["code"]) == code, files
+    if found is None:
+        return
+    assert found["file"].endswith(file), found["file"]
+    assert covered(files[file], found["range"]) == text

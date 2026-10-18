@@ -17,7 +17,7 @@ import re
 import unittest
 
 from tests.agentica_test import FIXTURES, TestCase, cli, run
-from tests.test_spec_checker import covered
+from tests.spec_support import covered
 
 GROUPS = json.loads((FIXTURES / "spec" / "checker-rest.json").read_text(encoding="utf-8"))
 

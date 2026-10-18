@@ -2,9 +2,10 @@
 
 Read this before changing `.github/workflows/`, the Makefile, or before
 adding VM source files, test peers or fixtures. The build and the release need
-only a C toolchain (they start from `bootstrap/stage0.agcb`), and the tests are
-all Python `unittest`. No job installs Racket: the Racket front end and its
-generators were deleted, and `vm/unicode_data.c` is frozen, checked-in data (see
+only a C toolchain (they start from `bootstrap/stage0.agcb`); Python tests run
+through pytest, with existing `unittest.TestCase` modules supported during
+migration. No job installs Racket: the Racket front end and its generators were
+deleted, and `vm/unicode_data.c` is frozen, checked-in data (see
 its header; a future generator must reproduce it byte for byte).
 
 ## The checks of ci.yml, sweep.yml and the release are make targets
@@ -70,9 +71,10 @@ STAGE1_COMPILER="path/to/agentica"`
   included, in `tests/fixtures/cli/forms.json` (`tests/test_cli_forms.py`, like
   the VM goldens; `make goldens` rewrites it after an intended change, and the
   diff is the review).
-- `test` and `test-slow` run Python `unittest` modules only (design in
-  `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of
-  `tests/test_<area>.py` files or directories (the default `tests/`). A leading
+- `test` and `test-slow` run pytest on modules named
+  `tests/test_<area>.py` (design in `docs/future/35-self-hosting.md` §35.10).
+  Existing `unittest.TestCase` classes are collected too. `TESTS` is a list of
+  module files or directories (the default `tests/`). A leading
   `./` and a trailing `/` are ignored; any other path (a file of another kind, a
 `.py`
   file outside `tests/test_<area>.py`, a name that is not a folder) fails with a
@@ -102,13 +104,13 @@ lists
   stages. It is not a CI step. The Racket writers that made them
   (`make frontend-freeze`, `make frontend-snapshot`) were removed in step 8d-3
   and the Racket front end with them; the tag `bootstrap-racket` keeps both.
-- Each Python module runs in its own process (`python3 -m unittest
-  tests.test_<area>` from the root), run by make itself: `make -k -O -j$(JOBS)`
-  over `py-test/<file>` targets, so a failure shows that module's report and
-  the other modules still run. `-O` needs GNU make 4.0 or newer (macOS ships
-  3.81; Linux only for now). Python is the standard library only (CI runs the
-  Debian runner's `python3`, printed by the `python3 --version` steps; use only
-  features of Python 3.10); the helpers are `tests/agentica_test.py` (paths,
+- Each Python module runs in its own process (`poetry run py.test
+  tests/test_<area>.py` from the root), run by make itself: `make -k -O
+  -j$(JOBS)` over `py-test/<file>` targets, so a failure shows that module's
+  report and the other modules still run. `-O` needs GNU make 4.0 or newer
+  (macOS ships 3.81; Linux only for now). CI installs the test group from
+  `pyproject.toml` and `poetry.lock`; test peers remain standard-library-only.
+  The helpers are `tests/agentica_test.py` (paths,
   the VM binary, the CLI, `run` with a timeout, `compile_agc`,
   `make_temp_dir`, `compile_text`, `@slow`, `tool` for Node;
   `run(stdout_to=, stderr_to=)` sends a stream to a file such as `/dev/full`),
@@ -121,19 +123,17 @@ lists
   read `agentica test --json` suites. Without `python3`, `CI` set fails the run
   and a local run reports a skip; a missing VM binary does the same for a
   test.
-- `test-slow` runs the `@slow` cases of the Python modules
-  (`AGENTICA_TEST_SLOW=1`; with the flag the fast cases of a module are
-  skipped). `make test` sets the flag to empty, so a stray
-  `AGENTICA_TEST_SLOW=1` in the environment does not turn it into a slow run.
-  Fast cases are unmarked, slow ones (frozen corpus, generated inputs, stress)
-  marked `@slow`; local runs use only the fast tier.
+- `test-slow` runs the slow tier (`AGENTICA_TEST_SLOW=1`). Existing
+  `unittest.TestCase` tests use the `@slow` wrapper; pytest functions use the
+  `slow` marker. The Makefile clears the flag for `make test`; local runs use
+  only the fast tier.
 - Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE` (a
   float, default 1; `ci.yml` and `sweep.yml` set 4 for the slow runners):
-  one test (`tests/agentica_test.py`: SIGALRM per test like pytest-timeout,
+  one test (`tests/agentica_test.py`: SIGALRM per `unittest.TestCase` test,
   120 s, 900 s for `@slow`; `@timeout(seconds)` overrides it for a method or
   a class; `faulthandler` kills the module 30 s later if the signal cannot
   run); one test module (the `MODULE_LIMIT` of the Makefile:
-  `timeout -k 10` around `unittest`; 600 s, 1800 s for `make test-slow`); the
+  `timeout -k 10` around pytest; 600 s, 1800 s for `make test-slow`); the
 job `timeout-minutes` of the workflow, which must
   stay larger than the module limit times the scale. Deadlines that a correct
   run must beat take `scaled(seconds)` (or `ms` in
@@ -161,7 +161,7 @@ job `timeout-minutes` of the workflow, which must
   mode (`docs/vm/15-layers.md` §15.5) and its self-test. A new `vm/*.c` file
   goes in one list of the script.
 - `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
-  unittest modules (`VM_PY_TESTS`, the golden shards among them, run with
+  Python modules (`VM_PY_TESTS`, the golden shards among them, run with
   `make test-py`) that run against the binary in the sanitizer job. They and
   `vm-diff-test` do not depend on `dist/agentica` on purpose: they test the
   binary that an earlier step built (`SANITIZE=1` makes `dist/agentica` the
