@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import ctypes
 import os
 import stat
@@ -172,9 +173,9 @@ class WindowsFilesystemMutationTests(TestCase):
         bytecode = self.compile_text(REMOVE_PROGRAM, "windows-remove-aliases")
         paths = (
             str(victim) + ".", str(victim) + " ", str(victim) + ":stream",
-            str(victim) + "/", str(victim) + "\\\\",
+            str(victim) + "/", str(victim) + "\\",
             str(self.root) + "/.", str(self.root) + "/unused/..",
-            "\\\\\\\\?\\\\" + str(victim), "\\\\\\\\.\\\\" + str(victim),
+            rf"\\?\{victim}", rf"\\.\{victim}",
         )
         for path in paths:
             with self.subTest(path=path):
@@ -202,6 +203,51 @@ class WindowsFilesystemMutationTests(TestCase):
         )
         self.assertEqual((result.code, result.stdout, result.stderr), (0, "true\n", ""))
         self.assertFalse(victim.exists())
+
+    def test_acl_denied_delete_preserves_remove_and_rename_sources(self) -> None:
+        box = self.root / "acl-box"
+        box.mkdir()
+        victim = box / "keep"
+        victim.write_text("acl sentinel", encoding="utf-8")
+        identity = subprocess.run(
+            ["whoami.exe", "/user", "/fo", "csv", "/nh"],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(identity.returncode, 0, identity.stderr)
+        sid = next(csv.reader(identity.stdout.splitlines()))[1]
+        self.assertTrue(sid.startswith("S-1-"), sid)
+
+        def acl(path, *arguments):
+            result = subprocess.run(
+                ["icacls.exe", str(path), *arguments],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        remove = self.compile_text(REMOVE_PROGRAM, "windows-remove-acl")
+        rename = self.compile_text(RACE_PROGRAM, "windows-rename-acl")
+        try:
+            # Deny both routes Windows may use: DELETE on the object and
+            # DELETE_CHILD on its parent. Reading the sentinel remains allowed.
+            acl(box, "/deny", f"*{sid}:(DC)")
+            acl(victim, "/deny", f"*{sid}:(D)")
+            for bytecode, arguments in (
+                (remove, [str(victim)]),
+                (rename, [str(victim), str(box / "moved")]),
+            ):
+                result = run_vm(
+                    bytecode, args=arguments, env=vm_environment(), cwd=self.root
+                )
+                self.assertEqual((result.code, result.stdout), (0, "false\n"))
+                self.assertEqual(victim.read_text(encoding="utf-8"), "acl sentinel")
+                self.assertFalse((box / "moved").exists())
+        finally:
+            acl(victim, "/remove:d", f"*{sid}")
+            acl(box, "/remove:d", f"*{sid}")
+        result = run_vm(
+            remove, args=[str(victim)], env=vm_environment(), cwd=self.root
+        )
+        self.assertEqual((result.code, result.stdout), (0, "true\n"), result.stderr)
 
     def test_depth_limit_fails_without_leaking_handles(self) -> None:
         victim = self.root / "deep"
@@ -305,10 +351,11 @@ class WindowsFilesystemMutationTests(TestCase):
                     base = self.root / f"pair-{int(source_directory)}-{int(target_directory)}"
                     base.mkdir()
                     source, target = base / "source", base / "target"
-                    for path, directory, text in (
+                    entries = (
                         (source, source_directory, "source sentinel"),
                         (target, target_directory, "target sentinel"),
-                    ):
+                    )
+                    for path, directory, text in entries:
                         if directory:
                             path.mkdir()
                             (path / "keep").write_text(text, encoding="utf-8")
@@ -319,10 +366,7 @@ class WindowsFilesystemMutationTests(TestCase):
                         env=vm_environment(), cwd=self.root,
                     )
                     self.assertEqual((result.code, result.stdout), (0, "false\n"))
-                    for path, directory, text in (
-                        (source, source_directory, "source sentinel"),
-                        (target, target_directory, "target sentinel"),
-                    ):
+                    for path, directory, text in entries:
                         entry = path / "keep" if directory else path
                         self.assertEqual(entry.read_text(encoding="utf-8"), text)
 

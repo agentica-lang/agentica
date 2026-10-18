@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
 import stat
 import unittest
@@ -85,6 +86,13 @@ struct LockContext
 end
 
 def locked_child(context: LockContext) -> Result[Void]
+  if System.args().length > 1
+    return File.each_line(context.path, 1024, 5000) do |line|
+      Result.unwrap!(context.ready.send(line.length > 0, 5000))
+      context.parked.recv(60000)
+      return ok()
+    end
+  end
   file = Result.unwrap!(File.open(context.path, "read", 5000))
   Result.unwrap!(context.ready.send(Result.unwrap!(File.try_lock(file, 5000)), 5000))
   context.parked.recv(60000)
@@ -114,8 +122,31 @@ def main() -> Void
   Result.unwrap!(context.crash.send(true, 5000))
   puts(Task.await(parent).ok?)
   puts(Task.await(child).ok?)
+  if System.args().length > 1
+    puts("ready")
+    IO.flush()
+    IO.gets()
+    return
+  end
   file = Result.unwrap!(File.open(context.path, "read", 5000))
   puts(Result.unwrap!(File.try_lock(file, 5000)))
+end
+"""
+
+EACH_LINE_PROGRAM = """\
+def main() -> Void
+  args = System.args()
+  result = File.each_line(args[0], 1024, 5000) do |line|
+    IO.inspect(line)
+    if args[1] == "stop"
+      return error("intentional early stop")
+    end
+    return ok()
+  end
+  puts(result.ok?)
+  puts("ready")
+  IO.flush()
+  IO.gets()
 end
 """
 
@@ -272,6 +303,53 @@ class WindowsLineTests(TestCase):
                 self.assertEqual(lines[:len(successful)], successful)
                 self.assertTrue(lines[-2].startswith("error("), lines)
                 self.assertEqual(lines[-1], "true")
+
+    @unittest.skipUnless(os.name == "nt", "exclusive handle probe needs Win32")
+    def test_each_line_closes_its_file_on_eof_callback_error_and_decode_error(self) -> None:
+        root = self.make_temp_dir("agentica-windows-each-line-")
+        bytecode = self.compile_text(EACH_LINE_PROGRAM, "windows-each-line")
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateFileW.argtypes = [
+            ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
+            ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+        ]
+        kernel32.CreateFileW.restype = ctypes.c_void_p
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        kernel32.CloseHandle.restype = ctypes.c_int
+        cancelled = self.compile_text(CANCELLED_LOCK_PROGRAM, "windows-cancelled-lines")
+        cases = (
+            (b"first\nsecond\n", "cancel", ["true", "false", "false"]),
+            (b"one\r\ntwo\nlast", "all", ['"one"', '"two"', '"last"', "true"]),
+            (b"one\ntwo\n", "stop", ['"one"', "false"]),
+            (b"\xff\n", "all", ["false"]),
+            (b"", "all", ["true"]),
+        )
+        for number, (data, mode, expected) in enumerate(cases):
+            with self.subTest(mode=mode, data=data):
+                target = root / f"case-{number}"
+                target.write_bytes(data)
+                program = cancelled if mode == "cancel" else bytecode
+                child = self.adopt(start_vm(
+                    program, str(target), mode, stdin=True, cwd=root
+                ))
+                for line in expected:
+                    self.assertEqual(child.next_line(), line)
+                self.assertEqual(child.next_line(), "ready")
+                self.assertIsNone(child.process.poll())
+                # Zero sharing fails while any reader still has the file open.
+                handle = kernel32.CreateFileW(
+                    str(target), 0x80000000, 0, None, 3, 0, None
+                )
+                try:
+                    self.assertNotEqual(
+                        handle, ctypes.c_void_p(-1).value,
+                        ctypes.WinError(ctypes.get_last_error()),
+                    )
+                finally:
+                    if handle != ctypes.c_void_p(-1).value:
+                        self.assertTrue(kernel32.CloseHandle(handle))
+                    child.close_stdin()
+                self.assertEqual(child.wait(), 0)
 
     def test_overlong_line_returns_error_and_handle_can_be_closed(self) -> None:
         root = self.make_temp_dir("agentica-windows-line-limit-")
