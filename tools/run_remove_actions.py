@@ -117,6 +117,15 @@ def _run_filesystem_tests(repository: Path, vm_build: Path, environment: dict[st
     )
     if status:
         return status
+    if os.name != "nt":
+        status = _run(
+            [sys.executable, "-m", "pytest", "tests/test_windows_metadata_and_locks.py",
+             "-k", "cancelled_owner or a_lock_of_a_task"],
+            cwd=repository,
+            env=environment,
+        )
+        if status:
+            return status
     module_paths = [module.replace(".", "/") + ".py" for module in modules]
     return _run(
         [sys.executable, "-m", "pytest", *module_paths],
