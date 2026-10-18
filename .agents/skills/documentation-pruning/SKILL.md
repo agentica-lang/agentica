@@ -28,8 +28,13 @@ Identify these roles by purpose, not fixed paths:
 | Agent skills (`SKILL.md`) | Task instructions | Minimal, self-contained |
 | Skill resources (`references/`) | Supporting detail | Load on demand |
 | Internal docs (`docs/`, etc.) | Specs, decisions, design | Authoritative |
-| Public docs (Hugo, MkDocs) | Product docs | For readers, not agents |
+| Public docs (Hugo, MkDocs) | Product docs | Include only when in scope |
 | Code, tests, CLI | Executable behavior, APIs | Prefer over repeated facts |
+
+For Agentica, do not crawl `site/content/` during a general docs audit. Include
+Hugo pages when requested or explicitly in scope, and inspect only relevant
+pages. Any in-scope user-facing language or builtin change must update its
+corresponding site page.
 
 Discover the actual paths, generators, build system, and conventions. Never
 assume a specific repository layout.
@@ -85,8 +90,8 @@ Prioritize in this order:
    useful, selectively loaded detail.
 4. **Internal docs:** consolidate specifications, decisions, and architecture
    without losing authority.
-5. **Public docs:** remove unnecessary maintenance duplication while retaining
-   useful human-facing explanations.
+5. **Public docs:** simplify relevant pages when the site is in scope, while
+   preserving useful reader-facing content.
 
 Prefer instructions over explanations, pointers over copies, and commands over
 static inventories.
@@ -140,8 +145,9 @@ Code describes behavior; it does not automatically explain intent.
   rewriting.
 - Preserve normative contracts, unfinished work, important decisions, and
   stable links.
-- Update indexes, cross-references, skill paths, anchors, and site navigation
-  together.
+- Update in-scope indexes and cross-references together. For an in-scope
+  user-facing language change, update its relevant site page and navigation if
+  needed.
 - Do not move entire documents into skill resources merely to hide duplication.
 - Do not create replacement summaries unless they reduce actual maintenance or
   context cost.
@@ -152,8 +158,9 @@ Handle source conflicts as in §2; never invent consensus.
 ## 7. Validate and report
 
 Check git diff, local links, skill references, relevant generators, and
-documentation builds. Run targeted tests if examples or executable
-documentation changed.
+documentation builds. For Agentica site changes, run `make site`; otherwise do
+not crawl or build the site unless it is in scope. Run targeted tests if
+examples or executable documentation changed.
 
 Report:
 
