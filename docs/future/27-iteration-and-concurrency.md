@@ -53,10 +53,10 @@ prelude, not in `std/`, because they need the catalog's type variables. Each
 future helper still needs its own spec and must pass the one-way test.
 `Task.map` stays a C builtin because it must cancel timed-out items, which no
 primitive can do, and because it lands at order step 7.3, before the prelude
-(see 27.1, "Why a builtin"). `Task.await` with a timeout (27.3) is a C builtin too,
-by the owner's decision of 2026-10-14: the timeout lives in the scheduler, as a
-timer on the job (`docs/vm/14-core-invariants.md` §14.2), and the prelude it
-would have waited for does not exist yet.
+(see 27.1, "Why a builtin"). `Task.await` with a timeout (27.3) is a C builtin
+too, by the owner's decision of 2026-10-14: the timeout lives in the scheduler,
+as a timer on the job (`docs/vm/14-core-invariants.md` §14.2), and the prelude
+it would have waited for does not exist yet.
 
 **One way for each job.** After this section, the programming skill teaches
 these forms, and only these, for each job. The skill updates of 17a and 17b

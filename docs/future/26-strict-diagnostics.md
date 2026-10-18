@@ -727,15 +727,15 @@ and 26.4.
     parameter; 3 `for _ in` loops in `tests/fixtures/vm/random.agc`, which stay
     valid as discards
 
-- **Where:** Inline programs in Racket tests, before 7i
-  - **26.1 imports:** 1 (`tests/test_spec_modules.py`)
-  - **26.2 variables:** 36: 24 in `test_spec_checker.py` (23 of the 33 `check-ok`
-    programs the scan could read, and one more), 6 in `test_frontend_bytecode.py`,
-    2 in `test_bdd_integration.py`, 1 each in `test_spec_modules.py`,
-    `test_examples.py`, `vm/tests/task_*_test.c` and `tests/vm_diff_support.py`
-  - **26.3 unreachable:** 0
-  - **26.4 results:** 1 (a `check-ok` program in `test_spec_checker.py` that drops
-    `HTTP.respond`)
+- **Where:** Inline programs in Racket tests, before 7i   - **26.1 imports:** 1
+  (`tests/test_spec_modules.py`)   - **26.2 variables:** 36: 24 in
+  `test_spec_checker.py` (23 of the 33 `check-ok`     programs the scan could
+  read, and one more), 6 in `test_frontend_bytecode.py`,     2 in
+  `test_bdd_integration.py`, 1 each in `test_spec_modules.py`,
+  `test_examples.py`, `vm/tests/task_*_test.c` and `tests/vm_diff_support.py`
+  - **26.3 unreachable:** 0   - **26.4 results:** 1 (a `check-ok` program in
+  `test_spec_checker.py` that drops     `HTTP.respond`)
+
 
 The inline counts are for the tests as they are before 7i. 7i deletes the
 evaluator and the tests that only exercise it, so the implementing PRs, which
@@ -751,31 +751,31 @@ What the hits are, and their fix:
   `Process.wait` assigned and never read. The fix is the discard `_` (`for _`,
   `|_, v|`, `error(_)`), a `_name`, a bare call statement (only for a value that
   is not a `Result`), or using the value; the site's `Result` values get a 26.4
-  handling form or `_ = ...`. The `test_spec_checker.py` programs mostly introduce a
-  variable only to check its type (`x: Int = i`); they get `_x` names or a
-  `puts`. In `tests/test_spec_modules.py`, `funcs.agc` assigns `n = C.go()` and
-  never reads it; its `main` is checked before the imported file's error that
-  the test expects, so the PR uses `n`. - **The one unreachable statement** is
-  the golden fixture   `tests/fixtures/vm/calls.agc`, which checks that code
-  after `return` does not   run; the PR removes that line and the new checker
-  test covers the case. (A   program in `tests/test_frontend_parser.py` also has
-  a statement after `return`, but   parser tests never run the checker.) - **The
-  one unused import** is in `tests/test_spec_modules.py`: `types.agc`   imports
-  `bad.agc` as `B` and never uses it, and the test expects
-  `CHECK-UNKNOWN-TYPE` from `bad.agc`. Under 26.1 the linker would stop first
-  with `CHECK-UNUSED-IMPORT`. The PR gives `B` a use (for example a parameter of
-  type `B.Pair`, once `Pair` is exported), so the test keeps checking that a
-  checker error in an imported file is reported in that file. The other module
-  tests with an unused alias fail earlier in the linker (missing file, bad path,
-  duplicate or reserved alias, import cycle) and are not affected. - **Ignored
-  results.** All 12 are calls with effects used as statements:   `File.close`,
-  `File.write_text` and `File.write_bytes` in the file fixtures,   and
-  `HTTP.respond` and `TCP.send` in two examples and one checker test. The
-  fixtures that test error cases on purpose use a `case` or `_ = ...`; the
-  others use `try` or `.unwrap!`. The 188 `IO.inspect` statements on a `Result`
-  are not hits (the exception above). -
-  `tests/eval/tasks/t5-scope-return/start.agc` has an unused `last`, but it is
-  broken on purpose (agents fix it) and fails earlier with
+  handling form or `_ = ...`. The `test_spec_checker.py` programs mostly
+  introduce a   variable only to check its type (`x: Int = i`); they get `_x`
+  names or a   `puts`. In `tests/test_spec_modules.py`, `funcs.agc` assigns `n =
+  C.go()` and   never reads it; its `main` is checked before the imported file's
+  error that   the test expects, so the PR uses `n`. - **The one unreachable
+  statement** is   the golden fixture   `tests/fixtures/vm/calls.agc`, which
+  checks that code   after `return` does not   run; the PR removes that line and
+  the new checker   test covers the case. (A   program in
+  `tests/test_frontend_parser.py` also has   a statement after `return`, but
+  parser tests never run the checker.) - **The   one unused import** is in
+  `tests/test_spec_modules.py`: `types.agc`   imports   `bad.agc` as `B` and
+  never uses it, and the test expects   `CHECK-UNKNOWN-TYPE` from `bad.agc`.
+  Under 26.1 the linker would stop first   with `CHECK-UNUSED-IMPORT`. The PR
+  gives `B` a use (for example a parameter of   type `B.Pair`, once `Pair` is
+  exported), so the test keeps checking that a   checker error in an imported
+  file is reported in that file. The other module   tests with an unused alias
+  fail earlier in the linker (missing file, bad path,   duplicate or reserved
+  alias, import cycle) and are not affected. - **Ignored   results.** All 12 are
+  calls with effects used as statements:   `File.close`,   `File.write_text` and
+  `File.write_bytes` in the file fixtures,   and   `HTTP.respond` and `TCP.send`
+  in two examples and one checker test. The   fixtures that test error cases on
+  purpose use a `case` or `_ = ...`; the   others use `try` or `.unwrap!`. The
+  188 `IO.inspect` statements on a `Result`   are not hits (the exception
+  above). -   `tests/eval/tasks/t5-scope-return/start.agc` has an unused `last`,
+  but it is   broken on purpose (agents fix it) and fails earlier with
   `CHECK-MISSING-RETURN`; it needs no edit. - `{expect="..."}` site blocks that
   fail earlier with another checker code are   not affected;
   `tour/results-and-try.md`'s `RUNTIME-UNWRAP-ERROR` block is,   since a check
