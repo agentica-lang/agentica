@@ -19,6 +19,21 @@ def main() -> Void
 end
 """
 
+# Both restricted creators, so the case that names them really makes the entries it reports. Their Windows guarantee is
+# an owner-and-DACL check on the object they opened, which these two lines exercise.
+PRIVATE_PROGRAM = """\
+def main() -> Void
+  args = System.args()
+  file = Result.unwrap!(File.open(args[0], "create_private", 5000))
+  Result.unwrap!(Dir.mkdir_private(args[1], 5000))
+  for path in [args[0], args[1]]
+    info = Result.unwrap!(File.stat(path, 5000))
+    puts("#{info.kind} #{info.mode} #{info.user_id} #{info.group_id}")
+  end
+  Result.unwrap!(File.close(file, 5000))
+end
+"""
+
 # The holder never closes its handle and never ends: only the process ending or being killed frees the lock that the
 # probe then asks for. `ready` is the explicit signal that the lock is held, so nothing waits on the clock.
 CONTENTION_PROGRAM = """\
@@ -87,15 +102,27 @@ class WindowsMetadataTests(TestCase):
         os.chmod(target, stat.S_IWRITE)
         self.assertEqual(self.metadata(target)[1], str(WRITABLE_MODE))
 
-    def test_a_directory_and_a_private_file_report_the_same_zero_owner(self) -> None:
+    def test_a_directory_reports_the_same_zero_owner(self) -> None:
         directory = self.root / "directory"
         directory.mkdir()
         kind, mode, user_id, group_id = self.metadata(directory)
         self.assertEqual((kind, mode, user_id, group_id), ("directory", str(WRITABLE_MODE), "0", "0"))
 
-        private = self.root / "private.txt"
-        private.write_text("private", encoding="utf-8")
-        self.assertEqual(self.metadata(private)[2:], ["0", "0"])
+    # Wine answers access denied for the restricted creators: it does not implement the owner and DACL the adapter sets
+    # and then checks on the object it opened, so this case is evidence from the native runner only.
+    @unittest.skipIf(os.environ.get("AGENTICA_TEST_WINE") == "1", "Wine cannot make the restricted object")
+    def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(self) -> None:
+        private_file = self.root / "private.txt"
+        private_directory = self.root / "private-directory"
+        bytecode = self.compile_text(PRIVATE_PROGRAM, "windows-private")
+        result = run_vm(bytecode, args=[str(private_file), str(private_directory)], env=vm_environment(), cwd=self.root)
+        self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [f"file {WRITABLE_MODE} 0 0", f"directory {WRITABLE_MODE} 0 0"],
+        )
+        self.assertEqual(self.metadata(private_file)[2:], ["0", "0"])
+        self.assertTrue(private_directory.is_dir())
 
 
 @unittest.skipUnless(TARGET_OS == "windows", "requires the native Windows VM")

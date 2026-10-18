@@ -6,7 +6,11 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <io.h>
+#endif
 #include <string.h>
 #include <uv.h>
 
@@ -244,9 +248,10 @@ int main(void) {
 #ifdef _WIN32
   assert(agc_fs_try_lock(-1) == -1 && errno == EBADF);
   /* A real handle whose LockFileEx fails for another reason must not read as contention: Windows does not lock a
-     directory handle, and answers an invalid-handle or access error instead. */
+     directory handle, and answers an invalid-handle or access error instead. The live descriptor keeps the early
+     invalid-argument return from standing in for the call. */
   int directory_fd = agc_fs_open(directory, AGC_FS_READ);
-  assert(directory_fd >= 0);
+  assert(directory_fd >= 0 && (intptr_t)_get_osfhandle(directory_fd) != -1);
   assert(agc_fs_try_lock(directory_fd) == -1 && errno != EAGAIN);
   assert(agc_fs_close(directory_fd) == 0);
   int first_lock = agc_fs_open(path, AGC_FS_WRITE);
