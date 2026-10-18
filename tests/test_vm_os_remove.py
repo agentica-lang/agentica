@@ -6,7 +6,9 @@ import stat
 import pytest
 
 from tests.agentica_test import run_vm, start_vm, vm_environment
-from tests.vm_os_support import (CONTENTION_PROGRAM, PROTOCOL_PROGRAM, RACE_PROGRAM, _RaceCase, compile_text,
+# sandbox_root as root: these isolated tests require the Docker or Actions sandbox,
+# unlike the plain root fixture shared by the non-destructive suites.
+from tests.vm_os_support import (CONTENTION_PROGRAM, PROTOCOL_PROGRAM, RACE_PROGRAM, _RaceCase, compile_work_text,
                                  rename_never_replaces_and_moves_a_link_as_a_link, run_program,
                                  sandbox_root as root, system_pid_is_the_vm_process_and_the_parent_a_child_sees,
                                  work)
@@ -148,7 +150,7 @@ end
 
 
 def test_rename_keeps_lock_owner_across_the_final_name(root, work, adopt):
-    bytecode = compile_text(work, CONTENTION_PROGRAM, "contention")
+    bytecode = compile_work_text(work, CONTENTION_PROGRAM, "contention")
 
     def probe(name: str) -> str:
         result = run_vm(
@@ -162,7 +164,7 @@ def test_rename_keeps_lock_owner_across_the_final_name(root, work, adopt):
 
     holder = adopt(
         start_vm(
-            compile_text(work, PROTOCOL_PROGRAM, "protocol"),
+            compile_work_text(work, PROTOCOL_PROGRAM, "protocol"),
             str(root),
             stdin=True,
             cwd=root,
@@ -183,5 +185,5 @@ def test_rename_never_replaces_and_moves_a_link_as_a_link(root, work):
 
 
 def test_rename_race_has_one_winner_and_preserves_all_losing_sources(root, work, adopt):
-    bytecode = compile_text(work, RACE_PROGRAM, "race")
+    bytecode = compile_work_text(work, RACE_PROGRAM, "race")
     assert_rename_race(_RaceCase(adopt), bytecode, root, lambda number: f"source{number}")

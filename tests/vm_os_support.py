@@ -132,8 +132,12 @@ def work(tmp_path):
     return path.resolve()
 
 
-def compile_text(work, text, name="program"):
-    """Compile Agentica source text; return the bytecode path."""
+def compile_work_text(work, text, name="program"):
+    """Compile Agentica source text into the work directory; return the bytecode path.
+
+    Unlike tests.agentica_test.compile_text, which compiles under tmp_path, this one
+    keeps programs in work, separate from the scratch files the tests mutate.
+    """
     source = work / (name + ".agc")
     source.write_text(text, encoding="utf-8")
     return compile_agc(source, work / (name + ".agcb"))
@@ -141,7 +145,7 @@ def compile_text(work, text, name="program"):
 
 def run_program(root, work, text, name, *args, flags=(), env=None, cwd=None):
     """Run a program in the scratch directory and return its output lines."""
-    result = run_vm(compile_text(work, text, name), *flags, args=[str(arg) for arg in args],
+    result = run_vm(compile_work_text(work, text, name), *flags, args=[str(arg) for arg in args],
                     env=vm_environment(env), cwd=cwd or root)
     assert (result.code, result.stderr) == (0, ""), result.stdout
     return output_lines(result.stdout)
@@ -194,14 +198,14 @@ def rename_never_replaces_and_moves_a_link_as_a_link(root, work):
 
 def rename_race_has_exactly_one_winner(root, work, adopt):
     """The rename race has exactly one winner (previously dead code on OsBuiltins)."""
-    bytecode = compile_text(work, RACE_PROGRAM, "race")
+    bytecode = compile_work_text(work, RACE_PROGRAM, "race")
     assert_rename_race(_RaceCase(adopt), bytecode, root, lambda number: "source%d" % number)
 
 
 def system_pid_is_the_vm_process_and_the_parent_a_child_sees(root, work, adopt):
     """The driver-pid handoff only accepts the real parent."""
-    child = compile_text(work, 'def main() -> Void\n  puts("child ran")\nend\n', "child")
-    bytecode = compile_text(work, PID_PROGRAM, "pid")
+    child = compile_work_text(work, 'def main() -> Void\n  puts("child ran")\nend\n', "child")
+    bytecode = compile_work_text(work, PID_PROGRAM, "pid")
     vm = adopt(Child([*vm_command(), "--allow-run", "--", bytecode, str(vm_binary()), str(child), str(root)],
                      env=vm_environment(), cwd=root, capture_stderr=True))
     lines = [vm.next_line() for _ in range(5)]

@@ -17,7 +17,9 @@ import pytest
 
 from tests.agentica_test import compile_agc, run_vm, start_vm, vm_environment
 from tests.remove_sandbox_support import require_remove_sandbox
-from tests.vm_os_support import _RaceCase, compile_text, sandbox_root as root, work
+# sandbox_root as root: these isolated tests require the Docker or Actions sandbox,
+# unlike the plain root fixture shared by the non-destructive suites.
+from tests.vm_os_support import _RaceCase, compile_work_text, sandbox_root as root, work
 from tests.windows_support import assert_rename_race, kernel32_file_api
 
 REMOVE_PROGRAM = """\
@@ -102,7 +104,7 @@ def test_remove_recurses_without_following_junctions_and_refuses_unsafe_paths(ro
     )
     assert link.returncode == 0, link.stdout + link.stderr
 
-    bytecode = compile_text(work, REMOVE_PROGRAM, "windows-remove-tree")
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-tree")
     result = run_vm(bytecode, args=[str(victim)], env=vm_environment(), cwd=root)
     assert (result.code, result.stdout, result.stderr) == (0, "true\n", ""), result.stderr
     assert not victim.exists()
@@ -127,7 +129,7 @@ def test_remove_fails_closed_when_an_existing_handle_allows_rename(root, work):
     handle = kernel32.CreateFileW(str(victim), 0x00010000, 0x00000007, None, 3, 0x02000000, None)
     assert handle != ctypes.c_void_p(-1).value, ctypes.WinError(ctypes.get_last_error())
     try:
-        bytecode = compile_text(work, REMOVE_PROGRAM, "windows-remove-busy-directory")
+        bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-busy-directory")
         blocked = run_vm(bytecode, args=[str(victim)], env=vm_environment(), cwd=root)
         assert (blocked.code, blocked.stdout) == (0, "false\n")
         assert (victim / "keep").exists()
@@ -152,7 +154,7 @@ def test_remove_refuses_a_reparse_ancestor(root, work):
     )
     assert link.returncode == 0, link.stdout + link.stderr
 
-    bytecode = compile_text(work, REMOVE_PROGRAM, "windows-remove-reparse-ancestor")
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-reparse-ancestor")
     result = run_vm(bytecode, args=[str(ancestor / "target")], env=vm_environment(), cwd=root)
     assert (result.code, result.stdout) == (0, "false\n"), result.stderr
     assert target.read_text(encoding="utf-8") == "outside sentinel"
@@ -169,7 +171,7 @@ def test_remove_deletes_files_and_treats_missing_paths_as_success(root, work):
     missing = root / "missing"
     traversed_target = root / "traversed"
     traversed_target.write_text("remove through normalized parent", encoding="utf-8")
-    bytecode = compile_text(work, REMOVE_PROGRAM, "windows-remove-file")
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-file")
 
     removed = run_vm(bytecode, args=[str(victim)], env=vm_environment(), cwd=root)
     unicode_removed = run_vm(bytecode, args=[str(unicode_victim)], env=vm_environment(), cwd=root)
@@ -192,7 +194,7 @@ def test_remove_deletes_files_and_treats_missing_paths_as_success(root, work):
 def test_unsafe_aliases_and_trailing_separators_preserve_the_entry(root, work):
     victim = root / "keep"
     victim.write_text("sentinel", encoding="utf-8")
-    bytecode = compile_text(work, REMOVE_PROGRAM, "windows-remove-aliases")
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-aliases")
     paths = (
         str(victim) + ".", str(victim) + " ", str(victim) + ":stream",
         str(victim) + "/", str(victim) + "\\",
@@ -211,7 +213,7 @@ def test_unsafe_aliases_and_trailing_separators_preserve_the_entry(root, work):
 def test_read_only_entry_failure_preserves_data_and_closes_its_handles(root, work):
     victim = root / "readonly"
     victim.write_text("sentinel", encoding="utf-8")
-    bytecode = compile_text(work, REMOVE_PROGRAM, "windows-remove-readonly")
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-readonly")
     os.chmod(victim, stat.S_IREAD)
     try:
         result = run_vm(
@@ -249,7 +251,7 @@ def test_acl_denied_delete_preserves_remove_sources(root, work):
         )
         assert result.returncode == 0, result.stdout + result.stderr
 
-    remove = compile_text(work, REMOVE_PROGRAM, "windows-remove-acl")
+    remove = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-acl")
     try:
         # Deny both routes Windows may use: DELETE on the object and
         # DELETE_CHILD on its parent. Reading the sentinel remains allowed.
@@ -326,7 +328,7 @@ def test_depth_limit_fails_without_leaking_handles(root, work, adopt):
         current = current / "d"
     sentinel = current.parent / "keep"
     sentinel.write_text("deep sentinel", encoding="utf-8")
-    bytecode = compile_text(work, PAUSED_REMOVE_PROGRAM, "windows-remove-depth")
+    bytecode = compile_work_text(work, PAUSED_REMOVE_PROGRAM, "windows-remove-depth")
     child = adopt(start_vm(bytecode, str(victim), stdin=True, cwd=root))
     try:
         assert child.next_line() == "false"
@@ -358,7 +360,7 @@ def test_remove_pins_ancestors_during_concurrent_replacement(root, work, adopt):
     for number in range(1200):
         (tree / f"item-{number}.dat").write_text("remove", encoding="utf-8")
 
-    bytecode = compile_text(work, REMOVE_RACE_PROGRAM, "windows-remove-ancestor-race")
+    bytecode = compile_work_text(work, REMOVE_RACE_PROGRAM, "windows-remove-ancestor-race")
     child = adopt(start_vm(bytecode, str(tree), cwd=root))
     assert child.next_line() == "ready"
     stop = threading.Event()
@@ -409,7 +411,7 @@ def test_rename_is_atomic_non_replacing_and_moves_directories(root, work):
     (directory / "inside").write_text("inside contents", encoding="utf-8")
     occupied_identity = occupied.stat().st_dev, occupied.stat().st_ino
 
-    bytecode = compile_text(work, RENAME_PROGRAM, "windows-rename")
+    bytecode = compile_work_text(work, RENAME_PROGRAM, "windows-rename")
     result = run_vm(bytecode, args=[str(root)], env=vm_environment(), cwd=root)
 
     assert (result.code, result.stdout, result.stderr) == (0, "false\ntrue\ntrue\nfalse\n", "")
@@ -423,7 +425,7 @@ def test_rename_is_atomic_non_replacing_and_moves_directories(root, work):
 
 @REQUIRES_NATIVE_WINDOWS
 def test_rename_preserves_existing_directory_and_file_targets(root, work):
-    bytecode = compile_text(work, RACE_PROGRAM, "windows-rename-types")
+    bytecode = compile_work_text(work, RACE_PROGRAM, "windows-rename-types")
     for source_directory in (False, True):
         for target_directory in (False, True):
             base = root / f"pair-{int(source_directory)}-{int(target_directory)}"
@@ -457,7 +459,7 @@ def test_rename_moves_a_junction_not_its_target(root, work):
         capture_output=True, text=True, check=False,
     )
     assert link.returncode == 0, link.stdout + link.stderr
-    bytecode = compile_text(work, RACE_PROGRAM, "windows-rename-junction")
+    bytecode = compile_work_text(work, RACE_PROGRAM, "windows-rename-junction")
     run_with_stdout(bytecode, [str(source), str(target)], root, "true\n")
     assert not source.exists()
     assert target.is_junction()
@@ -483,7 +485,7 @@ def test_symlinks_are_removed_and_renamed_without_touching_their_targets(root, w
         )
         assert made.returncode == 0, made.stdout + made.stderr
 
-    remove = compile_text(work, REMOVE_PROGRAM, "windows-remove-symlink")
+    remove = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-symlink")
     for link in (file_link, dir_link):
         result = run_vm(
             remove, args=[str(link)], env=vm_environment(), cwd=root
@@ -500,7 +502,7 @@ def test_symlinks_are_removed_and_renamed_without_touching_their_targets(root, w
     )
     assert made.returncode == 0, made.stdout + made.stderr
     moved = root / "moved-dir-link"
-    rename = compile_text(work, RACE_PROGRAM, "windows-rename-symlink")
+    rename = compile_work_text(work, RACE_PROGRAM, "windows-rename-symlink")
     result = run_vm(
         rename, args=[str(dir_link), str(moved)],
         env=vm_environment(), cwd=root,
@@ -529,7 +531,7 @@ def test_cross_volume_rename_fails_without_losing_the_source(root, work):
 
     source = box / "source.txt"
     source.write_text("cross-volume sentinel", encoding="utf-8")
-    bytecode = compile_text(work, RACE_PROGRAM, "windows-cross-volume-rename")
+    bytecode = compile_work_text(work, RACE_PROGRAM, "windows-cross-volume-rename")
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.GetVolumePathNameW.argtypes = [
         ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32,
@@ -596,8 +598,8 @@ def test_local_unc_share_removes_and_renames_only_its_confined_entries(root, wor
         )
         assert result.returncode == 0, result.stdout + result.stderr
 
-    remove = compile_text(work, REMOVE_PROGRAM, "windows-unc-remove")
-    rename = compile_text(work, RACE_PROGRAM, "windows-unc-rename")
+    remove = compile_work_text(work, REMOVE_PROGRAM, "windows-unc-remove")
+    rename = compile_work_text(work, RACE_PROGRAM, "windows-unc-rename")
     unc = rf"\\localhost\{name}"
     try:
         manage("create")
@@ -621,7 +623,7 @@ def test_local_unc_share_removes_and_renames_only_its_confined_entries(root, wor
 
 @REQUIRES_NATIVE_WINDOWS
 def test_rename_race_has_one_winner_and_preserves_losing_sources(root, work, adopt):
-    bytecode = compile_text(work, RACE_PROGRAM, "windows-rename-race")
+    bytecode = compile_work_text(work, RACE_PROGRAM, "windows-rename-race")
     assert_rename_race(_RaceCase(adopt), bytecode, root, lambda number: f"source-{number}")
 
 
@@ -645,7 +647,7 @@ def main() -> Void
   puts(Path.rename(path, invalid, 5000).ok?)
 end
 """
-    bytecode = compile_text(work, source, "windows-invalid-path")
+    bytecode = compile_work_text(work, source, "windows-invalid-path")
     result = run_vm(
         bytecode, args=[str(victim)], env=vm_environment(), cwd=box
     )
@@ -657,7 +659,7 @@ end
 
 @REQUIRES_WINDOWS
 def test_roots_and_final_dot_components_are_refused(work):
-    bytecode = compile_text(work, REMOVE_PROGRAM, "windows-remove-refusal")
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-refusal")
     paths = ("C:\\", "C:", "C:\\parent\\..", "\\\\server\\share")
     for path in paths:
         result = run_vm(bytecode, args=[path], env=vm_environment(), cwd=os.getcwd())

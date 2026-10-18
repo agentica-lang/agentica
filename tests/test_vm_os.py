@@ -11,7 +11,7 @@ import stat
 import pytest
 
 from tests.agentica_test import run_vm, start_vm, vm_environment
-from tests.vm_os_support import CONTENTION_PROGRAM, compile_text, root, run_program, work
+from tests.vm_os_support import CONTENTION_PROGRAM, compile_work_text, root, run_program, work
 
 MODES_PROGRAM = """\
 def main() -> Void
@@ -159,7 +159,7 @@ def test_try_lock_on_two_handles_of_one_file_is_released_by_close(root, work):
 def test_try_lock_contends_across_processes_and_dies_with_its_holder(root, work, adopt):
     path = root / "lock"
     path.write_text("")
-    bytecode = compile_text(work, CONTENTION_PROGRAM, "contention")
+    bytecode = compile_work_text(work, CONTENTION_PROGRAM, "contention")
 
     def probe():
         result = run_vm(bytecode, args=[str(path), "probe"], env=vm_environment(), cwd=root)
@@ -185,7 +185,7 @@ def test_try_lock_contends_across_processes_and_dies_with_its_holder(root, work,
 def test_a_child_does_not_keep_the_lock_after_the_handle_closes(root, work, adopt):
     path = root / "lock"
     path.write_text("")
-    bytecode = compile_text(work, CONTENTION_PROGRAM, "contention")
+    bytecode = compile_work_text(work, CONTENTION_PROGRAM, "contention")
     holder = adopt(start_vm(bytecode, str(path), "spawn", flags=("--allow-run",), stdin=True, cwd=root))
     assert holder.next_line() == "true"
     assert holder.next_line() == "closed"

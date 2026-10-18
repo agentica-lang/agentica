@@ -7,6 +7,8 @@ compares its output, or its diagnostic code taken from the last line of stderr.
 import json
 import re
 
+import pytest
+
 from tests.agentica_test import FIXTURES, cli, run, tool, vm_environment
 
 PEER = FIXTURES / "process-peer.js"
@@ -195,33 +197,49 @@ def test_wait_retries_preserve_children_active_stream_deadlines_abort_them(tmp_p
     body = ("  pid = Result.unwrap!(Process.read_line(p, 5000))\n  IO.inspect(Result.ok?(Process.wait(p, 20)))\n"
             '  Result.unwrap!(Process.send(p, "exit\\n", 5000))\n  IO.inspect(Process.wait(p, 5000))')
     assert output(tmp_path, program(node, "release", body)) == "false\nok(3)\n"
-    for operation in ("Process.read_line(p, 20)", "Process.send_bytes(p, List.repeat(65, 1048576), 20)"):
-        body = ("  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.inspect(Result.ok?(%s))\n"
-                "  IO.inspect(Result.ok?(Process.wait(p, 20)))" % operation)
-        result, out, _ = run_program(tmp_path, program(node, "hold", body))
-        assert result is None
-        lines = out.split("\n")
-        lines = lines[:-1] if lines[-1] == "" else lines
-        assert lines[1:] == ["false", "false"]
-        assert not alive(node, lines[0])
     assert output(tmp_path, program(
         node, "oversized", "  IO.inspect(Result.ok?(Process.read_line(p, 5000)))\n  IO.inspect(Result.ok?(Process.wait(p, 1000)))")) == \
         "false\nfalse\n"
 
 
-def test_every_way_a_run_ends_kills_and_reaps_its_children(tmp_path):
+@pytest.mark.parametrize("operation", (
+    "Process.read_line(p, 20)",
+    "Process.send_bytes(p, List.repeat(65, 1048576), 20)",
+))
+def test_hold_operations_abort_when_the_stream_deadline_passes(tmp_path, operation):
     node = tool("node")
-    for ending in ("", "  System.exit(4)", "  x = 1 / 0", "  while true\n  end",
-                   "  task = Task.spawn(&crash, 0)\n  n = Task.await(task)"):
-        result, out, _ = run_program(
-            tmp_path,
-            program(node, "hold", "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n" + ending,
-                    "def crash(n: Int) -> Int\n  return 1 / 0\nend\n\n"),
-            limit=100 if "while" in ending else None)
-        assert re.search(r"\A[0-9]+\n\Z", out)
-        if "crash" in ending:
-            assert result == "RUNTIME-TASK-CRASHED"
-        assert not alive(node, out)
+    body = ("  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.inspect(Result.ok?(%s))\n"
+            "  IO.inspect(Result.ok?(Process.wait(p, 20)))" % operation)
+    result, out, _ = run_program(tmp_path, program(node, "hold", body))
+    assert result is None
+    lines = out.split("\n")
+    lines = lines[:-1] if lines[-1] == "" else lines
+    assert lines[1:] == ["false", "false"]
+    assert not alive(node, lines[0])
+
+
+@pytest.mark.parametrize("ending", (
+    "",
+    "  System.exit(4)",
+    "  x = 1 / 0",
+    "  while true\n  end",
+    "  task = Task.spawn(&crash, 0)\n  n = Task.await(task)",
+), ids=("clean-exit", "exit-4", "divide-by-zero", "infinite-loop", "task-crash"))
+def test_every_way_a_run_ends_kills_and_reaps_its_children(tmp_path, ending):
+    node = tool("node")
+    result, out, _ = run_program(
+        tmp_path,
+        program(node, "hold", "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n" + ending,
+                "def crash(n: Int) -> Int\n  return 1 / 0\nend\n\n"),
+        limit=100 if "while" in ending else None)
+    assert re.search(r"\A[0-9]+\n\Z", out)
+    if "crash" in ending:
+        assert result == "RUNTIME-TASK-CRASHED"
+    assert not alive(node, out)
+
+
+def test_a_stubborn_hold_is_reaped_after_close(tmp_path):
+    node = tool("node")
     result, out, _ = run_program(tmp_path, captured(node, "stubborn", "  puts(Result.unwrap!(Process.read_line(p, 5000)))"))
     assert result is None
     assert re.search(r"\A[0-9]+\n\Z", out)

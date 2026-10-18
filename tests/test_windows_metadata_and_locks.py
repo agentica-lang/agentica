@@ -9,7 +9,7 @@ import stat
 import pytest
 
 from tests.agentica_test import TARGET_OS, compile_agc, run_vm, start_vm, vm_environment
-from tests.vm_os_support import compile_text, root, work
+from tests.vm_os_support import compile_work_text, root, work
 from tests.windows_support import kernel32_file_api
 
 # The documented Windows values: mode carries the read-only attribute only, and both owner ids are 0.
@@ -177,7 +177,7 @@ def _metadata(bytecode, path, root) -> list[str]:
 @REQUIRES_WINDOWS_VM
 def test_a_regular_file_reports_no_owner_and_only_the_read_only_attribute(root, work):
     """Check the metadata values the Windows platform really reports."""
-    bytecode = compile_text(work, METADATA_PROGRAM, "windows-metadata")
+    bytecode = compile_work_text(work, METADATA_PROGRAM, "windows-metadata")
 
 
     target = root / "plain.txt"
@@ -198,7 +198,7 @@ def test_a_regular_file_reports_no_owner_and_only_the_read_only_attribute(root, 
 
 @REQUIRES_WINDOWS_VM
 def test_a_directory_reports_the_same_zero_owner(root, work):
-    bytecode = compile_text(work, METADATA_PROGRAM, "windows-metadata")
+    bytecode = compile_work_text(work, METADATA_PROGRAM, "windows-metadata")
 
 
     directory = root / "directory"
@@ -212,10 +212,10 @@ def test_a_directory_reports_the_same_zero_owner(root, work):
 @REQUIRES_WINDOWS_VM
 @pytest.mark.skipif(os.environ.get("AGENTICA_TEST_WINE") == "1", reason="Wine cannot make the restricted object")
 def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(root, work):
-    metadata_bytecode = compile_text(work, METADATA_PROGRAM, "windows-metadata")
+    metadata_bytecode = compile_work_text(work, METADATA_PROGRAM, "windows-metadata")
     private_file = root / "private.txt"
     private_directory = root / "private-directory"
-    bytecode = compile_text(work, PRIVATE_PROGRAM, "windows-private")
+    bytecode = compile_work_text(work, PRIVATE_PROGRAM, "windows-private")
     result = run_vm(bytecode, args=[str(private_file), str(private_directory)], env=vm_environment(), cwd=root)
     assert (result.code, result.stderr) == (0, ""), result.stderr
     assert result.stdout.splitlines() == [
@@ -244,7 +244,7 @@ def _lock_case(root, work):
     """A fresh lock target and the contention program for it."""
     target = root / "lock"
     target.write_text("", encoding="utf-8")
-    return target, compile_text(work, CONTENTION_PROGRAM, "windows-contention")
+    return target, compile_work_text(work, CONTENTION_PROGRAM, "windows-contention")
 
 
 @REQUIRES_WINDOWS_VM
@@ -277,7 +277,7 @@ def test_a_killed_holder_frees_the_lock(root, work, adopt):
 @REQUIRES_WINDOWS_VM
 def test_cancelled_owner_releases_its_lock_without_ending_the_process(root, work):
     target, bytecode = _lock_case(root, work)
-    cancelled = compile_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lock")
+    cancelled = compile_work_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lock")
     result = run_vm(
         cancelled, args=[str(target)], env=vm_environment(), cwd=root
     )
@@ -289,7 +289,7 @@ def test_cancelled_owner_releases_its_lock_without_ending_the_process(root, work
 @REQUIRES_WINDOWS_VM
 def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(root, work):
     target, bytecode = _lock_case(root, work)
-    task = compile_text(work, TASK_LOCK_PROGRAM, "windows-task-lock")
+    task = compile_work_text(work, TASK_LOCK_PROGRAM, "windows-task-lock")
     result = run_vm(task, args=[str(target)], env=vm_environment(), cwd=root)
     assert (result.code, result.stderr) == (0, ""), result.stderr
     # The first task takes it and ends, so a later handle takes it; that handle then blocks another task until it
@@ -302,7 +302,7 @@ def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(root, work):
 def test_empty_crlf_lf_unterminated_and_invalid_utf8(tmp_path, work):
     """Check ordinary-file line decoding independently of pipe support."""
     box = tmp_path
-    bytecode = compile_text(work, READ_LINES_PROGRAM, "windows-lines")
+    bytecode = compile_work_text(work, READ_LINES_PROGRAM, "windows-lines")
     cases = (
         (b"", 1, []),
         (b"one\r\ntwo\nlast", 4, ['ok("one")', 'ok("two")', 'ok("last")']),
@@ -328,9 +328,9 @@ def test_empty_crlf_lf_unterminated_and_invalid_utf8(tmp_path, work):
 @pytest.mark.skipif(os.name != "nt", reason="exclusive handle probe needs Win32")
 def test_each_line_closes_its_file_on_eof_callback_error_and_decode_error(tmp_path, work, adopt):
     box = tmp_path
-    bytecode = compile_text(work, EACH_LINE_PROGRAM, "windows-each-line")
+    bytecode = compile_work_text(work, EACH_LINE_PROGRAM, "windows-each-line")
     kernel32 = kernel32_file_api()
-    cancelled = compile_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lines")
+    cancelled = compile_work_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lines")
     cases = (
         (b"first\nsecond\n", "cancel", ["true", "false", "false"]),
         (b"one\r\ntwo\nlast", "all", ['"one"', '"two"', '"last"', "true"]),
@@ -368,7 +368,7 @@ def test_overlong_line_returns_error_and_handle_can_be_closed(tmp_path, work):
     box = tmp_path
     target = box / "long-line"
     target.write_bytes(b"x" * (1048576 + 1))
-    bytecode = compile_text(work, READ_LINES_PROGRAM, "windows-line-limit")
+    bytecode = compile_work_text(work, READ_LINES_PROGRAM, "windows-line-limit")
     result = run_vm(
         bytecode, args=[str(target), "1"], env=vm_environment(), cwd=box
     )

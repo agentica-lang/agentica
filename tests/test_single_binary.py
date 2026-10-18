@@ -13,6 +13,8 @@ import re
 import struct
 import subprocess
 
+import pytest
+
 from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, TLS_BUILT, binary, compile_agc, require,
                                  run, run_vm, scaled, vm_environment, write_files)
 
@@ -225,17 +227,17 @@ def test_run_embedded_starts_a_program_the_binary_carries():
         assert (got.code, got.stdout, got.stderr) == (2, "", message)
 
 
-def test_a_program_cannot_call_the_front_end_builtins(tmp_path):
+@pytest.mark.parametrize("name", ("std", "hand_off"))
+def test_a_program_cannot_call_the_front_end_builtins(tmp_path, name):
     directory = make_suite(tmp_path, {"std.agc": STD_SOURCE, "hand_off.agc": HAND_OFF})
-    for name in ("std", "hand_off"):
-        got = agentica(name + ".agc", cwd=directory)
-        assert (got.code, got.stdout) == (1, "")
-        assert "RUNTIME-FRONT-END-ONLY" in got.stderr
-        # The same program on the VM that runs a compiled file: there is no front end there either.
-        assert agentica("compile", name + ".agc", "-o", name + ".agcb", cwd=directory).code == 0
-        again = run_vm(directory / (name + ".agcb"), env=vm_environment())
-        assert (again.code, again.stdout) == (1, "")
-        assert "RUNTIME-FRONT-END-ONLY" in again.stderr
+    got = agentica(name + ".agc", cwd=directory)
+    assert (got.code, got.stdout) == (1, "")
+    assert "RUNTIME-FRONT-END-ONLY" in got.stderr
+    # The same program on the VM that runs a compiled file: there is no front end there either.
+    assert agentica("compile", name + ".agc", "-o", name + ".agcb", cwd=directory).code == 0
+    again = run_vm(directory / (name + ".agcb"), env=vm_environment())
+    assert (again.code, again.stdout) == (1, "")
+    assert "RUNTIME-FRONT-END-ONLY" in again.stderr
 
 
 def test_the_vm_options_apply_to_the_program_only(tmp_path):
@@ -273,12 +275,17 @@ def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_do
     assert got.stderr == "agentica: invalid bytecode: built for another Agentica version\n"
 
 
-def test_the_front_end_gets_the_embedded_std_sources(tmp_path):
+@pytest.mark.parametrize("name", (STDLIB / "MODULES").read_text().split())
+def test_the_front_end_gets_the_embedded_std_sources(tmp_path, name):
     work = tmp_path
     front = front_end(work)
-    for name in (STDLIB / "MODULES").read_text().split():
-        got = agentica("--front-end", front, "std", name)
-        assert (got.code, got.stdout) == (0, (STDLIB / name).read_text())
+    got = agentica("--front-end", front, "std", name)
+    assert (got.code, got.stdout) == (0, (STDLIB / name).read_text())
+
+
+def test_the_front_end_reports_a_missing_std_source(tmp_path):
+    work = tmp_path
+    front = front_end(work)
     missing = agentica("--front-end", front, "std", "nothing.agc")
     assert (missing.code, missing.stdout) == (0, "error: no such std source\n")
 
@@ -301,52 +308,60 @@ def test_the_hand_off_runs_the_program_in_a_new_runtime(tmp_path):
     assert draws[0] != draws[2]
 
 
-def test_the_driver_refuses_what_the_front_end_hands_over_wrongly(tmp_path):
-    work = tmp_path
+def _hand_off_program(work):
     front = front_end(work)
     write_files(work, {"user.agc": EXIT_THREE})
-    program = compile_agc(work / "user.agc", work / "user.agcb")
-    for words, error in (
-            (["bad-program"], "error: the program is not a list of bytes, or it is too large\n"),
-            (["bad-word"], "error: argument 1 has a character 0\n"),
-            (["too-many-options"], "error: too many options\n"),
-            (["too-many-arguments"], "error: too many arguments\n")):
-        got = agentica("--front-end", front, *words)
-        assert (got.code, got.stdout, got.stderr) == (0, error, "")
-    for options, message in (
-            (["--bogus"], "agentica: unknown option --bogus\n"),
-            (["--max-steps", "0"], "agentica: --max-steps needs a positive integer\n"),
-            (["--version"], "agentica: the front end passed --version, which is not an option of a run\n"),
-            (["--driver-pid", "1"],
-             "agentica: the front end passed --driver-pid, which only the process that started agentica may name\n"),
-            (["--embedded", "runner"],
-             "agentica: the front end passed --embedded, which only agentica run takes\n"),
-            (["word"], "agentica: the front end passed word, which is not an option of a run\n")):
-        got = agentica("--front-end", front, "hand-off", program, *options)
-        assert (got.code, got.stdout, got.stderr) == (2, "", message)
+    return front, compile_agc(work / "user.agc", work / "user.agcb")
 
 
-def test_a_missing_front_end_is_a_usage_error(tmp_path):
-    cases = [
-        (["--front-end", "/nonexistent/front.agcb"], "agentica: cannot read /nonexistent/front.agcb\n"),
-        (["--front-end"], "agentica: --front-end needs a file\n"),
-    ]
+@pytest.mark.parametrize("words,error", (
+    (["bad-program"], "error: the program is not a list of bytes, or it is too large\n"),
+    (["bad-word"], "error: argument 1 has a character 0\n"),
+    (["too-many-options"], "error: too many options\n"),
+    (["too-many-arguments"], "error: too many arguments\n"),
+), ids=("bad-program", "bad-word", "too-many-options", "too-many-arguments"))
+def test_the_driver_refuses_malformed_handoff_words(tmp_path, words, error):
+    front, _program = _hand_off_program(tmp_path)
+    got = agentica("--front-end", front, *words)
+    assert (got.code, got.stdout, got.stderr) == (0, error, "")
+
+
+@pytest.mark.parametrize("options,message", (
+    (["--bogus"], "agentica: unknown option --bogus\n"),
+    (["--max-steps", "0"], "agentica: --max-steps needs a positive integer\n"),
+    (["--version"], "agentica: the front end passed --version, which is not an option of a run\n"),
+    (["--driver-pid", "1"],
+     "agentica: the front end passed --driver-pid, which only the process that started agentica may name\n"),
+    (["--embedded", "runner"],
+     "agentica: the front end passed --embedded, which only agentica run takes\n"),
+    (["word"], "agentica: the front end passed word, which is not an option of a run\n"),
+), ids=("bogus", "max-steps-0", "version", "driver-pid", "embedded", "word"))
+def test_the_driver_refuses_misplaced_run_options(tmp_path, options, message):
+    front, program = _hand_off_program(tmp_path)
+    got = agentica("--front-end", front, "hand-off", program, *options)
+    assert (got.code, got.stdout, got.stderr) == (2, "", message)
+
+
+@pytest.mark.parametrize("words,message", (
+    (["--front-end", "/nonexistent/front.agcb"], "agentica: cannot read /nonexistent/front.agcb\n"),
+    (["--front-end"], "agentica: --front-end needs a file\n"),
+), ids=("missing-file", "missing-argument"))
+def test_a_missing_front_end_is_a_usage_error(tmp_path, words, message):
+    got = agentica(*words, timeout=scaled(10))
+    assert (got.code, got.stdout, got.stderr) == (2, "", message)
+
+
+def test_a_missing_front_end_refuses_a_non_file_at_once(tmp_path):
     if TARGET_OS == "windows":
         # A directory is a portable non-file that the loader must refuse before reading.
-        directory = tmp_path / "front.agcb"
-        directory.mkdir()
-        cases.append((
-            ["--front-end", directory],
-            "agentica: cannot read %s\n" % directory,
-        ))
+        non_file = tmp_path / "front.agcb"
+        non_file.mkdir()
     else:
-        pipe = tmp_path / "front.agcb"
-        os.mkfifo(pipe)
+        non_file = tmp_path / "front.agcb"
+        os.mkfifo(non_file)
         # A named pipe is refused at once, not waited for.
-        cases.append((["--front-end", pipe], "agentica: cannot read %s\n" % pipe))
-    for words, message in cases:
-        got = agentica(*words, timeout=scaled(10))
-        assert (got.code, got.stdout, got.stderr) == (2, "", message)
+    got = agentica("--front-end", non_file, timeout=scaled(10))
+    assert (got.code, got.stdout, got.stderr) == (2, "", "agentica: cannot read %s\n" % non_file)
 
 
 def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(tmp_path):

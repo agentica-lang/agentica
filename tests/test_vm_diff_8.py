@@ -86,37 +86,46 @@ def test_shard_tables_name_real_fixtures_and_shards():
             assert ("SHARD = %d" % shard) in module.read_text(encoding="utf-8"), str(module)
 
 
-def test_compile_gives_the_same_bytes_every_time(tmp_path):
-    for name in ["imports", "io-gets", "enums-case"]:
-        program = FIXTURE_DIR / (name + ".agc")
-        first = compile_agc(program, tmp_path / (name + "-one.agcb"))
-        second = compile_agc(program, tmp_path / (name + "-two.agcb"))
-        assert first.read_bytes() == second.read_bytes(), name
+@pytest.mark.parametrize("name", ["imports", "io-gets", "enums-case"])
+def test_compile_gives_the_same_bytes_every_time(tmp_path, name):
+    program = FIXTURE_DIR / (name + ".agc")
+    first = compile_agc(program, tmp_path / (name + "-one.agcb"))
+    second = compile_agc(program, tmp_path / (name + "-two.agcb"))
+    assert first.read_bytes() == second.read_bytes()
 
 
-def test_the_vm_reads_piped_stdin_like_the_file_redirect(tmp_path):
-    for name in ["io-read", "io-rest"]:
-        program = FIXTURE_DIR / (name + ".agc")
-        fixture = Fixture(input=(FIXTURE_DIR / (name + ".stdin")).read_bytes())
-        bytecode = compile_agc(program, tmp_path / (name + "-pipe.agcb"))
-        assert outcome(run_vm(fixture, bytecode, None, cwd=tmp_path)) == read_expected(program), name
+@pytest.mark.parametrize("name", ["io-read", "io-rest"])
+def test_the_vm_reads_piped_stdin_like_the_file_redirect(tmp_path, name):
+    program = FIXTURE_DIR / (name + ".agc")
+    fixture = Fixture(input=(FIXTURE_DIR / (name + ".stdin")).read_bytes())
+    bytecode = compile_agc(program, tmp_path / (name + "-pipe.agcb"))
+    assert outcome(run_vm(fixture, bytecode, None, cwd=tmp_path)) == read_expected(program)
 
 
-def test_runaway_loops_stop_at_max_steps_with_a_prefix_of_their_expected_output(tmp_path):
-    for program in runaway_programs():
-        check_runaway(program, tmp_path)
+@pytest.mark.parametrize("program", runaway_programs(), ids=lambda program: program.stem)
+def test_runaway_loops_stop_at_max_steps_with_a_prefix_of_their_expected_output(tmp_path, program):
+    check_runaway(program, tmp_path)
+
+
+@pytest.mark.parametrize("options", [["--max-steps", "0"], ["--bogus"], ["--ai", "--ai"],
+                                       ["--max-steps", "5", "--max-steps", "5"],
+                                       ["--seed", "1", "--seed", "1"]])
+def test_the_vm_command_line_rejects_bad_options(tmp_path, options):
+    bytecode = str(fixture_bytecode(tmp_path, "calls"))
+    assert vm(tmp_path, *options, "--", bytecode)[0] == 2
+
+
+@pytest.mark.parametrize("seed", ["-1", "2147483648", "1x", "", "99999999999999999999"])
+def test_the_vm_command_line_rejects_a_bad_seed(tmp_path, seed):
+    bytecode = str(fixture_bytecode(tmp_path, "calls"))
+    rejected = vm(tmp_path, "--seed", seed, "--", bytecode)
+    assert rejected[0] == 2
+    assert rejected[2] == "agentica run: --seed needs an integer from 0 to 2147483647\n"
 
 
 def test_the_vm_command_line_checks_options_and_stops_parsing_at_the_file(tmp_path):
     bytecode = str(fixture_bytecode(tmp_path, "calls"))
     assert run_vm(PLAIN, bytecode, None, extra=["--max-steps", "1"], cwd=tmp_path)[0] == 0
-    for options in [["--max-steps", "0"], ["--bogus"], ["--ai", "--ai"], ["--max-steps", "5", "--max-steps", "5"],
-                    ["--seed", "1", "--seed", "1"]]:
-        assert vm(tmp_path, *options, "--", bytecode)[0] == 2, options
-    for seed in ["-1", "2147483648", "1x", "", "99999999999999999999"]:
-        rejected = vm(tmp_path, "--seed", seed, "--", bytecode)
-        assert rejected[0] == 2, seed
-        assert rejected[2] == "agentica run: --seed needs an integer from 0 to 2147483647\n", seed
     draws = compile_program(
         tmp_path, "random-draws", "def main() -> Void\n  puts(Random.int(0, 1000000000))\n  puts(Random.float)\nend\n")
 
