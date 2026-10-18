@@ -10,6 +10,8 @@ import subprocess
 import threading
 import time
 import unittest
+import uuid
+from pathlib import Path
 
 from tests.agentica_test import TestCase, run_vm, start_vm, vm_environment
 from tests.remove_sandbox_support import require_remove_sandbox
@@ -249,35 +251,73 @@ class WindowsFilesystemMutationTests(TestCase):
             kernel32.CreateFileW.restype = ctypes.c_void_p
             kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
             # Establish actual denial with an independent Win32 open before
-            # invoking either mutation; elevated privileges may override a DACL.
-            handle = kernel32.CreateFileW(str(victim), 0x10000, 7, None, 3, 0, None)
-            if handle != ctypes.c_void_p(-1).value:
-                kernel32.CloseHandle(handle)
-                details = subprocess.run(
-                    ["icacls.exe", str(victim)], capture_output=True,
-                    text=True, check=False,
+            # invoking either mutation; a hosted runner may have backup rights.
+            def delete_is_denied() -> bool:
+                handle = kernel32.CreateFileW(
+                    str(victim), 0x10000, 7, None, 3, 0, None
                 )
-                self.fail("ACL fixture did not deny DELETE: " + details.stdout)
-            self.assertEqual(ctypes.get_last_error(), 5)
-            for bytecode, arguments in (
-                (remove, [str(victim)]),
-                (rename, [str(victim), str(box / "moved")]),
+                if handle != ctypes.c_void_p(-1).value:
+                    kernel32.CloseHandle(handle)
+                    return False
+                return ctypes.get_last_error() == 5
+
+            if not delete_is_denied():
+                acl(box, "/inheritance:d")
+                acl(victim, "/inheritance:d")
+                acl(box, "/deny", f"*{sid}:(DC,D)")
+                acl(victim, "/deny", f"*{sid}:(D)")
+                if not delete_is_denied():
+                    details = subprocess.run(
+                        ["icacls.exe", str(box)], capture_output=True,
+                        text=True, check=False,
+                    )
+                    self.fail(
+                        "could not establish independent DELETE denial: "
+                        + details.stdout
+                    )
+
+            for bytecode, arguments, removed in (
+                (remove, [str(victim)], False),
+                (rename, [str(victim), str(box / "moved")], False),
+                (remove, [str(victim)], True),
+                (rename, [str(victim), str(box / "moved")], True),
             ):
+                if removed:
+                    acl(victim, "/remove:d", f"*{sid}")
+                    acl(box, "/remove:d", f"*{sid}")
                 result = run_vm(
                     bytecode, args=arguments, env=vm_environment(), cwd=self.root
                 )
+                expected = "true\n" if removed else "false\n"
                 self.assertEqual(
-                    (result.code, result.stdout), (0, "false\n"),
+                    (result.code, result.stdout), (0, expected),
                     f"{arguments}: {result.stderr}",
                 )
-                self.assertEqual(victim.read_text(encoding="utf-8"), "acl sentinel")
-                self.assertFalse((box / "moved").exists())
-        finally:
-            try:
-                if victim.exists():
+                if removed:
+                    self.assertFalse(victim.exists())
+                    self.assertEqual(
+                        (box / "moved").read_text(encoding="utf-8"),
+                        "acl sentinel",
+                    )
+                    (box / "moved").unlink()
+                    victim.write_text("acl sentinel", encoding="utf-8")
+                    acl(victim, "/deny", f"*{sid}:(D)")
+                else:
+                    # The denied DELETE ACE also blocks some hosted-runner
+                    # identities from reopening for read; restore before the
+                    # sentinel check, then reapply it for the next operation.
                     acl(victim, "/remove:d", f"*{sid}")
-            finally:
-                acl(box, "/remove:d", f"*{sid}")
+                    acl(box, "/remove:d", f"*{sid}")
+                    self.assertEqual(
+                        victim.read_text(encoding="utf-8"), "acl sentinel"
+                    )
+                    self.assertFalse((box / "moved").exists())
+                    acl(box, "/deny", f"*{sid}:(DC,D)")
+                    acl(victim, "/deny", f"*{sid}:(D)")
+        finally:
+            if victim.exists():
+                acl(victim, "/remove:d", f"*{sid}")
+            acl(box, "/remove:d", f"*{sid}")
         result = run_vm(
             remove, args=[str(victim)], env=vm_environment(), cwd=self.root
         )
@@ -429,6 +469,53 @@ class WindowsFilesystemMutationTests(TestCase):
         self.assertTrue(target.is_junction())
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "target sentinel")
         self.assertEqual((target / "keep").read_text(encoding="utf-8"), "target sentinel")
+
+    def test_local_unc_share_removes_and_renames_only_its_confined_entries(self) -> None:
+        share_root = self.root / "shared"
+        share_root.mkdir()
+        sentinel = share_root / "keep"
+        sentinel.write_text("share sentinel", encoding="utf-8")
+        victim = share_root / "victim"
+        victim.mkdir()
+        (victim / "data").write_text("remove", encoding="utf-8")
+        source = share_root / "source"
+        source.write_text("rename", encoding="utf-8")
+        name = "agentica-test-" + uuid.uuid4().hex
+        script = Path(__file__).parent / "fixtures" / "windows-filesystem-share.ps1"
+
+        def manage(action: str) -> None:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-File",
+                 str(script), action, name, str(share_root)],
+                capture_output=True, text=True, check=False, timeout=60,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        remove = self.compile_text(REMOVE_PROGRAM, "windows-unc-remove")
+        rename = self.compile_text(RACE_PROGRAM, "windows-unc-rename")
+        unc = rf"\\localhost\{name}"
+        try:
+            manage("create")
+            self.assertEqual((Path(unc) / "keep").read_text(), "share sentinel")
+            removed = run_vm(
+                remove, args=[unc + r"\victim"], env=vm_environment(), cwd=self.root
+            )
+            self.assertEqual(
+                (removed.code, removed.stdout), (0, "true\n"), removed.stderr
+            )
+            renamed = run_vm(
+                rename, args=[unc + r"\source", unc + r"\moved"],
+                env=vm_environment(), cwd=self.root,
+            )
+            self.assertEqual(
+                (renamed.code, renamed.stdout), (0, "true\n"), renamed.stderr
+            )
+            self.assertFalse(victim.exists())
+            self.assertFalse(source.exists())
+            self.assertEqual((share_root / "moved").read_text(), "rename")
+            self.assertEqual(sentinel.read_text(), "share sentinel")
+        finally:
+            manage("remove")
 
     def test_rename_race_has_one_winner_and_preserves_losing_sources(self) -> None:
         bytecode = self.compile_text(RACE_PROGRAM, "windows-rename-race")
