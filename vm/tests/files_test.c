@@ -89,7 +89,9 @@ static void test_win32_error_chain(void) {
   };
   for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++)
     check_error(cases[i].win_error, true, cases[i].expected_errno);
-  /* A Win32 code the vendored libuv does not list keeps the reported I/O error. */
+  /* A Win32 code the vendored libuv does not list keeps the reported I/O error.
+     54321 is above every code the table has; the assert below fails loudly if a
+     libuv update ever starts listing it. */
   assert(uv_translate_sys_error(54321) == UV_UNKNOWN);
   check_error(54321, true, EIO);
 }

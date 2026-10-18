@@ -27,6 +27,8 @@ typedef struct {
 void agc_fs_set_error(int result) {
   switch (result) {
     case UV_EACCES: errno = EACCES; break;
+    /* EAGAIN is also the contention signal File.try_lock reads: a code that a
+       later libuv translates to it would come back as a held lock, not an error. */
     case UV_EAGAIN: errno = EAGAIN; break;
     case UV_EBADF: errno = EBADF; break;
     case UV_EBUSY: errno = EBUSY; break;

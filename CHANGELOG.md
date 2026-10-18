@@ -23,7 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Windows filesystem errors preserve cross-device, unsupported-operation,
-  cancellation and timeout errors instead of reporting a generic I/O error.
+  cancellation, timeout, again, fault and character-encoding errors instead of
+  reporting a generic I/O error.
 - `Path.remove` now works on Windows, using native paths and removing
   reparse-point entries without traversing them.
 - `Path.rename` now works on Windows with native no-replace semantics: an
