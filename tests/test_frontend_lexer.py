@@ -8,8 +8,11 @@ inputs, deeply nested files and a file with invalid UTF-8.
 """
 import re
 
-from tests.agentica_test import ROOT, slow, timeout
-from tests.frontend_support import FROZEN, StageTestCase, load_corpus, load_json, write_files
+import pytest
+
+from tests.agentica_test import ROOT, timeout
+from tests.frontend_support import (FROZEN, PytestStageCase, load_corpus, load_json, pytest_stage_fixtures,
+                                    write_files)
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "lexer"
 
@@ -22,63 +25,75 @@ def nested(depth):
     return "if x\n" * depth
 
 
-class LexerFrozenTest(StageTestCase):
+class LexerStage(PytestStageCase):
     ENTRY = "lex.agc"
 
-    def lex(self, files, *, flags=()):
-        """Lex the files {path: text} written into a fresh folder; gives the output of each by its path."""
-        directory = self.make_temp_dir()
+    def lex(self, files, directory, *, flags=()):
+        """Lex the files {path: text} written into `directory`; gives the output of each by its path."""
         write_files(directory, files)
         return self.run_sections(sorted(files), flags=flags, cwd=directory)
 
-    def check_nested(self, depth):
-        name = "nested-%d" % depth
-        outputs = self.lex({name + ".agc": nested(depth)}, flags=("--max-steps", str(depth * STEPS_PER_LINE)))
-        self.assert_manifest({name: outputs[name + ".agc"]}, "lexer/nested.sha256", {name: nested(depth)}, keys=[name])
 
-    def test_every_input_has_a_golden_and_no_golden_is_left_over(self):
-        self.fixture_pairs(FIXTURES, ".input", ".tokens")
+_lexer_stage_class, lexer_stage = pytest_stage_fixtures(LexerStage, pytest, "lexer_stage")
 
-    def test_the_lexer_matches_the_goldens_of_the_fixtures(self):
-        pairs = self.fixture_pairs(FIXTURES, ".input", ".tokens")
-        outputs = self.run_sections(["tests/fixtures/frontend/lexer/" + name for name in pairs], cwd=ROOT)
-        self.assert_goldens({name: outputs["tests/fixtures/frontend/lexer/" + name] for name in pairs}, pairs,
-                            "lexer fixtures")
 
-    def test_the_unicode_table_is_the_char_graphic_table_of_the_freeze(self):
-        # compiler/unicode_table.agc is hand-edited data (its header has the provenance, Unicode 17.0); the ranges
-        # of the original table are frozen in lexer/graphic-ranges.expected.
-        text = (ROOT / "compiler" / "unicode_table.agc").read_text(encoding="utf-8")
-        body = text.split("export GRAPHIC_RANGES = [", 1)[1].split("]", 1)[0]
-        numbers = [int(number) for number in re.findall(r"\d+", body)]
-        ranges = ["%d %d" % pair for pair in zip(numbers[::2], numbers[1::2])]
-        self.assert_golden("".join(line + "\n" for line in ranges), FROZEN / "lexer" / "graphic-ranges.expected")
+def check_nested(lexer_stage, tmp_path, depth):
+    name = "nested-%d" % depth
+    outputs = lexer_stage.lex({name + ".agc": nested(depth)}, tmp_path,
+                              flags=("--max-steps", str(depth * STEPS_PER_LINE)))
+    lexer_stage.assert_manifest({name: outputs[name + ".agc"]}, "lexer/nested.sha256", {name: nested(depth)}, keys=[name])
 
-    def test_invalid_utf8_is_lex_invalid_utf8_at_the_first_bad_byte(self):
-        # The file is read by compiler/source_file.agc before the lexer sees it.
-        outputs = self.lex({"invalid.agc": b"# caf\xc3\xa9\ndef \xff\n"})
-        self.assert_golden(outputs["invalid.agc"], FROZEN / "lexer" / "invalid-utf8.expected")
-        self.assertRegex(outputs["invalid.agc"], r"^ERROR LEX-INVALID-UTF8 11:2:5-12:2:6 ")
 
-    def test_a_deeply_nested_file_lexes_in_a_linear_number_of_steps(self):
-        self.check_nested(4000)
+def test_every_input_has_a_golden_and_no_golden_is_left_over(lexer_stage):
+    lexer_stage.fixture_pairs(FIXTURES, ".input", ".tokens")
 
-    @slow
-    @timeout(1800)
-    def test_a_much_deeper_nested_file_lexes_in_a_linear_number_of_steps(self):
-        self.check_nested(10000)
 
-    @slow
-    @timeout(1800)
-    def test_corpus(self):
-        files = {path: text for path, text in load_corpus("examples", "stdlib", "fixtures").items()
-                 if path.startswith(("examples/", "stdlib/", "tests/fixtures/vm/"))}
-        outputs = self.lex(files)
-        self.assert_manifest(outputs, "lexer/corpus.sha256", files)
+def test_the_lexer_matches_the_goldens_of_the_fixtures(lexer_stage):
+    pairs = lexer_stage.fixture_pairs(FIXTURES, ".input", ".tokens")
+    outputs = lexer_stage.run_sections(["tests/fixtures/frontend/lexer/" + name for name in pairs], cwd=ROOT)
+    lexer_stage.assert_goldens({name: outputs["tests/fixtures/frontend/lexer/" + name] for name in pairs}, pairs,
+                               "lexer fixtures")
 
-    @slow
-    @timeout(1800)
-    def test_300_generated_inputs(self):
-        cases = {"case-%d" % n: text for n, text in enumerate(load_json("lexer/generated.json"))}
-        outputs = self.lex({key + ".agc": text for key, text in cases.items()})
-        self.assert_manifest({key: outputs[key + ".agc"] for key in cases}, "lexer/generated.sha256", cases)
+
+def test_the_unicode_table_is_the_char_graphic_table_of_the_freeze(lexer_stage):
+    # compiler/unicode_table.agc is hand-edited data (its header has the provenance, Unicode 17.0); the ranges
+    # of the original table are frozen in lexer/graphic-ranges.expected.
+    text = (ROOT / "compiler" / "unicode_table.agc").read_text(encoding="utf-8")
+    body = text.split("export GRAPHIC_RANGES = [", 1)[1].split("]", 1)[0]
+    numbers = [int(number) for number in re.findall(r"\d+", body)]
+    ranges = ["%d %d" % pair for pair in zip(numbers[::2], numbers[1::2])]
+    lexer_stage.assert_golden("".join(line + "\n" for line in ranges), FROZEN / "lexer" / "graphic-ranges.expected")
+
+
+def test_invalid_utf8_is_lex_invalid_utf8_at_the_first_bad_byte(lexer_stage, tmp_path):
+    # The file is read by compiler/source_file.agc before the lexer sees it.
+    outputs = lexer_stage.lex({"invalid.agc": b"# caf\xc3\xa9\ndef \xff\n"}, tmp_path)
+    lexer_stage.assert_golden(outputs["invalid.agc"], FROZEN / "lexer" / "invalid-utf8.expected")
+    assert re.search(r"^ERROR LEX-INVALID-UTF8 11:2:5-12:2:6 ", outputs["invalid.agc"])
+
+
+def test_a_deeply_nested_file_lexes_in_a_linear_number_of_steps(lexer_stage, tmp_path):
+    check_nested(lexer_stage, tmp_path, 4000)
+
+
+@pytest.mark.slow
+@timeout(1800)
+def test_a_much_deeper_nested_file_lexes_in_a_linear_number_of_steps(lexer_stage, tmp_path):
+    check_nested(lexer_stage, tmp_path, 10000)
+
+
+@pytest.mark.slow
+@timeout(1800)
+def test_corpus(lexer_stage, tmp_path):
+    files = {path: text for path, text in load_corpus("examples", "stdlib", "fixtures").items()
+             if path.startswith(("examples/", "stdlib/", "tests/fixtures/vm/"))}
+    outputs = lexer_stage.lex(files, tmp_path)
+    lexer_stage.assert_manifest(outputs, "lexer/corpus.sha256", files)
+
+
+@pytest.mark.slow
+@timeout(1800)
+def test_300_generated_inputs(lexer_stage, tmp_path):
+    cases = {"case-%d" % n: text for n, text in enumerate(load_json("lexer/generated.json"))}
+    outputs = lexer_stage.lex({key + ".agc": text for key, text in cases.items()}, tmp_path)
+    lexer_stage.assert_manifest({key: outputs[key + ".agc"] for key in cases}, "lexer/generated.sha256", cases)

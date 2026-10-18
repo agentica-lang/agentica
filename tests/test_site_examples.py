@@ -13,7 +13,9 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from tests.agentica_test import ROOT, TestCase, cli, run, slow, vm_environment
+import pytest
+
+from tests.agentica_test import ROOT, cli, run, vm_environment
 
 CONTENT = ROOT / "site" / "content"
 FENCE_OPEN = re.compile(r"^```([A-Za-z0-9_-]+)[ \t]*(?:\{([^}]*)\})?[ \t]*$")
@@ -96,110 +98,116 @@ def diagnostic_code(result):
     return data.get("code") if isinstance(data, dict) else None
 
 
-class SiteExamples(TestCase):
-    def agentica(self, directory, *arguments, stdin=""):
-        return run(cli() + [str(argument) for argument in arguments], stdin=stdin.encode("utf-8"),
-                   cwd=directory, env=vm_environment())
+def agentica(directory, *arguments, stdin=""):
+    return run(cli() + [str(argument) for argument in arguments], stdin=stdin.encode("utf-8"),
+               cwd=directory, env=vm_environment())
 
-    def check_program(self, where, directory, block, input_text, output_text):
-        """Check or run one program block in `directory`; returns (kind, problems)."""
-        attributes = block.attributes
-        problems = []
-        for key in attributes:
-            if key not in KNOWN_ATTRIBUTES:
-                problems.append("%s: unknown attribute %s" % (where, key))
-        mode = attributes.get("mode", "run")
-        if mode not in ("run", "check"):
-            problems.append("%s: unknown mode %s" % (where, mode))
-        expect = attributes.get("expect")
-        program = directory / "main.agc"
-        program.write_text(block.text, encoding="utf-8")
-        if mode == "check":
-            result = self.agentica(directory, "--json", "check", program)
-            code = diagnostic_code(result)
-            if result.code == 0:
-                if expect:
-                    problems.append("%s: expected %s, but the program checks" % (where, expect))
-                if output_text is not None:
-                    problems.append("%s: a check-only block has an output block" % where)
-                return "check", problems
-            if expect and code == expect:
-                return "rejected", problems
-            return "check", problems + ["%s: %s" % (where, result.stderr)]
-        result = self.agentica(directory, "--json", "--max-steps", "5000000", "--seed", "1", program,
-                               stdin=input_text or "")
+
+def check_program(where, directory, block, input_text, output_text):
+    """Check or run one program block in `directory`; returns (kind, problems)."""
+    attributes = block.attributes
+    problems = []
+    for key in attributes:
+        if key not in KNOWN_ATTRIBUTES:
+            problems.append("%s: unknown attribute %s" % (where, key))
+    mode = attributes.get("mode", "run")
+    if mode not in ("run", "check"):
+        problems.append("%s: unknown mode %s" % (where, mode))
+    expect = attributes.get("expect")
+    program = directory / "main.agc"
+    program.write_text(block.text, encoding="utf-8")
+    if mode == "check":
+        result = agentica(directory, "--json", "check", program)
         code = diagnostic_code(result)
-        rejected = code is not None and code.startswith(STATIC_PREFIXES)
-        if expect:
-            if result.code != 1:
-                problems.append("%s: expected exit 1, stderr: %s" % (where, result.stderr))
-            if code != expect:
-                problems.append("%s: expected %s, stderr: %s" % (where, expect, result.stderr))
-        else:
-            if not (result.code == 0 or result.stderr == ""):
-                problems.append("%s: exit %s, stderr: %s" % (where, result.code, result.stderr))
-            if code:
-                problems.append("%s: %s" % (where, result.stderr))
-        if not expect and output_text is None:
-            problems.append("%s: a run block needs an output block" % where)
-        if (not expect or output_text is not None) and not rejected:
-            if result.stdout != (output_text or ""):
-                problems.append("%s, stderr: %s\nstdout %r is not %r" % (where, result.stderr, result.stdout,
-                                                                         output_text or ""))
-        return ("rejected" if rejected else "run"), problems
+        if result.code == 0:
+            if expect:
+                problems.append("%s: expected %s, but the program checks" % (where, expect))
+            if output_text is not None:
+                problems.append("%s: a check-only block has an output block" % where)
+            return "check", problems
+        if expect and code == expect:
+            return "rejected", problems
+        return "check", problems + ["%s: %s" % (where, result.stderr)]
+    result = agentica(
+        directory, "--json", "--max-steps", "5000000", "--seed", "1", program,
+        stdin=input_text or "",
+    )
+    code = diagnostic_code(result)
+    rejected = code is not None and code.startswith(STATIC_PREFIXES)
+    if expect:
+        if result.code != 1:
+            problems.append("%s: expected exit 1, stderr: %s" % (where, result.stderr))
+        if code != expect:
+            problems.append("%s: expected %s, stderr: %s" % (where, expect, result.stderr))
+    else:
+        if not (result.code == 0 or result.stderr == ""):
+            problems.append("%s: exit %s, stderr: %s" % (where, result.code, result.stderr))
+        if code:
+            problems.append("%s: %s" % (where, result.stderr))
+    if not expect and output_text is None:
+        problems.append("%s: a run block needs an output block" % where)
+    if (not expect or output_text is not None) and not rejected:
+        if result.stdout != (output_text or ""):
+            problems.append("%s, stderr: %s\nstdout %r is not %r" % (where, result.stderr, result.stdout,
+                                                                     output_text or ""))
+    return ("rejected" if rejected else "run"), problems
 
-    def check_page(self, path, counts):
-        blocks = blocks_of(path)
-        scratch = self.make_temp_dir("agentica-site-").resolve()
-        modules = {}
-        for block in blocks:
-            if is_program(block) and "file" in block.attributes:
-                modules[block.attributes["file"]] = block.text
-        jobs = []
-        previous = None
-        for index, block in enumerate(blocks):
-            where = "%s:%d" % (path, block.line)
-            if block.lang in ("input", "output"):
-                self.assertIsNotNone(previous, "%s: %s block without a program before it" % (where, block.lang))
-                previous = previous if block.lang == "input" else None
-            elif is_program(block) and "file" in block.attributes:
-                counts["module"] += 1
-                previous = None
-            elif is_program(block):
-                directory = scratch / ("block-%d" % block.line)
-                directory.mkdir()
-                for name, text in modules.items():
-                    (directory / name).parent.mkdir(parents=True, exist_ok=True)
-                    (directory / name).write_text(text, encoding="utf-8")
-                after = following(blocks, index)
-                jobs.append((where, directory, block, after.get("input"), after.get("output")))
-                previous = block
-            elif block.lang != "sh":
-                previous = None
-        with ThreadPoolExecutor(JOBS) as pool:
-            outcomes = list(pool.map(lambda job: self.check_program(*job), jobs))
-        for (where, directory, *_rest), (kind, problems) in zip(jobs, outcomes):
-            counts[kind] += 1
-            self.assertEqual(problems, [], where)
-            shutil.rmtree(directory, ignore_errors=True)
 
-    def check_pages(self, pages):
-        counts = Counter()
-        for page in pages:
-            with self.subTest(str(page)):
-                self.check_page(page, counts)
-        return counts
+def check_page(path, counts, tmp_path):
+    blocks = blocks_of(path)
+    scratch = tmp_path.resolve()
+    scratch.mkdir(parents=True, exist_ok=True)
+    modules = {}
+    for block in blocks:
+        if is_program(block) and "file" in block.attributes:
+            modules[block.attributes["file"]] = block.text
+    jobs = []
+    previous = None
+    for index, block in enumerate(blocks):
+        where = "%s:%d" % (path, block.line)
+        if block.lang in ("input", "output"):
+            assert previous is not None, "%s: %s block without a program before it" % (where, block.lang)
+            previous = previous if block.lang == "input" else None
+        elif is_program(block) and "file" in block.attributes:
+            counts["module"] += 1
+            previous = None
+        elif is_program(block):
+            directory = scratch / ("block-%d" % block.line)
+            directory.mkdir()
+            for name, text in modules.items():
+                (directory / name).parent.mkdir(parents=True, exist_ok=True)
+                (directory / name).write_text(text, encoding="utf-8")
+            after = following(blocks, index)
+            jobs.append((where, directory, block, after.get("input"), after.get("output")))
+            previous = block
+        elif block.lang != "sh":
+            previous = None
+    with ThreadPoolExecutor(JOBS) as pool:
+        outcomes = list(pool.map(lambda job: check_program(*job), jobs))
+    for (where, directory, *_rest), (kind, problems) in zip(jobs, outcomes):
+        counts[kind] += 1
+        assert problems == [], where
+        shutil.rmtree(directory, ignore_errors=True)
 
-    def test_the_smoke_pages_run_their_examples(self):
-        pages = [page for page in site_pages() if str(page.relative_to(CONTENT)) in SMOKE_PAGES]
-        counts = self.check_pages(pages)
-        self.assertEqual(len(pages), len(SMOKE_PAGES))
-        self.assertGreater(counts["run"], 0, "the smoke pages should have run examples")
-        self.assertGreater(counts["module"], 0, "the smoke pages should have module files")
 
-    @slow
-    def test_every_site_page_runs_its_examples(self):
-        counts = self.check_pages(site_pages())
-        self.assertGreater(counts["run"], 100, "the site should have many run examples")
-        print("site examples: %d run, %d checked only, %d rejected by the checker, %d module files"
-              % (counts["run"], counts["check"], counts["rejected"], counts["module"]))
+def check_pages(pages, tmp_path):
+    counts = Counter()
+    for index, page in enumerate(pages):
+        check_page(page, counts, tmp_path / str(index))
+    return counts
+
+
+def test_the_smoke_pages_run_their_examples(tmp_path):
+    pages = [page for page in site_pages() if str(page.relative_to(CONTENT)) in SMOKE_PAGES]
+    counts = check_pages(pages, tmp_path)
+    assert len(pages) == len(SMOKE_PAGES)
+    assert counts["run"] > 0, "the smoke pages should have run examples"
+    assert counts["module"] > 0, "the smoke pages should have module files"
+
+
+@pytest.mark.slow
+def test_every_site_page_runs_its_examples(tmp_path):
+    counts = check_pages(site_pages(), tmp_path)
+    assert counts["run"] > 100, "the site should have many run examples"
+    print("site examples: %d run, %d checked only, %d rejected by the checker, %d module files"
+          % (counts["run"], counts["check"], counts["rejected"], counts["module"]))

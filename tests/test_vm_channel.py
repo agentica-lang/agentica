@@ -3,7 +3,9 @@
 The program listens on port 0 and prints the port; an independent Python peer
 connects six clients, and the loop of the workers ends when the channel closes.
 """
-from tests.agentica_test import FIXTURES, PYTHON, WAIT_SECONDS, TestCase, run, start_vm
+import re
+
+from tests.agentica_test import FIXTURES, PYTHON, WAIT_SECONDS, compile_agc, run, start_vm
 
 CLIENTS = 6
 
@@ -51,17 +53,21 @@ end
 """
 
 
-class VmChannel(TestCase):
-    def test_socket_handed_to_a_worker_is_served_and_the_loop_ends_when_the_channel_closes(self):
-        # The VM runs beside the peer, so it is a Child read line by line.
-        vm = self.adopt(start_vm(self.compile_text(PROGRAM, "pool")))
+def test_socket_handed_to_a_worker_is_served_and_the_loop_ends_when_the_channel_closes(tmp_path):
+    # The VM runs beside the peer, so it is a Child read line by line.
+    program = tmp_path / "pool.agc"
+    program.write_text(PROGRAM, encoding="utf-8")
+    vm = start_vm(compile_agc(program, tmp_path / "pool.agcb"))
+    try:
         port = int(vm.next_line())
-        self.assertGreater(port, 0)
+        assert port > 0
         peer = run([PYTHON, FIXTURES / "channel-peer.py", port, CLIENTS], timeout=WAIT_SECONDS)
-        self.assertEqual(peer.code, 0, peer.stderr)
+        assert peer.code == 0, peer.stderr
         replies = peer.stdout.splitlines()
-        self.assertEqual(len(replies), CLIENTS)
+        assert len(replies) == CLIENTS
         for i, line in enumerate(replies):
-            self.assertRegex(line, r"\A%d worker [012] got msg %d\Z" % (i, i))
-        self.assertEqual(vm.next_line(), "handled 6")
-        self.assertEqual(vm.wait(), 0, "the program ends")
+            assert re.fullmatch(r"%d worker [012] got msg %d" % (i, i), line), line
+        assert vm.next_line() == "handled 6"
+        assert vm.wait() == 0, "the program ends"
+    finally:
+        vm.stop()

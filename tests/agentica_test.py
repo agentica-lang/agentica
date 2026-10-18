@@ -1,9 +1,9 @@
-"""Shared helpers of the Python unittest tests (standard library only).
+"""Shared helpers for pytest modules and remaining unittest.TestCase modules.
 
-A test module is tests/test_<area>.py. `make test` runs each module in its own
-process (`python3 -m unittest tests.test_<area>` from the repository root, so
-this module imports as `tests.agentica_test`). Keep this file small: add a
-helper here only when a second test module needs it.
+A test module is tests/test_<area>.py. Make runs each selected module in its own
+pytest process; legacy TestCase modules still import this file as
+`tests.agentica_test`. Keep it small: add a helper only when another module
+needs it.
 """
 import faulthandler
 import os
@@ -81,6 +81,8 @@ def timeout(seconds):
 
 class TestTimeout(AssertionError):
     """A test that outlived its limit: unittest reports that test as failed and goes on with the next."""
+
+    __test__ = False
 
 
 # The time limit of a run, as in the VM golden harness (tests/vm_diff_support.py).

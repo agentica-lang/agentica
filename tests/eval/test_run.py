@@ -14,6 +14,18 @@ from unittest.mock import patch
 import run
 
 
+def require_docker_image(*, checker: bool = False) -> None:
+    if not shutil.which("docker"):
+        raise unittest.SkipTest("Docker is unavailable")
+    image = subprocess.run(
+        ["docker", "image", "inspect", run.DEFAULT_IMAGE], capture_output=True
+    )
+    if image.returncode:
+        raise unittest.SkipTest("evaluation image has not been built")
+    if checker and run.checker_version(run.DEFAULT_IMAGE) is None:
+        raise unittest.SkipTest("evaluation image has no type checker")
+
+
 class ChildEnvironmentTests(unittest.TestCase):
     def test_only_allowlisted_environment_is_passed(self) -> None:
         with patch.dict(os.environ, {"PROVIDER_TOKEN": "secret", "OTHER_SECRET": "hidden"}, clear=True):
@@ -452,11 +464,7 @@ class SummaryTests(unittest.TestCase):
 class DockerBoundaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        if not shutil.which("docker"):
-            raise unittest.SkipTest("Docker is unavailable")
-        image = subprocess.run(["docker", "image", "inspect", run.DEFAULT_IMAGE], capture_output=True)
-        if image.returncode:
-            raise unittest.SkipTest("evaluation image has not been built")
+        require_docker_image()
 
     def test_agent_can_write_workspace_without_host_files_or_unlisted_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -520,13 +528,7 @@ print(json.dumps([os.getenv('PROVIDER_TOKEN'), writable, network]))
 class DockerGradingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        if not shutil.which("docker"):
-            raise unittest.SkipTest("Docker is unavailable")
-        image = subprocess.run(["docker", "image", "inspect", run.DEFAULT_IMAGE], capture_output=True)
-        if image.returncode:
-            raise unittest.SkipTest("evaluation image has not been built")
-        if run.checker_version(run.DEFAULT_IMAGE) is None:
-            raise unittest.SkipTest("evaluation image has no type checker")
+        require_docker_image(checker=True)
 
     def grade(self, root: Path, name: str, source: str, arm: str = "typed-python") -> dict:
         solution = root / "solution.py"

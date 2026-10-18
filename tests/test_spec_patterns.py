@@ -4,12 +4,12 @@ Each case writes a program (one file, or several for the import-alias rules) and
 A rejected program is asserted by its diagnostic code and the source text its range covers; a good one checks clean or
 prints what the rule says. Message and help texts are not asserted (AGENTS.md).
 """
-import json
-
 from collections import namedtuple
 
-from tests.agentica_test import TestCase, cli, run
-from tests.test_spec_checker import covered
+import pytest
+
+from tests.agentica_test import cli, run
+from tests.spec_support import assert_multi_file_case, assert_single_file_case, covered
 
 # A range that starts with this text (a whole `case` or an arm: the range runs to its end).
 Starts = namedtuple("Starts", "text")
@@ -195,63 +195,46 @@ MODULES = [
 ]
 
 
-class SpecPatternsTest(TestCase):
-    def setUp(self):
-        super().setUp()
-        self.work = self.make_temp_dir()
+def assert_span_covers(program, span, expected):
+    seen = covered(program, span)
+    if isinstance(expected, Starts):
+        assert seen.startswith(expected.text), seen
+    else:
+        assert seen.rstrip("\n") == expected
 
-    def diagnostic(self, files, root="program.agc"):
-        """The JSON diagnostic that `check` gives the files {name: text}, or None when they check clean."""
-        for name, text in files.items():
-            (self.work / name).write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(self.work / root)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
 
-    def assert_covers(self, program, span, text):
-        seen = covered(program, span)
-        if isinstance(text, Starts):
-            self.assertTrue(seen.startswith(text.text), seen)
-        else:
-            self.assertEqual(seen.rstrip("\n"), text)
+@pytest.mark.parametrize("case", SINGLE_FILE, ids=[case[0] for case in SINGLE_FILE])
+def test_single_file_programs(case, agentica_check):
+    _, program, code, text = case
+    assert_single_file_case(agentica_check, program, code, text, assert_span_covers)
 
-    def test_single_file_programs(self):
-        for title, program, code, text in SINGLE_FILE:
-            with self.subTest(title):
-                found = self.diagnostic({"program.agc": program})
-                self.assertEqual(found and found["code"], code, program)
-                if text is not None:
-                    self.assert_covers(program, found["range"], text)
 
-    def test_programs_of_several_files(self):
-        for title, files, code, file, text in MODULES:
-            with self.subTest(title):
-                self.work = self.make_temp_dir()
-                found = self.diagnostic(files, "root.agc")
-                self.assertEqual(found and found["code"], code, files)
-                if found is None:
-                    continue
-                self.assertTrue(found["file"].endswith(file), found["file"])
-                self.assert_covers(files[file], found["range"], text)
+@pytest.mark.parametrize("case", MODULES, ids=[case[0] for case in MODULES])
+def test_programs_of_several_files(case, agentica_check):
+    _, files, code, file, text = case
+    assert_multi_file_case(agentica_check, files, code, file, text, assert_span_covers)
 
-    def test_programs_print_what_the_rules_say(self):
-        for title, program, lines in RUNS:
-            with self.subTest(title):
-                path = self.work / "run.agc"
-                path.write_text(program, encoding="utf-8")
-                result = run(cli() + [str(path)])
-                self.assertEqual((result.code, result.stdout.splitlines()), (0, lines), result.stderr)
 
-    def test_nesting_depth_is_bounded_like_expressions(self):
-        def deep(levels, tail=""):
-            pattern = "Deep.Node(" * levels + "Deep.Leaf" + ")" * levels
-            return ("enum Deep\n  Leaf\n  Node(Deep)\nend\n\ndef main() -> Void\n  x = Deep.Leaf\n  case x\n"
-                    "    " + pattern + " -> puts(1)\n" + tail + "    _ -> puts(2)\n  end\nend\n\n")
+@pytest.mark.parametrize(
+    ("title", "program", "lines"), RUNS, ids=[case[0] for case in RUNS]
+)
+def test_programs_print_what_the_rules_say(title, program, lines, tmp_path):
+    path = tmp_path / "run.agc"
+    path.write_text(program, encoding="utf-8")
+    result = run(cli() + [str(path)])
+    assert (result.code, result.stdout.splitlines()) == (0, lines), result.stderr
 
-        # The same 1000 level limit as parenthesised expressions: the lookahead and the parser use no recursion.
-        self.assertIsNone(self.diagnostic({"program.agc": deep(900)}))
-        self.assertEqual(self.diagnostic({"program.agc": deep(1001)})["code"], "PARSE-TOO-DEEP")
-        later = "    " + "Deep.Node(" * 3000 + "Deep.Leaf" + ")" * 3000 + " -> puts(3)\n"
-        self.assertEqual(self.diagnostic({"program.agc": deep(1, later)})["code"], "PARSE-TOO-DEEP")
+
+def test_nesting_depth_is_bounded_like_expressions(agentica_check):
+    def deep(levels, tail=""):
+        pattern = "Deep.Node(" * levels + "Deep.Leaf" + ")" * levels
+        return (
+            "enum Deep\n  Leaf\n  Node(Deep)\nend\n\ndef main() -> Void\n  x = Deep.Leaf\n  case x\n"
+            "    " + pattern + " -> puts(1)\n" + tail + "    _ -> puts(2)\n  end\nend\n\n"
+        )
+
+    # The parser and lookahead stay iterative at the same 1000-level limit.
+    assert agentica_check(deep(900)) is None
+    assert agentica_check(deep(1001))["code"] == "PARSE-TOO-DEEP"
+    later = "    " + "Deep.Node(" * 3000 + "Deep.Leaf" + ")" * 3000 + " -> puts(3)\n"
+    assert agentica_check(deep(1, later))["code"] == "PARSE-TOO-DEEP"

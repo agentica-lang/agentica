@@ -17,4 +17,5 @@ RUN apt-get update \
       pkg-config \
       perl \
       python3 \
+      python3-pytest \
  && rm -rf /var/lib/apt/lists/*

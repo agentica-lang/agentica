@@ -83,6 +83,7 @@ export AGENTICA_TEST_EXECUTABLE=/source/dist/agentica
 export AGENTICA_VM_BINARY=/source/dist/agentica
 export AGENTICA_TEST_TARGET_OS=linux
 export AGENTICA_REQUIRE_VM=1
+export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} -p no:cacheprovider"
 jobs=${JOBS:-4}
 make -j"$jobs" dist/agentica
 """
@@ -96,7 +97,7 @@ FILES_COMMAND = BUILD_COMMAND + r"""
 make -j"$jobs" build/vm/release/tree-test build/vm/release/files_private-test
 build/vm/release/tree-test
 build/vm/release/files_private-test
-python3 -m unittest tests.test_vm_os_remove tests.test_bdd_cleanup
+python3 -m pytest -p no:cacheprovider tests/test_vm_os_remove.py tests/test_bdd_cleanup.py
 """
 BDD_COMMAND = BUILD_COMMAND + r"""
 cd /source

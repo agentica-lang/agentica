@@ -8,7 +8,7 @@ not visible through the CLI; tests/test_frontend_lexer.py pins the token output 
 import json
 from concurrent.futures import ThreadPoolExecutor
 
-from tests.agentica_test import TestCase, cli, run
+from tests.agentica_test import cli, run
 
 # One start of the front end takes about a second, so the cases of a group run side by side.
 WORKERS = 4
@@ -221,46 +221,45 @@ def span_of(problem):
     return (where["start"]["line"], where["start"]["column"], where["end"]["line"], where["end"]["column"])
 
 
-class LexerSpec(TestCase):
-    def run_all(self, sources, arguments=()):
-        """Run the CLI on each {case: source} as a file, side by side; gives {case: Result}.
+def run_all(tmp_path, sources, arguments=()):
+    """Run each source through the CLI side by side; return results by case name."""
+    directory = tmp_path / "cases"
+    directory.mkdir()
+    cases = list(sources)
+    paths = []
+    for index, case in enumerate(cases):
+        path = directory / ("case-%d.agc" % index)
+        path.write_text(sources[case], encoding="utf-8")
+        paths.append(path)
+    with ThreadPoolExecutor(WORKERS) as pool:
+        results = list(pool.map(lambda path: run(cli() + list(arguments) + [str(path)]), paths))
+    return dict(zip(cases, results))
 
-        Only the subprocess runs in the pool: every assertion is made by the caller, under the case's subTest.
-        """
-        directory = self.make_temp_dir()
-        cases = list(sources)
-        paths = []
-        for index, case in enumerate(cases):
-            path = directory / ("case-%d.agc" % index)
-            path.write_bytes(sources[case].encode("utf-8"))
-            paths.append(path)
-        with ThreadPoolExecutor(WORKERS) as pool:
-            results = list(pool.map(lambda path: run(cli() + list(arguments) + [str(path)]), paths))
-        return dict(zip(cases, results))
 
-    def test_diagnostics_carry_the_code_and_span_of_the_rule(self):
-        results = self.run_all({case: source for case, source, *_ in DIAGNOSTICS}, ["--json", "check"])
-        for case, _source, code, where, help_ in DIAGNOSTICS:
-            with self.subTest(case):
-                result = results[case]
-                self.assertEqual(result.code, 1, result.stdout + result.stderr)
-                problem = json.loads(result.stderr.strip().split("\n")[-1])
-                self.assertEqual(problem["code"], code)
-                if where is not None:
-                    self.assertEqual(span_of(problem)[:len(where)], where)
-                if help_ is not None:
-                    self.assertEqual("help" in problem, help_)
+def test_diagnostics_carry_the_code_and_span_of_the_rule(tmp_path):
+    sources = {case: source for case, source, *_ in DIAGNOSTICS}
+    results = run_all(tmp_path, sources, ["--json", "check"])
+    for case, _source, code, where, help_ in DIAGNOSTICS:
+        result = results[case]
+        assert result.code == 1, f"{case}: {result.stdout}{result.stderr}"
+        problem = json.loads(result.stderr.strip().split("\n")[-1])
+        assert problem["code"] == code, case
+        if where is not None:
+            assert span_of(problem)[:len(where)] == where, case
+        if help_ is not None:
+            assert ("help" in problem) == help_, case
 
-    def test_sources_that_check_clean(self):
-        results = self.run_all(dict(CLEAN), ["--json", "check"])
-        for case, _source in CLEAN:
-            with self.subTest(case):
-                result = results[case]
-                self.assertEqual((result.code, result.stdout), (0, '{"ok":true}\n'), result.stderr)
 
-    def test_programs_print_what_the_rule_says(self):
-        results = self.run_all({case: source for case, source, _stdout in RUNS})
-        for case, _source, stdout in RUNS:
-            with self.subTest(case):
-                result = results[case]
-                self.assertEqual((result.code, result.stdout), (0, stdout), result.stderr)
+def test_sources_that_check_clean(tmp_path):
+    results = run_all(tmp_path, dict(CLEAN), ["--json", "check"])
+    for case, _source in CLEAN:
+        result = results[case]
+        assert (result.code, result.stdout) == (0, '{"ok":true}\n'), case
+
+
+def test_programs_print_what_the_rule_says(tmp_path):
+    sources = {case: source for case, source, _stdout in RUNS}
+    results = run_all(tmp_path, sources)
+    for case, _source, stdout in RUNS:
+        result = results[case]
+        assert (result.code, result.stdout) == (0, stdout), f"{case}: {result.stderr}"

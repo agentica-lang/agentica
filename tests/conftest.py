@@ -1,0 +1,91 @@
+"""Shared fixtures for CLI-backed language tests."""
+
+import faulthandler
+import json
+import os
+import signal
+import threading
+from collections.abc import Callable, Mapping
+from pathlib import Path
+
+import pytest
+
+from tests.agentica_test import (
+    BACKSTOP_GRACE,
+    SLOW_TEST_TIMEOUT,
+    TEST_TIMEOUT,
+    TIMEOUT_SCALE,
+    TestCase,
+    TestTimeout,
+    cli,
+    run,
+    scaled,
+)
+
+
+def pytest_collection_modifyitems(items):
+    """Keep plain pytest functions in the same fast/slow tier as TestCase methods."""
+    slow_run = os.environ.get("AGENTICA_TEST_SLOW", "") not in ("", "0")
+    for item in items:
+        test_class = getattr(item, "cls", None)
+        if test_class is not None and issubclass(test_class, TestCase):
+            continue
+        is_slow = item.get_closest_marker("slow") is not None
+        if is_slow != slow_run:
+            item.add_marker(pytest.mark.skip(reason="not selected in this test tier"))
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_protocol(item, nextitem):
+    """Give native pytest tests the same scaled per-test deadline as TestCase."""
+    test_class = getattr(item, "cls", None)
+    if (
+        (test_class is not None and issubclass(test_class, TestCase))
+        or not hasattr(signal, "setitimer")
+        or threading.current_thread() is not threading.main_thread()
+    ):
+        yield
+        return
+
+    seconds = getattr(item.obj, "agentica_timeout", None)
+    if not seconds:
+        is_slow = item.get_closest_marker("slow") is not None
+        seconds = SLOW_TEST_TIMEOUT if is_slow else TEST_TIMEOUT
+    limit = scaled(seconds)
+
+    def expired(signum, frame):
+        raise TestTimeout(
+            "%s took longer than %s s (AGENTICA_TEST_TIMEOUT_SCALE=%s)"
+            % (item.nodeid, limit, TIMEOUT_SCALE)
+        )
+
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, limit)
+    faulthandler.dump_traceback_later(limit + BACKSTOP_GRACE, exit=True)
+    try:
+        yield
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+@pytest.fixture
+def agentica_check(tmp_path: Path) -> Callable[..., dict[str, object] | None]:
+    """Write one or more programs under ``tmp_path`` and check the root file."""
+    def check(
+        source: str | Mapping[str, str], name: str = "main.agc"
+    ) -> dict[str, object] | None:
+        files = {name: source} if isinstance(source, str) else source
+        for filename, text in files.items():
+            path = tmp_path / filename
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        root = tmp_path / name
+        result = run(cli() + ["--json", "check", str(root)])
+        if result.code == 0:
+            return None
+        assert result.code == 1, result.stderr
+        return json.loads(result.stderr)
+
+    return check

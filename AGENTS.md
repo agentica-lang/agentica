@@ -18,9 +18,10 @@ vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, J
   tests/            C tests (make vm-test)
   third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
 stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner)
-tests/              unittest: test_<area>.py (agentica_test.py is the shared helper);
-                    test_spec_<area>.py are the language rules through the CLI;
-                    fixtures/ (goldens, Node/Python peers)
+tests/              pytest: test_<area>.py (conftest.py fixtures; agentica_test.py
+                    still supports unittest.TestCase modules); test_spec_<area>.py
+                    are the language rules through the CLI; fixtures/ (goldens,
+                    Node/Python peers)
 examples/           small programs per feature (README.md lists them)
 docs/
   grammar/          the language definition (index: docs/grammar.md)
@@ -40,19 +41,23 @@ phase 13).
 
 ## Commands
 
-- `make`: build `dist/agentica` (`git submodule update --init` first). It links
-  a first binary with `bootstrap/stage0.agcb`, compiles the front end three
-  times and links the final binary. `make fixed-point` checks it once more.
-  `make vm-test`: the C tests. `make test-cli`: the command line tests on the
-  binary. `make stage0` refreshes `bootstrap/stage0.agcb` (see
-`references/ci.md`
-  of the development skill).
+- `poetry install --only test --no-root`: install the pytest test environment.
+- `make`: build `dist/agentica` (`git submodule update --init` first). On Linux
+  it uses system libgc and OpenSSL by default; the Makefile checks them with
+  `pkg-config`. Use `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored` to
+  link the vendored versions of those two libraries statically. This is not a
+  fully static binary. The build links a first binary with
+  `bootstrap/stage0.agcb`, compiles the front end three times and links the
+  final binary. `make fixed-point` checks it once more. `make vm-test`: the C
+  tests. `make test-cli`: the command line tests on the binary. `make stage0`
+  refreshes `bootstrap/stage0.agcb` (see `references/ci.md` of the development
+  skill).
 - `make test TESTS="tests/test_vm_bits.py"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
 - `dist/agentica file.agc` runs a program; `... check file.agc` checks;
   `dist/agentica run -- file.agcb` runs compiled bytecode.
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: each
-  `tests/test_<area>.py` file runs as one unittest process.
+  `tests/test_<area>.py` file runs in one pytest process.
 - `make test-slow`: the `@slow` cases; CI only.
 - `make tests KIND=fast|files|slow|all` selects a whole group: `files` holds
   the destructive filesystem cases, which run only in the local Docker sandbox
@@ -114,11 +119,11 @@ phase 13).
   until its phase lands. No placeholder files or nodes for later phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
-- Tests: Python `unittest` only. Node and Python test code and peers (curl
-  included) use the standard library only, with no third-party libraries or
-  test frameworks. The VM's C dependencies are the submodules in
-  `vm/third_party`; the only dev-tool dependency is the pinned jscpd in
-  `tools/jscpd`.
+- Python tests run with pytest; existing `unittest.TestCase` modules remain
+  supported during migration. Pytest and pytest-xdist are test-only Poetry
+  dependencies. Node and Python test peers (curl included) use the standard
+  library only. The VM's C dependencies are the submodules in `vm/third_party`;
+  the only other dev-tool dependency is the pinned jscpd in `tools/jscpd`.
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external
@@ -126,15 +131,14 @@ phase 13).
   protocol implementation as the peer. Fixtures go in `tests/fixtures/`.
   CI installs the tools and fails if one is missing; local runs may report a
   skip.
-- Python tests live in `tests/test_<area>.py` and derive from
-  `tests.agentica_test.TestCase`; `make test` runs each module in its own
-  process, `JOBS` at a time (standard library only, no pytest).
-- Two test tiers: the fast tier is the default cases of a unittest module;
-  slow cases (frozen corpus, generated inputs, stress) are marked `@slow` (run
-  only with `AGENTICA_TEST_SLOW=1`, which `make test-slow` sets), and CI runs
-  them with `make test-slow`. Local runs use only the fast tier
-  (`make test TESTS=...`). Sanitizers, gc-stress, fuzz, smoke and full sweeps
-  are slow by nature.
+- Python tests live in `tests/test_<area>.py`; `make test` runs each module in
+  its own pytest process, `JOBS` at a time. Existing unittest modules derive
+  from `tests.agentica_test.TestCase` and are collected by pytest.
+- Two test tiers: fast is the default; slow cases (frozen corpus, generated
+  inputs, stress) use `@slow` on unittest classes or `pytest.mark.slow` on
+  pytest functions. `make test-slow` sets `AGENTICA_TEST_SLOW=1`; CI runs it,
+  while local runs use only fast tests (`make test TESTS=...`). Sanitizers,
+  gc-stress, fuzz, smoke and full sweeps are slow by nature.
 - When a phase item is done, tick it in the roadmap and update the
   development skill.
 - When the language or a builtin changes, update `docs/grammar/`, the site

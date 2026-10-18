@@ -6,10 +6,9 @@ these rules. It skips preprocessor lines (with continuations), comments and
 string or character literals, so a brace inside any of them does not count.
 """
 import re
+from pathlib import Path
 
-from tests.agentica_test import ROOT, TestCase
-
-VM_DIR = ROOT / "vm"
+VM_DIR = Path(__file__).resolve().parents[1] / "vm"
 
 # Generated tables, not hand-written C.
 SKIPPED = ("unicode_data.c",)
@@ -171,72 +170,72 @@ def text_problems(file, text):
     return problems
 
 
-class VmStyle(TestCase):
-    def test_scanner_finds_functions_and_late_type_definitions(self):
-        headers = top_level_headers(
-            "#define M(x) /* {\n  } */ \\\n  { x }\n"
-            "static int helper(int a);\n"
-            "static void (*hook)(int);\n"
-            "static int count, table[2];\n"
-            "typedef struct { int a; } t;\n"
-            "static const char *s = \"{\";\n"
-            "struct p *f(struct p *q);\n"
-            "static int g(void) {\n  struct p *x = 0;\n  return '}';\n}\n"
-            "static const int k[] = {1};\n"
-            "static struct p *h(void) { return 0; }\n"
-            "struct late {\n  int b;\n};\n"
-            "typedef struct late late_t;\n"
-            "  #define B {\n")
-        # The last line is an indented directive: its brace opens nothing.
-        self.assertEqual([line for line, _ in headers], [4, 5, 6, 7, 8, 10, 14, 15, 16, 19])
-        self.assertEqual([header_kind(h) for _, h in headers],
-                         ["prototype", "data", "data", "type", "data", "function", "data", "function",
-                          "type", "type"])
+def test_scanner_finds_functions_and_late_type_definitions():
+    headers = top_level_headers(
+        "#define M(x) /* {\n  } */ \\\n  { x }\n"
+        "static int helper(int a);\n"
+        "static void (*hook)(int);\n"
+        "static int count, table[2];\n"
+        "typedef struct { int a; } t;\n"
+        "static const char *s = \"{\";\n"
+        "struct p *f(struct p *q);\n"
+        "static int g(void) {\n  struct p *x = 0;\n  return '}';\n}\n"
+        "static const int k[] = {1};\n"
+        "static struct p *h(void) { return 0; }\n"
+        "struct late {\n  int b;\n};\n"
+        "typedef struct late late_t;\n"
+        "  #define B {\n")
+    # The last line is an indented directive: its brace opens nothing.
+    assert [line for line, _ in headers] == [4, 5, 6, 7, 8, 10, 14, 15, 16, 19]
+    assert [header_kind(h) for _, h in headers] == [
+        "prototype", "data", "data", "type", "data", "function", "data", "function", "type", "type"
+    ]
 
-    def test_late_types_and_static_prototypes_are_reported_with_their_lines(self):
-        problems = text_problems(
-            "x.c",
-            "_Noreturn static void stop(void);\n"
-            "int f(void) {\n  return 0;\n}\n"
-            "struct x {\n  int a;\n};\n"
-            "inline static int g(void);\n"
-            "static int f2(void);\n")
-        self.assertEqual([re.match(r"vm/x[.]c:(\d+):", p).group(1) for p in problems], ["1", "5", "8", "9"])
+def test_late_types_and_static_prototypes_are_reported_with_their_lines():
+    problems = text_problems(
+        "x.c",
+        "_Noreturn static void stop(void);\n"
+        "int f(void) {\n  return 0;\n}\n"
+        "struct x {\n  int a;\n};\n"
+        "inline static int g(void);\n"
+        "static int f2(void);\n")
+    assert [re.match(r"vm/x[.]c:(\d+):", p).group(1) for p in problems] == ["1", "5", "8", "9"]
 
-    def test_no_late_type_definition_or_static_prototype_in_vm_c_files(self):
-        files = vm_files()
-        self.assertIn("interp.c", files)
-        problems = [p for f in files for p in text_problems(f, (VM_DIR / f).read_text(encoding="utf-8"))]
-        self.assertEqual(problems, [], "\n".join(problems))
+def test_no_late_type_definition_or_static_prototype_in_vm_c_files():
+    files = vm_files()
+    assert "interp.c" in files
+    problems = [p for f in files for p in text_problems(f, (VM_DIR / f).read_text(encoding="utf-8"))]
+    assert problems == [], "\n".join(problems)
 
-    def test_header_comment_bounds(self):
-        def body(n):
-            return "\n".join(" * line %d" % i for i in range(n))
+def test_header_comment_bounds():
+    def body(n):
+        return "\n".join(" * line %d" % i for i in range(n))
 
-        def source(n):
-            return "/*\n" + body(n) + "\n */\nint x;\n"
+    def source(n):
+        return "/*\n" + body(n) + "\n */\nint x;\n"
 
-        self.assertEqual(header_problems("a.c", source(3)), [])
-        self.assertEqual(header_problems("a.c", source(8)), [])
-        self.assertEqual(len(header_problems("a.c", source(2))), 1)
-        self.assertEqual(len(header_problems("a.c", source(9))), 1)
-        self.assertEqual(header_problems("tests/a_test.c", source(1)), [])
-        self.assertEqual(header_problems("tests/a_test.c", source(4)), [])
-        self.assertEqual(len(header_problems("tests/a_test.c", source(5))), 1)
-        self.assertEqual(header_problems("a.c", "/* Copyright 2026 */\n" + source(3)), [])
-        self.assertRegex(header_problems("a.c", "int x;\n/* late */\n")[0], r"\Avm/a[.]c: no header comment")
-        self.assertRegex(header_problems("a.c", "// line\nint x;\n")[0], r"\Avm/a[.]c: no header")
-        self.assertEqual(header_problems(
-            "a.c", "/*\n * The license check of the TLS adapter.\n * Two.\n * Three.\n */\nint x;\n"), [])
-        self.assertEqual(len(header_problems("a.c", "/* Copyright 2026 */\nint x;\n/* late */\n")), 1)
-        self.assertEqual(len(header_problems("a.c", "/* Copyright 2026 */\n/* one line */\nint x;\n")), 1)
-        self.assertEqual(header_problems("a.c", "/*\n * one\n *\n * two\n *\n * three\n */\nint x;\n"), [])
-        self.assertEqual(len(header_problems("a.c", "/*\n * one\n *\n *\n * two\n */\nint x;\n")), 1)
+    assert header_problems("a.c", source(3)) == []
+    assert header_problems("a.c", source(8)) == []
+    assert len(header_problems("a.c", source(2))) == 1
+    assert len(header_problems("a.c", source(9))) == 1
+    assert header_problems("tests/a_test.c", source(1)) == []
+    assert header_problems("tests/a_test.c", source(4)) == []
+    assert len(header_problems("tests/a_test.c", source(5))) == 1
+    assert header_problems("a.c", "/* Copyright 2026 */\n" + source(3)) == []
+    assert re.search(r"\Avm/a[.]c: no header comment", header_problems("a.c", "int x;\n/* late */\n")[0])
+    assert re.search(r"\Avm/a[.]c: no header", header_problems("a.c", "// line\nint x;\n")[0])
+    assert header_problems(
+        "a.c", "/*\n * The license check of the TLS adapter.\n * Two.\n * Three.\n */\nint x;\n"
+    ) == []
+    assert len(header_problems("a.c", "/* Copyright 2026 */\nint x;\n/* late */\n")) == 1
+    assert len(header_problems("a.c", "/* Copyright 2026 */\n/* one line */\nint x;\n")) == 1
+    assert header_problems("a.c", "/*\n * one\n *\n * two\n *\n * three\n */\nint x;\n") == []
+    assert len(header_problems("a.c", "/*\n * one\n *\n *\n * two\n */\nint x;\n")) == 1
 
-    def test_every_vm_c_file_starts_with_a_header_comment_of_the_right_length(self):
-        files = header_files()
-        self.assertIn("interp.c", files)
-        self.assertIn("port.h", files)
-        self.assertIn("tests/map_test.c", files)
-        problems = [p for f in files for p in header_problems(f, (VM_DIR / f).read_text(encoding="utf-8"))]
-        self.assertEqual(problems, [], "\n".join(problems))
+def test_every_vm_c_file_starts_with_a_header_comment_of_the_right_length():
+    files = header_files()
+    assert "interp.c" in files
+    assert "port.h" in files
+    assert "tests/map_test.c" in files
+    problems = [p for f in files for p in header_problems(f, (VM_DIR / f).read_text(encoding="utf-8"))]
+    assert problems == [], "\n".join(problems)
