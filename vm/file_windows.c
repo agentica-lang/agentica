@@ -396,7 +396,11 @@ static bool remove_valid_entry_name(const FILE_ID_BOTH_DIR_INFO *entry) {
 static int remove_tree_entry(char **failed, HANDLE parent, const wchar_t *name, size_t name_length,
                              const wchar_t *display_path, unsigned depth, uint64_t expected_id, bool check_id) { // NOLINT(misc-no-recursion)
   HANDLE file = remove_open_relative(parent, name, name_length, false, false, true);
-  if (file == INVALID_HANDLE_VALUE) return errno == ENOENT ? 0 : errno;
+  if (file == INVALID_HANDLE_VALUE) {
+    int result = errno == ENOENT ? 0 : errno;
+    if (result != 0) remove_failed_path(failed, display_path);
+    return result;
+  }
   int result = 0;
   unsigned char *buffer = NULL;
   BY_HANDLE_FILE_INFORMATION info;

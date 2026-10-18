@@ -164,6 +164,23 @@ def main() -> Void
 end
 """
 
+RELOCK_PROGRAM = """\
+def main() -> Void
+  file = Result.unwrap!(File.open(System.args()[0], "read", 5000))
+  IO.inspect(File.try_lock(file, 5000))
+  IO.inspect(File.try_lock(file, 5000))
+  IO.inspect(File.close(file, 5000).ok?)
+  other = Result.unwrap!(File.open(System.args()[0], "read", 5000))
+  IO.inspect(File.try_lock(other, 5000))
+end
+"""
+
+DEVICE_OPEN_PROGRAM = """\
+def main() -> Void
+  IO.inspect(File.open("NUL", "read", 5000))
+end
+"""
+
 REQUIRES_WINDOWS_VM = pytest.mark.skipif(TARGET_OS != "windows", reason="requires the native Windows VM")
 
 
@@ -296,6 +313,29 @@ def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(root, work):
     # is closed. Every line is sequenced by an await.
     assert result.stdout == "true\ntrue\ntrue\nfalse\ntrue\n"
     assert _probe_lock(root, target, bytecode) == "true"
+
+
+@REQUIRES_WINDOWS_VM
+def test_relocking_is_idempotent_and_closing_frees_the_lock(root, work):
+    target = root / "lock"
+    target.write_text("", encoding="utf-8")
+    bytecode = compile_work_text(work, RELOCK_PROGRAM, "windows-relock")
+    result = run_vm(bytecode, args=[str(target)], env=vm_environment(), cwd=root)
+    # close(...).ok? is a Bool, so inspect prints it bare.
+    assert (result.code, result.stdout) == (
+        0, "ok(true)\nok(true)\ntrue\nok(true)\n"
+    ), result.stderr
+
+
+@REQUIRES_WINDOWS_VM
+def test_opening_a_device_fails_before_any_lock(root, work):
+    # Windows devices never become handles: the open itself fails as a value
+    # (no unwrap, so the program still exits 0), leaving try_lock nothing
+    # to contend with or reject.
+    bytecode = compile_work_text(work, DEVICE_OPEN_PROGRAM, "windows-device-open")
+    result = run_vm(bytecode, args=[], env=vm_environment(), cwd=root)
+    assert result.code == 0, (result.code, result.stderr)
+    assert "cannot open input file" in result.stdout, result.stdout
 
 
 @REQUIRES_WINDOWS_VM

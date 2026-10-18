@@ -2,14 +2,19 @@
 
 A 10 MB file streams in order with bounded memory and about size/buffer reads;
 FIFOs fed by fixtures/lines-peer.py check partial reads, stalls, early closes
-and a crash that frees the descriptor of a parked task.
+and a crash that frees the descriptor of a parked task. Ordinary files check
+line decoding, the end-of-file and overlong errors and descriptor cleanup.
 """
 import re
+import sys
+
+import pytest
 
 from tests.agentica_test import (FIXTURES, PYTHON, WAIT_SECONDS, Child, compile_agc, run, run_vm, vm_command,
                                  vm_environment)
 
 PEER = FIXTURES / "lines-peer.py"
+LINUX = sys.platform.startswith("linux")
 BUFFER_BYTES = 4096
 LINE_COUNT = 1400000
 
@@ -141,6 +146,111 @@ def main() -> Void
   IO.inspect(wait_for(before, 0))
 end
 """
+
+
+READ_ORDINARY_PROGRAM = """\
+def main() -> Void
+  args = System.args()
+  file = Result.unwrap!(File.open(args[0], "read", 5000))
+  for i in 0...args[1].to_i!
+    IO.inspect(File.read_line(file, 5000))
+  end
+  puts(File.close(file, 5000).ok?)
+end
+"""
+
+EACH_ORDINARY_PROGRAM = """\
+def main() -> Void
+  r = File.each_line(System.args()[0], 1024, 5000) do |line|
+    IO.inspect(line)
+    if line == "stop"
+      return error("stopped")
+    end
+    ok()
+  end
+  IO.inspect(r)
+end
+"""
+
+COUNT_FDS_PROGRAM = """\
+def open_files() -> Int
+  return Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
+end
+
+def main() -> Void
+  before = open_files()
+  r = File.each_line(System.args()[0], 1024, 5000) do |line|
+    IO.inspect(line)
+    if line == "stop"
+      return error("stopped")
+    end
+    ok()
+  end
+  IO.inspect(r)
+  IO.inspect(open_files() - before == 0)
+end
+"""
+
+
+def _ordinary_file_output(tmp_path, data, program, name, *args):
+    target = tmp_path / "case.txt"
+    target.write_bytes(data)
+    source = tmp_path / f"{name}.agc"
+    source.write_text(program, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / f"{name}.agcb")
+    result = run_vm(
+        bytecode, args=[str(target), *args], env=vm_environment(), cwd=tmp_path
+    )
+    assert result.code == 0, result.stderr
+    return result.stdout.splitlines()
+
+
+@pytest.mark.parametrize("data,count,successful", (
+    (b"", 1, []),
+    (b"one\ntwo\nlast\n", 4, ['ok("one")', 'ok("two")', 'ok("last")']),
+    (b"one\r\ntwo\nlast", 4, ['ok("one")', 'ok("two")', 'ok("last")']),
+    (b"\n", 2, ['ok("")']),
+    (b"\xff\n", 1, []),
+    (b"\xe2\x82", 1, []),
+    (b"a" * 1048577 + b"\n", 1, []),
+), ids=("empty", "lf", "crlf-unterminated", "blank-line", "invalid-utf8", "truncated-utf8",
+          "overlong-line"))
+def test_read_line_on_ordinary_files_decodes_strips_and_reports_end_of_file(tmp_path, data, count, successful):
+    lines = _ordinary_file_output(
+        tmp_path, data, READ_ORDINARY_PROGRAM, "read", str(count)
+    )
+    assert lines[:len(successful)] == successful
+    assert lines[-2].startswith("error("), lines
+    assert lines[-1] == "true"
+
+
+@pytest.mark.parametrize("data,delivered,ends_ok", (
+    (b"a\nb\n", ['"a"', '"b"'], True),
+    (b"a\r\nb", ['"a"', '"b"'], True),
+    (b"", [], True),
+    (b"a\nstop\nc\n", ['"a"', '"stop"'], False),
+    (b"\xff\n", [], False),
+    (b"a" * 2000 + b"\nshort\n", [], False),
+), ids=("lf", "crlf-unterminated", "empty", "block-error-stops", "invalid-utf8", "overlong-line"))
+def test_each_line_on_ordinary_files_passes_lines_and_stops_on_errors(tmp_path, data, delivered, ends_ok):
+    lines = _ordinary_file_output(tmp_path, data, EACH_ORDINARY_PROGRAM, "each")
+    assert lines[:len(delivered)] == delivered
+    tail = lines[len(delivered):]
+    if ends_ok:
+        assert tail == ["ok()"]
+    else:
+        assert len(tail) == 1 and tail[0].startswith("error("), lines
+
+
+@pytest.mark.skipif(not LINUX, reason="counts /proc/self/fd")
+@pytest.mark.parametrize("data,delivered", (
+    (b"a\nb\n", ['"a"', '"b"']),
+    (b"a\nstop\nc\n", ['"a"', '"stop"']),
+), ids=("clean", "block-error"))
+def test_each_line_frees_its_descriptor_on_every_return_path(tmp_path, data, delivered):
+    lines = _ordinary_file_output(tmp_path, data, COUNT_FDS_PROGRAM, "count")
+    assert lines[:len(delivered)] == delivered
+    assert lines[-1] == "true"
 
 
 def hwm_kib(text):
