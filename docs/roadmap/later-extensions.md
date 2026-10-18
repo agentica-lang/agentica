@@ -52,9 +52,8 @@
   Channels are planned in phase 17
   ([`docs/future/27-iteration-and-concurrency.md`
   §27.2](../future/27-iteration-and-concurrency.md#272-channels)); CPU
-  parallelism remains unscheduled, and [`docs/future/08-concurrency.md` section
-  8](../future/08-concurrency.md#8-concurrency-and-parallelism) records its
-  remaining decisions.
+  parallelism remains unscheduled, and its remaining decisions are in
+  [§27.6](../future/27-iteration-and-concurrency.md#276-open-questions).
 
 ### Open decisions
 

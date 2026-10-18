@@ -65,8 +65,8 @@ in Agentica, and the bit operations are builtins under its exception 5.
     CI does not run Python for it); `tests/test_std_binary.py` for the fixed
     output. There is no evaluator backend, so "both backends" is the VM in its
     three output formats, as for every golden.
-- Not in this phase: `Bytes` (`docs/future/12-data-structures.md` §12.5), which
-  this work does not replace; when `Bytes` lands, the `std/binary` API moves to
+- Not in this phase: `Bytes` (roadmap 8's "Later" item), which this work does
+  not replace; when `Bytes` lands, the `std/binary` API moves to
   it together with the `*_bytes` builtins. No mutable buffers or references.
 
 **Done when:** the Python vectors of 13a and 13b pass on the VM, what each

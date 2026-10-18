@@ -3,12 +3,11 @@
 **Status:** roadmap item 8d
 ([`08-data-structures.md`](../roadmap/08-data-structures.md)) is built: PR 1 of
 §17.9 (the API over the flat array), PR 2 (the trie behind it) and step 3, the
-unboxed leaves of Int and Float lists (§17.12). It fills in
-[`docs/future/12-data-structures.md`
-§12.4](../future/12-data-structures.md#124-faster-lists) for the C VM, which is
-the only backend since 7i. Line numbers are from master at 5713a2c, before PR 1
-moved the code. The implementation PRs were built from this file. A line that no
-longer matches means the code moved, not that the design changed.
+unboxed leaves of Int and Float lists (§17.12). It is the design of the 8d item
+of [`docs/roadmap/08-data-structures.md`](../roadmap/08-data-structures.md).
+Line numbers are from master at 5713a2c, before PR 1 moved the code. The
+implementation PRs were built from this file. A line that no longer matches
+means the code moved, not that the design changed.
 
 ### 17.1 Goal and non-goals
 
@@ -655,8 +654,7 @@ Two PRs, in this order. Recommended over one.
    (`site/content/vm.md:24`, `site/content/library/data-structures/list.md`),
    the catalog texts (`src/builtins.rkt:140-141`, `149`, `152-153`),
    `docs/vm/05-values-execution-builtins.md` §5.1,
-   `docs/future/12-data-structures.md` §12.4 ("both backends"), the 8d tick in
-   the roadmap and the development skill.
+   the 8d tick in the roadmap and the development skill.
 
 Why two. PR 1 is mechanical and the compiler checks it: the opaque type turns a
 missed site into a compile error, and the goldens plus the new fixture show that

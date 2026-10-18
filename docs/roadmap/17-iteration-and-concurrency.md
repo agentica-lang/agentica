@@ -163,12 +163,13 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   `diagnostics.md` and `tasks.md` changes here), the site's task pages (or a new
   `site/content/library/concurrency/channel.md`), `docs/vm/10-io-scheduler.md`
   §10.2.1 (stall check, await-cycle check) and §10.2.2,
-  `docs/vm/10-io-multicore.md` §10.2.3; `docs/future/08-concurrency.md` then
-  keeps only its open questions. Done: `vm/channel.c`, the checker and catalog
-  rules, `CHECK-EXPECTED-TYPE` and `RUNTIME-TASK-AWAIT-CYCLE`, the hints, nine
-  golden fixtures, `vm/tests/channel_test.c` and the channel case of
-  `task_cancel_test.c`, `tests/test_vm_channel.py`, and
-  `site/content/library/concurrency/channel.md`. A value that goes back to a
+  `docs/vm/10-io-multicore.md` §10.2.3; the open questions are in
+  [§27.6](../future/27-iteration-and-concurrency.md#276-open-questions). Done:
+  `vm/channel.c`, the checker and catalog rules, `CHECK-EXPECTED-TYPE` and
+  `RUNTIME-TASK-AWAIT-CYCLE`, the hints, nine golden fixtures,
+  `vm/tests/channel_test.c` and the channel case of `task_cancel_test.c`,
+  `tests/test_vm_channel.py`, and `site/content/library/concurrency/channel.md`.
+  A value that goes back to a
   full ring may make it hold more than its capacity until receivers take values;
   a waiter whose timer fired still takes a value that reached the ring before it
   re-ran.
@@ -284,7 +285,7 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   `references/files.md` and `references/builtins.md`, a new
   `site/content/library/data-structures/stream.md` with a runnable example, the
   development skill's notes (the prelude's `Stream` bodies).
-- Not in this phase: a public `Task.cancel` (open in §8), `select` over several
+- Not in this phase: a public `Task.cancel` (open, §27.6), `select` over several
   channels (§27.2, "Left out"), and other prelude helpers such as "the first of
   several tasks" or "all settled" (each needs its own spec, §27). CPU speed-ups
   from `Task.map` come only with the multicore schedulers (7h item, gated at

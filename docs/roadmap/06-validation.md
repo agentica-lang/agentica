@@ -10,8 +10,8 @@ results compare.
 - [x] Record correct programs, repair attempts, and whether diagnostics helped
   identify the fix (`eval.md`).
 - [x] Use the results to revise the grammar and examples explicitly before
-  adding exceptions to the implementation (the acceptance rule in
-  `docs/future/11-ruby-ergonomics.md` §11).
+  adding exceptions to the implementation (the acceptance rule,
+  [§25](../future/25-ruby-typed-idioms.md#25-ruby-typed-idioms)).
 
 **Complete when:** the prototype provides evidence about whether Agentica's
 syntax and diagnostics help agents write and repair programs.

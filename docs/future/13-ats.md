@@ -10,8 +10,8 @@ A `Channel[T]` ([§27.2](27-iteration-and-concurrency.md#272-channels)) passes
 messages between tasks; a table is state that many tasks read and update. The
 table waits for a program that needs it. `Table` becomes a reserved type and
 module name, a breaking change: a user `struct Table`, `enum Table` or
-`import ... as Table` becomes `CHECK-REDEFINED-NAME`, as §12 says for `Range`,
-`Set` and `Queue`.
+`import ... as Table` becomes `CHECK-REDEFINED-NAME`, as for `Range` and
+`Set` (and 8c's `Queue`).
 
 ```agentica
 def count_visit(hits: Table[String, Int]) -> Void

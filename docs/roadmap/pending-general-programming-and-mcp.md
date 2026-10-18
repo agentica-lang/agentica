@@ -84,10 +84,10 @@ existing builtin library.
 - [x] Specify and add basic time and randomness APIs: `Time.now_ms` (wall
   clock), `Time.monotonic_ms`, inclusive `Random.int`, `Random.float` in [0, 1),
   a per-run generator seeded from the OS or `--seed N`.
-- [ ] Decide which other gaps in
-  [`docs/future/05-list-operations.md`](../future/05-list-operations.md) ("Other
-  gaps for code-challenge programs": math, conversions, strings, sets, input,
-  performance) belong here after a real task needs them.
+- [ ] Decide which other gaps belong here after a real task needs them. From
+  the code-challenge list: math (`abs`, `min`, `max`, `pow`, `sqrt`, `floor`,
+  `ceil`, `gcd`), conversions, string helpers, input helpers (lines of
+  integers), tuples, bounds and performance.
 - [ ] Add harder 6b model-evaluation tasks that need sorting.
 
 **Milestone:** useful everyday scripts and automation using files, processes and
@@ -214,8 +214,9 @@ Task concurrency is already available for handling notifications while a client
 waits. Channels are planned in phase 17
 ([`docs/future/27-iteration-and-concurrency.md`
 §27.2](../future/27-iteration-and-concurrency.md#272-channels));
-`Process.poll_line` remains proposed in [`docs/future/08-concurrency.md` section
-8](../future/08-concurrency.md#8-concurrency-and-parallelism). UUID and Base64
+`Process.poll_line` remains proposed in
+[§27.6](../future/27-iteration-and-concurrency.md#276-open-questions). UUID and
+Base64
 remain later utilities unless a real application establishes an earlier need.
 A Ruby-style `Regex` is designed in
 [§48](../future/48-regex.md#48-regular-expressions), and it waits until after

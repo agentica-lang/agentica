@@ -201,5 +201,4 @@ it stays manual and out of CI.
     kept (O(n) indexing and updates, O(n) `Map.delete`); the knight tour,
     traveling salesman and maze BFS examples with functional tests; `List`
     chosen as the collection module (no `Enum` beside the `enum` keyword)
-  - **Where:** [`06b-builtins.md`](../grammar/06b-builtins.md),
-    `docs/future/05-list-operations.md`
+  - **Where:** [`06b-builtins.md`](../grammar/06b-builtins.md)

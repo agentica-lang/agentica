@@ -19,8 +19,8 @@ for order step 8.2. 27.4 (`File.each_line` and `Stream[T]`) is in two steps,
 decided by the owner on 2026-10-14: step 1 is item 17d at order row 7.2.1h
 (built), step 2 is item 17e at order step 8.2. 27.5 records what was decided
 against (generators, fibers, Agent-style shared state, public locks), so it is
-not proposed again. This section finalizes the channel proposal of [section
-8](08-concurrency.md#8-concurrency-and-parallelism) and answers [section
+not proposed again. This section finalizes the earlier channel proposal and
+answers [section
 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
 
 **What is asked for:** something like Elixir's `Stream` and `Task.async_stream`,
@@ -521,7 +521,7 @@ the plan above, with these choices where the plan left room or changed:
 
 ### 27.2 Channels
 
-This finalizes the channel proposal of section 8: a bounded buffer that tasks
+This finalizes the earlier channel proposal: a bounded buffer that tasks
 send values into and receive values from, so producer and consumer pipelines
 work.
 
@@ -573,7 +573,7 @@ Channel.closed?(channel: Channel[T]) -> Bool
 
 All but `new` are also methods (`jobs.send(v, 1000)`, `jobs.recv(1000)`,
 `jobs.close`, `jobs.closed?`); `Channel.new` has no channel to be called on.
-Against the section 8 proposal: `new` takes a capacity, `send` and `recv` take a
+Against the earlier proposal: `new` takes a capacity, `send` and `recv` take a
 timeout and return a `Result`, and `close` and `closed?` are added.
 
 **Rules:**
@@ -582,7 +582,7 @@ timeout and return a `Result`, and `close` and `closed?` are added.
   value is a handle: assigning or passing it shares the same channel. `Channel`
   becomes a reserved type and module name, a breaking change: a user
   `struct Channel`, `enum Channel` or `import ... as Channel` becomes
-  `CHECK-REDEFINED-NAME`, as section 12 does for `Range`, `Set` and `Queue`.
+  `CHECK-REDEFINED-NAME`, as for `Range` and `Set` (and 8c's `Queue`).
 - **Element type.** `T` is any type a variable can have, so not `Void`
   (`CHECK-VOID-TYPE`, as for a `List[Void]`; use `Nil` or `Bool` for a plain
   signal). `Fn`, `Task` and handles (files, sockets, processes, other channels)
@@ -937,7 +937,7 @@ the program, and a user cannot declare one with that name.
   that no await observed stays unobserved (the summary at the end of the run,
   §37), and a later await observes it as it does today. So a program can wait a
   bit, do other work, and wait again. Stopping the work is `Task.map`'s per-item
-  timeout; a public `Task.cancel` stays open in section 8.
+  timeout; a public `Task.cancel` stays open (see 27.6).
 - **A settled task never times out.** The call checks whether the target has
   already settled (ended, or been cancelled, and its owned files closed, §37.5)
   before it waits, and again when its wait times out; in both cases it returns
@@ -1336,3 +1336,22 @@ end
 When the parts can simply be returned, returning them is the one form:
 `Task.map(words, 3, 1000) do |w| ok(w.length) end`, then `reduce` over the
 results.
+
+### 27.6 Open questions
+
+- **Resources over a channel.** Immutable values can be shared safely, but
+  ports, sockets and contextual services carry state. A handle sent over a
+  channel stays owned by the task that opened it; the ownership and
+  synchronization rules for the others are open.
+- **A diagnostic in a task other than `main`** ends only that task (§37);
+  `Result.error` stays a normal result.
+- **A public `Task.cancel`.** This section cancels only the timed-out items of
+  `Task.map`, and a cancel call would be a second way to stop work; returning
+  from the entrypoint still cancels pending work.
+- **Handles of a cancelled task** stay open until the end of the run (27.1).
+  Whether a long-running program, such as a server, should close them when the
+  task is cancelled is open. Until then open handles inside the item and do not
+  share them across items.
+- **`Process.poll_line(p: Process, timeout_ms: Int) -> Result[String]`** may
+  come later, so a loop can alternate requests with polling child output. It is
+  not part of the task work, and no application has needed it yet.

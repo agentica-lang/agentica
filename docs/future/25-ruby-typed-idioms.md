@@ -17,10 +17,11 @@ post-bootstrap step 5, in `compiler/`; see "As built" at the end of 25.10).
 item 15f; see "As built" at the end of 25.6); 25.11 (`format`) is still planned.
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
-that models already know, with the rule of [section
-11](11-ruby-ergonomics.md#11-ruby-style-ergonomics): accept a form when it is
-real Ruby (or a typed version of it) or when it makes Agentica consistent with
-itself, and keep static checking and immutable values. Three limits do not move:
+that models already know, with this rule: accept a form when it is real Ruby (or
+a typed version of it) or when it makes Agentica consistent with itself, and
+keep static checking and immutable values. A form from another language is not
+accepted: its hint names the Agentica form, and a newly accepted form is checked
+with a second model in an evaluation round. Three limits do not move:
 no OOP (no classes, no inheritance, no user methods on user types), no user
 generics, and values stay immutable.
 
@@ -28,8 +29,7 @@ generics, and values stay immutable.
 A Ruby form is worth adding only when it does not create a second way to write
 something the language already has. Where it would, it is not accepted: the
 parser or the checker gives a diagnostic whose help shows the canonical form.
-This sharpens section 11's rule, [Which forms to
-accept](11-ruby-ergonomics.md#11-ruby-style-ergonomics). The same principle is
+This sharpens that rule. The same principle is
 why Agentica has no warnings: a diagnostic is an error or it does not exist
 ([section 26](26-strict-diagnostics.md#26-strict-diagnostics)).
 
@@ -468,8 +468,8 @@ open is never cached. A generic enum's equality depends on its type arguments:
 `Option[Int]` has it, `Option[Fn[Int, Int]]` does not; a user enum is checked
 per use, with its type arguments filled in.
 
-`List.member?` (planned in section 5) uses this wider equality: it takes any
-element type that has equality.
+`List.member?` (§25.6) uses this wider equality: it takes any element type
+that has equality.
 
 Lists, maps and Results are in this item because a struct with a
 `tags: List[String]` field is common, and struct equality without them would
@@ -541,8 +541,7 @@ ranges" text, and the turn cost of the wider `EQ`).
 
 ### 25.5 Standalone lambdas
 
-Listed in [section 11.4](11-ruby-ergonomics.md#114-blocks-and-closures), which
-points here; planned here.
+Planned here.
 
 ```agentica
 inc = lambda do |x: Int| x + 1 end
@@ -605,8 +604,7 @@ closures", the reserved words, the §7 hint row), the programming skill
 (`SKILL.md` and its adapter examples), `site/content/tour/blocks.md` and the
 site's adapter examples, and [section
 15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call),
-whose `getter`/`putter` helpers are replaced by `lambda` once lambdas land;
-section 11.4 then says nothing is open there.
+whose `getter`/`putter` helpers are replaced by `lambda` once lambdas land.
 
 ### 25.6 More Enumerable methods
 
@@ -644,8 +642,8 @@ Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
   one Agentica already has wins: `filter` (not `select`), `map` (not `collect`),
   `find` (not `detect`), `reduce` (not `inject`). The other name is
   `CHECK-UNKNOWN-METHOD` with a help that names the canonical method, in the
-  foreign-habit hint table of `grammar.md` §7. The aliases that section 11.2
-  already shipped (`length`, `push`, `strip`, `to_i`, ...) stay as they are; no
+  foreign-habit hint table of `grammar.md` §7. The already shipped aliases
+  (`length`, `push`, `strip`, `to_i`, ...) stay as they are; no
   new ones are added.
 - **No second ways.** `reject` is not added: it is `filter` with `!` (help:
   `xs.filter do |x| !cond end`). The `Range` methods that Ruby's `Enumerable`
@@ -674,12 +672,12 @@ Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
   `sum` takes `Int` or `Float`, and `min_by` and `max_by` take `List.sort_by`'s
   key types; another type is `CHECK-TYPE-MISMATCH`, as for `sort`.
 - `sum` of an empty list is `0` or `0.0`; an `Int` sum that does not fit is
-  `RUNTIME-INTEGER-OVERFLOW`. Section 5's planned `List.sum` is this one.
+  `RUNTIME-INTEGER-OVERFLOW`.
 - `Map.each` and `Map.filter` go in insertion order; their blocks take two
   parameters (`do |k, v|`).
 - **Not here:** `zip` needs tuples to be typed (`List[(A, B)]`); it waits for
-  them (12.5, and destructuring in Part B). `List.member?` is already planned in
-  section 5. `count` stays out (section 5 keeps `size` as the only count).
+  them (roadmap 8's "Later" list, and destructuring in Part B). `List.member?`
+  is this item's. `count` stays out (`size` is the only count).
 
 **Where the code lives: the compiler prelude.** By the std-first rule these are
 Agentica code, not C. But a `std/` module cannot hold them today, for two
@@ -777,8 +775,8 @@ element at a time is O(n²) today, whatever the technique. Until faster lists
 (8d) land, the existing native `List.map`, `List.filter` and `List.reduce` stay
 the only list builders, and the prelude does not start.
 
-After 8d, a list is a persistent vector ([section
-12.4](12-data-structures.md#124-faster-lists)): `push` (`List.append`), `set`
+After 8d, a list is a persistent vector
+([`docs/vm/17-lists.md`](../vm/17-lists.md)): `push` (`List.append`), `set`
 and indexing are O(log32 n), near constant. Section 12.4 states nothing for the
 other list operations, so the prelude counts `concat`, `take`, `drop`,
 `reverse`, `sort` and `sort_by` as O(n), as today. The bodies:
@@ -1358,7 +1356,7 @@ all, and how it relates to user `Option[T]` and to `JsonField` (§17).
 
 **What:** `a, b = pair`, block parameters `|(k, v)|`, multiple return values.
 **Why:** `partition`, `zip` and `Map` iteration read better. **Why not now:** it
-needs tuples ([section 12.5](12-data-structures.md#125-later)). **Open
+needs tuples (roadmap 8's "Later" list). **Open
 questions:** tuple syntax and types, and whether lists can be destructured with
 a length check.
 

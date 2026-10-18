@@ -5,26 +5,24 @@ This index tracks future proposals; the current language contract is in
 spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
-Section 14 records decided and rejected ideas; §18 records the front-end
-language decision and the self-hosted bootstrap, both done. Sections 19, 21 and
-22 are VM implementation
-proposals, not language changes. Sections 23–24 add binary data and logging
-without changing the grammar.
-Sections 25–34 cover Ruby idioms, diagnostics, concurrency, VM metrics, TLS,
-HTTP, BDD, doc comments, digit separators and VM values. Sections 36–40 cover
-unit tests, crash isolation, value representation, semantic CLI and native code.
-The Files index carries current status; linked sections keep requirements,
-rationale and alternatives.
-Sections 41–43 cover date/time types, sized numerics and an unscheduled language
-server; their specs record the requirements and dependencies.
+Sections 19, 21 and 22 are VM implementation proposals, not language changes.
+Sections 20 and 23–24 add crypto, binary data and logging without changing the
+grammar. Sections 25–34 cover Ruby idioms, diagnostics, concurrency, VM metrics,
+TLS, HTTP, BDD, doc comments, digit separators and VM values. Sections 36–40
+cover unit tests, crash isolation, value representation, semantic CLI and native
+code. Sections 41–43 cover date/time types, sized numerics and an unscheduled
+language server. The Files index carries current status; linked sections keep
+requirements, rationale and alternatives.
 
 
 ## Files
 
 Each section links to its proposal or current home. Landed and decided notes
-may share [`done.md`](done.md); §6 points to the VM design, and §7 to §25.13.
-Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
-[`docs/bdd.md`](../bdd.md).
+may share [`done.md`](done.md); §6 points to the VM design, §7 to §25.13, and
+§18 records the front-end language decision and the self-hosted bootstrap.
+Sections 1, 5, 8, 11, 12 and 35 have no file of their own: they are built or
+decided, and their content lives in the grammar, `docs/vm/`, the roadmap or
+§18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md).
 
 - §: 2
   - Title: Landed: enums and pattern matching
@@ -42,11 +40,6 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
     [`04-stdlib-and-function-values.md`](04-stdlib-and-function-values.md)
   - Status: Mostly landed; the rest is planned
 
-- §: 5
-  - Title: Remaining `List` operations
-  - File: [`05-list-operations.md`](05-list-operations.md)
-  - Status: Mostly landed; other gaps listed
-
 - §: 6
   - Title: Native runtime
   - File: [`VM design`](../vm/README.md)
@@ -57,12 +50,6 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - File: [Decided against](25-ruby-typed-idioms.md#2513-decided-against-part-c)
   - Status: Not planned; rationale in §25.13
 
-- §: 8
-  - Title: Concurrency and parallelism
-  - File: [`08-concurrency.md`](08-concurrency.md)
-  - Status: Tasks landed; channels built (§27.2); open questions only; CPU
-    parallelism proposed
-
 - §: 9
   - Title: Files and paths
   - File: [`done.md`](done.md#9-files-and-paths-implemented)
@@ -72,18 +59,6 @@ Sections 1 and 31 have no file here; §31 (BDD) is built and specified in
   - Title: Void and processes
   - File: [`done.md`](done.md#10-void-and-processes-implemented)
   - Status: Implemented
-
-- §: 11
-  - Title: Ruby-style ergonomics
-  - File: [`11-ruby-ergonomics.md`](11-ruby-ergonomics.md)
-  - Status: Implemented; its rule for new forms still applies; a few items
-    open
-
-- §: 12
-  - Title: Data structures
-  - File: [`12-data-structures.md`](12-data-structures.md)
-  - Status: Ranges landed; sets, queues and faster lists planned (roadmap
-    phase 8)
 
 - §: 13
   - Title: Shared tables (ATS)
