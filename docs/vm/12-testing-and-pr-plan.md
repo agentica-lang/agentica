@@ -64,8 +64,9 @@ programs; the front end links modules, so the VM needed no new code.
 ### 12.3 Plan for HTTP and TlsContext
 
 Current status and remaining gates live in
-[`docs/roadmap/20-hybrid-http.md`](../roadmap/20-hybrid-http.md) and
-[`docs/roadmap/19-tls-context.md`](../roadmap/19-tls-context.md). Streaming and
+[`docs/future/30-hybrid-http.md`](../future/30-hybrid-http.md) (§30, row 7.4)
+and [`docs/future/29-tls-context.md`](../future/29-tls-context.md) (§29.9, row
+7.4). Streaming and
 the HTTP benchmark precede `TlsContext`. Testing continues to follow §12.1:
 timing-free goldens, timeout tests in `tests/test_vm_http.py`, and standard-
 library-only peers.
