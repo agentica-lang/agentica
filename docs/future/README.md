@@ -6,8 +6,8 @@ spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
 Sections 19, 21 and 22 are VM implementation proposals, not language changes.
-Sections 20 and 23 add crypto and binary data without changing the grammar;
-logging (§24) is built and lives in the grammar. Sections 25–34 cover Ruby
+Section 20 adds crypto without changing the grammar; binary data (§23) and
+logging (§24) are built and live in the grammar. Sections 25–34 cover Ruby
 idioms, diagnostics, concurrency, VM metrics, TLS, HTTP, BDD, doc comments and
 VM values. Sections 36 and 38–40 cover unit tests, value
 representation, semantic CLI and native code; task crash isolation (§37) is
@@ -20,7 +20,8 @@ requirements, rationale and alternatives.
 
 Each section links to its proposal or current home; §6 points to the VM design,
 §7 to §25.13, and §18 records the front-end language decision and the
-self-hosted bootstrap. Sections 1, 2, 5, 8–12, 14, 21, 24, 33, 35 and 37 have no
+self-hosted bootstrap. Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33, 35 and 37
+have no
 file of their own: they are built or decided, and their content lives in the
 grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
 [`docs/bdd.md`](../bdd.md).
@@ -86,11 +87,6 @@ grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
   - Title: JIT
   - File: [`22-jit.md`](22-jit.md)
   - Status: Required (roadmap 7m)
-
-- §: 23
-  - Title: Binary data
-  - File: [`23-binary-data.md`](23-binary-data.md)
-  - Status: Done (roadmap phase 13)
 
 - §: 25
   - Title: Ruby typed idioms

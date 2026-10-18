@@ -45,7 +45,7 @@ use `extern "C"`. The rules are:
   ([`16-architecture.md`](../vm/16-architecture.md) §16.5).
 - Conversions come first for `Int`, `Float`, `Bool`, `String`, `List`, `Map` and
   structs. `Bytes` can follow when the compact type of [section
-  23](23-binary-data.md) lands.
+  binary data (phase 13) lands.
 
 Each native function declares a call kind, which says where it runs (40.3.1).
 Only its task waits, and the scheduler keeps running. The libuv pool takes only

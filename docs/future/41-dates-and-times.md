@@ -445,7 +445,7 @@ is updated there too.
 
 - Each conversion (civil to days, days to civil, Unix time to fields, text) is a
   few dozen C integer operations and one builtin call, which costs one step plus
-  its arguments (§23.6).
+  its arguments.
 - Allocation: one record for each date or time value, and one `String` for text.
   Parsing scans the text once.
 - The record has a fixed size; no field is a list or a nested record.
@@ -531,7 +531,7 @@ deleted from `docs/future/`, following the working rule of
 
 ### 41.15 Tests
 
-The Python vectors are the independent counterpart, as in §23.7.
+The Python vectors are the independent counterpart, as in the binary work.
 `tests/fixtures/dates-vectors.py` uses only the standard library (`datetime` and
 `timedelta`), with a fixed random seed, and writes
 `tests/fixtures/vm/dates-vectors.stdin`. The fixture `dates-vectors.agc` reads
@@ -599,7 +599,7 @@ an aware argument gives `CHECK-TYPE-MISMATCH`; and an `enum` with variants
 Monotonic clock: 41.10.
 
 The vectors fixture may be slow under the `--max-steps` sweep; if so, it goes in
-`heavy-fixtures` in `tests/vm-diff-common.rkt`, as §23.7 says.
+`heavy-fixtures` in `tests/vm-diff-common.rkt`, as the binary work does.
 
 ### 41.16 Later
 

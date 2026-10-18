@@ -146,7 +146,8 @@ The reasons, in the order of their weight:
   that: a `List[UInt8]` stored as 64-bit numbers costs 8 bytes per item too.
   The memory gain needs typed storage that uses the element width (1 byte for
   `UInt8`, §42.12). The types are the input that storage needs.
-- **Binary protocols and files.** §23 reads and writes numbers as `Int`, so the
+- **Binary protocols and files.** `std/binary` reads and writes numbers as
+  `Int`, so the
   width is only a convention in the function name, and `write_u16_be` checks the
   range at run time (`value 70000 does not fit in u16`). With `UInt16` the range
   is in the type, and the writer takes the type.
@@ -156,7 +157,8 @@ The reasons, in the order of their weight:
 - **Interop.** CBOR's integer major types cover -2^64 to 2^64 - 1
   (`docs/future/16-cbor.md:127` maps `Int` only). Other systems use `uint64` IDs
   and 32-bit floats in their data.
-- **Wrap-around math.** Hashes and checksums need arithmetic that wraps. §23
+- **Wrap-around math.** Hashes and checksums need arithmetic that wraps.
+  `std/binary`
   covers the bits with the `Int` shift builtins, but `+` and `*` halt on
   overflow, so a 64-bit multiply in a hash (FNV-1a, for example) can only be
   written today by hand with bit operations.
@@ -290,7 +292,7 @@ conversion.
 - **No hex, octal or binary literals in this design.** Reason: they are a
   grammar change with their own review, and the `_` rules in the grammar would
   have to
-  cover hex digits. Masks stay in decimal, as §23 says. Hex is the one literal
+  cover hex digits. Masks stay in decimal. Hex is the one literal
   form that binary code would want, so it is the first candidate for a separate
   proposal (§42.16).
 - **Out of range (recommended).** An integer literal outside its type is
@@ -319,7 +321,8 @@ conversion.
 
 - **One rule (recommended).** A conversion returns the plain value when it
   cannot fail: every source value fits the target, or it only rounds. It returns
-  a `Result` when some source value does not fit. Reason: §23.5 already does
+  a `Result` when some source value does not fit. Reason: `std/binary` already
+  does
   this for the writers (`i64`, `f32` and `f64` return plain lists, the others a
   Result), so the rule is not new, and the type tells the agent which form it
   has. `try` on a plain value is a check error.
@@ -362,7 +365,7 @@ conversion.
 
 - **Conversion:** Float to Float32
   - **Form:** plain (rounds; overflow gives an infinity of the same sign, as
-    `Float.to_bits32` does, §23.3)
+    `Float.to_bits32` does)
 
 - **Sized to sized (recommended).** A lossless widening is a plain method on the
   source (`x.to_uint16`, 12 pairs). Every other conversion between sized
@@ -408,7 +411,7 @@ conversion.
   `wrapping_mul` are methods on every integer type, including `Int`. Each
   returns the type and keeps the low bits of the two's complement result.
   Reason: hashes and checksums need them, the names say what happens, and
-  `Int.shift_left` already wraps (§23.2).
+  `Int.shift_left` already wraps.
 - **Checked methods: later.** `checked_add` and the like, returning a Result.
   Reason: the operators already halt, and a program that must recover from
   overflow can use `try` on a conversion first. This can be added when a program
@@ -427,7 +430,7 @@ conversion.
   unsigned operations in the VM (§42.11).
 - **Bit operations (recommended).** `bit_and`, `bit_or`, `bit_xor`, `bit_not`,
   `shift_left`, `shift_right` and `shift_right_unsigned` are methods on every
-  integer type, with the rules of §23.2 read at the type's width: the result is
+  integer type, with the `Int` bit rules read at the type's width: the result is
   the low `w` bits, read back in the type. Specifically: `bit_not` on an
   unsigned type flips the bits within its width, so `UInt8.bit_not(0)` is 255,
   while on a signed type it is `-1 - a` as on `Int`. `shift_left` drops the bits
@@ -436,7 +439,7 @@ conversion.
   has no sign bit. `shift_right_unsigned` is logical on every type. A negative
   count is `RUNTIME-INVALID-COUNT`. Reason: one meaning per name, at every
   width, and one rule to learn.
-- **`Int` keeps its methods.** The `Int` bit methods of §23.2 do not change.
+- **`Int` keeps its methods.** The `Int` bit methods do not change.
 
 ### 42.8 UInt64 above the `Int` maximum
 
@@ -487,7 +490,7 @@ conversion.
   `RUNTIME-DIVISION-BY-ZERO`, as it is for `Float`
   (`docs/grammar/06-semantics.md`).
 - **NaN.** Canonical NaN in `to_bits`: every NaN gives `0x7FC00000`
-  (2143289344), the same rule as `Float.to_bits32` (§23.3). Reason: every
+  (2143289344), the same rule as `Float.to_bits32`. Reason: every
   platform gives the same bits.
 - **Printing (recommended).** `to_s` prints the shortest decimal that reads back
   to the same binary32 value. The Float32 nearest 0.1 prints `0.1`, not
@@ -517,7 +520,7 @@ conversion.
   the 32-bit pattern gets one type, and the removal waits until the binary API
   moves.
 - **Open: `Float.to_bits` return type.** It returns `Int` today, signed, and a
-  negative `Int` for a sign bit (§23.3). A `UInt64` return would make the bit
+  negative `Int` for a sign bit. A `UInt64` return would make the bit
   pattern unsigned. This is in §42.17 for the owner to decide.
 - **Float16 and BFloat16: later.** Reason: no program needs them yet. Their main
   use is machine learning, which waits for the SIMD work of §19. Each needs its
@@ -544,7 +547,7 @@ conversion.
   the path in the error (§42.8). `JSON.schema` gives `minimum` and `maximum`.
   The change is additive for `Int`: no existing JSON program changes.
 - **CBOR (§16).** Adds one row per type when CBOR lands. Nothing changes now.
-- **`std/binary` (§23).** Recommended: step 3 moves the API to the types.
+- **`std/binary`.** Recommended: step 3 moves the API to the types.
   Readers return the width type (`read_u16_be(data, offset) -> Result[UInt16]`),
   and writers take it (`write_u16_be(value: UInt16) -> List[UInt8]`). The
   function names stay. The errors that remain are for the offset and the frame
@@ -553,14 +556,14 @@ conversion.
   literal takes the context type), and a value that is too big becomes an
   explicit conversion at the call site (`try n.to_uint16`). `read_frame_length`
   still returns `Result[Int]`, since a length is a count (below). This is
-  breaking, and §23.1 already names the move.
+  breaking, and the module's design already names the move.
 - **Byte lists.** In step 3, `IO.read_bytes`, `File.read_bytes`,
   `TCP.recv_bytes`, `Process.read_bytes`, `String.from_bytes` and the `*_bytes`
   writers take and return `List[UInt8]`. This is breaking (§42.15).
 - **`Bytes` (§12.5): not added (recommended).** Reason: `List[UInt8]`, with the
   typed storage of step 4, is the compact byte sequence that `Bytes` was meant
   to be, and a second type would double every `*_bytes` builtin. The docs that
-  name `Bytes` as a prerequisite (§12.5, §16, §20, §23, §18.4, §40 and others,
+  name `Bytes` as a prerequisite (§12.5, §16, §20, §18.4, §40 and others,
   22 files in all, from `rg -l '\bBytes\b'`) are updated when step 3 lands.
 - **Range (§12.1).** Stays `Int` only (recommended). Reason: a range over a
   sized type has no natural end type, and `for` over `Int` is the common loop. A
@@ -672,7 +675,8 @@ should have made.
   `from_bits`.
 - **Step 3: binary API and byte lists.** `std/binary` moves to the sized types
   (§42.10); the `*_bytes` builtins take `List[UInt8]`; `Float.to_bits32` and
-  `Float.from_bits32` are removed. This is one breaking PR, as §23.1 requires,
+  `Float.from_bits32` are removed. This is one breaking PR, as the module's
+  design requires,
   and it is followed by a re-measure of the `binary` arm of the evaluation
   rounds, as roadmap row 7.2.2 did.
 - **Step 4: typed storage, if measured.** §42.12.
@@ -682,7 +686,8 @@ independent Python peer, with the standard library only.
 
 - **Vectors (Python peer).** `tests/fixtures/numbers-vectors.py` computes every
   result with Python's unbounded integers, masked to the width, and writes
-  `tests/fixtures/vm/numbers-vectors.stdin` for a fixture, as §23.7 does. It
+  `tests/fixtures/vm/numbers-vectors.stdin` for a fixture, as the binary work
+  does. It
   covers: edge values of each type (the smallest, the largest, zero, one, minus
   one); each operation on those values; each bit method and count (0, 1, width -
   1, width, 63, 64); each conversion, including the plain and Result forms;
@@ -816,7 +821,7 @@ Not planned:
   variable of a call is fixed by its other arguments; and a unary `-` folds into
   an integer literal, so `x: UInt8 = -5` is `CHECK-INT-RANGE`. Recommendation:
   adopt it.
-- **`Float.to_bits` return type.** Keep `Int` (signed bit pattern, as in §23.3),
+- **`Float.to_bits` return type.** Keep `Int` (signed bit pattern),
   or change to `UInt64` in step 3? Recommendation: change it in step 3, with the
   other bit builtins, so one type holds a 64-bit pattern. This is breaking, and
   it is a choice of API, not of correctness.

@@ -133,7 +133,7 @@ uploads to an Agentica server); each would need its own one-way test.
 
 ### 30.12 Later: binary bodies and `TlsContext`
 
-- **Binary bodies** come after `Bytes` (phase 13, §23): byte forms of the body
+- **Binary bodies** come after `Bytes` (phase 13): byte forms of the body
   fields and of the stream pieces. They pass the one-way test because a `String`
   cannot hold arbitrary bytes. Their shape is decided with phase 13; until then
   a binary body is an `error` (client) or 400 (server).

@@ -302,8 +302,8 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.2.4
   - **Next work:** **Complete** (PRs #220 and #223): Binary data (phase 13,
-    [`docs/future/23-binary-data.md`
-    §23](../future/23-binary-data.md#23-binary-data)), taken out of row 7.5 by
+    [grammar](../grammar/05b-modules.md#binary-data-stdbinary)), taken out of
+    row 7.5 by
     the owner on 2026-10-14: the `Int` and `Float` bit builtins (13a) and
     `std/binary` (13b), with their tests and docs ([phase
     13](13-binary-data.md)). It comes before the freeze, because the bytecode
@@ -973,7 +973,8 @@ programming reference contain the current signatures.
      insides of `Map` and `List`.
   5. Basic operations on the core types, at the level of operators, which would
      be loops or fragile code in Agentica: for example the `Int` bit operations
-     and `Float` bit conversions of `docs/future/23-binary-data.md` §23.
+     and `Float` bit conversions of the grammar's
+     [`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary).
   6. Log registry state: the handler table and the global log level, which the
      VM runtime holds for `std/logger` (the grammar's logging section). It is
      runtime state, not computation. It is the first state the language
