@@ -40,8 +40,10 @@ dist/agentica --dump-ir prog.agc
 dist/agentica prog.agc               # front end + VM in one step, in one process
 ```
 
-- CI runs `vm-sanitizers` (`make vm-lint`, `make vm-layers`, ASan diff and bytecode tests, `make vm-fuzz`,
-  `make vm-gc-stress`) only when a pull request (never a `master` push) touches the VM paths listed
+- CI runs `vm-sanitizers` (`make vm-lint`, `make vm-layers`, ASan diff and
+  bytecode tests, `make vm-fuzz`,
+  `make vm-gc-stress`) only when a pull request (never a `master` push) touches
+the VM paths listed
   in the `changes` job of `.github/workflows/ci.yml`; the list and the other
   jobs are in `references/ci.md`. A new VM source or test file outside those
   paths must be added there.
@@ -50,7 +52,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   (`compiler/front_end.agc`) compiles in memory and hands the bytes to C with
   `FrontEnd.hand_off`; `vm/agentica.c` runs them in a new runtime. A
   `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1. Every catalog
-  implementation is in `VM_BUILTINS` (`compiler/lower_tables.agc`), so no builtin
+  implementation is in `VM_BUILTINS` (`compiler/lower_tables.agc`), so no
+builtin
   reaches it today.
   `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
   handles it when `run` is the first word, with the VM flags (`--max-steps`,
@@ -62,7 +65,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   Linux it first resets `SIGTERM` to its default, sets `PR_SET_PDEATHSIG` to
   `SIGTERM` and exits 2 when `getppid()` is not `PID`. `agentica test` runs the
   BDD driver in the front end; it starts the runner with `self_path run
-  --driver-pid ... --embedded runner` (see `references/bdd.md`). A new VM option goes in
+  --driver-pid ... --embedded runner` (see `references/bdd.md`). A new VM option
+goes in
   `agc_launch_parse` and in the pass-through list of the front end
   (`compiler/cli_options.agc` and the hand-off check in
   `vm/agentica.c`). A new builtin goes into `VM_BUILTINS` with its C
@@ -145,7 +149,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
     of `agentica test` modes (`--agentica-test run`) need a `.channel` file, and
     a fixture without one is the no-channel case (`test-no-channel`).
   - `process-` name prefix: runs with `--allow-run`.
-  - `HEAVY_FIXTURES` (in `tests/vm_diff_support.py`): fixtures pinned to a shard;
+  - `HEAVY_FIXTURES` (in `tests/vm_diff_support.py`): fixtures pinned to a
+    shard;
     the others rotate over shards 1 to 7 and shard 8 runs the extras.
   - `step-limited/<name>.agc`: runaway loops, golden taken at
     `--max-steps 500`, checked at 1 to 5, 50 and 500.
@@ -175,10 +180,12 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   by `total_steps`, may be lower but at most `T + max(10, T / 10)`
   (`check_steps`, which catches over-charging), and the last sweep limit,
   `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. With
-  `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and `make vm-gc-stress`) each
+  `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and `make vm-gc-stress`)
+each
   fixture runs only 1, 2, T - 1, T, the last limit and 8 limits drawn one
   from each eighth of 3 to T - 2 (`sampled_limits`); local `make test`,
-  the release and the weekly `sweep.yml` keep the full sweep. The draw comes from `AGENTICA_SWEEP_SEED`, else the
+  the release and the weekly `sweep.yml` keep the full sweep. The draw comes
+from `AGENTICA_SWEEP_SEED`, else the
   first 8 hex digits of `GITHUB_SHA` or `git rev-parse HEAD`, plus the
   fixture name, so it rotates with the commit and is fixed within a run.
   Each shard prints the seed, and a failed limit names it: rerun with that
@@ -212,7 +219,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
   `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS
   -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when its stamp
-  `build/vm/gc-flags` changes). `yyjson.c` is built per mode into `$(VM_BUILD)/yyjson.o`
+  `build/vm/gc-flags` changes). `yyjson.c` is built per mode into
+`$(VM_BUILD)/yyjson.o`
   with `YY_CFLAGS` (the sanitizers in `SANITIZE=1`, no `-Werror`) and the
   `YY_DEFS` that turn off everything but the reader; `vm/*.c` see the same
   `YY_DEFS` and `-I vm/third_party/yyjson/src`, and only `vm/json.c`
@@ -228,7 +236,8 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   `TRACE` does not rebuild them and a CI cache hit stays valid. Compile them
   only through those variables, so a new flag changes the stamp;
   `vm/*.c` see `-I vm/third_party/libuv/include`, and only `vm/loop.c`,
-  `vm/stream.c`, `vm/process.c`, `vm/tcp.c` and `vm/http_client.c` include `uv.h`. Bumping libuv: check out the new tag inside
+  `vm/stream.c`, `vm/process.c`, `vm/tcp.c` and `vm/http_client.c` include
+`uv.h`. Bumping libuv: check out the new tag inside
   `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
   `git add vm/third_party/libuv`, and rerun the sanitizer and diff tests.
 - Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
@@ -245,13 +254,29 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
 
 ## Files
 
-| Path | Owns |
-|---|---|
-| `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
-| `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
-| `vm/third_party/openssl` | OpenSSL submodule (Apache-2.0), shallow, pinned to tag `openssl-3.5.9`; with `AGENTICA_OPENSSL=vendored` (the release) built static on Linux per build mode into `$(VM_BUILD)/openssl/` (`libssl.a`, `libcrypto.a`; `docs/vm/10-dependencies-and-platforms.md` §10.0); the default `AGENTICA_OPENSSL=system` links the system OpenSSL 3 instead |
-| `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
-| `vm/third_party/picohttpparser` | picohttpparser submodule (MIT or Perl, dual; the MIT notice is at the top of `picohttpparser.h`), pinned to tag v1.4; `picohttpparser.c` is built like yyjson, into `$(VM_BUILD)/picohttpparser.o`, and only `vm/http_pico.c` includes its header |
+- **Path:** `vm/third_party/bdwgc`
+  - **Owns:** Boehm GC submodule, pinned to a release tag
+
+- **Path:** `vm/third_party/libuv`
+  - **Owns:** libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources
+    build into `$(VM_BUILD)/libuv.a`
+
+- **Path:** `vm/third_party/openssl`
+  - **Owns:** OpenSSL submodule (Apache-2.0), shallow, pinned to tag
+    `openssl-3.5.9`; with `AGENTICA_OPENSSL=vendored` (the release) built static
+    on Linux per build mode into `$(VM_BUILD)/openssl/` (`libssl.a`,
+    `libcrypto.a`; `docs/vm/10-dependencies-and-platforms.md` §10.0); the
+    default `AGENTICA_OPENSSL=system` links the system OpenSSL 3 instead
+
+- **Path:** `vm/third_party/yyjson`
+  - **Owns:** yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is
+    built, into `$(VM_BUILD)/yyjson.o`
+
+- **Path:** `vm/third_party/picohttpparser`
+  - **Owns:** picohttpparser submodule (MIT or Perl, dual; the MIT notice is at
+    the top of `picohttpparser.h`), pinned to tag v1.4; `picohttpparser.c` is
+    built like yyjson, into `$(VM_BUILD)/picohttpparser.o`, and only
+    `vm/http_pico.c` includes its header
 
 ## Gotchas
 

@@ -451,11 +451,21 @@ decides the digits (41.20). §24.2 has a cross-reference to this section.
 
 The parts land under different rules:
 
-| Part | Files | Rule |
-|---|---|---|
-| Types, reserved names, the construction rule and its code | `compiler/` (the Agentica front end) | A checker change in the Agentica front end (§35), decided by the owner on 2026-10-15. Not a table row. |
-| `Time.*` functions (41.3 to 41.7) | `compiler/` (the Agentica catalog, §35.4), `vm/dates.c` | With the types, in the Agentica front end (§35): most of the functions return the new types, so their catalog rows wait for it. |
-| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin catalog, if §35 step 4 is done), `vm/numbers.c` | Independent of the types, so it landed first (#248). After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
+- **Part:** Types, reserved names, the construction rule and its code
+  - **Files:** `compiler/` (the Agentica front end)
+  - **Rule:** A checker change in the Agentica front end (§35), decided by the
+    owner on 2026-10-15. Not a table row.
+
+- **Part:** `Time.*` functions (41.3 to 41.7)
+  - **Files:** `compiler/` (the Agentica catalog, §35.4), `vm/dates.c`
+  - **Rule:** With the types, in the Agentica front end (§35): most of the
+    functions return the new types, so their catalog rows wait for it.
+
+- **Part:** `Time.monotonic_ns` (41.10)
+  - **Files:** `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin
+    catalog, if §35 step 4 is done), `vm/numbers.c`
+  - **Rule:** Independent of the types, so it landed first (#248). After row
+    7.2.7 the freeze allows its table row and its `vm-builtins` name.
 
 Most of the functions return the new types, so they cannot land before the
 types. The owner decided on 2026-10-15 that the types come after the Agentica

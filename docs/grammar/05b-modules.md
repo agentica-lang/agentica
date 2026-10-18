@@ -1,62 +1,234 @@
 ### File modules and imports
 
-Each file is a module. `import Models from "models"` loads `models.agc` and gives it the alias `Models`, and `import Util from "../lib/util"` loads `../lib/util.agc`. The path has no extension. A path ending in `.agc`, an empty path, a path ending in `/`, or a last part containing a dot (`"models.rb"`, `"."`, `".."`) is `CHECK-IMPORT-PATH`, so a module file name has no dot apart from `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`. Writing the path first, as earlier versions did, is `PARSE-UNEXPECTED-TOKEN` at the string, with the help `write import Alias from "path"`.
+Each file is a module. `import Models from "models"` loads `models.agc` and
+gives it the alias `Models`, and `import Util from "../lib/util"` loads
+`../lib/util.agc`. The path has no extension. A path ending in `.agc`, an empty
+path, a path ending in `/`, or a last part containing a dot (`"models.rb"`,
+`"."`, `".."`) is `CHECK-IMPORT-PATH`, so a module file name has no dot apart
+from `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
+Writing the path first, as earlier versions did, is `PARSE-UNEXPECTED-TOKEN` at
+the string, with the help `write import Alias from "path"`.
 
-Relative paths resolve from the importing file, not the working directory. Each file is linked once. Cycles are `CHECK-IMPORT-CYCLE`, missing or unreadable files are `CHECK-IMPORT-IO`, and invalid paths are `CHECK-IMPORT-PATH`; each is located at the import.
+Relative paths resolve from the importing file, not the working directory. Each
+file is linked once. Cycles are `CHECK-IMPORT-CYCLE`, missing or unreadable
+files are `CHECK-IMPORT-IO`, and invalid paths are `CHECK-IMPORT-PATH`; each is
+located at the import.
 
-`export type Name = Type` exports a type alias, alongside exported structs, enums, functions and constants. An importer can use `Models.Names` or import it by name with `import {Names} from "models"`; type aliases can also be renamed to another capitalized name. Aliases can name private types in exported signatures; importers can use values of the alias but cannot name or construct the private type. Local names stay unqualified. Import aliases are uppercase and cannot collide with declarations, other aliases, imported names or builtin names. Imports cannot be re-exported.
+`export type Name = Type` exports a type alias, alongside exported structs,
+enums, functions and constants. An importer can use `Models.Names` or import it
+by name with `import {Names} from "models"`; type aliases can also be renamed to
+another capitalized name. Aliases can name private types in exported signatures;
+importers can use values of the alias but cannot name or construct the private
+type. Local names stay unqualified. Import aliases are uppercase and cannot
+collide with declarations, other aliases, imported names or builtin names.
+Imports cannot be re-exported.
 
 #### Importing names
 
-`import {User, greet} from "models"` brings the exported names `User` and `greet` into the file, to be used bare, wherever the name can stand: `User` in annotations and signatures, `User(name: "Ana")` to construct, `greet(user)` or `user |> greet()` to call (parentheses are required, as for a function of the file), `&greet` for a function value, and for an enum `Option`, the type `Option[T]`, the values `Option.None` and `Option.Some(value)` and the patterns `Option.Some(v)`. Variants are not imported on their own: import the enum. A function, struct, enum, type alias and constant can all be imported this way. The two forms mix: a file may import a module with an alias and, on another line, import names from it, and two lines with the same path are fine (the file is loaded once). A module imported only by names has no alias, so `Models.` is not available for it. One line does one thing: an alias and a name list are never on the same line.
+`import {User, greet} from "models"` brings the exported names `User` and
+`greet` into the file, to be used bare, wherever the name can stand: `User` in
+annotations and signatures, `User(name: "Ana")` to construct, `greet(user)` or
+`user |> greet()` to call (parentheses are required, as for a function of the
+file), `&greet` for a function value, and for an enum `Option`, the type
+`Option[T]`, the values `Option.None` and `Option.Some(value)` and the patterns
+`Option.Some(v)`. Variants are not imported on their own: import the enum. A
+function, struct, enum, type alias and constant can all be imported this way.
+The two forms mix: a file may import a module with an alias and, on another
+line, import names from it, and two lines with the same path are fine (the file
+is loaded once). A module imported only by names has no alias, so `Models.` is
+not available for it. One line does one thing: an alias and a name list are
+never on the same line.
 
-An entry may rename: `import {greet as hello, User as Account, Names as Labels} from "models"` binds local names for those exports. It exists so that two modules that export the same name can both be imported by name, and so that a long name can be shortened. A struct, enum or alias is renamed to a type name (a capital first letter), a function to a lowercase name, a constant to another constant name (capitals and underscores), and anything else is `CHECK-IMPORT-RENAME`, located at the new name. The original name is not bound unless another entry imports it, `{greet as hello, greet as hi}` binds two names for one function, and messages that print a name show the original name. `as` is contextual here too, and the original always comes first, so `{as as as_text}` renames a function called `as`.
+An entry may rename: `import {greet as hello, User as Account, Names as Labels}
+from "models"` binds local names for those exports. It exists so that two
+modules that export the same name can both be imported by name, and so that a
+long name can be shortened. A struct, enum or alias is renamed to a type name (a
+capital first letter), a function to a lowercase name, a constant to another
+constant name (capitals and underscores), and anything else is
+`CHECK-IMPORT-RENAME`, located at the new name. The original name is not bound
+unless another entry imports it, `{greet as hello, greet as hi}` binds two names
+for one function, and messages that print a name show the original name. `as` is
+contextual here too, and the original always comes first, so `{as as as_text}`
+renames a function called `as`.
 
-A name from an import list joins the names of the file, as a declaration does. It must not be the name of a declaration of the file, of an alias, of another imported name (in the same list or in another import line, and the same name from the same module twice), of a builtin function such as `puts` or `ok`, or of a reserved type name such as `Int` or `JSON`; each is `CHECK-REDEFINED-NAME`, located at the name in the braces (at the new name of a rename). The std-only names `HttpWire` and `LogRegistry` are reserved too, so they can be neither an alias nor an imported name. A name that the module does not export, or that is private, is `CHECK-IMPORT-NAME` at the name, with a `did you mean` help over the exports only. These checks run when the file is loaded, so they are reported at the import, before any use of the name. A path that cannot be loaded is still `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH` or `CHECK-IMPORT-CYCLE` at the import line. A name used as the wrong kind (an imported struct as the enum of a pattern) is `CHECK-TYPE-MISMATCH`, as with an alias.
+A name from an import list joins the names of the file, as a declaration does.
+It must not be the name of a declaration of the file, of an alias, of another
+imported name (in the same list or in another import line, and the same name
+from the same module twice), of a builtin function such as `puts` or `ok`, or of
+a reserved type name such as `Int` or `JSON`; each is `CHECK-REDEFINED-NAME`,
+located at the name in the braces (at the new name of a rename). The std-only
+names `HttpWire` and `LogRegistry` are reserved too, so they can be neither an
+alias nor an imported name. A name that the module does not export, or that is
+private, is `CHECK-IMPORT-NAME` at the name, with a `did you mean` help over the
+exports only. These checks run when the file is loaded, so they are reported at
+the import, before any use of the name. A path that cannot be loaded is still
+`CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH` or `CHECK-IMPORT-CYCLE` at the import
+line. A name used as the wrong kind (an imported struct as the enum of a
+pattern) is `CHECK-TYPE-MISMATCH`, as with an alias.
 
-A module imported by name counts as imported for the privacy rule of `value.with(...)` (section 6): the file may update every exported struct of that module, not only the ones it names. Imported names are not re-exported, and unused names are not reported.
+A module imported by name counts as imported for the privacy rule of
+`value.with(...)` (section 6): the file may update every exported struct of that
+module, not only the ones it names. Imported names are not re-exported, and
+unused names are not reported.
 
 #### Constants
 
-`export LIMIT = 100` makes a constant visible, and `import {LIMIT} from "limits"` brings it in by name, like any other exported name (it can be renamed to another constant name: `import {LIMIT as MAX_ITEMS} from "limits"`). A constant is read by its bare name, wherever an expression can stand, in the file that declares it and in a file that imports it by name; it is not reached through an alias. `Limits.LIMIT` is `CHECK-IMPORT-NAME` at the member, with the help `write import {LIMIT} from "limits", then use LIMIT` (a typo of a constant through an alias suggests `import {NAME}`), so a module that wants to offer a value through its alias exports a function. An imported name must not collide with a constant of the file, and two constants of the same name are `CHECK-REDEFINED-NAME`, as for any declaration. An unexported constant is private: importing it is `CHECK-IMPORT-NAME`. A constant is never changed, so there is no shared state between modules: the value an importer reads is the value the declaring file computed. Only the constants that a function reachable from `main` reads (and the constants those read) are set up, before `main` runs; a constant nothing reads never runs.
+`export LIMIT = 100` makes a constant visible, and `import {LIMIT} from
+"limits"` brings it in by name, like any other exported name (it can be renamed
+to another constant name: `import {LIMIT as MAX_ITEMS} from "limits"`). A
+constant is read by its bare name, wherever an expression can stand, in the file
+that declares it and in a file that imports it by name; it is not reached
+through an alias. `Limits.LIMIT` is `CHECK-IMPORT-NAME` at the member, with the
+help `write import {LIMIT} from "limits", then use LIMIT` (a typo of a constant
+through an alias suggests `import {NAME}`), so a module that wants to offer a
+value through its alias exports a function. An imported name must not collide
+with a constant of the file, and two constants of the same name are
+`CHECK-REDEFINED-NAME`, as for any declaration. An unexported constant is
+private: importing it is `CHECK-IMPORT-NAME`. A constant is never changed, so
+there is no shared state between modules: the value an importer reads is the
+value the declaring file computed. Only the constants that a function reachable
+from `main` reads (and the constants those read) are set up, before `main` runs;
+a constant nothing reads never runs.
 
-Every file keeps the declaration order of section 5: imports, then constants, then types, then `export def`, then private `def`. An imported file out of order is `CHECK-DECL-ORDER`, located in that file.
+Every file keeps the declaration order of section 5: imports, then constants,
+then types, then `export def`, then private `def`. An imported file out of order
+is `CHECK-DECL-ORDER`, located in that file.
 
-Only the root file supplies the executable `main() -> Void`; imported `main` functions do not run. Imported calls and tasks share the program's step budget and resource ownership. The CLI and `agentica test` use the same loader. There are no wildcard imports, package registry, mutable module state, nested modules or receiver attachment. `as` and `from` are contextual in imports, not reserved.
+Only the root file supplies the executable `main() -> Void`; imported `main`
+functions do not run. Imported calls and tasks share the program's step budget
+and resource ownership. The CLI and `agentica test` use the same loader. There
+are no wildcard imports, package registry, mutable module state, nested modules
+or receiver attachment. `as` and `from` are contextual in imports, not reserved.
 
 #### Standard library and external libraries
 
-- `import Queue from "std/queue"` loads the standard library embedded at build time. Nothing needs to be installed, and local files or external roots cannot shadow it. Embedded modules may use relative imports inside `std/`.
-- `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in order: `agc_libs/` beside the root program (not beside a dependency); the absolute roots in `AGENTICA_PATH` (`:`-separated, `;` on Windows), in order; `$XDG_DATA_HOME/agentica/lib/` (default `~/.local/share/agentica/lib/`; on Windows `%LOCALAPPDATA%/agentica/lib/`); then `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/` (none on Windows).
+- `import Queue from "std/queue"` loads the standard library embedded at build
+  time. Nothing needs to be installed, and local files or external roots cannot
+  shadow it. Embedded modules may use relative imports inside `std/`.
+- `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in order:
+  `agc_libs/` beside the root program (not beside a dependency); the absolute
+  roots in `AGENTICA_PATH` (`:`-separated, `;` on Windows), in order;
+  `$XDG_DATA_HOME/agentica/lib/` (default `~/.local/share/agentica/lib/`; on
+  Windows `%LOCALAPPDATA%/agentica/lib/`); then `/usr/local/share/agentica/lib/`
+  and `/usr/share/agentica/lib/` (none on Windows).
 
-The first existing file wins, and an error in that file does not fall back to another root. Empty `AGENTICA_PATH` entries are ignored; a relative entry is `CHECK-IMPORT-PATH`. Library paths use forward slashes and reject empty, `.`, `..`, backslash and colon components. After symlink resolution, the target must stay inside its root. These checks apply to namespaced imports only: imports are not a filesystem sandbox. A missing module is `CHECK-IMPORT-IO`. Diagnostics inside an embedded module name its source, such as `std/queue.agc`.
+The first existing file wins, and an error in that file does not fall back to
+another root. Empty `AGENTICA_PATH` entries are ignored; a relative entry is
+`CHECK-IMPORT-PATH`. Library paths use forward slashes and reject empty, `.`,
+`..`, backslash and colon components. After symlink resolution, the target must
+stay inside its root. These checks apply to namespaced imports only: imports are
+not a filesystem sandbox. A missing module is `CHECK-IMPORT-IO`. Diagnostics
+inside an embedded module name its source, such as `std/queue.agc`.
 
 #### String queue (`std/queue`)
 
-`std/queue` is written in Agentica; its signatures are in [`library/data-structures/queue.md`](../../site/content/library/data-structures/queue.md). Push adds at the back and pop removes the oldest value. Pop and peek on an empty queue return an error Result. Inputs are never changed: continue with the returned queue or `Popped.remaining`. Empty strings and duplicates are valid. There are no user generics and no blocking cross-task operations. `push`, `pop`, `peek`, `size` and `empty?` are O(n) with the current list operations; no constant-time FIFO is promised.
+`std/queue` is written in Agentica; its signatures are in
+[`library/data-structures/queue.md`][agentica-link-1].
+Push adds at the back and pop removes the oldest value. Pop and peek on an empty
+queue return an error Result. Inputs are never changed: continue with the
+returned queue or `Popped.remaining`. Empty strings and duplicates are valid.
+There are no user generics and no blocking cross-task operations. `push`, `pop`,
+`peek`, `size` and `empty?` are O(n) with the current list operations; no
+constant-time FIFO is promised.
 
 #### Binary data (`std/binary`)
 
-`std/binary` reads and writes binary numbers in a `List[Int]` of bytes, each item in `0 .. 255`, the list that `IO.read_bytes`, `File.read_bytes` and the other `*_bytes` builtins use. It is written in Agentica on the `Int` and `Float` bit builtins; its signatures are in [`library/text-and-data/binary.md`](../../site/content/library/text-and-data/binary.md). With the alias `Binary`:
+`std/binary` reads and writes binary numbers in a `List[Int]` of bytes, each
+item in `0 .. 255`, the list that `IO.read_bytes`, `File.read_bytes` and the
+other `*_bytes` builtins use. It is written in Agentica on the `Int` and `Float`
+bit builtins; its signatures are in
+[`library/text-and-data/binary.md`][agentica-link-2].
+With the alias `Binary`:
 
-- `Binary.read_u8`, `read_i8`, and `read_{u16,i16,u32,i32,u64,i64}_{be,le}` take `(data: List[Int], offset: Int)` and return `Result[Int]`. `Binary.read_f32_{be,le}` and `read_f64_{be,le}` return `Result[Float]`. `_be` is big-endian (network order), `_le` is little-endian, and signed types use two's complement. A reader never halts: a bad `offset`, a non-byte item, or a `u64` with the top bit set is an `error(...)`. The `offset` is zero-based and may be any `Int`.
-- `Binary.write_u8`, `write_i8`, and `write_{u16,i16,u32,i32,u64}_{be,le}` take a value and return `Result[List[Int]]`, an error when the value is outside the type's range. `Binary.write_i64_{be,le}`, `write_f32_{be,le}` and `write_f64_{be,le}` cannot fail and return a plain `List[Int]`. `write_f32_*` rounds to binary32; every NaN is written as the canonical NaN (`Float.to_bits`, `Float.to_bits32`).
-- `Binary.concat(parts: List[List[Int]]) -> List[Int]` joins any number of parts in order, in O(n log k) for n bytes in k parts. `Binary.frame(payload: List[Int]) -> Result[List[Int]]` puts the payload's 4-byte big-endian length in front of it (an error above `4294967295` items). `Binary.read_frame_length(data, offset, max) -> Result[Int]` reads that length and returns an error above `max`, so a reader can reject a hostile length before it reads the body.
-- `Int` is signed, so a `u64` above `9223372036854775807` is not an `Int`: `read_u64_*` returns an error for it and `write_u64_*` rejects a negative value. Use `read_i64_*` and `write_i64_*` for all 64 bits. Every `ok` of an integer reader writes back to the same bytes; a float reader does too, except that a NaN pattern other than the canonical one comes back canonical.
-- Errors are checked in this order and the first that applies is returned: a negative `max` (`read_frame_length` only), an `offset` below zero or above `data.size - n`, the first item by index that is not a byte, the `u64` top bit, a writer's value outside its type, a payload over `4294967295` items, a frame length above `max`. Messages are lowercase with no final period: `u32 at offset 10 is outside a list of length 12`, `value 300 at index 2 is not a byte`, `u64 at offset 0 does not fit in Int`, `value 70000 does not fit in u16`, `payload of 4294967296 bytes does not fit in a u32 length`, `frame length 70000 is above the limit 65536`, `frame limit -1 is negative`.
-- Writers return new lists and no buffer is ever changed. Offset writers into an existing list and the compact `Bytes` type are not part of the module.
+- `Binary.read_u8`, `read_i8`, and `read_{u16,i16,u32,i32,u64,i64}_{be,le}` take
+  `(data: List[Int], offset: Int)` and return `Result[Int]`.
+  `Binary.read_f32_{be,le}` and `read_f64_{be,le}` return `Result[Float]`. `_be`
+  is big-endian (network order), `_le` is little-endian, and signed types use
+  two's complement. A reader never halts: a bad `offset`, a non-byte item, or a
+  `u64` with the top bit set is an `error(...)`. The `offset` is zero-based and
+  may be any `Int`.
+- `Binary.write_u8`, `write_i8`, and `write_{u16,i16,u32,i32,u64}_{be,le}` take
+  a value and return `Result[List[Int]]`, an error when the value is outside the
+  type's range. `Binary.write_i64_{be,le}`, `write_f32_{be,le}` and
+  `write_f64_{be,le}` cannot fail and return a plain `List[Int]`. `write_f32_*`
+  rounds to binary32; every NaN is written as the canonical NaN
+  (`Float.to_bits`, `Float.to_bits32`).
+- `Binary.concat(parts: List[List[Int]]) -> List[Int]` joins any number of parts
+  in order, in O(n log k) for n bytes in k parts. `Binary.frame(payload:
+  List[Int]) -> Result[List[Int]]` puts the payload's 4-byte big-endian length
+  in front of it (an error above `4294967295` items).
+  `Binary.read_frame_length(data, offset, max) -> Result[Int]` reads that length
+  and returns an error above `max`, so a reader can reject a hostile length
+  before it reads the body.
+- `Int` is signed, so a `u64` above `9223372036854775807` is not an `Int`:
+  `read_u64_*` returns an error for it and `write_u64_*` rejects a negative
+  value. Use `read_i64_*` and `write_i64_*` for all 64 bits. Every `ok` of an
+  integer reader writes back to the same bytes; a float reader does too, except
+  that a NaN pattern other than the canonical one comes back canonical.
+- Errors are checked in this order and the first that applies is returned: a
+  negative `max` (`read_frame_length` only), an `offset` below zero or above
+  `data.size - n`, the first item by index that is not a byte, the `u64` top
+  bit, a writer's value outside its type, a payload over `4294967295` items, a
+  frame length above `max`. Messages are lowercase with no final period: `u32 at
+  offset 10 is outside a list of length 12`, `value 300 at index 2 is not a
+  byte`, `u64 at offset 0 does not fit in Int`, `value 70000 does not fit in
+  u16`, `payload of 4294967296 bytes does not fit in a u32 length`, `frame
+  length 70000 is above the limit 65536`, `frame limit -1 is negative`.
+- Writers return new lists and no buffer is ever changed. Offset writers into an
+  existing list and the compact `Bytes` type are not part of the module.
 
 #### TOML (`std/toml`)
 
-`std/toml` reads and writes TOML 1.0 documents. It is written in Agentica; its signatures and examples are in [`library/text-and-data/toml.md`](../../site/content/library/text-and-data/toml.md). With the alias `Toml`:
+`std/toml` reads and writes TOML 1.0 documents. It is written in Agentica; its
+signatures and examples are in
+[`library/text-and-data/toml.md`][agentica-link-3].
+With the alias `Toml`:
 
-- `export enum Value` models TOML's own values: `Str(String)`, `Int(Int)`, `Float(Float)`, `Bool(Bool)`, `DateTime(String)`, `Array(List[Value])` and `Table(Map[String, Value])`. The enum names itself in its payloads. A `DateTime` keeps the text as written (offset date-time, local date-time, local date, local time) and the module checks that it is a valid date-time; a leap second (`:60`) is accepted and every fractional digit is kept. A float whose magnitude is above the largest float reads as `inf`. An `Int` is a signed 64-bit integer, and a value outside that range is a parse error.
-- `Toml.parse(text: String) -> Result[Value]` accepts all of TOML 1.0 and nothing else. The root is always a `Table`, which keeps the first-insertion order of its keys. A CRLF counts as one LF. The redefinition rules of the specification are errors: a duplicate key, a table defined twice, extending an inline table or a static array, a dotted key against a `[header]`, and `[[a]]` against a static array or a table.
-- A parse error is `line L, column C: ` followed by lowercase text with no final period. Lines and columns count from 1 and a column counts characters. Arrays and inline tables nest at most 256 levels and a key has at most 256 parts; a deeper input is an error at the opening bracket or the key. No input halts the program.
-- `Toml.encode(value: Value) -> Result[String]` writes a `Table` as a document with a final newline, and any other root is an error. In each table the plain `key = value` lines come first, then `[a.b]` sections, then arrays that hold only tables as `[[a.b]]` sections, each group in `Map` insertion order. Keys that are not bare keys are quoted, and a `DateTime` that is not a valid date-time is an error. `Toml.parse` of the output gives back the same values, but the key order of a `Map` may be regrouped (plain entries first). A table path over 256 parts or an inline value nested over 256 levels is an error, as for `parse`, and so is a `to_json` value nested over 2,048 levels; none halts.
-- `Toml.to_json(value: Value) -> Result[Json]` converts a value for `JSON.decode(JSON.encode(json), T)`. A `DateTime` becomes its string, an integer stays an integer and a float stays a float, and `inf` or `nan` is an error.
-- `Toml.get(value: Value, path: String) -> Result[Value]` reads a dotted path of keys; a segment of plain digits (no sign, no leading zero) indexes an array.
+- `export enum Value` models TOML's own values: `Str(String)`, `Int(Int)`,
+  `Float(Float)`, `Bool(Bool)`, `DateTime(String)`, `Array(List[Value])` and
+  `Table(Map[String, Value])`. The enum names itself in its payloads. A
+  `DateTime` keeps the text as written (offset date-time, local date-time, local
+  date, local time) and the module checks that it is a valid date-time; a leap
+  second (`:60`) is accepted and every fractional digit is kept. A float whose
+  magnitude is above the largest float reads as `inf`. An `Int` is a signed
+  64-bit integer, and a value outside that range is a parse error.
+- `Toml.parse(text: String) -> Result[Value]` accepts all of TOML 1.0 and
+  nothing else. The root is always a `Table`, which keeps the first-insertion
+  order of its keys. A CRLF counts as one LF. The redefinition rules of the
+  specification are errors: a duplicate key, a table defined twice, extending an
+  inline table or a static array, a dotted key against a `[header]`, and `[[a]]`
+  against a static array or a table.
+- A parse error is `line L, column C: ` followed by lowercase text with no final
+  period. Lines and columns count from 1 and a column counts characters. Arrays
+  and inline tables nest at most 256 levels and a key has at most 256 parts; a
+  deeper input is an error at the opening bracket or the key. No input halts the
+  program.
+- `Toml.encode(value: Value) -> Result[String]` writes a `Table` as a document
+  with a final newline, and any other root is an error. In each table the plain
+  `key = value` lines come first, then `[a.b]` sections, then arrays that hold
+  only tables as `[[a.b]]` sections, each group in `Map` insertion order. Keys
+  that are not bare keys are quoted, and a `DateTime` that is not a valid
+  date-time is an error. `Toml.parse` of the output gives back the same values,
+  but the key order of a `Map` may be regrouped (plain entries first). A table
+  path over 256 parts or an inline value nested over 256 levels is an error, as
+  for `parse`, and so is a `to_json` value nested over 2,048 levels; none halts.
+- `Toml.to_json(value: Value) -> Result[Json]` converts a value for
+  `JSON.decode(JSON.encode(json), T)`. A `DateTime` becomes its string, an
+  integer stays an integer and a float stays a float, and `inf` or `nan` is an
+  error.
+- `Toml.get(value: Value, path: String) -> Result[Value]` reads a dotted path of
+  keys; a segment of plain digits (no sign, no leading zero) indexes an array.
 
 #### BDD steps (`std/bdd`)
 
-`std/bdd` is the step API of `agentica test`, written in Agentica. Most `BDD.*` functions take the context first and return it; see [`library/testing/bdd.md`](../../site/content/library/testing/bdd.md) and [`bdd.md`](../bdd.md). `BDD.Context` can be named but not built: a context exists only inside a step, so use the context that a call returns. The modules `std/bdd/gherkin`, `std/bdd/match`, `std/test/report` and `std/test/runner` are internal to `agentica test` and unsupported.
+`std/bdd` is the step API of `agentica test`, written in Agentica. Most `BDD.*`
+functions take the context first and return it; see
+[`library/testing/bdd.md`](../../site/content/library/testing/bdd.md) and
+[`bdd.md`](../bdd.md). `BDD.Context` can be named but not built: a context
+exists only inside a step, so use the context that a call returns. The modules
+`std/bdd/gherkin`, `std/bdd/match`, `std/test/report` and `std/test/runner` are
+internal to `agentica test` and unsupported.
+
+[agentica-link-1]: ../../site/content/library/data-structures/queue.md
+[agentica-link-2]: ../../site/content/library/text-and-data/binary.md
+[agentica-link-3]: ../../site/content/library/text-and-data/toml.md

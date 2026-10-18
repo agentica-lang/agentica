@@ -29,4 +29,5 @@ values = []            # Missing expected type for the empty list.
 puts "hello"           # The call requires parentheses.
 ```
 
-These statements are shown as function body fragments. At the top level they would also be invalid because they are not declarations.
+These statements are shown as function body fragments. At the top level they
+would also be invalid because they are not declarations.

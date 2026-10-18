@@ -1,18 +1,109 @@
 # Front-end recipes and gotchas
 
-Step lists for common front-end changes (keyword, AST node, syntax, diagnostic, stage, tests), the lexer gotchas of this repo, and how to read a failure. Read before editing `compiler/`.
+Step lists for common front-end changes (keyword, AST node, syntax, diagnostic,
+stage, tests), the lexer gotchas of this repo, and how to read a failure. Read
+before editing `compiler/`.
 
 ## The front end in Agentica
 
-`compiler/` is the front end and the only one: the Racket front end that came first was deleted after the bootstrap (the git tag `bootstrap-racket` keeps it, and the frozen goldens below were written by it). Every language change (syntax, checker rule, builtin row, builtin record or enum entry, registry line, std-only or reserved name, message text) is made there, with a golden case. Some rules came in after the freeze of the first front end and are worth knowing: `CHECK-DECL-ORDER` (the fixed declaration order of a file; `declarations.agc` and `check_register.agc`); `value.with(...)` (15c): a syntax form, the checker rules, a privacy list in the linker and the `STRUCT_WITH` opcode, because `compiler/` uses immutable struct updates; the import forms of 44a0-1: `import Alias from "path"` and `import {a, B as C} from "path"` (`ImportDecl` has `alias` and `names`; the linker has the `named` table, the collision, `CHECK-IMPORT-NAME` and `CHECK-IMPORT-RENAME` checks, bare names rewritten to linked names, the `.with` privacy set), where the path-first form was removed in 44a0-2 (`PARSE-UNEXPECTED-TOKEN` at the string, with the help `write import Alias from "path"`), and the checker never sees an import; the module constants of 44a2 (the paragraph "Module constants" below); default parameter values (15a, §25.1; the paragraph "Default parameter values" below); and `CHECK-TOO-DEEP` (step 4): the checker stops at 1,000 levels of expressions and statements, because the parser limit does not bound the depth of the tree and the checker recurses on it within the VM call limit of 10,000.
+`compiler/` is the front end and the only one: the Racket front end that came
+first was deleted after the bootstrap (the git tag `bootstrap-racket` keeps it,
+and the frozen goldens below were written by it). Every language change (syntax,
+checker rule, builtin row, builtin record or enum entry, registry line, std-only
+or reserved name, message text) is made there, with a golden case. Some rules
+came in after the freeze of the first front end and are worth knowing:
+`CHECK-DECL-ORDER` (the fixed declaration order of a file; `declarations.agc`
+and `check_register.agc`); `value.with(...)` (15c): a syntax form, the checker
+rules, a privacy list in the linker and the `STRUCT_WITH` opcode, because
+`compiler/` uses immutable struct updates; the import forms of 44a0-1: `import
+Alias from "path"` and `import {a, B as C} from "path"` (`ImportDecl` has
+`alias` and `names`; the linker has the `named` table, the collision,
+`CHECK-IMPORT-NAME` and `CHECK-IMPORT-RENAME` checks, bare names rewritten to
+linked names, the `.with` privacy set), where the path-first form was removed in
+44a0-2 (`PARSE-UNEXPECTED-TOKEN` at the string, with the help `write import
+Alias from "path"`), and the checker never sees an import; the module constants
+of 44a2 (the paragraph "Module constants" below); default parameter values (15a,
+§25.1; the paragraph "Default parameter values" below); and `CHECK-TOO-DEEP`
+(step 4): the checker stops at 1,000 levels of expressions and statements,
+because the parser limit does not bound the depth of the tree and the checker
+recurses on it within the VM call limit of 10,000.
 
-`compiler/` holds the Agentica front end, one stage per PR in the order of 35.4. So far it has the lexer, the parser, the module linker, the checker, the lowering and the bytecode writer: `source.agc`, `token.agc` and `diagnostic.agc` (spans, tokens and diagnostics as data), `lexer.agc`, `unicode.agc` with the hand-edited `unicode_table.agc` (the graphic ranges, from Racket's `char-graphic?` once, Unicode 17.0, for the text of `LEX-UNEXPECTED-CHAR`), and the entry `lex.agc` with `lex_text.agc`. Every entry and the module loader read a file through `source_file.agc` : strict UTF-8, no size limit, and `LEX-INVALID-UTF8` at the first bad byte (35.4). The parser is `ast.agc`, `parse_base.agc` and `parser.agc`, with the entry `parse.agc` and `parse_text.agc`; `text.agc` holds the quoting and span printing both text forms share. The linker is described after the parser below. In a `compiler/` file the order is: imports and module doc, structs and enums, exported functions, private functions (declaration order does not matter in Agentica, so the order is only for the reader). Code follows 35.5: build lists with `push` and strings with `join`, and use loops, not recursion over the input. `lexer.agc` is a `while` over the index with a `case` on the character class and mutable locals. The arms for names, operators, brackets and line breaks do their work in place and the rare ones (strings, numbers, docs) call `scan_*` functions that return a `Diag.Outcome`: a call costs several VM steps and the lexer makes a token every 5 characters or so, so `lex` is about 190 lines (it relaxes the target of about 60 lines; the speed pass of `docs/vm-benchmarks.md` halved the steps of the lexer this way). The text is a `List[String]` of characters (`text.split("")`, not codes: `Set[String]` tests cost the same as `Set[Int]`) followed by three sentinels `""`, so a scan or a look-ahead of up to two characters has no bounds test, and every stop set holds `""`. The tables (character classes by character, name, number and string-stop characters, `WORD_ACTIONS`, the `Op` values of the operators) are module constants, built once; calls cost more than assignments on the VM, so measure before changing the style of a hot function (a tail-recursive `step(state)` form with `state.with(...)` was measured and was about 3-6% slower). `lex` keeps the last frame and the size of the delimiter stack in two locals (`top` with `ROOT` for an empty stack, `depth`) and the column as `index + column_base`; keep them in step with `delimiters` and `line_start` wherever those change. A comment or doc line ends at the length of its line (`Input.lines`), unless the text has a CR. The measured costs are in `.agents/skills/agentica-programming/references/performance.md`. Positions and offsets count characters.
+`compiler/` holds the Agentica front end, one stage per PR in the order of 35.4.
+So far it has the lexer, the parser, the module linker, the checker, the
+lowering and the bytecode writer: `source.agc`, `token.agc` and `diagnostic.agc`
+(spans, tokens and diagnostics as data), `lexer.agc`, `unicode.agc` with the
+hand-edited `unicode_table.agc` (the graphic ranges, from Racket's
+`char-graphic?` once, Unicode 17.0, for the text of `LEX-UNEXPECTED-CHAR`), and
+the entry `lex.agc` with `lex_text.agc`. Every entry and the module loader read
+a file through `source_file.agc` : strict UTF-8, no size limit, and
+`LEX-INVALID-UTF8` at the first bad byte (35.4). The parser is `ast.agc`,
+`parse_base.agc` and `parser.agc`, with the entry `parse.agc` and
+`parse_text.agc`; `text.agc` holds the quoting and span printing both text forms
+share. The linker is described after the parser below. In a `compiler/` file the
+order is: imports and module doc, structs and enums, exported functions, private
+functions (declaration order does not matter in Agentica, so the order is only
+for the reader). Code follows 35.5: build lists with `push` and strings with
+`join`, and use loops, not recursion over the input. `lexer.agc` is a `while`
+over the index with a `case` on the character class and mutable locals. The arms
+for names, operators, brackets and line breaks do their work in place and the
+rare ones (strings, numbers, docs) call `scan_*` functions that return a
+`Diag.Outcome`: a call costs several VM steps and the lexer makes a token every
+5 characters or so, so `lex` is about 190 lines (it relaxes the target of about
+60 lines; the speed pass of `docs/vm-benchmarks.md` halved the steps of the
+lexer this way). The text is a `List[String]` of characters (`text.split("")`,
+not codes: `Set[String]` tests cost the same as `Set[Int]`) followed by three
+sentinels `""`, so a scan or a look-ahead of up to two characters has no bounds
+test, and every stop set holds `""`. The tables (character classes by character,
+name, number and string-stop characters, `WORD_ACTIONS`, the `Op` values of the
+operators) are module constants, built once; calls cost more than assignments on
+the VM, so measure before changing the style of a hot function (a tail-recursive
+`step(state)` form with `state.with(...)` was measured and was about 3-6%
+slower). `lex` keeps the last frame and the size of the delimiter stack in two
+locals (`top` with `ROOT` for an empty stack, `depth`) and the column as `index
++ column_base`; keep them in step with `delimiters` and `line_start` wherever
+those change. A comment or doc line ends at the length of its line
+(`Input.lines`), unless the text has a CR. The measured costs are in
+`.agents/skills/agentica-programming/references/performance.md`. Positions and
+offsets count characters.
 
-The lexer's output has a text form, one line per token (`kind start-end "lexeme" value`, spans as `offset:line:column`, `=` when the value is the lexeme) or one `ERROR` line. The golden is the output of the original Racket printer, removed in step 8d-3. `compiler/lex.agc` prints the same for each file in `System.args()`, after a `== path` line. Token kinds are Strings in `compiler/`; they must match the kind list in `references/stages.md`, because the parser compares them. Goldens are in `tests/fixtures/frontend/lexer/` (`NAME.input` and `NAME.tokens`); `.input` files keep their bytes (`-text` in `.gitattributes`). They hold the message and help text on purpose: 35.2 keeps the texts equal, an exception to "tests assert codes, not messages". They are not tied to live files. The comparison with the original lexer is frozen (`frozen/lexer/`, step 8c).
+The lexer's output has a text form, one line per token (`kind start-end "lexeme"
+value`, spans as `offset:line:column`, `=` when the value is the lexeme) or one
+`ERROR` line. The golden is the output of the original Racket printer, removed
+in step 8d-3. `compiler/lex.agc` prints the same for each file in
+`System.args()`, after a `== path` line. Token kinds are Strings in `compiler/`;
+they must match the kind list in `references/stages.md`, because the parser
+compares them. Goldens are in `tests/fixtures/frontend/lexer/` (`NAME.input` and
+`NAME.tokens`); `.input` files keep their bytes (`-text` in `.gitattributes`).
+They hold the message and help text on purpose: 35.2 keeps the texts equal, an
+exception to "tests assert codes, not messages". They are not tied to live
+files. The comparison with the original lexer is frozen (`frozen/lexer/`, step
+8c).
 
-The parser has a text form too: one node per line, two spaces of indent per level, `role: kind #id start-offset:line:column-stop-offset:line:column attrs`, the root as `program #id span`. Spans print as `offset:line:column-offset:line:column`. Attributes are `name="x"`, ` op=plus op-span=SPAN`, ` value=int:N`, `float:bits:N` (signed IEEE bits), `string:"..."`, `bool:true` or `nil`, ` piped=true|false`, ` type-parameters=["T"]`, ` bindings=["a",-,*]` (a name, `_` as `-`, a nested pattern as `*` with its own `nested:` child line, in order; the arm's `guard:` child line only when it has a guard), ` doc="..."` and ` module-doc="..."`. An `import-decl` prints ` path="x" alias="Mod"`, or ` path="x" names=[...]` with each name as `"A"@SPAN` and a rename as `"A"@SPAN as "B"@SPAN`. The else part of an `if` is a line `else:`, and text parts of a string interpolation are `part: text "..."`. A failure prints the lexer's `ERROR CODE SPAN "message" "help"|-` line (a `LEX-` error passes through). `compiler/parse.agc` prints the text form for each file argument.
+The parser has a text form too: one node per line, two spaces of indent per
+level, `role: kind #id start-offset:line:column-stop-offset:line:column attrs`,
+the root as `program #id span`. Spans print as
+`offset:line:column-offset:line:column`. Attributes are `name="x"`, ` op=plus
+op-span=SPAN`, ` value=int:N`, `float:bits:N` (signed IEEE bits),
+`string:"..."`, `bool:true` or `nil`, ` piped=true|false`, `
+type-parameters=["T"]`, ` bindings=["a",-,*]` (a name, `_` as `-`, a nested
+pattern as `*` with its own `nested:` child line, in order; the arm's `guard:`
+child line only when it has a guard), ` doc="..."` and ` module-doc="..."`. An
+`import-decl` prints ` path="x" alias="Mod"`, or ` path="x" names=[...]` with
+each name as `"A"@SPAN` and a rename as `"A"@SPAN as "B"@SPAN`. The else part of
+an `if` is a line `else:`, and text parts of a string interpolation are `part:
+text "..."`. A failure prints the lexer's `ERROR CODE SPAN "message" "help"|-`
+line (a `LEX-` error passes through). `compiler/parse.agc` prints the text form
+for each file argument.
 
-Node ids are dense, start at 0 and follow post-order: a child has a smaller id than its parent, siblings count in source order, and the `program` node has the last id. The Agentica parser builds trees bottom-up, so it gives ids as it goes; the original printer numbered by a post-order walk. Docs are a `doc` field on the declaration, field, variant and export nodes and `module_doc` on `Program`. Ids restart per call: `Parser.parse(tokens, first_id)` numbers from `first_id`, and `Ast.next_free_id(program)` is the first id for the next file, so the modules of step 3 can share one numbering (`compiler/parse.agc --first-id=N` and `--continue`) test it).
+Node ids are dense, start at 0 and follow post-order: a child has a smaller id
+than its parent, siblings count in source order, and the `program` node has the
+last id. The Agentica parser builds trees bottom-up, so it gives ids as it goes;
+the original printer numbered by a post-order walk. Docs are a `doc` field on
+the declaration, field, variant and export nodes and `module_doc` on `Program`.
+Ids restart per call: `Parser.parse(tokens, first_id)` numbers from `first_id`,
+and `Ast.next_free_id(program)` is the first id for the next file, so the
+modules of step 3 can share one numbering (`compiler/parse.agc --first-id=N` and
+`--continue`) test it).
 
 The 44c parser tables are module constants: `NESTING_LIMIT`, `LEVELS` and
 `COMPOUND_OPERATORS`, plus `LITERAL_KINDS`; do not rebuild these tables in
@@ -24,27 +115,243 @@ checker, `check_types.agc` uses local aliases for its repeated AST and resolved
 types, and `check_stmt.payload_types` shows a guarded match on nested enum
 constructors.
 
-Parser goldens are in `tests/fixtures/frontend/parser/` (`NAME.input` and `NAME.ast`): valid files for every node kind, one `err-*` file per `PARSE-` diagnostic site, and `deep-*` files for the nesting limit. The parser stops with `PARSE-TOO-DEEP` when the nesting passes 1,000 levels (counted in each statement, expression, prefix operator and type, and each link of a chain, where what follows the k-th link starts k levels deeper); the parser needs a bound well inside the VM's call depth (10,000 frames, up to about 8 frames per level; equality and comparison add no level but cost frames, so the tightest shape, calls with comparisons inside, overflows at 1.25 times the limit; the parser's stack is not shared with later passes). It bounds the parser's calls, not the depth of the tree (see `references/stages.md`). The Agentica parser takes `(env, pos, ids)` and returns a `Result` with the new position and the next id; a failure is a packed diagnostic in the `Result` error, so `try` stops at the first error.
+Parser goldens are in `tests/fixtures/frontend/parser/` (`NAME.input` and
+`NAME.ast`): valid files for every node kind, one `err-*` file per `PARSE-`
+diagnostic site, and `deep-*` files for the nesting limit. The parser stops with
+`PARSE-TOO-DEEP` when the nesting passes 1,000 levels (counted in each
+statement, expression, prefix operator and type, and each link of a chain, where
+what follows the k-th link starts k levels deeper); the parser needs a bound
+well inside the VM's call depth (10,000 frames, up to about 8 frames per level;
+equality and comparison add no level but cost frames, so the tightest shape,
+calls with comparisons inside, overflows at 1.25 times the limit; the parser's
+stack is not shared with later passes). It bounds the parser's calls, not the
+depth of the tree (see `references/stages.md`). The Agentica parser takes `(env,
+pos, ids)` and returns a `Result` with the new position and the next id; a
+failure is a packed diagnostic in the `Result` error, so `try` stops at the
+first error.
 
-The module linker (step 3) is `modules.agc` (the loader: it walks the imports with an explicit stack in a fixed order, so ids and the first failure are stable), `resolve_import.agc` and `import_path.agc` (`std/`, `pkg/` and relative resolution, the import path rules), `resolve.agc` and `rewrite.agc` (the linked name of every name), `linker.agc` (`Linker.link_file`, `Linker.program`), with `declarations.agc` (also `CHECK-DECL-ORDER`), `suggest.agc` (the "did you mean" help), `link_env.agc` (`Env` and `Settings`: the `stdlib/` folder and the environment variables, passed in, never read inside) and `link_failure.agc` (a failure is a packed diagnostic with its file, because a `Span` has no file). The name tables it needs (reserved type names, bare builtins, builtin enums, std-only modules) come from the builtin catalog, described below. Names imported by name are the `named` table of a `Module` (local name to a `Named`: the module key and the original name). `modules.agc` fills it when the file the import names has finished loading, because the checks need its exports: the frame keeps the key of that file in `pending`, and the next step binds the names (`bind_names`) before the frame goes on to its next import. `Resolve.resolve` and `Rewrite` read the table, `Linker.visible_structs` adds the files of the table to the `.with` privacy set, `Declarations.import_line` renders the import line for the `CHECK-IMPORT-PATH` helps, and `Suggest.unknown_import_help` is the help of `CHECK-IMPORT-NAME` for both `Alias.name` and an imported name. The loader and the rewrite use no mutable state: a `Walk` struct (updated with `.with`) goes through a tail-recursive loop, and the rewrite recurses on the tree (about one VM call per level, so trees deeper than about 9,900 levels overflow; `docs/future/35-self-hosting.md`, 35.9).
+The module linker (step 3) is `modules.agc` (the loader: it walks the imports
+with an explicit stack in a fixed order, so ids and the first failure are
+stable), `resolve_import.agc` and `import_path.agc` (`std/`, `pkg/` and relative
+resolution, the import path rules), `resolve.agc` and `rewrite.agc` (the linked
+name of every name), `linker.agc` (`Linker.link_file`, `Linker.program`), with
+`declarations.agc` (also `CHECK-DECL-ORDER`), `suggest.agc` (the "did you mean"
+help), `link_env.agc` (`Env` and `Settings`: the `stdlib/` folder and the
+environment variables, passed in, never read inside) and `link_failure.agc` (a
+failure is a packed diagnostic with its file, because a `Span` has no file). The
+name tables it needs (reserved type names, bare builtins, builtin enums,
+std-only modules) come from the builtin catalog, described below. Names imported
+by name are the `named` table of a `Module` (local name to a `Named`: the module
+key and the original name). `modules.agc` fills it when the file the import
+names has finished loading, because the checks need its exports: the frame keeps
+the key of that file in `pending`, and the next step binds the names
+(`bind_names`) before the frame goes on to its next import. `Resolve.resolve`
+and `Rewrite` read the table, `Linker.visible_structs` adds the files of the
+table to the `.with` privacy set, `Declarations.import_line` renders the import
+line for the `CHECK-IMPORT-PATH` helps, and `Suggest.unknown_import_help` is the
+help of `CHECK-IMPORT-NAME` for both `Alias.name` and an imported name. The
+loader and the rewrite use no mutable state: a `Walk` struct (updated with
+`.with`) goes through a tail-recursive loop, and the rewrite recurses on the
+tree (about one VM call per level, so trees deeper than about 9,900 levels
+overflow; `docs/future/35-self-hosting.md`, 35.9).
 
-Module constants (44a2-1; §44) are a declaration node `ConstDecl` (`name`, optional `type`, `value`, `exported`, `span`; `Decl.Constant(ConstDecl)` in `ast.agc`) and a read node `ConstRef` (`name`, `span`; `Expr.ConstRef`) that only the linker makes. The parser reads a constant at the top level when a `TYPE_NAME` is followed by `=` or `:` (`constant_start?`), raises `PARSE-CONSTANT-NAME` for a name that is not `UPPER_SNAKE_CASE` (`constant_name?`) and lets a constant follow another constant, after `export` or a doc block, with no blank line. `NAME.x` and `NAME.x(...)` parse as module calls; `NAME.with(...)` is read as a struct update on the name. The linker (`rewrite.agc`) makes the receiver `ConstRef` and the node a `FieldAccess` when the call had no parentheses and no arguments (a block counts as an argument), otherwise a `MethodCall`; the parser keeps the parenthesized bit of a call for that. `Mod.NAME` on a constant is `CHECK-IMPORT-NAME`; an unknown name in capitals (a `TypeName` that no declaration, import, alias or reserved type owns) is `CHECK-UNKNOWN-NAME` from the linker, with a did-you-mean over the constants the file can read (`Resolve.unknown_constant?`), because only the linker knows the local names of named imports; the parser reads `NAME.with(field: x)` as a struct update only when `field:` follows the parenthesis, so `Alias.with(1)` stays a call; a named import of a constant joins the names of the file (the rename check wants a constant name for a constant). The new receiver needs a node id of its own: the linker numbers it `Linked.ids` (twice the parser ids when any module declares a constant) so that the id is the parser total plus the id of the call, and the frozen id sizes (`frozen/modules/ids.sha256`) keep the numbering of the original printer. The checker reads both trees through one walk (`compiler/const_walk.agc`) so the order and the cycle span agree; `check_const.agc` (`Constants.check_all`) runs after `main` and before the function bodies. The initialization order is `Checked.constants`. The check text ends with `constant-order ["A","B"]` when the program has constants. The lowering plans the constants (`lower_const.agc`, 44a2-2; `vm-lowering.md` has the layout). A spec case for a constant goes through `--json check` on a file, which links first, because the checker does not see a bare `NAME` otherwise.
+Module constants (44a2-1; §44) are a declaration node `ConstDecl` (`name`,
+optional `type`, `value`, `exported`, `span`; `Decl.Constant(ConstDecl)` in
+`ast.agc`) and a read node `ConstRef` (`name`, `span`; `Expr.ConstRef`) that
+only the linker makes. The parser reads a constant at the top level when a
+`TYPE_NAME` is followed by `=` or `:` (`constant_start?`), raises
+`PARSE-CONSTANT-NAME` for a name that is not `UPPER_SNAKE_CASE`
+(`constant_name?`) and lets a constant follow another constant, after `export`
+or a doc block, with no blank line. `NAME.x` and `NAME.x(...)` parse as module
+calls; `NAME.with(...)` is read as a struct update on the name. The linker
+(`rewrite.agc`) makes the receiver `ConstRef` and the node a `FieldAccess` when
+the call had no parentheses and no arguments (a block counts as an argument),
+otherwise a `MethodCall`; the parser keeps the parenthesized bit of a call for
+that. `Mod.NAME` on a constant is `CHECK-IMPORT-NAME`; an unknown name in
+capitals (a `TypeName` that no declaration, import, alias or reserved type owns)
+is `CHECK-UNKNOWN-NAME` from the linker, with a did-you-mean over the constants
+the file can read (`Resolve.unknown_constant?`), because only the linker knows
+the local names of named imports; the parser reads `NAME.with(field: x)` as a
+struct update only when `field:` follows the parenthesis, so `Alias.with(1)`
+stays a call; a named import of a constant joins the names of the file (the
+rename check wants a constant name for a constant). The new receiver needs a
+node id of its own: the linker numbers it `Linked.ids` (twice the parser ids
+when any module declares a constant) so that the id is the parser total plus the
+id of the call, and the frozen id sizes (`frozen/modules/ids.sha256`) keep the
+numbering of the original printer. The checker reads both trees through one walk
+(`compiler/const_walk.agc`) so the order and the cycle span agree;
+`check_const.agc` (`Constants.check_all`) runs after `main` and before the
+function bodies. The initialization order is `Checked.constants`. The check text
+ends with `constant-order ["A","B"]` when the program has constants. The
+lowering plans the constants (`lower_const.agc`, 44a2-2; `vm-lowering.md` has
+the layout). A spec case for a constant goes through `--json check` on a file,
+which links first, because the checker does not see a bare `NAME` otherwise.
 
-Default parameter values (15a; §25.1) are `Param.default` (an optional expression: the parser reads any expression after `=`, and the id of the parameter follows the ids of its default). The linker rewrites the default with the names of the declaring module (`rewrite.agc`), so a copy at a call site in another file never depends on the caller's aliases. The checker checks the order and the shape of each default when it registers the function (`check_defaults.agc`: `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`) and the type of each default with the function (`CHECK-TYPE-MISMATCH`, recorded by node id like any expression). `defaults.agc` has the `Shape` of a function (fewest arguments, all parameters, whether a last `Fn` takes the last argument or the block) and the two functions that say which parameter an argument fills and which argument fills a parameter; the checker (`check_plain_call`, with the range in `CHECK-ARITY`) and the lowering (`lower_argument` in `lower_expr.agc`) both use them, so they agree. `Signature.shape` carries it in the checker, and `Lowering.Fill` (function name to shape, parameters, file and file index) in the lowering, which lowers a missing argument as the default expression with the instructions of the declaring file, so the bytecode and the VM do not change. Function values (`&f`, `.call`) keep the type with every parameter. `compiler/` must not use defaults until `bootstrap/stage0.agcb` can compile them (the two-step refresh of §35.3).
+Default parameter values (15a; §25.1) are `Param.default` (an optional
+expression: the parser reads any expression after `=`, and the id of the
+parameter follows the ids of its default). The linker rewrites the default with
+the names of the declaring module (`rewrite.agc`), so a copy at a call site in
+another file never depends on the caller's aliases. The checker checks the order
+and the shape of each default when it registers the function
+(`check_defaults.agc`: `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`) and the
+type of each default with the function (`CHECK-TYPE-MISMATCH`, recorded by node
+id like any expression). `defaults.agc` has the `Shape` of a function (fewest
+arguments, all parameters, whether a last `Fn` takes the last argument or the
+block) and the two functions that say which parameter an argument fills and
+which argument fills a parameter; the checker (`check_plain_call`, with the
+range in `CHECK-ARITY`) and the lowering (`lower_argument` in `lower_expr.agc`)
+both use them, so they agree. `Signature.shape` carries it in the checker, and
+`Lowering.Fill` (function name to shape, parameters, file and file index) in the
+lowering, which lowers a missing argument as the default expression with the
+instructions of the declaring file, so the bytecode and the VM do not change.
+Function values (`&f`, `.call`) keep the type with every parameter. `compiler/`
+must not use defaults until `bootstrap/stage0.agcb` can compile them (the
+two-step refresh of §35.3).
 
-The linked program has a text form too: `program #id span` for the root, then `module "path"` for each file that declares something, with its declarations (no `export`, linked names) one level deeper, in the node text form of the parser with ids that start at 0 inside each file (the numbers of the real, shared numbering are checked by `link.agc --ids`, which lists `module "path" first=N next=N` for every file read, empty ones too). A struct update prints ` visible=[...]`, the privacy rule of `.with` as the sorted names the file may update (data in `StructUpdate.visible`). A failure prints the parser's `ERROR` line with ` file="path"` added. Paths are the stored names of the .agcb (`Paths.stored_name`): relative to the folder of the root file, with `..` parts for a file above it, `./std/NAME.agc` for a user file under a `std/` folder, or `std/NAME.agc` for a standard module. The original printer parsed each file again to give every rewritten node the id and doc of the node at the same place in the original tree; the Agentica linker numbers them as it rewrites. The goldens are fixture folders in `tests/fixtures/frontend/modules/` (`NAME/root.agc`, the files it imports, an optional `NAME/fixture.env` of `AGENTICA_PATH=` and `XDG_DATA_HOME=` lines where `@/` is the fixture folder, an optional `NAME/fixture.links` of `LINK TARGET` lines that the tests make as symbolic links in a copy, because a checkout may not keep links, and `NAME.linked`); the tests run with no `AGENTICA_PATH` and a user data folder that does not exist unless the fixture sets them.
+The linked program has a text form too: `program #id span` for the root, then
+`module "path"` for each file that declares something, with its declarations (no
+`export`, linked names) one level deeper, in the node text form of the parser
+with ids that start at 0 inside each file (the numbers of the real, shared
+numbering are checked by `link.agc --ids`, which lists `module "path" first=N
+next=N` for every file read, empty ones too). A struct update prints `
+visible=[...]`, the privacy rule of `.with` as the sorted names the file may
+update (data in `StructUpdate.visible`). A failure prints the parser's `ERROR`
+line with ` file="path"` added. Paths are the stored names of the .agcb
+(`Paths.stored_name`): relative to the folder of the root file, with `..` parts
+for a file above it, `./std/NAME.agc` for a user file under a `std/` folder, or
+`std/NAME.agc` for a standard module. The original printer parsed each file
+again to give every rewritten node the id and doc of the node at the same place
+in the original tree; the Agentica linker numbers them as it rewrites. The
+goldens are fixture folders in `tests/fixtures/frontend/modules/`
+(`NAME/root.agc`, the files it imports, an optional `NAME/fixture.env` of
+`AGENTICA_PATH=` and `XDG_DATA_HOME=` lines where `@/` is the fixture folder, an
+optional `NAME/fixture.links` of `LINK TARGET` lines that the tests make as
+symbolic links in a copy, because a checkout may not keep links, and
+`NAME.linked`); the tests run with no `AGENTICA_PATH` and a user data folder
+that does not exist unless the fixture sets them.
 
-The builtin catalog (step 4a) is data and lookups in Agentica: `types.agc` (the `Type` enum and `to_text`), `builtin_model.agc` (`Builtin`, `Named`, `Record`, `EnumDef`, and the `Rule` enum, the rule symbols in CamelCase), `builtins.agc` (module-constant lookup maps and sets, plus `lookup`, `ref` with an arity, `std_only_name?`, `signature`) and `builtins_data.agc`, whose module constants hold the builtin rows, records, enums and reserved names; the table data was generated once from Racket and is edited by hand now. `tests/test_frontend_catalog.py` compares the Agentica catalog (`compiler/catalog.agc`) with a golden in `tests/fixtures/frontend/catalog/` (`python3 tools/refreeze.py --stage catalog` rewrites it) and checks that every implementation key is in `VM_BUILTINS`. A new rule symbol also needs a variant in `Rule` and an arm in `rule_name` or `later_rule_name` of `compiler/catalog_text.agc` (the golden test fails on a missing one: the text prints `?`). `suggest.agc` has `did_you_mean`.
+The builtin catalog (step 4a) is data and lookups in Agentica: `types.agc` (the
+`Type` enum and `to_text`), `builtin_model.agc` (`Builtin`, `Named`, `Record`,
+`EnumDef`, and the `Rule` enum, the rule symbols in CamelCase), `builtins.agc`
+(module-constant lookup maps and sets, plus `lookup`, `ref` with an arity,
+`std_only_name?`, `signature`) and `builtins_data.agc`, whose module constants
+hold the builtin rows, records, enums and reserved names; the table data was
+generated once from Racket and is edited by hand now.
+`tests/test_frontend_catalog.py` compares the Agentica catalog
+(`compiler/catalog.agc`) with a golden in `tests/fixtures/frontend/catalog/`
+(`python3 tools/refreeze.py --stage catalog` rewrites it) and checks that every
+implementation key is in `VM_BUILTINS`. A new rule symbol also needs a variant
+in `Rule` and an arm in `rule_name` or `later_rule_name` of
+`compiler/catalog_text.agc` (the golden test fails on a missing one: the text
+prints `?`). `suggest.agc` has `did_you_mean`.
 
-The checker (step 4b) is `check_register.agc` (enums, structs, variants, functions and `main`), `check_stmt.agc` (functions, blocks, statements, `case`), `check_expr.agc` (expressions, operators, `CHECK-TOO-DEEP`), `check_call.agc` and `check_method.agc` (calls, enum constructors, struct construction and update, methods and fields), the builtin rules in `check_rules.agc`, `check_list.agc`, `check_collections.agc` and `check_args.agc`, the help texts in `check_help.agc`, `check_names.agc`, `check_flow.agc` and `check_unused.agc`, the state in `check_state.agc`, `check_types.agc` and `check_failure.agc`, and `checker.agc` (`Checker.check(linked)`: `Checking.Done(Checked)` with the types and resolutions, or `Failed(Problem)`). State is an immutable `Cx` (declarations, help tables, file texts) and a threaded `St`; names in scope are one persistent `Map` that a scope snapshots and restores, never deleting from it. The cycle between expressions and statements goes through the function field `Cx.expression`. A failure is a packed `Problem` in the `Result` error. `Type.Unknown` is the expected type when there is none. `Checked.types` is a `List[Type]` indexed by node id (a `Map` took 50% longer), and what a method call or field access resolved to is `Checked.resolved` (`Resolved.Self|Text|Inspect|Call`); a builtin method is checked as the call of the builtin with the receiver as an `Ast.Expr.Typed` first argument (made by the checker, never by the parser). `check_tables.agc` holds the method and help tables as data, edited by hand (generated once from the Racket checker); `frozen/check/tables.expected` is a copy, and a fast test fails when they differ (refreeze). Add a builtin rule: its `Rule` variant in `builtin_model.agc` (a test checks it against the rows), an arm in `check_rule` (`check_rules.agc`) and a fixture that calls it (a fast test fails when a rule has no fixture).
+The checker (step 4b) is `check_register.agc` (enums, structs, variants,
+functions and `main`), `check_stmt.agc` (functions, blocks, statements, `case`),
+`check_expr.agc` (expressions, operators, `CHECK-TOO-DEEP`), `check_call.agc`
+and `check_method.agc` (calls, enum constructors, struct construction and
+update, methods and fields), the builtin rules in `check_rules.agc`,
+`check_list.agc`, `check_collections.agc` and `check_args.agc`, the help texts
+in `check_help.agc`, `check_names.agc`, `check_flow.agc` and `check_unused.agc`,
+the state in `check_state.agc`, `check_types.agc` and `check_failure.agc`, and
+`checker.agc` (`Checker.check(linked)`: `Checking.Done(Checked)` with the types
+and resolutions, or `Failed(Problem)`). State is an immutable `Cx`
+(declarations, help tables, file texts) and a threaded `St`; names in scope are
+one persistent `Map` that a scope snapshots and restores, never deleting from
+it. The cycle between expressions and statements goes through the function field
+`Cx.expression`. A failure is a packed `Problem` in the `Result` error.
+`Type.Unknown` is the expected type when there is none. `Checked.types` is a
+`List[Type]` indexed by node id (a `Map` took 50% longer), and what a method
+call or field access resolved to is `Checked.resolved`
+(`Resolved.Self|Text|Inspect|Call`); a builtin method is checked as the call of
+the builtin with the receiver as an `Ast.Expr.Typed` first argument (made by the
+checker, never by the parser). `check_tables.agc` holds the method and help
+tables as data, edited by hand (generated once from the Racket checker);
+`frozen/check/tables.expected` is a copy, and a fast test fails when they differ
+(refreeze). Add a builtin rule: its `Rule` variant in `builtin_model.agc` (a
+test checks it against the rows), an arm in `check_rule` (`check_rules.agc`) and
+a fixture that calls it (a fast test fails when a rule has no fixture).
 
-The check has a text form: the linked program of step 3 with ` type=DEBUG-TYPE` at the end of the line of each expression and block (`Types.debug_text`: `List(Int)`, `Struct(@2::Point)`), and ` resolved=self(T)|text(T)|inspect(T)|call("List.map", T)` on a method call or field access that names a builtin (`T` is the receiver's type); a failure is the `ERROR` line with ` expected="..." actual="..." callee="..." signature="..." labels=[SPAN "text", ...]` when present and ` file="path"`. `compiler/check.agc` prints this text. Goldens are `NAME.agc` (or a folder with a `root.agc`) and `NAME.checked` in `tests/fixtures/frontend/check/`: one per reachable `CHECK-` code, valid programs, and `rules.agc` for the rules. They hold the message and help text on purpose (35.2). The slow tier compares the Agentica checker with the frozen output of the original checker on the programs of the old checker test (`frozen/corpus/checker-programs.json`), `examples/`, `tests/fixtures/vm/`, the `std/` modules, `compiler/`, 1,500 mutated programs, trees around the nesting limit and a generated program of 1,000 functions.
+The check has a text form: the linked program of step 3 with ` type=DEBUG-TYPE`
+at the end of the line of each expression and block (`Types.debug_text`:
+`List(Int)`, `Struct(@2::Point)`), and `
+resolved=self(T)|text(T)|inspect(T)|call("List.map", T)` on a method call or
+field access that names a builtin (`T` is the receiver's type); a failure is the
+`ERROR` line with ` expected="..." actual="..." callee="..." signature="..."
+labels=[SPAN "text", ...]` when present and ` file="path"`. `compiler/check.agc`
+prints this text. Goldens are `NAME.agc` (or a folder with a `root.agc`) and
+`NAME.checked` in `tests/fixtures/frontend/check/`: one per reachable `CHECK-`
+code, valid programs, and `rules.agc` for the rules. They hold the message and
+help text on purpose (35.2). The slow tier compares the Agentica checker with
+the frozen output of the original checker on the programs of the old checker
+test (`frozen/corpus/checker-programs.json`), `examples/`, `tests/fixtures/vm/`,
+the `std/` modules, `compiler/`, 1,500 mutated programs, trees around the
+nesting limit and a generated program of 1,000 functions.
 
-Two tiers: the Agentica stages against the goldens are in `tests/test_frontend_<stage>.py` (fast); the frozen comparisons over the corpus, the 300 generated inputs, the boundary and large-file guards are `@slow`, which CI runs with `make test-slow`.
+Two tiers: the Agentica stages against the goldens are in
+`tests/test_frontend_<stage>.py` (fast); the frozen comparisons over the corpus,
+the 300 generated inputs, the boundary and large-file guards are `@slow`, which
+CI runs with `make test-slow`.
 
-The lowering (step 5) is `ir.agc` (the IR as data: `Instr` with an op, integer arguments, an immediate for `const`, a builtin name and the file index of its spans; a label is an `Instr` with the op `label`), `lower_tables.agc` (`VM_BUILTINS`, the operator tables, the builtin structs: constants, `tests/test_frontend_lower.py` compares `VM_BUILTINS` with the frozen copy `frozen/lower/vm-builtins.expected`, and `tests/test_frontend_catalog.py` checks that every catalog implementation key is in it), `lower_state.agc` (`Cx` with the `expression` and `block` function fields that break the module cycles, and `Fx`, the function being lowered: code, registers, labels, the block functions made so far), `lower_expr.agc`, `lower_data.agc`, `lower_stmt.agc`, `lower_scan.agc`, `lower_const.agc`, `lower_program.agc`, and `lowering.agc` (`Lowering.lower(linked, checked, catalog)`: `Lowered.Done(Ir.Program)` or `Failed(Problem)`). The function table (declared functions, kept constants, `<start>`, then blocks reserved in pre-order), the register discipline and the order the sources are first named must stay the same, because step 6 writes the bytes from this IR. `LOWER-UNSUPPORTED` and `LOWER-INTERNAL` cannot be reached from a checked program, so no fixture ends in a `LOWER-` code (the two error fixtures end in `CHECK-` and `CHECK-IMPORT-IO`). Lowering recurses on the tree with at most 3 VM frames for each level (the scans are loops), about 3,000 of the 10,000 frames at the 1,000 levels of `CHECK-TOO-DEEP`; `lower.agc --burn=N` starts the lowering N calls deeper to prove it. The text form is its own, not `--dump-ir` (it lacks the sources, the full spans and the JSON field types): `program SPAN entry=N globals=N`, `source N "path" chars=N`, `struct sN "Name" [...]`, `enum ...`, then `fnN "name" params=P captures=C slots=S [entry] @ SPAN` with `  LN:` labels and `    op ARGS @ SPAN` instructions (`rN` registers, `fnN`, `sN`, `vN`, `gN`, `LN`; constants as `int:N`, `float:bits:N`, quoted text); a failure is the `ERROR` line with ` file="path"`. Goldens are in `tests/fixtures/frontend/lower/` (`NAME.agc` or a folder with `root.agc`, and `NAME.ir`: 26 programs, one for each lowering path and every opcode, and two that end in an ERROR line (a check failure and an import failure)). The fast tier runs the goldens and `examples/`; the slow tier runs `tests/fixtures/vm/`, the programs of the old checker test, the `std/` modules, `compiler/`, the deep shapes and a generated program.
+The lowering (step 5) is `ir.agc` (the IR as data: `Instr` with an op, integer
+arguments, an immediate for `const`, a builtin name and the file index of its
+spans; a label is an `Instr` with the op `label`), `lower_tables.agc`
+(`VM_BUILTINS`, the operator tables, the builtin structs: constants,
+`tests/test_frontend_lower.py` compares `VM_BUILTINS` with the frozen copy
+`frozen/lower/vm-builtins.expected`, and `tests/test_frontend_catalog.py` checks
+that every catalog implementation key is in it), `lower_state.agc` (`Cx` with
+the `expression` and `block` function fields that break the module cycles, and
+`Fx`, the function being lowered: code, registers, labels, the block functions
+made so far), `lower_expr.agc`, `lower_data.agc`, `lower_stmt.agc`,
+`lower_scan.agc`, `lower_const.agc`, `lower_program.agc`, and `lowering.agc`
+(`Lowering.lower(linked, checked, catalog)`: `Lowered.Done(Ir.Program)` or
+`Failed(Problem)`). The function table (declared functions, kept constants,
+`<start>`, then blocks reserved in pre-order), the register discipline and the
+order the sources are first named must stay the same, because step 6 writes the
+bytes from this IR. `LOWER-UNSUPPORTED` and `LOWER-INTERNAL` cannot be reached
+from a checked program, so no fixture ends in a `LOWER-` code (the two error
+fixtures end in `CHECK-` and `CHECK-IMPORT-IO`). Lowering recurses on the tree
+with at most 3 VM frames for each level (the scans are loops), about 3,000 of
+the 10,000 frames at the 1,000 levels of `CHECK-TOO-DEEP`; `lower.agc --burn=N`
+starts the lowering N calls deeper to prove it. The text form is its own, not
+`--dump-ir` (it lacks the sources, the full spans and the JSON field types):
+`program SPAN entry=N globals=N`, `source N "path" chars=N`, `struct sN "Name"
+[...]`, `enum ...`, then `fnN "name" params=P captures=C slots=S [entry] @ SPAN`
+with `  LN:` labels and `    op ARGS @ SPAN` instructions (`rN` registers,
+`fnN`, `sN`, `vN`, `gN`, `LN`; constants as `int:N`, `float:bits:N`, quoted
+text); a failure is the `ERROR` line with ` file="path"`. Goldens are in
+`tests/fixtures/frontend/lower/` (`NAME.agc` or a folder with `root.agc`, and
+`NAME.ir`: 26 programs, one for each lowering path and every opcode, and two
+that end in an ERROR line (a check failure and an import failure)). The fast
+tier runs the goldens and `examples/`; the slow tier runs `tests/fixtures/vm/`,
+the programs of the old checker test, the `std/` modules, `compiler/`, the deep
+shapes and a generated program.
 
-The bytecode writer (step 6) is `bytecode_writer.agc` (`Writer.write(root_dir, program, version)`: `Written.Done(List[Int])` or `Failed(Problem)`; the version of the header is an input, `Settings.version`, from the `VERSION` file), `bytecode_function.agc` (one function: step runs merged and cut at 65,535, labels to instruction numbers, the constants, struct updates, builtins and spans interned in the order the code names them), `bytecode_types.agc` (the Types and Decodable sections), `bytecode_spans.agc` and `bytecode_pool.agc` (the interned tables, keyed by text), `bytecode_bytes.agc` (little-endian integers, UTF-8 and the chunk lists that `Binary.concat` of `std/binary` joins once; `compiler/` imports `std/binary`), `bytecode_tables.agc` (`FORMAT_VERSION`, the limits, `OPCODES`: `tests/test_frontend_bytecode.py` compares it with the frozen table and with `agc_opcode` in `vm/value.h`) and `bytecode_failure.agc`. The tables are filled while the functions are walked, so the functions are encoded first and the sections written in file order; a new opcode is added to `OPCODES` in `bytecode_tables.agc` and to `agc_opcode` in `vm/value.h`, in the same order. The runner `bytecode.agc` takes `ROOT -o OUT` pairs (flags as `lower.agc`, and `--version=V` for the header) and prints `== ROOT` then `wrote N bytes` or the `ERROR` line of the lowering text form, with no file written. `tests/test_frontend_bytecode.py` compares bytes, not a text form, with the frozen output of the original writer (hashes and sizes in `frozen/bytecode/`). Programs that no source gives (the limits of the format and `BYTECODE-INTERNAL`) are in `tests/fixtures/frontend/limits/limits.agc`, with the same scenarios frozen from the original writer. The writer is loops over the flat IR; only a JSON field type recurses, 1 VM frame for each level and at most 1,024 levels. `LinkText.stored` moved to `Paths.stored_file` (`import_path.agc`) for the writer's stored names.
+The bytecode writer (step 6) is `bytecode_writer.agc` (`Writer.write(root_dir,
+program, version)`: `Written.Done(List[Int])` or `Failed(Problem)`; the version
+of the header is an input, `Settings.version`, from the `VERSION` file),
+`bytecode_function.agc` (one function: step runs merged and cut at 65,535,
+labels to instruction numbers, the constants, struct updates, builtins and spans
+interned in the order the code names them), `bytecode_types.agc` (the Types and
+Decodable sections), `bytecode_spans.agc` and `bytecode_pool.agc` (the interned
+tables, keyed by text), `bytecode_bytes.agc` (little-endian integers, UTF-8 and
+the chunk lists that `Binary.concat` of `std/binary` joins once; `compiler/`
+imports `std/binary`), `bytecode_tables.agc` (`FORMAT_VERSION`, the limits,
+`OPCODES`: `tests/test_frontend_bytecode.py` compares it with the frozen table
+and with `agc_opcode` in `vm/value.h`) and `bytecode_failure.agc`. The tables
+are filled while the functions are walked, so the functions are encoded first
+and the sections written in file order; a new opcode is added to `OPCODES` in
+`bytecode_tables.agc` and to `agc_opcode` in `vm/value.h`, in the same order.
+The runner `bytecode.agc` takes `ROOT -o OUT` pairs (flags as `lower.agc`, and
+`--version=V` for the header) and prints `== ROOT` then `wrote N bytes` or the
+`ERROR` line of the lowering text form, with no file written.
+`tests/test_frontend_bytecode.py` compares bytes, not a text form, with the
+frozen output of the original writer (hashes and sizes in `frozen/bytecode/`).
+Programs that no source gives (the limits of the format and `BYTECODE-INTERNAL`)
+are in `tests/fixtures/frontend/limits/limits.agc`, with the same scenarios
+frozen from the original writer. The writer is loops over the flat IR; only a
+JSON field type recurses, 1 VM frame for each level and at most 1,024 levels.
+`LinkText.stored` moved to `Paths.stored_file` (`import_path.agc`) for the
+writer's stored names.
 
 ```sh
 dist/agentica compiler/lex.agc file.agc                    # the Agentica lexer's text form of a file
@@ -57,74 +364,205 @@ dist/agentica compiler/lower.agc --stdlib=$PWD/stdlib file.agc  # the Agentica l
 dist/agentica compiler/bytecode.agc --stdlib=$PWD/stdlib file.agc -o out.agcb  # the Agentica writer: links, checks, lowers and writes the .agcb (several `FILE -o OUT` pairs allowed)
 ```
 
-To add a case, put `NAME.input` in the folder and run `python3 tools/refreeze.py --stage lexer` (or `parser`): it writes the golden from the Agentica stage. A change to a ported stage reruns the test for that stage; review the golden diff.
+To add a case, put `NAME.input` in the folder and run `python3 tools/refreeze.py
+--stage lexer` (or `parser`): it writes the golden from the Agentica stage. A
+change to a ported stage reruns the test for that stage; review the golden diff.
 
 ### Frozen comparisons (step 8c)
 
-The slow tiers of the old `tests/frontend-*-test.rkt` files compared the Agentica stages with the live Racket stages. Step 8c froze every one of those comparisons, and step 8d-3 removed the rackunit files and the Racket writers (the tag `bootstrap-racket` keeps them), so the Python tests keep them (`docs/future/35-self-hosting.md` 35.10, phase 3). `tests/test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py` compile the stage of `compiler/` with the product CLI, run it on the VM and compare with `tests/fixtures/frontend/frozen/`; the fast cases are the ones that the rackunit fast tier compared live (bytes of the examples, id ranges, invalid UTF-8, the limit scenarios, node-id numbering), the rest are `@slow`. `tests/frontend_support.py` is the helper (`StageTestCase`, `assert_manifest`, `tree_listing`) and `tests/frontend_cases.py` holds the inputs that are a formula and are shared by two modules.
+The slow tiers of the old `tests/frontend-*-test.rkt` files compared the
+Agentica stages with the live Racket stages. Step 8c froze every one of those
+comparisons, and step 8d-3 removed the rackunit files and the Racket writers
+(the tag `bootstrap-racket` keeps them), so the Python tests keep them
+(`docs/future/35-self-hosting.md` 35.10, phase 3).
+`tests/test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py`
+compile the stage of `compiler/` with the product CLI, run it on the VM and
+compare with `tests/fixtures/frontend/frozen/`; the fast cases are the ones that
+the rackunit fast tier compared live (bytes of the examples, id ranges, invalid
+UTF-8, the limit scenarios, node-id numbering), the rest are `@slow`.
+`tests/frontend_support.py` is the helper (`StageTestCase`, `assert_manifest`,
+`tree_listing`) and `tests/frontend_cases.py` holds the inputs that are a
+formula and are shared by two modules.
 
-- `frozen/corpus/*.json` is the snapshot of the inputs: the `.agc` files of `examples/`, `stdlib/`, `tests/fixtures/` (without `frontend/modules/`) and `compiler/` at the freeze, the programs of the cases of the old checker test (also in `tests/fixtures/spec/checker-rest.json`) and the programs in the code blocks of the site. It is a fixed set: it does not follow those folders, so a new `stdlib/` file is not in it, and the `std/` modules the stages find are the snapshot's `stdlib/`.
-- Inputs from a seeded generator of the original tests (`lexer/generated.json`, `parser/generated.json`, `check/mutated.json`, `modules/mutated.json`) are checked in, because Python cannot draw the same numbers. Inputs that are a formula (nesting shapes, chains of 3,000 files, a file over 1 MiB, programs of 300 and 1,000 functions) are rebuilt by the Python test; the manifest records the SHA-256 of each input, and a rebuild that differs fails as "not the input the original writer used", which is a test bug.
-- A manifest `frozen/<stage>/<set>.sha256` has one line per input: the SHA-256 of the original output, its size, the SHA-256 of the input, the key. The outputs of the corpus are megabytes, so they are hashed; a mismatch prints the start of the Agentica output. A small output is kept as text (`*.expected`). A `.agcb` is its size and the SHA-256 of the file without the length and the text of the version (a release changes the version and must not change the freeze; the limit scenarios of `tests/fixtures/frontend/limits/limits.agc` leave the header out for the same reason), or the line the runner prints and `no file` for a failure. The id ranges of the linker are frozen as the sorted `name node-count` lines (`sizes_text`).
-- The original Racket stages wrote all of it once (`make frontend-freeze`, `make frontend-snapshot`, removed in step 8d-3). A changed output is frozen with `tools/refreeze.py` (below); the snapshot of the corpus is a fixed set of inputs and is not taken again.
-- Phase 2 (the Agentica output against the goldens next to the fixtures, `tests/fixtures/frontend/<stage>/`) lives in the same Python modules: "every input has a golden and no golden is left over", and the Agentica stage against each `.tokens`, `.ast`, `.linked`, `.checked`, `.ir` and the catalog golden. These cases use the live `stdlib/` (the goldens track it), while the frozen sets use the snapshot's.
-- The checks that read the Racket source are frozen as small lists, written once from it and compared by Python with the Agentica files: `frozen/lexer/graphic-ranges.expected` (the ranges of `char-graphic?`; `compiler/unicode_table.agc`, hand-edited now), `frozen/modules/stdlib-registry.expected` (the `std/` registry; a new `stdlib/` file is one more line), `frozen/check/tables.expected` (a copy of `compiler/check_tables.agc`), `frozen/check/codes.expected` (the `CHECK-` codes; `CHECK-INTERNAL`, `CHECK-MODULE-CONTEXT` and `CHECK-BLOCK-TYPE` no program reaches), `frozen/check/builtin-rules.expected` (the rule variant of each builtin; every variant must be used by a checker golden), `frozen/lower/vm-builtins.expected`, `frozen/catalog/rules.expected` (the `Rule` enum) and `frozen/bytecode/opcodes.expected`. When you change one of the Agentica tables on purpose (a new builtin, a new opcode), refreeze.
-- Accepted losses, because freezing them makes no sense: `compiler/builtins_data.agc` equal to a fresh generation from the Racket tables (106 KB; the catalog golden prints the same data, and the file is hand-edited); the section-fill and opcode coverage of the bytecode corpus is now read from the lowering goldens (`test_the_lowering_fixtures_fill_every_section_of_the_file`), which cannot tell the `types` and the `decodable` sections apart.
-- Fixtures that a Python test reads live, and so are frozen with what is derived from them: `tests/fixtures/frontend/modules/<name>/` (copied by `fixture_copy`; the node-id sizes `modules/ids.sha256` and the goldens hold their hashes as input hashes), `tests/fixtures/frontend/limits/limits.agc` (it imports the live `compiler/`, and its output is `bytecode/limits.expected`; the corpus test of the linker compiles it with the snapshot of `compiler/`), `tests/fixtures/frontend/parser/synthetic.input` and `hello.input` (the first-id and continue goldens `parser/first-id.expected`, `parser/continue-synthetic.expected`), `tests/fixtures/frontend/bytecode/*.agc` and the lowering fixtures (the `bytecode/fast.sha256` manifest). Editing one of these files, or a `compiler/` file that `limits.agc` imports, changes a frozen hash: run `tools/refreeze.py` and read the diff.
+- `frozen/corpus/*.json` is the snapshot of the inputs: the `.agc` files of
+  `examples/`, `stdlib/`, `tests/fixtures/` (without `frontend/modules/`) and
+  `compiler/` at the freeze, the programs of the cases of the old checker test
+  (also in `tests/fixtures/spec/checker-rest.json`) and the programs in the code
+  blocks of the site. It is a fixed set: it does not follow those folders, so a
+  new `stdlib/` file is not in it, and the `std/` modules the stages find are
+  the snapshot's `stdlib/`.
+- Inputs from a seeded generator of the original tests (`lexer/generated.json`,
+  `parser/generated.json`, `check/mutated.json`, `modules/mutated.json`) are
+  checked in, because Python cannot draw the same numbers. Inputs that are a
+  formula (nesting shapes, chains of 3,000 files, a file over 1 MiB, programs of
+  300 and 1,000 functions) are rebuilt by the Python test; the manifest records
+  the SHA-256 of each input, and a rebuild that differs fails as "not the input
+  the original writer used", which is a test bug.
+- A manifest `frozen/<stage>/<set>.sha256` has one line per input: the SHA-256
+  of the original output, its size, the SHA-256 of the input, the key. The
+  outputs of the corpus are megabytes, so they are hashed; a mismatch prints the
+  start of the Agentica output. A small output is kept as text (`*.expected`). A
+  `.agcb` is its size and the SHA-256 of the file without the length and the
+  text of the version (a release changes the version and must not change the
+  freeze; the limit scenarios of `tests/fixtures/frontend/limits/limits.agc`
+  leave the header out for the same reason), or the line the runner prints and
+  `no file` for a failure. The id ranges of the linker are frozen as the sorted
+  `name node-count` lines (`sizes_text`).
+- The original Racket stages wrote all of it once (`make frontend-freeze`, `make
+  frontend-snapshot`, removed in step 8d-3). A changed output is frozen with
+  `tools/refreeze.py` (below); the snapshot of the corpus is a fixed set of
+  inputs and is not taken again.
+- Phase 2 (the Agentica output against the goldens next to the fixtures,
+  `tests/fixtures/frontend/<stage>/`) lives in the same Python modules: "every
+  input has a golden and no golden is left over", and the Agentica stage against
+  each `.tokens`, `.ast`, `.linked`, `.checked`, `.ir` and the catalog golden.
+  These cases use the live `stdlib/` (the goldens track it), while the frozen
+  sets use the snapshot's.
+- The checks that read the Racket source are frozen as small lists, written once
+  from it and compared by Python with the Agentica files:
+  `frozen/lexer/graphic-ranges.expected` (the ranges of `char-graphic?`;
+  `compiler/unicode_table.agc`, hand-edited now),
+  `frozen/modules/stdlib-registry.expected` (the `std/` registry; a new
+  `stdlib/` file is one more line), `frozen/check/tables.expected` (a copy of
+  `compiler/check_tables.agc`), `frozen/check/codes.expected` (the `CHECK-`
+  codes; `CHECK-INTERNAL`, `CHECK-MODULE-CONTEXT` and `CHECK-BLOCK-TYPE` no
+  program reaches), `frozen/check/builtin-rules.expected` (the rule variant of
+  each builtin; every variant must be used by a checker golden),
+  `frozen/lower/vm-builtins.expected`, `frozen/catalog/rules.expected` (the
+  `Rule` enum) and `frozen/bytecode/opcodes.expected`. When you change one of
+  the Agentica tables on purpose (a new builtin, a new opcode), refreeze.
+- Accepted losses, because freezing them makes no sense:
+  `compiler/builtins_data.agc` equal to a fresh generation from the Racket
+  tables (106 KB; the catalog golden prints the same data, and the file is
+  hand-edited); the section-fill and opcode coverage of the bytecode corpus is
+  now read from the lowering goldens
+  (`test_the_lowering_fixtures_fill_every_section_of_the_file`), which cannot
+  tell the `types` and the `decodable` sections apart.
+- Fixtures that a Python test reads live, and so are frozen with what is derived
+  from them: `tests/fixtures/frontend/modules/<name>/` (copied by
+  `fixture_copy`; the node-id sizes `modules/ids.sha256` and the goldens hold
+  their hashes as input hashes), `tests/fixtures/frontend/limits/limits.agc` (it
+  imports the live `compiler/`, and its output is `bytecode/limits.expected`;
+  the corpus test of the linker compiles it with the snapshot of `compiler/`),
+  `tests/fixtures/frontend/parser/synthetic.input` and `hello.input` (the
+  first-id and continue goldens `parser/first-id.expected`,
+  `parser/continue-synthetic.expected`),
+  `tests/fixtures/frontend/bytecode/*.agc` and the lowering fixtures (the
+  `bytecode/fast.sha256` manifest). Editing one of these files, or a `compiler/`
+  file that `limits.agc` imports, changes a frozen hash: run `tools/refreeze.py`
+  and read the diff.
 
 ### Refreeze: `tools/refreeze.py`
 
-`python3 tools/refreeze.py` (standard library only) runs `tests.test_frontend_<stage>` with `AGENTICA_REFREEZE=1` for each stage, fast and slow tier (`--fast-only` skips the slow tier, `--stage lower` or `--stage lexer,parser` picks stages, `--jobs N` runs stages at a time). In that mode a comparison with a golden rewrites the golden from the Agentica output instead of failing, and logs it; the tool prints what changed: for a manifest, the entries (key, sizes, output and input hash prefixes) that changed, were added or removed, for a text golden a unified diff. All the other assertions (shape checks such as "this tree is a too-deep error", the coverage tests) still run and fail the stage. The tool freezes whatever the stages print, so read `git diff` and judge each change, as for any golden. A manifest keeps only hashes, so to see a changed output run the stage by hand (the commands above). `tests/test_frontend_refreeze.py` tests the rewrite path on a scratch copy.
+`python3 tools/refreeze.py` (standard library only) runs
+`tests.test_frontend_<stage>` with `AGENTICA_REFREEZE=1` for each stage, fast
+and slow tier (`--fast-only` skips the slow tier, `--stage lower` or `--stage
+lexer,parser` picks stages, `--jobs N` runs stages at a time). In that mode a
+comparison with a golden rewrites the golden from the Agentica output instead of
+failing, and logs it; the tool prints what changed: for a manifest, the entries
+(key, sizes, output and input hash prefixes) that changed, were added or
+removed, for a text golden a unified diff. All the other assertions (shape
+checks such as "this tree is a too-deep error", the coverage tests) still run
+and fail the stage. The tool freezes whatever the stages print, so read `git
+diff` and judge each change, as for any golden. A manifest keeps only hashes, so
+to see a changed output run the stage by hand (the commands above).
+`tests/test_frontend_refreeze.py` tests the rewrite path on a scratch copy.
 
-Stage order and `--jobs` matter. The default order is lexer, parser, modules, check, lower, catalog, bytecode. The lowering test that every opcode is lowered by a fixture reads `frozen/bytecode/opcodes.expected`, which the bytecode stage rewrites, so with a new opcode `lower` runs on the old table and `bytecode` writes the new one after it. Run the tool twice, or run `bytecode` first (`python3 tools/refreeze.py --stage bytecode`, then the rest). With `--jobs` above 1 the stages run at the same time and `lower` may read the table before or after `bytecode` has written it, so use `--jobs 1` when an opcode is new. The second run must print `nothing changed` for every stage.
+Stage order and `--jobs` matter. The default order is lexer, parser, modules,
+check, lower, catalog, bytecode. The lowering test that every opcode is lowered
+by a fixture reads `frozen/bytecode/opcodes.expected`, which the bytecode stage
+rewrites, so with a new opcode `lower` runs on the old table and `bytecode`
+writes the new one after it. Run the tool twice, or run `bytecode` first
+(`python3 tools/refreeze.py --stage bytecode`, then the rest). With `--jobs`
+above 1 the stages run at the same time and `lower` may read the table before or
+after `bytecode` has written it, so use `--jobs 1` when an opcode is new. The
+second run must print `nothing changed` for every stage.
 
-A stage whose tests were all skipped (a tool they need is missing) freezes nothing: the tool says so and exits 1, it does not print `nothing changed`.
+A stage whose tests were all skipped (a tool they need is missing) freezes
+nothing: the tool says so and exits 1, it does not print `nothing changed`.
 
-Two goldens have no Agentica source to rewrite them from, so refreeze never changes them and they need a hand edit: `frozen/check/codes.expected` (the `CHECK-` codes) and `frozen/check/builtin-rules.expected` (the rule variant of each builtin). Edit them in the same PR as the code or builtin that adds a line.
+Two goldens have no Agentica source to rewrite them from, so refreeze never
+changes them and they need a hand edit: `frozen/check/codes.expected` (the
+`CHECK-` codes) and `frozen/check/builtin-rules.expected` (the rule variant of
+each builtin). Edit them in the same PR as the code or builtin that adds a line.
 
 ## Common tasks
 
-The recipes below name `compiler/` files. A change to a stage runs the tests of that stage (`make test TESTS="tests/test_frontend_<stage>.py"`) and refreezes the goldens it changes on purpose.
+The recipes below name `compiler/` files. A change to a stage runs the tests of
+that stage (`make test TESTS="tests/test_frontend_<stage>.py"`) and refreezes
+the goldens it changes on purpose.
 
 ### Add a keyword or operator
 
-1. Add it to the constants of `compiler/lexer.agc`: a keyword to `WORD_ACTIONS` (1, 2 for a block opener, 3 for `end`), an operator to `OPERATOR_KINDS` and `SINGLE_LEXEMES` or `PAIR_LEXEMES`, with its characters in `CLASSES` (and `PAIR_SECONDS` for a new second character).
-2. If the parser must act on it, handle the kind in `compiler/parser.agc` (or `parse_base.agc`).
-3. Add a golden case (`NAME.input` in `tests/fixtures/frontend/lexer/`, then `python3 tools/refreeze.py --stage lexer`) and, when it affects syntax, a spec case in `tests/test_spec_<area>.py`.
-4. Run `make test TESTS="tests/test_frontend_lexer.py tests/test_frontend_parser.py"`.
+1. Add it to the constants of `compiler/lexer.agc`: a keyword to `WORD_ACTIONS`
+   (1, 2 for a block opener, 3 for `end`), an operator to `OPERATOR_KINDS` and
+   `SINGLE_LEXEMES` or `PAIR_LEXEMES`, with its characters in `CLASSES` (and
+   `PAIR_SECONDS` for a new second character).
+2. If the parser must act on it, handle the kind in `compiler/parser.agc` (or
+   `parse_base.agc`).
+3. Add a golden case (`NAME.input` in `tests/fixtures/frontend/lexer/`, then
+   `python3 tools/refreeze.py --stage lexer`) and, when it affects syntax, a
+   spec case in `tests/test_spec_<area>.py`.
+4. Run `make test TESTS="tests/test_frontend_lexer.py
+   tests/test_frontend_parser.py"`.
 
 ### Add an AST node
 
-1. Add the struct to `compiler/ast.agc` with `id` first and `span` last, and a variant in the `Expr`, `Stmt` or `Decl` enum.
-2. Construct it in `compiler/parser.agc` and set the span from the first token to the last consumed token (`Base.span_from`); give it the next free id. Teach the passes that walk the tree about it: `rewrite.agc`, `const_walk.agc`, the checker, the lowering and the text printer `parse_text.agc`.
-3. Add a parser golden (`NAME.input` in `tests/fixtures/frontend/parser/`, then `python3 tools/refreeze.py --stage parser`): it shows the node's fields and its span.
+1. Add the struct to `compiler/ast.agc` with `id` first and `span` last, and a
+   variant in the `Expr`, `Stmt` or `Decl` enum.
+2. Construct it in `compiler/parser.agc` and set the span from the first token
+   to the last consumed token (`Base.span_from`); give it the next free id.
+   Teach the passes that walk the tree about it: `rewrite.agc`,
+   `const_walk.agc`, the checker, the lowering and the text printer
+   `parse_text.agc`.
+3. Add a parser golden (`NAME.input` in `tests/fixtures/frontend/parser/`, then
+   `python3 tools/refreeze.py --stage parser`): it shows the node's fields and
+   its span.
 
 ### Add syntax
 
 1. Add tokens first if the syntax needs them.
 2. Add the AST node if no existing node fits.
-3. Write a parse function in `compiler/parser.agc` and call it from the right place: the statement parser for statements, the primary parser for expressions, the program parser for declarations.
-4. Add one valid test and one rejection test asserting the diagnostic code, in `tests/test_spec_<area>.py`.
+3. Write a parse function in `compiler/parser.agc` and call it from the right
+   place: the statement parser for statements, the primary parser for
+   expressions, the program parser for declarations.
+4. Add one valid test and one rejection test asserting the diagnostic code, in
+   `tests/test_spec_<area>.py`.
 5. Run `make test TESTS="tests/test_spec_<area>.py"` and the affected example.
 
 ### Add a diagnostic code
 
-1. Choose the stage prefix: `LEX-`, `PARSE-`, `CHECK-`, `LOWER-`, `BYTECODE-` or `RUNTIME-`.
-2. Raise it with the stage's failure helper (`Base.bail` in the parser, `Failure.problem` in the checker) and a token or position span.
-3. Test both the code and the location (`start` and `covers` of the `--json check` range), as `tests/test_spec_checker_rest.py` does.
+1. Choose the stage prefix: `LEX-`, `PARSE-`, `CHECK-`, `LOWER-`, `BYTECODE-` or
+   `RUNTIME-`.
+2. Raise it with the stage's failure helper (`Base.bail` in the parser,
+   `Failure.problem` in the checker) and a token or position span.
+3. Test both the code and the location (`start` and `covers` of the `--json
+   check` range), as `tests/test_spec_checker_rest.py` does.
 
 ### Add a pipeline stage
 
-1. Create `compiler/<stage>.agc` with one entry point that returns the next data or one diagnostic.
-2. Require the previous stage's data modules only; do not reach back into the CLI.
-3. Wire it into `compiler/pipeline.agc` after the previous stage, and add an entry program that prints its text form (like `check.agc`) with golden fixtures.
-4. Add `tests/test_frontend_<stage>.py` and `tests/test_spec_<area>.py`. `make test` discovers them automatically; CI needs no change.
+1. Create `compiler/<stage>.agc` with one entry point that returns the next data
+   or one diagnostic.
+2. Require the previous stage's data modules only; do not reach back into the
+   CLI.
+3. Wire it into `compiler/pipeline.agc` after the previous stage, and add an
+   entry program that prints its text form (like `check.agc`) with golden
+   fixtures.
+4. Add `tests/test_frontend_<stage>.py` and `tests/test_spec_<area>.py`. `make
+   test` discovers them automatically; CI needs no change.
 
 ### Add tests
 
-- Write a `tests/test_<area>.py` module that derives from `tests.agentica_test.TestCase`. A language rule goes through the CLI: write the program to a file and run `cli() + ["--json", "check", path]`, as `tests/test_spec_checker.py` does; assert the code and, when it matters, the start and the covered text of the range, never the message.
-- For many small programs, add cases to `tests/fixtures/spec/checker-rest.json` (a program as a list of lines, `code`, and the optional `start`, `covers`, `help`, `expected`, `actual`, `function`, `callee`, `labels`).
-- Cover the happy path, the error path, and the specific behavior the change introduces.
+- Write a `tests/test_<area>.py` module that derives from
+  `tests.agentica_test.TestCase`. A language rule goes through the CLI: write
+  the program to a file and run `cli() + ["--json", "check", path]`, as
+  `tests/test_spec_checker.py` does; assert the code and, when it matters, the
+  start and the covered text of the range, never the message.
+- For many small programs, add cases to `tests/fixtures/spec/checker-rest.json`
+  (a program as a list of lines, `code`, and the optional `start`, `covers`,
+  `help`, `expected`, `actual`, `function`, `callee`, `labels`).
+- Cover the happy path, the error path, and the specific behavior the change
+  introduces.
 
 ### Speed change to a stage (differential run against master)
 
@@ -152,55 +590,115 @@ change is recorded in `docs/vm-benchmarks.md`.
 
 ## Agentica gotchas
 
-- Positions count characters, line and column are 1-based, and span ends are exclusive. Keep that convention in new spans.
-- Declaration order does not matter to the language but `CHECK-DECL-ORDER` fixes it per file: imports, constants, structs and enums, `export def`, `def`. A `#` comment goes inside the body or above the `##` block, never between the block and its `def` (`PARSE-DETACHED-DOC`).
-- A function that fails returns a `Result` whose error is a packed diagnostic; `try` stops at the first one. There are no exceptions in a stage, and a value that cannot happen is a `*-INTERNAL` diagnostic.
-- The VM call depth is 10,000 frames: recurse on the tree only with a bounded depth (`CHECK-TOO-DEEP` bounds the checker and lowering), or use an explicit stack and loops.
-- `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`); a comparison of types needs `Types.same`, since an enum cannot be compared with `==`.
-- Build lists with `push` and strings with `join`; `s = s + piece` in a loop is quadratic.
+- Positions count characters, line and column are 1-based, and span ends are
+  exclusive. Keep that convention in new spans.
+- Declaration order does not matter to the language but `CHECK-DECL-ORDER` fixes
+  it per file: imports, constants, structs and enums, `export def`, `def`. A `#`
+  comment goes inside the body or above the `##` block, never between the block
+  and its `def` (`PARSE-DETACHED-DOC`).
+- A function that fails returns a `Result` whose error is a packed diagnostic;
+  `try` stops at the first one. There are no exceptions in a stage, and a value
+  that cannot happen is a `*-INTERNAL` diagnostic.
+- The VM call depth is 10,000 frames: recurse on the tree only with a bounded
+  depth (`CHECK-TOO-DEEP` bounds the checker and lowering), or use an explicit
+  stack and loops.
+- `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`); a comparison of
+  types needs `Types.same`, since an enum cannot be compared with `==`.
+- Build lists with `push` and strings with `join`; `s = s + piece` in a loop is
+  quadratic.
 
 
 ## Lexer gotcha: stray NL tokens
 
-The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including every blank/comment line, so extra lines between statements can leave more than one `NL` token. The grammar's `program` and `block` rules do not model this. The parser therefore skips stray `NL` at the top level and between statements. Keep that skip when adding statement forms, or valid files with comments between statements will fail to parse.
+The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including
+every blank/comment line, so extra lines between statements can leave more than
+one `NL` token. The grammar's `program` and `block` rules do not model this. The
+parser therefore skips stray `NL` at the top level and between statements. Keep
+that skip when adding statement forms, or valid files with comments between
+statements will fail to parse.
 
-Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK-LINE`, checked by the program parser from the NL tokens). A `##` doc block is one `DOC` token followed by the `NL` of its last line, and it does not count as a blank line: the check also fires when the next token is a `DOC`. A blank line and a `#` comment line both give one `NL`, so a `DOC` token carries what follows it (`DocBlock.next`) for the module-doc rule. The rule only fires when the next token starts a declaration or import, so stray text after `end` stays `PARSE-TOP-LEVEL-STATEMENT`. Inline test programs end each top-level `end` with `end\n\n`, so fragments can be joined safely.
+Top-level declarations need a blank line after their `end`
+(`PARSE-MISSING-BLANK-LINE`, checked by the program parser from the NL tokens).
+A `##` doc block is one `DOC` token followed by the `NL` of its last line, and
+it does not count as a blank line: the check also fires when the next token is a
+`DOC`. A blank line and a `#` comment line both give one `NL`, so a `DOC` token
+carries what follows it (`DocBlock.next`) for the module-doc rule. The rule only
+fires when the next token starts a declaration or import, so stray text after
+`end` stays `PARSE-TOP-LEVEL-STATEMENT`. Inline test programs end each top-level
+`end` with `end\n\n`, so fragments can be joined safely.
 
 ## Error handling
 
-- `make test TESTS="tests/test_<area>.py"` failure: read the failing test and subtest name (a spec case prints its program) and the code the CLI gave.
-- Smoke test exits 1: `dist/agentica` printed `file:line:column error[CODE]`, the message, and a source excerpt with a caret on stderr. That is a stage diagnostic, not a crash.
-- A `*-INTERNAL` diagnostic or a runtime error inside the front end (`RUNTIME-` with a trace in `compiler/`) means a stage assumed something false or indexed out of range. Find the token or index and turn it into a diagnostic; the roadmap requires Agentica diagnostics, never host tracebacks.
-- A stage unexpectedly returns a diagnostic: check the first-error rule and that the caller passes the failure on instead of going on.
+- `make test TESTS="tests/test_<area>.py"` failure: read the failing test and
+  subtest name (a spec case prints its program) and the code the CLI gave.
+- Smoke test exits 1: `dist/agentica` printed `file:line:column error[CODE]`,
+  the message, and a source excerpt with a caret on stderr. That is a stage
+  diagnostic, not a crash.
+- A `*-INTERNAL` diagnostic or a runtime error inside the front end (`RUNTIME-`
+  with a trace in `compiler/`) means a stage assumed something false or indexed
+  out of range. Find the token or index and turn it into a diagnostic; the
+  roadmap requires Agentica diagnostics, never host tracebacks.
+- A stage unexpectedly returns a diagnostic: check the first-error rule and that
+  the caller passes the failure on instead of going on.
 
 ## Comments
 
-- `compiler/*.agc`: a `#` comment where the code is complex or has a rule that is easy to break (name the rule, such as the span or NL rule). Each exported `def`, `struct` and `enum` you add or touch gets a `##` doc block, as in `stdlib/queue.agc` (do not add docs to code you do not touch); the file's first doc block, followed by a blank line, is its module doc (`docs/grammar/05-syntax.md`). A `#` comment goes inside the body or above the `##` block, never between the block and its `def` (that is `PARSE-DETACHED-DOC`).
+- `compiler/*.agc`: a `#` comment where the code is complex or has a rule that
+  is easy to break (name the rule, such as the span or NL rule). Each exported
+  `def`, `struct` and `enum` you add or touch gets a `##` doc block, as in
+  `stdlib/queue.agc` (do not add docs to code you do not touch); the file's
+  first doc block, followed by a blank line, is its module doc
+  (`docs/grammar/05-syntax.md`). A `#` comment goes inside the body or above the
+  `##` block, never between the block and its `def` (that is
+  `PARSE-DETACHED-DOC`).
 
 ## Code style
 
-- Lines in `compiler/*.agc` are at most 119 characters, comments included (`compiler/agentica.toml`, `[style]`), checked by `tests/test_style_line_width.py`. Break a call or list one item per line with a trailing comma, wrap a long expression in parentheses, and flow a doc block over several `##` lines.
-- Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into a few sentence-sized pieces joined with `+`, never one piece per line.
-- Several steps on one value are a pipe chain in parentheses, one `|> f(args)` per line, not `x = f(x, args)` repeated three or more times in a row. The lint does not check it; reviews do.
+- Lines in `compiler/*.agc` are at most 119 characters, comments included
+  (`compiler/agentica.toml`, `[style]`), checked by
+  `tests/test_style_line_width.py`. Break a call or list one item per line with
+  a trailing comma, wrap a long expression in parentheses, and flow a doc block
+  over several `##` lines.
+- Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into a
+  few sentence-sized pieces joined with `+`, never one piece per line.
+- Several steps on one value are a pipe chain in parentheses, one `|> f(args)`
+  per line, not `x = f(x, args)` repeated three or more times in a row. The lint
+  does not check it; reviews do.
 
 ## The command line in Agentica (step 8a, the product since 8d-2)
 
-`compiler/cli.agc` is the command line of the binary: `Cli.run(settings, words, hand_off) -> Int`. It reads the
-options (`cli_options.agc`, first error wins, `--version` and `-h` answer at once), then
-runs `check`, `compile`, `help`, `test` or a source file, through `pipeline.agc` (the stages the BDD driver shares).
-A command does not print: it answers with a `Reply` (code, stdout, stderr) and `cli.agc` writes it. A diagnostic is
-printed as plain text (`diagnostic_plain.agc`, with the text of its file read again by `SourceFile.read_shown`), `--ai` text
-(`diagnostic_ai.agc`) or the JSON of `diagnostic_json.agc`; the root file is named as typed, imported files by canonical path. `hand_off` is a function value
-that calls `FrontEnd.hand_off` (`front_end_cli.agc`); an ordinary run is in the process of the binary, with no child and no
-temporary file. `agentica run` is not here: C answers it when it is the first word (`vm/agentica.c`), so `cli.agc` only
-answers a later `run` with a usage error (`Texts.run_first_text`). `test` runs the BDD driver in the same process; the
-front end runs with `--allow-run`, and the driver starts the runner as `settings.self_path run ...`; without `--self` it
-answers status 2. A front end that stops with an error exits 2. `tests/test_cli_forms.py` pins
-the command line of the binary against `tests/fixtures/cli/forms.json`. `cli_text.agc` keeps the help texts as data. To try a change to `compiler/` without the
-build chain, run the front end as a program: `dist/agentica run --allow-run -- build/stage/stage2.agcb --version V
---stdlib stdlib --self PATH -- WORDS` (`tests.agentica_test.front_end_command` builds that command).
+`compiler/cli.agc` is the command line of the binary: `Cli.run(settings, words,
+hand_off) -> Int`. It reads the
+options (`cli_options.agc`, first error wins, `--version` and `-h` answer at
+once), then
+runs `check`, `compile`, `help`, `test` or a source file, through `pipeline.agc`
+(the stages the BDD driver shares).
+A command does not print: it answers with a `Reply` (code, stdout, stderr) and
+`cli.agc` writes it. A diagnostic is
+printed as plain text (`diagnostic_plain.agc`, with the text of its file read
+again by `SourceFile.read_shown`), `--ai` text
+(`diagnostic_ai.agc`) or the JSON of `diagnostic_json.agc`; the root file is
+named as typed, imported files by canonical path. `hand_off` is a function value
+that calls `FrontEnd.hand_off` (`front_end_cli.agc`); an ordinary run is in the
+process of the binary, with no child and no
+temporary file. `agentica run` is not here: C answers it when it is the first
+word (`vm/agentica.c`), so `cli.agc` only
+answers a later `run` with a usage error (`Texts.run_first_text`). `test` runs
+the BDD driver in the same process; the
+front end runs with `--allow-run`, and the driver starts the runner as
+`settings.self_path run ...`; without `--self` it
+answers status 2. A front end that stops with an error exits 2.
+`tests/test_cli_forms.py` pins
+the command line of the binary against `tests/fixtures/cli/forms.json`.
+`cli_text.agc` keeps the help texts as data. To try a change to `compiler/`
+without the
+build chain, run the front end as a program: `dist/agentica run --allow-run --
+build/stage/stage2.agcb --version V
+--stdlib stdlib --self PATH -- WORDS` (`tests.agentica_test.front_end_command`
+builds that command).
 
-Simple type aliases (49a) are `Ast.Decl.TypeAlias` nodes with a target `TypeRef`.
+Simple type aliases (49a) are `Ast.Decl.TypeAlias` nodes with a target
+`TypeRef`.
 The parser reads contextual `type` only at the top level; `Declarations.Kind`
 lets the linker export, import and rename aliases as type names, and `Rewrite`
 resolves the target in the declaring module. `check_register.agc` registers all

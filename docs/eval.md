@@ -30,20 +30,69 @@ pilot. The start programs of t9, t10 and t12 are 170 to 210 lines in both
 languages (`wc -l` of `start.agc` and `start.py`); the others are 28 to 132
 lines.
 
-| Task | Kind | The agent does |
-|---|---|---|
-| `t9-inventory-orders` | modify a program | add bulk discounts, a `remove` command and a `low` mark to a shop program with six commands |
-| `t10-calc-extend` | modify a program | add `%`, `^` (right-associative) and a unary minus to a calculator with variables, with the right precedence |
-| `t11-gradebook` | modify a program | add subject weights, ranking with ties and letter grades to a gradebook; the data model has to change |
-| `t12-member-ids` | type change | change member and book ids from `Int` to `String` (`M-007`, `B-12`) through structs, maps, sorting, parsing and messages |
-| `t13-transfer-variant` | type change | add an enum variant (`Transfer`) that every `case` handles (in Python, every `match` ends in `assert_never`) and a new field in the stats |
-| `t14-price-lookup` | type change | `find_price` stops returning `-1` and returns `Result[Int]` (`int \| None` in Python); follow it through four callers and count the unknown lookups |
-| `t15-robust-ledger` | error handling | a ledger program that halts on a bad line reports `line N: problem`, skips the line and goes on |
-| `t16-robust-csv` | error handling | the same for a CSV salary summary, with five checks in a fixed order |
-| `t17-quote-client` | repair an integration | an HTTP client with the wrong path, JSON shape, header and no error handling, against a Python server |
-| `t18-stats-server` | repair an integration | an HTTP server (`std/http`, `http.server`) with wrong JSON, content type, status codes and port line, driven by a Python client |
-| `t19-orders-report` | repair an integration | a CSV to JSON file pipeline with the wrong delimiter, header, output path and format |
-| `t20-big-log` | big data (a streaming probe) | print the slow server errors of a log of up to 29 MB and 600,000 lines, reading it line by line; in Agentica a whole-file read stops at 1 MiB, so the program has to stream (`File.each_line` or `File.read_line`) |
+- **Task:** `t9-inventory-orders`
+  - **Kind:** modify a program
+  - **The agent does:** add bulk discounts, a `remove` command and a `low` mark
+    to a shop program with six commands
+
+- **Task:** `t10-calc-extend`
+  - **Kind:** modify a program
+  - **The agent does:** add `%`, `^` (right-associative) and a unary minus to a
+    calculator with variables, with the right precedence
+
+- **Task:** `t11-gradebook`
+  - **Kind:** modify a program
+  - **The agent does:** add subject weights, ranking with ties and letter grades
+    to a gradebook; the data model has to change
+
+- **Task:** `t12-member-ids`
+  - **Kind:** type change
+  - **The agent does:** change member and book ids from `Int` to `String`
+    (`M-007`, `B-12`) through structs, maps, sorting, parsing and messages
+
+- **Task:** `t13-transfer-variant`
+  - **Kind:** type change
+  - **The agent does:** add an enum variant (`Transfer`) that every `case`
+    handles (in Python, every `match` ends in `assert_never`) and a new field in
+    the stats
+
+- **Task:** `t14-price-lookup`
+  - **Kind:** type change
+  - **The agent does:** `find_price` stops returning `-1` and returns
+    `Result[Int]` (`int \| None` in Python); follow it through four callers and
+    count the unknown lookups
+
+- **Task:** `t15-robust-ledger`
+  - **Kind:** error handling
+  - **The agent does:** a ledger program that halts on a bad line reports `line
+    N: problem`, skips the line and goes on
+
+- **Task:** `t16-robust-csv`
+  - **Kind:** error handling
+  - **The agent does:** the same for a CSV salary summary, with five checks in a
+    fixed order
+
+- **Task:** `t17-quote-client`
+  - **Kind:** repair an integration
+  - **The agent does:** an HTTP client with the wrong path, JSON shape, header
+    and no error handling, against a Python server
+
+- **Task:** `t18-stats-server`
+  - **Kind:** repair an integration
+  - **The agent does:** an HTTP server (`std/http`, `http.server`) with wrong
+    JSON, content type, status codes and port line, driven by a Python client
+
+- **Task:** `t19-orders-report`
+  - **Kind:** repair an integration
+  - **The agent does:** a CSV to JSON file pipeline with the wrong delimiter,
+    header, output path and format
+
+- **Task:** `t20-big-log`
+  - **Kind:** big data (a streaming probe)
+  - **The agent does:** print the slow server errors of a log of up to 29 MB and
+    600,000 lines, reading it line by line; in Agentica a whole-file read stops
+    at 1 MiB, so the program has to stream (`File.each_line` or
+    `File.read_line`)
 
 The arms are the context an agent gets:
 
@@ -342,12 +391,37 @@ whether the VM-only language regressed for agents (roadmap row 7.2.2). Tokens
 are input plus output, without cached tokens, as in the rounds above. Both
 models together cost $0.58.
 
-| Model | Tasks | Passed | Tokens/run | Seconds/run | Failing/run | Before (round 6 or 8) |
-|---|---|---|---|---|---|---|
-| DeepSeek V4.1 flash | t1 to t5 (15 runs) | 14/15 | 21,184 | 98 | 2.7 | 14/15, 31,691, 99, 3.1 |
-| DeepSeek V4.1 flash | t6 to t8 (9 runs) | 9/9 | 62,955 | 309 | 7.8 | 9/9, 78,694, 253, 7.9 |
-| GLM 5.3 flash | t1 to t5 (15 runs) | 14/15 | 8,456 | 39 | 4.1 | 15/15, 11,821, 33, 4.8 |
-| GLM 5.3 flash | t6 to t8 (9 runs) | 7/9 | 25,777 | 135 | 18.2 | 8/9, 79,286, 189, 22.8 |
+- **Model:** DeepSeek V4.1 flash
+  - **Tasks:** t1 to t5 (15 runs)
+  - **Passed:** 14/15
+  - **Tokens/run:** 21,184
+  - **Seconds/run:** 98
+  - **Failing/run:** 2.7
+  - **Before (round 6 or 8):** 14/15, 31,691, 99, 3.1
+
+- **Model:** DeepSeek V4.1 flash
+  - **Tasks:** t6 to t8 (9 runs)
+  - **Passed:** 9/9
+  - **Tokens/run:** 62,955
+  - **Seconds/run:** 309
+  - **Failing/run:** 7.8
+  - **Before (round 6 or 8):** 9/9, 78,694, 253, 7.9
+
+- **Model:** GLM 5.3 flash
+  - **Tasks:** t1 to t5 (15 runs)
+  - **Passed:** 14/15
+  - **Tokens/run:** 8,456
+  - **Seconds/run:** 39
+  - **Failing/run:** 4.1
+  - **Before (round 6 or 8):** 15/15, 11,821, 33, 4.8
+
+- **Model:** GLM 5.3 flash
+  - **Tasks:** t6 to t8 (9 runs)
+  - **Passed:** 7/9
+  - **Tokens/run:** 25,777
+  - **Seconds/run:** 135
+  - **Failing/run:** 18.2
+  - **Before (round 6 or 8):** 8/9, 79,286, 189, 22.8
 
 - No regression. Accuracy is the same within one run, and tokens fell for both
   models. With 3 reps, the token means move a lot between rounds, so treat the
@@ -374,11 +448,29 @@ tasks, 3 reps per cell, master `38fe556`, 60 runs per arm and model. Seconds are
 left out: to finish sooner, the runs went 4 to 6 at a time, next to other
 rounds, so they are not comparable. Rounds 9 to 11 together cost $3.75.
 
-| Model | `skill` passed | `typed-python` passed | `skill` tokens/run | `typed-python` tokens/run | `skill` cost/run | `typed-python` cost/run |
-|---|---|---|---|---|---|---|
-| DeepSeek V4.1 flash | 59/60 | 57/60 | 24,444 | 12,969 | $0.0082 | $0.0053 |
-| GLM 5.3 flash | 58/60 | 52/60 | 15,607 | 5,035 | $0.0056 | $0.0017 |
-| gpt-oss-120b | 31/60 | 45/60 | 21,980 | 8,303 | $0.0087 | $0.0028 |
+- **Model:** DeepSeek V4.1 flash
+  - **`skill` passed:** 59/60
+  - **`typed-python` passed:** 57/60
+  - **`skill` tokens/run:** 24,444
+  - **`typed-python` tokens/run:** 12,969
+  - **`skill` cost/run:** $0.0082
+  - **`typed-python` cost/run:** $0.0053
+
+- **Model:** GLM 5.3 flash
+  - **`skill` passed:** 58/60
+  - **`typed-python` passed:** 52/60
+  - **`skill` tokens/run:** 15,607
+  - **`typed-python` tokens/run:** 5,035
+  - **`skill` cost/run:** $0.0056
+  - **`typed-python` cost/run:** $0.0017
+
+- **Model:** gpt-oss-120b
+  - **`skill` passed:** 31/60
+  - **`typed-python` passed:** 45/60
+  - **`skill` tokens/run:** 21,980
+  - **`typed-python` tokens/run:** 8,303
+  - **`skill` cost/run:** $0.0087
+  - **`typed-python` cost/run:** $0.0028
 
 - With DeepSeek and GLM, Agentica passed as often as typed Python or more.
   Almost every failure on both sides is a logic error on a hidden case (GLM's
@@ -412,14 +504,35 @@ cannot assign an outer variable, use `for` or `reduce`; `Result` and `try`) and
 the builtin namespaces. The prompt is the same as in round 9. Run next to round
 10, so seconds are left out.
 
-| Model | Tasks | Round 9 (old help) | Round 11 (new help) |
-|---|---|---|---|
-| DeepSeek V4.1 flash | t1 to t5 | 14/15, 21,184 tokens, 2.7 failing, $0.0073 | 15/15, 13,997, 1.2, $0.0048 |
-| DeepSeek V4.1 flash | t6 to t8 | 9/9, 62,955, 7.8, $0.0271 | 9/9, 37,996, 5.4, $0.0156 |
-| GLM 5.3 flash | t1 to t5 | 14/15, 8,456, 4.1, $0.0042 | 15/15, 6,662, 2.7, $0.0035 |
-| GLM 5.3 flash | t6 to t8 | 7/9, 25,777, 18.2, $0.0181 | 8/9, 22,821, 13.7, $0.0156 |
-| gpt-oss-120b | t1 to t5 | – | 10/15, 8,314, 2.8, $0.0032 |
-| gpt-oss-120b | t6 to t8 | – | 0/9, 18,319, 4.4, $0.0072 |
+- **Model:** DeepSeek V4.1 flash
+  - **Tasks:** t1 to t5
+  - **Round 9 (old help):** 14/15, 21,184 tokens, 2.7 failing, $0.0073
+  - **Round 11 (new help):** 15/15, 13,997, 1.2, $0.0048
+
+- **Model:** DeepSeek V4.1 flash
+  - **Tasks:** t6 to t8
+  - **Round 9 (old help):** 9/9, 62,955, 7.8, $0.0271
+  - **Round 11 (new help):** 9/9, 37,996, 5.4, $0.0156
+
+- **Model:** GLM 5.3 flash
+  - **Tasks:** t1 to t5
+  - **Round 9 (old help):** 14/15, 8,456, 4.1, $0.0042
+  - **Round 11 (new help):** 15/15, 6,662, 2.7, $0.0035
+
+- **Model:** GLM 5.3 flash
+  - **Tasks:** t6 to t8
+  - **Round 9 (old help):** 7/9, 25,777, 18.2, $0.0181
+  - **Round 11 (new help):** 8/9, 22,821, 13.7, $0.0156
+
+- **Model:** gpt-oss-120b
+  - **Tasks:** t1 to t5
+  - **Round 9 (old help):** –
+  - **Round 11 (new help):** 10/15, 8,314, 2.8, $0.0032
+
+- **Model:** gpt-oss-120b
+  - **Tasks:** t6 to t8
+  - **Round 9 (old help):** –
+  - **Round 11 (new help):** 0/9, 18,319, 4.4, $0.0072
 
 - The new help cut tokens by a third to a half for DeepSeek and by 10 to 20% for
   GLM, with fewer failing runs and the same or better accuracy. The agents read
@@ -446,11 +559,29 @@ round 10 did not have:
 Seconds are left out, because the runs went in parallel. Round 12 cost $1.10.
 Rounds 9 to 12 together cost $4.85 of the $10 budget.
 
-| Model | Round 10 passed | Round 12 passed | Round 10 tokens/run | Round 12 tokens/run | Round 10 cost/run | Round 12 cost/run |
-|---|---|---|---|---|---|---|
-| DeepSeek V4.1 flash | 59/60 | 59/60 | 24,444 | 21,090 | $0.0082 | $0.0074 |
-| GLM 5.3 flash | 58/60 | 55/60 | 15,607 | 12,060 | $0.0056 | $0.0045 |
-| gpt-oss-120b | 31/60 | 30/60 | 21,980 | 17,581 | $0.0087 | $0.0065 |
+- **Model:** DeepSeek V4.1 flash
+  - **Round 10 passed:** 59/60
+  - **Round 12 passed:** 59/60
+  - **Round 10 tokens/run:** 24,444
+  - **Round 12 tokens/run:** 21,090
+  - **Round 10 cost/run:** $0.0082
+  - **Round 12 cost/run:** $0.0074
+
+- **Model:** GLM 5.3 flash
+  - **Round 10 passed:** 58/60
+  - **Round 12 passed:** 55/60
+  - **Round 10 tokens/run:** 15,607
+  - **Round 12 tokens/run:** 12,060
+  - **Round 10 cost/run:** $0.0056
+  - **Round 12 cost/run:** $0.0045
+
+- **Model:** gpt-oss-120b
+  - **Round 10 passed:** 31/60
+  - **Round 12 passed:** 30/60
+  - **Round 10 tokens/run:** 21,980
+  - **Round 12 tokens/run:** 17,581
+  - **Round 10 cost/run:** $0.0087
+  - **Round 12 cost/run:** $0.0065
 
 - Tokens per run fell 14% (DeepSeek), 23% (GLM) and 20% (gpt-oss). Cost per run
   fell 10%, 19% and 26%.

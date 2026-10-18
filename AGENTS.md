@@ -131,9 +131,9 @@ phase 13).
   self-contained and does not read the grammar.
 - A user-visible change adds an entry under `## [Unreleased]` in
   `CHANGELOG.md`; mark a breaking change `**Breaking:**`.
-- Prose wrapping: `site/content/` and `docs/grammar/` keep one line per
-  paragraph or list item (code blocks keep their line breaks); other `docs/`
-  files wrap at 80 characters.
+- Prose wrapping: `site/content/` keeps one line per paragraph or list item.
+  Markdown prose in `docs/` and `.agents/skills/` wraps at 80 characters;
+  code blocks keep their line breaks.
 
 ## Working style
 

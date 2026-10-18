@@ -4,7 +4,7 @@ The built parts are specified in [`docs/vm/10-io-http.md`](../vm/10-io-http.md)
 (§10.6 parsing, §10.7 design, client, server, answers, tests) and the grammar
 ([`docs/grammar/06d-io-and-network.md`](../grammar/06d-io-and-network.md));
 streaming (20e to 20g) is planned in
-[`docs/future/30-hybrid-http.md`](../future/30-hybrid-http.md#3011-streaming-on-channels).
+[`docs/future/30-hybrid-http.md`][agentica-link-1].
 Decided by the user on 2026-10-12. Two parts:
 
 - **20a to 20d, simple HTTP**, are the HTTP part of the catch-up: after TLS on
@@ -26,7 +26,7 @@ Decided by the user on 2026-10-12. Two parts:
   only `std/` code may call); Agentica (`std/http.agc`, imported as `HTTP`)
   keeps the rest. The removal of the builtin `HTTP` module is a breaking change,
   with its migration notes in
-  [`site/content/library/io-and-system/network.md`](../../site/content/library/io-and-system/network.md).
+[`site/content/library/io-and-system/network.md`][agentica-link-2].
 - **20e to 20g, streaming**, are new features at order step 7.4, VM-only: after
   phase 17 (`Task.map` at step 7.3, channels at row 7.2.1e), since they are
   built on `Channel[T]` (17b), and right before `TlsContext` (phase 19). Their
@@ -257,7 +257,8 @@ the server).
   Python's `http.client`; decide in its design whether a connection whose body
   was read to the end can carry a second request.
 - [ ] 20f **Streamed uploads** (§30.11), order step 7.4.
-  `HTTP.upload(client, method, url, headers, length, body: Channel[String]) -> Result[HttpResponse]`:
+  `HTTP.upload(client, method, url, headers, length, body: Channel[String]) ->
+Result[HttpResponse]`:
   `length` is the exact byte count or -1 for chunked; a body that ends short or
   long is an `error`; the response is whole. C gets the chunked encoder back for
   requests (`HttpWire` upload primitives). Tests: golden fixtures (fixed length,
@@ -287,3 +288,6 @@ server work with Python and Node peers over HTTP and HTTPS; the performance
 check is recorded (item 20c-bench); and, after 20g, a download bigger than 64
 MiB, a chunked upload and an SSE stream run through channels with one form for
 each job.
+
+[agentica-link-1]: ../future/30-hybrid-http.md#3011-streaming-on-channels
+[agentica-link-2]: ../../site/content/library/io-and-system/network.md

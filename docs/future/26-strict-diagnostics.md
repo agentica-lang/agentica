@@ -86,12 +86,25 @@ with `_` is the one way to keep a name that is unused on purpose (26.2).
   and the development skill's notes. When an item lands, its text moves to
   `grammar.md` and is deleted here.
 
-| § | Item | Stage | New diagnostic code |
-|---|---|---|---|
-| 26.1 | Unused imports | linker (`src/modules.rkt`) | `CHECK-UNUSED-IMPORT` |
-| 26.2 | Unused variables | checker (`src/checker.rkt`) | `CHECK-UNUSED-VARIABLE` |
-| 26.3 | Unreachable code | checker (`src/checker.rkt`) | `CHECK-UNREACHABLE-CODE` |
-| 26.4 | Ignored `Result` values | checker (`src/checker.rkt`) | `CHECK-UNUSED-RESULT` |
+- **§:** 26.1
+  - **Item:** Unused imports
+  - **Stage:** linker (`src/modules.rkt`)
+  - **New diagnostic code:** `CHECK-UNUSED-IMPORT`
+
+- **§:** 26.2
+  - **Item:** Unused variables
+  - **Stage:** checker (`src/checker.rkt`)
+  - **New diagnostic code:** `CHECK-UNUSED-VARIABLE`
+
+- **§:** 26.3
+  - **Item:** Unreachable code
+  - **Stage:** checker (`src/checker.rkt`)
+  - **New diagnostic code:** `CHECK-UNREACHABLE-CODE`
+
+- **§:** 26.4
+  - **Item:** Ignored `Result` values
+  - **Stage:** checker (`src/checker.rkt`)
+  - **New diagnostic code:** `CHECK-UNUSED-RESULT`
 
 The codes keep the `CHECK-` prefix, also for the linker's code, as the linker's
 other codes do (`CHECK-IMPORT-NAME`, `CHECK-IMPORT-CYCLE`).
@@ -409,10 +422,12 @@ program's order.
 **Help ideas**, by kind:
 
 - variable:
-  `"count" is never read; remove it, or name it _count if it is unused on purpose`;
+  `"count" is never read; remove it, or name it _count if it is unused on
+purpose`;
   when it is only updated: `"count" is only updated (count += 1), never read`;
   when the value is a `Result`:
-  `handle the Result: try ..., a case on ok(_) and error(message), or .unwrap!; or discard it with _ = TCP.send(...)`;
+  `handle the Result: try ..., a case on ok(_) and error(message), or .unwrap!;
+or discard it with _ = TCP.send(...)`;
   when the value is anything else and a call with effects:
   `keep the call as a statement`.
 - `for` variable: `write for _ in 0...n`.
@@ -515,7 +530,8 @@ uses it to tell "no `return` anywhere" apart from "a `return` on some paths
 only", and that question is about returns nested anywhere in the body.
 
 **Help idea:**
-`this statement never runs, because the block ends at the return on line 5; remove it, or move it before the return`.
+`this statement never runs, because the block ends at the return on line 5;
+remove it, or move it before the return`.
 For a `case` or `if`:
 `every branch of the case above ends with return, break or next`.
 
@@ -545,7 +561,8 @@ end
 
 The write can fail, but its `Result` is dropped, so the error is lost. This is
 `CHECK-UNUSED-RESULT` at the call, with the help
-`handle the Result: try File.write_text(...), a case on ok(_) and error(message), or .unwrap!; or discard it with _ = File.write_text(...)`.
+`handle the Result: try File.write_text(...), a case on ok(_) and
+error(message), or .unwrap!; or discard it with _ = File.write_text(...)`.
 
 **Rule:** an expression whose value is dropped, that is an expression statement
 or the last statement of a `Void` block, and whose type is `Result[...]`, is
@@ -658,16 +675,63 @@ pages; the programs of HTTP streaming and `TlsContext` (order step 7.4); and the
 (`std/logger`, 14c), with their site pages and tests; they matter to 26.1, 26.2
 and 26.4.
 
-| Where | 26.1 imports | 26.2 variables | 26.3 unreachable | 26.4 results |
-|---|---|---|---|---|
-| `examples/` (26 files), `stdlib/` | 0 | 0 | 0 | 3 in 2 files (`http_server.agc`: `HTTP.respond` twice; `tcp_echo.agc`: `TCP.send`) |
-| `benchmarks/programs/` | 0 | 1 (`error(message)` in `string-library.agc`) | 0 | 0 |
-| `tests/fixtures/` (`.agc`) | 0 | 35 in 22 files | 1 (`vm/calls.agc`, a statement after `return`) | 8 in 4 files (`vm/files-large.agc` 3, `files-errors.agc` 2, `files-handles.agc` 2, `files-text.agc` 1: `File.close`, `File.write_text`, `File.write_bytes`) |
-| `tests/bdd/handlers.agc` | 0 | 1 (`invalid = 1 / 0`, a handler that crashes on purpose) | 0 | 0 |
-| `site/content` blocks | 0 | 17 blocks on 7 pages (`library/io-and-system/network.md` 7, `process.md` 3, `files.md` 3, `io.md`, `library/data-structures/range.md`, `library/concurrency/task.md`, `tour/results-and-try.md`) | 0 | 0 |
-| Programming skill examples | 0 | 0 | 0 | 0 |
-| Bare `_` used as a variable (all of the sources above) | | 0 breaks: no `_ =`, no read of `_`, no `_` block parameter; 3 `for _ in` loops in `tests/fixtures/vm/random.agc`, which stay valid as discards | | |
-| Inline programs in Racket tests, before 7i | 1 (`tests/modules-test.rkt:207`) | 36: 24 in `checker-test.rkt` (23 of the 33 `check-ok` programs the scan could read, and one more), 6 in `bytecode-test.rkt`, 2 in `bdd-integration.rkt` (now `test_bdd_integration.py`), 1 each in `modules-test.rkt` (`:208`), `examples-test.rkt` (now `test_examples.py`), `task-test.rkt` and `vm-diff-common.rkt` | 0 | 1 (a `check-ok` program in `checker-test.rkt` that drops `HTTP.respond`) |
+- **Where:** `examples/` (26 files), `stdlib/`
+  - **26.1 imports:** 0
+  - **26.2 variables:** 0
+  - **26.3 unreachable:** 0
+  - **26.4 results:** 3 in 2 files (`http_server.agc`: `HTTP.respond` twice;
+    `tcp_echo.agc`: `TCP.send`)
+
+- **Where:** `benchmarks/programs/`
+  - **26.1 imports:** 0
+  - **26.2 variables:** 1 (`error(message)` in `string-library.agc`)
+  - **26.3 unreachable:** 0
+  - **26.4 results:** 0
+
+- **Where:** `tests/fixtures/` (`.agc`)
+  - **26.1 imports:** 0
+  - **26.2 variables:** 35 in 22 files
+  - **26.3 unreachable:** 1 (`vm/calls.agc`, a statement after `return`)
+  - **26.4 results:** 8 in 4 files (`vm/files-large.agc` 3, `files-errors.agc`
+    2, `files-handles.agc` 2, `files-text.agc` 1: `File.close`,
+    `File.write_text`, `File.write_bytes`)
+
+- **Where:** `tests/bdd/handlers.agc`
+  - **26.1 imports:** 0
+  - **26.2 variables:** 1 (`invalid = 1 / 0`, a handler that crashes on purpose)
+  - **26.3 unreachable:** 0
+  - **26.4 results:** 0
+
+- **Where:** `site/content` blocks
+  - **26.1 imports:** 0
+  - **26.2 variables:** 17 blocks on 7 pages (`library/io-and-system/network.md`
+    7, `process.md` 3, `files.md` 3, `io.md`,
+    `library/data-structures/range.md`, `library/concurrency/task.md`,
+    `tour/results-and-try.md`)
+  - **26.3 unreachable:** 0
+  - **26.4 results:** 0
+
+- **Where:** Programming skill examples
+  - **26.1 imports:** 0
+  - **26.2 variables:** 0
+  - **26.3 unreachable:** 0
+  - **26.4 results:** 0
+
+- **Where:** Bare `_` used as a variable (all of the sources above)
+  - **26.2 variables:** 0 breaks: no `_ =`, no read of `_`, no `_` block
+    parameter; 3 `for _ in` loops in `tests/fixtures/vm/random.agc`, which stay
+    valid as discards
+
+- **Where:** Inline programs in Racket tests, before 7i
+  - **26.1 imports:** 1 (`tests/modules-test.rkt:207`)
+  - **26.2 variables:** 36: 24 in `checker-test.rkt` (23 of the 33 `check-ok`
+    programs the scan could read, and one more), 6 in `bytecode-test.rkt`, 2 in
+    `bdd-integration.rkt` (now `test_bdd_integration.py`), 1 each in
+    `modules-test.rkt` (`:208`), `examples-test.rkt` (now `test_examples.py`),
+    `task-test.rkt` and `vm-diff-common.rkt`
+  - **26.3 unreachable:** 0
+  - **26.4 results:** 1 (a `check-ok` program in `checker-test.rkt` that drops
+    `HTTP.respond`)
 
 The inline counts are for the tests as they are before 7i. 7i deletes the
 evaluator and the tests that only exercise it, so the implementing PRs, which

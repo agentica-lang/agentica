@@ -6,12 +6,20 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Files
 
-| Path | Owns |
-|---|---|
-| `vm/task.c` | The scheduler (run queue, turns, park and wake), task cancellation and the `Task` builtins. |
-| `vm/task_map.c` | `Task.map`: a stepper on the caller that starts, times and cancels the items. |
-| `vm/channel.c` | The `Channel` builtins: a ring buffer, waiter queues and reservations. |
-| `vm/testing.c` | The `Test` builtins for unit tests, such as `Test.test`. |
+- **Path:** `vm/task.c`
+  - **Owns:** The scheduler (run queue, turns, park and wake), task cancellation
+    and the `Task` builtins.
+
+- **Path:** `vm/task_map.c`
+  - **Owns:** `Task.map`: a stepper on the caller that starts, times and cancels
+    the items.
+
+- **Path:** `vm/channel.c`
+  - **Owns:** The `Channel` builtins: a ring buffer, waiter queues and
+    reservations.
+
+- **Path:** `vm/testing.c`
+  - **Owns:** The `Test` builtins for unit tests, such as `Test.test`.
 
 - `vm/task.c`
   - the scheduler (`docs/vm/10-io-scheduler.md` §10.2.1, "As built")
@@ -203,7 +211,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (`task-map-*`) never race a timeout against work: they record step counts and
   run the `--max-steps` sweep.
 - Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept
-  out of `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it right
+  out of `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it
+right
   after `make test`). A sleeping task and a stdin reader must wake within
   250 ms next to CPU, sort and concat tasks, and must not with
   `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only switch that leaves

@@ -283,7 +283,8 @@ above was settled differently, by the owner's decision of 2026-10-16 (option A):
 `vm/unicode_data.c` and `compiler/unicode_table.agc` are frozen, checked-in
 source, with a header that says they came from the tables of Racket 9.3
 (Unicode 17.0), and `compiler/builtins_data.agc` and `check_tables.agc` are
-hand-edited sources. Option B is a later PR: a generator written in Agentica over
+hand-edited sources. Option B is a later PR: a generator written in Agentica
+over
 pinned Unicode Character Database files, which must reproduce `unicode_data.c`
 byte for byte (or explain each difference) before it replaces it. The parent
 commit of the merge of that PR is tagged `bootstrap-racket`.
@@ -305,16 +306,107 @@ stage's output in a stable text form under `tests/fixtures/frontend/<stage>/`.
 While both stages exist, both must match it. After Racket is deleted, the
 goldens stay.
 
-| Step | Racket stage | Compared output |
-|---|---|---|
-| 1 | **Done** (PR #237): Lexer (`src/lexer.rkt`, with `source.rkt`, `token.rkt` and the diagnostic data of `diagnostic.rkt`) | Tokens as text lines (kind, value, span), or the one `LEX-` diagnostic |
-| 2 | **Done** (PR #245): Parser (`src/parser.rkt`, `ast.rkt`) | The AST in a stable text form, or the `PARSE-` diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree, so step 2 adds a printer with the same output on both sides (`tests/frontend-parser-common.rkt`) |
-| 3 | **Done** (PR #254): Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution, or the first `CHECK-IMPORT-*`, `CHECK-DECL-ORDER` or `CHECK-REDEFINED-NAME` diagnostic with its file. Needs the environment and real-path builtins (35.5). It carries the privacy rule of `value.with(...)` (roadmap 15c) as data: each linked module lists the user structs it may update, and the text form prints the list on every update. The text form is `tests/frontend-modules-common.rkt` (Racket) and `compiler/link.agc` (Agentica) |
-| 4 | **Done** (4a, the builtin catalog as Agentica data, PR #258; 4b, the checker, PR #263; module constants, §44, in PR 44a2-1, with `compiler/check_const.agc` and `compiler/const_walk.agc`): Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then constants, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). It carries module constants (§44, roadmap row 7.2.8; done in 44a2-1): the order, `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE` and the `CHECK-DECL-ORDER` rank of constants; the new import forms of §44.2 (`import Mod from "path"`, `import {A, B} from "path"`) are parser and linker changes that land in `src/` and `compiler/` together (44a0), and the checker sees no import, but one help text of `src/checker.rkt` shows the old form and the checker port carries the new text. Decided for deep trees (35.9): the linker of step 3 handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that, so both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and statements (one level for each, so it bounds the depth of the tree they recurse on; a diagnostic change in both front ends, made in 4b). |
-| 5 | **Done** (PR #282): Lowering (`src/lower.rkt`) | The IR in a text form of its own (not `--dump-ir`, see the status note below), or the `LOWER-` diagnostic. The port carries the lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by 44a2-2): scalar literal constants inlined, the other kept constants as zero-parameter functions, the `<start>` entry, the pruning by reachability from `main`, and the order of `Checked.constants`. The text form is `tests/frontend-lower-common.rkt` (Racket) and `compiler/lower.agc` (Agentica) |
-| 6 | **Done** (PR #286): Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal (not a text form: the test compares the bytes of `compiler/bytecode.agc` with the ones Racket writes; see the status note below). The port writes every section as `src/bytecode.rkt` does, format version 5 with the Updates and Globals sections, and has its `BYTECODE-` diagnostics |
-| 7 | **Done** (7a, the OS builtins the port needs, audited in 35.5, PR #288; 7b, the driver, PR #294): BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/test_bdd.py`, `tests/test_bdd_integration.py`, `tests/unit-test-test.rkt`). The port is `compiler/bdd.agc` over the `compiler/bdd_*.agc` modules; see the status note below |
-| 8 | **Done** (8a, 8b, 8c, 8d-1, 8d-2 and 8d-3: PRs #299, #298, #297, #301, #310 and #311): CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
+- **Step:** 1
+  - **Racket stage:** **Done** (PR #237): Lexer (`src/lexer.rkt`, with
+    `source.rkt`, `token.rkt` and the diagnostic data of `diagnostic.rkt`)
+  - **Compared output:** Tokens as text lines (kind, value, span), or the one
+    `LEX-` diagnostic
+
+- **Step:** 2
+  - **Racket stage:** **Done** (PR #245): Parser (`src/parser.rkt`, `ast.rkt`)
+  - **Compared output:** The AST in a stable text form, or the `PARSE-`
+    diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree,
+    so step 2 adds a printer with the same output on both sides
+    (`tests/frontend-parser-common.rkt`)
+
+- **Step:** 3
+  - **Racket stage:** **Done** (PR #254): Modules and linker (`src/modules.rkt`,
+    `stdlib.rkt`)
+  - **Compared output:** The linked program dump, with `std/` and `pkg/`
+    resolution, or the first `CHECK-IMPORT-*`, `CHECK-DECL-ORDER` or
+    `CHECK-REDEFINED-NAME` diagnostic with its file. Needs the environment and
+    real-path builtins (35.5). It carries the privacy rule of `value.with(...)`
+    (roadmap 15c) as data: each linked module lists the user structs it may
+    update, and the text form prints the list on every update. The text form is
+    `tests/frontend-modules-common.rkt` (Racket) and `compiler/link.agc`
+    (Agentica)
+
+- **Step:** 4
+  - **Racket stage:** **Done** (4a, the builtin catalog as Agentica data, PR
+    #258; 4b, the checker, PR #263; module constants, §44, in PR 44a2-1, with
+    `compiler/check_const.agc` and `compiler/const_walk.agc`): Checker
+    (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`)
+  - **Compared output:** The `CHECK-` diagnostic, and the type of each
+    expression. The port must carry `CHECK-DECL-ORDER` (imports, then constants,
+    then `struct` and `enum`, then `export def`, then `def`, in every file),
+    which the Racket front end checks per file in `src/modules.rkt` before
+    linking; the module port (step 3) and this one keep its span (the start of
+    the first declaration out of place). It must also handle `Set[T]` (roadmap
+    8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or
+    `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows
+    of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected
+    type), `for` over a set, the printable and not-encodable cases, and the
+    reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword
+    table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/`
+    and in `compiler/parser.agc`, which already parses it as
+    `Update(StructUpdate)`): the receiver must be a struct
+    (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it
+    (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value
+    of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field
+    of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose
+    result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module
+    keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`;
+    the linker decides what is visible, as data from the modules port of step 3,
+    because the `visible` predicate of `src/` is a closure in the node).
+    Lowering (step 5) emits one `struct-with` per update and the bytecode writer
+    (step 6) writes its Updates section (format version 4). It carries module
+    constants (§44, roadmap row 7.2.8; done in 44a2-1): the order,
+    `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE`
+    and the `CHECK-DECL-ORDER` rank of constants; the new import forms of §44.2
+    (`import Mod from "path"`, `import {A, B} from "path"`) are parser and
+    linker changes that land in `src/` and `compiler/` together (44a0), and the
+    checker sees no import, but one help text of `src/checker.rkt` shows the old
+    form and the checker port carries the new text. Decided for deep trees
+    (35.9): the linker of step 3 handles trees up to about 9,900 levels with one
+    VM call per level, and the parser accepts trees much deeper than that, so
+    both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and
+    statements (one level for each, so it bounds the depth of the tree they
+    recurse on; a diagnostic change in both front ends, made in 4b).
+
+- **Step:** 5
+  - **Racket stage:** **Done** (PR #282): Lowering (`src/lower.rkt`)
+  - **Compared output:** The IR in a text form of its own (not `--dump-ir`, see
+    the status note below), or the `LOWER-` diagnostic. The port carries the
+    lowering of module constants (§44.7, 44.8; done in `src/lower.rkt` by
+    44a2-2): scalar literal constants inlined, the other kept constants as
+    zero-parameter functions, the `<start>` entry, the pruning by reachability
+    from `main`, and the order of `Checked.constants`. The text form is
+    `tests/frontend-lower-common.rkt` (Racket) and `compiler/lower.agc`
+    (Agentica)
+
+- **Step:** 6
+  - **Racket stage:** **Done** (PR #286): Bytecode writer (`src/bytecode.rkt`)
+  - **Compared output:** The `.agcb` bytes, equal (not a text form: the test
+    compares the bytes of `compiler/bytecode.agc` with the ones Racket writes;
+    see the status note below). The port writes every section as
+    `src/bytecode.rkt` does, format version 5 with the Updates and Globals
+    sections, and has its `BYTECODE-` diagnostics
+
+- **Step:** 7
+  - **Racket stage:** **Done** (7a, the OS builtins the port needs, audited in
+    35.5, PR #288; 7b, the driver, PR #294): BDD driver (`src/bdd-driver.rkt`)
+  - **Compared output:** The `agentica test` tests (`tests/test_bdd.py`,
+    `tests/test_bdd_integration.py`, `tests/unit-test-test.rkt`). The port is
+    `compiler/bdd.agc` over the `compiler/bdd_*.agc` modules; see the status
+    note below
+
+- **Step:** 8
+  - **Racket stage:** **Done** (8a, 8b, 8c, 8d-1, 8d-2 and 8d-3: PRs #299, #298,
+    #297, #301, #310 and #311): CLI driver (`src/main.rkt`, the output forms of
+    `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`)
+  - **Compared output:** Exit codes, stdout and stderr of every CLI test. The
+    single binary and embedding (35.6) land here, and the self-hosted front end
+    becomes the default
 
 Notes:
 
@@ -641,41 +733,266 @@ Notes:
 
 ### 35.5 Language and VM prerequisites
 
-| Need | Status | Notes |
-|---|---|---|
-| No quadratic `push` | Known, planned | `xs = xs.push(x)` copies the list. Fixed by 8d, a prerequisite (35.9). |
-| No quadratic `+=` on `String` | Known, no plan | `s += x` copies the string. A compiler builds big strings (dumps, `--json`, messages). Collect parts in a list and `join` them. To check on the corpus whether that is enough; if not, a string builder becomes a new prerequisite. Shared one-character strings (§34, 7g) cut the lexer's allocations if it reads characters with `at` or `split("")`. |
-| Efficient map for symbol tables | Known, ready | `Map` is a persistent HAMT (`vm/map.c`): `put` is O(log n) and copies nothing. Keys are `Int` or `String` only, hence the node ids of 35.4. |
-| JSON key listing | Known, not needed | No API lists an object's keys (phase 10, §15). The front end writes JSON (`--json`, `help --json`) with the builders, and reads none of unknown shape. |
-| Read files, directories and module paths | Known, ready | `File.read_text`, `File.stat`, `Dir.list` exist. `File.read_text` stops at 1 MiB and Racket has no limit, so a source file is read with `File.open`, `File.read_bytes` in a loop, and `String.from_bytes` (`compiler/source_file.agc`, 35.4). Both builtins that step 3 needs are done (row 7.2.6 of the order, OS builtins in C, exception 1 of the std-first rule, no new flag): `System.env(name)` reads environment variables (`AGENTICA_PATH`, `XDG_DATA_HOME` and, as `System.env("HOME")`, the home directory; `src/modules.rkt:29-50`), and `Path.real(path)` resolves symbolic links, for module identity and the `pkg/` escape check (`normalize-path`, `src/modules.rkt:26,91-99`). `Path.real` is POSIX `realpath`, so it fails on a path that does not exist where `normalize-path` does not: the linker checks that a file exists first, as `file-exists?` does there. `Path.resolve` is lexical and does not resolve links. |
-| Write binary `.agcb` output | Known, ready | Agentica has no byte type: `Bytes` is deferred (§12.5, §23.1), and bytes are `List[Int]`, written with `File.write_bytes` (1 MiB per call). An `Int` as 8 two's-complement bytes and a `Float` as its IEEE bits are `std/binary` (§23: `Binary.write_i64_be`, `Binary.write_f64_le`, `Binary.concat`), built on the `Int` and `Float` bit builtins; phase 13 (row 7.2.4 of the order) is done. To check: a 2 MB `.agcb` as `List[Int]` is 32 MB of values; if that is too slow or too big for the start-up target, `Bytes` becomes a prerequisite. |
-| Process spawning for the BDD driver | Known, ready (step 7a) | `Process.spawn_captured` exists (21a), and the environment builtin above reads `AGENTICA_VM` and `TMPDIR`. The audit of `src/bdd-driver.rkt` is the table under this one, and the OS builtins it found missing are done (step 7a: `vm/files.c`, `vm/tree.c`, `vm/process.c`; each is an OS builtin, exception 1 of the std-first rule, with no new flag). The path of the binary itself comes from C as an argument. |
-| Handing the program to the VM | **Done** (8b) | `agentica file.agc` runs the compiled program without a temporary file. `FrontEnd.hand_off(program, options, arguments)` gives the bytes, the VM option words and the arguments to C and ends the front end's run. C retires the front end's runtime (children stopped, output flushed, event loop closed, one collection) and loads the program in a new one, so the user program never sees the compiler's heap or tasks, and `--max-steps`, `--seed` and `--allow-run` apply only to it. `FrontEnd.std_source(path)` reads an embedded `std/` source by its path in `stdlib/` (`queue.agc`, `bdd/gherkin.agc`). Both are guarded in C at run time: they fail with `RUNTIME-FRONT-END-ONLY` unless the running program is the front end that C loaded itself (from its own data, or from `--front-end`, 35.3), which C knows because only then does the runtime have an `agc_front_end`. They are in both builtin tables (`src/builtins.rkt`, `compiler/builtins_data.agc`) without the std-only mark: a linker rule like the std-only `HttpWire` check cannot work here, because `compiler/` is not in `stdlib/`. |
-| Call depth | To check | The VM stops at call depth 10,000 (`RUNTIME-STACK-OVERFLOW`, `docs/vm/05-values-execution-builtins.md` §6.1). A recursive-descent parser or checker on deeply nested input can reach it where Racket does not. Use explicit stacks on the deep paths, or add a `PARSE-` nesting limit (a diagnostic change, decided in step 2). **Decided in step 2:** both parsers stop with `PARSE-TOO-DEEP` past 1,000 levels (up to about 8 VM frames per level, 1.25 times the limit at the tightest). It bounds the parser's calls, not the depth of its tree (see 35.9). **Decided in step 4:** both checkers stop with `CHECK-TOO-DEEP` past 1,000 levels of expressions and statements, which bounds the depth of the tree (3 to 4 VM frames per level in the checker, so at most about 4,000 frames). |
-| Speed | To check | The VM must run the front end on the largest corpus file within the start-up target (35.2), including loading and validating the embedded `.agcb`. The JIT (7m) is not required if the numbers hold. Compiling `compiler/` itself is a build step and has no target, but its time is recorded. |
-| Stack traces | Known, planned | A crash inside the compiler must show where it happened in `compiler/`. 14b (row 7.2.5 of the order, before the freeze) gives runtime errors a stack trace. |
+- **Need:** No quadratic `push`
+  - **Status:** Known, planned
+  - **Notes:** `xs = xs.push(x)` copies the list. Fixed by 8d, a prerequisite
+    (35.9).
+
+- **Need:** No quadratic `+=` on `String`
+  - **Status:** Known, no plan
+  - **Notes:** `s += x` copies the string. A compiler builds big strings (dumps,
+    `--json`, messages). Collect parts in a list and `join` them. To check on
+    the corpus whether that is enough; if not, a string builder becomes a new
+    prerequisite. Shared one-character strings (§34, 7g) cut the lexer's
+    allocations if it reads characters with `at` or `split("")`.
+
+- **Need:** Efficient map for symbol tables
+  - **Status:** Known, ready
+  - **Notes:** `Map` is a persistent HAMT (`vm/map.c`): `put` is O(log n) and
+    copies nothing. Keys are `Int` or `String` only, hence the node ids of 35.4.
+
+- **Need:** JSON key listing
+  - **Status:** Known, not needed
+  - **Notes:** No API lists an object's keys (phase 10, §15). The front end
+    writes JSON (`--json`, `help --json`) with the builders, and reads none of
+    unknown shape.
+
+- **Need:** Read files, directories and module paths
+  - **Status:** Known, ready
+  - **Notes:** `File.read_text`, `File.stat`, `Dir.list` exist. `File.read_text`
+    stops at 1 MiB and Racket has no limit, so a source file is read with
+    `File.open`, `File.read_bytes` in a loop, and `String.from_bytes`
+    (`compiler/source_file.agc`, 35.4). Both builtins that step 3 needs are done
+    (row 7.2.6 of the order, OS builtins in C, exception 1 of the std-first
+    rule, no new flag): `System.env(name)` reads environment variables
+    (`AGENTICA_PATH`, `XDG_DATA_HOME` and, as `System.env("HOME")`, the home
+    directory; `src/modules.rkt:29-50`), and `Path.real(path)` resolves symbolic
+    links, for module identity and the `pkg/` escape check (`normalize-path`,
+    `src/modules.rkt:26,91-99`). `Path.real` is POSIX `realpath`, so it fails on
+    a path that does not exist where `normalize-path` does not: the linker
+    checks that a file exists first, as `file-exists?` does there.
+    `Path.resolve` is lexical and does not resolve links.
+
+- **Need:** Write binary `.agcb` output
+  - **Status:** Known, ready
+  - **Notes:** Agentica has no byte type: `Bytes` is deferred (§12.5, §23.1),
+    and bytes are `List[Int]`, written with `File.write_bytes` (1 MiB per call).
+    An `Int` as 8 two's-complement bytes and a `Float` as its IEEE bits are
+    `std/binary` (§23: `Binary.write_i64_be`, `Binary.write_f64_le`,
+    `Binary.concat`), built on the `Int` and `Float` bit builtins; phase 13 (row
+    7.2.4 of the order) is done. To check: a 2 MB `.agcb` as `List[Int]` is 32
+    MB of values; if that is too slow or too big for the start-up target,
+    `Bytes` becomes a prerequisite.
+
+- **Need:** Process spawning for the BDD driver
+  - **Status:** Known, ready (step 7a)
+  - **Notes:** `Process.spawn_captured` exists (21a), and the environment
+    builtin above reads `AGENTICA_VM` and `TMPDIR`. The audit of
+    `src/bdd-driver.rkt` is the table under this one, and the OS builtins it
+    found missing are done (step 7a: `vm/files.c`, `vm/tree.c`, `vm/process.c`;
+    each is an OS builtin, exception 1 of the std-first rule, with no new flag).
+    The path of the binary itself comes from C as an argument.
+
+- **Need:** Handing the program to the VM
+  - **Status:** **Done** (8b)
+  - **Notes:** `agentica file.agc` runs the compiled program without a temporary
+    file. `FrontEnd.hand_off(program, options, arguments)` gives the bytes, the
+    VM option words and the arguments to C and ends the front end's run. C
+    retires the front end's runtime (children stopped, output flushed, event
+    loop closed, one collection) and loads the program in a new one, so the user
+    program never sees the compiler's heap or tasks, and `--max-steps`, `--seed`
+    and `--allow-run` apply only to it. `FrontEnd.std_source(path)` reads an
+    embedded `std/` source by its path in `stdlib/` (`queue.agc`,
+    `bdd/gherkin.agc`). Both are guarded in C at run time: they fail with
+    `RUNTIME-FRONT-END-ONLY` unless the running program is the front end that C
+    loaded itself (from its own data, or from `--front-end`, 35.3), which C
+    knows because only then does the runtime have an `agc_front_end`. They are
+    in both builtin tables (`src/builtins.rkt`, `compiler/builtins_data.agc`)
+    without the std-only mark: a linker rule like the std-only `HttpWire` check
+    cannot work here, because `compiler/` is not in `stdlib/`.
+
+- **Need:** Call depth
+  - **Status:** To check
+  - **Notes:** The VM stops at call depth 10,000 (`RUNTIME-STACK-OVERFLOW`,
+    `docs/vm/05-values-execution-builtins.md` §6.1). A recursive-descent parser
+    or checker on deeply nested input can reach it where Racket does not. Use
+    explicit stacks on the deep paths, or add a `PARSE-` nesting limit (a
+    diagnostic change, decided in step 2). **Decided in step 2:** both parsers
+    stop with `PARSE-TOO-DEEP` past 1,000 levels (up to about 8 VM frames per
+    level, 1.25 times the limit at the tightest). It bounds the parser's calls,
+    not the depth of its tree (see 35.9). **Decided in step 4:** both checkers
+    stop with `CHECK-TOO-DEEP` past 1,000 levels of expressions and statements,
+    which bounds the depth of the tree (3 to 4 VM frames per level in the
+    checker, so at most about 4,000 frames).
+
+- **Need:** Speed
+  - **Status:** To check
+  - **Notes:** The VM must run the front end on the largest corpus file within
+    the start-up target (35.2), including loading and validating the embedded
+    `.agcb`. The JIT (7m) is not required if the numbers hold. Compiling
+    `compiler/` itself is a build step and has no target, but its time is
+    recorded.
+
+- **Need:** Stack traces
+  - **Status:** Known, planned
+  - **Notes:** A crash inside the compiler must show where it happened in
+    `compiler/`. 14b (row 7.2.5 of the order, before the freeze) gives runtime
+    errors a stack trace.
 
 The audit of the BDD driver's OS needs (step 7a). Each row is a need of
 `src/bdd-driver.rkt`, the Agentica call that covers it, and whether that call
 existed:
 
-| Need | In `src/bdd-driver.rkt` | In Agentica | Result |
-|---|---|---|---|
-| A runner environment without `AGENTICA_VM_METRICS*` | `run-runner` clears both names in a copy of the environment | `Process.spawn_captured` | **Existing builtin, new rule.** The child environment of every `Process.spawn*` drops `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE`, matched with their `=` (the rule of §28.5, done early because the driver cannot edit a child's environment). `System.env` still shows them to the program itself. The VM reads neither variable yet (phase 18), so nothing else changes. |
-| A private 0700 temporary directory | `make-directory current #o700`, which fails when the name exists | `Dir.mkdir_private(path, timeout_ms)` | **New.** `Dir.mkdir` creates parents and accepts an existing directory, so it cannot claim a name. |
-| Giving the run directory its final name | `rename-file-or-directory current directory`: the driver makes `agentica-bdd-new-<hex>`, locks a file in it, and only then renames it to `agentica-bdd-<hex>`, so a concurrent sweep, which looks at `agentica-bdd-<hex>` names only, never finds an unlocked directory | `Path.rename(from, to, timeout_ms)` | **New.** One `renameat2` with `RENAME_NOREPLACE`: it never replaces, so a name that is taken stays taken (plain `rename` replaces a file and an empty directory), and it is atomic. The lock follows the file, since it belongs to the open file and not to the path. A file system that lacks `RENAME_NOREPLACE` (some network file systems) answers with an error, which the driver reports as an infrastructure error. |
-| Finding the temporary directory | `(find-system-path 'temp-dir)` (`bdd-driver.rkt`, line 245): `TMPDIR` when it is set and names a directory, else the first directory among `/var/tmp`, `/usr/tmp` and `/tmp` | `System.env("TMPDIR")` and `File.stat` | **Existing, no builtin.** The port walks the same list and takes the first path that `File.stat` says is a directory (a relative `TMPDIR` is kept as given, as in Racket). When none is a directory it reports an infrastructure error. |
-| An `flock`'d lock file | `open-output-file ... #:exists 'error #:permissions #o600`, then `port-try-file-lock?` | `File.open(path, "create_private", ms)`, then `File.try_lock(handle, ms)` | **New** (the open mode and the lock). The lock belongs to the open file, so `File.close`, the end of the owning task and the end of the process release it, and no child inherits it (descriptors are close-on-exec). `ok(false)` says another handle or process holds it: the call never waits. |
-| Locking the lock file of a possibly stale directory | `abandoned?` opens the file with `#:exists 'update` and tries the lock | `File.open(path, "read", ms)`, then `File.try_lock` | **Existing open, new lock.** `flock` does not need write access, so a read handle locks. |
-| The `TMPDIR` mode check | `file-or-directory-stat` for `mode`, `user-id` and `group-id` of `TMPDIR` (links followed) and of the new directory | `File.stat` and `File.lstat` | **New `FileInfo` fields** `mode` (`st_mode & 07777`, so the sticky and setgid bits are in it), `user_id` and `group_id`, appended after `modified_seconds` in `File.stat`. |
-| An `lstat`-like call | `file-or-directory-type path #t` and `file-or-directory-stat path #t` in `discover` and `abandoned?` | `File.lstat(path, timeout_ms)` | **New.** It returns `FileInfo` like `File.stat`, but a symbolic link is described itself (`kind` is `"link"`); `File.stat` then tells what the link names. |
-| The process's own PID | `getpid`, given to the runner as `--driver-pid` | `System.pid()` | **New.** The child VM compares it with its parent (`bind_to_driver`), so the value must be the VM's own PID. |
-| A 0600 write of the bytecode, the config and the lock | `write-private`: `#:exists 'error #:permissions #o600` | `File.open(path, "create_private", ms)`, `File.write_bytes`, `File.close` | **New open mode**, no new write builtin, so a file larger than 1 MiB is written in several calls. A VM started with `--driver-pid` reads only a private bytecode file (owner, one link, no group or other bits) and deletes it. |
-| Delete a file, and remove the run directory tree | `delete-directory/files` on each child of the run directory, then on the directory | `Path.remove(path, ms)` | **New** (`vm/tree.c`), one builtin for both, named as §46.4 names it. It unlinks a file or a link itself; a directory it opens level by level with `O_NOFOLLOW` and empties with `unlinkat`, so a link inside the tree is removed as a link and its target is never touched. A missing path is `ok()`, like `#:must-exist? #f`. It refuses `/`, `.` and `..` (as the last part of a path), and a tree deeper than 128 levels. Like Racket's `delete-directory/files`, and Python's `rmtree`, it crosses mount points. A failure inside the tree names the entry that failed, as they do. A timeout returns the error but does not stop a removal that is running. |
-| A random directory name | `crypto-random-bytes 16` | `Random.int` | **Existing, weaker.** The driver VM is not run with `--seed`, so the draws come from OS entropy, but `Random.int` has a 31-bit seed: the names can be guessed. That is only a denial of service, never a way in: a hostile local user could occupy the names the driver will draw, but `Dir.mkdir_private` is exclusive and 0700, so the driver can never end up in a directory it did not make. The port tries a bounded number of times (16), a new name each time, and after the last failure reports an infrastructure error that names the temporary directory and the last system error. Reading 16 bytes of `/dev/urandom` with `File.open` and `File.read_bytes` needs no new builtin and gives an unguessable name; step 7b picks one (decided below). |
-| Walking the test paths | `directory-list`, `file-or-directory-type`, `directory-exists?`, `file-exists?` | `Dir.list`, `File.lstat`, `File.stat` | **Existing, with one gap.** `Dir.list` decodes names lossily, so `utf-8-name?` cannot tell a name with a bad byte from one with a real U+FFFD. The port treats a name with U+FFFD as not UTF-8 (a real U+FFFD in a file name is the only false report); step 7b records the choice. |
-| Starting the runner and reading its output | `subprocess`, with a thread that copies each stream | `Process.spawn_captured`, `Process.output`, `Process.wait`, `Process.close` | **Existing, with one limit to check in 7b.** A captured stream keeps 1 MiB; the Racket driver keeps any size. A `--json` report of a very large run may pass it, and `Process.output` then marks it truncated. |
-| Cleanup when a signal ends the driver | `dynamic-wind` and `stop-vm`: a break (Ctrl-C, SIGTERM) unwinds the driver, which removes its run directory and closes the lock | the VM's own end of run | **Existing, and a behavior change.** The VM does not unwind: a stop signal ends it between turns, kills its children and does not run the program's cleanup. A run stopped that way leaves its directory in the temporary directory until the next run's sweep removes it; the lock is what tells that sweep the directory is abandoned, since the process's end releases it. Until §46 gives a program a stop hook, step 7b records this as a known difference from the Racket driver. |
+- **Need:** A runner environment without `AGENTICA_VM_METRICS*`
+  - **In `src/bdd-driver.rkt`:** `run-runner` clears both names in a copy of the
+    environment
+  - **In Agentica:** `Process.spawn_captured`
+  - **Result:** **Existing builtin, new rule.** The child environment of every
+    `Process.spawn*` drops `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE`,
+    matched with their `=` (the rule of §28.5, done early because the driver
+    cannot edit a child's environment). `System.env` still shows them to the
+    program itself. The VM reads neither variable yet (phase 18), so nothing
+    else changes.
+
+- **Need:** A private 0700 temporary directory
+  - **In `src/bdd-driver.rkt`:** `make-directory current #o700`, which fails
+    when the name exists
+  - **In Agentica:** `Dir.mkdir_private(path, timeout_ms)`
+  - **Result:** **New.** `Dir.mkdir` creates parents and accepts an existing
+    directory, so it cannot claim a name.
+
+- **Need:** Giving the run directory its final name
+  - **In `src/bdd-driver.rkt`:** `rename-file-or-directory current directory`:
+    the driver makes `agentica-bdd-new-<hex>`, locks a file in it, and only then
+    renames it to `agentica-bdd-<hex>`, so a concurrent sweep, which looks at
+    `agentica-bdd-<hex>` names only, never finds an unlocked directory
+  - **In Agentica:** `Path.rename(from, to, timeout_ms)`
+  - **Result:** **New.** One `renameat2` with `RENAME_NOREPLACE`: it never
+    replaces, so a name that is taken stays taken (plain `rename` replaces a
+    file and an empty directory), and it is atomic. The lock follows the file,
+    since it belongs to the open file and not to the path. A file system that
+    lacks `RENAME_NOREPLACE` (some network file systems) answers with an error,
+    which the driver reports as an infrastructure error.
+
+- **Need:** Finding the temporary directory
+  - **In `src/bdd-driver.rkt`:** `(find-system-path 'temp-dir)`
+    (`bdd-driver.rkt`, line 245): `TMPDIR` when it is set and names a directory,
+    else the first directory among `/var/tmp`, `/usr/tmp` and `/tmp`
+  - **In Agentica:** `System.env("TMPDIR")` and `File.stat`
+  - **Result:** **Existing, no builtin.** The port walks the same list and takes
+    the first path that `File.stat` says is a directory (a relative `TMPDIR` is
+    kept as given, as in Racket). When none is a directory it reports an
+    infrastructure error.
+
+- **Need:** An `flock`'d lock file
+  - **In `src/bdd-driver.rkt`:** `open-output-file ... #:exists 'error
+    #:permissions #o600`, then `port-try-file-lock?`
+  - **In Agentica:** `File.open(path, "create_private", ms)`, then
+    `File.try_lock(handle, ms)`
+  - **Result:** **New** (the open mode and the lock). The lock belongs to the
+    open file, so `File.close`, the end of the owning task and the end of the
+    process release it, and no child inherits it (descriptors are
+    close-on-exec). `ok(false)` says another handle or process holds it: the
+    call never waits.
+
+- **Need:** Locking the lock file of a possibly stale directory
+  - **In `src/bdd-driver.rkt`:** `abandoned?` opens the file with `#:exists
+    'update` and tries the lock
+  - **In Agentica:** `File.open(path, "read", ms)`, then `File.try_lock`
+  - **Result:** **Existing open, new lock.** `flock` does not need write access,
+    so a read handle locks.
+
+- **Need:** The `TMPDIR` mode check
+  - **In `src/bdd-driver.rkt`:** `file-or-directory-stat` for `mode`, `user-id`
+    and `group-id` of `TMPDIR` (links followed) and of the new directory
+  - **In Agentica:** `File.stat` and `File.lstat`
+  - **Result:** **New `FileInfo` fields** `mode` (`st_mode & 07777`, so the
+    sticky and setgid bits are in it), `user_id` and `group_id`, appended after
+    `modified_seconds` in `File.stat`.
+
+- **Need:** An `lstat`-like call
+  - **In `src/bdd-driver.rkt`:** `file-or-directory-type path #t` and
+    `file-or-directory-stat path #t` in `discover` and `abandoned?`
+  - **In Agentica:** `File.lstat(path, timeout_ms)`
+  - **Result:** **New.** It returns `FileInfo` like `File.stat`, but a symbolic
+    link is described itself (`kind` is `"link"`); `File.stat` then tells what
+    the link names.
+
+- **Need:** The process's own PID
+  - **In `src/bdd-driver.rkt`:** `getpid`, given to the runner as `--driver-pid`
+  - **In Agentica:** `System.pid()`
+  - **Result:** **New.** The child VM compares it with its parent
+    (`bind_to_driver`), so the value must be the VM's own PID.
+
+- **Need:** A 0600 write of the bytecode, the config and the lock
+  - **In `src/bdd-driver.rkt`:** `write-private`: `#:exists 'error #:permissions
+    #o600`
+  - **In Agentica:** `File.open(path, "create_private", ms)`,
+    `File.write_bytes`, `File.close`
+  - **Result:** **New open mode**, no new write builtin, so a file larger than 1
+    MiB is written in several calls. A VM started with `--driver-pid` reads only
+    a private bytecode file (owner, one link, no group or other bits) and
+    deletes it.
+
+- **Need:** Delete a file, and remove the run directory tree
+  - **In `src/bdd-driver.rkt`:** `delete-directory/files` on each child of the
+    run directory, then on the directory
+  - **In Agentica:** `Path.remove(path, ms)`
+  - **Result:** **New** (`vm/tree.c`), one builtin for both, named as §46.4
+    names it. It unlinks a file or a link itself; a directory it opens level by
+    level with `O_NOFOLLOW` and empties with `unlinkat`, so a link inside the
+    tree is removed as a link and its target is never touched. A missing path is
+    `ok()`, like `#:must-exist? #f`. It refuses `/`, `.` and `..` (as the last
+    part of a path), and a tree deeper than 128 levels. Like Racket's
+    `delete-directory/files`, and Python's `rmtree`, it crosses mount points. A
+    failure inside the tree names the entry that failed, as they do. A timeout
+    returns the error but does not stop a removal that is running.
+
+- **Need:** A random directory name
+  - **In `src/bdd-driver.rkt`:** `crypto-random-bytes 16`
+  - **In Agentica:** `Random.int`
+  - **Result:** **Existing, weaker.** The driver VM is not run with `--seed`, so
+    the draws come from OS entropy, but `Random.int` has a 31-bit seed: the
+    names can be guessed. That is only a denial of service, never a way in: a
+    hostile local user could occupy the names the driver will draw, but
+    `Dir.mkdir_private` is exclusive and 0700, so the driver can never end up in
+    a directory it did not make. The port tries a bounded number of times (16),
+    a new name each time, and after the last failure reports an infrastructure
+    error that names the temporary directory and the last system error. Reading
+    16 bytes of `/dev/urandom` with `File.open` and `File.read_bytes` needs no
+    new builtin and gives an unguessable name; step 7b picks one (decided
+    below).
+
+- **Need:** Walking the test paths
+  - **In `src/bdd-driver.rkt`:** `directory-list`, `file-or-directory-type`,
+    `directory-exists?`, `file-exists?`
+  - **In Agentica:** `Dir.list`, `File.lstat`, `File.stat`
+  - **Result:** **Existing, with one gap.** `Dir.list` decodes names lossily, so
+    `utf-8-name?` cannot tell a name with a bad byte from one with a real
+    U+FFFD. The port treats a name with U+FFFD as not UTF-8 (a real U+FFFD in a
+    file name is the only false report); step 7b records the choice.
+
+- **Need:** Starting the runner and reading its output
+  - **In `src/bdd-driver.rkt`:** `subprocess`, with a thread that copies each
+    stream
+  - **In Agentica:** `Process.spawn_captured`, `Process.output`, `Process.wait`,
+    `Process.close`
+  - **Result:** **Existing, with one limit to check in 7b.** A captured stream
+    keeps 1 MiB; the Racket driver keeps any size. A `--json` report of a very
+    large run may pass it, and `Process.output` then marks it truncated.
+
+- **Need:** Cleanup when a signal ends the driver
+  - **In `src/bdd-driver.rkt`:** `dynamic-wind` and `stop-vm`: a break (Ctrl-C,
+    SIGTERM) unwinds the driver, which removes its run directory and closes the
+    lock
+  - **In Agentica:** the VM's own end of run
+  - **Result:** **Existing, and a behavior change.** The VM does not unwind: a
+    stop signal ends it between turns, kills its children and does not run the
+    program's cleanup. A run stopped that way leaves its directory in the
+    temporary directory until the next run's sweep removes it; the lock is what
+    tells that sweep the directory is abandoned, since the process's end
+    releases it. Until §46 gives a program a stop hook, step 7b records this as
+    a known difference from the Racket driver.
 
 **Decided in step 7b.** The choices the audit left to the port:
 
@@ -1252,7 +1569,8 @@ for the 290 of `src/bytecode.rkt`. Notes:
   that no source gives (`tests/fixtures/frontend/limits/limits.agc` builds 22
   of them for the Agentica writer, 4 of them in the slow tier because they
   write a million bytes or build 65,535 structs; the test builds the same for
-  the Racket writer): the bytes or the code, the span, the file and the message of a limit
+  the Racket writer): the bytes or the code, the span, the file and the message
+of a limit
   must be equal. `BYTECODE-LIMIT` for nested List and Map levels in a JSON field
   type (1,024) cannot be reached from a source file, because the parser stops a
   type at 1,000 levels; the other limits (65,535 structs, enum variants, fields,
@@ -1455,11 +1773,13 @@ in rackunit until phase 3.
   the cases of `modules-test.rkt` that run programs, and the `compile` exit-code
   case of `bytecode-test.rkt`, are `tests/test_modules.py` and
   `tests/test_vm_diff_8.py`; `cli-in-process.rkt` is gone. What is left in
-  rackunit needs Racket on purpose: the stage tests (`lexer-test`, `parser-test`,
+  rackunit needs Racket on purpose: the stage tests (`lexer-test`,
+`parser-test`,
   `modules-test`, `checker-test`, `bytecode-test`, `diagnostic-test`), the live
   comparisons (`frontend-*`, frozen by 8c) and `vm-diff-common.rkt`, which is
   cut down to the three helpers the live comparisons use (the VM path,
-  `compile-file` and `run-process`). The old byte comparison of the in-process `compile-file`
+  `compile-file` and `run-process`). The old byte comparison of the in-process
+`compile-file`
   with the CLI `compile` is dropped: `test_vm_diff_8.py` checks that the CLI
   gives the same bytes twice, and the front-end bytecode goldens compare the
   writers. `compile-file` itself stays in `vm-diff-common.rkt` for the live

@@ -1,14 +1,21 @@
 # Agentica: grammar and language design
 
-Status: implemented by the interpreter: the single binary `agentica`, a C VM (`vm/`) that runs every program, with a front end written in Agentica (`compiler/`) inside it that compiles to bytecode. The Racket front end that came first was deleted (the git tag `bootstrap-racket` keeps it). This document describes what the interpreter accepts; remaining proposals live in [`future/`](../future/README.md).
+Status: implemented by the interpreter: the single binary `agentica`, a C VM
+(`vm/`) that runs every program, with a front end written in Agentica
+(`compiler/`) inside it that compiles to bytecode. The Racket front end that
+came first was deleted (the git tag `bootstrap-racket` keeps it). This document
+describes what the interpreter accepts; remaining proposals live in
+[`future/`](../future/README.md).
 
 ## 1. What we want to validate
 
-Agentica is a small statically typed language that AI agents can write, read and fix. This specification fixes its syntax, its rules and its diagnostics.
+Agentica is a small statically typed language that AI agents can write, read and
+fix. This specification fixes its syntax, its rules and its diagnostics.
 
 ## 2. Design decisions
 
-Each rule is stated once, in the section for its topic: lexical rules in §4, syntax and modules in §5, meaning and builtins in §6, and diagnostics in §7.
+Each rule is stated once, in the section for its topic: lexical rules in §4,
+syntax and modules in §5, meaning and builtins in §6, and diagnostics in §7.
 
 ## 3. A core program
 
@@ -36,4 +43,5 @@ def main() -> Void
 end
 ```
 
-The executable starts by calling `main()`. The top level holds only declarations; there are no executable statements there.
+The executable starts by calling `main()`. The top level holds only
+declarations; there are no executable statements there.

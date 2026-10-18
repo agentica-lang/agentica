@@ -1,12 +1,14 @@
 # Lowering and bytecode: new forms, opcodes and linked programs
 
-Read before changing `compiler/lower_*.agc`, `compiler/bytecode_*.agc` or adding an opcode.
+Read before changing `compiler/lower_*.agc`, `compiler/bytecode_*.agc` or adding
+an opcode.
 
 Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Widen the subset (new form or opcode)
 
-1. Read the matching rules in `docs/vm/02-reference-behavior.md` §2 (reference behavior) and `docs/vm/03-ir-and-bytecode.md` §3.3
+1. Read the matching rules in `docs/vm/02-reference-behavior.md` §2 (reference
+   behavior) and `docs/vm/03-ir-and-bytecode.md` §3.3
    (lowering). When a detail is not written down, decide it, write it into §2
    and pin it with a golden.
 2. `compiler/lower_*.agc`: lower the form. Emit one IR `step` per former AST
@@ -14,7 +16,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    the subset keeps failing with `LOWER-UNSUPPORTED` at its span; never
    miscompile. `vm-type?` says which checked types the VM accepts (the
    scalars, `(Struct name)` and `(Enum name ...)` declared in the program,
-   `Json`, `List`, `Map` and `Set` of accepted types, `Result` of accepted types or Void, and
+   `Json`, `List`, `Map` and `Set` of accepted types, `Result` of accepted types
+or Void, and
    `Fn` over accepted types with an accepted or Void result); a new
    value type widens it.
 3. New opcode: append it to `OPCODES` in `compiler/bytecode_tables.agc` and to
@@ -71,7 +74,8 @@ functions up by name.
   read, and the constants those read; only kept constants are initialized. A
   scalar literal constant (one literal, or `-` and a number) is a `CONST` at
   each read and has no slot. Every other constant that any emitted function
-  reads gets a slot, numbered in initialization order (`Checked.constants`), so an
+  reads gets a slot, numbered in initialization order (`Checked.constants`), so
+an
   unreachable function still loads; a slot nothing writes stays unset, and
   nothing can run the function that reads it. A kept constant is a function
   with no parameters named by its linked name whose body is `return <value>`.
@@ -104,8 +108,10 @@ functions up by name.
   creators already go through `agc_builtin_struct`, so it is a defence.
 - Struct and enum table names are display names: the bytecode writer passes
   the linked name through the display name (`types.agc`), as the
-  evaluator did when printing (`docs/vm/02-reference-behavior.md` §2.4). The lowerer keeps the
-  unique linked names as its keys and in the IR text. Variant ids are global in file order;
+  evaluator did when printing (`docs/vm/02-reference-behavior.md` §2.4). The
+lowerer keeps the
+  unique linked names as its keys and in the IR text. Variant ids are global in
+file order;
   struct ids and field indexes follow declaration order. Generic enums need
   nothing special: type arguments exist only in the checker.
 - `case` reads a local scrutinee in place (no copy) because every test and
@@ -121,7 +127,8 @@ functions up by name.
   after it. `TAIL_CALL` grows the registers to the frame base plus the
   callee's count first, then `memmove`s the argument window to `R[0..]`
   (windows overlap). It does not touch the depth, so a deep tail recursion
-  runs (the depth rule is in `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow need a
+  runs (the depth rule is in `docs/vm/05-values-execution-builtins.md` §6.1).
+Fixtures that must overflow need a
   non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); the
   deep tail-recursion case lives in `tests/test_vm_diff_8.py`. The loader
   treats `TAIL_CALL` as a call for the termination rules.
@@ -143,14 +150,16 @@ functions up by name.
   slot, and the exit test (`eq` with the last value) runs before `add-i`,
   so the largest Int never overflows. The loop top is a `STEP` with the
   `for` span, so each iteration charges one step even with an empty body
-  (never drop the loop); the counting natives call `charge_steps`, shared with `STEP`, before
+  (never drop the loop); the counting natives call `charge_steps`, shared with
+`STEP`, before
   each callback. The evaluator charges the same (`step!` per range
   iteration and per counting callback). `tests/fixtures/vm/step-limited/`
   holds huge loops that the extras shard runs only with small
   `--max-steps` values. `Range.each`, `Int.times`, `upto` and
   `downto` are counting native frames (`counting()` in `vm/interp.c`): no
   list, a current value, a last value, a direction and a "more" flag. The
-  range text is at most 43 bytes, so `AGC_SCALAR_TEXT` is 48 (a `_Static_assert` keeps it at least 44).
+  range text is at most 43 bytes, so `AGC_SCALAR_TEXT` is 48 (a `_Static_assert`
+keeps it at least 44).
 - Results: `ok`, `error` and `Result.*` are builtins (`vm/builtins.c`);
   `try`, `is-ok` and `result-value` are opcodes. A Result pattern is a
   `variant-pattern` with enum name `"Result"` and variant `"Ok"` or `"Err"`

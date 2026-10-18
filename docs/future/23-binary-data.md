@@ -264,12 +264,16 @@ Binary.read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[Int]
   | Case | Message |
   |---|---|
   | `read_frame_length` with `max < 0` | `frame limit -1 is negative` |
-  | `offset < 0` or `offset > data.size - n` (no overflow for any offset) | `u32 at offset 10 is outside a list of length 12` |
-  | an item that is not in `0 .. 255`, the first one by index | `value 300 at index 2 is not a byte` |
+  | `offset < 0` or `offset > data.size - n` (no overflow for any offset) | `u32
+at offset 10 is outside a list of length 12` |
+  | an item that is not in `0 .. 255`, the first one by index | `value 300 at
+index 2 is not a byte` |
   | `read_u64_*` with the top bit set | `u64 at offset 0 does not fit in Int` |
   | a writer's value outside its type | `value 70000 does not fit in u16` |
-  | `frame` with more than `4294967295` items | `payload of 4294967296 bytes does not fit in a u32 length` |
-  | `read_frame_length` above `max` | `frame length 70000 is above the limit 65536` |
+  | `frame` with more than `4294967295` items | `payload of 4294967296 bytes
+does not fit in a u32 length` |
+  | `read_frame_length` above `max` | `frame length 70000 is above the limit
+65536` |
 
   The type in a message is the one in the function name (`u8`, `i16`, `f32`,
   ...; `read_frame_length` reads a `u32`). Messages are lowercase with no final

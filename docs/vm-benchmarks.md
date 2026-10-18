@@ -33,20 +33,79 @@ Latest run: 2026-10-11, median of 5 runs at size 1, on an AMD Ryzen 5 3550H (4
 cores, 12 GB RAM), Debian 13, Racket 9.3 CS, gcc 14.2, Python 3.13.5. The host
 is shared with CI, so the numbers are rough.
 
-| Program | Work | VM s | Python s | VM / Python (below 1 is faster) |
-|---|---|---:|---:|---:|
-| knight-tour | Warnsdorff search with backtracking, 8x8, 22 starts | 0.037 | 0.031 | 1.2 |
-| maze-bfs | breadth-first search over four 40x40 mazes | 0.059 | 0.044 | 1.3 |
-| traveling-salesman | branch and bound over 9 cities | 0.031 | 0.030 | 1.0 |
-| arithmetic | Collatz lengths of 1 to 2500 | 0.044 | 0.040 | 1.1 |
-| strings | 2,000 lines built with `+` and interpolation | 0.019 | 0.026 | 0.7 |
-| string-library | split, trim, upcase, join, replace and more over non-ASCII text | 0.034 | 0.045 | 0.8 |
-| lists | 30 rounds of `push` to 1,000 items, then filter, map, reduce, sort | 0.064 | 0.057 | 1.1 |
-| list-build | 20,000 `push` calls, 20,000 `set` calls at scattered indexes, a `for` sum | 0.062 | 0.039 | 1.6 |
-| maps | 5 rounds of 6,000 `put` and `get` over 1,009 keys | 0.094 | 0.024 | 3.9 |
-| calls | recursive `fib` and 40,000 small helper calls | 0.021 | 0.037 | 0.6 |
-| case | an enum instruction list run 5,000 times through `case` | 0.022 | 0.069 | 0.3 |
-| small-values | one-character and empty Strings, empty Lists, Maps and Sets, 2 rounds | 0.111 | 0.093 | 1.2 |
+- **Program:** knight-tour
+  - **Work:** Warnsdorff search with backtracking, 8x8, 22 starts
+  - **VM s:** 0.037
+  - **Python s:** 0.031
+  - **VM / Python (below 1 is faster):** 1.2
+
+- **Program:** maze-bfs
+  - **Work:** breadth-first search over four 40x40 mazes
+  - **VM s:** 0.059
+  - **Python s:** 0.044
+  - **VM / Python (below 1 is faster):** 1.3
+
+- **Program:** traveling-salesman
+  - **Work:** branch and bound over 9 cities
+  - **VM s:** 0.031
+  - **Python s:** 0.030
+  - **VM / Python (below 1 is faster):** 1.0
+
+- **Program:** arithmetic
+  - **Work:** Collatz lengths of 1 to 2500
+  - **VM s:** 0.044
+  - **Python s:** 0.040
+  - **VM / Python (below 1 is faster):** 1.1
+
+- **Program:** strings
+  - **Work:** 2,000 lines built with `+` and interpolation
+  - **VM s:** 0.019
+  - **Python s:** 0.026
+  - **VM / Python (below 1 is faster):** 0.7
+
+- **Program:** string-library
+  - **Work:** split, trim, upcase, join, replace and more over non-ASCII text
+  - **VM s:** 0.034
+  - **Python s:** 0.045
+  - **VM / Python (below 1 is faster):** 0.8
+
+- **Program:** lists
+  - **Work:** 30 rounds of `push` to 1,000 items, then filter, map, reduce, sort
+  - **VM s:** 0.064
+  - **Python s:** 0.057
+  - **VM / Python (below 1 is faster):** 1.1
+
+- **Program:** list-build
+  - **Work:** 20,000 `push` calls, 20,000 `set` calls at scattered indexes, a
+    `for` sum
+  - **VM s:** 0.062
+  - **Python s:** 0.039
+  - **VM / Python (below 1 is faster):** 1.6
+
+- **Program:** maps
+  - **Work:** 5 rounds of 6,000 `put` and `get` over 1,009 keys
+  - **VM s:** 0.094
+  - **Python s:** 0.024
+  - **VM / Python (below 1 is faster):** 3.9
+
+- **Program:** calls
+  - **Work:** recursive `fib` and 40,000 small helper calls
+  - **VM s:** 0.021
+  - **Python s:** 0.037
+  - **VM / Python (below 1 is faster):** 0.6
+
+- **Program:** case
+  - **Work:** an enum instruction list run 5,000 times through `case`
+  - **VM s:** 0.022
+  - **Python s:** 0.069
+  - **VM / Python (below 1 is faster):** 0.3
+
+- **Program:** small-values
+  - **Work:** one-character and empty Strings, empty Lists, Maps and Sets, 2
+    rounds
+  - **VM s:** 0.111
+  - **Python s:** 0.093
+  - **VM / Python (below 1 is faster):** 1.2
 
 The `small-values` row is from 2026-10-16 (`--runs 7`, the shared small values
 of roadmap 7g, below); VM peak RSS 7.1 MB, Python 10.1 MB.
@@ -243,47 +302,267 @@ with the three binaries alternating and their order rotated each round.
 Milliseconds per operation, and peak RSS of the whole process in MB
 (`/usr/bin/time -f %M`, start-up 5.6 MB included, the base list included):
 
-| Int list | Master ms | This VM ms | Ratio | Python ms | Master MB | This VM MB | Python MB |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `(0...n).to_a` | 5.8 | 4.8 | 0.82 | 56.6 | 37.6 | 30.2 | 47.9 |
-| 100,000 `push` calls | 38.8 | 30.0 | 0.77 | 6.8 | 10.8 | 7.2 | 13.5 |
-| `map` (`y + 1`) | 102.4 | 97.2 | 0.95 | 78.8 | 37.3 | 22.0 | 88.2 |
-| `filter` | 165.2 | 149.4 | 0.90 | 81.6 | 61.6 | 53.1 | 51.9 |
-| `sort`, in order | 10.7 | 8.3 | 0.77 | 15.0 | 69.2 | 45.5 | 55.5 |
-| `sort`, reversed | 15.9 | 10.9 | 0.69 | 17.4 | 116.5 | 92.4 | 55.6 |
-| `sort`, scattered | 100.6 | 70.6 | 0.70 | 189.0 | 115.5 | 98.7 | 61.2 |
-| `for x in xs` sum | 134.6 | 133.8 | 0.99 | 48.4 | 21.8 | 13.8 | 48.0 |
-| `xs[i]` for every 7th item | 23.7 | 23.6 | 1.00 | 16.8 | 21.9 | 14.0 | 47.9 |
-| `take`, `drop`, `concat` | 6.6 | 2.2 | 0.33 | 18.3 | 46.4 | 32.8 | 67.0 |
-| `List.repeat(7, n)` | under 0.01 | under 0.01 | | 1.7 | 5.8 | 5.9 | 17.5 |
+- **Int list:** `(0...n).to_a`
+  - **Master ms:** 5.8
+  - **This VM ms:** 4.8
+  - **Ratio:** 0.82
+  - **Python ms:** 56.6
+  - **Master MB:** 37.6
+  - **This VM MB:** 30.2
+  - **Python MB:** 47.9
 
-| Float list | Master ms | This VM ms | Ratio | Python ms | Master MB | This VM MB | Python MB |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `map` of an Int list to Float | 111.8 | 102.4 | 0.92 | 108.6 | 37.5 | 22.0 | 88.2 |
-| 100,000 `push` calls | 47.0 | 38.0 | 0.81 | 12.4 | 10.7 | 7.2 | 13.7 |
-| `map` (`y * 1.5`) | 103.8 | 98.0 | 0.94 | 81.6 | 37.7 | 29.8 | 86.2 |
-| `filter` | 105.4 | 104.2 | 0.99 | 44.6 | 61.1 | 68.0 | 51.8 |
-| `sort`, in order | 11.5 | 9.4 | 0.81 | 16.6 | 100.0 | 67.9 | 55.6 |
-| `sort`, reversed | 17.2 | 11.5 | 0.67 | 17.8 | 69.3 | 76.6 | 55.6 |
-| `sort`, scattered | 104.8 | 73.4 | 0.70 | 175.6 | 100.7 | 98.8 | 61.3 |
-| `for x in xs` sum | 137.6 | 93.0 | 0.68 | 31.4 | 37.4 | 22.0 | 48.0 |
-| `xs[i]` for every 7th item | 18.0 | 17.5 | 0.97 | 14.1 | 37.2 | 22.0 | 48.0 |
-| `take`, `drop`, `concat` | 7.1 | 2.6 | 0.36 | 18.6 | 62.4 | 30.2 | 67.0 |
-| `List.repeat(2.5, n)` | under 0.01 | under 0.01 | | 4.6 | 5.9 | 5.9 | 17.4 |
+- **Int list:** 100,000 `push` calls
+  - **Master ms:** 38.8
+  - **This VM ms:** 30.0
+  - **Ratio:** 0.77
+  - **Python ms:** 6.8
+  - **Master MB:** 10.8
+  - **This VM MB:** 7.2
+  - **Python MB:** 13.5
+
+- **Int list:** `map` (`y + 1`)
+  - **Master ms:** 102.4
+  - **This VM ms:** 97.2
+  - **Ratio:** 0.95
+  - **Python ms:** 78.8
+  - **Master MB:** 37.3
+  - **This VM MB:** 22.0
+  - **Python MB:** 88.2
+
+- **Int list:** `filter`
+  - **Master ms:** 165.2
+  - **This VM ms:** 149.4
+  - **Ratio:** 0.90
+  - **Python ms:** 81.6
+  - **Master MB:** 61.6
+  - **This VM MB:** 53.1
+  - **Python MB:** 51.9
+
+- **Int list:** `sort`, in order
+  - **Master ms:** 10.7
+  - **This VM ms:** 8.3
+  - **Ratio:** 0.77
+  - **Python ms:** 15.0
+  - **Master MB:** 69.2
+  - **This VM MB:** 45.5
+  - **Python MB:** 55.5
+
+- **Int list:** `sort`, reversed
+  - **Master ms:** 15.9
+  - **This VM ms:** 10.9
+  - **Ratio:** 0.69
+  - **Python ms:** 17.4
+  - **Master MB:** 116.5
+  - **This VM MB:** 92.4
+  - **Python MB:** 55.6
+
+- **Int list:** `sort`, scattered
+  - **Master ms:** 100.6
+  - **This VM ms:** 70.6
+  - **Ratio:** 0.70
+  - **Python ms:** 189.0
+  - **Master MB:** 115.5
+  - **This VM MB:** 98.7
+  - **Python MB:** 61.2
+
+- **Int list:** `for x in xs` sum
+  - **Master ms:** 134.6
+  - **This VM ms:** 133.8
+  - **Ratio:** 0.99
+  - **Python ms:** 48.4
+  - **Master MB:** 21.8
+  - **This VM MB:** 13.8
+  - **Python MB:** 48.0
+
+- **Int list:** `xs[i]` for every 7th item
+  - **Master ms:** 23.7
+  - **This VM ms:** 23.6
+  - **Ratio:** 1.00
+  - **Python ms:** 16.8
+  - **Master MB:** 21.9
+  - **This VM MB:** 14.0
+  - **Python MB:** 47.9
+
+- **Int list:** `take`, `drop`, `concat`
+  - **Master ms:** 6.6
+  - **This VM ms:** 2.2
+  - **Ratio:** 0.33
+  - **Python ms:** 18.3
+  - **Master MB:** 46.4
+  - **This VM MB:** 32.8
+  - **Python MB:** 67.0
+
+- **Int list:** `List.repeat(7, n)`
+  - **Master ms:** under 0.01
+  - **This VM ms:** under 0.01
+  - **Python ms:** 1.7
+  - **Master MB:** 5.8
+  - **This VM MB:** 5.9
+  - **Python MB:** 17.5
+
+- **Float list:** `map` of an Int list to Float
+  - **Master ms:** 111.8
+  - **This VM ms:** 102.4
+  - **Ratio:** 0.92
+  - **Python ms:** 108.6
+  - **Master MB:** 37.5
+  - **This VM MB:** 22.0
+  - **Python MB:** 88.2
+
+- **Float list:** 100,000 `push` calls
+  - **Master ms:** 47.0
+  - **This VM ms:** 38.0
+  - **Ratio:** 0.81
+  - **Python ms:** 12.4
+  - **Master MB:** 10.7
+  - **This VM MB:** 7.2
+  - **Python MB:** 13.7
+
+- **Float list:** `map` (`y * 1.5`)
+  - **Master ms:** 103.8
+  - **This VM ms:** 98.0
+  - **Ratio:** 0.94
+  - **Python ms:** 81.6
+  - **Master MB:** 37.7
+  - **This VM MB:** 29.8
+  - **Python MB:** 86.2
+
+- **Float list:** `filter`
+  - **Master ms:** 105.4
+  - **This VM ms:** 104.2
+  - **Ratio:** 0.99
+  - **Python ms:** 44.6
+  - **Master MB:** 61.1
+  - **This VM MB:** 68.0
+  - **Python MB:** 51.8
+
+- **Float list:** `sort`, in order
+  - **Master ms:** 11.5
+  - **This VM ms:** 9.4
+  - **Ratio:** 0.81
+  - **Python ms:** 16.6
+  - **Master MB:** 100.0
+  - **This VM MB:** 67.9
+  - **Python MB:** 55.6
+
+- **Float list:** `sort`, reversed
+  - **Master ms:** 17.2
+  - **This VM ms:** 11.5
+  - **Ratio:** 0.67
+  - **Python ms:** 17.8
+  - **Master MB:** 69.3
+  - **This VM MB:** 76.6
+  - **Python MB:** 55.6
+
+- **Float list:** `sort`, scattered
+  - **Master ms:** 104.8
+  - **This VM ms:** 73.4
+  - **Ratio:** 0.70
+  - **Python ms:** 175.6
+  - **Master MB:** 100.7
+  - **This VM MB:** 98.8
+  - **Python MB:** 61.3
+
+- **Float list:** `for x in xs` sum
+  - **Master ms:** 137.6
+  - **This VM ms:** 93.0
+  - **Ratio:** 0.68
+  - **Python ms:** 31.4
+  - **Master MB:** 37.4
+  - **This VM MB:** 22.0
+  - **Python MB:** 48.0
+
+- **Float list:** `xs[i]` for every 7th item
+  - **Master ms:** 18.0
+  - **This VM ms:** 17.5
+  - **Ratio:** 0.97
+  - **Python ms:** 14.1
+  - **Master MB:** 37.2
+  - **This VM MB:** 22.0
+  - **Python MB:** 48.0
+
+- **Float list:** `take`, `drop`, `concat`
+  - **Master ms:** 7.1
+  - **This VM ms:** 2.6
+  - **Ratio:** 0.36
+  - **Python ms:** 18.6
+  - **Master MB:** 62.4
+  - **This VM MB:** 30.2
+  - **Python MB:** 67.0
+
+- **Float list:** `List.repeat(2.5, n)`
+  - **Master ms:** under 0.01
+  - **This VM ms:** under 0.01
+  - **Python ms:** 4.6
+  - **Master MB:** 5.9
+  - **This VM MB:** 5.9
+  - **Python MB:** 17.4
 
 A `List[String]` is a boxed list and must not get slower. The same cases on
 strings (`List.repeat("abc", n)` as the base, `upcase`, and a scattered sort of
 `to_s` keys):
 
-| String list | Master ms | This VM ms | Ratio | Python ms | Master MB | This VM MB | Python MB |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 100,000 `push` calls | 50.8 | 51.6 | 1.02 | 4.6 | 10.8 | 10.8 | 10.6 |
-| `map` (`upcase`) | 221.0 | 211.0 | 0.95 | 115.4 | 77.8 | 77.8 | 73.0 |
-| `sort`, scattered | 543.6 | 593.4 | 1.09 | 466.6 | 132.7 | 155.8 | 76.6 |
-| `for x in xs`, `length` | 165.8 | 171.8 | 1.04 | 55.8 | 5.7 | 5.8 | 17.4 |
-| `xs[i]` for every 7th item | 26.8 | 27.9 | 1.04 | 21.5 | 5.7 | 5.8 | 17.4 |
-| `take`, `drop`, `concat` | 5.9 | 6.5 | 1.09 | 5.7 | 22.8 | 39.1 | 36.4 |
-| `List.repeat("x", n)` | under 0.01 | under 0.01 | | 1.8 | 5.9 | 5.9 | 17.4 |
+- **String list:** 100,000 `push` calls
+  - **Master ms:** 50.8
+  - **This VM ms:** 51.6
+  - **Ratio:** 1.02
+  - **Python ms:** 4.6
+  - **Master MB:** 10.8
+  - **This VM MB:** 10.8
+  - **Python MB:** 10.6
+
+- **String list:** `map` (`upcase`)
+  - **Master ms:** 221.0
+  - **This VM ms:** 211.0
+  - **Ratio:** 0.95
+  - **Python ms:** 115.4
+  - **Master MB:** 77.8
+  - **This VM MB:** 77.8
+  - **Python MB:** 73.0
+
+- **String list:** `sort`, scattered
+  - **Master ms:** 543.6
+  - **This VM ms:** 593.4
+  - **Ratio:** 1.09
+  - **Python ms:** 466.6
+  - **Master MB:** 132.7
+  - **This VM MB:** 155.8
+  - **Python MB:** 76.6
+
+- **String list:** `for x in xs`, `length`
+  - **Master ms:** 165.8
+  - **This VM ms:** 171.8
+  - **Ratio:** 1.04
+  - **Python ms:** 55.8
+  - **Master MB:** 5.7
+  - **This VM MB:** 5.8
+  - **Python MB:** 17.4
+
+- **String list:** `xs[i]` for every 7th item
+  - **Master ms:** 26.8
+  - **This VM ms:** 27.9
+  - **Ratio:** 1.04
+  - **Python ms:** 21.5
+  - **Master MB:** 5.7
+  - **This VM MB:** 5.8
+  - **Python MB:** 17.4
+
+- **String list:** `take`, `drop`, `concat`
+  - **Master ms:** 5.9
+  - **This VM ms:** 6.5
+  - **Ratio:** 1.09
+  - **Python ms:** 5.7
+  - **Master MB:** 22.8
+  - **This VM MB:** 39.1
+  - **Python MB:** 36.4
+
+- **String list:** `List.repeat("x", n)`
+  - **Master ms:** under 0.01
+  - **This VM ms:** under 0.01
+  - **Python ms:** 1.8
+  - **Master MB:** 5.9
+  - **This VM MB:** 5.9
+  - **Python MB:** 17.4
 
 How to read the tables:
 
@@ -390,7 +669,8 @@ every key was new; the single pass removed that cost.
 `intersection` and `difference` first count the elements they keep with lookups
 only, and return the first set itself when none is dropped. On a 300,000-element
 set this took 3,455 ms when it built a copy that nothing needed; the count pass
-takes about 150 ms (an `intersection` of two equal sets) or 19 ms (a `difference`
+takes about 150 ms (an `intersection` of two equal sets) or 19 ms (a
+`difference`
 with an empty set). When half the elements go, the second pass builds the
 result: about 1.8 s for 150,000 puts. `Test.eq` and `subset?` on two equal
 sets of 300,000 take about 145 ms.
@@ -441,10 +721,9 @@ python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a qu
 
 Results are not recorded yet. They need an idle-machine run (roadmap
 [20c-bench](roadmap/20-hybrid-http.md)), and the script marks any round that ran
-on a busy machine. The table below fills in after that run.
-
-| Connections | Server | Requests/s | Min to max | p50 ms | p99 ms | Server CPU | Max client CPU |
-|---:|---|---:|---|---:|---:|---:|---:|
+on a busy machine. The results include connection count, server, requests per
+second, min-to-max latency, p50 and p99 latency, server CPU and maximum client
+CPU.
 
 ## Front end (post-bootstrap row 3)
 
@@ -482,7 +761,8 @@ gherkin 21 MB, parser 34 MB, `front_end.agc` 89 MB).
 The only change in this part that touches a run is the last two rows: `agentica
 test` used to compile `std/test/runner` (15,346,072 VM steps, 0.73 s) and the
 default step program `std/bdd` (2,859,782 steps, 0.15 s) on every run. The
-compiles are done when the binary is built. The VM benchmarks (`b-*.agcb` at scale 10,
+compiles are done when the binary is built. The VM benchmarks (`b-*.agcb` at
+scale 10,
 alternating, medians) moved between 0.85 and 1.04 times the old binary, which
 is the link-layout noise of this file (the padding experiments above), not a
 cost of the profiler: the profile hooks live in a second copy of the turn loop
@@ -661,12 +941,37 @@ run of gherkin at load 1.0 gave 127.0 and 98.5 ms. The resident size went down
 (`front_end.agc` 100.5 to 92.0 MB, gherkin 21.4 to 21.1 MB, `hello` 15.0 to
 14.8 MB).
 
-| command | steps before | steps after | `lexer.agc` steps before | after | s before | s after |
-|---|---:|---:|---:|---:|---:|---:|
-| `check examples/hello.agc` | 27,946 | 26,172 | 11,127 | 9,511 | 0.0272 | 0.0279 |
-| `check stdlib/bdd/gherkin.agc` | 2,833,726 | 1,923,661 | 1,647,836 | 867,097 | 0.1264 | 0.0993 |
-| `check compiler/parser.agc` | 11,153,906 | 7,420,483 | 6,682,444 | 3,431,804 | 0.401 | 0.304 |
-| `check compiler/front_end.agc` | 77,669,291 | 54,796,784 | 39,430,947 | 19,570,418 | 3.137 | 2.413 |
+- **command:** `check examples/hello.agc`
+  - **steps before:** 27,946
+  - **steps after:** 26,172
+  - **`lexer.agc` steps before:** 11,127
+  - **after:** 9,511
+  - **s before:** 0.0272
+  - **s after:** 0.0279
+
+- **command:** `check stdlib/bdd/gherkin.agc`
+  - **steps before:** 2,833,726
+  - **steps after:** 1,923,661
+  - **`lexer.agc` steps before:** 1,647,836
+  - **after:** 867,097
+  - **s before:** 0.1264
+  - **s after:** 0.0993
+
+- **command:** `check compiler/parser.agc`
+  - **steps before:** 11,153,906
+  - **steps after:** 7,420,483
+  - **`lexer.agc` steps before:** 6,682,444
+  - **after:** 3,431,804
+  - **s before:** 0.401
+  - **s after:** 0.304
+
+- **command:** `check compiler/front_end.agc`
+  - **steps before:** 77,669,291
+  - **steps after:** 54,796,784
+  - **`lexer.agc` steps before:** 39,430,947
+  - **after:** 19,570,418
+  - **s before:** 3.137
+  - **s after:** 2.413
 
 The lexer no longer calls `Source.position` (`source.agc`, 3.2 M steps in
 `front_end.agc`), so the lexer part of `front_end.agc` is 42.7 M steps before
@@ -937,25 +1242,127 @@ Micro programs, each a loop of 0.1 to 3 million iterations over one path (3
 rounds of 3 runs, bytecode compiled once; the megabytes and collections come
 from the profile line):
 
-| Path | Master s | This PR s | Ratio | Master MB (GCs) | This PR MB (GCs) |
-|---|---:|---:|---:|---:|---:|
-| `text.at(i)` | 0.422 | 0.321 | 0.76 | 104.0 (18) | 8.1 (3) |
-| `text.slice(i, 1)` | 0.443 | 0.334 | 0.76 | 104.1 | 8.0 |
-| `String.from_code` of ASCII | 0.452 | 0.336 | 0.74 | 102.8 (28) | 6.8 (3) |
-| `trim` with nothing to trim | 0.313 | 0.218 | 0.70 | 102.8 | 6.7 |
-| `reverse` of short Strings | 0.513 | 0.393 | 0.77 | 134.8 (36) | 6.8 (3) |
-| `upcase` and `downcase` of one character | 2.176 | 1.318 | 0.61 | 403.8 (107) | 7.0 (3) |
-| `to_s` of a digit | 0.499 | 0.444 | 0.89 | 70.8 (20) | 6.7 (3) |
-| empties: `slice(0, 0)`, `trim` of blanks, `join` of `[]`, `replace` to nothing | 0.677 | 0.545 | 0.81 | 135.3 (37) | 7.2 (3) |
-| `split` with empty pieces | 0.256 | 0.230 | 0.90 | 99.7 (28) | 61.3 (17) |
-| `split("\n")` with empty lines | 0.098 | 0.087 | 0.89 | 31.6 (7) | 21.9 (5) |
-| `String.from_bytes([])` | 0.281 | 0.236 | 0.84 | 70.9 (20) | 38.9 (11) |
-| `String.from_bytes` of one byte | 0.420 | 0.348 | 0.83 | 118.9 (32) | 86.9 (24) |
-| `JSON.parse` of small Strings and keys | 0.150 | 0.113 | 0.76 | 94.2 (28) | 67.3 (20) |
-| `File.each_line` over short lines | 0.488 | 0.463 | 0.95 | 151.1 (41) | 119.0 (32) |
-| `IO.gets` over short lines | 0.056 | 0.052 | 0.92 | 14.0 (5) | 12.3 (5) |
-| sets: `Set.new([])`, `delete` of the last element, `difference`, `intersection`, `Map.delete` | 1.885 | 1.647 | 0.87 | 455.5 (123) | 263.5 (72) |
-| empty Lists: `take(0)`, `drop`, `keys`, `to_a`, `split`, `reverse`, `filter` | 2.357 | 1.952 | 0.83 | 952.0 (258) | 743.9 (202) |
+- **Path:** `text.at(i)`
+  - **Master s:** 0.422
+  - **This PR s:** 0.321
+  - **Ratio:** 0.76
+  - **Master MB (GCs):** 104.0 (18)
+  - **This PR MB (GCs):** 8.1 (3)
+
+- **Path:** `text.slice(i, 1)`
+  - **Master s:** 0.443
+  - **This PR s:** 0.334
+  - **Ratio:** 0.76
+  - **Master MB (GCs):** 104.1
+  - **This PR MB (GCs):** 8.0
+
+- **Path:** `String.from_code` of ASCII
+  - **Master s:** 0.452
+  - **This PR s:** 0.336
+  - **Ratio:** 0.74
+  - **Master MB (GCs):** 102.8 (28)
+  - **This PR MB (GCs):** 6.8 (3)
+
+- **Path:** `trim` with nothing to trim
+  - **Master s:** 0.313
+  - **This PR s:** 0.218
+  - **Ratio:** 0.70
+  - **Master MB (GCs):** 102.8
+  - **This PR MB (GCs):** 6.7
+
+- **Path:** `reverse` of short Strings
+  - **Master s:** 0.513
+  - **This PR s:** 0.393
+  - **Ratio:** 0.77
+  - **Master MB (GCs):** 134.8 (36)
+  - **This PR MB (GCs):** 6.8 (3)
+
+- **Path:** `upcase` and `downcase` of one character
+  - **Master s:** 2.176
+  - **This PR s:** 1.318
+  - **Ratio:** 0.61
+  - **Master MB (GCs):** 403.8 (107)
+  - **This PR MB (GCs):** 7.0 (3)
+
+- **Path:** `to_s` of a digit
+  - **Master s:** 0.499
+  - **This PR s:** 0.444
+  - **Ratio:** 0.89
+  - **Master MB (GCs):** 70.8 (20)
+  - **This PR MB (GCs):** 6.7 (3)
+
+- **Path:** empties: `slice(0, 0)`, `trim` of blanks, `join` of `[]`, `replace`
+  to nothing
+  - **Master s:** 0.677
+  - **This PR s:** 0.545
+  - **Ratio:** 0.81
+  - **Master MB (GCs):** 135.3 (37)
+  - **This PR MB (GCs):** 7.2 (3)
+
+- **Path:** `split` with empty pieces
+  - **Master s:** 0.256
+  - **This PR s:** 0.230
+  - **Ratio:** 0.90
+  - **Master MB (GCs):** 99.7 (28)
+  - **This PR MB (GCs):** 61.3 (17)
+
+- **Path:** `split("\n")` with empty lines
+  - **Master s:** 0.098
+  - **This PR s:** 0.087
+  - **Ratio:** 0.89
+  - **Master MB (GCs):** 31.6 (7)
+  - **This PR MB (GCs):** 21.9 (5)
+
+- **Path:** `String.from_bytes([])`
+  - **Master s:** 0.281
+  - **This PR s:** 0.236
+  - **Ratio:** 0.84
+  - **Master MB (GCs):** 70.9 (20)
+  - **This PR MB (GCs):** 38.9 (11)
+
+- **Path:** `String.from_bytes` of one byte
+  - **Master s:** 0.420
+  - **This PR s:** 0.348
+  - **Ratio:** 0.83
+  - **Master MB (GCs):** 118.9 (32)
+  - **This PR MB (GCs):** 86.9 (24)
+
+- **Path:** `JSON.parse` of small Strings and keys
+  - **Master s:** 0.150
+  - **This PR s:** 0.113
+  - **Ratio:** 0.76
+  - **Master MB (GCs):** 94.2 (28)
+  - **This PR MB (GCs):** 67.3 (20)
+
+- **Path:** `File.each_line` over short lines
+  - **Master s:** 0.488
+  - **This PR s:** 0.463
+  - **Ratio:** 0.95
+  - **Master MB (GCs):** 151.1 (41)
+  - **This PR MB (GCs):** 119.0 (32)
+
+- **Path:** `IO.gets` over short lines
+  - **Master s:** 0.056
+  - **This PR s:** 0.052
+  - **Ratio:** 0.92
+  - **Master MB (GCs):** 14.0 (5)
+  - **This PR MB (GCs):** 12.3 (5)
+
+- **Path:** sets: `Set.new([])`, `delete` of the last element, `difference`,
+  `intersection`, `Map.delete`
+  - **Master s:** 1.885
+  - **This PR s:** 1.647
+  - **Ratio:** 0.87
+  - **Master MB (GCs):** 455.5 (123)
+  - **This PR MB (GCs):** 263.5 (72)
+
+- **Path:** empty Lists: `take(0)`, `drop`, `keys`, `to_a`, `split`, `reverse`,
+  `filter`
+  - **Master s:** 2.357
+  - **This PR s:** 1.952
+  - **Ratio:** 0.83
+  - **Master MB (GCs):** 952.0 (258)
+  - **This PR MB (GCs):** 743.9 (202)
 
 The time falls less than the bytes: Boehm already takes small atomic objects
 from a free list, and a short-lived one dies cheaply (§34.4 expected this). The

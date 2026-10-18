@@ -15,30 +15,79 @@ rules that keep them safe for agents to write.
 
 ### 42.1 Decisions at a glance
 
-| Choice | Recommendation |
-|---|---|
-| Integer types | Int8, Int16, Int32, UInt8, UInt16, UInt32, UInt64; Int64 is an alias of Int |
-| Float types | Float32 in step 2; Float64 is an alias of Float; Float16 and BFloat16 later |
-| Default spellings | Int and Float stay the names in examples and signatures |
-| Literals | Typed by context; Int when there is no context; no suffixes; no hex yet |
-| Literal out of range | CHECK-INT-RANGE (existing); CHECK-FLOAT-RANGE (new) |
-| Conversions | Plain value when it cannot fail; Result when it can; `!` halts; `wrap_` wraps |
-| Overflow | Halts at each width (RUNTIME-INTEGER-OVERFLOW), in both directions |
-| Modular math | `wrapping_add`, `wrapping_sub`, `wrapping_mul` on every integer type |
-| Bit operations | The seven `Int` names, read at each width |
-| Mixing types | CHECK-TYPE-MISMATCH; no implicit widening |
-| Map keys | Every integer type; no floats |
-| Range | Int only |
-| UInt64 text and JSON | Unsigned decimal; decoding reads the stored text |
-| JSON and schema | Sized struct fields, with bounds in the schema |
-| std/binary | Moves to the sized types in step 3 (breaking) |
-| Bytes | Not added; `List[UInt8]` does its job |
-| VM tags | One new tag per kind; the `Int` opcodes stay the same |
-| VM checks | One FIT opcode after 64-bit ops; unsigned ops for UInt64; ROUND_F32 |
-| Storage | `agc_value` items in steps 1 to 3; typed storage in step 4, if measured |
-| Phasing | 1 integers, 2 Float32, 3 binary API, 4 storage (gated) |
-| Freeze | Starts after step 8 of §35.4; nothing in `src/` changes |
-| Int and Float width | 64 bits on every target (§42.4, §42.16) |
+- **Choice:** Integer types
+  - **Recommendation:** Int8, Int16, Int32, UInt8, UInt16, UInt32, UInt64; Int64
+    is an alias of Int
+
+- **Choice:** Float types
+  - **Recommendation:** Float32 in step 2; Float64 is an alias of Float; Float16
+    and BFloat16 later
+
+- **Choice:** Default spellings
+  - **Recommendation:** Int and Float stay the names in examples and signatures
+
+- **Choice:** Literals
+  - **Recommendation:** Typed by context; Int when there is no context; no
+    suffixes; no hex yet
+
+- **Choice:** Literal out of range
+  - **Recommendation:** CHECK-INT-RANGE (existing); CHECK-FLOAT-RANGE (new)
+
+- **Choice:** Conversions
+  - **Recommendation:** Plain value when it cannot fail; Result when it can; `!`
+    halts; `wrap_` wraps
+
+- **Choice:** Overflow
+  - **Recommendation:** Halts at each width (RUNTIME-INTEGER-OVERFLOW), in both
+    directions
+
+- **Choice:** Modular math
+  - **Recommendation:** `wrapping_add`, `wrapping_sub`, `wrapping_mul` on every
+    integer type
+
+- **Choice:** Bit operations
+  - **Recommendation:** The seven `Int` names, read at each width
+
+- **Choice:** Mixing types
+  - **Recommendation:** CHECK-TYPE-MISMATCH; no implicit widening
+
+- **Choice:** Map keys
+  - **Recommendation:** Every integer type; no floats
+
+- **Choice:** Range
+  - **Recommendation:** Int only
+
+- **Choice:** UInt64 text and JSON
+  - **Recommendation:** Unsigned decimal; decoding reads the stored text
+
+- **Choice:** JSON and schema
+  - **Recommendation:** Sized struct fields, with bounds in the schema
+
+- **Choice:** std/binary
+  - **Recommendation:** Moves to the sized types in step 3 (breaking)
+
+- **Choice:** Bytes
+  - **Recommendation:** Not added; `List[UInt8]` does its job
+
+- **Choice:** VM tags
+  - **Recommendation:** One new tag per kind; the `Int` opcodes stay the same
+
+- **Choice:** VM checks
+  - **Recommendation:** One FIT opcode after 64-bit ops; unsigned ops for
+    UInt64; ROUND_F32
+
+- **Choice:** Storage
+  - **Recommendation:** `agc_value` items in steps 1 to 3; typed storage in step
+    4, if measured
+
+- **Choice:** Phasing
+  - **Recommendation:** 1 integers, 2 Float32, 3 binary API, 4 storage (gated)
+
+- **Choice:** Freeze
+  - **Recommendation:** Starts after step 8 of §35.4; nothing in `src/` changes
+
+- **Choice:** Int and Float width
+  - **Recommendation:** 64 bits on every target (§42.4, §42.16)
 
 ### 42.2 Today
 
@@ -122,15 +171,53 @@ the evaluation rounds measure the binary tasks again after step 3 (§42.13).
 Comparison with other languages. Each row is the language's own rule as of this
 writing.
 
-| Language | Integer types | Implicit conversion | Overflow by default | Modular ops | Notes |
-|---|---|---|---|---|---|
-| Go | int8 to int64, uint8 to uint64; `int` is 32 or 64 bit | none | wraps silently | the wrap is the rule | `byte` and `rune` are aliases |
-| Rust | i8 to i128, u8 to u128, isize, usize | none (`as` casts) | panics in debug, wraps in release | `wrapping_*`, `checked_*`, `saturating_*` | `try_from` returns a Result |
-| Swift | Int8 to Int64, UInt8 to UInt64; `Int` is 64 bit | none | traps | `&+`, `&-`, `&*` | `init(exactly:)` returns an optional |
-| Zig | any width up to 65535 bits | safe widening only | illegal behavior, checked in safe builds | `+%`, `+\|` | `@intCast` is checked |
-| Kotlin | Byte, Short, Int (32 bit), Long; unsigned UByte to ULong | none | wraps silently | none in the core | `toByte()` and similar |
-| C# | sbyte, byte, short, ushort, int, uint, long, ulong | widening only | unchecked unless in `checked` | `unchecked` context | |
-| Python, Ruby | one `int`, arbitrary precision | none | never overflows | none needed | `struct` or `pack` for fixed widths |
+- **Language:** Go
+  - **Integer types:** int8 to int64, uint8 to uint64; `int` is 32 or 64 bit
+  - **Implicit conversion:** none
+  - **Overflow by default:** wraps silently
+  - **Modular ops:** the wrap is the rule
+  - **Notes:** `byte` and `rune` are aliases
+
+- **Language:** Rust
+  - **Integer types:** i8 to i128, u8 to u128, isize, usize
+  - **Implicit conversion:** none (`as` casts)
+  - **Overflow by default:** panics in debug, wraps in release
+  - **Modular ops:** `wrapping_*`, `checked_*`, `saturating_*`
+  - **Notes:** `try_from` returns a Result
+
+- **Language:** Swift
+  - **Integer types:** Int8 to Int64, UInt8 to UInt64; `Int` is 64 bit
+  - **Implicit conversion:** none
+  - **Overflow by default:** traps
+  - **Modular ops:** `&+`, `&-`, `&*`
+  - **Notes:** `init(exactly:)` returns an optional
+
+- **Language:** Zig
+  - **Integer types:** any width up to 65535 bits
+  - **Implicit conversion:** safe widening only
+  - **Overflow by default:** illegal behavior, checked in safe builds
+  - **Modular ops:** `+%`, `+\|`
+  - **Notes:** `@intCast` is checked
+
+- **Language:** Kotlin
+  - **Integer types:** Byte, Short, Int (32 bit), Long; unsigned UByte to ULong
+  - **Implicit conversion:** none
+  - **Overflow by default:** wraps silently
+  - **Modular ops:** none in the core
+  - **Notes:** `toByte()` and similar
+
+- **Language:** C#
+  - **Integer types:** sbyte, byte, short, ushort, int, uint, long, ulong
+  - **Implicit conversion:** widening only
+  - **Overflow by default:** unchecked unless in `checked`
+  - **Modular ops:** `unchecked` context
+
+- **Language:** Python, Ruby
+  - **Integer types:** one `int`, arbitrary precision
+  - **Implicit conversion:** none
+  - **Overflow by default:** never overflows
+  - **Modular ops:** none needed
+  - **Notes:** `struct` or `pack` for fixed widths
 
 The pattern: the languages that avoid silent wrong results halt on overflow
 (Rust in debug, Swift, Zig in safe builds), and they name the wrap operations
@@ -246,17 +333,35 @@ conversion.
   (`to_u8`, `wrap_u8`) keep the same forms with other names.
 - **Which are plain** (recommended):
 
-| Conversion | Form |
-|---|---|
-| Int8, Int16, Int32, UInt8, UInt16, UInt32 to Int | plain |
-| UInt64 to Int | Result (values above 2^63 - 1 exist) |
-| Int to Int8, Int16, Int32, UInt8, UInt16, UInt32, UInt64 | Result; `!` halts; `wrap_` wraps |
-| A lossless widening between sized types (for example UInt8 to UInt16, Int8 to Int32) | plain method on the source (`x.to_uint16`) |
-| Any integer to Float, through `to_float` | plain (rounds to nearest) |
-| Any integer to Float32, through `to_float32` | plain (rounds once, from the 64-bit integer, to nearest, ties to even; §42.9) |
-| Float32 to Float | plain (exact) |
-| Float to any integer type | Result; `!` halts; no wrap form |
-| Float to Float32 | plain (rounds; overflow gives an infinity of the same sign, as `Float.to_bits32` does, §23.3) |
+- **Conversion:** Int8, Int16, Int32, UInt8, UInt16, UInt32 to Int
+  - **Form:** plain
+
+- **Conversion:** UInt64 to Int
+  - **Form:** Result (values above 2^63 - 1 exist)
+
+- **Conversion:** Int to Int8, Int16, Int32, UInt8, UInt16, UInt32, UInt64
+  - **Form:** Result; `!` halts; `wrap_` wraps
+
+- **Conversion:** A lossless widening between sized types (for example UInt8 to
+  UInt16, Int8 to Int32)
+  - **Form:** plain method on the source (`x.to_uint16`)
+
+- **Conversion:** Any integer to Float, through `to_float`
+  - **Form:** plain (rounds to nearest)
+
+- **Conversion:** Any integer to Float32, through `to_float32`
+  - **Form:** plain (rounds once, from the 64-bit integer, to nearest, ties to
+    even; §42.9)
+
+- **Conversion:** Float32 to Float
+  - **Form:** plain (exact)
+
+- **Conversion:** Float to any integer type
+  - **Form:** Result; `!` halts; no wrap form
+
+- **Conversion:** Float to Float32
+  - **Form:** plain (rounds; overflow gives an infinity of the same sign, as
+    `Float.to_bits32` does, §23.3)
 
 - **Sized to sized (recommended).** A lossless widening is a plain method on the
   source (`x.to_uint16`, 12 pairs). Every other conversion between sized
@@ -604,7 +709,8 @@ independent Python peer, with the standard library only.
   `RUNTIME-INTEGER-OVERFLOW` for each direction and for `MIN / -1`;
   `RUNTIME-INVALID-COUNT` for a negative shift count.
 - **Checker tests.** (The Racket front end is deleted since PR #313; the
-  rest of this bullet is the plan as written.) The Racket checker is frozen, so no new rule goes into it,
+  rest of this bullet is the plan as written.) The Racket checker is frozen, so
+no new rule goes into it,
   and its rackunit tests are not extended for these checks. The new checks are
   tested by the goldens of the Agentica front end, against
   `agentica check --json`. The stage goldens of §35.4 cover the compiler

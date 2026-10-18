@@ -151,14 +151,37 @@ The patterns are in
 [`library/testing/bdd.md`](../site/content/library/testing/bdd.md) ("Built-in
 steps"). Each is a handler in `std/bdd`:
 
-| Step | What it does and its errors |
-| --- | --- |
-| `the Agentica program {string}` | `Process.spawn_captured` of `agentica [--allow-run] [--seed N] --max-steps 1000000 PATH` in the feature's directory, 30 s to start. A missing `.agc` file is `RUNTIME-BDD-PROGRAM`; a missing `agentica` is `RUNTIME-BDD-INFRA`. |
-| `I send ...`, `I close stdin` | `Process.send` or `Process.close_stdin`, 5 s. Closed stdin is `RUNTIME-BDD-CONTEXT`; a timeout is `RUNTIME-BDD-TIMEOUT`; other errors are `RUNTIME-BDD-IO`. |
-| `I receive ...` (three forms) | `Process.read_line` within the timeout. A different line, or an ended stdout, is `RUNTIME-BDD-ASSERTION`; a timeout is `RUNTIME-BDD-TIMEOUT`; the output limit is `RUNTIME-BDD-OUTPUT-LIMIT`. The JSON form parses both lines (`RUNTIME-BDD-JSON` if either is invalid) and compares canonical texts. |
-| `stdin remains open` | A send of empty text succeeds, and `Process.wait` for 1 ms times out; otherwise `RUNTIME-BDD-ASSERTION`. |
-| `the program exits with code {int} ...` | `Process.wait`; a timeout is `RUNTIME-BDD-TIMEOUT`; a truncated output is `RUNTIME-BDD-OUTPUT-LIMIT`; then the code is compared. |
-| `stdout is:`, `stderr is:` | Need an exited program (`RUNTIME-BDD-CONTEXT`, "complete output requires program exit"). Stdout is what no line step has read yet; stderr is all of it. |
+- **Step:** `the Agentica program {string}`
+  - **What it does and its errors:** `Process.spawn_captured` of `agentica
+    [--allow-run] [--seed N] --max-steps 1000000 PATH` in the feature's
+    directory, 30 s to start. A missing `.agc` file is `RUNTIME-BDD-PROGRAM`; a
+    missing `agentica` is `RUNTIME-BDD-INFRA`.
+
+- **Step:** `I send ...`, `I close stdin`
+  - **What it does and its errors:** `Process.send` or `Process.close_stdin`, 5
+    s. Closed stdin is `RUNTIME-BDD-CONTEXT`; a timeout is
+    `RUNTIME-BDD-TIMEOUT`; other errors are `RUNTIME-BDD-IO`.
+
+- **Step:** `I receive ...` (three forms)
+  - **What it does and its errors:** `Process.read_line` within the timeout. A
+    different line, or an ended stdout, is `RUNTIME-BDD-ASSERTION`; a timeout is
+    `RUNTIME-BDD-TIMEOUT`; the output limit is `RUNTIME-BDD-OUTPUT-LIMIT`. The
+    JSON form parses both lines (`RUNTIME-BDD-JSON` if either is invalid) and
+    compares canonical texts.
+
+- **Step:** `stdin remains open`
+  - **What it does and its errors:** A send of empty text succeeds, and
+    `Process.wait` for 1 ms times out; otherwise `RUNTIME-BDD-ASSERTION`.
+
+- **Step:** `the program exits with code {int} ...`
+  - **What it does and its errors:** `Process.wait`; a timeout is
+    `RUNTIME-BDD-TIMEOUT`; a truncated output is `RUNTIME-BDD-OUTPUT-LIMIT`;
+    then the code is compared.
+
+- **Step:** `stdout is:`, `stderr is:`
+  - **What it does and its errors:** Need an exited program
+    (`RUNTIME-BDD-CONTEXT`, "complete output requires program exit"). Stdout is
+    what no line step has read yet; stderr is all of it.
 
 JSON lines compare by their canonical text, `JSON.encode(JSON.parse(line))`: key
 order and whitespace do not matter, arrays keep their order, and value kinds
@@ -276,28 +299,68 @@ agentica test [PATH...] [--steps FILE]
   for a record. The child flushes its stdout before it sends a record. The
   runner sends a step only after the previous one ended.
 
-| Direction | Record | Meaning |
-|---|---|---|
-| runner to child | settings, once (`base`, `agentica`, `allow_run`, `seeded`, `seed`) | Where programs resolve and run, how to start `agentica`, and what to pass on |
-| runner to child | `{"index":2,"definition":14,...}` | Run step 2 with definition 14; a pattern mismatch is `RUNTIME-BDD-INFRA` |
-| runner to child | end of the channel (`Process.channel_close`) | `BDD.run` ends the child with `System.exit(0)` |
-| child to runner | `assert`, `end` (with `index`), `fail` (with `code`, `message`, and `expected` and `actual` when known) | A passing assertion; the handler returned with no task left running; a BDD failure (the child then exits 1) |
-| list child to runner | `step` records, then `ready` | The definitions in order |
+- **Direction:** runner to child
+  - **Record:** settings, once (`base`, `agentica`, `allow_run`, `seeded`,
+    `seed`)
+  - **Meaning:** Where programs resolve and run, how to start `agentica`, and
+    what to pass on
+
+- **Direction:** runner to child
+  - **Record:** `{"index":2,"definition":14,...}`
+  - **Meaning:** Run step 2 with definition 14; a pattern mismatch is
+    `RUNTIME-BDD-INFRA`
+
+- **Direction:** runner to child
+  - **Record:** end of the channel (`Process.channel_close`)
+  - **Meaning:** `BDD.run` ends the child with `System.exit(0)`
+
+- **Direction:** child to runner
+  - **Record:** `assert`, `end` (with `index`), `fail` (with `code`, `message`,
+    and `expected` and `actual` when known)
+  - **Meaning:** A passing assertion; the handler returned with no task left
+    running; a BDD failure (the child then exits 1)
+
+- **Direction:** list child to runner
+  - **Record:** `step` records, then `ready`
+  - **Meaning:** The definitions in order
 
 **Outcome of a step.** After sending step `i`, the runner reads the channel with
 `Process.channel_read_line`, up to the scenario deadline. After an `end` or
 `fail` record it reads what the handler printed with `Process.read_available`,
 which the child flushed before the record:
 
-| What happens | Step `i` | Scenario error |
-|---|---|---|
-| `end`, and step `i` is a `Then` (or its `And`/`But`) with no `assert` since it was sent | failed | `RUNTIME-BDD-NO-ASSERTION` (the child is closed) |
-| `end` otherwise | passed | none |
-| `fail` record | failed | that record's code, message, expected and actual, at the step |
-| the channel ends, and the last stderr line is a JSON diagnostic | failed | that diagnostic, with its span in the step program |
-| the channel ends otherwise (a `System.exit`, even 0, or no diagnostic) | failed | `RUNTIME-BDD-PREMATURE-EXIT` |
-| the deadline passes | failed | `RUNTIME-BDD-TIMEOUT` (the read closes the channel, and the runner then closes the child) |
-| handler output over 1 MiB unread (stdout, or stderr) | failed | `RUNTIME-BDD-OUTPUT-LIMIT` |
+- **What happens:** `end`, and step `i` is a `Then` (or its `And`/`But`) with no
+  `assert` since it was sent
+  - **Step `i`:** failed
+  - **Scenario error:** `RUNTIME-BDD-NO-ASSERTION` (the child is closed)
+
+- **What happens:** `end` otherwise
+  - **Step `i`:** passed
+  - **Scenario error:** none
+
+- **What happens:** `fail` record
+  - **Step `i`:** failed
+  - **Scenario error:** that record's code, message, expected and actual, at the
+    step
+
+- **What happens:** the channel ends, and the last stderr line is a JSON
+  diagnostic
+  - **Step `i`:** failed
+  - **Scenario error:** that diagnostic, with its span in the step program
+
+- **What happens:** the channel ends otherwise (a `System.exit`, even 0, or no
+  diagnostic)
+  - **Step `i`:** failed
+  - **Scenario error:** `RUNTIME-BDD-PREMATURE-EXIT`
+
+- **What happens:** the deadline passes
+  - **Step `i`:** failed
+  - **Scenario error:** `RUNTIME-BDD-TIMEOUT` (the read closes the channel, and
+    the runner then closes the child)
+
+- **What happens:** handler output over 1 MiB unread (stdout, or stderr)
+  - **Step `i`:** failed
+  - **Scenario error:** `RUNTIME-BDD-OUTPUT-LIMIT`
 
 Every step after a failed one is `not_executed`. After the last step passes, the
 runner closes the channel, waits for its end and for exit 0, and fails the
@@ -360,7 +423,7 @@ that calls them can break the protocol, and nothing stops it.
 
 The order in which a failed test reports its failure is part of the `Test`
 builtin: see
-[`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md#unit-tests-test).
+[`grammar/06c-tasks-and-tests.md`][agentica-link-1].
 
 ## Decided against
 
@@ -380,13 +443,43 @@ builtin: see
 
 `agentica test` reports the first problem of each kind with a stable code:
 
-| Code | Meaning |
-|---|---|
-| `PARSE-GHERKIN-*` (`HEADER`, `STEP`, `ARGUMENT`, `TABLE`, `EXAMPLES`, `TAGS`, `EMPTY`, `PARAMETER`, `UNSUPPORTED`) | The `.feature` file breaks the supported subset; the rule is in the Gherkin list above |
-| `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`, `CHECK-BDD-EMPTY` | No step matches, more than one matches, or no feature or test file was found (or `--only` matches nothing) |
-| `RUNTIME-BDD-ASSERTION`, `RUNTIME-BDD-NO-ASSERTION` | An expectation failed, or a `Then` step or a whole scenario made no BDD assertion |
-| `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT` | A deadline or timeout passed; a step called `System.exit`, or its child ended without a diagnostic |
-| `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON` | A missing Doc String or table, a stream call before a program started, a second program, a step program that never calls `BDD.run`, a missing `.agc` program, or a JSON expectation that is not valid JSON |
-| `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`, `RUNTIME-BDD-PENDING-TASKS` | A pattern used twice, an invalid pattern (both at the step program's first line), or tasks left running before a step ends or before `BDD.run` |
-| `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`, `RUNTIME-BDD-USAGE` | Output over 1 MiB; a stream I/O failure, or a line over 1 MiB; a missing executable, VM or path, an unreadable folder, a broken link, a step program that cannot be read, or a runner failure; bad command-line usage |
-| `RUNTIME-TEST-*` | The unit test codes, reported per test: see [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md) |
+- **Code:** `PARSE-GHERKIN-*` (`HEADER`, `STEP`, `ARGUMENT`, `TABLE`,
+  `EXAMPLES`, `TAGS`, `EMPTY`, `PARAMETER`, `UNSUPPORTED`)
+  - **Meaning:** The `.feature` file breaks the supported subset; the rule is in
+    the Gherkin list above
+
+- **Code:** `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`, `CHECK-BDD-EMPTY`
+  - **Meaning:** No step matches, more than one matches, or no feature or test
+    file was found (or `--only` matches nothing)
+
+- **Code:** `RUNTIME-BDD-ASSERTION`, `RUNTIME-BDD-NO-ASSERTION`
+  - **Meaning:** An expectation failed, or a `Then` step or a whole scenario
+    made no BDD assertion
+
+- **Code:** `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT`
+  - **Meaning:** A deadline or timeout passed; a step called `System.exit`, or
+    its child ended without a diagnostic
+
+- **Code:** `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON`
+  - **Meaning:** A missing Doc String or table, a stream call before a program
+    started, a second program, a step program that never calls `BDD.run`, a
+    missing `.agc` program, or a JSON expectation that is not valid JSON
+
+- **Code:** `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`,
+  `RUNTIME-BDD-PENDING-TASKS`
+  - **Meaning:** A pattern used twice, an invalid pattern (both at the step
+    program's first line), or tasks left running before a step ends or before
+    `BDD.run`
+
+- **Code:** `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`,
+  `RUNTIME-BDD-USAGE`
+  - **Meaning:** Output over 1 MiB; a stream I/O failure, or a line over 1 MiB;
+    a missing executable, VM or path, an unreadable folder, a broken link, a
+    step program that cannot be read, or a runner failure; bad command-line
+    usage
+
+- **Code:** `RUNTIME-TEST-*`
+  - **Meaning:** The unit test codes, reported per test: see
+    [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md)
+
+[agentica-link-1]: grammar/06c-tasks-and-tests.md#unit-tests-test

@@ -6,10 +6,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Add a C builtin
 
-1. `compiler/lower_tables.agc`: let the call through the builtin check (today only the
+1. `compiler/lower_tables.agc`: let the call through the builtin check (today
+   only the
    `VM_BUILTINS` keys `puts`, `IO.print`, `IO.warn`, `IO.inspect`,
    `IO.gets`, `IO.gets!`, `IO.read`, `IO.read_bytes`, `IO.flush`,
-   `IO.eof?`, `System.args`, `System.exit`, `System.env`, `System.pid`, `FrontEnd.hand_off`,
+   `IO.eof?`, `System.args`, `System.exit`, `System.env`, `System.pid`,
+`FrontEnd.hand_off`,
    `FrontEnd.std_source`, `String.from_int`,
    `String.from_float`, `ok` (arities 0 and 1), `error`, `Result.ok?`,
    `Result.unwrap!`, `Result.unwrap_or`, `Result.message`, the callback
@@ -70,7 +72,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    `value`); `last` is the block's result or the finished job's result.
    Use `List`-style native frames for pure callbacks and a plain blocking
    builtin when there is no block. Every table entry
-   has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`, `docs/vm/10-io-scheduler.md`
+   has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`,
+`docs/vm/10-io-scheduler.md`
    §10.2.1, "Builtins"): a builtin whose work grows with its input takes
    `AGC_COST_SIZE` or charges `agc_charge` from inside; never touch
    `steps_left` for that. State goes in `vm->rt` (shared runtime),
@@ -80,7 +83,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 Rules for the C code:
 
-- The catalog (`compiler/builtins_data.agc`) stays the source of keys and arity; the
+- The catalog (`compiler/builtins_data.agc`) stays the source of keys and arity;
+  the
   loader resolves each `(key, arity)` against the C table.
 - Check argument tags generically from the table; check list and map
   elements when you touch them.
@@ -90,7 +94,8 @@ Rules for the C code:
   `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
 - Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d
   copy, NUL terminated, NULL on an embedded NUL so the caller returns its
-  error message; the caller frees it, usually with its request). Every String constructor validates UTF-8
+  error message; the caller frees it, usually with its request). Every String
+constructor validates UTF-8
   or decodes with U+FFFD. Build a String with `agc_make_string` (copies) or
   `agc_new_string` and fill every byte before it is stored anywhere.
 - Debug text of a String (`inspect`, and later map-key, `index_of` and

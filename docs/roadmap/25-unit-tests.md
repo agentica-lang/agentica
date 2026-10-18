@@ -221,7 +221,7 @@ tests run in `make test`.
     (used by `vm/testing.c`). `Test.run` reads and writes fd 3.
   - **Docs:** §10.4 and `docs/grammar.md` (`Process.spawn_captured`'s extra
     pipe, the child-side builtin pair, `Test.run`), [§36.6 and
-    §36.7](../future/36-unit-tests.md#366-isolation-a-child-vm-per-file-a-task-per-test)
+§36.7](../future/36-unit-tests.md)
     (the protocol, stdin and output of a test), `docs/bdd.md` (the scenario
     child's protocol), the programming skill (`references/testing.md`,
     `references/processes.md`, `references/bdd.md`), the site pages of `Process`

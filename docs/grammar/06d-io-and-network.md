@@ -1,67 +1,295 @@
 ### TCP, TLS and HTTP
 
-Networking uses the normal expression syntax and lightweight tasks. The network names in §4 are reserved, and handles are opaque: they belong to their run and close when it ends. No CLI flag is needed. Signatures and details are in [`library/io-and-system/network.md`](../../site/content/library/io-and-system/network.md); the protocol is in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) and [`docs/vm/10-io-tls.md`](../vm/10-io-tls.md).
+Networking uses the normal expression syntax and lightweight tasks. The network
+names in §4 are reserved, and handles are opaque: they belong to their run and
+close when it ends. No CLI flag is needed. Signatures and details are in
+[`library/io-and-system/network.md`][agentica-link-1];
+the protocol is in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) and
+[`docs/vm/10-io-tls.md`](../vm/10-io-tls.md).
 
-- Ports are 1 to 65535 to connect and 0 to 65535 to listen; port 0 asks for an assigned port, which `TCP.local_port` returns. A host with NUL is an error.
-- TLS checks certificates and host names, with TLS 1.2 or later; verification cannot be turned off. An empty CA file means system trust; a nonempty one replaces it, and a missing or empty file fails the connect. A peer that closes without TLS's close message ends the stream like EOF, so the protocol must detect a cut message.
-- Timeouts are positive milliseconds and cover the whole operation, lock waits included. A timeout during active I/O closes that socket, and later calls fail with `network: socket is closed`. A timeout while only waiting for a lock keeps it open.
-- `send` takes UTF-8 text and flushes; `send_bytes` takes values 0 to 255, at most 1 MiB per call. `recv_bytes` takes 1 to 1048576 and gives `ok([])` at EOF. `read_line` is an error on an empty EOF, on a reset in the middle of a line, and on a line over 1 MiB, which also closes the socket.
-- Header values use the Latin-1 byte range. CR, LF, control characters and framing headers set by the program are rejected.
+- Ports are 1 to 65535 to connect and 0 to 65535 to listen; port 0 asks for an
+  assigned port, which `TCP.local_port` returns. A host with NUL is an error.
+- TLS checks certificates and host names, with TLS 1.2 or later; verification
+  cannot be turned off. An empty CA file means system trust; a nonempty one
+  replaces it, and a missing or empty file fails the connect. A peer that closes
+  without TLS's close message ends the stream like EOF, so the protocol must
+  detect a cut message.
+- Timeouts are positive milliseconds and cover the whole operation, lock waits
+  included. A timeout during active I/O closes that socket, and later calls fail
+  with `network: socket is closed`. A timeout while only waiting for a lock
+  keeps it open.
+- `send` takes UTF-8 text and flushes; `send_bytes` takes values 0 to 255, at
+  most 1 MiB per call. `recv_bytes` takes 1 to 1048576 and gives `ok([])` at
+  EOF. `read_line` is an error on an empty EOF, on a reset in the middle of a
+  line, and on a line over 1 MiB, which also closes the socket.
+- Header values use the Latin-1 byte range. CR, LF, control characters and
+  framing headers set by the program are rejected.
 
 #### HTTP client and server (`std/http`)
 
-HTTP is the `std/http` library, imported with `import HTTP from "std/http"`; any alias works. It calls the internal module `HttpWire`, which no other module can name (`CHECK-UNKNOWN-NAME`). A complete program is in [`examples/http_server.agc`](../../examples/http_server.agc).
+HTTP is the `std/http` library, imported with `import HTTP from "std/http"`; any
+alias works. It calls the internal module `HttpWire`, which no other module can
+name (`CHECK-UNKNOWN-NAME`). A complete program is in
+[`examples/http_server.agc`](../../examples/http_server.agc).
 
-A client call is whole: it returns after the whole body, which must be valid UTF-8. One `timeout_ms` covers the whole call. Calls wait in FIFO order for one of the `max_connections` slots (at most 65536). `max_body_bytes` is at most 64 MiB. A call in flight when `close_client` runs fails with `http: client is closed`.
+A client call is whole: it returns after the whole body, which must be valid
+UTF-8. One `timeout_ms` covers the whole call. Calls wait in FIFO order for one
+of the `max_connections` slots (at most 65536). `max_body_bytes` is at most 64
+MiB. A call in flight when `close_client` runs fails with `http: client is
+closed`.
 
-A `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` sent on a reused connection that the server had already closed is retried once on a new connection, within the same timeout, if no response byte arrived. `POST`, `PATCH` and other methods are never retried.
+A `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` sent on a reused connection that
+the server had already closed is retried once on a new connection, within the
+same timeout, if no response byte arrived. `POST`, `PATCH` and other methods are
+never retried.
 
-URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`, `Transfer-Encoding` or `Connection` itself is an error. Status codes 4xx and 5xx are normal responses. Protocol errors start with `http: `; connection errors keep their TCP or TLS text; a timeout is `network: operation timed out`.
+URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`,
+`Transfer-Encoding` or `Connection` itself is an error. Status codes 4xx and 5xx
+are normal responses. Protocol errors start with `http: `; connection errors
+keep their TCP or TLS text; a timeout is `network: operation timed out`.
 
-`listen` (or `listen_tls`) serves in the background, with one task per connection. The handler gets a whole `HttpRequest` and returns a whole `HttpResponse`; the server adds the framing headers it needs. If the handler returns `error(message)`, or the response cannot be sent (a status outside 200 to 599, a bad header, a handler-set `Content-Length` or `Transfer-Encoding`, or a body on 204 or 304), the client gets a 500 with an empty body and the connection closes. Stderr gets `http: handler error: <message>` or `http: invalid response: <reason>`. A handler has no time limit. A runtime error in a handler crashes its connection task, and the run reports the crash.
+`listen` (or `listen_tls`) serves in the background, with one task per
+connection. The handler gets a whole `HttpRequest` and returns a whole
+`HttpResponse`; the server adds the framing headers it needs. If the handler
+returns `error(message)`, or the response cannot be sent (a status outside 200
+to 599, a bad header, a handler-set `Content-Length` or `Transfer-Encoding`, or
+a body on 204 or 304), the client gets a 500 with an empty body and the
+connection closes. Stderr gets `http: handler error: <message>` or `http:
+invalid response: <reason>`. A handler has no time limit. A runtime error in a
+handler crashes its connection task, and the run reports the crash.
 
-`server_options()` gives 30 s request and idle timeouts, 128 connections and 1 MiB bodies. `request_timeout_ms` bounds the first byte of a connection's first request, then the rest of each request, then the response write; `idle_timeout_ms` bounds the wait for a later request. Connections beyond `max_connections` wait in the backlog. A request rejected before the handler runs gets an empty answer and a close (400, 413, 417, 431, 501 or 505). `close_server` closes the listener, ends every connection, cancels the handlers and the tasks they spawned, and is idempotent. Return from `main` ends the run, whatever the server is doing.
+`server_options()` gives 30 s request and idle timeouts, 128 connections and 1
+MiB bodies. `request_timeout_ms` bounds the first byte of a connection's first
+request, then the rest of each request, then the response write;
+`idle_timeout_ms` bounds the wait for a later request. Connections beyond
+`max_connections` wait in the backlog. A request rejected before the handler
+runs gets an empty answer and a close (400, 413, 417, 431, 501 or 505).
+`close_server` closes the listener, ends every connection, cancels the handlers
+and the tasks they spawned, and is idempotent. Return from `main` ends the run,
+whatever the server is doing.
 
 ### Logging (`std/logger`)
 
-`std/logger` is imported with `import Logger from "std/logger"`. It calls the internal module `LogRegistry`, which no other module can name (`CHECK-UNKNOWN-NAME`). `LogLevel` and `LogEvent` are builtin types and their names are reserved in every program (`CHECK-REDEFINED-NAME`).
+`std/logger` is imported with `import Logger from "std/logger"`. It calls the
+internal module `LogRegistry`, which no other module can name
+(`CHECK-UNKNOWN-NAME`). `LogLevel` and `LogEvent` are builtin types and their
+names are reserved in every program (`CHECK-REDEFINED-NAME`).
 
-There are four levels, `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`. Each level has one function, `Logger.debug(message, fields)`, and the same for `info`, `warning` and `err` (the function for the last level is `err` because `error` is reserved; the output says `error`). `fields` is a `Map[String, String]` with the default `{}`, so `Logger.info("started")` and `Logger.info("request done", {"path": "/items"})` are both calls. `Logger.log(level, message, fields)` takes the level as a value.
+There are four levels, `LogLevel.Debug < LogLevel.Info < LogLevel.Warning <
+LogLevel.Error`. Each level has one function, `Logger.debug(message, fields)`,
+and the same for `info`, `warning` and `err` (the function for the last level is
+`err` because `error` is reserved; the output says `error`). `fields` is a
+`Map[String, String]` with the default `{}`, so `Logger.info("started")` and
+`Logger.info("request done", {"path": "/items"})` are both calls.
+`Logger.log(level, message, fields)` takes the level as a value.
 
-The global level (`Logger.set_level`, `info` by default) is checked first, by every call. Each handler has its own level and gets an event only when the event is at or above it. `Logger.enabled?(level)` is true only if the level is at or above the global level and some attached handler accepts it, so a costly message goes inside `if Logger.enabled?(LogLevel.Debug)`.
+The global level (`Logger.set_level`, `info` by default) is checked first, by
+every call. Each handler has its own level and gets an event only when the event
+is at or above it. `Logger.enabled?(level)` is true only if the level is at or
+above the global level and some attached handler accepts it, so a costly message
+goes inside `if Logger.enabled?(LogLevel.Debug)`.
 
-A handler is a function `Fn[LogEvent, Void]` (`&Logger.stderr_json`) or a block, attached under a name with `Logger.attach(name, level, handler)` and removed with `Logger.detach(name)`; both return `error(...)` for a name in use or not in use. `Logger.handlers()` lists the names in attach order. Handlers run in attach order, synchronously, in the task that logs; an event keeps the handlers it started with, and a handler error is the error of that task.
+A handler is a function `Fn[LogEvent, Void]` (`&Logger.stderr_json`) or a block,
+attached under a name with `Logger.attach(name, level, handler)` and removed
+with `Logger.detach(name)`; both return `error(...)` for a name in use or not in
+use. `Logger.handlers()` lists the names in attach order. Handlers run in attach
+order, synchronously, in the task that logs; an event keeps the handlers it
+started with, and a handler error is the error of that task.
 
-The first call of any `Logger` function attaches a handler named `console` (`Logger.stderr_text`, level `info`). `Logger.detach("console")` removes it. The handlers and the global level are held by the VM and belong to one run; this registry is the language's only global state.
+The first call of any `Logger` function attaches a handler named `console`
+(`Logger.stderr_text`, level `info`). `Logger.detach("console")` removes it. The
+handlers and the global level are held by the VM and belong to one run; this
+registry is the language's only global state.
 
-`Logger.stderr_text` and `Logger.stderr_json` write `Logger.format_text(event)` and `Logger.format_json(event)` to stderr with one `IO.warn` call. The text form is `TIME LEVEL MESSAGE key=value ...` with the time in UTC (`2026-10-12T10:15:02.345Z`); a message, key or value that is empty, has `=`, a quote, a backslash or a control character, or (for a key or value) a space, is written as a JSON string. The JSON form is one object per line with the keys `time`, `level` (`debug`, `info`, `warning`, `error`), `msg`, `fields` and `task`. `Logger.time_text(ms)` formats milliseconds since the Unix epoch as that time text.
+`Logger.stderr_text` and `Logger.stderr_json` write `Logger.format_text(event)`
+and `Logger.format_json(event)` to stderr with one `IO.warn` call. The text form
+is `TIME LEVEL MESSAGE key=value ...` with the time in UTC
+(`2026-10-12T10:15:02.345Z`); a message, key or value that is empty, has `=`, a
+quote, a backslash or a control character, or (for a key or value) a space, is
+written as a JSON string. The JSON form is one object per line with the keys
+`time`, `level` (`debug`, `info`, `warning`, `error`), `msg`, `fields` and
+`task`. `Logger.time_text(ms)` formats milliseconds since the Unix epoch as that
+time text.
 
 ### Files and paths
 
-`File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. A file handle is opaque, belongs to one evaluation, and closes when it ends. The host user's permissions apply; there is no filesystem permission flag. File operations accept regular files and symlinks to them, and also FIFOs, pipes and devices that can wait, whose calls wait on the event loop; they reject directories, a missing path for a read, and a path that reopens a pipe the VM made for itself. Signatures are in [`library/io-and-system/files.md`](../../site/content/library/io-and-system/files.md).
+`File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. A file handle
+is opaque, belongs to one evaluation, and closes when it ends. The host user's
+permissions apply; there is no filesystem permission flag. File operations
+accept regular files and symlinks to them, and also FIFOs, pipes and devices
+that can wait, whose calls wait on the event loop; they reject directories, a
+missing path for a read, and a path that reopens a pipe the VM made for itself.
+Signatures are in
+[`library/io-and-system/files.md`][agentica-link-2].
 
-- `File.open` modes: `read` (an existing path that is not a directory), `write` (creates or truncates), `append` (creates or appends) and `create_private` (a new write-only file with mode 0600, less where the umask clears bits; any existing entry, a dangling link included, is an error and a link is never followed; VM only).
-- `File.try_lock(handle, timeout_ms)` takes an exclusive lock on the open file without waiting, for any handle mode: `ok(true)` when taken (again on the same handle too), `ok(false)` when another handle or process holds it. The lock lasts until the handle is closed, its task ends or the process ends, and a child process never keeps it. Only a regular file can be locked: a handle on a pipe, a FIFO or a device (such as `/dev/null`) is an error. There is no unlock call (close the handle). On Unix the lock is advisory (`flock`): code that does not ask for a lock can still access the file. On Windows it locks the whole byte range with `LockFileEx`, so the OS also rejects reads and writes through other handles while the lock is held. VM only.
-- Text is strict UTF-8. Whole-text helpers and each stream read or write are limited to 1 MiB. `read_bytes` takes 1 to 1048576 bytes and gives `ok([])` at EOF. `read_line` strips LF or CRLF and accepts a final unterminated line; it is an error at EOF or on invalid UTF-8.
-- `File.each_line(path, buffer_bytes, timeout_ms) do |line| ... end` gives `Result[Void]`. It opens `path` for reading and passes the block one line at a time, never reading the whole file. A line is at most `buffer_bytes` bytes including its terminator; a longer line ends the call with `error("filesystem: line exceeds buffer_bytes")`. `buffer_bytes` is 1024 to 16777216, otherwise `RUNTIME-INVALID-COUNT` at that argument, checked before the file opens. `timeout_ms` applies to each read, the open and the close, not to the whole call, and must be positive, otherwise `error("filesystem: timeout must be positive milliseconds")`. LF and CRLF are removed, a final line without a newline is passed, and invalid UTF-8 ends the call with an error. The block returns `Result[Void]`: `ok()` goes on to the next line and an error stops and is returned by `each_line`. `try` works in the block. The file is closed on every return path.
-- `File.close` flushes and is idempotent. Timeouts are positive milliseconds and include the lock wait. A timeout during active I/O closes the handle; a timeout while waiting for the lock keeps it open.
-- `File.stat` follows symlinks and gives `FileInfo(kind, size_bytes, modified_seconds, mode, user_id, group_id)`; `mode` is the permission bits with setuid, setgid and sticky (`st_mode & 07777`) as an `Int`. `File.lstat` gives the same record without following a final symlink: `kind` is `"link"` and the other fields describe the link itself (VM only). `Dir.list` gives immediate entry names, sorted. `Dir.mkdir` creates parents. `Dir.mkdir_private(path, timeout_ms)` creates exactly one directory with mode 0700 (less where the umask clears bits) and fails when the path exists or the parent is missing (VM only). `Path.remove(path, timeout_ms)` deletes what is at the path without following symlinks (VM only): a file, a symlink itself, or a directory with everything in it, where a link in the tree is removed as a link and its target is untouched. A missing path is `ok()`. A path whose last part is a separator, `.` or `..` (also as `dir/..`) is refused, a tree deeper than 128 levels is an error, and a trailing separator on a symlink is an error. A path under a file (`file/child`) is an error too (`Not a directory`), on purpose: `link/` gives the same error and must never report `ok()`. A failure inside the tree names the entry that failed in the error, and what was removed before it stays removed. Unix removal crosses mount points; on Windows, reparse-point entries such as junctions are removed themselves and not traversed. Windows drive and UNC paths use native syntax, with drive and share roots refused. To avoid Win32 path aliases, Windows also refuses input paths with alternate-data-stream syntax or a component ending in a dot or space. A timeout returns the error but does not stop a removal that is running. `Path.rename(from, to, timeout_ms)` renames a file, a symlink (moved as a link) or a directory to a path that does not exist, in one step: an existing target, even an empty directory, is an error and is never replaced. Linux uses `renameat2` with `RENAME_NOREPLACE`; macOS uses `renameatx_np` with `RENAME_EXCL`; Windows uses `MoveFileW`. There is no copy/delete fallback across volumes (VM only). `Path.resolve` is lexical and does not resolve symlinks.
-- `Path.real(path)` gives the absolute canonical path with every symlink resolved, as POSIX `realpath` does, so the path must exist. A missing path, a loop of links (or too long a chain of them), and a name that is not a directory are errors with the OS error text, like other filesystem errors; an empty path or one with NUL gives the same contract error as `File.stat`. A relative path starts at the working directory. `.`, `..` and repeated `/` are removed, and `..` after a link follows the link's target. The length of the path has no buffer limit. In the result, each byte that is not part of a valid UTF-8 sequence becomes U+FFFD, as in `Dir.list` names. The call has no timeout argument; it runs in the pool of file threads and does not stop other tasks.
+- `File.open` modes: `read` (an existing path that is not a directory), `write`
+  (creates or truncates), `append` (creates or appends) and `create_private` (a
+  new write-only file with mode 0600, less where the umask clears bits; any
+  existing entry, a dangling link included, is an error and a link is never
+  followed; VM only).
+- `File.try_lock(handle, timeout_ms)` takes an exclusive lock on the open file
+  without waiting, for any handle mode: `ok(true)` when taken (again on the same
+  handle too), `ok(false)` when another handle or process holds it. The lock
+  lasts until the handle is closed, its task ends or the process ends, and a
+  child process never keeps it. Only a regular file can be locked: a handle on a
+  pipe, a FIFO or a device (such as `/dev/null`) is an error. There is no unlock
+  call (close the handle). On Unix the lock is advisory (`flock`): code that
+  does not ask for a lock can still access the file. On Windows it locks the
+  whole byte range with `LockFileEx`, so the OS also rejects reads and writes
+  through other handles while the lock is held. VM only.
+- Text is strict UTF-8. Whole-text helpers and each stream read or write are
+  limited to 1 MiB. `read_bytes` takes 1 to 1048576 bytes and gives `ok([])` at
+  EOF. `read_line` strips LF or CRLF and accepts a final unterminated line; it
+  is an error at EOF or on invalid UTF-8.
+- `File.each_line(path, buffer_bytes, timeout_ms) do |line| ... end` gives
+  `Result[Void]`. It opens `path` for reading and passes the block one line at a
+  time, never reading the whole file. A line is at most `buffer_bytes` bytes
+  including its terminator; a longer line ends the call with `error("filesystem:
+  line exceeds buffer_bytes")`. `buffer_bytes` is 1024 to 16777216, otherwise
+  `RUNTIME-INVALID-COUNT` at that argument, checked before the file opens.
+  `timeout_ms` applies to each read, the open and the close, not to the whole
+  call, and must be positive, otherwise `error("filesystem: timeout must be
+  positive milliseconds")`. LF and CRLF are removed, a final line without a
+  newline is passed, and invalid UTF-8 ends the call with an error. The block
+  returns `Result[Void]`: `ok()` goes on to the next line and an error stops and
+  is returned by `each_line`. `try` works in the block. The file is closed on
+  every return path.
+- `File.close` flushes and is idempotent. Timeouts are positive milliseconds and
+  include the lock wait. A timeout during active I/O closes the handle; a
+  timeout while waiting for the lock keeps it open.
+- `File.stat` follows symlinks and gives `FileInfo(kind, size_bytes,
+  modified_seconds, mode, user_id, group_id)`; `mode` is the permission bits
+  with setuid, setgid and sticky (`st_mode & 07777`) as an `Int`. `File.lstat`
+  gives the same record without following a final symlink: `kind` is `"link"`
+  and the other fields describe the link itself (VM only). `Dir.list` gives
+  immediate entry names, sorted. `Dir.mkdir` creates parents.
+  `Dir.mkdir_private(path, timeout_ms)` creates exactly one directory with mode
+  0700 (less where the umask clears bits) and fails when the path exists or the
+  parent is missing (VM only). `Path.remove(path, timeout_ms)` deletes what is
+  at the path without following symlinks (VM only): a file, a symlink itself, or
+  a directory with everything in it, where a link in the tree is removed as a
+  link and its target is untouched. A missing path is `ok()`. A path whose last
+  part is a separator, `.` or `..` (also as `dir/..`) is refused, a tree deeper
+  than 128 levels is an error, and a trailing separator on a symlink is an
+  error. A path under a file (`file/child`) is an error too (`Not a directory`),
+  on purpose: `link/` gives the same error and must never report `ok()`. A
+  failure inside the tree names the entry that failed in the error, and what was
+  removed before it stays removed. Unix removal crosses mount points; on
+  Windows, reparse-point entries such as junctions are removed themselves and
+  not traversed. Windows drive and UNC paths use native syntax, with drive and
+  share roots refused. To avoid Win32 path aliases, Windows also refuses input
+  paths with alternate-data-stream syntax or a component ending in a dot or
+  space. A timeout returns the error but does not stop a removal that is
+  running. `Path.rename(from, to, timeout_ms)` renames a file, a symlink (moved
+  as a link) or a directory to a path that does not exist, in one step: an
+  existing target, even an empty directory, is an error and is never replaced.
+  Linux uses `renameat2` with `RENAME_NOREPLACE`; macOS uses `renameatx_np` with
+  `RENAME_EXCL`; Windows uses `MoveFileW`. There is no copy/delete fallback
+  across volumes (VM only). `Path.resolve` is lexical and does not resolve
+  symlinks.
+- `Path.real(path)` gives the absolute canonical path with every symlink
+  resolved, as POSIX `realpath` does, so the path must exist. A missing path, a
+  loop of links (or too long a chain of them), and a name that is not a
+  directory are errors with the OS error text, like other filesystem errors; an
+  empty path or one with NUL gives the same contract error as `File.stat`. A
+  relative path starts at the working directory. `.`, `..` and repeated `/` are
+  removed, and `..` after a link follows the link's target. The length of the
+  path has no buffer limit. In the result, each byte that is not part of a valid
+  UTF-8 sequence becomes U+FFFD, as in `Dir.list` names. The call has no timeout
+  argument; it runs in the pool of file threads and does not stop other tasks.
 
 ### Processes
 
-`Process` is an opaque handle, with no constructor, fields, equality or JSON encoding; `IO.inspect` prints `<Process>`. Signatures are in [`library/io-and-system/process.md`](../../site/content/library/io-and-system/process.md).
+`Process` is an opaque handle, with no constructor, fields, equality or JSON
+encoding; `IO.inspect` prints `<Process>`. Signatures are in
+[`library/io-and-system/process.md`][agentica-link-3].
 
-- Starting a program needs `agentica --allow-run file.agc`. The flag defaults to off and precedes the source file; later arguments reach `System.args`. The `test` command accepts it before or after the command. Checking and `help` need no flag. The permission reaches tasks. BDD step handlers can always start programs.
-- A command without `/` is looked up in each `PATH` entry, in order. An empty entry is skipped, so `./name` runs a program in the working directory; a relative entry such as `.` resolves against it. A command with `/` is a path, relative to the working directory unless absolute. A name that is not found, or names a directory, is `executable is unavailable`. Arguments go straight to the program, with no shell. On Windows only `.exe` and `.com` run. A file that is found but cannot run is an error Result from `spawn`.
-- Timeouts are positive milliseconds and include the lock wait. A timeout during stream I/O kills and closes the child; a timeout while waiting for the lock keeps it; a timed-out wait for exit does not terminate it.
-- A send takes at most 1048576 UTF-8 bytes, or integers 0 to 255, and flushes. Invalid data consumes nothing. `read_bytes` takes 0 to 1048576 and waits for that many bytes or EOF. `read_line` takes at most 1 MiB, strips LF or CRLF, and decodes strictly. An empty EOF is an error, and an oversized line closes the child.
-- `close_stdin` flushes and closes input, idempotently. `wait` returns the exit code, including nonzero codes, and can be repeated. A child blocks when its stdout pipe is full, so read it in a task while sending or waiting.
-- `close` force-kills a running child, waits for it to exit (other tasks run meanwhile) and closes the ports it owns; it is idempotent. A timeout closes the child too, but does not wait for it. Return from `main`, `System.exit`, a diagnostic, a task failure, step exhaustion and an external interruption clean up the children started directly; their descendants are not covered. Operational failures are String error Results. A failed explicit cleanup is `RUNTIME-PROCESS-CLOSE` at the call.
-- `spawn_captured` works like `spawn`, with the same lookup, permission and cleanup, except that the child starts in `dir` (`"."` keeps the working directory; an empty, NUL or non-directory `dir` is an error) and its streams are read by the VM. The child never blocks on a full pipe. Stdout is read by `read_line` and `read_bytes`; stderr never reaches the program's stderr. Past 1 MiB of unread stdout, or of stderr, that stream is truncated and later bytes are dropped; after a truncation every stdout read returns `error("process: output exceeds 1048576 bytes")`.
-- `output` waits until both streams end and returns `ProcessOutput(stdout, stderr, truncated)`: the stdout not read yet, all of stderr (invalid UTF-8 becomes U+FFFD), and whether a stream was truncated. It consumes nothing. A timeout is `error("network: operation timed out")` and keeps the child. On a `spawn` handle it is `error("process: output is not captured")`.
-- Closing a captured child sends `SIGTERM`, then `SIGKILL` one second later, so a child that is itself an Agentica program can stop its own children first. `close` and a timeout never wait. At the end of a run a captured child gets about one second; a child from `spawn` is killed at once.
-- `spawn_channel(command, args, dir, timeout_ms)` works like `spawn_captured` and also opens a channel to the child: a bidirectional socket pair, separate from its stdin, stdout and stderr, that carries text lines in both directions. The child finds it on descriptor 3, and its environment holds `AGENTICA_CHANNEL=3`. `spawn` and `spawn_captured` remove that variable from the child's environment, even when the parent inherited it, so a program only ever sees a channel its own parent opened for it. The channel is Linux-only: elsewhere `spawn_channel`, the four calls below and the two child-side calls do not exist.
-- `channel_read_line(p, timeout_ms)` reads one line the child sent, with the rules of `read_line` (at most 1 MiB, LF or CRLF removed, strict UTF-8, an empty end is `error("process: end of input")`). When the child's stdout or stderr is cut (more than 1 MiB unread), a read that finds no complete line gives `error("process: output exceeds 1048576 bytes")` at once, without closing the channel. `channel_send(p, text, timeout_ms)` sends at most 1048576 bytes and does not add a line end. `channel_close(p, timeout_ms)` closes the sending side, so the child reads the end of its input while the parent can still read; it is idempotent, also after the child has exited. A timeout in `channel_read_line` or `channel_send` closes the channel, not the process, and later channel calls return `error("process: channel is closed")`. On a child that has no channel they return `error("process: the child has no channel")`.
-- `read_available(p, timeout_ms)` gives the captured stdout the VM has read since the last call and consumes it, without waiting for more; the timeout bounds only the wait for the reader lock. Output the child wrote before it wrote a channel line is in it once that line was read. One call takes at most 2 MiB, and bytes that end in the middle of a UTF-8 character stay for the next call, unless the output has ended. After a truncation it returns `error("process: output exceeds 1048576 bytes")`. On a `spawn` handle it is `error("process: output is not captured")`.
-- `Process.parent_read_line(timeout_ms)` and `Process.parent_send(text, timeout_ms)` are the child's side of the same channel, with the same rules and errors. A program that was not given a channel gets `error("process: no parent channel")`. The timeout must be positive, and a timeout closes the channel for good. The VM takes the channel at startup only when the marker is present and descriptor 3 is a socket, or a FIFO opened for reading and writing; a regular file, a device or a one-way FIFO there is left alone and the program has no channel. These two calls are for runner code such as `Test.run`: a test or step that calls them can break the protocol, and nothing stops it.
+- Starting a program needs `agentica --allow-run file.agc`. The flag defaults to
+  off and precedes the source file; later arguments reach `System.args`. The
+  `test` command accepts it before or after the command. Checking and `help`
+  need no flag. The permission reaches tasks. BDD step handlers can always start
+  programs.
+- A command without `/` is looked up in each `PATH` entry, in order. An empty
+  entry is skipped, so `./name` runs a program in the working directory; a
+  relative entry such as `.` resolves against it. A command with `/` is a path,
+  relative to the working directory unless absolute. A name that is not found,
+  or names a directory, is `executable is unavailable`. Arguments go straight to
+  the program, with no shell. On Windows only `.exe` and `.com` run. A file that
+  is found but cannot run is an error Result from `spawn`.
+- Timeouts are positive milliseconds and include the lock wait. A timeout during
+  stream I/O kills and closes the child; a timeout while waiting for the lock
+  keeps it; a timed-out wait for exit does not terminate it.
+- A send takes at most 1048576 UTF-8 bytes, or integers 0 to 255, and flushes.
+  Invalid data consumes nothing. `read_bytes` takes 0 to 1048576 and waits for
+  that many bytes or EOF. `read_line` takes at most 1 MiB, strips LF or CRLF,
+  and decodes strictly. An empty EOF is an error, and an oversized line closes
+  the child.
+- `close_stdin` flushes and closes input, idempotently. `wait` returns the exit
+  code, including nonzero codes, and can be repeated. A child blocks when its
+  stdout pipe is full, so read it in a task while sending or waiting.
+- `close` force-kills a running child, waits for it to exit (other tasks run
+  meanwhile) and closes the ports it owns; it is idempotent. A timeout closes
+  the child too, but does not wait for it. Return from `main`, `System.exit`, a
+  diagnostic, a task failure, step exhaustion and an external interruption clean
+  up the children started directly; their descendants are not covered.
+  Operational failures are String error Results. A failed explicit cleanup is
+  `RUNTIME-PROCESS-CLOSE` at the call.
+- `spawn_captured` works like `spawn`, with the same lookup, permission and
+  cleanup, except that the child starts in `dir` (`"."` keeps the working
+  directory; an empty, NUL or non-directory `dir` is an error) and its streams
+  are read by the VM. The child never blocks on a full pipe. Stdout is read by
+  `read_line` and `read_bytes`; stderr never reaches the program's stderr. Past
+  1 MiB of unread stdout, or of stderr, that stream is truncated and later bytes
+  are dropped; after a truncation every stdout read returns `error("process:
+  output exceeds 1048576 bytes")`.
+- `output` waits until both streams end and returns `ProcessOutput(stdout,
+  stderr, truncated)`: the stdout not read yet, all of stderr (invalid UTF-8
+  becomes U+FFFD), and whether a stream was truncated. It consumes nothing. A
+  timeout is `error("network: operation timed out")` and keeps the child. On a
+  `spawn` handle it is `error("process: output is not captured")`.
+- Closing a captured child sends `SIGTERM`, then `SIGKILL` one second later, so
+  a child that is itself an Agentica program can stop its own children first.
+  `close` and a timeout never wait. At the end of a run a captured child gets
+  about one second; a child from `spawn` is killed at once.
+- `spawn_channel(command, args, dir, timeout_ms)` works like `spawn_captured`
+  and also opens a channel to the child: a bidirectional socket pair, separate
+  from its stdin, stdout and stderr, that carries text lines in both directions.
+  The child finds it on descriptor 3, and its environment holds
+  `AGENTICA_CHANNEL=3`. `spawn` and `spawn_captured` remove that variable from
+  the child's environment, even when the parent inherited it, so a program only
+  ever sees a channel its own parent opened for it. The channel is Linux-only:
+  elsewhere `spawn_channel`, the four calls below and the two child-side calls
+  do not exist.
+- `channel_read_line(p, timeout_ms)` reads one line the child sent, with the
+  rules of `read_line` (at most 1 MiB, LF or CRLF removed, strict UTF-8, an
+  empty end is `error("process: end of input")`). When the child's stdout or
+  stderr is cut (more than 1 MiB unread), a read that finds no complete line
+  gives `error("process: output exceeds 1048576 bytes")` at once, without
+  closing the channel. `channel_send(p, text, timeout_ms)` sends at most 1048576
+  bytes and does not add a line end. `channel_close(p, timeout_ms)` closes the
+  sending side, so the child reads the end of its input while the parent can
+  still read; it is idempotent, also after the child has exited. A timeout in
+  `channel_read_line` or `channel_send` closes the channel, not the process, and
+  later channel calls return `error("process: channel is closed")`. On a child
+  that has no channel they return `error("process: the child has no channel")`.
+- `read_available(p, timeout_ms)` gives the captured stdout the VM has read
+  since the last call and consumes it, without waiting for more; the timeout
+  bounds only the wait for the reader lock. Output the child wrote before it
+  wrote a channel line is in it once that line was read. One call takes at most
+  2 MiB, and bytes that end in the middle of a UTF-8 character stay for the next
+  call, unless the output has ended. After a truncation it returns
+  `error("process: output exceeds 1048576 bytes")`. On a `spawn` handle it is
+  `error("process: output is not captured")`.
+- `Process.parent_read_line(timeout_ms)` and `Process.parent_send(text,
+  timeout_ms)` are the child's side of the same channel, with the same rules and
+  errors. A program that was not given a channel gets `error("process: no parent
+  channel")`. The timeout must be positive, and a timeout closes the channel for
+  good. The VM takes the channel at startup only when the marker is present and
+  descriptor 3 is a socket, or a FIFO opened for reading and writing; a regular
+  file, a device or a one-way FIFO there is left alone and the program has no
+  channel. These two calls are for runner code such as `Test.run`: a test or
+  step that calls them can break the protocol, and nothing stops it.
+
+[agentica-link-1]: ../../site/content/library/io-and-system/network.md
+[agentica-link-2]: ../../site/content/library/io-and-system/files.md
+[agentica-link-3]: ../../site/content/library/io-and-system/process.md

@@ -1,6 +1,7 @@
 # Repository map, file by file
 
-One line per file of `compiler/`, `vm/`, `tests/`, `stdlib/` and `docs/`. The short tree is in `AGENTS.md`; read this to find which file owns something.
+One line per file of `compiler/`, `vm/`, `tests/`, `stdlib/` and `docs/`. The
+short tree is in `AGENTS.md`; read this to find which file owns something.
 
 ```text
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (make stage0 refreshes it; references/ci.md)

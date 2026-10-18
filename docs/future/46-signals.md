@@ -849,33 +849,119 @@ change. "Partly" means a workaround is possible. "Missing" means the builtin or
 the module is not there. The file-operation gaps are real, but they are not
 signal work, so they go to their own change.
 
-| Need | Status | Note |
-| --- | --- | --- |
-| Env vars with defaults | exists | `System.env(name).unwrap_or(default)` |
-| Boolean env flags | exists | `String.trim`, `String.downcase` and `==` |
-| Stop signals TERM and INT | missing | `Signal.channel` with `Signal.Term` and `Signal.Int` (46.3.1) |
-| Signal a child's group | missing | `Process.signal_group` (46.3.6) |
-| Run run.sh as a session leader, with its output | missing | `Process.spawn_group` (46.3.6). It inherits the output, as Python does. |
-| Run `./config.sh` in a directory | partly | `spawn_captured` takes `dir` but captures stderr. `spawn` has no `dir`. The example captures config.sh and logs it. |
-| Spawn `sudo chown` | exists | `Process.spawn_captured` with `--allow-run`. sudo must be present. |
-| Scan `/proc` for Runner.Listener | exists | `Dir.list("/proc")` and `File.read_text`. Not yet tested on `/proc`. |
-| Signal a listener by pid | missing | `System.signal` through a pidfd (46.3.7) |
-| Wait for exit with a deadline | exists | `Process.wait(p, ms)` returns `error("network: operation timed out")` on a timeout and keeps the child. The example repeats the wait. |
-| Path: exists check | partly | `File.stat(path, t).ok?`. It follows symlinks and has no `exists?`. |
-| Path: unlink | exists | `Path.remove(path, ms)` (§35.5, step 7a). A missing path is `ok`, as with `unlink(missing_ok=True)`. A link is removed itself. |
-| Path: rmtree | exists | `Path.remove` covers it, recursively and without following links (`vm/tree.c`). It refuses `/`, `.` and `..`, and trees deeper than 128 levels. |
-| Path: copy2 that keeps the mode | missing | `read_text` and `write_text` lose the mode and are text-only. Credential files need their mode. Proposed as `File.copy` (separate change). |
-| Path: mkdir -p | exists | `Dir.mkdir` creates parents. |
-| Path: iterdir with is_dir and is_symlink | exists | `Dir.list` gives names. `File.lstat` (§35.5, step 7a) does not follow a link and gives `kind` `"link"`; `File.stat` follows it. |
-| Path: os.access (writable) | missing | The example runs `sudo chown` every time. A probe write is the workaround. Out of scope. |
-| HTTP POST with headers and TLS | exists | `HTTP.post`. System CA certificates by default. |
-| JSON token parse | exists | `JSON.parse`, `JSON.get`, `JSON.string`. |
-| Logging with timestamps to stdout | exists | `Logger.attach` with a handler that calls `IO.puts(Logger.format_text(event))`. The default handler writes to stderr, and the time is UTC. |
-| LOG_LEVEL from the environment | exists | `Logger.set_level`, with a few lines to parse the name. |
-| Hostname | missing | No builtin. Use `HOSTNAME` (set by Docker) or `/etc/hostname`. A `System.hostname()` would be one row, if it is needed later. Out of scope. |
-| Monotonic clock | exists | `Time.monotonic_ms()` |
-| Exit with a code | exists | `System.exit(code)` |
-| Reap orphans as PID 1 | missing | Use `docker run --init`. Out of scope (46.8, question 10). |
+- **Need:** Env vars with defaults
+  - **Status:** exists
+  - **Note:** `System.env(name).unwrap_or(default)`
+
+- **Need:** Boolean env flags
+  - **Status:** exists
+  - **Note:** `String.trim`, `String.downcase` and `==`
+
+- **Need:** Stop signals TERM and INT
+  - **Status:** missing
+  - **Note:** `Signal.channel` with `Signal.Term` and `Signal.Int` (46.3.1)
+
+- **Need:** Signal a child's group
+  - **Status:** missing
+  - **Note:** `Process.signal_group` (46.3.6)
+
+- **Need:** Run run.sh as a session leader, with its output
+  - **Status:** missing
+  - **Note:** `Process.spawn_group` (46.3.6). It inherits the output, as Python
+    does.
+
+- **Need:** Run `./config.sh` in a directory
+  - **Status:** partly
+  - **Note:** `spawn_captured` takes `dir` but captures stderr. `spawn` has no
+    `dir`. The example captures config.sh and logs it.
+
+- **Need:** Spawn `sudo chown`
+  - **Status:** exists
+  - **Note:** `Process.spawn_captured` with `--allow-run`. sudo must be present.
+
+- **Need:** Scan `/proc` for Runner.Listener
+  - **Status:** exists
+  - **Note:** `Dir.list("/proc")` and `File.read_text`. Not yet tested on
+    `/proc`.
+
+- **Need:** Signal a listener by pid
+  - **Status:** missing
+  - **Note:** `System.signal` through a pidfd (46.3.7)
+
+- **Need:** Wait for exit with a deadline
+  - **Status:** exists
+  - **Note:** `Process.wait(p, ms)` returns `error("network: operation timed
+    out")` on a timeout and keeps the child. The example repeats the wait.
+
+- **Need:** Path: exists check
+  - **Status:** partly
+  - **Note:** `File.stat(path, t).ok?`. It follows symlinks and has no
+    `exists?`.
+
+- **Need:** Path: unlink
+  - **Status:** exists
+  - **Note:** `Path.remove(path, ms)` (§35.5, step 7a). A missing path is `ok`,
+    as with `unlink(missing_ok=True)`. A link is removed itself.
+
+- **Need:** Path: rmtree
+  - **Status:** exists
+  - **Note:** `Path.remove` covers it, recursively and without following links
+    (`vm/tree.c`). It refuses `/`, `.` and `..`, and trees deeper than 128
+    levels.
+
+- **Need:** Path: copy2 that keeps the mode
+  - **Status:** missing
+  - **Note:** `read_text` and `write_text` lose the mode and are text-only.
+    Credential files need their mode. Proposed as `File.copy` (separate change).
+
+- **Need:** Path: mkdir -p
+  - **Status:** exists
+  - **Note:** `Dir.mkdir` creates parents.
+
+- **Need:** Path: iterdir with is_dir and is_symlink
+  - **Status:** exists
+  - **Note:** `Dir.list` gives names. `File.lstat` (§35.5, step 7a) does not
+    follow a link and gives `kind` `"link"`; `File.stat` follows it.
+
+- **Need:** Path: os.access (writable)
+  - **Status:** missing
+  - **Note:** The example runs `sudo chown` every time. A probe write is the
+    workaround. Out of scope.
+
+- **Need:** HTTP POST with headers and TLS
+  - **Status:** exists
+  - **Note:** `HTTP.post`. System CA certificates by default.
+
+- **Need:** JSON token parse
+  - **Status:** exists
+  - **Note:** `JSON.parse`, `JSON.get`, `JSON.string`.
+
+- **Need:** Logging with timestamps to stdout
+  - **Status:** exists
+  - **Note:** `Logger.attach` with a handler that calls
+    `IO.puts(Logger.format_text(event))`. The default handler writes to stderr,
+    and the time is UTC.
+
+- **Need:** LOG_LEVEL from the environment
+  - **Status:** exists
+  - **Note:** `Logger.set_level`, with a few lines to parse the name.
+
+- **Need:** Hostname
+  - **Status:** missing
+  - **Note:** No builtin. Use `HOSTNAME` (set by Docker) or `/etc/hostname`. A
+    `System.hostname()` would be one row, if it is needed later. Out of scope.
+
+- **Need:** Monotonic clock
+  - **Status:** exists
+  - **Note:** `Time.monotonic_ms()`
+
+- **Need:** Exit with a code
+  - **Status:** exists
+  - **Note:** `System.exit(code)`
+
+- **Need:** Reap orphans as PID 1
+  - **Status:** missing
+  - **Note:** Use `docker run --init`. Out of scope (46.8, question 10).
 
 ### 46.6 Testing plan (for later)
 

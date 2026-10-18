@@ -53,14 +53,22 @@ end
 
   | Function | Result |
   |---|---|
-  | `Table.new() -> Table[K, V]` | needs an expected type, like an empty `Map`; without one, `CHECK-EXPECTED-TYPE` (the general code of [§27.2](27-iteration-and-concurrency.md#272-channels)) |
+  | `Table.new() -> Table[K, V]` | needs an expected type, like an empty `Map`;
+without one, `CHECK-EXPECTED-TYPE` (the general code of
+[§27.2](27-iteration-and-concurrency.md#272-channels)) |
   | `Table.put(t, k: K, v: V) -> Void` | insert or replace |
-  | `Table.put_new(t, k: K, v: V) -> Bool` | insert only when the key is absent; `false` leaves the table unchanged (ETS `insert_new`) |
+  | `Table.put_new(t, k: K, v: V) -> Bool` | insert only when the key is absent;
+`false` leaves the table unchanged (ETS `insert_new`) |
   | `Table.get(t, k: K) -> Result[V]`, `Table.has_key?(t, k: K) -> Bool` | |
   | `Table.delete(t, k: K) -> Void` | absent keys are ignored |
-  | `Table.add(t, k: K, n: Int) -> Int` | `Table[K, Int]` only: adds `n` (absent counts as 0) and returns the new value, atomically (ETS `update_counter`); overflow halts with `RUNTIME-INTEGER-OVERFLOW` and leaves the table unchanged; on a table whose values are not `Int`, `CHECK-TYPE-MISMATCH` |
+  | `Table.add(t, k: K, n: Int) -> Int` | `Table[K, Int]` only: adds `n` (absent
+counts as 0) and returns the new value, atomically (ETS `update_counter`);
+overflow halts with `RUNTIME-INTEGER-OVERFLOW` and leaves the table unchanged;
+on a table whose values are not `Int`, `CHECK-TYPE-MISMATCH` |
   | `Table.size(t) -> Int` | a snapshot read, O(1) |
-  | `Table.keys(t) -> List[K]`, `Table.to_map(t) -> Map[K, V]` | snapshots, in first-insertion order; a key deleted and then put again goes to the end, as in `Map` |
+  | `Table.keys(t) -> List[K]`, `Table.to_map(t) -> Map[K, V]` | snapshots, in
+first-insertion order; a key deleted and then put again goes to the end, as in
+`Map` |
 
 - **Left out on purpose:** `get` with a default and `values`, which `Map` has.
   Use `Result.unwrap_or` and `to_map`.

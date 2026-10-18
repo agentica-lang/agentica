@@ -209,25 +209,77 @@ and the token list, before any layout:
 The positions that rules 2 and 3 get wrong are fixed by the table below. Each
 row is one position where a comment can sit.
 
-| Position in the source | Attached as | Printed as |
-|---|---|---|
-| before the module doc | leading on the module doc | above the `##` block |
-| after the module doc, before the next item | trailing on the module doc (own line) | the blank line the grammar needs stays; a `#` line right after the doc is valid only after that blank line (`PARSE-DETACHED-DOC` otherwise) |
-| a comment-only file, or after the last item | dangling on the program, or trailing on the last item | in order, at column 0, after the last item |
-| before `elsif` or `else` of an `if` | dangling on the `IfStmt`, tagged with that keyword | at the `if` indent, just before the keyword |
-| before `end` of an `if` | trailing on the last statement of the last body (own line) | on its own line, at the body indent |
-| after `else`, with an empty `else` body | dangling on the `IfStmt`, tagged `else` | after `else`, indented |
-| between `case` arms | leading on the next `CaseArm` | above the arm, at the arm indent |
-| after `->` on an arm line | trailing on the arm pattern (end of line) | at the end of the arm's first line |
-| after `do \|x\|` | trailing on the last `BlockParam` (end of line); with no parameter, leading on the first statement | at the end of the `do` line, or above the first statement |
-| before the `end` of a block | trailing on the last statement of the body (own line) | on its own line, at the body indent |
-| between `def` parameters | leading on the next `Param`, or trailing on the previous | one parameter per line |
-| after `) -> Type` | trailing on the result `TypeRef` (end of line) | at the end of the header line |
-| between struct fields or enum variants | leading on the `FieldDecl` or `EnumVariant` | above it; a doc block stays directly above its declaration |
-| before a closing bracket of a call, list, map or struct literal | trailing on the last element (own line) | on its own line after it; the comma goes before the comment |
-| after a map key, before the value | trailing on the `MapEntry`'s key (end of line) | at the end of the entry's line |
-| between the lines of a method chain | trailing on the previous call (own line) | on its own line after it; a golden of 47b checks it |
-| inside an empty `[]`, `{}` or `()` | dangling on the literal | on own lines inside |
+- **Position in the source:** before the module doc
+  - **Attached as:** leading on the module doc
+  - **Printed as:** above the `##` block
+
+- **Position in the source:** after the module doc, before the next item
+  - **Attached as:** trailing on the module doc (own line)
+  - **Printed as:** the blank line the grammar needs stays; a `#` line right
+    after the doc is valid only after that blank line (`PARSE-DETACHED-DOC`
+    otherwise)
+
+- **Position in the source:** a comment-only file, or after the last item
+  - **Attached as:** dangling on the program, or trailing on the last item
+  - **Printed as:** in order, at column 0, after the last item
+
+- **Position in the source:** before `elsif` or `else` of an `if`
+  - **Attached as:** dangling on the `IfStmt`, tagged with that keyword
+  - **Printed as:** at the `if` indent, just before the keyword
+
+- **Position in the source:** before `end` of an `if`
+  - **Attached as:** trailing on the last statement of the last body (own line)
+  - **Printed as:** on its own line, at the body indent
+
+- **Position in the source:** after `else`, with an empty `else` body
+  - **Attached as:** dangling on the `IfStmt`, tagged `else`
+  - **Printed as:** after `else`, indented
+
+- **Position in the source:** between `case` arms
+  - **Attached as:** leading on the next `CaseArm`
+  - **Printed as:** above the arm, at the arm indent
+
+- **Position in the source:** after `->` on an arm line
+  - **Attached as:** trailing on the arm pattern (end of line)
+  - **Printed as:** at the end of the arm's first line
+
+- **Position in the source:** after `do \|x\|`
+  - **Attached as:** trailing on the last `BlockParam` (end of line); with no
+    parameter, leading on the first statement
+  - **Printed as:** at the end of the `do` line, or above the first statement
+
+- **Position in the source:** before the `end` of a block
+  - **Attached as:** trailing on the last statement of the body (own line)
+  - **Printed as:** on its own line, at the body indent
+
+- **Position in the source:** between `def` parameters
+  - **Attached as:** leading on the next `Param`, or trailing on the previous
+  - **Printed as:** one parameter per line
+
+- **Position in the source:** after `) -> Type`
+  - **Attached as:** trailing on the result `TypeRef` (end of line)
+  - **Printed as:** at the end of the header line
+
+- **Position in the source:** between struct fields or enum variants
+  - **Attached as:** leading on the `FieldDecl` or `EnumVariant`
+  - **Printed as:** above it; a doc block stays directly above its declaration
+
+- **Position in the source:** before a closing bracket of a call, list, map or
+  struct literal
+  - **Attached as:** trailing on the last element (own line)
+  - **Printed as:** on its own line after it; the comma goes before the comment
+
+- **Position in the source:** after a map key, before the value
+  - **Attached as:** trailing on the `MapEntry`'s key (end of line)
+  - **Printed as:** at the end of the entry's line
+
+- **Position in the source:** between the lines of a method chain
+  - **Attached as:** trailing on the previous call (own line)
+  - **Printed as:** on its own line after it; a golden of 47b checks it
+
+- **Position in the source:** inside an empty `[]`, `{}` or `()`
+  - **Attached as:** dangling on the literal
+  - **Printed as:** on own lines inside
 
 Own-line trailing comments are printed at the indent of the node they follow,
 not at their source column. That is the one place where the output does not

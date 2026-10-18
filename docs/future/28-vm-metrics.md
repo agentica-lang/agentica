@@ -137,13 +137,40 @@ which only the last file write has.
 
 **Build and process**
 
-| Name | Type | Labels | How | Why |
-|---|---|---|---|---|
-| `agentica_vm_build_info` | gauge, always 1 | `version`, `libgc` (`none` on a sanitizer build), `libuv`, `yyjson`, `trace` (`on`/`off`) | derived (the `--version` data) | Join a dashboard to the VM version; see a change of version on a graph |
-| `process_start_time_seconds` | gauge | none | derived (wall clock read once when metrics start) | Uptime is `time() - process_start_time_seconds`; Prometheus prefers a start time to an uptime gauge |
-| `process_cpu_seconds_total` | counter | none | derived (`/proc/self/stat`, on the metrics thread) | CPU use; close to 1 per second means the scheduler is busy, near 0 means it waits. It replaces a "time blocked in the loop" counter, which would need clock reads around every poll |
-| `process_resident_memory_bytes` | gauge | none | derived (`/proc/self/statm`) | RSS; Boehm's heap is not the same as what the OS gives |
-| `process_open_fds`, `process_max_fds` | gauge | none | derived (`/proc/self/fd`, `getrlimit`) | Descriptor leaks and limits, for servers |
+- **Name:** `agentica_vm_build_info`
+  - **Type:** gauge, always 1
+  - **Labels:** `version`, `libgc` (`none` on a sanitizer build), `libuv`,
+    `yyjson`, `trace` (`on`/`off`)
+  - **How:** derived (the `--version` data)
+  - **Why:** Join a dashboard to the VM version; see a change of version on a
+    graph
+
+- **Name:** `process_start_time_seconds`
+  - **Type:** gauge
+  - **Labels:** none
+  - **How:** derived (wall clock read once when metrics start)
+  - **Why:** Uptime is `time() - process_start_time_seconds`; Prometheus prefers
+    a start time to an uptime gauge
+
+- **Name:** `process_cpu_seconds_total`
+  - **Type:** counter
+  - **Labels:** none
+  - **How:** derived (`/proc/self/stat`, on the metrics thread)
+  - **Why:** CPU use; close to 1 per second means the scheduler is busy, near 0
+    means it waits. It replaces a "time blocked in the loop" counter, which
+    would need clock reads around every poll
+
+- **Name:** `process_resident_memory_bytes`
+  - **Type:** gauge
+  - **Labels:** none
+  - **How:** derived (`/proc/self/statm`)
+  - **Why:** RSS; Boehm's heap is not the same as what the OS gives
+
+- **Name:** `process_open_fds`, `process_max_fds`
+  - **Type:** gauge
+  - **Labels:** none
+  - **How:** derived (`/proc/self/fd`, `getrlimit`)
+  - **Why:** Descriptor leaks and limits, for servers
 
 The `process_*` names are the standard ones from Prometheus client libraries, so
 ready-made Grafana panels work. They are read by the metrics thread, which
@@ -151,14 +178,39 @@ touches no VM state for them.
 
 **GC** (left out under `AGC_NO_GC`, the sanitizer build, which has no collector)
 
-| Name | Type | How | Why |
-|---|---|---|---|
-| `agentica_vm_gc_collections_total` | counter | derived (`GC_get_gc_no`) | When collections happen: `increase()` per scrape interval shows them on a graph. The exact moment of each one is the `gc` trace category's job |
-| `agentica_vm_gc_heap_bytes` | gauge | derived (`GC_get_heap_size`) | Heap growth, leaks |
-| `agentica_vm_gc_free_bytes` | gauge | derived (`GC_get_free_bytes`) | How much of the heap is unused |
-| `agentica_vm_gc_allocated_since_collection_bytes` | gauge | derived (`GC_get_bytes_since_gc`) | How close the next collection is |
-| `agentica_vm_gc_allocated_bytes_total` | counter | derived (`GC_get_total_bytes`) | Allocation rate with `rate()`; a sawtooth gauge alone samples badly |
-| `agentica_vm_gc_pause_seconds_total` | counter | hook: `GC_start_performance_measurement()` called at the lazy start; read with `GC_get_full_gc_total_time()` | Time the program was stopped by the GC; the mean pause is `rate(pause) / rate(collections)`. Millisecond steps, so a short run shows 0 |
+- **Name:** `agentica_vm_gc_collections_total`
+  - **Type:** counter
+  - **How:** derived (`GC_get_gc_no`)
+  - **Why:** When collections happen: `increase()` per scrape interval shows
+    them on a graph. The exact moment of each one is the `gc` trace category's
+    job
+
+- **Name:** `agentica_vm_gc_heap_bytes`
+  - **Type:** gauge
+  - **How:** derived (`GC_get_heap_size`)
+  - **Why:** Heap growth, leaks
+
+- **Name:** `agentica_vm_gc_free_bytes`
+  - **Type:** gauge
+  - **How:** derived (`GC_get_free_bytes`)
+  - **Why:** How much of the heap is unused
+
+- **Name:** `agentica_vm_gc_allocated_since_collection_bytes`
+  - **Type:** gauge
+  - **How:** derived (`GC_get_bytes_since_gc`)
+  - **Why:** How close the next collection is
+
+- **Name:** `agentica_vm_gc_allocated_bytes_total`
+  - **Type:** counter
+  - **How:** derived (`GC_get_total_bytes`)
+  - **Why:** Allocation rate with `rate()`; a sawtooth gauge alone samples badly
+
+- **Name:** `agentica_vm_gc_pause_seconds_total`
+  - **Type:** counter
+  - **How:** hook: `GC_start_performance_measurement()` called at the lazy
+    start; read with `GC_get_full_gc_total_time()`
+  - **Why:** Time the program was stopped by the GC; the mean pause is
+    `rate(pause) / rate(collections)`. Millisecond steps, so a short run shows 0
 
 A pause **histogram** is not planned: Boehm has no collection callback with user
 data, so it would need a mutable global set under the GC lock, an exception to
@@ -168,28 +220,140 @@ exception, registered only at the lazy start.
 
 **Tasks and the scheduler**
 
-| Name | Type | Labels | How | Why |
-|---|---|---|---|---|
-| `agentica_vm_tasks_spawned_total` | counter | none | existing counter (`next_task_id - 1`, main included) | Spawn rate |
-| `agentica_vm_tasks_finished_total` | counter | none | existing counter: `tasks_done` while the run goes on (main is never in it, 28.1), and `tasks_done + 1` in the end-of-run snapshot, once the run's outcome is known. "Finished" means the run is over for that task: main counts as finished at the end however the run ended (main returned, a child failed, or a task called `System.exit`) | Finish rate. While the run goes on, spawned minus finished is the live count, and it includes main while main runs, so it is at least 1 at every scrape. At the end, spawned minus finished is the number of tasks the run cut off: the ready and parked tasks cancelled when the run ended, plus the child whose failure or `System.exit` ended the run, since such a task never reaches `finish_task` and so is not in `tasks_done` either |
-| `agentica_vm_tasks` | gauge | `state`: `ready`, `parked` | derived: `ready` walks the run queue at the snapshot; `parked` is live (spawned minus finished, main included) minus ready (the snapshot is taken between turns, so no task is running) | Backlog: many ready tasks mean CPU contention; many parked tasks mean waiting on I/O |
-| `agentica_vm_steps_total` | counter | none | existing counter (`--max-steps` start value minus `steps_left`; exact to one step batch) | Interpreter work rate |
-| `agentica_vm_turns_total` | counter | `end`: `yield`, `park`, `done` | hook at the `sched turn` trace point | How often tasks are preempted (`yield`) against how often they wait (`park`) |
-| `agentica_vm_turn_cost_units_total` | counter | none | hook at the `sched turn` trace point (`turn_cost_used`) | How much long builtins (sorts, big joins, JSON) weigh on fairness |
-| `agentica_vm_run_queue_delay_seconds` | histogram | buckets 0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 1, `+Inf` | hook at one point only, the dequeue point (28.4): one clock read per `dequeue`. Tasks queued after a turn's code ended (await waiters woken by `finish_task`, the task put back after a `yield`, wakes from the poll after the turn or from a blocking poll) are stamped with that read; only tasks spawned or woken inside a turn keep the earlier stamp (the time the turn started), and their wait is real: they waited at least the rest of that turn | The latency a server's tasks see: how long a ready task waits for its turn. It is the production form of the 250 ms latency rule of `docs/vm/10-io-scheduler.md` §10.2.1 |
+- **Name:** `agentica_vm_tasks_spawned_total`
+  - **Type:** counter
+  - **Labels:** none
+  - **How:** existing counter (`next_task_id - 1`, main included)
+  - **Why:** Spawn rate
+
+- **Name:** `agentica_vm_tasks_finished_total`
+  - **Type:** counter
+  - **Labels:** none
+  - **How:** existing counter: `tasks_done` while the run goes on (main is never
+    in it, 28.1), and `tasks_done + 1` in the end-of-run snapshot, once the
+    run's outcome is known. "Finished" means the run is over for that task: main
+    counts as finished at the end however the run ended (main returned, a child
+    failed, or a task called `System.exit`)
+  - **Why:** Finish rate. While the run goes on, spawned minus finished is the
+    live count, and it includes main while main runs, so it is at least 1 at
+    every scrape. At the end, spawned minus finished is the number of tasks the
+    run cut off: the ready and parked tasks cancelled when the run ended, plus
+    the child whose failure or `System.exit` ended the run, since such a task
+    never reaches `finish_task` and so is not in `tasks_done` either
+
+- **Name:** `agentica_vm_tasks`
+  - **Type:** gauge
+  - **Labels:** `state`: `ready`, `parked`
+  - **How:** derived: `ready` walks the run queue at the snapshot; `parked` is
+    live (spawned minus finished, main included) minus ready (the snapshot is
+    taken between turns, so no task is running)
+  - **Why:** Backlog: many ready tasks mean CPU contention; many parked tasks
+    mean waiting on I/O
+
+- **Name:** `agentica_vm_steps_total`
+  - **Type:** counter
+  - **Labels:** none
+  - **How:** existing counter (`--max-steps` start value minus `steps_left`;
+    exact to one step batch)
+  - **Why:** Interpreter work rate
+
+- **Name:** `agentica_vm_turns_total`
+  - **Type:** counter
+  - **Labels:** `end`: `yield`, `park`, `done`
+  - **How:** hook at the `sched turn` trace point
+  - **Why:** How often tasks are preempted (`yield`) against how often they wait
+    (`park`)
+
+- **Name:** `agentica_vm_turn_cost_units_total`
+  - **Type:** counter
+  - **Labels:** none
+  - **How:** hook at the `sched turn` trace point (`turn_cost_used`)
+  - **Why:** How much long builtins (sorts, big joins, JSON) weigh on fairness
+
+- **Name:** `agentica_vm_run_queue_delay_seconds`
+  - **Type:** histogram
+  - **Labels:** buckets 0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 1, `+Inf`
+  - **How:** hook at one point only, the dequeue point (28.4): one clock read
+    per `dequeue`. Tasks queued after a turn's code ended (await waiters woken
+    by `finish_task`, the task put back after a `yield`, wakes from the poll
+    after the turn or from a blocking poll) are stamped with that read; only
+    tasks spawned or woken inside a turn keep the earlier stamp (the time the
+    turn started), and their wait is real: they waited at least the rest of that
+    turn
+  - **Why:** The latency a server's tasks see: how long a ready task waits for
+    its turn. It is the production form of the 250 ms latency rule of
+    `docs/vm/10-io-scheduler.md` §10.2.1
 
 **I/O, processes, TCP**
 
-| Name | Type | Labels | How | Why |
-|---|---|---|---|---|
-| `agentica_vm_resources_open` | gauge | `kind`: `file`, `process`, `job`, `tcp_socket`, `tcp_listener` | derived: one walk of the resource registry at the snapshot; `lock` jobs (timers of tasks waiting for a handle's lock or on a channel, not I/O) are skipped, as in `agentica_vm_io_jobs_finished_total` | Open handles by kind; a leak shows as a line that only grows |
-| `agentica_vm_io_jobs_finished_total` | counter | `kind` (the `agc_io_kind` names except `lock`: `file`, `process`, `sleep`, `stdin`, `tcp`); `result`: `ok`, `error`, `timeout` (a plain `value` result counts as `ok`) | hook in `trace_finish` (`vm/loop.c`, the `io done` and `io timeout` trace points), placed after its one combined test and before its trace-only early returns (no start time, a `lock` job), so it counts jobs whether `io` tracing is on or not; `lock` jobs are skipped | I/O rate and error rate by kind. Jobs in flight are in `agentica_vm_resources_open{kind="job"}`, derived, so no start counter |
-| `agentica_vm_io_bytes_total` | counter | `kind`: `file`, `stdin`, `process`, `tcp`; `direction`: `read`, `write` | hook in `trace_finish` next to the jobs counter (before its early returns), for every kind, TCP included (with PR #106, TCP reads and writes are `tcp_io` external jobs that finish through `agc_io_finish` → `trace_finish`). One mechanism: each kind keeps its byte count in its own `data` struct, written next to the system call (in `work`, or in the libuv callback for an external kind); `done` reports it through a new out-parameter, `agc_value (*done)(agc_vm *vm, void *data, agc_value context, agc_io_bytes *out)` (`agc_io_bytes` holds the count and the direction; a kind that moves no bytes leaves it zero); `agc_io_finish` copies it onto the job before `trace_finish` runs, since `data` is freed by then. Cost with metrics off: one store per I/O job in the kind's data, next to the system call it reports, and no branch | Throughput |
-| `agentica_vm_processes_spawned_total` | counter | none | hook at `proc spawn` | Child process rate |
-| `agentica_vm_process_spawn_failures_total` | counter | none | hook at `proc spawn_failed` | Missing executables, limits |
-| `agentica_vm_processes_exited_total` | counter | `exit`: `zero`, `nonzero`, `signal` | hook at `proc exit` | Failing children; three values instead of the exit code, so the label set stays fixed |
-| `agentica_vm_tcp_connections_total` | counter | `side`: `accepted`, `connected` | hook at `tcp_accept` and `tcp_connected` | Connection rate of a server and of a client |
-| `agentica_vm_tcp_errors_total` | counter | `op`: `accept`, `connect` | hook at `tcp_accept_error` and `tcp_connect_error` | Failed connections |
+- **Name:** `agentica_vm_resources_open`
+  - **Type:** gauge
+  - **Labels:** `kind`: `file`, `process`, `job`, `tcp_socket`, `tcp_listener`
+  - **How:** derived: one walk of the resource registry at the snapshot; `lock`
+    jobs (timers of tasks waiting for a handle's lock or on a channel, not I/O)
+    are skipped, as in `agentica_vm_io_jobs_finished_total`
+  - **Why:** Open handles by kind; a leak shows as a line that only grows
+
+- **Name:** `agentica_vm_io_jobs_finished_total`
+  - **Type:** counter
+  - **Labels:** `kind` (the `agc_io_kind` names except `lock`: `file`,
+    `process`, `sleep`, `stdin`, `tcp`); `result`: `ok`, `error`, `timeout` (a
+    plain `value` result counts as `ok`)
+  - **How:** hook in `trace_finish` (`vm/loop.c`, the `io done` and `io timeout`
+    trace points), placed after its one combined test and before its trace-only
+    early returns (no start time, a `lock` job), so it counts jobs whether `io`
+    tracing is on or not; `lock` jobs are skipped
+  - **Why:** I/O rate and error rate by kind. Jobs in flight are in
+    `agentica_vm_resources_open{kind="job"}`, derived, so no start counter
+
+- **Name:** `agentica_vm_io_bytes_total`
+  - **Type:** counter
+  - **Labels:** `kind`: `file`, `stdin`, `process`, `tcp`; `direction`: `read`,
+    `write`
+  - **How:** hook in `trace_finish` next to the jobs counter (before its early
+    returns), for every kind, TCP included (with PR #106, TCP reads and writes
+    are `tcp_io` external jobs that finish through `agc_io_finish` →
+    `trace_finish`). One mechanism: each kind keeps its byte count in its own
+    `data` struct, written next to the system call (in `work`, or in the libuv
+    callback for an external kind); `done` reports it through a new
+    out-parameter, `agc_value (*done)(agc_vm *vm, void *data, agc_value context,
+    agc_io_bytes *out)` (`agc_io_bytes` holds the count and the direction; a
+    kind that moves no bytes leaves it zero); `agc_io_finish` copies it onto the
+    job before `trace_finish` runs, since `data` is freed by then. Cost with
+    metrics off: one store per I/O job in the kind's data, next to the system
+    call it reports, and no branch
+  - **Why:** Throughput
+
+- **Name:** `agentica_vm_processes_spawned_total`
+  - **Type:** counter
+  - **Labels:** none
+  - **How:** hook at `proc spawn`
+  - **Why:** Child process rate
+
+- **Name:** `agentica_vm_process_spawn_failures_total`
+  - **Type:** counter
+  - **Labels:** none
+  - **How:** hook at `proc spawn_failed`
+  - **Why:** Missing executables, limits
+
+- **Name:** `agentica_vm_processes_exited_total`
+  - **Type:** counter
+  - **Labels:** `exit`: `zero`, `nonzero`, `signal`
+  - **How:** hook at `proc exit`
+  - **Why:** Failing children; three values instead of the exit code, so the
+    label set stays fixed
+
+- **Name:** `agentica_vm_tcp_connections_total`
+  - **Type:** counter
+  - **Labels:** `side`: `accepted`, `connected`
+  - **How:** hook at `tcp_accept` and `tcp_connected`
+  - **Why:** Connection rate of a server and of a client
+
+- **Name:** `agentica_vm_tcp_errors_total`
+  - **Type:** counter
+  - **Labels:** `op`: `accept`, `connect`
+  - **How:** hook at `tcp_accept_error` and `tcp_connect_error`
+  - **Why:** Failed connections
 
 Bytes written to stdout and stderr are not counted: they go through `agc_write`,
 which has no trace point, and adding a test there would put a branch on the
@@ -200,11 +364,25 @@ and status class, never by path).
 **End of run** (only in the last file write, 28.5; the endpoint is closed by
 then)
 
-| Name | Type | Labels | How | Why |
-|---|---|---|---|---|
-| `agentica_vm_exit_code` | gauge | none | derived (the code `vm/launch.c` returns) | The main alert of a batch job |
-| `agentica_vm_end_time_seconds` | gauge | none | derived (wall clock at the last write) | Alert when a cron job has not run for a day |
-| `agentica_vm_runtime_errors_total` | counter | `code`: a `RUNTIME-` code | derived (the outcome); one series with value 1 when the run failed, none otherwise | Which runtime error ended the run; codes are a fixed list, messages are never exported |
+- **Name:** `agentica_vm_exit_code`
+  - **Type:** gauge
+  - **Labels:** none
+  - **How:** derived (the code `vm/launch.c` returns)
+  - **Why:** The main alert of a batch job
+
+- **Name:** `agentica_vm_end_time_seconds`
+  - **Type:** gauge
+  - **Labels:** none
+  - **How:** derived (wall clock at the last write)
+  - **Why:** Alert when a cron job has not run for a day
+
+- **Name:** `agentica_vm_runtime_errors_total`
+  - **Type:** counter
+  - **Labels:** `code`: a `RUNTIME-` code
+  - **How:** derived (the outcome); one series with value 1 when the run failed,
+    none otherwise
+  - **Why:** Which runtime error ended the run; codes are a fixed list, messages
+    are never exported
 
 Not measured: anything per function, per instruction, per task id, per path, per
 host or per program value; message text; the step limit. Task ids, paths and
@@ -427,12 +605,32 @@ it.
 
 **Compared:**
 
-| Way | Fits | Cost and risk | Decision |
-|---|---|---|---|
-| (a) Pull endpoint: the VM serves `GET /metrics` | Long-running programs (servers, workers); the normal Prometheus way | A listener and a tiny HTTP responder; must never keep the VM alive; a run that ends before a scrape is never seen | **Planned (18b)** |
-| (b) Textfile for node_exporter's textfile collector | Batch jobs and scripts, which end before any scrape; hosts that already run node_exporter | One atomic file write every 15 seconds and at the end; file safety rules | **Planned (18a)**, first, since it needs no socket |
-| (c) Push to a Pushgateway | Batch jobs | Needs an HTTP client in C, retries, a reachable gateway; Prometheus advises it only for batch jobs, which (b) covers | Not planned |
-| (d) OpenTelemetry (OTLP) | Shops on OTel | Protobuf over HTTP or gRPC in C; a large dependency for the same numbers. The OTel Collector's Prometheus receiver can scrape (a) | Not planned; to evaluate later only if a user needs push to OTLP |
+- **Way:** (a) Pull endpoint: the VM serves `GET /metrics`
+  - **Fits:** Long-running programs (servers, workers); the normal Prometheus
+    way
+  - **Cost and risk:** A listener and a tiny HTTP responder; must never keep the
+    VM alive; a run that ends before a scrape is never seen
+  - **Decision:** **Planned (18b)**
+
+- **Way:** (b) Textfile for node_exporter's textfile collector
+  - **Fits:** Batch jobs and scripts, which end before any scrape; hosts that
+    already run node_exporter
+  - **Cost and risk:** One atomic file write every 15 seconds and at the end;
+    file safety rules
+  - **Decision:** **Planned (18a)**, first, since it needs no socket
+
+- **Way:** (c) Push to a Pushgateway
+  - **Fits:** Batch jobs
+  - **Cost and risk:** Needs an HTTP client in C, retries, a reachable gateway;
+    Prometheus advises it only for batch jobs, which (b) covers
+  - **Decision:** Not planned
+
+- **Way:** (d) OpenTelemetry (OTLP)
+  - **Fits:** Shops on OTel
+  - **Cost and risk:** Protobuf over HTTP or gRPC in C; a large dependency for
+    the same numbers. The OTel Collector's Prometheus receiver can scrape (a)
+  - **Decision:** Not planned; to evaluate later only if a user needs push to
+    OTLP
 
 (a) and (b) answer different needs (a process that runs, a run that ended), and
 both may be set at once; they share the snapshot and the text format.

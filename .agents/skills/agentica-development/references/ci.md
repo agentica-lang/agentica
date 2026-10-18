@@ -46,7 +46,8 @@ comment), then a step that calls it. Targets that are not obvious:
   bytecode format version), split it in two PRs, as 35.3 says: the first adds
   the feature without using it in `compiler/`, and refreshes stage0; the
   second uses it. When that is not possible, compile `stage1` with another
-  compiler and say so in the PR: `make stage0 STAGE1_COMPILER="path/to/agentica"`
+  compiler and say so in the PR: `make stage0
+STAGE1_COMPILER="path/to/agentica"`
   (a binary built from the parent commit in a second worktree); the later
   stages still run on the new first binary. A new bytecode format is harder:
   the new VM cannot load a program in the old format, so the old VM must run
@@ -72,12 +73,14 @@ comment), then a step that calls it. Targets that are not obvious:
 - `test` and `test-slow` run Python `unittest` modules only (design in
   `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of
   `tests/test_<area>.py` files or directories (the default `tests/`). A leading
-  `./` and a trailing `/` are ignored; any other path (a file of another kind, a `.py`
+  `./` and a trailing `/` are ignored; any other path (a file of another kind, a
+`.py`
   file outside `tests/test_<area>.py`, a name that is not a folder) fails with a
   message.
   A directory adds its own `test_*.py` files and is not searched recursively on
   purpose: `tests/eval/test_*.py` are not modules for this runner. `PY_ALONE`
-  in the Makefile (`tests/test_vm_latency.py`, `tests/test_vm_task_map.py`) lists
+  in the Makefile (`tests/test_vm_latency.py`, `tests/test_vm_task_map.py`)
+lists
   modules that a directory does not pick up: they run when named, as
   `make vm-latency` and `make vm-task-map` do.
 - `make tests KIND=fast|files|slow|all` is the group selector over those
@@ -87,7 +90,8 @@ comment), then a step that calls it. Targets that are not obvious:
   Ubuntu test container and `WINE=1` runs the Windows checks of it under Wine
   (`kind=fast` and `files` only). `TESTS=` narrows only host fast/slow runs;
   Make rejects it for `files`, `all`, Docker and Wine rather than ignoring it.
-  `make test`, `test-slow`, `test-bdd`, `windows-docker-check`, `windows-docker-remove-check` and
+  `make test`, `test-slow`, `test-bdd`, `windows-docker-check`,
+`windows-docker-remove-check` and
   `windows-docker-remove-wine-check` stay as the explicit forms and delegate
   to the same routes; an unknown `KIND` fails before anything runs.
 - `make goldens` also rewrites `tests/fixtures/cli/forms.json`.
@@ -109,7 +113,8 @@ comment), then a step that calls it. Targets that are not obvious:
   `make_temp_dir`, `compile_text`, `@slow`, `tool` for Node;
   `run(stdout_to=, stderr_to=)` sends a stream to a file such as `/dev/full`),
   and `Child` and `start_vm(flags=)` for a peer or VM read line by line
-  (`next_line`, `next_stderr_line`, `stdout_text`, `wait`, `close_stdin`; `read_stdout=False`
+  (`next_line`, `next_stderr_line`, `stdout_text`, `wait`, `close_stdin`;
+`read_stdout=False`
   for a pipe that must stay full), killed with its process group when the test
   ends, also on Ctrl-C or SIGTERM; `process_alive` and `wait_until` check
   that a test left no process, and `make_suite` and `report_cases` build and
@@ -128,7 +133,8 @@ comment), then a step that calls it. Targets that are not obvious:
   120 s, 900 s for `@slow`; `@timeout(seconds)` overrides it for a method or
   a class; `faulthandler` kills the module 30 s later if the signal cannot
   run); one test module (the `MODULE_LIMIT` of the Makefile:
-  `timeout -k 10` around `unittest`; 600 s, 1800 s for `make test-slow`); the job `timeout-minutes` of the workflow, which must
+  `timeout -k 10` around `unittest`; 600 s, 1800 s for `make test-slow`); the
+job `timeout-minutes` of the workflow, which must
   stay larger than the module limit times the scale. Deadlines that a correct
   run must beat take `scaled(seconds)` (or `ms` in
   `tests/test_bdd_integration.py`); a
@@ -189,7 +195,8 @@ comment), then a step that calls it. Targets that are not obvious:
   are selected for the cross build. The Wine prefix stays in
   `build/wine-home`, so it is made once. It needs Docker with BuildKit and
   the buildx plugin, the network for the pinned toolchain archive and base
-  image, and about 6 GB of disk; no Windows machine. Override `WINDOWS_IMAGE` or `WINDOWS_DOCKERFILE` to use another
+  image, and about 6 GB of disk; no Windows machine. Override `WINDOWS_IMAGE` or
+`WINDOWS_DOCKERFILE` to use another
   image. No CI job calls these targets. Wine is not a substitute for native
   Windows CI; tests relying on Windows process creation, command-line UTF-16
   conversion or symlink resolution can differ under Wine.
@@ -213,13 +220,15 @@ comment), then a step that calls it. Targets that are not obvious:
   `RUNNER_TEMP` subtree and an outside sentinel detects an escape, with
   bounded subprocesses and cleanup. This is a regression guard on an ephemeral
   OS-enforced sandbox. The Linux, macOS and Windows platform jobs use that
-  native route, including Windows private-handoff deletion and refusal tests. Wine
+  native route, including Windows private-handoff deletion and refusal tests.
+Wine
   (`make tests KIND=files WINE=1`, `windows-docker-remove-wine-check`) is
   optional local compatibility coverage, not proof of native NTFS, ACL or
   reparse-point behavior, and the container writes its Wine prefix in the
   disposable `/tmp`. The general `windows-docker-check` mount remains writable
   and is not the destructive-test sandbox.
-- `vm-diff-build` and `vm-diff-test` are the golden tests (`tests/test_vm_diff_*.py`);
+- `vm-diff-build` and `vm-diff-test` are the golden tests
+  (`tests/test_vm_diff_*.py`);
   `sweep-full` runs them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`).
   `test-distribution` is the release's relocated-executable test
   (`tests/test_stdlib_distribution.py` copies `dist/agentica` alone away from
@@ -266,17 +275,20 @@ Ubuntu runners.
   15 s after `make test` built the stages, as a step of its own so a failure
   shows alone), `make test-cli`, `make test-slow` (the `@slow` cases of the test
   files),
-  `make vm-latency` and `make vm-task-map` alone after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
+  `make vm-latency` and `make vm-task-map` alone after that, `make smoke` (the
+example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
   check (the last step that builds), and then `make dup-check` (it runs even
   when an earlier step fails, so a clone or an npm outage does not hide the
   test results). The vm-latency negative control starts its two VMs together
-  (it can only raise latency, so the control stays valid). The vendored check stays last: it rebuilds
+  (it can only raise latency, so the control stays valid). The vendored check
+stays last: it rebuilds
   `build/vm/release/obj` with other flags, so nothing that builds the binary
   may run beside it.
 - `dup-check` as a job runs only on `master` pushes (it saves the npm cache).
 - `vm-sanitizers` (`needs: test`, and it still runs when `test` fails):
   `make vm-lint`, one `make -j vm-test vm-fuzz`, `make vm-layers` (on the
-  sanitizer objects; the job installs ripgrep if `rg` is missing), the ASan golden,
+  sanitizer objects; the job installs ripgrep if `rg` is missing), the ASan
+golden,
   bytecode, trace, TCP and TLS tests, `make fixed-point` on the sanitizer
   binary (about 75 s and 1.8 GB: the VM has no GC then; it runs before
   `vm-sanitize-test`, whose `tests/test_single_binary.py` needs the sanitizer
@@ -330,12 +342,14 @@ Ubuntu runners.
 
 The first steps of the `test` job (the `changes` step, checkout with
 `fetch-depth: 2`) diff the pull request merge commit against its base
-(`git diff HEAD^1 HEAD`) and publish the result as job outputs. It runs `vm-sanitizers` only when the VM,
+(`git diff HEAD^1 HEAD`) and publish the result as job outputs. It runs
+`vm-sanitizers` only when the VM,
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
 - `vm/`, `bootstrap/`, `compiler/front_end*`, `compiler/lower*`,
   `compiler/bytecode*`, `VERSION`;
-- `tests/test_vm_diff_*`, `tests/vm_diff_support.py`, `tests/test_vm_trace.py`, `tests/test_vm_tcp.py`,
+- `tests/test_vm_diff_*`, `tests/vm_diff_support.py`, `tests/test_vm_trace.py`,
+  `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
   `tests/fixtures/tls/`, `tests/test_vm_http.py`, `tests/fixtures/http-*`,
@@ -356,7 +370,8 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   pattern is `stdlib/*`; in a shell `case`, `*` also matches `/`);
 - the Makefile, `.gitmodules`, `.clang-tidy`, `ci.yml`.
 
-Otherwise it shows as skipped. If the `changes` step does not set its outputs, `vm-sanitizers` still
+Otherwise it shows as skipped. If the `changes` step does not set its outputs,
+`vm-sanitizers` still
 runs. A manual run always runs it. Front-end changes (checker, AST,
 builtins, `compiler/`) skip `vm-sanitizers` on purpose; the `test` job still
 runs the `vm-diff` golden shards and every CLI test with the real VM. Keep
@@ -385,7 +400,8 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   pull requests. PR jobs can write to that volume, so the release sets
   `CCACHE=` (in the job env and on the `make` line) and never uses it.
 - `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`, and
-  `make vm-sanitize-test` runs the Python modules, the golden shards first. `make vm-test` and `make vm-lint` run their C tests
+  `make vm-sanitize-test` runs the Python modules, the golden shards first.
+`make vm-test` and `make vm-lint` run their C tests
   and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
@@ -406,8 +422,10 @@ Actions → Run workflow:
 - `fuzz.yml` fuzzes the sanitizer VM with 5 million mutants and a random
   seed.
 
-`sweep.yml` runs by schedule (Monday 03:00 UTC) and by hand: the `vm-diff` shards on
-the release VM with `AGENTICA_SWEEP=full` (`make sweep-full`). Nothing else in CI runs on a schedule.
+`sweep.yml` runs by schedule (Monday 03:00 UTC) and by hand: the `vm-diff`
+shards on
+the release VM with `AGENTICA_SWEEP=full` (`make sweep-full`). Nothing else in
+CI runs on a schedule.
 
 Two more workflows: `site-examples.yml` and `pages.yml` (see
 `references/site.md`).
@@ -418,14 +436,16 @@ The release workflow builds `dist/agentica` with a pinned `zig cc` against
 glibc 2.28, with `AGENTICA_OPENSSL: vendored` and `AGENTICA_GC: vendored`
 set for the whole job, from `bootstrap/stage0.agcb` (`make vm-test
 fixed-point CCACHE=`: the embedding and the link have to work with this
-toolchain, and the fixed point runs on the result). It needs only a C toolchain. It
+toolchain, and the fixed point runs on the result). It needs only a C toolchain.
+It
 strips the binary, checks the glibc floor with `objdump -T` (an empty list of
 versions is an error with its own message), checks that OpenSSL is linked
 statically (in the build and in the unpacked archive) and that `run
 --version` names the submodule's OpenSSL version. It fails when `readelf -d`
 shows a NEEDED `libgc` (in the build and in the unpacked archive). The
 archive holds `bin/agentica` alone (the workflow checks that nothing else is
-in `bin/`), `LICENSE`, `NOTICE` and the third-party licenses in `licenses/`. Its test steps are targets: `make vm-diff-test` runs the
+in `bin/`), `LICENSE`, `NOTICE` and the third-party licenses in `licenses/`. Its
+test steps are targets: `make vm-diff-test` runs the
 golden tests on the release binary with the full sweep, and `make
 test-distribution` runs the relocated-binary test. A last step unpacks the
 archive and runs an example, `compile` and `run`, and `agentica test`. The
@@ -436,8 +456,10 @@ CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
 
 - The `VERSION` file at the repository root (one line, no `v`) is the single
   source of the version. `make version` prints it and the Makefile passes it to
-  C as `AGC_VERSION`; `agentica --version` reports it. The Agentica front end takes it as an input
-  (`Settings.version`; `--version V` in the arguments of `compiler/front_end.agc`),
+  C as `AGC_VERSION`; `agentica --version` reports it. The Agentica front end
+takes it as an input
+  (`Settings.version`; `--version V` in the arguments of
+`compiler/front_end.agc`),
   and writes it into each `.agcb` header. Keep it in sync with the Git tag.
 - Every PR with a user-visible change adds a short entry under `## [Unreleased]`
   in `CHANGELOG.md` (Added, Changed, Removed or Fixed; start a change that

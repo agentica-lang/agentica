@@ -215,22 +215,49 @@ none of them (the VM has `_WIN32` paths): the channel is Linux only.
 
 ### 10.5 Limits the C runtime keeps
 
-| Limit | Value |
-|---|---|
-| `IO.read_bytes` count | 0..1 MiB |
-| Process send, read, line | 1 MiB |
-| File read, line, text, writes | 1 MiB |
-| TCP `send_bytes`, `recv_bytes`, line (`TCP.send` of a String has no limit, as in the grammar) | 1 MiB |
-| Byte values | 0..255 |
-| `List.repeat` count | 0..1048576 |
-| HTTP start and header line | 8192 bytes |
-| HTTP header block | 65536 bytes |
-| HTTP headers | 100 |
-| HTTP interim responses | 15 accepted, the 16th fails |
-| `max_connections` | at most 65536 |
-| HTTP body | `max_body_bytes`, 413. The body is held whole, so the default is 1 MiB and the cap 64 MiB (10.7) |
-| Process launch | `--allow-run` |
-| Windows programs other than `.exe`, `.com` | rejected |
+- **Limit:** `IO.read_bytes` count
+  - **Value:** 0..1 MiB
+
+- **Limit:** Process send, read, line
+  - **Value:** 1 MiB
+
+- **Limit:** File read, line, text, writes
+  - **Value:** 1 MiB
+
+- **Limit:** TCP `send_bytes`, `recv_bytes`, line (`TCP.send` of a String has no
+  limit, as in the grammar)
+  - **Value:** 1 MiB
+
+- **Limit:** Byte values
+  - **Value:** 0..255
+
+- **Limit:** `List.repeat` count
+  - **Value:** 0..1048576
+
+- **Limit:** HTTP start and header line
+  - **Value:** 8192 bytes
+
+- **Limit:** HTTP header block
+  - **Value:** 65536 bytes
+
+- **Limit:** HTTP headers
+  - **Value:** 100
+
+- **Limit:** HTTP interim responses
+  - **Value:** 15 accepted, the 16th fails
+
+- **Limit:** `max_connections`
+  - **Value:** at most 65536
+
+- **Limit:** HTTP body
+  - **Value:** `max_body_bytes`, 413. The body is held whole, so the default is
+    1 MiB and the cap 64 MiB (10.7)
+
+- **Limit:** Process launch
+  - **Value:** `--allow-run`
+
+- **Limit:** Windows programs other than `.exe`, `.com`
+  - **Value:** rejected
 
 HTTP numbers: `Content-Length` and chunk sizes accumulate with saturation.
 Parsing stops once a value exceeds the limit (413), and every comparison is

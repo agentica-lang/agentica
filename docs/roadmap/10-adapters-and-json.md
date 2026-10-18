@@ -1,7 +1,7 @@
 ## Phase 10: Adapters and JSON inspection
 
 Specified in [`docs/future/15-adapters-and-json-inspection.md` section
-15](../future/15-adapters-and-json-inspection.md#15-adapters-and-json-inspection)
+15](../future/15-adapters-and-json-inspection.md)
 (10a to 10d) and [section
 17](../future/17-optional-json-fields.md#17-optional-and-nullable-json-fields)
 (10e). Each item lands in the evaluator and the VM in one PR, with `grammar.md`,

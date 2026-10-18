@@ -21,8 +21,11 @@ Read first: `references/vm.md` (the trust model and the layers).
   is `const`. The exceptions of `docs/vm/10-io-multicore.md` §10.2.3 take
   `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`.
   `vm/tests/.clang-tidy` turns the check off for the C tests.
-- No prototypes of `static` functions: define each helper before its first use, so files read bottom-up and the `agc_*` functions usually come last (*checked*); only unavoidable mutual recursion may have one.
-- No value-driven C recursion (`docs/vm/05-values-execution-builtins.md` §7.3; *checked* by
+- No prototypes of `static` functions: define each helper before its first use,
+  so files read bottom-up and the `agc_*` functions usually come last
+  (*checked*); only unavoidable mutual recursion may have one.
+- No value-driven C recursion (`docs/vm/05-values-execution-builtins.md` §7.3;
+  *checked* by
   `misc-no-recursion` within one file only: recursion across files through
   `agc_*` calls is not caught). Depth bounded by a constant or `log n` (HAMT
   levels) is allowed with `// NOLINT(misc-no-recursion)` on the function line.
@@ -32,7 +35,8 @@ Read first: `references/vm.md` (the trust model and the layers).
   comment, except the generated `vm/unicode_data.c`, and a new C file needs
   one too. A source file's header is about 3 to 8 lines of text (the `/*` and
   `*/` lines do not count): what the file is, its main functions or builtin
-  family, its layer, and where its design lives in `docs/vm/`, as `vm/agentica.c`
+  family, its layer, and where its design lives in `docs/vm/`, as
+`vm/agentica.c`
   does. A C test's header is 1 to 4 lines on what it tests. A legal header may
   come before it. *Checked* by `tests/test_vm_style.py` (3 to 8 lines of text
   for a source file, 1 to 4 for a C test, the generated file skipped).
@@ -45,7 +49,13 @@ Read first: `references/vm.md` (the trust model and the layers).
   comments. Never narrate obvious code and never leave commented-out code. Tool
   markers (`// NOLINT(...)`, `/* fall through */`) are not comments in this
   sense.
-- Only `value.c` and the inline constructors and accessors of `value.h` (`agc_int`, `agc_as_int`, ... for the common types, with `agc_wrong_tag` as their one out-of-line failure) read the value union, besides the two inline word helpers of `value.h` (`agc_value_word`, `agc_word_value`) that list leaves use for the 8-byte payload of an Int or Float. Immediates write the full word. A new constructor or accessor for a hot type goes inline in `value.h`; one for a service resource stays in `value.c`.
+- Only `value.c` and the inline constructors and accessors of `value.h`
+  (`agc_int`, `agc_as_int`, ... for the common types, with `agc_wrong_tag` as
+  their one out-of-line failure) read the value union, besides the two inline
+  word helpers of `value.h` (`agc_value_word`, `agc_word_value`) that list
+  leaves use for the 8-byte payload of an Int or Float. Immediates write the
+  full word. A new constructor or accessor for a hot type goes inline in
+  `value.h`; one for a service resource stays in `value.c`.
 
 `make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
 skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes
@@ -60,7 +70,8 @@ macOS branches are not linted while those platforms are paused.
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
 stack. `System.exit` calls `agc_exit`, which records `AGC_EXITED` and the
-code and `longjmp`s the same way. Only the driver (`vm/launch.c`, with `agentica.c`) prints and exits: it
+code and `longjmp`s the same way. Only the driver (`vm/launch.c`, with
+`agentica.c`) prints and exits: it
 flushes stdout and maps the code (1..255 as is, anything else 0, like
 Racket's exit handler). SIGPIPE is ignored and every write is checked.
 
