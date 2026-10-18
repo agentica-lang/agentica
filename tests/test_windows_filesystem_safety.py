@@ -320,6 +320,78 @@ def test_acl_denied_delete_preserves_remove_sources(root, work):
 
 
 @REQUIRES_NATIVE_WINDOWS
+def test_rename_denied_delete_preserves_source_and_target(root, work):
+    box = root / "acl-box"
+    box.mkdir()
+    source = box / "source"
+    source.write_text("rename sentinel", encoding="utf-8")
+    target = box / "occupied"
+    target.write_text("keep destination", encoding="utf-8")
+    identity = subprocess.run(
+        ["whoami.exe", "/user", "/fo", "csv", "/nh"],
+        capture_output=True, text=True, check=False,
+    )
+    assert identity.returncode == 0, identity.stderr
+    sid = next(csv.reader(identity.stdout.splitlines()))[1]
+    assert sid.startswith("S-1-"), sid
+
+    def acl(path, *arguments):
+        result = subprocess.run(
+            ["icacls.exe", str(path), *arguments],
+            capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    rename = compile_work_text(work, RACE_PROGRAM, "windows-rename-denied")
+    try:
+        # Deny DELETE on the source; the non-replacing rename must refuse
+        # instead of moving or truncating anything.
+        acl(box, "/deny", f"*{sid}:(DC)")
+        acl(source, "/deny", f"*{sid}:(D)")
+        kernel32 = kernel32_file_api()
+        # Establish actual denial with an independent Win32 open before
+        # invoking the rename; a hosted runner may have backup rights.
+        def delete_is_denied() -> bool:
+            handle = kernel32.CreateFileW(
+                str(source), 0x10000, 7, None, 3, 0, None
+            )
+            if handle != ctypes.c_void_p(-1).value:
+                kernel32.CloseHandle(handle)
+                return False
+            return ctypes.get_last_error() == 5
+
+        if not delete_is_denied():
+            acl(box, "/inheritance:d")
+            acl(source, "/inheritance:d")
+            acl(box, "/deny", f"*{sid}:(DC,D)")
+            acl(source, "/deny", f"*{sid}:(D)")
+            if not delete_is_denied():
+                details = subprocess.run(
+                    ["icacls.exe", str(box)], capture_output=True,
+                    text=True, check=False,
+                )
+                pytest.fail(
+                    "could not establish independent DELETE denial: "
+                    + details.stdout
+                )
+        result = run_vm(
+            rename, args=[str(source), str(target)], env=vm_environment(), cwd=root
+        )
+        assert (result.code, result.stdout) == (0, "false\n"), result.stderr
+    finally:
+        acl(source, "/remove:d", f"*{sid}")
+        acl(box, "/remove:d", f"*{sid}")
+    assert source.read_text(encoding="utf-8") == "rename sentinel"
+    assert target.read_text(encoding="utf-8") == "keep destination"
+    result = run_vm(
+        rename, args=[str(source), str(target)], env=vm_environment(), cwd=root
+    )
+    assert (result.code, result.stdout) == (0, "true\n"), result.stderr
+    assert not source.exists()
+    assert target.read_text(encoding="utf-8") == "rename sentinel"
+
+
+@REQUIRES_NATIVE_WINDOWS
 def test_depth_limit_fails_without_leaking_handles(root, work, adopt):
     victim = root / "deep"
     current = victim
