@@ -212,9 +212,7 @@ def test_a_directory_reports_the_same_zero_owner(root, work):
 @REQUIRES_WINDOWS_VM
 @pytest.mark.skipif(os.environ.get("AGENTICA_TEST_WINE") == "1", reason="Wine cannot make the restricted object")
 def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(root, work):
-    bytecode = compile_text(work, METADATA_PROGRAM, "windows-metadata")
-
-
+    metadata_bytecode = compile_text(work, METADATA_PROGRAM, "windows-metadata")
     private_file = root / "private.txt"
     private_directory = root / "private-directory"
     bytecode = compile_text(work, PRIVATE_PROGRAM, "windows-private")
@@ -223,7 +221,7 @@ def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(ro
     assert result.stdout.splitlines() == [
         f"file {WRITABLE_MODE} 0 0", f"directory {WRITABLE_MODE} 0 0",
     ]
-    assert _metadata(bytecode, private_file, root)[2:] == ["0", "0"]
+    assert _metadata(metadata_bytecode, private_file, root)[2:] == ["0", "0"]
     assert private_directory.is_dir()
 
 
