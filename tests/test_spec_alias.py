@@ -1,6 +1,7 @@
 import json
 
 from tests.agentica_test import TestCase, cli, output_lines, run, vm_environment
+from tests.spec_support import json_diagnostic
 
 
 class SpecAliasTest(TestCase):
@@ -8,14 +9,16 @@ class SpecAliasTest(TestCase):
         self.work = self.make_temp_dir()
 
     def check(self, text, name="main.agc"):
-        path = self.work / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(path)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
+        return json_diagnostic(self, self.work, text, name)
+
+    def assert_diagnostic(self, text, code, start):
+        found = self.check(text)
+        self.assertEqual(found["code"], code)
+        self.assertEqual(
+            (found["range"]["start"]["line"], found["range"]["start"]["column"]),
+            start,
+        )
+        return found
 
     def test_aliases_are_transparent_and_can_be_chained(self):
         text = (
@@ -137,12 +140,7 @@ class SpecAliasTest(TestCase):
         ]
         for text, code, start in cases:
             with self.subTest(text=text):
-                found = self.check(text)
-                self.assertEqual(found["code"], code)
-                self.assertEqual(
-                    (found["range"]["start"]["line"], found["range"]["start"]["column"]),
-                    start,
-                )
+                self.assert_diagnostic(text, code, start)
 
     def test_expanded_type_errors_point_to_the_alias_use(self):
         cases = [
@@ -159,12 +157,7 @@ class SpecAliasTest(TestCase):
         ]
         for text, code, start in cases:
             with self.subTest(code=code):
-                found = self.check(text)
-                self.assertEqual(found["code"], code)
-                self.assertEqual(
-                    (found["range"]["start"]["line"], found["range"]["start"]["column"]),
-                    start,
-                )
+                self.assert_diagnostic(text, code, start)
 
     def test_repeated_alias_expansion_is_bounded(self):
         aliases = ["type T0 = Int"]
@@ -199,12 +192,7 @@ class SpecAliasTest(TestCase):
             (pattern, "CHECK-PATTERN-TYPE", (10, 5)),
         ]:
             with self.subTest(code=code):
-                found = self.check(text)
-                self.assertEqual(found["code"], code)
-                self.assertEqual(
-                    (found["range"]["start"]["line"], found["range"]["start"]["column"]),
-                    start,
-                )
+                found = self.assert_diagnostic(text, code, start)
                 self.assertIn("Shape.Circle", json.dumps(found))
 
     def test_alias_collision_unknown_target_constructor_and_arguments(self):

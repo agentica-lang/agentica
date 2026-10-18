@@ -6,8 +6,12 @@ help texts are not asserted (AGENTS.md).
 """
 import json
 
-from tests.agentica_test import TestCase, cli, run
-from tests.test_spec_checker import covered
+from tests.agentica_test import TestCase
+from tests.spec_support import (
+    assert_module_cases,
+    assert_single_file_cases,
+    json_diagnostic_files,
+)
 
 JOIN = 'def join(xs: List[String], sep: String = ", ") -> String\n  return xs.join(sep)\nend\n\n'
 
@@ -179,31 +183,10 @@ class SpecCheckerDefaultsTest(TestCase):
         self.work = self.make_temp_dir()
 
     def diagnostic(self, files, root="program.agc"):
-        """The JSON diagnostic that `check` gives the files {name: text}, or None when they check clean."""
-        for name, text in files.items():
-            (self.work / name).write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(self.work / root)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
+        return json_diagnostic_files(self, self.work, files, root)
 
     def test_single_file_programs(self):
-        for title, program, code, text in SINGLE_FILE:
-            with self.subTest(title):
-                found = self.diagnostic({"program.agc": program})
-                self.assertEqual(found and found["code"], code, program)
-                if text is not None:
-                    self.assertEqual(covered(program, found["range"]), text)
+        assert_single_file_cases(self, SINGLE_FILE, self.diagnostic)
 
     def test_programs_of_several_files(self):
-        for title, files, code, file, text in MODULES:
-            with self.subTest(title):
-                folder = self.make_temp_dir()
-                self.work = folder
-                found = self.diagnostic(files, "root.agc")
-                self.assertEqual(found and found["code"], code, files)
-                if found is None:
-                    continue
-                self.assertTrue(found["file"].endswith(file), found["file"])
-                self.assertEqual(covered(files[file], found["range"]), text)
+        assert_module_cases(self, MODULES, self.diagnostic)

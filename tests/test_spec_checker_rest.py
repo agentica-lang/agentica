@@ -16,8 +16,8 @@ import json
 import re
 import unittest
 
-from tests.agentica_test import FIXTURES, TestCase, cli, run
-from tests.test_spec_checker import covered
+from tests.agentica_test import FIXTURES, TestCase
+from tests.spec_support import covered, json_diagnostic
 
 GROUPS = json.loads((FIXTURES / "spec" / "checker-rest.json").read_text(encoding="utf-8"))
 
@@ -29,14 +29,7 @@ class SpecCheckerRestTest(TestCase):
         self.work = self.make_temp_dir()
 
     def diagnostic(self, text):
-        """The JSON diagnostic that `check` gives the program, or None when the program checks clean."""
-        path = self.work / "program.agc"
-        path.write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(path)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
+        return json_diagnostic(self, self.work, text)
 
     def assert_case(self, case):
         text = "\n".join(case["program"])

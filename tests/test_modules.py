@@ -10,19 +10,14 @@ import os
 import shutil
 
 from tests.agentica_test import ROOT, TestCase, cli, report_cases, run, vm_environment
+from tests.module_support import write_module_files
 
 EXAMPLE = ROOT / "examples" / "json-modules.agc"
 
 
 class Modules(TestCase):
     def files(self, files):
-        """A resolved temp folder holding the given files (name -> text, names may have folders)."""
-        directory = self.make_temp_dir("agentica-modules-").resolve()
-        for name, text in files.items():
-            path = directory / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
-        return directory
+        return write_module_files(self, files)
 
     def elsewhere(self):
         """A folder to run in that holds none of the program's files."""

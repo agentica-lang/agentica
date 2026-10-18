@@ -1,11 +1,13 @@
 {
-  "path": ["vm"],
-  "format": ["c", "c-header"],
+  "path": ["vm", "tests"],
+  "format": ["c", "c-header", "python"],
   "ignore": [
     "**/third_party/**",
     "**/unicode_data.c",
-    "vm/tools/**"
+    "vm/tools/**",
+    "**/eval/tasks/**"
   ],
+  "ignorePattern": ["\"\"\"[\\s\\S]*?\"\"\""],
   "minTokens": 50,
   "minLines": 5,
   "mode": "weak",

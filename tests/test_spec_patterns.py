@@ -6,13 +6,13 @@ prints what the rule says. Message and help texts are not asserted (AGENTS.md).
 """
 import json
 
-from collections import namedtuple
-
 from tests.agentica_test import TestCase, cli, run
-from tests.test_spec_checker import covered
-
-# A range that starts with this text (a whole `case` or an arm: the range runs to its end).
-Starts = namedtuple("Starts", "text")
+from tests.spec_support import (
+    Starts,
+    assert_module_cases,
+    assert_single_file_cases,
+    json_diagnostic_files,
+)
 
 ENUMS = ('enum Option\n  Some(Int)\n  None\nend\n\n'
          'enum Shape\n  Dot\n  Circle(Int)\n  Pair(Int, Int)\n  Boxed(Option)\nend\n\n')
@@ -201,40 +201,15 @@ class SpecPatternsTest(TestCase):
         self.work = self.make_temp_dir()
 
     def diagnostic(self, files, root="program.agc"):
-        """The JSON diagnostic that `check` gives the files {name: text}, or None when they check clean."""
-        for name, text in files.items():
-            (self.work / name).write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(self.work / root)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
-
-    def assert_covers(self, program, span, text):
-        seen = covered(program, span)
-        if isinstance(text, Starts):
-            self.assertTrue(seen.startswith(text.text), seen)
-        else:
-            self.assertEqual(seen.rstrip("\n"), text)
+        return json_diagnostic_files(self, self.work, files, root)
 
     def test_single_file_programs(self):
-        for title, program, code, text in SINGLE_FILE:
-            with self.subTest(title):
-                found = self.diagnostic({"program.agc": program})
-                self.assertEqual(found and found["code"], code, program)
-                if text is not None:
-                    self.assert_covers(program, found["range"], text)
+        assert_single_file_cases(
+            self, SINGLE_FILE, self.diagnostic, trim_newline=True
+        )
 
     def test_programs_of_several_files(self):
-        for title, files, code, file, text in MODULES:
-            with self.subTest(title):
-                self.work = self.make_temp_dir()
-                found = self.diagnostic(files, "root.agc")
-                self.assertEqual(found and found["code"], code, files)
-                if found is None:
-                    continue
-                self.assertTrue(found["file"].endswith(file), found["file"])
-                self.assert_covers(files[file], found["range"], text)
+        assert_module_cases(self, MODULES, self.diagnostic, trim_newline=True)
 
     def test_programs_print_what_the_rules_say(self):
         for title, program, lines in RUNS:

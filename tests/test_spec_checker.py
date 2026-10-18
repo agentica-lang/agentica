@@ -8,9 +8,8 @@ range (the 1-based line and column of the start and of the end, which is exclusi
 asserted (AGENTS.md). The programs are also in the frozen corpus (tests/fixtures/frontend/frozen/corpus/), which the
 Agentica checker is compared with.
 """
-import json
-
-from tests.agentica_test import TestCase, cli, run
+from tests.agentica_test import TestCase
+from tests.spec_support import covered, json_diagnostic
 
 
 def main_with(body):
@@ -33,16 +32,6 @@ def position(point):
     return point["line"], point["column"]
 
 
-def covered(text, span):
-    """The source text from the start of a JSON range to its end (exclusive)."""
-    lines = text.split("\n")
-
-    def offset(point):
-        return sum(len(line) + 1 for line in lines[:point["line"] - 1]) + point["column"] - 1
-
-    return text[offset(span["start"]):offset(span["end"])]
-
-
 PIPE_HELPERS = ("def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\n"
                 "def parse(text: String) -> Result[Int]\n  return text.to_i\nend\n\n"
                 "def load(path: String) -> Result[Int]\n"
@@ -59,14 +48,7 @@ class SpecCheckerTest(TestCase):
         self.work = self.make_temp_dir()
 
     def problem(self, text):
-        """The JSON diagnostic that `check` gives the program, or None when the program checks clean."""
-        path = self.work / "program.agc"
-        path.write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(path)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
+        return json_diagnostic(self, self.work, text)
 
     def assert_clean(self, text):
         self.assertIsNone(self.problem(text), text)
