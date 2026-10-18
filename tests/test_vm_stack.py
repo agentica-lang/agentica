@@ -9,9 +9,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from tests.agentica_test import FIXTURES, compile_agc, vm_binary
 from tests.vm_diff_support import (
-    FIXTURE_TOKEN, FIXTURES_PREFIX, Fixture, VmCase, check_fixture_filter, fixture_selected,
+    FIXTURE_TOKEN, FIXTURES_PREFIX, Fixture, check_fixture_filter, fixture_selected,
     run_vm_process)
 
 CASES = [
@@ -38,6 +40,11 @@ CASES = [
 STYLES = [("plain", []), ("ai", ["--ai"]), ("json", ["--json"])]
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _warmup():
+    vm_binary()
+
+
 def sidecar(name, style):
     return FIXTURES / ("%s.stack.%s" % (name, style))
 
@@ -60,30 +67,23 @@ def selected_cases():
     return [(name, extra) for name, extra in CASES if fixture_selected(Path(name).name)]
 
 
-def _method(name, extra):
-    def method(self):
+def _make_test(name, extra):
+    def test_stack(tmp_path):
         # One compile per fixture; the three formats only change the VM options.
-        work = self.work_dir()
-        program, bytecode = compile_fixture(name, work)
+        program, bytecode = compile_fixture(name, tmp_path)
         for style, options in STYLES:
-            with self.subTest(style=style):
-                text = stderr_of(program, bytecode, extra, options, work)
-                self.assertEqual(text, sidecar(name, style).read_text(encoding="utf-8"))
+            text = stderr_of(program, bytecode, extra, options, tmp_path)
+            assert text == sidecar(name, style).read_text(encoding="utf-8"), style
 
-    method.__doc__ = "%s in the plain, --ai and --json formats" % name
-    return method
-
-
-def _methods():
-    return {"test_%s" % Path(name).name.replace("-", "_"): _method(name, extra) for name, extra in selected_cases()}
+    test_stack.__name__ = "test_%s" % Path(name).name.replace("-", "_")
+    test_stack.__doc__ = "%s in the plain, --ai and --json formats" % name
+    return test_stack
 
 
-def _set_up_class(cls):
-    super(cls, cls).setUpClass()
-    vm_binary()
-
-
-StackTraces = type("StackTraces", (VmCase,), {**_methods(), "setUpClass": classmethod(_set_up_class)})
+for _name, _extra in selected_cases():
+    _test = _make_test(_name, _extra)
+    assert _test.__name__ not in globals(), _test.__name__
+    globals()[_test.__name__] = _test
 
 
 def write_sidecars():
