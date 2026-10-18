@@ -80,84 +80,24 @@ question (13).
 
 ## Files
 
-- **§:** 1
-  - **Topic:** Overview: golden outputs, black-box rule, pipeline, trust model
-  - **File:** this file
-
-- **§:** 2
-  - **Topic:** Reference behavior: steps, numbers, strings, printing,
-    diagnostics, JSON, files
-  - **File:** [`02-reference-behavior.md`](02-reference-behavior.md)
-
-- **§:** 3, 4
-  - **Topic:** IR (lowering) and bytecode: machine model, instructions, calls,
-    builtin imports, file format
-  - **File:** [`03-ir-and-bytecode.md`](03-ir-and-bytecode.md)
-
-- **§:** 5, 6, 7
-  - **Topic:** Values in C, execution (stack, failure, out of memory) and
-    builtins in C
-  - **File:**
-    [`05-values-execution-builtins.md`](05-values-execution-builtins.md)
-
-- **§:** 8, 9
-  - **Topic:** Loader safety; CLI and packaging, the driver and tracing
-  - **File:** [`08-loader-and-cli.md`](08-loader-and-cli.md)
-
-- **§:** 10, 10.0, 10.1
-  - **Topic:** Dependencies and platforms, linking OpenSSL, libuv
-  - **File:**
-    [`10-dependencies-and-platforms.md`](10-dependencies-and-platforms.md)
-
-- **§:** 10.2, 10.2.1, 10.2.2
-  - **Topic:** Rules for 7h, the scheduler, the loop
-  - **File:** [`10-io-scheduler.md`](10-io-scheduler.md)
-
-- **§:** 10.2.3
-  - **Topic:** Multicore: the rules for N schedulers and the I/O thread (the
-    model is §16)
-  - **File:** [`10-io-multicore.md`](10-io-multicore.md)
-
-- **§:** 10.3, 10.3.1
-  - **Topic:** TLS, TCP
-  - **File:** [`10-io-tls.md`](10-io-tls.md)
-
-- **§:** 10.4, 10.5
-  - **Topic:** Processes, limits the C runtime keeps
-  - **File:** [`10-io-processes.md`](10-io-processes.md)
-
-- **§:** 10.6, 10.7
-  - **Topic:** HTTP parsing; HTTP on the VM (the hybrid split, decisions,
-    client, server, answers, tests)
-  - **File:** [`10-io-http.md`](10-io-http.md)
-
-- **§:** 11
-  - **Topic:** Build, CI and supply chain
-  - **File:** [`11-build-ci-supply-chain.md`](11-build-ci-supply-chain.md)
-
-- **§:** 12, 13
-  - **Topic:** Testing; the PR plan (done) and what is pending; open questions
-  - **File:** [`12-testing-and-pr-plan.md`](12-testing-and-pr-plan.md)
-
-- **§:** 14
-  - **Topic:** VM core invariants: one way to wait, time out, cancel, end and
-    own a handle; the entry rule for the core
-  - **File:** [`14-core-invariants.md`](14-core-invariants.md)
-
-- **§:** 15
-  - **Topic:** VM layers: core, services and adapters plus the driver, the port
-    between them, one header per layer and the CI check (done, roadmap row
-    7.2.1b)
-  - **File:** [`15-layers.md`](15-layers.md)
-
-- **§:** 16
-  - **Topic:** VM architecture: the threads (schedulers and one I/O thread), the
-    queues, who owns jobs and handles, the life cycle of a task, and what
-    differs from N = 1 as built (roadmap row 7.2.1c)
-  - **File:** [`16-architecture.md`](16-architecture.md)
-
-- **§:** 17
-  - **Topic:** Faster lists: a persistent vector behind `List` (design for
-    roadmap 8d: representation, the C API, costs, tests, PR plan, unboxed Int
-    and Float leaves)
-  - **File:** [`17-lists.md`](17-lists.md)
+- **§1:** Overview, golden contract, pipeline and trust model (this file).
+- **§2:** [Reference behavior](02-reference-behavior.md)—steps, values,
+  diagnostics, JSON and files.
+- **§§3–4:** [IR and bytecode](03-ir-and-bytecode.md), including the
+  file format.
+- **§§5–7:** [VM core](05-values-execution-builtins.md): values, execution
+  and builtins.
+- **§§8–9:** [Loader and CLI](08-loader-and-cli.md), packaging and tracing.
+- **§10, 10.0–10.1:**
+  [Dependencies/platforms](10-dependencies-and-platforms.md).
+- **§10.2–10.2.2:** [Scheduler and event loop](10-io-scheduler.md).
+- **§10.2.3:** [Multicore rules](10-io-multicore.md); model in §16.
+- **§§10.3–10.3.1:** [TLS and TCP](10-io-tls.md).
+- **§§10.4–10.5:** [Processes and runtime limits](10-io-processes.md).
+- **§§10.6–10.7:** [HTTP](10-io-http.md)—parser and VM implementation.
+- **§11:** [Build, CI and supply chain](11-build-ci-supply-chain.md).
+- **§§12–13:** [Tests and PR plan](12-testing-and-pr-plan.md); open questions.
+- **§14:** [Core invariants](14-core-invariants.md).
+- **§15:** [VM layers](15-layers.md); roadmap 7.2.1b.
+- **§16:** [VM architecture](16-architecture.md); roadmap 7.2.1c.
+- **§17:** [Persistent lists](17-lists.md); design for roadmap 8d.
