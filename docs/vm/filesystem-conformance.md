@@ -61,13 +61,19 @@ as native evidence. Existing merged evidence does not validate later changes.
 
 Phase 6 is not yet completely covered:
 
-- Actual cross-volume rename: prove a real second filesystem, not merely a
-  drive alias, and check source preservation on failure.
+- Actual cross-volume rename: the VHD fixture now provisions a real second
+  NTFS filesystem and checks source preservation on failure. Its first native
+  result is pending; review disk/image cleanup after the job.
 - Successful UNC mutations: a hosted-runner fixture publishes only a fresh
   scratch subdirectory to the current user, exercises localhost UNC remove
   and rename, and removes the exact share in `finally`. The native job passed
   remove, rename and sentinel checks in run `39136358678`. Share-root rejection
   is also tested.
+- Cross-volume rename: `tests/fixtures/windows-cross-volume.ps1` creates a
+  fresh 64 MiB NTFS VHD under per-run scratch, attaches it to a free drive
+  letter, verifies the volume label/filesystem, then detaches and deletes only
+  that VHD. Its regression checks failure and preserves source data. Require
+  the native job to pass before counting this as evidence.
 - Reparse tags beyond the junction cases: establish safe failure or unlink
   semantics for each supported fixture; do not generalize to all drivers.
 - Traversal races: the stress-style replacement case preserves sentinels but

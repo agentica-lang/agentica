@@ -11,8 +11,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Native Windows regressions for ordinary-file line decoding, lock-owner
-  cancellation, unsafe path aliases, depth/read-only removal failures and
-  preservation of existing rename targets and junction destinations.
+  cancellation, unsafe path aliases, depth/read-only removal failures,
+  preservation of existing rename targets and junction destinations, localhost
+  UNC operations and a confined cross-volume rename fixture.
 
 - `make tests KIND=fast|files|slow|all` runs a whole test group, with
   `KIND=files` for the destructive filesystem cases, `DOCKER=1` to run a group

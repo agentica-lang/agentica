@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import ctypes
 import os
+import re
 import stat
 import subprocess
 import threading
@@ -460,6 +461,42 @@ class WindowsFilesystemMutationTests(TestCase):
         self.assertTrue(target.is_junction())
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "target sentinel")
         self.assertEqual((target / "keep").read_text(encoding="utf-8"), "target sentinel")
+
+    def test_cross_volume_rename_fails_without_losing_the_source(self) -> None:
+        root = self.root / "cross-volume"
+        root.mkdir()
+        script = Path(__file__).parent / "fixtures" / "windows-cross-volume.ps1"
+        name = "agentica-test-" + uuid.uuid4().hex
+
+        def manage(action: str) -> str:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-File",
+                 str(script), action, name, str(root)],
+                capture_output=True, text=True, check=False, timeout=90,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return result.stdout
+
+        source = root / "source.txt"
+        source.write_text("cross-volume sentinel", encoding="utf-8")
+        bytecode = self.compile_text(RACE_PROGRAM, "windows-cross-volume-rename")
+        mounted = False
+        try:
+            output = manage("create")
+            mounted = True
+            match = re.search(r"^AGENTICA_DRIVE=([A-Z]:\\)$", output, re.MULTILINE)
+            self.assertIsNotNone(match, output)
+            target = match.group(1) + name + ".txt"
+            result = run_vm(
+                bytecode, args=[str(source), target],
+                env=vm_environment(), cwd=self.root,
+            )
+            self.assertEqual((result.code, result.stdout), (0, "false\n"), result.stderr)
+            self.assertEqual(source.read_text(encoding="utf-8"), "cross-volume sentinel")
+            self.assertFalse(Path(target).exists())
+        finally:
+            if mounted or (root / (name + ".vhdx")).exists():
+                manage("remove")
 
     def test_local_unc_share_removes_and_renames_only_its_confined_entries(self) -> None:
         share_root = self.root / "shared"
