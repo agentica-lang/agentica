@@ -457,9 +457,9 @@ after them may run in parallel when needed and keep their relative order.
     pattern, written as a literal or a string, and no pattern can stall the VM
 
 - **Order:** 7.11
-  - **Next work:** **Planned**, not yet scheduled by the owner (phase 31,
-    [`docs/roadmap/31-test-functions.md`](31-test-functions.md); design:
-    [§50](../future/50-test-functions.md#50-test-functions)): a `*_test.agc`
+  - **Next work:** **Planned**, not yet scheduled by the owner (design
+    and plan: [§50](../future/50-test-functions.md#50-test-functions)):
+    a `*_test.agc`
     file may have no `main`; its top-level `test_*` functions are its tests, and
     the front end adds the `main` that runs them (50a, `compiler/` only).
     Post-bootstrap step 6.
@@ -820,10 +820,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 
 - **File:** [`30-type-aliases.md`](30-type-aliases.md)
   - **Contents:** Phase 30: type aliases (simple, then generic; design in §49)
-
-- **File:** [`31-test-functions.md`](31-test-functions.md)
-  - **Contents:** Phase 31: test functions without `main` (`test_*` functions
-    are tests; design in §50)
 
 - **File:**
   [`pending-general-programming-and-mcp.md`][agentica-link-5]

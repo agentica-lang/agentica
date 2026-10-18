@@ -1,8 +1,7 @@
 ## 50. Test functions
 
-**Status:** planned (2026-10-16), one part (50a). Roadmap phase 31
-([`docs/roadmap/31-test-functions.md`](../roadmap/31-test-functions.md)) is row
-7.11 of the [roadmap](../roadmap/README.md) order, in post-bootstrap step 6.
+**Status:** planned (2026-10-16), one part (50a, one PR). Row 7.11 of the
+[roadmap](../roadmap/README.md) order, in post-bootstrap step 6.
 Nothing is implemented. The `main` and `Test.run` form of the grammar's
 `Unit tests (Test)` and `agentica test` sections stays valid.
 
@@ -111,3 +110,10 @@ end
   valid.
 
 - **stage0**: no refresh needed. `compiler/` does not use the new form.
+
+### 50.3 Done when
+
+- A test file with no `main` runs under `agentica test`, and the report
+  names each test from its function name; a file with both `main` and
+  `test_*` functions is `CHECK-TEST-MAIN`; and the `main` and `Test.run`
+  form still works and is documented.
