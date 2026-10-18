@@ -193,7 +193,8 @@ Signatures are in
   failure inside the tree names the entry that failed in the error, and what was
   removed before it stays removed. Unix removal crosses mount points; on
   Windows, reparse-point entries (junctions, volume mount points and unknown
-  third-party tags alike) are removed themselves and not traversed. Windows drive and UNC paths use native syntax, with drive and
+  third-party tags alike) are unlinked when supported, never traversed.
+  Windows drive and UNC paths use native syntax, with drive and
   share roots refused. To avoid Win32 path aliases, Windows also refuses input
   paths with alternate-data-stream syntax or a component ending in a dot or
   space. A timeout returns the error but does not stop a removal that is

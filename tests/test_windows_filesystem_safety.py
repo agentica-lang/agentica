@@ -112,10 +112,8 @@ def test_remove_recurses_without_following_junctions_and_refuses_unsafe_paths(ro
     assert not victim.exists()
     assert sentinel.read_text(encoding="utf-8") == "outside sentinel"
 
-    root_result = run_vm(bytecode, args=[str(root.anchor)], env=vm_environment(), cwd=root)
     parent_result = run_vm(bytecode, args=[str(root / "..")], env=vm_environment(), cwd=root)
     device_result = run_vm(bytecode, args=[str(root / "NUL")], env=vm_environment(), cwd=root)
-    assert (root_result.code, root_result.stdout) == (0, "false\n")
     assert (parent_result.code, parent_result.stdout) == (0, "false\n")
     assert (device_result.code, device_result.stdout) == (0, "false\n")
     assert root.is_dir()
@@ -780,6 +778,35 @@ def test_cross_volume_rename_fails_without_losing_the_source(root, work):
         assert (result.code, result.stdout) == (0, "false\n"), result.stderr
         assert source.read_text(encoding="utf-8") == "cross-volume sentinel"
         assert not Path(target).exists()
+
+        # An actual volume mount point shares the junction tag, but its
+        # filesystem may refuse unlinking. Either result must preserve the
+        # volume's contents; never descend into the mounted filesystem.
+        volume_name = ctypes.create_unicode_buffer(1024)
+        kernel32.GetVolumeNameForVolumeMountPointW.argtypes = [
+            ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32,
+        ]
+        kernel32.SetVolumeMountPointW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p]
+        kernel32.DeleteVolumeMountPointW.argtypes = [ctypes.c_wchar_p]
+        assert kernel32.GetVolumeNameForVolumeMountPointW(match.group(1), volume_name, len(volume_name))
+        mount = box / "mounted-volume"
+        mount.mkdir()
+        mount_path = str(mount) + "\\"
+        assert kernel32.SetVolumeMountPointW(mount_path, volume_name.value)
+        volume_sentinel = Path(match.group(1)) / (name + "-keep.txt")
+        volume_sentinel.write_text("mounted sentinel", encoding="utf-8")
+        identity = volume_sentinel.stat().st_ino
+        try:
+            remove = compile_work_text(work, REMOVE_PROGRAM, "windows-volume-mount-remove")
+            result = run_vm(remove, args=[str(mount)], env=vm_environment(), cwd=root)
+            assert result.code == 0, result.stderr
+            assert result.stdout in ("true\n", "false\n"), result.stdout
+            assert volume_sentinel.read_text(encoding="utf-8") == "mounted sentinel"
+            assert volume_sentinel.stat().st_ino == identity
+        finally:
+            if mount.exists():
+                assert kernel32.DeleteVolumeMountPointW(mount_path)
+                mount.rmdir()
     finally:
         if mounted or (box / (name + ".vhdx")).exists():
             manage("remove")
@@ -866,15 +893,6 @@ end
     assert not (box / "keep-moved").exists()
 
 
-@REQUIRES_WINDOWS
-def test_roots_and_final_dot_components_are_refused(work):
-    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-refusal")
-    paths = ("C:\\", "C:", "C:\\parent\\..", "\\\\server\\share")
-    for path in paths:
-        result = run_vm(bytecode, args=[path], env=vm_environment(), cwd=os.getcwd())
-        assert (result.code, result.stdout) == (0, "false\n"), result.stderr
-
-
 @REQUIRES_NATIVE_WINDOWS
 @pytest.mark.parametrize("form", ["drive-relative", "device-extension"])
 def test_remove_missing_native_names_is_idempotent(root, work, form):
@@ -892,27 +910,21 @@ def test_remove_missing_native_names_is_idempotent(root, work, form):
 @REQUIRES_NATIVE_WINDOWS
 @pytest.mark.parametrize("path", [
     "",
-    "C:\\",
-    "C:/",
-    "C:",
     "C:\\foo\\",
     "C:\\foo\\.",
     "C:\\foo\\..",
     "C:\\foo ",
     "C:\\foo.",
     "C:\\foo:stream",
-    "\\\\server",
-    "\\\\server\\share",
-    "\\\\server\\share\\",
     "NUL",
     "CON",
     "AUX",
     "COM1",
     "LPT1",
 ], ids=[
-    "empty", "drive-root-backslash", "drive-root-slash", "drive-only",
+    "empty",
     "trailing-separator", "trailing-dot", "trailing-dotdot", "trailing-space",
-    "trailing-dot-component", "ads-stream", "unc-server", "unc-share", "unc-share-slash",
+    "trailing-dot-component", "ads-stream",
     "nul-device", "con-device", "aux-device", "com1-device", "lpt1-device",
 ])
 def test_remove_refuses_reserved_windows_paths_without_touching_entries(root, work, path):

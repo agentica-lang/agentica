@@ -10,34 +10,66 @@
 #include <windows.h>
 #include <wchar.h>
 
+typedef union { uint64_t alignment; unsigned char bytes[512]; } directory_snapshot;
+
 static wchar_t victim[4096], away[4096], outside[4096];
+static directory_snapshot snapshot;
+static size_t snapshot_size;
 static unsigned race_mode, intercepted;
+static bool forbid_open;
+
+static HANDLE WINAPI guarded_open(LPCWSTR path, DWORD access, DWORD sharing,
+                                  LPSECURITY_ATTRIBUTES security, DWORD creation,
+                                  DWORD attributes, HANDLE template_file) {
+  assert(!forbid_open);
+  return CreateFileW(path, access, sharing, security, creation, attributes, template_file);
+}
 
 static BOOL WINAPI enumerate_then_replace(HANDLE file, FILE_INFO_BY_HANDLE_CLASS kind,
                                          LPVOID buffer, DWORD size) {
-  BOOL result = GetFileInformationByHandleEx(file, kind, buffer, size);
-  if (!result || !race_mode || (kind != FileIdBothDirectoryRestartInfo && kind != FileIdBothDirectoryInfo))
-    return result;
-  FILE_ID_BOTH_DIR_INFO *entry = buffer;
-  for (;;) {
-    if (entry->FileNameLength == 4 * sizeof(wchar_t) && wmemcmp(entry->FileName, L"swap", 4) == 0) {
-      unsigned mode = race_mode;
-      race_mode = 0;
-      assert(MoveFileW(victim, away));
-      if (mode == 2) assert(CreateDirectoryW(victim, NULL));
-      if (mode == 3) assert(CreateSymbolicLinkW(victim, outside, SYMBOLIC_LINK_FLAG_DIRECTORY | 2));
-      intercepted++;
-      break;
-    }
-    if (!entry->NextEntryOffset) break;
-    entry = (FILE_ID_BOTH_DIR_INFO *)((unsigned char *)entry + entry->NextEntryOffset);
+  if (race_mode && (kind == FileIdBothDirectoryRestartInfo || kind == FileIdBothDirectoryInfo)) {
+    assert(size >= snapshot_size);
+    memcpy(buffer, snapshot.bytes, snapshot_size);
+    race_mode = 0;
+    intercepted++;
+    return TRUE;
   }
-  return result;
+  return GetFileInformationByHandleEx(file, kind, buffer, size);
 }
 
 #define GetFileInformationByHandleEx enumerate_then_replace
+#define CreateFileW guarded_open
 #include "../file_windows.c"
+#undef CreateFileW
 #undef GetFileInformationByHandleEx
+
+/* Capture a real NTFS enumeration before replacing the entry. Replay only
+   this stale result: native write-denying ancestor handles can block a live
+   rename, but the walker must also reject a stale filesystem snapshot. */
+static void capture_entry(const wchar_t *tree) {
+  HANDLE directory = CreateFileW(tree, FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                 NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+  assert(directory != INVALID_HANDLE_VALUE);
+  unsigned char buffer[65536];
+  bool found = false;
+  while (!found && GetFileInformationByHandleEx(directory, FileIdBothDirectoryInfo, buffer, sizeof buffer)) {
+    FILE_ID_BOTH_DIR_INFO *entry = (FILE_ID_BOTH_DIR_INFO *)buffer;
+    for (;;) {
+      if (entry->FileNameLength == 4 * sizeof(wchar_t) && wmemcmp(entry->FileName, L"swap", 4) == 0) {
+        snapshot_size = offsetof(FILE_ID_BOTH_DIR_INFO, FileName) + entry->FileNameLength;
+        assert(snapshot_size <= sizeof snapshot.bytes);
+        memcpy(snapshot.bytes, entry, snapshot_size);
+        ((FILE_ID_BOTH_DIR_INFO *)snapshot.bytes)->NextEntryOffset = 0;
+        found = true;
+        break;
+      }
+      if (!entry->NextEntryOffset) break;
+      entry = (FILE_ID_BOTH_DIR_INFO *)((unsigned char *)entry + entry->NextEntryOffset);
+    }
+  }
+  assert(found);
+  assert(CloseHandle(directory));
+}
 
 static void child_path(wchar_t *result, const wchar_t *parent, const wchar_t *name) {
   int length = swprintf(result, 4096, L"%ls\\%ls", parent, name);
@@ -47,6 +79,19 @@ static void child_path(wchar_t *result, const wchar_t *parent, const wchar_t *na
 int main(void) {
   const char *scratch = getenv("AGENTICA_REMOVE_TEST_SCRATCH");
   if (!agc_test_remove_sandbox(scratch)) return 1;
+  /* Refusal must happen before any filesystem open, even if the validator
+     regresses. The guard aborts instead of allowing access to a real root. */
+  const char *roots[] = {"C:", "C:/", "C:\\", "\\\\server\\share", "//server/share/"};
+  forbid_open = true;
+  for (size_t k = 0; k < sizeof roots / sizeof roots[0]; k++) {
+    char *failed = NULL;
+    assert(agc_fs_remove_tree(roots[k], &failed) == AGC_FS_REMOVE_REFUSED);
+    assert(failed == NULL);
+  }
+  forbid_open = false;
+  assert(!remove_valid_component(L".", 1));
+  assert(!remove_valid_component(L"..", 2));
+  assert(!remove_valid_component(L"file:stream", 11));
   char pattern[4200];
   assert(snprintf(pattern, sizeof pattern, "%s/agentica-races-XXXXXX", scratch) > 0);
   uv_fs_t request;
@@ -72,6 +117,10 @@ int main(void) {
   for (unsigned mode = 1; mode <= 3; mode++) {
     assert(CreateDirectoryW(tree, NULL));
     assert(CreateDirectoryW(victim, NULL));
+    capture_entry(tree);
+    assert(MoveFileW(victim, away));
+    if (mode == 2) assert(CreateDirectoryW(victim, NULL));
+    if (mode == 3) assert(CreateSymbolicLinkW(victim, outside, SYMBOLIC_LINK_FLAG_DIRECTORY | 2));
     char tree_utf8[16384];
     assert(WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, tree, -1,
                               tree_utf8, sizeof tree_utf8, NULL, NULL));
