@@ -393,6 +393,53 @@ def test_rename_denied_delete_preserves_source_and_target(root, work):
 
 
 @REQUIRES_NATIVE_WINDOWS
+def test_remove_names_the_nested_entry_that_failed_and_stops_there(root, work):
+    tree = root / "tree"
+    locked = tree / "a" / "locked"
+    locked.mkdir(parents=True)
+    (locked / "f.txt").write_text("f", encoding="utf-8")
+    (tree / "z.txt").write_text("z", encoding="utf-8")
+    identity = subprocess.run(
+        ["whoami.exe", "/user", "/fo", "csv", "/nh"],
+        capture_output=True, text=True, check=False,
+    )
+    assert identity.returncode == 0, identity.stderr
+    sid = next(csv.reader(identity.stdout.splitlines()))[1]
+    assert sid.startswith("S-1-"), sid
+
+    def acl(path, *arguments):
+        result = subprocess.run(
+            ["icacls.exe", str(path), *arguments],
+            capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    remove = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-nested-denied")
+    try:
+        # Deny DELETE on the nested directory: emptying it succeeds, but the
+        # directory itself cannot go, so the failure names it.
+        acl(locked, "/deny", f"*{sid}:(D)")
+        kernel32 = kernel32_file_api()
+        handle = kernel32.CreateFileW(
+            str(locked), 0x10000, 7, None, 3, 0, None
+        )
+        try:
+            assert handle == ctypes.c_void_p(-1).value, "DELETE was not denied"
+            assert ctypes.get_last_error() == 5, ctypes.WinError(ctypes.get_last_error())
+        finally:
+            if handle != ctypes.c_void_p(-1).value:
+                kernel32.CloseHandle(handle)
+        result = run_vm(
+            remove, args=[str(tree)], env=vm_environment(), cwd=root
+        )
+        assert (result.code, result.stdout) == (0, "false\n"), result.stderr
+        assert str(locked) in result.stderr, result.stderr
+    finally:
+        acl(locked, "/remove:d", f"*{sid}")
+    assert locked.is_dir()
+
+
+@REQUIRES_NATIVE_WINDOWS
 def test_depth_limit_fails_without_leaking_handles(root, work, adopt):
     victim = root / "deep"
     current = victim
