@@ -10,12 +10,14 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
 from tests.agentica_test import ROOT, wait_until
 from tests.remove_sandbox_support import require_remove_sandbox
+from tools import run_remove_actions
 from tools.run_remove_actions import SENTINEL_MARKER, _actions_scratch
 
 RUNNER = ROOT / "tools" / "docker_tests.py"
@@ -24,6 +26,35 @@ IMAGE = "preloaded-test-image"
 DIGEST = "0123456789abcdef"
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="the Docker launcher uses POSIX process groups")
+
+
+@pytest.mark.parametrize("race_binary_exists", [False, True])
+def test_windows_actions_requires_deterministic_races_and_ordinary_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, race_binary_exists: bool
+) -> None:
+    """Fail closed if native race coverage is missing; run regular files too."""
+    (tmp_path / "files_private-test.exe").touch()
+    if race_binary_exists:
+        (tmp_path / "windows_remove-test.exe").touch()
+    commands: list[list[str]] = []
+
+    def record(command: list[str], **kwargs: object) -> int:
+        commands.append(command)
+        return 0
+
+    monkeypatch.setattr(run_remove_actions, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        run_remove_actions, "sys", SimpleNamespace(platform="win32", executable=sys.executable, stderr=sys.stderr)
+    )
+    monkeypatch.setattr(run_remove_actions, "_run", record)
+    status = run_remove_actions._run_filesystem_tests(tmp_path, tmp_path, {})
+    assert status == (0 if race_binary_exists else 1)
+    if race_binary_exists:
+        assert commands[1] == [str(tmp_path / "windows_remove-test.exe")]
+        assert commands[2][-3:] == ["tests/test_vm_file_lines.py", "-k", "ordinary_files"]
+        assert commands[3][-1] == "tests/test_windows_filesystem_safety.py"
+    else:
+        assert len(commands) == 1
 
 
 class DockerLauncher:

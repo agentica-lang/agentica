@@ -95,6 +95,8 @@ def _run_filesystem_tests(repository: Path, vm_build: Path, environment: dict[st
         "tests.test_vm_os_remove",
         "tests.test_bdd_cleanup",
     ]
+    if os.name == "nt":
+        binaries.append(vm_build / f"windows_remove-test{suffix}")
     if sys.platform.startswith("linux"):
         binaries.insert(0, vm_build / f"tree-test{suffix}")
 
@@ -106,6 +108,15 @@ def _run_filesystem_tests(repository: Path, vm_build: Path, environment: dict[st
         if status:
             return status
 
+    # Select only regular-file cases: FIFO and /proc probes belong to the
+    # platform-specific stream suite, not this filesystem conformance gate.
+    status = _run(
+        [sys.executable, "-m", "pytest", "tests/test_vm_file_lines.py", "-k", "ordinary_files"],
+        cwd=repository,
+        env=environment,
+    )
+    if status:
+        return status
     module_paths = [module.replace(".", "/") + ".py" for module in modules]
     return _run(
         [sys.executable, "-m", "pytest", *module_paths],
