@@ -321,19 +321,21 @@ def test_relocking_is_idempotent_and_closing_frees_the_lock(root, work):
     target.write_text("", encoding="utf-8")
     bytecode = compile_work_text(work, RELOCK_PROGRAM, "windows-relock")
     result = run_vm(bytecode, args=[str(target)], env=vm_environment(), cwd=root)
+    # close(...).ok? is a Bool, so inspect prints it bare.
     assert (result.code, result.stdout) == (
-        0, "ok(true)\nok(true)\nok(true)\nok(true)\n"
+        0, "ok(true)\nok(true)\ntrue\nok(true)\n"
     ), result.stderr
 
 
 @REQUIRES_WINDOWS_VM
 def test_opening_a_device_fails_before_any_lock(root, work):
-    # Windows devices never become handles: the open itself is refused, so
-    # there is nothing try_lock could contend with or reject.
+    # Windows devices never become handles: the open itself fails as a value
+    # (no unwrap, so the program still exits 0), leaving try_lock nothing
+    # to contend with or reject.
     bytecode = compile_work_text(work, DEVICE_OPEN_PROGRAM, "windows-device-open")
     result = run_vm(bytecode, args=[], env=vm_environment(), cwd=root)
-    assert result.code == 1, (result.code, result.stdout)
-    assert "cannot open input file" in result.stderr, result.stderr
+    assert result.code == 0, (result.code, result.stderr)
+    assert "cannot open input file" in result.stdout, result.stdout
 
 
 @REQUIRES_WINDOWS_VM
