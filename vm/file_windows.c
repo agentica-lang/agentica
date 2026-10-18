@@ -27,11 +27,18 @@ typedef struct {
 void agc_fs_set_error(int result) {
   switch (result) {
     case UV_EACCES: errno = EACCES; break;
+    /* EAGAIN is also the contention signal File.try_lock reads: a code that a
+       later libuv translates to it would come back as a held lock, not an error. */
+    case UV_EAGAIN: errno = EAGAIN; break;
     case UV_EBADF: errno = EBADF; break;
     case UV_EBUSY: errno = EBUSY; break;
+    case UV_ECANCELED: errno = ECANCELED; break;
+    case UV_ECHARSET: errno = EILSEQ; break;
     case UV_EEXIST: errno = EEXIST; break;
+    case UV_EFAULT: errno = EFAULT; break;
     case UV_EINTR: errno = EINTR; break;
     case UV_EINVAL: errno = EINVAL; break;
+    case UV_EIO: errno = EIO; break;
     case UV_EISDIR: errno = EISDIR; break;
     case UV_ELOOP: errno = ELOOP; break;
     case UV_EMFILE: errno = EMFILE; break;
@@ -41,9 +48,14 @@ void agc_fs_set_error(int result) {
     case UV_ENOSPC: errno = ENOSPC; break;
     case UV_ENOTDIR: errno = ENOTDIR; break;
     case UV_ENOTEMPTY: errno = ENOTEMPTY; break;
+    case UV_ENOTSUP: errno = ENOTSUP; break;
     case UV_EPERM: errno = EPERM; break;
     case UV_EPIPE: errno = EPIPE; break;
     case UV_EROFS: errno = EROFS; break;
+    case UV_ETIMEDOUT: errno = ETIMEDOUT; break;
+    case UV_EXDEV: errno = EXDEV; break;
+    /* UV_UNKNOWN and the codes with no errno here keep the reported I/O error;
+       the Windows CRT has no EFTYPE, so UV_EFTYPE lands here too. */
     default: errno = EIO; break;
   }
 }

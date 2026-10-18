@@ -5,6 +5,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
@@ -35,7 +36,72 @@ static void check_text(agc_value path, const char *text) {
   assert(got->bytes == strlen(text) && memcmp(got->data, text, got->bytes) == 0);
 }
 
+#ifdef _WIN32
+/* A value no errno uses: the translation has to overwrite it on every path. */
+#define SENTINEL_ERRNO 9999
+
+static void check_error(int from, bool win32, int expected_errno) {
+  errno = SENTINEL_ERRNO;
+  agc_fs_set_error(win32 ? uv_translate_sys_error(from) : from);
+  assert(errno == expected_errno);
+}
+
+static void test_error_mapping(void) {
+  const struct { int uv_error, expected_errno; } cases[] = {
+    {UV_EACCES, EACCES}, {UV_EAGAIN, EAGAIN}, {UV_EBADF, EBADF},
+    {UV_EBUSY, EBUSY}, {UV_ECANCELED, ECANCELED}, {UV_ECHARSET, EILSEQ},
+    {UV_EEXIST, EEXIST}, {UV_EFAULT, EFAULT}, {UV_EINTR, EINTR},
+    {UV_EINVAL, EINVAL}, {UV_EIO, EIO}, {UV_EISDIR, EISDIR}, {UV_ELOOP, ELOOP},
+    {UV_EMFILE, EMFILE}, {UV_ENAMETOOLONG, ENAMETOOLONG}, {UV_ENOENT, ENOENT},
+    {UV_ENOMEM, ENOMEM}, {UV_ENOSPC, ENOSPC}, {UV_ENOTDIR, ENOTDIR},
+    {UV_ENOTEMPTY, ENOTEMPTY}, {UV_ENOTSUP, ENOTSUP}, {UV_EPERM, EPERM},
+    {UV_EPIPE, EPIPE}, {UV_EROFS, EROFS}, {UV_ETIMEDOUT, ETIMEDOUT},
+    {UV_EXDEV, EXDEV},
+    {UV_UNKNOWN, EIO}, {UV_EFTYPE, EIO}, {-1234567, EIO}
+  };
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++)
+    check_error(cases[i].uv_error, false, cases[i].expected_errno);
+}
+
+/* The whole chain a native call walks: GetLastError(), libuv, then errno. */
+static void test_win32_error_chain(void) {
+  const struct { int win_error, expected_errno; } cases[] = {
+    {ERROR_SHARING_VIOLATION, EBUSY},
+    {ERROR_LOCK_VIOLATION, EBUSY},
+    {ERROR_ACCESS_DENIED, EPERM},
+    {ERROR_NOT_SAME_DEVICE, EXDEV},
+    {ERROR_NOT_SUPPORTED, ENOTSUP},
+    {ERROR_OPERATION_ABORTED, ECANCELED},
+    {ERROR_DIR_NOT_EMPTY, ENOTEMPTY},
+    {ERROR_SEM_TIMEOUT, ETIMEDOUT},
+    {ERROR_DIRECTORY, ENOENT},
+    {ERROR_FILE_NOT_FOUND, ENOENT},
+    {ERROR_PATH_NOT_FOUND, ENOENT},
+    {ERROR_FILENAME_EXCED_RANGE, ENAMETOOLONG},
+    {ERROR_NO_UNICODE_TRANSLATION, EILSEQ},
+    {ERROR_WRITE_PROTECT, EROFS},
+    {ERROR_DISK_FULL, ENOSPC},
+    {ERROR_TOO_MANY_OPEN_FILES, EMFILE},
+    {ERROR_BAD_PIPE, EPIPE},
+    {ERROR_INVALID_PARAMETER, EINVAL},
+    {ERROR_CANT_RESOLVE_FILENAME, ELOOP},
+    {ERROR_INVALID_FUNCTION, EISDIR}
+  };
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++)
+    check_error(cases[i].win_error, true, cases[i].expected_errno);
+  /* A Win32 code the vendored libuv does not list keeps the reported I/O error.
+     54321 is above every code the table has; the assert below fails loudly if a
+     libuv update ever starts listing it. */
+  assert(uv_translate_sys_error(54321) == UV_UNKNOWN);
+  check_error(54321, true, EIO);
+}
+#endif
+
 int main(void) {
+#ifdef _WIN32
+  test_error_mapping();
+  test_win32_error_chain();
+#endif
   agc_init();
   agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
