@@ -80,7 +80,7 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.1
   - **Next work:** **Complete, catch-up:** 7h processes, then VM tracing (14a,
-    `docs/future/24-logging.md` §24.4), then TCP, then TLS (today's API), then
+    `docs/vm/08-loader-and-cli.md` §9), then TCP, then TLS (today's API), then
     HTTP 20a (phase 20, `docs/vm/10-io-http.md` §10.7: hybrid and synchronous,
     whole messages, C for parsing, framing and the pool, `std/http` in Agentica,
     imported as `HTTP`), then BDD in Agentica ([phase
@@ -311,8 +311,7 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.2.5
   - **Next work:** **Complete** (2026-10-14, PR #225): Stack traces on runtime
-    errors (14b, [`docs/future/24-logging.md`
-    §24.3](../future/24-logging.md#243-stack-traces-on-runtime-errors)), taken
+    errors (14b, `docs/vm/02-reference-behavior.md`), taken
     out of row 7.5 by the owner on 2026-10-14: [phase 14](14-logging.md), always
     on in the plain, `--ai` and `--json` formats. It comes before the freeze,
     since agents and the self-hosted compiler both need the call stack
@@ -383,7 +382,7 @@ after them may run in parallel when needed and keep their relative order.
     `src/stdlib.rkt`; the `std-only-modules` list and, for a std-only module,
     its name in the reserved type names of `src/checker.rkt`; and message texts
     that name the right std module (a message fix, not a rule). The 2026-10-15
-    items are the owner's decision (§24.2, "The freeze"), and so is the change
+    items are the owner's decision (the freeze), and so is the change
     in `src/lower.rkt` for an enum field of a builtin record, which relaxes this
     list for those lines. A new checker rule, tag, syntax or construction rule
     is not data. Every language change after this row goes into the Agentica
@@ -526,7 +525,7 @@ after them may run in parallel when needed and keep their relative order.
     §25.1](../future/25-ruby-typed-idioms.md#251-default-parameter-values)):
     front end only; split out of row 7.5 on 2026-10-14. `std/logger` (14c, row
     7.5) did not need it: until it landed, the API had two functions per level
-    (decided on 2026-10-15, [§24.2](../future/24-logging.md#242-stdlogger)), and
+    (decided on 2026-10-15), and
     the `_meta` functions are gone now
   - **Outcome:** Functions take default parameter values, checked at compile
     time, and `std/logger` replaces its `_meta` functions with a `fields`
@@ -612,9 +611,9 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.5
   - **Next work:** New features, VM-only (cont.): UDP, then logging and
-    debugging (14c, **done**: `std/logger` of `docs/future/24-logging.md` §24.2,
-    with no default parameter values and no flags; its Racket parts are data
-    under the freeze of row 7.2.7 (§24.2, "The freeze")), then the `Crypto`
+    debugging (14c, **done**: `std/logger`, with no default parameter values and
+    no flags; its Racket parts were data under the freeze of row 7.2.7), then
+    the `Crypto`
     module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare,
     random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`). Binary
     data (row 7.2.4) and stack traces (row 7.2.5) moved to their own rows
@@ -974,12 +973,12 @@ programming reference contain the current signatures.
      be loops or fragile code in Agentica: for example the `Int` bit operations
      and `Float` bit conversions of `docs/future/23-binary-data.md` §23.
   6. Log registry state: the handler table and the global log level, which the
-     VM runtime holds for `std/logger` (`docs/future/24-logging.md`, §24.2).
-     It is runtime state, not computation. It is the first state the language
+     VM runtime holds for `std/logger` (the grammar's logging section). It is
+     runtime state, not computation. It is the first state the language
      keeps between calls, so it is limited to this registry and reached only
      through the `Logger` functions. Its two builtin types, the record
-     `LogEvent` and the enum `LogLevel`, are builtins because handlers take them
-     (§24.2).
+     `LogEvent` and the enum `LogLevel`, are builtins because handlers take
+     them.
 - Library code that must be generic over the builtin type variables, or that
   must be called as a method on a builtin type (`xs.find do ... end`), cannot be
   a `std/` module; it goes in the compiler prelude (`stdlib/prelude/*.agc`,
@@ -990,7 +989,7 @@ programming reference contain the current signatures.
   instead (`Task.await` with a timeout, §27.3).
 - Two builtin modules are std-only: `HttpWire` (phase 20,
   `docs/vm/10-io-http.md` §10.7), the framing layer under `std/http`, and
-  `LogRegistry` (`docs/future/24-logging.md` §24.2), the registry under
+  `LogRegistry` (the grammar's logging section), the registry under
   `std/logger`. A public raw layer next to `std/http` would be a second way to
   do HTTP, and a public registry would let user code change the handlers without
   the `Logger` functions. So the linker lets only modules embedded from

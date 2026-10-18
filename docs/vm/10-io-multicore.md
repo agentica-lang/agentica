@@ -96,7 +96,7 @@ needs it.
     ownership).
   - Shared: the global run queue (§16.3).
   - The `std/logger` registry (`log` in the runtime, built in `vm/logger.c`,
-    `docs/future/24-logging.md` §24.2): the global level, the lowest handler
+    the grammar's logging section): the global level, the lowest handler
     rank and an array of (name, rank, handler) in the GC heap, reached only by
     the ten `LogRegistry` builtins. It is the language's one piece of global
     mutable state and is a field of the runtime, not a `static`. With N>1 it

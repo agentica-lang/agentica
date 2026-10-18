@@ -4,7 +4,7 @@
  * handler; stdlib/logger.agc does, in the task that logs. Service layer.
  * The table is not locked: with tasks on several cores it needs a lock (the
  * same one as the stderr buffer).
- * Design: docs/future/24-logging.md §24.2 and docs/vm/10-io-multicore.md §10.2.3.
+ * Design: the grammar's logging section and docs/vm/10-io-multicore.md §10.2.3.
  */
 #include "services.h"
 

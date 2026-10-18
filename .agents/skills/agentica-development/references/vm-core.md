@@ -170,8 +170,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     the stack trace of a runtime error.
 
 - **Path:** `vm/trace.h`, `vm/trace.c`
-  - **Owns:** VM tracing (`AGENTICA_VM_TRACE`, `docs/future/24-logging.md`
-    §24.4, as built in `docs/vm/08-loader-and-cli.md` §9): the `agc_trace`
+  - **Owns:** VM tracing (`AGENTICA_VM_TRACE`, as built in
+    `docs/vm/08-loader-and-cli.md` §9): the `agc_trace`
     struct, category bits, `AGC_TRACE_ON` and `AGC_TRACE`; `agc_trace_parse`,
     `agc_trace_message`, `agc_trace_format` (for the C test) and
     `agc_trace_emit` (one 512-byte stack line, one `write(2)`)

@@ -333,7 +333,7 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   front end is stage0, whose driver compiles them from the `std/` sources on
   every `agentica test`, as before.
 
-**VM tracing (as built).** The rules are in `docs/future/24-logging.md` §24.4.
+**VM tracing (as built).**
 This note lists what the code chose.
 
 - `AGENTICA_VM_TRACE` lists the categories to trace: `sched`, `io`, `proc`,

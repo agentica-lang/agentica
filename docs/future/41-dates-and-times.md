@@ -9,8 +9,9 @@ the existing `Time` module. Every name here is a proposal for the owner to
 review. The precision is microseconds, as the owner decided on 2026-10-15
 (41.8).
 
-Programs compute with dates and times: a due date, the timestamp of a log line
-(§24), an expiry, a time from a JSON API. Today a program has `Time.now_ms()`
+Programs compute with dates and times: a due date, the timestamp of a log
+line (the grammar's logging section), an expiry, a time from a JSON API.
+Today a program has `Time.now_ms()`
 (wall clock) and `Time.monotonic_ms()`, and nothing else. It turns milliseconds
 into a date by hand, and it cannot tell a value with an offset from one without.
 `File.stat` already gives `modified_seconds` as Unix seconds (`vm/files.c`), so
@@ -235,7 +236,7 @@ Examples: 19:05:42.201337 UTC on 2026-10-14 formats as
 Format decisions:
 
 - Offset 0 is written `Z`, and other offsets as `+hh:mm` or `-hh:mm`. This is
-  the form the examples of §24 use, and RFC 3339 writes it for UTC.
+  the form the logger's examples use, and RFC 3339 writes it for UTC.
 - Always six fraction digits, `.000000` included. The value has microsecond
   precision, and a fixed width keeps the length of the text the same, so strings
   from one offset sort by time. Trimming zeros would make `.2` and `.200000` two
@@ -350,7 +351,7 @@ Not in v1: `add_months` and `add_years` (41.16), and arithmetic on `TimeOfDay`.
   leap seconds is as much work as the zone data of 41.16.
 - Precision is microseconds, as in Python and Elixir. The field `microsecond`
   is 0 to 999999. `Time.now_ms` and `Time.monotonic_ms` keep milliseconds, and
-  so does the input of `std/logger` (`time_ms`, §24.2), which the logger turns
+  so does the input of `std/logger` (`time_ms`), which the logger turns
   into microseconds with `* 1000` (41.11). Nanoseconds would not fit an Int over
   the whole range: the latest value is about 2.5e20 ns since 1970, and an Int
   holds 9.2e18 (`Int` is 64 bits on every target, §42.4), so Unix nanoseconds
@@ -422,21 +423,23 @@ end
   name, and it would hide which clock it reads. The existing code
   (`stdlib/test/runner.agc`) writes the subtraction, and it stays that way.
 
-### 41.11 Relation to `std/logger` (§24)
+### 41.11 Relation to `std/logger`
 
 `Logger.time_text(ms)` becomes
 `Time.format(Time.from_unix_us(ms * 1000).unwrap!)`: the log's text and the
 `Time` formatter are one code path, and the log time is one native call instead
-of the integer arithmetic §24.2 describes. A value outside years 1 to 9999
+of the integer arithmetic the logger describes. A value outside years 1 to
+9999
 halts, as any `!` form does, and so does a `ms * 1000` that overflows an Int
 (`*` halts on overflow, as `docs/grammar/06b-builtins.md` says). The log's own
 time always comes from `Time.now_ms()`, which is in range, and the vectors cover
 the edges.
 
 The text changes with this. The time has six fraction digits
-(`2026-10-12T10:15:02.345000Z`), where §24 shows three. §24's examples and its
-"with milliseconds" are updated in the implementation PR (41.14), and the owner
-decides the digits (41.20). §24.2 has a cross-reference to this section.
+(`2026-10-12T10:15:02.345000Z`), where the logger shows three. The logger's
+examples and its "with milliseconds" are updated in the implementation PR
+(41.14), and the owner decides the digits (41.20). The grammar's logging section
+is updated there too.
 
 ### 41.12 Cost
 
@@ -509,8 +512,8 @@ Agentica front end:
 - Grammar: `docs/grammar/04-lexical.md` (reserved builtin names),
   `docs/grammar/06b-builtins.md` (the records, the `Time` functions and the
   construction rule), `docs/grammar/07-diagnostics.md` (the new code).
-- `docs/future/24-logging.md` (§24.2 and its examples): the log time with six
-  fraction digits (41.11).
+- `docs/grammar/06d-io-and-network.md` (the logging section) and the logger
+  site page: the log time with six fraction digits (41.11).
 - Programming skill: `.agents/skills/agentica-programming/references/dates.md`
   (new), with its row in the "When to read a reference" table of `SKILL.md`;
   `references/builtins.md` (the other `Time` lines) and
@@ -707,5 +710,5 @@ The costs, to be accepted when it lands:
   `LocalTime`, which says what the value lacks, as `NaiveDateTime` does for the
   offset. Recommendation: `TimeOfDay`.
 - **Log digits (41.11).** Six fraction digits, as `Time.format` writes them, or
-  three, as §24 shows now (which needs a second formatter for the log).
+  three, as the logger shows now (which needs a second formatter for the log).
   Recommendation: six.

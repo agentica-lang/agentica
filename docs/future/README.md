@@ -6,9 +6,10 @@ spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
 Sections 19, 21 and 22 are VM implementation proposals, not language changes.
-Sections 20 and 23–24 add crypto, binary data and logging without changing the
-grammar. Sections 25–34 cover Ruby idioms, diagnostics, concurrency, VM metrics,
-TLS, HTTP, BDD, doc comments, digit separators and VM values. Sections 36–40
+Sections 20 and 23 add crypto and binary data without changing the grammar;
+logging (§24) is built and lives in the grammar. Sections 25–34 cover Ruby
+idioms, diagnostics, concurrency, VM metrics, TLS, HTTP, BDD, doc comments,
+digit separators and VM values. Sections 36–40
 cover unit tests, crash isolation, value representation, semantic CLI and native
 code. Sections 41–43 cover date/time types, sized numerics and an unscheduled
 language server. The Files index carries current status; linked sections keep
@@ -20,9 +21,9 @@ requirements, rationale and alternatives.
 Each section links to its proposal or current home. Landed and decided notes
 may share [`done.md`](done.md); §6 points to the VM design, §7 to §25.13, and
 §18 records the front-end language decision and the self-hosted bootstrap.
-Sections 1, 5, 8, 11, 12 and 35 have no file of their own: they are built or
-decided, and their content lives in the grammar, `docs/vm/`, the roadmap or
-§18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md).
+Sections 1, 5, 8, 11, 12, 21, 24 and 35 have no file of their own: they are
+built or decided, and their content lives in the grammar, `docs/vm/`, the
+roadmap or §18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md).
 
 - §: 2
   - Title: Landed: enums and pattern matching
@@ -110,11 +111,6 @@ decided, and their content lives in the grammar, `docs/vm/`, the roadmap or
   - Title: Binary data
   - File: [`23-binary-data.md`](23-binary-data.md)
   - Status: Done (roadmap phase 13)
-
-- §: 24
-  - Title: Logging and debugging
-  - File: [`24-logging.md`](24-logging.md)
-  - Status: Built (14a, 14b, 14c)
 
 - §: 25
   - Title: Ruby typed idioms

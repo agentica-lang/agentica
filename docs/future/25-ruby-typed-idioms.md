@@ -233,7 +233,7 @@ variant). Every call in the bytecode passes all its arguments, so the bytecode
 and the VM do not change.
 
 **`std/logger`:** this item did not block it. The logger had two functions per
-level (`info` and `info_meta`, [section 24.2](24-logging.md#242-stdlogger)).
+level (the grammar's logging section).
 When this item landed, `std/logger` dropped its `_meta` functions, and each
 level function takes an optional `fields` parameter with the default `{}`. That
 was a breaking change, which the owner accepted, since the language has no
@@ -303,7 +303,7 @@ the checker cannot reject a hand-written wrapper, as with `with`.
 - The alias must be an import of this file: otherwise `CHECK-IMPORT-NAME` with
   the help "unknown module alias", decided in the linker. The name must be
   exported by that module (`CHECK-IMPORT-NAME`, with the "did you mean" help
-  that §24.2 (D9) added).
+  that the logger added).
 - Re-exports are resolved after the file's imports are visited. Today the
   linker's `visit` fills a module's exports before it visits its imports, so
   this changes the order: the plain exports are filled first, the imports are
@@ -738,8 +738,9 @@ call span is replaced the same way a prelude instruction's span is.
   `xs.each_slice(0)` (prelude). The innermost run of prelude frames is
   `each_slice` alone, so the error points at the `each_slice` call inside the
   block, not at `each_with_index`.
-- Prelude frames are skipped in stack traces (14b, [section
-  24.3](24-logging.md#243-stack-traces-on-runtime-errors)), like native frames.
+- Prelude frames are skipped in stack traces (14b; the shape is in
+  [`docs/vm/02-reference-behavior.md`](../vm/02-reference-behavior.md)), like
+  native frames.
   A user block called from a prelude function keeps its own frame, so an error
   in the block shows the block and then the user's call.
 - A prelude-only intrinsic, `__fail_arg(code, index, message)`, raises the given

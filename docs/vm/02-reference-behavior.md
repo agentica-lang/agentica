@@ -151,7 +151,7 @@ is not repeated here; read the file.
   at both ends. `--json` prints one line with keys in this order: `code`,
   `file`, `message`, `range`, `spawned_at`, `stack`, `stack_omitted`, `task`
   (the last four only when they apply).
-- Stack lines (`docs/future/24-logging.md` §24.3, as built): plain adds
+- Stack lines (as built): plain adds
   `  = stack, innermost first:` after the caret line, `--ai` adds `  stack:`
   after `source:`, and each frame is a line of four spaces,
   `name at file:line:column`, then ` (N times)` for a merged run and

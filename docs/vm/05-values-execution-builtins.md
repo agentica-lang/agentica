@@ -160,8 +160,9 @@ so zeroed registers are valid values.
   native push) are all the stack trace costs while a program runs, plus the span
   of the spawning call that a task keeps (`spawn_span`, set by
   `agc_task_spawn_in`).
-- The stack trace is built when the program fails (`docs/future/24-logging.md`
-  §24.3). `agc_fail` and `agc_fail_text` call `agc_stack_capture` (`vm/diag.c`)
+- The stack trace is built when the program fails (as built; the shape is in
+  [`02-reference-behavior.md`](02-reference-behavior.md)). `agc_fail` and
+  `agc_fail_text` call `agc_stack_capture` (`vm/diag.c`)
   before the `longjmp`, only while a task runs (`vm->in_turn`). It walks the
   frames of `vm->task` from the innermost one, skips the native frames, merges
   neighbouring frames with the same function, place and tail flag, and keeps

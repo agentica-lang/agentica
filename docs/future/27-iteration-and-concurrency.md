@@ -38,7 +38,8 @@ wait without stopping the task, and a task cannot be cancelled by the program.
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms):
 one way to do each thing (its Principle and its test), values stay immutable
 with no shared mutable state (the one exception is the `std/logger`
-registry, which only the Logger functions reach; §24.2), types stay static, and
+registry, which only the Logger functions reach; the grammar's logging
+section), types stay static, and
 the users are LLM agents, who do best with one obvious form and an error whose
 help shows it.
 
@@ -1272,7 +1273,8 @@ Each of these is decided; it gets a help that names the Agentica form.
   `Agent.update` and `Agent.get`, Ruby's `Concurrent::AtomicFixnum`, or a
   counter that blocks change.
   - Shared mutable state, which the language does not have: values are
-    immutable. The one exception is the `std/logger` registry (§24.2),
+    immutable. The one exception is the `std/logger` registry (the grammar's
+    logging section),
     which only the Logger functions reach; the shared table of §13 waits until a
     program needs it, with atomic calls. Unlike an `Agent`, the registry is not
     a value that programs hold: a program never gets a reference to it.
