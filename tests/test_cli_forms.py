@@ -8,16 +8,17 @@ a golden that `make goldens` rewrites (so a change of wording is one command and
 The cases ran through both command lines (the original front end, the development oracle, and the binary) until
 that front end went; they agreed on every byte of the exit code, stdout and stderr. tests/fixtures/cli/forms.json
 keeps that output. A change of the command line on purpose rewrites it with `make goldens` (or
-`python3 -m tests.test_cli_forms freeze`), and the diff of the file is the review. The temp folder and the version are written as <work> and <version>.
+`poetry run python -m tests.test_cli_forms freeze`), and the diff of the file is the review. The temp folder and the version are written as <work> and <version>.
 A file that `compile` writes is only noted as written or not (its bytes carry the version)."""
 import json
 import sys
 import tempfile
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from tests.agentica_test import FIXTURES, TestCase, agentica_version, binary, run, vm_environment
+import pytest
+
+from tests.agentica_test import FIXTURES, agentica_version, binary, run, vm_environment
 
 FROZEN = FIXTURES / "cli" / "forms.json"
 JOBS = 6
@@ -82,18 +83,14 @@ OPTIONS = [
 class Workspace:
     """A folder with the programs of FILES, and the way to run the binary in it and write down what it did."""
 
-    def __init__(self):
-        self.directory = tempfile.TemporaryDirectory(prefix="agentica-cli-forms-")
-        self.work = Path(self.directory.name).resolve()
+    def __init__(self, work):
+        self.work = Path(work).resolve()
         for name, text in FILES.items():
             path = self.work / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
         for name, data in BINARY_FILES.items():
             (self.work / name).write_bytes(data)
-
-    def cleanup(self):
-        self.directory.cleanup()
 
     def plain(self, text):
         return text.replace(str(self.work), "<work>").replace(agentica_version(), "<version>")
@@ -151,8 +148,8 @@ def groups(work):
 
 
 def freeze():
-    workspace = Workspace()
-    try:
+    with tempfile.TemporaryDirectory(prefix="agentica-cli-forms-") as directory:
+        workspace = Workspace(directory)
         frozen = {}
         for cases in groups(workspace.work).values():
             # The compile cases write the same name: one at a time.
@@ -161,60 +158,70 @@ def freeze():
         FROZEN.parent.mkdir(parents=True, exist_ok=True)
         FROZEN.write_text(json.dumps(frozen, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
         print("%d cases written to %s" % (len(frozen), FROZEN))
-    finally:
-        workspace.cleanup()
 
 
-class CliForms(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.workspace = Workspace()
-        cls.addClassCleanup(cls.workspace.cleanup)
-        cls.groups = groups(cls.workspace.work)
-        cls.frozen = json.loads(FROZEN.read_text(encoding="utf-8"))
+@pytest.fixture(scope="module")
+def workspace(tmp_path_factory):
+    return Workspace(tmp_path_factory.mktemp("agentica-cli-forms-"))
 
-    def differences(self, cases, parallel=True):
-        """The cases whose output is not the frozen one, as a message ('' when none differs)."""
-        def compare(case):
-            arguments, options = case
-            expected = self.frozen.get(self.workspace.key(arguments, options))
-            if expected is None:
-                return "%s: no frozen output (python3 -m tests.test_cli_forms freeze)" % (arguments,)
-            found = self.workspace.observe(arguments, **options)
-            return None if found == expected else "%s\n  frozen: %r\n  found:  %r" % (arguments, expected, found)
 
-        if parallel:
-            with ThreadPoolExecutor(JOBS) as pool:
-                found = list(pool.map(compare, cases))
-        else:
-            found = [compare(case) for case in cases]
-        return "\n".join(line for line in found if line)
+@pytest.fixture(scope="module")
+def case_groups(workspace):
+    return groups(workspace.work)
 
-    def test_every_frozen_case_is_still_a_case(self):
-        keys = {self.workspace.key(arguments, options)
-                for cases in self.groups.values() for arguments, options in cases}
-        self.assertEqual(sorted(set(self.frozen) - keys), [])
 
-    def test_options_commands_and_their_mistakes(self):
-        self.assertEqual(self.differences(self.groups["options"]), "")
+@pytest.fixture(scope="module")
+def frozen():
+    return json.loads(FROZEN.read_text(encoding="utf-8"))
 
-    def test_every_diagnostic_form_of_every_stage(self):
-        self.assertEqual(self.differences(self.groups["diagnostics"]), "")
 
-    def test_running_a_program_passes_arguments_standard_streams_and_the_exit_status(self):
-        self.assertEqual(self.differences(self.groups["runs"]), "")
+def differences(workspace, frozen, cases, parallel=True):
+    """The cases whose output is not the frozen one, as a message ('' when none differs)."""
+    def compare(case):
+        arguments, options = case
+        expected = frozen.get(workspace.key(arguments, options))
+        if expected is None:
+            return "%s: no frozen output (python3 -m tests.test_cli_forms freeze)" % (arguments,)
+        found = workspace.observe(arguments, **options)
+        return None if found == expected else "%s\n  frozen: %r\n  found:  %r" % (arguments, expected, found)
 
-    def test_compile_writes_a_file_or_says_why_not(self):
-        # The cases write the same name one after the other: one at a time.
-        self.assertEqual(self.differences(self.groups["compiles"], parallel=False), "")
+    if parallel:
+        with ThreadPoolExecutor(JOBS) as pool:
+            found = list(pool.map(compare, cases))
+    else:
+        found = [compare(case) for case in cases]
+    return "\n".join(line for line in found if line)
 
-    def test_help_for_a_few_builtins_in_both_forms(self):
-        self.assertEqual(self.differences(self.groups["helps"]), "")
+
+def test_every_frozen_case_is_still_a_case(workspace, case_groups, frozen):
+    keys = {workspace.key(arguments, options)
+            for cases in case_groups.values() for arguments, options in cases}
+    assert sorted(set(frozen) - keys) == []
+
+
+def test_options_commands_and_their_mistakes(workspace, case_groups, frozen):
+    assert differences(workspace, frozen, case_groups["options"]) == ""
+
+
+def test_every_diagnostic_form_of_every_stage(workspace, case_groups, frozen):
+    assert differences(workspace, frozen, case_groups["diagnostics"]) == ""
+
+
+def test_running_a_program_passes_arguments_standard_streams_and_the_exit_status(workspace, case_groups, frozen):
+    assert differences(workspace, frozen, case_groups["runs"]) == ""
+
+
+def test_compile_writes_a_file_or_says_why_not(workspace, case_groups, frozen):
+    # The cases write the same name one after the other: one at a time.
+    assert differences(workspace, frozen, case_groups["compiles"], parallel=False) == ""
+
+
+def test_help_for_a_few_builtins_in_both_forms(workspace, case_groups, frozen):
+    assert differences(workspace, frozen, case_groups["helps"]) == ""
 
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["freeze"]:
         freeze()
     else:
-        unittest.main()
+        raise SystemExit("usage: poetry run python -m tests.test_cli_forms freeze")

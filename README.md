@@ -40,7 +40,7 @@ dist/agentica examples/hello.agc
 ## Test
 
 ```sh
-make test                                      # all tests, after building the binary (Python unittest)
+make test                                      # all tests, after building the binary (pytest)
 make test TESTS="tests/test_spec_checker.py"   # some files
 make vm-test                                   # the C tests
 ```

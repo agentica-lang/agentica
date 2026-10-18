@@ -40,14 +40,16 @@ vm exe cli bdd-driver:
 version:
 	@printf '%s' '$(AGC_VERSION)'
 
-# The tests are Python unittest modules, tests/test_<area>.py (docs/future/18-front-end-language.md §18.7,
-# references/ci.md). TESTS names modules, or directories that hold them (the default is tests/).
+# Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
+# TESTS names modules, or directories that hold them (the default is tests/). Design: references/ci.md,
+# docs/future/18-front-end-language.md §18.7.
 # Fast Python tests:           make test [TESTS="tests/test_vm_bits.py ..."]
 # Test groups:                 make tests KIND=fast|files|slow|all [DOCKER=1|WINE=1]
 # More or fewer workers:       make test JOBS=8
 PYTHON ?= python3
+POETRY ?= poetry
 # TESTS without a leading ./ or a trailing /. A directory contributes its own test_*.py files, not those of subdirectories
-# (tests/eval/test_*.py are not unittest modules for this runner).
+# (tests/eval/test_*.py are not part of this runner).
 TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency, make vm-task-map): a directory in TESTS does not pick them up
@@ -59,16 +61,12 @@ PY_TESTS = $(sort $(filter-out $(ISOLATED_PY_TESTS),$(PY_FILES)) $(filter-out $(
 PY_NOT_DIR = $(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(if $(wildcard $(t)/.),,$(t)))
 PY_BAD = $(PY_NOT_DIR) $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
 PY_CHECK = $(if $(strip $(PY_BAD)),$(error TESTS: $(strip $(PY_BAD)) is not a tests/test_<area>.py file))
-# tests/test_x.py -> tests.test_x (run from the repository root, so tests/agentica_test.py imports as tests.agentica_test)
-PY_MODULE = $(subst /,.,$(patsubst %.py,%,$(1)))
-
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
 test: $(PRODUCT)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=
 
-# The slow tier: the @slow cases of the .py files (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after
-# make test; a local run does not. With the flag a .py file runs only its @slow cases.
+# The slow tier: @slow TestCase methods and pytest functions marked slow. CI runs it after make test; locally do not run it.
 test-slow: $(PRODUCT)
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW=1
@@ -79,34 +77,41 @@ test-slow: $(PRODUCT)
 MODULE_BASE_LIMIT = $(if $(filter-out 0,$(AGENTICA_TEST_SLOW)),1800,600)
 MODULE_LIMIT = $(shell awk -v scale='$(or $(AGENTICA_TEST_TIMEOUT_SCALE),1)' -v base=$(MODULE_BASE_LIMIT) 'BEGIN { printf "%d", base * scale }')
 
-# One unittest process per module, run by make itself: -j gives the workers, -O (GNU make 4.0 or newer) keeps each
-# module's output together, -k runs the other modules after a failure. A failing module shows its unittest report and a make error line.
-# CI (CI is set) fails when Python is missing; a local run reports a skip.
+# One pytest process per module, run by make itself: -j gives the workers, -O (GNU make 4.0 or newer) keeps each
+# module's output together, -k runs the other modules after a failure. CI requires Poetry; locally system pytest is a
+# fallback when Poetry is unavailable, and tests skip only if both runners are missing.
 test-py:
 	@: $(PY_CHECK)
 	@if [ -n "$(PY_ISOLATED_SELECTED)" ]; then \
 	  echo "$(PY_ISOLATED_SELECTED) is isolated: run make tests KIND=files (Docker) or make test-remove-actions in CI" >&2; exit 1; \
 	fi
 	@if [ -n "$(PY_TESTS)" ]; then \
-	  if ! command -v $(PYTHON) >/dev/null 2>&1; then \
-	    test -z "$$CI" || { echo "$(PYTHON) is required in CI" >&2; exit 1; }; \
-	    echo "SKIP the Python tests: $(PYTHON) is unavailable"; exit 0; \
+	  if command -v $(POETRY) >/dev/null 2>&1; then \
+	    pytest_runner="$(POETRY) run python -m pytest"; \
+	  elif [ -n "$$CI" ]; then \
+	    echo "$(POETRY) is required in CI" >&2; exit 1; \
+	  elif python3 -m pytest --version >/dev/null 2>&1; then \
+	    pytest_runner="python3 -m pytest"; \
+	  else \
+	    echo "SKIP the Python tests: $(POETRY) and system pytest are unavailable"; exit 0; \
 	  fi; \
-	  $(MAKE) --no-print-directory -k -O -j$(JOBS) $(addprefix py-test/,$(PY_TESTS)) \
+	  $(MAKE) --no-print-directory -k -O -j$(JOBS) PYTEST_RUNNER="$$pytest_runner" \
+	    $(addprefix py-test/,$(PY_TESTS)) \
 	    || { echo "The Python tests failed" >&2; exit 1; }; \
 	fi
 
 # `timeout` (coreutils) ends a hung module: exit 124, or 137 when it had to send KILL after the 10 s of grace. Without
 # the command the module runs unguarded; the per-test limit and the job timeout remain.
+PYTEST_RUNNER ?= $(POETRY) run python -m pytest
 py-test/%: FORCE
-	@echo "unittest $*"
+	@echo "pytest $*"
 	@if command -v timeout >/dev/null 2>&1; then \
-	  timeout -k 10 $(MODULE_LIMIT) $(PYTHON) -m unittest $(call PY_MODULE,$*); status=$$?; \
+	  timeout -k 10 $(MODULE_LIMIT) $(PYTEST_RUNNER) "$*"; status=$$?; \
 	  if [ $$status -eq 124 ] || [ $$status -eq 137 ]; then \
-	    echo "unittest $*: hung, stopped after $(MODULE_LIMIT) s (the module limit)" >&2; \
+	    echo "pytest $*: hung, stopped after $(MODULE_LIMIT) s (the module limit)" >&2; \
 	  fi; \
 	  exit $$status; \
-	else $(PYTHON) -m unittest $(call PY_MODULE,$*); fi
+	else $(PYTEST_RUNNER) "$*"; fi
 
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
 # diagnostics, the programs, `agentica test`, `agentica run`.
@@ -165,7 +170,7 @@ tests-host:
 
 # The destructive group: only the Actions scratch of an ephemeral runner, or the local Docker sandbox.
 tests-files:
-	@if [ "$${GITHUB_ACTIONS:-}" = true ]; then $(PYTHON) tools/run_remove_actions.py all; \
+	@if [ "$${GITHUB_ACTIONS:-}" = true ]; then $(POETRY) run python tools/run_remove_actions.py all; \
 	else $(MAKE) --no-print-directory tests-docker KIND=files; fi
 
 # A group in the Ubuntu test container: the checkout is read-only there and build/ and dist/ are own volumes.
@@ -202,12 +207,12 @@ test-distribution: $(PRODUCT)
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
 # Without FIXTURES it also rewrites the CLI output golden tests/fixtures/cli/forms.json (tests/test_cli_forms.py) and the
 # front-end goldens of tests/fixtures/frontend/ from the Agentica stages (tools/refreeze.py, fast tier only: run
-# `python3 tools/refreeze.py` with no flag to rewrite the frozen manifests of the slow tier too, slow).
+# `poetry run python tools/refreeze.py` with no flag to rewrite the frozen manifests of the slow tier too, slow).
 goldens: $(PRODUCT)
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.test_vm_stack
-	test -n "$(FIXTURES)" || $(PYTHON) -m tests.test_cli_forms freeze
-	test -n "$(FIXTURES)" || $(PYTHON) tools/refreeze.py --fast-only
+	test -n "$(FIXTURES)" || $(POETRY) run python -m tests.test_cli_forms freeze
+	test -n "$(FIXTURES)" || $(POETRY) run python tools/refreeze.py --fast-only
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
 vm-golden-check: $(PRODUCT)
@@ -761,7 +766,7 @@ windows-docker-remove-wine-check:
 
 # Native destructive regressions run only on ephemeral GitHub Actions runners.
 test-remove-actions:
-	$(PYTHON) tools/run_remove_actions.py all
+	$(POETRY) run python tools/run_remove_actions.py all
 
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)

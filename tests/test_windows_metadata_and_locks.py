@@ -8,6 +8,7 @@ import stat
 import unittest
 
 from tests.agentica_test import TARGET_OS, TestCase, run_vm, start_vm, vm_environment
+from tests.windows_support import kernel32_file_api
 
 # The documented Windows values: mode carries the read-only attribute only, and both owner ids are 0.
 WRITABLE_MODE = 0o666
@@ -308,14 +309,7 @@ class WindowsLineTests(TestCase):
     def test_each_line_closes_its_file_on_eof_callback_error_and_decode_error(self) -> None:
         root = self.make_temp_dir("agentica-windows-each-line-")
         bytecode = self.compile_text(EACH_LINE_PROGRAM, "windows-each-line")
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.CreateFileW.argtypes = [
-            ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
-            ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
-        ]
-        kernel32.CreateFileW.restype = ctypes.c_void_p
-        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
-        kernel32.CloseHandle.restype = ctypes.c_int
+        kernel32 = kernel32_file_api()
         cancelled = self.compile_text(CANCELLED_LOCK_PROGRAM, "windows-cancelled-lines")
         cases = (
             (b"first\nsecond\n", "cancel", ["true", "false", "false"]),

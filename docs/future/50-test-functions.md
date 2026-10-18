@@ -3,8 +3,8 @@
 **Status:** planned (2026-10-16), one part (50a). Roadmap phase 31
 ([`docs/roadmap/31-test-functions.md`](../roadmap/31-test-functions.md)) is row
 7.11 of the [roadmap](../roadmap/README.md) order, in post-bootstrap step 6.
-Nothing is implemented. The `main` and `Test.run` form of
-The grammar's `Unit tests (Test)` and `agentica test` sections stay valid.
+Nothing is implemented. The `main` and `Test.run` form of the grammar's
+`Unit tests (Test)` and `agentica test` sections stays valid.
 
 ### 50.1 Today
 

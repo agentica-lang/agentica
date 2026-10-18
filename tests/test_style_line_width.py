@@ -5,9 +5,11 @@ Each agentica.toml under those folders may hold a [style] table with max_line_wi
 included. This test enforces it until `agentica check` reads [style] itself. A missing tomllib skips the test locally
 and fails it in CI.
 """
-import unittest
+import os
 
-from tests.agentica_test import ROOT, TestCase, require
+import pytest
+
+from tests.agentica_test import ROOT
 
 try:
     import tomllib
@@ -37,20 +39,19 @@ def offenders(folder, limit):
     return found
 
 
-class LineWidthTest(TestCase):
-    def test_every_styled_folder_has_a_manifest(self):
-        folders = {path.parent.relative_to(ROOT).as_posix() for path in manifests()}
-        self.assertEqual(folders, set(STYLED_FOLDERS))
-
-    def test_lines_fit_max_line_width(self):
-        require(tomllib is not None, "tomllib needs Python 3.11 or later")
-        for manifest in manifests():
-            with self.subTest(manifest=manifest.relative_to(ROOT).as_posix()):
-                limit = tomllib.loads(manifest.read_text(encoding="utf-8"))["style"]["max_line_width"]
-                self.assertIsInstance(limit, int)
-                found = offenders(manifest.parent, limit)
-                self.assertEqual(found, [], "lines longer than %d characters:\n%s" % (limit, "\n".join(found)))
+def test_every_styled_folder_has_a_manifest():
+    folders = {path.parent.relative_to(ROOT).as_posix() for path in manifests()}
+    assert folders == set(STYLED_FOLDERS)
 
 
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.parametrize("manifest", manifests(), ids=lambda path: path.parent.relative_to(ROOT).as_posix())
+def test_lines_fit_max_line_width(manifest):
+    if tomllib is None:
+        message = "tomllib needs Python 3.11 or later"
+        if os.environ.get("CI"):
+            pytest.fail(message)
+        pytest.skip(message)
+    limit = tomllib.loads(manifest.read_text(encoding="utf-8"))["style"]["max_line_width"]
+    assert isinstance(limit, int)
+    found = offenders(manifest.parent, limit)
+    assert found == [], "lines longer than %d characters:\n%s" % (limit, "\n".join(found))

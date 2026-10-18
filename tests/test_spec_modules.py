@@ -9,7 +9,10 @@ import json
 import os
 from pathlib import Path
 
-from tests.agentica_test import TestCase, cli, run, vm_environment
+import pytest
+
+from tests.agentica_test import cli, run, vm_environment
+from tests.module_support import write_module_files
 
 # No AGENTICA_PATH roots and no user data folder, so only the files of a case resolve.
 HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"}
@@ -23,20 +26,22 @@ def start(problem):
     return position["line"], position["column"]
 
 
-class ModuleRules(TestCase):
-    def setUp(self):
-        super().setUp()
+class TestModuleRules:
+    @pytest.fixture(autouse=True)
+    def set_up(self, tmp_path):
+        self._tmp_path = tmp_path
+        self._temp_dir_count = 0
         # A folder that holds none of the programs' files: a relative path must not resolve by accident.
         self.cwd = self.make_temp_dir("agentica-cwd-")
 
+    def make_temp_dir(self, prefix="agentica-"):
+        self._temp_dir_count += 1
+        path = self._tmp_path / f"{prefix}{self._temp_dir_count}"
+        path.mkdir()
+        return path
+
     def files(self, files):
-        """A resolved temp folder holding the given files (name -> text; names may have folders)."""
-        directory = self.make_temp_dir("agentica-modules-").resolve()
-        for name, text in files.items():
-            path = directory / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
-        return directory
+        return write_module_files(self, files)
 
     def checks(self, cases):
         """Check several programs side by side: each case is (files, root, env), and the result is a list of
@@ -64,23 +69,23 @@ class ModuleRules(TestCase):
 
     def problem_of(self, result):
         if result.code == 0:
-            self.assertEqual(result.stdout, '{"ok":true}\n')
+            assert result.stdout == '{"ok":true}\n'
             return None
-        self.assertEqual(result.code, 1, result.stderr)
+        assert result.code == 1, result.stderr
         problem = json.loads(result.stderr)
         # Internal names (with the module mangling '@') must not reach a user in the message or the help.
-        self.assertNotIn("@", json.dumps({key: problem.get(key) for key in ("message", "help")}))
+        assert "@" not in json.dumps({key: problem.get(key) for key in ("message", "help")})
         return problem
 
     def assert_rejected(self, checked, code, line=None, file=None):
         """The check fails with `code`, at `line`, and in `file` (a name of the folder) when given."""
         directory, problem = checked
-        self.assertIsNotNone(problem, "the program checks clean")
-        self.assertEqual(problem["code"], code)
+        assert problem is not None, "the program checks clean"
+        assert problem["code"] == code
         if line is not None:
-            self.assertEqual(start(problem)[0], line)
+            assert start(problem)[0] == line
         if file is not None:
-            self.assertEqual(problem["file"], str(directory / file))
+            assert problem["file"] == str(directory / file)
         return problem
 
     def test_reserved_library_namespaces_reject_traversal_and_keep_the_import_span(self):
@@ -90,8 +95,7 @@ class ModuleRules(TestCase):
         results = self.checks([({"root.agc": 'import Q from "%s"\n' % path + MAIN}, "root.agc", None)
                                for path, _code in cases])
         for (path, code), checked in zip(cases, results):
-            with self.subTest(path):
-                self.assert_rejected(checked, code, line=1, file="root.agc")
+            self.assert_rejected(checked, code, line=1, file="root.agc")
 
     def test_pkg_imports_reject_relative_environment_roots_and_escaping_symlinks(self):
         directory = self.files({
@@ -110,7 +114,7 @@ class ModuleRules(TestCase):
             "a.agc": "export struct Point\n  x: Int\nend\n\n",
             "root.agc": 'import A from "a"\ndef main() -> Void\n  n: Int = A.Point(x: 1)\nend\n\n'})
         problem = self.assert_rejected(checked, "CHECK-TYPE-MISMATCH")
-        self.assertEqual(problem["actual"], "Point")
+        assert problem["actual"] == "Point"
         files = {
             "a.agc": "export struct Point\n  x: Int\nend\n\n"
                      "export def make(x: Int) -> Point\n  return Point(x: x)\nend\n\n",
@@ -118,7 +122,7 @@ class ModuleRules(TestCase):
             "arity.agc": 'import A from "a"\ndef main() -> Void\n  p = A.make()\nend\n\n'}
         field, arity = self.checks([(files, "root.agc", None), (files, "arity.agc", None)])
         problem = self.assert_rejected(field, "CHECK-UNKNOWN-FIELD", line=3)
-        self.assertEqual(start(problem), (3, 7))
+        assert start(problem) == (3, 7)
         self.assert_rejected(arity, "CHECK-ARITY")
 
     def test_unknown_types_and_names_in_imported_files_are_reported_in_those_files(self):
@@ -130,8 +134,8 @@ class ModuleRules(TestCase):
                          "def main() -> Void\n  n = C.go()\nend\n\n"}
         types, funcs = self.checks([(files, "types.agc", None), (files, "funcs.agc", None)])
         problem = self.assert_rejected(types, "CHECK-UNKNOWN-TYPE")
-        self.assertEqual(start(problem), (6, 6))
-        self.assertEqual(problem["file"], str(types[0] / "bad.agc"))
+        assert start(problem) == (6, 6)
+        assert problem["file"] == str(types[0] / "bad.agc")
         self.assert_rejected(funcs, "CHECK-UNKNOWN-NAME")
 
     def test_module_errors_are_located_and_do_not_expose_private_declarations(self):
@@ -153,8 +157,7 @@ class ModuleRules(TestCase):
                                  "root.agc": imports + "def main() -> Void\n" + body + "end\n\n"}, "root.agc", None)
                                for imports, body, _code in cases])
         for (imports, body, code), checked in zip(cases, results):
-            with self.subTest(code=code, body=body or imports):
-                self.assert_rejected(checked, code, file="root.agc")
+            self.assert_rejected(checked, code, file="root.agc")
 
     def test_import_paths_name_modules_without_an_extension(self):
         names = ["lib/util.agc", "lib/util.rb", 'a"b.agc', "json.tools.agc", "lib/", "..", ".", ""]
@@ -165,9 +168,8 @@ class ModuleRules(TestCase):
                         + "import Util from %s\n" % json.dumps(name) + MAIN}, "root.agc", None)
             for name in names])
         for name, checked in zip(names, results):
-            with self.subTest(name):
-                problem = self.assert_rejected(checked, "CHECK-IMPORT-PATH")
-                self.assertEqual(start(problem), (4, 1))
+            problem = self.assert_rejected(checked, "CHECK-IMPORT-PATH")
+            assert start(problem) == (4, 1)
 
     def test_nullary_variants_need_no_parentheses_locally_and_through_an_alias(self):
         results = self.checks([
@@ -185,7 +187,7 @@ class ModuleRules(TestCase):
             "lib.agc": "struct Hidden\n  n: Int\nend\n\nexport def hidden() -> Hidden\n  return Hidden(n: 1)\nend\n\n",
             "root.agc": 'import Lib from "lib"\n\ndef main() -> Void\n'
                         "  h = Lib.hidden()\n  x = h.with(n: 2)\nend\n\n"})
-        self.assertEqual(start(self.assert_rejected(problem, "CHECK-IMPORT-NAME")), (5, 7))
+        assert start(self.assert_rejected(problem, "CHECK-IMPORT-NAME")) == (5, 7)
         # Importing a module that only passes the struct along is not enough: the importer needs its own module.
         self.assert_rejected(self.check({
             "a.agc": "export struct P\n  n: Int\nend\n\n",
@@ -212,9 +214,8 @@ class ModuleRules(TestCase):
         results = self.checks([({"root.agc": 'import HTTP from "std/http"\ndef main() -> Void\n' + body + "end\n\n"},
                                 "root.agc", None) for body, _help in cases])
         for (body, has_help), checked in zip(cases, results):
-            with self.subTest(body):
-                problem = self.assert_rejected(checked, "CHECK-IMPORT-NAME", line=3)
-                self.assertEqual("help" in problem, has_help)
+            problem = self.assert_rejected(checked, "CHECK-IMPORT-NAME", line=3)
+            assert ("help" in problem) == has_help
 
     def test_a_wrong_imported_name_suggests_the_closest_export_never_a_private_name(self):
         module = ("struct Secret\n  value: Int\nend\n\nexport struct Public\n  a: Int\nend\n\n"
@@ -226,9 +227,8 @@ class ModuleRules(TestCase):
                                  "root.agc": 'import M from "module"\ndef main() -> Void\n' + body + "end\n\n"},
                                 "root.agc", None) for body, _suggests in cases])
         for (body, suggests), checked in zip(cases, results):
-            with self.subTest(body):
-                problem = self.assert_rejected(checked, "CHECK-IMPORT-NAME", line=3)
-                self.assertEqual("help" in problem, suggests)
+            problem = self.assert_rejected(checked, "CHECK-IMPORT-NAME", line=3)
+            assert ("help" in problem) == suggests
         # `ab` and `ac` are both one edit from `ad`. The tie-break is message detail, so only the code is checked.
         self.assert_rejected(self.check({
             "module.agc": "export def ac() -> Void\nend\n\nexport def ab() -> Void\nend\n\n",
@@ -258,10 +258,9 @@ class ModuleRules(TestCase):
         registry, error, clean = results[:3]
         self.assert_rejected(registry, "CHECK-UNKNOWN-NAME")
         self.assert_rejected(error, "CHECK-IMPORT-NAME")
-        self.assertIsNone(clean[1])
+        assert clean[1] is None
         for declaration, checked in zip(declarations, results[3:]):
-            with self.subTest(declaration.split()[1]):
-                self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
+            self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
 
     def test_http_wire_is_internal_to_std_http_for_user_files_relative_imports_and_pkg_modules(self):
         call = 'export def go() -> Void\n  HttpWire.client(1, 1, 1, 1, "")\nend\n\n'
@@ -285,59 +284,55 @@ class ModuleRules(TestCase):
         roots_checked, clean, body_checked, names_checked = (
             results[:3], results[3], results[4:7], results[7:])
         for (name, _text), checked in zip(roots, roots_checked):
-            with self.subTest(name):
-                self.assert_rejected(checked, "CHECK-UNKNOWN-NAME", file=name)
-        self.assertIsNone(clean[1])
+            self.assert_rejected(checked, "CHECK-UNKNOWN-NAME", file=name)
+        assert clean[1] is None
         for (body, code), checked in zip(bodies, body_checked):
-            with self.subTest(body):
-                problem = self.assert_rejected(checked, code)
-                # The hint must not name the internal HttpWire type, which the user never wrote.
-                self.assertNotIn("HttpWire", json.dumps(problem))
+            problem = self.assert_rejected(checked, code)
+            # The hint must not name the internal HttpWire type, which the user never wrote.
+            assert "HttpWire" not in json.dumps(problem)
         for name, checked in zip(names, names_checked):
-            with self.subTest(name):
-                self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
+            self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
 
     def test_a_type_after_a_function_is_out_of_order_at_the_type(self):
         problem = self.check({"root.agc": "def main() -> Void\nend\n\nstruct Late\n  n: Int\nend\n\n"})
-        self.assertEqual(start(self.assert_rejected(problem, "CHECK-DECL-ORDER")), (4, 1))
+        assert start(self.assert_rejected(problem, "CHECK-DECL-ORDER")) == (4, 1)
 
     def test_a_private_function_before_an_exported_one_is_out_of_order_at_the_export(self):
         results = self.checks([
             ({"root.agc": "def helper() -> Void\nend\n\nexport def api() -> Void\nend\n\n"}, "root.agc", None),
             ({"root.agc": "def helper() -> Void\nend\n\nexport struct Late\nend\n\n"}, "root.agc", None)])
         for checked in results:
-            self.assertEqual(start(self.assert_rejected(checked, "CHECK-DECL-ORDER")), (4, 1))
+            assert start(self.assert_rejected(checked, "CHECK-DECL-ORDER")) == (4, 1)
 
     def test_a_private_enum_after_a_function_is_out_of_order_at_the_enum(self):
         problem = self.check({"root.agc": "def main() -> Void\nend\n\nenum Late\n  A\nend\n\n"})
-        self.assertEqual(start(self.assert_rejected(problem, "CHECK-DECL-ORDER")), (4, 1))
+        assert start(self.assert_rejected(problem, "CHECK-DECL-ORDER")) == (4, 1)
 
     def test_an_import_after_a_declaration_is_out_of_order(self):
         problem = self.check({
             "lib.agc": "export def go() -> Void\nend\n\n",
             "root.agc": 'struct Early\nend\n\nimport Lib from "lib"\n'})
-        self.assertEqual(start(self.assert_rejected(problem, "CHECK-DECL-ORDER")), (4, 1))
+        assert start(self.assert_rejected(problem, "CHECK-DECL-ORDER")) == (4, 1)
 
     def test_types_in_any_order_then_exports_then_private_functions_check_clean(self):
-        self.assertIsNone(self.check({
+        assert self.check({
             "lib.agc": "export def go() -> Void\nend\n\n",
             "root.agc": '## Module doc.\n\nimport Lib from "lib"\nimport Queue from "std/queue"\n\n'
                         "export enum Kind\n  A\nend\n\nstruct Box\n  n: Int\nend\n\n"
                         "export struct Pair\n  n: Int\nend\n\nenum Hidden\n  B\nend\n\n"
                         "export def api() -> Void\n  Lib.go()\n  helper()\nend\n\n"
-                        "def helper() -> Void\nend\n\n" + MAIN})[1])
+                        "def helper() -> Void\nend\n\n" + MAIN})[1] is None
 
     def test_an_imported_module_is_checked_too_and_the_diagnostic_names_its_file(self):
         checked = self.check({
             "lib.agc": "def helper() -> Void\nend\n\nexport def go() -> Void\nend\n\n",
             "root.agc": 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n'})
         problem = self.assert_rejected(checked, "CHECK-DECL-ORDER", file="lib.agc")
-        self.assertEqual(start(problem), (4, 1))
+        assert start(problem) == (4, 1)
 
     def test_embedded_std_modules_follow_the_rule_so_importing_them_never_trips_it(self):
         names = ["std/http", "std/logger", "std/binary", "std/toml", "std/queue"]
         results = self.checks([({"root.agc": 'import M from "%s"\n' % name + MAIN}, "root.agc", None)
                                for name in names])
         for name, (_directory, problem) in zip(names, results):
-            with self.subTest(name):
-                self.assertIsNone(problem)
+            assert problem is None

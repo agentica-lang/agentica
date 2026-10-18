@@ -57,6 +57,25 @@ def load_corpus(*names):
     return files
 
 
+def direct_files(files, folder):
+    """The paths directly under `folder`, excluding descendants, in sorted order."""
+    return sorted(path for path in files if path.startswith(folder + "/") and "/" not in path[len(folder) + 1:])
+
+
+def stdlib_compiler_sources():
+    """Return wrapper programs for every std module and the compiler's direct source files."""
+    wrappers = {}
+    for path in load_corpus("stdlib"):
+        name = path[len("stdlib/"):-len(".agc")]
+        wrappers["std-" + name.replace("/", "_")] = (
+            'import Module from "std/%s"\n\ndef main() -> Void\nend\n' % name
+        )
+    compiler = load_corpus("compiler")
+    files = {path: compiler[path] for path in direct_files(compiler, "compiler")}
+    assert len(wrappers) + len(files) > 50
+    return wrappers, files
+
+
 def read_manifest(relative):
     """The entries of a manifest: Entry(output_sha, size, input_sha, key), in the order of the file."""
     entries = []
@@ -84,111 +103,144 @@ def sections(output):
     return found
 
 
+def _assert_equal(actual, expected, message, assertion):
+    if assertion is None:
+        assert actual == expected, message
+    else:
+        assertion(actual, expected, message)
+
+
+def assert_golden(actual, path, label=None, *, assert_equal=None):
+    """Compare text with the golden file at `path`; in refreeze mode, rewrite the golden."""
+    path = Path(path)
+    expected = path.read_bytes().decode("utf-8") if path.exists() else None
+    if refreezing():
+        if actual != expected:
+            path.write_bytes(actual.encode("utf-8"))
+            report({"file": shown(path), "diff": [expected or "", actual]})
+        return
+    _assert_equal(actual, expected, label or str(path), assert_equal)
+
+
+def fixture_goldens(folder, stems, suffix, *, assert_equal=None):
+    """Return each stem's golden path, checking for missing and leftover fixture goldens."""
+    folder = Path(folder)
+    found = sorted(path.name[:-len(suffix)] for path in folder.iterdir() if path.name.endswith(suffix))
+    if refreezing():
+        for stem in sorted(set(found) - set(stems)):
+            (folder / (stem + suffix)).unlink()
+            report({"file": shown(folder / (stem + suffix)), "removed": True})
+    else:
+        _assert_equal(found, sorted(stems), "the inputs and the %s goldens of %s" % (suffix, folder.name), assert_equal)
+    return {stem: folder / (stem + suffix) for stem in stems}
+
+
+def fixture_pairs(folder, input_suffix, golden_suffix, *, assert_equal=None):
+    """Return each input name and its matching golden path for one fixture folder."""
+    names = sorted(path.name for path in Path(folder).iterdir() if path.name.endswith(input_suffix))
+    stems = {name[:-len(input_suffix)]: name for name in names}
+    goldens = fixture_goldens(folder, list(stems), golden_suffix, assert_equal=assert_equal)
+    return {stems[stem]: golden for stem, golden in goldens.items()}
+
+
+def assert_goldens(outputs, goldens, label, *, assert_equal=None):
+    """Compare outputs with their golden files, naming every fixture whose text differs."""
+    _assert_equal(sorted(outputs), sorted(goldens), label, assert_equal)
+    if refreezing():
+        for name in sorted(goldens):
+            assert_golden(outputs[name], goldens[name], assert_equal=assert_equal)
+        return
+    different = [name for name in sorted(goldens)
+                 if outputs[name] != goldens[name].read_bytes().decode("utf-8")]
+    _assert_equal(different[:10], [], "%d of %d %s differ from their goldens" % (len(different), len(goldens), label),
+                  assert_equal)
+
+
+def rewrite_manifest(outputs, relative, entries, inputs, keys):
+    """Write a manifest from outputs and report changed, added and removed entries."""
+    old = {entry.key: entry for entry in entries}
+    selected = set(old) | set(outputs) if keys is None else set(keys)
+    rewritten, changed, added, removed = [], [], [], []
+    for entry in entries:
+        if entry.key not in selected:
+            rewritten.append(entry)
+        elif entry.key not in outputs:
+            removed.append(entry.key)
+        else:
+            text = outputs[entry.key]
+            input_sha = sha256(inputs[entry.key]) if inputs is not None else entry.input_sha
+            new = Entry(sha256(text), len(text.encode("utf-8")), input_sha, entry.key)
+            rewritten.append(new)
+            if new != entry:
+                changed.append({"key": entry.key, "old": [entry.size, entry.output_sha[:12], entry.input_sha[:12]],
+                                "new": [new.size, new.output_sha[:12], new.input_sha[:12]]})
+    for key in sorted(selected - set(old)):
+        text = outputs[key]
+        input_sha = sha256(inputs[key]) if inputs is not None else sha256("")
+        rewritten.append(Entry(sha256(text), len(text.encode("utf-8")), input_sha, key))
+        added.append(key)
+    if changed or added or removed:
+        (FROZEN / relative).write_text(
+            "".join("%s %d %s %s\n" % (e.output_sha, e.size, e.input_sha, e.key) for e in rewritten), encoding="utf-8")
+        report({"file": "frozen/" + relative, "changed": changed, "added": added, "removed": removed})
+
+
+def assert_manifest(outputs, relative, inputs=None, keys=None, *, assert_equal=None, assert_greater=None):
+    """Compare output and input hashes with a manifest; refreeze mode rewrites it instead."""
+    problems = []
+    checked = 0
+    entries = read_manifest(relative)
+    if refreezing():
+        rewrite_manifest(outputs, relative, entries, inputs, keys)
+        return
+    if keys is None:
+        _assert_equal(sorted(outputs), sorted(entry.key for entry in entries), relative, assert_equal)
+    for entry in entries:
+        if keys is not None and entry.key not in keys:
+            continue
+        checked += 1
+        if inputs is not None and sha256(inputs[entry.key]) != entry.input_sha:
+            problems.append("%s: the input is not the one the original writer used" % entry.key)
+        text = outputs.get(entry.key)
+        if text is None:
+            problems.append("%s: no output" % entry.key)
+        elif sha256(text) != entry.output_sha:
+            problems.append("%s: the output differs from the frozen one (%d bytes, frozen %d), it starts with:\n%s" % (
+                entry.key, len(text.encode("utf-8")), entry.size, text[:300]))
+    if assert_greater is None:
+        assert checked > 0, relative
+    else:
+        assert_greater(checked, 0, relative)
+    _assert_equal(problems[:5], [], "%d of %d entries of %s differ" % (len(problems), checked, relative), assert_equal)
+
+
 class GoldenTestCase(TestCase):
     """A test case that compares text with goldens, and rewrites them in refreeze mode (tools/refreeze.py)."""
 
     def rewrite_manifest(self, outputs, relative, entries, inputs, keys):
-        """Refreeze mode of assert_manifest: write the manifest from the outputs and report the entries that changed."""
-        old = {entry.key: entry for entry in entries}
-        selected = set(old) | set(outputs) if keys is None else set(keys)
-        rewritten, changed, added, removed = [], [], [], []
-        for entry in entries:
-            if entry.key not in selected:
-                rewritten.append(entry)
-            elif entry.key not in outputs:
-                removed.append(entry.key)
-            else:
-                text = outputs[entry.key]
-                input_sha = sha256(inputs[entry.key]) if inputs is not None else entry.input_sha
-                new = Entry(sha256(text), len(text.encode("utf-8")), input_sha, entry.key)
-                rewritten.append(new)
-                if new != entry:
-                    changed.append({"key": entry.key, "old": [entry.size, entry.output_sha[:12], entry.input_sha[:12]],
-                                    "new": [new.size, new.output_sha[:12], new.input_sha[:12]]})
-        for key in sorted(selected - set(old)):
-            text = outputs[key]
-            input_sha = sha256(inputs[key]) if inputs is not None else sha256("")
-            rewritten.append(Entry(sha256(text), len(text.encode("utf-8")), input_sha, key))
-            added.append(key)
-        if changed or added or removed:
-            (FROZEN / relative).write_text(
-                "".join("%s %d %s %s\n" % (e.output_sha, e.size, e.input_sha, e.key) for e in rewritten), encoding="utf-8")
-            report({"file": "frozen/" + relative, "changed": changed, "added": added, "removed": removed})
+        return rewrite_manifest(outputs, relative, entries, inputs, keys)
 
     def assert_golden(self, actual, path, label=None):
-        """Compare text with the golden file at `path` (a Path); in refreeze mode, rewrite the golden."""
-        path = Path(path)
-        expected = path.read_bytes().decode("utf-8") if path.exists() else None
-        if refreezing():
-            if actual != expected:
-                path.write_bytes(actual.encode("utf-8"))
-                report({"file": shown(path), "diff": [expected or "", actual]})
-            return
-        self.assertEqual(actual, expected, label or str(path))
+        return assert_golden(actual, path, label, assert_equal=self.assertEqual)
 
     def fixture_goldens(self, folder, stems, suffix):
-        """The golden file of each stem in `stems`, as {stem: Path}: <folder>/<stem><suffix>.
-
-        Every input has a golden and no golden is left over; in refreeze mode a missing golden is made by the caller's
-        comparison and a leftover one is deleted.
-        """
-        folder = Path(folder)
-        found = sorted(path.name[:-len(suffix)] for path in folder.iterdir() if path.name.endswith(suffix))
-        if refreezing():
-            for stem in sorted(set(found) - set(stems)):
-                (folder / (stem + suffix)).unlink()
-                report({"file": shown(folder / (stem + suffix)), "removed": True})
-        else:
-            self.assertEqual(found, sorted(stems), "the inputs and the %s goldens of %s" % (suffix, folder.name))
-        return {stem: folder / (stem + suffix) for stem in stems}
+        return fixture_goldens(folder, stems, suffix, assert_equal=self.assertEqual)
 
     def fixture_pairs(self, folder, input_suffix, golden_suffix):
-        """The goldens of the input files of a folder, as {input file name: Path of its golden}."""
-        names = sorted(path.name for path in Path(folder).iterdir() if path.name.endswith(input_suffix))
-        stems = {name[:-len(input_suffix)]: name for name in names}
-        goldens = self.fixture_goldens(folder, list(stems), golden_suffix)
-        return {stems[stem]: golden for stem, golden in goldens.items()}
+        return fixture_pairs(folder, input_suffix, golden_suffix, assert_equal=self.assertEqual)
 
     def assert_goldens(self, outputs, goldens, label):
-        """Compare {name: text} with the golden file of each name ({name: Path}), naming every name that differs."""
-        self.assertEqual(sorted(outputs), sorted(goldens), label)
-        if refreezing():
-            for name in sorted(goldens):
-                self.assert_golden(outputs[name], goldens[name])
-            return
-        different = [name for name in sorted(goldens)
-                     if outputs[name] != goldens[name].read_bytes().decode("utf-8")]
-        self.assertEqual(different[:10], [], "%d of %d %s differ from their goldens" % (len(different), len(goldens), label))
+        return assert_goldens(outputs, goldens, label, assert_equal=self.assertEqual)
 
     def assert_manifest(self, outputs, relative, inputs=None, keys=None):
-        """Compare the outputs {key: text} with a manifest, key by key.
-
-        `inputs` ({key: text or bytes}), when given, are also checked against the input hashes of the manifest;
-        `keys` limits the check to those entries. Without `keys`, the outputs and the manifest must name the same inputs,
-        so a path that the test stops listing is not a silent loss of coverage.
-        """
-        problems = []
-        checked = 0
-        entries = read_manifest(relative)
-        if refreezing():
-            self.rewrite_manifest(outputs, relative, entries, inputs, keys)
-            return
-        if keys is None:
-            self.assertEqual(sorted(outputs), sorted(entry.key for entry in entries), relative)
-        for entry in entries:
-            if keys is not None and entry.key not in keys:
-                continue
-            checked += 1
-            if inputs is not None and sha256(inputs[entry.key]) != entry.input_sha:
-                problems.append("%s: the input is not the one the original writer used" % entry.key)
-            text = outputs.get(entry.key)
-            if text is None:
-                problems.append("%s: no output" % entry.key)
-            elif sha256(text) != entry.output_sha:
-                problems.append("%s: the output differs from the frozen one (%d bytes, frozen %d), it starts with:\n%s" % (
-                    entry.key, len(text.encode("utf-8")), entry.size, text[:300]))
-        self.assertGreater(checked, 0, relative)
-        self.assertEqual(problems[:5], [], "%d of %d entries of %s differ" % (len(problems), checked, relative))
+        return assert_manifest(
+            outputs,
+            relative,
+            inputs,
+            keys,
+            assert_equal=self.assertEqual,
+            assert_greater=self.assertGreater,
+        )
 
 
 class StageTestCase(GoldenTestCase):
@@ -202,6 +254,10 @@ class StageTestCase(GoldenTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls._compile_stage()
+
+    @classmethod
+    def _compile_stage(cls):
         directory = Path(tempfile.mkdtemp(prefix="agentica-frontend-"))
         cls.addClassCleanup(shutil.rmtree, directory, ignore_errors=True)
         cls.stage_dir = directory
@@ -209,6 +265,10 @@ class StageTestCase(GoldenTestCase):
         if cls.STDLIB:
             write_files(directory, load_corpus("stdlib"))
             cls.stdlib = directory / "stdlib"
+
+    def temp_dir(self, prefix="agentica-"):
+        """Create per-test scratch removed by the TestCase cleanup stack."""
+        return self.make_temp_dir(prefix)
 
     def corpus_dir(self, *names):
         """A fresh folder with the snapshot files of the corpora `names` at their paths; removed after the test."""
@@ -227,18 +287,53 @@ class StageTestCase(GoldenTestCase):
         """Run the stage over the paths (after the arguments `before`); gives the output of each by its path."""
         return sections(self.run_stage(*before, *paths, flags=flags, cwd=cwd, timeout=timeout))
 
-    def run_cases(self, cases, *before, flags=(), timeout=STAGE_TIMEOUT, folder="cases"):
-        """Write the programs {key: text} as <folder>/<key>.agc into a fresh folder and run the stage over them.
+    def run_cases(self, cases, *before, flags=(), timeout=STAGE_TIMEOUT, folder="cases", directory=None):
+        """Write programs under `folder` in fresh scratch, or the supplied `directory`, and run the stage.
 
         Gives {key: output}. `before` are the arguments the stage takes before the paths.
         """
-        directory = self.make_temp_dir()
+        directory = Path(directory) if directory is not None else self.make_temp_dir()
         write_files(directory, {"%s/%s.agc" % (folder, key): text for key, text in cases.items()})
         paths = {key: "%s/%s.agc" % (folder, key) for key in cases}
         if self.STDLIB:
             before = ("--stdlib=%s" % self.stdlib,) + before
         outputs = self.run_sections(sorted(paths.values()), *before, flags=flags, cwd=directory, timeout=timeout)
         return {key: outputs[path] for key, path in paths.items()}
+
+
+class PytestStageCase(StageTestCase):
+    """Stage helper for pytest functions; it is deliberately not a collected TestCase."""
+
+    __test__ = False
+
+    @classmethod
+    def setUpClass(cls):
+        cls._compile_stage()
+
+
+def pytest_stage_fixtures(stage_case, pytest, fixture_name="stage"):
+    """Build module- and test-scoped pytest fixtures around a shared stage helper class."""
+    class_fixture_name = fixture_name + "_class"
+
+    @pytest.fixture(scope="module", name=class_fixture_name)
+    def setup_stage():
+        try:
+            stage_case.setUpClass()
+            yield stage_case
+        finally:
+            stage_case.tearDownClass()
+
+    @pytest.fixture(name=fixture_name)
+    def stage_instance(request):
+        helper_class = request.getfixturevalue(class_fixture_name)
+        instance = helper_class()
+        try:
+            yield instance
+        finally:
+            instance.doCleanups()
+
+    return setup_stage, stage_instance
+
 
 def fixture_roots(folder):
     """{fixture name: path of its program relative to the repository} for a fixture folder of the repository: NAME.agc, or

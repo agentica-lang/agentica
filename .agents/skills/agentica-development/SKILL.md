@@ -42,8 +42,9 @@ change needs.
 ## Commands while you work
 
 ```sh
+poetry install --only test --no-root      # install pytest test dependencies
 make                          # build dist/agentica from bootstrap/stage0.agcb (git submodule update --init first)
-make test TESTS="tests/test_vm_bits.py"   # unittest modules, one process each; builds the binary first
+make test TESTS="tests/test_vm_bits.py"   # pytest modules, one process each; builds the binary first
 make tests KIND=files         # destructive filesystem group: Docker locally, Actions scratch in CI
 make tests KIND=fast DOCKER=1 # a group in tools/ubuntu-test.Dockerfile; KIND=slow too
 make tests KIND=files WINE=1  # Windows removal refusal under Wine (compatibility only)
@@ -54,17 +55,21 @@ make vm-test                  # C tests; one: make build/vm/release/<name>-test
 make fixed-point              # stage2 == stage3 (about 25 s)
 make stage0                   # refresh bootstrap/stage0.agcb (references/ci.md)
 make goldens                  # rewrite VM and front-end goldens after an intended change; review the diff
-python3 tools/refreeze.py     # rewrite frozen goldens in tests/fixtures/frontend/; --stage, --fast-only
+poetry run python tools/refreeze.py  # rewrite frozen goldens; --stage, --fast-only
 make vm-golden-check FIXTURES="a b"   # check only those fixtures; make goldens FIXTURES=... rewrites them
 make dup-check                # jscpd: a new copy fails CI; share a helper instead
 make site                     # before merging a site change
 ```
 
 Run what the change touches and the affected example with `dist/agentica`.
-Fast cases go in `tests/test_<area>.py` (unittest, `references/ci.md`); slow
-ones (frozen corpus, generated inputs, stress) are marked `@slow`. Locally run
-only the fast tier; CI runs `make test-slow`. Destructive filesystem cases never
-run on the host.
+Make runs one pytest process per module; keep xdist disabled by default because
+Make already parallelizes modules. Native pytest tests inherit scaled per-test
+timeouts from `tests/conftest.py`; legacy `TestCase` classes keep their own
+limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
+`unittest.TestCase` modules remain supported, `references/ci.md`); slow cases
+(frozen corpus, generated inputs, stress) use `@slow` for unittest or
+`pytest.mark.slow` for pytest. Locally run only the fast tier; CI runs
+`make test-slow`. Destructive filesystem cases never run on the host.
 
 ## Stage contract
 
@@ -98,10 +103,10 @@ run on the host.
   body in `stdlib/prelude/` (`references/stages.md`, "Compiler prelude").
 - `std/` module: `stdlib/<name>.agc`, listed in `stdlib/MODULES`, with a doc on
   the module and each export (`references/library-notes.md`).
-- Test: `tests/test_<area>.py` (unittest only). A language rule is
-  `tests/test_spec_<area>.py` through `--json check FILE`: assert code and span,
-  never message text. VM behavior: a fixture in `tests/fixtures/vm/` plus
-  `.expected`.
+- Test: `tests/test_<area>.py` (pytest; legacy unittest modules remain
+  supported). A language rule is `tests/test_spec_<area>.py` through
+  `--json check FILE`: assert code and span, never message text. VM behavior: a
+  fixture in `tests/fixtures/vm/` plus `.expected`.
 - Language rule: `docs/grammar/`, the site page, and
   `.agents/skills/agentica-programming/`.
 - Style or idiom of `.agc` code: `.agents/skills/agentica-code-guidelines/`.

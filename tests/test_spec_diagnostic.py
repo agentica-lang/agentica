@@ -5,9 +5,9 @@ is written to a file and checked from its folder, so the header names the file a
 label and the help text are not asserted (AGENTS.md): the test checks that they are there, and where the marks stand.
 """
 import re
-import unittest
+import pytest
 
-from tests.agentica_test import TestCase, cli, run
+from tests.agentica_test import cli, run
 
 # Label texts are words on a line of their own after the marks; they are replaced by a placeholder at the same column.
 LABEL_TEXT = re.compile(r"^(  \|\s+)[A-Za-z].*$")
@@ -41,30 +41,27 @@ CASES = {
 }
 
 
-class SpecDiagnosticTest(TestCase):
-    def render(self, text):
-        path = self.make_temp_dir() / "t.agc"
-        path.write_bytes(text.encode("utf-8"))
-        result = run(cli() + ["check", "t.agc"], cwd=path.parent)
-        self.assertEqual(result.code, 1, result.stderr)
-        return result.stderr
-
-    def test_the_text_form_of_a_diagnostic(self):
-        for title, (text, code, start, shown, has_help) in CASES.items():
-            with self.subTest(title):
-                lines = self.render(text).rstrip("\n").split("\n")
-                self.assertNotIn("\r", "".join(lines))
-                self.assertEqual(lines[0], "t.agc:%d:%d error[%s]" % (start + (code,)))
-                # The message line, then a blank line, then the source and the marks.
-                self.assertTrue(lines[1], lines)
-                self.assertEqual(lines[2], "")
-                tail = lines[3:]
-                helped = bool(tail) and tail[-1].startswith("  = help: ")
-                self.assertEqual(helped, has_help)
-                if helped:
-                    tail = tail[:-1]
-                self.assertEqual([LABEL_TEXT.sub(lambda m: m.group(1) + "<label>", line) for line in tail], shown)
+def render(text, tmp_path):
+    path = tmp_path / "t.agc"
+    path.write_text(text, encoding="utf-8")
+    result = run(cli() + ["check", "t.agc"], cwd=tmp_path)
+    assert result.code == 1, result.stderr
+    return result.stderr
 
 
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.parametrize(("title", "case"), CASES.items(), ids=CASES)
+def test_the_text_form_of_a_diagnostic(title, case, tmp_path):
+    text, code, start, shown, has_help = case
+    lines = render(text, tmp_path).rstrip("\n").split("\n")
+    assert "\r" not in "".join(lines), title
+    assert lines[0] == "t.agc:%d:%d error[%s]" % (start + (code,)), title
+    # The message line, then a blank line, then the source and the marks.
+    assert lines[1], lines
+    assert lines[2] == ""
+    tail = lines[3:]
+    helped = bool(tail) and tail[-1].startswith("  = help: ")
+    assert helped == has_help, title
+    if helped:
+        tail = tail[:-1]
+    normalized = [LABEL_TEXT.sub(lambda match: match.group(1) + "<label>", line) for line in tail]
+    assert normalized == shown, title

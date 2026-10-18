@@ -14,69 +14,54 @@ A key that a case does not have is not asserted. A group is one test method, nam
 """
 import json
 import re
-import unittest
+import pytest
 
-from tests.agentica_test import FIXTURES, TestCase, cli, run
-from tests.test_spec_checker import covered
+from tests.agentica_test import FIXTURES
+from tests.spec_support import check_diagnostic as diagnostic, covered
 
 GROUPS = json.loads((FIXTURES / "spec" / "checker-rest.json").read_text(encoding="utf-8"))
 
 FIELDS = ("expected", "actual", "function", "callee")
 
 
-class SpecCheckerRestTest(TestCase):
-    def setUp(self):
-        self.work = self.make_temp_dir()
-
-    def diagnostic(self, text):
-        """The JSON diagnostic that `check` gives the program, or None when the program checks clean."""
-        path = self.work / "program.agc"
-        path.write_text(text, encoding="utf-8")
-        result = run(cli() + ["--json", "check", str(path)])
-        if result.code == 0:
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr)
-
-    def assert_case(self, case):
-        text = "\n".join(case["program"])
-        found = self.diagnostic(text)
-        self.assertEqual(found and found["code"], case["code"], text)
-        if found is None:
-            return
-        start = found["range"]["start"]
-        if "start" in case:
-            self.assertEqual([start["line"], start["column"]], case["start"], text)
-        if "covers" in case:
-            self.assertEqual(covered(text, found["range"]), case["covers"], text)
-        if "help" in case:
-            self.assertEqual(bool(found.get("help")), case["help"], text)
-        for field in FIELDS:
-            if field in case:
-                self.assertEqual(found.get(field), case[field], text)
-        if "labels" in case:
-            self.assertEqual(len(found.get("labels", [])), case["labels"], text)
-
-
-def group_test(cases):
-    def test(self):
-        for number, case in enumerate(cases):
-            with self.subTest(case=number):
-                self.assert_case(case)
-    return test
+def assert_case(case, tmp_path):
+    text = "\n".join(case["program"])
+    found = diagnostic(text, tmp_path)
+    assert (found and found["code"]) == case["code"], text
+    if found is None:
+        return
+    start = found["range"]["start"]
+    if "start" in case:
+        assert [start["line"], start["column"]] == case["start"], text
+    if "covers" in case:
+        assert covered(text, found["range"]) == case["covers"], text
+    if "help" in case:
+        assert bool(found.get("help")) == case["help"], text
+    for field in FIELDS:
+        if field in case:
+            assert found.get(field) == case[field], text
+    if "labels" in case:
+        assert len(found.get("labels", [])) == case["labels"], text
 
 
 def method_name(title):
     return "test_group_" + re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")[:90]
 
 
+def group_test(title, cases):
+    def test(case, tmp_path):
+        assert_case(case, tmp_path)
+
+    test.__name__ = method_name(title)
+    test.__doc__ = title
+    return pytest.mark.parametrize(
+        "case",
+        cases,
+        ids=[f"{title} [{index}]" for index in range(len(cases))],
+    )(test)
+
+
 for title, group_cases in GROUPS.items():
     name = method_name(title)
-    assert not hasattr(SpecCheckerRestTest, name), name
-    method = group_test(group_cases)
-    method.__doc__ = title
-    setattr(SpecCheckerRestTest, name, method)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    assert name not in globals(), name
+    globals()[name] = group_test(title, group_cases)

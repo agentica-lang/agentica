@@ -134,15 +134,15 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     text_test.c          # text forms
     tls_test.c           # TLS adapter
     trace_test.c         # trace points
-tests/            # unittest modules (test_<area>.py); the lists of references/vm-tests.md say which covers what
-  test_spec_<area>.py  # unittest: the language rules through the CLI (code and span from the --json output, never message text): the lexer (test_spec_lexer.py), the parser (test_spec_parser.py), the module linker (test_spec_modules.py), the checker (test_spec_checker.py: spans, pipes, nesting; test_spec_checker_rest.py: the other rules, cases in fixtures/spec/checker-rest.json), the bytecode writer through program runs (test_spec_bytecode.py), the text form of a diagnostic (test_spec_diagnostic.py)
-  test_cli_forms.py  # unittest: the options, the three diagnostic forms, runs, compile and help of dist/agentica against fixtures/cli/forms.json (`python3 -m tests.test_cli_forms freeze` rewrites it; references/ci.md)
-  test_modules.py  # unittest: programs of several files, pkg roots, the JSON example and step handlers through the CLI (references/language-notes.md)
-  test_examples.py  # unittest: examples/*.agc, rejected fragments, CLI exit codes; slow: every malformed input of the algorithm examples (references/stages.md)
-  test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # unittest: the Agentica stages against tests/fixtures/frontend/frozen/ and the goldens of tests/fixtures/frontend/<stage>/ (references/frontend.md); frontend_support.py and frontend_cases.py are their helpers; test_frontend_refreeze.py tests tools/refreeze.py (the rackunit files and the Racket writers of the frozen files were removed in step 8d-3)
+tests/            # pytest modules (test_<area>.py; existing unittest.TestCase modules remain supported); the lists of references/vm-tests.md say which covers what
+  test_spec_<area>.py  # pytest language rules through the CLI (code and span from --json, never message text); shared helpers live in spec_support.py. Covers lexer, parser, module linker, checker, bytecode writer and diagnostic text.
+  test_cli_forms.py  # pytest: CLI goldens; `make goldens` rewrites fixtures/cli/forms.json (references/ci.md)
+  test_modules.py  # pytest: programs of several files, pkg roots, JSON and step handlers through the CLI (references/language-notes.md)
+  test_examples.py  # pytest: examples/*.agc, rejected fragments, CLI exit codes; slow: malformed algorithm inputs (references/stages.md)
+  test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # pytest: Agentica stages against frozen outputs and goldens; frontend_support.py and frontend_cases.py hold helpers; test_frontend_refreeze.py covers tools/refreeze.py (references/frontend.md)
   test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
   test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
-  test_filesystem.py  # unittest: File and Path programs on the VM (references/vm-io.md)
+  test_filesystem.py  # pytest: File and Path programs on the VM (references/vm-io.md)
   vm_diff_support.py  # the golden harness: fixtures, sidecars, sweeps, `make goldens` (references/vm-build.md)
   test_vm_diff_{1..8}.py  # unittest: shards of the golden tests; shard 8 is the VM command line, the product CLI and the process, signal and path cases (references/vm-build.md)
   test_vm_latency.py  # unittest: the latency check, run alone by make vm-latency (references/vm-tasks.md)
@@ -157,11 +157,11 @@ tests/            # unittest modules (test_<area>.py); the lists of references/v
   test_vm_channel.py  # unittest: a socket handed to a worker over a Channel (references/vm-tests.md)
   test_vm_stdout.py  # unittest: stdout and stderr on the loop (references/vm-tests.md)
   test_vm_stack.py  # unittest: stack-trace stderr in the three formats (references/vm-tests.md)
-  test_vm_file_lines.py  # unittest: File.each_line on the VM (references/vm-tests.md)
+  test_vm_file_lines.py  # pytest: File.each_line on the VM (references/vm-tests.md)
   test_vm_os.py   # unittest: the OS builtins of the BDD driver port, with real contention between VMs (references/vm-tests.md)
   test_single_binary.py  # unittest: dist/agentica: the exit status and problems of a source file, `agentica run`, the guarded FrontEnd builtins, the options of the hand-off, --front-end with fixtures/single-binary/front.agc (references/vm-tests.md); the fixed point is a CI step, not a test
   test_stdlib_modules.py  # unittest: stdlib/MODULES names each stdlib/ source once (no binary needed)
-  test_stdlib_prelude.py  # unittest: the prelude table and the files of stdlib/prelude/ agree, no O(n) builtin in a loop there, and a Python peer for the methods
+  test_stdlib_prelude.py  # pytest: the prelude table, stdlib/prelude/ files and Python peer agree; no O(n) builtin in a loop
   test_vm_test_protocol.py  # unittest: a Python peer plays a test runner over the child channel (references/vm-tests.md)
   test_vm_child_channel.py  # unittest: the child channel on its own, against Python peers (references/vm-tests.md)
   test_vm_tls.py  # unittest: the VM TLS builtins against independent peers (references/vm-tests.md)
@@ -169,11 +169,12 @@ tests/            # unittest modules (test_<area>.py); the lists of references/v
   test_vm_bits.py  # unittest: spans of the Int and Float bit builtin errors (references/library-notes.md)
   agentica_test.py  # unittest helpers: paths, VM and CLI, run with timeout, temp dirs, @slow (references/ci.md)
   test_std_binary.py  # unittest: std/binary on the VM (references/library-notes.md)
-  test_site_examples.py  # unittest: agentica blocks in site/content run or check through the CLI; fast: four pages, slow: all (references/site.md)
+  test_site_examples.py  # pytest: agentica blocks in site/content run or check through the CLI; fast: four pages, slow: all (references/site.md)
   test_stdlib_distribution.py  # unittest: a copy of the binary alone still finds std/ and runs `agentica test` (references/ci.md)
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
-  test_bdd.py  # unittest: agentica test over the CLI: step programs, isolation (references/bdd.md)
-  test_bdd_integration.py  # unittest: programs under test, limits, seed, cleanup; slow: 1 MiB outputs, big JSON line, killed driver (references/bdd.md)
+  test_bdd.py  # pytest: agentica test over the CLI: step programs, isolation (references/bdd.md)
+  test_bdd_cleanup.py  # pytest: destructive cleanup in the Docker/Actions scratch (references/bdd.md)
+  test_bdd_integration.py  # pytest: programs under test, limits, seed, cleanup; slow: large outputs and killed driver (references/bdd.md)
   test_unit_test.py  # unittest: agentica test on *_test.agc files; slow: the test timeout, stderr flood, endless print, flooding listing (references/bdd.md)
   std/            # *_test.agc unit tests of the std/ modules
   fixtures/       # golden fixtures and independent Node.js and Python peers; toml/ (std/toml inputs, driver.agc, misc.agc), toml-test/ (vendored, MIT)

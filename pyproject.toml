@@ -1,0 +1,24 @@
+[project]
+name = "agentica"
+version = "0.4.1"
+description = ""
+authors = [
+    {name = "Johanderson Mogollon",email = "johander1822@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^9.1.1"
+pytest-xdist = "^3.8.0"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+markers = ["slow: slow tests, run by make test-slow and CI"]

@@ -225,10 +225,10 @@ branch's on the same binary:
 
 ## Refreeze: `tools/refreeze.py`
 
-`python3 tools/refreeze.py` (standard library only) reruns
-`tests.test_frontend_<stage>`
-with `AGENTICA_REFREEZE=1`: a golden mismatch rewrites the golden and logs the
-change. Flags: `--fast-only` (skip the slow tier), `--stage lower` or
+`poetry run python tools/refreeze.py` reruns pytest modules
+`tests.test_frontend_<stage>` with `AGENTICA_REFREEZE=1`: a golden mismatch
+rewrites the golden and logs the change. Run it in the Poetry test environment,
+which provides pytest. Flags: `--fast-only` (skip the slow tier), `--stage lower` or
 `--stage lexer,parser`, `--jobs N`. It prints what changed: manifest entries
 (key, sizes, hash prefixes) or a unified diff for a text golden. Other
 assertions still fail. It freezes whatever the stage prints, so read `git diff`

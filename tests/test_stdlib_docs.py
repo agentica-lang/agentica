@@ -8,7 +8,9 @@ examples and goldens check.
 """
 import re
 
-from tests.agentica_test import ROOT, TestCase
+import pytest
+
+from tests.agentica_test import ROOT
 
 STDLIB = ROOT / "stdlib"
 EXPORT = re.compile(r"^export\s")
@@ -45,15 +47,18 @@ def export_docs(lines):
     return found
 
 
-class StdlibDocs(TestCase):
-    def test_the_standard_library_has_files_to_check(self):
-        self.assertGreaterEqual(len(sorted(STDLIB.rglob("*.agc"))), 9)
+def test_the_standard_library_has_files_to_check():
+    assert len(sorted(STDLIB.rglob("*.agc"))) >= 9
 
-    def test_every_module_has_a_module_doc_and_a_doc_on_every_export(self):
-        for file in sorted(STDLIB.rglob("*.agc")):
-            name = str(file.relative_to(STDLIB))
-            with self.subTest(name):
-                lines = file.read_text(encoding="utf-8").split("\n")
-                self.assertTrue(module_doc(lines), "%s: module doc" % name)
-                for number, documented in export_docs(lines):
-                    self.assertTrue(documented, "%s: line %d" % (name, number))
+
+@pytest.mark.parametrize(
+    "file",
+    sorted(STDLIB.rglob("*.agc")),
+    ids=lambda file: str(file.relative_to(STDLIB)),
+)
+def test_every_module_has_a_module_doc_and_a_doc_on_every_export(file):
+    name = str(file.relative_to(STDLIB))
+    lines = file.read_text(encoding="utf-8").split("\n")
+    assert module_doc(lines), f"{name}: module doc"
+    for number, documented in export_docs(lines):
+        assert documented, f"{name}: line {number}"
