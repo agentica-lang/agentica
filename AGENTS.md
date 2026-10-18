@@ -120,10 +120,10 @@ phase 13).
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
 - Python tests run with pytest; existing `unittest.TestCase` modules remain
-  supported during migration. Pytest and pytest-xdist are test-only Poetry
-  dependencies. Node and Python test peers (curl included) use the standard
-  library only. The VM's C dependencies are the submodules in `vm/third_party`;
-  the only other dev-tool dependency is the pinned jscpd in `tools/jscpd`.
+  supported during migration. Pytest is a test-only Poetry dependency. Node
+  and Python test peers (curl included) use the standard library only. The
+  VM's C dependencies are the submodules in `vm/third_party`; the only other
+  dev-tool dependency is the pinned jscpd in `tools/jscpd`.
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external

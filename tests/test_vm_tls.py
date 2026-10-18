@@ -8,8 +8,10 @@ and a client. The certificates are the ones in fixtures/tls. Everything is on
 import json
 import re
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, check_lines, run, run_vm, scaled, start_vm, tool,
-                                 vm_environment)
+import pytest
+
+from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_text, output_lines,
+                                 run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
@@ -269,121 +271,136 @@ def client_program(ports):
         'end'])
 
 
-class VmTls(TestCase):
-    def setUp(self):
-        self.node = tool("node")
 
-    def run_text(self, name, text, env=None, stdin=None):
-        return run_vm(self.compile_text(text, name), env=vm_environment(env), args=[CERTS], stdin=stdin)
 
-    def trace_env(self):
-        trace = self.make_temp_dir() / "vm.trace"
-        return trace, {"AGENTICA_VM_TRACE": "io,tls", "AGENTICA_VM_TRACE_FILE": str(trace)}
 
-    def python_server(self, mode):
-        """A Python TLS peer in `mode` (server or http); returns it and the port it prints."""
-        server = self.adopt(Child([PYTHON, PYTHON_PEER, mode]))
-        return server, server.next_line()
 
-    def test_client_against_node_tls_servers_data_eof_resets_limits_timeouts_and_verify_errors(self):
-        peer = self.adopt(Child([self.node, NODE_PEER, "servers"]))
-        ports = json.loads(peer.next_line())
-        result = self.run_text("client", client_program(ports))
-        self.assertEqual(result.code, 0, result.stderr)
-        check_lines(self, result.stdout, [
-            "ñ",
-            "ñ😀",
-            'ok("tail")',
-            'error("network: end of input")',
-            "ok([])",
-            'ok("abc")',
-            'ok("partial")',
-            'error("network: end of input")',
-            ("prefix", 'error("error reading from stream port\\n  system error: '),
-            "100000",
-            "100000 true",
-            'error("network: line exceeds 1048576 bytes")',
-            'error("network: socket is closed")',
-            'error("network: operation timed out")',
-            'error("network: socket is closed")',
-            "ssl-connect: connect failed (certificate verify failed: hostname mismatch)",
-            "ssl-connect: connect failed (certificate verify failed: certificate has expired)",
-            "ssl-connect: connect failed (certificate verify failed: self-signed certificate)",
-            ("prefix", "ssl-connect: connect failed ("),
-            ("prefix", "ssl-connect: connect failed ("),
-            "network: operation timed out",
-            "ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)"],
-            result.stderr)
 
-    def test_ssl_cert_file_is_the_trust_store_when_ca_file_is_empty(self):
-        trusted = self.run_text("trust", TRUST_PROGRAM, {"SSL_CERT_FILE": CERTS / "ca.pem"})
-        self.assertEqual((trusted.code, trusted.stdout), (0, "true\n"), trusted.stderr)
-        untrusted = self.run_text("trust", TRUST_PROGRAM, {"SSL_CERT_FILE": CERTS / "self-signed.pem"})
-        self.assertEqual((untrusted.code, untrusted.stdout), (0, "false\n"), untrusted.stderr)
 
-    def test_server_serves_node_clients_tls_13_and_12_and_python_and_fails_an_untrusting_clients_accept(self):
-        vm = self.adopt(start_vm(self.compile_text(SERVER_PROGRAM, "server"), CERTS))
-        port = vm.next_line()
-        nodes = run([self.node, NODE_PEER, "clients", port], timeout=scaled(30))
-        self.assertEqual(nodes.code, 0, nodes.stderr)
-        self.assertEqual(nodes.stdout, "clients ok\nuntrusting UNABLE_TO_VERIFY_LEAF_SIGNATURE\n")
-        self.assertEqual(vm.next_line(), "served")
-        self.assertTrue(vm.next_line().startswith("port->ssl-ports: accept failed ("))
-        python = run([PYTHON, PYTHON_PEER, "client", port], timeout=scaled(30))
-        self.assertEqual(python.code, 0, python.stderr)
-        self.assertEqual(python.stdout, "hello python TLSv1.3\n")
-        self.assertEqual(vm.next_line(), "done")
-        self.assertEqual(vm.wait(), 0, vm.stderr_text())
 
-    def test_client_against_a_python_tls_12_server_closed_with_close_notify(self):
-        server, port = self.python_server("server")
-        result = self.run_text("python-client", PYTHON_CLIENT_PROGRAM, stdin=port + "\n")
-        self.assertEqual((result.code, result.stdout),
-                         (0, 'python TLSv1.2 FROM AGENTICA\nerror("network: end of input")\n'), result.stderr)
-        self.assertEqual(server.wait(), 0)
 
-    def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(self):
-        server, port = self.python_server("http")
-        result = self.run_text("https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
-        self.assertEqual((result.code, result.stdout), (0, "ok\nok\n"), result.stderr)
-        self.assertEqual([server.next_line(), server.next_line()], ["close_notify /hang", "close_notify /ping"])
-        self.assertEqual(server.wait(), 0)
+def run_text(tmp_path, name, text, env=None, stdin=None):
+    return run_vm(compile_text(text, name, tmp_path), env=vm_environment(env), args=[CERTS], stdin=stdin)
 
-    def test_handshake_and_load_errors_on_both_sides_of_a_vm_client_and_server(self):
-        result = self.run_text("handshakes", HANDSHAKE_PROGRAM)
-        self.assertEqual(result.code, 0, result.stderr)
-        check_lines(self, result.stdout, [
-            "server: ok",
-            "  server: ok",
-            "wrong-host: ssl-connect: connect failed (certificate verify failed: hostname mismatch)",
-            ("prefix", "  server: port->ssl-ports: accept failed ("),
-            "server: ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)",
-            ("prefix", "  server: port->ssl-ports: accept failed ("),
-            "false",
-            "false",
-            'ssl-load-verify-source!: load failed from: "<tls>/missing.pem"',
-            ("prefix", "  system error: "),
-            ("prefix", "plain server: ssl-connect: connect failed ("),
-            ("prefix", "plain client: port->ssl-ports: accept failed (")],
-            result.stderr)
 
-    def test_timeouts_close_a_tls_socket_a_pending_handshake_times_out_a_closed_listener_stays_closed(self):
-        result = self.run_text("limits", LIMITS_PROGRAM)
-        self.assertEqual((result.code, result.stdout), (0, 'error("network: operation timed out")\n'
-                                                           'error("network: socket is closed")\n'
-                                                           'error("network: operation timed out")\n'
-                                                           'error("network: listener is closed")\n'),
-                         result.stderr)
+def trace_env(tmp_path):
+    trace = tmp_path / "vm.trace"
+    return trace, {"AGENTICA_VM_TRACE": "io,tls", "AGENTICA_VM_TRACE_FILE": str(trace)}
 
-    def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(self):
-        trace, env = self.trace_env()
-        result = self.run_text("exit", EXIT_PROGRAM, env)
-        self.assertEqual((result.code, result.stdout), (0, "<Socket>\n<Socket>\n<Socket>\ndone\n"), result.stderr)
-        text = trace.read_text()
 
-        def count(pattern):
-            return len(re.findall(pattern, text, re.M))
+def python_server(adopt, mode):
+    """A Python TLS peer in `mode` (server or http); returns it and the port it prints."""
+    server = adopt(Child([PYTHON, PYTHON_PEER, mode]))
+    return server, server.next_line()
 
-        self.assertEqual(count(r" io end code=0 signal=0$"), 1, text)
-        self.assertEqual(count(r" tls tls_handshake_done "), 4)
-        self.assertEqual(count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$"), 3)
+
+def test_client_against_node_tls_servers_data_eof_resets_limits_timeouts_and_verify_errors(tmp_path, adopt, node):
+    peer = adopt(Child([node, NODE_PEER, "servers"]))
+    ports = json.loads(peer.next_line())
+    result = run_text(tmp_path, "client", client_program(ports))
+    assert result.code == 0, result.stderr
+    check_lines(result.stdout, [
+        "ñ",
+        "ñ😀",
+        'ok("tail")',
+        'error("network: end of input")',
+        "ok([])",
+        'ok("abc")',
+        'ok("partial")',
+        'error("network: end of input")',
+        ("prefix", 'error("error reading from stream port\\n  system error: '),
+        "100000",
+        "100000 true",
+        'error("network: line exceeds 1048576 bytes")',
+        'error("network: socket is closed")',
+        'error("network: operation timed out")',
+        'error("network: socket is closed")',
+        "ssl-connect: connect failed (certificate verify failed: hostname mismatch)",
+        "ssl-connect: connect failed (certificate verify failed: certificate has expired)",
+        "ssl-connect: connect failed (certificate verify failed: self-signed certificate)",
+        ("prefix", "ssl-connect: connect failed ("),
+        ("prefix", "ssl-connect: connect failed ("),
+        "network: operation timed out",
+        "ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)"],
+        result.stderr)
+
+
+def test_ssl_cert_file_is_the_trust_store_when_ca_file_is_empty(tmp_path):
+    trusted = run_text(tmp_path, "trust", TRUST_PROGRAM, {"SSL_CERT_FILE": CERTS / "ca.pem"})
+    assert (trusted.code, trusted.stdout) == (0, "true\n"), trusted.stderr
+    untrusted = run_text(tmp_path, "trust", TRUST_PROGRAM, {"SSL_CERT_FILE": CERTS / "self-signed.pem"})
+    assert (untrusted.code, untrusted.stdout) == (0, "false\n"), untrusted.stderr
+
+
+def test_server_serves_node_clients_tls_13_and_12_and_python_and_fails_an_untrusting_clients_accept(
+    tmp_path, adopt, node
+):
+    vm = adopt(start_vm(compile_text(SERVER_PROGRAM, "server", tmp_path), CERTS))
+    port = vm.next_line()
+    nodes = run([node, NODE_PEER, "clients", port], timeout=scaled(30))
+    assert nodes.code == 0, nodes.stderr
+    assert nodes.stdout == "clients ok\nuntrusting UNABLE_TO_VERIFY_LEAF_SIGNATURE\n"
+    assert vm.next_line() == "served"
+    assert vm.next_line().startswith("port->ssl-ports: accept failed (")
+    python = run([PYTHON, PYTHON_PEER, "client", port], timeout=scaled(30))
+    assert python.code == 0, python.stderr
+    assert python.stdout == "hello python TLSv1.3\n"
+    assert vm.next_line() == "done"
+    assert vm.wait() == 0, vm.stderr_text()
+
+
+def test_client_against_a_python_tls_12_server_closed_with_close_notify(tmp_path, adopt):
+    server, port = python_server(adopt, "server")
+    result = run_text(tmp_path, "python-client", PYTHON_CLIENT_PROGRAM, stdin=port + "\n")
+    assert (result.code, result.stdout) == (0, 'python TLSv1.2 FROM AGENTICA\nerror("network: end of input")\n'), \
+        result.stderr
+    assert server.wait() == 0
+
+
+def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
+    server, port = python_server(adopt, "http")
+    result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
+    assert (result.code, result.stdout) == (0, "ok\nok\n"), result.stderr
+    assert [server.next_line(), server.next_line()] == ["close_notify /hang", "close_notify /ping"]
+    assert server.wait() == 0
+
+
+def test_handshake_and_load_errors_on_both_sides_of_a_vm_client_and_server(tmp_path):
+    result = run_text(tmp_path, "handshakes", HANDSHAKE_PROGRAM)
+    assert result.code == 0, result.stderr
+    check_lines(result.stdout, [
+        "server: ok",
+        "  server: ok",
+        "wrong-host: ssl-connect: connect failed (certificate verify failed: hostname mismatch)",
+        ("prefix", "  server: port->ssl-ports: accept failed ("),
+        "server: ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)",
+        ("prefix", "  server: port->ssl-ports: accept failed ("),
+        "false",
+        "false",
+        'ssl-load-verify-source!: load failed from: "<tls>/missing.pem"',
+        ("prefix", "  system error: "),
+        ("prefix", "plain server: ssl-connect: connect failed ("),
+        ("prefix", "plain client: port->ssl-ports: accept failed (")],
+        result.stderr)
+
+
+def test_timeouts_close_a_tls_socket_a_pending_handshake_times_out_a_closed_listener_stays_closed(tmp_path):
+    result = run_text(tmp_path, "limits", LIMITS_PROGRAM)
+    assert (result.code, result.stdout) == (0, 'error("network: operation timed out")\n'
+                                              'error("network: socket is closed")\n'
+                                              'error("network: operation timed out")\n'
+                                              'error("network: listener is closed")\n'), result.stderr
+
+
+def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tmp_path):
+    trace, env = trace_env(tmp_path)
+    result = run_text(tmp_path, "exit", EXIT_PROGRAM, env)
+    assert (result.code, result.stdout) == (0, "<Socket>\n<Socket>\n<Socket>\ndone\n"), result.stderr
+    text = trace.read_text()
+
+    def count(pattern):
+        return len(re.findall(pattern, text, re.M))
+
+    assert count(r" io end code=0 signal=0$") == 1, text
+    assert count(r" tls tls_handshake_done ") == 4
+    assert count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$") == 3

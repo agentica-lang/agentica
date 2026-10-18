@@ -13,8 +13,10 @@ import re
 import struct
 import subprocess
 
-from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, TLS_BUILT, TestCase, binary, compile_agc, require,
-                                 run, run_vm, scaled, vm_environment)
+import pytest
+
+from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, TLS_BUILT, binary, compile_agc, require,
+                                 run, run_vm, scaled, vm_environment, write_files)
 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
@@ -68,297 +70,325 @@ def with_version(data, text):
     return data[:8] + struct.pack("<I", len(text)) + text.encode() + data[12 + length:]
 
 
-class SingleBinary(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.binary = binary()
+def agentica(*words, **options):
+    options.setdefault("env", vm_environment())
+    return run([binary(), *words], **options)
 
-    def agentica(self, *words, **options):
-        options.setdefault("env", vm_environment())
-        return run([self.binary, *words], **options)
 
-    def front_end(self, work):
-        """The test front end, compiled once for the case, with the header version of the current build."""
-        return compile_agc(FRONT, work / "front.agcb")
+def front_end(work):
+    """The test front end, compiled once for the case, with the header version of the current build."""
+    return compile_agc(FRONT, work / "front.agcb")
 
-    def test_runs_a_program_with_arguments_and_standard_input(self):
-        directory = self.make_suite({"main.agc": STDIN_AND_ARGS})
-        result = self.agentica("main.agc", "one", "two words", cwd=directory, stdin="typed\n")
-        self.assertEqual((result.code, result.stdout, result.stderr),
-                         (3, 'args ["one", "two words"]\nline ok("typed")\n', ""))
 
-    def test_the_exit_status_and_the_problems_of_a_source_file(self):
-        """The shapes of a result: the status of the program, a diagnostic with status 1, a file that is not UTF-8.
+def make_suite(directory, files):
+    write_files(directory, files)
+    return directory
 
-        tests/test_cli_forms.py compares every command, option and diagnostic form with a golden."""
-        directory = self.make_suite({"exit.agc": EXIT_THREE, "type.agc": TYPE_ERROR})
-        (directory / "bad.agc").write_bytes(b"\xff\xfe")
-        bad_utf8_file(directory / "big_bad.agc")
-        self.assertEqual(self.agentica("exit.agc", cwd=directory)[:3], (3, "before\n", ""))
-        typed = self.agentica("type.agc", cwd=directory)
-        self.assertEqual((typed.code, typed.stdout), (1, ""))
-        self.assertIn("CHECK-TYPE-MISMATCH", typed.stderr)
-        self.assertEqual(self.agentica("missing.agc", cwd=directory).code, 2)
-        # The line of a file that is not UTF-8 is shown with U+FFFD, as the front end shows it.
-        self.assertIn("1 | \ufffd\ufffd\n", self.agentica("bad.agc", cwd=directory).stderr)
-        self.assertIn("50001 | \ufffd\ufffd\n", self.agentica("big_bad.agc", cwd=directory).stderr)
 
-    def test_the_output_and_the_errors_of_a_program_keep_their_order_in_one_stream(self):
-        """With 2>&1 the program writes both streams to one pipe; the binary leaves them as the program wrote them."""
-        directory = self.make_suite({"mixed.agc": INTERLEAVED})
-        merged = ["sh", "-c", 'exec "$@" 2>&1', "sh"]
-        got = run(merged + [str(self.binary), "mixed.agc"], cwd=directory, env=vm_environment())
-        self.assertEqual((got.code, got.stdout), (0, "".join("out %d\nerr %d\n" % (i, i) for i in range(6))))
+def test_runs_a_program_with_arguments_and_standard_input(tmp_path):
+    directory = make_suite(tmp_path, {"main.agc": STDIN_AND_ARGS})
+    result = agentica("main.agc", "one", "two words", cwd=directory, stdin="typed\n")
+    assert (result.code, result.stdout, result.stderr) == (3, 'args ["one", "two words"]\nline ok("typed")\n', "")
 
-    def test_a_front_end_that_stops_with_an_error_ends_with_status_2_not_the_status_of_a_failed_run(self):
-        """The driver of `agentica test` is part of the front end: when it crashes, the status is 2, as for a usage
-        error, and it is never the 1 of a test run that failed."""
-        front = self.front_end(self.make_temp_dir())
-        got = self.agentica("--front-end", front, "crash")
-        self.assertEqual((got.code, got.stdout), (2, ""))
-        self.assertIn("RUNTIME-DIVISION-BY-ZERO", got.stderr)
 
-    def test_a_front_end_without_the_path_of_the_binary_cannot_test(self):
-        """The front end started as an ordinary program has no --self: `test` says so and exits 2."""
-        got = run_vm(STAGE2, "--allow-run", args=["--version", version(), "--stdlib", STDLIB, "--", "test", "x"],
-                     env=vm_environment())
-        self.assertEqual((got.code, got.stdout), (2, ""))
-        self.assertIn("the test command needs the path of the binary", got.stderr)
+def test_the_exit_status_and_the_problems_of_a_source_file(tmp_path):
+    """The shapes of a result: the status of the program, a diagnostic with status 1, a file that is not UTF-8.
 
-    def test_the_version_is_answered_even_when_the_standard_output_is_closed(self):
-        """A closed pipe must end the answer with a status, not with SIGPIPE, for the early --version path too."""
-        reader, writer = os.pipe()
-        os.close(reader)
-        try:
-            process = subprocess.run([str(self.binary), "--version"], stdout=writer, stderr=subprocess.PIPE,
-                                     env=vm_environment(), timeout=scaled(10))
-        finally:
-            os.close(writer)
-        # POSIX reports the failed flush. Windows' CRT reports success for this closed standard handle, including
-        # under Wine; either way, the process must not be killed by a broken-pipe signal.
-        self.assertEqual(process.returncode, 0 if TARGET_OS == "windows" else 1, process.stderr)
+    tests/test_cli_forms.py compares every command, option and diagnostic form with a golden."""
+    directory = make_suite(tmp_path, {"exit.agc": EXIT_THREE, "type.agc": TYPE_ERROR})
+    (directory / "bad.agc").write_bytes(b"\xff\xfe")
+    bad_utf8_file(directory / "big_bad.agc")
+    assert agentica("exit.agc", cwd=directory)[:3] == (3, "before\n", "")
+    typed = agentica("type.agc", cwd=directory)
+    assert (typed.code, typed.stdout) == (1, "")
+    assert "CHECK-TYPE-MISMATCH" in typed.stderr
+    assert agentica("missing.agc", cwd=directory).code == 2
+    # The line of a file that is not UTF-8 is shown with U+FFFD, as the front end shows it.
+    assert "1 | \ufffd\ufffd\n" in agentica("bad.agc", cwd=directory).stderr
+    assert "50001 | \ufffd\ufffd\n" in agentica("big_bad.agc", cwd=directory).stderr
 
-    def test_compile_writes_what_the_vm_loads(self):
-        """What compile writes is what the VM loads: the same output as running the file in one step. The bytes are the
-        bytes of the front end inside the binary."""
-        work = self.make_temp_dir()
-        source = ROOT / "examples" / "json-modules.agc"
-        self.assertEqual(self.agentica("compile", source, "-o", work / "next.agcb").code, 0)
-        data = (work / "next.agcb").read_bytes()
-        self.assertEqual(run_vm(work / "next.agcb", env=vm_environment()), self.agentica(source))
-        self.assertIn(version().encode(), data[:32])
 
-    def test_run_runs_a_compiled_file_with_the_vm_flags_and_no_front_end(self):
-        directory = self.make_suite({"loop.agc": LOOP, "random.agc": RANDOM, "spawn.agc": SPAWN,
-                                     "args.agc": STDIN_AND_ARGS, "divide.agc": "def main() -> Void\n  puts(1 / 0)\nend\n"})
-        compiled = {name: compile_agc(directory / (name + ".agc"), directory / (name + ".agcb"))
-                    for name in ("loop", "random", "spawn", "args", "divide")}
-        limited = self.agentica("run", "--max-steps", "5000", "--", compiled["loop"])
-        self.assertEqual((limited.code, limited.stdout), (1, ""))
-        self.assertIn("RUNTIME-STEP-LIMIT", limited.stderr)
-        draws = [self.agentica("run", "--seed", seed, "--", compiled["random"]).stdout for seed in "445"]
-        self.assertEqual(draws[0], draws[1])
-        self.assertNotEqual(draws[0], draws[2])
-        self.assertIn("--allow-run", self.agentica("run", "--", compiled["spawn"]).stdout)
-        self.assertEqual(self.agentica("run", "--allow-run", "--", compiled["spawn"]).stdout, "spawned\n")
-        # The words after the file are the program's, flags included; its input and exit status are the process's.
-        got = self.agentica("run", "--", compiled["args"], "--seed", "x", stdin="typed\n")
-        self.assertEqual((got.code, got.stdout), (3, 'args ["--seed", "x"]\nline ok("typed")\n'))
-        failed = self.agentica("run", "--json", "--", compiled["divide"])
-        self.assertEqual(failed.code, 1)
-        self.assertRegex(failed.stderr, r'^\{"code":"RUNTIME-DIVISION-BY-ZERO"')
+def test_the_output_and_the_errors_of_a_program_keep_their_order_in_one_stream(tmp_path):
+    """With 2>&1 the program writes both streams to one pipe; the binary leaves them as the program wrote them."""
+    directory = make_suite(tmp_path, {"mixed.agc": INTERLEAVED})
+    merged = ["sh", "-c", 'exec "$@" 2>&1', "sh"]
+    got = run(merged + [str(binary()), "mixed.agc"], cwd=directory, env=vm_environment())
+    assert (got.code, got.stdout) == (0, "".join("out %d\nerr %d\n" % (i, i) for i in range(6)))
 
-    def test_run_checks_its_command_line_and_names_itself_in_its_messages(self):
-        compiled = compile_agc(self.make_suite({"main.agc": EXIT_THREE}) / "main.agc", self.make_temp_dir() / "main.agcb")
-        for words, message in (
-                ([], "usage: agentica run "),
-                (["--seed", "x", "--", compiled], "agentica run: --seed needs an integer from 0 to 2147483647\n"),
-                (["--bogus", "--", compiled], "agentica run: unknown option --bogus\n")):
-            with self.subTest(words=words):
-                got = self.agentica("run", *words)
-                self.assertEqual((got.code, got.stdout), (2, ""))
-                self.assertTrue(got.stderr.startswith(message.rstrip("\n")), got.stderr)
-        # The usual mistake, a source file: the loader's reason, then the way to run it.
-        source = self.make_suite({"main.agc": EXIT_THREE}) / "main.agc"
-        mistaken = self.agentica("run", "--", source)
-        self.assertEqual((mistaken.code, mistaken.stdout), (2, ""))
-        self.assertIn("invalid bytecode: bad magic", mistaken.stderr)
-        self.assertIn("to run a source file, use agentica %s" % source, mistaken.stderr)
-        # `run` must be the first word: after an option it is a source file name, and the front end says so.
-        late = self.agentica("--json", "run", "x.agcb")
-        self.assertEqual((late.code, late.stdout), (2, ""))
-        self.assertIn("run must be the first word", late.stderr)
-        # The long version line is the VM's (the libraries it links); `agentica --version` is the version alone.
-        long = self.agentica("run", "--version")
-        self.assertEqual(long.code, 0)
-        # The sanitizer build has no libgc: "(sanitizer build, no libgc, yyjson ...)". The Windows build has no TLS
-        # adapter yet (phase 11), so it does not name OpenSSL.
-        self.assertRegex(long.stdout, r"^agentica %s \((libgc |sanitizer build, no libgc).*yyjson .*libuv .*%s"
-                                      % (re.escape(version()), "OpenSSL " if TLS_BUILT else ""))
-        self.assertEqual(self.agentica("--version").stdout, version() + "\n")
 
-    def test_run_embedded_starts_a_program_the_binary_carries(self):
-        """`run --embedded NAME` is for `agentica test`: no file, the words after `--` are the program's."""
-        # The runner it starts exits 2 for a configuration it cannot open. A usage error of `run` is exit 2 too, but
-        # its message begins with `agentica run:` (below): the runner's does not.
-        got = self.agentica("run", "--embedded", "runner", "--", "/nonexistent/config.jsonl")
-        self.assertEqual((got.code, got.stdout), (2, ""))
-        self.assertNotEqual(got.stderr, "")
-        self.assertFalse(got.stderr.startswith("agentica run:"), got.stderr)
-        for words, message in (
-                (["--embedded", "nothing", "--", "x"],
-                 "agentica run: this binary carries no embedded program nothing\n"),
-                (["--embedded"], "agentica run: --embedded needs a program name\n"),
-                (["--embedded", "runner", "--embedded", "steps", "--"],
-                 "agentica run: the --embedded option can only be specified once\n")):
-            with self.subTest(words=words):
-                got = self.agentica("run", *words)
-                self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
+def test_a_front_end_that_stops_with_an_error_ends_with_status_2_not_the_status_of_a_failed_run(tmp_path):
+    """The driver of `agentica test` is part of the front end: when it crashes, the status is 2, as for a usage
+    error, and it is never the 1 of a test run that failed."""
+    front = front_end(tmp_path)
+    got = agentica("--front-end", front, "crash")
+    assert (got.code, got.stdout) == (2, "")
+    assert "RUNTIME-DIVISION-BY-ZERO" in got.stderr
 
-    def test_a_program_cannot_call_the_front_end_builtins(self):
-        directory = self.make_suite({"std.agc": STD_SOURCE, "hand_off.agc": HAND_OFF})
-        for name in ("std", "hand_off"):
-            with self.subTest(name=name):
-                got = self.agentica(name + ".agc", cwd=directory)
-                self.assertEqual((got.code, got.stdout), (1, ""))
-                self.assertIn("RUNTIME-FRONT-END-ONLY", got.stderr)
-                # The same program on the VM that runs a compiled file: there is no front end there either.
-                self.assertEqual(self.agentica("compile", name + ".agc", "-o", name + ".agcb", cwd=directory).code, 0)
-                again = run_vm(directory / (name + ".agcb"), env=vm_environment())
-                self.assertEqual((again.code, again.stdout), (1, ""))
-                self.assertIn("RUNTIME-FRONT-END-ONLY", again.stderr)
 
-    def test_the_vm_options_apply_to_the_program_only(self):
-        directory = self.make_suite({"loop.agc": LOOP, "random.agc": RANDOM, "spawn.agc": SPAWN})
-        # The front end needs millions of steps to compile this: the limit does not reach it.
-        limited = self.agentica("--max-steps", "5000", "loop.agc", cwd=directory)
-        self.assertEqual((limited.code, limited.stdout), (1, ""))
-        self.assertIn("RUNTIME-STEP-LIMIT", limited.stderr)
-        seeded = [self.agentica("--seed", seed, "random.agc", cwd=directory).stdout for seed in ("4", "4", "5")]
-        self.assertEqual(seeded[0], seeded[1])
-        self.assertNotEqual(seeded[0], seeded[2])
-        denied = self.agentica("spawn.agc", cwd=directory)
-        self.assertIn("--allow-run", denied.stdout)
-        self.assertEqual(self.agentica("--allow-run", "spawn.agc", cwd=directory).stdout, "spawned\n")
+def test_a_front_end_without_the_path_of_the_binary_cannot_test():
+    """The front end started as an ordinary program has no --self: `test` says so and exits 2."""
+    got = run_vm(STAGE2, "--allow-run", args=["--version", version(), "--stdlib", STDLIB, "--", "test", "x"],
+                 env=vm_environment())
+    assert (got.code, got.stdout) == (2, "")
+    assert "the test command needs the path of the binary" in got.stderr
 
-    def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_does_not(self):
-        work = self.make_temp_dir()
-        data = self.front_end(work).read_bytes()
-        other = work / "other.agcb"
-        other.write_bytes(with_version(data, ANOTHER_VERSION))
-        loaded = self.agentica("--front-end", other, "inputs", "x")
-        # The binary names itself with the real path of its file, for the commands that start it again.
-        self_path = os.path.realpath(self.binary)
-        if os.environ.get("AGENTICA_TEST_WINE"):
-            self_path = "Z:" + str(ROOT / "dist" / "agentica.exe").replace("/", "\\")
-        inputs = "--version %s --self %s -- inputs x\n" % (version(), self_path)
-        self.assertEqual((loaded.code, loaded.stdout, loaded.stderr), (0, inputs, ""))
-        refused = run_vm(other, env=vm_environment())
-        self.assertEqual(refused.code, 2)
-        self.assertIn("built for another Agentica version", refused.stderr)
-        # The program that a front end hands over gets the same check as a file given to the VM.
-        got = self.agentica("--front-end", work / "front.agcb", "hand-off", other)
-        self.assertEqual((got.code, got.stdout), (2, ""))
-        self.assertEqual(got.stderr, "agentica: invalid bytecode: built for another Agentica version\n")
 
-    def test_the_front_end_gets_the_embedded_std_sources(self):
-        work = self.make_temp_dir()
-        front = self.front_end(work)
-        for name in (STDLIB / "MODULES").read_text().split():
-            with self.subTest(name=name):
-                got = self.agentica("--front-end", front, "std", name)
-                self.assertEqual((got.code, got.stdout), (0, (STDLIB / name).read_text()))
-        missing = self.agentica("--front-end", front, "std", "nothing.agc")
-        self.assertEqual((missing.code, missing.stdout), (0, "error: no such std source\n"))
+def test_the_version_is_answered_even_when_the_standard_output_is_closed():
+    """A closed pipe must end the answer with a status, not with SIGPIPE, for the early --version path too."""
+    reader, writer = os.pipe()
+    os.close(reader)
+    try:
+        process = subprocess.run([str(binary()), "--version"], stdout=writer, stderr=subprocess.PIPE,
+                                 env=vm_environment(), timeout=scaled(10))
+    finally:
+        os.close(writer)
+    # POSIX reports the failed flush. Windows' CRT reports success for this closed standard handle, including
+    # under Wine; either way, the process must not be killed by a broken-pipe signal.
+    assert process.returncode == (0 if TARGET_OS == "windows" else 1), process.stderr
 
-    def test_the_hand_off_runs_the_program_in_a_new_runtime(self):
-        work = self.make_suite({"user.agc": STDIN_AND_ARGS, "random.agc": RANDOM})
-        front = self.front_end(work)
-        user = compile_agc(work / "user.agc", work / "user.agcb")
-        got = self.agentica("--front-end", front, "hand-off", user, "--", "p", "q r", stdin="in\n")
-        self.assertEqual((got.code, got.stdout, got.stderr), (3, 'args ["p", "q r"]\nline ok("in")\n', ""))
-        # The options the front end passes on apply to the program: the front end itself ran far more than 5000 steps.
-        loop = compile_agc(self.make_suite({"loop.agc": LOOP}) / "loop.agc", work / "loop.agcb")
-        limited = self.agentica("--front-end", front, "hand-off", loop, "--max-steps", "5000")
-        self.assertEqual(limited.code, 1)
-        self.assertIn("RUNTIME-STEP-LIMIT", limited.stderr)
-        random = compile_agc(work / "random.agc", work / "random.agcb")
-        draws = [self.agentica("--front-end", front, "hand-off", random, "--seed", seed).stdout for seed in "445"]
-        self.assertEqual(draws[0], draws[1])
-        self.assertNotEqual(draws[0], draws[2])
 
-    def test_the_driver_refuses_what_the_front_end_hands_over_wrongly(self):
-        work = self.make_temp_dir()
-        front = self.front_end(work)
-        program = compile_agc(self.make_suite({"user.agc": EXIT_THREE}) / "user.agc", work / "user.agcb")
-        for words, error in (
-                (["bad-program"], "error: the program is not a list of bytes, or it is too large\n"),
-                (["bad-word"], "error: argument 1 has a character 0\n"),
-                (["too-many-options"], "error: too many options\n"),
-                (["too-many-arguments"], "error: too many arguments\n")):
-            with self.subTest(words=words):
-                got = self.agentica("--front-end", front, *words)
-                self.assertEqual((got.code, got.stdout, got.stderr), (0, error, ""))
-        for options, message in (
-                (["--bogus"], "agentica: unknown option --bogus\n"),
-                (["--max-steps", "0"], "agentica: --max-steps needs a positive integer\n"),
-                (["--version"], "agentica: the front end passed --version, which is not an option of a run\n"),
-                (["--driver-pid", "1"],
-                 "agentica: the front end passed --driver-pid, which only the process that started agentica may name\n"),
-                (["--embedded", "runner"],
-                 "agentica: the front end passed --embedded, which only agentica run takes\n"),
-                (["word"], "agentica: the front end passed word, which is not an option of a run\n")):
-            with self.subTest(options=options):
-                got = self.agentica("--front-end", front, "hand-off", program, *options)
-                self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
+def test_compile_writes_what_the_vm_loads(tmp_path):
+    """What compile writes is what the VM loads: the same output as running the file in one step. The bytes are the
+    bytes of the front end inside the binary."""
+    work = tmp_path
+    source = ROOT / "examples" / "json-modules.agc"
+    assert agentica("compile", source, "-o", work / "next.agcb").code == 0
+    data = (work / "next.agcb").read_bytes()
+    assert run_vm(work / "next.agcb", env=vm_environment()) == agentica(source)
+    assert version().encode() in data[:32]
 
-    def test_a_missing_front_end_is_a_usage_error(self):
-        cases = [
-            (["--front-end", "/nonexistent/front.agcb"], "agentica: cannot read /nonexistent/front.agcb\n"),
-            (["--front-end"], "agentica: --front-end needs a file\n"),
-        ]
-        if TARGET_OS == "windows":
-            # A directory is a portable non-file that the loader must refuse before reading.
-            directory = self.make_temp_dir() / "front.agcb"
-            directory.mkdir()
-            cases.append((
-                ["--front-end", directory],
-                "agentica: cannot read %s\n" % directory,
-            ))
-        else:
-            pipe = self.make_temp_dir() / "front.agcb"
-            os.mkfifo(pipe)
-            # A named pipe is refused at once, not waited for.
-            cases.append((["--front-end", pipe], "agentica: cannot read %s\n" % pipe))
-        for words, message in cases:
-            got = self.agentica(*words, timeout=scaled(10))
-            self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
 
-    def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(self):
-        work = self.make_temp_dir()
-        trace = work / "trace"
-        env = vm_environment({"AGENTICA_VM_TRACE": "io", "AGENTICA_VM_TRACE_FILE": trace})
-        answer = self.agentica("--version", env=env)
-        self.assertEqual((answer.code, answer.stdout, answer.stderr), (0, version() + "\n", ""))
-        self.assertFalse(trace.exists())
-        # The program of a run would not start with this variable, so the front end does not compile for it either.
-        refused = self.agentica(ROOT / "examples" / "hello.agc",
-                                env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": "soon"}), timeout=scaled(10))
-        self.assertEqual((refused.code, refused.stdout), (2, ""))
-        self.assertIn("AGENTICA_FLUSH_TIMEOUT_MS needs an integer", refused.stderr)
+def test_run_runs_a_compiled_file_with_the_vm_flags_and_no_front_end(tmp_path):
+    directory = make_suite(tmp_path, {"loop.agc": LOOP, "random.agc": RANDOM, "spawn.agc": SPAWN,
+                                      "args.agc": STDIN_AND_ARGS, "divide.agc": "def main() -> Void\n  puts(1 / 0)\nend\n"})
+    compiled = {name: compile_agc(directory / (name + ".agc"), directory / (name + ".agcb"))
+                for name in ("loop", "random", "spawn", "args", "divide")}
+    limited = agentica("run", "--max-steps", "5000", "--", compiled["loop"])
+    assert (limited.code, limited.stdout) == (1, "")
+    assert "RUNTIME-STEP-LIMIT" in limited.stderr
+    draws = [agentica("run", "--seed", seed, "--", compiled["random"]).stdout for seed in "445"]
+    assert draws[0] == draws[1]
+    assert draws[0] != draws[2]
+    assert "--allow-run" in agentica("run", "--", compiled["spawn"]).stdout
+    assert agentica("run", "--allow-run", "--", compiled["spawn"]).stdout == "spawned\n"
+    # The words after the file are the program's, flags included; its input and exit status are the process's.
+    got = agentica("run", "--", compiled["args"], "--seed", "x", stdin="typed\n")
+    assert (got.code, got.stdout) == (3, 'args ["--seed", "x"]\nline ok("typed")\n')
+    failed = agentica("run", "--json", "--", compiled["divide"])
+    assert failed.code == 1
+    assert re.search(r'^\{"code":"RUNTIME-DIVISION-BY-ZERO"', failed.stderr)
 
-    def test_a_problem_in_a_std_module_shows_that_module_not_a_file_of_the_working_folder(self):
-        """A front end on the VM with --stdlib DIR: DIR/queue.agc is broken, ./std/queue.agc is a decoy."""
-        require(STAGE2.is_file(), "the front end is not built (%s): run make stage2" % STAGE2)
-        work = self.make_suite({"main.agc": USES_STD})
-        (work / "libstd").mkdir()
-        (work / "libstd" / "queue.agc").write_text((STDLIB / "queue.agc").read_text() + BROKEN_STD)
-        (work / "std").mkdir()
-        (work / "std" / "queue.agc").write_text("# a decoy\n" * 100)
-        got = run_vm(STAGE2, args=["--version", version(), "--stdlib", "libstd", "--", "compile", "main.agc",
-                                   "-o", "out.agcb"], cwd=work, env=vm_environment())
-        self.assertEqual((got.code, got.stdout), (1, ""))
-        self.assertIn("std/queue.agc:", got.stderr)
-        self.assertIn('return "text"', got.stderr)
-        self.assertNotIn("decoy", got.stderr)
+
+def test_run_checks_its_command_line_and_names_itself_in_its_messages(tmp_path):
+    write_files(tmp_path, {"main.agc": EXIT_THREE})
+    compiled = compile_agc(tmp_path / "main.agc", tmp_path / "main.agcb")
+    for words, message in (
+            ([], "usage: agentica run "),
+            (["--seed", "x", "--", compiled], "agentica run: --seed needs an integer from 0 to 2147483647\n"),
+            (["--bogus", "--", compiled], "agentica run: unknown option --bogus\n")):
+        got = agentica("run", *words)
+        assert (got.code, got.stdout) == (2, "")
+        assert got.stderr.startswith(message.rstrip("\n")), got.stderr
+    # The usual mistake, a source file: the loader's reason, then the way to run it.
+    source = tmp_path / "main.agc"
+    mistaken = agentica("run", "--", source)
+    assert (mistaken.code, mistaken.stdout) == (2, "")
+    assert "invalid bytecode: bad magic" in mistaken.stderr
+    assert "to run a source file, use agentica %s" % source in mistaken.stderr
+    # `run` must be the first word: after an option it is a source file name, and the front end says so.
+    late = agentica("--json", "run", "x.agcb")
+    assert (late.code, late.stdout) == (2, "")
+    assert "run must be the first word" in late.stderr
+    # The long version line is the VM's (the libraries it links); `agentica --version` is the version alone.
+    long = agentica("run", "--version")
+    assert long.code == 0
+    # The sanitizer build has no libgc: "(sanitizer build, no libgc, yyjson ...)". The Windows build has no TLS
+    # adapter yet (phase 11), so it does not name OpenSSL.
+    assert re.search(r"^agentica %s \((libgc |sanitizer build, no libgc).*yyjson .*libuv .*%s"
+                     % (re.escape(version()), "OpenSSL " if TLS_BUILT else ""), long.stdout)
+    assert agentica("--version").stdout == version() + "\n"
+
+
+def test_run_embedded_starts_a_program_the_binary_carries():
+    """`run --embedded NAME` is for `agentica test`: no file, the words after `--` are the program's."""
+    # The runner it starts exits 2 for a configuration it cannot open. A usage error of `run` is exit 2 too, but
+    # its message begins with `agentica run:` (below): the runner's does not.
+    got = agentica("run", "--embedded", "runner", "--", "/nonexistent/config.jsonl")
+    assert (got.code, got.stdout) == (2, "")
+    assert got.stderr != ""
+    assert not got.stderr.startswith("agentica run:"), got.stderr
+    for words, message in (
+            (["--embedded", "nothing", "--", "x"],
+             "agentica run: this binary carries no embedded program nothing\n"),
+            (["--embedded"], "agentica run: --embedded needs a program name\n"),
+            (["--embedded", "runner", "--embedded", "steps", "--"],
+             "agentica run: the --embedded option can only be specified once\n")):
+        got = agentica("run", *words)
+        assert (got.code, got.stdout, got.stderr) == (2, "", message)
+
+
+@pytest.mark.parametrize("name", ("std", "hand_off"))
+def test_a_program_cannot_call_the_front_end_builtins(tmp_path, name):
+    directory = make_suite(tmp_path, {"std.agc": STD_SOURCE, "hand_off.agc": HAND_OFF})
+    got = agentica(name + ".agc", cwd=directory)
+    assert (got.code, got.stdout) == (1, "")
+    assert "RUNTIME-FRONT-END-ONLY" in got.stderr
+    # The same program on the VM that runs a compiled file: there is no front end there either.
+    assert agentica("compile", name + ".agc", "-o", name + ".agcb", cwd=directory).code == 0
+    again = run_vm(directory / (name + ".agcb"), env=vm_environment())
+    assert (again.code, again.stdout) == (1, "")
+    assert "RUNTIME-FRONT-END-ONLY" in again.stderr
+
+
+def test_the_vm_options_apply_to_the_program_only(tmp_path):
+    directory = make_suite(tmp_path, {"loop.agc": LOOP, "random.agc": RANDOM, "spawn.agc": SPAWN})
+    # The front end needs millions of steps to compile this: the limit does not reach it.
+    limited = agentica("--max-steps", "5000", "loop.agc", cwd=directory)
+    assert (limited.code, limited.stdout) == (1, "")
+    assert "RUNTIME-STEP-LIMIT" in limited.stderr
+    seeded = [agentica("--seed", seed, "random.agc", cwd=directory).stdout for seed in ("4", "4", "5")]
+    assert seeded[0] == seeded[1]
+    assert seeded[0] != seeded[2]
+    denied = agentica("spawn.agc", cwd=directory)
+    assert "--allow-run" in denied.stdout
+    assert agentica("--allow-run", "spawn.agc", cwd=directory).stdout == "spawned\n"
+
+
+def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_does_not(tmp_path):
+    work = tmp_path
+    data = front_end(work).read_bytes()
+    other = work / "other.agcb"
+    other.write_bytes(with_version(data, ANOTHER_VERSION))
+    loaded = agentica("--front-end", other, "inputs", "x")
+    # The binary names itself with the real path of its file, for the commands that start it again.
+    self_path = os.path.realpath(binary())
+    if os.environ.get("AGENTICA_TEST_WINE"):
+        self_path = "Z:" + str(ROOT / "dist" / "agentica.exe").replace("/", "\\")
+    inputs = "--version %s --self %s -- inputs x\n" % (version(), self_path)
+    assert (loaded.code, loaded.stdout, loaded.stderr) == (0, inputs, "")
+    refused = run_vm(other, env=vm_environment())
+    assert refused.code == 2
+    assert "built for another Agentica version" in refused.stderr
+    # The program that a front end hands over gets the same check as a file given to the VM.
+    got = agentica("--front-end", work / "front.agcb", "hand-off", other)
+    assert (got.code, got.stdout) == (2, "")
+    assert got.stderr == "agentica: invalid bytecode: built for another Agentica version\n"
+
+
+@pytest.mark.parametrize("name", (STDLIB / "MODULES").read_text().split())
+def test_the_front_end_gets_the_embedded_std_sources(tmp_path, name):
+    work = tmp_path
+    front = front_end(work)
+    got = agentica("--front-end", front, "std", name)
+    assert (got.code, got.stdout) == (0, (STDLIB / name).read_text())
+
+
+def test_the_front_end_reports_a_missing_std_source(tmp_path):
+    work = tmp_path
+    front = front_end(work)
+    missing = agentica("--front-end", front, "std", "nothing.agc")
+    assert (missing.code, missing.stdout) == (0, "error: no such std source\n")
+
+
+def test_the_hand_off_runs_the_program_in_a_new_runtime(tmp_path):
+    work = make_suite(tmp_path, {"user.agc": STDIN_AND_ARGS, "random.agc": RANDOM})
+    front = front_end(work)
+    user = compile_agc(work / "user.agc", work / "user.agcb")
+    got = agentica("--front-end", front, "hand-off", user, "--", "p", "q r", stdin="in\n")
+    assert (got.code, got.stdout, got.stderr) == (3, 'args ["p", "q r"]\nline ok("in")\n', "")
+    # The options the front end passes on apply to the program: the front end itself ran far more than 5000 steps.
+    write_files(work, {"loop.agc": LOOP})
+    loop = compile_agc(work / "loop.agc", work / "loop.agcb")
+    limited = agentica("--front-end", front, "hand-off", loop, "--max-steps", "5000")
+    assert limited.code == 1
+    assert "RUNTIME-STEP-LIMIT" in limited.stderr
+    random = compile_agc(work / "random.agc", work / "random.agcb")
+    draws = [agentica("--front-end", front, "hand-off", random, "--seed", seed).stdout for seed in "445"]
+    assert draws[0] == draws[1]
+    assert draws[0] != draws[2]
+
+
+def _hand_off_program(work):
+    front = front_end(work)
+    write_files(work, {"user.agc": EXIT_THREE})
+    return front, compile_agc(work / "user.agc", work / "user.agcb")
+
+
+@pytest.mark.parametrize("words,error", (
+    (["bad-program"], "error: the program is not a list of bytes, or it is too large\n"),
+    (["bad-word"], "error: argument 1 has a character 0\n"),
+    (["too-many-options"], "error: too many options\n"),
+    (["too-many-arguments"], "error: too many arguments\n"),
+), ids=("bad-program", "bad-word", "too-many-options", "too-many-arguments"))
+def test_the_driver_refuses_malformed_handoff_words(tmp_path, words, error):
+    front, _program = _hand_off_program(tmp_path)
+    got = agentica("--front-end", front, *words)
+    assert (got.code, got.stdout, got.stderr) == (0, error, "")
+
+
+@pytest.mark.parametrize("options,message", (
+    (["--bogus"], "agentica: unknown option --bogus\n"),
+    (["--max-steps", "0"], "agentica: --max-steps needs a positive integer\n"),
+    (["--version"], "agentica: the front end passed --version, which is not an option of a run\n"),
+    (["--driver-pid", "1"],
+     "agentica: the front end passed --driver-pid, which only the process that started agentica may name\n"),
+    (["--embedded", "runner"],
+     "agentica: the front end passed --embedded, which only agentica run takes\n"),
+    (["word"], "agentica: the front end passed word, which is not an option of a run\n"),
+), ids=("bogus", "max-steps-0", "version", "driver-pid", "embedded", "word"))
+def test_the_driver_refuses_misplaced_run_options(tmp_path, options, message):
+    front, program = _hand_off_program(tmp_path)
+    got = agentica("--front-end", front, "hand-off", program, *options)
+    assert (got.code, got.stdout, got.stderr) == (2, "", message)
+
+
+@pytest.mark.parametrize("words,message", (
+    (["--front-end", "/nonexistent/front.agcb"], "agentica: cannot read /nonexistent/front.agcb\n"),
+    (["--front-end"], "agentica: --front-end needs a file\n"),
+), ids=("missing-file", "missing-argument"))
+def test_a_missing_front_end_is_a_usage_error(tmp_path, words, message):
+    got = agentica(*words, timeout=scaled(10))
+    assert (got.code, got.stdout, got.stderr) == (2, "", message)
+
+
+def test_a_missing_front_end_refuses_a_non_file_at_once(tmp_path):
+    if TARGET_OS == "windows":
+        # A directory is a portable non-file that the loader must refuse before reading.
+        non_file = tmp_path / "front.agcb"
+        non_file.mkdir()
+    else:
+        non_file = tmp_path / "front.agcb"
+        os.mkfifo(non_file)
+        # A named pipe is refused at once, not waited for.
+    got = agentica("--front-end", non_file, timeout=scaled(10))
+    assert (got.code, got.stdout, got.stderr) == (2, "", "agentica: cannot read %s\n" % non_file)
+
+
+def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(tmp_path):
+    work = tmp_path
+    trace = work / "trace"
+    env = vm_environment({"AGENTICA_VM_TRACE": "io", "AGENTICA_VM_TRACE_FILE": trace})
+    answer = agentica("--version", env=env)
+    assert (answer.code, answer.stdout, answer.stderr) == (0, version() + "\n", "")
+    assert not trace.exists()
+    # The program of a run would not start with this variable, so the front end does not compile for it either.
+    refused = agentica(ROOT / "examples" / "hello.agc",
+                       env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": "soon"}), timeout=scaled(10))
+    assert (refused.code, refused.stdout) == (2, "")
+    assert "AGENTICA_FLUSH_TIMEOUT_MS needs an integer" in refused.stderr
+
+
+def test_a_problem_in_a_std_module_shows_that_module_not_a_file_of_the_working_folder(tmp_path):
+    """A front end on the VM with --stdlib DIR: DIR/queue.agc is broken, ./std/queue.agc is a decoy."""
+    require(STAGE2.is_file(), "the front end is not built (%s): run make stage2" % STAGE2)
+    work = make_suite(tmp_path, {"main.agc": USES_STD})
+    (work / "libstd").mkdir()
+    (work / "libstd" / "queue.agc").write_text((STDLIB / "queue.agc").read_text() + BROKEN_STD)
+    (work / "std").mkdir()
+    (work / "std" / "queue.agc").write_text("# a decoy\n" * 100)
+    got = run_vm(STAGE2, args=["--version", version(), "--stdlib", "libstd", "--", "compile", "main.agc",
+                               "-o", "out.agcb"], cwd=work, env=vm_environment())
+    assert (got.code, got.stdout) == (1, "")
+    assert "std/queue.agc:" in got.stderr
+    assert 'return "text"' in got.stderr
+    assert "decoy" not in got.stderr

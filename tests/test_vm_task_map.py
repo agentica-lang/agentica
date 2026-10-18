@@ -15,10 +15,11 @@ import select
 import socket
 import threading
 import time
-import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from tests.agentica_test import TestCase, run_vm, scaled, start_vm
+import pytest
+
+from tests.agentica_test import compile_agc, run_vm, scaled, start_vm
 
 # A program writes a time as @250@ (milliseconds); timed() scales it like every other deadline, so a loaded runner
 # stretches the sleeps and the deadlines together and the order of events does not change.
@@ -325,6 +326,22 @@ end
 TIMED_OUT = '[error("task: timed out")]'
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _require_default_binary():
+    if os.environ.get("AGENTICA_VM_BINARY"):
+        pytest.skip("AGENTICA_VM_BINARY names another binary")
+
+
+
+
+@pytest.fixture
+def peer(request):
+    server = Peer()
+    request.addfinalizer(server.server_close)
+    request.addfinalizer(server.shutdown)
+    return server
+
+
 def position(text, needle):
     """The line and column (both from 1) of the first `needle` in `text`."""
     index = text.index(needle)
@@ -389,163 +406,165 @@ class Handler(BaseHTTPRequestHandler):
                 self.server.closed_at = time.monotonic()
 
 
-class VmTaskMap(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        if os.environ.get("AGENTICA_VM_BINARY"):
-            raise unittest.SkipTest("AGENTICA_VM_BINARY names another binary")
+def compile_text(program, name, tmp_path):
+    source = tmp_path / (name + ".agc")
+    source.write_text(timed(program), encoding="utf-8")
+    return compile_agc(source, tmp_path / (name + ".agcb"))
 
-    def run_lines(self, program, name, *args, flags=()):
-        result = run_vm(self.compile_text(timed(program), name), *flags, args=args)
-        self.assertEqual(result.code, 0, result.stderr)
-        return result.stdout.splitlines()
 
-    def diagnostic(self, program, name, *args):
-        """The JSON diagnostic of a run that halts, from either output stream."""
-        result = run_vm(self.compile_text(timed(program), name), "--json", args=args)
-        self.assertEqual(result.code, 1, result.stdout + result.stderr)
-        text = result.stderr if result.stderr.strip().startswith("{") else result.stdout
-        return json.loads(text.strip().splitlines()[-1])
+def run_lines(tmp_path, program, name, *args, flags=()):
+    result = run_vm(compile_text(program, name, tmp_path), *flags, args=args)
+    assert result.code == 0, result.stderr
+    return result.stdout.splitlines()
 
-    def peer(self):
-        peer = Peer()
-        self.addCleanup(peer.server_close)
-        self.addCleanup(peer.shutdown)
-        return peer
 
-    def test_the_limit_bounds_the_items_in_flight_and_the_results_keep_input_order(self):
-        lines = self.run_lines(IN_FLIGHT_PROGRAM, "in-flight")
-        events, report = lines[:32], lines[32:]
-        self.assertEqual(in_flight(events, 0, 16), 2)
-        self.assertEqual(in_flight(events, 16, 16), 8)
-        ok = "[" + ", ".join("ok(%d)" % (n * 10) for n in range(8)) + "]"
-        self.assertEqual(report[0], "narrow " + ok)
-        self.assertEqual(report[2], "wide " + ok)
-        # Four waves of one sleep (a timer can fire a millisecond early); the serial run takes eight.
-        sleep = scaled(250)
-        self.assertGreaterEqual(int(report[1].split()[2]), 3.6 * sleep)
-        self.assertLess(int(report[3].split()[2]), 7.2 * sleep)
+def diagnostic(tmp_path, program, name, *args):
+    """The JSON diagnostic of a run that halts, from either output stream."""
+    result = run_vm(compile_text(program, name, tmp_path), "--json", args=args)
+    assert result.code == 1, result.stdout + result.stderr
+    text = result.stderr if result.stderr.strip().startswith("{") else result.stdout
+    return json.loads(text.strip().splitlines()[-1])
 
-    def test_http_requests_overlap_within_the_limit_and_come_back_in_input_order(self):
-        peer = self.peer()
-        lines = self.run_lines(HTTP_PROGRAM, "http", str(peer.server_address[1]))
-        events = [(kind, path) for kind, path in peer.events]
-        for group, limit in (("/a/", 3), ("/b/", 8)):
-            flight = most = 0
-            for kind, path in events:
-                if path.startswith(group):
-                    flight += 1 if kind == "start" else -1
-                    most = max(most, flight)
-            self.assertEqual(most, limit, group)
-        ended = [path for kind, path in events if kind == "end" and path.startswith("/b/")]
-        self.assertEqual(sorted(ended), sorted("/b/%d" % n for n in range(8)))
-        self.assertNotEqual(ended, ["/b/%d" % n for n in range(8)], "the peer answers the later requests first")
-        self.assertEqual(lines[0], "bounded [" + ", ".join('ok("item %d")' % n for n in range(9)) + "]")
-        self.assertEqual(lines[2], "everyone [" + ", ".join('ok("item %d")' % n for n in range(8)) + "]")
-        # Three waves of 300 ms at least. The eight slow requests take 4.2 s one after the other.
-        self.assertGreaterEqual(int(lines[1].split()[2]), 2.7 * scaled(300))
-        self.assertLess(int(lines[3].split()[2]), scaled(3500))
 
-    def test_an_item_that_times_out_is_cancelled_with_everything_it_started(self):
-        started = time.monotonic()
-        lines = self.run_lines(TIMEOUT_PROGRAM, "timeout")
-        self.assertEqual(lines, ['[ok(1), error("task: timed out"), error("task: timed out"), ok(4)]', "main done"])
-        self.assertLess(time.monotonic() - started, scaled(30), "the item that sleeps 60 s does not hold the run")
+def test_the_limit_bounds_the_items_in_flight_and_the_results_keep_input_order(tmp_path):
+    lines = run_lines(tmp_path, IN_FLIGHT_PROGRAM, "in-flight")
+    events, report = lines[:32], lines[32:]
+    assert in_flight(events, 0, 16) == 2
+    assert in_flight(events, 16, 16) == 8
+    ok = "[" + ", ".join("ok(%d)" % (n * 10) for n in range(8)) + "]"
+    assert report[0] == "narrow " + ok
+    assert report[2] == "wide " + ok
+    # Four waves of one sleep (a timer can fire a millisecond early); the serial run takes eight.
+    sleep = scaled(250)
+    assert int(report[1].split()[2]) >= 3.6 * sleep
+    assert int(report[3].split()[2]) < 7.2 * sleep
 
-    def test_a_grandchild_of_a_timed_out_item_is_cancelled_after_its_parent_ended(self):
-        lines = self.run_lines(GRANDCHILD_PROGRAM, "grandchild")
-        self.assertEqual(lines, [TIMED_OUT, "main done"])
 
-    def test_a_nested_map_in_a_timed_out_item_starts_no_more_items(self):
-        lines = self.run_lines(NESTED_PROGRAM, "nested")
-        self.assertEqual(lines, ["start 1", TIMED_OUT, "main done"])
+def test_http_requests_overlap_within_the_limit_and_come_back_in_input_order(tmp_path, peer):
+    lines = run_lines(tmp_path, HTTP_PROGRAM, "http", str(peer.server_address[1]))
+    events = [(kind, path) for kind, path in peer.events]
+    for group, limit in (("/a/", 3), ("/b/", 8)):
+        flight = most = 0
+        for kind, path in events:
+            if path.startswith(group):
+                flight += 1 if kind == "start" else -1
+                most = max(most, flight)
+        assert most == limit, group
+    ended = [path for kind, path in events if kind == "end" and path.startswith("/b/")]
+    assert sorted(ended) == sorted("/b/%d" % n for n in range(8))
+    assert ended != ["/b/%d" % n for n in range(8)], "the peer answers the later requests first"
+    assert lines[0] == "bounded [" + ", ".join('ok("item %d")' % n for n in range(9)) + "]"
+    assert lines[2] == "everyone [" + ", ".join('ok("item %d")' % n for n in range(8)) + "]"
+    # Three waves of 300 ms at least. The eight slow requests take 4.2 s one after the other.
+    assert int(lines[1].split()[2]) >= 2.7 * scaled(300)
+    assert int(lines[3].split()[2]) < scaled(3500)
 
-    def test_a_read_in_a_timed_out_item_is_detached_and_its_socket_stays_open(self):
-        listener = socket.create_server(("127.0.0.1", 0))
-        self.addCleanup(listener.close)
 
-        def serve():
-            connection, _ = listener.accept()
-            with connection:
-                time.sleep(scaled(1.0))
-                connection.sendall(b"first\n")
-                time.sleep(scaled(0.6))
-                connection.sendall(b"second\n")
-                time.sleep(scaled(0.5))
+def test_an_item_that_times_out_is_cancelled_with_everything_it_started(tmp_path):
+    started = time.monotonic()
+    lines = run_lines(tmp_path, TIMEOUT_PROGRAM, "timeout")
+    assert lines == ['[ok(1), error("task: timed out"), error("task: timed out"), ok(4)]', "main done"]
+    assert time.monotonic() - started < scaled(30), "the item that sleeps 60 s does not hold the run"
 
-        thread = threading.Thread(target=serve, daemon=True)
-        thread.start()
-        lines = self.run_lines(DETACHED_READ_PROGRAM, "detached", str(listener.getsockname()[1]))
-        # The read of the item took "first" and dropped it; the socket was not closed, so main reads the next line.
-        self.assertEqual(lines, [TIMED_OUT, "main reads", 'ok("second")'])
-        thread.join(scaled(10))
 
-    def test_a_timed_out_http_item_leaves_no_pooled_connection(self):
-        peer = self.peer()
-        vm = self.adopt(start_vm(self.compile_text(timed(HTTP_TIMEOUT_PROGRAM), "http-timeout"),
-                                 str(peer.server_address[1])))
-        self.assertEqual(vm.next_line(), TIMED_OUT)
-        self.assertEqual(vm.next_line(), "call done")
-        self.assertEqual(vm.next_line(), "main done")
-        finished = time.monotonic()
-        # The detached request ends after 2 s and the client drops the connection then, long before the run ends.
-        self.assertIsNotNone(peer.closed_at, "the peer saw no end of file")
-        self.assertLess(peer.closed_at, finished - 0.5)
-        self.assertEqual(vm.wait(), 0)
+def test_a_grandchild_of_a_timed_out_item_is_cancelled_after_its_parent_ended(tmp_path):
+    lines = run_lines(tmp_path, GRANDCHILD_PROGRAM, "grandchild")
+    assert lines == [TIMED_OUT, "main done"]
 
-    def test_await_of_a_handle_that_a_timed_out_item_passed_out_is_task_cancelled(self):
-        programs = ((CANCELLED_AFTER_PROGRAM, "cancelled-after"), (CANCELLED_PARKED_PROGRAM, "cancelled-parked"))
-        for program, name in programs:
-            with self.subTest(name):
-                diagnostic = self.diagnostic(program, name)
-                self.assertEqual(diagnostic["code"], "RUNTIME-TASK-CANCELLED")
-                line, column = position(program, "Task.await(child)")
-                self.assertEqual(diagnostic["range"]["start"], {"line": line, "column": column})
 
-    def test_a_timed_out_receiver_leaves_the_channel_queue(self):
-        lines = self.run_lines(HAND_OFF_TIMED_OUT_PROGRAM, "hand-off-timed-out")
-        self.assertEqual(lines[0], TIMED_OUT)
-        # The sender's result and the value that receiver 2 gets; which prints first is not the point.
-        self.assertEqual(sorted(lines[1:]), ["ok()", "ok(7)"])
+def test_a_nested_map_in_a_timed_out_item_starts_no_more_items(tmp_path):
+    lines = run_lines(tmp_path, NESTED_PROGRAM, "nested")
+    assert lines == ["start 1", TIMED_OUT, "main done"]
 
-    def test_a_value_handed_to_an_item_before_its_deadline_is_kept_when_the_deadline_passes_in_the_same_turn(self):
-        # The run is conclusive only if the sender sent before the deadline and its sort ended after it, each by a
-        # margin. A stall at the wrong moment makes it inconclusive, and then it runs again.
-        for attempt in range(3):
-            lines = self.run_lines(HAND_OFF_HELD_PROGRAM, "hand-off-held")
-            deadline = int(re.search(r"^deadline (\d+)$", "\n".join(lines), re.M).group(1))
-            sent, held = map(int, re.search(r"^sent (\d+) held (\d+)$", "\n".join(lines), re.M).groups())
-            if sent + 30 < deadline < sent + held - 30:
-                break
-        else:
-            self.fail("the sort did not cross the deadline in 3 runs: %s" % lines)
-        # The item runs before the caller of Task.map looks at the clock, so it keeps the value, and receiver 2 gets
-        # nothing: the value is neither lost nor copied.
-        self.assertIn("[ok(7)]", lines)
-        self.assertIn('error("channel: timed out")', lines)
-        self.assertNotIn("ok(7)", lines)
 
-    def test_the_arguments_are_diagnostics_at_their_own_span(self):
-        cases = [
-            ("limit 0", "Task.map([1], 0, 100)", "0, 100", "RUNTIME-INVALID-COUNT"),
-            ("limit 1025", "Task.map([1], 1025, 100)", "1025", "RUNTIME-INVALID-COUNT"),
-            ("empty list", "Task.map(empty, 0, 100)", "0, 100", "RUNTIME-INVALID-COUNT"),
-            ("timeout 0", "Task.map([1], 2, 0)", "0)", "RUNTIME-INVALID-DURATION"),
-            ("timeout -5", "Task.map([1], 2, -5)", "-5", "RUNTIME-INVALID-DURATION"),
-        ]
-        for name, call, argument, code in cases:
-            with self.subTest(name):
-                program = "def main() -> Void\n  empty: List[Int] = []\n  puts(%s do |n| ok(n) end)\nend\n" % call
-                diagnostic = self.diagnostic(program, "arguments")
-                self.assertEqual(diagnostic["code"], code)
-                line, column = position(program, call)
-                column += call.index(argument)
-                self.assertEqual(diagnostic["range"]["start"], {"line": line, "column": column})
+def test_a_read_in_a_timed_out_item_is_detached_and_its_socket_stays_open(tmp_path, request):
+    listener = socket.create_server(("127.0.0.1", 0))
+    request.addfinalizer(listener.close)
 
-    def test_a_seed_gives_the_same_random_numbers_whatever_order_the_items_end_in(self):
-        results = [self.run_lines(SEED_PROGRAM, "seed", order, flags=("--seed", "7"))[0]
-                   for order in ("forward", "reverse", "forward")]
-        self.assertEqual(results[0], results[1])
-        self.assertEqual(results[0], results[2])
-        self.assertGreater(len(set(re.findall(r"ok\((\d+)\)", results[0]))), 1, "each item has its own stream")
+    def serve():
+        connection, _ = listener.accept()
+        with connection:
+            time.sleep(scaled(1.0))
+            connection.sendall(b"first\n")
+            time.sleep(scaled(0.6))
+            connection.sendall(b"second\n")
+            time.sleep(scaled(0.5))
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    lines = run_lines(tmp_path, DETACHED_READ_PROGRAM, "detached", str(listener.getsockname()[1]))
+    # The read of the item took "first" and dropped it; the socket was not closed, so main reads the next line.
+    assert lines == [TIMED_OUT, "main reads", 'ok("second")']
+    thread.join(scaled(10))
+
+
+def test_a_timed_out_http_item_leaves_no_pooled_connection(tmp_path, adopt, peer):
+    vm = adopt(start_vm(compile_text(HTTP_TIMEOUT_PROGRAM, "http-timeout", tmp_path),
+                        str(peer.server_address[1])))
+    assert vm.next_line() == TIMED_OUT
+    assert vm.next_line() == "call done"
+    assert vm.next_line() == "main done"
+    finished = time.monotonic()
+    # The detached request ends after 2 s and the client drops the connection then, long before the run ends.
+    assert peer.closed_at is not None, "the peer saw no end of file"
+    assert peer.closed_at < finished - 0.5
+    assert vm.wait() == 0
+
+
+def test_await_of_a_handle_that_a_timed_out_item_passed_out_is_task_cancelled(tmp_path):
+    programs = ((CANCELLED_AFTER_PROGRAM, "cancelled-after"), (CANCELLED_PARKED_PROGRAM, "cancelled-parked"))
+    for program, name in programs:
+        result = diagnostic(tmp_path, program, name)
+        assert result["code"] == "RUNTIME-TASK-CANCELLED"
+        line, column = position(program, "Task.await(child)")
+        assert result["range"]["start"] == {"line": line, "column": column}
+
+
+def test_a_timed_out_receiver_leaves_the_channel_queue(tmp_path):
+    lines = run_lines(tmp_path, HAND_OFF_TIMED_OUT_PROGRAM, "hand-off-timed-out")
+    assert lines[0] == TIMED_OUT
+    # The sender's result and the value that receiver 2 gets; which prints first is not the point.
+    assert sorted(lines[1:]) == ["ok()", "ok(7)"]
+
+
+def test_a_value_handed_to_an_item_before_its_deadline_is_kept_when_the_deadline_passes_in_the_same_turn(tmp_path):
+    # The run is conclusive only if the sender sent before the deadline and its sort ended after it, each by a
+    # margin. A stall at the wrong moment makes it inconclusive, and then it runs again.
+    for _attempt in range(3):
+        lines = run_lines(tmp_path, HAND_OFF_HELD_PROGRAM, "hand-off-held")
+        deadline = int(re.search(r"^deadline (\d+)$", "\n".join(lines), re.M).group(1))
+        sent, held = map(int, re.search(r"^sent (\d+) held (\d+)$", "\n".join(lines), re.M).groups())
+        if sent + 30 < deadline < sent + held - 30:
+            break
+    else:
+        pytest.fail("the sort did not cross the deadline in 3 runs: %s" % lines)
+    # The item runs before the caller of Task.map looks at the clock, so it keeps the value, and receiver 2 gets
+    # nothing: the value is neither lost nor copied.
+    assert "[ok(7)]" in lines
+    assert 'error("channel: timed out")' in lines
+    assert "ok(7)" not in lines
+
+
+def test_the_arguments_are_diagnostics_at_their_own_span(tmp_path):
+    cases = [
+        ("limit 0", "Task.map([1], 0, 100)", "0, 100", "RUNTIME-INVALID-COUNT"),
+        ("limit 1025", "Task.map([1], 1025, 100)", "1025", "RUNTIME-INVALID-COUNT"),
+        ("empty list", "Task.map(empty, 0, 100)", "0, 100", "RUNTIME-INVALID-COUNT"),
+        ("timeout 0", "Task.map([1], 2, 0)", "0)", "RUNTIME-INVALID-DURATION"),
+        ("timeout -5", "Task.map([1], 2, -5)", "-5", "RUNTIME-INVALID-DURATION"),
+    ]
+    for _name, call, argument, code in cases:
+        program = "def main() -> Void\n  empty: List[Int] = []\n  puts(%s do |n| ok(n) end)\nend\n" % call
+        result = diagnostic(tmp_path, program, "arguments")
+        assert result["code"] == code
+        line, column = position(program, call)
+        column += call.index(argument)
+        assert result["range"]["start"] == {"line": line, "column": column}
+
+
+def test_a_seed_gives_the_same_random_numbers_whatever_order_the_items_end_in(tmp_path):
+    results = [run_lines(tmp_path, SEED_PROGRAM, "seed", order, flags=("--seed", "7"))[0]
+               for order in ("forward", "reverse", "forward")]
+    assert results[0] == results[1]
+    assert results[0] == results[2]
+    assert len(set(re.findall(r"ok\((\d+)\)", results[0]))) > 1, "each item has its own stream"

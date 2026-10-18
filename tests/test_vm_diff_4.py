@@ -1,4 +1,5 @@
 """Shard 4 of the VM golden tests (tests/vm_diff_support.py)."""
-from tests.vm_diff_support import shard_case
+from tests.vm_diff_support import install_shard_tests
 
-Shard4 = shard_case(4)
+SHARD = 4
+install_shard_tests(SHARD, globals())

@@ -5,9 +5,11 @@ from __future__ import annotations
 import ctypes
 import os
 import stat
-import unittest
 
-from tests.agentica_test import TARGET_OS, TestCase, run_vm, start_vm, vm_environment
+import pytest
+
+from tests.agentica_test import TARGET_OS, compile_agc, run_vm, start_vm, vm_environment
+from tests.vm_os_support import compile_work_text, root, work
 from tests.windows_support import kernel32_file_api
 
 # The documented Windows values: mode carries the read-only attribute only, and both owner ids are 0.
@@ -162,198 +164,215 @@ def main() -> Void
 end
 """
 
+REQUIRES_WINDOWS_VM = pytest.mark.skipif(TARGET_OS != "windows", reason="requires the native Windows VM")
 
-@unittest.skipUnless(TARGET_OS == "windows", "requires the native Windows VM")
-class WindowsMetadataTests(TestCase):
+
+def _metadata(bytecode, path, root) -> list[str]:
+    """Run the metadata probe program for one path; return its stdout words."""
+    result = run_vm(bytecode, args=[str(path)], env=vm_environment(), cwd=root)
+    assert (result.code, result.stderr) == (0, ""), result.stderr
+    return result.stdout.split()
+
+
+@REQUIRES_WINDOWS_VM
+def test_a_regular_file_reports_no_owner_and_only_the_read_only_attribute(root, work):
     """Check the metadata values the Windows platform really reports."""
-
-    def setUp(self) -> None:
-        self.root = self.make_temp_dir("agentica-windows-metadata-").resolve()
-        self.bytecode = self.compile_text(METADATA_PROGRAM, "windows-metadata")
-
-    def metadata(self, path) -> list[str]:
-        result = run_vm(self.bytecode, args=[str(path)], env=vm_environment(), cwd=self.root)
-        self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
-        return result.stdout.split()
-
-    def test_a_regular_file_reports_no_owner_and_only_the_read_only_attribute(self) -> None:
-        target = self.root / "plain.txt"
-        target.write_text("plain", encoding="utf-8")
-        kind, mode, user_id, group_id = self.metadata(target)
-        self.assertEqual(kind, "file")
-        self.assertEqual(mode, str(WRITABLE_MODE))
-        # A 0 here is not an owner: the platform has no Unix owner ids, so the fields carry nothing to look up.
-        self.assertEqual((user_id, group_id), ("0", "0"))
-
-        os.chmod(target, stat.S_IREAD)
-        kind, mode, user_id, group_id = self.metadata(target)
-        self.assertEqual((kind, mode, user_id, group_id), ("file", str(READ_ONLY_MODE), "0", "0"))
-
-        os.chmod(target, stat.S_IWRITE)
-        self.assertEqual(self.metadata(target)[1], str(WRITABLE_MODE))
-
-    def test_a_directory_reports_the_same_zero_owner(self) -> None:
-        directory = self.root / "directory"
-        directory.mkdir()
-        kind, mode, user_id, group_id = self.metadata(directory)
-        self.assertEqual((kind, mode, user_id, group_id), ("directory", str(WRITABLE_MODE), "0", "0"))
-
-    # Wine answers access denied for the restricted creators: it does not implement the owner and DACL the adapter sets
-    # and then checks on the object it opened, so this case is evidence from the native runner only.
-    @unittest.skipIf(os.environ.get("AGENTICA_TEST_WINE") == "1", "Wine cannot make the restricted object")
-    def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(self) -> None:
-        private_file = self.root / "private.txt"
-        private_directory = self.root / "private-directory"
-        bytecode = self.compile_text(PRIVATE_PROGRAM, "windows-private")
-        result = run_vm(bytecode, args=[str(private_file), str(private_directory)], env=vm_environment(), cwd=self.root)
-        self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
-        self.assertEqual(
-            result.stdout.splitlines(),
-            [f"file {WRITABLE_MODE} 0 0", f"directory {WRITABLE_MODE} 0 0"],
-        )
-        self.assertEqual(self.metadata(private_file)[2:], ["0", "0"])
-        self.assertTrue(private_directory.is_dir())
+    bytecode = compile_work_text(work, METADATA_PROGRAM, "windows-metadata")
 
 
-@unittest.skipUnless(TARGET_OS == "windows", "requires the native Windows VM")
-class WindowsLockTests(TestCase):
+    target = root / "plain.txt"
+    target.write_text("plain", encoding="utf-8")
+    kind, mode, user_id, group_id = _metadata(bytecode, target, root)
+    assert kind == "file"
+    assert mode == str(WRITABLE_MODE)
+    # A 0 here is not an owner: the platform has no Unix owner ids, so the fields carry nothing to look up.
+    assert (user_id, group_id) == ("0", "0")
+
+    os.chmod(target, stat.S_IREAD)
+    kind, mode, user_id, group_id = _metadata(bytecode, target, root)
+    assert (kind, mode, user_id, group_id) == ("file", str(READ_ONLY_MODE), "0", "0")
+
+    os.chmod(target, stat.S_IWRITE)
+    assert _metadata(bytecode, target, root)[1] == str(WRITABLE_MODE)
+
+
+@REQUIRES_WINDOWS_VM
+def test_a_directory_reports_the_same_zero_owner(root, work):
+    bytecode = compile_work_text(work, METADATA_PROGRAM, "windows-metadata")
+
+
+    directory = root / "directory"
+    directory.mkdir()
+    kind, mode, user_id, group_id = _metadata(bytecode, directory, root)
+    assert (kind, mode, user_id, group_id) == ("directory", str(WRITABLE_MODE), "0", "0")
+
+
+# Wine answers access denied for the restricted creators: it does not implement the owner and DACL the adapter sets
+# and then checks on the object it opened, so this case is evidence from the native runner only.
+@REQUIRES_WINDOWS_VM
+@pytest.mark.skipif(os.environ.get("AGENTICA_TEST_WINE") == "1", reason="Wine cannot make the restricted object")
+def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(root, work):
+    metadata_bytecode = compile_work_text(work, METADATA_PROGRAM, "windows-metadata")
+    private_file = root / "private.txt"
+    private_directory = root / "private-directory"
+    bytecode = compile_work_text(work, PRIVATE_PROGRAM, "windows-private")
+    result = run_vm(bytecode, args=[str(private_file), str(private_directory)], env=vm_environment(), cwd=root)
+    assert (result.code, result.stderr) == (0, ""), result.stderr
+    assert result.stdout.splitlines() == [
+        f"file {WRITABLE_MODE} 0 0", f"directory {WRITABLE_MODE} 0 0",
+    ]
+    assert _metadata(metadata_bytecode, private_file, root)[2:] == ["0", "0"]
+    assert private_directory.is_dir()
+
+
+def _probe_lock(root, target, bytecode) -> str:
+    """Ask another process for the lock; "true" or "false", never a timeout."""
+    result = run_vm(bytecode, args=[str(target), "probe"], env=vm_environment(), cwd=root)
+    assert (result.code, result.stderr) == (0, ""), result.stderr
+    return result.stdout.strip()
+
+
+def _hold_lock(root, target, bytecode, adopt):
+    """A process holding the lock and waiting on stdin, adopted so the test always stops it."""
+    child = adopt(start_vm(bytecode, str(target), "hold", stdin=True, cwd=root))
+    assert child.next_line() == "true"
+    assert child.next_line() == "ready"
+    return child
+
+
+def _lock_case(root, work):
+    """A fresh lock target and the contention program for it."""
+    target = root / "lock"
+    target.write_text("", encoding="utf-8")
+    return target, compile_work_text(work, CONTENTION_PROGRAM, "windows-contention")
+
+
+@REQUIRES_WINDOWS_VM
+def test_a_lock_contends_across_processes_and_frees_when_the_holder_ends(root, work, adopt):
     """Check that a Windows lock contends across processes and dies with its holder."""
-
-    def setUp(self) -> None:
-        self.root = self.make_temp_dir("agentica-windows-lock-").resolve()
-        self.target = self.root / "lock"
-        self.target.write_text("", encoding="utf-8")
-        self.bytecode = self.compile_text(CONTENTION_PROGRAM, "windows-contention")
-
-    def probe(self) -> str:
-        """Ask another process for the lock; "true" or "false", never a timeout."""
-        result = run_vm(self.bytecode, args=[str(self.target), "probe"], env=vm_environment(), cwd=self.root)
-        self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
-        return result.stdout.strip()
-
-    def holder(self):
-        """A process holding the lock and waiting on stdin, adopted so the test always stops it."""
-        child = self.adopt(start_vm(self.bytecode, str(self.target), "hold", stdin=True, cwd=self.root))
-        self.assertEqual(child.next_line(), "true")
-        self.assertEqual(child.next_line(), "ready")
-        return child
-
-    def test_a_lock_contends_across_processes_and_frees_when_the_holder_ends(self) -> None:
-        self.assertEqual(self.probe(), "true")
-        holder = self.holder()
-        try:
-            self.assertEqual(self.probe(), "false")
-        finally:
-            holder.close_stdin()
-        self.assertEqual(holder.wait(), 0)
-        self.assertIsNotNone(holder.process.poll())
-        self.assertEqual(self.probe(), "true")
-
-    def test_a_killed_holder_frees_the_lock(self) -> None:
-        holder = self.holder()
-        try:
-            self.assertEqual(self.probe(), "false")
-        finally:
-            holder.stop()
-        self.assertIsNotNone(holder.process.poll(), "the holder process must be gone before the lock is asked for")
-        self.assertEqual(self.probe(), "true")
-
-    def test_cancelled_owner_releases_its_lock_without_ending_the_process(self) -> None:
-        bytecode = self.compile_text(CANCELLED_LOCK_PROGRAM, "windows-cancelled-lock")
-        result = run_vm(
-            bytecode, args=[str(self.target)], env=vm_environment(), cwd=self.root
-        )
-        self.assertEqual(result.code, 0, result.stderr)
-        self.assertIn("RUNTIME-UNWRAP-ERROR", result.stderr)
-        self.assertEqual(result.stdout, "true\nfalse\nfalse\ntrue\n")
-
-    def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(self) -> None:
-        bytecode = self.compile_text(TASK_LOCK_PROGRAM, "windows-task-lock")
-        result = run_vm(bytecode, args=[str(self.target)], env=vm_environment(), cwd=self.root)
-        self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
-        # The first task takes it and ends, so a later handle takes it; that handle then blocks another task until it
-        # is closed. Every line is sequenced by an await.
-        self.assertEqual(result.stdout, "true\ntrue\ntrue\nfalse\ntrue\n")
-        self.assertEqual(self.probe(), "true")
+    target, bytecode = _lock_case(root, work)
+    assert _probe_lock(root, target, bytecode) == "true"
+    holder = _hold_lock(root, target, bytecode, adopt)
+    try:
+        assert _probe_lock(root, target, bytecode) == "false"
+    finally:
+        holder.close_stdin()
+    assert holder.wait() == 0
+    assert holder.process.poll() is not None
+    assert _probe_lock(root, target, bytecode) == "true"
 
 
-@unittest.skipUnless(TARGET_OS == "windows", "requires the Windows VM")
-class WindowsLineTests(TestCase):
+@REQUIRES_WINDOWS_VM
+def test_a_killed_holder_frees_the_lock(root, work, adopt):
+    target, bytecode = _lock_case(root, work)
+    holder = _hold_lock(root, target, bytecode, adopt)
+    try:
+        assert _probe_lock(root, target, bytecode) == "false"
+    finally:
+        holder.stop()
+    assert holder.process.poll() is not None, "the holder process must be gone before the lock is asked for"
+    assert _probe_lock(root, target, bytecode) == "true"
+
+
+@REQUIRES_WINDOWS_VM
+def test_cancelled_owner_releases_its_lock_without_ending_the_process(root, work):
+    target, bytecode = _lock_case(root, work)
+    cancelled = compile_work_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lock")
+    result = run_vm(
+        cancelled, args=[str(target)], env=vm_environment(), cwd=root
+    )
+    assert result.code == 0, result.stderr
+    assert "RUNTIME-UNWRAP-ERROR" in result.stderr
+    assert result.stdout == "true\nfalse\nfalse\ntrue\n"
+
+
+@REQUIRES_WINDOWS_VM
+def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(root, work):
+    target, bytecode = _lock_case(root, work)
+    task = compile_work_text(work, TASK_LOCK_PROGRAM, "windows-task-lock")
+    result = run_vm(task, args=[str(target)], env=vm_environment(), cwd=root)
+    assert (result.code, result.stderr) == (0, ""), result.stderr
+    # The first task takes it and ends, so a later handle takes it; that handle then blocks another task until it
+    # is closed. Every line is sequenced by an await.
+    assert result.stdout == "true\ntrue\ntrue\nfalse\ntrue\n"
+    assert _probe_lock(root, target, bytecode) == "true"
+
+
+@REQUIRES_WINDOWS_VM
+def test_empty_crlf_lf_unterminated_and_invalid_utf8(tmp_path, work):
     """Check ordinary-file line decoding independently of pipe support."""
-
-    def test_empty_crlf_lf_unterminated_and_invalid_utf8(self) -> None:
-        root = self.make_temp_dir("agentica-windows-lines-")
-        bytecode = self.compile_text(READ_LINES_PROGRAM, "windows-lines")
-        cases = (
-            (b"", 1, []),
-            (b"one\r\ntwo\nlast", 4, ['ok("one")', 'ok("two")', 'ok("last")']),
-            (b"\n\r\n", 3, ['ok("")', 'ok("")']),
-            (b"\xff\n", 1, []),
-            (b"\xe2\x82", 1, []),
-        )
-        for number, (data, count, successful) in enumerate(cases):
-            with self.subTest(data=data):
-                target = root / f"case-{number}"
-                target.write_bytes(data)
-                result = run_vm(
-                    bytecode, args=[str(target), str(count)],
-                    env=vm_environment(), cwd=root,
-                )
-                self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
-                lines = result.stdout.splitlines()
-                self.assertEqual(lines[:len(successful)], successful)
-                self.assertTrue(lines[-2].startswith("error("), lines)
-                self.assertEqual(lines[-1], "true")
-
-    @unittest.skipUnless(os.name == "nt", "exclusive handle probe needs Win32")
-    def test_each_line_closes_its_file_on_eof_callback_error_and_decode_error(self) -> None:
-        root = self.make_temp_dir("agentica-windows-each-line-")
-        bytecode = self.compile_text(EACH_LINE_PROGRAM, "windows-each-line")
-        kernel32 = kernel32_file_api()
-        cancelled = self.compile_text(CANCELLED_LOCK_PROGRAM, "windows-cancelled-lines")
-        cases = (
-            (b"first\nsecond\n", "cancel", ["true", "false", "false"]),
-            (b"one\r\ntwo\nlast", "all", ['"one"', '"two"', '"last"', "true"]),
-            (b"one\ntwo\n", "stop", ['"one"', "false"]),
-            (b"\xff\n", "all", ["false"]),
-            (b"", "all", ["true"]),
-        )
-        for number, (data, mode, expected) in enumerate(cases):
-            with self.subTest(mode=mode, data=data):
-                target = root / f"case-{number}"
-                target.write_bytes(data)
-                program = cancelled if mode == "cancel" else bytecode
-                child = self.adopt(start_vm(
-                    program, str(target), mode, stdin=True, cwd=root
-                ))
-                for line in expected:
-                    self.assertEqual(child.next_line(), line)
-                self.assertEqual(child.next_line(), "ready")
-                self.assertIsNone(child.process.poll())
-                # Zero sharing fails while any reader still has the file open.
-                handle = kernel32.CreateFileW(
-                    str(target), 0x80000000, 0, None, 3, 0, None
-                )
-                try:
-                    self.assertNotEqual(
-                        handle, ctypes.c_void_p(-1).value,
-                        ctypes.WinError(ctypes.get_last_error()),
-                    )
-                finally:
-                    if handle != ctypes.c_void_p(-1).value:
-                        self.assertTrue(kernel32.CloseHandle(handle))
-                    child.close_stdin()
-                self.assertEqual(child.wait(), 0)
-
-    def test_overlong_line_returns_error_and_handle_can_be_closed(self) -> None:
-        root = self.make_temp_dir("agentica-windows-line-limit-")
-        target = root / "long-line"
-        target.write_bytes(b"x" * (1048576 + 1))
-        bytecode = self.compile_text(READ_LINES_PROGRAM, "windows-line-limit")
+    box = tmp_path
+    bytecode = compile_work_text(work, READ_LINES_PROGRAM, "windows-lines")
+    cases = (
+        (b"", 1, []),
+        (b"one\r\ntwo\nlast", 4, ['ok("one")', 'ok("two")', 'ok("last")']),
+        (b"\n\r\n", 3, ['ok("")', 'ok("")']),
+        (b"\xff\n", 1, []),
+        (b"\xe2\x82", 1, []),
+    )
+    for number, (data, count, successful) in enumerate(cases):
+        target = box / f"case-{number}"
+        target.write_bytes(data)
         result = run_vm(
-            bytecode, args=[str(target), "1"], env=vm_environment(), cwd=root
+            bytecode, args=[str(target), str(count)],
+            env=vm_environment(), cwd=box,
         )
-        self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
+        assert (result.code, result.stderr) == (0, ""), result.stderr
         lines = result.stdout.splitlines()
-        self.assertTrue(lines[0].startswith("error("), lines)
-        self.assertEqual(lines[1], "true")
+        assert lines[:len(successful)] == successful
+        assert lines[-2].startswith("error("), lines
+        assert lines[-1] == "true"
+
+
+@REQUIRES_WINDOWS_VM
+@pytest.mark.skipif(os.name != "nt", reason="exclusive handle probe needs Win32")
+def test_each_line_closes_its_file_on_eof_callback_error_and_decode_error(tmp_path, work, adopt):
+    box = tmp_path
+    bytecode = compile_work_text(work, EACH_LINE_PROGRAM, "windows-each-line")
+    kernel32 = kernel32_file_api()
+    cancelled = compile_work_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lines")
+    cases = (
+        (b"first\nsecond\n", "cancel", ["true", "false", "false"]),
+        (b"one\r\ntwo\nlast", "all", ['"one"', '"two"', '"last"', "true"]),
+        (b"one\ntwo\n", "stop", ['"one"', "false"]),
+        (b"\xff\n", "all", ["false"]),
+        (b"", "all", ["true"]),
+    )
+    for number, (data, mode, expected) in enumerate(cases):
+        target = box / f"case-{number}"
+        target.write_bytes(data)
+        program = cancelled if mode == "cancel" else bytecode
+        child = adopt(start_vm(
+            program, str(target), mode, stdin=True, cwd=box
+        ))
+        for line in expected:
+            assert child.next_line() == line
+        assert child.next_line() == "ready"
+        assert child.process.poll() is None
+        # Zero sharing fails while any reader still has the file open.
+        handle = kernel32.CreateFileW(
+            str(target), 0x80000000, 0, None, 3, 0, None
+        )
+        try:
+            assert handle != ctypes.c_void_p(-1).value, \
+                ctypes.WinError(ctypes.get_last_error())
+        finally:
+            if handle != ctypes.c_void_p(-1).value:
+                assert kernel32.CloseHandle(handle)
+            child.close_stdin()
+        assert child.wait() == 0
+
+
+@REQUIRES_WINDOWS_VM
+def test_overlong_line_returns_error_and_handle_can_be_closed(tmp_path, work):
+    box = tmp_path
+    target = box / "long-line"
+    target.write_bytes(b"x" * (1048576 + 1))
+    bytecode = compile_work_text(work, READ_LINES_PROGRAM, "windows-line-limit")
+    result = run_vm(
+        bytecode, args=[str(target), "1"], env=vm_environment(), cwd=box
+    )
+    assert (result.code, result.stderr) == (0, ""), result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0].startswith("error("), lines
+    assert lines[1] == "true"

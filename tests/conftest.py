@@ -20,7 +20,24 @@ from tests.agentica_test import (
     cli,
     run,
     scaled,
+    tool,
 )
+
+
+@pytest.fixture
+def adopt(request):
+    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
+    def register(child):
+        request.addfinalizer(child.stop)
+        return child
+
+    return register
+
+
+@pytest.fixture
+def node():
+    """The Node.js tool for peer servers."""
+    return tool("node")
 
 
 def pytest_collection_modifyitems(items):

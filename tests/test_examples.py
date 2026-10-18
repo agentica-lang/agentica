@@ -94,13 +94,6 @@ def program(tmp_path):
     return write
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); returns it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-    return register
 
 
 def cli_run(*arguments, stdin=b""):

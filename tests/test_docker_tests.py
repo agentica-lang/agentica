@@ -168,7 +168,7 @@ def test_each_group_runs_its_own_command(launcher):
         "slow": ("make -j\"$jobs\" test-slow",),
         "files": ("build/vm/release/tree-test", "python3 -m pytest", "tests/test_vm_os_remove.py", "tests/test_bdd_cleanup.py"),
         "bdd": ("tests/bdd/specs/",),
-        "windows-wine-tests": ("tests.test_windows_filesystem_safety",),
+        "windows-wine-tests": ("tests/test_windows_filesystem_safety.py",),
     }
     for mode, markers in expected.items():
         launcher.log.unlink(missing_ok=True)
@@ -182,19 +182,14 @@ def test_each_group_runs_its_own_command(launcher):
 def test_isolated_modules_do_not_collect_imported_test_classes():
     from tests import test_bdd_cleanup, test_vm_os_remove
 
-    suite = unittest.defaultTestLoader.loadTestsFromModule(test_vm_os_remove)
-    assert suite.countTestCases() > 0
-    pending = list(suite)
-    while pending:
-        test = pending.pop()
-        if isinstance(test, unittest.TestSuite):
-            pending.extend(test)
-        else:
-            assert type(test).__module__ == test_vm_os_remove.__name__
-    # test_bdd_cleanup is pytest-native: it imports no TestCase, so unittest cannot collect a base class's cases.
-    imported = [name for name, value in vars(test_bdd_cleanup).items()
-                if isinstance(value, type) and issubclass(value, unittest.TestCase)]
-    assert imported == []
+    # Both isolated modules are pytest-native: unittest collects no cases from them,
+    # and neither re-exports tests defined in another module (pytest would collect those too).
+    for module in (test_bdd_cleanup, test_vm_os_remove):
+        assert unittest.defaultTestLoader.loadTestsFromModule(module).countTestCases() == 0
+        imported = [name for name, value in vars(module).items()
+                    if name.startswith("test_") and callable(value)
+                    and getattr(value, "__module__", None) != module.__name__]
+        assert imported == [], module.__name__
 
 
 def test_actions_entrypoint_refuses_local_execution(tmp_path):

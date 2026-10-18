@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from tests.agentica_test import FIXTURES, compile_agc, vm_binary
 from tests.vm_diff_support import (
     FIXTURE_TOKEN, FIXTURES_PREFIX, Fixture, VmCase, check_fixture_filter, fixture_selected,
@@ -38,6 +40,11 @@ CASES = [
 STYLES = [("plain", []), ("ai", ["--ai"]), ("json", ["--json"])]
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _warmup():
+    vm_binary()
+
+
 def sidecar(name, style):
     return FIXTURES / ("%s.stack.%s" % (name, style))
 
@@ -60,30 +67,56 @@ def selected_cases():
     return [(name, extra) for name, extra in CASES if fixture_selected(Path(name).name)]
 
 
-def _method(name, extra):
-    def method(self):
-        # One compile per fixture; the three formats only change the VM options.
-        work = self.work_dir()
-        program, bytecode = compile_fixture(name, work)
-        for style, options in STYLES:
-            with self.subTest(style=style):
-                text = stderr_of(program, bytecode, extra, options, work)
-                self.assertEqual(text, sidecar(name, style).read_text(encoding="utf-8"))
+def check_case(name, extra, work):
+    """One fixture in the plain, --ai and --json formats against its sidecars."""
+    # One compile per fixture; the three formats only change the VM options.
+    program, bytecode = compile_fixture(name, work)
+    for style, options in STYLES:
+        text = stderr_of(program, bytecode, extra, options, work)
+        assert text == sidecar(name, style).read_text(encoding="utf-8"), style
 
-    method.__doc__ = "%s in the plain, --ai and --json formats" % name
+
+def _make_test(name, extra):
+    def test_stack(tmp_path):
+        check_case(name, extra, tmp_path)
+
+    test_stack.__name__ = "test_%s" % Path(name).name.replace("-", "_")
+    test_stack.__doc__ = "%s in the plain, --ai and --json formats" % name
+    return test_stack
+
+
+_STACK_TESTS = []
+for _name, _extra in selected_cases():
+    _test = _make_test(_name, _extra)
+    assert _test.__name__ not in globals(), _test.__name__
+    globals()[_test.__name__] = _test
+    _STACK_TESTS.append(_test)
+
+
+def _unittest_method(test):
+    def method(self):
+        test(self.work_dir())
+
+    method.__name__ = test.__name__
+    method.__doc__ = test.__doc__
     return method
 
 
-def _methods():
-    return {"test_%s" % Path(name).name.replace("-", "_"): _method(name, extra) for name, extra in selected_cases()}
+class StackTraces(VmCase):
+    """unittest entry for `python3 -m tests.vm_diff_support check` (make vm-golden-check).
+
+    pytest collects the module-level tests above; this class only serves the golden check."""
+
+    __test__ = False
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        vm_binary()
 
 
-def _set_up_class(cls):
-    super(cls, cls).setUpClass()
-    vm_binary()
-
-
-StackTraces = type("StackTraces", (VmCase,), {**_methods(), "setUpClass": classmethod(_set_up_class)})
+for _test in _STACK_TESTS:
+    setattr(StackTraces, _test.__name__, _unittest_method(_test))
 
 
 def write_sidecars():

@@ -14,11 +14,11 @@ import json
 import math
 import re
 import struct
-import tempfile
-import unittest
 from pathlib import Path
 
-from tests.agentica_test import FIXTURES, TestCase, compile_agc, require, run_vm
+import pytest
+
+from tests.agentica_test import FIXTURES, compile_agc, require, run_vm
 
 try:
     import tomllib
@@ -28,6 +28,7 @@ except ImportError:  # Python before 3.11
 TOML_DIR = FIXTURES / "toml"
 TOML_TEST = FIXTURES / "toml-test"
 POSITION = re.compile(r"^line \d+, column \d+: \S")
+NEEDS_TOMLLIB = pytest.mark.skipif(tomllib is None, reason="tomllib needs Python 3.11 or later")
 
 
 def float_bits(x):
@@ -114,129 +115,151 @@ def relative(path):
     return str(Path(path).relative_to(FIXTURES))
 
 
+@pytest.fixture(scope="module")
+def toml_driver(tmp_path_factory):
+    """The driver bytecode and a work directory for the .toml files, compiled once for the module."""
+    work = tmp_path_factory.mktemp("agentica-toml-")
+    driver = compile_agc(TOML_DIR / "driver.agc", work / "driver.agcb")
+    return work, driver
+
+
+@pytest.fixture(scope="module")
+def misc_bytecode(tmp_path_factory):
+    """The misc caller program, compiled once for the module."""
+    work = tmp_path_factory.mktemp("agentica-toml-")
+    return compile_agc(TOML_DIR / "misc.agc", work / "misc.agcb")
+
+
 class Reports:
     """The driver's lines for a list of files, by path."""
 
-    def __init__(self, case, bytecode, paths):
+    def __init__(self, bytecode, paths):
         self.by_path = {}
         # A few hundred paths per run keep the command line short.
         for start in range(0, len(paths), 300):
             result = run_vm(bytecode, args=[str(p) for p in paths[start:start + 300]])
-            case.assertEqual(result.code, 0, result.stderr)
+            assert result.code == 0, result.stderr
             for line in result.stdout.splitlines():
                 report = json.loads(line)
                 self.by_path[report["name"]] = report
-        case.assertEqual(len(self.by_path), len(paths))
+        assert len(self.by_path) == len(paths)
 
     def of(self, path):
         return self.by_path[str(path)]
 
 
-class TomlTestCase(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        work = tempfile.TemporaryDirectory(prefix="agentica-toml-")
-        cls.addClassCleanup(work.cleanup)
-        cls.work = Path(work.name)
-        cls.driver = compile_agc(TOML_DIR / "driver.agc", cls.work / "driver.agcb")
-
-    def reports(self, paths):
-        return Reports(self, self.driver, paths)
-
-    def parse_text(self, name, text):
-        """The driver's report for a text written to a file (bytes are written as they are)."""
-        path = self.work / (name + ".toml")
-        path.write_bytes(text if isinstance(text, bytes) else text.encode("utf-8"))
-        return self.reports([path]).of(path)
+def make_reports(bytecode, paths):
+    return Reports(bytecode, paths)
 
 
-class TomlTestSuite(TomlTestCase):
-    """The vendored toml-test files, read without any other parser."""
-
-    def test_valid_inputs_decode_to_the_expected_value(self):
-        paths = sorted((TOML_TEST / "valid").rglob("*.toml"))
-        self.assertGreater(len(paths), 200)
-        reports = self.reports(paths)
-        for path in paths:
-            report = reports.of(path)
-            expected = from_toml_test(json.loads(path.with_suffix(".json").read_text(encoding="utf-8")))
-            self.assertTrue(report["ok"], "%s: %s" % (relative(path), report.get("error")))
-            self.assertEqual(from_driver(report["tagged"]), expected, relative(path))
-
-    def test_valid_inputs_round_trip_through_the_encoder(self):
-        paths = sorted((TOML_TEST / "valid").rglob("*.toml"))
-        reports = self.reports(paths)
-        for path in paths:
-            report = reports.of(path)
-            self.assertNotIn("encode_error", report, relative(path))
-            self.assertNotIn("reparse_error", report, relative(path))
-            self.assertEqual(from_driver(report["again"]), from_driver(report["tagged"]), relative(path))
-
-    def test_invalid_inputs_are_errors_with_a_position(self):
-        paths = sorted((TOML_TEST / "invalid").rglob("*.toml"))
-        self.assertGreater(len(paths), 400)
-        reports = self.reports(paths)
-        for path in paths:
-            report = reports.of(path)
-            self.assertFalse(report["ok"], "%s was accepted" % relative(path))
-            # A file that is not UTF-8 never reaches the parser: the file read fails.
-            if not report["error"].startswith("line "):
-                self.assertRaises(UnicodeDecodeError, path.read_bytes().decode, "utf-8")
-            else:
-                self.assertRegex(report["error"], POSITION, relative(path))
+def parse_text(work, bytecode, name, text):
+    """The driver's report for a text written to a file (bytes are written as they are)."""
+    path = work / (name + ".toml")
+    path.write_bytes(text if isinstance(text, bytes) else text.encode("utf-8"))
+    return make_reports(bytecode, [path]).of(path)
 
 
-class TomllibPeer(TomlTestCase):
-    """Python's tomllib reads the same inputs and the encoder output."""
+def own_valid():
+    return sorted((TOML_DIR / "valid").glob("*.toml"))
 
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        require(tomllib is not None, "tomllib needs Python 3.11 or later")
 
-    def own_valid(self):
-        return sorted((TOML_DIR / "valid").glob("*.toml"))
+def misc_lines(bytecode, case):
+    result = run_vm(bytecode, args=[case])
+    assert result.code == 0, result.stderr
+    return result.stdout.rstrip("\n").split("\n")
 
-    def test_own_inputs_match_tomllib(self):
-        paths = self.own_valid()
-        self.assertGreaterEqual(len(paths), 10)
-        reports = self.reports(paths)
-        for path in paths:
-            report = reports.of(path)
-            self.assertTrue(report["ok"], "%s: %s" % (path.name, report.get("error")))
-            expected = from_tomllib(tomllib.loads(path.read_bytes().decode("utf-8")))
-            self.assertEqual(from_driver(report["tagged"]), expected, path.name)
 
-    def test_toml_test_inputs_match_tomllib(self):
-        paths = sorted((TOML_TEST / "valid").rglob("*.toml"))
-        reports = self.reports(paths)
-        for path in paths:
-            expected = from_tomllib(tomllib.loads(path.read_bytes().decode("utf-8")))
-            self.assertEqual(from_driver(reports.of(path)["tagged"]), expected, relative(path))
+def test_valid_inputs_decode_to_the_expected_value(toml_driver):
+    work, driver = toml_driver
+    paths = sorted((TOML_TEST / "valid").rglob("*.toml"))
+    assert len(paths) > 200
+    reports = make_reports(driver, paths)
+    for path in paths:
+        report = reports.of(path)
+        expected = from_toml_test(json.loads(path.with_suffix(".json").read_text(encoding="utf-8")))
+        assert report["ok"], "%s: %s" % (relative(path), report.get("error"))
+        assert from_driver(report["tagged"]) == expected, relative(path)
 
-    def test_encoder_output_is_valid_toml_with_the_same_value(self):
-        paths = self.own_valid() + sorted((TOML_TEST / "valid").rglob("*.toml"))
-        reports = self.reports(paths)
-        for path in paths:
-            report = reports.of(path)
-            # Our reader and the peer read what the encoder wrote, and agree with the first decode.
-            self.assertEqual(from_driver(report["again"]), from_driver(report["tagged"]), relative(path))
-            peer = from_tomllib(tomllib.loads(report["encoded"]))
-            self.assertEqual(peer, from_driver(report["tagged"]), relative(path))
 
-    def test_encoder_is_stable(self):
-        paths = self.own_valid()
-        first = self.reports(paths)
-        for path in paths:
-            report = first.of(path)
-            again = self.parse_text("again-" + path.stem, report["encoded"])
-            self.assertEqual(again["encoded"], report["encoded"], path.name)
+def test_valid_inputs_round_trip_through_the_encoder(toml_driver):
+    work, driver = toml_driver
+    paths = sorted((TOML_TEST / "valid").rglob("*.toml"))
+    reports = make_reports(driver, paths)
+    for path in paths:
+        report = reports.of(path)
+        assert "encode_error" not in report, relative(path)
+        assert "reparse_error" not in report, relative(path)
+        assert from_driver(report["again"]) == from_driver(report["tagged"]), relative(path)
 
-    def test_peer_rejects_what_we_reject(self):
-        for name, text in INVALID.items():
-            with self.assertRaises(tomllib.TOMLDecodeError, msg=name):
-                tomllib.loads(text)
+
+def test_invalid_inputs_are_errors_with_a_position(toml_driver):
+    work, driver = toml_driver
+    paths = sorted((TOML_TEST / "invalid").rglob("*.toml"))
+    assert len(paths) > 400
+    reports = make_reports(driver, paths)
+    for path in paths:
+        report = reports.of(path)
+        assert not report["ok"], "%s was accepted" % relative(path)
+        # A file that is not UTF-8 never reaches the parser: the file read fails.
+        if not report["error"].startswith("line "):
+            with pytest.raises(UnicodeDecodeError):
+                path.read_bytes().decode("utf-8")
+        else:
+            assert re.search(POSITION, report["error"]), relative(path)
+
+
+@NEEDS_TOMLLIB
+def test_own_inputs_match_tomllib(toml_driver):
+    work, driver = toml_driver
+    paths = own_valid()
+    assert len(paths) >= 10
+    reports = make_reports(driver, paths)
+    for path in paths:
+        report = reports.of(path)
+        assert report["ok"], "%s: %s" % (path.name, report.get("error"))
+        expected = from_tomllib(tomllib.loads(path.read_bytes().decode("utf-8")))
+        assert from_driver(report["tagged"]) == expected, path.name
+
+
+@NEEDS_TOMLLIB
+def test_toml_test_inputs_match_tomllib(toml_driver):
+    work, driver = toml_driver
+    paths = sorted((TOML_TEST / "valid").rglob("*.toml"))
+    reports = make_reports(driver, paths)
+    for path in paths:
+        expected = from_tomllib(tomllib.loads(path.read_bytes().decode("utf-8")))
+        assert from_driver(reports.of(path)["tagged"]) == expected, relative(path)
+
+
+@NEEDS_TOMLLIB
+def test_encoder_output_is_valid_toml_with_the_same_value(toml_driver):
+    work, driver = toml_driver
+    paths = own_valid() + sorted((TOML_TEST / "valid").rglob("*.toml"))
+    reports = make_reports(driver, paths)
+    for path in paths:
+        report = reports.of(path)
+        # Our reader and the peer read what the encoder wrote, and agree with the first decode.
+        assert from_driver(report["again"]) == from_driver(report["tagged"]), relative(path)
+        peer = from_tomllib(tomllib.loads(report["encoded"]))
+        assert peer == from_driver(report["tagged"]), relative(path)
+
+
+@NEEDS_TOMLLIB
+def test_encoder_is_stable(toml_driver):
+    work, driver = toml_driver
+    paths = own_valid()
+    first = make_reports(driver, paths)
+    for path in paths:
+        report = first.of(path)
+        again = parse_text(work, driver, "again-" + path.stem, report["encoded"])
+        assert again["encoded"] == report["encoded"], path.name
+
+
+@NEEDS_TOMLLIB
+def test_peer_rejects_what_we_reject():
+    for name, text in INVALID.items():
+        with pytest.raises(tomllib.TOMLDecodeError):
+            tomllib.loads(text)
 
 
 # Inputs that both parsers must reject. The values are written with escapes: no control character in this source.
@@ -313,221 +336,220 @@ INVALID = {
 }
 
 
-class OwnInvalid(TomlTestCase):
-    def test_invalid_inputs_are_errors_with_a_position(self):
-        paths = []
-        for name, text in INVALID.items():
-            path = self.work / ("invalid-" + name + ".toml")
-            path.write_bytes(text.encode("utf-8"))
-            paths.append(path)
-        reports = self.reports(paths)
-        for path in paths:
-            report = reports.of(path)
-            self.assertFalse(report["ok"], "%s was accepted" % path.name)
-            self.assertRegex(report["error"], POSITION, path.name)
-
-    def test_error_messages_name_line_and_column(self):
-        cases = [
-            ("a = 1\nb = 2\nc d\n", "line 3, column 3: expected '=' after key"),
-            ("a = 1\nb =\n", "line 2, column 4: expected a value"),
-            ("a = 1\na = 2\n", "line 2, column 1: key \"a\" is already defined"),
-            ("  x = [1, 2\n", "line 2, column 1: expected ',' or ']' in an array"),
-            ("s = \"abc\n", "line 1, column 5: unterminated string"),
-            ("a = 1 # ok\nb = 1979-02-30\n", "line 2, column 5: invalid date"),
-            ("t = \"caf\u00e9\" x\n", "line 1, column 12: expected a line end after the value"),
-            ("\u00e9 = 1\n", "line 1, column 1: expected a key"),
-            ("a = \"\\q\"\n", "line 1, column 6: invalid escape in a string"),
-            ("[a]\nb = 1\n[a]\n", "line 3, column 1: table \"a\" is already defined"),
-            ("a = 1\r\nb = ?\r\n", "line 2, column 5: expected a value"),
-        ]
-        paths = []
-        for index, (text, _) in enumerate(cases):
-            path = self.work / ("position-%d.toml" % index)
-            path.write_bytes(text.encode("utf-8"))
-            paths.append(path)
-        reports = self.reports(paths)
-        for path, (text, message) in zip(paths, cases):
-            self.assertEqual(reports.of(path).get("error"), message, text)
-
-    def test_integer_bounds(self):
-        text = ("max = 9223372036854775807\nmin = -9223372036854775808\n"
-                "hex_max = 0x7FFFFFFFFFFFFFFF\noct_max = 0o777777777777777777777\nbin_max = 0b" + "1" * 63 + "\n")
-        report = self.parse_text("bounds", text)
-        self.assertTrue(report["ok"], report.get("error"))
-        values = {k: v["v"] for k, v in report["tagged"]["v"].items()}
-        self.assertEqual(values["max"], "9223372036854775807")
-        self.assertEqual(values["min"], "-9223372036854775808")
-        self.assertEqual(values["hex_max"], "9223372036854775807")
-        self.assertEqual(values["oct_max"], "9223372036854775807")
-        self.assertEqual(values["bin_max"], "9223372036854775807")
-        for bad in ("9223372036854775808", "-9223372036854775809", "0x8000000000000000", "0xFFFFFFFFFFFFFFFF",
-                    "0o1000000000000000000000", "0b1" + "0" * 63, "99999999999999999999999999"):
-            report = self.parse_text("overflow", "a = %s\n" % bad)
-            self.assertFalse(report["ok"], bad)
-            self.assertIn("64-bit", report["error"], bad)
-
-    def test_a_header_and_a_key_may_each_reach_the_limit(self):
-        # The reader accepts 256 header parts plus 256 key parts; the writer refuses that depth with an error.
-        text = "[" + ".".join(["a"] * 256) + "]\n" + ".".join(["b"] * 256) + " = 1\n"
-        report = self.parse_text("both-limits", text)
-        self.assertTrue(report["ok"], report.get("error"))
-        self.assertIn("nest more than 256", report["encode_error"])
-
-    def test_float_overflow_is_infinity_like_the_peer(self):
-        report = self.parse_text("overflow-floats", "a = 1e400\nb = -1e400\nc = 1e-400\nd = -1e-400\ne = 2.5e-324\n")
-        self.assertTrue(report["ok"], report.get("error"))
-        values = {k: int(v["v"]) for k, v in report["tagged"]["v"].items()}
-        self.assertEqual(values, {"a": float_bits(math.inf), "b": float_bits(-math.inf), "c": 0,
-                                  "d": float_bits(-0.0), "e": float_bits(5e-324)})
-
-    def test_nesting_limit(self):
-        limit = 256
-        cases = {
-            "arrays-at-limit": ("a = " + "[" * limit + "]" * limit + "\n", True),
-            "arrays-over-limit": ("a = " + "[" * (limit + 1) + "]" * (limit + 1) + "\n", False),
-            "arrays-far-over": ("a = " + "[" * 100000 + "]" * 100000 + "\n", False),
-            "arrays-unclosed": ("a = " + "[" * 100000 + "\n", False),
-            "inline-at-limit": ("a = " + "{a=" * limit + "1" + "}" * limit + "\n", True),
-            "inline-over-limit": ("a = " + "{a=" * (limit + 1) + "1" + "}" * (limit + 1) + "\n", False),
-            "inline-far-over": ("a = " + "{a=" * 100000 + "1" + "}" * 100000 + "\n", False),
-            "mixed-over-limit": ("a = " + "[{a=" * 129 + "1" + "}]" * 129 + "\n", False),
-            "header-at-limit": ("[" + ".".join(["a"] * limit) + "]\n", True),
-            "header-over-limit": ("[" + ".".join(["a"] * (limit + 1)) + "]\n", False),
-            "header-and-key-over-limit": ("[" + ".".join(["a"] * 200) + "]\n" + ".".join(["b"] * 300) + " = 1\n", False),
-            "dotted-key-over-limit": (".".join(["a"] * (limit + 1)) + " = 1\n", False),
-            "header-far-over": ("[" + ".".join(["a"] * 50000) + "]\n", False),
-        }
-        paths = {}
-        for name, (text, _) in cases.items():
-            path = self.work / ("deep-" + name + ".toml")
-            path.write_bytes(text.encode("utf-8"))
-            paths[name] = path
-        reports = self.reports(list(paths.values()))
-        for name, (_, accepted) in cases.items():
-            report = reports.of(paths[name])
-            self.assertEqual(report["ok"], accepted, "%s: %s" % (name, report.get("error")))
-            if accepted:
-                # The deepest value can still be written and read back.
-                self.assertNotIn("encode_error", report, name)
-                self.assertEqual(from_driver(report["again"]), from_driver(report["tagged"]), name)
-            else:
-                self.assertRegex(report["error"], POSITION, name)
-                self.assertTrue("nest more than 256" in report["error"] or "more than 256 parts" in report["error"], name)
+def test_own_invalid_inputs_are_errors_with_a_position(toml_driver):
+    work, driver = toml_driver
+    paths = []
+    for name, text in INVALID.items():
+        path = work / ("invalid-" + name + ".toml")
+        path.write_bytes(text.encode("utf-8"))
+        paths.append(path)
+    reports = make_reports(driver, paths)
+    for path in paths:
+        report = reports.of(path)
+        assert not report["ok"], "%s was accepted" % path.name
+        assert re.search(POSITION, report["error"]), path.name
 
 
-class Misc(TestCase):
-    """Programs that use the module as a caller would: encoder rules, to_json into structs, get."""
+def test_error_messages_name_line_and_column(toml_driver):
+    work, driver = toml_driver
+    cases = [
+        ("a = 1\nb = 2\nc d\n", "line 3, column 3: expected '=' after key"),
+        ("a = 1\nb =\n", "line 2, column 4: expected a value"),
+        ("a = 1\na = 2\n", "line 2, column 1: key \"a\" is already defined"),
+        ("  x = [1, 2\n", "line 2, column 1: expected ',' or ']' in an array"),
+        ("s = \"abc\n", "line 1, column 5: unterminated string"),
+        ("a = 1 # ok\nb = 1979-02-30\n", "line 2, column 5: invalid date"),
+        ("t = \"caf\u00e9\" x\n", "line 1, column 12: expected a line end after the value"),
+        ("\u00e9 = 1\n", "line 1, column 1: expected a key"),
+        ("a = \"\\q\"\n", "line 1, column 6: invalid escape in a string"),
+        ("[a]\nb = 1\n[a]\n", "line 3, column 1: table \"a\" is already defined"),
+        ("a = 1\r\nb = ?\r\n", "line 2, column 5: expected a value"),
+    ]
+    paths = []
+    for index, (text, _) in enumerate(cases):
+        path = work / ("position-%d.toml" % index)
+        path.write_bytes(text.encode("utf-8"))
+        paths.append(path)
+    reports = make_reports(driver, paths)
+    for path, (text, message) in zip(paths, cases):
+        assert reports.of(path).get("error") == message, text
 
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        work = tempfile.TemporaryDirectory(prefix="agentica-toml-")
-        cls.addClassCleanup(work.cleanup)
-        cls.bytecode = compile_agc(TOML_DIR / "misc.agc", Path(work.name) / "misc.agcb")
 
-    def lines(self, case):
-        result = run_vm(self.bytecode, args=[case])
-        self.assertEqual(result.code, 0, result.stderr)
-        return result.stdout.rstrip("\n").split("\n")
+def test_integer_bounds(toml_driver):
+    work, driver = toml_driver
+    text = ("max = 9223372036854775807\nmin = -9223372036854775808\n"
+            "hex_max = 0x7FFFFFFFFFFFFFFF\noct_max = 0o777777777777777777777\nbin_max = 0b" + "1" * 63 + "\n")
+    report = parse_text(work, driver, "bounds", text)
+    assert report["ok"], report.get("error")
+    values = {k: v["v"] for k, v in report["tagged"]["v"].items()}
+    assert values["max"] == "9223372036854775807"
+    assert values["min"] == "-9223372036854775808"
+    assert values["hex_max"] == "9223372036854775807"
+    assert values["oct_max"] == "9223372036854775807"
+    assert values["bin_max"] == "9223372036854775807"
+    for bad in ("9223372036854775808", "-9223372036854775809", "0x8000000000000000", "0xFFFFFFFFFFFFFFFF",
+                "0o1000000000000000000000", "0b1" + "0" * 63, "99999999999999999999999999"):
+        report = parse_text(work, driver, "overflow", "a = %s\n" % bad)
+        assert not report["ok"], bad
+        assert "64-bit" in report["error"], bad
 
-    def test_encoder_puts_plain_entries_before_tables_and_arrays_of_tables(self):
-        # The Map inserts the table and the array of tables before the scalars.
-        text = "\n".join(self.lines("order")).replace("<NL>", "\n")
-        self.assertEqual(text, (
-            "title = \"x\"\nflag = true\n\n[sub]\nz = 1\n\n[[rows]]\nn = 1\n\n[[rows]]\nn = 2\n"))
-        self.assertEqual(tomllib_loads(text), {"title": "x", "flag": True, "sub": {"z": 1}, "rows": [{"n": 1}, {"n": 2}]})
 
-    def test_encoder_quotes_keys_and_strings_and_writes_special_floats(self):
-        out = self.lines("quoting")
-        text = out[0].replace("<NL>", "\n")
-        self.assertEqual(out[1], "same")
-        self.assertIn("\"a b\" = 1\n", text)
-        self.assertIn("\"\" = 2\n", text)
-        self.assertIn("\"dot.key\" = 3\n", text)
-        self.assertIn("plain-key_1 = 4\n", text)
-        self.assertIn("inf = inf\n", text)
-        self.assertIn("neg = -inf\n", text)
-        self.assertIn("nothing = nan\n", text)
-        self.assertIn("\"[quoted.tbl]\"", text)
-        loaded = tomllib_loads(text)
-        self.assertEqual(loaded["a b"], 1)
-        self.assertEqual(loaded["s"], "tab\there \"q\" back\\slash \x01 \x7f nl\n \u00e9 \U0001F600")
-        self.assertEqual(loaded["inf"], math.inf)
-        self.assertTrue(math.isnan(loaded["nothing"]))
+def test_a_header_and_a_key_may_each_reach_the_limit(toml_driver):
+    work, driver = toml_driver
+    # The reader accepts 256 header parts plus 256 key parts; the writer refuses that depth with an error.
+    text = "[" + ".".join(["a"] * 256) + "]\n" + ".".join(["b"] * 256) + " = 1\n"
+    report = parse_text(work, driver, "both-limits", text)
+    assert report["ok"], report.get("error")
+    assert "nest more than 256" in report["encode_error"]
 
-    def test_encoder_errors(self):
-        self.assertEqual(self.lines("encode_errors"), [
-            "root: the root of a TOML document must be a table",
-            "datetime: not a valid TOML date-time: \"yesterday\"",
-            "nested datetime: not a valid TOML date-time: \"1979-02-30\"",
-            "ok datetime: ok",
-        ])
 
-    def test_to_json_decodes_into_structs(self):
-        self.assertEqual(self.lines("to_json"), [
-            "name=demo",
-            "port=8080",
-            "ratio=0.5",
-            "debug=true",
-            "tags=a,b",
-            "since=1979-05-27T07:32:00Z",
-            "limits.cpu=4",
-            "float as int: error",
-            "inf: cannot convert inf to JSON",
-            "nan inside: cannot convert nan to JSON",
-        ])
+def test_float_overflow_is_infinity_like_the_peer(toml_driver):
+    work, driver = toml_driver
+    report = parse_text(work, driver, "overflow-floats", "a = 1e400\nb = -1e400\nc = 1e-400\nd = -1e-400\ne = 2.5e-324\n")
+    assert report["ok"], report.get("error")
+    values = {k: int(v["v"]) for k, v in report["tagged"]["v"].items()}
+    assert values == {"a": float_bits(math.inf), "b": float_bits(-math.inf), "c": 0,
+                      "d": float_bits(-0.0), "e": float_bits(5e-324)}
 
-    def test_to_json_keeps_floats_and_integers_apart(self):
-        text = self.lines("json_kinds")[0]
-        self.assertEqual(json.loads(text), {"f": 1.0, "i": 1, "e": 1e20, "z": -0.0})
-        self.assertIn("\"f\":1.0", text)
-        self.assertIn("\"i\":1", text)
-        self.assertNotIn("\"i\":1.", text)
 
-    def test_get(self):
-        self.assertEqual(self.lines("get"), [
-            "package.name: str demo",
-            "bin.1.path: str b",
-            "package: table 2",
-            "missing: no key \"nope\" in \"package.nope\"",
-            "bad index: no index \"7\" in \"bin.7\"",
-            "into scalar: \"x\" in \"package.name.x\" is not inside a table or an array",
-            "bin.01.path: no index \"01\" in \"bin.01.path\"",
-            "bin.+1.path: no index \"+1\" in \"bin.+1.path\"",
-            "bin.-0.path: no index \"-0\" in \"bin.-0.path\"",
-            "bin.0.path: str a",
-            "bin.00.path: no index \"00\" in \"bin.00.path\"",
-            "bin.1x.path: no index \"1x\" in \"bin.1x.path\"",
-        ])
+def test_nesting_limit(toml_driver):
+    work, driver = toml_driver
+    limit = 256
+    cases = {
+        "arrays-at-limit": ("a = " + "[" * limit + "]" * limit + "\n", True),
+        "arrays-over-limit": ("a = " + "[" * (limit + 1) + "]" * (limit + 1) + "\n", False),
+        "arrays-far-over": ("a = " + "[" * 100000 + "]" * 100000 + "\n", False),
+        "arrays-unclosed": ("a = " + "[" * 100000 + "\n", False),
+        "inline-at-limit": ("a = " + "{a=" * limit + "1" + "}" * limit + "\n", True),
+        "inline-over-limit": ("a = " + "{a=" * (limit + 1) + "1" + "}" * (limit + 1) + "\n", False),
+        "inline-far-over": ("a = " + "{a=" * 100000 + "1" + "}" * 100000 + "\n", False),
+        "mixed-over-limit": ("a = " + "[{a=" * 129 + "1" + "}]" * 129 + "\n", False),
+        "header-at-limit": ("[" + ".".join(["a"] * limit) + "]\n", True),
+        "header-over-limit": ("[" + ".".join(["a"] * (limit + 1)) + "]\n", False),
+        "header-and-key-over-limit": ("[" + ".".join(["a"] * 200) + "]\n" + ".".join(["b"] * 300) + " = 1\n", False),
+        "dotted-key-over-limit": (".".join(["a"] * (limit + 1)) + " = 1\n", False),
+        "header-far-over": ("[" + ".".join(["a"] * 50000) + "]\n", False),
+    }
+    paths = {}
+    for name, (text, _) in cases.items():
+        path = work / ("deep-" + name + ".toml")
+        path.write_bytes(text.encode("utf-8"))
+        paths[name] = path
+    reports = make_reports(driver, list(paths.values()))
+    for name, (_, accepted) in cases.items():
+        report = reports.of(paths[name])
+        assert report["ok"] == accepted, "%s: %s" % (name, report.get("error"))
+        if accepted:
+            # The deepest value can still be written and read back.
+            assert "encode_error" not in report, name
+            assert from_driver(report["again"]) == from_driver(report["tagged"]), name
+        else:
+            assert re.search(POSITION, report["error"]), name
+            assert "nest more than 256" in report["error"] or "more than 256 parts" in report["error"], name
 
-    def test_encoder_and_to_json_refuse_what_the_reader_would_refuse(self):
-        # No halt for a value nested 50,000 deep, and whatever the encoder writes, the reader takes back.
-        self.assertEqual(self.lines("limits"), [
-            "tables 256: ok",
-            "tables 257: tables nest more than 256 levels",
-            "tables 300: tables nest more than 256 levels",
-            "tables 1: ok",
-            "tables 50000: tables nest more than 256 levels",
-            "arrays 256: ok",
-            "arrays 257: arrays and inline tables nest more than 256 levels",
-            "arrays 50000: arrays and inline tables nest more than 256 levels",
-            "json arrays 2000: |",
-            "json arrays 2100: a value nests more than 2048 levels",
-            "json arrays 50000: a value nests more than 2048 levels",
-            "json tables 50000: a value nests more than 2048 levels",
-        ])
 
-    def test_many_date_times_encode_fast(self):
-        self.assertEqual(self.lines("dates"), ["size: 220008", "parsed: true", "encode within 3x of parse: true"])
+def test_encoder_puts_plain_entries_before_tables_and_arrays_of_tables(misc_bytecode):
+    # The Map inserts the table and the array of tables before the scalars.
+    text = "\n".join(misc_lines(misc_bytecode, "order")).replace("<NL>", "\n")
+    assert text == (
+        "title = \"x\"\nflag = true\n\n[sub]\nz = 1\n\n[[rows]]\nn = 1\n\n[[rows]]\nn = 2\n")
+    assert tomllib_loads(text) == {"title": "x", "flag": True, "sub": {"z": 1}, "rows": [{"n": 1}, {"n": 2}]}
 
-    def test_encode_then_parse_is_the_identity_for_built_values(self):
-        self.assertEqual(self.lines("round_trip"), ["same"])
+
+def test_encoder_quotes_keys_and_strings_and_writes_special_floats(misc_bytecode):
+    out = misc_lines(misc_bytecode, "quoting")
+    text = out[0].replace("<NL>", "\n")
+    assert out[1] == "same"
+    assert "\"a b\" = 1\n" in text
+    assert "\"\" = 2\n" in text
+    assert "\"dot.key\" = 3\n" in text
+    assert "plain-key_1 = 4\n" in text
+    assert "inf = inf\n" in text
+    assert "neg = -inf\n" in text
+    assert "nothing = nan\n" in text
+    assert "\"[quoted.tbl]\"" in text
+    loaded = tomllib_loads(text)
+    assert loaded["a b"] == 1
+    assert loaded["s"] == "tab\there \"q\" back\\slash \x01 \x7f nl\n \u00e9 \U0001F600"
+    assert loaded["inf"] == math.inf
+    assert math.isnan(loaded["nothing"])
+
+
+def test_encoder_errors(misc_bytecode):
+    assert misc_lines(misc_bytecode, "encode_errors") == [
+        "root: the root of a TOML document must be a table",
+        "datetime: not a valid TOML date-time: \"yesterday\"",
+        "nested datetime: not a valid TOML date-time: \"1979-02-30\"",
+        "ok datetime: ok",
+    ]
+
+
+def test_to_json_decodes_into_structs(misc_bytecode):
+    assert misc_lines(misc_bytecode, "to_json") == [
+        "name=demo",
+        "port=8080",
+        "ratio=0.5",
+        "debug=true",
+        "tags=a,b",
+        "since=1979-05-27T07:32:00Z",
+        "limits.cpu=4",
+        "float as int: error",
+        "inf: cannot convert inf to JSON",
+        "nan inside: cannot convert nan to JSON",
+    ]
+
+
+def test_to_json_keeps_floats_and_integers_apart(misc_bytecode):
+    text = misc_lines(misc_bytecode, "json_kinds")[0]
+    assert json.loads(text) == {"f": 1.0, "i": 1, "e": 1e20, "z": -0.0}
+    assert "\"f\":1.0" in text
+    assert "\"i\":1" in text
+    assert "\"i\":1." not in text
+
+
+def test_get(misc_bytecode):
+    assert misc_lines(misc_bytecode, "get") == [
+        "package.name: str demo",
+        "bin.1.path: str b",
+        "package: table 2",
+        "missing: no key \"nope\" in \"package.nope\"",
+        "bad index: no index \"7\" in \"bin.7\"",
+        "into scalar: \"x\" in \"package.name.x\" is not inside a table or an array",
+        "bin.01.path: no index \"01\" in \"bin.01.path\"",
+        "bin.+1.path: no index \"+1\" in \"bin.+1.path\"",
+        "bin.-0.path: no index \"-0\" in \"bin.-0.path\"",
+        "bin.0.path: str a",
+        "bin.00.path: no index \"00\" in \"bin.00.path\"",
+        "bin.1x.path: no index \"1x\" in \"bin.1x.path\"",
+    ]
+
+
+def test_encoder_and_to_json_refuse_what_the_reader_would_refuse(misc_bytecode):
+    # No halt for a value nested 50,000 deep, and whatever the encoder writes, the reader takes back.
+    assert misc_lines(misc_bytecode, "limits") == [
+        "tables 256: ok",
+        "tables 257: tables nest more than 256 levels",
+        "tables 300: tables nest more than 256 levels",
+        "tables 1: ok",
+        "tables 50000: tables nest more than 256 levels",
+        "arrays 256: ok",
+        "arrays 257: arrays and inline tables nest more than 256 levels",
+        "arrays 50000: arrays and inline tables nest more than 256 levels",
+        "json arrays 2000: |",
+        "json arrays 2100: a value nests more than 2048 levels",
+        "json arrays 50000: a value nests more than 2048 levels",
+        "json tables 50000: a value nests more than 2048 levels",
+    ]
+
+
+def test_many_date_times_encode_fast(misc_bytecode):
+    assert misc_lines(misc_bytecode, "dates") == ["size: 220008", "parsed: true", "encode within 3x of parse: true"]
+
+
+def test_encode_then_parse_is_the_identity_for_built_values(misc_bytecode):
+    assert misc_lines(misc_bytecode, "round_trip") == ["same"]
 
 
 def tomllib_loads(text):
     require(tomllib is not None, "tomllib needs Python 3.11 or later")
     return tomllib.loads(text)
-
-
-if __name__ == "__main__":
-    unittest.main()
