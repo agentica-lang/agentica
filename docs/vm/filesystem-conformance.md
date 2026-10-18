@@ -65,8 +65,9 @@ Phase 6 is not yet completely covered:
   drive alias, and check source preservation on failure.
 - Successful UNC mutations: a hosted-runner fixture publishes only a fresh
   scratch subdirectory to the current user, exercises localhost UNC remove
-  and rename, and removes the exact share in finally. Treat this as evidence
-  only after its native job passes; share-root rejection is already tested.
+  and rename, and removes the exact share in `finally`. The native job passed
+  remove, rename and sentinel checks in run `39136358678`. Share-root rejection
+  is also tested.
 - Reparse tags beyond the junction cases: establish safe failure or unlink
   semantics for each supported fixture; do not generalize to all drivers.
 - Traversal races: the stress-style replacement case preserves sentinels but
