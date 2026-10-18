@@ -172,8 +172,12 @@ def main() -> Void
   IO.inspect(File.close(file, 5000).ok?)
   other = Result.unwrap!(File.open(System.args()[0], "read", 5000))
   IO.inspect(File.try_lock(other, 5000))
-  device = Result.unwrap!(File.open("NUL", "read", 5000))
-  IO.inspect(File.try_lock(device, 5000))
+end
+"""
+
+DEVICE_OPEN_PROGRAM = """\
+def main() -> Void
+  IO.inspect(File.open("NUL", "read", 5000))
 end
 """
 
@@ -312,15 +316,24 @@ def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(root, work):
 
 
 @REQUIRES_WINDOWS_VM
-def test_relocking_is_idempotent_closing_frees_and_devices_reject_locks(root, work):
+def test_relocking_is_idempotent_and_closing_frees_the_lock(root, work):
     target = root / "lock"
     target.write_text("", encoding="utf-8")
     bytecode = compile_work_text(work, RELOCK_PROGRAM, "windows-relock")
     result = run_vm(bytecode, args=[str(target)], env=vm_environment(), cwd=root)
-    assert result.code == 0, result.stderr
-    lines = result.stdout.splitlines()
-    assert lines[:4] == ['ok(true)', 'ok(true)', 'ok(true)', 'ok(true)']
-    assert len(lines) == 5 and lines[4].startswith("error("), lines
+    assert (result.code, result.stdout) == (
+        0, "ok(true)\nok(true)\nok(true)\nok(true)\n"
+    ), result.stderr
+
+
+@REQUIRES_WINDOWS_VM
+def test_opening_a_device_fails_before_any_lock(root, work):
+    # Windows devices never become handles: the open itself is refused, so
+    # there is nothing try_lock could contend with or reject.
+    bytecode = compile_work_text(work, DEVICE_OPEN_PROGRAM, "windows-device-open")
+    result = run_vm(bytecode, args=[], env=vm_environment(), cwd=root)
+    assert result.code == 1, (result.code, result.stdout)
+    assert "cannot open input file" in result.stderr, result.stderr
 
 
 @REQUIRES_WINDOWS_VM
