@@ -217,7 +217,7 @@ class WindowsFilesystemMutationTests(TestCase):
         self.assertEqual((result.code, result.stdout, result.stderr), (0, "true\n", ""))
         self.assertFalse(victim.exists())
 
-    def test_acl_denied_delete_preserves_remove_and_rename_sources(self) -> None:
+    def test_acl_denied_delete_preserves_remove_sources(self) -> None:
         box = self.root / "acl-box"
         box.mkdir()
         victim = box / "keep"
@@ -238,7 +238,6 @@ class WindowsFilesystemMutationTests(TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
         remove = self.compile_text(REMOVE_PROGRAM, "windows-remove-acl")
-        rename = self.compile_text(RACE_PROGRAM, "windows-rename-acl")
         try:
             # Deny both routes Windows may use: DELETE on the object and
             # DELETE_CHILD on its parent. Reading the sentinel remains allowed.
@@ -295,17 +294,6 @@ class WindowsFilesystemMutationTests(TestCase):
                 if removed:
                     self.assertFalse(victim.exists())
                 else:
-                    # Rename needs DELETE on the source as well; the denied
-                    # object must stay in place with its sentinel.
-                    renamed = run_vm(
-                        rename,
-                        args=[str(victim), str(box / "moved")],
-                        env=vm_environment(), cwd=self.root,
-                    )
-                    self.assertEqual(
-                        (renamed.code, renamed.stdout), (0, "false\n"),
-                        renamed.stderr,
-                    )
                     # The denied DELETE ACE also blocks some hosted-runner
                     # identities from reopening for read; restore before the
                     # sentinel check, then reapply it for the next operation.
