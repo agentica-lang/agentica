@@ -27,26 +27,16 @@ decision, of the method, and of what remains; live status is in
 
 ### 18.2 Bootstrap
 
-The plan, decided by the owner on 2026-10-14, starts at row 7.2.7 (the freeze
-of the Racket front end), after rows 8 and 7.2.4 to 7.2.6. Each stage of the
-port was one PR, checked against the Racket stage over the whole corpus, with
-goldens under `tests/fixtures/frontend/<stage>/`.
-
-1. **stage1.** The front end in `compiler/` compiled by another compiler:
-   Racket at first, `bootstrap/stage0.agcb` later.
-2. **stage2.** The self-hosted front end compiles itself; its output must equal
-   stage1 byte for byte. While Racket existed, CI also checked that Racket's
-   compile of `compiler/` was stage2 as well (a diverse double compile).
-3. **Embed.** From step 8, stage2 goes into the binary as data, and the binary
-   is a full `agentica`; `bootstrap/stage0.agcb` then seeds every build, so a
-   clone needs no Racket.
-
-Determinism is a requirement: no timestamps, and source paths relative to the
-entry file's folder, so the compiled bytes do not depend on where the checkout
-lives. A refresh of `stage0` (`make stage0`) is its own PR; the two-step
-refresh for a change the old stage0 cannot compile, the fixed point
-(`stage2 == stage3`) and the format-version rule are in the development skill's
-`references/ci.md`, "The checks of ci.yml…".
+The plan, decided by the owner on 2026-10-14, started at row 7.2.7 (the
+freeze of the Racket front end), after rows 8 and 7.2.4 to 7.2.6. Each stage
+of the port was one PR, checked against the Racket stage over the whole
+corpus, with goldens under `tests/fixtures/frontend/<stage>/`: stage1 (the
+front end in `compiler/`, compiled by Racket, later by
+`bootstrap/stage0.agcb`), stage2 (self-hosted, byte-identical to stage1),
+then Embed (stage2 goes into the binary as data). Determinism is a
+requirement: no timestamps, and source paths relative to the entry file's
+folder. Refresh, fixed-point and format-version rules are in the development
+skill's `references/ci.md`, "The checks of ci.yml…".
 
 ### 18.3 Port
 
@@ -62,22 +52,12 @@ internal code with a stack trace (roadmap 14b).
 ### 18.4 Prerequisites
 
 The port needed these, all now part of the language or the VM (grammar and
-`docs/vm/` are the current homes):
-
-- O(1) `push` and `+=` (a persistent `List`,
-  [`docs/vm/17-lists.md`](../vm/17-lists.md)), an efficient `Map`, and JSON key
-  listing;
-- file, directory and path builtins (`File`, `Dir`, `Path.real`), `System.env`,
-  binary output for `.agcb` (written as a `List[Int]`, so a 2 MB file is 32 MB
-  of values; typed byte storage is a possible later change, §42.11), process
-  spawning and the hand-off to the VM;
-- call depth and stack traces (roadmap 14b);
-- for the BDD driver: a private 0700 temporary directory, an `flock`'d lock
-  file, `lstat` and the process PID, 0600 writes, file and tree removal, a
-  random directory name, walking the test paths, starting the runner and
-  reading its output, and cleanup when a signal ends the driver. The isolation
-  decisions (random names, lossy names, the 1 MiB capture, signals, `TMPDIR`)
-  are in [`docs/bdd.md`](../bdd.md), "Isolation and process lifetime".
+`docs/vm/` are the current homes): O(1) `push`/`+=`, an efficient `Map`, JSON
+key listing, file/dir/path builtins, `System.env`, binary output, process
+spawning, call depth and stack traces, and the BDD driver builtins. The
+isolation decisions (random names, lossy names, the 1 MiB capture, signals,
+`TMPDIR`) are in [`docs/bdd.md`](../bdd.md), "Isolation and process
+lifetime".
 
 ### 18.5 Goals and targets
 
@@ -102,10 +82,10 @@ FFI and the JIT path.
 
 ### 18.7 Tests
 
-The suite is Python `unittest`, standard library only, run by `make test` under
-the front end's own binary (the repository rules in `AGENTS.md`; design and make
-targets in the development skill's `references/ci.md`). The Racket test files
-and their generators were removed with the front end.
+The suite is Python, standard library only (the repository rules in
+`AGENTS.md`; design and make targets in the development skill's
+`references/ci.md`). The Racket test files and their generators were removed
+with the front end.
 
 ### 18.8 Distribution
 
