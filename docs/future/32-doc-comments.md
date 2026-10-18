@@ -6,7 +6,8 @@ and the `std/` docs); 22b (§32.5, §32.6) waits until after the bootstrap
 documentation comments written as `##` lines, in the style of Rust's `///`, so
 that a later tool can generate documentation from the code. Phase 22 is front
 end only. 22a comes after 7i, HTTP 20b, task crash isolation, unit tests
-(§36) and HTTP 20c (roadmap order step 7.2.1), and after the evaluation pilot
+(phase 25) and HTTP 20c (roadmap order step 7.2.1), and after the evaluation
+pilot
 (order step 7.2.2, §32.7).
 
 The idea in one paragraph: a run of lines that start with `##` documents the
@@ -202,7 +203,8 @@ end
   CLI, and the AST keeps its shape (§32.4).
 - **When.** Decided by the user on 2026-10-13: 22a comes after 7i, at
   roadmap order step 7.2a: after order step 7.2.1 (HTTP 20b, task crash
-  isolation (phase 24), unit tests (§36), then HTTP 20c, which also took what
+  isolation (phase 24), unit tests (phase 25), then HTTP 20c, which also took
+  what
   was
   left of 20d; placed there by the owner on 2026-10-13) and after the evaluation
   pilot (order step 7.2.2, added by the owner on 2026-10-13), and before digit

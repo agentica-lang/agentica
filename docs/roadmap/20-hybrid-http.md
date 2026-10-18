@@ -15,7 +15,7 @@ Decided by the user on 2026-10-12. Two parts:
   `HTTP` is the free import alias of `std/http` and only its client (20a)
   exists; the order is now 7i, 20b, task crash isolation ([phase
   24](24-task-crash-isolation.md)), unit tests ([phase
-  25](25-unit-tests.md), §36), then 20c (order step 7.2.1), and 20c brings the
+  25](25-unit-tests.md)), then 20c (order step 7.2.1), and 20c brings the
   server back. The switch that 20d planned was done by 7i; what was left of 20d
   moved into 20c. They replace roadmap 7h's C-only HTTP item
   ([`07-vm.md`](07-vm.md)). Whole requests and whole responses, `String` bodies

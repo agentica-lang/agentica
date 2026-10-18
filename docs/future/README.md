@@ -9,21 +9,20 @@ Sections 19, 21 and 22 are VM implementation proposals, not language changes.
 Section 20 adds crypto without changing the grammar; binary data (§23) and
 logging (§24) are built and live in the grammar. Sections 25–34 cover Ruby
 idioms, diagnostics, concurrency, VM metrics, TLS, HTTP, BDD, doc comments and
-VM values. Sections 36 and 38–40 cover unit tests, value
-representation, semantic CLI and native code; task crash isolation (§37) is
-built. Sections 41–43 cover date/time types, sized numerics and an unscheduled
-language server. The Files index carries current status; linked sections keep
-requirements, rationale and alternatives.
+VM values. Sections 38–40 cover value representation, semantic CLI and native
+code; unit tests (§36) and task crash isolation (§37) are built. Sections 41–43
+cover date/time types, sized numerics and an unscheduled language server. The
+Files index carries current status; linked sections keep requirements, rationale
+and alternatives.
 
 
 ## Files
 
 Each section links to its proposal or current home; §6 points to the VM design,
 §7 to §25.13, and §18 records the front-end language decision and the
-self-hosted bootstrap. Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33, 35 and 37
-have no
-file of their own: they are built or decided, and their content lives in the
-grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
+self-hosted bootstrap. Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33 and 35–37
+have no file of their own: they are built or decided, and their content lives in
+the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
 [`docs/bdd.md`](../bdd.md).
 
 - §: 3
@@ -135,12 +134,6 @@ grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
   - Title: Shared small values in the VM
   - File: [`34-shared-small-values.md`](34-shared-small-values.md)
   - Status: Built (roadmap 7g, 2026-10-16)
-
-- §: 36
-  - Title: Unit tests (`Test`)
-  - File: [`36-unit-tests.md`](36-unit-tests.md)
-  - Status: `Test` module done (25a); `agentica test` for test files planned
-    (25b)
 
 - §: 38
   - Title: Value representation

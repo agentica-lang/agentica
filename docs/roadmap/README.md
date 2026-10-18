@@ -104,7 +104,9 @@ after them may run in parallel when needed and keep their relative order.
     crash isolation (phase 24): a crash
     in a task other than `main` ends only that task; it needs 20b; done), then
     unit tests ([phase 25](25-unit-tests.md),
-    [§36](../future/36-unit-tests.md#36-unit-tests-test): the builtin `Test`
+    the grammar's
+    [`Test` rules](../grammar/06c-tasks-and-tests.md#unit-tests-test): the
+    builtin `Test`
     module and `*_test.agc` files in `agentica test`; after phase 24, so a crash
     fails one test; done), then HTTP 20c (done: the `std/http` server, which
     brings back an HTTP server and `examples/http_server.agc`, and also takes
@@ -224,7 +226,7 @@ after them may run in parallel when needed and keep their relative order.
     7.2.1b) and rows 7.2.1d to 7.2.1f (the owner's order of 2026-10-13), and
     before the pilot, two small PRs: first the child protocol on its own channel
     (**done**, [25c](25-unit-tests.md),
-    [§36.6][agentica-link-2]):
+    [a task per test][agentica-link-2]):
     `Process.spawn_channel` (a sibling of `spawn_captured`) opens an extra
     bidirectional socket pair (fd 3 and the environment marker
     `AGENTICA_CHANNEL=3`) with the builtins `channel_read_line`, `channel_send`,
@@ -1118,7 +1120,7 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 Planned syntax is in [`docs/future/`](../future/README.md).
 
 [agentica-link-1]: ../future/27-iteration-and-concurrency.md
-[agentica-link-2]: ../future/36-unit-tests.md
+[agentica-link-2]: ../grammar/06c-tasks-and-tests.md#agentica-test
 [task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
 [agentica-link-4]: ../future/30-hybrid-http.md
 [agentica-link-5]: pending-general-programming-and-mcp.md

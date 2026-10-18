@@ -208,7 +208,7 @@ none of them (the VM has `_WIN32` paths): the channel is Linux only.
   `agc_parent_send`. The core has no protocol mode: stdout is an ordinary stream
   and stdin is the program's. The two child-side builtins are for runner code.
   Nothing keeps a test from calling them, which can lose or add a line
-  (accepted, as in `docs/future/36-unit-tests.md` §36.7); the only guard is that
+  (accepted, as in the grammar's test rules); the only guard is that
   a second request in a direction that already has one pending gets
   `error("process: the channel is in use")`, so two requests never share a
   buffer.

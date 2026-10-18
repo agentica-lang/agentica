@@ -1,25 +1,26 @@
 ## Phase 25: Unit tests
 
-Specified in [`docs/future/36-unit-tests.md` section
-36](../future/36-unit-tests.md#36-unit-tests-test). Phase 25 adds the builtin
+The rules are in the grammar
+([`06c-tasks-and-tests.md`](../grammar/06c-tasks-and-tests.md#unit-tests-test)).
+Phase 25 adds the builtin
 `Test` module and runs `*_test.agc` files with `agentica test`, next to the
 features, through the BDD runner and report. It comes right after task crash
 isolation (phase 24), so a crash fails one test; its place in the order is row
 7.1 of the [roadmap](README.md). It has two PRs, each with its own tests and
 docs.
 
-- [x] **25a: the `Test` module (§36.3, §36.4).**
+- [x] **25a: the `Test` module.**
   - **VM:** `Test.test` (the `TestCase` value with its call span; as built, an
     opaque type, not a record), `Test.eq` (it pulls §25.4's type predicate and
     deep compare forward, with an explicit stack, for 15d to reuse; `Json` at
     any depth compares and prints as canonical text), `Test.ok?`, `Test.error?`,
     `Test.assert`, the assertion records on the nearest test task, and
     `Test.run` (list and run modes, one task per test, the pending-task and
-    unobserved-crash checks, the records of §36.6 with raw texts, the per-test
+    unobserved-crash checks, the per-test records with raw texts, the per-test
     seed from the given seed and the test name).
   - **Front end:** the catalog entries; `Test.eq` needs a type with §25.4
     equality or `Json` (`CHECK-TYPE-MISMATCH`); `Test` and `TestCase` reserved.
-  - **Tests:** the golden fixtures and checker tests of §36.12.
+  - **Tests:** the golden fixtures and checker tests.
   - **Docs:** `docs/grammar.md` (the `Test` module, reserved names); the
     programming skill (`references/testing.md`, its row in "When to read a
     reference", `references/diagnostics.md`);
@@ -37,7 +38,7 @@ docs.
       so a record gave nothing.
     - Each task records the test it was spawned under (`test`, inherited at
       spawn; a test's task points to itself). An assertion records its first
-      failure there (`note`), which is the nearest test task of §36.3 without
+      failure there (`note`), which is the nearest test task without
       walking parent links. When a test's task ends, the scheduler records
       whether it left running children (`left_children`): that is the pending
       check, made when the test returns, not when `Test.run` wakes later. Its
@@ -51,7 +52,7 @@ docs.
       observed prints the summary line and exits 1, which the 25b runner reports
       as a file error. `Test.run` inside a test, or in any task but `main`'s, is
       the new code `RUNTIME-TEST-RUN`.
-    - The outcome order is §36.3's (crash, first assertion, the block's
+    - The outcome order is the grammar's (crash, first assertion, the block's
       `error`), then pending tasks, then an unobserved crash. A crash keeps its
       code, message and span on the task (`crash_code`, `crash_message`,
       `crash_span`) for the record.
@@ -86,12 +87,12 @@ docs.
       `Test.test` call; checker tests for two different types, an `Fn`, a struct
       with an `Fn` field, a block that does not return `Result[Void]`, `try` in
       a test block, and `Test` and `TestCase` as type names.
-    - **Left for 25b:** the CLI tests of §36.12 and `RUNTIME-TEST-TIMEOUT` (the
+    - **Left for 25b:** the CLI tests and `RUNTIME-TEST-TIMEOUT` (the
       runner's deadline).
     - **Dropped by the owner's rule** (only what proves the change): a deep
       value for the explicit stack and a C test of `agc_equal` (15d adds them
       with `==`).
-- [x] **25b: `agentica test` runs test files (§36.5 to §36.8).**
+- [x] **25b: `agentica test` runs test files.**
   - **Driver** (`src/bdd-driver.rkt`): find `*_test.agc` next to `.feature`
     files in one pass; the default paths `specs/` and `test/`; compile each test
     file; `--only TEXT`.
@@ -135,7 +136,7 @@ docs.
     status and count.
   - **First users:** unit tests for `std/queue` and `std/http`'s pure helpers in
     `tests/std/`, run by a rackunit test.
-  - **Tests:** the CLI tests of §36.12.
+  - **Tests:** the CLI tests.
   - **Docs:** `docs/grammar.md` and `docs/bdd.md` (`agentica test`), the
     programming skill (`references/testing.md`, `references/bdd.md`),
     `site/content/getting-started.md`, the development skill.
@@ -160,7 +161,7 @@ docs.
     `RUNTIME-TEST-RUN` also names a test file whose `main` never calls
     `Test.run`; a scenario has `output` too (always `""` for BDD), and a file's
     `kind` is `feature`, `tests`, `steps` (the step program) or `""`. Not done:
-    `--jobs N` (§36.6, later).
+    `--jobs N` (later).
 
 **Done when:** `agentica test test/` runs a `*_test.agc` file and a `.feature`
 file in one report with the BDD formats and exit codes, a failed `Test.eq` shows
@@ -198,7 +199,7 @@ tests run in `make test`.
     it, and neither is a regular file or a character device with the marker
     (left untouched); with no channel, `Test.run` is `RUNTIME-TEST-RUN`. A
     hostile test can still find the private descriptor through `/proc/self/fd`,
-    as §36.7 accepts for a hostile test.
+    as the grammar accepts for a hostile test.
   - **Runners:** `std/test/runner`, `std/test/units` (which calls
     `spawn_captured`) and `std/test/child` pass the protocol on the channel: the
     index lines go in and the records come out there. `stdlib/bdd.agc` moves
@@ -220,8 +221,8 @@ tests run in `make test`.
     stdin source, and `mid_line` of the output stream and `agc_write_record`
     (used by `vm/testing.c`). `Test.run` reads and writes fd 3.
   - **Docs:** §10.4 and `docs/grammar.md` (`Process.spawn_captured`'s extra
-    pipe, the child-side builtin pair, `Test.run`), [§36.6 and
-§36.7](../future/36-unit-tests.md)
+    pipe, the child-side builtin pair, `Test.run`), the grammar's
+    [`agentica test` rules](../grammar/06c-tasks-and-tests.md#agentica-test)
     (the protocol, stdin and output of a test), `docs/bdd.md` (the scenario
     child's protocol), the programming skill (`references/testing.md`,
     `references/processes.md`, `references/bdd.md`), the site pages of `Process`
@@ -265,7 +266,8 @@ tests run in `make test`.
     There is no "serves once" rule and no "channel in use" answer for the test's
     own code: `Process.parent_read_line` and `Process.parent_send` are for
     runner code, and a test that calls them can break the protocol (accepted,
-    §36.7). **Removed from the VM:** `rt->in.reserved`, `reserve_stdin`, the
+    the grammar). **Removed from the VM:** `rt->in.reserved`, `reserve_stdin`,
+    the
     private copy of fd 0 and `/dev/null` on fd 0, `agc_protocol_line`,
     `mid_line` of the output stream and `agc_write_record` (and their C tests).
     **Removed elsewhere:** the token in the driver, the runner, `units` and

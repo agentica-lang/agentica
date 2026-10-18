@@ -342,8 +342,9 @@ and `Process.parent_send`, see [`06d`](06d-io-and-network.md#processes) and
 `--agentica-test` arguments but without that channel fails with
 `RUNTIME-TEST-RUN`. The channel belongs to `Test.run`: test code that calls
 `Process.parent_read_line` or `Process.parent_send` can break the protocol, and
-nothing stops it (the same trust level as in
-[`36.7`](../future/36-unit-tests.md)). The test's own stdin and stdout are free:
+nothing stops it (the same trust level as the
+[`agentica test`](#agentica-test) rules). The test's own stdin and stdout are
+free:
 the runner shows what a test printed only when it fails.
 
 A test fails with the first of these that applies:
@@ -376,5 +377,12 @@ is the verdict. BDD is the standard module `std/bdd`, written in Agentica, and
 `CHECK-UNKNOWN-NAME`, with the import as its help. The discovery rules,
 timeouts, output limits, seeds, runner protocol and step catalog are in
 [`bdd.md`](../bdd.md).
+
+Not planned: an assertion that stops the test by itself (Agentica has no
+exceptions; `try` is the one way to stop early); running tests in the runner's
+own VM; a child VM per test (a task per test is enough); and `describe`, `setup`
+and tags (a helper function does what `setup` does). Doctests, running the
+fenced `agentica` examples of `std/` docs, are an option to evaluate later, with
+the doc-comment phase.
 
 [agentica-link-1]: ../../site/content/library/concurrency/channel.md

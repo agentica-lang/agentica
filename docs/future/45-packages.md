@@ -597,7 +597,7 @@ One line each, as possible later work:
 
 5. **`dev_dependencies`.**
    - Option A: not in v1. There is one list.
-   - Option B: a second table, used only by `*_test.agc` files (§36).
+   - Option B: a second table, used only by `*_test.agc` files (phase 25).
    - **Recommendation:** A. Add B when a test needs a package that the program
      does not.
 

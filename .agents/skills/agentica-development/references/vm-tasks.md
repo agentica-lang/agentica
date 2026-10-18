@@ -165,8 +165,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - No new opcode: the builtins are appended to the table, and `src/lower.rkt`
     lists their names.
 - `vm/testing.c`
-  - the `Test` builtins (`agc_test_builtins`, `docs/future/36-unit-tests.md`
-    §36.3, §36.6, as built in `docs/roadmap/25-unit-tests.md` 25a): `Test.test`
+  - the `Test` builtins (`agc_test_builtins`, as built in
+    `docs/roadmap/25-unit-tests.md` 25a; the rules are in the grammar's
+    `Unit tests (Test)` section): `Test.test`
     makes an `agc_test_case` (tag `AGC_T_TEST`: name, block, call span)
   - the assertions return `ok()` or `error(text)` and record their first failure
     (`agc_test_note`) on `vm->task->test`, the test the task was spawned under
