@@ -10,6 +10,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Native Windows regressions for ordinary-file line decoding, lock-owner
+  cancellation, unsafe path aliases, depth/read-only removal failures,
+  preservation of existing rename targets and junction destinations, localhost
+  UNC operations and a confined cross-volume rename fixture.
+
 - `make tests KIND=fast|files|slow|all` runs a whole test group, with
   `KIND=files` for the destructive filesystem cases, `DOCKER=1` to run a group
   in the Ubuntu test container (`tools/ubuntu-test.Dockerfile`) and `WINE=1`
@@ -23,6 +28,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Windows removal opens entries without backup intent, so enabled backup or
+  restore privileges do not bypass ordinary delete ACL checks.
+- Confined Wine tests have a 3 GiB temporary storage limit: a fresh prefix
+  exceeds the previous 1 GiB limit. Other test groups keep their existing cap.
 - Windows `File.stat` documents what it really reports: `mode` carries only the
   read-only attribute (438 or 292) and `user_id` and `group_id` are always 0, so
   neither is an owner or an ACL. `create_private` and `mkdir_private` document

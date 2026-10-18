@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
 import stat
 import unittest
@@ -69,6 +70,94 @@ def main() -> Void
   puts(Task.await(Task.spawn(&take, path)))
   Result.unwrap!(File.close(file, 5000))
   puts(Task.await(Task.spawn(&take, path)))
+end
+"""
+
+
+# Main permits the ancestor to crash only after the child has acquired the lock.
+# Awaiting both tasks observes cancellation while the process remains alive.
+CANCELLED_LOCK_PROGRAM = """\
+struct LockContext
+  path: String
+  ready: Channel[Bool]
+  crash: Channel[Bool]
+  parked: Channel[Bool]
+  handles: Channel[Task[Result[Void]]]
+end
+
+def locked_child(context: LockContext) -> Result[Void]
+  if System.args().length > 1
+    return File.each_line(context.path, 1024, 5000) do |line|
+      Result.unwrap!(context.ready.send(line.length > 0, 5000))
+      context.parked.recv(60000)
+      return ok()
+    end
+  end
+  file = Result.unwrap!(File.open(context.path, "read", 5000))
+  Result.unwrap!(context.ready.send(Result.unwrap!(File.try_lock(file, 5000)), 5000))
+  context.parked.recv(60000)
+  return ok()
+end
+
+def ancestor(context: LockContext) -> Result[Void]
+  child = Task.spawn(&locked_child, context)
+  Result.unwrap!(context.handles.send(child, 5000))
+  Result.unwrap!(context.crash.recv(5000))
+  failure: Result[Void] = error("intentional ancestor failure")
+  Result.unwrap!(failure)
+  return ok()
+end
+
+def main() -> Void
+  context = LockContext(
+    path: System.args()[0],
+    ready: Channel.new(1),
+    crash: Channel.new(1),
+    parked: Channel.new(1),
+    handles: Channel.new(1),
+  )
+  parent = Task.spawn(&ancestor, context)
+  child = Result.unwrap!(context.handles.recv(5000))
+  puts(Result.unwrap!(context.ready.recv(5000)))
+  Result.unwrap!(context.crash.send(true, 5000))
+  puts(Task.await(parent).ok?)
+  puts(Task.await(child).ok?)
+  if System.args().length > 1
+    puts("ready")
+    IO.flush()
+    IO.gets()
+    return
+  end
+  file = Result.unwrap!(File.open(context.path, "read", 5000))
+  puts(Result.unwrap!(File.try_lock(file, 5000)))
+end
+"""
+
+EACH_LINE_PROGRAM = """\
+def main() -> Void
+  args = System.args()
+  result = File.each_line(args[0], 1024, 5000) do |line|
+    IO.inspect(line)
+    if args[1] == "stop"
+      return error("intentional early stop")
+    end
+    return ok()
+  end
+  puts(result.ok?)
+  puts("ready")
+  IO.flush()
+  IO.gets()
+end
+"""
+
+READ_LINES_PROGRAM = """\
+def main() -> Void
+  args = System.args()
+  file = Result.unwrap!(File.open(args[0], "read", 5000))
+  for i in 0...args[1].to_i!
+    IO.inspect(File.read_line(file, 5000))
+  end
+  puts(File.close(file, 5000).ok?)
 end
 """
 
@@ -168,6 +257,15 @@ class WindowsLockTests(TestCase):
         self.assertIsNotNone(holder.process.poll(), "the holder process must be gone before the lock is asked for")
         self.assertEqual(self.probe(), "true")
 
+    def test_cancelled_owner_releases_its_lock_without_ending_the_process(self) -> None:
+        bytecode = self.compile_text(CANCELLED_LOCK_PROGRAM, "windows-cancelled-lock")
+        result = run_vm(
+            bytecode, args=[str(self.target)], env=vm_environment(), cwd=self.root
+        )
+        self.assertEqual(result.code, 0, result.stderr)
+        self.assertIn("RUNTIME-UNWRAP-ERROR", result.stderr)
+        self.assertEqual(result.stdout, "true\nfalse\nfalse\ntrue\n")
+
     def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(self) -> None:
         bytecode = self.compile_text(TASK_LOCK_PROGRAM, "windows-task-lock")
         result = run_vm(bytecode, args=[str(self.target)], env=vm_environment(), cwd=self.root)
@@ -176,3 +274,92 @@ class WindowsLockTests(TestCase):
         # is closed. Every line is sequenced by an await.
         self.assertEqual(result.stdout, "true\ntrue\ntrue\nfalse\ntrue\n")
         self.assertEqual(self.probe(), "true")
+
+
+@unittest.skipUnless(TARGET_OS == "windows", "requires the Windows VM")
+class WindowsLineTests(TestCase):
+    """Check ordinary-file line decoding independently of pipe support."""
+
+    def test_empty_crlf_lf_unterminated_and_invalid_utf8(self) -> None:
+        root = self.make_temp_dir("agentica-windows-lines-")
+        bytecode = self.compile_text(READ_LINES_PROGRAM, "windows-lines")
+        cases = (
+            (b"", 1, []),
+            (b"one\r\ntwo\nlast", 4, ['ok("one")', 'ok("two")', 'ok("last")']),
+            (b"\n\r\n", 3, ['ok("")', 'ok("")']),
+            (b"\xff\n", 1, []),
+            (b"\xe2\x82", 1, []),
+        )
+        for number, (data, count, successful) in enumerate(cases):
+            with self.subTest(data=data):
+                target = root / f"case-{number}"
+                target.write_bytes(data)
+                result = run_vm(
+                    bytecode, args=[str(target), str(count)],
+                    env=vm_environment(), cwd=root,
+                )
+                self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
+                lines = result.stdout.splitlines()
+                self.assertEqual(lines[:len(successful)], successful)
+                self.assertTrue(lines[-2].startswith("error("), lines)
+                self.assertEqual(lines[-1], "true")
+
+    @unittest.skipUnless(os.name == "nt", "exclusive handle probe needs Win32")
+    def test_each_line_closes_its_file_on_eof_callback_error_and_decode_error(self) -> None:
+        root = self.make_temp_dir("agentica-windows-each-line-")
+        bytecode = self.compile_text(EACH_LINE_PROGRAM, "windows-each-line")
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateFileW.argtypes = [
+            ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
+            ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+        ]
+        kernel32.CreateFileW.restype = ctypes.c_void_p
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        kernel32.CloseHandle.restype = ctypes.c_int
+        cancelled = self.compile_text(CANCELLED_LOCK_PROGRAM, "windows-cancelled-lines")
+        cases = (
+            (b"first\nsecond\n", "cancel", ["true", "false", "false"]),
+            (b"one\r\ntwo\nlast", "all", ['"one"', '"two"', '"last"', "true"]),
+            (b"one\ntwo\n", "stop", ['"one"', "false"]),
+            (b"\xff\n", "all", ["false"]),
+            (b"", "all", ["true"]),
+        )
+        for number, (data, mode, expected) in enumerate(cases):
+            with self.subTest(mode=mode, data=data):
+                target = root / f"case-{number}"
+                target.write_bytes(data)
+                program = cancelled if mode == "cancel" else bytecode
+                child = self.adopt(start_vm(
+                    program, str(target), mode, stdin=True, cwd=root
+                ))
+                for line in expected:
+                    self.assertEqual(child.next_line(), line)
+                self.assertEqual(child.next_line(), "ready")
+                self.assertIsNone(child.process.poll())
+                # Zero sharing fails while any reader still has the file open.
+                handle = kernel32.CreateFileW(
+                    str(target), 0x80000000, 0, None, 3, 0, None
+                )
+                try:
+                    self.assertNotEqual(
+                        handle, ctypes.c_void_p(-1).value,
+                        ctypes.WinError(ctypes.get_last_error()),
+                    )
+                finally:
+                    if handle != ctypes.c_void_p(-1).value:
+                        self.assertTrue(kernel32.CloseHandle(handle))
+                    child.close_stdin()
+                self.assertEqual(child.wait(), 0)
+
+    def test_overlong_line_returns_error_and_handle_can_be_closed(self) -> None:
+        root = self.make_temp_dir("agentica-windows-line-limit-")
+        target = root / "long-line"
+        target.write_bytes(b"x" * (1048576 + 1))
+        bytecode = self.compile_text(READ_LINES_PROGRAM, "windows-line-limit")
+        result = run_vm(
+            bytecode, args=[str(target), "1"], env=vm_environment(), cwd=root
+        )
+        self.assertEqual((result.code, result.stderr), (0, ""), result.stderr)
+        lines = result.stdout.splitlines()
+        self.assertTrue(lines[0].startswith("error("), lines)
+        self.assertEqual(lines[1], "true")

@@ -235,7 +235,9 @@ def _container_arguments(
         "--pids-limit=512",
         # Tests and the Wine wrapper execute only from disposable storage.
         "--tmpfs",
-        "/tmp:rw,nosuid,nodev,exec,size=1g,mode=1777",
+        # A fresh 64-bit Wine prefix alone needs about 1.4 GiB in this image.
+        # Keep its storage disposable and bounded without starving initialization.
+        f"/tmp:rw,nosuid,nodev,exec,size={'3g' if mode == 'windows-wine-tests' else '1g'},mode=1777",
         "--tmpfs",
         "/var/tmp:rw,nosuid,nodev,exec,size=512m,mode=1777",
         "--mount",
