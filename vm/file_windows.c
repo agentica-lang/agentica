@@ -28,6 +28,7 @@ void agc_fs_set_error(int result) {
   switch (result) {
     case UV_EACCES: errno = EACCES; break;
     case UV_EBADF: errno = EBADF; break;
+    case UV_EBUSY: errno = EBUSY; break;
     case UV_EEXIST: errno = EEXIST; break;
     case UV_EINTR: errno = EINTR; break;
     case UV_EINVAL: errno = EINVAL; break;
@@ -394,22 +395,15 @@ static int remove_tree_entry(char **failed, HANDLE parent, const wchar_t *name, 
     goto done;
   }
   if (depth >= REMOVE_MAX_DEPTH) { result = AGC_FS_REMOVE_TOO_DEEP; goto done; }
-  HANDLE directory_handle = remove_open_relative(parent, name, name_length, true, true, true);
-  if (directory_handle == INVALID_HANDLE_VALUE) { result = errno; goto done; }
-  BY_HANDLE_FILE_INFORMATION directory_info;
-  if (!remove_file_info(directory_handle, &directory_info)) {
-    result = errno;
-    CloseHandle(directory_handle);
-    goto done;
-  }
-  if (remove_file_id(&directory_info) != remove_file_id(&info) ||
-      (directory_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
-    result = EBUSY;
-    CloseHandle(directory_handle);
-    goto done;
-  }
+  uint64_t file_id = remove_file_id(&info);
   CloseHandle(file);
-  file = directory_handle;
+  file = INVALID_HANDLE_VALUE;
+  file = remove_open_relative(parent, name, name_length, true, true, true);
+  if (file == INVALID_HANDLE_VALUE) { result = errno == ENOENT ? 0 : errno; goto done; }
+  BY_HANDLE_FILE_INFORMATION directory_info;
+  if (!remove_file_info(file, &directory_info)) { result = errno; goto done; }
+  if (remove_file_id(&directory_info) != file_id ||
+      (directory_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) { result = EBUSY; goto done; }
   buffer = malloc(REMOVE_ENUM_BYTES);
   if (!buffer) { result = ENOMEM; goto done; }
   for (unsigned attempt = 0; attempt < REMOVE_MAX_PASSES; attempt++) {
@@ -465,7 +459,7 @@ static int remove_tree_entry(char **failed, HANDLE parent, const wchar_t *name, 
 done:
   if (result != 0) remove_failed_path(failed, display_path);
   free(buffer);
-  CloseHandle(file);
+  if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
   if (result == AGC_FS_REMOVE_TOO_DEEP) return result;
   if (result != 0 && result != errno) errno = result;
   return result;
