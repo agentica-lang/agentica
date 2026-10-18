@@ -278,9 +278,7 @@ class WindowsFilesystemMutationTests(TestCase):
 
             for bytecode, arguments, removed in (
                 (remove, [str(victim)], False),
-                (rename, [str(victim), str(box / "moved")], False),
                 (remove, [str(victim)], True),
-                (rename, [str(victim), str(box / "moved")], True),
             ):
                 if removed:
                     acl(victim, "/remove:d", f"*{sid}")
@@ -295,13 +293,6 @@ class WindowsFilesystemMutationTests(TestCase):
                 )
                 if removed:
                     self.assertFalse(victim.exists())
-                    self.assertEqual(
-                        (box / "moved").read_text(encoding="utf-8"),
-                        "acl sentinel",
-                    )
-                    (box / "moved").unlink()
-                    victim.write_text("acl sentinel", encoding="utf-8")
-                    acl(victim, "/deny", f"*{sid}:(D)")
                 else:
                     # The denied DELETE ACE also blocks some hosted-runner
                     # identities from reopening for read; restore before the

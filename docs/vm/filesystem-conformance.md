@@ -39,8 +39,9 @@ step executes `tests/test_windows_filesystem_safety.py`.
   without moving their targets.
 - Remove: the isolated suite checks missing entries, Unicode/long names,
   junctions, reparse ancestors, sharing conflicts and ancestor replacement.
-  Additional cases cover unsafe aliases, read-only failures, denied delete
-  ACLs, depth failure and releasing traversal handles on failure.
+  Additional cases cover unsafe aliases, read-only failures, denied remove
+  ACLs, depth failure and releasing traversal handles on failure. Rename under
+  an ACL deny is not yet claimed.
 - Errors: `files-test.exe` checks the libuv-to-errno adapter and Win32 error
   translation. Unmapped codes retain EIO. PR #348 passed natively.
 
@@ -62,8 +63,10 @@ Phase 6 is not yet completely covered:
 
 - Actual cross-volume rename: prove a real second filesystem, not merely a
   drive alias, and check source preservation on failure.
-- Successful UNC mutations: share-root rejection is tested, but no hermetic
-  native SMB share fixture currently establishes successful UNC traversal.
+- Successful UNC mutations: a hosted-runner fixture publishes only a fresh
+  scratch subdirectory to the current user, exercises localhost UNC remove
+  and rename, and removes the exact share in finally. Treat this as evidence
+  only after its native job passes; share-root rejection is already tested.
 - Reparse tags beyond the junction cases: establish safe failure or unlink
   semantics for each supported fixture; do not generalize to all drivers.
 - Traversal races: the stress-style replacement case preserves sentinels but
