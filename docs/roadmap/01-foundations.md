@@ -14,7 +14,7 @@ dropped):
 - [ ] Phase 5d3, the rest of the agent API: `symbols`, `show` and `refs` with
   one test per command over `examples/`, and the measurement of `--ai` and
   labels against plain text on the `binary` arm (`docs/eval.md`). The semantic
-  commands for agents are now planned as [phase 26](26-semantic-cli.md)
+  commands for agents are now planned as [§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)
   (`outline`, `symbol`, `refs`, `type-at`).
 - [ ] Phase 6a, the Sonnet 5.5 round (postponed; only `pi` for now). Rounds 1 to
   8 are done and recorded in `docs/eval.md`; see

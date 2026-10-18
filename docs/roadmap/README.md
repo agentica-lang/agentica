@@ -316,8 +316,8 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 7.2b
   - **Next work:** **After the bootstrap** (owner, 2026-10-14). New features,
     VM-only (cont.), after row 22b, in `compiler/`: the semantic CLI
-    for agents ([phase 26](26-semantic-cli.md),
-    [§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)): `agentica
+    for agents
+    ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)): `agentica
     outline`, then `agentica symbol` and `agentica refs`, then `agentica
     type-at`, JSON first; front end and CLI only, nothing to run, no LSP; the
     full 6c round (step 10) measures it
@@ -412,8 +412,7 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 7.8
   - **Next work:** **Deferred until after the bootstrap** (46c and 46d; 46a and
     46b may run earlier as VM-only rows, when no other VM PR is waiting),
-    decided by the owner on 2026-10-15 (phase 27,
-    [`docs/roadmap/27-signals.md`](27-signals.md); design:
+    decided by the owner on 2026-10-15 (design and plan:
     [§46](../future/46-signals.md#46-signals)): signals that a program can
     handle, in four parts. 46a, subscription: the `Signal` enum and its
     subscription builtin (the name is decided in 46a), so a program handles
@@ -778,14 +777,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 - **File:** [`25-unit-tests.md`](25-unit-tests.md)
   - **Contents:** Phase 25: unit tests (the `Test` module, `*_test.agc` in
     `agentica test`)
-
-- **File:** [`26-semantic-cli.md`](26-semantic-cli.md)
-  - **Contents:** Phase 26: semantic CLI for agents (`agentica outline`,
-    `symbol`, `refs`, `type-at`)
-
-- **File:** [`27-signals.md`](27-signals.md)
-  - **Contents:** Phase 27: signals (stop signals a program handles, signals to
-    children, the driver's stop, graceful HTTP stop; design in §46)
 
 - **File:**
   [`pending-general-programming-and-mcp.md`][agentica-link-5]

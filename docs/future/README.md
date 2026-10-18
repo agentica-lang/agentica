@@ -182,8 +182,8 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 46
   - Title: Signals
   - File: [`46-signals.md`](46-signals.md)
-  - Status: Scheduled on 2026-10-15, after the bootstrap (phase 27,
-    [`docs/roadmap/27-signals.md`](../roadmap/27-signals.md)): catch TERM and
+  - Status: Scheduled on 2026-10-15, after the bootstrap (§46, row 7.8):
+    catch TERM and
     INT for a safe shutdown, forward signals to children, signal a process
     group; 46a and 46b (VM code and builtin table rows) may come earlier
 
