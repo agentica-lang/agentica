@@ -387,3 +387,15 @@ build one context at start-up and share it; `references/diagnostics.md`:
 CHANGELOG entry of 29.5, `docs/vm/10-io-tls.md` §10.3 (contexts, `TLS.upgrade`),
 `docs/vm/05-values-execution-builtins.md` §5.3 (the finalizer exception), and
 the development skill's `references/vm-net.md`.
+
+### 29.9 Implementation (row 7.4)
+
+- One PR per item, each with its own tests and docs. 19a `TlsContext`
+  (breaking, one step: contexts for `TLS` and `HTTP`, reserved names,
+  migration); 19b `TLS.upgrade`; 19c ALPN.
+- Not in this phase: the other later options of §29.7.
+- Done when: a program builds one client context and one server context
+  at start-up and shares them; `TLS`, `HTTP.client` and
+  `HTTP.listen_tls` take only contexts; STARTTLS works against Python on
+  both sides; no repository program uses a TLS file path outside the
+  options records.

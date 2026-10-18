@@ -377,8 +377,8 @@ after them may run in parallel when needed and keep their relative order.
   - **Next work:** New features, VM-only (cont.): the streaming items of phase
     20 (20e to 20g,
     [§30](../future/30-hybrid-http.md#3011-streaming-on-channels), the hybrid
-    HTTP plan), built on the channels of 17b; then `TlsContext` ([phase
-    19](19-tls-context.md), [§29](../future/29-tls-context.md#29-tls-contexts)),
+    HTTP plan), built on the channels of 17b; then `TlsContext`
+    ([§29](../future/29-tls-context.md#29-tls-contexts)),
     then ALPN (19c, owner 2026-10-16: the HTTP client stays small and opens its
     low layers,
     [§30.13][agentica-link-4])
@@ -760,12 +760,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 - **File:** [`17-iteration-and-concurrency.md`](17-iteration-and-concurrency.md)
   - **Contents:** Phase 17: iteration and concurrent collections (`Task.map`,
     channels, `Task.await` with a timeout)
-
-- **File:** [`18-vm-metrics.md`](18-vm-metrics.md)
-  - **Contents:** Phase 18: VM metrics (Prometheus)
-
-- **File:** [`19-tls-context.md`](19-tls-context.md)
-  - **Contents:** Phase 19: TLS contexts (`TlsContext`, `TLS.upgrade`)
 
 - **File:** [`20-hybrid-http.md`](20-hybrid-http.md)
   - **Contents:** Phase 20: HTTP on the VM, simple and synchronous (C framing,
