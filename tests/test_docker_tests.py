@@ -149,7 +149,7 @@ raise SystemExit(64)
             "slow": ("make -j\"$jobs\" test-slow",),
             "files": ("build/vm/release/tree-test", "tests.test_vm_os_remove"),
             "bdd": ("tests/bdd/specs/",),
-            "windows-wine-tests": ("tests.test_windows_remove_refusal",),
+            "windows-wine-tests": ("tests.test_windows_filesystem_safety",),
         }
         for mode, markers in expected.items():
             with self.subTest(mode=mode):

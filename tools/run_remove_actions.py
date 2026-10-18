@@ -91,7 +91,7 @@ def _run_bdd(repository: Path, product: Path, environment: dict[str, str]) -> in
 def _run_filesystem_tests(repository: Path, vm_build: Path, environment: dict[str, str]) -> int:
     suffix = ".exe" if os.name == "nt" else ""
     binaries = [vm_build / f"files_private-test{suffix}"]
-    modules = ["tests.test_windows_remove_refusal"] if os.name == "nt" else [
+    modules = ["tests.test_windows_filesystem_safety"] if os.name == "nt" else [
         "tests.test_vm_os_remove",
         "tests.test_bdd_cleanup",
     ]

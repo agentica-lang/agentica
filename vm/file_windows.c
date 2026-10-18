@@ -274,6 +274,220 @@ int agc_fs_take_channel(int fd) {
   return taken;
 }
 
+#define REMOVE_MAX_DEPTH 128u
+#define REMOVE_MAX_PASSES 64u
+
+static void close_handles(HANDLE *handles, size_t count) {
+  while (count) CloseHandle(handles[--count]);
+}
+
+static int remove_handle(HANDLE file) {
+  FILE_DISPOSITION_INFO disposition = {.DeleteFile = TRUE};
+  if (SetFileInformationByHandle(file, FileDispositionInfo, &disposition, sizeof disposition)) return 0;
+  DWORD error = GetLastError();
+  agc_fs_set_error(uv_translate_sys_error((int)error));
+  return errno;
+}
+
+static int remove_object(const wchar_t *path, unsigned depth, unsigned *passes);
+
+static int remove_directory(HANDLE directory, const wchar_t *path, unsigned depth, unsigned *passes) {
+  if (depth >= REMOVE_MAX_DEPTH) {
+    CloseHandle(directory);
+    return AGC_FS_REMOVE_TOO_DEEP;
+  }
+  for (unsigned attempt = 0; attempt < REMOVE_MAX_PASSES; attempt++) {
+    size_t path_len = wcslen(path);
+    wchar_t *pattern = malloc((path_len + 3) * sizeof(wchar_t));
+    if (!pattern) { CloseHandle(directory); errno = ENOMEM; return ENOMEM; }
+    memcpy(pattern, path, path_len * sizeof(wchar_t));
+    pattern[path_len] = L'\\';
+    pattern[path_len + 1] = L'*';
+    pattern[path_len + 2] = 0;
+    WIN32_FIND_DATAW entry;
+    HANDLE find = FindFirstFileW(pattern, &entry);
+    DWORD error = find == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
+    free(pattern);
+    if (find == INVALID_HANDLE_VALUE) {
+      CloseHandle(directory);
+      agc_fs_set_error(uv_translate_sys_error((int)error));
+      return errno;
+    }
+    unsigned removed = 0;
+    do {
+      if ((entry.cFileName[0] == L'.' && entry.cFileName[1] == 0) ||
+          (entry.cFileName[0] == L'.' && entry.cFileName[1] == L'.' && entry.cFileName[2] == 0)) continue;
+      if (++*passes > 1000000u) {
+        FindClose(find);
+        CloseHandle(directory);
+        errno = E2BIG;
+        return E2BIG;
+      }
+      size_t child_len = path_len + wcslen(entry.cFileName) + 2;
+      wchar_t *child = malloc(child_len * sizeof(wchar_t));
+      if (!child) {
+        FindClose(find);
+        CloseHandle(directory);
+        errno = ENOMEM;
+        return ENOMEM;
+      }
+      memcpy(child, path, path_len * sizeof(wchar_t));
+      child[path_len] = L'\\';
+      wcscpy(child + path_len + 1, entry.cFileName);
+      int rc = remove_object(child, depth + 1, passes);
+      free(child);
+      if (rc != 0) {
+        FindClose(find);
+        CloseHandle(directory);
+        return rc;
+      }
+      removed++;
+    } while (FindNextFileW(find, &entry));
+    error = GetLastError();
+    FindClose(find);
+    if (error != ERROR_NO_MORE_FILES) {
+      CloseHandle(directory);
+      agc_fs_set_error(uv_translate_sys_error((int)error));
+      return errno;
+    }
+    if (remove_handle(directory) == 0) {
+      CloseHandle(directory);
+      return 0;
+    }
+    if (errno != ENOTEMPTY || removed == 0) {
+      CloseHandle(directory);
+      return errno;
+    }
+  }
+  CloseHandle(directory);
+  errno = EBUSY;
+  return EBUSY;
+}
+
+static int remove_object(const wchar_t *path, unsigned depth, unsigned *passes) {
+  HANDLE file = CreateFileW(path, DELETE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+  if (file == INVALID_HANDLE_VALUE) {
+    DWORD error = GetLastError();
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) return 0;
+    agc_fs_set_error(uv_translate_sys_error((int)error));
+    return errno;
+  }
+  BY_HANDLE_FILE_INFORMATION info;
+  if (GetFileType(file) != FILE_TYPE_DISK || !GetFileInformationByHandle(file, &info)) {
+    DWORD error = GetLastError();
+    CloseHandle(file);
+    agc_fs_set_error(uv_translate_sys_error((int)error));
+    return errno;
+  }
+  if ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+    return remove_directory(file, path, depth, passes);
+  int rc = remove_handle(file);
+  CloseHandle(file);
+  return rc;
+}
+
+static bool path_missing_error(DWORD error) {
+  return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+}
+
+int agc_fs_remove_tree(const char *path, char **failed) {
+  if (failed) *failed = NULL;
+  wchar_t *wide = native_path(path);
+  if (!wide) return errno;
+  for (wchar_t *p = wide; *p; p++) if (*p == L'/') *p = L'\\';
+  size_t length = wcslen(wide);
+  if (length < 4 || wide[1] != L':' || wide[2] != L'\\' ||
+      ((wide[0] < L'A' || wide[0] > L'Z') && (wide[0] < L'a' || wide[0] > L'z')) ||
+      wide[length - 1] == L'\\') {
+    free(wide);
+    errno = EINVAL;
+    return AGC_FS_REMOVE_REFUSED;
+  }
+  wchar_t drive_root[] = {wide[0], L':', L'\\', 0};
+  HANDLE volume = CreateFileW(drive_root, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+  if (volume == INVALID_HANDLE_VALUE) {
+    DWORD error = GetLastError();
+    free(wide);
+    if (path_missing_error(error)) return 0;
+    agc_fs_set_error(uv_translate_sys_error((int)error));
+    return errno;
+  }
+  DWORD needed = GetFinalPathNameByHandleW(volume, NULL, 0, FILE_NAME_NORMALIZED | VOLUME_NAME_GUID);
+  wchar_t *root = needed ? malloc(((size_t)needed + 1) * sizeof(wchar_t)) : NULL;
+  DWORD written = root ? GetFinalPathNameByHandleW(volume, root, needed + 1, FILE_NAME_NORMALIZED | VOLUME_NAME_GUID) : 0;
+  DWORD error = GetLastError();
+  CloseHandle(volume);
+  if (!written || written > needed) {
+    free(root);
+    free(wide);
+    if (!needed) { agc_fs_set_error(uv_translate_sys_error((int)error)); return errno; }
+    errno = ENOMEM;
+    return ENOMEM;
+  }
+  size_t root_len = wcslen(root);
+  size_t suffix_len = length - 3;
+  wchar_t *canonical = malloc((root_len + suffix_len + 2) * sizeof(wchar_t));
+  if (!canonical) { free(root); free(wide); errno = ENOMEM; return ENOMEM; }
+  memcpy(canonical, root, root_len * sizeof(wchar_t));
+  if (root_len && canonical[root_len - 1] != L'\\') canonical[root_len++] = L'\\';
+  memcpy(canonical + root_len, wide + 3, (suffix_len + 1) * sizeof(wchar_t));
+  free(root);
+  free(wide);
+  size_t canonical_len = wcslen(canonical);
+  size_t root_prefix = root_len;
+  if (root_prefix && canonical[root_prefix - 1] != L'\\') root_prefix++;
+  wchar_t *last_sep = wcsrchr(canonical, L'\\');
+  if (!last_sep || !last_sep[1] || root_prefix > canonical_len) {
+    free(canonical);
+    return AGC_FS_REMOVE_REFUSED;
+  }
+  size_t max_handles = canonical_len + 1;
+  HANDLE *parents = calloc(max_handles, sizeof(HANDLE));
+  if (!parents) { free(canonical); errno = ENOMEM; return ENOMEM; }
+  size_t parent_count = 0;
+  /* Keep every ordinary ancestor open without write/delete sharing. */
+  wchar_t *scan = canonical + root_prefix;
+  wchar_t *final_start = last_sep + 1;
+  while (scan < final_start) {
+    wchar_t *sep = wcschr(scan, L'\\');
+    if (!sep || sep >= final_start) break;
+    wchar_t saved = *sep;
+    *sep = 0;
+    HANDLE parent = CreateFileW(canonical, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    *sep = saved;
+    if (parent == INVALID_HANDLE_VALUE) {
+      error = GetLastError();
+      close_handles(parents, parent_count);
+      free(parents);
+      free(canonical);
+      if (path_missing_error(error)) return 0;
+      agc_fs_set_error(uv_translate_sys_error((int)error));
+      return errno;
+    }
+    BY_HANDLE_FILE_INFORMATION info;
+    if (!GetFileInformationByHandle(parent, &info) || !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+      CloseHandle(parent);
+      close_handles(parents, parent_count);
+      free(parents);
+      free(canonical);
+      errno = ELOOP;
+      return errno;
+    }
+    parents[parent_count++] = parent;
+    scan = sep + 1;
+  }
+  unsigned passes = 0;
+  int rc = remove_object(canonical, 0, &passes);
+  close_handles(parents, parent_count);
+  free(parents);
+  free(canonical);
+  return rc;
+}
+
 int agc_fs_rename_noreplace(const char *from, const char *to) {
   wchar_t *wide_from = native_path(from);
   if (!wide_from) return -1;

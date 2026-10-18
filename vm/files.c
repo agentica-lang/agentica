@@ -118,6 +118,9 @@ static const char line_too_long[] = "filesystem: line exceeds buffer_bytes";
 static const char bad_timeout[] = "filesystem: timeout must be positive milliseconds";
 static const char too_deep[] = "filesystem: directory tree is deeper than 128 levels";
 static const char refused_path[] = "filesystem: refusing to remove /, . or ..";
+#ifdef _WIN32
+static const char refused_windows_path[] = "filesystem: refusing to remove an unsafe Windows path";
+#endif
 static const char not_lockable[] = "filesystem: only a regular file can be locked";
 static const char rename_who[] = "rename-file-or-directory";
 static const char complete_who[] = "path->complete-path";
@@ -218,6 +221,55 @@ static bool path_string(const agc_string *s) {
 #endif
   return true;
 }
+
+#ifdef _WIN32
+static unsigned char ascii_lower(unsigned char c) { return c >= 'A' && c <= 'Z' ? (unsigned char)(c + ('a' - 'A')) : c; }
+
+static bool windows_device_component(const char *data, size_t len) {
+  size_t base = 0;
+  while (base < len && data[base] != '.') base++;
+  static const char *const names[] = {"con", "prn", "aux", "nul", "conin$", "conout$"};
+  for (size_t k = 0; k < sizeof names / sizeof names[0]; k++) {
+    size_t name_len = strlen(names[k]);
+    if (base != name_len) continue;
+    size_t at = 0;
+    while (at < base && ascii_lower((unsigned char)data[at]) == (unsigned char)names[k][at]) at++;
+    if (at == base) return true;
+  }
+  if (base == 4 && data[3] >= '1' && data[3] <= '9') {
+    bool com = ascii_lower((unsigned char)data[0]) == 'c' && ascii_lower((unsigned char)data[1]) == 'o' &&
+               ascii_lower((unsigned char)data[2]) == 'm';
+    bool lpt = ascii_lower((unsigned char)data[0]) == 'l' && ascii_lower((unsigned char)data[1]) == 'p' &&
+               ascii_lower((unsigned char)data[2]) == 't';
+    if (com || lpt) return true;
+  }
+  return false;
+}
+
+static bool windows_remove_input_valid(const agc_string *s) {
+  size_t len = s->bytes;
+  if ((len >= 2 && ((s->data[0] >= 'A' && s->data[0] <= 'Z') || (s->data[0] >= 'a' && s->data[0] <= 'z')) &&
+       s->data[1] == ':' && (len == 2 || (s->data[2] != '/' && s->data[2] != '\\'))) ||
+      s->data[len - 1] == '/' || s->data[len - 1] == '\\') return false;
+  size_t start = len >= 2 && s->data[1] == ':' ? 2 : 0;
+  while (start < len) {
+    while (start < len && (s->data[start] == '/' || s->data[start] == '\\')) start++;
+    size_t end = start;
+    while (end < len && s->data[end] != '/' && s->data[end] != '\\') end++;
+    size_t part_len = end - start;
+    if (part_len == 1 && s->data[start] == '.') return false;
+    if (part_len == 2 && s->data[start] == '.' && s->data[start + 1] == '.') return false;
+    if (part_len && (s->data[end - 1] == '.' || s->data[end - 1] == ' ' || windows_device_component(s->data + start, part_len)))
+      return false;
+    for (size_t k = start; k < end; k++) {
+      unsigned char c = (unsigned char)s->data[k];
+      if (c < 0x20 || c == ':' || c == '<' || c == '>' || c == '"' || c == '|' || c == '?' || c == '*') return false;
+    }
+    start = end + 1;
+  }
+  return true;
+}
+#endif
 
 void agc_files_init(agc_vm *vm) {
   char *buf = agc_fs_cwd();
@@ -738,7 +790,20 @@ static void work_mkdir_private(op *o) {
    names the entry that failed, not the root. */
 static void work_remove(op *o) {
 #ifdef _WIN32
-  fail_op(o, FS_REMOVE, ENOTSUP);
+  char *failed = NULL;
+  int rc = agc_fs_remove_tree(o->path, &failed);
+  if (rc == 0) return;
+  if (rc == AGC_FS_REMOVE_TOO_DEEP) {
+    fail_op(o, FS_TREE_DEEP, 0);
+  } else if (rc == AGC_FS_REMOVE_REFUSED) {
+    fail_op(o, FS_REFUSED, 0);
+  } else {
+    fail_op(o, FS_REMOVE, rc);
+    if (failed) {
+      free(o->path);
+      o->path = failed;
+    }
+  }
 #else
   int rc;
   do {
@@ -1390,8 +1455,11 @@ static agc_value builtin_dir_mkdir_private(agc_vm *vm, agc_value *args, uint32_t
 
 static agc_value builtin_remove(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
-  return path_op(vm, OP_REMOVE, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), "delete-directory/files",
-                 "path-string?");
+  const agc_string *path = agc_as_string(vm, args[0]);
+#ifdef _WIN32
+  if (path_string(path) && !windows_remove_input_valid(path)) return error_of(refused_windows_path);
+#endif
+  return path_op(vm, OP_REMOVE, path, agc_as_int(vm, args[1]), "delete-directory/files", "path-string?");
 }
 
 static agc_value builtin_rename(agc_vm *vm, agc_value *args, uint32_t span) {
