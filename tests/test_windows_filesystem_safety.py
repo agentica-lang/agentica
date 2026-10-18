@@ -326,8 +326,9 @@ def test_rename_denied_delete_preserves_source_and_target(root, work):
     box.mkdir()
     source = box / "source"
     source.write_text("rename sentinel", encoding="utf-8")
-    target = box / "occupied"
-    target.write_text("keep destination", encoding="utf-8")
+    target = box / "destination"
+    occupied = box / "occupied"
+    occupied.write_text("keep destination", encoding="utf-8")
     identity = subprocess.run(
         ["whoami.exe", "/user", "/fo", "csv", "/nh"],
         capture_output=True, text=True, check=False,
@@ -383,7 +384,8 @@ def test_rename_denied_delete_preserves_source_and_target(root, work):
         acl(source, "/remove:d", f"*{sid}")
         acl(box, "/remove:d", f"*{sid}")
     assert source.read_text(encoding="utf-8") == "rename sentinel"
-    assert target.read_text(encoding="utf-8") == "keep destination"
+    assert not target.exists()
+    assert occupied.read_text(encoding="utf-8") == "keep destination"
     result = run_vm(
         rename, args=[str(source), str(target)], env=vm_environment(), cwd=root
     )

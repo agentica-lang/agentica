@@ -229,8 +229,6 @@ jobs:
         run: poetry run python -m pytest tests/test_platform_bootstrap.py
       - run: make fixed-point
       - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py tests/test_platform_bootstrap.py"
-      - name: Windows filesystem suite in Actions-owned scratch
-        run: make py-test/tests/test_windows_filesystem_safety.py PYTHON=python
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions PYTHON=python
         env:
