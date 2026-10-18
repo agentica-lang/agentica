@@ -417,6 +417,19 @@ def test_depth_limit_fails_without_leaking_handles(root, work, adopt):
 
 
 @REQUIRES_NATIVE_WINDOWS
+def test_depth_boundary_removes_exactly_128_levels(root, work):
+    victim = root / "fits"
+    current = victim
+    for _ in range(127):
+        current.mkdir()
+        current = current / "d"
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-boundary")
+    result = run_vm(bytecode, args=[str(victim)], env=vm_environment(), cwd=root)
+    assert (result.code, result.stdout) == (0, "true\n"), result.stderr
+    assert not victim.exists()
+
+
+@REQUIRES_NATIVE_WINDOWS
 def test_remove_pins_ancestors_during_concurrent_replacement(root, work, adopt):
     anchor = root / "anchor"
     moved = root / "anchor-moved"
