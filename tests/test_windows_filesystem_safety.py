@@ -736,3 +736,41 @@ def test_roots_and_final_dot_components_are_refused(work):
     for path in paths:
         result = run_vm(bytecode, args=[path], env=vm_environment(), cwd=os.getcwd())
         assert (result.code, result.stdout) == (0, "false\n"), result.stderr
+
+
+@REQUIRES_NATIVE_WINDOWS
+@pytest.mark.parametrize("path", [
+    "",
+    "C:\\",
+    "C:/",
+    "C:",
+    "C:foo",
+    "C:\\foo\\",
+    "C:\\foo\\.",
+    "C:\\foo\\..",
+    "C:\\foo ",
+    "C:\\foo.",
+    "C:\\foo:stream",
+    "\\\\server",
+    "\\\\server\\share",
+    "\\\\server\\share\\",
+    "NUL",
+    "CON",
+    "AUX",
+    "COM1",
+    "LPT1",
+    "NUL.txt",
+], ids=[
+    "empty", "drive-root-backslash", "drive-root-slash", "drive-only", "drive-relative",
+    "trailing-separator", "trailing-dot", "trailing-dotdot", "trailing-space",
+    "trailing-dot-component", "ads-stream", "unc-server", "unc-share", "unc-share-slash",
+    "nul-device", "con-device", "aux-device", "com1-device", "lpt1-device", "nul-with-extension",
+])
+def test_remove_refuses_reserved_windows_paths_without_touching_entries(root, work, path):
+    sentinel = root / "keep"
+    sentinel.write_text("sentinel", encoding="utf-8")
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-reserved")
+    result = run_vm(bytecode, args=[path], env=vm_environment(), cwd=root)
+    assert (result.code, result.stdout) == (0, "false\n"), (path, result.stderr)
+    assert sentinel.read_text(encoding="utf-8") == "sentinel"
+    assert root.is_dir()
