@@ -231,12 +231,7 @@ def test_read_only_entry_failure_preserves_data_and_closes_its_handles(root, wor
     assert not victim.exists()
 
 
-@REQUIRES_NATIVE_WINDOWS
-def test_acl_denied_delete_preserves_remove_sources(root, work):
-    box = root / "acl-box"
-    box.mkdir()
-    victim = box / "keep"
-    victim.write_text("acl sentinel", encoding="utf-8")
+def current_user_sid():
     identity = subprocess.run(
         ["whoami.exe", "/user", "/fo", "csv", "/nh"],
         capture_output=True, text=True, check=False,
@@ -244,13 +239,33 @@ def test_acl_denied_delete_preserves_remove_sources(root, work):
     assert identity.returncode == 0, identity.stderr
     sid = next(csv.reader(identity.stdout.splitlines()))[1]
     assert sid.startswith("S-1-"), sid
+    return sid
 
-    def acl(path, *arguments):
-        result = subprocess.run(
-            ["icacls.exe", str(path), *arguments],
-            capture_output=True, text=True, check=False,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
+
+def acl(path, *arguments):
+    result = subprocess.run(
+        ["icacls.exe", str(path), *arguments],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def delete_is_denied(path):
+    kernel32 = kernel32_file_api()
+    handle = kernel32.CreateFileW(str(path), 0x10000, 7, None, 3, 0, None)
+    if handle != ctypes.c_void_p(-1).value:
+        kernel32.CloseHandle(handle)
+        return False
+    return ctypes.get_last_error() == 5
+
+
+@REQUIRES_NATIVE_WINDOWS
+def test_acl_denied_delete_preserves_remove_sources(root, work):
+    box = root / "acl-box"
+    box.mkdir()
+    victim = box / "keep"
+    victim.write_text("acl sentinel", encoding="utf-8")
+    sid = current_user_sid()
 
     remove = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-acl")
     try:
@@ -258,24 +273,12 @@ def test_acl_denied_delete_preserves_remove_sources(root, work):
         # DELETE_CHILD on its parent. Reading the sentinel remains allowed.
         acl(box, "/deny", f"*{sid}:(DC)")
         acl(victim, "/deny", f"*{sid}:(D)")
-        kernel32 = kernel32_file_api()
-        # Establish actual denial with an independent Win32 open before
-        # invoking either mutation; a hosted runner may have backup rights.
-        def delete_is_denied() -> bool:
-            handle = kernel32.CreateFileW(
-                str(victim), 0x10000, 7, None, 3, 0, None
-            )
-            if handle != ctypes.c_void_p(-1).value:
-                kernel32.CloseHandle(handle)
-                return False
-            return ctypes.get_last_error() == 5
-
-        if not delete_is_denied():
+        if not delete_is_denied(victim):
             acl(box, "/inheritance:d")
             acl(victim, "/inheritance:d")
             acl(box, "/deny", f"*{sid}:(DC,D)")
             acl(victim, "/deny", f"*{sid}:(D)")
-            if not delete_is_denied():
+            if not delete_is_denied(victim):
                 details = subprocess.run(
                     ["icacls.exe", str(box)], capture_output=True,
                     text=True, check=False,
@@ -329,59 +332,27 @@ def test_rename_denied_delete_preserves_source_and_target(root, work):
     target = box / "destination"
     occupied = box / "occupied"
     occupied.write_text("keep destination", encoding="utf-8")
-    identity = subprocess.run(
-        ["whoami.exe", "/user", "/fo", "csv", "/nh"],
-        capture_output=True, text=True, check=False,
-    )
-    assert identity.returncode == 0, identity.stderr
-    sid = next(csv.reader(identity.stdout.splitlines()))[1]
-    assert sid.startswith("S-1-"), sid
-
-    def acl(path, *arguments):
-        result = subprocess.run(
-            ["icacls.exe", str(path), *arguments],
-            capture_output=True, text=True, check=False,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
+    sid = current_user_sid()
 
     rename = compile_work_text(work, RACE_PROGRAM, "windows-rename-denied")
     try:
         # Deny DELETE on the source; the non-replacing rename must refuse
         # instead of moving or truncating anything.
-        acl(box, "/deny", f"*{sid}:(DC)")
+        # MoveFile can use a parent's DELETE_CHILD grant even when DELETE
+        # on the source is denied. Remove inherited grants (including group
+        # grants), then grant the parent read/write rights without deletion.
+        acl(box, "/grant:r", f"*{sid}:(RX,W)")
+        acl(box, "/inheritance:r")
         acl(source, "/deny", f"*{sid}:(D)")
-        kernel32 = kernel32_file_api()
-        # Establish actual denial with an independent Win32 open before
-        # invoking the rename; a hosted runner may have backup rights.
-        def delete_is_denied() -> bool:
-            handle = kernel32.CreateFileW(
-                str(source), 0x10000, 7, None, 3, 0, None
-            )
-            if handle != ctypes.c_void_p(-1).value:
-                kernel32.CloseHandle(handle)
-                return False
-            return ctypes.get_last_error() == 5
-
-        if not delete_is_denied():
-            acl(box, "/inheritance:d")
-            acl(source, "/inheritance:d")
-            acl(box, "/deny", f"*{sid}:(DC,D)")
-            acl(source, "/deny", f"*{sid}:(D)")
-            if not delete_is_denied():
-                details = subprocess.run(
-                    ["icacls.exe", str(box)], capture_output=True,
-                    text=True, check=False,
-                )
-                pytest.fail(
-                    "could not establish independent DELETE denial: "
-                    + details.stdout
-                )
+        assert delete_is_denied(source), "DELETE was not denied"
         result = run_vm(
             rename, args=[str(source), str(target)], env=vm_environment(), cwd=root
         )
         assert (result.code, result.stdout) == (0, "false\n"), result.stderr
     finally:
-        acl(source, "/remove:d", f"*{sid}")
+        acl(box, "/grant:r", f"*{sid}:(F)")
+        acl(box, "/inheritance:e")
+        acl(source if source.exists() else target, "/remove:d", f"*{sid}")
         acl(box, "/remove:d", f"*{sid}")
     assert source.read_text(encoding="utf-8") == "rename sentinel"
     assert not target.exists()
@@ -401,20 +372,7 @@ def test_remove_names_the_nested_entry_that_failed_and_stops_there(root, work):
     locked.mkdir(parents=True)
     (locked / "f.txt").write_text("f", encoding="utf-8")
     (tree / "z.txt").write_text("z", encoding="utf-8")
-    identity = subprocess.run(
-        ["whoami.exe", "/user", "/fo", "csv", "/nh"],
-        capture_output=True, text=True, check=False,
-    )
-    assert identity.returncode == 0, identity.stderr
-    sid = next(csv.reader(identity.stdout.splitlines()))[1]
-    assert sid.startswith("S-1-"), sid
-
-    def acl(path, *arguments):
-        result = subprocess.run(
-            ["icacls.exe", str(path), *arguments],
-            capture_output=True, text=True, check=False,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
+    sid = current_user_sid()
 
     remove = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-nested-denied")
     try:
@@ -863,12 +821,25 @@ def test_roots_and_final_dot_components_are_refused(work):
 
 
 @REQUIRES_NATIVE_WINDOWS
+@pytest.mark.parametrize("form", ["drive-relative", "device-extension"])
+def test_remove_missing_native_names_is_idempotent(root, work, form):
+    # Drive-relative names are valid native paths. The handle-relative NT
+    # backend treats a device name with an extension as a literal filename,
+    # not a DOS device alias. Neither missing entry is a refusal.
+    path = root.drive + "agentica-missing-" + uuid.uuid4().hex
+    if form == "device-extension":
+        path = str(root / "NUL.txt")
+    bytecode = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-missing-native")
+    run_with_stdout(bytecode, [path], root, "true\n")
+    assert root.is_dir()
+
+
+@REQUIRES_NATIVE_WINDOWS
 @pytest.mark.parametrize("path", [
     "",
     "C:\\",
     "C:/",
     "C:",
-    "C:foo",
     "C:\\foo\\",
     "C:\\foo\\.",
     "C:\\foo\\..",
@@ -883,12 +854,11 @@ def test_roots_and_final_dot_components_are_refused(work):
     "AUX",
     "COM1",
     "LPT1",
-    "NUL.txt",
 ], ids=[
-    "empty", "drive-root-backslash", "drive-root-slash", "drive-only", "drive-relative",
+    "empty", "drive-root-backslash", "drive-root-slash", "drive-only",
     "trailing-separator", "trailing-dot", "trailing-dotdot", "trailing-space",
     "trailing-dot-component", "ads-stream", "unc-server", "unc-share", "unc-share-slash",
-    "nul-device", "con-device", "aux-device", "com1-device", "lpt1-device", "nul-with-extension",
+    "nul-device", "con-device", "aux-device", "com1-device", "lpt1-device",
 ])
 def test_remove_refuses_reserved_windows_paths_without_touching_entries(root, work, path):
     sentinel = root / "keep"
