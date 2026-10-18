@@ -186,6 +186,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - run: python3 -m pip install poetry==2.1.2
+      - run: poetry install --only test --no-root
       - run: |
           clang --version
           python3 --version
