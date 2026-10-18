@@ -97,8 +97,9 @@ lists
   `windows-docker-remove-wine-check` stay as the explicit forms and delegate
   to the same routes; an unknown `KIND` fails before anything runs.
 - `make goldens` also rewrites `tests/fixtures/cli/forms.json`.
-  `tools/refreeze.py` (Python; `make goldens` runs its `--fast-only`
-  tier, the full run also rewrites the slow-tier manifests) rewrites the frozen
+  `tools/refreeze.py` (pytest, run by `make goldens` in Poetry with its
+  `--fast-only` tier; the full run also rewrites the slow-tier manifests)
+  rewrites the frozen
   goldens that `tests/test_frontend_<stage>.py` compare the Agentica stages
   with (`references/frontend.md`, "Frozen comparisons") from the Agentica
   stages. It is not a CI step. The Racket writers that made them

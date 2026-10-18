@@ -6,7 +6,7 @@ help texts are not asserted (AGENTS.md).
 """
 import pytest
 
-from tests.spec_support import covered
+from tests.spec_support import assert_exact_span, assert_multi_file_case, assert_single_file_case
 
 JOIN = 'def join(xs: List[String], sep: String = ", ") -> String\n  return xs.join(sep)\nend\n\n'
 
@@ -178,10 +178,7 @@ MODULES = [
     ids=[case[0] for case in SINGLE_FILE],
 )
 def test_single_file_programs(title, program, code, text, agentica_check):
-    found = agentica_check(program, "program.agc")
-    assert (found and found["code"]) == code, program
-    if text is not None:
-        assert covered(program, found["range"]) == text
+    assert_single_file_case(agentica_check, program, code, text, assert_exact_span)
 
 
 @pytest.mark.parametrize(
@@ -190,9 +187,4 @@ def test_single_file_programs(title, program, code, text, agentica_check):
     ids=[case[0] for case in MODULES],
 )
 def test_programs_of_several_files(title, files, code, file, text, agentica_check):
-    found = agentica_check(files, "root.agc")
-    assert (found and found["code"]) == code, files
-    if found is None:
-        return
-    assert found["file"].endswith(file), found["file"]
-    assert covered(files[file], found["range"]) == text
+    assert_multi_file_case(agentica_check, files, code, file, text, assert_exact_span)

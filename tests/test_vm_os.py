@@ -9,6 +9,7 @@ import signal
 import stat
 
 from tests.agentica_test import Child, TestCase, output_lines, run_vm, start_vm, vm_binary, vm_command, vm_environment
+from tests.windows_support import assert_rename_race
 
 MODES_PROGRAM = """\
 def main() -> Void
@@ -329,22 +330,7 @@ class OsBuiltins(OsBuiltinsBase):
 
     def _rename_has_exactly_one_winner_when_processes_race_for_a_name(self):
         bytecode = self.program(RACE_PROGRAM, "race")
-        target = self.root / "target"
-        sources = []
-        for k in range(6):
-            source = self.root / ("source%d" % k)
-            source.write_text(str(k))
-            sources.append(source)
-        racers = [self.adopt(start_vm(bytecode, str(source), str(target), cwd=self.root)) for source in sources]
-        answers = [racer.next_line() for racer in racers]
-        for racer in racers:
-            self.assertEqual(racer.wait(), 0)
-        self.assertEqual(sorted(answers), ["false"] * 5 + ["true"])
-        winner = answers.index("true")
-        self.assertEqual(target.read_text(), str(winner))
-        self.assertFalse(sources[winner].exists())
-        for k, source in enumerate(sources):
-            self.assertEqual(source.exists(), k != winner)
+        assert_rename_race(self, bytecode, self.root, lambda number: "source%d" % number)
 
     def test_make_directory_error_names_the_path_and_os_reason(self):
         text = """\

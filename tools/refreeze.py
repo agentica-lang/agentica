@@ -6,28 +6,28 @@ the fixtures (tests/fixtures/frontend/{lexer,parser,modules,check,lower,catalog}
 front end. A change of a compiler/ stage that changes its output on purpose is frozen with this tool (`make goldens` runs it
 with --fast-only):
 
-    python3 tools/refreeze.py                  # every stage, fast and slow tier
-    python3 tools/refreeze.py --stage lower    # one stage (repeat or comma-separate for several)
-    python3 tools/refreeze.py --fast-only      # only the fast tier (the manifests of the slow tier stay as they are)
+    poetry run python tools/refreeze.py                  # every stage, fast and slow tier
+    poetry run python tools/refreeze.py --stage lower    # one stage (repeat or comma-separate for several)
+    poetry run python tools/refreeze.py --fast-only      # only the fast tier (the manifests of the slow tier stay as they are)
 
-It runs the unittest modules tests/test_frontend_<stage>.py with AGENTICA_REFREEZE=1. In that mode a comparison with a
+It runs pytest modules tests/test_frontend_<stage>.py with AGENTICA_REFREEZE=1. In that mode a comparison with a
 golden rewrites the golden from the Agentica output instead of failing (tests/frontend_support.py), and logs what changed.
 The tool prints the log as a summary: for a manifest, each entry whose output hash, size or input hash changed, was added
 or was removed; for a text golden, a unified diff. Then read `git diff` before committing: the tool freezes whatever the
 stages print, so a regression is frozen the same way as a fix. Every other assertion of the tests (the shape checks
 such as "this input is a too-deep error") still runs and still fails the stage.
 
-The tier follows the tests: the slow cases are the ones marked @slow, which run only with AGENTICA_TEST_SLOW=1 (set here
-unless --fast-only is given). The tool needs only the Python standard library and the product CLI the tests already use.
+The tier follows the tests: the slow cases are marked @slow, which run only with AGENTICA_TEST_SLOW=1 (set here unless
+--fast-only is given). Run this tool in the Poetry test environment; it requires pytest and the product CLI the tests use.
 """
 import argparse
 import difflib
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -42,38 +42,57 @@ def run_stage(stage, fast_only):
     """Run one stage in refreeze mode. Gives (return code, tail of the output, list of logged records)."""
     with tempfile.TemporaryDirectory(prefix="agentica-refreeze-") as directory:
         log = Path(directory) / "log.jsonl"
+        junit = Path(directory) / "junit.xml"
         env = dict(os.environ, AGENTICA_REFREEZE="1", AGENTICA_REFREEZE_LOG=str(log), TMPDIR=directory)
         if fast_only:
             env.pop("AGENTICA_TEST_SLOW", None)
         else:
             env["AGENTICA_TEST_SLOW"] = "1"
         try:
-            result = subprocess.run([sys.executable, "-m", "unittest", "-v", "tests.test_frontend_" + stage],
-                                    cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                    timeout=STAGE_TIMEOUT)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    "-q",
+                    "--junitxml",
+                    str(junit),
+                    "tests/test_frontend_" + stage + ".py",
+                ],
+                cwd=ROOT,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=STAGE_TIMEOUT,
+            )
             code, output = result.returncode, result.stdout
         except subprocess.TimeoutExpired as expired:
             code, output = 1, "stopped after %d seconds\n%s" % (STAGE_TIMEOUT, expired.stdout or "")
         records = []
         if log.exists():
             records = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line]
-    return code, output, records
+        counts = count_skips(junit.read_text(encoding="utf-8")) if junit.exists() else (0, 0, 0)
+    return code, output, records, counts
 
 
-# The reasons that tests/agentica_test.py gives for a case of the other tier; any other skip reason is a missing tool.
-TIER_SKIPS = ("slow tier only", "fast tier only", "no cases in this tier")
+# These are expected skips when pytest keeps cases from the other tier collected but does not run them.
+TIER_SKIPS = ("slow tier only", "fast tier only", "no cases in this tier", "not selected in this test tier")
 
 
-def count_skips(output):
-    """(tests run, tests skipped, skipped for another reason than the tier) from a verbose unittest run.
-
-    All three are 0 when the summary is not there. A case of the other tier is an expected skip: with --fast-only the
-    @slow cases are skipped on purpose."""
-    ran = re.search(r"^Ran (\d+) tests? in ", output, re.MULTILINE)
-    skipped = re.search(r"^(?:OK|FAILED) \(.*\bskipped=(\d+)", output, re.MULTILINE)
-    reasons = re.findall(r"\.\.\. skipped '(.*)'$", output, re.MULTILINE)
+def count_skips(report):
+    """Return (collected cases, skipped cases, unexpected skips) from pytest JUnit XML."""
+    if not report:
+        return 0, 0, 0
+    root = ET.fromstring(report)
+    cases = list(root.iter("testcase"))
+    reasons = [
+        skipped.get("message", "") or skipped.text or ""
+        for case in cases
+        for skipped in case.findall("skipped")
+    ]
     unexpected = sum(1 for reason in reasons if reason not in TIER_SKIPS)
-    return (int(ran.group(1)) if ran else 0, int(skipped.group(1)) if skipped else 0, unexpected)
+    return len(cases), len(reasons), unexpected
 
 
 def describe_entry(entry):
@@ -135,16 +154,19 @@ def main(arguments=None):
 
     failed = False
     changed_files = 0
-    for stage, (code, output, records) in zip(stages, results):
+    for stage, (code, output, records, counts) in zip(stages, results):
         print("== %s" % stage)
         for record in records:
             changed_files += 1
             print("\n".join(summarize(record, options.diff_lines)))
-        ran, skipped, missing_tool = count_skips(output)
+        ran, skipped, missing_tool = counts
         if missing_tool:
             print("%d of %d tests were skipped (a tool the tests need is missing?); their goldens were not checked or "
                   "rewritten" % (missing_tool, ran))
-        if ran and skipped == ran:
+        if not ran:
+            failed = True
+            print("no tests were collected for %s, so this stage froze nothing" % stage)
+        elif skipped == ran:
             # An empty log would read as "nothing changed" while nothing ran, so this is a failure, not a clean stage.
             failed = True
             print("every test of %s was skipped, so this stage froze nothing" % stage)

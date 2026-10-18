@@ -8,12 +8,15 @@ manifests hold their hashes.
 """
 import time
 
-from tests.agentica_test import FIXTURES, ROOT, scaled, slow, timeout
-from tests.frontend_support import FROZEN, StageTestCase, load_corpus, load_json, write_files
+import pytest
+
+from tests.agentica_test import FIXTURES, ROOT, scaled, timeout
+from tests.frontend_support import (
+    FROZEN, PytestStageCase, assert_golden, assert_goldens, assert_manifest, fixture_pairs, load_corpus, load_json,
+    pytest_stage_fixtures, write_files)
 
 NESTING_LIMIT = 1000
 PARSER_FIXTURES = FIXTURES / "frontend" / "parser"
-
 
 def function_body(body):
     return "def main() -> Void\n" + body + "end\n\n"
@@ -75,108 +78,121 @@ def is_too_deep(text):
     return text.startswith("ERROR PARSE-TOO-DEEP")
 
 
-class ParserFrozenTest(StageTestCase):
+class ParserStage(PytestStageCase):
     ENTRY = "parse.agc"
 
     def parse_cases(self, cases, *before, flags=()):
-        """Parse {key: program text} written as files; gives {key: output}."""
-        directory = self.make_temp_dir()
+        directory = self.temp_dir()
         write_files(directory, {key + ".agc": text for key, text in cases.items()})
         outputs = self.run_sections(sorted(key + ".agc" for key in cases), *before, flags=flags, cwd=directory)
         return {key: outputs[key + ".agc"] for key in cases}
 
     def check_cases(self, cases, manifest):
         outputs = self.parse_cases(cases)
-        self.assert_manifest(outputs, manifest, cases)
+        assert_manifest(outputs, manifest, cases)
         return outputs
 
-    def test_every_input_has_a_golden_and_no_golden_is_left_over(self):
-        self.fixture_pairs(PARSER_FIXTURES, ".input", ".ast")
 
-    def test_the_parser_matches_the_goldens_of_the_fixtures(self):
-        pairs = self.fixture_pairs(PARSER_FIXTURES, ".input", ".ast")
-        outputs = self.run_sections(["tests/fixtures/frontend/parser/" + name for name in pairs], cwd=ROOT)
-        self.assert_goldens({name: outputs["tests/fixtures/frontend/parser/" + name] for name in pairs}, pairs,
-                            "parser fixtures")
+_parser_stage_class, stage = pytest_stage_fixtures(ParserStage, pytest)
 
-    def test_chains_prefix_operators_and_nested_chains_are_legal_at_the_limit_and_refused_one_past_it(self):
-        # The trees of the legal cases print about 1 MB each, so the golden holds their hashes.
-        cases = {}
-        legal = {}
-        for name, limit, build in limit_shapes():
-            for count in (limit, limit + 1):
-                cases["limit-%s-%d" % (name, count)] = build(count)
-                legal["limit-%s-%d" % (name, count)] = count == limit
-        outputs = self.check_cases(cases, "parser/limits.sha256")
-        for key, is_legal in legal.items():
-            self.assertEqual(outputs[key].startswith("program "), is_legal, key)
 
-    def test_a_file_with_invalid_utf8_is_lex_invalid_utf8_at_the_first_bad_byte(self):
-        directory = self.make_temp_dir()
-        write_files(directory, {"invalid.agc": b"# caf\xc3\xa9\ndef \xff\n"})
-        outputs = self.run_sections(["invalid.agc"], cwd=directory)
-        self.assert_golden(outputs["invalid.agc"], FROZEN / "parser" / "invalid-utf8.expected")
+def test_every_input_has_a_golden_and_no_golden_is_left_over():
+    fixture_pairs(PARSER_FIXTURES, ".input", ".ast")
 
-    def test_the_first_node_id_can_be_chosen_so_modules_can_share_one_numbering(self):
-        path = "tests/fixtures/frontend/parser/synthetic.input"
-        shifted = self.run_sections([path], "--first-id=1000")
-        self.assert_golden(shifted[path], FROZEN / "parser" / "first-id.expected")
-        self.assertIn(" #1000 ", shifted[path])
 
-    def test_a_second_file_continues_the_numbering_from_the_next_free_id_of_the_first(self):
-        first = "tests/fixtures/frontend/parser/hello.input"
-        second = "tests/fixtures/frontend/parser/synthetic.input"
-        continued = self.run_sections([first, second], "--continue")
-        self.assert_golden(continued[first], PARSER_FIXTURES / "hello.ast")
-        self.assert_golden(continued[second], FROZEN / "parser" / "continue-synthetic.expected")
+def test_the_parser_matches_the_goldens_of_the_fixtures(stage):
+    pairs = fixture_pairs(PARSER_FIXTURES, ".input", ".ast")
+    outputs = stage.run_sections(["tests/fixtures/frontend/parser/" + name for name in pairs], cwd=ROOT)
+    assert_goldens({name: outputs["tests/fixtures/frontend/parser/" + name] for name in pairs}, pairs,
+                   "parser fixtures")
 
-    @slow
-    @timeout(1800)
-    def test_corpus(self):
-        files = {path: text for path, text in load_corpus("examples", "stdlib", "fixtures").items()
-                 if path.startswith(("examples/", "stdlib/", "tests/fixtures/vm/"))}
-        directory = self.make_temp_dir()
-        write_files(directory, files)
-        outputs = self.run_sections(sorted(files), cwd=directory)
-        self.assert_manifest(outputs, "parser/corpus.sha256", files)
 
-    @slow
-    @timeout(1800)
-    def test_300_generated_inputs(self):
-        cases = {"case-%d" % n: text for n, text in enumerate(load_json("parser/generated.json"))}
-        outputs = self.check_cases(cases, "parser/generated.sha256")
-        errors = sum(1 for text in outputs.values() if text.startswith("ERROR"))
-        self.assertTrue(30 < errors < 270, "%d of 300 generated inputs are errors" % errors)
+def test_chains_prefix_operators_and_nested_chains_are_legal_at_the_limit_and_refused_one_past_it(stage):
+    # The trees of the legal cases print about 1 MB each, so the golden holds their hashes.
+    cases = {}
+    legal = {}
+    for name, limit, build in limit_shapes():
+        for count in (limit, limit + 1):
+            cases["limit-%s-%d" % (name, count)] = build(count)
+            legal["limit-%s-%d" % (name, count)] = count == limit
+    outputs = stage.check_cases(cases, "parser/limits.sha256")
+    for key, is_legal in legal.items():
+        assert outputs[key].startswith("program ") == is_legal, key
 
-    @slow
-    @timeout(1800)
-    def test_the_nesting_limit_falls_at_the_same_token_in_both_parsers(self):
-        cases = {}
-        for count in range(NESTING_LIMIT - 5, NESTING_LIMIT + 4):
-            for name, text in nesting_shapes(count):
-                if name in ("parentheses", "types", "binary chain", "mixed chain"):
-                    cases["boundary-%s-%d" % (key_of(name), count)] = text
-        outputs = self.check_cases(cases, "parser/boundary.sha256")
-        results = {is_too_deep(text) for text in outputs.values()}
-        self.assertEqual(results, {True, False}, "the boundary cases cross the limit")
 
-    @slow
-    @timeout(1800)
-    def test_nesting_far_below_and_above_the_limit_gives_the_same_tree_or_the_same_too_deep(self):
-        cases = {}
-        deep = {}
-        for count in (300, 900, NESTING_LIMIT + 1, 3000):
-            for name, text in nesting_shapes(count):
-                key = "nest-%s-%d" % (key_of(name), count)
-                cases[key] = text
-                deep[key] = count > deepest_legal(name)
-        outputs = self.check_cases(cases, "parser/nesting.sha256")
-        for key, expected in deep.items():
-            self.assertEqual(is_too_deep(outputs[key]), expected, key)
+def test_a_file_with_invalid_utf8_is_lex_invalid_utf8_at_the_first_bad_byte(stage):
+    directory = stage.temp_dir()
+    write_files(directory, {"invalid.agc": b"# caf\xc3\xa9\ndef \xff\n"})
+    outputs = stage.run_sections(["invalid.agc"], cwd=directory)
+    assert_golden(outputs["invalid.agc"], FROZEN / "parser" / "invalid-utf8.expected")
 
-    @slow
-    @timeout(1800)
-    def test_a_large_file_parses_in_linear_time(self):
-        started = time.monotonic()
-        self.check_cases(large_files(), "parser/large.sha256")
-        self.assertLess(time.monotonic() - started, scaled(60))
+
+def test_the_first_node_id_can_be_chosen_so_modules_can_share_one_numbering(stage):
+    path = "tests/fixtures/frontend/parser/synthetic.input"
+    shifted = stage.run_sections([path], "--first-id=1000")
+    assert_golden(shifted[path], FROZEN / "parser" / "first-id.expected")
+    assert " #1000 " in shifted[path]
+
+
+def test_a_second_file_continues_the_numbering_from_the_next_free_id_of_the_first(stage):
+    first = "tests/fixtures/frontend/parser/hello.input"
+    second = "tests/fixtures/frontend/parser/synthetic.input"
+    continued = stage.run_sections([first, second], "--continue")
+    assert_golden(continued[first], PARSER_FIXTURES / "hello.ast")
+    assert_golden(continued[second], FROZEN / "parser" / "continue-synthetic.expected")
+
+
+@pytest.mark.slow
+@timeout(1800)
+def test_corpus(stage):
+    files = {path: text for path, text in load_corpus("examples", "stdlib", "fixtures").items()
+             if path.startswith(("examples/", "stdlib/", "tests/fixtures/vm/"))}
+    directory = stage.temp_dir()
+    write_files(directory, files)
+    outputs = stage.run_sections(sorted(files), cwd=directory)
+    assert_manifest(outputs, "parser/corpus.sha256", files)
+
+
+@pytest.mark.slow
+@timeout(1800)
+def test_300_generated_inputs(stage):
+    cases = {"case-%d" % n: text for n, text in enumerate(load_json("parser/generated.json"))}
+    outputs = stage.check_cases(cases, "parser/generated.sha256")
+    errors = sum(1 for text in outputs.values() if text.startswith("ERROR"))
+    assert 30 < errors < 270, "%d of 300 generated inputs are errors" % errors
+
+
+@pytest.mark.slow
+@timeout(1800)
+def test_the_nesting_limit_falls_at_the_same_token_in_both_parsers(stage):
+    cases = {}
+    for count in range(NESTING_LIMIT - 5, NESTING_LIMIT + 4):
+        for name, text in nesting_shapes(count):
+            if name in ("parentheses", "types", "binary chain", "mixed chain"):
+                cases["boundary-%s-%d" % (key_of(name), count)] = text
+    outputs = stage.check_cases(cases, "parser/boundary.sha256")
+    results = {is_too_deep(text) for text in outputs.values()}
+    assert results == {True, False}, "the boundary cases cross the limit"
+
+
+@pytest.mark.slow
+@timeout(1800)
+def test_nesting_far_below_and_above_the_limit_gives_the_same_tree_or_the_same_too_deep(stage):
+    cases = {}
+    deep = {}
+    for count in (300, 900, NESTING_LIMIT + 1, 3000):
+        for name, text in nesting_shapes(count):
+            key = "nest-%s-%d" % (key_of(name), count)
+            cases[key] = text
+            deep[key] = count > deepest_legal(name)
+    outputs = stage.check_cases(cases, "parser/nesting.sha256")
+    for key, expected in deep.items():
+        assert is_too_deep(outputs[key]) == expected, key
+
+
+@pytest.mark.slow
+@timeout(1800)
+def test_a_large_file_parses_in_linear_time(stage):
+    started = time.monotonic()
+    stage.check_cases(large_files(), "parser/large.sha256")
+    assert time.monotonic() - started < scaled(60)

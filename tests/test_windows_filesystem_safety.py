@@ -16,6 +16,7 @@ from pathlib import Path
 
 from tests.agentica_test import TestCase, run_vm, start_vm, vm_environment
 from tests.remove_sandbox_support import require_remove_sandbox
+from tests.windows_support import assert_rename_race, kernel32_file_api, run_vm_with_stdout
 
 REMOVE_PROGRAM = """\
 def main() -> Void
@@ -113,12 +114,7 @@ class WindowsFilesystemMutationTests(TestCase):
         victim = self.root / "busy-directory"
         victim.mkdir()
         (victim / "keep").write_text("keep until handle closes", encoding="utf-8")
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
-                                         ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p]
-        kernel32.CreateFileW.restype = ctypes.c_void_p
-        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
-        kernel32.CloseHandle.restype = ctypes.c_int
+        kernel32 = kernel32_file_api()
         handle = kernel32.CreateFileW(str(victim), 0x00010000, 0x00000007, None, 3, 0x02000000, None)
         self.assertNotEqual(handle, ctypes.c_void_p(-1).value, ctypes.WinError(ctypes.get_last_error()))
         try:
@@ -243,13 +239,7 @@ class WindowsFilesystemMutationTests(TestCase):
             # DELETE_CHILD on its parent. Reading the sentinel remains allowed.
             acl(box, "/deny", f"*{sid}:(DC)")
             acl(victim, "/deny", f"*{sid}:(D)")
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-            kernel32.CreateFileW.argtypes = [
-                ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
-                ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
-            ]
-            kernel32.CreateFileW.restype = ctypes.c_void_p
-            kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+            kernel32 = kernel32_file_api()
             # Establish actual denial with an independent Win32 open before
             # invoking either mutation; a hosted runner may have backup rights.
             def delete_is_denied() -> bool:
@@ -430,11 +420,7 @@ class WindowsFilesystemMutationTests(TestCase):
                             (path / "keep").write_text(text, encoding="utf-8")
                         else:
                             path.write_text(text, encoding="utf-8")
-                    result = run_vm(
-                        bytecode, args=[str(source), str(target)],
-                        env=vm_environment(), cwd=self.root,
-                    )
-                    self.assertEqual((result.code, result.stdout), (0, "false\n"))
+                    run_vm_with_stdout(self, bytecode, [str(source), str(target)], self.root, "false\n")
                     for path, directory, text in entries:
                         entry = path / "keep" if directory else path
                         self.assertEqual(entry.read_text(encoding="utf-8"), text)
@@ -451,11 +437,7 @@ class WindowsFilesystemMutationTests(TestCase):
         )
         self.assertEqual(link.returncode, 0, link.stdout + link.stderr)
         bytecode = self.compile_text(RACE_PROGRAM, "windows-rename-junction")
-        result = run_vm(
-            bytecode, args=[str(source), str(target)],
-            env=vm_environment(), cwd=self.root,
-        )
-        self.assertEqual((result.code, result.stdout), (0, "true\n"))
+        run_vm_with_stdout(self, bytecode, [str(source), str(target)], self.root, "true\n")
         self.assertFalse(source.exists())
         self.assertTrue(target.is_junction())
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "target sentinel")
@@ -617,23 +599,7 @@ class WindowsFilesystemMutationTests(TestCase):
 
     def test_rename_race_has_one_winner_and_preserves_losing_sources(self) -> None:
         bytecode = self.compile_text(RACE_PROGRAM, "windows-rename-race")
-        target = self.root / "target"
-        sources = []
-        for number in range(6):
-            source = self.root / f"source-{number}"
-            source.write_text(str(number), encoding="utf-8")
-            sources.append(source)
-
-        racers = [self.adopt(start_vm(bytecode, str(source), str(target), cwd=self.root)) for source in sources]
-        answers = [racer.next_line() for racer in racers]
-        for racer in racers:
-            self.assertEqual(racer.wait(), 0)
-
-        self.assertEqual(sorted(answers), ["false"] * 5 + ["true"])
-        winner = answers.index("true")
-        self.assertEqual(target.read_text(encoding="utf-8"), str(winner))
-        for number, source in enumerate(sources):
-            self.assertEqual(source.exists(), number != winner)
+        assert_rename_race(self, bytecode, self.root, lambda number: f"source-{number}")
 
 
 @unittest.skipUnless(os.environ.get("AGENTICA_TEST_TARGET_OS") == "windows", "requires the Windows VM")

@@ -9,7 +9,7 @@ from collections import namedtuple
 import pytest
 
 from tests.agentica_test import cli, run
-from tests.spec_support import covered
+from tests.spec_support import assert_multi_file_case, assert_single_file_case, covered
 
 # A range that starts with this text (a whole `case` or an arm: the range runs to its end).
 Starts = namedtuple("Starts", "text")
@@ -203,30 +203,16 @@ def assert_span_covers(program, span, expected):
         assert seen.rstrip("\n") == expected
 
 
-@pytest.mark.parametrize(
-    ("title", "program", "code", "text"),
-    SINGLE_FILE,
-    ids=[case[0] for case in SINGLE_FILE],
-)
-def test_single_file_programs(title, program, code, text, agentica_check):
-    found = agentica_check(program, "program.agc")
-    assert (found and found["code"]) == code, program
-    if text is not None:
-        assert_span_covers(program, found["range"], text)
+@pytest.mark.parametrize("case", SINGLE_FILE, ids=[case[0] for case in SINGLE_FILE])
+def test_single_file_programs(case, agentica_check):
+    _, program, code, text = case
+    assert_single_file_case(agentica_check, program, code, text, assert_span_covers)
 
 
-@pytest.mark.parametrize(
-    ("title", "files", "code", "file", "text"),
-    MODULES,
-    ids=[case[0] for case in MODULES],
-)
-def test_programs_of_several_files(title, files, code, file, text, agentica_check):
-    found = agentica_check(files, "root.agc")
-    assert (found and found["code"]) == code, files
-    if found is None:
-        return
-    assert found["file"].endswith(file), found["file"]
-    assert_span_covers(files[file], found["range"], text)
+@pytest.mark.parametrize("case", MODULES, ids=[case[0] for case in MODULES])
+def test_programs_of_several_files(case, agentica_check):
+    _, files, code, file, text = case
+    assert_multi_file_case(agentica_check, files, code, file, text, assert_span_covers)
 
 
 @pytest.mark.parametrize(

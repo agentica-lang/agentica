@@ -8,10 +8,7 @@ range (the 1-based line and column of the start and of the end, which is exclusi
 asserted (AGENTS.md). The programs are also in the frozen corpus (tests/fixtures/frontend/frozen/corpus/), which the
 Agentica checker is compared with.
 """
-import json
-
-from tests.agentica_test import cli, run
-from tests.spec_support import covered
+from tests.spec_support import check_diagnostic as problem, covered
 
 
 def main_with(body):
@@ -43,15 +40,6 @@ PIPE_HELPERS = ("def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\n"
 
 METHOD_PIPE_HELPERS = ("def f(n: Int) -> Int\n  return n\nend\n\n"
                        "def g(n: Int) -> Result[Int]\n  return ok(n)\nend\n\n")
-
-
-def problem(text, tmp_path):
-    """Return the JSON diagnostic, or None when the program checks clean."""
-    path = tmp_path / "program.agc"
-    path.write_text(text, encoding="utf-8")
-    result = run(cli() + ["--json", "check", str(path)])
-    assert result.code in (0, 1), result.stderr
-    return json.loads(result.stderr) if result.code else None
 
 
 def assert_clean(text, tmp_path):

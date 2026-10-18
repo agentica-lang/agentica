@@ -7,6 +7,7 @@ import unittest
 from tests import test_vm_os as os_tests
 from tests.agentica_test import run_vm, start_vm, vm_environment
 from tests.remove_sandbox_support import require_remove_sandbox
+from tests.windows_support import assert_rename_race
 
 TREE_DEPTH = 130
 REMOVE_PROGRAM = """\
@@ -184,22 +185,4 @@ end
 
     def test_rename_race_has_one_winner_and_preserves_all_losing_sources(self) -> None:
         bytecode = self.program(os_tests.RACE_PROGRAM, "race")
-        target = self.root / "target"
-        sources = []
-        for number in range(6):
-            source = self.root / f"source{number}"
-            source.write_text(str(number))
-            sources.append(source)
-        racers = [
-            self.adopt(start_vm(bytecode, str(source), str(target), cwd=self.root))
-            for source in sources
-        ]
-        answers = [racer.next_line() for racer in racers]
-        for racer in racers:
-            self.assertEqual(racer.wait(), 0)
-        self.assertEqual(sorted(answers), ["false"] * 5 + ["true"])
-        winner = answers.index("true")
-        self.assertEqual(target.read_text(), str(winner))
-        self.assertFalse(sources[winner].exists())
-        for number, source in enumerate(sources):
-            self.assertEqual(source.exists(), number != winner)
+        assert_rename_race(self, bytecode, self.root, lambda number: f"source{number}")

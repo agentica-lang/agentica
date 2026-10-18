@@ -106,8 +106,9 @@ def _run_filesystem_tests(repository: Path, vm_build: Path, environment: dict[st
         if status:
             return status
 
+    module_paths = [module.replace(".", "/") + ".py" for module in modules]
     return _run(
-        [sys.executable, "-m", "unittest", *modules],
+        [sys.executable, "-m", "pytest", *module_paths],
         cwd=repository,
         env=environment,
     )

@@ -55,7 +55,7 @@ make vm-test                  # C tests; one: make build/vm/release/<name>-test
 make fixed-point              # stage2 == stage3 (about 25 s)
 make stage0                   # refresh bootstrap/stage0.agcb (references/ci.md)
 make goldens                  # rewrite VM and front-end goldens after an intended change; review the diff
-python3 tools/refreeze.py     # rewrite frozen goldens in tests/fixtures/frontend/; --stage, --fast-only
+poetry run python tools/refreeze.py  # rewrite frozen goldens; --stage, --fast-only
 make vm-golden-check FIXTURES="a b"   # check only those fixtures; make goldens FIXTURES=... rewrites them
 make dup-check                # jscpd: a new copy fails CI; share a helper instead
 make site                     # before merging a site change

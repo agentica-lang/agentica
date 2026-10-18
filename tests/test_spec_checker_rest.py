@@ -16,21 +16,12 @@ import json
 import re
 import pytest
 
-from tests.agentica_test import FIXTURES, cli, run
-from tests.spec_support import covered
+from tests.agentica_test import FIXTURES
+from tests.spec_support import check_diagnostic as diagnostic, covered
 
 GROUPS = json.loads((FIXTURES / "spec" / "checker-rest.json").read_text(encoding="utf-8"))
 
 FIELDS = ("expected", "actual", "function", "callee")
-
-
-def diagnostic(text, tmp_path):
-    """Return the JSON diagnostic that `check` gives, or None when the program checks clean."""
-    path = tmp_path / "program.agc"
-    path.write_text(text, encoding="utf-8")
-    result = run(cli() + ["--json", "check", str(path)])
-    assert result.code in (0, 1), result.stderr
-    return json.loads(result.stderr) if result.code else None
 
 
 def assert_case(case, tmp_path):
