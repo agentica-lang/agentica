@@ -1,76 +1,11 @@
 ## Phase 13: Binary data
 
 The builtins and `std/binary` are in the grammar
-([`05b-modules.md`](../grammar/05b-modules.md#binary-data-stdbinary)). Order row
-7.2.4 (taken out of
-row 7.5 by the owner on 2026-10-14): a new feature after 7i, VM-only, before the
-freeze of the Racket front end (row 7.2.7), so the bytecode writer of the
-self-hosted front end can use it
-([§18.4](../future/18-front-end-language.md#184-prerequisites)). UDP
-(row 7.5) comes after this phase, since UDP programs pack their headers with
-`std/binary`. This phase has no technical need for TCP or TLS: `std/` imports
-already run on the VM, so it can move earlier if a real program needs it. It
-follows the library rule (after the order table): the packing is a `std/` module
-in Agentica, and the bit operations are builtins under its exception 5.
+([`05b-modules.md`](../grammar/05b-modules.md#binary-data-stdbinary)). Done (order row 7.2.4), VM-only. It follows the library rule (after the
+order table): the packing is a `std/` module in Agentica, and the bit
+operations are builtins under its exception 5.
 
-- [x] 13a Builtins on the VM, in one PR: `Int.bit_and`, `bit_or`, `bit_xor`,
-  `bit_not`, `shift_left`
-  (wraps), `shift_right` (arithmetic), `shift_right_unsigned` (logical), with
-  `RUNTIME-INVALID-COUNT` for a negative count; `Float.to_bits`, `from_bits`,
-  `to_bits32`, `from_bits32`, with the canonical NaNs and
-  `RUNTIME-INVALID-NUMBER` for `from_bits32` outside `0 .. 4294967295`. With
-  `grammar.md`, the programming skill,
-  `site/content/library/text-and-data/numbers.md`, and its tests
-  (vm-diff fixtures, evaluator tests, Python vectors).
-  - **Done.** The eleven catalog rows in `src/builtins.rkt`, the names in
-    `vm-builtins` (`src/lower.rkt`) and the rows in `agc_number_builtins`
-    (`vm/numbers.c`); no opcode and no checker change. C computes on
-    `uint64_t`, so there is no signed overflow and no undefined shift, and
-    punning goes through `memcpy`. Docs: `docs/grammar/06b-builtins.md`, the
-    programming skill (`references/builtins.md`, `references/diagnostics.md`)
-    and `site/content/library/text-and-data/numbers.md`. Tests: the goldens
-    `int-bits`, `float-bits` (with the round trips), `int-shift-negative`,
-    `int-shift-right-negative`, `int-shift-right-unsigned-negative`,
-    `float-from-bits32-negative` and `float-from-bits32-range`;
-    `bits-vectors.agc`, which checks the 1,037 vectors of
-    `tests/fixtures/vm/bits-vectors.stdin` that
-    `tests/fixtures/bits-vectors.py` writes (Python `struct`, run by hand; CI
-    does not run Python for it); `tests/test_vm_bits.py` for the spans of the
-    errors. There are no evaluator tests, since the evaluator is gone.
-- [x] 13b `std/binary` (`stdlib/binary.agc`, registered in `src/stdlib.rkt`),
-  its own PR after 13a: readers and
-  writers for `u8` to `i64`, `f32` and `f64` in both byte orders, `concat`, and
-  the 4-byte length framing, written in Agentica on the 13a builtins. Docs: a
-  "Binary data" part in `grammar.md` next to "String queue"; a
-  `references/binary.md` file in the programming skill and its row in the "When
-  to read a reference" table; a `site/content/library/text-and-data/binary.md`
-  page (front matter `title` and `weight`, runnable examples that
-  `tests/site-examples-test.rkt` checks). Tests: the Python `struct`
-  vectors checked in with their generator, round trips, error cases, both
-  backends through the vm-diff fixtures, and the fixed-output check in
-  `tests/test_std_binary.py`.
-  - **Done.** `stdlib/binary.agc` (registered in `src/stdlib.rkt`) has the 18
-    readers, the 18 writers, `concat`, `frame` and `read_frame_length`, with the
-    signatures and the documented error order. A reader checks the offset,
-    reads the items by index, checks them all with one `bit_or` and one range
-    test, and walks them again only to name the first bad one; a writer checks
-    the range and returns a list literal. There is no loop over bytes on the
-    success path and no module state; `concat` splits its parts in halves.
-    Docs: `docs/grammar/05b-modules.md`, the programming skill
-    (`references/binary.md`, `references/modules.md`, its row in `SKILL.md`) and
-    `site/content/library/text-and-data/binary.md`. Tests: the goldens
-    `std-binary` (round trips both ways, offset, item, writer, u64 and frame
-    errors, `concat`) and `std-binary-vectors`, which checks the 808 vectors of
-    `tests/fixtures/vm/std-binary-vectors.stdin` that
-    `tests/fixtures/std-binary-vectors.py` writes (Python `struct`, run by hand;
-    CI does not run Python for it); `tests/test_std_binary.py` for the fixed
-    output. There is no evaluator backend, so "both backends" is the VM in its
-    three output formats, as for every golden.
-- Not in this phase: `Bytes` (roadmap 8's "Later" item), which this work does
-  not replace; when `Bytes` lands, the `std/binary` API moves to
-  it together with the `*_bytes` builtins. No mutable buffers or references.
-
-**Done when:** the Python vectors of 13a and 13b pass on the VM, what each
-reader returns writes back to the same bytes (a NaN pattern other than the
-canonical one aside), and the site page's examples run.
+**Done:** the `Int`/`Float` bit builtins (13a) and `std/binary` (13b),
+with Python vectors on the VM. Record: the grammar's
+[`std/binary`](../grammar/05b-modules.md#binary-data-stdbinary).
 
