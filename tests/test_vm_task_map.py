@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from tests.agentica_test import compile_agc, run_vm, scaled, start_vm
+from tests.agentica_test import adopt, compile_agc, run_vm, scaled, start_vm
 
 # A program writes a time as @250@ (milliseconds); timed() scales it like every other deadline, so a loaded runner
 # stretches the sleeps and the deadlines together and the order of events does not change.
@@ -332,14 +332,6 @@ def _require_default_binary():
         pytest.skip("AGENTICA_VM_BINARY names another binary")
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
 
 
 @pytest.fixture

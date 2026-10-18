@@ -20,6 +20,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+
+import pytest
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -422,20 +424,113 @@ def text_crash_free(text):
     return "\n".join(kept), codes, summaries
 
 
-def check_text_format(case, on_vm, full, message):
+def check_text_format(on_vm, full, message):
     """A plain or --ai run against the golden of the --json run: same exit and stdout, the same crashes, the same
     program stderr, and the same diagnostic code."""
-    case.assertEqual(tuple(on_vm[:2]), tuple(full[:2]), message)
+    assert tuple(on_vm[:2]) == tuple(full[:2]), message
     stderr, text_crashes, text_summaries = text_crash_free(on_vm[2])
     expected, json_crashes, json_summaries = json_crash_free(full[2])
-    case.assertEqual(text_crashes, json_crashes, message)
-    case.assertEqual(text_summaries, json_summaries, message)
-    case.assertTrue(stderr.startswith(expected), "%s: %r does not start with %r" % (message, stderr, expected))
+    assert text_crashes == json_crashes, message
+    assert text_summaries == json_summaries, message
+    assert stderr.startswith(expected), "%s: %r does not start with %r" % (message, stderr, expected)
     diagnostic = stderr[min(len(stderr), len(expected)):]
     if full[3]:
-        case.assertEqual(text_code(diagnostic), full[3], message)
+        assert text_code(diagnostic) == full[3], message
     else:
-        case.assertEqual(diagnostic, "", message)
+        assert diagnostic == "", message
+
+
+def check_steps(total, expected_steps, name):
+    """A fixture stays within the step allowance of its golden."""
+    assert total <= step_allowance(expected_steps), \
+        "%s takes %s steps, more than its golden %s allows (over-charging)" % (name, total, expected_steps)
+
+
+def check_limited(on_vm, full, name, limit, note=""):
+    """One sweep limit: the golden outcome, or a step-limit stop whose output is a prefix of the golden's."""
+    seen = outcome(on_vm)
+    message = "%s --max-steps %s%s (exit 124/137 or timeout: the run timed out): %r" % (name, limit, note, seen)
+    if seen != full:
+        assert seen[0] == 1, message
+        assert seen[3] == "RUNTIME-STEP-LIMIT", message
+        assert full[1].startswith(seen[1]), message
+        assert full[2].startswith(seen[2]), message
+    return seen == full
+
+
+def check_sweep(results, limits, full, name, note=""):
+    """Every limit must stop on the step limit or give the golden outcome, and once one finishes so must larger."""
+    finished = False
+    for on_vm, limit in zip(results, limits):
+        done = check_limited(on_vm, full, name, limit, note)
+        if finished:
+            assert done, "%s --max-steps %s%s stops after a smaller limit finished" % (name, limit, note)
+        finished = done
+    assert finished, "%s finishes under --max-steps %s%s" % (name, limits[-1], note)
+
+
+def check_fixture(program, work):
+    """The golden test of one fixture: every format, the step count and the --max-steps sweep."""
+    name = program.name
+    fixture = Fixture.of(program)
+    bytecode = compile_agc(program, work / (program.stem + ".agcb"))
+    full = read_expected(program)
+    expected_steps = read_expected_steps(program)
+    total = total_steps(lambda limit: step_limited(run_fixture_vm(fixture, bytecode, limit, work)))
+    check_steps(total, expected_steps, name)
+    limits = sampled_limits(total, expected_steps, name) if SAMPLED_SWEEP else sweep_limits(total, expected_steps)
+    text_styles = ["plain", "ai"]
+    results = vm_batch(
+        fixture, bytecode,
+        [style_options("json")] + [style_options(style) for style in text_styles]
+        + [limit_options(limit) + style_options("json") for limit in limits], work)
+    assert outcome(results[0]) == full, name
+    for style, on_vm in zip(text_styles, results[1:]):
+        check_text_format(on_vm, full, "%s %s" % (name, style))
+    check_sweep(results[1 + len(text_styles):], limits, full, name, sweep_note())
+
+
+def check_runaway(program, work):
+    """A runaway loop stops at --max-steps 1 to 5, 50 and 500 with a prefix of its expected output."""
+    name = program.name
+    bytecode = compile_agc(program, work / (program.stem + ".agcb"))
+    expected = read_expected(program)
+    fixture = Fixture()
+    for limit in [1, 2, 3, 4, 5, 50, RUNAWAY_LIMIT]:
+        message = "%s --max-steps %s" % (name, limit)
+        on_vm = run_vm(fixture, bytecode, limit, cwd=work)
+        assert on_vm[0] == 1, message
+        assert step_limited(on_vm), message
+        assert "done" not in on_vm[1], message
+        assert expected[1].startswith(on_vm[1]), message
+        assert expected[2].startswith(outcome(on_vm)[2]), message
+        if limit == RUNAWAY_LIMIT:
+            assert outcome(on_vm) == expected, message
+
+
+def _make_shard_test(program):
+    def test_fixture(tmp_path):
+        check_fixture(program, tmp_path)
+
+    test_fixture.__name__ = "test_" + program.stem.replace("-", "_")
+    test_fixture.__doc__ = ("%s gives its expected exit code, stdout, stderr and diagnostic code "
+                             "under every --max-steps" % program.name)
+    return test_fixture
+
+
+def install_shard_tests(shard, namespace):
+    """Define the pytest tests of golden shard N in namespace (the caller shard module's globals).
+
+    The caller keeps SHARD = N so the shard-table test still names its shard."""
+    @pytest.fixture(scope="module", autouse=True)
+    def _warmup():
+        vm_binary()
+
+    namespace["_warmup"] = _warmup
+    for program in [program for program, assigned in shard_assignment(fixture_programs()) if assigned == shard]:
+        test = _make_shard_test(program)
+        assert test.__name__ not in namespace, test.__name__
+        namespace[test.__name__] = test
 
 
 # Goldens --------------------------------------------------------------------------------------------------------------
@@ -587,68 +682,19 @@ class VmCase(TestCase):
         return compile_agc(program, self.work_dir() / ((name or program.stem) + ".agcb"))
 
     def check_limited(self, on_vm, full, name, limit, note=""):
-        """One sweep limit: the golden outcome, or a step-limit stop whose output is a prefix of the golden's."""
-        seen = outcome(on_vm)
-        message = "%s --max-steps %s%s (exit 124/137 or timeout: the run timed out): %r" % (name, limit, note, seen)
-        if seen != full:
-            self.assertEqual(seen[0], 1, message)
-            self.assertEqual(seen[3], "RUNTIME-STEP-LIMIT", message)
-            self.assertTrue(full[1].startswith(seen[1]), message)
-            self.assertTrue(full[2].startswith(seen[2]), message)
-        return seen == full
+        return check_limited(on_vm, full, name, limit, note)
 
     def check_sweep(self, results, limits, full, name, note=""):
-        """Every limit must stop on the step limit or give the golden outcome, and once one finishes so must larger."""
-        finished = False
-        for on_vm, limit in zip(results, limits):
-            done = self.check_limited(on_vm, full, name, limit, note)
-            if finished:
-                self.assertTrue(done, "%s --max-steps %s%s stops after a smaller limit finished" % (name, limit, note))
-            finished = done
-        self.assertTrue(finished, "%s finishes under --max-steps %s%s" % (name, limits[-1], note))
+        return check_sweep(results, limits, full, name, note)
 
     def check_steps(self, total, expected_steps, name):
-        self.assertLessEqual(total, step_allowance(expected_steps),
-                             "%s takes %s steps, more than its golden %s allows (over-charging)"
-                             % (name, total, expected_steps))
+        return check_steps(total, expected_steps, name)
 
     def check_fixture(self, program):
-        """The golden test of one fixture: every format, the step count and the --max-steps sweep."""
-        name = program.name
-        fixture = Fixture.of(program)
-        work = self.work_dir()
-        bytecode = self.bytecode_of(program)
-        full = read_expected(program)
-        expected_steps = read_expected_steps(program)
-        total = total_steps(lambda limit: step_limited(run_fixture_vm(fixture, bytecode, limit, work)))
-        self.check_steps(total, expected_steps, name)
-        limits = sampled_limits(total, expected_steps, name) if SAMPLED_SWEEP else sweep_limits(total, expected_steps)
-        text_styles = ["plain", "ai"]
-        results = vm_batch(
-            fixture, bytecode,
-            [style_options("json")] + [style_options(style) for style in text_styles]
-            + [limit_options(limit) + style_options("json") for limit in limits], work)
-        self.assertEqual(outcome(results[0]), full, name)
-        for style, on_vm in zip(text_styles, results[1:]):
-            check_text_format(self, on_vm, full, "%s %s" % (name, style))
-        self.check_sweep(results[1 + len(text_styles):], limits, full, name, sweep_note())
+        return check_fixture(program, self.work_dir())
 
     def check_runaway(self, program):
-        """A runaway loop stops at --max-steps 1 to 5, 50 and 500 with a prefix of its expected output."""
-        name = program.name
-        bytecode = self.bytecode_of(program)
-        expected = read_expected(program)
-        fixture = Fixture()
-        for limit in [1, 2, 3, 4, 5, 50, RUNAWAY_LIMIT]:
-            message = "%s --max-steps %s" % (name, limit)
-            on_vm = run_vm(fixture, bytecode, limit, cwd=self.work_dir())
-            self.assertEqual(on_vm[0], 1, message)
-            self.assertTrue(step_limited(on_vm), message)
-            self.assertNotIn("done", on_vm[1], message)
-            self.assertTrue(expected[1].startswith(on_vm[1]), message)
-            self.assertTrue(expected[2].startswith(outcome(on_vm)[2]), message)
-            if limit == RUNAWAY_LIMIT:
-                self.assertEqual(outcome(on_vm), expected, message)
+        return check_runaway(program, self.work_dir())
 
 
 def shard_case(shard):

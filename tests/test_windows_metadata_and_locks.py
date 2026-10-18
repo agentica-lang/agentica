@@ -8,7 +8,8 @@ import stat
 
 import pytest
 
-from tests.agentica_test import TARGET_OS, compile_agc, run_vm, start_vm, vm_environment
+from tests.agentica_test import TARGET_OS, adopt, compile_agc, run_vm, start_vm, vm_environment
+from tests.vm_os_support import compile_text, root, work
 from tests.windows_support import kernel32_file_api
 
 # The documented Windows values: mode carries the read-only attribute only, and both owner ids are 0.
@@ -166,37 +167,11 @@ end
 REQUIRES_WINDOWS_VM = pytest.mark.skipif(TARGET_OS != "windows", reason="requires the native Windows VM")
 
 
-@pytest.fixture
-def root(tmp_path):
-    """A fresh scratch directory for the test (resolved, like make_temp_dir was)."""
-    path = (tmp_path / "scratch").resolve()
-    path.mkdir()
-    return path
-
-
-@pytest.fixture
-def work(tmp_path):
-    """A fresh directory for compiled programs, separate from the scratch files."""
-    path = tmp_path / "work"
-    path.mkdir()
-    return path.resolve()
-
-
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
-
-
-def compile_text(work, text, name="program"):
-    """Compile Agentica source text; return the bytecode path."""
-    source = work / (name + ".agc")
-    source.write_text(text, encoding="utf-8")
-    return compile_agc(source, work / (name + ".agcb"))
+def _metadata(bytecode, path, root) -> list[str]:
+    """Run the metadata probe program for one path; return its stdout words."""
+    result = run_vm(bytecode, args=[str(path)], env=vm_environment(), cwd=root)
+    assert (result.code, result.stderr) == (0, ""), result.stderr
+    return result.stdout.split()
 
 
 @REQUIRES_WINDOWS_VM
@@ -204,39 +179,31 @@ def test_a_regular_file_reports_no_owner_and_only_the_read_only_attribute(root, 
     """Check the metadata values the Windows platform really reports."""
     bytecode = compile_text(work, METADATA_PROGRAM, "windows-metadata")
 
-    def metadata(path) -> list[str]:
-        result = run_vm(bytecode, args=[str(path)], env=vm_environment(), cwd=root)
-        assert (result.code, result.stderr) == (0, ""), result.stderr
-        return result.stdout.split()
 
     target = root / "plain.txt"
     target.write_text("plain", encoding="utf-8")
-    kind, mode, user_id, group_id = metadata(target)
+    kind, mode, user_id, group_id = _metadata(bytecode, target, root)
     assert kind == "file"
     assert mode == str(WRITABLE_MODE)
     # A 0 here is not an owner: the platform has no Unix owner ids, so the fields carry nothing to look up.
     assert (user_id, group_id) == ("0", "0")
 
     os.chmod(target, stat.S_IREAD)
-    kind, mode, user_id, group_id = metadata(target)
+    kind, mode, user_id, group_id = _metadata(bytecode, target, root)
     assert (kind, mode, user_id, group_id) == ("file", str(READ_ONLY_MODE), "0", "0")
 
     os.chmod(target, stat.S_IWRITE)
-    assert metadata(target)[1] == str(WRITABLE_MODE)
+    assert _metadata(bytecode, target, root)[1] == str(WRITABLE_MODE)
 
 
 @REQUIRES_WINDOWS_VM
 def test_a_directory_reports_the_same_zero_owner(root, work):
     bytecode = compile_text(work, METADATA_PROGRAM, "windows-metadata")
 
-    def metadata(path) -> list[str]:
-        result = run_vm(bytecode, args=[str(path)], env=vm_environment(), cwd=root)
-        assert (result.code, result.stderr) == (0, ""), result.stderr
-        return result.stdout.split()
 
     directory = root / "directory"
     directory.mkdir()
-    kind, mode, user_id, group_id = metadata(directory)
+    kind, mode, user_id, group_id = _metadata(bytecode, directory, root)
     assert (kind, mode, user_id, group_id) == ("directory", str(WRITABLE_MODE), "0", "0")
 
 
@@ -247,10 +214,6 @@ def test_a_directory_reports_the_same_zero_owner(root, work):
 def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(root, work):
     bytecode = compile_text(work, METADATA_PROGRAM, "windows-metadata")
 
-    def metadata(path) -> list[str]:
-        result = run_vm(bytecode, args=[str(path)], env=vm_environment(), cwd=root)
-        assert (result.code, result.stderr) == (0, ""), result.stderr
-        return result.stdout.split()
 
     private_file = root / "private.txt"
     private_directory = root / "private-directory"
@@ -260,7 +223,7 @@ def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(ro
     assert result.stdout.splitlines() == [
         f"file {WRITABLE_MODE} 0 0", f"directory {WRITABLE_MODE} 0 0",
     ]
-    assert metadata(private_file)[2:] == ["0", "0"]
+    assert _metadata(bytecode, private_file, root)[2:] == ["0", "0"]
     assert private_directory.is_dir()
 
 

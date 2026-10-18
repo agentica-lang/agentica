@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, Child, compile_agc, scaled, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, Child, adopt, compile_agc, scaled, vm_command, vm_environment
 
 LIMIT_MS = 250
 WAIT_SECONDS = scaled(60)
@@ -26,14 +26,6 @@ def vm_cmd():
     return vm_command()
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
 
 
 def compile_fixture(source, tmp_path):

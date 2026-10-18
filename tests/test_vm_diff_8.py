@@ -16,13 +16,15 @@ import time
 
 import pytest
 
-from tests.agentica_test import (RUN_TIMEOUT, TESTS, Child, cli, compile_agc, process_alive, scaled, vm_binary,
+from tests.agentica_test import (RUN_TIMEOUT, TESTS, Child, adopt, cli, compile_agc, process_alive, scaled, vm_binary,
                                  vm_command, vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
-    decode, exit_status, execute, fixture_programs, json_crash_free, last_limit, outcome, read_expected,
-    read_expected_steps, run_fixture_vm, run_vm, run_vm_process, runaway_programs, step_allowance, step_limited,
-    style_options, text_code, text_crash_free, total_steps, shard_assignment)
+    check_limited, check_runaway, check_steps, check_sweep, check_text_format, decode, exit_status, execute,
+    fixture_programs,
+    json_crash_free, last_limit, outcome, read_expected, read_expected_steps, run_fixture_vm, run_vm,
+    run_vm_process, runaway_programs, step_allowance, step_limited, style_options, text_code, text_crash_free,
+    total_steps, shard_assignment)
 
 LINUX = sys.platform.startswith("linux")
 PLAIN = Fixture()
@@ -34,13 +36,6 @@ def _warmup():
     vm_binary()
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-    return register
 
 
 def words(text):
@@ -59,68 +54,6 @@ def kill_alive(pids):
                 os.kill(int(pid), signal.SIGKILL)
             except ProcessLookupError:
                 pass
-
-
-def check_text_format(on_vm, full, message):
-    """A plain or --ai run against the golden of the --json run: same exit and stdout, the same crashes, the same
-    program stderr, and the same diagnostic code."""
-    assert tuple(on_vm[:2]) == tuple(full[:2]), message
-    stderr, text_crashes, text_summaries = text_crash_free(on_vm[2])
-    expected, json_crashes, json_summaries = json_crash_free(full[2])
-    assert text_crashes == json_crashes, message
-    assert text_summaries == json_summaries, message
-    assert stderr.startswith(expected), "%s: %r does not start with %r" % (message, stderr, expected)
-    diagnostic = stderr[min(len(stderr), len(expected)):]
-    if full[3]:
-        assert text_code(diagnostic) == full[3], message
-    else:
-        assert diagnostic == "", message
-
-
-def check_steps(total, expected_steps, name):
-    assert total <= step_allowance(expected_steps), \
-        "%s takes %s steps, more than its golden %s allows (over-charging)" % (name, total, expected_steps)
-
-
-def check_limited(on_vm, full, name, limit, note=""):
-    """One sweep limit: the golden outcome, or a step-limit stop whose output is a prefix of the golden's."""
-    seen = outcome(on_vm)
-    message = "%s --max-steps %s%s (exit 124/137 or timeout: the run timed out): %r" % (name, limit, note, seen)
-    if seen != full:
-        assert seen[0] == 1, message
-        assert seen[3] == "RUNTIME-STEP-LIMIT", message
-        assert full[1].startswith(seen[1]), message
-        assert full[2].startswith(seen[2]), message
-    return seen == full
-
-
-def check_sweep(results, limits, full, name, note=""):
-    """Every limit must stop on the step limit or give the golden outcome, and once one finishes so must larger."""
-    finished = False
-    for on_vm, limit in zip(results, limits):
-        done = check_limited(on_vm, full, name, limit, note)
-        if finished:
-            assert done, "%s --max-steps %s%s stops after a smaller limit finished" % (name, limit, note)
-        finished = done
-    assert finished, "%s finishes under --max-steps %s%s" % (name, limits[-1], note)
-
-
-def check_runaway(program, work):
-    """A runaway loop stops at --max-steps 1 to 5, 50 and 500 with a prefix of its expected output."""
-    name = program.name
-    bytecode = compile_agc(program, work / (program.stem + ".agcb"))
-    expected = read_expected(program)
-    fixture = Fixture()
-    for limit in [1, 2, 3, 4, 5, 50, RUNAWAY_LIMIT]:
-        message = "%s --max-steps %s" % (name, limit)
-        on_vm = run_vm(fixture, bytecode, limit, cwd=work)
-        assert on_vm[0] == 1, message
-        assert step_limited(on_vm), message
-        assert "done" not in on_vm[1], message
-        assert expected[1].startswith(on_vm[1]), message
-        assert expected[2].startswith(outcome(on_vm)[2]), message
-        if limit == RUNAWAY_LIMIT:
-            assert outcome(on_vm) == expected, message
 
 
 def compile_program(work, name, text):

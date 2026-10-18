@@ -15,8 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import compile_agc, run_vm, start_vm, vm_environment
+from tests.agentica_test import adopt, compile_agc, run_vm, start_vm, vm_environment
 from tests.remove_sandbox_support import require_remove_sandbox
+from tests.vm_os_support import _RaceCase, compile_text, sandbox_root as root, work
 from tests.windows_support import assert_rename_race, kernel32_file_api
 
 REMOVE_PROGRAM = """\
@@ -72,56 +73,6 @@ WINDOWS = os.environ.get("AGENTICA_TEST_TARGET_OS") == "windows"
 
 REQUIRES_NATIVE_WINDOWS = pytest.mark.skipif(not NATIVE_WINDOWS_SCRATCH, reason="requires the native Windows VM and scratch")
 REQUIRES_WINDOWS = pytest.mark.skipif(not WINDOWS, reason="requires the Windows VM")
-
-
-@pytest.fixture
-def root(tmp_path):
-    """A fresh scratch directory for the test, inside the Docker or Actions sandbox."""
-    path = (tmp_path / "scratch").resolve()
-    path.mkdir()
-    require_remove_sandbox(path)
-    return path
-
-
-@pytest.fixture
-def work(tmp_path):
-    """A fresh directory for compiled programs, separate from the scratch files."""
-    path = tmp_path / "work"
-    path.mkdir()
-    return path.resolve()
-
-
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
-
-
-def compile_text(work, text, name="program"):
-    """Compile Agentica source text; return the bytecode path."""
-    source = work / (name + ".agc")
-    source.write_text(text, encoding="utf-8")
-    return compile_agc(source, work / (name + ".agcb"))
-
-
-class _RaceCase:
-    """Duck-typed TestCase for tests.windows_support helpers (they only use adopt and asserts)."""
-
-    def __init__(self, adopt):
-        self._adopt = adopt
-
-    def adopt(self, child):
-        return self._adopt(child)
-
-    def assertEqual(self, first, second, message=None):
-        assert first == second, message or "%r != %r" % (first, second)
-
-    def assertFalse(self, value, message=None):
-        assert not value, message or "%r is not false" % (value,)
 
 
 def run_with_stdout(bytecode, arguments, root, expected_stdout):

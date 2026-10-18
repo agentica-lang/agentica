@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, WAIT_SECONDS, Child, compile_agc, run, run_vm, scaled, start_vm, tool,
-                                 vm_environment)
+from tests.agentica_test import (FIXTURES, WAIT_SECONDS, Child, adopt, compile_text, node, run, run_vm, scaled,
+                                 start_vm, vm_environment)
 
 PEER = FIXTURES / "tcp-peer.js"
 
@@ -204,25 +204,10 @@ REFUSED_HEAD = "tcp-connect: connection failed\n  hostname: 127.0.0.1\n  port nu
 RESET = 'error("error reading from stream port\\n  system error: Connection reset by peer; errno=104")\n'
 
 
-@pytest.fixture
-def node():
-    return tool("node")
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
 
 
-def compile_text(text, name, tmp_path):
-    source = tmp_path / (name + ".agc")
-    source.write_text(text, encoding="utf-8")
-    return compile_agc(source, tmp_path / (name + ".agcb"))
 
 
 def start_peer(adopt, node):

@@ -741,7 +741,7 @@ windows-docker-check: windows-docker-build
 	  export AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(WINDOWS_WRAPPER_DIR)/agentica"; \
 	  export AGENTICA_VM_BINARY="$(WINDOWS_WRAPPER_DIR)/bootstrap"; \
 	  $(MAKE) $(WINDOWS_CROSS) vm-test; \
-	  python3 -m unittest tests.test_platform_bootstrap; \
+	  python3 -m pytest -p no:cacheprovider tests/test_platform_bootstrap.py; \
 	  export AGENTICA_VM_BINARY="$(WINDOWS_WRAPPER_DIR)/agentica"; \
 	  $(MAKE) $(WINDOWS_CROSS) test-py TESTS="$(WINDOWS_TEST_MODULES)" PYTHON=python3'
 

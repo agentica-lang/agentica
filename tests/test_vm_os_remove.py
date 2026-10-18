@@ -5,10 +5,10 @@ import stat
 
 import pytest
 
-from tests import test_vm_os as os_tests
-from tests.agentica_test import run_vm, start_vm, vm_environment
-from tests.remove_sandbox_support import require_remove_sandbox
-from tests.windows_support import assert_rename_race
+from tests.agentica_test import adopt, run_vm, start_vm, vm_environment
+from tests.vm_os_support import (CONTENTION_PROGRAM, PROTOCOL_PROGRAM, RACE_PROGRAM, _RaceCase, compile_text,
+                                 rename_never_replaces_and_moves_a_link_as_a_link, run_program,
+                                 sandbox_root as root, work)
 
 TREE_DEPTH = 130
 REMOVE_PROGRAM = """\
@@ -31,49 +31,6 @@ def main() -> Void
   IO.inspect(Path.remove(base + "/real-dir", 5000))
 end
 """
-
-
-@pytest.fixture
-def root(tmp_path):
-    """A fresh scratch directory for the test, inside the Docker or Actions sandbox."""
-    path = (tmp_path / "scratch").resolve()
-    path.mkdir()
-    require_remove_sandbox(path)
-    return path
-
-
-@pytest.fixture
-def work(tmp_path):
-    """A fresh directory for compiled programs, separate from the scratch files."""
-    path = tmp_path / "work"
-    path.mkdir()
-    return path.resolve()
-
-
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
-
-
-class _RaceCase:
-    """Duck-typed TestCase for tests.windows_support helpers (they only use adopt and asserts)."""
-
-    def __init__(self, adopt):
-        self._adopt = adopt
-
-    def adopt(self, child):
-        return self._adopt(child)
-
-    def assertEqual(self, first, second, message=None):
-        assert first == second, message or "%r != %r" % (first, second)
-
-    def assertFalse(self, value, message=None):
-        assert not value, message or "%r is not false" % (value,)
 
 
 def prepare_trees(root):
@@ -106,12 +63,12 @@ def prepare_trees(root):
 
 
 def test_private_bytecode_handoff_is_consumed_only_inside_sandbox(root, work, adopt):
-    os_tests.system_pid_is_the_vm_process_and_the_parent_a_child_sees(root, work, adopt)
+    system_pid_is_the_vm_process_and_the_parent_a_child_sees(root, work, adopt)
 
 
 def test_remove_deletes_links_as_links_never_follows_them_and_refuses_unsafe_roots(root, work):
     prepare_trees(root)
-    lines = os_tests.run_program(
+    lines = run_program(
         root,
         work,
         REMOVE_PROGRAM,
@@ -162,7 +119,7 @@ def main() -> Void
   IO.inspect(Path.remove(System.args()[0] + "/tree", 5000))
 end
 """
-        lines = os_tests.run_program(root, work, text, "named", root)
+        lines = run_program(root, work, text, "named", root)
         assert lines == [
             'error("filesystem: cannot remove path\\n  path: %s/tree/a/locked/f.txt\\n  system error: '
             'Permission denied; errno=13")' % root
@@ -180,7 +137,7 @@ def main() -> Void
   IO.inspect(Path.remove(System.args()[0] + "/plain.txt/x", 5000))
 end
 """
-    lines = os_tests.run_program(root, work, text, "remove-error", root)
+    lines = run_program(root, work, text, "remove-error", root)
     assert lines == [
         'error("filesystem: cannot remove path\\n  path: %s/plain.txt/x\\n  system error: '
         'Not a directory; errno=20")' % root
@@ -189,7 +146,7 @@ end
 
 
 def test_rename_keeps_lock_owner_across_the_final_name(root, work, adopt):
-    bytecode = os_tests.compile_text(work, os_tests.CONTENTION_PROGRAM, "contention")
+    bytecode = compile_text(work, CONTENTION_PROGRAM, "contention")
 
     def probe(name: str) -> str:
         result = run_vm(
@@ -203,7 +160,7 @@ def test_rename_keeps_lock_owner_across_the_final_name(root, work, adopt):
 
     holder = adopt(
         start_vm(
-            os_tests.compile_text(work, os_tests.PROTOCOL_PROGRAM, "protocol"),
+            compile_text(work, PROTOCOL_PROGRAM, "protocol"),
             str(root),
             stdin=True,
             cwd=root,
@@ -220,9 +177,9 @@ def test_rename_keeps_lock_owner_across_the_final_name(root, work, adopt):
 
 
 def test_rename_never_replaces_and_moves_a_link_as_a_link(root, work):
-    os_tests.rename_never_replaces_and_moves_a_link_as_a_link(root, work)
+    rename_never_replaces_and_moves_a_link_as_a_link(root, work)
 
 
 def test_rename_race_has_one_winner_and_preserves_all_losing_sources(root, work, adopt):
-    bytecode = os_tests.compile_text(work, os_tests.RACE_PROGRAM, "race")
+    bytecode = compile_text(work, RACE_PROGRAM, "race")
     assert_rename_race(_RaceCase(adopt), bytecode, root, lambda number: f"source{number}")

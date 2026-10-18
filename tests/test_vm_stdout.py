@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, PYTHON, compile_agc, run, scaled, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, PYTHON, compile_text, run, scaled, vm_command, vm_environment
 
 PEER = FIXTURES / "stdout-peer.py"
 PEER_LIMIT = scaled(90)
@@ -275,10 +275,6 @@ def row_total(count):
     return sum(1 + len("row %d %s" % (n, FILLER)) for n in range(count))
 
 
-def compile_text(program, name, tmp_path):
-    source = tmp_path / (name + ".agc")
-    source.write_text(program, encoding="utf-8")
-    return compile_agc(source, tmp_path / (name + ".agcb"))
 
 
 def run_case(tmp_path, name, program, peer=(), vm=(), env=None):

@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, Child, cli, compile_agc, output_lines, run, scaled,
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, Child, adopt, cli, compile_agc, output_lines, run, scaled,
                                  vm_command, vm_environment)
 
 EXAMPLES = ROOT / "examples"
@@ -85,14 +85,6 @@ def run_program(new_dir):
     return run_text
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
 
 
 @pytest.fixture

@@ -7,17 +7,10 @@ import shutil
 
 import pytest
 
-from tests.agentica_test import PYTHON, Child, run, scaled, vm_environment
+from tests.agentica_test import PYTHON, Child, adopt, run, scaled, vm_environment
 from tests.agentica_test import vm_binary as binary
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); returns it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-    return register
 
 
 def test_copied_binary_compiles_and_runs_outside_the_checkout(tmp_path) -> None:

@@ -168,7 +168,7 @@ def test_each_group_runs_its_own_command(launcher):
         "slow": ("make -j\"$jobs\" test-slow",),
         "files": ("build/vm/release/tree-test", "python3 -m pytest", "tests/test_vm_os_remove.py", "tests/test_bdd_cleanup.py"),
         "bdd": ("tests/bdd/specs/",),
-        "windows-wine-tests": ("tests.test_windows_filesystem_safety",),
+        "windows-wine-tests": ("tests/test_windows_filesystem_safety.py",),
     }
     for mode, markers in expected.items():
         launcher.log.unlink(missing_ok=True)

@@ -226,7 +226,7 @@ jobs:
       - name: Bootstrap driver smoke
         env:
           AGENTICA_VM_BINARY: build/vm/release/bootstrap/agentica.exe
-        run: python -m unittest tests.test_platform_bootstrap
+        run: poetry run python -m pytest tests/test_platform_bootstrap.py
       - run: make fixed-point
       - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch

@@ -10,8 +10,8 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, compile_agc, output_lines, run, run_vm, scaled, start_vm,
-                                 tool, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, Child, adopt, check_lines, compile_text, node, output_lines,
+                                 run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
@@ -271,36 +271,12 @@ def client_program(ports):
         'end'])
 
 
-@pytest.fixture
-def node():
-    return tool("node")
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
 
 
-def check_lines(text, expected, message):
-    """One output line per expectation: a string is equal, ("prefix", text) is a prefix."""
-    lines = output_lines(text)
-    assert len(lines) == len(expected), message + "\n" + text
-    for line, want in zip(lines, expected):
-        if isinstance(want, str):
-            assert line == want, message
-        else:
-            assert line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1])
 
 
-def compile_text(text, name, tmp_path):
-    source = tmp_path / (name + ".agc")
-    source.write_text(text, encoding="utf-8")
-    return compile_agc(source, tmp_path / (name + ".agcb"))
 
 
 def run_text(tmp_path, name, text, env=None, stdin=None):

@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, cli, compile_agc, process_alive, scaled, start_vm,
+from tests.agentica_test import (FIXTURES, PYTHON, Child, adopt, cli, compile_agc, process_alive, scaled, start_vm,
                                  vm_command, vm_environment, wait_until)
 
 PEER = FIXTURES / "stop-peer.py"
@@ -97,14 +97,6 @@ def gone_soon(pid):
     return False
 
 
-@pytest.fixture
-def adopt(request):
-    """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""
-    def register(child):
-        request.addfinalizer(child.stop)
-        return child
-
-    return register
 
 
 def bytecode(text, tmp_path, name="program"):
