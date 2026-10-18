@@ -124,9 +124,11 @@ Signatures are in
 
 - `File.open` modes: `read` (an existing path that is not a directory), `write`
   (creates or truncates), `append` (creates or appends) and `create_private` (a
-  new write-only file with mode 0600, less where the umask clears bits; any
-  existing entry, a dangling link included, is an error and a link is never
-  followed; VM only).
+  new write-only file for the host user alone; any existing entry, a dangling
+  link included, is an error and a link is never followed; VM only). On Unix it
+  is mode 0600, less where the umask clears bits. On Windows the file is made
+  with a protected DACL that grants only the current user, and creation fails
+  unless the object it opened has that owner and that DACL; there is no mode.
 - `File.try_lock(handle, timeout_ms)` takes an exclusive lock on the open file
   without waiting, for any handle mode: `ok(true)` when taken (again on the same
   handle too), `ok(false)` when another handle or process holds it. The lock
@@ -159,16 +161,23 @@ Signatures are in
   timeout while waiting for the lock keeps it open.
 - `File.stat` follows symlinks and gives `FileInfo(kind, size_bytes,
   modified_seconds, mode, user_id, group_id)`; `mode` is the permission bits
-  with setuid, setgid and sticky (`st_mode & 07777`) as an `Int`. `File.lstat`
-  gives the same record without following a final symlink: `kind` is `"link"`
-  and the other fields describe the link itself (VM only). `Dir.list` gives
-  immediate entry names, sorted. `Dir.mkdir` creates parents.
-  `Dir.mkdir_private(path, timeout_ms)` creates exactly one directory with mode
-  0700 (less where the umask clears bits) and fails when the path exists or the
-  parent is missing (VM only). `Path.remove(path, timeout_ms)` deletes what is
-  at the path without following symlinks (VM only): a file, a symlink itself, or
-  a directory with everything in it, where a link in the tree is removed as a
-  link and its target is untouched. A missing path is `ok()`. A path whose last
+  with setuid, setgid and sticky (`st_mode & 07777`) as an `Int`. Windows has
+  no Unix permission bits and no Unix owner ids: there `mode` carries only the
+  read-only attribute (0666 for an object that is writable, 0444 when the
+  attribute is set, and no `setuid`, `setgid` or sticky bit either way), and
+  `user_id` and `group_id` are always 0. A 0 there is not the owner, and `mode`
+  says nothing about the object's ACL or DACL. `File.lstat` gives the same
+  record without following a final symlink: `kind` is `"link"` and the other
+  fields describe the link itself (VM only). `Dir.list` gives immediate entry
+  names, sorted. `Dir.mkdir` creates parents.
+  `Dir.mkdir_private(path, timeout_ms)` creates exactly one directory for the
+  host user alone and fails when the path exists or the parent is missing (VM
+  only): mode 0700 on Unix, less where the umask clears bits; on Windows the
+  same owner-and-DACL rule as `create_private`, with no mode.
+  `Path.remove(path, timeout_ms)` deletes what is at the path without following
+  symlinks (VM only): a file, a symlink itself, or a directory with everything
+  in it, where a link in the tree is removed as a link and its target is
+  untouched. A missing path is `ok()`. A path whose last
   part is a separator, `.` or `..` (also as `dir/..`) is refused, a tree deeper
   than 128 levels is an error, and a trailing separator on a symlink is an
   error. A path under a file (`file/child`) is an error too (`Not a directory`),
