@@ -10,31 +10,24 @@ description: >-
 
 # Agentica programming
 
-Agentica is Ruby-like syntax with static types, checked before it runs. Values
-never change in place. This file has the cheat sheet and the rules agents break;
-`references/` has the rest. If a form is in neither, it does not exist: check a
-signature with `agentica help NAME` instead of guessing.
+Ruby-like syntax, static types, checked before it runs. Values never change in
+place. If a form is in neither this file nor `references/`, it does not exist:
+check a signature with `agentica help NAME`.
 
 ## Check and run
 
-1. Save the program as `program.agc`, with exactly one `def main() -> Void`.
-2. `agentica check program.agc` checks without running. `agentica program.agc
-   ARGS` runs it on the VM; `System.args()` returns ARGS. `agentica compile
-   program.agc -o program.agcb` writes bytecode, and `agentica run [FLAGS] --
-   program.agcb ARGS` runs it with the same flags (`run` must be the first
-   word). If `agentica` is not on `PATH`, use the path the user gives.
-3. Exit 0 is success. Exit 1 is a program diagnostic on stderr: the first error,
-   a stable code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`), a span, often a
-   `help` line that names the Agentica form. Exit 2 is bad usage or an
-   unreadable file. Fix the first error and run again.
-4. Finish only when the run exits 0 and the output matches the request. A check
-   does not test runtime behavior.
-5. `agentica help NAME` prints one builtin's signature (`agentica help Map.get`;
-   add `--json` for a machine form); `agentica help` lists the namespaces;
-   unknown names exit 2. Useful flags: `--allow-run` (needed by
-   `Process.spawn`), `--seed N` (makes `Random` repeatable), `--max-steps N`,
-   `--json` (diagnostics as one JSON object). `agentica --help` lists the other
-   commands. Tests and BDD: `references/testing.md`, `references/bdd.md`.
+1. Save `program.agc` with exactly one `def main() -> Void`.
+2. `agentica check F` checks only. `agentica F ARGS` runs (`System.args()`
+   returns ARGS). `agentica compile F -o F.agcb`, then `agentica run [FLAGS]
+   -- F.agcb ARGS`. Use the path the user gives if `agentica` is not on PATH.
+3. Exit 0: success. Exit 1: first diagnostic on stderr (stable code `LEX-`,
+   `PARSE-`, `CHECK-` or `RUNTIME-`, a span, often a `help` line). Exit 2: bad
+   usage or unreadable file. Fix the first error and rerun.
+4. Done means exit 0 and the output matches the request. A check does not test
+   runtime behavior.
+5. `agentica help NAME` (`--json` too) prints a signature; `agentica help`
+   lists namespaces; unknown names exit 2. Flags: `--allow-run` (for
+   `Process.spawn`), `--seed N`, `--max-steps N`, `--json`.
 
 ## Cheat sheet
 
@@ -95,184 +88,120 @@ def main() -> Void
 end
 ```
 
-Common Ruby forms that work: `s.length`, `s.strip`, `s.split(" ")`, `s.upcase`,
+Working Ruby forms: `s.length`, `s.strip`, `s.split(" ")`, `s.upcase`,
 `s.include?("x")`, `s.to_i` (a Result), `s.to_i!`, `n.to_s`, `n.to_f`,
-`xs.size`, `xs.push(v)`, `xs.sort`, `xs.join(",")` (a `List[String]`), `m.keys`,
-`m.put(k, v)`, `m.get(k)` (a Result), `(1..3).to_a`, `n.times do |i| ... end`.
-The full list is in `references/builtins.md`.
+`xs.size`, `xs.push(v)`, `xs.sort`, `xs.join(",")`, `m.keys`, `m.put(k, v)`,
+`m.get(k)` (a Result), `(1..3).to_a`, `n.times do |i| ... end`. Full list:
+`references/builtins.md`.
 
-Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`,
-`List[T]`, `Map[K, V]` (K is `Int` or `String`), `Set[T]` (T is `Int` or
-`String`: `Set.new([1, 2])`, `s.add(x)`, `s.include?(x)`), `Result[T]`, `Range`,
-`Json`, `Fn[A, ..., R]`, `Task[R]`, `Await[T]`, `Channel[T]`, `Process`, and
-your own `struct`, `enum` and alias names. `type Names = List[String]` gives a
-long type a short, transparent name. Type names start with an uppercase letter;
-variables, functions, and fields start with a lowercase letter or `_`. Details:
-`references/language.md`.
+Types: `Int` (64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`,
+`Map[K, V]` (K is `Int` or `String`), `Set[T]` (T is `Int` or `String`;
+`Set.new([1, 2])`, `add`, `include?`), `Result[T]`, `Range`, `Json`,
+`Fn[A, ..., R]`, `Task[R]`,
+`Await[T]`, `Channel[T]`, `Process`, your `struct`/`enum`/alias names.
+`type Names = List[String]` names a long type. Types start uppercase; values,
+functions and fields start lowercase or `_`. Details: `references/language.md`.
 
 ## Rules agents break
 
-- Syntax: no semicolons, braces, `let`, `when`, `elif`, `then`, `match`, or
-  `loop do`. Strings are double-quoted (`'x'` is an error). Comments are `#`
-  only (`//` is an error). `break` and `next` stand alone on a line; write `if x
-  ... break ... end`, not `break if x`.
+- Syntax: no `;`, braces, `let`, `when`, `elif`, `then`, `match`, `loop do`,
+  `continue` (use `next`). Strings are double-quoted (`'x'` fails). Comments are
+  `#` (`//` fails). `break` and `next` stand alone: `if x` then `break`, never
+  `break if x`.
 - A `##` block directly above a `def`, `struct`, `enum`, field or variant is its
-  Markdown doc (`## Adds two numbers.` above `def add(a: Int, b: Int) -> Int`).
-  The first `##` block of a file, followed by a blank line, documents the
-  module. Any other `##` block is `PARSE-DETACHED-DOC`.
-- Constants: a top-level `LIMIT = 100` (capitals; `export` to share) is a value
-  built once before `main`. It may hold literals, collections and effect-free
-  builtins, not calls of your own functions or effects
-  (`CHECK-CONSTANT-EXPRESSION`). Read it as `LIMIT`; in another file `import
-  {LIMIT} from "x"`, never `Mod.LIMIT`. Build lookup tables as constants.
-  Details: `references/language.md`.
-- File order: module doc and `import`s, then constants, then `struct`, `enum`
-  and type aliases, then `export def`, then private `def`; any other order is
-  `CHECK-DECL-ORDER` (the help says where the declaration goes). Order has no
-  other meaning: a function may call a later one.
+  Markdown doc. The first `##` block of a file, followed by a blank line, is the
+  module doc. Any other `##` block is `PARSE-DETACHED-DOC`.
+- Constants: top-level `LIMIT = 100` (capitals; `export` shares it). Literals,
+  collections and effect-free builtins only (`CHECK-CONSTANT-EXPRESSION`).
+  Import with `import {LIMIT} from "x"`, never `Mod.LIMIT`.
+- File order: module doc, `import`s, constants, `struct`/`enum`/aliases,
+  `export def`, private `def` (else `CHECK-DECL-ORDER`). A function may call a
+  later one.
 - Imports: `import Models from "models"` then `Models.User`, or `import {User,
-  greet as hello} from "models"` for bare names (an alias and a name list never
-  share a line; a rename keeps the case rule: types stay capitalized, functions
-  lowercase).
-- Default parameter values: `def join(xs: List[String], sep: String = ", ") ->
-  String`. A default is a constant (a literal, `true`, `false`, `nil`, `[]`,
-  `{}` or an enum variant without a payload), else `CHECK-DEFAULT-VALUE`.
-  Parameters with a default go last (`CHECK-DEFAULT-ORDER`), except a last `Fn`
-  parameter that a block fills. A function value (`&join`) takes every argument.
-  Details: `references/language.md`.
-- Text of two or more lines is a heredoc: `<<~NAME`, the lines, then a line with
-  only `NAME`; the common indentation goes, `#{...}` and escapes work as in a
-  string, and a `"` needs no escape. `puts(<<~TEXT)` and `<<~TEXT.upcase` work.
-  One line of text is a plain string (`LEX-HEREDOC-ONE-LINE`); indent with
-  spaces (`LEX-HEREDOC-INDENT`). Details: `references/language.md`.
-- Calls take parentheses: `puts("hi")`, `main()`, `run(5) do |x| ... end`. Only
-  a builtin method or a zero-argument module function may drop them: `s.length`,
-  `xs.size`, `IO.gets!`.
+  greet as hello} from "models"`. Never both on one line. Renames keep case:
+  types stay capitalized, functions lowercase.
+- Defaults: a literal, `true`, `false`, `nil`, `[]`, `{}` or a payload-free
+  variant (else `CHECK-DEFAULT-VALUE`). Defaulted parameters go last
+  (`CHECK-DEFAULT-ORDER`), except a last `Fn` that a block fills. A function
+  value (`&join`) still takes every argument.
+- Heredoc for two or more lines: `<<~NAME`, the lines, then `NAME` alone.
+  Common indentation is removed; interpolation and escapes work as in strings.
+  One line is a plain string (`LEX-HEREDOC-ONE-LINE`); indent with spaces
+  (`LEX-HEREDOC-INDENT`).
+- Calls take parentheses. Only builtin methods and zero-argument module
+  functions drop them: `s.length`, `xs.size`, `IO.gets!`.
 - Values are immutable: `xs = xs.push(4)`, `m = m.put("k", 1)`. A bare
-  `xs.push(4)` or `user.with(age: 31)` is `CHECK-UNUSED-VALUE`. Fields and
-  indexes cannot be assigned: copy a struct with some fields changed, `user =
-  user.with(age: 31)` (named fields, one or more; the values see the old
-  struct).
-- Several steps on one value are a pipe chain, not repeated reassignment: `out =
-  (header(v)` then one `|> add(a)` per line, then `)`, instead of `out =
-  add(out, a)` again and again. `x |> f(a)` is `f(x, a)`; the right side is your
-  function or `Alias.f(...)` with parentheses (a builtin with a method form uses
-  `.`).
-- A block cannot assign an outer variable (`CHECK-CAPTURED-ASSIGNMENT`). A `for
-  x in xs ... end` loop can, so use it for running totals.
-- No implicit Int/Float: `2 * 1.5` is `CHECK-TYPE-MISMATCH`. Convert with
-  `n.to_f`, `Float.from_int(n)`, `x.to_i!`, or `Float.to_int!(x)`. `7 / 2` is
+  `xs.push(4)` is `CHECK-UNUSED-VALUE`. No field or index assignment:
+  `user = user.with(age: 31)`; named fields see the old struct.
+- Several steps on one value: a pipe chain, `x |> f(a)` is `f(x, a)`; the right
+  side is your function or `Alias.f(...)`.
+- A block cannot assign an outer variable (`CHECK-CAPTURED-ASSIGNMENT`). A
+  `for x in xs ... end` loop can, so use it for running totals.
+- No implicit Int/Float (`CHECK-TYPE-MISMATCH`): `2 * 1.5` fails. Convert with
+  `n.to_f`, `Float.from_int(n)`, `x.to_i!` or `Float.to_int!(x)`. `7 / 2` is
   `3`.
-- `==` works only on Int, Float, Bool, String, Nil (same type on both sides) and
-  ranges. Compare enums and structs with `case` or a field. Comparisons do not
-  chain: write `a < b and b < c`.
-- `if` and `while` need a Bool: `if 1` is an error. `!` binds tightly: `!(a >=
-  b)`.
-- Empty `[]`, `{}` and `Set.new([])` need a type from an annotation, a
-  parameter, a field, or the return type: `m: Map[String, Int] = {}`.
-- A non-Void function must `return` on every path. A loop does not count, so put
-  a `return` after `while true`.
-- `case` on Int, Float, String, Bool, or Nil needs a final `_` arm. On an enum,
-  list every variant or add `_`.
-- `case` arms take a guard, `Shape.Circle(r) if r > 3 -> ...` (a Bool that sees
-  the arm's names), and any pattern in a payload position: `ok(Option.Some(0))`,
-  `Shape.Pair(1, n)`. A guarded or literal/nested arm never covers a variant, so
-  end with `ok(_)`, `Shape.Pair(_, _)` or `_`.
-- `for` takes a List, a Set or a Range. `0...n` excludes n; `1..n` includes it.
-  There is no `range(n)`.
-- Result: `ok(v)` and `error(msg)` need an expected Result type: `r: Result[Int]
-  = error("bad")` (a bare `r = error("bad")` is `CHECK-RESULT-TYPE`). `try`
-  needs a Result operand (`try text.to_i`, not `try text.to_i!`) and a
-  Result-returning function. `"x".to_i` is a Result, not `0`.
-- A timed `Task.await(task, timeout_ms)` returns `Await[R]` (`Await.Done(value)`
-  or `Await.TimedOut`), not `R`; `timeout_ms` must be above 0, and the timeout
-  does not cancel the task.
-- `Void` is only a function result or a completion. `v = puts("x")` is
-  `CHECK-VOID-VALUE`.
-- Functions, tasks, and handles have no `to_s`, so they cannot be printed or
-  interpolated. `nil.to_s` is `"nil"`. Write `(-5).to_s`, since `-5.to_s` is an
-  error.
-- Use `IO.flush()` after each stdio protocol message, and send logs with
-  `IO.warn()` (stderr).
-- For fixed JSON records, use structs with typed fields. `Json` and
-  `JSON.object` are for dynamic data; maps and lists hold one type.
+- `==` works only on Int, Float, Bool, String, Nil (same type) and ranges.
+  Compare enums and structs with `case` or a field. No chained comparisons:
+  `a < b and b < c`.
+- `if` and `while` need a Bool. `!` binds tightly: `!(a >= b)`.
+- Empty `[]`, `{}`, `Set.new([])` need a type from an annotation, parameter,
+  field or return type: `m: Map[String, Int] = {}`.
+- A non-Void function returns on every path. A loop does not count: put a
+  `return` after `while true`.
+- `case` on Int, Float, String, Bool or Nil needs a final `_`. On an enum, list
+  every variant or add `_`. Guards see arm names; patterns work in payloads
+  (`ok(Option.Some(0))`). A guarded or literal/nested arm never covers a
+  variant: end with `ok(_)`, `Shape.Pair(_, _)` or `_`.
+- `for` takes a List, Set or Range. `0...n` excludes n; `1..n` includes it. No
+  `range(n)`.
+- Result: `ok(v)` and `error(msg)` need an expected Result type (`r: Result[Int]
+  = error("bad")`, else `CHECK-RESULT-TYPE`). `try` needs a Result operand
+  (`try text.to_i`, not `try text.to_i!`) in a Result-returning function.
+  `"x".to_i` is a Result, not `0`.
+- `Task.await(task, timeout_ms)` returns `Await[R]` (`Await.Done(v)` or
+  `Await.TimedOut`), not `R`; `timeout_ms` is above 0; a timeout does not cancel
+  the task.
+- `Void` has no value; it is only a function result or completion.
+  `v = puts("x")` is `CHECK-VOID-VALUE`.
+- Functions, tasks and handles have no `to_s` and cannot be printed or
+  interpolated. `nil.to_s` is `"nil"`; write `(-5).to_s`, since `-5.to_s` fails.
+- Call `IO.flush()` after each stdio protocol message. Send logs to stderr with
+  `IO.warn()`.
+- Fixed JSON records use structs with typed fields. `Json` and `JSON.object` are
+  for dynamic data. Maps and lists hold one type.
 
-Not in Agentica, and what to write instead: `continue` (use `next`), `Map.new`
-(`{}` with a type), `IO.read_all` (`IO.read()`), `s.chars` (`s.split("")`),
-`s.ord` (`String.code(s)`), `s.len` (`s.length`), `s.empty?` (`s.length == 0`),
+Not in Agentica, and what to write instead: `Map.new` (`{}` with a type),
+`IO.read_all` (`IO.read()`), `s.chars` (`s.split("")`), `s.ord`
+(`String.code(s)`), `s.len` (`s.length`), `s.empty?` (`s.length == 0`),
 `r.is_err?` or `r.error?` (`!r.ok?`), `=~` and `matches?` (no regex builtin).
 
 ## When to read a reference
 
-Read only the files the task needs:
+Read only what the task needs:
 
-- **Read:** [references/language.md](references/language.md)
-  - **When the program:** hits a checker error about an operator, type, Void,
-    pattern, block, method, or Result, or needs a core rule this file does not
-    state
+- `references/language.md`: a checker error about an operator, type, Void,
+  pattern, block, method or Result, or a core rule not stated here.
+- `references/builtins.md`: a builtin not in the cheat sheet, or an exact
+  signature (String, List, Map, Set, Range, Int, Float, IO, System, Time,
+  Random).
+- `references/examples.md`: a complete program to start from.
+- `references/performance.md`: slow programs, 100,000+ items or about 1 MB,
+  hot paths, `AGENTICA_VM_TRACE=profile`.
+- `references/modules.md`: several files, shared constants, `std/` or `pkg/`.
+- `references/json.md`: JSON. `references/toml.md`: TOML (`std/toml`).
+- `references/files.md`: files, directories, paths, locks, private files,
+  removing or renaming paths or trees.
+- `references/processes.md`: starting programs (`Process`).
+- `references/tasks.md`: concurrency, `Task.map`, timed awaits, `Channel`.
+- `references/binary.md`: packing or unpacking bytes (`std/binary`).
+- `references/logger.md`: levels, fields, handlers (`std/logger`).
+- `references/network.md`: TCP, TLS, HTTP client or server.
+- `references/bdd.md`: `.feature` specs and BDD steps (`agentica test`).
+- `references/testing.md`: unit tests (`Test.test`, `Test.eq`, `Test.run`).
+- `references/diagnostics.md`: a diagnostic code whose meaning or fix is
+  unclear.
 
-- **Read:** [references/builtins.md](references/builtins.md)
-  - **When the program:** calls a builtin not in the cheat sheet, or needs an
-    exact signature for `String`, `List`, `Map`, `Set`, `Range`, `Int`, `Float`,
-    `IO`, `System` (arguments, environment, process id), `Time`, or `Random`
-
-- **Read:** [references/examples.md](references/examples.md)
-  - **When the program:** needs a complete program to start from
-
-- **Read:** [references/performance.md](references/performance.md)
-  - **When the program:** a program is too slow or must process 100,000+ items
-    or about 1 MB; choosing `while`, recursion, `.with` or a collection for a
-    hot path; finding where its steps go (`AGENTICA_VM_TRACE=profile`)
-
-- **Read:** [references/modules.md](references/modules.md)
-  - **When the program:** spans several files, shares constants between files,
-    or imports `std/` or `pkg/` modules
-
-- **Read:** [references/json.md](references/json.md)
-  - **When the program:** reads or writes JSON
-
-- **Read:** [references/files.md](references/files.md)
-  - **When the program:** reads or writes files, directories, or paths, locks a
-    file (advisory on Unix; enforced against other handles' I/O on Windows),
-    makes private files and directories, or removes or renames a path or a tree
-
-- **Read:** [references/processes.md](references/processes.md)
-  - **When the program:** starts other programs and talks to them (`Process`)
-
-- **Read:** [references/tasks.md](references/tasks.md)
-  - **When the program:** runs work concurrently, maps a block over a list a few
-    items at a time (`Task.map`), waits for a task with a timeout, passes values
-    between tasks, or uses `Channel`
-
-- **Read:** [references/binary.md](references/binary.md)
-  - **When the program:** packs or unpacks binary numbers in a `List[Int]` of
-    bytes (`std/binary`: `u8` to `i64`, `f32`, `f64`, byte order, framing)
-
-- **Read:** [references/toml.md](references/toml.md)
-  - **When the program:** reads or writes TOML (`std/toml`: `Toml.parse`,
-    `Toml.encode`, the `Toml.Value` enum, decoding a config into a struct)
-
-- **Read:** [references/logger.md](references/logger.md)
-  - **When the program:** logs with levels, fields, handlers, text or JSON lines
-    (`std/logger`)
-
-- **Read:** [references/network.md](references/network.md)
-  - **When the program:** uses TCP, TLS, or the HTTP client or server
-
-- **Read:** [references/bdd.md](references/bdd.md)
-  - **When the program:** writes `.feature` specifications or a BDD step program
-    (`agentica test`)
-
-- **Read:** [references/testing.md](references/testing.md)
-  - **When the program:** writes unit tests (`Test.test`, `Test.eq`, `Test.run`)
-
-- **Read:** [references/diagnostics.md](references/diagnostics.md)
-  - **When the program:** hits a diagnostic code whose meaning or fix is unclear
-
-For style and idiom (naming, pipe chains, `case`, errors, tables and other speed
-rules), use the `agentica-code-guidelines` skill.
-
-The Agentica site has the full documentation as Markdown:
-`https://sonic182.github.io/agentica/llms.txt` indexes the pages, and
-`https://sonic182.github.io/agentica/llms-full.txt` has them all. For the
-installed binary, `agentica help NAME` is the authority on signatures.
+For style and idiom, use `agentica-code-guidelines`. Online docs:
+`https://sonic182.github.io/agentica/llms.txt` indexes them;
+`https://sonic182.github.io/agentica/llms-full.txt` has them all.
+`agentica help NAME` is the authority on signatures for the installed binary.
