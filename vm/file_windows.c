@@ -335,7 +335,9 @@ static HANDLE remove_open_relative(HANDLE parent, const wchar_t *name, size_t le
   IO_STATUS_BLOCK status_block = {0};
   HANDLE file = INVALID_HANDLE_VALUE;
   ACCESS_MASK access = FILE_READ_ATTRIBUTES | SYNCHRONIZE;
-  ULONG options = FILE_OPEN_FOR_BACKUP_INTENT | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT;
+  /* Ordinary removal must respect the object's ACL, even when the caller has
+     backup/restore privileges. NtCreateFile needs no backup intent for a directory. */
+  ULONG options = FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT;
   if (delete_access) access |= DELETE;
   if (directory) { access |= FILE_TRAVERSE; options |= FILE_DIRECTORY_FILE; }
   if (list_directory) access |= FILE_LIST_DIRECTORY;
