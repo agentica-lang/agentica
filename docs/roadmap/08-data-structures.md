@@ -78,7 +78,7 @@ their own place in the order (step 8).
   sorted map or set (iterate in key order; today sort the keys); and a deque
   (both ends).
 
-**Done when:** ranges, sets, queues and the faster lists run on both backends,
+**Done when:** ranges, sets, queues and the faster lists run on the VM,
 and an evaluation round shows agents use ranges without `while` workarounds.
 
 

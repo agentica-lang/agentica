@@ -2,67 +2,23 @@
 
 ### Completed: Strict Void prerequisite
 
-- [x] Separate no-value completion from Nil data; require main() -> Void and
-  explicit returns from Nil functions.
-- [x] Reject Void in data type/value positions; support completion in Fn return
-  types, Result[Void], and Task[Void].
-- [x] Add ok() for successful Result[Void] completion; preserve ok(nil), JSON
-  null, and Nil task results.
-- [x] Migrate side-effect APIs, HTTP/BDD callbacks, shipped programs,
-  benchmarks, and evaluation prompts/fixtures; update both language references
-  and development notes.
+**Done:** no-value completion separated from `Nil`; `main() -> Void`, explicit
+returns, `ok()` for `Result[Void]`; side-effect APIs, callbacks, programs and
+references migrated. Rules in the grammar.
 
 ### Completed: Files and paths
 
-Make local data processing possible before adding more protocol-specific APIs.
-
-- [x] Specify file and path APIs, error behavior and byte limits in
-  `docs/future/`; use host filesystem permissions without a new capability flag.
-- [x] Read and write text and bytes, including explicit overwrite/append
-  behavior and strict UTF-8 decoding.
-- [x] List directories, create directories, inspect file metadata, and
-  join/resolve paths.
-- [x] Cover failures and resource cleanup with temporary-directory integration
-  tests; add a small file-processing example.
+**Done:** file/path APIs with error behavior and byte limits, text and bytes
+I/O, directories, metadata, temp-dir integration tests and a file-processing
+example. Rules in the grammar and the programming skill.
 
 ### Completed: Processes (phase 5l)
 
-Run existing tools for automation, then reuse the same API for stdio MCP
-clients.
-
-```text
-Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process]
-Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
-Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void]
-Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
-Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[List[Int]]
-Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
-Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
-Process.close(p: Process) -> Void
-```
-
-- Opaque evaluation-owned Process handles; literal argv, inherited environment
-  and working directory.
-- Positive full-operation deadlines and independent read/write locks. Active
-  stream timeouts abort; lock and wait timeouts preserve children.
-- Per-call 1 MiB limits, strict UTF-8 lines, counted bytes with short/empty EOF,
-  and fixed-buffer stderr forwarding. Output has no lifetime cap; use Task for
-  concurrent consumption.
-- Direct children are killed and reaped on close, main return, System.exit,
-  diagnostics, task failure, budget exhaustion, and external interruption.
-  Arbitrary descendant trees remain outside the guarantee.
-- --allow-run defaults off and propagates to tasks, HTTP callbacks, BDD handlers
-  and programs under test. Check and help need no flag.
-
-- [x] Specify exit-code retrieval, stdin closure, output limits, and
-  deadline/cleanup behavior alongside spawn/send/read/close.
-- [x] Add the Process type and module over racket/subprocess, without shell
-  interpolation of command arguments.
-- [x] Test independent local Node children, including nonzero exits, full-duplex
-  I/O, cancellation, PID cleanup, BDD allowance, and source/compiled CLI
-  behavior; require Node in CI.
-- [x] Add examples/process-tool.agc, which runs a shell command (`sh -c`) and
-  checks its Result and exit code; include it in CI with --allow-run.
+**Done:** `Process` handles over the VM (no shell interpolation),
+full-operation deadlines, 1 MiB per-call limits, strict UTF-8 lines, cleanup
+of direct children on close/return/exit, `--allow-run` off by default; local
+Node tests, CI and `examples/process-tool.agc`. API in the builtin catalog
+([`06b-builtins.md`](../grammar/06b-builtins.md)).
 
 ### 1. Everyday library (remaining phase 5n and supporting utilities)
 
@@ -95,83 +51,17 @@ the basic library.
 
 ### 2. Typed JSON, builders and schemas
 
-#### Phase 5f2: Typed JSON decoding
-
-```text
-JSON.decode(s: String, type: T) -> Result[T]
-```
-
-The second argument is a struct name, not a value, as in
-`JSON.decode(text, User)`. The checker types the call as `Result[User]`, and the
-evaluator walks the declared fields.
-
-- The target type may contain only `Int`, `Float`, `Bool`, `String`, `List[T]`,
-  `Map[String, V]`, and other structs. Anything else is `CHECK-NOT-DECODABLE`,
-  reported before the program runs.
-- Fields map to JSON keys by name. Struct tags such as Go's `json:"user_name"`
-  are out of scope.
-- A missing field or a wrong type is `error("age: expected Int, found String")`,
-  with the path to the field. Extra keys are ignored.
-- A JSON integer decodes to `Float` when the field is `Float`, but a JSON float
-  never decodes to `Int`.
-
-- [x] Parse a bare type name as an expression and accept it only in JSON type
-  argument positions (JSON.decode and JSON.schema).
-- [x] Check that the target type is decodable.
-- [x] Decode nested structs, lists, and maps, with the path in error messages.
-- [x] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the
-  same field values (compare fields, since structs have no `==`).
-
-#### Phase 5i: JSON builders and schemas
-
-Construct structured output at run time, including future JSON-RPC replies.
-
-```text
-JSON.object(fields: Map[String, Json]) -> Json
-JSON.array(items: List[Json]) -> Json
-JSON.from(value: T) -> Json
-JSON.null() -> Json
-JSON.null?(j: Json) -> Bool
-JSON.schema(type: T) -> Json
-```
-
-- `JSON.from` accepts the same types as `JSON.encode`.
-- `JSON.schema(AddArgs)` takes a struct name, as in `JSON.decode`, and returns
-  its JSON Schema (`type`, `properties`, `required`). MCP tools declare an
-  `inputSchema`, so a tool is a struct plus a function.
-- Same decodable-type rule as 5f2: `CHECK-NOT-DECODABLE` otherwise.
-
-- [x] Add the functions above and focused behavior tests.
-- [x] Verify `JSON.schema` output against an independent expected schema for one
-  struct.
+**Done (phases 5f2, 5i):** `JSON.decode` into typed structs (decodable-type
+rule, `CHECK-NOT-DECODABLE`, path errors, extras ignored) and builders/schemas
+(`JSON.object/array/from/null/null?/schema`, MCP `inputSchema`). Rules in the
+grammar and the builtin catalog.
 
 ### 3. Modules and imports
 
-Split larger programs across files with explicit exports and predictable
-resolution. This is planned language syntax, not an extension to implement
-without a specification.
-
-- [x] Define import/export syntax, module naming, path resolution and the
-  entrypoint rule; normative rules now live in grammar.md.
-- [x] Decide visibility, duplicate-name handling, import cycles and diagnostic
-  spans across files.
-- [x] Implement loading, checking and execution without resetting the
-  execution's shared budget or resource ownership.
-- [x] Test a program spanning multiple files and controlled diagnostics for
-  missing imports, cycles and private names.
-
-### 3a. Embedded standard library and external resolution
-
-- [x] Reserve `std/` for embedded Agentica sources, retaining explicit import
-  aliases.
-- [x] Ship a String FIFO in `stdlib/queue.agc` without native queue dispatch.
-- [x] Add `pkg/` search roots: entrypoint-local agc_libs, AGENTICA_PATH, user
-  data, system data.
-- [x] Validate paths and symlink containment; preserve module identities, source
-  spans and BDD loading.
-- [x] Verify queue behavior, precedence, compiled CLI and relocated release
-  bundles.
-- [x] Document imports/API in the grammar and programming reference together.
+**Done (phases 3, 3a):** import/export syntax, naming, resolution, entrypoint,
+visibility, cycles, spans; `std/` embedded sources with aliases, `pkg/` search
+roots, symlink containment, compiled CLI and relocated bundles. Rules in
+[`05b-modules.md`](../grammar/05b-modules.md).
 
 ### 7. Real applications
 
@@ -211,9 +101,8 @@ server yet.
   the existing HTTP/1.1 streaming APIs with independent interoperability tests.
 
 Task concurrency is already available for handling notifications while a client
-waits. Channels are planned in phase 17
-([`docs/future/27-iteration-and-concurrency.md`
-§27.2](../future/27-iteration-and-concurrency.md#272-channels));
+waits. Channels are built
+([§27.2](../future/27-iteration-and-concurrency.md#272-channels));
 `Process.poll_line` remains proposed in
 [§27.6](../future/27-iteration-and-concurrency.md#276-open-questions). UUID and
 Base64

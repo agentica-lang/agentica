@@ -109,14 +109,6 @@ end
 - Builtins keep today's help, from the catalog.
 - User files are not covered: `agentica doc file.agc` serves them.
 
-### 32.7 Not built yet
-
-- **Front end only.** Doc comments change only the lexer, the parser and the
-  CLI. The VM runs programs with doc comments as before, because docs never
-  reach it.
-- **When.** 22b waits until after the bootstrap (decided by the owner on
-  2026-10-15, roadmap row 22b).
-
 ### 32.8 Later, to evaluate
 
 - **Doctests:** run the fenced `agentica` examples of `std/` docs in a test, as

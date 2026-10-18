@@ -35,9 +35,8 @@
   the current implementation order; error propagation is already implemented in
   5e.
 - [x] Complete lightweight I/O concurrency before networking in phase 5j2.
-  Channels are planned in phase 17
-  ([`docs/future/27-iteration-and-concurrency.md`
-  §27.2](../future/27-iteration-and-concurrency.md#272-channels)); CPU
+  Channels are built
+  ([§27.2](../future/27-iteration-and-concurrency.md#272-channels)); CPU
   parallelism remains unscheduled, and its remaining decisions are in
   [§27.6](../future/27-iteration-and-concurrency.md#276-open-questions).
 

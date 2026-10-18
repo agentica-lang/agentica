@@ -1,20 +1,10 @@
 ## Phase 6: Validate the language design
 
-Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after
-`Result` + `try` and JSON) are described under Phase 5d3 and 6a in
-[`01-foundations.md`](01-foundations.md) and use the same task set, so the
-results compare.
-
-- [x] Ask agents to write and repair small programs using only the grammar and
-  examples (evaluation rounds 1–8, `tests/eval/`).
-- [x] Record correct programs, repair attempts, and whether diagnostics helped
-  identify the fix (`eval.md`).
-- [x] Use the results to revise the grammar and examples explicitly before
-  adding exceptions to the implementation (the acceptance rule,
-  [§25](../future/25-ruby-typed-idioms.md#25-ruby-typed-idioms)).
-
-**Complete when:** the prototype provides evidence about whether Agentica's
-syntax and diagnostics help agents write and repair programs.
+**Done (phases 6a/6b):** agent rounds 1–8 with the task set under
+`tests/eval/`, recorded in `docs/eval.md`, revising the grammar before
+adding implementation exceptions (the acceptance rule,
+[§25](../future/25-ruby-typed-idioms.md#25-ruby-typed-idioms)). Details
+under Phase 5d3 and 6a in [`01-foundations.md`](01-foundations.md).
 
 ### Phase 6c: Agentica against typed Python
 

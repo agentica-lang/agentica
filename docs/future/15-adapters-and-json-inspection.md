@@ -238,9 +238,9 @@ end
   value; `Json` is the only dynamic value, and `kind` covers it.
 - Diagnostics: none new. A non-`Json` argument is `CHECK-TYPE-MISMATCH`; a
   missing variant is `CHECK-NON-EXHAUSTIVE-CASE`.
-- Evaluator: `JsonValue` is the first builtin enum, so it needs a path in the
-  checker's enum table and in the evaluator.
-- Import linking (`src/modules.rkt`): it renames each module's names and rejects
+- Front end and VM: `JsonValue` is the first builtin enum, so it needs a path
+  in the checker's enum table.
+- Import linking (in `compiler/`): it renames each module's names and rejects
   unknown aliases, so `JsonValue` needs a path there too, like the existing
   `Result` exception (`[(and (eq? kind 'enum) (string=? name "Result")) name]`).
   It covers enum patterns and constructors (`JsonValue.JsonInt(n)`), and the
@@ -318,7 +318,7 @@ end
   substituted type, so `Box[Int]` has `to_s` and `inspect`, and
   `Box[Fn[Int, Int]]` does not.
 - An imported generic struct is written `M.Box[Int]`, as for enums. Import
-  linking (`src/modules.rkt`) must carry the type parameters through: today its
+  linking (in `compiler/`) must carry the type parameters through: today its
   `struct-decl` case rewrites every field type through `resolve`, so a bare `T`
   would get the module prefix. It needs the same check as `rewrite-enum-type`
   does for enums (a parameter name with no type arguments stays as it is).
