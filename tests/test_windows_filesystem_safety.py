@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import stat
 import subprocess
 import threading
 import time
@@ -165,6 +166,62 @@ class WindowsFilesystemMutationTests(TestCase):
         self.assertFalse(long_victim.exists())
         self.assertFalse(traversed_target.exists())
 
+    def test_unsafe_aliases_and_trailing_separators_preserve_the_entry(self) -> None:
+        victim = self.root / "keep"
+        victim.write_text("sentinel", encoding="utf-8")
+        bytecode = self.compile_text(REMOVE_PROGRAM, "windows-remove-aliases")
+        paths = (
+            str(victim) + ".", str(victim) + " ", str(victim) + ":stream",
+            str(victim) + "/", str(victim) + "\\\\",
+            str(self.root) + "/.", str(self.root) + "/unused/..",
+            "\\\\\\\\?\\\\" + str(victim), "\\\\\\\\.\\\\" + str(victim),
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                result = run_vm(
+                    bytecode, args=[path], env=vm_environment(), cwd=self.root
+                )
+                self.assertEqual((result.code, result.stdout), (0, "false\n"))
+                self.assertEqual(victim.read_text(encoding="utf-8"), "sentinel")
+
+    def test_read_only_entry_failure_preserves_data_and_closes_its_handles(self) -> None:
+        victim = self.root / "readonly"
+        victim.write_text("sentinel", encoding="utf-8")
+        bytecode = self.compile_text(REMOVE_PROGRAM, "windows-remove-readonly")
+        os.chmod(victim, stat.S_IREAD)
+        try:
+            result = run_vm(
+                bytecode, args=[str(victim)], env=vm_environment(), cwd=self.root
+            )
+            self.assertEqual((result.code, result.stdout), (0, "false\n"))
+            self.assertEqual(victim.read_text(encoding="utf-8"), "sentinel")
+        finally:
+            os.chmod(victim, stat.S_IWRITE)
+        result = run_vm(
+            bytecode, args=[str(victim)], env=vm_environment(), cwd=self.root
+        )
+        self.assertEqual((result.code, result.stdout, result.stderr), (0, "true\n", ""))
+        self.assertFalse(victim.exists())
+
+    def test_depth_limit_fails_without_leaking_handles(self) -> None:
+        victim = self.root / "deep"
+        current = victim
+        for _ in range(129):
+            current.mkdir()
+            current = current / "d"
+        sentinel = current.parent / "keep"
+        sentinel.write_text("deep sentinel", encoding="utf-8")
+        bytecode = self.compile_text(REMOVE_PROGRAM, "windows-remove-depth")
+        result = run_vm(
+            bytecode, args=[str(victim)], env=vm_environment(), cwd=self.root
+        )
+        self.assertEqual((result.code, result.stdout), (0, "false\n"))
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "deep sentinel")
+        # Renaming the tree proves traversal handles were closed on failure.
+        moved = self.root / "deep-moved"
+        victim.rename(moved)
+        self.assertTrue(moved.is_dir())
+
     def test_remove_pins_ancestors_during_concurrent_replacement(self) -> None:
         anchor = self.root / "anchor"
         moved = self.root / "anchor-moved"
@@ -239,6 +296,57 @@ class WindowsFilesystemMutationTests(TestCase):
         self.assertEqual(moved.read_text(encoding="utf-8"), "source contents")
         self.assertFalse(directory.exists())
         self.assertEqual((moved_directory / "inside").read_text(encoding="utf-8"), "inside contents")
+
+    def test_rename_preserves_existing_directory_and_file_targets(self) -> None:
+        bytecode = self.compile_text(RACE_PROGRAM, "windows-rename-types")
+        for source_directory in (False, True):
+            for target_directory in (False, True):
+                with self.subTest(source=source_directory, target=target_directory):
+                    base = self.root / f"pair-{int(source_directory)}-{int(target_directory)}"
+                    base.mkdir()
+                    source, target = base / "source", base / "target"
+                    for path, directory, text in (
+                        (source, source_directory, "source sentinel"),
+                        (target, target_directory, "target sentinel"),
+                    ):
+                        if directory:
+                            path.mkdir()
+                            (path / "keep").write_text(text, encoding="utf-8")
+                        else:
+                            path.write_text(text, encoding="utf-8")
+                    result = run_vm(
+                        bytecode, args=[str(source), str(target)],
+                        env=vm_environment(), cwd=self.root,
+                    )
+                    self.assertEqual((result.code, result.stdout), (0, "false\n"))
+                    for path, directory, text in (
+                        (source, source_directory, "source sentinel"),
+                        (target, target_directory, "target sentinel"),
+                    ):
+                        entry = path / "keep" if directory else path
+                        self.assertEqual(entry.read_text(encoding="utf-8"), text)
+
+    def test_rename_moves_a_junction_not_its_target(self) -> None:
+        outside = self.root / "outside-rename"
+        outside.mkdir()
+        sentinel = outside / "keep"
+        sentinel.write_text("target sentinel", encoding="utf-8")
+        source, target = self.root / "source-link", self.root / "moved-link"
+        link = subprocess.run(
+            ["cmd.exe", "/d", "/c", "mklink", "/J", str(source), str(outside)],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(link.returncode, 0, link.stdout + link.stderr)
+        bytecode = self.compile_text(RACE_PROGRAM, "windows-rename-junction")
+        result = run_vm(
+            bytecode, args=[str(source), str(target)],
+            env=vm_environment(), cwd=self.root,
+        )
+        self.assertEqual((result.code, result.stdout), (0, "true\n"))
+        self.assertFalse(source.exists())
+        self.assertTrue(target.is_junction())
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "target sentinel")
+        self.assertEqual((target / "keep").read_text(encoding="utf-8"), "target sentinel")
 
     def test_rename_race_has_one_winner_and_preserves_losing_sources(self) -> None:
         bytecode = self.compile_text(RACE_PROGRAM, "windows-rename-race")
