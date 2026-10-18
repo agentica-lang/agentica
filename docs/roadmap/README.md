@@ -200,15 +200,10 @@ after them may run in parallel when needed and keep their relative order.
     errors come with a hint, and the re-measure shows whether agents fail less
 
 - **Order:** 7.2a
-  - **Next work:** New features, VM-only, after rows 7.2.1 and 7.2.2: doc
-    comments ([§32](../future/32-doc-comments.md#32-doc-comments), part 22a,
+  - **Next work:** **Done:** doc comments (part 22a,
     [§32](../future/32-doc-comments.md#32-doc-comments): `##` lines, front end
-    only; `agentica doc` is row 22b, after the bootstrap), then digit separators
-    ([phase 23](23-digit-separators.md),
-    the grammar's [literal rules](../grammar/04-lexical.md#literals): `1_000`,
-    lexer
-    only). This is the last new language feature in the Racket front end; row
-    7.2.7 freezes that front end after it
+    only) and digit separators ([phase 23](23-digit-separators.md),
+    `1_000`, lexer only).
   - **Outcome:** Programs carry `##` docs in their source, and write long
     numbers as `1_000_000`
 

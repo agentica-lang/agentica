@@ -104,8 +104,8 @@ end
   memory backend is read-only: its map is fixed when it is created, `get` reads
   it, and `put` returns `error("read-only")`. A test can pass the memory backend
   to code that only reads, and the program passes the disk one. The two backends
-  live in separate programs; see the "Done when" of [roadmap phase
-  10](../roadmap/10-adapters-and-json.md#phase-10-adapters-and-json-inspection).
+  live in separate programs; see "Done when" in
+  [§15.6 Implementation](#156-implementation-row-76) below.
   A block can only be written as the last argument of a call, so each block goes
   through a small function that returns it (`getter`, `putter` above);
   standalone lambdas are planned in [section

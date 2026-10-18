@@ -488,8 +488,8 @@ test runs the `agentica fmt` binary in a temporary folder that it cleans up.
 
 ### 47.8 Phases
 
-Roadmap phase 28 ([`docs/roadmap/28-formatter.md`](../roadmap/28-formatter.md))
-holds the checklist.
+The checklist lives in [§47.10 Implementation](#4710-implementation-row-79)
+below; there is no separate roadmap phase file.
 
 - **47a: comments and the side list.** `lex_with_comments` in
   `compiler/lexer.agc`, the attachment pass in `compiler/format_comments.agc`,
