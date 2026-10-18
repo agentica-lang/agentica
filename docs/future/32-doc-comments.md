@@ -5,7 +5,7 @@ and the `std/` docs); 22b (§32.5, §32.6) waits until after the bootstrap
 (roadmap [row 22b](../roadmap/README.md)). Decided on 2026-10-12: Agentica gets
 documentation comments written as `##` lines, in the style of Rust's `///`, so
 that a later tool can generate documentation from the code. Phase 22 is front
-end only. 22a comes after 7i, HTTP 20b, task crash isolation (§37), unit tests
+end only. 22a comes after 7i, HTTP 20b, task crash isolation, unit tests
 (§36) and HTTP 20c (roadmap order step 7.2.1), and after the evaluation pilot
 (order step 7.2.2, §32.7).
 
@@ -202,7 +202,8 @@ end
   CLI, and the AST keeps its shape (§32.4).
 - **When.** Decided by the user on 2026-10-13: 22a comes after 7i, at
   roadmap order step 7.2a: after order step 7.2.1 (HTTP 20b, task crash
-  isolation (§37), unit tests (§36), then HTTP 20c, which also took what was
+  isolation (phase 24), unit tests (§36), then HTTP 20c, which also took what
+  was
   left of 20d; placed there by the owner on 2026-10-13) and after the evaluation
   pilot (order step 7.2.2, added by the owner on 2026-10-13), and before digit
   separators (§33) and before `Task.map` (order step 7.3); channels come

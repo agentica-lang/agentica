@@ -235,7 +235,7 @@ HttpWire.local_port(server: HttpServer) -> Int
   `max_connections` are open, and parks otherwise. A TLS socket is returned
   before its handshake, which runs under the first read's or write's timeout.
 - `spawn` is the hand-off of `Task.spawn_owning`
-([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends))
+([handle ownership][task-rules])
   into the server's group, through the port function `agc_task_spawn_owning`: it
   starts `f(socket)` as a child of the group and gives it the socket, which the
   caller (the accept loop of `std/http`) must own, or the call fails with
@@ -253,7 +253,8 @@ HttpWire.local_port(server: HttpServer) -> Int
   path runs `close_server` for it, and its port is free. A running task that
   closes its own server stops after that builtin
   (`vm/tests/task_cancel_test.c`).
-- A crash in a connection task ends that connection (§37.5), and its client sees
+- A crash in a connection task ends that connection (handle ownership), and its
+  client sees
   the close with no response (Crashes, 10.2.1).
 - `std/http` runs the accept loop in the group. For each socket it spawns the
   connection loop: `read_request` (the first request waits `request_timeout_ms`
@@ -324,7 +325,8 @@ HttpWire.local_port(server: HttpServer) -> Int
 
 - **Case:** A runtime diagnostic in the handler
   - **Who:** The VM
-  - **Answer:** The connection task crashes (§37.5). The client sees the close,
+  - **Answer:** The connection task crashes (handle ownership). The client sees
+    the close,
     and the server goes on
 
 - **Case:** A handler that runs a long time
@@ -370,3 +372,5 @@ and a body that is not UTF-8. A connection that fails is never pooled.
 - **Performance** is not a CI gate: `benchmarks/http_bench.py` against
   `examples/http_server.agc`. The numbers go in `docs/vm-benchmarks.md` (roadmap
   20c-bench).
+
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

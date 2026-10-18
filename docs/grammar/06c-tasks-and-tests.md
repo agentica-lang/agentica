@@ -14,7 +14,10 @@ parameter. Each task has its own scopes, call depth and return handling.
 indexing or JSON encoding.
 
 A runtime error in a task other than `main` is a crash. It ends only that task.
-Its diagnostic goes to stderr at once, with ` in a task` after the code
+This is sound because values are immutable, so a crashed task cannot leave a
+shared value half-updated, and the only mutable state lives in handles, whose
+ownership is described below. Its diagnostic goes to stderr at once, with
+` in a task` after the code
 (`--json` adds `"task": true`), and its running descendants are cancelled. The
 handles it owns close: see the next paragraph.
 

@@ -107,7 +107,7 @@ first-insertion order; a key deleted and then put again goes to the end, as in
     `Json`), so to pass a table between steps capture it from `main`; to pass
     data, use the JSON state.
 - **Ownership:** a table is not an OS resource, so the owner rule of
-  [§37.5](37-task-crash-isolation.md#375-handles-of-a-task-that-ends) does not
+  [handle ownership][task-rules] does not
   apply to it. The task that creates a table does not own it, and ending that
   task (a return, a crash or a cancel) does not close it. It lives while any
   value refers to it, and the garbage collector frees it then. A `Channel` is
@@ -148,3 +148,5 @@ first-insertion order; a key deleted and then put again goes to the end, as in
   ([§18](18-front-end-language.md)) instead, since the Racket front end takes
   no new checker rules then.
 
+
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

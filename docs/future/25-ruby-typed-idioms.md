@@ -362,7 +362,7 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
   fails (it flushes writes, so its error matters). If the block returned an
   error, the call returns that error, and a close error is dropped.
 - A runtime diagnostic inside the block ends the task (the whole run only in
-  `main`, §37); the handle, owned by the task, is closed by the crash, or by the
+  `main`); the handle, owned by the task, is closed by the crash, or by the
   run's end in `main`, as today. A handle that leaves the block (returned inside
   the Result or captured by a lambda) is closed; using it gives the error
   `Result` of a closed handle, as today.

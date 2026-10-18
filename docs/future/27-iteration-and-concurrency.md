@@ -197,9 +197,9 @@ Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> Li
   checks the list (`results.all? do |r| r.ok? end`). A runtime diagnostic in an
   item (a bug, such as `RUNTIME-INDEX-OUT-OF-RANGE`) is a crash of that item's
   task: with task crash isolation
-  ([§37](37-task-crash-isolation.md#37-task-crash-isolation), roadmap phase 24,
+  (crash isolation, roadmap phase 24,
   which lands before 17a), the item's slot gets `error("task crashed: ...")`,
-  its descendants are cancelled and the other items go on (§37.7).
+  its descendants are cancelled and the other items go on (task rules).
 - **Cancellation.** The caller cannot leave a `Task.map` call early: it waits
   until every item has ended, and an `error` result does not stop it. So
   in-flight items stop early only at their own timeout, or when the run ends
@@ -415,7 +415,7 @@ with 17b). These forms get a help, through the hint table of `grammar.md` §7
   `Task.map(empty, 0, 1000) do |n| ok(n) end` (`RUNTIME-INVALID-COUNT`, the
   arguments are checked first); `timeout_ms` 0 (`RUNTIME-INVALID-DURATION` at
   the argument span); a diagnostic inside an item (its slot is
-  `error("task crashed: ...")` and the other items give `ok`, §37.7); a nested
+  `error("task crashed: ...")` and the other items give `ok`); a nested
   `Task.map`; the step count of a 1,000-item call with no timeouts.
 - A Python timing test, `tests/test_vm_task_map.py`, like
   `tests/test_vm_latency.py`: `PY_ALONE` in the Makefile keeps it out of
@@ -630,13 +630,14 @@ timeout and return a `Result`, and `close` and `closed?` are added.
   loop polls forever: the program hangs while it keeps running, and the stall
   check cannot see it, since the loop is not parked. This is why the close rule
   below exists. A diagnostic in `main` ends the whole run. With several
-  producers, or a producer that may crash (§37), each producer returns a
+  producers, or a producer that may crash, each producer returns a
   `Result` and a coordinator awaits them all and then closes the channel: a
   crashed producer gives the coordinator an `error`, so the close still happens
-  (§37.7). With one producer, `Task.spawn_owning(&produce, jobs)` makes it the
+  (task rules). With one producer, `Task.spawn_owning(&produce, jobs)` makes it
+  the
   owner of the channel: the channel is closed when that task ends in any way, a
   crash or a cancel included, so the receive loop does not wait for a producer
-  that died (§37.5).
+  that died (handle ownership).
 - **`close`** marks the channel closed and returns `Void`; closing again does
   nothing. Waiting senders get the closed error; so do woken senders that hold a
   reserved slot but have not run yet: `close` revokes their reservations, since
@@ -801,7 +802,7 @@ and the rules for printing, `==` and JSON. No lowering change.
   to a worker over a channel, against a local Python TCP counterpart on port 0.
 - `RUNTIME-TASK-CANCELLED` without `Task.map` (a golden fixture): a task spawns
   a child, sends the child's handle to `main` over a channel, then crashes; the
-  crash cancels the child (§37), and `main`'s `Task.await` on it halts with the
+  crash cancels the child, and `main`'s `Task.await` on it halts with the
   code at its span. The cancel of a parked channel waiter is a case in
   `vm/tests/task_cancel_test.c` (§14.3: a new kind of wait adds its case there).
 - Await cycles: a task that receives its own handle over a channel and awaits it
@@ -858,7 +859,7 @@ earlier plan (decided on 2026-10-12): prelude code over a helper task, a
 capacity-1 channel and two prelude-only builtins (`__task_settled?` and
 `__task_wait`), returning `Result[T]`. That plan needed lambdas (15e) and the
 prelude (15f), which wait for the bootstrap, and it made a timeout an `error`
-next to the `error("task crashed: ...")` of a crashed task (§37) and a
+next to the `error("task crashed: ...")` of a crashed task and a
 `Result[Result[U]]` for a task that returns a `Result`.
 
 Wait for a task's result, but not longer than `timeout_ms`.
@@ -905,7 +906,7 @@ the program, and a user cannot declare one with that name.
 - **A timeout is a normal outcome, so it is not an error.** The result is
   `Await[T]`, not `Result[T]`, because a timeout is not a failure of the task:
   the task is fine, and the answer is "not yet". A dedicated type keeps it apart
-  from a crash (`error("task crashed: ...")` when `T` is a `Result`, §37) and
+  from a crash (`error("task crashed: ...")` when `T` is a `Result`) and
   from the `error` a task returns itself, and it avoids `Result[Result[U]]` for
   a task that returns `Result[U]`: that task gives `Await.Done(ok(5))`,
   `Await.Done(error("..."))` or `Await.TimedOut`, three cases that cannot be
@@ -936,11 +937,13 @@ the program, and a user cannot declare one with that name.
   affected by what happens to the target afterwards: if the target later crashes
   or is cancelled, the caller, which already has its answer, goes on. A crash
   that no await observed stays unobserved (the summary at the end of the run,
-  §37), and a later await observes it as it does today. So a program can wait a
+  cancellation), and a later await observes it as it does today. So a program
+  can wait a
   bit, do other work, and wait again. Stopping the work is `Task.map`'s per-item
   timeout; a public `Task.cancel` stays open (see 27.6).
 - **A settled task never times out.** The call checks whether the target has
-  already settled (ended, or been cancelled, and its owned files closed, §37.5)
+  already settled (ended, or been cancelled, and its owned files closed, handle
+  ownership)
   before it waits, and again when its wait times out; in both cases it returns
   the target's outcome, not a timeout. So a small timeout on a task that is
   done, or that ended while the CPU was busy with other tasks, still gives
@@ -950,7 +953,7 @@ the program, and a user cannot declare one with that name.
   target. "Has it finished?" without any wait is not part of this item.
 - **Errors.** The target's outcome is what the plain `Task.await` gives. If the
   target ends in time, the call returns `Await.Done(v)` (`Await.Done(_)` for a
-  `Task[Void]`). If it crashed (§37) and `T` is a `Result`, the call returns
+  `Task[Void]`). If it crashed and `T` is a `Result`, the call returns
   `Await.Done(error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE"))`; for
   any other `T` the caller halts with `RUNTIME-TASK-CRASHED` at the call. Either
   way the crash is now observed. If the target is cancelled (or was cancelled
@@ -981,7 +984,8 @@ job, `docs/vm/14-core-invariants.md` §14.2), and it needs the target's waiter
 list, which no Agentica code can reach without a helper task. The builtin is two
 entries of the table, `Task.await` with arity 2 and `Task.await_result` with
 arity 2 (lowering picks the second when `T` is a `Result`, as it does for arity
-1, §37.8). No opcode and no format change: the entries are appended to the
+1, the VM design). No opcode and no format change: the entries are appended to
+the
 builtin table.
 
 How the wait works (`docs/vm/10-io-scheduler.md` §10.2.1, "Await with a
@@ -1344,7 +1348,7 @@ results.
   ports, sockets and contextual services carry state. A handle sent over a
   channel stays owned by the task that opened it; the ownership and
   synchronization rules for the others are open.
-- **A diagnostic in a task other than `main`** ends only that task (§37);
+- **A diagnostic in a task other than `main`** ends only that task;
   `Result.error` stays a normal result.
 - **A public `Task.cancel`.** This section cancels only the timed-out items of
   `Task.map`, and a cancel call would be a second way to stop work; returning
@@ -1356,3 +1360,5 @@ results.
 - **`Process.poll_line(p: Process, timeout_ms: Int) -> Result[String]`** may
   come later, so a loop can alternate requests with polling child output. It is
   not part of the task work, and no application has needed it yet.
+
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

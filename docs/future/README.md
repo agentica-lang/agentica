@@ -9,9 +9,9 @@ Sections 19, 21 and 22 are VM implementation proposals, not language changes.
 Sections 20 and 23 add crypto and binary data without changing the grammar;
 logging (§24) is built and lives in the grammar. Sections 25–34 cover Ruby
 idioms, diagnostics, concurrency, VM metrics, TLS, HTTP, BDD, doc comments,
-digit separators and VM values. Sections 36–40
-cover unit tests, crash isolation, value representation, semantic CLI and native
-code. Sections 41–43 cover date/time types, sized numerics and an unscheduled
+digit separators and VM values. Sections 36 and 38–40 cover unit tests, value
+representation, semantic CLI and native code; task crash isolation (§37) is
+built. Sections 41–43 cover date/time types, sized numerics and an unscheduled
 language server. The Files index carries current status; linked sections keep
 requirements, rationale and alternatives.
 
@@ -21,8 +21,8 @@ requirements, rationale and alternatives.
 Each section links to its proposal or current home. Landed and decided notes
 may share [`done.md`](done.md); §6 points to the VM design, §7 to §25.13, and
 §18 records the front-end language decision and the self-hosted bootstrap.
-Sections 1, 5, 8, 11, 12, 21, 24 and 35 have no file of their own: they are
-built or decided, and their content lives in the grammar, `docs/vm/`, the
+Sections 1, 5, 8, 11, 12, 21, 24, 35 and 37 have no file of their own: they
+are built or decided, and their content lives in the grammar, `docs/vm/`, the
 roadmap or §18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md).
 
 - §: 2
@@ -170,12 +170,6 @@ roadmap or §18. §31 (BDD) is built and specified in [`docs/bdd.md`](../bdd.md)
   - File: [`36-unit-tests.md`](36-unit-tests.md)
   - Status: `Test` module done (25a); `agentica test` for test files planned
     (25b)
-
-- §: 37
-  - Title: Task crash isolation
-  - File: [`37-task-crash-isolation.md`](37-task-crash-isolation.md)
-  - Status: Planned (roadmap phase 24, after 7i and 20b); semantics for the
-    owner to review
 
 - §: 38
   - Title: Value representation

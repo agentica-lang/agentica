@@ -13,7 +13,7 @@ and the assertions (`Test.eq`, `Test.ok?`, `Test.error?`, `Test.assert`) return
 writes one report, with the same text, `--ai` and `--json` shapes and the same
 exit codes as BDD. Each test file runs in its own child VM through the BDD
 runner (`docs/bdd.md`, "How a run works"), and each test runs as its own task,
-so with §37 a crash fails only that test.
+so with crash isolation a crash fails only that test.
 
 **Why.** Above all for the self-hosted front end (§18) and the `std/`
 modules, which today are tested only through whole-output golden fixtures.
@@ -116,7 +116,7 @@ Test.assert(condition: Bool, message: String) -> Result[Void]
   task records itself, so no walk is needed), and a test that returns `ok()`
   with a recorded failure fails with the first one. An assertion outside any
   test only returns its `Result`.
-- **Outcome of a test**, in this order: a crash (§37) gives that diagnostic;
+- **Outcome of a test**, in this order: a crash gives that diagnostic;
   else the first recorded failure gives `RUNTIME-TEST-ASSERTION` with the
   assertion's span, `expected` and `actual` (`Test.assert`: the message, no
   expected or actual); else an `error(m)` the block returned itself gives
@@ -127,7 +127,7 @@ Test.assert(condition: Bool, message: String) -> Result[Void]
 - **Tasks in a test.** A test may spawn tasks. When it returns, `Test.run`
   checks that its descendants have ended (`RUNTIME-TEST-PENDING-TASKS`, then
   they are cancelled with 20b's core, so the next test starts clean) and that
-  none of them crashed unobserved (`Task.unobserved_crash`, §37.4:
+  none of them crashed unobserved (`Task.unobserved_crash`, unobserved crashes:
   `RUNTIME-TASK-CRASHED` with the crash's text, so its code and span stay in the
   report). Reporting a crash observes it, so the next tests of the file do not
   fail with the same crash. (As built in 25a: the pending check is made when the
@@ -138,7 +138,8 @@ Test.assert(condition: Bool, message: String) -> Result[Void]
   outside every test, such as one in a task `main` started before `Test.run`, is
   not any test's: when stdin ends in run mode, and after a list, `Test.run` ends
   the run as a return from `main` would, so such a crash prints the summary line
-  of §37.4 and the child exits 1. `Test.run` inside a test, or while another
+  of the unobserved-crash rule and the child exits 1. `Test.run` inside a test,
+  or while another
   `Test.run` serves the runner, is `RUNTIME-TEST-RUN`.)
 
 ### 36.4 Why a builtin module, not a `std/` module
@@ -223,15 +224,18 @@ checks compare with `Test.eq` and put the same inspect texts in their records,
 so the report quotes neither kind again; an undefined step's `actual` is the
 step text's inspect form.)
 
-**With §37:** a crash in a test ends only its task. `Test.run` reports it as
+**With crash isolation:** a crash in a test ends only its task. `Test.run`
+reports it as
 that test's failure, with the crash's code and span, and goes on. A crash
 outside the tests (in `main` before `Test.run`), a step limit, a `System.exit`
 or the deadline ends the child: the current test fails with that diagnostic
 (`RUNTIME-BDD-PREMATURE-EXIT`, `RUNTIME-STEP-LIMIT`, `RUNTIME-TEST-TIMEOUT`),
 and the rest of the file is `not_executed`.
 
-**Without §37,** any crash in a test ends the child the same way. §36 could ship
-first with that weaker isolation; the decided order puts §37 first, which is the
+**Without crash isolation,** any crash in a test ends the child the same way.
+§36 could ship
+first with that weaker isolation; the decided order puts crash isolation first,
+which is the
 recommendation, so one bug does not hide the rest of the file.
 
 **Timeouts.** Each test has 30 seconds from the moment its index is sent. This
@@ -280,7 +284,7 @@ or with the others.
   so the overflow was the running test's unread stdout, and that test fails with
   `RUNTIME-BDD-OUTPUT-LIMIT`. Only the VM's own lines (a `--json` diagnostic, a
   task crash line, the unobserved summary, of exactly their shapes) are taken
-  out of the shown stderr; other JSON a program writes stays. The §37 crash
+  out of the shown stderr; other JSON a program writes stays. The crash
   lines (`"task": true`) are not shown again, since the crash is already the
   test's error.
 - Stdin and stdout belong to the test. As built (25c): the protocol runs on the
@@ -323,7 +327,8 @@ or with the others.
 ### 36.9 Order
 
 - Decided by the owner on 2026-10-13: 7i (delete the evaluator and the builtin
-  `HTTP` module) → 20b → §37 (phase 24) → §36 (phase 25) → 20c → 22 → 23.
+  `HTTP` module) → 20b → crash isolation (phase 24) → §36 (phase 25) → 20c →
+22 → 23.
   VM-only, like every feature after 7i.
 - **First users,** in the same phase: unit tests for `std/queue` and
   `std/http`'s pure helpers in `tests/std/`, run by a rackunit test through
@@ -343,7 +348,8 @@ discovery and the report of this section, not `Test`.
   `try` is the one way to stop early.
 - **Tests in the runner's own VM:** user code would run in the process that
   writes the report.
-- **A child VM per test:** one VM start per test; with §37 a task per test is
+- **A child VM per test:** one VM start per test; with crash isolation a task
+  per test is
   enough.
 - **`describe`, `setup` and tags:** not needed yet; a helper function does what
   `setup` does.

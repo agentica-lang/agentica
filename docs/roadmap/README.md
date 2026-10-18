@@ -101,7 +101,7 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 7.2.1
   - **Next work:** **Complete:** HTTP 20b (the task cancellation core, done),
     then task crash isolation ([phase 24](24-task-crash-isolation.md),
-    [§37](../future/37-task-crash-isolation.md#37-task-crash-isolation): a crash
+    crash isolation (phase 24): a crash
     in a task other than `main` ends only that task; it needs 20b; done), then
     unit tests ([phase 25](25-unit-tests.md),
     [§36](../future/36-unit-tests.md#36-unit-tests-test): the builtin `Test`
@@ -234,7 +234,7 @@ after them may run in parallel when needed and keep their relative order.
     and list modes) use it, and the VM dropped 25b's token, reserved stdin,
     private fd 0 and `mid_line` with `agc_write_record`; then one
     handle-ownership rule (**done**, [24b](24-task-crash-isolation.md),
-    [§37.5][agentica-link-3],
+    [handle ownership][task-rules],
     §14.5): a handle belongs to the task that opened it, is closed when that
     task ends, and moves to another task only explicitly, with
     `Task.spawn_owning`, replacing three mechanisms (the spawn move,
@@ -1117,7 +1117,7 @@ Planned syntax is in [`docs/future/`](../future/README.md).
 
 [agentica-link-1]: ../future/27-iteration-and-concurrency.md
 [agentica-link-2]: ../future/36-unit-tests.md
-[agentica-link-3]: ../future/37-task-crash-isolation.md
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
 [agentica-link-4]: ../future/30-hybrid-http.md
 [agentica-link-5]: pending-general-programming-and-mcp.md
 [grammar-defaults]: ../grammar/06-semantics.md#default-parameter-values

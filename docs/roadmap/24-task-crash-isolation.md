@@ -1,18 +1,19 @@
 ## Phase 24: Task crash isolation
 
-Specified in [`docs/future/37-task-crash-isolation.md` section
-37](../future/37-task-crash-isolation.md#37-task-crash-isolation). Phase 24 is
-VM work with a small language change: a runtime error in a task other than
+The semantics are in the grammar's task section
+([`06c-tasks-and-tests.md`][task-rules]).
+This file is the implementation record. Phase 24 is VM work with a small
+language change: a runtime error in a task other than
 `main` ends only that task. Its place in the order is row 7.1 of the
 [roadmap](README.md). It has one PR, with its own tests and docs. The semantics
 are a proposal for the owner to review.
 
-- [x] **24a: crashes end only their task (§37.3 to §37.8).**
+- [x] **24a: crashes end only their task.**
   - **VM:**
     - `agc_vm_run` (`vm/task.c`) sets the failure target once per turn; a fatal
       outcome (a crash in `main`, `RUNTIME-STEP-LIMIT`, `RUNTIME-INTERNAL`, an
       exit) ends the run as today, anything else crashes the current task;
-    - the crash, in the order of §37.8: finish the turn, store and print the
+    - the crash, in this order: finish the turn, store and print the
       diagnostic (text, `--ai`, `--json` with `"task": true`), cancel the
       descendants (20b's `agc_task_cancel`), close the owned handles and
       channels by kind, pass on a `next_owner` turn, wake the awaiters;
@@ -21,7 +22,7 @@ are a proposal for the owner to review.
       as the `Task.spawn` argument moves to the new task (nested ones and
       channels do not; replaced in 24b by `Task.spawn_owning`); `HttpClient`
       exempt;
-    - the close per kind (§37.5): mark closing and wake every lock waiter with
+    - the close per kind: mark closing and wake every lock waiter with
       the closed error; files by an `OP_CLOSE` pool job, pending while a job
       holds them (run by `agc_io_finish`, or where 20b releases a detached
       holder); sockets, listeners and TLS by `disown`; processes by
@@ -63,7 +64,7 @@ are a proposal for the owner to review.
       on stderr carry the fixture's absolute path, so the golden harness
       replaces the fixture directory with a fixed token before it compares
       stderr.
-  - **New tests:** §37.11.
+  - **New tests:** the crash tests below.
   - **Docs:**
     - `docs/grammar.md` (Lightweight tasks; the new code);
     - the programming skill (`references/tasks.md`, `references/diagnostics.md`,
@@ -75,7 +76,7 @@ are a proposal for the owner to review.
   - **Done.** As built:
     - `agc_vm_run` runs each turn under its own `setjmp` (`vm->turn`, used while
       `vm->in_turn`); a crash in a task other than `main` goes through `crash`
-      in `vm/task.c`, in the order of §37.8. The second await entry is
+      in `vm/task.c`, in the order above. The second await entry is
       `Task.await_result`, picked by `src/lower.rkt` when the checker's type of
       the call is a `Result`.
     - Owners: `agc_own` records the task that made a file (`vm/files.c`), a
@@ -105,7 +106,8 @@ are a proposal for the owner to review.
       `tests/test_process.py` ("every way a run ends") now awaits its crashing
       task and expects `RUNTIME-TASK-CRASHED`; `vm/tests/task_cancel_test.c` now
       expects a task that awaits a cancelled task to crash. These cases of
-      §37.11 were left out by the owner's rule (only the tests that prove "Done
+      the spec's tests were left out by the owner's rule (only the tests that
+      prove "Done
       when"): the separate stderr lines in `--ai` and plain beyond the harness
       check, a non-`Result` await from another task (that task crashes in turn),
       two awaits of one crashed task (one parked before the crash), the
@@ -118,7 +120,7 @@ are a proposal for the owner to review.
       tests (the `next_owner` hand-on, the pending file close with an attached
       and a detached holder, the subtree cleanup) and the latency case with
       10,000 descendants and 1,000 files.
-    - **Cost (departs from §37.8):** the cancel of the descendants and the
+    - **Cost (the design was trimmed):** the cancel of the descendants and the
       closes are not charged to any turn. `agc_task_cancel` charges the task
       that calls it, here the crashed task, whose turn has already ended; the
       descendants were paid for when they were spawned.
@@ -156,7 +158,7 @@ are a proposal for the owner to review.
 diagnostic and makes the run exit 1, a crash in `examples/tcp_echo.agc`'s `echo`
 closes only its socket (through the explicit hand-off of 24b,
 `Task.spawn_owning`; 24a did it with a spawn move), and the fixtures and the
-existing latency test (`make vm-latency`) pass. The latency case of §37.11 was
+existing latency test (`make vm-latency`) pass. The latency case was
 dropped (see "Done").
 
 - [x] **24b: one handle-ownership rule
@@ -182,10 +184,10 @@ dropped (see "Done").
   now expects the descriptor to stay open until `agc_io_close`, expects it
   closed at once. One PR. Decided by the owner on 2026-10-13: ownership decides
   who closes a handle, not who may use it, so shared use stays as
-  [§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends)
+  [the handle rules][task-rules]
   "Shared handles" says, and `HttpClient` stays exempt.
   - **Spec first:** the one explicit hand-off form (for example a builtin that
-    gives a handle the caller owns to a task it spawned) in §37.5, and
+    gives a handle the caller owns to a task it spawned), and
     `HttpWire.spawn` in `docs/vm/10-io-http.md` §10.7.2 described as a use of
     it. Behavior changes: a handle opened in a helper task and returned through
     `Task.await` is closed when the helper ends unless it is handed over; a
@@ -203,7 +205,8 @@ dropped (see "Done").
   - **Programs:** `examples/tcp_echo.agc` (its `Task.spawn(&echo, connection)`)
     switches to the explicit form; so does `std/http`'s server through
     `HttpWire.spawn`.
-  - **Docs:** §37.5, `docs/vm/10-io-http.md` §10.7.2, §10.2.1 "Owners",
+  - **Docs:** the grammar's task section, `docs/vm/10-io-http.md` §10.7.2,
+    §10.2.1 "Owners",
     [§14.5](../vm/14-core-invariants.md#145-handles) (the target becomes as
     built), `docs/grammar.md`, the programming skill (`references/tasks.md`,
     `references/network.md`), the site page of `Task`, the development skill.
@@ -214,7 +217,7 @@ dropped (see "Done").
     `tcp-crash-delegate.agc`, which rely on the spawn move and `agc_give_owned`,
     switch to the explicit form.
   - **Done.** As built (spec in
-[§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends)):
+[the handle rules][task-rules]):
     - The one hand-off is the builtin `Task.spawn_owning(&f, handle)`
       (`Task.spawn` plus the hand-off of a handle the caller owns, in one call).
       The checker accepts only a handle type as its argument (`FileHandle`,
@@ -288,7 +291,7 @@ dropped (see "Done").
       their handles in the task that uses them.
 
 - [x] **24c: a channel can have an owner
-([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends),
+([the handle rules][task-rules],
   [§14.5](../vm/14-core-invariants.md#145-handles)).** Decided by the owner on
   2026-10-14. `Task.spawn_owning(&f, ch)` makes the spawned task the owner of a
   `Channel`. When that task ends in any way (return, crash, cancel),
@@ -300,7 +303,7 @@ dropped (see "Done").
   is closed only by `Channel.close`, which any task may still call on an owned
   channel. Plain `Task.spawn` moves nothing. Erlang monitors and links are not
   added, and several producers on one channel keep the coordinator pattern
-  (§37.7).
+  (the task rules).
   - **Done.**
     - The checker accepts `Channel[T]` as the handle argument of
       `Task.spawn_owning` (`src/checker.rkt`); any other non-handle type is
@@ -317,3 +320,5 @@ dropped (see "Done").
       does not close, a close from a non-owner, hand-on by the owner, and the
       `RUNTIME-HANDLE-NOT-OWNED` cases); a checker case for `Channel` accepted
       and a non-handle still `CHECK-NOT-A-HANDLE`.
+
+[task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
