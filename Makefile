@@ -52,7 +52,7 @@ TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency, make vm-task-map): a directory in TESTS does not pick them up
 PY_ALONE = tests/test_vm_latency.py tests/test_vm_task_map.py
-ISOLATED_PY_TESTS = tests/test_vm_os_remove.py tests/test_bdd_cleanup.py tests/test_windows_remove_refusal.py
+ISOLATED_PY_TESTS = tests/test_vm_os_remove.py tests/test_bdd_cleanup.py tests/test_windows_filesystem_safety.py
 PY_ISOLATED_SELECTED = $(filter $(ISOLATED_PY_TESTS),$(PY_FILES))
 PY_TESTS = $(sort $(filter-out $(ISOLATED_PY_TESTS),$(PY_FILES)) $(filter-out $(PY_ALONE) $(ISOLATED_PY_TESTS),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
 # A file that is not tests/test_<area>.py (a file of another kind, or a .py file elsewhere) would build a wrong module name below

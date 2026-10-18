@@ -7,6 +7,7 @@
 
 #ifdef _WIN32
 #include <errno.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <io.h>
 #include <string.h>
@@ -15,12 +16,23 @@
 #include <uv.h>
 #include <windows.h>
 #include <aclapi.h>
+#include <winternl.h>
+
+typedef NTSTATUS (NTAPI *remove_nt_create_file_fn)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK,
+                                                   PLARGE_INTEGER, ULONG, ULONG, ULONG, ULONG, PVOID, ULONG);
+typedef ULONG (NTAPI *remove_nt_status_to_error_fn)(NTSTATUS);
 
 typedef struct {
   TOKEN_USER *user;
   PACL acl;
   SECURITY_DESCRIPTOR descriptor;
 } private_security;
+
+typedef struct {
+  remove_nt_create_file_fn create_file;
+  remove_nt_status_to_error_fn status_to_error;
+  char **failed;
+} remove_state;
 
 void agc_fs_set_error(int result) {
   switch (result) {
@@ -276,6 +288,17 @@ int agc_fs_take_channel(int fd) {
 
 #define REMOVE_MAX_DEPTH 128u
 #define REMOVE_MAX_PASSES 64u
+#define REMOVE_ENUM_BYTES 65536u
+
+static void remove_failed_path(char **failed, const wchar_t *path) {
+  if (!failed || *failed) return;
+  int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, path, -1, NULL, 0, NULL, NULL);
+  char *text = size ? malloc((size_t)size) : NULL;
+  if (text && WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, path, -1, text, size, NULL, NULL))
+    *failed = text;
+  else
+    free(text);
+}
 
 static void close_handles(HANDLE *handles, size_t count) {
   while (count) CloseHandle(handles[--count]);
@@ -289,106 +312,173 @@ static int remove_handle(HANDLE file) {
   return errno;
 }
 
-static int remove_object(const wchar_t *path, unsigned depth, unsigned *passes);
-
-static int remove_directory(HANDLE directory, const wchar_t *path, unsigned depth, unsigned *passes) {
-  if (depth >= REMOVE_MAX_DEPTH) {
-    CloseHandle(directory);
-    return AGC_FS_REMOVE_TOO_DEEP;
-  }
-  for (unsigned attempt = 0; attempt < REMOVE_MAX_PASSES; attempt++) {
-    size_t path_len = wcslen(path);
-    wchar_t *pattern = malloc((path_len + 3) * sizeof(wchar_t));
-    if (!pattern) { CloseHandle(directory); errno = ENOMEM; return ENOMEM; }
-    memcpy(pattern, path, path_len * sizeof(wchar_t));
-    pattern[path_len] = L'\\';
-    pattern[path_len + 1] = L'*';
-    pattern[path_len + 2] = 0;
-    WIN32_FIND_DATAW entry;
-    HANDLE find = FindFirstFileW(pattern, &entry);
-    DWORD error = find == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
-    free(pattern);
-    if (find == INVALID_HANDLE_VALUE) {
-      CloseHandle(directory);
-      agc_fs_set_error(uv_translate_sys_error((int)error));
-      return errno;
-    }
-    unsigned removed = 0;
-    do {
-      if ((entry.cFileName[0] == L'.' && entry.cFileName[1] == 0) ||
-          (entry.cFileName[0] == L'.' && entry.cFileName[1] == L'.' && entry.cFileName[2] == 0)) continue;
-      if (++*passes > 1000000u) {
-        FindClose(find);
-        CloseHandle(directory);
-        errno = E2BIG;
-        return E2BIG;
-      }
-      size_t child_len = path_len + wcslen(entry.cFileName) + 2;
-      wchar_t *child = malloc(child_len * sizeof(wchar_t));
-      if (!child) {
-        FindClose(find);
-        CloseHandle(directory);
-        errno = ENOMEM;
-        return ENOMEM;
-      }
-      memcpy(child, path, path_len * sizeof(wchar_t));
-      child[path_len] = L'\\';
-      wcscpy(child + path_len + 1, entry.cFileName);
-      int rc = remove_object(child, depth + 1, passes);
-      free(child);
-      if (rc != 0) {
-        FindClose(find);
-        CloseHandle(directory);
-        return rc;
-      }
-      removed++;
-    } while (FindNextFileW(find, &entry));
-    error = GetLastError();
-    FindClose(find);
-    if (error != ERROR_NO_MORE_FILES) {
-      CloseHandle(directory);
-      agc_fs_set_error(uv_translate_sys_error((int)error));
-      return errno;
-    }
-    if (remove_handle(directory) == 0) {
-      CloseHandle(directory);
-      return 0;
-    }
-    if (errno != ENOTEMPTY || removed == 0) {
-      CloseHandle(directory);
-      return errno;
-    }
-  }
-  CloseHandle(directory);
-  errno = EBUSY;
-  return EBUSY;
+static int remove_nt_error(remove_state *state, NTSTATUS status) {
+  ULONG error = state->status_to_error(status);
+  if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) errno = ENOENT;
+  else agc_fs_set_error(uv_translate_sys_error((int)error));
+  return errno;
 }
 
-static int remove_object(const wchar_t *path, unsigned depth, unsigned *passes) {
-  HANDLE file = CreateFileW(path, DELETE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
-  if (file == INVALID_HANDLE_VALUE) {
-    DWORD error = GetLastError();
-    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) return 0;
-    agc_fs_set_error(uv_translate_sys_error((int)error));
-    return errno;
+static HANDLE remove_open_relative(remove_state *state, HANDLE parent, const wchar_t *name, size_t length,
+                                   bool directory, bool list_directory, bool delete_access) {
+  if (!length || length > USHRT_MAX / sizeof(wchar_t)) { errno = ENAMETOOLONG; return INVALID_HANDLE_VALUE; }
+  UNICODE_STRING object_name = {
+    .Length = (USHORT)(length * sizeof(wchar_t)),
+    .MaximumLength = (USHORT)(length * sizeof(wchar_t)),
+    .Buffer = (PWSTR)name,
+  };
+  OBJECT_ATTRIBUTES attributes;
+  InitializeObjectAttributes(&attributes, &object_name, OBJ_CASE_INSENSITIVE, parent, NULL);
+  IO_STATUS_BLOCK status_block = {0};
+  HANDLE file = INVALID_HANDLE_VALUE;
+  ACCESS_MASK access = FILE_READ_ATTRIBUTES | SYNCHRONIZE;
+  ULONG options = FILE_OPEN_FOR_BACKUP_INTENT | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT;
+  if (delete_access) access |= DELETE;
+  if (directory) { access |= FILE_TRAVERSE; options |= FILE_DIRECTORY_FILE; }
+  if (list_directory) access |= FILE_LIST_DIRECTORY;
+  NTSTATUS status = state->create_file(&file, access, &attributes, &status_block, NULL, FILE_ATTRIBUTE_NORMAL,
+                                        FILE_SHARE_READ, FILE_OPEN, options, NULL, 0);
+  if (status < 0) {
+    remove_nt_error(state, status);
+    return INVALID_HANDLE_VALUE;
   }
+  return file;
+}
+
+static bool remove_file_info(HANDLE file, BY_HANDLE_FILE_INFORMATION *info) {
+  if (GetFileType(file) != FILE_TYPE_DISK) { errno = EINVAL; return false; }
+  if (GetFileInformationByHandle(file, info)) return true;
+  DWORD error = GetLastError();
+  agc_fs_set_error(uv_translate_sys_error((int)error));
+  return false;
+}
+
+static uint64_t remove_file_id(const BY_HANDLE_FILE_INFORMATION *info) {
+  return ((uint64_t)info->nFileIndexHigh << 32) | info->nFileIndexLow;
+}
+
+static bool remove_valid_component(const wchar_t *name, size_t length) {
+  if (!length || (length == 1 && name[0] == L'.') ||
+      (length == 2 && name[0] == L'.' && name[1] == L'.')) return false;
+  for (size_t i = 0; i < length; i++)
+    if (!name[i] || name[i] == L'\\' || name[i] == L'/' || name[i] == L':') return false;
+  return true;
+}
+
+static wchar_t *remove_child_path(const wchar_t *parent, const wchar_t *name, size_t name_length) {
+  size_t parent_length = wcslen(parent);
+  bool separator = parent_length && parent[parent_length - 1] != L'\\';
+  if (parent_length > SIZE_MAX - name_length - (separator ? 2u : 1u)) { errno = ENOMEM; return NULL; }
+  size_t length = parent_length + name_length + (separator ? 1u : 0u) + 1u;
+  wchar_t *path = malloc(length * sizeof(wchar_t));
+  if (!path) { errno = ENOMEM; return NULL; }
+  memcpy(path, parent, parent_length * sizeof(wchar_t));
+  size_t at = parent_length;
+  if (separator) path[at++] = L'\\';
+  memcpy(path + at, name, name_length * sizeof(wchar_t));
+  path[at + name_length] = 0;
+  return path;
+}
+
+static bool remove_valid_entry_name(const FILE_ID_BOTH_DIR_INFO *entry) {
+  if (!entry->FileNameLength || entry->FileNameLength % sizeof(wchar_t)) return false;
+  size_t length = entry->FileNameLength / sizeof(wchar_t);
+  if ((length == 1 && entry->FileName[0] == L'.') ||
+      (length == 2 && entry->FileName[0] == L'.' && entry->FileName[1] == L'.')) return true;
+  return remove_valid_component(entry->FileName, length);
+}
+
+static int remove_tree_entry(remove_state *state, HANDLE parent, const wchar_t *name, size_t name_length,
+                             const wchar_t *display_path, unsigned depth, uint64_t expected_id, bool check_id) { // NOLINT(misc-no-recursion)
+  HANDLE file = remove_open_relative(state, parent, name, name_length, false, false, true);
+  if (file == INVALID_HANDLE_VALUE) return errno == ENOENT ? 0 : errno;
+  int result = 0;
+  unsigned char *buffer = NULL;
   BY_HANDLE_FILE_INFORMATION info;
-  if (GetFileType(file) != FILE_TYPE_DISK || !GetFileInformationByHandle(file, &info)) {
-    DWORD error = GetLastError();
-    CloseHandle(file);
-    agc_fs_set_error(uv_translate_sys_error((int)error));
-    return errno;
+  if (!remove_file_info(file, &info)) { result = errno; goto done; }
+  if (check_id && remove_file_id(&info) != expected_id) { result = EBUSY; goto done; }
+  bool directory = (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+  bool reparse = (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+  if (!directory || reparse) {
+    result = remove_handle(file);
+    goto done;
   }
-  if ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
-    return remove_directory(file, path, depth, passes);
-  int rc = remove_handle(file);
+  if (depth >= REMOVE_MAX_DEPTH) { result = AGC_FS_REMOVE_TOO_DEEP; goto done; }
+  HANDLE directory_handle = remove_open_relative(state, parent, name, name_length, true, true, true);
+  if (directory_handle == INVALID_HANDLE_VALUE) { result = errno; goto done; }
+  BY_HANDLE_FILE_INFORMATION directory_info;
+  if (!remove_file_info(directory_handle, &directory_info)) {
+    result = errno;
+    CloseHandle(directory_handle);
+    goto done;
+  }
+  if (remove_file_id(&directory_info) != remove_file_id(&info) ||
+      (directory_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+    result = EBUSY;
+    CloseHandle(directory_handle);
+    goto done;
+  }
   CloseHandle(file);
-  return rc;
-}
-
-static bool path_missing_error(DWORD error) {
-  return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+  file = directory_handle;
+  buffer = malloc(REMOVE_ENUM_BYTES);
+  if (!buffer) { result = ENOMEM; goto done; }
+  for (unsigned attempt = 0; attempt < REMOVE_MAX_PASSES; attempt++) {
+    bool restart = true;
+    unsigned removed = 0;
+    for (;;) {
+      FILE_INFO_BY_HANDLE_CLASS info_class = restart ? FileIdBothDirectoryRestartInfo : FileIdBothDirectoryInfo;
+      if (!GetFileInformationByHandleEx(file, info_class, buffer, REMOVE_ENUM_BYTES)) {
+        DWORD error = GetLastError();
+        if (error == ERROR_NO_MORE_FILES) break;
+        agc_fs_set_error(uv_translate_sys_error((int)error));
+        result = errno;
+        goto done;
+      }
+      restart = false;
+      size_t offset = 0;
+      for (;;) {
+        size_t header = offsetof(FILE_ID_BOTH_DIR_INFO, FileName);
+        if (offset > REMOVE_ENUM_BYTES - header) { result = EIO; goto done; }
+        FILE_ID_BOTH_DIR_INFO *entry = (FILE_ID_BOTH_DIR_INFO *)(buffer + offset);
+        size_t remaining = REMOVE_ENUM_BYTES - offset;
+        if (entry->FileNameLength > remaining - header || !remove_valid_entry_name(entry)) {
+          result = EIO;
+          goto done;
+        }
+        size_t name_length = entry->FileNameLength / sizeof(wchar_t);
+        bool dot = name_length == 1 && entry->FileName[0] == L'.';
+        bool dotdot = name_length == 2 && entry->FileName[0] == L'.' && entry->FileName[1] == L'.';
+        if (!dot && !dotdot) {
+          wchar_t *child_path = remove_child_path(display_path, entry->FileName, name_length);
+          if (!child_path) { result = errno; goto done; }
+          uint64_t expected_id = (uint64_t)entry->FileId.QuadPart;
+          result = remove_tree_entry(state, file, entry->FileName, name_length, child_path, depth + 1,
+                                     expected_id, true);
+          free(child_path);
+          if (result != 0) goto done;
+          removed++;
+        }
+        if (!entry->NextEntryOffset) break;
+        if (entry->NextEntryOffset < header + entry->FileNameLength || entry->NextEntryOffset > remaining ||
+            entry->NextEntryOffset % sizeof(ULONG)) {
+          result = EIO;
+          goto done;
+        }
+        offset += entry->NextEntryOffset;
+      }
+    }
+    result = remove_handle(file);
+    if (result == 0) goto done;
+    if (errno != ENOTEMPTY || removed == 0) { result = errno; goto done; }
+  }
+  result = EBUSY;
+done:
+  if (result != 0) remove_failed_path(state->failed, display_path);
+  free(buffer);
+  CloseHandle(file);
+  if (result == AGC_FS_REMOVE_TOO_DEEP) return result;
+  if (result != 0 && result != errno) errno = result;
+  return result;
 }
 
 int agc_fs_remove_tree(const char *path, char **failed) {
@@ -397,94 +487,155 @@ int agc_fs_remove_tree(const char *path, char **failed) {
   if (!wide) return errno;
   for (wchar_t *p = wide; *p; p++) if (*p == L'/') *p = L'\\';
   size_t length = wcslen(wide);
-  if (length < 4 || wide[1] != L':' || wide[2] != L'\\' ||
-      ((wide[0] < L'A' || wide[0] > L'Z') && (wide[0] < L'a' || wide[0] > L'z')) ||
-      wide[length - 1] == L'\\') {
+  bool drive_path = length >= 3 && wide[1] == L':' && wide[2] == L'\\' &&
+                    ((wide[0] >= L'A' && wide[0] <= L'Z') || (wide[0] >= L'a' && wide[0] <= L'z'));
+  bool unc_path = length >= 5 && wide[0] == L'\\' && wide[1] == L'\\';
+  if (wide[length - 1] == L'\\' || (!drive_path && !unc_path)) {
     free(wide);
     errno = EINVAL;
     return AGC_FS_REMOVE_REFUSED;
   }
-  wchar_t drive_root[] = {wide[0], L':', L'\\', 0};
-  HANDLE volume = CreateFileW(drive_root, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                              NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-  if (volume == INVALID_HANDLE_VALUE) {
+
+  HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+  remove_nt_create_file_fn create_file = ntdll ? (remove_nt_create_file_fn)GetProcAddress(ntdll, "NtCreateFile") : NULL;
+  remove_nt_status_to_error_fn status_to_error =
+      ntdll ? (remove_nt_status_to_error_fn)GetProcAddress(ntdll, "RtlNtStatusToDosError") : NULL;
+  if (!create_file || !status_to_error) {
+    free(wide);
+    errno = ENOSYS;
+    return ENOSYS;
+  }
+  remove_state state = {.create_file = create_file, .status_to_error = status_to_error, .failed = failed};
+
+  size_t root_prefix;
+  HANDLE root;
+  if (drive_path) {
+    wchar_t drive_root[] = {wide[0], L':', L'\\', 0};
+    root = CreateFileW(drive_root, FILE_TRAVERSE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                       FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    root_prefix = 3;
+  } else {
+    wchar_t *server_end = wcschr(wide + 2, L'\\');
+    wchar_t *share_end = server_end ? wcschr(server_end + 1, L'\\') : NULL;
+    if (!server_end || server_end == wide + 2 || server_end[1] == 0 || server_end[1] == L'\\') {
+      free(wide);
+      errno = EINVAL;
+      return AGC_FS_REMOVE_REFUSED;
+    }
+    if (!share_end) {
+      free(wide);
+      errno = EINVAL;
+      return AGC_FS_REMOVE_REFUSED;
+    }
+    if (share_end == server_end + 1 || !share_end[1]) {
+      free(wide);
+      errno = EINVAL;
+      return AGC_FS_REMOVE_REFUSED;
+    }
+    wchar_t saved = *share_end;
+    *share_end = 0;
+    root = CreateFileW(wide, FILE_TRAVERSE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                       FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    *share_end = saved;
+    root_prefix = (size_t)(share_end + 1 - wide);
+  }
+  if (root == INVALID_HANDLE_VALUE) {
     DWORD error = GetLastError();
     free(wide);
-    if (path_missing_error(error)) return 0;
     agc_fs_set_error(uv_translate_sys_error((int)error));
     return errno;
   }
-  DWORD needed = GetFinalPathNameByHandleW(volume, NULL, 0, FILE_NAME_NORMALIZED | VOLUME_NAME_GUID);
-  wchar_t *root = needed ? malloc(((size_t)needed + 1) * sizeof(wchar_t)) : NULL;
-  DWORD written = root ? GetFinalPathNameByHandleW(volume, root, needed + 1, FILE_NAME_NORMALIZED | VOLUME_NAME_GUID) : 0;
-  DWORD error = GetLastError();
-  CloseHandle(volume);
-  if (!written || written > needed) {
-    free(root);
+  BY_HANDLE_FILE_INFORMATION root_info;
+  if (!remove_file_info(root, &root_info)) {
+    int error = errno;
+    CloseHandle(root);
     free(wide);
-    if (!needed) { agc_fs_set_error(uv_translate_sys_error((int)error)); return errno; }
-    errno = ENOMEM;
-    return ENOMEM;
+    return error;
   }
-  size_t root_len = wcslen(root);
-  size_t suffix_len = length - 3;
-  wchar_t *canonical = malloc((root_len + suffix_len + 2) * sizeof(wchar_t));
-  if (!canonical) { free(root); free(wide); errno = ENOMEM; return ENOMEM; }
-  memcpy(canonical, root, root_len * sizeof(wchar_t));
-  if (root_len && canonical[root_len - 1] != L'\\') canonical[root_len++] = L'\\';
-  memcpy(canonical + root_len, wide + 3, (suffix_len + 1) * sizeof(wchar_t));
-  free(root);
-  free(wide);
-  size_t canonical_len = wcslen(canonical);
-  size_t root_prefix = root_len;
-  if (root_prefix && canonical[root_prefix - 1] != L'\\') root_prefix++;
-  wchar_t *last_sep = wcsrchr(canonical, L'\\');
-  if (!last_sep || !last_sep[1] || root_prefix > canonical_len) {
-    free(canonical);
+  if (!(root_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+      (root_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+    CloseHandle(root);
+    free(wide);
+    errno = ELOOP;
+    return ELOOP;
+  }
+
+  size_t capacity = length + 1;
+  HANDLE *parents = calloc(capacity, sizeof(HANDLE));
+  if (!parents) { CloseHandle(root); free(wide); errno = ENOMEM; return ENOMEM; }
+  size_t parent_count = 1;
+  parents[0] = root;
+  wchar_t *last_sep = wcsrchr(wide, L'\\');
+  if (!last_sep || !last_sep[1] || (size_t)(last_sep + 1 - wide) < root_prefix) {
+    close_handles(parents, parent_count);
+    free(parents);
+    free(wide);
+    errno = EINVAL;
     return AGC_FS_REMOVE_REFUSED;
   }
-  size_t max_handles = canonical_len + 1;
-  HANDLE *parents = calloc(max_handles, sizeof(HANDLE));
-  if (!parents) { free(canonical); errno = ENOMEM; return ENOMEM; }
-  size_t parent_count = 0;
-  /* Keep every ordinary ancestor open without write/delete sharing. */
-  wchar_t *scan = canonical + root_prefix;
-  wchar_t *final_start = last_sep + 1;
-  while (scan < final_start) {
-    wchar_t *sep = wcschr(scan, L'\\');
-    if (!sep || sep >= final_start) break;
-    wchar_t saved = *sep;
-    *sep = 0;
-    HANDLE parent = CreateFileW(canonical, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
-    *sep = saved;
-    if (parent == INVALID_HANDLE_VALUE) {
-      error = GetLastError();
+  wchar_t *component = wide + root_prefix;
+  while (component < last_sep) {
+    wchar_t *separator = wcschr(component, L'\\');
+    if (!separator || separator > last_sep || separator == component) {
       close_handles(parents, parent_count);
       free(parents);
-      free(canonical);
-      if (path_missing_error(error)) return 0;
-      agc_fs_set_error(uv_translate_sys_error((int)error));
-      return errno;
+      free(wide);
+      errno = EINVAL;
+      return AGC_FS_REMOVE_REFUSED;
+    }
+    size_t component_length = (size_t)(separator - component);
+    if (!remove_valid_component(component, component_length)) {
+      close_handles(parents, parent_count);
+      free(parents);
+      free(wide);
+      errno = EINVAL;
+      return AGC_FS_REMOVE_REFUSED;
+    }
+    HANDLE parent = remove_open_relative(&state, parents[parent_count - 1], component, component_length, true, false, false);
+    if (parent == INVALID_HANDLE_VALUE) {
+      int error = errno;
+      close_handles(parents, parent_count);
+      free(parents);
+      free(wide);
+      if (error == ENOENT) return 0;
+      return error;
     }
     BY_HANDLE_FILE_INFORMATION info;
-    if (!GetFileInformationByHandle(parent, &info) || !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
-        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+    if (!remove_file_info(parent, &info)) {
+      int error = errno;
+      remove_failed_path(failed, wide);
       CloseHandle(parent);
       close_handles(parents, parent_count);
       free(parents);
-      free(canonical);
+      free(wide);
+      return error;
+    }
+    if (!(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+      remove_failed_path(failed, wide);
+      CloseHandle(parent);
+      close_handles(parents, parent_count);
+      free(parents);
+      free(wide);
       errno = ELOOP;
-      return errno;
+      return ELOOP;
     }
     parents[parent_count++] = parent;
-    scan = sep + 1;
+    component = separator + 1;
   }
-  unsigned passes = 0;
-  int rc = remove_object(canonical, 0, &passes);
+  size_t target_length = wcslen(last_sep + 1);
+  if (!remove_valid_component(last_sep + 1, target_length)) {
+    close_handles(parents, parent_count);
+    free(parents);
+    free(wide);
+    errno = EINVAL;
+    return AGC_FS_REMOVE_REFUSED;
+  }
+  int rc = remove_tree_entry(&state, parents[parent_count - 1], last_sep + 1, target_length, wide, 0, 0, false);
+  if (rc != 0) remove_failed_path(failed, wide);
   close_handles(parents, parent_count);
   free(parents);
-  free(canonical);
+  free(wide);
   return rc;
 }
 

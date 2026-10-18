@@ -223,49 +223,29 @@ static bool path_string(const agc_string *s) {
 }
 
 #ifdef _WIN32
-static unsigned char ascii_lower(unsigned char c) { return c >= 'A' && c <= 'Z' ? (unsigned char)(c + ('a' - 'A')) : c; }
-
-static bool windows_device_component(const char *data, size_t len) {
-  size_t base = 0;
-  while (base < len && data[base] != '.') base++;
-  static const char *const names[] = {"con", "prn", "aux", "nul", "conin$", "conout$"};
-  for (size_t k = 0; k < sizeof names / sizeof names[0]; k++) {
-    size_t name_len = strlen(names[k]);
-    if (base != name_len) continue;
-    size_t at = 0;
-    while (at < base && ascii_lower((unsigned char)data[at]) == (unsigned char)names[k][at]) at++;
-    if (at == base) return true;
-  }
-  if (base == 4 && data[3] >= '1' && data[3] <= '9') {
-    bool com = ascii_lower((unsigned char)data[0]) == 'c' && ascii_lower((unsigned char)data[1]) == 'o' &&
-               ascii_lower((unsigned char)data[2]) == 'm';
-    bool lpt = ascii_lower((unsigned char)data[0]) == 'l' && ascii_lower((unsigned char)data[1]) == 'p' &&
-               ascii_lower((unsigned char)data[2]) == 't';
-    if (com || lpt) return true;
-  }
-  return false;
-}
-
 static bool windows_remove_input_valid(const agc_string *s) {
   size_t len = s->bytes;
-  if ((len >= 2 && ((s->data[0] >= 'A' && s->data[0] <= 'Z') || (s->data[0] >= 'a' && s->data[0] <= 'z')) &&
-       s->data[1] == ':' && (len == 2 || (s->data[2] != '/' && s->data[2] != '\\'))) ||
-      s->data[len - 1] == '/' || s->data[len - 1] == '\\') return false;
-  size_t start = len >= 2 && s->data[1] == ':' ? 2 : 0;
-  while (start < len) {
-    while (start < len && (s->data[start] == '/' || s->data[start] == '\\')) start++;
-    size_t end = start;
-    while (end < len && s->data[end] != '/' && s->data[end] != '\\') end++;
-    size_t part_len = end - start;
-    if (part_len == 1 && s->data[start] == '.') return false;
-    if (part_len == 2 && s->data[start] == '.' && s->data[start + 1] == '.') return false;
-    if (part_len && (s->data[end - 1] == '.' || s->data[end - 1] == ' ' || windows_device_component(s->data + start, part_len)))
-      return false;
-    for (size_t k = start; k < end; k++) {
-      unsigned char c = (unsigned char)s->data[k];
-      if (c < 0x20 || c == ':' || c == '<' || c == '>' || c == '"' || c == '|' || c == '?' || c == '*') return false;
+  if (s->data[len - 1] == '/' || s->data[len - 1] == '\\' ||
+      (len == 2 && ((s->data[0] >= 'A' && s->data[0] <= 'Z') ||
+                    (s->data[0] >= 'a' && s->data[0] <= 'z')) && s->data[1] == ':')) return false;
+  size_t start = len;
+  while (start && s->data[start - 1] != '/' && s->data[start - 1] != '\\') start--;
+  size_t last = len - start;
+  if (last == 0 || (last == 1 && s->data[start] == '.') ||
+      (last == 2 && s->data[start] == '.' && s->data[start + 1] == '.')) return false;
+  if (len >= 2 && s->data[1] == ':' && start == 2) return false;
+  bool drive_colon = len >= 3 && ((s->data[0] >= 'A' && s->data[0] <= 'Z') ||
+                                  (s->data[0] >= 'a' && s->data[0] <= 'z')) && s->data[1] == ':';
+  size_t component = 0;
+  for (size_t k = 0; k <= len; k++) {
+    if (k < len && s->data[k] == ':' && !(drive_colon && k == 1)) return false;
+    if (k == len || s->data[k] == '/' || s->data[k] == '\\') {
+      size_t part = k - component;
+      bool dot = part == 1 && s->data[component] == '.';
+      bool dotdot = part == 2 && s->data[component] == '.' && s->data[component + 1] == '.';
+      if (part && !dot && !dotdot && (s->data[k - 1] == '.' || s->data[k - 1] == ' ')) return false;
+      component = k + 1;
     }
-    start = end + 1;
   }
   return true;
 }
@@ -794,6 +774,7 @@ static void work_remove(op *o) {
   int rc = agc_fs_remove_tree(o->path, &failed);
   if (rc == 0) return;
   if (rc == AGC_FS_REMOVE_TOO_DEEP) {
+    free(failed);
     fail_op(o, FS_TREE_DEEP, 0);
   } else if (rc == AGC_FS_REMOVE_REFUSED) {
     fail_op(o, FS_REFUSED, 0);

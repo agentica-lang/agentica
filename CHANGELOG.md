@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Path.remove` now works on Windows, using native paths and removing
+  reparse-point entries without traversing them.
 - `Path.rename` now works on Windows with native no-replace semantics: an
   existing destination is preserved.
 - Windows stdin reads run in the I/O pool, keeping tasks and timers responsive.

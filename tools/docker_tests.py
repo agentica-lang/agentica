@@ -115,7 +115,7 @@ export PYTHONPATH=/source PYTHONDONTWRITEBYTECODE=1
 export AGENTICA_TEST_TARGET_OS=windows AGENTICA_TEST_WINE=1
 export AGENTICA_TEST_EXECUTABLE="$wrapper" AGENTICA_VM_BINARY="$wrapper"
 export AGENTICA_REQUIRE_VM=1
-python3 -m unittest tests.test_windows_remove_refusal
+python3 -m unittest tests.test_windows_filesystem_safety
 """
 GROUP_COMMANDS = {
     "probe": "",
