@@ -744,9 +744,6 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 - **File:** [`08-data-structures.md`](08-data-structures.md)
   - **Contents:** Phase 8: core data structures
 
-- **File:** [`10-adapters-and-json.md`](10-adapters-and-json.md)
-  - **Contents:** Phase 10: adapters and JSON inspection
-
 - **File:** [`12-benchmarks.md`](12-benchmarks.md)
   - **Contents:** Phase 12: cross-language benchmarks
 
