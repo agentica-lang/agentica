@@ -295,6 +295,17 @@ class WindowsFilesystemMutationTests(TestCase):
                 if removed:
                     self.assertFalse(victim.exists())
                 else:
+                    # Rename needs DELETE on the source as well; the denied
+                    # object must stay in place with its sentinel.
+                    renamed = run_vm(
+                        rename,
+                        args=[str(victim), str(box / "moved")],
+                        env=vm_environment(), cwd=self.root,
+                    )
+                    self.assertEqual(
+                        (renamed.code, renamed.stdout), (0, "false\n"),
+                        renamed.stderr,
+                    )
                     # The denied DELETE ACE also blocks some hosted-runner
                     # identities from reopening for read; restore before the
                     # sentinel check, then reapply it for the next operation.

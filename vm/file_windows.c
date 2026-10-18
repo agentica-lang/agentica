@@ -634,7 +634,9 @@ int agc_fs_rename_noreplace(const char *from, const char *to) {
     free(wide_from);
     return -1;
   }
-  if (MoveFileW(wide_from, wide_to)) {
+  /* No MOVEFILE_COPY_ALLOWED: a cross-volume move fails with
+     ERROR_NOT_SAME_DEVICE instead of copying and deleting the source. */
+  if (MoveFileExW(wide_from, wide_to, 0)) {
     free(wide_from);
     free(wide_to);
     return 0;
