@@ -6,10 +6,10 @@ when a real program needs it, for example a disk cache or messages between
 Agentica processes. It needs `Bytes`, generic structs (10c, for the type check
 on generic instances) and the JSON form of enums (10d,
 `docs/future/15-adapters-and-json-inspection.md` §15.4), so both formats share
-the tag and values order. The codec lands in both backends in one PR, with
+the tag and values order. The codec lands on the VM in one PR, with
 `grammar.md`, the docs and tests. Docs: a
 `site/content/library/text-and-data/term.md` page (front matter `title` and
-`weight`, runnable examples that `tests/site-examples-test.rkt` checks), and a
+`weight`, runnable examples that `tests/test_site_examples.py` checks), and a
 `references/term.md` file in the programming skill plus its row in the skill's
 "When to read a reference" table (the skill is not published).
 
@@ -18,8 +18,8 @@ Needs: `Bytes`, not repeated here. It is the Phase 8 "Later" item
 first.
 
 - [ ] 11a `Term.encode(value: T) -> Result[Bytes]` and
-  `Term.decode(data: Bytes, type: T) -> Result[T]` in the evaluator (Racket, no
-  library) and the VM (in-house C, explicit stack): the mapping and
+  `Term.decode(data: Bytes, type: T) -> Result[T]` on the VM (in-house C,
+  explicit stack): the mapping and
   deterministic encoding of §16.4, with enums as `[tag, values]`; the Term type
   check is a new checker predicate that substitutes the instance's type
   arguments into struct fields and enum payloads before it recurses
@@ -44,7 +44,7 @@ first.
 - [ ] 11b Tests: round trips both ways (`encode(decode(b))` gives `b` for
   canonical bytes); RFC 8949 Appendix A vectors as fixtures; byte-identical
   encoded output and the same error results (ok or error; message text may
-  differ, black-box parity) on both backends (`tests/vm-diff-*-test.rkt`);
+  differ, black-box parity) on the VM (`tests/test_vm_diff_*.py`);
   hostile input (truncation at every byte, lengths past the input, depth over
   the limit (enum nesting counted as one level), more than `TERM_MAX_ITEMS`
   values (`$: too many items`, also inside an ignored struct value), duplicate
@@ -58,6 +58,5 @@ first.
 
 **Done when:** an example writes a struct with an `Int`-keyed map, a Float NaN
 and an enum to bytes and reads it back, with the same bytes and output on both
-backends, and every hostile-input case returns `error(...)` with its path on
-both.
+VM, and every hostile-input case returns `error(...)` with its path.
 

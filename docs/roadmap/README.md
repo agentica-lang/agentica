@@ -75,7 +75,8 @@ after them may run in parallel when needed and keep their relative order.
     `agentica file.agc` runs on the VM; programs that use `TCP`, `TLS`, `HTTP`
     or `BDD`, and `agentica test`, fell back to the evaluator at first (each 7.1
     PR removed its fallback, and 7i removed the last one, `HTTP`); the
-    differential tests became golden tests; the release ships `agentica-vm`
+    differential tests became golden tests; the release ships one `agentica`
+    binary
   - **Outcome:** One backend for almost every program; CI runs each test once
 
 - **Order:** 7.1
@@ -242,21 +243,6 @@ after them may run in parallel when needed and keep their relative order.
     modules and checks their real paths
 
 - **Order:** 7.2.7
-  - **Next work:** **Done (2026-10-16; started 2026-10-15; the Racket front end
-    is deleted, post-bootstrap step 2); PRs #237, #245, #254, #258, #263, #282,
-    #286, #288, #294, #297, #298, #299, #301, #310, #311):** the freeze is in
-    force and the port’s steps 1 (the lexer), 2 (the parser, with
-    `PARSE-TOO-DEEP`), 3
-    (the modules and linker) and 4 (the builtin catalog, PR #258, and the
-    checker, with `CHECK-TOO-DEEP`, PR #263; module constants, row 7.2.8,
-    excepted), 5 (lowering, with module constants, PR #282) and 6 (the bytecode
-    writer, PR #286), all in `compiler/`, and 7 (the BDD driver: 7a, the OS
-    builtins it needs, PR #288, audited in
-    [§18.4](../future/18-front-end-language.md#184-prerequisites); 7b,
-    the driver itself, `compiler/bdd.agc`, PR #294, which relaxes the freeze
-    only for the hand-off in `src/bdd-driver.rkt` and `src/main.rkt`) are done;
-    step 8 follows, 8a (the command line in Agentica, PR #299, which relaxes the
-- **Order:** 7.2.7
   - **Next work:** **Done (2026-10-16; PRs #237–#311, then #313):** the
     Racket front-end freeze (owner, 2026-10-14: no new syntax or checker
     rules in `src/`, only bug fixes and catalog data) and the port to
@@ -320,19 +306,16 @@ after them may run in parallel when needed and keep their relative order.
     harness; each test lives in one framework
 
 - **Order:** 22b
-  - **Next work:** **Deferred until after the bootstrap**, decided by the owner
-    on 2026-10-15, because the `agentica doc` and `help` work is in
-    `src/main.rkt` and a new `src/docs.rkt`, Racket front-end work that the port
-    would then redo. New features, front end only: `agentica doc PATH` and
+  - **Next work:** **After the bootstrap** (owner, 2026-10-15). New features,
+    front end only, in `compiler/`: `agentica doc PATH` and
     `agentica help std/MODULE` ([phase 22](22-doc-comments.md), part 22b; [§32.5
     and §32.6](../future/32-doc-comments.md#32-doc-comments))
   - **Outcome:** Agents and people read a module's API with `agentica doc
     std/http`, in text or JSON
 
 - **Order:** 7.2b
-  - **Next work:** **Deferred until after the bootstrap**, decided by the owner
-    on 2026-10-14, because it extends the Racket front end, which the port would
-    then redo. New features, VM-only (cont.), after row 22b: the semantic CLI
+  - **Next work:** **After the bootstrap** (owner, 2026-10-14). New features,
+    VM-only (cont.), after row 22b, in `compiler/`: the semantic CLI
     for agents ([phase 26](26-semantic-cli.md),
     [§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)): `agentica
     outline`, then `agentica symbol` and `agentica refs`, then `agentica
@@ -351,8 +334,8 @@ after them may run in parallel when needed and keep their relative order.
     time
 
 - **Order:** 7.6
-  - **Next work:** **Deferred until after the bootstrap**, because each item
-    changes the Racket checker, which the port would then redo. New features,
+  - **Next work:** **After the bootstrap** (each item changes the checker,
+    now in `compiler/`). New features,
     VM-only (cont.): strict diagnostics first (phase 16,
     `docs/future/26-strict-diagnostics.md` §26, no warnings:
     `CHECK-UNUSED-IMPORT`, `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`,
@@ -688,7 +671,7 @@ programming reference contain the current signatures.
 
 - New library features that are pure computation over types that already exist
   start as `std/` modules written in Agentica (`stdlib/*.agc`, registered in
-  `src/stdlib.rkt`), not as builtins. Examples: numbers to bytes, bit tricks
+  `stdlib/MODULES`), not as builtins. Examples: numbers to bytes, bit tricks
   built on the `Int` builtins, text formatting, algorithms. They run on the VM
   with no VM work, and the golden fixtures test them.
 - A function moves to a C builtin later only when a measurement shows it is hot
@@ -740,7 +723,8 @@ programming reference contain the current signatures.
   `std/logger`. A public raw layer next to `std/http` would be a second way to
   do HTTP, and a public registry would let user code change the handlers without
   the `Logger` functions. So the linker lets only modules embedded from
-  `stdlib/` call them (`std-only-modules` in `src/builtins.rkt`), and user code
+  `stdlib/` call them (`std_only_name?` in `compiler/builtins.agc`),
+  and user code
   gets `CHECK-UNKNOWN-NAME` with a help that names the std module to import.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 

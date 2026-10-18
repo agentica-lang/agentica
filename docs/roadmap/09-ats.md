@@ -18,14 +18,13 @@ the programming skill, the site docs and tests.
   "Values are immutable" rule (line 9); its effects line ("I/O, tasks, or
   `test`") already covers `concurrency`, so it stays. Docs: a
   `site/content/library/data-structures/table.md` page (front matter `title` and
-  `weight`, runnable examples that `tests/site-examples-test.rkt` checks), and a
+  `weight`, runnable examples that `tests/test_site_examples.py` checks), and a
   `references/table.md` file in the programming skill plus its row in the
   skill's "When to read a reference" table (the skill is not published). Add a
   `CHECK-TABLE-VALUE` check that `V` is not `Void` or `Nil` and that
-  `data-type?` holds for `V`. If phase 9 starts after the freeze of the Racket
-  front end (row 7.2.7), this checker part goes into the Agentica front end
-  ([§18](../future/18-front-end-language.md)), not `src/`; before the freeze,
-  it goes into `src/` as written. `CHECK-MAP-KEY-TYPE` keeps its code for
+  `data-type?` holds for `V`. This checker part goes into the Agentica
+  front end ([§18](../future/18-front-end-language.md)). `CHECK-MAP-KEY-TYPE`
+  keeps its code for
   `Table` keys; its message must mention `Table` too. Build the
   insertion-order layout (§13, Layout) as a persistent ordered map, for example
   a balanced tree, on the VM.

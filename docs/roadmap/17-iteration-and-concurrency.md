@@ -173,102 +173,14 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   full ring may make it hold more than its capacity until receivers take values;
   a waiter whose timer fired still takes a value that reached the ring before it
   re-ran.
-- [x] 17c `Task.await(task, timeout_ms) -> Await[T]` (§27.3), decided by the
-  owner on 2026-10-14 (it replaced the prelude plan of 2026-10-12: prelude code
-  in `stdlib/prelude/task.agc` with a helper task, a capacity-1 channel and the
-  prelude-only builtins `__task_settled?` and `__task_wait`, returning
-  `Result[T]`). A C builtin in `vm/task.c` and a new builtin generic enum,
-  `Await[T]`, with `Await.Done(value)` and `Await.TimedOut`, matched with `case`
-  and checked for exhaustiveness like a user enum. A timeout does not cancel the
-  target and does not halt the caller; the target keeps running and a later
-  await (with or without a timeout) returns its cached outcome; a settled task
-  never times out (checked before the wait and again when the timer fires);
-  `timeout_ms` must be positive (`RUNTIME-INVALID-DURATION` at the argument); a
-  crashed or cancelled target behaves as in the plain await
-  (`Await.Done(error(...))` for a `Result` task, `RUNTIME-TASK-CRASHED` and
-  `RUNTIME-TASK-CANCELLED` otherwise), and the timed form takes no part in the
-  await-cycle check (a task that timed-awaits its own handle gets
-  `Await.TimedOut`; a plain await skips a task that waits with a timeout).
-  `Task[Void]` gives `Await[Void]`, matched as `Await.Done(_)`, as
-  `Result.Ok(_)` is. `Await` is a reserved name (`CHECK-REDEFINED-NAME`), which
-  is a breaking change; `try` does not apply to it. Reuse of the user-enum
-  machinery, with no special case per site: `builtin-enums` in
-  `src/builtin-types.rkt` seeds the checker's enum table and its reserved names,
-  the module linker keeps the name unmangled, and lowering appends the enum to
-  the program's enum table when the program uses it, as it does for the builtin
-  structs; no new opcode. VM: the wait parks with retry on the target's waiter
-  list and starts a timer job (`agc_wait_io`), the first wake wins and the
-  winner cleans up the other side; a cancelled caller leaves through
-  `unlink_task`; the entries `Task.await` and `Task.await_result` gain a second
-  arity, and `agc_builtin_variant` finds the `Await` variants by name. Appended
-  entries, no format bump. Done: the checker rule and catalog row, `vm/task.c`,
-  `vm/builtins.c`, `vm/text.c` (prints `Await.Done()` for a `Void` payload),
-  seven golden fixtures (`await-timeout`, `-void`, `-crash`, `-late-crash`,
-  `-invalid`, `-cancelled`, `-cycle`), the rows in `tests/checker-test.rkt`,
-  `tests/modules-test.rkt`, `tests/parser-test.rkt` and
-  `tests/bytecode-test.rkt`, and the two timed-await cases of
-  `vm/tests/task_cancel_test.c`. Docs: `grammar.md` (builtins, reserved names,
-  "Lightweight tasks"), `references/tasks.md` and `references/diagnostics.md`,
-  `site/content/library/concurrency/task.md` and `tour/tasks.md`,
-  `docs/vm/10-io-scheduler.md` §10.2.1, the development skill's notes. No
-  timing-dependent test was needed: the goldens decide each outcome by program
-  order (a target that waits on a channel nobody has sent to, or a 10-second
-  timeout), not by the clock.
-- [x] 17d `File.each_line(path, buffer_bytes, timeout_ms) do |line| ... end`
-  (§27.4, step 1), order row 7.2.1h, decided by the owner on 2026-10-14. A C
-  builtin with no new type: it reads the file in blocks of at most
-  `buffer_bytes` (1,024 to 16,777,216; otherwise `RUNTIME-INVALID-COUNT` at the
-  argument) and calls the block once per line, in order; a line whose line end
-  is longer than the buffer ends the call with
-  `error("filesystem: line exceeds buffer_bytes")`; LF or CRLF is removed, a
-  last line without a newline is passed, and the text is strict UTF-8.
-  `timeout_ms` bounds each read, the open and the close, not the whole call; 0
-  or less is the `error` result that file calls give today (`vm/files.c`,
-  `bad_timeout`), not a diagnostic. The block returns `Result[Void]`: `error`
-  stops the call and is returned; `try` works in the block, as in a `Test.test`
-  block, since its type is a fixed `Result[Void]`; this item adds only the
-  completion-value check (a Void or non-Result last expression is
-  `CHECK-TYPE-MISMATCH` with a help that shows `ok()`), and the inferred-`T`
-  case of §25.9 comes with the first of 17a and 15i. The file is closed on every
-  return path. Reads follow §14.1 (a pool job for a regular file, the loop for a
-  FIFO, pipe or device that can wait), and the call is a resumable builtin
-  (`docs/vm/03-ir-and-bytecode.md` §4.3). Effects: `filesystem`. VM only, no
-  format bump. Tests: golden fixtures (a small file; no final newline; CRLF; an
-  empty file; a block that stops early with `error`; a block with `try`; the
-  capacity errors at the argument span); a Racket test on a 10 MB file of short
-  lines with `buffer_bytes` 4096 (the line count, and about size over buffer
-  reads); a line longer than the buffer; invalid UTF-8; a FIFO fed by a Python
-  stdlib peer; the file closed after an early stop and after a timeout. Docs:
-  `grammar.md` (builtins and files), `references/files.md`,
-  `site/content/library/io-and-system/files.md` with a runnable example,
-  `docs/vm/03-ir-and-bytecode.md` §4.3 and `docs/vm/10-io-scheduler.md` §10.2.1
-  and §10.2.2. Done: `File.each_line` in `vm/files.c` as a new kind of resumable
-  builtin, the stepper (`agc_task_stepper`, `AGC_NATIVE_STEPPER` in
-  `vm/interp.c`, `agc_step` in `vm/port.h`): the builtin checks its arguments
-  and installs a step function, and the interpreter asks it for the next action
-  (call the block, park for a read or the close, or end), so the core still
-  calls no service. One `OP_READ_BLOCK` job reads at most `buffer_bytes` bytes
-  into a buffer made once (`buffer_bytes + 1` bytes, so a last line of exactly
-  `buffer_bytes` bytes without a terminator fits); every complete line in it
-  goes to the block before the next read. The buffer range is checked first,
-  then the timeout, then the path. Each block call costs one step plus the turn
-  cost of its bytes, so `--max-steps` ends a long file. `try` in the block
-  worked before this item, through the known `Result[Void]` of the block type;
-  the checker change is only that the last expression of such a block is checked
-  as a completion value, so a Void or non-Result last expression is
-  `CHECK-TYPE-MISMATCH` with the help
-  `give a Result with ok() or error("message")` (a `Test.test` block with a Void
-  last expression changes from `CHECK-VOID-VALUE` to this, and the help shows
-  for any mismatch with an expected `Result`, such as `x: Result[Int] = 5`).
-  Four golden fixtures (`file-each-line`, `-stop`, `-limits`, `-crash`),
-  `vm/tests/each_line_test.c`, a checker test, `tests/test_vm_file_lines.py`
-  with `tests/fixtures/lines-peer.py`, and the files page of the site. The
-  inferred-`T` form of `try` in a block is not built: no builtin needs it yet,
-  so 17a (`Task.map`) or 15i (`File.open` block) adds it with its first test. A
-  task that is cancelled without a crash while it waits in `File.each_line` (a
-  `Test.run` leftover, a later `Task.map` timeout) leaves the file open until
-  the end of the run, as a `File.open` handle does, until 24b; a crash of the
-  task or of an ancestor closes it.
+- [x] 17c `Task.await(task, timeout_ms) -> Await[T]` (§27.3). Done: a C
+  builtin and the builtin generic enum `Await[T]` (`Await.Done`,
+  `Await.TimedOut`), goldens, checker tests. Record: the grammar's task
+  rules and `docs/vm/10-io-scheduler.md` §10.2.1.
+- [x] 17d `File.each_line` (§27.4, step 1), order row 7.2.1h. Done: a C
+  builtin, a block per line with a bounded buffer; `try` in the block and
+  the completion-value check. Record: the grammar's files section
+  (`docs/grammar/06d-io-and-network.md`) and the site files page.
 - [ ] 17e `Stream[T]` (§27.4, step 2), order step 8.2, after 15f (the prelude)
   and 17d. A builtin opaque generic and an immutable recipe: sources
   `Stream.lines(path, buffer_bytes, timeout_ms)` (the block buffer of 17d) and

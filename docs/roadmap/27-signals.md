@@ -10,11 +10,10 @@ self-hosted front end ([§18](../future/18-front-end-language.md), step 8).
 Items 46a and 46b may run earlier, as VM-only rows, when no other VM PR is
 waiting.
 
-46a and 46b are VM C code and builtin table rows, which row 7.2.7 allows. That
-holds for option (B) of §46.3.1. Option (A), or an enum parameter the checker
-cannot handle, is a front-end change, so that PR names the freeze rule it
-relaxes and why (AGENTS.md). 46c changes the driver, which is `src/main.rkt` and
-`src/vm-launch.rkt` until step 8 ports it (§46.1), so it waits for that port.
+46a and 46b are VM C code and `compiler/` builtin table rows. That
+holds for option (B) of §46.3.1; option (A), or an enum parameter the
+checker cannot handle, is a front-end change in `compiler/`. 46c changes
+the driver in `compiler/`, so it comes after the bootstrap.
 46d is Agentica code in `std/http`; it comes after 46b by the owner's order
 (§46.7 does not require it). Each item has its own PR, with its own tests and
 docs.
@@ -26,13 +25,8 @@ docs.
     - the masks and the handler change in `vm/loop.c`; the stop set grows by
       USR1, USR2 and QUIT; the EINTR retry goes in `vm/output.c` (§46.3.2);
     - Quit takes the `_exit(131)` path (§46.3.3).
-  - **Builtin data:** the rows of `src/builtins.rkt`, the entries of
-    `src/builtin-types.rkt` and the `vm-builtins` names in `src/lower.rkt`
-    (row 7.2.7 data). The compiler catalog is regenerated in the same PR, and
-    `tests/frontend-catalog-test.rkt` checks it. If this PR lands after step 8
-    of §18, the builtin data lives in `compiler/` and the catalog is
-    regenerated with the generator of that time; the `src/` names above apply
-    to a PR before the bootstrap.
+  - **Builtin data:** the rows of `compiler/builtins_data.agc` and the
+    catalog regeneration of that time, checked by its test.
   - **Fixture:** `struct Signal` in `tests/fixtures/vm/http-server-close.agc`
     is renamed, since the name becomes reserved.
   - **Tests:** the C tests of `vm/tests`, and the Python cases 1, 3 (without
@@ -67,7 +61,7 @@ docs.
   - **Tests:** a test with terminal input, written first (§46.7). §46.6 names
     no case for it, so the 46c PR specifies it.
   - **Docs:** the site page gets the container recipe, which runs
-    `agentica compile` and then `agentica-vm` directly (§46.1) and uses
+    `agentica compile` and then `agentica run` directly (§46.1) and uses
     `docker run --init` to reap orphans (§46.8, question 10); and a
     `CHANGELOG.md` entry for the driver change.
 - [ ] **46d: graceful HTTP stop (§46.7).**

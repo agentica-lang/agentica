@@ -4,7 +4,7 @@ Specified in [`docs/future/15-adapters-and-json-inspection.md` section
 15](../future/15-adapters-and-json-inspection.md)
 (10a to 10d) and [section
 17](../future/17-optional-json-fields.md#17-optional-and-nullable-json-fields)
-(10e). Each item lands in the evaluator and the VM in one PR, with `grammar.md`,
+(10e). Each item lands on the VM in one PR, with `grammar.md`,
 the programming skill, the site docs and tests. 10a needs `.call` on the VM (7e
 PR 5e); 10b, 10d and 10e, and the JSON part of 10c, need the VM JSON PR
 (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 7). 10e also needs 10b for the
@@ -38,8 +38,8 @@ example are two separate programs; see "Done when" below.
   `JSON.decode` into a `Map`, so `JSON.parse` does not change. The VM follows
   the number rules and differential fixtures of
   `docs/future/15-adapters-and-json-inspection.md` §15.2. `JsonValue` is the
-  first builtin enum: it needs a path in the checker's enum table, in the
-  evaluator, and in `src/modules.rkt` import linking (enum patterns and
+  first builtin enum: it needs a path in the checker's enum table and in
+  `compiler/` import linking (enum patterns and
   constructors, like the existing `Result` exception, and the bare
   `JsonValue.JsonNull` `type-expression`), or linking renames or rejects it
   (`CHECK-IMPORT-NAME`). Test `JsonValue` used inside an imported module.
@@ -66,8 +66,8 @@ example are two separate programs; see "Done when" below.
   also covers structs. Update the `grammar.md` sentences "only enum declarations
   may declare type parameters" and "generic structs are not supported", add
   `[ type_parameters ]` to the `struct_decl` rule in grammar.md, and add a
-  type-parameter field to `struct-decl` in `src/ast.rkt`. Carry the type
-  parameters through `src/modules.rkt` import linking (the `struct-decl` case,
+  type-parameter field to `struct-decl` in the `compiler/` AST. Carry the type
+  parameters through `compiler/` import linking (the `struct-decl` case,
   like `rewrite-enum-type` for enums), or a bare `T` gets the module prefix;
   test a generic struct declared in an imported module and used as `M.Box[Int]`.
 - [ ] 10d JSON for enums: tagged objects (`{"tag": ..., "values": [...]}`) in
@@ -110,8 +110,8 @@ example are two separate programs; see "Done when" below.
   and a direct `JsonField[Nil]` field is then `CHECK-NOT-DECODABLE` or
   `CHECK-NOT-ENCODABLE`. In a generic struct (10c), a field that is `JsonField`
   after substitution (`Box[JsonField[Int]]`) counts as a direct field for encode
-  and `JSON.from`. Outside JSON it is an ordinary printable enum. Reuse the 10b
-  builtin-enum path (checker enum table, evaluator, `src/modules.rkt` linking of
+  and `JSON.from`. Outside JSON it is an ordinary printable enum. Reuse the
+  10b builtin-enum path (checker enum table, `compiler/` linking of
   patterns, constructors and bare `JsonField.Absent` / `JsonField.Null`) and
   give it a type parameter. `JsonField` becomes a reserved type name
   (`CHECK-REDEFINED-NAME`; say so in the changelog); `Option` stays free. Update
@@ -137,10 +137,10 @@ example are two separate programs; see "Done when" below.
 read-only memory backend, used by a function that takes `Storage`, and a walker
 over unknown JSON; it uses no `File.*` and no `System.args`, needs the library
 builtins of `docs/vm/12-testing-and-pr-plan.md` §12.2 item 6b (`Map.get`,
-`Map.keys`), and gives the same output on both backends (VM differential check).
+`Map.keys`), and gives the same output on the VM (golden check).
 The disk program uses the same `Storage` shape with a disk backend whose `get`
 and `put` check each key with an allow-list before they build a path
 (`error("bad key")` otherwise, tested with a key such as `../x`), in a temporary
-directory that the Racket test creates and passes as an argument (read with
-`System.args`); it runs only on the evaluator until files reach the VM (7h).
+directory that the test creates and passes as an argument (read with
+`System.args`).
 

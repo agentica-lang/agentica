@@ -4,7 +4,7 @@ Phases 1 to 5h and the completed foundations for general programming and MCP.
 They were built on the Racket evaluator, which the VM replaced (phase 7, 7i);
 the language they define is specified in [`docs/grammar.md`](../grammar.md) and
 its files in `docs/grammar/`, and the tests of each stage are in
-`tests/<stage>-test.rkt`. The full checklists and design notes that used to be
+`tests/test_*.py`. The full checklists and design notes that used to be
 of this period are in git history. The current order is in
 [`README.md`](README.md).
 
@@ -24,21 +24,20 @@ dropped):
 
 - **Phase:** 1. Source handling and lexer
   - **What landed:** `.agc` text to located tokens or one lexical diagnostic
-    (`LEX-`). `source.rkt` (positions and spans), `token.rkt`, `diagnostic.rkt`,
-    `lexer.rkt`; `main.rkt` stays a thin driver
-  - **Where:** `src/`, `tests/lexer-test.rkt`, grammar §4
+    (`LEX-`). Positions and spans, tokens, diagnostics; a thin driver
+  - **Where:** grammar §4 (history in git)
 
 - **Phase:** 2. AST and parser
   - **What landed:** Tokens to a program (every node carries a span) or the
-    first `PARSE-` diagnostic. `ast.rkt` holds nodes only, `parser.rkt` holds
-    the rules; no checker or placeholder nodes for later phases
-  - **Where:** `src/`, `tests/parser-test.rkt`, grammar §5
+    first `PARSE-` diagnostic. Nodes hold only data, rules live apart; no
+    checker or placeholder nodes for later phases
+  - **Where:** grammar §5 (history in git)
 
 - **Phase:** 3. Name resolution and type checking
   - **What landed:** Program to a checked program or the first `CHECK-`
     diagnostic: types, scopes, calls, returns, structs, lists, `Void`/`Nil`
     rules
-  - **Where:** `src/checker.rkt`, `tests/checker-test.rkt`, grammar §6, §7
+  - **Where:** grammar §6, §7 (history in git)
 
 - **Phase:** 4. Core evaluator
   - **What landed:** The checked program run to a value or one `RUNTIME-`
@@ -48,15 +47,15 @@ dropped):
 
 - **Phase:** 5. CLI and diagnostic quality
   - **What landed:** Every diagnostic names file, position, stable code, a
-    concrete message and the source line with a caret (`diagnostic.rkt`); the
+    concrete message and the source line with a caret; the
     CLI prints the first diagnostic to stderr and exits 1; a missing file or bad
     usage is one plain message and exit 2; `--dump` prints the checked tree.
     Every grammar example is a test (`tests/test_examples.py`)
-  - **Where:** `src/main.rkt`, `src/diagnostic.rkt`, grammar §7, §8
+  - **Where:** grammar §7, §8 (history in git)
 
 Rules from these phases that stay: each stage takes the previous stage's output
 and returns data or exactly one diagnostic, stops at the first error, never
-prints and never lets a Racket exception escape (also in `AGENTS.md`).
+prints and never lets a front-end exception escape (also in `AGENTS.md`).
 Diagnostic codes are stable and prefixed by stage. Internal checker cases that
 should never happen have their own code, `CHECK-INTERNAL`. The old
 `CHECK-NOT-A-STRUCT` was replaced by `CHECK-UNKNOWN-METHOD`, and the evaluator's
@@ -124,7 +123,7 @@ through injectable ports, so tests do not touch the real network.
   - **What landed:** `Result[T]` with `ok`, `error` and the `Result` module
     (`ok?`, `unwrap!`, `unwrap_or`, `message`); `try` in a `Result`-returning
     function (`CHECK-TRY-CONTEXT`); `CHECK-RESULT-TYPE`, `RUNTIME-UNWRAP-ERROR`;
-    `src/builtins.rkt` as the one table of builtin names, signatures, effects
+    a builtin catalog as the one table of builtin names, signatures, effects
     and descriptions, read by the checker and `agentica help NAME --json` (exit
     2 for an unknown target)
   - **Where:** grammar §6, [`06b-builtins.md`](../grammar/06b-builtins.md)

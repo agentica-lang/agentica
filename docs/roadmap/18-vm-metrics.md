@@ -4,7 +4,7 @@ Specified in [`docs/future/28-vm-metrics.md` section
 28](../future/28-vm-metrics.md#28-vm-metrics). Three small PRs, and a fourth
 (18d) after 17b, on the VM only, in order step 7.7: a new VM-only feature after
 7i, before the server measurement (7j), which reads its GC and run-queue
-numbers. No grammar change and no builtin: it is a tool of `agentica-vm`, like
+numbers. No grammar change and no builtin: it is a tool of `dist/agentica`, like
 VM tracing (14a). The endpoint does not use the HTTP stack, so it does not wait
 for anything but 7i. Every metric is derived at scrape time from state the VM
 already keeps, or comes from an enabled-only hook at an existing trace point
@@ -34,7 +34,7 @@ that starts at the first scrape; with metrics off the cost is zero, and
   `drop_uring_env` is set or either variable is present: it removes
   `UV_USE_IO_URING=` only when the VM set it, and both metrics variables
   (matched with their `=`) whenever present, invalid values too;
-  `src/bdd-driver.rkt` (phase 21) removes the metrics variables from the runner
+  `compiler/bdd.agc` (phase 21) removes the metrics variables from the runner
   VM it starts, so the scenario VMs and programs under test inherit the cleaned
   environment (`docs/bdd.md`, "How a run works"), with a test; the `metrics`
   trace category in `vm/trace.c` (its `write` lines) and `metrics` in the
@@ -59,10 +59,9 @@ that starts at the first scrape; with metrics off the cost is zero, and
   start-up file with no exit code, the child environment cases (a user's
   `UV_USE_IO_URING` is kept). Every test file that removes `AGENTICA_VM_TRACE`
   removes the metrics variables too. Python is required for these tests in CI
-  and is the only outside tool. Timing-sensitive cases go in
-  `tests/vm-metrics-timing-test.rkt`, listed in `test-omit-paths` in
-  `tests/info.rkt`, run by `make vm-metrics-timing` and by a CI step after
-  `make vm-latency`, with bounds that leave room for a loaded runner. Docs:
+  and is the only outside tool. Timing-sensitive cases go in a separate
+  timing test, run by a CI step after `make vm-latency`, with bounds that
+  leave room for a loaded runner. Docs:
   `docs/vm/` and the development skill.
 - [ ] 18b The endpoint (§28.5): `AGENTICA_VM_METRICS=[IP:]PORT` (a bare port
   binds `127.0.0.1`; port 0 for tests, reported by the `metrics listen` trace
