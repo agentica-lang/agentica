@@ -10,8 +10,6 @@ names.
 The section numbers stay as they were, so a reference such as `§10.4` still
 finds its place. The table below gives the file for each number. The checklist
 of what is built and what is pending is `docs/roadmap/07-vm.md`.
-Filesystem coverage and its remaining gates are recorded in
-[filesystem conformance](filesystem-conformance.md).
 
 ## 1. Overview
 
