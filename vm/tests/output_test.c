@@ -728,15 +728,27 @@ static void full_socket_pair(SOCKET *writer, SOCKET *reader) {
   *reader = accept(listener, NULL, NULL);
   assert(*reader != INVALID_SOCKET);
   closesocket(listener);
+  /* A buffer size set on the listener may not stick to the accepted socket, and Windows grows a receive window that
+     was not set by hand. */
+  setsockopt(*reader, SOL_SOCKET, SO_RCVBUF, (const char *)&small, sizeof small);
   u_long nonblocking = 1;
   assert(ioctlsocket(*writer, FIONBIO, &nonblocking) == 0);
   static const char junk[1024] = {0};
   size_t total = 0;
-  while (send(*writer, junk, sizeof junk, 0) > 0) {
-    total += sizeof junk;
-    assert(total < ((size_t)256 << 20));
+  /* The receiver can open its window a little after the first refusal, so the fill goes on until the sender has been
+     refused for a while in a row. */
+  for (int refused = 0; refused < 10;) {
+    int sent = send(*writer, junk, sizeof junk, 0);
+    if (sent > 0) {
+      total += (size_t)sent;
+      refused = 0;
+      assert(total < ((size_t)256 << 20));
+      continue;
+    }
+    assert(WSAGetLastError() == WSAEWOULDBLOCK);
+    refused++;
+    Sleep(20);
   }
-  assert(WSAGetLastError() == WSAEWOULDBLOCK);
   nonblocking = 0;
   assert(ioctlsocket(*writer, FIONBIO, &nonblocking) == 0);
 }
@@ -754,7 +766,10 @@ static void test_a_handle_that_libuv_refuses_is_written_by_a_pool_thread(void) {
   assert(write_as(a, 'a', 1000, false));
   leave_while_stuck();
   /* Wine takes the write at once, so there the thread is never stuck; native Windows blocks it. */
-  if (!getenv("AGENTICA_TEST_WINE")) assert(out()->len == 1000 && out()->writing && !out()->failed);
+  bool stuck = out()->len == 1000 && out()->writing && !out()->failed;
+  if (!stuck && !getenv("AGENTICA_TEST_WINE"))
+    fprintf(stderr, "socket write: len=%zu writing=%d failed=%d\n", out()->len, out()->writing, out()->failed);
+  assert(stuck || getenv("AGENTICA_TEST_WINE"));
   closesocket(reader);
   CancelIoEx((HANDLE)writer, NULL);
   for (int round = 0; round < 5000 && out()->writing; round++) pump();
