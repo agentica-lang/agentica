@@ -1,6 +1,8 @@
 /*
  * Command search rules for Windows. Platform adapter (process_os.h); no VM
- * state or scheduling. Docs: docs/vm/10-io-processes.md, section 10.4.
+ * state or scheduling. Only .exe and .com run, PATH splits at ';' and may
+ * quote an entry.
+ * Docs: docs/vm/10-io-processes.md, section 10.4.
  */
 #include "process_os.h"
 
