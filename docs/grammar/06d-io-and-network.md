@@ -202,9 +202,10 @@ Signatures are in
   as a link) or a directory to a path that does not exist, in one step: an
   existing target, even an empty directory, is an error and is never replaced.
   Linux uses `renameat2` with `RENAME_NOREPLACE`; macOS uses `renameatx_np` with
-  `RENAME_EXCL`; Windows uses `MoveFileW`. There is no copy/delete fallback
-  across volumes (VM only). `Path.resolve` is lexical and does not resolve
-  symlinks.
+  `RENAME_EXCL`; Windows uses `MoveFileExW` with no flags, so it neither
+  replaces a target nor copies across volumes. There is no copy/delete
+  fallback across volumes (VM only). `Path.resolve` is lexical and does not
+  resolve symlinks.
 - `Path.real(path)` gives the absolute canonical path with every symlink
   resolved, as POSIX `realpath` does, so the path must exist. A missing path, a
   loop of links (or too long a chain of them), and a name that is not a

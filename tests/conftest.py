@@ -4,6 +4,7 @@ import faulthandler
 import json
 import os
 import signal
+import sys
 import threading
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -40,6 +41,42 @@ def node():
     return tool("node")
 
 
+TIER_SKIP_REASON = "not selected in this test tier"
+FAIL_ON_SKIP_ENV = "AGENTICA_FAIL_ON_SKIP"
+_unexpected_skips: list[str] = []
+
+
+def _record_skip(report) -> None:
+    """Remember a skip that is not the fast/slow tier selection."""
+    if not report.skipped:
+        return
+    longrepr = report.longrepr
+    reason = str(longrepr[2]) if isinstance(longrepr, tuple) and len(longrepr) == 3 else str(longrepr)
+    if TIER_SKIP_REASON not in reason:
+        _unexpected_skips.append(f"{getattr(report, 'nodeid', '?')}: {reason}")
+
+
+def pytest_runtest_logreport(report):
+    _record_skip(report)
+
+
+def pytest_collectreport(report):
+    _record_skip(report)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """With AGENTICA_FAIL_ON_SKIP=1 (native Windows gate) a skipped case fails the run.
+
+    A gate that skips its native cases proves nothing, so the harness sets the
+    variable where every selected case must really run.
+    """
+    if os.environ.get(FAIL_ON_SKIP_ENV) != "1" or not _unexpected_skips:
+        return
+    for line in _unexpected_skips:
+        print(f"{FAIL_ON_SKIP_ENV}: skipped {line}", file=sys.stderr)
+    session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
 def pytest_collection_modifyitems(items):
     """Keep plain pytest functions in the same fast/slow tier as TestCase methods."""
     slow_run = os.environ.get("AGENTICA_TEST_SLOW", "") not in ("", "0")
@@ -49,7 +86,7 @@ def pytest_collection_modifyitems(items):
             continue
         is_slow = item.get_closest_marker("slow") is not None
         if is_slow != slow_run:
-            item.add_marker(pytest.mark.skip(reason="not selected in this test tier"))
+            item.add_marker(pytest.mark.skip(reason=TIER_SKIP_REASON))
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)

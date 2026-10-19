@@ -242,8 +242,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       path of the failed entry (`failed`), which replaces `o->path` in the error
     - `Path.rename` (`OP_RENAME`): Unix uses `renameat2` with
       `RENAME_NOREPLACE` (macOS: `renameatx_np` with `RENAME_EXCL`); Windows
-      uses `MoveFileW`, which fails if the destination exists; there is no
-      cross-volume copy fallback. The second path is `op.to`; the error is
+      uses `MoveFileExW` with no flags, which fails if the destination exists;
+      there is no cross-volume copy fallback. The second path is `op.to`; the error is
       `FS_RENAME` with both paths
   - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_fs_realpath`, the
     job

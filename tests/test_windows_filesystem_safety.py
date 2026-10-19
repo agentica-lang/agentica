@@ -602,16 +602,18 @@ def test_rename_moves_a_junction_not_its_target(root, work):
     assert (target / "keep").read_text(encoding="utf-8") == "target sentinel"
 
 
-# A third-party reparse tag the VM and the OS do not implement: the entry
-# must be deleted and moved as an opaque link, never traversed.
-UNKNOWN_REPARSE_TAG = 0x2000C10D
+# Third-party reparse tags that the VM and the OS do not implement, one with
+# the name-surrogate bit and one without. NTFS needs an empty entry to accept
+# them and nothing can resolve them, so the tests prove only that remove does
+# not fail on them and that rename moves the entry itself.
+UNKNOWN_REPARSE_TAGS = {"name-surrogate": 0x2000C10D, "plain": 0x0000C10E}
 FSCTL_SET_REPARSE_POINT = 0x900A4
 FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 
 
-def tag_as_unknown_reparse_point(path):
+def tag_as_unknown_reparse_point(path, tag):
     """Stamp an empty entry with a GUID-owned, non-Microsoft reparse tag."""
     kernel32 = kernel32_file_api()
     kernel32.DeviceIoControl.argtypes = [
@@ -623,7 +625,7 @@ def tag_as_unknown_reparse_point(path):
     # Non-Microsoft tags require REPARSE_GUID_DATA_BUFFER, not the shorter
     # Microsoft-owned REPARSE_DATA_BUFFER. NTFS requires an empty directory.
     owner = uuid.UUID("42543ec1-1467-4fd3-9fd0-c3f95204e613").bytes_le
-    buffer = struct.pack("<IHH16s", UNKNOWN_REPARSE_TAG, len(payload), 0, owner) + payload
+    buffer = struct.pack("<IHH16s", tag, len(payload), 0, owner) + payload
     handle = kernel32.CreateFileW(
         str(path), 0x40000000, 0x00000007, None, 3,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, None)
@@ -648,8 +650,9 @@ def has_reparse_point(path):
 
 
 @REQUIRES_NATIVE_WINDOWS
+@pytest.mark.parametrize("tag", UNKNOWN_REPARSE_TAGS.values(), ids=UNKNOWN_REPARSE_TAGS.keys())
 @pytest.mark.parametrize("directory", [False, True], ids=["file", "directory"])
-def test_unknown_reparse_tags_are_deleted_and_moved_as_links(root, work, directory):
+def test_unknown_reparse_tags_are_deleted_and_moved_as_links(root, work, directory, tag):
     link = root / "unknown-link"
     if directory:
         link.mkdir()
@@ -658,7 +661,7 @@ def test_unknown_reparse_tags_are_deleted_and_moved_as_links(root, work, directo
     sentinel = root / "outside-sentinel"
     sentinel.write_text("preserve", encoding="utf-8")
     identity = sentinel.stat().st_ino
-    tag_as_unknown_reparse_point(link)
+    tag_as_unknown_reparse_point(link, tag)
     assert has_reparse_point(link)
     moved = root / "unknown-moved"
     bytecode = compile_work_text(work, RACE_PROGRAM, "windows-rename-unknown-tag")
@@ -749,8 +752,12 @@ def test_existing_and_broken_link_targets_are_never_replaced_or_followed(root, w
         assert link.lstat().st_ino == identity
         assert os.readlink(link) == destination
         assert source.read_text(encoding="utf-8") == "source sentinel"
-        if not broken and not directory:
-            assert referent.read_text(encoding="utf-8") == "referent sentinel"
+        if not broken:
+            if directory:
+                assert referent.is_dir()
+                assert link.is_dir()
+            else:
+                assert referent.read_text(encoding="utf-8") == "referent sentinel"
     moved = root / "broken-moved"
     run_with_stdout(rename, [str(link), str(moved)], root, "true\n")
     assert not os.path.lexists(link)
@@ -839,6 +846,9 @@ def test_cross_volume_rename_fails_without_losing_the_source(root, work):
         volume_sentinel.write_text("mounted sentinel", encoding="utf-8")
         identity = volume_sentinel.stat().st_ino
         try:
+            # The sentinel is visible through the mount point, so the VM below
+            # meets a live mounted volume and not an empty directory.
+            assert (mount / volume_sentinel.name).read_text(encoding="utf-8") == "mounted sentinel"
             remove = compile_work_text(work, REMOVE_PROGRAM, "windows-volume-mount-remove")
             result = run_vm(remove, args=[str(mount)], env=vm_environment(), cwd=root)
             assert result.code == 0, result.stderr
@@ -907,7 +917,7 @@ def test_rename_race_has_one_winner_and_preserves_losing_sources(root, work, ado
 
 @REQUIRES_WINDOWS
 def test_empty_nul_and_invalid_timeout_do_not_mutate_the_entry(tmp_path, work):
-    """Check root and dot-component refusals without mutating the filesystem."""
+    """Refuse empty, NUL and zero-timeout arguments without mutating the filesystem."""
     box = (tmp_path / "scratch").resolve()
     box.mkdir()
     require_remove_sandbox(box)

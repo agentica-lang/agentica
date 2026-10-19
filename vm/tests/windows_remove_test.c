@@ -50,10 +50,11 @@ static void capture_entry(const wchar_t *tree) {
   HANDLE directory = CreateFileW(tree, FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                  NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
   assert(directory != INVALID_HANDLE_VALUE);
-  unsigned char buffer[65536];
+  /* The union gives the buffer the 8-byte alignment of FILE_ID_BOTH_DIR_INFO. */
+  union { uint64_t alignment; unsigned char bytes[65536]; } buffer;
   bool found = false;
-  while (!found && GetFileInformationByHandleEx(directory, FileIdBothDirectoryInfo, buffer, sizeof buffer)) {
-    FILE_ID_BOTH_DIR_INFO *entry = (FILE_ID_BOTH_DIR_INFO *)buffer;
+  while (!found && GetFileInformationByHandleEx(directory, FileIdBothDirectoryInfo, buffer.bytes, sizeof buffer.bytes)) {
+    FILE_ID_BOTH_DIR_INFO *entry = (FILE_ID_BOTH_DIR_INFO *)buffer.bytes;
     for (;;) {
       if (entry->FileNameLength == 4 * sizeof(wchar_t) && wmemcmp(entry->FileName, L"swap", 4) == 0) {
         snapshot_size = offsetof(FILE_ID_BOTH_DIR_INFO, FileName) + entry->FileNameLength;
@@ -81,7 +82,8 @@ int main(void) {
   if (!agc_test_remove_sandbox(scratch)) return 1;
   /* Refusal must happen before any filesystem open, even if the validator
      regresses. The guard aborts instead of allowing access to a real root. */
-  const char *roots[] = {"C:", "C:/", "C:\\", "\\\\server\\share", "//server/share/"};
+  const char *roots[] = {"C:", "C:/", "C:\\", "\\\\server", "\\\\server\\share",
+                        "\\\\server\\share\\", "//server/share/"};
   forbid_open = true;
   for (size_t k = 0; k < sizeof roots / sizeof roots[0]; k++) {
     char *failed = NULL;
