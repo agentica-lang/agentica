@@ -139,7 +139,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - the child side is `agc_parent_take` (called by `agc_launch_vm` in
     `vm/launch.c` after
     `agc_files_init`: takes the descriptors only when `AGENTICA_CHANNEL` is
-    exactly the value `agc_chan_marker()` gives (`3` on POSIX, `3,4` on
+    exactly the value `agc_chan_value()` gives (`3` on POSIX, `3,4` on
     Windows) and `agc_chan_take` accepts them: on POSIX fd 3 a socket or a FIFO
     opened `O_RDWR` (`F_GETFL`; a one-way FIFO would fail the read start and
     park `Test.run` for ever), moved with `F_DUPFD_CLOEXEC`; on Windows fd 3 a
@@ -211,9 +211,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     Windows two `uv_pipe` pairs whose child ends are blocking), stdio slots 3
     (and 4) that hand the child ends over, and `child_env`, which rebuilds the
     child environment on every spawn (it removes `AGENTICA_CHANNEL`, removes
-    `UV_USE_IO_URING` when `drop_uring_env`, and adds the entry of
-    `agc_chan_marker()`, `AGENTICA_CHANNEL=3` or `=3,4` on Windows, for a
-    channel spawn only; `AGC_CHANNEL_ENV` is in `vm/services.h`)
+    `UV_USE_IO_URING` when `drop_uring_env`, and adds `AGENTICA_CHANNEL=` with
+    `agc_chan_value()` for a channel spawn only; `AGC_CHANNEL_ENV` is in
+    `vm/services.h`)
   - the parent end is an `agc_duplex` (`vm/duplex.c`) in `proc.channel`, and the
     `agc_process` has a third pair of lock records, `channel.reader` and
     `channel.writer`

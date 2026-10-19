@@ -10,14 +10,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- On Windows, `Process.spawn_channel` gives the child a pipe in each direction
-  instead of one duplex pipe: the child reads descriptor 3 and writes
-  descriptor 4, and `AGENTICA_CHANNEL` is `3,4` (Linux and macOS keep one
-  socket on descriptor 3 and `3`). A byte pipe cannot be shut down for writing,
-  so with one pipe `channel_close` did not end the child's input. A VM takes the
-  channel only when the variable has the value of its own system. `agentica
-  test` is not yet supported on Windows. A Windows child that is no VM and was
-  written for the old duplex pipe on descriptor 3 must now read 3 and write 4.
+- On Windows, `Process.spawn_channel` gives the child a pipe per direction:
+  descriptor 3 to read, 4 to write, `AGENTICA_CHANNEL=3,4`, so `channel_close`
+  ends the child's input. A Windows child that is no VM and reads the old
+  duplex pipe on descriptor 3 must read 3 and write 4. `agentica test` is not
+  yet supported on Windows.
 
 - `--schedulers N` and the variable `AGENTICA_SCHEDULERS` set the number of
   scheduler threads (1 to 1024; the flag wins over a valid variable; a bad

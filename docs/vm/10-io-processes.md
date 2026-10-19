@@ -43,12 +43,11 @@
   `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct children are in
   it, not their subprocesses: the direct children of a VM that is killed die
   with it, and a child that is itself a VM stops its own children the same
-  way. Other descendants are not covered. The tree holds only while each level
-  is a libuv process (a VM): when a channel child dies on Windows, its own
-  libuv children die with it, so a grandchild never reads the end of input from
-  the death of its parent there (on Linux and macOS it does). A parent that is
-  no libuv process, or that spawns with `UV_PROCESS_DETACHED`, leaves a child
-  that reads the end of input; `vm/tests/process_test.c` uses the second form.
+  way. Other descendants are not covered. So a grandchild that a VM started
+  never reads the end of its channel from the death of its parent there: the
+  parent's job ends it first. A parent that is no libuv process, or that
+  spawns with `UV_PROCESS_DETACHED`, leaves a child that reads it
+  (`vm/tests/process_test.c`).
   `Process.close` and the end of a run still stop only the direct child.
   Stopping a child that has already ended, before its exit callback ran, is not
   a failure on any system (`UV_ESRCH` is read as stopped, with no `#ifdef`). On
@@ -111,8 +110,8 @@ builtins. Other systems get none.
   killed and reaped, files are flushed, and the signal is raised again. Children
   are killed before the file flush. A VM killed by `SIGKILL`, or ended by the
   out-of-memory exit (70, §6.3), leaves its children running; one that has a
-  channel reads the end of input (on Windows the job above ends it).
-  `tests/test_vm_child_channel.py` kills a VM to check both. On a break,
+  channel reads the end of input (on Windows the job above ends it first). On
+  a break,
   `agentica` waits 2 seconds, sends `SIGTERM`, and kills the VM 2 seconds later
   (`docs/vm/08-loader-and-cli.md`).
 - **Behavior notes.**
@@ -163,10 +162,7 @@ shared duplex stream are in `vm/duplex.c`, a service (`docs/vm/15-layers.md`);
 the system part (making the ends, the marker, taking them in the child) is
 `vm/duplex_os.h` with `duplex_posix.c` and `duplex_windows.c`. The signatures
 are in `docs/grammar/06d-io-and-network.md`. Linux and macOS use a socket
-pair; Windows uses a pipe per direction (below). The C tests
-`vm/tests/pipe_pair_test.c` and `vm/tests/process_test.c` and the Node peer of
-`tests/test_vm_child_channel.py` run on all three systems; `agentica test` on
-Windows is still to come.
+pair; Windows uses a pipe per direction (below).
 
 - **The socket pair.** One `uv_socketpair` (`SOCK_STREAM`) per child. The parent
   keeps one end as two libuv pipe handles, one to read and one to write, on two
@@ -187,8 +183,7 @@ Windows is still to come.
   stdio count is 5, and the variable is `AGENTICA_CHANNEL=3,4`. The parent's
   write end is write-only, so `uv_shutdown` on it closes the handle and the
   child reads the end of its input; the parent keeps reading the other pipe.
-  `vm/tests/pipe_pair_test.c` checks this against the system, with a plain C
-  child that uses `_read` and `_write`. The CRT of the child rebuilds
+  The CRT of the child rebuilds
   descriptors 3 and 4 from the `lpReserved2` block that libuv builds for each
   spawn, and libuv passes only those handles
   (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so a grandchild gets none of them.
@@ -203,12 +198,13 @@ Windows is still to come.
   (§10.2.2), and only `spawn_channel` adds `AGENTICA_CHANNEL=3` (`3,4` on
   Windows). So a parent that spawns without the pipe never passes an inherited
   marker on, and a grandchild sees neither the marker nor descriptor 3 unless
-  its own parent opened a channel for it. `System.env` hides the same entries from the
-  program (`own_env` in `vm/process.c` decides for both). `AGENTICA_VM_METRICS`
-  and `AGENTICA_VM_METRICS_FILE` are also removed from a child's environment
-  (`metrics_env`, matched with their `=`), so a child VM or a BDD runner never
-  fights for the metrics port or file (`docs/future/28-vm-metrics.md` §28.5);
-  `System.env` still shows them to the program.
+  its own parent opened a channel for it. `System.env` hides the same entries
+  from the program (`own_env` in `vm/process.c` decides for both).
+  `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE` are also removed from a
+  child's environment (`metrics_env`, matched with their `=`), so a child VM or
+  a BDD runner never fights for the metrics port or file
+  (`docs/future/28-vm-metrics.md` §28.5); `System.env` still shows them to the
+  program.
 - **Child start.** `agc_parent_take` runs in `agentica.c` before the program
   does. The variable must be exactly the value of this system (`3`, or `3,4` on
   Windows): a VM never guesses from another form. If `AGENTICA_CHANNEL` is `3`
