@@ -126,8 +126,8 @@ void agc_task_park(agc_vm *vm, bool retry) {
    scheduler to the task: once the task is PARKED a waker may queue it and another scheduler run it. */
 bool agc_task_commit_park(agc_task *t) {
   agc_task_state expected = AGC_TASK_PARKING;
-  return atomic_compare_exchange_strong_explicit(&t->state, &expected, AGC_TASK_PARKED, memory_order_acq_rel,
-                                                 memory_order_acquire);
+  return atomic_compare_exchange_strong_explicit(&t->state, &expected, AGC_TASK_PARKED, memory_order_seq_cst,
+                                                 memory_order_seq_cst);
 }
 
 /* Takes a PARKED task for the caller, the way a waker does but without queueing it: PARKED to READY. Whoever wins the
@@ -216,10 +216,10 @@ static void end_cancelled(agc_vm *vm, agc_task *t) {
    - A PARKED task is claimed by a CAS (agc_task_claim), the same race as a waker's. The winner owns it. A loser looks
      at the state again: a waker made it READY. */
 static void cancel_one(agc_vm *vm, agc_task *t) {
-  atomic_store_explicit(&t->cancelled, true, memory_order_release);
+  atomic_store_explicit(&t->cancelled, true, memory_order_seq_cst);
   if (!t->group) AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64, t->id);
   for (;;) {
-    switch (atomic_load_explicit(&t->state, memory_order_acquire)) {
+    switch (atomic_load_explicit(&t->state, memory_order_seq_cst)) {
     case AGC_TASK_RUNNING:
     case AGC_TASK_PARKING:
     case AGC_TASK_WOKEN:
@@ -450,7 +450,10 @@ agc_task *agc_task_next(agc_vm *vm) {
    succeeded the task belongs to its waker, with one more read: a cancel can set the flag after the first look and
    before the commit, and the canceller saw PARKING and left the task to this turn. So after the commit the flag is read
    again, and the task is claimed by a CAS (agc_task_claim), which a waker or a canceller may win instead, and then they
-   own it. Returns true when `main` has returned. */
+   own it. The cancel and this end of the turn are a store-then-load on both sides (the canceller stores the flag and
+   reads the state; the scheduler stores the state with the commit and reads the flag), so all four accesses are
+   sequentially consistent: with weaker orders both sides could read the old value and nobody would end the task. Returns
+   true when `main` has returned. */
 bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_turn(vm, t, r, ran);
   trace_gc(vm, "turn");
@@ -477,7 +480,7 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
     enqueue(vm, t);
   } else if (!agc_task_commit_park(t)) {
     enqueue(vm, t);
-  } else if (atomic_load_explicit(&t->cancelled, memory_order_acquire) && agc_task_claim(t)) {
+  } else if (atomic_load_explicit(&t->cancelled, memory_order_seq_cst) && agc_task_claim(t)) {
     agc_sync_take(vm);
     end_cancelled(vm, t);
     agc_sync_drop(vm);
