@@ -269,11 +269,13 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
     outer_exit = fx.loop_exit
     fx = fx.with(loop_next: increment, loop_exit: exit)
     before = fx
-    fx = Lowering.alloc(fx)
-    element = fx.next - 1
-    fx = bind_variable(fx, node.variable, element)
     fx = Lowering.place(fx, top)
-    fx = fx.with(pending: [Ir.instr("list-get", [element, items, index], fx.file, [span])])
+    if node.variable != "_"
+      fx = Lowering.alloc(fx)
+      element = fx.next - 1
+      fx = fx.with(vars: fx.vars.put(node.variable, element))
+      fx = fx.with(pending: [Ir.instr("list-get", [element, items, index], fx.file, [span])])
+    end
     fx = try lower_block(cx, fx, node.body)
     fx = leave(fx, before)
     fx = fx.with(loop_next: outer_next, loop_exit: outer_exit)

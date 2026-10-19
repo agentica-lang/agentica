@@ -48,9 +48,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the child's input. A child that used the duplex pipe on descriptor 3, or a VM
   older than this release, finds no channel.
 
-- `_` is a discard wherever a name is bound, including a `for` variable
-  (`for _ in 0...3` with `_ = f()` in the body); reading `_` is
-  `CHECK-UNKNOWN-NAME`.
+- **Breaking:** `_` is a discard wherever a name is bound, including a `for`
+  variable (`for _ in 0...3` with `_ = f()` in the body). Reading `_` was
+  allowed before and is now `CHECK-UNKNOWN-NAME`.
 - A blocking call whose deadline and whose result fall in the same pass of the
   event loop now takes whichever the loop saw first: if the timer ran first the
   call times out, where it used to return the result if it had arrived by the
