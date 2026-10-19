@@ -198,6 +198,8 @@ static void finish_task(agc_vm *vm, agc_task *t) {
 /* The task is out of the run queue already (cancel_one took it out or claimed it PARKED) or was never in it. */
 static void unlink_task(agc_vm *vm, agc_task *t) {
   if (t->parked) agc_io_detach(vm, t);
+  agc_timers_disarm(vm, t);
+  t->timer.timed = false;
   if (t->lock_wait) agc_handle_leave(vm, t);
   if (t->channel.channel) agc_channel_leave(vm, t);
   if (t->output.out) agc_output_leave(vm, t);
@@ -284,6 +286,12 @@ static void resume(agc_vm *vm, agc_task *t) {
   if (t->parked) {
     agc_value result = agc_io_finish(vm, t);
     if (!t->retry) t->regs[t->park_reg] = result;
+  } else if (t->timer.timed) {
+    agc_sync_take(vm);
+    agc_timers_disarm(vm, t);
+    agc_sync_drop(vm);
+    t->timer.timed = false;
+    if (!t->retry) t->regs[t->park_reg] = agc_void();
   }
   t->retry = false;
 }
@@ -513,7 +521,8 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       agc_task *t = agc_task_next(vm);
       if (!t) {
         check_stop(vm);
-        if (!agc_io_poll(vm, true)) {
+        if (agc_timers_run(vm)) continue;
+        if (!agc_io_wait(vm, agc_timers_next_due(vm))) {
           check_stop(vm);
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
@@ -528,6 +537,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       agc_turn_finish(vm);
       if (agc_task_end_turn(vm, t, r, ran)) break;
       agc_io_poll(vm, false);
+      (void)agc_timers_run(vm);
       check_stop(vm);
     }
     vm->rt->outcome.kind = AGC_DONE;
@@ -694,8 +704,7 @@ static agc_value await_timeout(agc_vm *vm, agc_value *args, uint32_t span, bool 
   agc_task_parking(vm);
   t->awaiting = target;
   agc_task_enqueue(&target->waiters, &target->waiters_tail, t);
-  agc_io_start_marked(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->await_deadline - now));
-  agc_task_park(vm, true);
+  agc_task_park_until(vm, t->await_deadline, true);
   return agc_void();
 }
 
@@ -715,15 +724,6 @@ static agc_value builtin_await_timeout_result(agc_vm *vm, agc_value *args, uint3
   return await_timeout(vm, args, span, true);
 }
 
-static agc_value slept(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
-  (void)data;
-  (void)context;
-  return agc_void();
-}
-
-static const agc_io_kind sleep_io = {NULL, slept, slept, NULL, false, "sleep", NULL, false};
-
 static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t ms = agc_as_int(vm, args[0]);
   if (ms < 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", "sleep duration must be nonnegative", span + 1);
@@ -731,7 +731,8 @@ static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
     vm->yield = true;
     return agc_void();
   }
-  agc_io_start(vm, &sleep_io, NULL, agc_void(), ms);
+  agc_task_parking(vm);
+  agc_task_park_until(vm, agc_clock_ms() + (uint64_t)ms, false);
   return agc_void();
 }
 

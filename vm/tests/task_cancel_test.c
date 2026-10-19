@@ -959,10 +959,10 @@ static void test_children_move(void) {
 static void check_channel(agc_vm *vm, int64_t n) {
   agc_task *a = reg_task(vm, 2), *b = reg_task(vm, 4);
   if (n == 1) {
-    assert(a->state == AGC_TASK_PARKED && a->parked && a->channel.channel && !a->channel.reserved);
-    assert(b->state == AGC_TASK_PARKED && b->parked && b->channel.channel == a->channel.channel);
+    assert(a->state == AGC_TASK_PARKED && a->timer.heap && a->channel.channel && !a->channel.reserved);
+    assert(b->state == AGC_TASK_PARKED && b->timer.heap && b->channel.channel == a->channel.channel);
   } else if (n == 2) {
-    assert(cancelled(a) && !a->parked && !a->channel.channel);
+    assert(cancelled(a) && !a->timer.heap && !a->channel.channel);
     assert(b->state == AGC_TASK_READY && b->channel.reserved && mark_count == 0);
   } else {
     const agc_result *r = agc_as_result(vm, b->result);
@@ -1002,9 +1002,9 @@ static void check_timed_cancel(agc_vm *vm, int64_t n) {
   agc_task *sleeper = reg_task(vm, 0), *waiter = reg_task(vm, 2);
   if (n == 1) {
     assert(sleeper->waiters == waiter && waiter->awaiting == sleeper && waiter->state == AGC_TASK_PARKED);
-    assert(waiter->parked && waiter->await_deadline);
+    assert(waiter->timer.heap && waiter->await_deadline);
   } else {
-    assert(!sleeper->waiters && !sleeper->waiters_tail && cancelled(waiter) && !waiter->awaiting && !waiter->parked);
+    assert(!sleeper->waiters && !sleeper->waiters_tail && cancelled(waiter) && !waiter->awaiting && !waiter->timer.heap);
     assert(sleeper->state == AGC_TASK_PARKED && mark_count == 1 && marks[0] == 5);
   }
 }
@@ -1022,7 +1022,7 @@ static void test_timed_await_cancel(void) {
 static void check_timed_end(agc_vm *vm, int64_t n) {
   agc_task *sleeper = reg_task(vm, 0), *quick = reg_task(vm, 2);
   const agc_enum *outcome = agc_as_enum(vm, vm->rt->main->regs[n == 1 ? 4 : 6]);
-  assert(!vm->rt->main->awaiting && !vm->rt->main->await_deadline && !vm->rt->main->parked);
+  assert(!vm->rt->main->awaiting && !vm->rt->main->await_deadline && !vm->rt->main->timer.heap);
   if (n == 1) {
     assert(outcome->variant == 1 && outcome->n == 0);
     assert(!sleeper->waiters && !sleeper->waiters_tail && sleeper->state == AGC_TASK_PARKED);

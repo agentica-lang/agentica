@@ -138,7 +138,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - a cancelled `next_owner` passes the lock on)
     - `agc_handle_wait` (
       - the per-handle FIFO lock: take it as `next_owner` or when free, else
-        queue and park with retry on a timer-only job at the task's own deadline
+        queue and park with retry on the task's own timer
+        (`agc_task_park_until`) at its deadline
       - a `closing` handle lets every caller through, so the builtin returns its
         closed error)
     - the one exit path (

@@ -276,6 +276,9 @@ typedef struct {
   agc_task *crashes, *crashes_tail, *quiet;
   uint64_t crash_count, observed_count;
   _Atomic uint64_t tasks_done;
+  /* How many timers are armed in all the heaps: a scheduler with nothing to run and no job on the loop is stalled only
+     when this is zero. Changed under rt->sync. */
+  _Atomic uint64_t timers_armed;
   /* The one lock for the shared state of the tasks (agc_sync_take): the task tree, the waiter lists, the channels, the
      Task.map groups and the logger table. `shared` is false until agc_share, and then the lock is real, and the
      interpreter takes it around each builtin whose row is marked `shared`. */
@@ -308,6 +311,29 @@ typedef enum {
 typedef enum { AGC_TURN_YIELD, AGC_TURN_PARKED, AGC_TURN_DONE } agc_turn_result;
 
 typedef enum { AGC_LOCK_TAKEN, AGC_LOCK_WAIT, AGC_LOCK_TIMEOUT } agc_lock_status;
+
+/* The timed wait of a task (docs/vm/16-architecture.md §16.9, "Timers"): the task is its own timer entry, so a deadline
+   needs no job, no registry slot and no libuv. `heap` is the heap that holds the entry (NULL when it is not armed),
+   `index` its place there, `seq` the order of arming that breaks a tie between equal deadlines, and `timed` says that
+   the task is parked on a timer, so `resume` disarms it and gives a wait that does not retry its void result. */
+typedef struct {
+  uint64_t deadline, seq;
+  struct agc_timers *heap;
+  size_t index;
+  bool timed;
+} agc_timer;
+
+/* The armed timers of one scheduler: a binary min-heap of tasks ordered by (deadline, seq), in GC memory. Every change
+   to a heap is made with rt->sync held, by any scheduler (a cancel or a resume on another scheduler removes the entry
+   from the arming scheduler's heap); `next_due` is the earliest deadline (UINT64_MAX when empty), written under the
+   lock and read without it at the turn boundary of the owner. */
+typedef struct agc_timers {
+  struct agc_task **items;
+  size_t count, cap;
+  uint64_t seq;
+  _Atomic uint64_t next_due;
+  agc_runtime *rt;
+} agc_timers;
 
 struct agc_task {
   uint64_t id;
@@ -349,6 +375,7 @@ struct agc_task {
   agc_resource *lock_wait, *owned;
   agc_channel_wait channel;
   agc_output_wait output;
+  agc_timer timer;
 };
 
 /* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each
@@ -366,6 +393,7 @@ struct agc_vm {
   agc_task *task;
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
   uint64_t gc_seen;
+  agc_timers timers;
   agc_profile *profile;
   bool yield, in_turn;
   /* How many times this scheduler has taken rt->sync and not dropped it (agc_sync_take), and the stream lock it holds, if
@@ -466,7 +494,6 @@ void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 #define AGC_JOB_FLUSH 1u
 #define AGC_JOB_QUIET 2u
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags);
-extern const agc_io_kind agc_wait_io;
 #if !defined(_WIN32)
 void agc_io_block_stop(sigset_t *saved);
 #endif

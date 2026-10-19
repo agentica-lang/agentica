@@ -39,8 +39,8 @@ before it moved; the header split moved no line of a `.c` file except the
 
 - **Layer:** **Core**
   - **Files:** `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`,
-    `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`,
-    `runq.c`, `inbox.c`, `sync.c`, `task_map.c`, `channel.c`, `loop.c`,
+    `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `runq.c`,
+    `inbox.c`, `sync.c`, `timers.c`, `task_map.c`, `channel.c`, `loop.c`,
     `input.c`, `output.c`, `stdio_posix.c`, `stdio_windows.c`, `random.c`,
     `loader.c`, `builtins.c`, `diag.c`, `trace.c`
   - **May use:** `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv
@@ -81,8 +81,8 @@ Notes on the choices:
   may not name. Its builtin table is declared in `core.h`, as
   `agc_task_builtins` is.
 - **`task_map.c` is core.** `Task.map` spawns, cancels and times tasks, and
-  parks its caller in a stepper on the scheduler's own timer job, so it can
-  use only what the core offers (`agc_task_spawn_seeded`, `agc_task_cancel`,
+  parks its caller in a stepper on a timer of the task (`vm/timers.c`), so it
+  can use only what the core offers (`agc_task_spawn_seeded`, `agc_task_cancel`,
   `agc_task_stepper`, the end hook of a task, `agc_count_step`). Its builtin
   table (`agc_task_map_builtins`) is declared in `core.h` and listed in
   `builtin_tables.c`.

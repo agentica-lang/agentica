@@ -87,16 +87,16 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   `close`, a wake, a hand-on and a cancelled waiter that leaves its FIFO take
   it, and it is never held across a park. Ring growth copies the slots under the
   lock: an accepted exception, bounded by the capacity and charged as turn cost.
-  The lock orders the write of a value before its read on another scheduler. A
-  wake or a hand-on is a scheduler waker that reaches the waiter's timer job:
-  under the channel lock it takes the job's reference and sets the outcome by
-  the CAS of §16.5 rule 3. If the timer wins instead, the timer side takes the
-  channel lock before it pushes the task, and a wake or hand-on that lost passes
-  the value or the slot to the next waiter, so nothing is lost. With N=1 the
-  lock is not needed, and the VM does not take one. Each task also writes its
-  `awaiting` field before it parks, under the target's lock (Park and wake
-  protocol), so two tasks that close a cycle at the same time cannot both miss
-  it: the second to take the lock sees the first's field.
+  The lock orders the write of a value before its read on another scheduler. As
+  built (3b), the waiter's deadline is a timer of the task (§16.9, "Timers"),
+  not a job: a wake or a hand-on and the fire of the timer are two wakers, the
+  state CAS lets one win, and both run under `rt->sync`, so the retry of the
+  woken waiter sees either its reservation or the passed deadline, and a value
+  or slot it does not take is passed to the next waiter, so nothing is lost.
+  With N=1 the lock is not needed, and the VM does not take one. Each task also
+  writes its `awaiting` field before it parks, under the target's lock (Park and
+  wake protocol), so two tasks that close a cycle at the same time cannot both
+  miss it: the second to take the lock sees the first's field.
 - **Task.map group lock (17a, planned for N>1; not built).** Each `Task.map`
   group will have a small lock for its running list, its ended list and its
   counters. The step function on the caller's scheduler and the end hook of an

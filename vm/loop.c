@@ -591,22 +591,13 @@ static agc_loop *loop_of(agc_vm *vm) {
   return loop;
 }
 
-static agc_value wait_woken(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
-  (void)data;
-  (void)context;
-  return agc_void();
-}
-
-const agc_io_kind agc_wait_io = {NULL, wait_woken, wait_woken, NULL, false, "lock", NULL, false};
-
 static job_trace trace_of(const agc_resource *r, const job *j) {
   return (job_trace){r->id, j->started_ns, atomic_load_explicit(&j->ended_ns, memory_order_relaxed), j->kind};
 }
 
 static void trace_finish(agc_vm *vm, const job_trace *job, bool done, agc_value result) {
   const agc_trace *tr = &vm->rt->trace;
-  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !job->started_ns || job->kind == &agc_wait_io) return;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !job->started_ns) return;
   uint64_t end = job->ended_ns ? job->ended_ns : agc_trace_now();
   uint64_t us = end > job->started_ns ? (end - job->started_ns) / 1000u : 0;
   const char *outcome = !agc_is(result, AGC_T_RESULT) ? "value" : agc_as_result(vm, result)->ok ? "ok" : "error";
@@ -1238,6 +1229,23 @@ static void release_bound(agc_loop *loop) {
   loop->bound_init = false;
 }
 
+/* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true): a loop with nothing alive
+   means a stall. With a timer, the loop runs once for at most the time to the deadline (the bound timer), alive or not,
+   because an armed timer is work that will come (docs/vm/16-architecture.md §16.9, "Timers"); a job that becomes ready
+   or a stop signal ends the wait sooner. */
+bool agc_io_wait(agc_vm *vm, uint64_t due_ms) {
+  if (due_ms == UINT64_MAX) return agc_io_poll(vm, true);
+  agc_loop *loop = loop_of(vm);
+  if (loop->inbox) (void)agc_inbox_run(loop->inbox);
+  uint64_t now = agc_clock_ms();
+  if (loop->ready || due_ms <= now)
+    uv_run(&loop->uv, UV_RUN_NOWAIT);
+  else
+    run_bounded(loop, due_ms - now);
+  drain(vm);
+  return true;
+}
+
 bool agc_io_run_for(agc_vm *vm, uint64_t ms) {
   agc_loop *loop = loop_of(vm);
   if (loop->inbox) (void)agc_inbox_run(loop->inbox);
@@ -1301,8 +1309,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   agc_task_parking(vm);
   agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
   t->lock_wait = handle;
-  agc_io_start_marked(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(deadline - now));
-  agc_task_park(vm, true);
+  agc_task_park_until(vm, deadline, true);
   return AGC_LOCK_WAIT;
 }
 
@@ -1582,6 +1589,12 @@ bool agc_io_service(agc_vm *vm) {
   return false;
 }
 
+bool agc_io_wait(agc_vm *vm, uint64_t due_ms) {
+  (void)vm;
+  (void)due_ms;
+  return false;
+}
+
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   (void)vm;
   (void)handle;
@@ -1591,7 +1604,6 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 
 uint64_t agc_clock_ms(void) { return 0; }
 
-const agc_io_kind agc_wait_io = {NULL, NULL, NULL, NULL, false, "lock", NULL, false};
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)t;

@@ -162,8 +162,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     agc_task_enqueue(&c->senders, &c->senders_tail, t);
   else
     agc_task_enqueue(&c->receivers, &c->receivers_tail, t);
-  agc_io_start_marked(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->channel.deadline - now));
-  agc_task_park(vm, true);
+  agc_task_park_until(vm, t->channel.deadline, true);
   return agc_void();
 }
 

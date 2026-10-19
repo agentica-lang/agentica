@@ -92,6 +92,23 @@ agc_task *agc_runq_wait(agc_runq *q) {
   return t;
 }
 
+/* The wait of an idle scheduler that has a timer: as agc_runq_wait, but it also returns NULL once agc_clock_ms reaches
+   DUE_MS, with no task (docs/vm/16-architecture.md §16.9, "Timers"). The caller tells the end, a nudge and the deadline
+   apart by asking the queue and the clock. Only the scheduler that owns the nearest deadline waits timed; the others wait
+   untimed, so one deadline does not wake every idle scheduler. A solo queue never waits. */
+agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms) {
+  if (q->solo) return take_first(q);
+  uv_mutex_lock(&q->lock);
+  while (!q->first && !q->ended && !atomic_load_explicit(&q->nudged, memory_order_relaxed)) {
+    uint64_t now = agc_clock_ms();
+    if (now >= due_ms) break;
+    (void)uv_cond_timedwait(&q->wake, &q->lock, (due_ms - now) * UINT64_C(1000000));
+  }
+  agc_task *t = q->ended ? NULL : take_first(q);
+  uv_mutex_unlock(&q->lock);
+  return t;
+}
+
 /* Asks one scheduler to run the service work (agc_io_service). The flag is set under the lock and the signal comes
    after the unlock; one waiter is enough, because the service takes the whole list. */
 void agc_runq_nudge(agc_runq *q) {

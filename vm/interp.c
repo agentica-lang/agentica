@@ -158,6 +158,8 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->log.lowest = AGC_LOG_NO_HANDLER;
   agc_trace_parse(&rt->trace, NULL, 2);
   vm->rt = rt;
+  vm->timers.rt = rt;
+  atomic_init(&vm->timers.next_due, UINT64_MAX);
   vm->rt->main = vm->task = agc_new_task(vm);
   agc_random_seed(&vm->task->random, 0);
 }
