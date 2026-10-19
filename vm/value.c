@@ -15,6 +15,9 @@
 const char *__asan_default_options(void); // NOLINT(readability-identifier-naming,misc-use-internal-linkage)
 const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_return_null=1"; }
 #else
+/* gc.h declares the thread registration calls only with GC_THREADS. The system libgc is built for threads, and the
+   vendored one gets the same define from the Makefile. */
+#define GC_THREADS
 #include <gc.h>
 #endif
 
@@ -61,6 +64,32 @@ void agc_init(void) {
   GC_set_oom_fn(on_gc_oom);
   GC_set_abort_func(on_gc_abort);
   GC_set_warn_proc(GC_ignore_warn_proc);
+#endif
+}
+
+/* Threads other than the main one: libuv starts them, so Boehm does not know them until they register
+   (docs/vm/10-io-multicore.md §10.2.3). The main thread calls agc_gc_allow_threads once, after agc_init and before
+   the first thread starts; it also starts Boehm's mark threads. A thread calls agc_gc_thread_enter before it
+   allocates or holds a GC pointer, and agc_gc_thread_leave before it ends: a thread that ends registered leaves a
+   stack for the collector to scan. */
+void agc_gc_allow_threads(void) {
+#ifndef AGC_NO_GC
+  GC_allow_register_threads();
+#endif
+}
+
+bool agc_gc_thread_enter(void) {
+#ifdef AGC_NO_GC
+  return true;
+#else
+  struct GC_stack_base base;
+  return GC_get_stack_base(&base) == GC_SUCCESS && GC_register_my_thread(&base) == GC_SUCCESS;
+#endif
+}
+
+void agc_gc_thread_leave(void) {
+#ifndef AGC_NO_GC
+  GC_unregister_my_thread();
 #endif
 }
 

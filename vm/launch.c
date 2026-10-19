@@ -19,6 +19,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -383,6 +384,10 @@ static bool parse_flush(const char *text, int64_t *ms) {
   return parse_count(text, ms) && *ms <= AGC_FLUSH_TIMEOUT_MAX_MS;
 }
 
+static bool parse_schedulers(const char *text, int64_t *count) {
+  return parse_count(text, count) && *count >= 1 && *count <= AGC_SCHEDULERS_MAX;
+}
+
 static bool parse_steps(const char *text, int64_t *steps) { return parse_count(text, steps) && *steps > 0; }
 
 static bool parse_seed(const char *text, uint32_t *seed) {
@@ -401,20 +406,35 @@ void agc_launch_defaults(agc_launch_options *options) {
   memset(options, 0, sizeof *options);
   options->max_steps = INT64_MAX;
   options->flush_timeout = AGC_FLUSH_TIMEOUT_MS;
+  options->schedulers = 1;
   options->style = AGC_STYLE_PLAIN;
   options->source_root = "";
 }
 
-bool agc_launch_flush_env(const char *name, agc_launch_options *options) {
-  const char *text = getenv("AGENTICA_FLUSH_TIMEOUT_MS");
+bool agc_launch_env(const char *name, agc_launch_options *options) {
+  const char *flush = getenv("AGENTICA_FLUSH_TIMEOUT_MS");
   int64_t ms = 0;
-  if (!text) return true;
-  if (!parse_flush(text, &ms)) {
+  if (flush && !parse_flush(flush, &ms)) {
     fprintf(stderr, "%s: AGENTICA_FLUSH_TIMEOUT_MS needs an integer from 0 to 86400000\n", name);
     return false;
   }
-  if (!options->seen_flush) options->flush_timeout = ms;
+  if (flush && !options->seen_flush) options->flush_timeout = ms;
+  const char *schedulers = getenv("AGENTICA_SCHEDULERS");
+  int64_t count = 0;
+  if (schedulers && !parse_schedulers(schedulers, &count)) {
+    fprintf(stderr, "%s: AGENTICA_SCHEDULERS needs an integer from 1 to %d\n", name, AGC_SCHEDULERS_MAX);
+    return false;
+  }
+  if (schedulers && !options->seen_schedulers) options->schedulers = count;
   return true;
+}
+
+/* The count of schedulers is read and checked, but only the scheduler that shares a thread with the loop is built, and
+   a larger count would silently run as one. */
+bool agc_launch_supported(const char *name, const agc_launch_options *options) {
+  if (options->schedulers <= 1) return true;
+  fprintf(stderr, "%s: %" PRId64 " schedulers were asked for, but this build runs one\n", name, options->schedulers);
+  return false;
 }
 
 static agc_launch_status refuse(const char *name, const char *message) {
@@ -459,6 +479,11 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       if (!once(name, &options->seen_flush, arg)) return AGC_LAUNCH_BAD;
       if (!value || !parse_flush(value, &options->flush_timeout))
         return refuse(name, "--flush-timeout needs an integer from 0 to 86400000");
+      i += 2;
+    } else if (strcmp(arg, "--schedulers") == 0) {
+      if (!once(name, &options->seen_schedulers, arg)) return AGC_LAUNCH_BAD;
+      if (!value || !parse_schedulers(value, &options->schedulers))
+        return refuse(name, "--schedulers needs an integer from 1 to 1024");
       i += 2;
     } else if (strcmp(arg, "--source-root") == 0) {
       if (!once(name, &seen_root, arg)) return AGC_LAUNCH_BAD;

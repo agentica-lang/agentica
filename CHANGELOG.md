@@ -10,6 +10,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `--schedulers N` and the variable `AGENTICA_SCHEDULERS` set the number of
+  scheduler threads (1 to 1024; the flag wins; a bad value exits 2). This is
+  the first step of the multicore VM: the VM still runs one scheduler, so the
+  default is 1 and a larger number exits 2 with a message instead of running as
+  1. The same step builds Boehm with thread support, makes the task states
+  atomic (with PARKING and WOKEN), puts ready tasks in a locked global run queue
+  and reads the scheduler clock without the event loop. With one scheduler the
+  order of tasks does not change.
+
 - Native Windows regressions for ordinary-file line decoding, lock-owner
   cancellation, unsafe path aliases, depth/read-only removal failures,
   preservation of existing rename targets and junction destinations, localhost

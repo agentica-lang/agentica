@@ -72,7 +72,7 @@ static agc_task *pop_live(agc_task **head, agc_task **tail) {
   while (*head) {
     agc_task *t = *head;
     agc_task_remove(head, tail, t);
-    if (t->state == AGC_TASK_PARKED) return t;
+    if (agc_task_waiting(t)) return t;
   }
   return NULL;
 }
@@ -143,7 +143,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     stop_waiting(t);
     return timed_out_error();
   }
-  uint64_t now = agc_io_now(vm);
+  uint64_t now = agc_clock_ms();
   if (!t->channel.deadline) t->channel.deadline = now + (uint64_t)timeout;
   if (t->channel.deadline <= now) {
     stop_waiting(t);

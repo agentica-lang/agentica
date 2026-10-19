@@ -262,11 +262,11 @@ Items in the plan to re-check with this rule before they start:
   - **Question:** Required by the roadmap; it must keep the same five rules and
     add no runtime of its own.
 
-- **Item:** Multicore schedulers (gated, §16 and §10.2.3)
-  - **Question:** Gated on the numbers of step 9 (and the 6c pilot of step
-    7.2.2). If built: schedulers that pull from one global run queue, and one
-    I/O thread with the only loop. Each rule above must still hold as §16.6 maps
-    it, with one exit path for the process (`end_run` on the I/O thread).
+- **Item:** Multicore schedulers (in progress, §16 and §10.2.3)
+  - **Question:** Started by the owner's decision of 2026-10-19: schedulers
+    that pull from one global run queue, and one I/O thread with the only loop.
+    Each rule above must still hold as §16.6 maps it, with one exit path for the
+    process (`end_run` on the I/O thread).
 
 - **Item:** K I/O threads, local run queues with work stealing (§16.10)
   - **Question:** Only if measurements ask. Does the model of §16 stop being

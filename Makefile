@@ -279,7 +279,7 @@ PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/system.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/system.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -381,7 +381,7 @@ VM_CFLAGS += $(GC_INC)
 VM_STAMP := build/vm/flags
 VM_TP_STAMP := $(VM_BUILD)/third-party-flags
 GC_STAMP := build/vm/gc-flags
-GC_COMPILE = $(CC) -std=c11 -O2 $(VM_PIC) -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION -I $(GC_DIR)/include
+GC_COMPILE = $(CC) -std=c11 -O2 $(VM_PIC) -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION -DGC_THREADS -DGC_BUILTIN_ATOMIC -DPARALLEL_MARK -DTHREAD_LOCAL_ALLOC -I $(GC_DIR)/include
 YY_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS) $(YY_DEFS)
 PICO_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS)
 UV_COMPILE = $(VM_CC) -std=gnu11 $(YY_CFLAGS) $(UV_DEFS) -I $(UV_DIR)/include -I $(UV_DIR)/src

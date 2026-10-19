@@ -149,6 +149,9 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
   if options.flush_timeout != ""
     flags = flags.concat(["--flush-timeout", options.flush_timeout])
   end
+  if options.schedulers != ""
+    flags = flags.concat(["--schedulers", options.schedulers])
+  end
   if options.allow_run
     flags = flags.push("--allow-run")
   end

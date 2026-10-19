@@ -375,7 +375,8 @@ def run_vm(bytecode, *flags, args=(), **options):
 
 # The tests do not read these from their own environment: a trace or a trust store set by the caller would change
 # the output of the programs they compare.
-_VM_UNSET = ("AGENTICA_VM_TRACE", "AGENTICA_VM_TRACE_FILE", "AGENTICA_FLUSH_TIMEOUT_MS", "SSL_CERT_FILE", "SSL_CERT_DIR")
+_VM_UNSET = ("AGENTICA_VM_TRACE", "AGENTICA_VM_TRACE_FILE", "AGENTICA_FLUSH_TIMEOUT_MS", "AGENTICA_SCHEDULERS",
+             "SSL_CERT_FILE", "SSL_CERT_DIR")
 
 
 def vm_environment(extra=None):

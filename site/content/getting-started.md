@@ -160,11 +160,12 @@ Split text; an empty separator gives characters.
 | `--max-steps N` | stops the program after `N` steps (`RUNTIME-STEP-LIMIT`) |
 | `--seed N` | makes `Random` repeat the same numbers |
 | `--flush-timeout MS` | waits at most `MS` milliseconds for file data and buffered output to be written at the end of the run; when time runs out, the run still ends and prints a warning. The default is 30000 and the most is 86400000 (24 hours). The environment variable `AGENTICA_FLUSH_TIMEOUT_MS` sets the same value, and the flag wins over it |
+| `--schedulers N` | sets the number of scheduler threads, from 1 to 1024. The environment variable `AGENTICA_SCHEDULERS` sets the same value, and the flag wins over it. This build runs one scheduler, so the default is 1 and a larger number is refused with exit code 2 |
 | `--allow-run` | lets the program start other programs with `Process.spawn` |
 | `--dump` | prints the checked program tree instead of running it |
 | `--dump-ir` | prints the lowered VM IR instead of running the program |
 | `compile FILE -o OUT` | writes the program as VM bytecode; `agentica run -- OUT` runs it |
-| `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode that `compile` wrote, with `--max-steps`, `--seed`, `--flush-timeout`, `--allow-run`, `--source-root DIR`, `--ai` or `--json` before the `--`; `run` must be the first word, and `run --version` also lists the libraries the VM links |
+| `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode that `compile` wrote, with `--max-steps`, `--seed`, `--flush-timeout`, `--schedulers`, `--allow-run`, `--source-root DIR`, `--ai` or `--json` before the `--`; `run` must be the first word, and `run --version` also lists the libraries the VM links |
 | `--version` | prints the version |
 
 `agentica test` runs unit test files (`*_test.agc`, see [Test](/library/testing/test/)) and `.feature` specifications (see [BDD](/library/testing/bdd/)) in one report. With no paths it looks in `test/` and `specs/`; `--only TEXT` runs the tests and scenarios whose name contains `TEXT`.

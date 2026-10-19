@@ -7,7 +7,7 @@
 USAGE = [
   [
     "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] ",
-    "[--allow-run] [check] <source-file> [args...]",
+    "[--schedulers N] [--allow-run] [check] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
   "       agentica help NAME [--json]",
@@ -30,7 +30,8 @@ SUMMARY = [
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
   "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",
-  "                                          --flush-timeout MS, --allow-run, --source-root DIR, --ai, --json",
+  "                                          --flush-timeout MS, --schedulers N, --allow-run, --source-root DIR,",
+  "                                          --ai, --json",
   "  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split",
   "  agentica help                           this summary and the builtin namespaces",
   "Core rules:",
@@ -62,6 +63,11 @@ OPTIONS = [
   [
     "     wait at most MS milliseconds for file data and buffered output at the end of the run (default 30000; ",
     "AGENTICA_FLUSH_TIMEOUT_MS sets it too, the flag wins)",
+  ].join(""),
+  "  --schedulers <n>",
+  [
+    "     run on N scheduler threads, 1 to 1024 (AGENTICA_SCHEDULERS sets it too, the flag wins); this build runs ",
+    "one, so a larger number is refused",
   ].join(""),
   "  --dump",
   "     print the checked tree instead of running it",

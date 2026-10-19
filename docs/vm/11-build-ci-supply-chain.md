@@ -21,23 +21,29 @@
   holds the version and flags, so a new system libgc relinks, and the submodule
   is not compiled. `vendored` (the default off Linux, where there is no
   pkg-config module to count on) compiles libgc once from its submodule with
-  `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION` into `build/vm/gc.o`, and
-  links it with `-lpthread` (not on Windows). Those two defines are the ones
-  bdwgc's own configure and CMake builds set. `NO_EXECUTE_PERMISSION` keeps the
+  `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION -DGC_THREADS
+  -DGC_BUILTIN_ATOMIC -DPARALLEL_MARK -DTHREAD_LOCAL_ALLOC` into
+  `build/vm/gc.o`, and links it with `-lpthread` (not on Windows). The first
+  two defines are the ones bdwgc's own configure and CMake builds set; the
+  rest build the collector with thread support (below), and
+  `GC_BUILTIN_ATOMIC` makes it use the compiler's atomics, since the build
+  has no `libatomic_ops` header. `NO_EXECUTE_PERMISSION` keeps the
   heap without execute permission, since macOS on arm64 refuses writable and
   executable pages. `make vm-gc-stress` always uses the vendored GC (it needs
   `GC_DEBUG`), and `SANITIZE=1` links no libgc. Pass `AGENTICA_GC=vendored` to
   every make command, or export it. `build/vm/flags` and `obj-flags` record the
   mode, so switching it recompiles and relinks.
-- The two libgc builds differ in two ways. Debian's libgc is built with thread
-  support and the vendored `gc.o` is not (no `GC_THREADS`). The VM never
-  includes `gc.h` with `GC_THREADS`, so `pthread_create` is not redirected, the
-  collector knows only the main thread, and it starts no marker threads (the
-  process has one thread). That is safe because the libuv pool threads and the
-  I/O work run on `malloc` memory and never call `GC_malloc` or hold a GC
-  pointer (16.5). Nothing needs `GC_register_my_thread` while the VM has one
-  scheduler thread (N = 1); the multicore row (16) must call it for any thread
-  that touches GC memory, and build with `GC_THREADS`. The second difference is
+- Both libgc builds have thread support: Debian's libgc is built with it, and
+  the vendored `gc.o` has `GC_THREADS`, `PARALLEL_MARK` and
+  `THREAD_LOCAL_ALLOC`. `vm/value.c` defines `GC_THREADS` before it includes
+  `gc.h` (the only file that does), which gives it the registration calls.
+  The collector starts its mark threads when `agc_gc_allow_threads` calls
+  `GC_allow_register_threads`, and nothing calls it with one scheduler (N = 1),
+  so the process has no mark thread (the same threads as before the change).
+  The libuv pool threads and the I/O work run on `malloc` memory and never call
+  `GC_malloc` or hold a GC pointer (16.5), so they stay unregistered. A thread
+  that touches GC memory calls `agc_gc_thread_enter` first and
+  `agc_gc_thread_leave` before it ends. The one other difference is
   `ALL_INTERIOR_POINTERS`: `agc_init` calls `GC_set_all_interior_pointers(1)`
   before `GC_INIT`, so a libgc built without it behaves like the vendored one:
   both modes match.

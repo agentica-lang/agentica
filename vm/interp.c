@@ -150,6 +150,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
     rt->chars[c] = agc_make_string(&ch, 1, 1);
   }
   atomic_init(&rt->next_task_id, 1);
+  rt->runq = agc_runq_new();
   rt->log.level = -1;
   rt->log.lowest = AGC_LOG_NO_HANDLER;
   agc_trace_parse(&rt->trace, NULL, 2);
@@ -759,10 +760,16 @@ static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
   agc_fail(vm, "RUNTIME-KEY-NOT-FOUND", message, span);
 }
 
+/* The end of a turn that waits (docs/vm/10-io-multicore.md §10.2.3). PARKING to PARKED is the one CAS that decides:
+   it holds unless a waker got in first, and then the state is WOKEN and nobody queued the task. That task is not
+   parked: it yields, so the scheduler queues it and its next turn re-checks the wait. */
 static agc_turn_result park_task(agc_task *t) {
   t->parking = false;
-  t->state = AGC_TASK_PARKED;
-  return AGC_TURN_PARKED;
+  agc_task_state expected = AGC_TASK_PARKING;
+  if (atomic_compare_exchange_strong_explicit(&t->state, &expected, AGC_TASK_PARKED, memory_order_acq_rel,
+                                              memory_order_acquire))
+    return AGC_TURN_PARKED;
+  return AGC_TURN_YIELD;
 }
 
 /* The span of the running instruction, read only where a failure or a call needs it. */
@@ -1018,11 +1025,9 @@ reload:
           goto reload;
         }
         if (t->parking) {
-          t->parking = false;
           if (t->retry) frame->pc = pc - 1;
           t->park_reg = base + in.a;
-          t->state = AGC_TASK_PARKED;
-          return AGC_TURN_PARKED;
+          return park_task(t);
         }
         args[0] = result;
         if (b->cost == AGC_COST_SIZE) agc_charge(vm, units + agc_value_units(result));

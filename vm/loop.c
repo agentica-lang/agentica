@@ -852,11 +852,9 @@ uint64_t agc_trace_now(void) {
   return now;
 }
 
-uint64_t agc_io_now(agc_vm *vm) {
-  agc_loop *loop = loop_of(vm);
-  uv_update_time(&loop->uv);
-  return uv_now(&loop->uv);
-}
+/* The clock of the schedulers: milliseconds of libuv's monotonic clock. It does not read the loop (uv_now is the
+   loop's own cached time, and the loop belongs to the I/O thread), so any thread may call it. */
+uint64_t agc_clock_ms(void) { return agc_trace_now() / 1000000u; }
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   agc_task *t = vm->task;
@@ -868,7 +866,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     return AGC_LOCK_TAKEN;
   }
   uint64_t deadline = t->lock_deadline;
-  uint64_t now = deadline ? agc_io_now(vm) : 0;
+  uint64_t now = deadline ? agc_clock_ms() : 0;
   t->lock_wait = NULL;
   if (handle->next_owner == t || (!handle->holder && !handle->next_owner)) {
     if (deadline) agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
@@ -883,7 +881,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     return AGC_LOCK_TAKEN;
   }
   if (!deadline) {
-    now = agc_io_now(vm);
+    now = agc_clock_ms();
     deadline = t->lock_deadline = now + (uint64_t)*timeout_ms;
   }
   agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
@@ -1158,10 +1156,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   return AGC_LOCK_TAKEN;
 }
 
-uint64_t agc_io_now(agc_vm *vm) {
-  (void)vm;
-  return 0;
-}
+uint64_t agc_clock_ms(void) { return 0; }
 
 const agc_io_kind agc_wait_io = {NULL, NULL, NULL, NULL, false, "lock", NULL};
 

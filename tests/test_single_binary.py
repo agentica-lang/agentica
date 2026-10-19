@@ -378,6 +378,38 @@ def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(t
     assert "AGENTICA_FLUSH_TIMEOUT_MS needs an integer" in refused.stderr
 
 
+HELLO = ROOT / "examples" / "hello.agc"
+SCHEDULERS_RANGE = "needs an integer from 1 to 1024"
+MORE_THAN_ONE = "schedulers were asked for, but this build runs one"
+
+
+def test_the_scheduler_count_is_checked_and_more_than_one_is_refused_before_the_program_runs(tmp_path):
+    """`--schedulers N` and AGENTICA_SCHEDULERS take 1 to 1024, the flag wins, and until the VM has more than one
+    scheduler a larger count must not run as one: it is a start error (status 2) with nothing on stdout."""
+    asked = {}
+    for count in ("0", "1025", "x", "-1", ""):
+        got = agentica("--schedulers", count, HELLO, timeout=scaled(10))
+        asked[count] = (got.code, got.stdout, SCHEDULERS_RANGE in got.stderr)
+    assert asked == {count: (2, "", True) for count in asked}
+    ran = agentica("--schedulers", "1", HELLO, timeout=scaled(10))
+    assert (ran.code, ran.stdout, ran.stderr) == (0, "hello\n", "")
+    refused = agentica("--schedulers", "2", HELLO, timeout=scaled(10))
+    assert (refused.code, refused.stdout) == (2, "") and MORE_THAN_ONE in refused.stderr
+    # The variable is read before the front end compiles; the flag overrides it, valid or not.
+    bad = agentica(HELLO, env=vm_environment({"AGENTICA_SCHEDULERS": "many"}), timeout=scaled(10))
+    assert (bad.code, bad.stdout) == (2, "") and "AGENTICA_SCHEDULERS " + SCHEDULERS_RANGE in bad.stderr
+    many = vm_environment({"AGENTICA_SCHEDULERS": "3"})
+    assert agentica(HELLO, env=many, timeout=scaled(10)).code == 2
+    assert agentica("check", HELLO, env=many, timeout=scaled(10)).code == 0
+    won = agentica("--schedulers", "1", HELLO, env=many, timeout=scaled(10))
+    assert (won.code, won.stdout) == (0, "hello\n")
+    program = compile_agc(HELLO, tmp_path / "hello.agcb")
+    for words, code in ((("--schedulers", "1"), 0), (("--schedulers", "2"), 2), (("--schedulers", "0"), 2)):
+        assert run_vm(program, *words, timeout=scaled(10), env=vm_environment()).code == code
+    got = run_vm(program, env=vm_environment({"AGENTICA_SCHEDULERS": "2"}), timeout=scaled(10))
+    assert (got.code, got.stdout) == (2, "") and MORE_THAN_ONE in got.stderr
+
+
 def test_a_problem_in_a_std_module_shows_that_module_not_a_file_of_the_working_folder(tmp_path):
     """A front end on the VM with --stdlib DIR: DIR/queue.agc is broken, ./std/queue.agc is a decoy."""
     require(STAGE2.is_file(), "the front end is not built (%s): run make stage2" % STAGE2)

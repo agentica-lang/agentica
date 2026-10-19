@@ -40,8 +40,8 @@ before it moved; the header split moved no line of a `.c` file except the
 - **Layer:** **Core**
   - **Files:** `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`,
     `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`,
-    `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`,
-    `loader.c`, `builtins.c`, `diag.c`, `trace.c`
+    `runq.c`, `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`,
+    `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c`
   - **May use:** `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv
 
 - **Layer:** **Services**

@@ -26,7 +26,7 @@
 #define MAX_FNS 22
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CRASH, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CRASH, B_WINDOW, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
 
 enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED, F_MAP_ITEM, F_MAP_GROUP, F_MAP_CLOSING, F_MAP_CRASHING };
 
@@ -60,6 +60,7 @@ static int released;
 static bool self_returned;
 static int owned_closed;
 static int tries;
+static int window_calls;
 static int end_calls;
 static agc_task *closed[4];
 static size_t closed_count;
@@ -309,6 +310,20 @@ static agc_value test_crash(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_fail(vm, "RUNTIME-INVALID-COUNT", "test crash", span);
 }
 
+/* A waker that gets in between the park mark and the end of the turn: the first call wakes its own task, as another
+   thread could. The task must not park: the turn ends with the task woken, and the builtin runs again. */
+static agc_value test_window(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  if (window_calls++ == 0) {
+    agc_task_park(vm, true);
+    assert(vm->task->state == AGC_TASK_PARKING);
+    agc_task_wake(vm, vm->task, "test");
+    assert(vm->task->state == AGC_TASK_WOKEN && !agc_runq_peek(vm->rt->runq));
+  }
+  return agc_void();
+}
+
 static agc_value test_close_done(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_task_close_done(vm, agc_as_task(vm, args[0]));
@@ -409,6 +424,7 @@ static const agc_builtin test_builtins[] = {
   {"Test.closing", 1, test_closing, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.close_done", 1, test_close_done, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.crash", 1, test_crash, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.window", 1, test_window, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -608,6 +624,7 @@ static void reset(void) {
   self_returned = false;
   owned_closed = 0;
   tries = 0;
+  window_calls = 0;
   client = agc_void();
   memset(jobs, 0, sizeof jobs);
 }
@@ -745,6 +762,19 @@ static void test_timer_fired_then_cancel(void) {
   run_done(&p, check_timer_ready);
 }
 
+static void test_woken_while_parking(void) {
+  prog p;
+  new_prog(&p);
+  call_int(&p, F_MAIN, B_WINDOW, 0);
+  call_int(&p, F_MAIN, B_MARK, 1);
+  finish_fn(&p, F_MAIN);
+  reset();
+  agc_vm vm;
+  agc_outcome o = run(&vm, &p);
+  assert(o.kind == AGC_DONE && window_calls == 2 && mark_count == 1 && marks[0] == 1);
+  settle(&vm);
+}
+
 static void check_await(agc_vm *vm, int64_t n) {
   (void)n;
   agc_task *s = reg_task(vm, 0), *w = reg_task(vm, 2);
@@ -778,7 +808,7 @@ static void test_parked_await(void) {
 static void check_ready(agc_vm *vm, int64_t n) {
   (void)n;
   agc_task *r = reg_task(vm, 0);
-  assert(cancelled(r) && !r->next && vm->ready == NULL && !vm->main->children);
+  assert(cancelled(r) && !r->next && !agc_runq_peek(vm->rt->runq) && !vm->main->children);
 }
 
 static void test_ready_then_await(void) {
@@ -1298,6 +1328,7 @@ int main(void) {
   quiet = fopen("/dev/null", "w");
   assert(quiet);
   test_states();
+  test_woken_while_parking();
   test_parked_await();
   test_ready_then_await();
   test_self_cancel();

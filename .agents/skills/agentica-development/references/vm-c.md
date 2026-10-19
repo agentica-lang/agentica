@@ -105,10 +105,12 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   binary) has checked pkg-config, the package and `GC_MIN` (8.2.0);
   `vendored` builds `build/vm/gc.o` from the submodule (non-Linux hosts, the
   release, and `GC_STRESS=1` always); `SANITIZE=1` has no libgc. The mode is
-  not remembered: pass it to every make command or export it. Debian's libgc
-  is threaded and `gc.o` is not; the VM never defines `GC_THREADS`, so the
-  collector knows only the main thread and starts no marker threads. Keep
-  pool threads off GC memory (they use `malloc` only); a thread that
-  touches the heap needs `GC_THREADS` and `GC_register_my_thread` first.
+  not remembered: pass it to every make command or export it. Both builds
+  have thread support (Debian's libgc, and `gc.o` with the defines above;
+  `vm/value.c` defines `GC_THREADS` before `gc.h`). The collector starts no
+  marker threads until `agc_gc_allow_threads`, which only the C tests call, so
+  N=1 has none. Keep pool threads off GC memory (they use `malloc` only); a
+  thread that touches the heap calls `agc_gc_thread_enter` first and
+  `agc_gc_thread_leave` before it ends.
   `agc_init` sets `GC_set_all_interior_pointers(1)` before `GC_INIT` so both
   builds agree.

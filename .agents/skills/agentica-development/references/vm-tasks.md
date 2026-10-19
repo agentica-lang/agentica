@@ -10,6 +10,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - **Owns:** The scheduler (run queue, turns, park and wake), task cancellation
     and the `Task` builtins.
 
+- **Path:** `vm/runq.c`
+  - **Owns:** The global run queue: a FIFO through `agc_task.next`, one mutex
+    and one condvar, in GC memory (`agc_runtime.runq`). `agc_runq_push`,
+    `agc_runq_pop`, `agc_runq_wait` (the schedulers' blocking pop),
+    `agc_runq_end`, `agc_runq_remove`.
+
 - **Path:** `vm/task_map.c`
   - **Owns:** `Task.map`: a stepper on the caller that starts, times and cancels
     the items.
@@ -26,7 +32,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     - `agc_vm_run` (
       - setjmp, FIFO run queue, one turn per task, `uv_run` NOWAIT after each
         turn and ONCE when idle, the stall check)
-    - `agc_task_wake`, `agc_task_park`, task cancellation (
+    - `agc_task_wake`, `agc_task_park` (
+      - the state is an `_Atomic agc_task_state`: READY (in the run queue),
+        RUNNING, PARKING, PARKED, WOKEN, DONE
+      - a waker CASes PARKED to READY and pushes, or PARKING to WOKEN and queues
+        nothing; `park_task` in `vm/interp.c` CASes PARKING to PARKED at the end
+        of the turn, and yields if it finds WOKEN
+      - `agc_task_park` takes PARKING after the builtin registered its wait
+      - `agc_clock_ms` is the clock for deadlines; it does not read the loop)
+    - task cancellation (
       - 20b, `docs/vm/10-io-scheduler.md` §10.2.1: each task has `parent` and a
         `children` list
       - a task that ends moves its running children to its parent

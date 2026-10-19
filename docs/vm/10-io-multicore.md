@@ -4,17 +4,18 @@ The multicore model (threads, queues and ownership) is in §16
 ([`16-architecture.md`](16-architecture.md)); this section keeps the rules
 that still apply. §16 replaces the earlier BEAM-style plan (a loop, run queue
 and registry per scheduler, home schedulers and work stealing) with one I/O
-loop, one global queue and no home scheduler. Multicore is gated on the server
-measurement (roadmap 7j, order step 11) and proceeds only if CPU-bound work
-needs it.
+loop, one global queue and no home scheduler. Multicore is built in steps
+(roadmap 7h, order step 11); §16.9 lists what exists.
 
 - **Schedulers.** `N` defaults to `uv_available_parallelism()` (respects CPU
-  affinity); `--schedulers N` sets it, capped at 1024 (not built). Invalid
-  values exit 2. `--schedulers 1` gives the N=1 order, which still depends on
-  timer and pool timing. `--seed` does not imply one scheduler; at N>1 only
-  per-task random values repeat (7.4). The thread split and shared queue are in
-  §16.2–16.3. Tasks are green VM stacks; turns and reductions are in §10.2.1,
-  thread-pool details in §10.2.2.
+  affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it,
+  capped at 1024, and the flag wins. Invalid values exit 2. As built, both are
+  parsed and checked, the default is 1, and a count above 1 exits 2 before the
+  program loads, because only one scheduler runs (§16.9). `--schedulers 1`
+  gives the N=1 order, which still depends on timer and pool timing. `--seed`
+  does not imply one scheduler; at N>1 only per-task random values repeat
+  (7.4). The thread split and shared queue are in §16.2–16.3. Tasks are green VM
+  stacks; turns and reductions are in §10.2.1, thread-pool details in §10.2.2.
 - **Run queue and idle schedulers.** FIFO order, push/pop and condvar rules are
   specified in §16.3. Requeueing a preempted task does not change the packed
   Stall-check word: it remains live.
@@ -44,6 +45,11 @@ needs it.
   WOKEN is stale and dropped. The scheduler sets WOKEN to RUNNING when the turn
   starts. A resumed task re-checks its condition, so a wake is only a hint. No
   wake is lost, and a task is queued at most once. Which waker wins is in §16.5.
+  As built (`agc_task_wake` in `vm/task.c`, `park_task` in `vm/interp.c`), a
+  waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the run
+  queue", and the scheduler sets READY to RUNNING when it pops the task. A task
+  that finds WOKEN when it tries PARKING to PARKED yields instead. PARKING is
+  taken in `agc_task_park`, after the builtin registered its wait (§16.9).
 - **Channel lock (17b).** Each channel has a short lock. `send`, `recv`,
   `close`, a wake, a hand-on and a cancelled waiter that leaves its FIFO take
   it, and it is never held across a park. Ring growth copies the slots under the
@@ -78,14 +84,14 @@ needs it.
   one (as built).
 - **State split.** As built (`vm/port.h`): `agc_runtime` (shared),
   `struct agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
-  current `task`, the run queue, `loop`, `registry`, the turn counters and the
-  `fail` jmp_buf), and `agc_task`. With N=1 there are these deviations: the
+  current `task`, `loop`, `registry`, the turn counters and the `fail`
+  jmp_buf), and `agc_task`. The run queue is a field of the runtime
+  (`agc_runtime.runq`, `vm/runq.c`). With N=1 there are these deviations: the
   runtime is GC-allocated by `agc_vm_init` (both are roots for Boehm), the
   `fail` jmp_buf is per scheduler (the only `setjmp` is the scheduler's own),
-  the task state is a plain READY, RUNNING, PARKED, DONE enum (no PARKING or
-  WOKEN, which only matter to a thread that can wake a task), and there are no
-  stream locks, since one thread writes. With N>1 the fields go as follows
-  (§16):
+  and there are no stream locks, since one thread writes. The task state is an
+  atomic enum with PARKING and WOKEN (see "Park and wake protocol"). With N>1
+  the fields go as follows (§16):
   - Runtime, read-only after start-up: `program` (with its constants, except
     the Globals table, which the entry writes before `main`, see "The Globals
     table" below), `args`, `cwd` (raw bytes, read by `agc_files_init`),
@@ -153,9 +159,14 @@ needs it.
 - **Shutdown.** `end_run` runs on the I/O thread; it does not close each handle
   or free the loop (§14.4; §10.2.2, "End of run").
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
-  `THREAD_LOCAL_ALLOC`. Scheduler threads are created with `GC_pthread_create`
-  or register with `GC_register_my_thread`. The libuv pool threads stay
-  unregistered on purpose, since they never touch GC memory. The runtime struct
+  `THREAD_LOCAL_ALLOC`; as built, this holds for the vendored `gc.o` and the
+  distro's libgc, and `vm/value.c` defines `GC_THREADS` before it includes
+  `gc.h`. The threads libuv starts (the schedulers) register with
+  `agc_gc_thread_enter` (`GC_register_my_thread`) and leave with
+  `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once
+  after `agc_init`, which also starts the mark threads. The libuv pool threads
+  stay unregistered on purpose, since they never touch GC memory. With N=1 no
+  one calls `agc_gc_allow_threads`, so no mark thread exists. The runtime struct
   stays on the main thread's stack for the whole run. The run queue lives in GC
   memory or is a registered root, so a head in `malloc` memory never hides a
   task from the collector. Jobs and the inbox are `malloc` memory with no GC
@@ -213,7 +224,7 @@ needs it.
   would not stop a torn read). At N=1 tasks interleave on one thread and
   nothing is racy.
 - **Order of work.** First the tasks PR, on these split structures, with N=1.
-  Then, if the gate opens, the multicore schedulers item: N>1 with the I/O
+  Then the multicore schedulers item: N>1 with the I/O
   thread and its inbox, the global run queue, Boehm threads, the TLS and HTTP
   steps moved into the resumed task's turn (§16.9), and a stress test of the
   task fixtures with `--schedulers 4`, under TSan when available. TSan does not

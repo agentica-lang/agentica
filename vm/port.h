@@ -43,6 +43,7 @@ typedef void (*agc_end_fn)(agc_vm *vm, agc_task *t);
 typedef struct agc_test_note agc_test_note;
 typedef struct agc_test_run agc_test_run;
 typedef struct agc_registry agc_registry;
+typedef struct agc_runq agc_runq;
 typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
 typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
@@ -224,6 +225,7 @@ typedef struct {
   agc_style style;
   int64_t flush_timeout;
   agc_front_end *front_end;
+  agc_runq *runq;
 #ifdef __linux__
   locale_t messages_locale;
 #endif
@@ -239,7 +241,14 @@ typedef struct {
   agc_file_ids inherited;
 } agc_runtime;
 
-typedef enum { AGC_TASK_READY, AGC_TASK_RUNNING, AGC_TASK_PARKED, AGC_TASK_DONE } agc_task_state;
+/* The life of a task (docs/vm/10-io-multicore.md §10.2.3, "Park and wake protocol"). READY: in the run queue, from a
+   spawn, a yield or a wake. RUNNING: a scheduler runs its turn. PARKING: the turn is registering a wait, and a wake
+   that arrives now has to be seen by the task. PARKED: waiting, in no queue. WOKEN: a waker got in while the task was
+   PARKING; nothing was queued, and the end of the turn sends the task back to the queue. DONE: ended. Only
+   agc_task_wake changes the state of a task that is not running its turn. */
+typedef enum {
+  AGC_TASK_READY, AGC_TASK_RUNNING, AGC_TASK_PARKING, AGC_TASK_PARKED, AGC_TASK_WOKEN, AGC_TASK_DONE
+} agc_task_state;
 
 typedef enum { AGC_TURN_YIELD, AGC_TURN_PARKED, AGC_TURN_DONE } agc_turn_result;
 
@@ -260,7 +269,7 @@ struct agc_task {
   agc_stepper *stepper;
   int64_t turn_cost;
   uint64_t lock_deadline, await_deadline, input_seen;
-  agc_task_state state;
+  _Atomic agc_task_state state;
   bool cancelled, crashed, observed, left_children, group, hidden, spawned;
   uint32_t spawn_span;
   agc_value result;
@@ -297,7 +306,6 @@ typedef struct {
 struct agc_vm {
   agc_runtime *rt;
   agc_task *task, *main;
-  agc_task *ready, *ready_tail;
   agc_registry *registry;
   agc_loop *loop;
   agc_resource *process_guard, *parent;
@@ -321,6 +329,7 @@ void agc_unregister(agc_vm *vm, agc_resource *r);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
+bool agc_task_waiting(const agc_task *t);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);

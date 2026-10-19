@@ -109,7 +109,22 @@ Read first: `references/vm.md`.
     `test_closing_task` also checks that the end hook of a task runs once, when
     `agc_task_close_done` brings `closing` to 0; 17c adds
     `test_timed_await_cancel` and `test_timed_await_ends` (they build the
-    `Await` enum tables in `new_prog`)
+    `Await` enum tables in `new_prog`); `test_woken_while_parking` (the
+    `Test.window` builtin wakes its own task while the task is PARKING: the CAS
+    makes it WOKEN, queues nothing, and the end of the turn yields instead of
+    parking, so the task is queued once)
+
+- **Path:** `vm/tests/runq_test.c`
+  - **Owns:** The global run queue (`vm/runq.c`): FIFO order and removal from
+    the middle, three pushers against three poppers on libuv threads (every task
+    comes out exactly once), a waiter that sleeps until a push, and
+    `agc_runq_end` waking every waiter.
+
+- **Path:** `vm/tests/gc_thread_test.c`
+  - **Owns:** Boehm with threads: libuv threads that call `agc_gc_thread_enter`
+    allocate checked lists, held only on their stacks, while they and the main
+    thread force collections. A collector that missed a stack would free live
+    nodes. The sanitizer build has no collector, so it only runs the threads.
 
 - **Path:** `vm/tests/channel_test.c`
   - **Owns:** the `Channel` builtins called directly with hand-made tasks (no

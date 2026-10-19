@@ -4,8 +4,8 @@
 [roadmap](../roadmap/README.md) (docs only; nothing here changes the VM yet).
 This is the one picture of the threads, the queues and who owns what. The VM as
 built runs one scheduler and the loop on the same thread (N = 1); §16.9 says
-what differs. Building more than one scheduler stays gated (roadmap step 11),
-and this model also serves N = 1.
+what differs. More than one scheduler is built in steps (roadmap step 11), and
+this model also serves N = 1.
 
 It replaces the first multicore design of §10.2.3 (BEAM style: one loop, one run
 queue and one resource registry per scheduler, a home scheduler for each task,
@@ -149,7 +149,10 @@ void end_waiting(queue *q) {
 ```
 
 This is a sketch of the rules, not final code. The run queue's `push` also calls
-`pthread_cond_signal` after the unlock. The rules:
+`pthread_cond_signal` after the unlock. As built, the run queue is
+`vm/runq.c`, with libuv's `uv_mutex_t` and `uv_cond_t` (portable to Windows).
+It counts the schedulers inside `agc_runq_wait`, so a push signals only when
+one can hear it. The rules:
 
 - **Wake after publish.** The producer prepares the entry outside the lock,
   links it under the lock, unlocks, and only then wakes the recipient. The lock
@@ -412,17 +415,20 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   after each turn and `uv_run(UV_RUN_ONCE)` when the run queue is empty
   (§10.2.1, §10.2.2). In the model, the I/O thread sits in the loop and the
   schedulers wait on the condvar.
-- **No inbox and no locks.** `agc_io_start` calls libuv directly. libuv
-  callbacks put the job on a ready list, and the scheduler drains it after
-  `uv_run` and queues the tasks. That drain is the push of §16.4. The run queue
-  is a plain list.
+- **No inbox.** `agc_io_start` calls libuv directly. libuv callbacks put the
+  job on a ready list, and the scheduler drains it after `uv_run` and queues
+  the tasks. That drain is the push of §16.4. The run queue is the locked queue
+  of §16.3 (`vm/runq.c`, reached by `agc_runtime.runq`, in GC memory). The one
+  scheduler locks it on each push and pop and never waits on the condvar.
 - **Libuv steps run on the scheduler.** The timer close in `agc_io_finish` and
   `end_detached`; the libuv part of `done`, `expired`, cancel and `drop` (for
   example `accept_done` in `vm/tcp.c`, `request_expired` in `vm/process.c`, the
   file `drop` in `vm/files.c`); the poller calls of builtins; the timer and
   `uv_queue_work` of `start_job`; and `loop_now` and `agc_io_extend`
-  (`vm/loop.c`). In the model they are requests to the I/O thread, and the
-  scheduler needs a clock that does not use the loop.
+  (`vm/loop.c`). In the model they are requests to the I/O thread. The clock
+  is already apart from the loop: `agc_clock_ms` (the monotonic `uv_hrtime`,
+  in milliseconds) is what the scheduler, the channel waits and `Task.map` read
+  for deadlines.
 - **Services make their own handles** through `agc_io_uv` (§15.1), for example
   in `vm/tcp.c`, `vm/process.c` and `vm/http_client.c`. In the model that code
   is the start step of a request.
@@ -435,10 +441,26 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
 - **TLS and HTTP steps run in libuv callbacks.** For example `advance` and
   `flush` in `vm/tcp.c` and `head_step` in `vm/http_server.c`. The model moves
   them into the turn of the resumed task.
-- **Plain task states.** READY, RUNNING, PARKED and DONE, without PARKING and
-  WOKEN (§10.2.3), and no stream locks.
-- **One resource registry on the scheduler** (`vm->registry`), and Boehm built
-  without thread support.
+- **Atomic task states, and a different READY.** The states are READY, RUNNING,
+  PARKING, PARKED, WOKEN and DONE (`agc_task_state` in `vm/port.h`), in an
+  `_Atomic` field. READY means "in the run queue", so a waker CASes PARKED to
+  READY and pushes; the model's PARKED to WOKEN (§10.2.3) is not used. A waker
+  that finds PARKING CASes it to WOKEN and queues nothing, as in the model: the
+  end of the turn (`park_task` in `vm/interp.c`) CASes PARKING to PARKED, and
+  when it finds WOKEN it yields, so the task is queued once and its next turn
+  checks the wait again. The task takes PARKING in `agc_task_park`, after the
+  builtin has registered its wait, where the model takes it before the
+  registration. With one thread nothing can wake the task in between. There
+  are no stream locks.
+- **`--schedulers N` is parsed and checked, and only 1 runs.** `vm/launch.c`
+  reads the flag and `AGENTICA_SCHEDULERS` (1 to 1024, the flag wins). A count
+  above 1 exits 2 with a message before the program loads, so N > 1 never runs
+  as 1. The default is 1, not `uv_available_parallelism()`.
+- **One resource registry on the scheduler** (`vm->registry`). Boehm is built
+  with thread support (§10.2.3, "GC"), but no thread registers with it yet:
+  `agc_gc_allow_threads`, `agc_gc_thread_enter` and `agc_gc_thread_leave`
+  (`vm/value.c`) are the helpers, and only the C tests call them. N = 1 starts
+  no marker thread.
 - **`end_run` runs on the scheduler's thread**, which is the main thread.
 
 ### 16.10 Later iterations
@@ -462,9 +484,9 @@ Only if measurements ask for them. Neither is planned.
   (`end_detached`), so the options are: the I/O thread does it, an exception to
   §16.5 for this case; or the job goes back through the run queue to a
   scheduler.
-- **Cancelling a ready task.** `agc_task_cancel` already walks the ready list
-  today (`leave_ready` in `vm/task.c`), on the one thread. With a shared run
-  queue the options are:
+- **Cancelling a ready task.** `agc_task_cancel` already walks the run queue
+  today (`agc_runq_remove` in `vm/runq.c`, which takes the queue's lock), on the
+  one thread. With several schedulers the options are:
   - Walk the queue under its lock. It is O(n), and it misses a task that another
     scheduler has popped but not yet set to RUNNING, so the cancel flag must be
     set as well and checked when that task starts.
