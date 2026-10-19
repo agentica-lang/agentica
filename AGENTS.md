@@ -32,7 +32,8 @@ site/content/       Hugo documentation site
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agentica-development (working on this repo), agentica-programming
                     (writing .agc), agentica-code-guidelines (.agc style and
-                    speed), vm-c-critic (C VM PR review)
+                    speed), vm-c-critic (C VM PR review), agentica-dev-workflow
+                    (the PR loop: review, fix, CI, merge)
 ```
 
 Each of `docs/grammar/`, `docs/future/`, `docs/roadmap/` and `docs/vm/` has a
@@ -85,6 +86,9 @@ phase 13).
 
 - **Task:** a C VM PR review
   - **Read:** `.agents/skills/vm-c-critic/`
+
+- **Task:** taking a PR from branch to merge (reviews, fixes, CI, merge)
+  - **Read:** `.agents/skills/agentica-dev-workflow/`
 
 - **Task:** language rules
   - **Read:** `docs/grammar/`
