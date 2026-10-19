@@ -96,7 +96,7 @@ phase 13).
   - **Read:** `.agents/skills/agentica-dev-workflow/`
 
 - **Task:** writing or updating docs, a site page, a skill, a CHANGELOG
-  entry or a PR body
+  entry, a doc comment or a PR body
   - **Read:** `.agents/skills/documentation-writing/`
 
 - **Task:** language rules

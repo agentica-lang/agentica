@@ -22,8 +22,9 @@ Ask what changed and who reads about it:
 - **User-visible behavior** (syntax, builtin, CLI): the grammar, the site page
   and the programming skill together (the AGENTS.md rule), plus a CHANGELOG
   entry.
-- **A design decision or contract:** the design doc (`docs/vm/...`). Write
-  the decision and its reason, not the recipe (files touched, steps taken).
+- **A design decision or contract:** the design doc (built: `docs/vm/`;
+  planned: the roadmap phase file, see the pruning map). Write the decision
+  and its reason, not the recipe (files touched, steps taken).
 - **An implementation detail:** a code comment where the code is not obvious,
   or nothing.
 - **Progress or evidence:** the PR body, the roadmap tick or the CHANGELOG.
@@ -37,7 +38,8 @@ leave it out and mention the gap in the PR body.
 Each fact lives in one file. Edit that file in place; other places hold only
 a pointer. The homes are in the lifecycle table and the Agentica map of
 `documentation-pruning` (§2); follow them, do not copy them here or into new
-docs. Do not create files under `docs/` (AGENTS.md).
+docs. Do not create files under `docs/` unless the user asks for one
+(AGENTS.md).
 
 ## 3. Provable claims
 
@@ -55,8 +57,9 @@ docs. Do not create files under `docs/` (AGENTS.md).
 ## 4. Minimal diff
 
 - Change only the sentences that became wrong; keep the rest byte for byte.
-- No history: no "now", "previously", "new", "this PR". Docs describe the
-  current state; git and the PR keep the history.
+- No history in docs: no "now", "previously", "new", "this PR". Docs
+  describe the current state; git keeps the history. Only the CHANGELOG and
+  the PR body may say "new" or "added".
 - No per-PR progress logs in design docs. An "As built" or status section
   that every PR rewrites causes merge conflicts; progress goes in the PR body
   and the roadmap.
@@ -82,7 +85,7 @@ Real overclaims from recent PRs, each caught only by a critic:
 - "Descendants die with the job object": only direct children do, under
   `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`.
 - "A stopped Windows child exits with code 1": it is 128 + signal.
-- "`agc_sync_assert` in every mutator": there were 9 sites, not all.
+- "`agc_sync_assert` in every mutator": it was in some mutators, not all.
 - "Faster" in the CHANGELOG with no benchmark behind it.
 - Benchmark figures in docs that nobody could reproduce.
 - Docs describing `.com` and name rules one PR before the code landed.
