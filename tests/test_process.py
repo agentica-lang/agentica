@@ -9,22 +9,23 @@ import re
 
 import pytest
 
-from tests.agentica_test import FIXTURES, cli, run, tool, vm_environment
+from tests.agentica_test import FIXTURES, agc_literal, cli, run, tool, vm_environment
 
 PEER = FIXTURES / "process-peer.js"
 
 
 def spawn(node, mode, extra=""):
-    return '  p = Result.unwrap!(Process.spawn("%s", ["%s", "%s"%s], 5000))\n' % (node, PEER, mode, extra)
+    return '  p = Result.unwrap!(Process.spawn(%s, [%s, "%s"%s], 5000))\n' % (agc_literal(node), agc_literal(PEER), mode, extra)
 
 
 def captured(node, mode, body, prefix=""):
-    return ('%sdef main() -> Void\n  p = Result.unwrap!(Process.spawn_captured("%s", ["%s", "%s"], ".", 5000))\n%s\nend\n\n'
-            % (prefix, node, PEER, mode, body))
+    return ('%sdef main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, "%s"], ".", 5000))\n%s\nend\n\n'
+            % (prefix, agc_literal(node), agc_literal(PEER), mode, body))
 
 
 def probe(node, pid):
-    return 'Process.wait(Result.unwrap!(Process.spawn("%s", ["%s", "probe", %s], 5000)), 5000)' % (node, PEER, pid)
+    return ('Process.wait(Result.unwrap!(Process.spawn(%s, [%s, "probe", %s], 5000)), 5000)'
+            % (agc_literal(node), agc_literal(PEER), pid))
 
 
 def program(node, mode, body, prefix="", extra=""):
@@ -73,8 +74,9 @@ def alive(node, pid):
 
 def test_cli_capability_guards_execution_while_check_and_help_work_without_it(tmp_path):
     node = tool("node")
-    body = ("  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.inspect(System.args())\n"
-            "  Result.unwrap!(Process.wait(p, 5000))")
+    # The first node start of a test run can be slow on a cold Windows runner (virus scan), so this one waits longer.
+    body = ("  puts(Result.unwrap!(Process.read_line(p, 30000)))\n  IO.inspect(System.args())\n"
+            "  Result.unwrap!(Process.wait(p, 30000))")
     file = write(tmp_path, "program.agc", program(node, "args", body))
     assert tuple(cli_run("check", file)) == (0, "check ok\n", "")
     denied = cli_run("--json", file, "--allow-run")
@@ -94,35 +96,6 @@ def test_unavailable_and_malformed_commands_return_errors_without_a_child(tmp_pa
         '  IO.inspect(Result.ok?(Process.spawn("node", [nul], 1000)))\nend\n\n') == "false\nfalse\nfalse\n"
 
 
-def test_bdd_handlers_can_always_spawn_and_programs_under_test_need_allow_run(tmp_path):
-    node = tool("node")
-    directory = tmp_path
-    feature = directory / "process.feature"
-    steps = directory / "steps.agc"
-    feature.write_text(
-        'Feature: Process capability\nScenario: child\nGiven the Agentica program "child.agc"\n'
-        'Then I receive a JSON line within 30000 milliseconds:\n  """\n  ["child"]\n  """\n'
-        'And the program exits with code 0 within 30000 milliseconds\nScenario: handler\nThen the handler can spawn\n')
-    (directory / "child.agc").write_text(program(
-        node, "args", "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  Result.unwrap!(Process.wait(p, 5000))",
-        "", ', "child"'))
-    steps.write_text(
-        'import BDD from "std/bdd"\n\ndef handler(ctx: BDD.Context, args: List[String]) -> BDD.Context\n'
-        + spawn(node, "args", ', "handler"')
-        + '  checked = BDD.assert(ctx, Result.unwrap!(Process.read_line(p, 5000)) == "[\\"handler\\"]", "argv")\n'
-        + "  Result.unwrap!(Process.wait(p, 5000))\n  return checked\nend\n\n"
-        + 'def main() -> Void\n  BDD.run([BDD.step("the handler can spawn", &handler)])\nend\n')
-    args = ["test", feature, "--steps", steps, "--json"]
-    denied = cli_run(*args)
-    assert denied.code == 1, (denied.stdout, denied.stderr)
-    report = json.loads(denied.stdout)
-    assert report["passed"] == 1
-    assert [item["status"] for item in report["files"][0]["scenarios"]] == ["failed", "passed"]
-    allowed = cli_run(*args, "--allow-run")
-    assert allowed.code == 0
-    assert json.loads(allowed.stdout)["passed"] == 2
-
-
 def test_permission_literal_argv_and_inherited_task_capability(tmp_path):
     node = tool("node")
     text = program(node, "args", "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.inspect(Process.wait(p, 5000))",
@@ -131,6 +104,15 @@ def test_permission_literal_argv_and_inherited_task_capability(tmp_path):
     assert denied == "RUNTIME-UNWRAP-ERROR"
     assert out == ""
     assert output(tmp_path, text) == '["a b;$x","--allow-run"]\nok(0)\n'
+
+
+def test_arguments_with_backslashes_quotes_and_interpolation_marks_reach_the_child_unchanged(tmp_path):
+    node = tool("node")
+    words = ['back\\slash\\', 'say "hi"', "#{x}", "tail\\\\", "", "ñ 🙂 ^&|<>%PATH%"]
+    extra = "".join(", " + agc_literal(word) for word in words)
+    out = output(tmp_path, program(node, "args", "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n"
+                                   "  Result.unwrap!(Process.wait(p, 5000))", "", extra))
+    assert json.loads(out) == words
 
 
 def test_flushed_text_and_bytes_reply_before_stdin_eof_stderr_stays_separate(tmp_path):

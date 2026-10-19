@@ -15,6 +15,28 @@
   case-insensitively, and reject names with a trailing dot or space or any `:`.
   The allowlist applies to the last component of the resolved path. The port
   must not search the current directory before `PATH`.
+- Windows stops: there is no `SIGTERM`. libuv ends a child with
+  `TerminateProcess` for `SIGTERM`, `SIGKILL` and `SIGINT` alike, so the grace
+  wait of a captured child ends at once. libuv reports the raw exit code 1 and
+  the signal that was asked for, and `exited` records 128 plus that signal: 137
+  for the `SIGKILL` of a plain child, 143 for the `SIGTERM` of a captured one
+  (`tests/test_process_windows.py` reads the pair from the `proc` trace). The
+  program cannot read that status, because the handle is closed by then; and
+  137 and 143 hold only when the stop reached a live child, since after an
+  `ESRCH` the real exit code is recorded.
+  Unless libuv cannot assign its job object (a Windows version without nested
+  jobs, `win/process.c`), every child it starts is in one job that kills its
+  members when the VM that made it ends. That job has
+  `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct children are in
+  it, not their subprocesses: the direct children of a VM that is killed die
+  with it, and a child that is itself a VM stops its own children the same
+  way. Other descendants are not covered.
+  `Process.close` and the end of a run still stop only the direct child.
+  Stopping a child that has already ended, before its exit callback ran, is not
+  a failure on any system (`UV_ESRCH` is read as stopped, with no `#ifdef`). On
+  Windows that is `TerminateProcess` on an exited process. On POSIX it means
+  someone else reaped the child (a host with `SIGCHLD` set to `SIG_IGN`, or its
+  own reaper), and then `Process.close` waits up to `REAP_MS`.
 
 **As built (processes PR, Linux).** `vm/process.c` holds the eight `Process`
 builtins. Other systems get none.

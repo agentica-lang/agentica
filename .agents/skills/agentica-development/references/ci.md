@@ -120,9 +120,11 @@ lists
   (`next_line`, `next_stderr_line`, `stdout_text`, `wait`, `close_stdin`;
 `read_stdout=False`
   for a pipe that must stay full), killed with its process group when the test
-  ends, also on Ctrl-C or SIGTERM; `process_alive` and `wait_until` check
-  that a test left no process, and `make_suite` and `report_cases` build and
-  read `agentica test --json` suites. Without `python3`, `CI` set fails the run
+  ends, also on Ctrl-C or SIGTERM; `process_alive` (Windows: ctypes; POSIX:
+  `kill 0` plus a zombie check) and `wait_until` check that a test left no
+  process, `agc_literal` writes a path as an Agentica string, and `make_suite`
+  and `report_cases` build and read
+  `agentica test --json` suites. Without `python3`, `CI` set fails the run
   and a local run reports a skip; a missing VM binary does the same for a
   test.
 - `test-slow` runs the slow tier (`AGENTICA_TEST_SLOW=1`). Existing

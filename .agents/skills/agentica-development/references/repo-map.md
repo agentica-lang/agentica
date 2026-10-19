@@ -150,7 +150,9 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_modules.py  # pytest: programs of several files, pkg roots, JSON and step handlers through the CLI (references/language-notes.md)
   test_examples.py  # pytest: examples/*.agc, rejected fragments, CLI exit codes; slow: malformed algorithm inputs (references/stages.md)
   test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # pytest: Agentica stages against frozen outputs and goldens; frontend_support.py and frontend_cases.py hold helpers; test_frontend_refreeze.py covers tools/refreeze.py (references/frontend.md)
-  test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
+  test_process.py  # pytest: Process builtins on the VM, every way a run ends (references/vm-net.md)
+  test_process_bdd.py  # pytest: Process in agentica test; apart from test_process.py until it runs on Windows
+  test_process_windows.py  # pytest, native Windows only: the exit pair libuv reports for a stopped child (references/ci.md)
   test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
   test_filesystem.py  # pytest: File and Path programs on the VM (references/vm-io.md)
   vm_diff_support.py  # the golden harness: fixtures, sidecars, sweeps, `make goldens` (references/vm-build.md)

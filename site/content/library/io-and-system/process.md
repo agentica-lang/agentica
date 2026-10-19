@@ -181,7 +181,7 @@ When more than 1 MiB of standard output is waiting, or standard error passes
 `error("process: output exceeds 1048576 bytes")`. `Process.read_bytes(p, 0,
 timeout)` gives that error at once, so you can check for it without waiting.
 
-Closing a captured program asks it to stop first (`SIGTERM`) and kills it one second later if it still runs, so a program that is itself an Agentica program can stop its own children. `agentica test` runs each [BDD](/library/testing/bdd/) scenario, and each program under test, as a captured program.
+Closing a captured program asks it to stop first (`SIGTERM`) and kills it one second later if it still runs, so a program that is itself an Agentica program can stop its own children. Windows has no `SIGTERM`: the program ends at once. On Windows, where libuv can assign its job object, the programs the VM started die when the VM ends, and a program that is itself an Agentica program stops its own children the same way; other descendants are not covered. `agentica test` runs each [BDD](/library/testing/bdd/) scenario, and each program under test, as a captured program.
 
 ```agentica {mode="check"}
 def main() -> Void

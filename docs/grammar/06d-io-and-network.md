@@ -252,7 +252,11 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   diagnostic, a task failure, step exhaustion and an external interruption clean
   up the children started directly; their descendants are not covered.
   Operational failures are String error Results. A failed explicit cleanup is
-  `RUNTIME-PROCESS-CLOSE` at the call.
+  `RUNTIME-PROCESS-CLOSE` at the call. On Windows a stop is always immediate (no
+  `SIGTERM` grace). Where libuv can assign its job object, the direct children
+  of the VM die when the VM ends, and a child that is itself an Agentica
+  program stops its own children the same way. Other descendants are not
+  covered.
 - `spawn_captured` works like `spawn`, with the same lookup, permission and
   cleanup, except that the child starts in `dir` (`"."` keeps the working
   directory; an empty, NUL or non-directory `dir` is an error) and its streams
