@@ -419,9 +419,9 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
 
 Actions → Run workflow:
 
-- `platforms.yml` runs `make vm-test` (the C VM and its C tests; the binary is
-  Linux only since 8d-2) on GitHub-hosted macOS and Windows (MSYS2 UCRT64) for
-  pull requests and pushes to `master`. It also supports manual dispatch.
+- `platforms.yml` runs `make vm-test`, `make fixed-point` and a test subset
+  on GitHub-hosted macOS (Intel and ARM) and Windows (MSYS2 UCRT64) for pull
+  requests and pushes to `master`. It also supports manual dispatch.
 - `fuzz.yml` fuzzes the sanitizer VM with 5 million mutants and a random
   seed.
 

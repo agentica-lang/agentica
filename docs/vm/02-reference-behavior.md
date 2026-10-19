@@ -206,7 +206,7 @@ is not repeated here; read the file.
   with a stable sort.
 - The VM reads top-level strings, arrays and objects with the yyjson reader (10)
   and copies the tree into `Json` nodes. Numbers reach the VM as text. Check
-  `strtod` on macOS and Windows when those platforms build again.
+  `strtod` on macOS and Windows (they build again; not yet checked).
 
 ### 2.7 Typed JSON
 

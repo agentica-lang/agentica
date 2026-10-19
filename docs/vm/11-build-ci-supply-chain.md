@@ -135,13 +135,16 @@
     run, GC stress run
 
 - **Job:** macOS (`platforms.yml`)
-  - **Runner:** GitHub-hosted `macos-15` (Apple clang, arm64), submodules
-  - **Runs:** `make vm-test` (the C VM only: the binary is Linux only)
+  - **Runner:** GitHub-hosted `macos-15-intel` and `macos-latest` (Apple
+    clang, x86-64 and arm64), submodules
+  - **Runs:** `make vm-test`, `make fixed-point` (the binary) and a test
+    subset (files, paths, OS, processes, single binary)
 
 - **Job:** Windows (`platforms.yml`)
   - **Runner:** GitHub-hosted `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc,
     make), submodules
-  - **Runs:** `make vm-test` (the C VM only: the binary is Linux only)
+  - **Runs:** `make vm-test`, `make fixed-point` (the binary) and the test
+    subset of `WINDOWS_TEST_MODULES` in the Makefile
 
 - **Job:** Fuzz (`fuzz.yml`, by hand)
   - **Runner:** GitHub-hosted `ubuntu-latest`, clang
@@ -151,9 +154,9 @@
   `platforms.yml` runs on pull requests and pushes to `master`, and either can
   be started by hand. No job installs Racket (the Racket front end was deleted,
   PR #313), and no step checks or regenerates the frozen `vm/unicode_data.c`
-  (its header gives the provenance). The macOS and Windows jobs build and run
-  the C tests only: the binary and the process and network tests are not
-  portable yet.
+  (its header gives the provenance). The macOS and Windows jobs run the test
+  subset named in `platforms.yml`; the network tests are Linux only until
+  the multiplatform port reaches TCP, TLS and HTTP.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,
   and git detects the `string-inspect.agc` fixture as binary from its NUL bytes.
   So Windows sees the same sources, spans and output as Linux.

@@ -77,15 +77,17 @@ operating system call differs.
 - Shared files (validation, buffers, ownership, scheduling, Result and
   timeout) keep no `#ifdef` inside a function body. An OS difference is a
   function of a platform adapter, in the façade/adapter shape of
-  `docs/vm/15-layers.md` §15.3:
+  `docs/vm/15-layers.md` §15.1 ("Files have a platform adapter") and §15.3:
   - one plain header (`file_io.h` is the model) with a few operations, opaque
     handles, no VM values, and one error convention (libuv codes or errno);
-    its comment names each real difference between systems;
+    its comment names each real difference between systems; declarations
+    that exist on one system only sit in one whole `#ifdef` block;
   - one file per system family (`<area>_posix.c`, `<area>_windows.c`), each
     guarded whole by `#ifdef _WIN32` or `#ifndef _WIN32`, like
     `file_windows.c`; `__APPLE__` and `__linux__` only for a real API gap
     inside the POSIX file. `file_io.c` still mixes POSIX and Windows
-    branches: split it into `file_io_posix.c` the next time it changes;
+    branches: any PR that changes it first splits it into
+    `file_io_posix.c`;
   - no VM state, scheduling, timeouts or resource ownership in the adapter.
 - Signal to split: a shared file whose `#if` count grows with a port, two
   copies of one function under `#ifdef`, or flags that only make sense on one

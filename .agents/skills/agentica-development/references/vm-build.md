@@ -247,9 +247,9 @@ from `AGENTICA_SWEEP_SEED`, else the
   only drops `-pie` and RELRO. Every binary
   target ends in `$(EXE)` (`.exe` on Windows); the front end is embedded as
   ELF, Mach-O or COFF data. The `platforms.yml` workflow runs on every PR and
-  push: `make vm-test`, the bootstrap and a test subset on `windows-2025`,
-  `macos-15-intel` and `macos-latest`. Platform code follows "Platform code"
-  in `references/vm-c.md`.
+  on pushes to `master`: `make vm-test`, the bootstrap and a test subset on
+  `windows-2025`, `macos-15-intel` and `macos-latest`. Platform code follows
+  "Platform code" in `references/vm-c.md`.
 
 ## Files
 
@@ -284,8 +284,9 @@ from `AGENTICA_SWEEP_SEED`, else the
   back.
 - Under ASan, Boehm is off (`-DAGC_NO_GC`); GC bugs need the GC-debug stress
   run (`make vm-gc-stress`), not ASan.
-- Portability: keep platform code in `vm/launch.c` and the Makefile platform
-  block (`vm/agentica.c` is Linux only). `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
+- Portability: keep driver platform code in `vm/launch.c` and the Makefile
+  platform block; VM platform code follows "Platform code" in
+  `references/vm-c.md`. `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
   guards the signal. `_Exit` is C11; mingw-w64 still provides `write`,
   `open`, `read`, `fstat` and `ssize_t` with `-std=c11`, but its `struct
   stat` has a 32-bit `st_size`, so Windows uses `_fstat64`. A Windows port of
