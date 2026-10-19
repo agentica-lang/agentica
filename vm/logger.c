@@ -77,6 +77,7 @@ static agc_value builtin_floor(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_set_level(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_sync_assert(vm);
   (void)span;
   vm->rt->log.level = agc_as_int(vm, args[0]);
   return agc_void();
@@ -92,6 +93,7 @@ static agc_value builtin_lowest(agc_vm *vm, agc_value *args, uint32_t span) {
  * that make their first calls together install the console handler once, and
  * a later detach stays in effect because the level is no longer -1. */
 static agc_value builtin_install_default(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_sync_assert(vm);
   (void)span;
   agc_log_registry *log = &vm->rt->log;
   (void)agc_as_fn(vm, args[0]);
@@ -104,6 +106,7 @@ static agc_value builtin_install_default(agc_vm *vm, agc_value *args, uint32_t s
 }
 
 static agc_value builtin_attach(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_sync_assert(vm);
   (void)span;
   agc_string *name = agc_as_string(vm, args[0]);
   int64_t rank = agc_as_int(vm, args[1]);
@@ -115,6 +118,7 @@ static agc_value builtin_attach(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_detach(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_sync_assert(vm);
   (void)span;
   agc_log_registry *log = &vm->rt->log;
   agc_string *name = agc_as_string(vm, args[0]);

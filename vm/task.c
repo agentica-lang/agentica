@@ -144,7 +144,8 @@ bool agc_task_claim(agc_task *t) {
 
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper) { vm->task->stepper = stepper; }
 
-static void adopt(agc_task *parent, agc_task *child) {
+static void adopt(agc_vm *vm, agc_task *parent, agc_task *child) {
+  agc_sync_assert(vm);
   child->parent = parent;
   child->prev_sibling = NULL;
   child->next_sibling = parent->children;
@@ -185,7 +186,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   while (t->children) {
     agc_task *child = t->children;
     leave_parent(child);
-    if (t->parent) adopt(t->parent, child);
+    if (t->parent) adopt(vm, t->parent, child);
   }
   leave_parent(t);
   if (!t->closing) agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
@@ -238,7 +239,10 @@ static void cancel_one(agc_vm *vm, agc_task *t) {
       if (t == vm->task) vm->yield = true;
       return;
     case AGC_TASK_READY:
-      if (agc_runq_remove(vm->rt->runq, t)) end_cancelled(vm, t);
+      if (agc_runq_remove(vm->rt->runq, t))
+        end_cancelled(vm, t);
+      else
+        AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel_deferred task=%" PRIu64, t->id);
       return;
     case AGC_TASK_PARKED:
       if (!agc_task_claim(t)) continue;
@@ -445,6 +449,8 @@ static void check_stop(agc_vm *vm) {
    scheduler had popped it already (cancel_one), so whoever pops it ends it. A cancel that comes after this check
    is seen at the end of the turn. NULL when the queue is empty. */
 agc_task *agc_task_next(agc_vm *vm) {
+  /* Between turns vm->task still names the last task, which may be DONE. That is safe for cancel_one: it compares a
+     task with vm->task only in the states of a turn (RUNNING, PARKING, WOKEN), which a DONE task never has again. */
   /* A scheduler holds rt->sync only inside a builtin or an ending, never between turns. */
   if (vm->sync_depth) agc_fail(vm, "RUNTIME-INTERNAL", "rt->sync held between turns", 0);
   for (;;) {
@@ -543,7 +549,7 @@ agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const ag
   child->spawned = true;
   child->spawn_span = span;
   agc_task_call(vm, child, fn, args, argc, span);
-  adopt(parent, child);
+  adopt(vm, parent, child);
   trace_spawn(vm, child, parent);
   enqueue(vm, child);
   return child;
@@ -562,7 +568,7 @@ agc_task *agc_task_group(agc_vm *vm) {
   atomic_store_explicit(&g->state, AGC_TASK_PARKED, memory_order_relaxed);
   g->result = agc_void();
   g->test = vm->task->test;
-  adopt(vm->task, g);
+  adopt(vm, vm->task, g);
   return g;
 }
 

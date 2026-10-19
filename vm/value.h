@@ -236,7 +236,9 @@ typedef struct {
   /* The builtin reads or writes state that several schedulers can reach (tasks, channels, handle locks, the logger
      table, stdin, service state): the interpreter calls it with rt->sync held once the VM is shared (agc_share). The
      rest, such as strings, numbers, JSON, lists, maps and the file calls that name a path, run in parallel. A row that
-     is not marked must touch none of that state; make test-shared checks it by running programs with the locks on. */
+     is not marked must touch none of that state. vm/tests/sync_test.c checks the marks of whole tables and of chosen
+     rows; in a shared VM agc_sync_assert in the mutators of the shared lists (docs/vm/16-architecture.md §16.9) fails a
+     run that reaches one without the lock, and make test-shared runs the programs that way. */
   bool shared;
 } agc_builtin;
 

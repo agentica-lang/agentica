@@ -3,6 +3,7 @@
  * scheduler and is undone by agc_sync_reset. Threads each hold a copy of the vm, as schedulers do.
  */
 #include "../core.h"
+#include "../services.h"
 #include "test_support.h"
 
 #include <assert.h>
@@ -95,18 +96,40 @@ static void test_reset_frees_the_lock(void) {
   agc_sync_reset(&vm);
 }
 
-/* Which builtins the interpreter locks: marked by row. The rows that change task, channel, handle, stdin or logger
-   state, and the services', are locked; the pure libraries, the output and the file calls that name a path are not. */
+/* Every row of one table has the given mark. A table of a build without that service has one empty row. */
+static void table_marked(const agc_builtin *table, size_t count, bool shared) {
+  for (size_t k = 0; k < count; k++) {
+    if (!table[k].fn) continue;
+    if (table[k].shared != shared) fprintf(stderr, "%s/%u: shared should be %d\n", table[k].name, table[k].arity, shared);
+    assert(table[k].shared == shared);
+  }
+}
+
+/* Which builtins the interpreter locks: marked by row. Every row of the tables of tasks, Task.map, channels, the
+   logger, processes, duplex channels, TCP and HTTP is locked; no row of the pure libraries (String, numbers, JSON) is.
+   The mixed tables (the core one and File) are checked by row: stdin, handles and closes are locked, the output and
+   the file calls that name a path are not. */
 static void test_builtin_classes(void) {
+  table_marked(agc_task_builtins, agc_task_builtin_count, true);
+  table_marked(agc_task_map_builtins, agc_task_map_builtin_count, true);
+  table_marked(agc_channel_builtins, agc_channel_builtin_count, true);
+  table_marked(agc_logger_builtins, agc_logger_builtin_count, true);
+  table_marked(agc_process_builtins, agc_process_builtin_count, true);
+  table_marked(agc_duplex_builtins, agc_duplex_builtin_count, true);
+  table_marked(agc_tcp_builtins, agc_tcp_builtin_count, true);
+  table_marked(agc_http_builtins, agc_http_builtin_count, true);
+  table_marked(agc_http_server_builtins, agc_http_server_builtin_count, true);
+  table_marked(agc_string_builtins, agc_string_builtin_count, false);
+  table_marked(agc_number_builtins, agc_number_builtin_count, false);
+  table_marked(agc_json_builtins, agc_json_builtin_count, false);
   struct {
     const char *name;
     uint32_t arity;
     bool shared;
   } expected[] = {
-      {"Channel.send", 3, true},   {"Channel.recv", 2, true},   {"Task.spawn", 2, true},   {"Task.await", 1, true},
-      {"Task.sleep", 1, true},     {"IO.gets", 0, true},        {"IO.read", 0, true},      {"File.read_line", 2, true},
-      {"File.close", 2, true},     {"String.length", 1, false}, {"puts", 1, false},        {"File.read_text", 2, false},
-      {"File.write_text", 3, false}, {"File.stat", 2, false},   {"Path.join", 1, false},
+      {"IO.gets", 0, true},          {"IO.read", 0, true},     {"File.read_line", 2, true}, {"File.close", 2, true},
+      {"puts", 1, false},            {"File.read_text", 2, false}, {"File.write_text", 3, false},
+      {"File.stat", 2, false},       {"Path.join", 1, false},
   };
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
     const agc_builtin *b = agc_find_builtin((const uint8_t *)expected[k].name, strlen(expected[k].name), expected[k].arity);
@@ -159,12 +182,13 @@ static void test_relock_aborts(void) {
 int main(void) {
   agc_test_deadline(120);
   agc_init();
+#ifndef _WIN32
+  /* Before the collector may start threads: the child allocates the lock through the GC after the fork. */
+  test_relock_aborts();
+#endif
   agc_gc_allow_threads();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_builtin_classes();
-#ifndef _WIN32
-  test_relock_aborts();
-#endif
   test_solo();
   test_exclusion_and_nesting();
   test_reset_frees_the_lock();

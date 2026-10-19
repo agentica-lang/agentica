@@ -1262,6 +1262,7 @@ static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "fil
 /* The close of an ended task's file, or of a file still open when the run
    ends: pending while a job holds it. */
 static void close_file(agc_vm *vm, agc_resource *r, agc_task *ender) {
+  agc_sync_assert(vm);
   r->closing = true;
   r->next_owner = NULL;
   agc_task_wake_all(vm, &r->waiters, &r->waiters_tail, "close");
