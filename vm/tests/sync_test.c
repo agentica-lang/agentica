@@ -4,6 +4,7 @@
  */
 #include "../core.h"
 #include "../services.h"
+#include "test_abort.h"
 #include "test_support.h"
 
 #include <assert.h>
@@ -13,10 +14,6 @@
 #include <uv.h>
 #include <setjmp.h>
 #ifndef _WIN32
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -157,36 +154,16 @@ static void test_assert_and_reset(void) {
 }
 
 #ifndef _WIN32
-/* A thread that takes a lock it holds ends the process (SIGABRT) instead of deadlocking, and the message names the
-   lock. Run in a child, whose stderr is a pipe read here. */
-static void test_relock_aborts(void) {
-  int fds[2];
-  assert(pipe(fds) == 0);
-  pid_t pid = fork();
-  assert(pid >= 0);
-  if (pid == 0) {
-    struct rlimit none = {0, 0};
-    setrlimit(RLIMIT_CORE, &none);
-    close(fds[0]);
-    dup2(fds[1], 2);
-    alarm(30);
-    agc_lock *l = agc_lock_new("test");
-    agc_lock_share(l);
-    agc_lock_take(l);
-    agc_lock_take(l);
-    _exit(0);
-  }
-  close(fds[1]);
-  char message[512] = {0};
-  size_t got = 0;
-  for (ssize_t n; got < sizeof message - 1 && (n = read(fds[0], message + got, sizeof message - 1 - got)) > 0;)
-    got += (size_t)n;
-  close(fds[0]);
-  int status = 0;
-  assert(waitpid(pid, &status, 0) == pid);
-  assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT);
-  assert(strstr(message, "already holds") && strstr(message, "lock=test"));
+static void relock(void) {
+  agc_lock *l = agc_lock_new("test");
+  agc_lock_share(l);
+  agc_lock_take(l);
+  agc_lock_take(l);
 }
+
+/* A thread that takes a lock it holds ends the process (SIGABRT) instead of deadlocking, and the message names the
+   lock. */
+static void test_relock_aborts(void) { agc_test_aborts_with(relock, "already holds (lock=test"); }
 #endif
 
 int main(void) {

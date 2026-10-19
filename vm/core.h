@@ -68,7 +68,8 @@ void agc_runq_push(agc_runq *q, agc_task *t);
 agc_task *agc_runq_pop(agc_runq *q);
 bool agc_runq_remove(agc_runq *q, const agc_task *t);
 /* agc_runq_wait is the pop of an idle scheduler: it blocks until a task is queued, and returns NULL once agc_runq_end
- * has been called (the run is over, also on a solo queue) or, on a solo queue, when it is empty. */
+ * has been called (the run is over, also on a solo queue), when a nudge is pending (agc_runq_nudge), or, on a solo
+ * queue, when it is empty. */
 agc_task *agc_runq_wait(agc_runq *q);
 void agc_runq_end(agc_runq *q);
 /* The same wait with a deadline (an agc_clock_ms value): NULL also when the clock reaches it. */

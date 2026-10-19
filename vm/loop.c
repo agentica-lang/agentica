@@ -9,6 +9,7 @@
 #endif
 #include "core.h"
 
+#include <assert.h>
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -97,9 +98,10 @@ struct agc_loop {
   bool bound_init;
   /* The vm that owns the loop: the I/O role reads its registry and wakes its tasks. NULL inbox: one thread plays both
      roles (N = 1) and every request runs where it is posted. The inbox is made by agc_io_share, before a second thread
-     posts, and `owner` is then the thread that runs the loop. */
+     posts, and `owner` is then the thread that runs the loop. It is atomic because a poster on another thread reads it,
+     while the loop's thread clears it at the close. */
   agc_vm *vm;
-  agc_inbox *inbox;
+  agc_inbox *_Atomic inbox;
   /* Set by agc_io_share and never cleared: the loop has an owner thread from then on, also after the inbox is closed.
      `closed` is set by agc_io_close once no thread posts any more, so a post after it is a bug that must be loud. */
   bool shared;
@@ -529,12 +531,13 @@ static void post(job *j, request_kind kind, int64_t arg) {
     handle_request(&req);
     return;
   }
-  if (atomic_load(&loop->closed)) post_after_close();
+  agc_inbox *inbox = loop->inbox;
+  if (atomic_load(&loop->closed) || !inbox) post_after_close();
   agc_request *req = malloc(sizeof *req);
   if (!req) agc_out_of_memory();
   *req = (agc_request){NULL, (int)kind, j, arg};
   if (kind != REQ_RELEASE) agc_job_ref(&j->refs);
-  agc_inbox_post(loop->inbox, req);
+  agc_inbox_post(inbox, req);
 }
 
 /* Gives back a reference from any thread. A scheduler posts a RELEASE and the I/O thread drops it, so the count reaches
@@ -656,9 +659,9 @@ static bool cancellable(const job *j) { return j->kind->cancel && (!j->kind->wor
    result is dropped, its `expired` half never runs, so it never closes a
    task's handle, and the turn cost of `done` is not charged to the current
    task. The owner's reference goes at the end, as the task's does in agc_io_finish,
-   but before `done` runs when `done` is called: a `done` that raises must not leak the job. This runs on the I/O
-   thread (the ready list is drained there), so at N > 1 the `done` half runs there too; PR 3 must move it to a
-   scheduler (docs/vm/16-architecture.md §16.9). */
+   but before `done` runs when `done` is called: a `done` that raises must not leak the job. It runs where the ready
+   list is drained while one thread plays both roles, and on a scheduler (agc_io_service) once the loop is shared
+   (docs/vm/16-architecture.md §16.9). */
 static void end_detached(agc_vm *vm, agc_resource *r) {
   job *j = r->native;
   if (atomic_load(&j->start_failed)) atomic_store(&j->dropping, true);
@@ -736,32 +739,40 @@ static void drain(agc_vm *vm) {
 }
 
 /* A scheduler runs the work that the I/O role left for it: the end of each detached job, with rt->sync held like the
-   other endings of a task. The job was not woken for a task, so no task is current: a scratch task takes the turn cost
-   of `done`, which end_detached saves and restores. The ready-list reference goes back by a RELEASE request, since only
-   the I/O thread may drop a count to zero. Returns whether it ran anything. */
+   other endings of a task. Jobs leave the list one at a time, so a `done` that raises (agc_fail ends the run) leaves
+   the rest on the list, where close_all gives their counts back. The ready-list reference goes back first, by a
+   RELEASE request (only the I/O thread may drop a count to zero); the owner's reference keeps the job alive, and
+   end_detached gives it back before `done`, so a `done` that raises leaks nothing. No task is current: a scratch task
+   in GC memory takes the turn cost of `done`, which end_detached saves and restores, and it stays valid if `done`
+   raises. Returns whether it ended any job. */
 bool agc_io_service(agc_vm *vm) {
   agc_loop *loop = vm->rt->loop;
   if (!loop || atomic_load_explicit(&loop->service_count, memory_order_acquire) == 0) return false;
-  agc_lock_take(loop->service_lock);
-  job *list = loop->service;
-  loop->service = loop->service_tail = NULL;
-  agc_lock_drop(loop->service_lock);
-  agc_task scratch;
-  memset(&scratch, 0, sizeof scratch);
   agc_task *saved = vm->task;
-  vm->task = &scratch;
-  for (job *next; list; list = next) {
-    job *j = list;
-    next = j->service_next;
+  vm->task = agc_alloc(sizeof(agc_task));
+  bool ran = false;
+  for (;;) {
+    agc_lock_take(loop->service_lock);
+    job *j = loop->service;
+    if (j) {
+      loop->service = j->service_next;
+      if (!loop->service) loop->service_tail = NULL;
+      atomic_fetch_sub_explicit(&loop->service_count, 1, memory_order_relaxed);
+    }
+    agc_lock_drop(loop->service_lock);
+    if (!j) break;
     j->service_next = NULL;
-    atomic_fetch_sub_explicit(&loop->service_count, 1, memory_order_relaxed);
+    ran = true;
     agc_sync_take(vm);
-    if (!atomic_load(&j->ended) && j->res->native == j) end_detached(vm, j->res);
-    agc_sync_drop(vm);
+    bool live = !atomic_load(&j->ended) && j->res->native == j;
+    /* A job that is not ended still has its owner's reference, so this release cannot free it; one that is ended may
+       be freed by the I/O thread right after, so it is not read again. */
     release(j);
+    if (live) end_detached(vm, j->res);
+    agc_sync_drop(vm);
   }
   vm->task = saved;
-  return true;
+  return ran;
 }
 
 #if !defined(_WIN32)
@@ -1235,6 +1246,7 @@ static void release_bound(agc_loop *loop) {
 bool agc_io_wait(agc_vm *vm, uint64_t due_ms) {
   if (due_ms == UINT64_MAX) return agc_io_poll(vm, true);
   agc_loop *loop = loop_of(vm);
+  assert(on_io_thread(loop));
   if (loop->inbox) (void)agc_inbox_run(loop->inbox);
   uint64_t now = agc_clock_ms();
   if (loop->ready || due_ms <= now)
@@ -1505,9 +1517,10 @@ static bool close_all(agc_vm *vm) {
   if (!vm->rt->loop) return true;
   unwatch_stop(vm->rt->loop);
   if (vm->rt->loop->inbox) {
+    /* `closed` first: a post that comes after it aborts loudly instead of reaching an inbox that is going away. */
+    atomic_store(&vm->rt->loop->closed, true);
     agc_inbox_close(vm->rt->loop->inbox);
     vm->rt->loop->inbox = NULL;
-    atomic_store(&vm->rt->loop->closed, true);
   }
   release_bound(vm->rt->loop);
   for (int attempt = 0; attempt < 4; attempt++) {

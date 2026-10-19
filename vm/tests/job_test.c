@@ -4,18 +4,16 @@
  * and poll). The pool work is held by a semaphore, so the test and not the clock decides which event comes first.
  */
 #include "../core.h"
+#include "test_abort.h"
 #include "test_support.h"
 
 #include <assert.h>
+#include <setjmp.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <uv.h>
 #ifndef _WIN32
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -525,6 +523,61 @@ static void test_detached_ends_on_a_scheduler(void) {
   settle_loop();
 }
 
+/* The `done` half of the first job raises, as a failing builtin would. */
+static agc_value raising_done(agc_vm *vm, void *data, agc_value context) {
+  (void)context;
+  free(data);
+  agc_fail(vm, "RUNTIME-INTERNAL", "done raised", 0);
+}
+
+static const agc_io_kind raising_io = {swift_work, raising_done, raising_done, swift_drop, false, "raise", NULL, false};
+
+static void start_raising(void *arg) {
+  agc_io_detached(&vm, &raising_io, arg, agc_void(), AGC_JOB_QUIET);
+}
+
+static int service_raised;
+static agc_task *task_after_raise;
+
+static void service_raising(void *arg) {
+  agc_task *before = arg;
+  if (setjmp(vm.fail) == 0) {
+    (void)agc_io_service(&vm);
+    assert(!"the raising done did not raise");
+  }
+  service_raised++;
+  task_after_raise = vm.task;
+  agc_sync_reset(&vm);
+  vm.task = before;
+  /* The job after the one that raised is still on the list, and the next call ends it. */
+  assert(swift_done_calls == 0);
+  assert(agc_io_service(&vm) && swift_done_calls == 1);
+  assert(!agc_io_service(&vm));
+}
+
+static void wait_for_hand_over(void) {
+  while (!agc_runq_nudged(vm.rt->runq)) assert(agc_io_poll(&vm, true));
+  assert(agc_runq_take_nudge(vm.rt->runq));
+}
+
+/* A `done` that raises on a scheduler: the jobs after it stay on the service list for the next call, every reference
+   goes back (the loop closes with an empty registry), and vm->task never points at a dead frame. */
+static void test_raising_done_on_a_scheduler(void) {
+  assert(agc_io_share(&vm, false));
+  int *first = calloc(1, sizeof *first), *second = calloc(1, sizeof *second);
+  assert(first && second);
+  swift_done_calls = 0;
+  on_thread(start_raising, first);
+  wait_for_hand_over();
+  on_thread(start_detached, second);
+  wait_for_hand_over();
+  agc_task *before = vm.task;
+  on_thread(service_raising, before);
+  assert(service_raised == 1 && task_after_raise && task_after_raise != before);
+  pump_until_idle();
+  settle_loop();
+}
+
 #ifndef _WIN32
 static void extend_after_close(void *arg) {
   agc_io_extend(arg, 5);
@@ -532,11 +585,6 @@ static void extend_after_close(void *arg) {
 
 /* Child process: closes the inbox while a job is still held by its pool work, then a second thread posts to it. */
 static void post_after_close_child(void) {
-  struct rlimit none = {0, 0};
-  setrlimit(RLIMIT_CORE, &none);
-  alarm(60);
-  int quiet = open("/dev/null", O_WRONLY);
-  if (quiet >= 0) dup2(quiet, 2);
   agc_init();
   agc_gc_allow_threads();
   agc_io_init();
@@ -549,18 +597,13 @@ static void post_after_close_child(void) {
   uv_sem_wait(&g->entered);
   assert(!agc_io_close(&vm));
   on_thread(extend_after_close, job);
-  _exit(0);
 }
 
 /* A post from another thread after agc_inbox_close has no consumer: it must end the process loudly (SIGABRT), not run
-   inline or vanish. It runs in a child, first of all, before any thread exists in this process. */
+   inline or vanish; the child's message must say so, so an abort for another reason fails the test. It runs in a
+   child, first of all, before any thread exists in this process. */
 static void test_post_after_close_is_loud(void) {
-  pid_t pid = fork();
-  assert(pid >= 0);
-  if (pid == 0) post_after_close_child();
-  int status = 0;
-  assert(waitpid(pid, &status, 0) == pid);
-  assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT);
+  agc_test_aborts_with(post_after_close_child, "a request was posted to the I/O thread after the loop closed");
 }
 #endif
 
@@ -589,6 +632,7 @@ int main(void) {
   test_instant_job_wakes_its_task();
   test_many_jobs_end();
   test_detached_ends_on_a_scheduler();
+  test_raising_done_on_a_scheduler();
 #endif
   puts("job tests passed");
   return 0;

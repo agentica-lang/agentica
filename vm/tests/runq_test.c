@@ -143,7 +143,6 @@ static void test_wait_gets_the_push(void) {
   }
 }
 
-/* The end wakes all the waiters at once, and a wait after the end returns NULL at once, with tasks left in the queue. */
 static agc_task *pushed_late;
 
 static void push_late(void *arg) {
@@ -183,6 +182,7 @@ static void test_wait_until(void) {
   assert(agc_runq_take_nudge(q) && !agc_runq_take_nudge(q));
 }
 
+/* The end wakes all the waiters at once, and a wait after the end returns NULL at once, with tasks left in the queue. */
 static void test_end_wakes_everyone(void) {
   agc_runq *q = vm.rt->runq;
   uv_thread_t waiters[POPPERS];

@@ -507,9 +507,14 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   `tasks_done` (atomic). `agc_vm` keeps the scheduler's own context: `task`,
   the turn and stop counters, `yield`, `in_turn`, `sync_depth`, `gc_seen`, the
   profile and the two jmp_bufs. The registry has its own leaf lock (solo until
-  `agc_share`), and a job points to its resource (`res`), so the I/O role never
-  looks a job up by slot, which `agc_unregister` moves. The slots are
-  swap-with-last: no code reads a slot outside the registry lock.
+  `agc_share`): `agc_register`, `agc_unregister` and `agc_resource_id` take
+  it. A job points to its resource (`res`), so the I/O role never looks a job
+  up by slot, which `agc_unregister` moves (the slots are swap-with-last). The
+  walks of the whole registry (`release_handles`, `agc_io_goodbye`,
+  `close_files`, `close_all`, `flushing`) read it without the lock; they run at
+  the end of the run, on the loop's thread. Taking the lock there, or a
+  snapshot, is needed once a scheduler thread can still register at that
+  point.
 - **Timers are per scheduler and live in the task.** A task that waits for a
   deadline (`Task.sleep`, a timed await, a channel timeout, a `Task.map`
   timeout, a handle lock timeout) arms its own entry (`agc_timer` in `agc_task`)

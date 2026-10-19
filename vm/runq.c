@@ -11,6 +11,9 @@
 
 #include <uv.h>
 
+/* The longest single condvar wait of agc_runq_wait_until. */
+#define WAIT_SLICE_MS UINT64_C(3600000)
+
 /* GC memory (agc_runq_new): the list links tasks, and a head that malloc memory held would hide them from the
    collector (docs/vm/16-architecture.md §16.5, "GC rule"). `solo` is true while one thread uses the queue: it takes no
    lock then, which is what one scheduler costs. */
@@ -97,12 +100,14 @@ agc_task *agc_runq_wait(agc_runq *q) {
    apart by asking the queue and the clock. Only the scheduler that owns the nearest deadline waits timed; the others wait
    untimed, so one deadline does not wake every idle scheduler. A solo queue never waits. */
 agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms) {
-  if (q->solo) return take_first(q);
+  if (q->solo) return q->ended ? NULL : take_first(q);
   uv_mutex_lock(&q->lock);
   while (!q->first && !q->ended && !atomic_load_explicit(&q->nudged, memory_order_relaxed)) {
     uint64_t now = agc_clock_ms();
     if (now >= due_ms) break;
-    (void)uv_cond_timedwait(&q->wake, &q->lock, (due_ms - now) * UINT64_C(1000000));
+    /* At most an hour per wait, so the nanoseconds never overflow; the loop waits again for the rest. */
+    uint64_t left = due_ms - now < WAIT_SLICE_MS ? due_ms - now : WAIT_SLICE_MS;
+    (void)uv_cond_timedwait(&q->wake, &q->lock, left * UINT64_C(1000000));
   }
   agc_task *t = q->ended ? NULL : take_first(q);
   uv_mutex_unlock(&q->lock);

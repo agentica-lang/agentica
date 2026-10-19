@@ -30,11 +30,10 @@ agc_lock *agc_lock_new(const char *name) {
    orders this write before that thread's first read of `solo`. */
 void agc_lock_share(agc_lock *l) { l->solo = false; }
 
-/* A token that differs for each thread: the address of a thread-local. */
-static uintptr_t self(void) {
-  static _Thread_local char token;
-  return (uintptr_t)&token;
-}
+/* A token that differs for each live thread: its thread id (pthread_t, or the thread's HANDLE on Windows), unique among
+   live threads. It used to be the address of a thread-local; on macOS arm64 the relock check then fired with an owner
+   that was not the caller (CI job 118126582089), which a working mutex with unique tokens cannot produce. */
+static uintptr_t self(void) { return (uintptr_t)uv_thread_self(); }
 
 /* Names the lock, the owner it records and the calling thread's token, so that a failure seen once in CI says which
    lock and whether the owner was this thread. */

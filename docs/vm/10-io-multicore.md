@@ -148,7 +148,8 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     `install_default` is one native call, so the check for level -1 and the
     writes cannot interleave with another task.
   - I/O thread: the loop, the inbox (§16.4) and the resource registry. As
-    built, the registry is shared under its own leaf lock (§16.9).
+    built, the registry has its own leaf lock for register and unregister
+    (§16.9).
   - Per scheduler: the turn counter and the running task's context (`task`,
     `fail`).
   - Per task: the registers and frames, `random` (7.4), the `fail` jmp_buf

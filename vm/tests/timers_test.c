@@ -8,6 +8,7 @@
 
 #include <assert.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <uv.h>
 
@@ -59,28 +60,70 @@ static void test_order(void) {
   assert(!agc_timers_run(&vm));
 }
 
-/* A deadline that has not come stays; a disarm of any entry keeps the rest in order. */
+/* The heap invariant: no entry comes before its parent in (deadline, arming order), and each entry knows its place. */
+static void check_heap(void) {
+  const agc_timers *h = &vm.timers;
+  for (size_t i = 0; i < h->count; i++) {
+    const agc_task *t = h->items[i];
+    assert(t->timer.index == i && t->timer.heap == h);
+    if (i == 0) continue;
+    const agc_task *parent = h->items[(i - 1) / 2];
+    assert(parent->timer.deadline < t->timer.deadline ||
+           (parent->timer.deadline == t->timer.deadline && parent->timer.seq < t->timer.seq));
+  }
+}
+
+/* Past and future deadlines are mixed; a third of the timers are disarmed one by one, from anywhere in the heap, and
+   the invariant holds after each. A fire wakes exactly the due timers that were not disarmed, and the future ones stay
+   armed with the earliest of them as next_due. A disarm that only sifted down would leave a due entry under one that
+   is not due, and it would fire late; check_heap catches that at once. */
 static void test_disarm_and_future(void) {
   uint64_t now = agc_clock_ms();
-  agc_task *later = parked_on_timer(&vm, now + 60000);
-  for (size_t k = 0; k < TASKS; k++) tasks[k] = parked_on_timer(&vm, now - 500 + (uint64_t)((k * 53) % 97));
-  for (size_t k = 0; k < TASKS; k += 3) agc_timers_disarm(&vm, tasks[k]);
-  for (size_t k = 0; k < TASKS; k += 3) assert(!tasks[k]->timer.heap);
-  agc_timers_disarm(&vm, tasks[0]);
-  size_t live = TASKS - (TASKS + 2) / 3;
-  assert(agc_timers_armed(vm.rt) == live + 1);
+  bool due[TASKS], gone[TASKS];
+  for (size_t k = 0; k < TASKS; k++) {
+    uint64_t r = (uint64_t)((k * 7919) % 1009);
+    due[k] = r % 2 == 0;
+    gone[k] = (k * 13) % 3 == 0;
+    tasks[k] = parked_on_timer(&vm, due[k] ? now - 1000 + r : now + 60000 + r);
+    tasks[k]->timer.timed = false;
+  }
+  check_heap();
+  for (size_t k = 0; k < TASKS; k++) {
+    if (!gone[k]) continue;
+    agc_timers_disarm(&vm, tasks[k]);
+    assert(!tasks[k]->timer.heap);
+    check_heap();
+  }
+  size_t woken_expected = 0, left = 0;
+  uint64_t earliest = UINT64_MAX;
+  for (size_t k = 0; k < TASKS; k++) {
+    if (gone[k]) continue;
+    if (due[k]) {
+      woken_expected++;
+    } else {
+      left++;
+      if (tasks[k]->timer.deadline < earliest) earliest = tasks[k]->timer.deadline;
+    }
+  }
+  assert(agc_timers_armed(vm.rt) == woken_expected + left);
   vm.task = vm.rt->main;
   assert(agc_timers_run(&vm));
-  size_t popped = 0;
-  uint64_t last = 0;
-  for (agc_task *t; (t = pop_ready()); popped++) {
-    assert(t->timer.deadline >= last);
-    last = t->timer.deadline;
+  size_t woken = 0;
+  for (agc_task *t; (t = pop_ready()); woken++) {
+    size_t k = 0;
+    while (tasks[k] != t) k++;
+    assert(due[k] && !gone[k] && !t->timer.heap);
   }
-  assert(popped == live);
-  assert(later->timer.heap && agc_timers_armed(vm.rt) == 1 && agc_timers_next_due(&vm) == later->timer.deadline);
-  agc_timers_disarm(&vm, later);
-  assert(agc_timers_armed(vm.rt) == 0);
+  assert(woken == woken_expected);
+  check_heap();
+  assert(agc_timers_armed(vm.rt) == left && agc_timers_next_due(&vm) == earliest);
+  for (size_t k = 0; k < TASKS; k++) {
+    if (gone[k] || due[k]) continue;
+    assert(tasks[k]->timer.heap && atomic_load(&tasks[k]->state) == AGC_TASK_PARKED);
+    agc_timers_disarm(&vm, tasks[k]);
+    check_heap();
+  }
+  assert(agc_timers_armed(vm.rt) == 0 && agc_timers_next_due(&vm) == UINT64_MAX);
 }
 
 static agc_task *racing;
