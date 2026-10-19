@@ -1117,10 +1117,21 @@ static void ready(void *data, int status) {
   agc_io_ready(o->job);
 }
 
+static bool opens(const op *o) {
+  return o->kind == OP_OPEN_READ || o->kind == OP_OPEN_WRITE || o->kind == OP_OPEN_CREATE || o->kind == OP_OPEN_APPEND;
+}
+
 /* The rest of a whole-file call whose path is a pipe, a FIFO or a device:
-   its pool work only opened it, and the job now waits on the loop. */
+   its pool work only opened it, and the job now waits on the loop. For an open whose descriptor is polled, the
+   poller is made here, on the I/O thread, since it is a libuv handle. */
 static bool more(void *data, agc_io_job *job) {
   op *o = data;
+  if (opens(o)) {
+    int err = 0;
+    if (o->status == FS_OK && o->st->polled && !(o->st->poller = agc_poller_open(o->vm, o->st->fd, &err)))
+      fail_op(o, FS_OPEN, err);
+    return false;
+  }
   if (!o->polled || o->status != FS_OK) return false;
   int err = 0;
   o->poller = agc_poller_open(o->vm, o->fd, &err);
@@ -1132,6 +1143,22 @@ static bool more(void *data, agc_io_job *job) {
   if (step(o)) return false;
   agc_poller_wait(o->poller, writes(o), ready, o);
   return true;
+}
+
+/* The `more` step of a polled wait (poll_io): the wait starts on the I/O thread, in the job's START, before its
+   deadline is armed. */
+static bool begin_wait(void *data, agc_io_job *job) {
+  op *o = data;
+  o->job = job;
+  agc_poller_wait(o->st->poller, writes(o), ready, o);
+  return true;
+}
+
+/* The kind's `pause`: the deadline of a polled wait passed, and the wait stops on the I/O thread before `expired`
+   moves the buffer that its callback writes. */
+static void pause_wait(void *data) {
+  agc_poller *p = poller_of(data);
+  if (p) agc_poller_pause(p);
 }
 
 static bool stop(agc_vm *vm, void *data, agc_value context, bool deadline) {
@@ -1255,9 +1282,9 @@ static agc_value closed(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", NULL, true};
+static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", NULL, true, NULL};
 
-static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "file", stop, true};
+static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "file", stop, true, NULL};
 
 /* The close of an ended task's file, or of a file still open when the run
    ends: pending while a job holds it. */
@@ -1309,13 +1336,6 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_OPEN_WRITE:
       case OP_OPEN_CREATE:
       case OP_OPEN_APPEND: {
-        int err = 0;
-        if (o->st->polled && !(o->st->poller = agc_poller_open(vm, o->st->fd, &err))) {
-          fail_op(o, FS_OPEN, err);
-          result = common_error(vm, o);
-          o->owns_st = true;
-          break;
-        }
         agc_resource *r = agc_register(vm, o->st, release_state);
         agc_own(vm, r, close_file);
         r->pool_close = true;
@@ -1348,9 +1368,9 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   return error_of(timed_out);
 }
 
-static const agc_io_kind file_io = {work, done, expired, drop, false, "file", stop, false};
+static const agc_io_kind file_io = {work, done, expired, drop, false, "file", stop, false, pause_wait};
 
-static const agc_io_kind poll_io = {NULL, done, expired, drop, true, "file", stop, false};
+static const agc_io_kind poll_io = {NULL, done, expired, drop, true, "file", stop, false, pause_wait};
 
 static void files_on(agc_vm *vm, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
@@ -1363,8 +1383,7 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
     return agc_void();
   }
   if (step(o)) return done(vm, o, context);
-  o->job = agc_io_start(vm, &poll_io, o, context, timeout);
-  agc_poller_wait(o->st->poller, writes(o), ready, o);
+  agc_io_start_then(vm, &poll_io, o, context, timeout, begin_wait);
   return agc_void();
 }
 

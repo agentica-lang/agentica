@@ -78,7 +78,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - the `UV_USE_IO_URING=0` setenv at start-up
       - returns whether it set it)
     - `agc_io_uv` (
-      - the scheduler's `uv_loop_t`, for handle code)
+      - the scheduler's `uv_loop_t`, for handle code; aborts off the I/O
+        thread, so at N > 1 a libuv step goes through `agc_io_call` and the
+        builtins that still call it are refused, `agc_program_for_threads`)
     - `agc_io_ready` (
       - completes an `external` job from a libuv callback)
     - `agc_io_run_for` (

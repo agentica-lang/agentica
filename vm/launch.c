@@ -153,13 +153,13 @@ static void flush_files(agc_vm *vm) {
   const agc_outcome *o = &vm->rt->outcome;
   agc_notice notice;
   agc_print_flush_failed(agc_notice_begin(&vm->rt->err, &notice), o->code, o->message, o->message_len, vm->rt->style);
-  agc_notice_end(&notice, AGC_NOTICE_FINAL);
+  agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
 }
 
 static void print_outcome(agc_vm *vm, const agc_outcome *outcome, agc_notice_mode mode) {
   agc_notice notice;
   agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, outcome, vm->rt->style, false);
-  agc_notice_end(&notice, mode);
+  agc_notice_end(vm, &notice, mode);
 }
 
 static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
@@ -182,7 +182,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   if (vm->rt->flush_expired) {
     agc_notice notice;
     agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->style);
-    agc_notice_end(&notice, AGC_NOTICE_FINAL);
+    agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
   }
   const char *write_error = NULL;
   if (outcome->kind != AGC_FAILED && !agc_io_stop_signal()) {
@@ -432,12 +432,26 @@ bool agc_launch_env(const char *name, agc_launch_options *options) {
   return true;
 }
 
-/* The count of schedulers is read and checked, but only the scheduler that shares a thread with the loop is built, and
-   a larger count would silently run as one. */
+/* More than one scheduler runs only under the test switch AGENTICA_VM_TEST_MULTICORE=1 until the count is lifted
+   (#345). The profile trace counts on one scheduler, and the test-only blocking output holds a stream lock across a
+   write, which the end of a run with scheduler threads cannot wait for: both refuse a larger count. */
 bool agc_launch_supported(const char *name, const agc_launch_options *options) {
   if (options->schedulers <= 1) return true;
-  fprintf(stderr, "%s: %" PRId64 " schedulers were asked for, but this build runs one\n", name, options->schedulers);
-  return false;
+  const char *multicore = getenv("AGENTICA_VM_TEST_MULTICORE");
+  if (!multicore || strcmp(multicore, "1") != 0) {
+    fprintf(stderr, "%s: %" PRId64 " schedulers were asked for, but this build runs one\n", name, options->schedulers);
+    return false;
+  }
+  if (agc_trace_mask(getenv("AGENTICA_VM_TRACE")) & AGC_TRACE_PROFILE) {
+    fprintf(stderr, "%s: the profile trace needs one scheduler\n", name);
+    return false;
+  }
+  const char *blocking = getenv("AGENTICA_VM_TEST_BLOCKING_OUTPUT");
+  if (blocking && strcmp(blocking, "1") == 0) {
+    fprintf(stderr, "%s: AGENTICA_VM_TEST_BLOCKING_OUTPUT needs one scheduler\n", name);
+    return false;
+  }
+  return true;
 }
 
 static agc_launch_status refuse(const char *name, const char *message) {
@@ -533,6 +547,7 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->drop_uring_env = launch->own_uring_env;
   rt->inherited = launch->inherited;
   rt->front_end = front_end;
+  rt->schedulers = front_end ? 1 : options->schedulers;
   seed_map_hash(vm);
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");

@@ -95,3 +95,7 @@ void agc_inbox_close(agc_inbox *in) {
   (void)agc_inbox_run(in);
   uv_close((uv_handle_t *)&in->wake, closed);
 }
+
+/* Any thread: wakes the loop's thread with no request, so that it looks at the run again (the end of the run, every
+   scheduler idle). */
+void agc_inbox_wake(agc_inbox *in) { uv_async_send(&in->wake); }

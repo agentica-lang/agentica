@@ -333,7 +333,7 @@ static void trace_gc(agc_vm *vm, const char *when) {
 static void trace_end(agc_vm *vm) {
   const agc_trace *tr = &vm->rt->trace;
   const agc_outcome *o = &vm->rt->outcome;
-  uint64_t task = vm->task && executing(vm->task) ? vm->task->id : 0;
+  uint64_t task = vm->rt->over ? vm->rt->over_task : vm->task && executing(vm->task) ? vm->task->id : 0;
   if (o->kind == AGC_FAILED)
     AGC_TRACE(tr, AGC_TRACE_SCHED, "fail task=%" PRIu64 " code=%s", task, o->code);
   else if (o->kind == AGC_EXITED)
@@ -358,7 +358,7 @@ static agc_task **quiet_slot(agc_vm *vm, const agc_task *t) {
 
 /* Runs under the run-level target: a failure here ends the run. */
 static void crash(agc_vm *vm, agc_task *t) {
-  agc_outcome *o = &vm->rt->outcome;
+  agc_outcome *o = vm->outcome;
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "crash task=%" PRIu64 " code=%s", t->id, o->code);
   t->crash = agc_crash_text(vm->rt->program, o);
   t->crash_code = o->code;
@@ -384,7 +384,7 @@ static void crash(agc_vm *vm, agc_task *t) {
   }
   agc_notice notice;
   agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
-  agc_notice_end(&notice, AGC_NOTICE_QUEUED);
+  agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
   o->kind = AGC_DONE;
   unlink_task(vm, t);
   for (agc_task *child = t->children, *next; child; child = next) {
@@ -395,7 +395,7 @@ static void crash(agc_vm *vm, agc_task *t) {
 }
 
 static bool fatal(const agc_vm *vm, const agc_task *t) {
-  const agc_outcome *o = &vm->rt->outcome;
+  const agc_outcome *o = vm->outcome;
   return t == vm->rt->main || o->kind != AGC_FAILED || strcmp(o->code, "RUNTIME-STEP-LIMIT") == 0 ||
          strcmp(o->code, "RUNTIME-INTERNAL") == 0;
 }
@@ -425,7 +425,7 @@ bool agc_report_unobserved(agc_vm *vm) {
   agc_notice notice;
   agc_print_unobserved(agc_notice_begin(&vm->rt->err, &notice), vm->rt->crash_count - vm->rt->observed_count, first->crash,
                        vm->rt->style);
-  agc_notice_end(&notice, AGC_NOTICE_QUEUED);
+  agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
   return true;
 }
 
@@ -453,6 +453,15 @@ static void check_stop(agc_vm *vm) {
   if (sig) agc_stop(vm, sig);
 }
 
+/* A popped task that may run, or NULL when it was ended instead (see agc_task_next). */
+static agc_task *admit(agc_vm *vm, agc_task *t) {
+  if (atomic_load_explicit(&t->state, memory_order_acquire) == AGC_TASK_DONE) return NULL;
+  if (!atomic_load_explicit(&t->cancelled, memory_order_seq_cst)) return t;
+  vm->task = t;
+  end_cancelled_locked(vm, t);
+  return NULL;
+}
+
 /* The next task to run. A DONE task is dropped (a cancel that raced a waker's push). So is a cancelled one that is not
    running: the canceller could not take it out of the queue because a waker had set READY and not pushed yet, or a
    scheduler had popped it already (cancel_one), so whoever pops it ends it. A cancel that comes after this check
@@ -465,10 +474,7 @@ agc_task *agc_task_next(agc_vm *vm) {
   for (;;) {
     agc_task *t = agc_runq_pop(vm->rt->runq);
     if (!t) return NULL;
-    if (atomic_load_explicit(&t->state, memory_order_acquire) == AGC_TASK_DONE) continue;
-    if (!atomic_load_explicit(&t->cancelled, memory_order_seq_cst)) return t;
-    vm->task = t;
-    end_cancelled_locked(vm, t);
+    if ((t = admit(vm, t))) return t;
   }
 }
 
@@ -521,7 +527,197 @@ static bool idle_wait(agc_vm *vm) {
   return agc_io_run_for(vm, due > now ? due - now : 0, false);
 }
 
+/* One turn of T on this scheduler and its end. True when `main` has returned. */
+static bool run_task(agc_vm *vm, agc_task *t) {
+  vm->task = t;
+  atomic_store_explicit(&t->state, AGC_TASK_RUNNING, memory_order_relaxed);
+  agc_turn_begin(vm);
+  agc_turn_result r = AGC_TURN_DONE;
+  bool ran = run_turn(vm, t, &r);
+  agc_turn_finish(vm);
+  return agc_task_end_turn(vm, t, r, ran);
+}
+
+/* Several schedulers (docs/vm/16-architecture.md §16.9, "Threads"): N scheduler threads share the run queue, and the
+   main thread becomes the I/O thread, the only one that calls libuv. It is reached only under the test switch
+   AGENTICA_VM_TEST_MULTICORE until the count is lifted (#345). */
+
+/* The run is over: the first caller records the end in rt->outcome (its own failure, or the end it wrote there), every
+   caller ends the run queue, so each scheduler stops at its next turn boundary, and wakes the I/O thread. Nothing reads
+   rt->outcome before the I/O thread has joined the schedulers, which orders the copy before the read. */
+void agc_run_over(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  bool expected = false;
+  if (atomic_compare_exchange_strong_explicit(&rt->over, &expected, true, memory_order_acq_rel,
+                                              memory_order_acquire)) {
+    if (vm->outcome != &rt->outcome) rt->outcome = *vm->outcome;
+    rt->over_task = vm->task && executing(vm->task) ? vm->task->id : 0;
+  }
+  agc_runq_end(rt->runq);
+  agc_io_wake(vm);
+}
+
+/* agc_run_over for an end that no task caused (a stop signal, a stall, a failure of the I/O thread): the trace names
+   no task. The I/O context keeps its own task for what runs after (a detached ending reads it). */
+void agc_run_over_untasked(agc_vm *vm) {
+  agc_task *own = vm->task;
+  vm->task = NULL;
+  agc_run_over(vm);
+  vm->task = own;
+}
+
+/* The stall of a run with several schedulers, found by the I/O thread (agc_io_serve): the same end as at N = 1, with
+   no stack, since no task is running. */
+void agc_run_stall(agc_vm *vm) {
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
+  agc_outcome *o = vm->outcome;
+  memset(o, 0, sizeof *o);
+  o->kind = AGC_FAILED;
+  o->code = "RUNTIME-INTERNAL";
+  o->message = "every task is waiting and nothing can wake them";
+  o->message_len = strlen(o->message);
+  agc_run_over_untasked(vm);
+}
+
+/* The entry of a file with Globals slots writes them before it hands over to `main` (docs/vm/10-io-multicore.md
+   §10.2.3, "The Globals table"), and nothing orders those writes before a read on another thread. So only scheduler 0
+   runs tasks until the entry has handed over: then the frame at the bottom of `main` is no longer the entry's. A
+   file without slots has nothing to wait for. */
+static bool entry_over(const agc_vm *vm) {
+  const agc_program *p = vm->rt->program;
+  const agc_task *m = vm->rt->main;
+  return p->global_count == 0 || !m->frames || m->frame_count == 0 || m->frames[0].function != p->entry;
+}
+
+/* Scheduler 0 starts the others (THREAD, which is sched_main) once the entry is over. Each one is counted by the run
+   queue before it starts, so the stall check never sees a run as idle while a thread is still on its way in. */
+static void start_others(agc_vm *vm, void (*thread)(void *arg)) {
+  agc_runtime *rt = vm->rt;
+  atomic_store_explicit(&rt->entry_done, true, memory_order_release);
+  for (int64_t k = 1; k < rt->schedulers; k++) {
+    agc_runq_add_scheduler(rt->runq);
+    if (!agc_thread_start(rt->threads, (size_t)k, thread, rt->scheds[k])) {
+      agc_runq_drop_scheduler(rt->runq);
+      agc_fail(vm, "RUNTIME-INTERNAL", "cannot start a scheduler thread", 0);
+    }
+    atomic_fetch_add_explicit(&rt->started, 1, memory_order_release);
+  }
+}
+
+/* The loop of one scheduler thread. It never touches libuv: the service work that the I/O thread leaves (the end of
+   a detached job) is taken on a nudge, at each turn boundary and when idle; a scheduler with no task waits on the run
+   queue, until its nearest timer when it has one. */
+static void sched_turns(agc_vm *vm, void (*thread)(void *arg)) {
+  agc_runtime *rt = vm->rt;
+  agc_runq *q = rt->runq;
+  if (vm->index == 0 && entry_over(vm)) start_others(vm, thread);
+  for (;;) {
+    if (atomic_load_explicit(&rt->over, memory_order_acquire)) return;
+    agc_task *t = agc_task_next(vm);
+    if (!t) {
+      if (agc_runq_take_nudge(q)) {
+        (void)agc_io_service(vm);
+        continue;
+      }
+      check_stop(vm);
+      if (agc_timers_run(vm)) continue;
+      uint64_t due = agc_timers_next_due(vm);
+      t = due == UINT64_MAX ? agc_runq_wait(q) : agc_runq_wait_until(q, due);
+      if (!t || !(t = admit(vm, t))) continue;
+    }
+    if (run_task(vm, t)) {
+      vm->outcome->kind = AGC_DONE;
+      agc_run_over(vm);
+      return;
+    }
+    if (vm->index == 0 && t == rt->main && !atomic_load_explicit(&rt->entry_done, memory_order_relaxed) &&
+        entry_over(vm))
+      start_others(vm, thread);
+    if (agc_runq_nudged(q) && agc_runq_take_nudge(q)) (void)agc_io_service(vm);
+    (void)agc_timers_run(vm);
+    check_stop(vm);
+  }
+}
+
+/* A scheduler thread: registered with the collector before its first allocation, with the stop signals blocked (the
+   I/O thread handles them), and with its own failure target. A failure that reaches it (a fatal task failure, a stop
+   signal, System.exit) ends the run. */
+static void sched_main(void *arg) {
+  agc_vm *vm = arg;
+  agc_io_thread_signals();
+  if (!agc_gc_thread_enter()) agc_internal_abort("cannot register a scheduler thread with the collector");
+  if (setjmp(vm->fail) == 0) {
+    sched_turns(vm, sched_main);
+  } else {
+    agc_sync_reset(vm);
+    agc_io_service_reset(vm);
+    agc_run_over(vm);
+  }
+  agc_gc_thread_leave();
+}
+
+static agc_outcome run_threads(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  size_t n = (size_t)rt->schedulers;
+  /* A failure of the setup (the loop cannot be made: no descriptor left) ends the run here, before any scheduler
+     starts; agc_io_serve sets its own target once they run. */
+  if (setjmp(vm->fail) != 0) {
+    agc_sync_reset(vm);
+    agc_io_hand_off(vm, false);
+    trace_end(vm);
+    return rt->outcome;
+  }
+  rt->program = agc_program_for_threads(rt->program);
+  agc_share(vm);
+  if (!agc_io_share(vm, true)) agc_internal_abort("cannot start the I/O thread's inbox");
+  agc_gc_allow_threads();
+  rt->scheds = agc_alloc(agc_size_mul(n, sizeof(agc_vm *)));
+  for (size_t k = 0; k < n; k++) {
+    agc_vm *s = agc_alloc(sizeof(agc_vm));
+    agc_vm_init_context(s, rt);
+    s->index = (uint32_t)k;
+    rt->scheds[k] = s;
+  }
+  agc_input_watch(vm);
+  rt->threads = agc_threads_new(n);
+  agc_runq_on_idle(rt->runq, agc_io_wake_idle, vm);
+  /* The I/O thread's own failures (agc_io_serve) go to its own record too while the schedulers run. */
+  vm->outcome = &vm->own;
+  agc_task_enter(vm, rt->main, rt->program->entry);
+  trace_spawn(vm, rt->main, NULL);
+  enqueue(vm, rt->main);
+  agc_runq_add_scheduler(rt->runq);
+  /* Counted before it starts: scheduler 0 adds the others to `started` at once, and a later store would hide them
+     from the joins below. */
+  atomic_store_explicit(&rt->started, 1, memory_order_release);
+  if (!agc_thread_start(rt->threads, 0, sched_main, rt->scheds[0]))
+    agc_internal_abort("cannot start a scheduler thread");
+  agc_io_serve(vm);
+  /* Scheduler 0 first: it is the one that starts the others, so once it has ended `started` no longer grows. */
+  agc_thread_join(rt->threads, 0);
+  uint32_t started = atomic_load_explicit(&rt->started, memory_order_acquire);
+  for (uint32_t k = 1; k < started; k++) agc_thread_join(rt->threads, k);
+  agc_threads_free(rt->threads);
+  rt->threads = NULL;
+  vm->outcome = &rt->outcome;
+  /* One thread again: what the I/O thread hands over now it ends itself, and the detached jobs still listed. */
+  agc_io_hand_off(vm, false);
+  if (setjmp(vm->fail) == 0) {
+    (void)agc_io_service(vm);
+    if (rt->outcome.kind == AGC_DONE && agc_report_unobserved(vm)) {
+      rt->outcome.kind = AGC_EXITED;
+      rt->outcome.exit_code = 1;
+    }
+  } else {
+    agc_sync_reset(vm);
+    agc_io_service_reset(vm);
+  }
+  trace_end(vm);
+  return rt->outcome;
+}
+
 agc_outcome agc_vm_run(agc_vm *vm) {
+  if (vm->rt->schedulers > 1) return run_threads(vm);
   if (setjmp(vm->fail) == 0) {
     agc_profile_start(vm);
     agc_task_enter(vm, vm->rt->main, vm->rt->program->entry);
@@ -539,13 +735,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
         }
         continue;
       }
-      vm->task = t;
-      atomic_store_explicit(&t->state, AGC_TASK_RUNNING, memory_order_relaxed);
-      agc_turn_begin(vm);
-      agc_turn_result r = AGC_TURN_DONE;
-      bool ran = run_turn(vm, t, &r);
-      agc_turn_finish(vm);
-      if (agc_task_end_turn(vm, t, r, ran)) break;
+      if (run_task(vm, t)) break;
       agc_io_poll(vm, false);
       (void)agc_timers_run(vm);
       check_stop(vm);
@@ -557,6 +747,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
     }
   } else {
     agc_sync_reset(vm);
+    agc_io_service_reset(vm);
   }
   trace_end(vm);
   return vm->rt->outcome;

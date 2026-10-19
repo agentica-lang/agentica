@@ -239,7 +239,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   return deadline && !q->sending;
 }
 
-static const agc_io_kind duplex_io = {NULL, request_done, request_expired, drop_request, true, "channel", request_cancel, true};
+static const agc_io_kind duplex_io = {NULL, request_done, request_expired, drop_request, true, "channel", request_cancel, true, NULL};
 
 static bool usable(const agc_duplex *d, const request *pending, agc_value *result) {
   if (d->closed) {

@@ -23,6 +23,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   queue and reads the scheduler clock without the event loop. With one
   scheduler the order of tasks does not change.
 
+- With the test-only switch `AGENTICA_VM_TEST_MULTICORE=1`, `--schedulers N`
+  runs N scheduler threads beside one I/O thread, with standard input and
+  output, files and FIFOs; TCP, TLS, HTTP, `Process`, `Duplex` and `Test.run`
+  fail with `RUNTIME-INTERNAL` there for now. Without the switch a count above
+  1 still exits 2. `make test-multicore` and `make vm-tsan-run` run the
+  programs on four schedulers.
+
 - Native Windows regressions for ordinary-file line decoding, lock-owner
   cancellation, unsafe path aliases, depth/read-only removal failures,
   preservation of existing rename targets and junction destinations, localhost

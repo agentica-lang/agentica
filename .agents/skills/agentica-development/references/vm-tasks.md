@@ -8,7 +8,16 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/task.c`
   - **Owns:** The scheduler (run queue, turns, park and wake), task cancellation
-    and the `Task` builtins.
+    and the `Task` builtins. With `rt->schedulers > 1` (test-only:
+    `AGENTICA_VM_TEST_MULTICORE=1`) `agc_vm_run` goes to `run_threads`: one
+    `agc_vm` per scheduler thread (`sched_main`, `sched_turns`), the calling
+    thread as the I/O thread (`agc_io_serve` in `vm/loop.c`), the first end
+    recorded once by `agc_run_over`, the threads joined before the exit path
+    (`docs/vm/16-architecture.md` §16.9, "Threads"). A failure writes
+    `*vm->outcome`, the record of that scheduler, never `rt->outcome`
+    directly. Programs at N = 4: `tests/test_vm_multicore.py`
+    (`make test-multicore`, `make vm-tsan-run`); whole runs in C:
+    `vm/tests/threads_test.c`.
 
 - **Path:** `vm/runq.c`
   - **Owns:** The global run queue: a FIFO through `agc_task.next` and one
@@ -19,9 +28,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_runq_share`, which runs before a second thread touches it. A nudge
     (`agc_runq_nudge`, `agc_runq_nudged`, `agc_runq_take_nudge`) is work for a
     scheduler that is not a task: it ends one `agc_runq_wait` with NULL, and
-    in 3c the scheduler then calls `agc_io_service` (`vm/loop.c`), which ends
-    the detached jobs that the I/O role handed over (as built only C tests
-    call it).
+    the scheduler then calls `agc_io_service` (`vm/loop.c`), which ends the
+    detached jobs that the I/O role handed over. The queue counts its idle
+    schedulers for the stall check of the I/O thread (`agc_runq_quiet`,
+    `agc_runq_still_quiet`, `agc_runq_on_idle`).
 
 - **Path:** `vm/sync.c`
   - **Owns:** The locks of the shared state. `agc_lock` (a mutex that is solo
@@ -54,7 +64,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_inbox_keep`, `agc_inbox_close`): a locked queue taken whole and the
     `uv_async_t` that wakes the loop. `agc_io_share` makes it; none exists at
     N = 1, where a request runs inline. The threaded C tests run under TSan:
-    `make vm-tsan` (`TSAN=1`, no libgc, `AGC_NO_GC`).
+    `make vm-tsan` (`TSAN=1`, no libgc, `AGC_NO_GC`); `make vm-tsan-run` runs
+    the multicore programs on a TSan binary.
 
 - **Path:** `vm/timers.c`
   - **Owns:** The timed waits. `agc_timer` lives in `agc_task`; the heap
@@ -67,7 +78,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`agc_timers_disarm`). Every change is made with `rt->sync` held, by any
     scheduler. The idle step (`idle_wait` in `vm/task.c`) runs the loop until
     the nearest deadline with `agc_io_run_for(vm, ms, false)`;
-    `agc_runq_wait_until` does the same for a scheduler thread.
+    `agc_runq_wait_until` does the same for a scheduler thread. Arm and disarm
+    keep `rt->timers_armed`, which the stall check at N > 1 reads.
 
 - **Path:** `vm/task_map.c`
   - **Owns:** `Task.map`: a stepper on the caller that starts, times and cancels

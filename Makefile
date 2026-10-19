@@ -21,7 +21,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -256,6 +256,7 @@ site-serve: site-sass
 # make SANITIZE=1         clang with ASan and UBSan, no libgc: the same binary, built in that mode
 # make TSAN=1             clang with TSan, no libgc (TSan and Boehm's stop-the-world do not mix): for make vm-tsan
 # make vm-tsan            the C tests of the code that threads share (inbox, outcome, run queue, wake, job) under TSan
+# make vm-tsan-run        the programs of tests/test_vm_multicore.py on several schedulers, on a TSan binary
 # Each mode compiles vm/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
@@ -601,9 +602,9 @@ BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)
 STAGE1_COMPILER ?= $(BOOT)
 STAGE1_NEEDS := $(if $(filter $(BOOT),$(STAGE1_COMPILER)),$(BOOT))
 
-ifeq ($(GC_STRESS),1)
+ifneq ($(filter 1,$(GC_STRESS) $(TSAN)),)
 $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS):
-	@echo "$@ is missing: the GC stress build links the front end of the release build; run make first" >&2; exit 1
+	@echo "$@ is missing: the GC stress and TSan builds link the front end of the release build; run make first" >&2; exit 1
 else
 $(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(STAGE1_NEEDS)
 	@mkdir -p $(STAGE_DIR)
@@ -714,10 +715,21 @@ vm-test: $(VM_TESTS)
 # set-once outcome and reference count, the run queue, the wake against the park, a job on the loop, rt->sync, the output
 # locks and a timer fired against a wake. The VM is built without libgc (AGC_NO_GC), so the collector's own signals are out
 # of the picture; the whole run is checked, so a race fails it.
-VM_TSAN_TESTS := inbox outcome runq task_wake job sync output timers
+VM_TSAN_TESTS := inbox outcome runq task_wake job sync output timers threads
 vm-tsan:
 	$(MAKE) $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) TSAN=1 SANITIZE=0 GC_STRESS=0
 	printf '%s\n' $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) | TSAN_OPTIONS=halt_on_error=1 xargs -n 1 sh -c '$(VM_TEST_RUNNER) "$$0" || { echo "C test failed: $$0" >&2; exit 255; }'
+
+# Programs on several schedulers (tests/test_vm_multicore.py): the test-only switch AGENTICA_VM_TEST_MULTICORE=1 lets
+# --schedulers N run them on N threads. test-multicore runs them on dist/agentica; vm-tsan-run runs them on a TSan
+# binary (no libgc, the front end of the release build), so a race between schedulers or with the I/O thread fails it.
+test-multicore: dist/agentica$(EXE)
+	@$(MAKE) --no-print-directory test-py TESTS="tests/test_vm_multicore.py"
+
+vm-tsan-run: dist/agentica$(EXE)
+	$(MAKE) build/vm/tsan/agentica$(EXE) TSAN=1 SANITIZE=0 GC_STRESS=0
+	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS=halt_on_error=1 \
+	  $(MAKE) --no-print-directory test-py TESTS="tests/test_vm_multicore.py"
 
 # The C tests as programs, without running them: windows-docker-build builds them in a container.
 vm-test-binaries: $(VM_TESTS)
@@ -839,7 +851,7 @@ sweep-full: vm-diff-build
 
 # The test modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
-VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_linux.py tests/test_vm_channel.py tests/test_vm_trace.py
+VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_linux.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py
 SANITIZE_JOBS ?= 4
 
 # The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only): the lock checks of

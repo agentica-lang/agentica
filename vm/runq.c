@@ -25,6 +25,13 @@ struct agc_runq {
   /* Work for a scheduler that is not a task (the end of a detached job, §16.11): set under the lock, so a waiter sees it
      in its test, and read without it at the turn boundary of a busy scheduler. */
   _Atomic bool nudged;
+  /* The stall check of several schedulers (docs/vm/16-architecture.md §16.9, "Stall"): `count` schedulers use the
+     queue and `idle` of them wait in it; `epoch` grows each time one leaves its wait. All three change under the lock.
+     The one that makes every scheduler idle calls `on_idle`, which wakes the I/O thread to look. */
+  uint32_t count, idle;
+  uint64_t epoch;
+  void (*on_idle)(void *data);
+  void *on_idle_data;
 };
 
 agc_runq *agc_runq_new(void) {
@@ -85,11 +92,28 @@ agc_task *agc_runq_pop(agc_runq *q) {
    wait (§16.3, "Idle schedulers"). An ended queue returns NULL even if tasks are left: the run is over. A nudge
    (agc_runq_nudge) also ends the wait with NULL when no task is queued; the caller tells the two apart with
    agc_runq_take_nudge. */
+static bool must_wait(const agc_runq *q) {
+  return !q->first && !q->ended && !atomic_load_explicit(&q->nudged, memory_order_relaxed);
+}
+
+/* Under the lock: the caller is about to wait. */
+static void enter_idle(agc_runq *q) {
+  if (++q->idle == q->count && q->on_idle) q->on_idle(q->on_idle_data);
+}
+
+static void leave_idle(agc_runq *q) {
+  q->idle--;
+  q->epoch++;
+}
+
 agc_task *agc_runq_wait(agc_runq *q) {
   if (q->solo) return q->ended ? NULL : take_first(q);
   uv_mutex_lock(&q->lock);
-  while (!q->first && !q->ended && !atomic_load_explicit(&q->nudged, memory_order_relaxed))
-    uv_cond_wait(&q->wake, &q->lock);
+  if (must_wait(q)) {
+    enter_idle(q);
+    while (must_wait(q)) uv_cond_wait(&q->wake, &q->lock);
+    leave_idle(q);
+  }
   agc_task *t = q->ended ? NULL : take_first(q);
   uv_mutex_unlock(&q->lock);
   return t;
@@ -102,13 +126,17 @@ agc_task *agc_runq_wait(agc_runq *q) {
 agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms) {
   if (q->solo) return q->ended ? NULL : take_first(q);
   uv_mutex_lock(&q->lock);
-  while (!q->first && !q->ended && !atomic_load_explicit(&q->nudged, memory_order_relaxed)) {
+  bool idle = false;
+  while (must_wait(q)) {
     uint64_t now = agc_clock_ms();
     if (now >= due_ms) break;
+    if (!idle) enter_idle(q);
+    idle = true;
     /* At most an hour per wait, so the nanoseconds never overflow; the loop waits again for the rest. */
     uint64_t left = due_ms - now < WAIT_SLICE_MS ? due_ms - now : WAIT_SLICE_MS;
     (void)uv_cond_timedwait(&q->wake, &q->lock, left * UINT64_C(1000000));
   }
+  if (idle) leave_idle(q);
   agc_task *t = q->ended ? NULL : take_first(q);
   uv_mutex_unlock(&q->lock);
   return t;
@@ -175,4 +203,42 @@ bool agc_runq_remove(agc_runq *q, const agc_task *t) {
   bool found = unlink_from(q, t);
   uv_mutex_unlock(&q->lock);
   return found;
+}
+
+/* A scheduler thread starts (or failed to start) using the queue. */
+void agc_runq_add_scheduler(agc_runq *q) {
+  uv_mutex_lock(&q->lock);
+  q->count++;
+  uv_mutex_unlock(&q->lock);
+}
+
+void agc_runq_drop_scheduler(agc_runq *q) {
+  uv_mutex_lock(&q->lock);
+  q->count--;
+  uv_mutex_unlock(&q->lock);
+}
+
+/* FN runs under the queue's lock, so it must take no lock of the VM: the I/O thread's wake (uv_async_send) takes none.
+   Set before the first scheduler thread starts. */
+void agc_runq_on_idle(agc_runq *q, void (*fn)(void *data), void *data) {
+  q->on_idle = fn;
+  q->on_idle_data = data;
+}
+
+/* True when every scheduler waits in an empty queue with no nudge and the run has not ended; EPOCH says when, for
+   agc_runq_still_quiet. While that holds no scheduler can make work, so whatever else the caller then finds idle stays
+   idle, unless the epoch moved: a scheduler woke in between. */
+bool agc_runq_quiet(agc_runq *q, uint64_t *epoch) {
+  uv_mutex_lock(&q->lock);
+  bool quiet = q->count && q->idle == q->count && must_wait(q);
+  *epoch = q->epoch;
+  uv_mutex_unlock(&q->lock);
+  return quiet;
+}
+
+bool agc_runq_still_quiet(agc_runq *q, uint64_t epoch) {
+  uv_mutex_lock(&q->lock);
+  bool quiet = q->epoch == epoch && q->idle == q->count && must_wait(q);
+  uv_mutex_unlock(&q->lock);
+  return quiet;
 }

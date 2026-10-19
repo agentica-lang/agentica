@@ -420,7 +420,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   return deadline && q->kind != REQ_SEND;
 }
 
-static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process", request_cancel, true};
+static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process", request_cancel, true, NULL};
 
 static void wrote(uv_write_t *w, int status) {
   proc *p = OWNER(w, write_req);

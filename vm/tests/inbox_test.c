@@ -74,7 +74,7 @@ static void post_all(void *arg) {
   for (int64_t k = 0; k < PER_PRODUCER; k++) {
     agc_request *req = malloc(sizeof *req);
     assert(req);
-    *req = (agc_request){NULL, p->self, p->s, k};
+    *req = (agc_request){NULL, p->self, p->s, k, NULL};
     agc_inbox_post(p->s->inbox, req);
   }
 }
@@ -123,7 +123,7 @@ static void ping_all(void *arg) {
     ping_payload[k] = (int)(k * 3 + 1);
     agc_request *req = malloc(sizeof *req);
     assert(req);
-    *req = (agc_request){NULL, 0, p, k};
+    *req = (agc_request){NULL, 0, p, k, NULL};
     agc_inbox_post(p->inbox, req);
     uv_sem_wait(&p->answered);
   }
@@ -166,12 +166,12 @@ static void post_second(void *arg) {
   overlap *o = arg;
   agc_request *req = malloc(sizeof *req);
   assert(req);
-  *req = (agc_request){NULL, 0, o, 1};
+  *req = (agc_request){NULL, 0, o, 1, NULL};
   agc_inbox_post(o->inbox, req);
   uv_sem_wait(&o->in_handler);
   req = malloc(sizeof *req);
   assert(req);
-  *req = (agc_request){NULL, 0, o, 2};
+  *req = (agc_request){NULL, 0, o, 2, NULL};
   agc_inbox_post(o->inbox, req);
   uv_sem_post(&o->go_on);
 }
@@ -216,7 +216,7 @@ static void test_close_handles_queued_requests(void) {
   for (int64_t k = 0; k < 5; k++) {
     agc_request *req = malloc(sizeof *req);
     assert(req);
-    *req = (agc_request){NULL, 0, NULL, k};
+    *req = (agc_request){NULL, 0, NULL, k, NULL};
     agc_inbox_post(inbox, req);
   }
   agc_inbox_close(inbox);

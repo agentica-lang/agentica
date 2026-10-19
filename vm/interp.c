@@ -33,7 +33,7 @@ struct agc_native {
 };
 
 static _Noreturn void raise_failure(agc_vm *vm) {
-  agc_stack_capture(vm, &vm->rt->outcome);
+  agc_stack_capture(vm, vm->outcome);
   longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
@@ -81,7 +81,7 @@ static uint32_t report_span(const agc_vm *vm, uint32_t span, int64_t argument) {
 }
 
 void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
-  agc_outcome *o = &vm->rt->outcome;
+  agc_outcome *o = vm->outcome;
   o->kind = AGC_FAILED;
   o->code = code;
   o->message = message;
@@ -96,7 +96,7 @@ void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint
 }
 
 void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument, uint32_t span) {
-  agc_outcome *o = &vm->rt->outcome;
+  agc_outcome *o = vm->outcome;
   o->kind = AGC_FAILED;
   o->code = code;
   o->text = message;
@@ -107,8 +107,8 @@ void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, 
 }
 
 void agc_exit(agc_vm *vm, int64_t code) {
-  vm->rt->outcome.kind = AGC_EXITED;
-  vm->rt->outcome.exit_code = code;
+  vm->outcome->kind = AGC_EXITED;
+  vm->outcome->exit_code = code;
   longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
@@ -125,8 +125,16 @@ agc_task *agc_new_task(agc_vm *vm) {
   return t;
 }
 
-void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps) {
+/* A scheduler context of RT: every one is made here, because a zeroed timer heap would say a timer is due at once
+   (agc_timers in port.h). Its failures go to its own record until agc_vm_init points the first context at rt. */
+void agc_vm_init_context(agc_vm *vm, agc_runtime *rt) {
   memset(vm, 0, sizeof *vm);
+  vm->rt = rt;
+  vm->outcome = &vm->own;
+  atomic_init(&vm->timers.next_due, UINT64_MAX);
+}
+
+void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps) {
   agc_runtime *rt = agc_alloc(sizeof(agc_runtime));
   rt->program = program;
   rt->out.file = out;
@@ -157,8 +165,9 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->log.level = -1;
   rt->log.lowest = AGC_LOG_NO_HANDLER;
   agc_trace_parse(&rt->trace, NULL, 2);
-  vm->rt = rt;
-  atomic_init(&vm->timers.next_due, UINT64_MAX);
+  rt->schedulers = 1;
+  agc_vm_init_context(vm, rt);
+  vm->outcome = &rt->outcome;
   vm->rt->main = vm->task = agc_new_task(vm);
   agc_random_seed(&vm->task->random, 0);
 }

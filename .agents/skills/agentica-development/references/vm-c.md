@@ -144,9 +144,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   not remembered: pass it to every make command or export it. Both builds
   have thread support (Debian's libgc, and `gc.o` with the defines above;
   `vm/value.c` defines `GC_THREADS` before `gc.h`). The collector starts no
-  marker threads until `agc_gc_allow_threads`, which only the C tests call, so
-  N=1 has none. Keep pool threads off GC memory (they use `malloc` only); a
-  thread that touches the heap calls `agc_gc_thread_enter` first and
-  `agc_gc_thread_leave` before it ends.
+  marker threads until `agc_gc_allow_threads`, which a run with N > 1 and the
+  C tests call, so N=1 has none. Keep pool threads off GC memory (they use
+  `malloc` only); a thread that touches the heap calls `agc_gc_thread_enter`
+  first and `agc_gc_thread_leave` before it ends.
   `agc_init` sets `GC_set_all_interior_pointers(1)` before `GC_INIT` so both
   builds agree.

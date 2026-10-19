@@ -6,6 +6,7 @@
 #define _DARWIN_C_SOURCE
 #endif
 #include "../core.h"
+#include "test_program.h"
 #include "test_support.h"
 
 #include <assert.h>
@@ -36,8 +37,7 @@ typedef struct {
   agc_instr code[MAX_FNS][MAX_CODE];
   uint32_t spans[MAX_FNS][MAX_CODE];
   agc_span span_table[128];
-  agc_source source;
-  uint32_t line_start[1], line_chars[1];
+  agc_test_source source;
   agc_value constants[64];
   agc_enum_def enum_defs[1];
   agc_variant_def variant_defs[2];
@@ -114,8 +114,8 @@ static bool ext_cancel(agc_vm *vm, void *data, agc_value context, bool deadline)
   return deadline;
 }
 
-static const agc_io_kind ext_io = {NULL, ext_done, ext_expired, ext_drop, true, "test", NULL, false};
-static const agc_io_kind short_io = {NULL, ext_done, ext_expired, ext_drop, true, "short", ext_cancel, false};
+static const agc_io_kind ext_io = {NULL, ext_done, ext_expired, ext_drop, true, "test", NULL, false, NULL};
+static const agc_io_kind short_io = {NULL, ext_done, ext_expired, ext_drop, true, "short", ext_cancel, false, NULL};
 
 static agc_value napped(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
@@ -124,7 +124,7 @@ static agc_value napped(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind nap_io = {NULL, napped, napped, NULL, true, "nap", NULL, false};
+static const agc_io_kind nap_io = {NULL, napped, napped, NULL, true, "nap", NULL, false, NULL};
 
 static agc_value nap_again(agc_vm *vm) {
   assert(++tries < 1000);
@@ -183,7 +183,7 @@ static void pool_drop(void *data) {
   dropped++;
 }
 
-static const agc_io_kind pool_io = {pool_work, pool_done, pool_done, pool_drop, false, "pool", pool_cancel, false};
+static const agc_io_kind pool_io = {pool_work, pool_done, pool_done, pool_drop, false, "pool", pool_cancel, false, NULL};
 
 static agc_value test_pool_job(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -432,17 +432,10 @@ static const agc_builtin test_builtins[] = {
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
-  agc_function *fn = &p->fns[f];
-  assert(fn->count < MAX_CODE);
-  p->code[f][fn->count] = (agc_instr){(uint16_t)op, (uint16_t)a, (uint16_t)(bx & 0xffff), (uint16_t)(bx >> 16)};
-  p->spans[f][fn->count++] = span;
+  agc_test_emit(&p->fns[f], MAX_CODE, op, a, bx, span);
 }
 
-static uint32_t constant(prog *p, int64_t v) {
-  uint32_t k = p->program.constant_count++;
-  p->constants[k] = agc_int(v);
-  return k;
-}
+static uint32_t constant(prog *p, int64_t v) { return agc_test_constant(&p->program, p->constants, v); }
 
 static void call_int(prog *p, uint32_t f, uint32_t builtin, int64_t v) {
   emit(p, f, AGC_OP_CONST, SCRATCH, constant(p, v), 1);
@@ -580,29 +573,8 @@ static void new_prog(prog *p) {
   p->builtins[B_AWAIT_TIMED] = agc_find_builtin((const uint8_t *)"Task.await", 10, 2);
   p->builtins[B_MAP] = agc_find_builtin((const uint8_t *)"Task.map", 8, 4);
   for (size_t k = 0; k < sizeof test_builtins / sizeof test_builtins[0]; k++) p->builtins[B_MARK + k] = &test_builtins[k];
-  for (uint32_t f = 0; f < MAX_FNS; f++) {
-    p->fns[f].name = agc_make_string("f", 1, 1);
-    p->fns[f].params = f == F_MAIN ? 0 : 1;
-    p->fns[f].registers = 32;
-    p->fns[f].code = p->code[f];
-    p->fns[f].spans = p->spans[f];
-  }
-  p->source.name = agc_make_string("t.agc", 5, 5);
-  p->source.text = agc_make_string("x\n", 2, 2);
-  p->source.lines = 1;
-  p->line_chars[0] = 1;
-  p->source.line_start = p->line_start;
-  p->source.line_chars = p->line_chars;
-  for (uint32_t k = 0; k < 128; k++) p->span_table[k] = (agc_span){0, 1, k + 1, 1, k + 2};
-  p->program.sources = &p->source;
-  p->program.source_count = 1;
-  p->program.spans = p->span_table;
-  p->program.span_count = 128;
-  p->program.constants = p->constants;
-  p->program.builtins = p->builtins;
-  p->program.builtin_count = B_COUNT;
-  p->program.functions = p->fns;
-  p->program.function_count = MAX_FNS;
+  agc_test_program(&p->program, &p->source, p->span_table, 128, p->constants, p->builtins, B_COUNT, p->fns, MAX_FNS,
+                   &p->code[0][0], &p->spans[0][0], MAX_CODE, F_MAIN);
   p->enum_defs[0] = (agc_enum_def){agc_make_string("Await", 5, 5), 0, 2};
   p->variant_defs[0] = (agc_variant_def){agc_make_string("Done", 4, 4), 0, 1, NULL};
   p->variant_defs[1] = (agc_variant_def){agc_make_string("TimedOut", 8, 8), 0, 0, agc_new_enum(1, 0)};
@@ -611,7 +583,6 @@ static void new_prog(prog *p) {
   p->program.variants = p->variant_defs;
   p->program.variant_count = 2;
   p->program.max_arity = 1;
-  p->program.entry = F_MAIN;
   build_tasks(p);
 }
 
