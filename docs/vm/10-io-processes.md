@@ -104,15 +104,16 @@ code above.
   in milliseconds. A failed `SIGTERM` in `Process.close` is
   `RUNTIME-PROCESS-CLOSE`.
 
-**As built (25c, the child channel, Linux only).** A second descriptor, a socket
+**As built (25c, the child channel).** A second descriptor, a socket
 pair separate from stdin, stdout and stderr, carries the protocol of
 `agentica test` and of BDD children, so a test or a step program owns its own
 stdin and stdout. `Process.spawn_channel`, `channel_read_line`, `channel_send`,
 `channel_close` and `read_available` are in `vm/process.c`;
 `Process.parent_read_line` and `Process.parent_send` (the child side) and the
 shared duplex stream are in `vm/duplex.c`, a service (`docs/vm/15-layers.md`).
-The signatures are in `docs/grammar/06d-io-and-network.md`. Other systems build
-none of them (the VM has `_WIN32` paths): the channel is Linux only.
+The signatures are in `docs/grammar/06d-io-and-network.md`. Linux and macOS
+use a socket pair; Windows has a pipe path (`agc_fs_take_channel`) that the
+platform tests do not cover yet.
 
 - **The socket pair.** One `uv_socketpair` (`SOCK_STREAM`) per child. The parent
   keeps one end as a libuv pipe handle, and the child gets the other as

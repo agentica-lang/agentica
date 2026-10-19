@@ -186,8 +186,9 @@ handles. A second way for any of them is a finding.
   OpenSSL or private headers such as `list_impl.h`. An exemption added to
   `vm/tools/check-layers.sh` needs a reason, and an exact path, not a bare
   basename glob.
-- Platform code: an `#ifdef` inside a shared function, two copies of one
-  function under `#ifdef`, or one-system flags in a shared struct is a finding.
+- Platform code: a new `#ifdef` inside a shared function, two copies of one
+  function under `#ifdef`, or one-system flags in a shared struct is a finding
+  (flag what the diff adds, not older code).
   The fix is a platform adapter (`references/vm-c.md` of the development
   skill, "Platform code").
 - C style: types at the top of the file, no prototypes of `static` functions, no

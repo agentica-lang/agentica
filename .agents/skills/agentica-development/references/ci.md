@@ -109,8 +109,9 @@ lists
   tests/test_<area>.py` from the root), run by make itself: `make -k -O
   -j$(JOBS)` over `py-test/<file>` targets, so a failure shows that module's
   report and the other modules still run. `-O` needs GNU make 4.0 or newer
-  (macOS ships 3.81; Linux only for now). CI installs the test group from
-  `pyproject.toml` and `poetry.lock`; test peers remain standard-library-only.
+  (macOS ships 3.81; its CI jobs install GNU make as `gmake`). CI installs
+  the test group from `pyproject.toml` and `poetry.lock`; test peers remain
+  standard-library-only.
   The helpers are `tests/agentica_test.py` (paths,
   the VM binary, the CLI, `run` with a timeout, `compile_agc`,
   `make_temp_dir`, `compile_text`, `@slow`, `tool` for Node;

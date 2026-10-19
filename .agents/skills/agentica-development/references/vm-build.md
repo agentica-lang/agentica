@@ -47,8 +47,8 @@ the VM paths listed
   in the `changes` job of `.github/workflows/ci.yml`; the list and the other
   jobs are in `references/ci.md`. A new VM source or test file outside those
   paths must be added there.
-- `agentica file.agc` runs in one process (Linux only,
-  `docs/vm/08-loader-and-cli.md` §9): the front end of the binary
+- `agentica file.agc` runs in one process
+  (`docs/vm/08-loader-and-cli.md` §9): the front end of the binary
   (`compiler/front_end.agc`) compiles in memory and hands the bytes to C with
   `FrontEnd.hand_off`; `vm/agentica.c` runs them in a new runtime. A
   `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1. Every catalog
@@ -224,10 +224,10 @@ from `AGENTICA_SWEEP_SEED`, else the
   with `YY_CFLAGS` (the sanitizers in `SANITIZE=1`, no `-Werror`) and the
   `YY_DEFS` that turn off everything but the reader; `vm/*.c` see the same
   `YY_DEFS` and `-I vm/third_party/yyjson/src`, and only `vm/json.c`
-  includes `yyjson.h`. libuv (Linux only, `UV_NAMES` in the Makefile, the
-  Linux list of its `CMakeLists.txt`) builds per mode into
+  includes `yyjson.h`. libuv (a `UV_NAMES` list per system in the Makefile,
+  from the lists of its `CMakeLists.txt`) builds per mode into
   `$(VM_BUILD)/uv/*.o` with `-std=gnu11`, its own `UV_DEFS` and the mode's
-  `YY_CFLAGS`, then `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt`. The
+  `YY_CFLAGS`, then `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt` on Linux. The
   yyjson, picohttpparser and libuv objects follow only their own stamp,
   `$(VM_BUILD)/third-party-flags` (the output of `make -s
   vm-third-party-key`: the `YY_COMPILE`, `PICO_COMPILE` and `UV_COMPILE`

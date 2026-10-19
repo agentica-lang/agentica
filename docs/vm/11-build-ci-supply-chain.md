@@ -6,8 +6,8 @@
   and the hardening flags `-fstack-protector-strong -D_FORTIFY_SOURCE=2`, and
   links `dist/agentica` (the VM with the front end inside, the one product;
   §18.2). On Linux it links PIE with full RELRO. The binary embeds the front end
-  with `.incbin` in ELF assembly, so only Linux builds it; `make vm-test` builds
-  the C VM and its tests on macOS and MinGW too (`platforms.yml`). The Makefile
+  as ELF, Mach-O or COFF data and builds on Linux, macOS and MinGW
+  (`platforms.yml`). The Makefile
   picks the platform from `OS=Windows_NT` or `uname -s`. The warning flags apply
   to our own `vm/*.c` only.
 - `AGENTICA_GC` picks the libgc build, like `AGENTICA_OPENSSL` picks OpenSSL.
@@ -137,8 +137,8 @@
 - **Job:** macOS (`platforms.yml`)
   - **Runner:** GitHub-hosted `macos-15-intel` and `macos-latest` (Apple
     clang, x86-64 and arm64), submodules
-  - **Runs:** `make vm-test`, `make fixed-point` (the binary) and a test
-    subset (files, paths, OS, processes, single binary)
+  - **Runs:** `make vm-test`, `make fixed-point` (the binary) and the test
+    subset listed in `platforms.yml`
 
 - **Job:** Windows (`platforms.yml`)
   - **Runner:** GitHub-hosted `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc,

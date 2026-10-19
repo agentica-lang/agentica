@@ -80,7 +80,7 @@ operating system call differs.
   `docs/vm/15-layers.md` §15.1 ("Files have a platform adapter") and §15.3:
   - one plain header (`file_io.h` is the model) with a few operations, opaque
     handles, no VM values, and one error convention (libuv codes or errno);
-    its comment names each real difference between systems; declarations
+    its comment names the real differences between systems, if any; declarations
     that exist on one system only sit in one whole `#ifdef` block;
   - one file per system family (`<area>_posix.c`, `<area>_windows.c`), each
     guarded whole by `#ifdef _WIN32` or `#ifndef _WIN32`, like
@@ -94,9 +94,10 @@ operating system call differs.
   system. Move the operation behind the adapter header in the same PR, and
   add the new file to the Makefile, `vm/tools/check-layers.sh` and
   `references/repo-map.md`.
-- Tests of the shared behavior go in the Platforms CI subset, so they run on
-  every system; a test of one system's adapter says so in its name and runs
-  only in that system's job (a skip fails the native Windows gate).
+- Tests of the shared behavior go in the Platforms CI subset (add a new test
+  file to the job lists of `platforms.yml` and `WINDOWS_TEST_MODULES`), so they
+  run on every system; a test of one system's adapter says so in its name and
+  runs only in that system's job (a skip fails the native Windows gate).
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
