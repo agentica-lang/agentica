@@ -379,7 +379,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/test_vm_stack.py`, `tests/agentica_test.py` (the helper of the
   unittest modules),
   `tests/test_vm_test_protocol.py`, `tests/fixtures/test-protocol-peer.*`,
-  `tests/test_vm_child_channel.py`, `tests/test_vm_child_channel_posix.py`,
+  `tests/test_vm_child_channel.py`, `tests/test_vm_child_channel_linux.py`,
   `tests/fixtures/child-channel*`,
   `tests/fixtures/child_channel.py`, `tests/fixtures/channel-run.py`,
   `tests/fixtures/vm/`;

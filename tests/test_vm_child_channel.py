@@ -3,23 +3,26 @@
 fixtures/child-channel.agc is the program; fixtures/child-channel-peer.js is the independent peer (Node): it drives
 the child side, and it is the child the parent side spawns. The peer opens the channel the way the system does, one
 socket pair at descriptor 3, or one pipe per direction at 3 and 4 on Windows. The cases that need a shell, /proc or a
-FIFO are in test_vm_child_channel_posix.py.
+FIFO are in test_vm_child_channel_linux.py, together with the check that a plain child inherits nothing (the
+`spawning` mode); vm/tests/process_test.c checks that, and the take itself, in C.
 """
 import json
+import os
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, compile_agc, kill_process, process_alive, run, run_vm, scaled, start_vm, vm_binary,
-                                 wait_until)
+from tests.agentica_test import (FIXTURES, compile_agc, kill_process, process_alive, run, run_vm, scaled, start_vm,
+                                 vm_binary, wait_until)
 
 PEER = FIXTURES / "child-channel-peer.js"
 WAIT = scaled(20)
 
-# The VM is the parent of a child that reads its channel until the end and reports its pid.
+# The VM is the parent of a child that reads its channel until the end and reports its pid; the mark file is where
+# the child says that it read the end of input.
 PARENT_PROGRAM = """\
 def main() -> Void
   args = System.args()
-  p = Result.unwrap!(Process.spawn_channel(args[0], [args[1], "child", "watch"], ".", 5000))
+  p = Result.unwrap!(Process.spawn_channel(args[0], [args[1], "child", "watch", args[2]], ".", 5000))
   puts(Result.unwrap!(Process.read_line(p, 5000)))
   IO.flush()
   Task.sleep(60000)
@@ -89,13 +92,19 @@ def test_parent_side_send_read_available_close_timeouts_and_limits(bytecode, nod
 
 
 def test_a_child_ends_when_its_parent_is_killed(tmp_path, request, adopt, node):
-    """Linux and macOS: the child reads the end of input; Windows: libuv's job object ends it with the VM."""
+    """Linux and macOS: the child reads the end of input and says so in the mark file. Windows: libuv's kill-on-close
+    job ends the child with the VM before it can read anything, so only its end is checked there; the end of input
+    after a parent that is no libuv process is checked in vm/tests/process_test.c, with a detached leaf."""
     source = tmp_path / "parent.agc"
     source.write_text(PARENT_PROGRAM, encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "parent.agcb"), node, PEER, flags=["--allow-run"]))
+    mark = tmp_path / "mark.txt"
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "parent.agcb"), node, PEER, mark, flags=["--allow-run"]))
     pid = vm.next_line(WAIT).strip()
     request.addfinalizer(lambda: kill_process(pid))
     assert process_alive(pid)
     vm.process.kill()
     vm.wait(WAIT)
     assert wait_until(lambda: not process_alive(pid), WAIT, 0.1), "the child outlived its parent"
+    if os.name != "nt":
+        assert wait_until(mark.exists, WAIT, 0.1), "the child ended without reading the end of input"
+        assert mark.read_text() == "end\n"

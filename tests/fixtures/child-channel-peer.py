@@ -1,4 +1,4 @@
-"""The POSIX-only side of the child channel: descriptors pinned to files, FIFOs and devices, and a shell child.
+"""The Linux-only side of the child channel: descriptors pinned to files, FIFOs and devices, and a shell child.
 
 They need fcntl, mkfifo, /proc and sh, so they run on Linux only (the others lack /proc); the cases of every system are in
 child-channel-peer.js. Drives the child side of fixtures/child-channel.agc and prints JSON.

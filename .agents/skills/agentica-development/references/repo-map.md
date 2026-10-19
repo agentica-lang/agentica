@@ -183,7 +183,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_stdlib_prelude.py  # pytest: the prelude table, stdlib/prelude/ files and Python peer agree; no O(n) builtin in a loop
   test_vm_test_protocol.py  # unittest: a Python peer plays a test runner over the child channel (references/vm-tests.md)
   test_vm_child_channel.py  # pytest: the child channel on its own, against a Node peer, on every system (references/vm-tests.md)
-  test_vm_child_channel_posix.py  # pytest: pinned descriptors and a shell child, Linux only (references/vm-tests.md)
+  test_vm_child_channel_linux.py  # pytest: pinned descriptors and a shell child, Linux only (references/vm-tests.md)
   test_vm_tls.py  # unittest: the VM TLS builtins against independent peers (references/vm-tests.md)
   test_vm_monotonic.py  # unittest: Time.monotonic_ns against Python's clock
   test_vm_bits.py  # unittest: spans of the Int and Float bit builtin errors (references/library-notes.md)

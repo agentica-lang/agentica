@@ -152,7 +152,11 @@ function readLine(fd) {
     try {
       n = fs.readSync(fd, one, 0, 1, null);
     } catch (error) {
-      if (error.code === "EAGAIN") continue;
+      // A descriptor that was given non-blocking has nothing yet: wait a little and read again.
+      if (error.code === "EAGAIN") {
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+        continue;
+      }
       n = 0; // a closed pipe may report itself as an error instead of an end
     }
     if (n === 0) return null;
@@ -177,6 +181,7 @@ function asChild(mode) {
     return;
   }
   const channel = ends();
+  if (channel === null) throw new Error("child mode " + mode + " needs the channel, and AGENTICA_CHANNEL is not 3 or 3,4");
   if (mode === "echo") {
     const data = readLine(channel.read);
     writeAll(1, "out:" + data.toString().trim() + "\n");
@@ -199,9 +204,10 @@ function asChild(mode) {
   } else if (mode === "gone") {
     return;
   } else if (mode === "watch") {
-    // Reports its pid, then reads until the parent's end goes away, which is the whole job.
+    // Reports its pid, then reads until the parent's end goes away and leaves a mark file (argument 4) saying so.
     writeAll(1, process.pid + "\n");
     while (readLine(channel.read) !== null);
+    fs.writeFileSync(process.argv[4], "end\n");
   } else {
     return pause(30000);
   }

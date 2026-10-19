@@ -357,10 +357,11 @@ Read first: `references/vm.md`.
     stalled send that close only the channel, a line over 1 MiB, a child with no
     channel, an uncaptured child, a UTF-8 character split between two
     `read_available` calls, `channel_close` after the child exited), and a
-    child that is gone after its parent is killed (the end of input on Linux
-    and macOS, libuv's job object on Windows)
+    child that is gone after its parent is killed (it reads the end of
+    input and leaves a mark on Linux and macOS; libuv's job object ends it on
+    Windows)
 
-- **Path:** `tests/test_vm_child_channel_posix.py`
+- **Path:** `tests/test_vm_child_channel_linux.py`
   - **Owns:** the Linux-only cases (`child-channel-peer.py`): descriptor 3 given
     to the VM as a regular file, a character device or a write-only FIFO
     (refused, left as it was) or as a read-write FIFO (taken), and a shell

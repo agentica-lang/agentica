@@ -1,4 +1,4 @@
-"""The POSIX-only side of the child channel: descriptors pinned to a file, a device, a FIFO, and a shell child.
+"""The Linux-only side of the child channel: descriptors pinned to a file, a device, a FIFO, and a shell child.
 
 fixtures/child-channel.agc is the program; fixtures/child-channel-peer.py drives its child side. They need fcntl,
 mkfifo, /proc and sh, so the module runs on Linux only; test_vm_child_channel.py has the cases of every system.
