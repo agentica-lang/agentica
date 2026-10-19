@@ -16,6 +16,8 @@ correctness, essential knowledge, and navigability.
 Short, precise instructions beat exhaustive explanations. Do not optimize file
 count at the expense of context efficiency.
 
+To decide whether a change needs new docs at all, use `documentation-writing`.
+
 ## 1. Discover
 
 Read repository instructions and inspect documentation structure before
