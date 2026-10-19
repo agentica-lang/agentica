@@ -1,4 +1,4 @@
-/* Native environment UTF-8, empty/missing/invalid names and the VM process identity. */
+/* Native environment UTF-8, empty/missing/invalid names, the VM process identity and the system name. */
 #include "../core.h"
 #include "../services.h"
 
@@ -9,6 +9,13 @@
 static agc_value env(agc_vm *vm, const char *name, size_t size) {
   agc_value argument = agc_string_value(agc_make_string(name, size, 0));
   return agc_system_builtins[0].fn(vm, &argument, 0);
+}
+
+static agc_value call(agc_vm *vm, const char *name) {
+  for (size_t k = 0; k < agc_system_builtin_count; k++)
+    if (strcmp(agc_system_builtins[k].name, name) == 0) return agc_system_builtins[k].fn(vm, NULL, 0);
+  assert(!"no such builtin");
+  return agc_void();
 }
 
 int main(void) {
@@ -37,7 +44,16 @@ int main(void) {
   assert(!agc_as_result(&vm, env(&vm, "agentica_channel", strlen("agentica_channel")))->ok);
 #endif
   assert(uv_os_unsetenv(AGC_CHANNEL_ENV) == 0);
-  assert(agc_as_int(&vm, agc_system_builtins[1].fn(&vm, NULL, 0)) == (int64_t)uv_os_getpid());
+  assert(agc_as_int(&vm, call(&vm, "System.pid")) == (int64_t)uv_os_getpid());
+#ifdef _WIN32
+  const char *os = "windows";
+#elif defined(__APPLE__)
+  const char *os = "macos";
+#else
+  const char *os = "linux";
+#endif
+  const agc_string *name_of_os = agc_as_string(&vm, call(&vm, "System.os"));
+  assert(name_of_os->bytes == strlen(os) && memcmp(name_of_os->data, os, name_of_os->bytes) == 0);
   assert(agc_io_close(&vm));
   puts("system tests passed");
   return 0;
