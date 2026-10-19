@@ -180,6 +180,7 @@ static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true,
 /* The request of a read, or NULL when this task waits for the one already in flight. */
 static read_request *begin_read(agc_vm *vm, agc_input *in) {
   if (in->reading) {
+    agc_task_parking(vm);
     agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
     agc_task_park(vm, true);
     return NULL;

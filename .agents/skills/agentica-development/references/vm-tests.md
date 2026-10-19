@@ -109,7 +109,35 @@ Read first: `references/vm.md`.
     `test_closing_task` also checks that the end hook of a task runs once, when
     `agc_task_close_done` brings `closing` to 0; 17c adds
     `test_timed_await_cancel` and `test_timed_await_ends` (they build the
-    `Await` enum tables in `new_prog`)
+    `Await` enum tables in `new_prog`); `test_woken_while_parking` (the
+    `Test.window` builtin marks its task, wakes it, then parks: the CAS makes it
+    WOKEN, queues nothing, and the end of the turn queues the task instead of
+    parking it, so it is queued once)
+
+- **Path:** `vm/tests/runq_test.c`
+  - **Owns:** The global run queue (`vm/runq.c`): FIFO order and removal from
+    the middle on the solo queue, then three pushers against three poppers on
+    libuv threads after `agc_runq_share` (every task comes out exactly once).
+
+- **Path:** `vm/tests/task_wake_test.c`
+  - **Owns:** The wake against the park path: the task marks itself PARKING and
+    two waker threads call `agc_task_wake` twice each while the scheduler thread
+    does `agc_task_commit_park`, 20000 rounds with different timings. The task
+    ends in the queue exactly once per round (a dropped wake leaves none, a
+    double push leaves two). The single-thread part checks the marks, unpark
+    and a stale wake.
+
+- **Path:** `vm/tests/test_support.h`
+  - **Owns:** `agc_test_deadline(seconds)` (an alarm, so a broken park path
+    fails a test instead of hanging `make vm-test`; none on Windows) and
+    `agc_test_ready_head` (the first ready task, for tests that run on one
+    thread).
+
+- **Path:** `vm/tests/gc_thread_test.c`
+  - **Owns:** Boehm with threads: libuv threads that call `agc_gc_thread_enter`
+    allocate checked lists, held only on their stacks, while they and the main
+    thread force collections. A collector that missed a stack would free live
+    nodes. The sanitizer build has no collector, so it only runs the threads.
 
 - **Path:** `vm/tests/channel_test.c`
   - **Owns:** the `Channel` builtins called directly with hand-made tasks (no

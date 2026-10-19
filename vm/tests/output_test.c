@@ -686,9 +686,9 @@ static void request_stop(void) {
    wait at most: the process has to be able to leave while its reader is silent. */
 static void leave_while_stuck(void) {
   request_stop();
-  uint64_t started = agc_io_now(&vm);
+  uint64_t started = agc_clock_ms();
   assert(!agc_output_busy(&vm));
-  assert(agc_io_now(&vm) - started < 1000);
+  assert(agc_clock_ms() - started < 1000);
 }
 
 /* The reader never reads. */
@@ -700,9 +700,9 @@ static void test_a_stop_signal_does_not_wait_for_a_silent_reader(void) {
   assert(write_as(a, 'a', 1000, false));
   leave_while_stuck();
   assert(out()->len > 0 && !out()->failed);
-  uint64_t started = agc_io_now(&vm);
+  uint64_t started = agc_clock_ms();
   assert(!agc_output_busy(&vm));
-  assert(agc_io_now(&vm) - started < 100);
+  assert(agc_clock_ms() - started < 100);
   finish();
   close_pipe();
 }

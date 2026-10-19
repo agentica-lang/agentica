@@ -269,6 +269,9 @@ static void copy_piece(agc_output *s, const agc_output_wait *w, size_t n) {
   if (at < end) put_bytes(s, "\n", 1);
 }
 
+/* One look at the wait of the running task, which is marked PARKING already (a task that joins the FIFO marks before
+   it links itself, a turn that resumes marks first: `put` and `agc_drain`), so a drain that frees room after the check
+   below finds PARKING and sets WOKEN instead of being dropped; a turn that ends the wait puts the state back. */
 static bool wait_turn(agc_vm *vm, agc_output *out) {
   agc_output *s = out->base;
   agc_task *t = vm->task;
@@ -293,6 +296,7 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
   }
   stop_waiting(s, t);
   advance(s);
+  agc_task_unpark(vm);
   return true;
 }
 
@@ -309,7 +313,10 @@ static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newlin
       return true;
     }
     t->output = w;
+    agc_task_parking(vm);
     agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
+  } else {
+    agc_task_parking(vm);
   }
   return wait_turn(vm, out);
 }
@@ -328,7 +335,10 @@ bool agc_drain(agc_vm *vm) {
     if (s->failed) fail_write(vm, out);
     if (!s->len && !s->waiters && !queued(s)) return true;
     t->output = (agc_output_wait){.out = out, .flush = true};
+    agc_task_parking(vm);
     agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
+  } else {
+    agc_task_parking(vm);
   }
   return wait_turn(vm, out);
 }
@@ -345,12 +355,12 @@ void agc_output_leave(agc_vm *vm, agc_task *t) {
    a reader that is not cannot hold the exit once per stream and per notice. */
 static void settle(agc_output *s) {
   agc_vm *vm = s->vm;
-  uint64_t now = agc_io_now(vm);
+  uint64_t now = agc_clock_ms();
   if (!vm->rt->settle_by) vm->rt->settle_by = now + FINAL_WAIT_MS;
   kick(s);
   while (s->writing && !s->failed && now < vm->rt->settle_by) {
     agc_io_run_for(vm, vm->rt->settle_by - now);
-    now = agc_io_now(vm);
+    now = agc_clock_ms();
   }
 }
 

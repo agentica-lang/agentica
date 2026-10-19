@@ -100,15 +100,15 @@ byte of a file with a type table, an Updates section or Globals.
 - `agentica compile file.agc -o file.agcb` runs the front end and writes
   bytecode.
 - `agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS]
-  [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]` runs a
-  compiled program (until step 8d-2 this was the separate `agentica-vm`
-  program). `run` is read only as the first word of the command line; C answers
-  it before any front end starts. The option parser is hand written. It stops at
-  the first non-option and honors `--`. Callers always pass `--` before the
-  file, so an option after the file is a program argument. Option errors (a
-  repeated option, an unknown switch, a missing or bad value, a bad
-  `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and `--json` may both appear, and
-  the last one wins.
+  [--schedulers N] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb
+  [args...]` runs a compiled program (until step 8d-2 this was the separate
+  `agentica-vm` program). `run` is read only as the first word of the command
+  line; C answers it before any front end starts. The option parser is hand
+  written. It stops at the first non-option and honors `--`. Callers always pass
+  `--` before the file, so an option after the file is a program argument.
+  Option errors (a repeated option, an unknown switch, a missing or bad value, a
+  bad `AGENTICA_FLUSH_TIMEOUT_MS` or `AGENTICA_SCHEDULERS`) exit 2. `--ai` and
+  `--json` may both appear, and the last one wins.
 - `--source-root DIR` (once; DIR must be valid UTF-8 and not `--`, and "" does
   nothing; a bad DIR exits 2) puts `DIR/` before every source name of the
   program that is relative and does not start with `std/`, once, right after
@@ -141,7 +141,17 @@ byte of a file with a type table, an Updates section or Globals.
 - `--version` prints the VM version and the versions of the libraries it links:
   libgc, yyjson, libuv and OpenSSL (the one that runs). OpenSSL is linked
   statically in the release.
-- The planned `--schedulers N` (10.2.3) is not in the VM yet.
+- `--schedulers N` (10.2.3) sets the number of scheduler threads: an integer
+  from 1 to 1024, without a sign, a space or a trailing letter. The environment
+  variable `AGENTICA_SCHEDULERS` (same range) sets it when the flag is absent.
+  The flag wins over a valid value of the variable; a bad flag or a bad
+  variable exits 2 even when the other is valid, and the variable is read
+  before the front end starts, so it is checked for every command, also
+  `check`. The default is 1. A count above 1 exits 2 with `agentica: N
+  schedulers were asked for, but this build runs one` before the program loads
+  (`agc_launch_supported`), so it never runs as 1; `agentica test` refuses a
+  flag above 1 the same way. `agentica` passes the flag to the VM, and `check`
+  and `compile` ignore it.
 - Windows and macOS: the binary embeds the front end as ELF, Mach-O or COFF
   data and builds on all three systems (`platforms.yml`); `vm/launch.c` finds
   the executable path through libuv.
@@ -248,52 +258,52 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   embedded program runner`), is exit 2, and the front end may not pass the
   option on in a hand-off.
 
-- **Two runs in one process.** `agentica [--front-end FILE.agcb] WORDS...`
-  loads the front end (the carried one, or `FILE`; `--front-end` must be the
-  first word and is not in any help) and runs it in a first runtime with the
-  arguments `--version V --self PATH [--embedded-bdd] -- WORDS...`, where `V`
-  is `AGC_VERSION`, `PATH` is the target of `/proc/self/exe` (`argv[0]` without
+- **Two runs in one process.** `agentica [--front-end FILE.agcb] WORDS...` loads
+  the front end (the carried one, or `FILE`; `--front-end` must be the first
+  word and is not in any help) and runs it in a first runtime with the arguments
+  `--version V --self PATH [--embedded-bdd] -- WORDS...`, where `V` is
+  `AGC_VERSION`, `PATH` is the target of `/proc/self/exe` (`argv[0]` without
   it), and `--embedded-bdd` is passed to the carried front end only when the
   binary carries both compiled programs used by `agentica test`. A replacement
   front end supplied with `--front-end` gets the original arguments, for
   compatibility with older front ends. The standard-library sources can be
   embedded without those programs, as in the first bootstrap binary. A lone
   `agentica --version` is answered by C before anything else is opened, so it
-  starts no front end and creates no trace file. `AGENTICA_FLUSH_TIMEOUT_MS`
-  is checked before the front end runs, as `agentica run` checks it at its
-  start. The front end has no step limit, no standard input (a read gives EOF,
-  so the program keeps the real one) and no channel to a parent process; it has
-  `--allow-run`, because `agentica test` starts the runner (the user's program
-  never runs in that runtime). If it
-  calls `FrontEnd.hand_off` and its run ends with status 0, C retires that
-  runtime: the same steps as the end of any run (`agc_launch_settle`: children
-  stopped, output and files flushed), then the event loop is closed and the
-  heap is collected once. Any other end of the front end (a usage error, a
-  problem in the user's file, a crash, a stop signal) is the end of the
-  process, with the status the front end gave, except for a crash (a runtime
-  error in the front end), which is status 2. The program is then loaded from
-  the bytes it handed over, with the full version check, and runs in a new
-  runtime with the options it was given. A bad option or bytecode is exit 2
-  with `agentica: ...`. The stop signal handlers and the wake handle of the
-  loop are set again for the second runtime (`unwatch_stop` in `vm/loop.c`
-  releases the first one). If the event loop of the front end cannot be closed
-  (an operation of its is still running), the run ends with status 1 and
-  `agentica: internal error: the front end left an operation running`, because
-  the program must not share a process with anything of the compiler.
+  starts no front end and creates no trace file. `AGENTICA_FLUSH_TIMEOUT_MS` and
+  `AGENTICA_SCHEDULERS` are checked before the front end runs, as `agentica run`
+  checks them at its start. The front end has no step limit, no standard input
+  (a read gives EOF, so the program keeps the real one) and no channel to a
+  parent process; it has `--allow-run`, because `agentica test` starts the
+  runner (the user's program never runs in that runtime). If it calls
+  `FrontEnd.hand_off` and its run ends with status 0, C retires that runtime:
+  the same steps as the end of any run (`agc_launch_settle`: children stopped,
+  output and files flushed), then the event loop is closed and the heap is
+  collected once. Any other end of the front end (a usage error, a problem in
+  the user's file, a crash, a stop signal) is the end of the process, with the
+  status the front end gave, except for a crash (a runtime error in the front
+  end), which is status 2. The program is then loaded from the bytes it handed
+  over, with the full version check, and runs in a new runtime with the options
+  it was given. A bad option or bytecode is exit 2 with `agentica: ...`. The
+  stop signal handlers and the wake handle of the loop are set again for the
+  second runtime (`unwatch_stop` in `vm/loop.c` releases the first one). If the
+  event loop of the front end cannot be closed (an operation of its is still
+  running), the run ends with status 1 and `agentica: internal error: the front
+  end left an operation running`, because the program must not share a process
+  with anything of the compiler.
 - **What a front end may hand over, and trust.** The front end that C loads is
-  fully trusted: it runs with the user's rights, can read files and, through
-  the options it hands over, give the program `--allow-run`. That is why
+  fully trusted: it runs with the user's rights, can read files and, through the
+  options it hands over, give the program `--allow-run`. That is why
   `--front-end FILE` is for the build and the tests only, is not in the help,
   and has the same standing as the binary itself. The options it may pass are
   exactly `--ai`, `--json`, `--allow-run`, `--max-steps N`, `--seed N`,
-  `--flush-timeout MS` and `--source-root DIR`, each once, and nothing else; no
-  positional word, no `--version`. `--driver-pid` is refused (exit 2): it says
-  which process started this one, and only that process can say so. So is
-  `--embedded` (exit 2): only `agentica run` starts an embedded program. The
-  hand-off takes at most 64 option words and 1,048,576 argument words
-  (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`), so the counts
-  fit an `int`. The file of `--front-end` is opened with `O_NONBLOCK` and must
-  be a regular file of at most 256 MiB, so a named pipe is refused at once.
+  `--flush-timeout MS`, `--schedulers N` and `--source-root DIR`, each once, and
+  nothing else; no positional word, no `--version`. `--driver-pid` is refused
+  (exit 2): it says which process started this one, and only that process can
+  say so. So is `--embedded` (exit 2): only `agentica run` starts an embedded
+  program. The hand-off takes at most 64 option words and 1,048,576 argument
+  words (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`), so the
+  counts fit an `int`. The file of `--front-end` is opened with `O_NONBLOCK` and
+  must be a regular file of at most 256 MiB, so a named pipe is refused at once.
 - **Shared by the two runs.** `vm/launch.c` holds what both do: the option
   parser (`agc_launch_parse`; its messages start with the program name,
   `agentica` or `agentica run`), seeds, the trace file, the creation of a

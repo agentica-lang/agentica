@@ -72,7 +72,7 @@ static agc_task *pop_live(agc_task **head, agc_task **tail) {
   while (*head) {
     agc_task *t = *head;
     agc_task_remove(head, tail, t);
-    if (t->state == AGC_TASK_PARKED) return t;
+    if (agc_task_waiting(t)) return t;
   }
   return NULL;
 }
@@ -143,12 +143,13 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     stop_waiting(t);
     return timed_out_error();
   }
-  uint64_t now = agc_io_now(vm);
+  uint64_t now = agc_clock_ms();
   if (!t->channel.deadline) t->channel.deadline = now + (uint64_t)timeout;
   if (t->channel.deadline <= now) {
     stop_waiting(t);
     return timed_out_error();
   }
+  agc_task_parking(vm);
   t->channel.channel = c;
   t->channel.sending = sending;
   t->channel.reserved = false;
@@ -156,7 +157,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     agc_task_enqueue(&c->senders, &c->senders_tail, t);
   else
     agc_task_enqueue(&c->receivers, &c->receivers_tail, t);
-  agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->channel.deadline - now));
+  agc_io_start_marked(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->channel.deadline - now));
   agc_task_park(vm, true);
   return agc_void();
 }
