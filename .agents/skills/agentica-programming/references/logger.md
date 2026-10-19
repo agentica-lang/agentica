@@ -44,9 +44,7 @@ Logger.time_text(ms: Int) -> String
 - A handler is `&Logger.stderr_json` or a block: `Logger.attach("audit",
   LogLevel.Warning) do |event| IO.warn("audit: #{event.message}") end`. A name
   in use for `attach`, or not in use for `detach`, is an `error` result. Inside
-  a block, assign the result to a new name (`gone = Logger.detach("x")`): a
-  block cannot assign a name that exists outside it, `_` included
-  (`CHECK-CAPTURED-ASSIGNMENT`).
+  a block, discard it with `_ = Logger.detach("x")`.
 - Handlers run in attach order, synchronously, in the task that logs, so a line
   is written when the call returns. A handler error is the error of that task. A
   handler that logs recurses until `RUNTIME-STACK-OVERFLOW`.

@@ -68,7 +68,7 @@ end
 
 ## for
 
-`for` walks through a list. The loop variable is new and read-only.
+`for` walks through a list. The loop variable is new and read-only. Name it `_` when the body does not need it.
 
 ```agentica
 def main() -> Void

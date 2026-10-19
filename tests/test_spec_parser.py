@@ -180,6 +180,10 @@ class TestSpecParser:
             assert (result.code) == (0), result.stderr
             assert (output_lines(result.stdout)) == (case.lines)
 
+    def test_a_discard_has_no_type_annotation(self):
+        self.check_accepted([Accept(main_of("  _ = 1\n"))])
+        self.check_rejected([Reject(main_of("  _: Int = 1\n"), "PARSE-UNEXPECTED-TOKEN", (2, 4))])
+
     def test_ranges_bind_loosest_and_do_not_chain(self):
         self.check_output([
             Output(main_of("  n = 2\n  for i in 0...n + 1 do\n    puts(i)\n  end\n"), ["0", "1", "2"]),
