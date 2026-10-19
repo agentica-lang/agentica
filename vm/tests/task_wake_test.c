@@ -1,9 +1,7 @@
 /*
- * The wake against the park path (docs/vm/10-io-multicore.md §10.2.3): a task marks itself PARKING, and two wakers on
- * other threads wake it while the scheduler thread ends the turn with agc_task_commit_park. Whatever the interleaving,
- * the task is queued exactly once per round: by the waker that found it PARKED, or by the scheduler when the commit
- * lost to a waker that found it PARKING (the state was WOKEN, and nobody else queued it). A wake that is dropped
- * leaves the queue empty, and a wake that is queued twice leaves two entries; both fail the round.
+ * The wake against the park path (docs/vm/10-io-multicore.md §10.2.3): a task marks PARKING and two wakers race the
+ * scheduler's agc_task_commit_park. Per round the task is queued exactly once, by the waker that found it PARKED or
+ * by the commit that lost to a waker that found PARKING. A dropped wake or a double queue fails the round.
  */
 #include "../core.h"
 #include "test_support.h"
