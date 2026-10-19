@@ -2754,6 +2754,19 @@ ROWS_45: List[Model.Builtin] = [
 
 ROWS_46: List[Model.Builtin] = [
     Model.Builtin(
+      name: "System.os",
+      parameters: [],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "System.os",
+      effects: ["process"],
+      description: (
+        "Return the operating system: linux, macos, windows, or the lowercase name uname gives on another system; " +
+        "VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "System.pid",
       parameters: [],
       result: Types.Type.Int,

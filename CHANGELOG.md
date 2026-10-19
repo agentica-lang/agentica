@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `System.os()` returns the operating system: `"linux"`, `"macos"`, `"windows"`,
+  or the lowercase `uname` name on another system.
+
 - `--schedulers N` and the variable `AGENTICA_SCHEDULERS` set the number of
   scheduler threads (1 to 1024; the flag wins over a valid variable; a bad
   value in either exits 2). This is the first step of the multicore VM: the VM

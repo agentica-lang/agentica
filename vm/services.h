@@ -106,6 +106,10 @@ extern const size_t agc_json_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
 char *agc_system_env(const char *name);
+/* Size of the buffers that hold an operating system name. */
+#define AGC_OS_NAME_MAX 64
+/* The System.os name for a uname sysname (NULL when there is none); see system.c. */
+void agc_system_os_name(const char *sysname, char *out, size_t size);
 
 extern const agc_builtin agc_system_builtins[];
 extern const size_t agc_system_builtin_count;

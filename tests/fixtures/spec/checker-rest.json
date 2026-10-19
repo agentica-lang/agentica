@@ -5435,6 +5435,37 @@
         ""
       ],
       "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  name: String = System.os()",
+        "  puts(name == \"windows\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = System.os(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  n: Int = System.os()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
     }
   ],
   "JSON signatures and opaque types": [
