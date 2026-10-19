@@ -29,6 +29,8 @@ typedef struct {
   size_t length[2], written;
   agc_utf8_cut cut;
   agc_io_job *job;
+  /* The stream, for the start of a POLL or STREAM write on the I/O thread (start_stream). */
+  agc_output *out;
 } drain_request;
 #endif
 
@@ -219,6 +221,13 @@ static drain_request *begin_drain(agc_output *s) {
   return q;
 }
 
+/* The libuv half of a POLL or STREAM write, on the I/O thread (agc_io_call): the poller's wait or the stream's write.
+   The job and the ranges were set before the call was posted, and nothing frees the request before its job ends. */
+static void start_stream(void *data) {
+  drain_request *q = data;
+  agc_stdio_start(q->out, q->part[0], q->length[0], q->part[1], q->length[1], request_finished, q);
+}
+
 /* Starts a write of the ring if none is out: a pool job, or a request that tells the loop when the descriptor can be
    written (POLL) or when the stream has taken the bytes (STREAM). */
 static void kick(agc_output *s) {
@@ -228,8 +237,9 @@ static void kick(agc_output *s) {
     agc_io_detached(s->vm, &drain_io, q, agc_void(), 0);
     return;
   }
+  q->out = s;
   q->job = agc_io_detached(s->vm, &watch_io, q, agc_void(), AGC_JOB_QUIET);
-  agc_stdio_start(s, q->part[0], q->length[0], q->part[1], q->length[1], request_finished, q);
+  agc_io_call(s->vm, start_stream, q);
 }
 
 static void wake_head(agc_output *s) {
@@ -285,8 +295,8 @@ static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
   return result;
 }
 
-static const agc_io_kind drain_io = {drain_work, drain_done, drain_done, request_drop, false, "output", NULL, false};
-static const agc_io_kind watch_io = {NULL, drain_done, drain_done, request_drop, true, "output", NULL, false};
+static const agc_io_kind drain_io = {drain_work, drain_done, drain_done, request_drop, false, "output", NULL, false, NULL};
+static const agc_io_kind watch_io = {NULL, drain_done, drain_done, request_drop, true, "output", NULL, false, NULL};
 
 static void flush_now(agc_output *s) {
   if (s->failed) return;

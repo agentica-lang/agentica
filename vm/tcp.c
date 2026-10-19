@@ -884,7 +884,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   return true;
 }
 
-static const agc_io_kind tcp_io = {NULL, request_done, request_expired, drop_request, true, "tcp", request_cancel, true};
+static const agc_io_kind tcp_io = {NULL, request_done, request_expired, drop_request, true, "tcp", request_cancel, true, NULL};
 
 static request *park(agc_vm *vm, net *n, req_kind kind, agc_value context, int64_t timeout) {
   request *q = new_request(n, kind);

@@ -11,8 +11,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it,
   capped at 1024, and the flag wins over a valid variable. Invalid values exit
   2, also a bad variable next to a valid flag. As built, both are
-  parsed and checked, the default is 1, and a count above 1 exits 2 before the
-  program loads, because only one scheduler runs (§16.9). `--schedulers 1`
+  parsed and checked and the default is 1. A count above 1 runs only under the
+  test-only switch `AGENTICA_VM_TEST_MULTICORE=1`, and otherwise exits 2 before
+  the program loads (§16.9). `--schedulers 1`
   gives the N=1 order, which still depends on timer and pool timing. `--seed`
   does not imply one scheduler; at N>1 only per-task random values repeat
   (7.4). The thread split and shared queue are in §16.2–16.3. Tasks are green
@@ -158,8 +159,8 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   - A runtime diagnostic or `System.exit` on any scheduler ends the run (6.2).
     That scheduler records the outcome once and wakes the I/O thread and the
     idle schedulers. The others stop at their next `STEP` slow path or when they
-    wake. The exit path (§14.4) runs on the I/O thread. Whether it waits for the
-    schedulers first is open (§16.11).
+    wake. The exit path (§14.4) runs on the I/O thread, after it has joined
+    every scheduler thread (§16.9, "Threads").
 - **I/O ownership.** Handles stay on the I/O loop. Schedulers request
   operations through its inbox and tasks resume via the global queue, not a
   handle-owning scheduler (§16.2, §16.4). Pool threads never touch GC memory
@@ -195,7 +196,8 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   word. A scheduler leaves idle before it pops a task. The check runs on every
   change that makes idle == N and live == 0. The thread that makes that change,
   if tasks are still parked, fails the run with `RUNTIME-INTERNAL` and wakes the
-  other schedulers (10.2.1, Stall check).
+  other schedulers (10.2.1, Stall check). As built the check is not this word:
+  the I/O thread runs it when it has nothing to do (§16.9, "Stall").
 - **Shutdown.** `end_run` runs on the I/O thread; it does not close each handle
   or free the loop (§14.4; §10.2.2, "End of run").
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and

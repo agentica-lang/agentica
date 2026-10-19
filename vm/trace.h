@@ -58,6 +58,7 @@ static inline int agc_trace_len(size_t n) { return n > INT_MAX ? INT_MAX : (int)
 
 uint64_t agc_trace_now(void);
 void agc_trace_parse(agc_trace *trace, const char *names, int fd);
+unsigned agc_trace_mask(const char *names);
 void agc_trace_message(int fd, const char *text, const char *value, size_t len, bool quoted);
 void agc_trace_format(agc_trace_line *line, const agc_trace *trace, unsigned category, const char *format, ...)
   AGC_PRINTF_FORMAT(4, 5);

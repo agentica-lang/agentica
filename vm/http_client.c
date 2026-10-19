@@ -672,7 +672,7 @@ static bool exchange_cancel(agc_vm *vm, void *data, agc_value context, bool dead
   return false;
 }
 
-static const agc_io_kind http_io = {NULL, exchange_done, exchange_expired, exchange_drop, true, "http", exchange_cancel, true};
+static const agc_io_kind http_io = {NULL, exchange_done, exchange_expired, exchange_drop, true, "http", exchange_cancel, true, NULL};
 
 static bool host_text(const agc_string *host) {
   if (host->bytes == 0 || host->bytes > MAX_HOST) return false;

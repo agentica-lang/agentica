@@ -113,3 +113,17 @@ void agc_share(agc_vm *vm) {
   agc_registry_share(vm);
   rt->shared = true;
 }
+
+void *agc_threads_new(size_t n) {
+  uv_thread_t *threads = calloc(n, sizeof *threads);
+  if (!threads) agc_out_of_memory();
+  return threads;
+}
+
+/* libuv gives a new thread the stack size of RLIMIT_STACK on Linux and macOS (the main thread's), and the system's
+   default on Windows (docs.libuv.org, uv_thread_create_ex). */
+bool agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg) {
+  return uv_thread_create(&((uv_thread_t *)threads)[k], fn, arg) == 0;
+}
+
+void agc_thread_join(void *threads, size_t k) { (void)uv_thread_join(&((uv_thread_t *)threads)[k]); }

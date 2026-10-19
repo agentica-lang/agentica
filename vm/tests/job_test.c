@@ -84,7 +84,7 @@ static void gate_drop(void *data) {
   dropped++;
 }
 
-static const agc_io_kind gate_io = {gate_work, gate_done, gate_expired, gate_drop, false, "gate", NULL, false};
+static const agc_io_kind gate_io = {gate_work, gate_done, gate_expired, gate_drop, false, "gate", NULL, false, NULL};
 
 /* The `done` half owns the data it is given, so it frees it; a job that is dropped or expired leaves it to `drop`. */
 static agc_value idle_done(agc_vm *vm, void *data, agc_value context) {
@@ -107,15 +107,15 @@ static void idle_drop(void *data) {
 }
 
 /* A wait on the loop that nothing ends: only its deadline does, so the job always expires. */
-static const agc_io_kind idle_io = {NULL, idle_done, idle_expired, idle_drop, true, "idle", NULL, false};
+static const agc_io_kind idle_io = {NULL, idle_done, idle_expired, idle_drop, true, "idle", NULL, false, NULL};
 
-static const agc_io_kind nap_io = {NULL, idle_done, idle_expired, NULL, true, "nap", NULL, false};
+static const agc_io_kind nap_io = {NULL, idle_done, idle_expired, NULL, true, "nap", NULL, false, NULL};
 
 static void quick_work(void *data) {
   ((gate *)data)->value = 7;
 }
 
-static const agc_io_kind more_io = {quick_work, gate_done, gate_expired, gate_drop, false, "more", NULL, false};
+static const agc_io_kind more_io = {quick_work, gate_done, gate_expired, gate_drop, false, "more", NULL, false, NULL};
 
 static void swift_work(void *data) {
   *(int *)data = 1;
@@ -135,7 +135,7 @@ static void swift_drop(void *data) {
 }
 
 /* Pool work that ends at once, for the many-jobs test. */
-static const agc_io_kind swift_io = {swift_work, swift_done, swift_done, swift_drop, false, "swift", NULL, false};
+static const agc_io_kind swift_io = {swift_work, swift_done, swift_done, swift_drop, false, "swift", NULL, false, NULL};
 
 static gate *new_gate(void) {
   gate *g = calloc(1, sizeof *g);
@@ -491,7 +491,7 @@ static agc_value where_done(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind where_io = {swift_work, where_done, where_done, swift_drop, false, "where", NULL, false};
+static const agc_io_kind where_io = {swift_work, where_done, where_done, swift_drop, false, "where", NULL, false, NULL};
 
 static void start_detached(void *arg) {
   agc_io_detached(&vm, &where_io, arg, agc_void(), AGC_JOB_QUIET);
@@ -567,7 +567,7 @@ static agc_value raising_done(agc_vm *vm, void *data, agc_value context) {
   agc_fail(vm, "RUNTIME-INTERNAL", "done raised", 0);
 }
 
-static const agc_io_kind raising_io = {swift_work, raising_done, raising_done, swift_drop, false, "raise", NULL, false};
+static const agc_io_kind raising_io = {swift_work, raising_done, raising_done, swift_drop, false, "raise", NULL, false, NULL};
 
 static void start_raising(void *arg) {
   agc_io_detached(&vm, &raising_io, arg, agc_void(), AGC_JOB_QUIET);
@@ -617,7 +617,7 @@ static void left_drop(void *data) {
   left_drops++;
 }
 
-static const agc_io_kind left_io = {swift_work, where_done, where_done, left_drop, false, "left", NULL, false};
+static const agc_io_kind left_io = {swift_work, where_done, where_done, left_drop, false, "left", NULL, false, NULL};
 
 static void start_left(void *arg) {
   agc_io_detached(&vm, &left_io, arg, agc_void(), AGC_JOB_QUIET);
@@ -656,7 +656,7 @@ static agc_value guarded_done(agc_vm *vm, void *data, agc_value context) {
 }
 
 static const agc_io_kind guarded_io = {swift_work, guarded_done, guarded_done, swift_drop, false, "guarded", NULL,
-                                       false};
+                                       false, NULL};
 
 static void start_guarded(void *arg) {
   agc_io_detached(&vm, &guarded_io, arg, agc_void(), AGC_JOB_QUIET);
@@ -707,7 +707,7 @@ static void test_service_holds_sync(void) {
   settle_loop();
 }
 
-static const agc_io_kind timer_only_io = {NULL, idle_done, idle_expired, NULL, false, "timer", NULL, false};
+static const agc_io_kind timer_only_io = {NULL, idle_done, idle_expired, NULL, false, "timer", NULL, false, NULL};
 
 /* A kind with no work and no wait would be a bare deadline, which is a task timer: start_job refuses it before it
    registers anything. */
