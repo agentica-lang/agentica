@@ -1,9 +1,7 @@
 /*
- * A job on the loop (docs/vm/16-architecture.md §16.5): a timer against a completion in both orders, a cancel against a
- * completion, and the requests that a thread other than the loop's sends through the inbox: a START that is still
- * queued when its owner has ended the job, a finish whose CLOSE_TIMER and RELEASE are queued, the `more` path with a
- * late end of the wait, a request left in the inbox at close, and a poll with an inbox that does not keep the loop.
- * The pool work is held by a semaphore, so the test and not the clock decides which event comes first.
+ * A job on the loop (docs/vm/16-architecture.md §16.5): the timer against the completion in both orders, a cancel, and
+ * the requests that a second thread sends through the inbox (a queued START, a queued finish, the `more` path, close
+ * and poll). The pool work is held by a semaphore, so the test and not the clock decides which event comes first.
  */
 #include "../core.h"
 #include "test_support.h"
