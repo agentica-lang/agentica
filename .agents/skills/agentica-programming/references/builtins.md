@@ -52,7 +52,9 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
 - `IO.flush` flushes stdout, not stderr. On Linux, macOS and Windows, a print is
   copied into a 64 KiB buffer per stream and written as the reader takes it, so
   output reaches a pipe without `IO.flush`. Stdout and stderr to the same file
-  keep the order of the calls. `IO.flush` returns once the buffer is in the
+  keep the order of the calls (on Windows, when both descriptors are one handle
+  object, as with a pipe given to both). `IO.flush` returns once the buffer is
+  in the
   pipe, so it can wait for a slow reader. On other systems, output does not
   auto-flush. For stdio protocols, write one compact JSON message per line,
   flush after each response, and send logs to `IO.warn`.

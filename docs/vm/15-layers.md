@@ -40,7 +40,8 @@ before it moved; the header split moved no line of a `.c` file except the
 - **Layer:** **Core**
   - **Files:** `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`,
     `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`,
-    `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`,
+    `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `stdio_posix.c`,
+    `stdio_windows.c`, `random.c`,
     `loader.c`, `builtins.c`, `diag.c`, `trace.c`
   - **May use:** `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv
 
@@ -84,11 +85,16 @@ Notes on the choices:
   `agc_task_stepper`, the end hook of a task, `agc_count_step`). Its builtin
   table (`agc_task_map_builtins`) is declared in `core.h` and listed in
   `builtin_tables.c`.
-- **`input.c`, `output.c` and `builtins.c` are core.** stdin's waiters and the
-  waiters of stdout and stderr are lists the scheduler owns (§14.1), and
+- **`input.c`, `output.c`, `stdio_posix.c`, `stdio_windows.c` and `builtins.c`
+  are core.** stdin's waiters and the waiters of stdout and stderr are lists the
+  scheduler owns (§14.1), and
   `agc_task_cancel` takes a task out of them (`task.c:129`). `builtins.c` holds
   the `IO`, `System`, `List`, `Map`, `Set`, `Result` and `Range` builtins over
   core values, and `agc_find_builtin`, which the loader calls.
+  `stdio_posix.c` and `stdio_windows.c` are the operating-system side of
+  `output.c`, one file per system family, each guarded whole: which way a
+  descriptor is written, whether two are one target, the writes, and the
+  in-memory stream of a notice. `output.c` has no `#ifdef` for an OS.
 - **`stream.c` is a service.** It is the kit the stream services share
   (`agc_inbuf_*`, `agc_stream_lock`, `agc_stream_write`); only `duplex.c`,
   `process.c`, `tcp.c` and `http_client.c` use it.
@@ -398,10 +404,10 @@ if not. The script fails when:
    (it may include `value.h`; rule 8 keeps it to the memory functions);
 5. a third-party header is included outside its place: `<gc.h>` only in
    `value.c`; `<openssl/...>` only in `tls_openssl.c`; `<picohttpparser.h>` only
-   in `http_pico.c`; `"yyjson.h"` only in `json.c`; `<uv.h>` only in `loop.c`
-   and the stream services (`stream.c`, `duplex.c`, `process.c`, `system.c`,
-`tcp.c`,
-   `http_client.c`). `input.c` and `files.c` put stdin, FIFOs and character
+   in `http_pico.c`; `"yyjson.h"` only in `json.c`; `<uv.h>` only in `loop.c`,
+   `stdio_windows.c` and the stream services (`stream.c`, `duplex.c`,
+   `process.c`, `system.c`, `tcp.c`, `http_client.c`). `input.c` and `files.c`
+   put stdin, FIFOs and character
    devices on loop handles through `agc_poller_*` (§15.2) and include no libuv
    header;
 6. a `.c` file declares an `agc_` name at file scope instead of taking it from a

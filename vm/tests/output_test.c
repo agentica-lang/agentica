@@ -248,7 +248,7 @@ static void wait_ready(agc_task *t) {
 static void test_small_prints_keep_order(void) {
   open_pipe();
   fresh(pipe_fds[1]);
-  assert(out()->base == out() && !out()->pooled && (out()->poller || out()->stream));
+  assert(out()->base == out() && (out()->mode == AGC_WRITE_POLL || out()->mode == AGC_WRITE_STREAM));
   agc_task *a = make_task();
   assert(write_as(a, 'a', 5, true));
   assert(write_as(a, 'b', 3, false));
@@ -410,7 +410,7 @@ static void test_a_file_is_drained_by_the_pool(void) {
   snprintf(path, sizeof path, "%s", request.path);
   uv_fs_req_cleanup(&request);
   fresh(fd);
-  assert(out()->pooled && !out()->poller && !out()->stream && out()->fd == fd);
+  assert(out()->mode == AGC_WRITE_DISK && out()->fd == fd);
   agc_task *a = make_task();
   assert(write_as(a, 'a', 40000, false));
   while (out()->len || out()->writing) agc_io_poll(&vm, true);
@@ -437,7 +437,7 @@ static void test_a_device_that_never_waits_is_pooled(void) {
   int fd = uv_fs_open(NULL, &request, NULL_DEVICE, UV_FS_O_WRONLY, 0, NULL);
   assert(fd >= 0);
   fresh(fd);
-  assert(out()->pooled && !out()->poller && !out()->stream && out()->fd == fd);
+  assert(out()->mode == AGC_WRITE_DISK && out()->fd == fd);
   assert(write_as(make_task(), 'a', 10, true));
   agc_io_flush_files(&vm);
   assert(out()->len == 0 && !out()->failed);
@@ -669,6 +669,102 @@ static void test_a_final_notice_is_dropped_when_the_pipe_is_stuck(void) {
   close_pipe();
 }
 
+/* The stop state is process-wide and stays set, so the tests that need a stop signal run last. On Windows a driver
+   process that does not exist counts as a request to stop; elsewhere the signal is raised. */
+static void request_stop(void) {
+  if (agc_io_stop_signal()) return;
+#ifdef _WIN32
+  agc_io_watch_stop(&vm, 0x7ffffff0);
+#else
+  agc_io_watch_stop(&vm, 0);
+  raise(SIGTERM);
+#endif
+  assert(agc_io_stop_signal() != 0);
+}
+
+/* With a stop signal set, the end of the run gives a stream that cannot be written one last write and a short, shared
+   wait at most: the process has to be able to leave while its reader is silent. */
+static void leave_while_stuck(void) {
+  request_stop();
+  uint64_t started = agc_io_now(&vm);
+  assert(!agc_output_busy(&vm));
+  assert(agc_io_now(&vm) - started < 1000);
+}
+
+/* The reader never reads. */
+static void test_a_stop_signal_does_not_wait_for_a_silent_reader(void) {
+  open_pipe();
+  block_pipe();
+  fresh(pipe_fds[1]);
+  agc_task *a = make_task();
+  assert(write_as(a, 'a', 1000, false));
+  leave_while_stuck();
+  assert(out()->len > 0 && !out()->failed);
+  uint64_t started = agc_io_now(&vm);
+  assert(!agc_output_busy(&vm));
+  assert(agc_io_now(&vm) - started < 100);
+  finish();
+  close_pipe();
+}
+
+#ifdef _WIN32
+/* A connected pair of TCP sockets with small buffers; the writer is filled until a send would block. */
+static void full_socket_pair(SOCKET *writer, SOCKET *reader) {
+  WSADATA data;
+  assert(WSAStartup(MAKEWORD(2, 2), &data) == 0);
+  SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  struct sockaddr_in address;
+  memset(&address, 0, sizeof address);
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  int length = sizeof address, small = 4096;
+  setsockopt(listener, SOL_SOCKET, SO_RCVBUF, (const char *)&small, sizeof small);
+  assert(bind(listener, (struct sockaddr *)&address, length) == 0);
+  assert(getsockname(listener, (struct sockaddr *)&address, &length) == 0);
+  assert(listen(listener, 1) == 0);
+  *writer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  setsockopt(*writer, SOL_SOCKET, SO_SNDBUF, (const char *)&small, sizeof small);
+  assert(connect(*writer, (struct sockaddr *)&address, length) == 0);
+  *reader = accept(listener, NULL, NULL);
+  assert(*reader != INVALID_SOCKET);
+  closesocket(listener);
+  u_long nonblocking = 1;
+  assert(ioctlsocket(*writer, FIONBIO, &nonblocking) == 0);
+  static const char junk[1024] = {0};
+  size_t total = 0;
+  while (send(*writer, junk, sizeof junk, 0) > 0) {
+    total += sizeof junk;
+    assert(total < ((size_t)256 << 20));
+  }
+  assert(WSAGetLastError() == WSAEWOULDBLOCK);
+  nonblocking = 0;
+  assert(ioctlsocket(*writer, FIONBIO, &nonblocking) == 0);
+}
+
+/* A socket as standard output is not a pipe that libuv takes, so a pool thread writes it. The thread waits for the
+   reader; the loop does not, and the stop signal still lets the run end within the short wait. */
+static void test_a_handle_that_libuv_refuses_is_written_by_a_pool_thread(void) {
+  SOCKET writer, reader;
+  full_socket_pair(&writer, &reader);
+  int fd = _open_osfhandle((intptr_t)writer, _O_BINARY);
+  assert(fd >= 0);
+  fresh(fd);
+  assert(out()->mode == AGC_WRITE_THREAD && out()->fd == fd);
+  agc_task *a = make_task();
+  assert(write_as(a, 'a', 1000, false));
+  leave_while_stuck();
+  /* Wine takes the write at once, so there the thread is never stuck; native Windows blocks it. */
+  if (!getenv("AGENTICA_TEST_WINE")) assert(out()->len == 1000 && out()->writing && !out()->failed);
+  closesocket(reader);
+  CancelIoEx((HANDLE)writer, NULL);
+  for (int round = 0; round < 5000 && out()->writing; round++) pump();
+  assert(!out()->writing);
+  finish();
+  close(fd);
+  WSACleanup();
+}
+#endif
+
 /* The tests that fill no pipe, so they run on either kind of write end. */
 static void run_unfilled_pipe_tests(void) {
   test_small_prints_keep_order();
@@ -704,6 +800,11 @@ int main(void) {
 #ifdef _WIN32
   overlapped_end = false;
   run_unfilled_pipe_tests();
+  overlapped_end = true;
+#endif
+  test_a_stop_signal_does_not_wait_for_a_silent_reader();
+#ifdef _WIN32
+  test_a_handle_that_libuv_refuses_is_written_by_a_pool_thread();
 #endif
   puts("output tests passed");
   return 0;

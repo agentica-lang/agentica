@@ -520,26 +520,39 @@ section says how the scheduler and the loop keep them, as built.
   one the shell and child processes share. A socket is duplicated with
   `F_DUPFD_CLOEXEC` and written with `send(MSG_DONTWAIT | MSG_NOSIGNAL)`, as
   stdin reads it. Both are written when the poller says the descriptor is
-  writable. The poller runs one `external` detached job per writable event, and
+  writable. On macOS each write is first guarded by `poll(POLLOUT)` and cut to
+  `PIPE_BUF` (a socket: `SO_SNDLOWAT`, read once), so that it cannot block: the
+  description is shared with the program that started the VM and stays blocking,
+  and `send(MSG_DONTWAIT)` alone stalled the loop on such a socket. The poller
+  runs one `external` detached job per writable event, and
   the request holds the stream's index, not a pointer into the runtime, so no GC
   pointer is kept in `malloc` memory. A regular file or a block device is
   drained by a pool job, as files are (§14.1), on the descriptor the process was
   given (a reopen would reset the file offset and `O_APPEND`); a device epoll
   refuses with `EPERM` (`/dev/null`, `/dev/full`) takes the same path. One job
-  runs at a time. **Windows.** `agc_stdio_kind_of` (`vm/loop.c`) sorts the
-  descriptor with `uv_guess_handle`. A file, or `NUL`, is drained by the same
-  pool job on `_write`. A pipe is written by a libuv pipe handle (`agc_wstream`,
-  one write request at a time; libuv writes a pipe that is not overlapped on a
-  Windows worker thread and an overlapped one with I/O completion ports) and a
-  console by a libuv tty handle; neither waits for the reader on the loop. The
+  runs at a time. **Windows.** `vm/stdio_windows.c` (the Linux and macOS side is
+  `vm/stdio_posix.c`, and `vm/output.c` has no OS branch) sorts the descriptor
+  with `uv_guess_handle` into one of four write modes (`agc_write_mode`). A
+  file, or `NUL`, is drained by a pool job on `_write`. A pipe is written by a
+  libuv pipe handle, one write request at a time (libuv writes a pipe that is
+  not overlapped on a Windows worker thread and an overlapped one with I/O
+  completion ports). A console is written by a pool job that converts UTF-8 to
+  UTF-16 and calls `WriteConsoleW` (a character cut by the end of one write
+  waits for the next), not by `uv_tty_t`: libuv writes a console on the loop
+  thread, where a console that is paused (a selection, Ctrl+S) would stop every
+  task and the stop signals, and `uv_tty_init` changes the console mode for
+  good. A handle that libuv refuses (a socket, a pipe nobody can write to) is
+  also written by a pool job, which holds one pool thread while the reader is
+  slow. The loop never writes a pipe, a console or a refused handle. The pipe's
   handle is a private, non-inheritable copy of the descriptor, so closing it
-  leaves stdout open, and closing it cancels the request in flight. A handle
-  that libuv refuses is written by a pool job, which holds one pool thread while
-  the reader is slow. A request takes the ranges of the ring as they are and
-  ends all or nothing, so the ring is consumed when the request ends. A Windows
-  pipe has no non-blocking try: where Unix makes one non-blocking write (a stop
-  signal, a final notice), Windows starts the request and waits up to 200 ms
-  for it. The jobs do not set `flush`, since `agc_output_busy` counts
+  leaves stdout open, and closing it cancels the request in flight. A request
+  takes the ranges of the ring as they are and ends all or nothing, so the ring
+  is consumed when the request ends. Neither a pipe request nor a pool job has a
+  non-blocking try: where Unix makes one non-blocking write (a stop signal, a
+  final notice), Windows starts the request and waits for it, in one wait of up
+  to 200 ms that the stop and the final notices of the exit share (`settle`).
+  The normal end of the run does not use that wait: it is bounded by the flush
+  limit. The jobs do not set `flush`, since `agc_output_busy` counts
   the buffered bytes (End of run, below). The trace shows a pool write as
   `kind=output` jobs, and a poller stream as one `output_start stream=...` and
   `output_done` line per run of data (the per-event jobs are quiet,
@@ -569,11 +582,15 @@ section says how the scheduler and the loop keep them, as built.
   only flushes stdout before it sends one. **One target, one buffer.** When
   stdout and stderr are the same file (the same `st_dev` and `st_ino` from
   `fstat`: a terminal, `2>&1`, both to one file; on Windows
-  `CompareObjectHandles`, since `fstat` gives a pipe no device and inode),
-  stderr shares the buffer and the FIFO of stdout (`err.base`). So `puts a`,
-  `IO.warn b`, `puts c` appear in the order of the calls. When they are different files there is no order between the two
+  `CompareObjectHandles` asks whether the two descriptors are one kernel object,
+  since `fstat` gives a pipe no device and inode, so two separate opens of one
+  file are two targets there), stderr shares the buffer and the FIFO of stdout
+  (`err.base`). So `puts a`, `IO.warn b`, `puts c` appear in the order of the
+  calls. When they are different files there is no order between the two
   streams. **Notices.** Text the VM itself writes to stderr goes through
-  `agc_notice_begin` and `agc_notice_end`: a memory stream, written whole. A
+  `agc_notice_begin` and `agc_notice_end`: a memory stream, written whole (on
+  Windows, which has no `open_memstream`, a thread collects what is written to a
+  pipe). A
   task crash diagnostic and the unobserved-task summary are non-final. The text
   joins a `malloc`'d queue (at most 1 MiB; a notice that arrives when the queue
   already holds that much is dropped, so a stuck stderr cannot make the VM
@@ -588,7 +605,7 @@ section says how the scheduler and the loop keep them, as built.
   flush warnings, and the `RUNTIME-INTERNAL` diagnostic for a write error that
   is only known after the flush, are final: `end_run` prints them with
   non-blocking writes until all of the text is written or the pipe would block
-  (on Windows, each write waits up to 200 ms for its request).
+  (on Windows the writes share one wait of up to 200 ms for their requests).
   What a stuck pipe will not take is dropped (the exit code still reports the
   result), so a stuck stderr cannot hold the exit; a stop signal drops what is
   still queued. The flush-timeout warning is known only at the deadline, so it
@@ -602,9 +619,10 @@ section says how the scheduler and the loop keep them, as built.
   the pieces it already copied, and starts the writer again for each stream that
   is not writing, so the wait ends when the data is written and not at the flush
   limit. When a stop signal is set, `agc_output_busy` does one non-blocking
-  write per stream (when no pool job is writing it; on Windows, one wait of up
-  to 200 ms for the request) and then stops waiting for
-  stdout and stderr, so a reader that never reads cannot hold a stopped VM for
+  write per stream (when no pool job is writing it; on Windows a request or a
+  pool thread writes, and the exit waits for it within the shared 200 ms) and
+  then stops waiting for stdout and stderr, so a reader that never reads cannot
+  hold a stopped VM for
   the flush limit; files keep their wait. `end_run` flushes the blocking
   `stdout` and `stderr` first and only then queues the diagnostic, so on
   blocking streams the diagnostic also comes after the program's output

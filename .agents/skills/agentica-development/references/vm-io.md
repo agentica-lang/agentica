@@ -48,16 +48,20 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/output.c`
   - **Owns:** The writer of stdout and stderr, with a buffer and a waiting queue
-    per stream. On Linux and macOS a poller or a pool job writes them; on
-    Windows a libuv pipe or tty handle (`agc_wstream` in `vm/loop.c`, one
-    request at a time) or, for a file or a handle libuv refuses, a pool job. A
-    Windows pipe has no non-blocking try, so the end of the run, a stop signal
-    and a final notice wait up to 200 ms for the request (`settle`).
+    per stream. It has no OS branch: `vm/stdio_posix.c` and `vm/stdio_windows.c`
+    decide how a descriptor is written (`agc_write_mode`: DISK pool job, POLL on
+    Linux and macOS, STREAM a libuv pipe on Windows, THREAD a pool job for a
+    Windows console or a handle libuv refuses), whether two descriptors are one
+    target, and make the in-memory stream of a notice. A STREAM or THREAD stream
+    has no non-blocking try, so a stop signal and the final notices wait for the
+    request in one shared 200 ms (`settle`, `agc_runtime.settle_by`); the normal
+    end of the run waits within the flush limit.
 
 - `vm/loop.c`
   - the event loop and the resource registry (`docs/vm/10-io-scheduler.md`
-    §10.2.2), with `vm/stream.c`, `vm/process.c`, `vm/system.c`, `vm/tcp.c` and
-    `vm/http_client.c` the only files that include `uv.h` (`vm/http_server.c`
+    §10.2.2), with `vm/stdio_windows.c`, `vm/stream.c`, `vm/process.c`,
+    `vm/system.c`, `vm/tcp.c` and `vm/http_client.c` the only files that include
+    `uv.h` (`vm/http_server.c`
     reaches libuv only through `vm/net.h` and jobs)
     - `agc_io_init` (
       - the `UV_USE_IO_URING=0` setenv at start-up
@@ -66,6 +70,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - the scheduler's `uv_loop_t`, for handle code)
     - `agc_io_ready` (
       - completes an `external` job from a libuv callback)
+    - `agc_io_run_for` (
+      - runs the loop once for at most N ms with one reusable timer, then hands
+        the finished jobs on; the flush wait, the last writes after a stop
+        signal and the native close all wait with it)
     - `agc_register`/`agc_unregister` (
       - GC `agc_resource` objects owning `malloc` memory
       - a job keeps its registry slot index, fixed when an entry moves)
@@ -283,9 +291,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     copies in pieces and holds the stream.
   - `agc_output_open` (from `main`, after `agc_input_open`) reopens a pipe, FIFO
     or terminal through `agc_fd_reopen` (`/proc/self/fd/N`, `O_NONBLOCK`), or
-    duplicates a socket (`F_DUPFD_CLOEXEC`, `send` with `MSG_DONTWAIT`), and
-    writes it from an `agc_poller` (one `external` detached job per writable
-    event, the request holds the stream index)
+    duplicates a socket (`F_DUPFD_CLOEXEC`, `send` with `MSG_DONTWAIT`; on macOS
+    every write is first guarded by `poll` and cut to `PIPE_BUF` or
+    `SO_SNDLOWAT`), and writes it from an `agc_poller` (one `external` detached
+    job per writable event, the request holds the stream index)
   - it drains a regular file, a block device or a device epoll refuses
     (`/dev/null`) by one pool job on the original descriptor
   - and it leaves the others (read-only descriptor, failed reopen or `dup`,

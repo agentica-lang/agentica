@@ -54,12 +54,14 @@ Known exceptions, as built:
   it can close the loop. This is a portability exception, not a pattern for
   other I/O (§10.2.2, Stdin). With `UV_THREADPOOL_SIZE=1`, a pending stdin read
   leaves no worker for file I/O; keep spare pool capacity when stdin may wait.
-- **Windows stdout and stderr.** A pipe is written by a libuv pipe handle and a
-  console by a tty handle, one write request at a time, so the loop never waits
-  for the reader. libuv has no non-blocking try on a Windows pipe, so the end of
-  the run, a stop signal and a final notice wait up to 200 ms for the request
-  instead (§10.2.2). A handle that libuv refuses is written by a pool job that
-  keeps one pool thread while the reader is slow.
+- **Windows stdout and stderr.** A pipe is written by a libuv pipe handle, one
+  write request at a time; a console, and a handle that libuv refuses, by a pool
+  job, so the loop never waits for the reader (a console is not written by
+  `uv_tty_t`, because libuv writes it on the loop thread). A pool job keeps one
+  pool thread while the reader is slow. Windows has no non-blocking try on a
+  pipe or a console, so a stop signal and the final notices wait for the request
+  instead, in one wait of up to 200 ms that the exit shares (§10.2.2). The
+  normal end of the run waits only within the flush limit.
 - **Fallbacks that still use a pool thread.** stdin stays a pool job with a
   blocking read when it cannot be made non-blocking: the reopen through
   `/proc/self/fd/N` fails (no `/proc`, or `EACCES` after `su` or `sudo -u`), a
@@ -95,8 +97,9 @@ Known exceptions, as built:
   stuck pipe will not take is dropped, so the exit stays bounded and the exit
   code still reports the result (§10.2.2, Notices).
 - **Stdout and stderr on one target.** When both descriptors are the same file
-  (`st_dev` and `st_ino`: a terminal, `2>&1`; on Windows
-  `CompareObjectHandles`), they share one buffer and one FIFO, so `puts`,
+  (`st_dev` and `st_ino`: a terminal, `2>&1`; on Windows `CompareObjectHandles`,
+  which matches only the same kernel object), they share one buffer and one
+  FIFO, so `puts`,
   `IO.warn` and `puts` appear in the order of the calls.
 
 ### 14.2 Timeouts

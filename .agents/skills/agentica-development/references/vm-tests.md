@@ -137,7 +137,9 @@ Read first: `references/vm.md`.
     lets a queued notice and the next writer through, the end of run moving a
     notice held by a cut print, a record that starts a line after a cut print,
     the notice queue limit and a kept notice, and final notices (written
-    straight, or dropped when the pipe is full). It also runs on Windows, where
+    straight, or dropped when the pipe is full), and a stop signal not waiting
+    for a silent reader (on Windows also a socket, which libuv refuses, written
+    by a pool thread). It also runs on Windows, where
     the pipe has an overlapped write end (the tests that fill it) or a
     synchronous one (the other tests, as a Python parent gives it), and where a
     duplicate of the descriptor is one target and two pipes are two

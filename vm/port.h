@@ -47,7 +47,8 @@ typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
 typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
 typedef struct agc_poller agc_poller;
-typedef struct agc_wstream agc_wstream;
+typedef struct agc_stdio agc_stdio;
+typedef struct agc_memstream agc_memstream;
 typedef struct agc_native agc_native;
 
 typedef struct {
@@ -152,19 +153,38 @@ typedef struct {
   bool newline, flush;
 } agc_output_wait;
 
+/* How a standard stream is written. vm/output.c asks, vm/stdio.c decides:
+   - DISK: a pool job writes a file or a device that never waits for a reader; when the run is stopping the loop may
+     write it itself.
+   - POLL: the loop writes what the descriptor takes when its poller says it is ready (Linux and macOS pipes, sockets
+     and terminals).
+   - STREAM: a libuv stream takes one request at a time (a Windows pipe).
+   - THREAD: a pool job writes a handle that can wait for its reader (a Windows console, or a socket or pipe that libuv
+     refuses). The loop never writes it. */
+typedef enum { AGC_WRITE_DISK, AGC_WRITE_POLL, AGC_WRITE_STREAM, AGC_WRITE_THREAD } agc_write_mode;
+
+/* The first bytes of a UTF-8 character that one write cut off, kept for the next: a Windows console takes UTF-16. */
+typedef struct {
+  uint8_t bytes[4];
+  size_t length;
+} agc_utf8_cut;
+
+/* One stream. While a pool job or a stream holds a request (writing, and mode is not POLL) the ring ranges of the
+   request stay valid: nothing consumes the ring or fails the stream until the request is done, and text is only
+   appended behind it. */
 struct agc_output {
   FILE *file;
   agc_output *base;
   agc_vm *vm;
   int fd;
-  uint64_t dev, ino;
   uint8_t *buf;
   size_t start, len;
   uint8_t *notice;
   size_t notice_at, notice_len;
-  agc_poller *poller;
-  agc_wstream *stream;
-  bool pooled, socket, waits, writing, armed, failed, settled;
+  agc_stdio *io;
+  agc_write_mode mode;
+  agc_utf8_cut cut;
+  bool writing, failed;
   agc_task *waiters, *waiters_tail;
 };
 
@@ -225,6 +245,9 @@ typedef struct {
   bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired;
   agc_style style;
   int64_t flush_timeout;
+  /* The loop clock (ms) at which the one short wait that a stuck stream gets at exit ends; 0 until it starts. A stop
+     signal and the final diagnostics share it, so that the exit does not wait once per stream and notice. */
+  uint64_t settle_by;
   agc_front_end *front_end;
 #ifdef __linux__
   locale_t messages_locale;
@@ -365,19 +388,24 @@ void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int 
 void agc_poller_pause(agc_poller *p);
 void agc_poller_close(agc_poller *p);
 #endif
-#ifdef _WIN32
-/* The standard streams of Windows, which have no poller: a file is written by a pool job, a pipe or a console by a
-   libuv stream (agc_wstream, one write request at a time). OTHER is anything else, left to the blocking FILE. */
-typedef enum { AGC_STDIO_OTHER, AGC_STDIO_FILE, AGC_STDIO_PIPE, AGC_STDIO_CONSOLE } agc_stdio_kind;
-
-agc_stdio_kind agc_stdio_kind_of(int fd);
-bool agc_stdio_same(int first, int second);
-agc_wstream *agc_wstream_open(agc_vm *vm, int fd);
-void agc_wstream_write(agc_wstream *w, const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,
-                       void (*done)(void *data, int status), void *data);
-void agc_wstream_close(agc_wstream *w);
-void agc_io_pump(agc_vm *vm, uint64_t ms);
-FILE *agc_scratch_open(void);
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+/* The OS side of the standard streams (vm/stdio_posix.c, vm/stdio_windows.c). open fills OUT->fd, io and mode, or
+   returns false for a descriptor that is left to the blocking FILE. same asks whether FD is the target of FIRST (stdout
+   and stderr given as one pipe). try writes what the target takes now and never waits (DISK and POLL; -1 with EAGAIN
+   when it is full). start asks for DONE to be called when a POLL descriptor can be written, or when a STREAM has
+   written the two ranges. write is one blocking write on a pool thread (DISK and THREAD): like write(2), it returns
+   the bytes written or -1 with errno. */
+bool agc_stdio_open(agc_vm *vm, agc_output *out, int fd);
+bool agc_stdio_same(const agc_output *first, int fd);
+void agc_stdio_close(agc_stdio *io);
+ssize_t agc_stdio_try(agc_output *out, const uint8_t *data, size_t n);
+void agc_stdio_start(agc_output *out, const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,
+                     void (*done)(void *data, int status), void *data);
+ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut);
+/* A FILE that keeps what is written to it in memory (open_memstream; Windows has none). NULL when none can be made.
+   take closes it and gives the text (malloc'd) and its length; false when text was lost. */
+FILE *agc_memstream_open(agc_memstream **ms);
+bool agc_memstream_take(FILE *file, agc_memstream *ms, char **text, size_t *len);
 #endif
 
 void agc_charge(agc_vm *vm, uint64_t units);

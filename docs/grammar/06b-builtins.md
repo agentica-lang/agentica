@@ -180,7 +180,9 @@ Expected types flow into these operations for empty collections and Results.
   file without `IO.flush()`; `IO.flush()` returns when the buffer is empty, that
   is, when the data is in the pipe or file, and it can wait for a slow reader.
   When stdout and stderr are the same terminal or file, their output keeps the
-  order of the calls; otherwise there is no order between them. On other
+  order of the calls (on Windows, when both descriptors are one handle object,
+  as with a pipe given to both); otherwise there is no order between them. On
+  other
   systems, output functions do not flush by themselves. A stdio protocol writes
   one compact JSON message per line, flushes after each reply, and sends logs to
   `IO.warn` (stderr).
