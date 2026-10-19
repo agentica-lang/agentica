@@ -81,7 +81,7 @@ static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
   task->parking = false;
   task->state = AGC_TASK_PARKED;
   while (task->state == AGC_TASK_PARKED) assert(agc_io_poll(vm, true));
-  vm->ready = vm->ready_tail = NULL;
+  while (agc_runq_pop(vm->rt->runq)) {}
   agc_value result = agc_io_finish(vm, task);
   assert(!task->parked);
   task->state = AGC_TASK_RUNNING;

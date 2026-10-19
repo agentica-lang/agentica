@@ -24,10 +24,11 @@ static const char name[] = "agentica";
 static const char run_name[] = "agentica run";
 
 static const char usage[] =
-  "usage: agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] "
-  "[--source-root DIR] -- <file.agcb> [args...]\n"
+  "usage: agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--schedulers N] [--allow-run] "
+  "[--ai|--json] [--source-root DIR] -- <file.agcb> [args...]\n"
   "  --source-root DIR is put before each stored source name that is relative and does not start with std/, in diagnostics and reports\n"
-  "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins, at most 86400000)\n";
+  "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins, at most 86400000)\n"
+  "  the run uses 1 scheduler, or N (1 to 1024), or AGENTICA_SCHEDULERS (the flag wins); this build runs one\n";
 
 /* The std/ sources of the binary, from the index that make wrote. */
 static agc_std_source *std_sources(size_t *count) {
@@ -114,7 +115,7 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
 
 /* The second run: the program that the front end handed over, with the options it passed on. It returns only to
  * report a start that failed. The options are those of `agentica run` (--ai, --json, --allow-run, --max-steps,
- * --seed, --flush-timeout, --source-root), each once. The front end is trusted with them, but
+ * --seed, --flush-timeout, --schedulers, --source-root), each once. The front end is trusted with them, but
  * --driver-pid is not one: it names the process that started this one, which only that process can say, so the
  * front end cannot. The counts are capped by the hand-off (AGC_FRONT_END_MAX_OPTIONS and _ARGUMENTS), so they fit
  * an int. */
@@ -137,7 +138,7 @@ static int run_program(agc_launch *launch, const agc_front_end *fe) {
     fprintf(stderr, "%s: the front end passed --embedded, which only %s takes\n", name, run_name);
     return 2;
   }
-  if (!agc_launch_flush_env(name, &options)) return 2;
+  if (!agc_launch_env(name, &options) || !agc_launch_supported(name, &options)) return 2;
   agc_program *program = NULL;
   char error[160];
   if (!agc_load_traced(fe->program, fe->program_len, &program, error, sizeof error, &launch->trace)) {
@@ -184,7 +185,7 @@ static int run_command(agc_launch *launch, int argc, char **argv) {
     fputs(usage, stderr);
     return 2;
   }
-  if (!agc_launch_flush_env(run_name, &options)) return 2;
+  if (!agc_launch_env(run_name, &options) || !agc_launch_supported(run_name, &options)) return 2;
   if (options.seen_driver && !agc_launch_bind(options.driver)) {
     fprintf(stderr, "%s: --driver-pid does not match the parent process\n", run_name);
     return 2;
@@ -243,7 +244,7 @@ int main(int argc, char **argv) {
    * run_program applies the value. */
   agc_launch_options environment;
   agc_launch_defaults(&environment);
-  if (!agc_launch_flush_env(name, &environment)) return 2;
+  if (!agc_launch_env(name, &environment)) return 2;
   agc_launch_trace(&launch);
   int first = 1;
   const char *replacement = NULL;

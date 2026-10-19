@@ -97,7 +97,7 @@ static void park(agc_task *t) {
 static agc_value finish_wait(agc_task *t) {
   park(t);
   while (t->state == AGC_TASK_PARKED) assert(agc_io_poll(&vm, true));
-  vm.ready = vm.ready_tail = NULL;
+  while (agc_runq_pop(vm.rt->runq)) {}
   vm.task = t;
   t->state = AGC_TASK_RUNNING;
   vm.in_turn = true;

@@ -28,8 +28,8 @@ section says how the scheduler and the loop keep them, as built.
 
 - **Run queue.** One FIFO of ready tasks, ordered by the scheduler alone: libuv
   never decides which task runs. A new task, a task whose turn ended, and a task
-  woken by a libuv callback go to its back. With N>1 it is the global run queue,
-  under its lock (§16.3, 10.2.3).
+  woken by a libuv callback go to its back. It is the global run queue
+  (`vm/runq.c`) under its lock (§16.3, 10.2.3); with N=1 one thread uses it.
 - **Reductions.** Each turn has a budget of 2000 steps (`AGC_TURN_STEPS`),
   counted by `STEP` as `--max-steps` counts them (`STEP n` counts n). When a
   `STEP` spends the budget, the task goes to the back of the queue. A merged
@@ -117,7 +117,7 @@ section says how the scheduler and the loop keep them, as built.
     `Await.Done` with the outcome of the plain await, also when the timer woke
     the caller at the same time as the target's end. Otherwise the deadline is
     stored in the task (`await_deadline`, computed at the first call from
-    `agc_io_now`; the timed form runs no cycle check, since it cannot wait
+    `agc_clock_ms`; the timed form runs no cycle check, since it cannot wait
     forever, so a task that awaits its own handle with a timeout gets
     `Await.TimedOut`), the task joins the target's waiters as the plain await
     does, a timer job of the time left is started (`agc_wait_io`, the job kind
@@ -220,7 +220,7 @@ section says how the scheduler and the loop keep them, as built.
     slots, the counters, the running list (in start order) and the list of items
     that ended. The step function runs on the caller each time it wakes: it
     moves the ended items into their slots (a crashed item is observed and its
-    slot is `error("task crashed: ...")`), reads `agc_io_now`, expires the
+    slot is `error("task crashed: ...")`), reads `agc_clock_ms`, expires the
     oldest running item whose deadline has passed (its slot is `error("task:
     timed out")` and `agc_task_cancel` stops it and its descendants), starts
     items up to `limit`, and, when every slot is set, ends with the list.

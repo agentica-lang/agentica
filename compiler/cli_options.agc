@@ -11,8 +11,8 @@ import Texts from "cli_text"
 
 # The options that are given once at most, with the number of values each takes; --steps may repeat.
 ONCE = {
-  "--version": 0, "--allow-run": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--dump": 0, "--dump-ir": 0,
-  "--ai": 0, "--json": 0,
+  "--version": 0, "--allow-run": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1,
+  "--dump": 0, "--dump-ir": 0, "--ai": 0, "--json": 0,
 }
 DIGITS = "0123456789"
 
@@ -22,6 +22,7 @@ export struct Options
   max_steps: String
   seed: String
   flush_timeout: String
+  schedulers: String
   allow_run: Bool
   dump: Bool
   dump_ir: Bool
@@ -49,6 +50,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     max_steps: "",
     seed: "",
     flush_timeout: "",
+    schedulers: "",
     allow_run: false,
     dump: false,
     dump_ir: false,
@@ -122,6 +124,7 @@ def apply(options: Options, word: String, value: String) -> Applied
     "--steps" -> return Applied.Changed(options.with(steps: options.steps.push(value)))
     "--max-steps" -> return max_steps(options, value)
     "--seed" -> return seed(options, value)
+    "--schedulers" -> return schedulers(options, value)
     _ -> return flush_timeout(options, value)
   end
 end
@@ -140,6 +143,14 @@ def seed(options: Options, value: String) -> Applied
     return Applied.Refused("--seed needs an integer from 0 to 2147483647")
   end
   return Applied.Changed(options.with(seed: digits))
+end
+
+def schedulers(options: Options, value: String) -> Applied
+  digits = without_leading_zeros(value)
+  if !digits?(value) or digits.length > 4 or digits.to_i! < 1 or digits.to_i! > 1024
+    return Applied.Refused("--schedulers needs an integer from 1 to 1024")
+  end
+  return Applied.Changed(options.with(schedulers: digits))
 end
 
 # The flag passes the text as it was typed (a leading zero stays).

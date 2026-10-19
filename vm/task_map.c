@@ -147,7 +147,7 @@ static agc_step map_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   (void)last;
   map_group *g = (map_group *)self;
   collect(vm, g);
-  uint64_t now = agc_io_now(vm);
+  uint64_t now = agc_clock_ms();
   expire(vm, g, now);
   start(vm, g, now);
   if (g->settled == g->count) {

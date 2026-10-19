@@ -149,6 +149,9 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
   if options.flush_timeout != ""
     flags = flags.concat(["--flush-timeout", options.flush_timeout])
   end
+  if options.schedulers != ""
+    flags = flags.concat(["--schedulers", options.schedulers])
+  end
   if options.allow_run
     flags = flags.push("--allow-run")
   end
@@ -230,6 +233,12 @@ def test(session: Session, words: List[String]) -> Int
   binary = session.settings.self_path
   if binary == ""
     return emit(Reply.failed(2, Texts.test_without_binary_text()))
+  end
+  # The test files run in VMs that the driver starts, which do not get the flag. Until a VM can run more than one
+  # scheduler, a larger count is refused here as it is for a program, instead of being dropped without a word.
+  if options.schedulers != "" and options.schedulers != "1"
+    asked = "#{options.schedulers} schedulers were asked for, but this build runs one"
+    return emit(Reply.failed(2, "agentica: #{asked}\n"))
   end
   driver: List[String] = [
     "--vm", binary, "--version", session.settings.version, "--style", options.style,

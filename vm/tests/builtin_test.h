@@ -15,7 +15,7 @@ static inline agc_value agc_test_call(agc_vm *vm, agc_task *task, const agc_buil
   task->parking = false;
   task->state = AGC_TASK_PARKED;
   while (task->state == AGC_TASK_PARKED) assert(agc_io_poll(vm, true));
-  vm->ready = vm->ready_tail = NULL;
+  while (agc_runq_pop(vm->rt->runq)) {}
   task->state = AGC_TASK_RUNNING;
   return agc_io_finish(vm, task);
 }

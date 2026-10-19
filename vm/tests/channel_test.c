@@ -3,6 +3,7 @@
  * ring growth and its turn cost, wrap-around, capacity and waiter order.
  */
 #include "../core.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <string.h>
@@ -98,17 +99,16 @@ static bool failed(agc_value result, const char *text) {
   return !r->ok && s->bytes == strlen(text) && memcmp(s->data, text, s->bytes) == 0;
 }
 
+static agc_task *ready_head(void) { return agc_test_ready_head(vm.rt->runq); }
+
 static agc_task *next_ready(void) {
-  agc_task *t = vm.ready;
+  agc_task *t = agc_runq_pop(vm.rt->runq);
   assert(t);
-  vm.ready = t->next;
-  if (!vm.ready) vm.ready_tail = NULL;
-  t->next = NULL;
   return t;
 }
 
 static void settle(void) {
-  assert(!vm.ready);
+  assert(!ready_head());
   vm.task = main_task;
 }
 
@@ -191,7 +191,7 @@ static void test_cancelled_receiver(void) {
   wait_recv(a, ch, 5000);
   wait_recv(b, ch, 5000);
   send(main_task, ch, 7, 0);
-  assert(vm.ready == a && a->channel.reserved);
+  assert(ready_head() == a && a->channel.reserved);
   agc_task_cancel(&vm, a);
   assert(a->state == AGC_TASK_DONE && !a->channel.channel && !a->parked);
   assert(next_ready() == b && b->channel.reserved);
@@ -208,9 +208,9 @@ static void test_value_back_to_buffer(void) {
   wait_recv(a, ch, 5000);
   send(main_task, ch, 1, 0);
   send(main_task, ch, 2, 0);
-  assert(vm.ready == a);
+  assert(ready_head() == a);
   agc_task_cancel(&vm, a);
-  assert(!vm.ready);
+  assert(!ready_head());
   assert(got(recv(main_task, ch, 0), 1));
   assert(got(recv(main_task, ch, 0), 2));
   assert(failed(recv(main_task, ch, 0), "channel: timed out"));
@@ -223,10 +223,10 @@ static void test_values_back_in_send_order(bool reverse) {
   wait_recv(b, ch, 5000);
   send(main_task, ch, 1, 0);
   send(main_task, ch, 2, 0);
-  assert(vm.ready == a && a->next == b);
+  assert(ready_head() == a && a->next == b);
   agc_task_cancel(&vm, reverse ? b : a);
   agc_task_cancel(&vm, reverse ? a : b);
-  assert(!vm.ready);
+  assert(!ready_head());
   assert(sent(send(main_task, ch, 3, 0)));
   assert(got(recv(main_task, ch, 0), 1));
   assert(got(recv(main_task, ch, 0), 2));
@@ -258,9 +258,9 @@ static void test_values_back_into_wrapped_ring(void) {
     wait_recv(receivers[k], ch, 5000);
   }
   for (int64_t v = 1; v <= 12; v++) assert(sent(send(main_task, ch, v, 0)));
-  assert(vm.ready == receivers[0] && receivers[0]->channel.reserved);
+  assert(ready_head() == receivers[0] && receivers[0]->channel.reserved);
   for (int k = 0; k < 4; k++) agc_task_cancel(&vm, receivers[k]);
-  assert(!vm.ready);
+  assert(!ready_head());
   for (int64_t v = 1; v <= 12; v++) assert(got(recv(main_task, ch, 0), v));
   assert(failed(recv(main_task, ch, 0), "channel: timed out"));
 }
@@ -272,12 +272,12 @@ static void test_sender_waits_while_over_capacity(void) {
   for (int64_t v = 1; v <= 3; v++) assert(sent(send(main_task, ch, v, 0)));
   wait_send(sender, ch, 4, 5000);
   agc_task_cancel(&vm, receiver);
-  assert(!vm.ready);
+  assert(!ready_head());
   assert(failed(send(main_task, ch, 9, 0), "channel: timed out"));
   assert(got(recv(main_task, ch, 0), 1));
-  assert(!vm.ready);
+  assert(!ready_head());
   assert(got(recv(main_task, ch, 0), 2));
-  assert(vm.ready == sender && sender->channel.reserved);
+  assert(ready_head() == sender && sender->channel.reserved);
   assert(next_ready() == sender);
   settle();
   agc_value args[3] = {ch, agc_int(4), agc_int(5000)};
@@ -317,7 +317,7 @@ static void test_reserved_sender_to_receiver(void) {
 static void test_cancelled_sender(void) {
   agc_task *a = make_task(), *b = make_task();
   agc_value ch = free_slot_for_senders(a, b);
-  assert(vm.ready == a && a->channel.reserved);
+  assert(ready_head() == a && a->channel.reserved);
   agc_task_cancel(&vm, a);
   assert(next_ready() == b && b->channel.reserved);
   settle();
@@ -335,7 +335,7 @@ static void test_cancelled_sender_frees_slot(void) {
   wait_send(a, ch, 2, 5000);
   assert(got(recv(main_task, ch, 0), 1));
   agc_task_cancel(&vm, a);
-  assert(!vm.ready);
+  assert(!ready_head());
   assert(sent(send(main_task, ch, 3, 0)));
   assert(got(recv(main_task, ch, 0), 3));
   assert(failed(recv(main_task, ch, 0), "channel: timed out"));
@@ -382,7 +382,7 @@ static void test_close_with_reserved_slot(void) {
   agc_value args_b[3] = {ch, agc_int(3), agc_int(5000)};
   wait(b, SEND, args_b);
   assert(got(recv(main_task, ch, 0), 1));
-  assert(vm.ready == a);
+  assert(ready_head() == a);
   close_channel(ch);
   assert(next_ready() == a && next_ready() == b);
   settle();
@@ -414,7 +414,7 @@ static void test_timeout_before_reservation(void) {
   struct timespec delay = {0, 80000000L};
   while (nanosleep(&delay, &delay) != 0) {}
   agc_io_poll(&vm, false);
-  assert(vm.ready == a && a->channel.channel);
+  assert(ready_head() == a && a->channel.channel);
   send(main_task, ch, 8, 0);
   assert(a->next == b);
   assert(next_ready() == a && next_ready() == b && b->channel.reserved);
@@ -441,6 +441,7 @@ static void test_reservation_beats_deadline(void) {
 }
 
 int main(void) {
+  agc_test_deadline(300);
   agc_init();
   agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
