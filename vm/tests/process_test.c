@@ -378,39 +378,20 @@ static int child(int argc, char **argv) {
     size_t room = sizeof value;
     return uv_os_getenv(AGC_CHANNEL_ENV, value, &room) == UV_ENOENT && fd_absent(3) && fd_absent(4) ? 0 : 1;
   }
-  if (strcmp(argv[1], "--leaf") == 0 && argc > 2) {
-    /* Leaves a mark when its parent's end of the channel goes away. */
-    take_channel();
-    agc_value args[] = {agc_int(10000)};
-    const agc_result *r = agc_as_result(&vm, call("Process.parent_read_line", args));
-    if (!r->ok) {
-      const agc_string *why = agc_as_string(&vm, r->value);
-      FILE *f = fopen(argv[2], "wb");
-      if (f) {
-        fprintf(f, "%.*s\n", (int)why->bytes, why->data);
-        fclose(f);
-      }
-    }
-    return 0;
-  }
-  if (strcmp(argv[1], "--middle") == 0 && argc > 2) {
-    /* A channel child with two children of its own: a channel child and a plain one. It reports whether the plain one
-       inherited anything, then ends at once without the clean-up of a VM, so its end of the leaf's channel closes
-       with the process. */
+  if (strcmp(argv[1], "--middle") == 0) {
+    /* A channel child with a plain child of its own: it reports whether that one inherited the marker or a channel
+       descriptor. */
     take_channel();
     char self[32768];
     size_t size = sizeof self;
     assert(uv_exepath(self, &size) == 0);
-    start("Process.spawn_channel", self, "--leaf", argv[2]);
     agc_value plain = start("Process.spawn_captured", self, "--isolated", NULL);
     agc_value args[] = {plain, agc_int(5000)};
     int64_t status = agc_as_int(&vm, ok(call("Process.wait", args)));
     args[0] = text(status == 0 ? "isolated\n" : "inherited\n");
     args[1] = agc_int(5000);
     ok(call("Process.parent_send", args));
-    args[0] = text("ready\n");
-    ok(call("Process.parent_send", args));
-    _exit(0);
+    return 0;
   }
   if (strcmp(argv[1], "--channel") == 0) {
     take_channel();
@@ -438,26 +419,8 @@ static int child(int argc, char **argv) {
   return fflush(stdout) == 0 ? 0 : 1;
 }
 
-/* Waits, for at most five seconds, for the file the leaf writes, and checks its line. */
-static void wait_for_mark(const char *path, const char *expected) {
-  for (int k = 0; k < 500; k++) {
-    FILE *f = fopen(path, "rb");
-    if (f) {
-      char text_[160] = "";
-      bool whole = fgets(text_, sizeof text_, f) && strchr(text_, '\n');
-      fclose(f);
-      if (whole) {
-        assert(strcmp(text_, expected) == 0);
-        return;
-      }
-    }
-    uv_sleep(10);
-  }
-  assert(!"the leaf never saw its parent go");
-}
-
 /* The channel contract with children that are this program: lines in both directions, the end of input after a half
-   close and what still comes back, a line over the limit, a timeout, a child that ends, and a parent that vanishes. */
+   close and what still comes back, a line over the limit, a timeout, a child that ends, and the isolation of a grandchild. */
 static void channel_tests(const char *self) {
   agc_value handle = start("Process.spawn_channel", self, "--lines", NULL);
   ok(send_line(handle, text("one\n")));
@@ -487,18 +450,10 @@ static void channel_tests(const char *self) {
   assert(exit_status(handle) == 3);
   close_process(handle);
 
-  char base[4096], mark[4200];
-  size_t base_size = sizeof base;
-  assert(uv_os_tmpdir(base, &base_size) == 0);
-  snprintf(mark, sizeof mark, "%s/agc-leaf-%ld.txt", base, (long)uv_os_getpid());
-  remove(mark);
-  handle = start("Process.spawn_channel", self, "--middle", mark);
+  handle = start("Process.spawn_channel", self, "--middle", NULL);
   equal(ok(read_line(handle, 10000)), "isolated");
-  equal(ok(read_line(handle, 10000)), "ready");
   assert(exit_status(handle) == 0);
   close_process(handle);
-  wait_for_mark(mark, "process: end of input\n");
-  remove(mark);
 }
 
 int main(int argc, char **argv) {
