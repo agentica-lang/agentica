@@ -114,8 +114,8 @@ static bool ext_cancel(agc_vm *vm, void *data, agc_value context, bool deadline)
   return deadline;
 }
 
-static const agc_io_kind ext_io = {NULL, ext_done, ext_expired, ext_drop, true, "test", NULL};
-static const agc_io_kind short_io = {NULL, ext_done, ext_expired, ext_drop, true, "short", ext_cancel};
+static const agc_io_kind ext_io = {NULL, ext_done, ext_expired, ext_drop, true, "test", NULL, false};
+static const agc_io_kind short_io = {NULL, ext_done, ext_expired, ext_drop, true, "short", ext_cancel, false};
 
 static agc_value napped(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
@@ -124,7 +124,7 @@ static agc_value napped(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind nap_io = {NULL, napped, napped, NULL, false, "nap", NULL};
+static const agc_io_kind nap_io = {NULL, napped, napped, NULL, false, "nap", NULL, false};
 
 static agc_value nap_again(agc_vm *vm) {
   assert(++tries < 1000);
@@ -183,7 +183,7 @@ static void pool_drop(void *data) {
   dropped++;
 }
 
-static const agc_io_kind pool_io = {pool_work, pool_done, pool_done, pool_drop, false, "pool", pool_cancel};
+static const agc_io_kind pool_io = {pool_work, pool_done, pool_done, pool_drop, false, "pool", pool_cancel, false};
 
 static agc_value test_pool_job(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -407,28 +407,28 @@ static agc_value test_drain(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static const agc_builtin test_builtins[] = {
-  {"Test.mark", 1, test_mark, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.cancel", 1, test_cancel, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.check", 1, test_check, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.io", 1, test_io, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.finish", 1, test_finish, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.cancel_self", 1, test_self, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.http", 1, test_http, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.until", 1, test_until, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.close", 1, test_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.io_short", 1, test_io_short, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.pool", 1, test_pool_job, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.gate", 1, test_gate, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.settled", 1, test_settled, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.own_self", 1, test_own, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.print", 1, test_print, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.drain", 1, test_drain, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.keep", 1, test_keep, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.closing", 1, test_closing, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.close_done", 1, test_close_done, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.crash", 1, test_crash, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.window", 1, test_window, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.mark", 1, test_mark, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.cancel", 1, test_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.check", 1, test_check, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.io", 1, test_io, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.finish", 1, test_finish, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.cancel_self", 1, test_self, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.http", 1, test_http, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.until", 1, test_until, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.close", 1, test_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.io_short", 1, test_io_short, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.pool", 1, test_pool_job, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.gate", 1, test_gate, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.settled", 1, test_settled, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.own_self", 1, test_own, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.print", 1, test_print, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.drain", 1, test_drain, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.keep", 1, test_keep, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.closing", 1, test_closing, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.close_done", 1, test_close_done, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.crash", 1, test_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.window", 1, test_window, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {

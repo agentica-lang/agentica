@@ -1255,13 +1255,14 @@ static agc_value closed(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", NULL};
+static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", NULL, true};
 
-static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "file", stop};
+static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "file", stop, true};
 
 /* The close of an ended task's file, or of a file still open when the run
    ends: pending while a job holds it. */
 static void close_file(agc_vm *vm, agc_resource *r, agc_task *ender) {
+  agc_sync_assert(vm);
   r->closing = true;
   r->next_owner = NULL;
   agc_task_wake_all(vm, &r->waiters, &r->waiters_tail, "close");
@@ -1347,9 +1348,9 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   return error_of(timed_out);
 }
 
-static const agc_io_kind file_io = {work, done, expired, drop, false, "file", stop};
+static const agc_io_kind file_io = {work, done, expired, drop, false, "file", stop, false};
 
-static const agc_io_kind poll_io = {NULL, done, expired, drop, true, "file", stop};
+static const agc_io_kind poll_io = {NULL, done, expired, drop, true, "file", stop, false};
 
 static void files_on(agc_vm *vm, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
@@ -1875,29 +1876,29 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_file_builtins[] = {
-  {"File.open", 3, builtin_open, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.close", 2, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.each_line", 4, builtin_each_line, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.lstat", 2, builtin_lstat, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"File.try_lock", 2, builtin_try_lock, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Dir.mkdir_private", 2, builtin_dir_mkdir_private, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Path.join", 1, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.open", 3, builtin_open, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"File.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"File.close", 2, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"File.each_line", 4, builtin_each_line, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"File.lstat", 2, builtin_lstat, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"File.try_lock", 2, builtin_try_lock, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Dir.mkdir_private", 2, builtin_dir_mkdir_private, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Path.join", 1, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
@@ -1913,7 +1914,7 @@ void agc_files_forget(agc_file_ids *ids, int fd) {
 
 void agc_files_close(agc_vm *vm) { (void)vm; }
 
-const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
+const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_file_builtin_count = 0;
 #endif

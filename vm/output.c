@@ -2,6 +2,12 @@
  * Standard output and standard error: one writer per stream, with a 64 KiB
  * ring and a FIFO of waiting writers, so that a print waits its turn instead
  * of interleaving. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
+ *
+ * Each stream has a lock (`lock` in agc_output, the base's when two streams share one; solo until agc_share). The
+ * public entry points take it for the whole call and drop it before they return or fail; the static helpers assume it
+ * is held, and none of them takes it again. It is never held across a park: a task that must wait is on the stream's
+ * FIFO and returns. Lock order: rt->sync, then the stream's lock, then the run queue's (docs/vm/16-architecture.md
+ * §16.9).
  */
 #include "core.h"
 
@@ -45,6 +51,24 @@ bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->ta
 bool agc_output_failed(const agc_output *out) { return out->base && out->base->failed; }
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+/* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
+   it gives it back (agc_sync_reset). The streams' locks are never held together. */
+static void stream_take(agc_vm *vm, agc_lock *l) {
+  agc_lock_take(l);
+  vm->stream_lock = l;
+}
+
+static void stream_drop(agc_vm *vm, agc_lock *l) {
+  vm->stream_lock = NULL;
+  agc_lock_drop(l);
+}
+
+/* A failure of a call that holds the stream's lock: the lock goes first, because agc_fail jumps out of the call. */
+static _Noreturn void fail_locked(agc_vm *vm, agc_output *out) {
+  stream_drop(vm, out->base->lock);
+  fail_write(vm, out);
+}
+
 static size_t smaller(size_t a, size_t b) { return a < b ? a : b; }
 
 static size_t room(const agc_output *s) { return AGC_OUTPUT_BUFFER - s->len; }
@@ -221,8 +245,7 @@ static void advance(agc_output *s) {
 
 /* The done half of every write. A POLL stream is told that the descriptor can be written and writes what it takes;
    the others are told what the pool job or the stream wrote. */
-static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
-  (void)context;
+static agc_value drain_done_locked(agc_vm *vm, void *data) {
   drain_request *q = data;
   agc_output *s = stream_of(vm, q->to_err);
   size_t written = q->written;
@@ -252,8 +275,18 @@ static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind drain_io = {drain_work, drain_done, drain_done, request_drop, false, "output", NULL};
-static const agc_io_kind watch_io = {NULL, drain_done, drain_done, request_drop, true, "output", NULL};
+static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
+  (void)context;
+  const drain_request *q = data;
+  agc_lock *lock = stream_of(vm, q->to_err)->lock;
+  stream_take(vm, lock);
+  agc_value result = drain_done_locked(vm, data);
+  stream_drop(vm, lock);
+  return result;
+}
+
+static const agc_io_kind drain_io = {drain_work, drain_done, drain_done, request_drop, false, "output", NULL, false};
+static const agc_io_kind watch_io = {NULL, drain_done, drain_done, request_drop, true, "output", NULL, false};
 
 static void flush_now(agc_output *s) {
   if (s->failed) return;
@@ -281,7 +314,7 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
   agc_output_wait *w = &t->output;
   if (s->failed) {
     stop_waiting(s, t);
-    fail_write(vm, out);
+    fail_locked(vm, out);
   }
   if (s->waiters != t || room(s) < need(w)) {
     agc_task_park(vm, true);
@@ -303,54 +336,72 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
   return true;
 }
 
+/* The start of a print or a flush, with the stream's lock taken: true when the task is not yet in the FIFO (it is a
+   new writer; false when it comes back to the call it parked in). */
+static bool enter(agc_vm *vm, agc_output *out) {
+  stream_take(vm, out->base->lock);
+  bool new_writer = vm->task->output.out != out;
+  if (new_writer && out->base->failed) fail_locked(vm, out);
+  return new_writer;
+}
+
+/* The end of a print or a flush that waits its turn: marks the task PARKING before it links itself, looks at its wait
+   once and drops the stream's lock. */
+static bool take_turn(agc_vm *vm, agc_output *out, bool new_writer) {
+  agc_output *s = out->base;
+  agc_task_parking(vm);
+  if (new_writer) agc_task_enqueue(&s->waiters, &s->waiters_tail, vm->task);
+  bool done = wait_turn(vm, out);
+  stream_drop(vm, s->lock);
+  return done;
+}
+
 static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
   agc_output *s = out->base;
-  agc_task *t = vm->task;
-  if (t->output.out != out) {
-    if (s->failed) fail_write(vm, out);
+  bool new_writer = enter(vm, out);
+  if (new_writer) {
     agc_output_wait w = {.out = out, .text = text, .newline = newline};
-    if (total(&w) == 0) return true;
+    if (total(&w) == 0) {
+      stream_drop(vm, s->lock);
+      return true;
+    }
     if (!s->waiters && !queued(s) && total(&w) <= room(s)) {
       copy_piece(s, &w, total(&w));
       kick(s);
+      stream_drop(vm, s->lock);
       return true;
     }
-    t->output = w;
-    agc_task_parking(vm);
-    agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
-  } else {
-    agc_task_parking(vm);
+    vm->task->output = w;
   }
-  return wait_turn(vm, out);
+  return take_turn(vm, out, new_writer);
 }
 
 bool agc_drain(agc_vm *vm) {
   agc_output *out = &vm->rt->out;
   if (!out->base) {
-    if (fflush(out->file) != 0) write_failed(vm, out);
+    agc_flush(vm);
     return true;
   }
   agc_output *s = out->base;
-  agc_task *t = vm->task;
-  if (t->output.out != out) {
-    if (s->failed) fail_write(vm, out);
+  bool new_writer = enter(vm, out);
+  if (new_writer) {
     flush_now(s);
-    if (s->failed) fail_write(vm, out);
-    if (!s->len && !s->waiters && !queued(s)) return true;
-    t->output = (agc_output_wait){.out = out, .flush = true};
-    agc_task_parking(vm);
-    agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
-  } else {
-    agc_task_parking(vm);
+    if (s->failed) fail_locked(vm, out);
+    if (!s->len && !s->waiters && !queued(s)) {
+      stream_drop(vm, s->lock);
+      return true;
+    }
+    vm->task->output = (agc_output_wait){.out = out, .flush = true};
   }
-  return wait_turn(vm, out);
+  return take_turn(vm, out, new_writer);
 }
 
 void agc_output_leave(agc_vm *vm, agc_task *t) {
-  (void)vm;
   agc_output *s = t->output.out->base;
+  stream_take(vm, s->lock);
   stop_waiting(s, t);
   advance(s);
+  stream_drop(vm, s->lock);
 }
 
 /* A pipe or a console has no non-blocking try: the data goes out through a request or a pool job, and the caller gives
@@ -362,7 +413,13 @@ static void settle(agc_output *s) {
   if (!vm->rt->settle_by) vm->rt->settle_by = now + FINAL_WAIT_MS;
   kick(s);
   while (s->writing && !s->failed && now < vm->rt->settle_by) {
-    if (!agc_io_run_for(vm, vm->rt->settle_by - now)) return;
+    /* The loop runs the drain of this very stream (drain_done takes the lock), so a caller that holds the lock gives it
+       back for the run and takes it again. */
+    bool held = agc_lock_held(s->lock);
+    if (held) stream_drop(vm, s->lock);
+    bool alive = agc_io_run_for(vm, vm->rt->settle_by - now);
+    if (held) stream_take(vm, s->lock);
+    if (!alive) return;
     now = agc_clock_ms();
   }
 }
@@ -489,6 +546,8 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
     len = sizeof lost - 1;
   }
   agc_output *s = out->base;
+  agc_vm *vm = s->vm;
+  stream_take(vm, s->lock);
   bool write = !s->failed && len;
   if (write && mode == AGC_NOTICE_FINAL)
     finish_text(s, text, len);
@@ -496,6 +555,7 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
     queue_notice(s, text, len, mode == AGC_NOTICE_KEPT);
   free(n->text);
   if (write && mode != AGC_NOTICE_FINAL) flush_now(s);
+  stream_drop(vm, s->lock);
 }
 #else
 bool agc_drain(agc_vm *vm) {
@@ -533,12 +593,24 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
 }
 #endif
 
+/* Drops the lock of the blocking FILE fallback and returns OK, keeping errno for write_failed. */
+static bool unlock_keeping_errno(agc_lock *l, bool ok) {
+  int saved = errno;
+  agc_lock_drop(l);
+  errno = saved;
+  return ok;
+}
+
+/* The blocking FILE fallback: a print is two stdio calls (the text, then the newline), so the stream's own lock keeps
+   the lines of two tasks apart. The lock is dropped before a failure, and errno is kept for write_failed. */
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   if (out->base) return put(vm, out, text, newline);
 #endif
-  if (text->bytes && fwrite(text->data, 1, text->bytes, out->file) != text->bytes) write_failed(vm, out);
-  if (newline && fputc('\n', out->file) == EOF) write_failed(vm, out);
+  agc_lock_take(out->lock);
+  bool ok = !text->bytes || fwrite(text->data, 1, text->bytes, out->file) == text->bytes;
+  ok = ok && (!newline || fputc('\n', out->file) != EOF);
+  if (!unlock_keeping_errno(out->lock, ok)) write_failed(vm, out);
   return true;
 }
 
@@ -546,9 +618,12 @@ void agc_flush(agc_vm *vm) {
   agc_output *out = &vm->rt->out;
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   if (out->base) {
+    stream_take(vm, out->base->lock);
     flush_now(out->base);
+    stream_drop(vm, out->base->lock);
     return;
   }
 #endif
-  if (fflush(out->file) != 0) write_failed(vm, out);
+  agc_lock_take(out->lock);
+  if (!unlock_keeping_errno(out->lock, fflush(out->file) == 0)) write_failed(vm, out);
 }

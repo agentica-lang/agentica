@@ -286,7 +286,9 @@ Ubuntu runners.
 - `test`: first the `changes` step (below), then `make -j vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them, from `bootstrap/stage0.agcb`), `make test JOBS=6` (the whole suite on
-  the binary; it builds the binary first), `make fixed-point` (stage2 == stage3
+  the binary; it builds the binary first), `make test-shared` (the binary
+  modules again with every shared-state lock on), `make fixed-point` (stage2
+  == stage3
   from stage0, and the binary compiling the front end to stage2 again; about
   15 s after `make test` built the stages, as a step of its own so a failure
   shows alone), `make test-cli`, `make test-slow` (the `@slow` cases of the test

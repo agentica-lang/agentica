@@ -66,8 +66,11 @@ phase 13).
   Wine) and in the scratch of an ephemeral CI runner. Encapsulation and the
   Actions route: `references/ci.md` of the development skill.
 - `make vm-tsan`: the C tests of the code that threads share (inbox, job
-  outcome, run queue, wake, job) under ThreadSanitizer, in a build without
-  libgc; CI runs it in the sanitizer job.
+  outcome, run queue, wake and cancel, job, sync locks, output) under
+  ThreadSanitizer, in a build without libgc; CI runs it in the sanitizer job.
+- `make test-shared`: the binary test modules (`VM_PY_TESTS`) with
+  `AGENTICA_VM_TEST_SHARED=1`, so every lock and held check of the shared state
+  is on at one scheduler; CI runs it after `make test`.
 - `make vm-task-map`: the timing cases of `Task.map`
   (`tests/test_vm_task_map.py`), alone like `make vm-latency`.
 - `make smoke`, `make site` (before merging a site change).

@@ -77,6 +77,7 @@ static agc_value builtin_floor(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_set_level(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_sync_assert(vm);
   (void)span;
   vm->rt->log.level = agc_as_int(vm, args[0]);
   return agc_void();
@@ -92,6 +93,7 @@ static agc_value builtin_lowest(agc_vm *vm, agc_value *args, uint32_t span) {
  * that make their first calls together install the console handler once, and
  * a later detach stays in effect because the level is no longer -1. */
 static agc_value builtin_install_default(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_sync_assert(vm);
   (void)span;
   agc_log_registry *log = &vm->rt->log;
   (void)agc_as_fn(vm, args[0]);
@@ -104,6 +106,7 @@ static agc_value builtin_install_default(agc_vm *vm, agc_value *args, uint32_t s
 }
 
 static agc_value builtin_attach(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_sync_assert(vm);
   (void)span;
   agc_string *name = agc_as_string(vm, args[0]);
   int64_t rank = agc_as_int(vm, args[1]);
@@ -115,6 +118,7 @@ static agc_value builtin_attach(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_detach(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_sync_assert(vm);
   (void)span;
   agc_log_registry *log = &vm->rt->log;
   agc_string *name = agc_as_string(vm, args[0]);
@@ -160,16 +164,16 @@ static agc_value builtin_task_id(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_logger_builtins[] = {
-  {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.set_level", 1, builtin_set_level, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.install_default", 1, builtin_install_default, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"LogRegistry.attach", 3, builtin_attach, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"LogRegistry.detach", 1, builtin_detach, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"LogRegistry.names", 0, builtin_names, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"LogRegistry.handlers", 1, builtin_handlers, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"LogRegistry.task_id", 0, builtin_task_id, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"LogRegistry.level", 0, builtin_level, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"LogRegistry.floor", 0, builtin_floor, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"LogRegistry.set_level", 1, builtin_set_level, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"LogRegistry.lowest", 0, builtin_lowest, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"LogRegistry.install_default", 1, builtin_install_default, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"LogRegistry.attach", 3, builtin_attach, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"LogRegistry.detach", 1, builtin_detach, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"LogRegistry.names", 0, builtin_names, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"LogRegistry.handlers", 1, builtin_handlers, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"LogRegistry.task_id", 0, builtin_task_id, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_logger_builtin_count = sizeof agc_logger_builtins / sizeof agc_logger_builtins[0];

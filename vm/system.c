@@ -61,8 +61,8 @@ static agc_value builtin_pid(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_system_builtins[] = {
-  {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"System.pid", 0, builtin_pid, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"System.pid", 0, builtin_pid, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_system_builtin_count = sizeof agc_system_builtins / sizeof agc_system_builtins[0];

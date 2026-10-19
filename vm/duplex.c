@@ -239,7 +239,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   return deadline && !q->sending;
 }
 
-static const agc_io_kind duplex_io = {NULL, request_done, request_expired, drop_request, true, "channel", request_cancel};
+static const agc_io_kind duplex_io = {NULL, request_done, request_expired, drop_request, true, "channel", request_cancel, true};
 
 static bool usable(const agc_duplex *d, const request *pending, agc_value *result) {
   if (d->closed) {
@@ -388,13 +388,13 @@ static agc_value builtin_parent_send(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 const agc_builtin agc_duplex_builtins[] = {
-  {"Process.parent_read_line", 1, builtin_parent_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.parent_send", 2, builtin_parent_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Process.parent_read_line", 1, builtin_parent_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.parent_send", 2, builtin_parent_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
 };
 
 const size_t agc_duplex_builtin_count = sizeof agc_duplex_builtins / sizeof agc_duplex_builtins[0];
 #else
-const agc_builtin agc_duplex_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
+const agc_builtin agc_duplex_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_duplex_builtin_count = 0;
 

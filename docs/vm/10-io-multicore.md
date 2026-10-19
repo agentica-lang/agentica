@@ -29,7 +29,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
 - **Cancel and stop flags.** The task's cancel flag and the run's stop flag are
   atomics, checked only on the `STEP` slow path, when the "next stop" counter
   runs out. The fast path still touches no atomic. A cancel or stop takes effect
-  within one turn budget.
+  within one turn budget. A task that a cancel finds on a turn is ended by its
+  own scheduler at the end of the turn, so no signal crosses schedulers (the
+  `vm->yield` of the canceller's scheduler is for the canceller's own task).
 - **Park and wake protocol.** Each task has an atomic state: RUNNING, PARKING,
   PARKED or WOKEN. To park, the task sets PARKING before it registers its wait
   (before it posts its start request, joins a waiter list, or registers on
@@ -57,12 +59,13 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   - A waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the
     run queue", and the scheduler sets READY to RUNNING when it pops the task.
     On PARKING it CASes to WOKEN and queues nothing.
-  - The end of the turn is in the scheduler (`agc_vm_run`). It traces, reads
-    the cancel flag (an atomic) and ends a cancelled task first. Then it does
-    the CAS from PARKING to PARKED (`agc_task_commit_park`), which is the last
-    thing it does with the task: from then on a waker may queue it and another
-    scheduler may run it. A CAS that finds WOKEN queues the task, so the turn
-    yields.
+  - The end of the turn is in the scheduler (`agc_task_end_turn`). It traces,
+    reads the cancel flag (an atomic) and ends a cancelled task first. Then it
+    does the CAS from PARKING to PARKED (`agc_task_commit_park`): from then on a
+    waker may queue the task and another scheduler may run it. The one thing it
+    does after that is read the cancel flag again (a cancel can fall between the
+    first read and the CAS) and claim the task by a CAS from PARKED to READY, to
+    end it. A CAS that finds WOKEN queues the task, so the turn yields.
   - A yield after WOKEN does not skip anything the waker prepared. A task that
     parked on a job has `parked` set, and `resume` takes the job's result and
     writes it to `park_reg` when the task runs again, whichever way it got
@@ -119,7 +122,8 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   (`agc_runtime.runq`, `vm/runq.c`). With N=1 there are these deviations: the
   runtime is GC-allocated by `agc_vm_init` (both are roots for Boehm), the
   `fail` jmp_buf is per scheduler (the only `setjmp` is the scheduler's own),
-  and there are no stream locks, since one thread writes. The task state is an
+  and the stream locks and `rt->sync` are solo (they take nothing) until
+  `agc_share`, since one thread runs the VM (§16.9). The task state is an
   atomic enum with PARKING and WOKEN (see "Park and wake protocol"). With N>1
   the fields go as follows (§16):
   - Runtime, read-only after start-up: `program` (with its constants, except
@@ -127,7 +131,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     table" below), `args`, `cwd` (raw bytes, read by `agc_files_init`),
     `no_files`, and the config.
     Shared under rules: the atomic `steps_left` (10.2.1, Quotas), `outcome` (set
-    once by a CAS, 6.2), and `out` and `err` (one lock per stream, see Output).
+    once by a CAS, 6.2), `out` and `err` (one lock per stream, see Output) and
+    `sync`, the one lock of the task tree, the channels and the other shared
+    state (§16.9).
     Stdin (`in`, an `agc_input`) is a handle on the I/O loop (see I/O
     ownership).
   - Shared: the global run queue (§16.3).
@@ -136,9 +142,10 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     rank and an array of (name, rank, handler) in the GC heap, reached only by
     the ten `LogRegistry` builtins. It is the language's one piece of global
     mutable state and is a field of the runtime, not a `static`. With N>1 it
-    needs a lock, the same lock as the stderr buffer; the multicore PR owns that
-    change. `install_default` is one native call, so the check for level -1 and
-    the writes cannot interleave with another task.
+    needs a lock; as built it is `rt->sync`, the one coarse lock (§16.9), taken
+    around each `LogRegistry` builtin (its rows are marked `shared`).
+    `install_default` is one native call, so the check for level -1 and the
+    writes cannot interleave with another task.
   - I/O thread: the loop, the inbox (§16.4) and the resource registry. Whether
     the registry is owned by the I/O thread or shared under a lock is open
     (§16.11).

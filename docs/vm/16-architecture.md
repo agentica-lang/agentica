@@ -150,8 +150,11 @@ void end_waiting(queue *q) {
 
 This is a sketch of the rules, not final code. The run queue's `push` also calls
 `pthread_cond_signal` after the unlock. As built, the run queue is `vm/runq.c`,
-with libuv's `uv_mutex_t` (portable to Windows) and no condvar, `pop_wait` or
-`end_waiting` yet: one scheduler never waits on it. The rules:
+with libuv's `uv_mutex_t` and `uv_cond_t` (portable to Windows). `agc_runq_wait`
+is `pop_wait` and `agc_runq_end` is `end_waiting`; no scheduler thread calls
+them yet. A solo queue never waits: `agc_runq_wait` returns NULL when it is
+empty. After the end, `agc_runq_wait` returns NULL even if tasks are left (the
+sketch returns them): the run is over. The rules:
 
 - **Wake after publish.** The producer prepares the entry outside the lock,
   links it under the lock, unlocks, and only then wakes the recipient. The lock
@@ -492,8 +495,9 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
 - **TSan covers the shared code.** `make vm-tsan` builds the VM without libgc
   (`TSAN=1`, `AGC_NO_GC`; TSan and Boehm's stop-the-world do not mix) and runs
   the C tests that use more than one thread: the inbox, the set-once outcome
-  and the count, the run queue, the wake against the park, and a job on the
-  loop with a request from another thread.
+  and the count, the run queue, the wake and the cancel against the park, a job
+  on the loop with a request from another thread, `rt->sync`, and the output
+  locks.
 - **The task is recorded before the job starts.** `start_job` sets `r->task` and
   `t->parked` before it posts START, so a completion that follows at once
   finds the task.
@@ -508,20 +512,95 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   task is marked PARKING before it registers its wait (`agc_task_parking`, as
   the model says), and the end of the turn is in the scheduler: it decides the
   trace and the cancel flag first, and the CAS from PARKING to PARKED is its
-  last access to the task. When the CAS finds WOKEN it queues the task, so the
-  task is queued once and its next turn takes up the wait again. There are no
-  stream locks.
+  last access to the task, but for one more read of the cancel flag (a cancel
+  can fall between the first read and the CAS), which is claimed by a CAS. When
+  the CAS finds WOKEN it queues the task, so the
+  task is queued once and its next turn takes up the wait again.
 - **`--schedulers N` is parsed and checked, and only 1 runs.** `vm/launch.c`
   reads the flag and `AGENTICA_SCHEDULERS` (1 to 1024, the flag wins). A count
   above 1 exits 2 with a message before the program loads, so N > 1 never runs
   as 1. The default is 1, not `uv_available_parallelism()`.
-- **A cancel of the running task works through `vm->yield`.** `cancel_one`
-  (`vm/task.c`) sets the target's cancel flag, and when the target is the task
-  that runs (RUNNING, PARKING or WOKEN) it also sets `vm->yield` of the one
-  scheduler, so the turn ends. That is a per-scheduler flag and is right for N =
-  1 only; another scheduler's task needs a signal of its own. The N > 1 PR must
-  also close the race of a cancel against PARKING (§16.11, "Cancel against
-  PARKING").
+- **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic
+  cancel flag, and then the state says who ends the task, and exactly one party
+  does. A task on a turn (RUNNING, PARKING or WOKEN) is left to its scheduler,
+  which reads the flag at the end of the turn and again after it publishes
+  PARKED (`agc_task_end_turn`); only the canceller's own task gets `vm->yield`,
+  and another scheduler's task stops within one turn, as §10.2.3 says. A READY
+  task is taken out of the queue and ended; if it is not in the queue (a waker
+  set READY and has not pushed, or a scheduler has popped it) `agc_task_next`
+  ends it when it pops it. A PARKED task is claimed by a CAS from PARKED to
+  READY (`agc_task_claim`), the same race as a waker's, and the winner ends
+  it. The ending (`end_cancelled`) walks the lists of the task with `rt->sync`
+  held (the next item).
+- **One coarse lock, not per-channel locks.** The plan of §16.1 to §16.8 puts a
+  lock on each channel, waiter list and task. As built there is one mutex,
+  `rt->sync` (`vm/sync.c`, an `agc_lock`), for the task tree (parent, children,
+  waiters, awaiting), the channels, the `Task.map` groups, the logger table, the
+  stdin buffer and the FIFOs of the handles and of the jobs. Why: the code that
+  touches these structures calls into each other (a cancel ends a task, which
+  wakes its awaiters, which ends a `Task.map` item, which cancels its siblings),
+  so many small locks need one fixed order across the whole task code and would
+  still be taken in long chains; the coarse lock is held for a short stretch of
+  pointer work and never across a park or a turn, so the work that takes long
+  (the Agentica code of the turns, strings, numbers, JSON, lists and maps) runs
+  in parallel. It is held across the libuv calls that a locked path makes inline
+  at N = 1 (a job start, a close); with the services of 3c those become
+  requests to the I/O thread, and the lock is not held while the scheduler
+  waits for one. It is cheap to split later, when a measurement shows the
+  contention: 3c measures it (the benchmarks `prints`, `ping-pong` and `files`
+  with the locks on) before the split is chosen. The pieces:
+  - What takes the lock is marked per builtin: `agc_builtin.shared` (a flag in
+    each row of the builtin tables, so a new row must say `true` or `false`).
+    `call_builtin` (`vm/interp.c`) takes `rt->sync` around a row marked shared;
+    the rows of the pure libraries (strings, numbers, lists, maps, JSON,
+    `Path`) are not marked. A builtin that touches the task tree, a channel,
+    the logger table, a handle's FIFO or stdin is marked, and so is every
+    `IO` row that reads stdin. The same interpreter takes the lock around the
+    steps of a stepper, and `run_half` (`vm/loop.c`) around the halves of a
+    job whose kind says `locked` (`agc_io_kind.locked`); the ending of a task
+    takes it in `agc_task_end_turn` and `agc_task_next`. The output builtins are not
+    marked: a stream has its own lock, taken inside `vm/output.c`.
+  - The lock nests. A scheduler counts its depth (`vm->sync_depth`) and takes
+    and drops the mutex at the outer level, so a cancel that wakes a task that
+    ends a `Task.map` item does not lock itself. `agc_sync_reset` drops it after
+    an `agc_fail` jumped out of a locked builtin (`run_turn`, `agc_vm_run`).
+  - Each stream has a lock (the base's, when two streams share one buffer). A
+    print takes it for the copy into the ring or the join of the FIFO, and drops
+    it before it returns, parks or fails (`agc_sync_reset` also drops the stream
+    lock a failure left). The lock order is `rt->sync`, then a stream's lock,
+    then the I/O inbox's and the run queue's. No lock is held across a park.
+  - Both are solo until `agc_share`, which runs before a second thread exists:
+    `rt->shared` is false, `agc_sync_take` tests that one flag and nothing is
+    locked. Only the C tests and `AGENTICA_VM_TEST_SHARED=1` call `agc_share`
+    today. That switch is test-only: it runs a program on one scheduler with
+    every lock on. `make test-shared` (a step of CI) runs the binary test
+    modules that way, and in that mode the lock placement is checked, not
+    only exercised: `agc_lock_drop` aborts when the caller is not the owner,
+    `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when one of these
+    runs without the lock: `finish_task`, `agc_task_wake_all`,
+    `agc_task_cancel`, the end of a cancelled task, the link of a task to its
+    parent (`adopt`, so every spawn), a channel's waiter queues (the enqueue,
+    the pop and the leave), the writers of the logger table (`set_level`,
+    `install_default`, `attach`, `detach`), a handle's waiters, holder and
+    `next_owner` (the hand-on, the wait, a job start on a handle, the closes of
+    files) and the stdin waiters. `agc_task_next` fails when a turn ended with
+    the lock held. `vm/tests/sync_test.c` checks the marks: every row of the
+    task, `Task.map`, channel, logger, process, duplex, TCP and HTTP tables is
+    marked, no row of the String, number and JSON tables is, and the core and
+    `File` tables are checked by row. `tests/test_vm_shared.py` holds the
+    programs for the paths the other modules do not reach.
+    Not yet under the lock: the profiling counters, the timers, the I/O
+    thread's side of the handles, `rt->outcome` (written by `agc_exit` and
+    `agc_fail` without it), and the owner of a stream's lock, which is recorded
+    on the stream's own `vm` (`s->vm`, in `agc_notice_end` and `settle`), not
+    on the scheduler that prints; 3c passes the calling scheduler through
+    `agc_notice` and `settle`. The later PRs of the plan cover those.
+- **The order of PR 3 of issue #345.** 3a (the blocking pop, the cancel by
+  claim and these locks), 3b (the context split of the scheduler and
+  per-scheduler timers), 3c (threads, net, pollers and the standard streams;
+  real parallelism, behind the test-only `AGENTICA_VM_TEST_MULTICORE`), 3d
+  (process and duplex, the end of the refusal of N > 1, the default of one
+  scheduler per logical core).
 - **One resource registry on the scheduler** (`vm->registry`). Boehm is built
   with thread support (§10.2.3, "GC"), but no thread registers with it yet:
   `agc_gc_allow_threads`, `agc_gc_thread_enter` and `agc_gc_thread_leave`
@@ -558,32 +637,15 @@ Only if measurements ask for them. Neither is planned.
   request posted from another thread after the close would run inline instead
   of failing. Nothing posts after the close today (the schedulers have ended).
   PR 3 must make a post from another thread after the close fail loudly.
-- **Cancel against PARKING (to fix in the N > 1 PR).** The scheduler reads
-  `cancelled` at the end of a turn and then does the CAS to PARKED. A cancel
-  from another thread that lands after that read and before
-  `agc_task_commit_park` sets the flag on a task that then becomes PARKED, and
-  nobody ends it: a cancelled task stays parked until its wait ends. With one
-  scheduler the canceller runs on the same thread, so it cannot happen and this
-  PR does not handle it. The N > 1 PR must close it, either with a re-check of
-  `cancelled` after the CAS (if it is set, take the task back with a CAS from
-  PARKED to READY and end it) or with a CAS handshake where the canceller and
-  the scheduler both move the state and one of them ends the task. It must
-  also replace the canceller's use of `vm->yield`, which belongs to the
-  canceller's own scheduler, with a signal for each task.
-- **Cancelling a ready task.** `agc_task_cancel` already walks the run queue
-  today (`agc_runq_remove` in `vm/runq.c`, which takes the queue's lock), on the
-  one thread. With several schedulers the options are:
-  - Walk the queue under its lock. It is O(n), and it misses a task that another
-    scheduler has popped but not yet set to RUNNING, so the cancel flag must be
-    set as well and checked when that task starts.
-  - Only set the cancel flag, and let the scheduler that pops the task end it
-    instead of running it. It is O(1), but the end of the task (and the wake of
-    its awaiters and the close of its handles) waits until the task is popped,
-    and the order against other tasks changes.
-
-  Unlinking a task from a waiter list or from the lock FIFO is the same O(n)
-  walk today (`agc_task_remove`). A cancel from another scheduler takes effect
-  within one turn (§10.2.3).
+- **Cancel against PARKING and a ready task (decided, built; §16.9).** The
+  scheduler re-reads `cancelled` after the commit CAS and claims the task if it
+  is set, so a cancel that fell between the first look and the commit does not
+  leave a cancelled task PARKED. A READY task is taken out of the queue by the
+  canceller (O(n) under the queue's lock), and one it cannot find is ended by
+  the scheduler that pops it. `vm->yield` is used only for the canceller's own
+  task. Unlinking a task from a waiter list or from the lock FIFO is the same
+  O(n) walk (`agc_task_remove`), and it needs the lock of the list (open, "Who
+  owns the wait lists").
 - **The resource registry.** One registry shared under a lock, or one owned by
   the I/O thread, with registration done when the request is started. The I/O
   thread needs it to go from a job's id to the task (§16.5), so a lookup needs
