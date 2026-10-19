@@ -238,11 +238,23 @@ Wine
   (`tests/test_stdlib_distribution.py` copies `dist/agentica` alone away from
   the checkout and runs it, `agentica test` included).
 
-## Manual Windows console smoke
+## Windows console
 
-Piped-input tests do not exercise console input or keyboard signals. After
-changing Windows stdin or stop handling, use a native Windows terminal (not
-Wine) and save this as `console-input.agc` in a scratch directory:
+`tests/test_windows_console_stop.py` runs on the Windows job (it needs a Windows
+console, so Wine skips it). It starts the VM with `CREATE_NEW_PROCESS_GROUP` and
+sends `CTRL_BREAK_EVENT`: the exit is 149 (128 + `SIGBREAK`), a child that
+ignores the event is stopped, buffered file data is written, and a stuck stdout
+does not hold the exit. Two more cases write stdout and stderr to a pseudo
+console (ConPTY), which the VM writes from a pool thread with `WriteConsoleW`:
+one checks the text and its order, the other a line longer than the 64 KiB
+buffer, whose first write ends inside a character, and that no replacement
+character reaches the console. A new process group turns Ctrl+C off, so Ctrl+C
+is not sent; libuv reports both events through one console handler
+(`uv_signal_t`).
+
+Piped-input tests do not exercise console input. After changing Windows stdin
+handling, a check on a native Windows terminal (not Wine) is useful but does not
+block a change. Save this as `console-input.agc` in a scratch directory:
 
 ```agentica
 def main() -> Void
@@ -258,13 +270,11 @@ end
    Expect a prompt return, no read-error diagnostic and no surviving VM.
    libuv handles the signal on the loop even if `_read` remains blocked in
    the pool; retrying an interrupted `_read` must not be the signal handler.
-3. Repeat step 2 with Ctrl+Break when the terminal supports it.
 
 The fast `test_platform_bootstrap.py` cases separately check binary stdin
 (NUL, CR/LF, Ctrl+Z and 0xff), an empty open pipe while a timer runs and the
 program exits, and builtin lock repetition, contention and close/reacquire.
-The native C file test also checks Windows-enforced read exclusion. A console
-smoke is still required: pipes and Wine do not prove keyboard signal behavior.
+The native C file test also checks Windows-enforced read exclusion.
 
 ## Pull requests (`.github/workflows/ci.yml`)
 
