@@ -458,8 +458,7 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   last access to the task, but for one more read of the cancel flag (a cancel
   can fall between the first read and the CAS), which is claimed by a CAS. When
   the CAS finds WOKEN it queues the task, so the
-  task is queued once and its next turn takes up the wait again. There are no
-  stream locks.
+  task is queued once and its next turn takes up the wait again.
 - **`--schedulers N` is parsed and checked, and only 1 runs.** `vm/launch.c`
   reads the flag and `AGENTICA_SCHEDULERS` (1 to 1024, the flag wins). A count
   above 1 exits 2 with a message before the program loads, so N > 1 never runs
@@ -474,8 +473,48 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   set READY and has not pushed, or a scheduler has popped it) `agc_task_next`
   ends it when it pops it. A PARKED task is claimed by a CAS from PARKED to
   READY (`agc_task_claim`), the same race as a waker's, and the winner ends
-  it. The ending (`end_cancelled`) still walks the lists of the task without
-  a lock; the shared-state lock of the next PR covers it.
+  it. The ending (`end_cancelled`) walks the lists of the task with `rt->sync`
+  held (the next item).
+- **One coarse lock, not per-channel locks.** The plan of §16.1 to §16.8 puts a
+  lock on each channel, waiter list and task. As built there is one mutex,
+  `rt->sync` (`vm/sync.c`, an `agc_lock`), for the task tree (parent, children,
+  waiters, awaiting), the channels, the `Task.map` groups, the logger table, the
+  stdin buffer and the FIFOs of the handles and of the jobs. Why: the code that
+  touches these structures calls into each other (a cancel ends a task, which
+  wakes its awaiters, which ends a `Task.map` item, which cancels its siblings),
+  so many small locks need one fixed order across the whole task code and would
+  still be taken in long chains; the coarse lock is held for a short stretch of
+  pointer work, never across a park, a turn or a libuv call, so the work that
+  takes long (the Agentica code of the turns, strings, numbers, JSON, lists and
+  maps) runs in parallel. It is cheap to split later, when a measurement shows
+  the contention. The pieces:
+  - The interpreter takes `rt->sync` around the call of every builtin of a
+    shared library (`agc_builtin_table.shared`; `builtin_sync` per builtin, built
+    by `agc_share`), around the steps of a stepper, around the `done` and
+    `expired` halves of a job (`resume` in `vm/task.c`), and around each ending
+    of a task in `agc_task_end_turn` and `agc_task_next`. The pure libraries are
+    not locked. The output builtins are not either: a stream has its own lock.
+  - The lock nests. A scheduler counts its depth (`vm->sync_depth`) and takes
+    and drops the mutex at the outer level, so a cancel that wakes a task that
+    ends a `Task.map` item does not lock itself. `agc_sync_reset` drops it after
+    an `agc_fail` jumped out of a locked builtin (`run_turn`, `agc_vm_run`).
+  - Each stream has a lock (the base's, when two streams share one buffer). A
+    print takes it for the copy into the ring or the join of the FIFO, and drops
+    it before it returns, parks or fails. The lock order is `rt->sync`, then a
+    stream's lock, then the run queue's. No lock is held across a park.
+  - Both are solo until `agc_share`, which runs before a second thread exists:
+    `rt->shared` is false, `agc_sync_take` tests that one flag and nothing is
+    locked. Only the C tests and `AGENTICA_VM_TEST_SHARED=1` call `agc_share`
+    today. That switch is test-only: it runs the whole suite on one scheduler
+    with every lock on, so the lock placement meets the same programs as N = 1.
+    Not yet under the lock: the profiling counters, the timers and the I/O
+    thread's side of the handles; the later PRs of the plan cover those.
+- **The order of PR 3 of issue #345.** 3a (the blocking pop, the cancel by
+  claim and these locks), 3b (the context split of the scheduler and
+  per-scheduler timers), 3c (threads, net, pollers and the standard streams;
+  real parallelism, behind the test-only `AGENTICA_VM_TEST_MULTICORE`), 3d
+  (process and duplex, the end of the refusal of N > 1, the default of one
+  scheduler per logical core).
 - **One resource registry on the scheduler** (`vm->registry`). Boehm is built
   with thread support (§10.2.3, "GC"), but no thread registers with it yet:
   `agc_gc_allow_threads`, `agc_gc_thread_enter` and `agc_gc_thread_leave`

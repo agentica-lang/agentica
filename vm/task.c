@@ -520,6 +520,8 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       vm->rt->outcome.kind = AGC_EXITED;
       vm->rt->outcome.exit_code = 1;
     }
+  } else {
+    agc_sync_reset(vm);
   }
   trace_end(vm);
   return vm->rt->outcome;

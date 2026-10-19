@@ -115,7 +115,8 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   (`agc_runtime.runq`, `vm/runq.c`). With N=1 there are these deviations: the
   runtime is GC-allocated by `agc_vm_init` (both are roots for Boehm), the
   `fail` jmp_buf is per scheduler (the only `setjmp` is the scheduler's own),
-  and there are no stream locks, since one thread writes. The task state is an
+  and the stream locks and `rt->sync` are solo (they take nothing) until
+  `agc_share`, since one thread runs the VM (§16.9). The task state is an
   atomic enum with PARKING and WOKEN (see "Park and wake protocol"). With N>1
   the fields go as follows (§16):
   - Runtime, read-only after start-up: `program` (with its constants, except
@@ -123,7 +124,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     table" below), `args`, `cwd` (raw bytes, read by `agc_files_init`),
     `no_files`, and the config.
     Shared under rules: the atomic `steps_left` (10.2.1, Quotas), `outcome` (set
-    once by a CAS, 6.2), and `out` and `err` (one lock per stream, see Output).
+    once by a CAS, 6.2), `out` and `err` (one lock per stream, see Output) and
+    `sync`, the one lock of the task tree, the channels and the other shared
+    state (§16.9).
     Stdin (`in`, an `agc_input`) is a handle on the I/O loop (see I/O
     ownership).
   - Shared: the global run queue (§16.3).
@@ -132,9 +135,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     rank and an array of (name, rank, handler) in the GC heap, reached only by
     the ten `LogRegistry` builtins. It is the language's one piece of global
     mutable state and is a field of the runtime, not a `static`. With N>1 it
-    needs a lock, the same lock as the stderr buffer; the multicore PR owns that
-    change. `install_default` is one native call, so the check for level -1 and
-    the writes cannot interleave with another task.
+    needs a lock; as built it is `rt->sync`, the one coarse lock (§16.9), taken
+    around each `LogRegistry` builtin. `install_default` is one native call, so
+    the check for level -1 and the writes cannot interleave with another task.
   - I/O thread: the loop, the inbox (§16.4) and the resource registry. Whether
     the registry is owned by the I/O thread or shared under a lock is open
     (§16.11).

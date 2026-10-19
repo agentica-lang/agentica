@@ -305,6 +305,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     &state->stepper)` and returns, then `CALL_BUILTIN` sees `t->stepper` and
     `start_stepper` pushes an `AGC_NATIVE_STEPPER` frame whose block is the
     builtin's last argument
+  - `call_builtin` (`vm/interp.c`) is the one call of a builtin function: once
+    the VM is shared (`agc_share`) it takes `rt->sync` around a builtin of a
+    shared library (`vm/sync.c`, `references/vm-tasks.md`), and `resume_stepper`
+    takes it around each step
   - `resume_stepper` asks the step function (`agc_step_fn`) what to do next:
     `AGC_STEP_CALL` calls the block with one argument and the block's result is
     the next `last` (read from the native frame's base register),

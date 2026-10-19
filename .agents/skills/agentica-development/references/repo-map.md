@@ -106,6 +106,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   front_end.c     # FrontEnd.hand_off and FrontEnd.std_source, guarded by rt->front_end (references/vm-builtins.md)
   task.c          # scheduler, task cancellation, Task builtins (references/vm-tasks.md)
   runq.c          # the locked global run queue (references/vm-tasks.md)
+  sync.c          # rt->sync and the stream locks (references/vm-tasks.md)
   task_map.c      # Task.map: a stepper on the caller that starts, times and cancels the items (references/vm-tasks.md)
   channel.c       # Channel builtins (references/vm-tasks.md)
   testing.c       # Test builtins for unit tests (references/vm-tasks.md)

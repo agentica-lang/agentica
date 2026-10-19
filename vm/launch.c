@@ -536,6 +536,10 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");
   rt->no_turn_cost = no_turn_cost && strcmp(no_turn_cost, "1") == 0;
+  /* Test-only: run on one scheduler with every lock on (agc_share), so the whole suite goes through the locking code
+     of the shared state until the scheduler threads exist. */
+  const char *shared = getenv("AGENTICA_VM_TEST_SHARED");
+  if (shared && strcmp(shared, "1") == 0 && !front_end) agc_share(vm);
   rt->seed = options->seen_seed ? options->seed : entropy_seed();
   agc_random_seed(&vm->main->random, rt->seed);
   rt->args = args;

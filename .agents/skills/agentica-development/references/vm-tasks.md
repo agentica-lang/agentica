@@ -18,6 +18,20 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     queue, when empty). The queue is solo (no lock, never waits) until
     `agc_runq_share`, which runs before a second thread touches it.
 
+- **Path:** `vm/sync.c`
+  - **Owns:** The locks of the shared state. `agc_lock` (a mutex that is solo
+    until `agc_share`), `rt->sync`, the one coarse lock for the task tree, the
+    waiter lists, the channels, the `Task.map` groups, the logger table, stdin
+    and the FIFOs, and the lock of each output stream. `agc_sync_take` and
+    `agc_sync_drop` nest per scheduler (`vm->sync_depth`); `agc_sync_reset`
+    undoes them after `agc_fail`. The interpreter takes the lock around each
+    builtin of a shared library (`agc_builtin_table.shared`), a stepper step,
+    the halves of a job and each end of a task; never hold it across a park or
+    a turn. Order: sync, a stream's lock, the run queue's. `agc_share` turns
+    all of it on; `AGENTICA_VM_TEST_SHARED=1` does it for a whole run on one
+    scheduler (test only). A new builtin library that touches shared state must
+    set `.shared` in `vm/builtin_tables.c`.
+
 - **Path:** `vm/task_map.c`
   - **Owns:** `Task.map`: a stepper on the caller that starts, times and cancels
     the items.
