@@ -232,13 +232,14 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   entry is skipped, so `./name` runs a program in the working directory; a
   relative entry such as `.` resolves against it. A command with `/` is a path
   (on Windows `\` and a drive such as `C:` also make a path), relative to the
-  working directory unless absolute. A name that is not found,
-  or names a directory, is `executable is unavailable`. Arguments go straight to
-  the program, with no shell. On Windows only `.exe` and `.com` run (no
-  `PATHEXT`, no `.bat` or `.cmd`: that needs `cmd.exe`), and a name with a
-  trailing dot or space, a `:` outside a drive, or ending in `.bat` or `.cmd`,
-  is refused. A file that is
-  found but cannot run is an error Result from `spawn`.
+  working directory unless absolute. A name that is not found, or names a
+  directory, is `executable is unavailable`. Arguments go straight to the
+  program, with no shell. On Windows only `.exe` and `.com` run (no `PATHEXT`,
+  no `.bat` or `.cmd`: that needs `cmd.exe`), and a name with a trailing dot or
+  space, a `:` outside a drive, a `\\?\` or `\\.\` prefix, or ending in `.bat`
+  or `.cmd`, is refused. The `.exe` suffix is tried before `.com` on purpose: a
+  plain `tool` finds `tool.exe` first. A file that is found but cannot run is an
+  error Result from `spawn`.
 - Timeouts are positive milliseconds and include the lock wait. A timeout during
   stream I/O kills and closes the child; a timeout while waiting for the lock
   keeps it; a timed-out wait for exit does not terminate it.

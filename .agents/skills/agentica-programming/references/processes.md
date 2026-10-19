@@ -41,8 +41,9 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   files, such as `.bat` and `.cmd`, never run, because that needs `cmd.exe`:
   start `cmd.exe` by name if you want a shell. A command with `\`, `/` or a
   drive (`C:\tool\a.exe`) is a path, not searched in `PATH`; a name ending in
-  a dot or space, with a `:` that is not the drive, or ending in `.cmd` or
-  `.bat`, fails. A file that is found but cannot be executed is an error
+  a dot or space, with a `:` that is not the drive, starting with `\\?\` or
+  `\\.\`, or ending in `.cmd` or `.bat`, fails. A bare name tries `.exe`
+  before `.com`. A file that is found but cannot be executed is an error
   Result from `spawn`.
 - Every `Process` function runs on the VM (Linux). A signal (`SIGINT`,
   `SIGTERM`, `SIGHUP`) to the VM or to `agentica` kills its running children,

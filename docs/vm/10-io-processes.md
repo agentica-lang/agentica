@@ -12,11 +12,14 @@
 - A child must not get `UV_USE_IO_URING=0` from the VM's own environment
   (§10.2.2), unless the user set it before the VM started.
 - Windows: allow only `.exe` and `.com` after resolution, case-insensitively
-  (`.exe` is tried first when the name has neither). A command with `\`, `/` or
-  a `:` is a path and is not searched in `PATH`. Reject a name that ends in a
-  dot or a space, or in `.cmd` or `.bat`, and any `:` that is not the drive
-  letter of `C:\` or `C:/` (so `C:foo.exe`, `x.exe:stream` and `\\?\C:\x.exe`
-  are refused). The checks are on the command as given (`agc_proc_name_ok`).
+  (`.exe` is tried first when the name has neither, on purpose: `.com` files
+  are the older, rarer kind, and a plain name should not be taken by one). A
+  command with `\`, `/` or a `:` is a path and is not searched in `PATH`.
+  Reject a name that ends in a dot or a space, or in `.cmd` or `.bat`, any `:`
+  that is not the drive letter of `C:\` or `C:/`, and the `\\?\` and `\\.\`
+  prefixes (so `C:foo.exe`, `x.exe:stream`, `\\?\C:\x.exe` and
+  `\\.\C:\x.exe` are refused). The checks are on the command as given
+  (`agc_proc_name_ok`).
   The allowlist applies to the last component of the resolved path. The port
   does not search the current directory before `PATH`, but a relative `PATH`
   entry such as `.` resolves against it, as on POSIX. `PATHEXT` is not read:

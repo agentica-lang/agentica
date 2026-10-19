@@ -122,8 +122,11 @@ def test_a_bare_command_is_not_looked_for_in_the_working_directory_or_an_empty_p
             '  end\nend\n\n')
     program_file = write(tmp_path, "program.agc", text)
     sep = os.pathsep
-    name = next((key for key in os.environ if key.upper() == "PATH"), "PATH")  # "Path" on Windows
-    old = os.environ.get(name, "")
+    # Windows spells the variable "Path"; the copy that the VM gets must replace it, not sit beside it.
+    name = next((key for key in os.environ if key.upper() == "PATH"), "PATH")
+    elsewhere = tmp_path / "elsewhere"  # a fixed, empty folder: nothing in the ambient PATH can answer for `tool`
+    elsewhere.mkdir()
+    old = str(elsewhere)
 
     def spawned(path):
         result = cli_run("--allow-run", program_file, env={name: path}, cwd=here)
