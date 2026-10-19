@@ -156,8 +156,7 @@ field of V3, which PR 1 added; it has its own header, `port.h`.
   - **Functions:** `agc_io_start` with an `agc_io_kind` (`work`, `done`,
     `expired`, `drop`, `cancel`), `agc_io_ready`, `agc_io_detached` (its context
     is the handle a close job holds, or void), `agc_io_start_then` (a pool job's
-    `more` step, which may keep it waiting on the loop), `agc_io_extend` (20c:
-    restart the job's own timer once)
+    `more` step, which may keep it waiting on the loop)
 
 - **Job:** Wait on a descriptor on the loop
   - **Functions:** `agc_poller_open`, `agc_poller_wait`, `agc_poller_pause`,

@@ -76,26 +76,24 @@ builtin HttpWire.close_server forms=1
   HttpWire.close_server(server: HttpServer) -> Void shape=(Opaque(HttpServer)) -> Void rule=Plain impl="HttpWire.close_server" effects=["network"] desc="Internal to std/http: close the listener and cancel the server's tasks."
 builtin HttpWire.close_write forms=1
   HttpWire.close_write(socket: Socket) -> Void shape=(Opaque(Socket)) -> Void rule=Plain impl="HttpWire.close_write" effects=["network"] desc="Internal to std/http: close the write side of a socket once its output is sent; reads go on."
-builtin HttpWire.closes? forms=1
-  HttpWire.closes?(headers: List[Header]) -> Bool shape=(List(Struct(Header))) -> Bool rule=Plain impl="HttpWire.closes?" effects=[] desc="Internal to std/http: true when a Connection header has the close token."
 builtin HttpWire.encode_response forms=1
-  HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[List[Int]] shape=(Struct(HttpRequest), Struct(HttpResponse), Int) -> Result(List(Int)) rule=Plain impl="HttpWire.encode_response" effects=[] desc="Internal to std/http: the bytes of a response head with Content-Length and Date, or the reason it cannot be sent."
+  HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[HttpWire.Reply] shape=(Struct(HttpRequest), Struct(HttpResponse), Int) -> Result(Struct(HttpWire.Reply)) rule=Plain impl="HttpWire.encode_response" effects=[] desc="Internal to std/http: the bytes of a response head with Content-Length and Date, and whether the connection closes after it, or the reason it cannot be sent."
 builtin HttpWire.error_answer forms=1
   HttpWire.error_answer(status: Int) -> String shape=(Int) -> String rule=Plain impl="HttpWire.error_answer" effects=[] desc="Internal to std/http: the error answer with this status, an empty body and Connection: close."
 builtin HttpWire.exchange forms=1
   HttpWire.exchange(client: HttpClient, scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: String) -> Result[HttpResponse] shape=(Opaque(HttpClient), String, String, Int, String, String, List(Struct(Header)), String) -> Result(Struct(HttpResponse)) rule=Plain impl="HttpWire.exchange" effects=["network"] desc="Internal to std/http: send one whole request and read the whole response."
 builtin HttpWire.local_port forms=1
   HttpWire.local_port(server: HttpServer) -> Int shape=(Opaque(HttpServer)) -> Int rule=Plain impl="HttpWire.local_port" effects=["network"] desc="Internal to std/http: the server's listening port."
+builtin HttpWire.read_head forms=1
+  HttpWire.read_head(socket: Socket, rest: List[Int], max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Head] shape=(Opaque(Socket), List(Int), Int, Int) -> Result(Struct(HttpWire.Head)) rule=Plain impl="HttpWire.read_head" effects=["network"] desc="Internal to std/http: put rest back in front of the input, then read and parse the next request head; a bad head has the answer's status and reason (status 0 for a good one)."
 builtin HttpWire.read_text forms=1
-  HttpWire.read_text(socket: Socket, max_bytes: Int, carry: List[Int], timeout_ms: Int) -> Result[HttpWire.Text] shape=(Opaque(Socket), Int, List(Int), Int) -> Result(Struct(HttpWire.Text)) rule=Plain impl="HttpWire.read_text" effects=["network"] desc="Internal to std/http: read the bytes available, at most max_bytes (1..1048576), as UTF-8 text after carry; bytes is 0 at the end of input."
-builtin HttpWire.request_head forms=1
-  HttpWire.request_head(data: List[Int], scanned: Int, max_body_bytes: Int) -> Result[HttpWire.Head] shape=(List(Int), Int, Int) -> Result(Struct(HttpWire.Head)) rule=Plain impl="HttpWire.request_head" effects=[] desc="Internal to std/http: parse a request head at the start of data; incomplete until its blank line; the error is the answer status and the reason."
+  HttpWire.read_text(socket: Socket, max_bytes: Int, carry: List[Int], timeout_ms: Int) -> Result[HttpWire.Text] shape=(Opaque(Socket), Int, List(Int), Int) -> Result(Struct(HttpWire.Text)) rule=Plain impl="HttpWire.read_text" effects=["network"] desc="Internal to std/http: read the bytes available, at most max_bytes (1..1048576), as UTF-8 text after carry; bytes is 0 at the end of input, and valid is false for bytes that are not UTF-8."
 builtin HttpWire.server forms=1
   HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer shape=(Opaque(Listener), Int, Fn([Opaque(HttpServer)], Void)) -> Opaque(HttpServer) rule=Plain impl="HttpWire.server" effects=["network"] desc="Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it."
 builtin HttpWire.spawn forms=1
   HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void shape=(Opaque(HttpServer), Opaque(Socket), Fn([Opaque(Socket)], Void)) -> Void rule=Plain impl="HttpWire.spawn" effects=["network"] desc="Internal to std/http: run a connection task in the server's group."
 builtin HttpWire.text forms=1
-  HttpWire.text(carry: List[Int], data: List[Int], runs: List[Int]) -> Result[HttpWire.Text] shape=(List(Int), List(Int), List(Int)) -> Result(Struct(HttpWire.Text)) rule=Plain impl="HttpWire.text" effects=[] desc="Internal to std/http: the UTF-8 text of carry and the runs of data (start, length pairs); an unfinished last character is the new carry."
+  HttpWire.text(carry: List[Int], data: List[Int], runs: List[Int]) -> HttpWire.Text shape=(List(Int), List(Int), List(Int)) -> Struct(HttpWire.Text) rule=Plain impl="HttpWire.text" effects=[] desc="Internal to std/http: the UTF-8 text of carry and the runs of data (start, length pairs); an unfinished last character is the new carry, and valid is false for bytes that are not UTF-8."
 builtin HttpWire.wait forms=1
   HttpWire.wait(server: HttpServer) -> Result[Void] shape=(Opaque(HttpServer)) -> Result(Void) rule=Plain impl="HttpWire.wait" effects=["network"] desc="Internal to std/http: wait until the server is closed."
 builtin IO.eof? forms=1
@@ -498,8 +496,9 @@ record HttpRequest method: String, target: String, path: String, headers: List(S
 record HttpResponse status: Int, headers: List(Struct(Header)), body: String
 record HttpServerOptions request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int
 record HttpWire.Chunk done: Bool, next: Int, runs: List(Int), state: Int, remaining: Int, size: Int, line: Int, block: Int, count: Int, name: String, name_length: Int, total: Int, limit: Int
-record HttpWire.Head complete: Bool, used: Int, method: String, target: String, path: String, headers: List(Struct(Header)), length: Int, chunked: Bool, expect_continue: Bool
-record HttpWire.Text text: String, carry: List(Int), bytes: Int
+record HttpWire.Head method: String, target: String, path: String, headers: List(Struct(Header)), length: Int, chunked: Bool, expect_continue: Bool, buffered: Int, status: Int, reason: String
+record HttpWire.Reply head: List(Int), closes: Bool
+record HttpWire.Text text: String, carry: List(Int), bytes: Int, valid: Bool
 record LogEvent level: Enum(LogLevel, []), message: String, fields: Map(String, String), time_ms: Int, task: Int
 record ProcessOutput stdout: String, stderr: String, truncated: Bool
 enum Await parameters=["T"] variants=Done(Var(T)) | TimedOut

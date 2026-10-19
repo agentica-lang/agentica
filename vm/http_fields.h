@@ -36,5 +36,7 @@ agc_value agc_http_error_result(const char *prefix, const char *reason);
    character, which comes back as the carry, and bytes, the count read. An
    error result when the text is not UTF-8. */
 agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes);
+agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit, size_t buffered);
+int64_t agc_http_max_body(agc_vm *vm, agc_value v, uint32_t span);
 
 #endif

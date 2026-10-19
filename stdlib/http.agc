@@ -10,6 +10,8 @@ FRAME_BYTES = 512
 SMALL_BODY = 16384
 TEXT_BYTES = 1048576
 BAD_TEXT = "400 request body is not valid UTF-8"
+# The least time an error answer gets to be sent, even past the request deadline.
+ANSWER_MS = 100
 
 struct Target
   scheme: String
@@ -314,63 +316,59 @@ def serve(socket: Socket, service: Service) -> Void
   end
 end
 
-# One whole request, from the bytes left over from the last one and then the socket. The first byte may take
-# first_ms; then the rest of the request has request_timeout_ms. A request that breaks the rules gets its error answer
-# here, and the result is the error.
+# One whole request. rest holds the bytes the last chunked body read past its end. The first byte may take first_ms;
+# then the rest of the request has request_timeout_ms. A request that breaks the rules gets its error answer here, and
+# the result is the error.
 def read_request(socket: Socket, rest: List[Int], first_ms: Int, options: HttpServerOptions) -> Result[Incoming]
-  data = rest
-  if List.size(data) == 0
-    data = try TCP.recv_bytes(socket, READ_BYTES, first_ms)
-    if List.size(data) == 0
+  first = rest
+  if List.size(first) == 0
+    first = try TCP.recv_bytes(socket, 1, first_ms)
+    if List.size(first) == 0
       return error("network: end of input")
     end
   end
   deadline = Time.monotonic_ms() + options.request_timeout_ms
-  head = try request_head(socket, data, 0, deadline, options.max_body_bytes)
-  while not head.complete
-    data = List.concat(data, try more_request(socket, READ_BYTES, deadline))
-    head = try request_head(socket, data, head.used, deadline, options.max_body_bytes)
-  end
+  head = try read_head(socket, first, deadline, options.max_body_bytes)
   reading = Reading(socket: socket, head: head, deadline: deadline, max_body_bytes: options.max_body_bytes)
-  if head.expect_continue and (head.chunked or head.length > 0) and List.size(data) == head.used
+  if head.expect_continue and (head.chunked or head.length > 0) and head.buffered == 0
     try TCP.send(socket, "HTTP/1.1 100 Continue\r\n\r\n", try time_left(socket, deadline))
   end
   if head.chunked
-    return read_chunked(reading, data)
+    return read_chunked(reading)
   end
-  return read_length(reading, data)
+  return read_length(reading)
 end
 
-def request_head(
-  socket: Socket,
-  data: List[Int],
-  scanned: Int,
-  deadline: Int,
-  max_body_bytes: Int,
-) -> Result[HttpWire.Head]
-  case HttpWire.request_head(data, scanned, max_body_bytes)
-    ok(head) -> return ok(head)
-    error(problem) -> return error(refuse(socket, problem, deadline))
+# The head stays in the socket's input until it is whole (HttpWire.read_head), so a slow head holds no List here.
+def read_head(socket: Socket, rest: List[Int], deadline: Int, max_body_bytes: Int) -> Result[HttpWire.Head]
+  left = try time_left(socket, deadline)
+  case HttpWire.read_head(socket, rest, max_body_bytes, left)
+    ok(head) ->
+      if head.status > 0
+        return error(refuse(socket, head.status, head.reason, deadline))
+      end
+      return ok(head)
+    error(message) ->
+      TCP.close(socket)
+      return error(message)
   end
 end
 
-def read_length(reading: Reading, first: List[Int]) -> Result[Incoming]
-  at = reading.head.used
-  take = smaller(List.size(first) - at, reading.head.length)
-  body = try add_text(reading, Body(pieces: [], carry: []), first, [at, take])
-  left = reading.head.length - take
+def read_length(reading: Reading) -> Result[Incoming]
+  body = Body(pieces: [], carry: [])
+  left = reading.head.length
   while left > 0
     piece = try more_text(reading, body.carry, smaller(left, TEXT_BYTES))
     body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
     left = left - piece.bytes
   end
-  return finish(reading, body, List.drop(first, at + take))
+  return finish(reading, body, [])
 end
 
-def read_chunked(reading: Reading, first: List[Int]) -> Result[Incoming]
-  data = first
-  state = try next_chunk(reading, HttpWire.chunked(reading.max_body_bytes), data, reading.head.used)
-  body = try add_text(reading, Body(pieces: [], carry: []), data, state.runs)
+def read_chunked(reading: Reading) -> Result[Incoming]
+  data: List[Int] = []
+  state = HttpWire.chunked(reading.max_body_bytes)
+  body = Body(pieces: [], carry: [])
   while not state.done
     if state.remaining > 0
       # The rest of a chunk goes straight into text; only framing goes through the decoder.
@@ -380,49 +378,46 @@ def read_chunked(reading: Reading, first: List[Int]) -> Result[Incoming]
     else
       # A small read: chunk data past the framing is read as text above.
       data = try more_request(reading.socket, FRAME_BYTES, reading.deadline)
-      state = try next_chunk(reading, state, data, 0)
+      state = try next_chunk(reading, state, data)
       body = try add_text(reading, body, data, state.runs)
     end
   end
   return finish(reading, body, List.drop(data, state.next))
 end
 
-def next_chunk(reading: Reading, state: HttpWire.Chunk, data: List[Int], at: Int) -> Result[HttpWire.Chunk]
-  case HttpWire.chunk(state, data, at)
+def next_chunk(reading: Reading, state: HttpWire.Chunk, data: List[Int]) -> Result[HttpWire.Chunk]
+  case HttpWire.chunk(state, data, 0)
     ok(next) -> return ok(next)
-    error(problem) -> return error(refuse(reading.socket, problem, reading.deadline))
+    error(problem) -> return error(refuse_problem(reading.socket, problem, reading.deadline))
   end
 end
 
 # Adds the runs of data to the body text; an unfinished character waits in carry for the next bytes.
 def add_text(reading: Reading, body: Body, data: List[Int], runs: List[Int]) -> Result[Body]
-  case HttpWire.text(body.carry, data, runs)
-    ok(piece) -> return ok(Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry))
-    error(_) -> return error(refuse(reading.socket, BAD_TEXT, reading.deadline))
+  piece = HttpWire.text(body.carry, data, runs)
+  if not piece.valid
+    return error(refuse_problem(reading.socket, BAD_TEXT, reading.deadline))
   end
+  return ok(Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry))
 end
 
-# The next bytes of a Content-Length body, read straight into text.
+# The next bytes of a body, read straight into text.
 def more_text(reading: Reading, carry: List[Int], most: Int) -> Result[HttpWire.Text]
   left = try time_left(reading.socket, reading.deadline)
-  case HttpWire.read_text(reading.socket, most, carry, left)
-    ok(piece) ->
-      if piece.bytes == 0
-        TCP.close(reading.socket)
-        return error("http: connection closed before the request was complete")
-      end
-      return ok(piece)
-    error(message) ->
-      if message == "invalid UTF-8"
-        return error(refuse(reading.socket, BAD_TEXT, reading.deadline))
-      end
-      return error(message)
+  piece = try HttpWire.read_text(reading.socket, most, carry, left)
+  if not piece.valid
+    return error(refuse_problem(reading.socket, BAD_TEXT, reading.deadline))
   end
+  if piece.bytes == 0
+    TCP.close(reading.socket)
+    return error("http: connection closed before the request was complete")
+  end
+  return ok(piece)
 end
 
 def finish(reading: Reading, body: Body, rest: List[Int]) -> Result[Incoming]
   if List.size(body.carry) > 0
-    return error(refuse(reading.socket, BAD_TEXT, reading.deadline))
+    return error(refuse_problem(reading.socket, BAD_TEXT, reading.deadline))
   end
   head = reading.head
   request = HttpRequest(
@@ -462,23 +457,28 @@ def time_left(socket: Socket, deadline: Int) -> Result[Int]
   return ok(left)
 end
 
-# Answers a bad request, closes, and returns the error text. problem is "NNN reason" from HttpWire: NNN is the
-# answer's status.
-def refuse(socket: Socket, problem: String, deadline: Int) -> String
-  linger(socket, HttpWire.error_answer(String.to_int!(String.slice(problem, 0, 3))), deadline)
-  return "http: #{rest_of(problem, 4)}"
+# Answers a bad request, closes, and returns the error text.
+def refuse(socket: Socket, status: Int, reason: String, deadline: Int) -> String
+  linger(socket, HttpWire.error_answer(status), deadline)
+  return "http: #{reason}"
+end
+
+# refuse for a problem written "NNN reason" (HttpWire.chunk, BAD_TEXT): NNN is the answer's status.
+def refuse_problem(socket: Socket, problem: String, deadline: Int) -> String
+  return refuse(socket, String.to_int!(String.slice(problem, 0, 3)), rest_of(problem, 4), deadline)
 end
 
 # Sends text, closes the write side, and reads and drops input until the peer closes or deadline, so unread request
-# bytes cannot turn the close into a reset that loses the answer. Then it closes the socket.
+# bytes cannot turn the close into a reset that loses the answer. Then it closes the socket. The answer gets at least
+# ANSWER_MS even when the deadline has passed; only the drain is bound by the deadline.
 def linger(socket: Socket, text: String, deadline: Int) -> Void
-  case time_left(socket, deadline)
-    ok(left) ->
-      if text == "" or Result.ok?(TCP.send(socket, text, left))
-        HttpWire.close_write(socket)
-        drain(socket, deadline)
-      end
-    error(_) -> return
+  wait = deadline - Time.monotonic_ms()
+  if wait < ANSWER_MS
+    wait = ANSWER_MS
+  end
+  if text == "" or Result.ok?(TCP.send(socket, text, wait))
+    HttpWire.close_write(socket)
+    drain(socket, deadline)
   end
   TCP.close(socket)
 end
@@ -521,17 +521,25 @@ end
 # Writes one whole response with Content-Length. ok(false) when the request or the response asked to close: the
 # connection then closes as in linger.
 def write_response(socket: Socket, request: HttpRequest, response: HttpResponse, timeout: Int) -> Result[Bool]
-  head: List[Int] = []
   case HttpWire.encode_response(request, response, Time.now_ms())
-    ok(bytes) -> head = bytes
+    ok(reply) -> return send_response(socket, request, response, reply, timeout)
     error(reason) -> return error("http: invalid response: #{reason}")
   end
+end
+
+def send_response(
+  socket: Socket,
+  request: HttpRequest,
+  response: HttpResponse,
+  reply: HttpWire.Reply,
+  timeout: Int,
+) -> Result[Bool]
   deadline = Time.monotonic_ms() + timeout
   body = response.body
   if request.method == "HEAD"
     body = ""
   end
-  case String.from_bytes(head)
+  case String.from_bytes(reply.head)
     ok(text) ->
       if String.length(body) <= SMALL_BODY
         try TCP.send(socket, text + body, timeout)
@@ -540,12 +548,12 @@ def write_response(socket: Socket, request: HttpRequest, response: HttpResponse,
         try TCP.send(socket, body, try time_left(socket, deadline))
       end
     error(_) ->
-      try TCP.send_bytes(socket, head, timeout)
+      try TCP.send_bytes(socket, reply.head, timeout)
       if body != ""
         try TCP.send(socket, body, try time_left(socket, deadline))
       end
   end
-  if HttpWire.closes?(request.headers) or HttpWire.closes?(response.headers)
+  if reply.closes
     linger(socket, "", deadline)
     return ok(false)
   end

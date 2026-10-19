@@ -523,7 +523,6 @@ void agc_task_cancel(agc_vm *vm, agc_task *t);
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
-void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 /* Runs FN(DATA) on the I/O thread: at once where the caller is that thread (always while one thread plays both roles),
    else as a request in its inbox, after every request the caller posted before. A libuv step of a service that has no
    request of its own (the start of a stream write) goes through it. */

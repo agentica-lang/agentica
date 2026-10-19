@@ -30,7 +30,6 @@ struct waiter {
 
 static const char server_closed[] = "http: server is closed";
 
-
 static void settle(server *s) {
   if (!s->users) free(s);
 }

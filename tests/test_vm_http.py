@@ -350,6 +350,7 @@ def send_in_pieces(port, pieces):
             if k:
                 time.sleep(0.05)
             conn.sendall(piece)
+        conn.shutdown(socket.SHUT_WR)
         got = b""
         while chunk := conn.recv(65536):
             got += chunk
@@ -357,7 +358,9 @@ def send_in_pieces(port, pieces):
     return top.split(b" ")[1].decode(), body.decode()
 
 
-def test_server_reads_a_body_whose_utf8_character_is_split_across_reads_and_chunks(tmp_path, adopt):
+def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
+    """A head or body split across reads gets the same answer as one sent whole: a UTF-8 character split across
+    reads and chunks, a forbidden trailer split mid-name, and heads too large however slowly they arrive."""
     source = tmp_path / "server.agc"
     source.write_text(SERVER_PROGRAM, encoding="utf-8")
     vm = adopt(start_vm(compile_agc(source, tmp_path / "server.agcb"), CERTS, stdin=True))
@@ -371,5 +374,13 @@ def test_server_reads_a_body_whose_utf8_character_is_split_across_reads_and_chun
         "200", "POST /chunked ab\u00f1c")
     assert send_in_pieces(port, [length % 3 + b"ab", b"\xc3"])[0] == "400"
     assert send_in_pieces(port, [chunked + b"3\r\nab", b"\xc3\r\n0\r\n\r\n"])[0] == "400"
+    assert send_in_pieces(port, [chunked + b"0\r\nConte", b"nt-Length: 2\r\n\r\n"])[0] == "400"
+    many = b"GET / HTTP/1.1\r\nHost: x\r\n" + b"".join(b"X-%d: v\r\n" % k for k in range(101)) + b"\r\n"
+    assert send_in_pieces(port, [many[:300], many[300:900], many[900:]])[0] == "431"
+    unended = b"GET /" + b"a" * 80000
+    assert send_in_pieces(port, [unended[k:k + 20000] for k in range(0, len(unended), 20000)])[0] == "431"
+    filler = b"X-Fill: " + b"b" * 4000 + b"\r\n"
+    large = b"GET / HTTP/1.1\r\nHost: x\r\n" + filler * 20
+    assert send_in_pieces(port, [large[k:k + 9000] for k in range(0, len(large), 9000)])[0] == "431"
     vm.close_stdin()
     assert vm.wait() == 0, "the VM server finishes"

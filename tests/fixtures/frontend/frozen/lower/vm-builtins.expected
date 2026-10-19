@@ -37,13 +37,12 @@ HttpWire.client
 HttpWire.close_client
 HttpWire.close_server
 HttpWire.close_write
-HttpWire.closes?
 HttpWire.encode_response
 HttpWire.error_answer
 HttpWire.exchange
 HttpWire.local_port
+HttpWire.read_head
 HttpWire.read_text
-HttpWire.request_head
 HttpWire.server
 HttpWire.spawn
 HttpWire.text

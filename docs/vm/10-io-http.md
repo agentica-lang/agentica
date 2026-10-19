@@ -190,14 +190,13 @@ HttpWire.close_client(client: HttpClient) -> Void
 #### 10.7.2 As built: the server (20c)
 
 ```text
-HttpWire.request_head(data: List[Int], scanned: Int, max_body_bytes: Int) -> Result[HttpWire.Head]
 HttpWire.chunked(max_body_bytes: Int) -> HttpWire.Chunk
 HttpWire.chunk(state: HttpWire.Chunk, data: List[Int], from: Int) -> Result[HttpWire.Chunk]
 HttpWire.chunk_read(state: HttpWire.Chunk, bytes: Int) -> HttpWire.Chunk
-HttpWire.text(carry: List[Int], data: List[Int], runs: List[Int]) -> Result[HttpWire.Text]
+HttpWire.text(carry: List[Int], data: List[Int], runs: List[Int]) -> HttpWire.Text
+HttpWire.read_head(socket: Socket, rest: List[Int], max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Head]
 HttpWire.read_text(socket: Socket, max_bytes: Int, carry: List[Int], timeout_ms: Int) -> Result[HttpWire.Text]
-HttpWire.closes?(headers: List[Header]) -> Bool
-HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[List[Int]]
+HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[HttpWire.Reply]
 HttpWire.error_answer(status: Int) -> String
 HttpWire.close_write(socket: Socket) -> Void
 HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer
@@ -208,36 +207,43 @@ HttpWire.wait(server: HttpServer) -> Result[Void]
 HttpWire.local_port(server: HttpServer) -> Int
 ```
 
-- `vm/http_wire.c` holds the functions that take bytes and return records
-  (`HttpWire.Head`, `HttpWire.Chunk`, `HttpWire.Text`). These are std-only
-  record types: only a std module can name them, and they reserve no user
-  name. A `Chunk` holds the decoder's state between reads, and `chunk` checks
-  every field before it decodes. `vm/tcp.c` holds `read_text` (up to
+- `vm/http_wire.c` holds the functions that take bytes or records and return
+  records (`HttpWire.Chunk`, `HttpWire.Text`, `HttpWire.Reply`). These, with
+  `HttpWire.Head`, are std-only record types: only a std module can name them,
+  and they reserve no user name. A `Chunk` holds the decoder's state between
+  reads, and `chunk` checks every field before it decodes. `vm/tcp.c` holds the
+  reads: `read_head` (the head stays in the socket's input until it is whole,
+  is parsed only when a line ends, and only its bytes are taken; a bad head is a
+  `Head` with the answer's `status` and `reason`), `read_text` (up to
   `max_bytes` straight into text, with the UTF-8 check and the carry of an
-  unfinished character) and `close_write`. `vm/http_server.c` holds the task
-  group, on tcp.c's connection object. Header lists are shared with the client
-  in `vm/http_fields.c`.
+  unfinished character; `valid` is false for bytes that are not UTF-8) and
+  `close_write`. `vm/http_server.c` holds the task group, on tcp.c's connection
+  object. Header lists are shared with the client in `vm/http_fields.c`.
 - `std/http` reads a request: it waits up to `request_timeout_ms` (the first
   request) or `idle_timeout_ms` (later ones) for the first byte. On TLS that
   wait covers the handshake too. Then `request_timeout_ms`
   bounds the rest of the request. The checks run in this order: the parse
   errors of 10.6; an `Upgrade` header (501); an `Expect` other than
   `100-continue` (417); a `Content-Length` over `max_body_bytes` (413);
-  `100 Continue` if `Expect` asked and the body is still to come; the body and
-  its UTF-8 check (400). The head and chunk framing go through
-  `request_head` and `chunk`; body data past them goes through `read_text`.
+  `100 Continue` if `Expect` asked and no body byte is buffered; then the body,
+  whose bytes are checked as UTF-8 as they arrive, so bytes that can never be
+  UTF-8 get 400 at once, before a later framing error or the end of input. The
+  head goes through `read_head`, chunk framing through `chunk` on 512-byte
+  reads, and body data through `read_text`.
   Every error answer is `error_answer`: `HTTP/1.1 CODE REASON` with
-  `Content-Length: 0` and `Connection: close`. The write side is then shut
+  `Content-Length: 0` and `Connection: close`. It is sent within the request
+  deadline, or within 100 ms when that has passed. The write side is then shut
   (`close_write`), and input is read and dropped until the peer closes or the
   deadline, so unread request bytes cannot turn the close into a reset that
   loses the answer. The read returns `error("http: <reason>")`. EOF before the
   first byte is `network: end of input`. EOF mid-request is
   `http: connection closed before the request was complete`. The deadline
   returns `network: operation timed out` with no answer. TCP reads only while
-  a reader waits, so pipelined bytes cannot grow the buffer past one read;
-  bytes past one request are kept for the next.
-- The response head is `encode_response`, built before anything is written.
-  The status must
+  a reader waits, so pipelined bytes cannot grow the buffer past one read.
+  Bytes past one request stay in the socket's input for the next, except the
+  bytes a chunked body's last read took, which `read_head` puts back.
+- The response head is `encode_response`, built before anything is written,
+  with whether the connection closes after it. The status must
   be 200 to 599. A handler's `Content-Length` or `Transfer-Encoding` is refused
   (`Content-Length and Transfer-Encoding are set by the server`), and a 204 or
   304 gets no body. A `Date` header is added unless the handler set one, and the

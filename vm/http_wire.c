@@ -23,11 +23,12 @@ typedef struct {
   const char *reason;
 } status_text;
 
-static const char *const head_fields[] = {"complete", "used",    "method",  "target",         "path",
-                                          "headers",  "length", "chunked", "expect_continue"};
+static const char *const head_fields[] = {"method",          "target",   "path",   "headers", "length", "chunked",
+                                          "expect_continue", "buffered", "status", "reason"};
 static const char *const chunk_fields[] = {"done", "next",  "runs", "state",       "remaining", "size", "line",
                                            "block", "count", "name", "name_length", "total",     "limit"};
-static const char *const text_fields[] = {"text", "carry", "bytes"};
+static const char *const text_fields[] = {"text", "carry", "bytes", "valid"};
+static const char *const reply_fields[] = {"head", "closes"};
 static const char *const framing_headers[] = {"content-length", "transfer-encoding"};
 static const char *const week_days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 static const char *const months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -86,15 +87,6 @@ static bool copy_bytes(agc_vm *vm, const agc_list *data, size_t from, size_t n, 
   return true;
 }
 
-static bool has_lf(agc_vm *vm, const agc_list *data, size_t from) {
-  agc_list_cursor cursor;
-  agc_value item;
-  agc_list_cursor_begin(&cursor, data, from);
-  while (agc_list_cursor_next(&cursor, &item))
-    if (agc_as_int(vm, item) == '\n') return true;
-  return false;
-}
-
 static agc_value byte_list(const uint8_t *data, size_t n) {
   agc_list_builder out;
   agc_list_builder_sized(&out, n);
@@ -112,7 +104,7 @@ static agc_value ascii(const uint8_t *data, size_t n) {
   return agc_string_value(agc_make_string((const char *)data, n, n));
 }
 
-static int64_t max_body(agc_vm *vm, agc_value v, uint32_t span) {
+int64_t agc_http_max_body(agc_vm *vm, agc_value v, uint32_t span) {
   int64_t limit = agc_as_int(vm, v);
   if (limit < 1 || limit > MAX_BODY) misuse(vm, "HttpWire: max_body_bytes must be 1..67108864", span);
   return limit;
@@ -128,34 +120,44 @@ static size_t count_named(const agc_http_head *head, const char *name, agc_http_
   return n;
 }
 
-static agc_value incomplete_head(agc_vm *vm, size_t used) {
-  agc_struct *h = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Head", head_fields, 9), 9);
-  agc_value empty = agc_string_value(agc_make_string("", 0, 0));
-  h->fields[0] = agc_bool(false);
-  h->fields[1] = agc_int((int64_t)used);
-  h->fields[2] = h->fields[3] = h->fields[4] = empty;
-  h->fields[5] = empty_list();
-  h->fields[6] = agc_int(0);
-  h->fields[7] = h->fields[8] = agc_bool(false);
+static agc_struct *head_record(agc_vm *vm) {
+  return agc_new_struct(agc_builtin_struct(vm, "HttpWire.Head", head_fields, 10), 10);
+}
+
+/* A head refused with this answer status and reason; the other fields are
+   empty. */
+static agc_value refused_head(agc_vm *vm, int code, const char *reason) {
+  agc_struct *h = head_record(vm);
+  agc_value empty = ascii((const uint8_t *)"", 0);
+  h->fields[0] = h->fields[1] = h->fields[2] = empty;
+  h->fields[3] = empty_list();
+  h->fields[4] = h->fields[7] = agc_int(0);
+  h->fields[5] = h->fields[6] = agc_bool(false);
+  h->fields[8] = agc_int(code);
+  h->fields[9] = ascii((const uint8_t *)reason, strlen(reason));
   return agc_result_value(true, agc_struct_value(h));
 }
 
-/* The checks of docs/vm/10-io-http.md §10.7.3 in their order: the parse
-   errors, Upgrade, Expect, then a Content-Length over the limit. */
-static agc_value request_head(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit) {
+/* The HttpWire.Head of the request head at the start of buf, with the checks
+   of docs/vm/10-io-http.md §10.7.3 in their order: the parse errors, Upgrade,
+   Expect, then a Content-Length over the limit; a refused head has the answer's
+   status and reason. A head still incomplete means the input ended or failed before its end.
+   buffered is the count of input bytes after the head. */
+agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit, size_t buffered) {
   agc_http_head head;
   size_t used;
   agc_http_error error;
   agc_http_status status = agc_http_parse_request_head(buf, len, &head, &used, &error);
-  if (status == AGC_HTTP_INCOMPLETE) return incomplete_head(vm, len);
-  if (status == AGC_HTTP_ERROR) return parse_error(error);
+  if (status == AGC_HTTP_INCOMPLETE) return agc_error_value("http: connection closed before the request was complete");
+  if (status == AGC_HTTP_ERROR) return refused_head(vm, agc_http_error_code(error), agc_http_error_text(error));
   agc_http_slice value = {NULL, 0};
-  if (count_named(&head, "upgrade", &value)) return status_error(501, "protocol upgrades are unsupported");
+  if (count_named(&head, "upgrade", &value)) return refused_head(vm, 501, "protocol upgrades are unsupported");
   size_t expects = count_named(&head, "expect", &value);
   if (expects > 1 || (expects == 1 && !agc_http_named(value, "100-continue")))
-    return status_error(417, "unsupported expectation");
+    return refused_head(vm, 417, "unsupported expectation");
   bool chunked = head.frame == AGC_HTTP_FRAME_CHUNKED;
-  if (!chunked && head.length > limit) return parse_error(AGC_HTTP_ERR_TOO_LARGE);
+  if (!chunked && head.length > limit)
+    return refused_head(vm, agc_http_error_code(AGC_HTTP_ERR_TOO_LARGE), agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
   agc_http_fields fields = {0};
   agc_http_fields_keep(&fields, &head);
   agc_value headers = agc_http_header_list(vm, &fields);
@@ -163,33 +165,18 @@ static agc_value request_head(agc_vm *vm, const uint8_t *buf, size_t len, uint64
   agc_http_fields_free(&fields);
   const uint8_t *query = memchr(head.target.data, '?', head.target.len);
   size_t path_len = query ? (size_t)(query - head.target.data) : head.target.len;
-  agc_struct *h = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Head", head_fields, 9), 9);
-  h->fields[0] = agc_bool(true);
-  h->fields[1] = agc_int((int64_t)used);
-  h->fields[2] = ascii(head.method.data, head.method.len);
-  h->fields[3] = ascii(head.target.data, head.target.len);
-  h->fields[4] = ascii(head.target.data, path_len);
-  h->fields[5] = headers;
-  h->fields[6] = agc_int(chunked ? 0 : (int64_t)head.length);
-  h->fields[7] = agc_bool(chunked);
-  h->fields[8] = agc_bool(expects == 1);
+  agc_struct *h = head_record(vm);
+  h->fields[0] = ascii(head.method.data, head.method.len);
+  h->fields[1] = ascii(head.target.data, head.target.len);
+  h->fields[2] = ascii(head.target.data, path_len);
+  h->fields[3] = headers;
+  h->fields[4] = agc_int(chunked ? 0 : (int64_t)head.length);
+  h->fields[5] = agc_bool(chunked);
+  h->fields[6] = agc_bool(expects == 1);
+  h->fields[7] = agc_int((int64_t)(len - used + buffered));
+  h->fields[8] = agc_int(0);
+  h->fields[9] = ascii((const uint8_t *)"", 0);
   return agc_result_value(true, agc_struct_value(h));
-}
-
-/* HttpWire.request_head(data, scanned, max_body_bytes): data[scanned..] are
-   the bytes not yet searched for a line end, so a head that arrives a byte
-   at a time is parsed only when a line is complete. */
-static agc_value builtin_request_head(agc_vm *vm, agc_value *args, uint32_t span) {
-  const agc_list *data = agc_as_list(vm, args[0]);
-  int64_t scanned = agc_as_int(vm, args[1]);
-  uint64_t limit = (uint64_t)max_body(vm, args[2], span);
-  size_t len = agc_list_len(data);
-  if (!range_ok(scanned, 0, len)) misuse(vm, "HttpWire.request_head: scanned is out of range", span);
-  if (len <= AGC_HTTP_MAX_HEAD && !has_lf(vm, data, (size_t)scanned)) return incomplete_head(vm, len);
-  size_t window = len < AGC_HTTP_MAX_HEAD + 1 ? len : AGC_HTTP_MAX_HEAD + 1;
-  uint8_t *buf = agc_alloc_atomic(window ? window : 1);
-  if (!copy_bytes(vm, data, 0, window, buf)) misuse(vm, "HttpWire.request_head: data must be bytes", span);
-  return request_head(vm, buf, window, limit);
 }
 
 static agc_struct *chunk_record(agc_vm *vm) {
@@ -223,7 +210,7 @@ static agc_value between_reads(agc_vm *vm, const agc_http_body *b) {
 
 static agc_value builtin_chunked(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_http_body b;
-  agc_http_body_init(&b, AGC_HTTP_FRAME_CHUNKED, 0, (uint64_t)max_body(vm, args[0], span));
+  agc_http_body_init(&b, AGC_HTTP_FRAME_CHUNKED, 0, (uint64_t)agc_http_max_body(vm, args[0], span));
   return between_reads(vm, &b);
 }
 
@@ -313,19 +300,25 @@ static size_t whole_prefix(const uint8_t *s, size_t len) {
   for (size_t back = 1; back <= 3 && back <= len; back++) {
     uint8_t c = s[len - back];
     if ((c & 0xC0) == 0x80) continue;
-    return c >= 0xC0 && agc_utf8_width(c) > back ? len - back : len;
+    /* 0xC0, 0xC1 and 0xF5..0xFF never start a valid sequence: kept in the
+       prefix, they fail the decoding at once. */
+    return c >= 0xC2 && c <= 0xF4 && agc_utf8_width(c) > back ? len - back : len;
   }
   return len;
 }
 
+/* The HttpWire.Text of buf: valid is false, with empty text, when buf is not
+   UTF-8 up to an unfinished last character. */
 agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes) {
   size_t whole = whole_prefix(buf, len), chars;
-  if (!agc_utf8_chars(buf, whole, &chars)) return agc_error_value("invalid UTF-8");
-  agc_struct *t = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Text", text_fields, 3), 3);
-  t->fields[0] = agc_string_value(agc_make_string((const char *)buf, whole, chars));
-  t->fields[1] = byte_list(buf + whole, len - whole);
+  bool valid = agc_utf8_chars(buf, whole, &chars);
+  agc_struct *t = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Text", text_fields, 4), 4);
+  t->fields[0] = valid ? agc_string_value(agc_make_string((const char *)buf, whole, chars))
+                       : agc_string_value(agc_make_string("", 0, 0));
+  t->fields[1] = valid ? byte_list(buf + whole, len - whole) : empty_list();
   t->fields[2] = agc_int((int64_t)bytes);
-  return agc_result_value(true, agc_struct_value(t));
+  t->fields[3] = agc_bool(valid);
+  return agc_struct_value(t);
 }
 
 /* HttpWire.text(carry, data, runs): the text of carry followed by the runs of
@@ -355,11 +348,6 @@ static agc_value builtin_text(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_http_text_value(vm, buf, total, total - kept);
 }
 
-static agc_value builtin_closes(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return agc_bool(agc_http_list_closes(vm, agc_as_list(vm, args[0])));
-}
-
 static bool has_named(agc_vm *vm, const agc_list *headers, const char *wanted) {
   agc_list_cursor cursor;
   agc_value item;
@@ -382,12 +370,13 @@ static void put_date(agc_http_bytes *b, int64_t now_ms) {
 /* The head of the response to request: the body itself is std/http's to send,
    and only when the method is not HEAD (a 204 or 304 body is refused here). */
 static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct *request,
-                                 const agc_struct *response, int64_t now_ms) {
+                                 const agc_struct *response, int64_t now_ms, bool *closes) {
   if (request->n != 5 || response->n != 3) return "invalid response";
   int64_t status = agc_as_int(vm, response->fields[0]);
   const agc_list *headers = agc_as_list(vm, response->fields[1]);
   const agc_string *body = agc_as_string(vm, response->fields[2]);
   bool close = agc_http_list_closes(vm, agc_as_list(vm, request->fields[3])) || agc_http_list_closes(vm, headers);
+  *closes = close;
   if (status < 200 || status > 599) return "the status must be 200..599";
   bool bodyless = status == 204 || status == 304;
   if (bodyless && body->bytes) return "a 204 or 304 response cannot have a body";
@@ -409,12 +398,23 @@ static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct
   return NULL;
 }
 
+/* HttpWire.encode_response: the head bytes, and whether the connection closes
+   after this response (either side said Connection: close). */
 static agc_value builtin_encode_response(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_http_bytes out = {0};
+  bool closes = false;
   const char *bad = response_head(vm, &out, agc_as_struct(vm, args[0]), agc_as_struct(vm, args[1]),
-                                  agc_as_int(vm, args[2]));
-  agc_value result = bad ? agc_error_value(bad) : agc_result_value(true, byte_list(out.data, out.len));
+                                  agc_as_int(vm, args[2]), &closes);
+  agc_value result = agc_void();
+  if (bad) {
+    result = agc_error_value(bad);
+  } else {
+    agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Reply", reply_fields, 2), 2);
+    r->fields[0] = byte_list(out.data, out.len);
+    r->fields[1] = agc_bool(closes);
+    result = agc_result_value(true, agc_struct_value(r));
+  }
   agc_charge(vm, out.len / AGC_COST_BYTES);
   free(out.data);
   return result;
@@ -430,12 +430,10 @@ static agc_value builtin_error_answer(agc_vm *vm, agc_value *args, uint32_t span
 }
 
 const agc_builtin agc_http_wire_builtins[] = {
-  {"HttpWire.request_head", 3, builtin_request_head, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"HttpWire.chunked", 1, builtin_chunked, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"HttpWire.chunk", 3, builtin_chunk, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"HttpWire.chunk_read", 2, builtin_chunk_read, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"HttpWire.text", 3, builtin_text, AGC_NATIVE_NONE, AGC_COST_NONE, false},
-  {"HttpWire.closes?", 1, builtin_closes, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"HttpWire.encode_response", 3, builtin_encode_response, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"HttpWire.error_answer", 1, builtin_error_answer, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };

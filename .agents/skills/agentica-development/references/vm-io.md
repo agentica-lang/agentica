@@ -127,11 +127,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         before the cancel
       - a queued job is never swept)
     - `agc_io_detached` (phase 24: a job with no task from the start, for a
-      crashed task's file close), `agc_io_extend` (20c: restart a job's own
-      timer once), handle ownership (24b: `agc_own` records a handle's owner
-      and close and puts it on the owner task's list (`owned_prev` and
-      `owned_next` in the resource, `owned` in the task), `agc_unregister`
-      takes it off,
+      crashed task's file close), handle ownership (24b: `agc_own` records a
+      handle's owner and close and puts it on the owner task's list
+      (`owned_prev` and `owned_next` in the resource, `owned` in the task),
+      `agc_unregister` takes it off,
       `agc_owned_of` finds the owned resource of a handle value, `agc_hand_over`
       moves it to another task, `agc_close_owned(vm, t)` closes what a task
       still owns when it ends), `close_pending` runs a file's pending close

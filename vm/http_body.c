@@ -187,7 +187,9 @@ static int hex(uint8_t c) {
 }
 
 static void size_done(agc_http_body *b) {
-  if (b->size > b->limit - b->len) {
+  /* len <= limit holds for a decoder this file built; the first test keeps a
+     restored one (HttpWire.chunk) from wrapping the subtraction. */
+  if (b->len > b->limit || b->size > b->limit - b->len) {
     fail(b, AGC_HTTP_ERR_TOO_LARGE);
     return;
   }

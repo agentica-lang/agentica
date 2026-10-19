@@ -85,13 +85,18 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/http_wire.c`
   - **Owns:** the `HttpWire` functions std/http's server reads and writes with
-    (Linux and macOS; stubs on Windows): `request_head`, `chunked`, `chunk`,
-    `chunk_read`, `text`, `closes?`, `encode_response` and `error_answer`. No
-    I/O and no state: each takes bytes or a record and returns a std-only record
-    (`HttpWire.Head`, `HttpWire.Chunk`, `HttpWire.Text`). `chunk` rebuilds the
-    decoder from a `Chunk` and checks every field first. `agc_http_text_value`
-    builds a `Text` for `HttpWire.read_text` in `vm/tcp.c`, which reads body
-    bytes straight into text, next to `HttpWire.close_write`.
+    (Linux and macOS; stubs on Windows): `chunked`, `chunk`, `chunk_read`,
+    `text`, `encode_response` and `error_answer`. No I/O and no state: each
+    takes bytes or a record and returns a std-only record (`HttpWire.Chunk`,
+    `HttpWire.Text`, `HttpWire.Reply`). `chunk` rebuilds the decoder from a
+    `Chunk` and checks every field first (`vm/tests/http_wire_test.c`).
+    `agc_http_head_value` and `agc_http_text_value` build the `Head` and `Text`
+    of the reads in `vm/tcp.c`: `HttpWire.read_head` (the head stays in the
+    input until it is whole, with a scan hint so it is parsed once per line;
+    `rest` goes back in front first, `agc_inbuf_unread`) and
+    `HttpWire.read_text`, next to `HttpWire.close_write`. Each read has its
+    readiness test (`head_ready`), its cut out of the input (`cut_head`,
+    `cut_text`) and the value built from the cut (`head_value`, `text_value`).
 
 - **Path:** `vm/http_server.c`
   - **Owns:** The `HttpWire` server task group (Linux and macOS; stubs on
@@ -238,24 +243,26 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     the stream ended or failed, and takes them out with `agc_inbuf_take`
   - the trace line of a spawn has `channel=`
 - `stdlib/http.agc` reads requests and writes responses (§10.7.2)
-  - the head through `HttpWire.request_head` on 64 KiB `TCP.recv_bytes`
-    reads; the order of `docs/vm/10-io-http.md` §10.7.3 (parse errors,
-    `Upgrade` 501, `Expect` 417, the `Content-Length` limit 413, then
-    `100 Continue`, then the body and its UTF-8 check) is in `request_head`
+  - the first byte through a 1-byte `TCP.recv_bytes` (its own wait), then the
+    head through `HttpWire.read_head`; the order of `docs/vm/10-io-http.md`
+    §10.7.3 (parse errors, `Upgrade` 501, `Expect` 417, the `Content-Length`
+    limit 413, then `100 Continue`, then the body with its UTF-8 check as the
+    bytes arrive) is in `agc_http_head_value`
   - a `Content-Length` body through `HttpWire.read_text`; a chunked one through
     `HttpWire.chunk` on 512-byte reads, with chunk data past the framing read
     by `read_text` and counted by `chunk_read`
   - every error answer is `HttpWire.error_answer`, then the lingering close
     (`close_write`, drop input until the peer closes or the deadline, so no
     reset loses the answer)
-  - bytes past one request are kept for the next; TCP reads only while a
-    reader waits, so pipelined bytes cannot pile up
+  - bytes past one request stay in the input for the next (a chunked body's
+    last read gives them back as `rest`); TCP reads only while a reader waits,
+    so pipelined bytes cannot pile up
   - `HttpWire.encode_response` builds the head first (status 200..599, no body
     on 204 and 304 or for `HEAD`, `Content-Length` and `Transfer-Encoding`
     managed, a `Date` header; when the request or response says
     `Connection: close` (`agc_http_list_closes`), the handler's `Connection`
-    headers are dropped for one `Connection: close`), or gives the reason
-    without writing
+    headers are dropped for one `Connection: close`) and says whether the
+    connection closes, or gives the reason without writing
 - `vm/http_server.c`
   - `HttpWire.server`, `accept`, `spawn`, `close_server`, `wait` and
     `local_port` (`agc_http_server_builtins`, Linux and macOS, a stub table
