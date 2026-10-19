@@ -495,8 +495,9 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
 - **TSan covers the shared code.** `make vm-tsan` builds the VM without libgc
   (`TSAN=1`, `AGC_NO_GC`; TSan and Boehm's stop-the-world do not mix) and runs
   the C tests that use more than one thread: the inbox, the set-once outcome
-  and the count, the run queue, the wake against the park, and a job on the
-  loop with a request from another thread.
+  and the count, the run queue, the wake and the cancel against the park, a job
+  on the loop with a request from another thread, `rt->sync`, and the output
+  locks.
 - **The task is recorded before the job starts.** `start_job` sets `r->task` and
   `t->parked` before it posts START, so a completion that follows at once
   finds the task.
