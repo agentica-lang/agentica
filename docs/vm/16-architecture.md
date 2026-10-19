@@ -578,9 +578,9 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     `Path`) are not marked. A builtin that touches the task tree, a channel,
     the logger table, a handle's FIFO or stdin is marked, and so is every
     `IO` row that reads stdin. The same interpreter takes the lock around the
-    steps of a stepper, and `resume` (`vm/task.c`) around the halves of a job
-    whose kind says `locked` (`agc_io_kind.locked`); the ending of a task takes
-    it in `agc_task_end_turn` and `agc_task_next`. The output builtins are not
+    steps of a stepper, and `run_half` (`vm/loop.c`) around the halves of a
+    job whose kind says `locked` (`agc_io_kind.locked`); the ending of a task
+    takes it in `agc_task_end_turn` and `agc_task_next`. The output builtins are not
     marked: a stream has its own lock, taken inside `vm/output.c`.
   - The lock nests. A scheduler counts its depth (`vm->sync_depth`) and takes
     and drops the mutex at the outer level, so a cancel that wakes a task that
@@ -598,14 +598,25 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     every lock on. `make test-shared` (a step of CI) runs the binary test
     modules that way, and in that mode the lock placement is checked, not
     only exercised: `agc_lock_drop` aborts when the caller is not the owner,
-    `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of
-    the shared lists (`finish_task`, `agc_task_wake_all`, `agc_task_cancel`,
-    the end of a cancelled task, the hand-on of a handle, the stdin waiters, a
-    channel leave) runs without the lock, and `agc_task_next` fails when a turn
-    ended with the lock held. `tests/test_vm_shared.py` holds the programs for
-    the paths the other modules do not reach.
-    Not yet under the lock: the profiling counters, the timers and the I/O
-    thread's side of the handles; the later PRs of the plan cover those.
+    `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when one of these
+    runs without the lock: `finish_task`, `agc_task_wake_all`,
+    `agc_task_cancel`, the end of a cancelled task, the link of a task to its
+    parent (`adopt`, so every spawn), a channel's waiter queues (the enqueue,
+    the pop and the leave), the writers of the logger table (`set_level`,
+    `install_default`, `attach`, `detach`), a handle's waiters, holder and
+    `next_owner` (the hand-on, the wait, a job start on a handle, the closes of
+    files) and the stdin waiters. `agc_task_next` fails when a turn ended with
+    the lock held. `vm/tests/sync_test.c` checks the marks: every row of the
+    task, `Task.map`, channel, logger, process, duplex, TCP and HTTP tables is
+    marked, no row of the String, number and JSON tables is, and the core and
+    `File` tables are checked by row. `tests/test_vm_shared.py` holds the
+    programs for the paths the other modules do not reach.
+    Not yet under the lock: the profiling counters, the timers, the I/O
+    thread's side of the handles, `rt->outcome` (written by `agc_exit` and
+    `agc_fail` without it), and the owner of a stream's lock, which is recorded
+    on the stream's own `vm` (`s->vm`, in `agc_notice_end` and `settle`), not
+    on the scheduler that prints; 3c passes the calling scheduler through
+    `agc_notice` and `settle`. The later PRs of the plan cover those.
 - **The order of PR 3 of issue #345.** 3a (the blocking pop, the cancel by
   claim and these locks), 3b (the context split of the scheduler and
   per-scheduler timers), 3c (threads, net, pollers and the standard streams;

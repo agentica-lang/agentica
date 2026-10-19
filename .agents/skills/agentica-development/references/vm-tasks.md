@@ -34,14 +34,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     table says `true` or `false`), a stepper step, the halves of a job whose
     kind says `locked`, and each end of a task; never hold it across a park or
     a turn. Order: sync, a stream's lock, then the inbox's and the run queue's.
-    Held checks: `agc_sync_assert` in every mutator of the shared lists fails
-    the run when a shared VM calls it without the lock, and `agc_task_next`
-    fails if a turn ended with it held. `agc_share` turns all of it on;
+    Held checks: `agc_sync_assert` fails the run when a shared VM reaches
+    one of the checked mutators without the lock (the list is in
+    `docs/vm/16-architecture.md` §16.9: the task tree, a channel's waiter
+    queues, the logger table, a handle's waiters, holder and `next_owner`,
+    stdin's waiters), and `agc_task_next` fails if a turn ended with it held. `agc_share` turns all of it on;
     `AGENTICA_VM_TEST_SHARED=1` does it for a whole run on one scheduler (test
     only): `make test-shared` runs the binary modules that way (CI runs it) and
     `tests/test_vm_shared.py` has the programs for the rarer paths. A new
     builtin that touches shared state must set `shared` to true in its row;
-    `vm/tests/sync_test.c` lists the rows that must be marked.
+    `vm/tests/sync_test.c` checks that every row of the task, `Task.map`,
+    channel, logger, process, duplex, TCP and HTTP tables is marked, that no
+    row of the String, number and JSON tables is, and chosen rows of the core
+    and `File` tables.
 
 - **Path:** `vm/inbox.c`
   - **Owns:** The inbox of the I/O thread (`agc_inbox_open`, `agc_inbox_post`,

@@ -1150,7 +1150,11 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
     r->task = vm->task;
     vm->task->parked = r;
   }
-  if (agc_is(context, AGC_T_HANDLE)) agc_as_handle(vm, context)->holder = r;
+  if (agc_is(context, AGC_T_HANDLE)) {
+    /* A handle's holder and next_owner change under rt->sync, like its waiters. */
+    agc_sync_assert(vm);
+    agc_as_handle(vm, context)->holder = r;
+  }
   post(j, REQ_START, timeout_ms);
   return r;
 }
@@ -1385,6 +1389,7 @@ static bool flushing(agc_vm *vm) {
 }
 
 static void close_files(agc_vm *vm) {
+  agc_sync_assert(vm);
   for (size_t k = registry_count(vm); k-- > 0;) {
     if (k >= registry_count(vm)) continue;
     agc_resource *r = vm->rt->registry->items[k];

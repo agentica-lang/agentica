@@ -121,7 +121,9 @@ static void canceller(void *arg) {
 
 /* Odd rounds start the cancel before the end of the turn, even rounds after it, and the spins move it through the
    first look at the flag, the commit and the second look. Without the second look a cancel that falls between the
-   first look and the commit leaves the task PARKED for ever, and this check fails. */
+   first look and the commit leaves the task PARKED for ever, and this check fails. The VM is solo on purpose (no
+   agc_share): rt->sync would serialize the cancel and the end of the turn, and the test is of the state protocol
+   (the CAS and the second look), which must hold without the lock. */
 static void test_cancel_against_park(void) {
   canceller_vm = vm;
   canceller_vm.task = NULL;

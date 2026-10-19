@@ -1,7 +1,7 @@
 /*
  * The locks of the shared scheduler state (docs/vm/16-architecture.md §16.9, "One coarse lock"): `rt->sync`, the one lock
- * for the task tree, the waiter lists, the channels, the Task.map groups and the logger table, the lock of each output
- * stream and the registry's. All are solo until agc_share: while one thread runs the VM they take nothing but a flag
+ * for the task tree, the waiter lists, the channels, the Task.map groups and the logger table, and the lock of each
+ * output stream. All are solo until agc_share: while one thread runs the VM they take nothing but a flag
  * test, which is what one scheduler costs. Core layer.
  *
  * It includes <uv.h> only for `uv_mutex_t`, as runq.c does (docs/vm/15-layers.md §15.5, rule 5).
