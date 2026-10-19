@@ -199,7 +199,20 @@ static void test_deferred_native_close(void) {
   timer.data = &done;
   assert(uv_timer_start(&timer, native_close, 50, 0) == 0);
   assert(agc_io_close(&vm));
-  assert(done && vm.loop == NULL);
+  assert(done && vm.rt->loop == NULL);
+}
+
+/* The idle step of a scheduler with a timer waits for the deadline even when nothing else is alive in the loop: it
+   returns only once the time has passed, not at once (a NOWAIT run would spin the scheduler). With alive_required the
+   same empty loop is not run at all. The margin allows for the loop's millisecond clock. */
+static void test_idle_wait_blocks_until_the_deadline(void) {
+  agc_vm vm;
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  assert(!agc_io_run_for(&vm, 50, true));
+  uint64_t start = agc_clock_ms();
+  assert(agc_io_run_for(&vm, 50, false));
+  assert(agc_clock_ms() - start >= 45);
+  assert(agc_io_close(&vm));
 }
 #endif
 
@@ -213,6 +226,7 @@ int main(void) {
   agc_io_init();
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   test_deferred_native_close();
+  test_idle_wait_blocks_until_the_deadline();
 #endif
 #if defined(__linux__) || defined(__APPLE__)
   test_reopen_preserves_flags_and_offsets();
@@ -237,7 +251,7 @@ int main(void) {
   assert(agc_io_close(&vm));
   assert(dropped == 1);
   assert(released == 500);
-  assert(vm.loop == NULL);
+  assert(vm.rt->loop == NULL);
   agc_resource *again = agc_register(&vm, &released, release_count);
   assert(again->slot == 0);
   agc_unregister(&vm, again);
@@ -250,17 +264,17 @@ int main(void) {
     if (!closed) pause_ms(10);
   }
   assert(closed);
-  assert(vm.loop == NULL);
+  assert(vm.rt->loop == NULL);
   /* The single binary runs two VMs in one process, one after the other: the second watches the stop signals with a
      wake handle of its own once the first is closed, and both closes settle. */
   agc_vm second;
   agc_vm_init(&second, NULL, stdout, stderr, INT64_MAX);
   agc_io_watch_stop(&vm, (int64_t)uv_os_getpid());
   assert(agc_io_close(&vm));
-  assert(vm.loop == NULL);
+  assert(vm.rt->loop == NULL);
   agc_io_watch_stop(&second, (int64_t)uv_os_getpid());
   assert(agc_io_close(&second));
-  assert(second.loop == NULL);
+  assert(second.rt->loop == NULL);
   agc_io_watch_stop(&vm, (int64_t)uv_os_getpid());
   assert(agc_io_close(&vm));
   assert(agc_io_stop_signal() == 0);

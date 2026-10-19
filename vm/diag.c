@@ -198,7 +198,7 @@ void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
     entries++;
     frames += line.repeat;
   }
-  if (entries == 0 || (frames < 2 && t == vm->main)) return;
+  if (entries == 0 || (frames < 2 && t == vm->rt->main)) return;
   bool cut = entries > AGC_STACK_HEAD + AGC_STACK_TAIL;
   stack->count = 0;
   stack->omitted = 0;

@@ -127,8 +127,7 @@ static void canceller(void *arg) {
 static void test_cancel_against_park(void) {
   canceller_vm = vm;
   canceller_vm.task = NULL;
-  canceller_vm.tasks_done = 0;
-  uint64_t base = vm.tasks_done;
+  uint64_t base = atomic_load(&vm.rt->tasks_done);
   uv_thread_t thread;
   assert(uv_thread_create(&thread, canceller, NULL) == 0);
   for (int round = 1; round <= CANCEL_ROUNDS; round++) {
@@ -147,7 +146,7 @@ static void test_cancel_against_park(void) {
     }
     while (atomic_load_explicit(&cancel_done, memory_order_acquire) < round) {}
     assert(t->state == AGC_TASK_DONE && t->cancelled);
-    assert(vm.tasks_done - base + canceller_vm.tasks_done == (uint64_t)round);
+    assert(atomic_load(&vm.rt->tasks_done) - base == (uint64_t)round);
     assert(agc_runq_pop(vm.rt->runq) == NULL);
   }
   assert(uv_thread_join(&thread) == 0);
@@ -159,7 +158,7 @@ static void test_cancel_against_park(void) {
 static void test_cancel_ready(void) {
   agc_runq *q = vm.rt->runq;
   vm.task = NULL;
-  uint64_t before = vm.tasks_done;
+  uint64_t before = atomic_load(&vm.rt->tasks_done);
   agc_task *queued = agc_new_task(&vm);
   agc_runq_push(q, queued);
   agc_task_cancel(&vm, queued);
@@ -168,11 +167,11 @@ static void test_cancel_ready(void) {
   agc_task *unpushed = agc_new_task(&vm);
   assert(unpushed->state == AGC_TASK_READY);
   agc_task_cancel(&vm, unpushed);
-  assert(unpushed->state == AGC_TASK_READY && unpushed->cancelled && vm.tasks_done == before + 1);
+  assert(unpushed->state == AGC_TASK_READY && unpushed->cancelled && atomic_load(&vm.rt->tasks_done) == before + 1);
   agc_task *plain = agc_new_task(&vm);
   agc_runq_push(q, unpushed);
   agc_runq_push(q, plain);
-  assert(agc_task_next(&vm) == plain && unpushed->state == AGC_TASK_DONE && vm.tasks_done == before + 2);
+  assert(agc_task_next(&vm) == plain && unpushed->state == AGC_TASK_DONE && atomic_load(&vm.rt->tasks_done) == before + 2);
   assert(agc_task_next(&vm) == NULL);
 
   agc_task *parked = agc_new_task(&vm);
@@ -180,7 +179,7 @@ static void test_cancel_ready(void) {
   assert(agc_task_claim(parked) && parked->state == AGC_TASK_READY && !agc_task_claim(parked));
   atomic_store(&parked->state, AGC_TASK_PARKED);
   agc_task_cancel(&vm, parked);
-  assert(parked->state == AGC_TASK_DONE && agc_runq_pop(q) == NULL && vm.tasks_done == before + 3);
+  assert(parked->state == AGC_TASK_DONE && agc_runq_pop(q) == NULL && atomic_load(&vm.rt->tasks_done) == before + 3);
 }
 
 int main(void) {

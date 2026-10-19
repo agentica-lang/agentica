@@ -124,7 +124,7 @@ static agc_value napped(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind nap_io = {NULL, napped, napped, NULL, false, "nap", NULL, false};
+static const agc_io_kind nap_io = {NULL, napped, napped, NULL, true, "nap", NULL, false};
 
 static agc_value nap_again(agc_vm *vm) {
   assert(++tries < 1000);
@@ -648,7 +648,7 @@ static void settle(agc_vm *vm) {
   assert(agc_io_close(vm));
 }
 
-static agc_task *reg_task(agc_vm *vm, uint32_t r) { return agc_as_task(vm, vm->main->regs[r]); }
+static agc_task *reg_task(agc_vm *vm, uint32_t r) { return agc_as_task(vm, vm->rt->main->regs[r]); }
 
 static size_t child_count(const agc_task *t) {
   size_t n = 0;
@@ -666,14 +666,14 @@ static void check_states(agc_vm *vm, int64_t n) {
       assert(a->state == AGC_TASK_PARKED && a->parked && handle->holder == a->parked);
       assert(handle->waiters == b && b->wait_next == c && c->wait_next == d && b->lock_wait == handle);
       assert(s->state == AGC_TASK_PARKED && s->waiters == w && w->awaiting == s);
-      assert(child_count(vm->main) == 6 && a->parent == vm->main);
+      assert(child_count(vm->rt->main) == 6 && a->parent == vm->rt->main);
       break;
     case 2:
       assert(cancelled(w) && !s->waiters);
       assert(cancelled(a) && !a->parked && handle->holder && handle->native);
       assert(cancelled(b) && handle->waiters == c && c->wait_next == d);
       assert(cancelled(s));
-      assert(child_count(vm->main) == 2 && done_calls == 0);
+      assert(child_count(vm->rt->main) == 2 && done_calls == 0);
       break;
     case 3:
       assert(done_calls == 1 && !handle->holder && handle->native);
@@ -685,7 +685,7 @@ static void check_states(agc_vm *vm, int64_t n) {
     default:
       assert(done_calls == 2 && d->state == AGC_TASK_DONE && !d->cancelled);
       assert(!handle->holder && !handle->next_owner && handle->native);
-      assert(!vm->main->children);
+      assert(!vm->rt->main->children);
       assert(mark_count == 2 && marks[0] == 5 && marks[1] == 4);
   }
 }
@@ -835,7 +835,7 @@ static void test_parked_await(void) {
 static void check_ready(agc_vm *vm, int64_t n) {
   (void)n;
   agc_task *r = reg_task(vm, 0);
-  assert(cancelled(r) && !r->next && !agc_test_ready_head(vm->rt->runq) && !vm->main->children);
+  assert(cancelled(r) && !r->next && !agc_test_ready_head(vm->rt->runq) && !vm->rt->main->children);
 }
 
 static void test_ready_then_await(void) {
@@ -938,10 +938,10 @@ static void check_children(agc_vm *vm, int64_t n) {
     assert(parent->state == AGC_TASK_DONE && !parent->parent && !parent->children);
     assert(grandchild && !grandchild->next_sibling && grandchild->parent == item);
     assert(grandchild->state == AGC_TASK_PARKED && item->state == AGC_TASK_PARKED);
-    assert(vm->main->children == item && !item->next_sibling);
+    assert(vm->rt->main->children == item && !item->next_sibling);
     return;
   }
-  assert(cancelled(item) && cancelled(grandchild) && !item->children && !vm->main->children);
+  assert(cancelled(item) && cancelled(grandchild) && !item->children && !vm->rt->main->children);
 }
 
 static void test_children_move(void) {
@@ -959,10 +959,10 @@ static void test_children_move(void) {
 static void check_channel(agc_vm *vm, int64_t n) {
   agc_task *a = reg_task(vm, 2), *b = reg_task(vm, 4);
   if (n == 1) {
-    assert(a->state == AGC_TASK_PARKED && a->parked && a->channel.channel && !a->channel.reserved);
-    assert(b->state == AGC_TASK_PARKED && b->parked && b->channel.channel == a->channel.channel);
+    assert(a->state == AGC_TASK_PARKED && a->timer.heap && a->channel.channel && !a->channel.reserved);
+    assert(b->state == AGC_TASK_PARKED && b->timer.heap && b->channel.channel == a->channel.channel);
   } else if (n == 2) {
-    assert(cancelled(a) && !a->parked && !a->channel.channel);
+    assert(cancelled(a) && !a->timer.heap && !a->channel.channel);
     assert(b->state == AGC_TASK_READY && b->channel.reserved && mark_count == 0);
   } else {
     const agc_result *r = agc_as_result(vm, b->result);
@@ -1002,9 +1002,9 @@ static void check_timed_cancel(agc_vm *vm, int64_t n) {
   agc_task *sleeper = reg_task(vm, 0), *waiter = reg_task(vm, 2);
   if (n == 1) {
     assert(sleeper->waiters == waiter && waiter->awaiting == sleeper && waiter->state == AGC_TASK_PARKED);
-    assert(waiter->parked && waiter->await_deadline);
+    assert(waiter->timer.heap && waiter->await_deadline);
   } else {
-    assert(!sleeper->waiters && !sleeper->waiters_tail && cancelled(waiter) && !waiter->awaiting && !waiter->parked);
+    assert(!sleeper->waiters && !sleeper->waiters_tail && cancelled(waiter) && !waiter->awaiting && !waiter->timer.heap);
     assert(sleeper->state == AGC_TASK_PARKED && mark_count == 1 && marks[0] == 5);
   }
 }
@@ -1021,8 +1021,8 @@ static void test_timed_await_cancel(void) {
 
 static void check_timed_end(agc_vm *vm, int64_t n) {
   agc_task *sleeper = reg_task(vm, 0), *quick = reg_task(vm, 2);
-  const agc_enum *outcome = agc_as_enum(vm, vm->main->regs[n == 1 ? 4 : 6]);
-  assert(!vm->main->awaiting && !vm->main->await_deadline && !vm->main->parked);
+  const agc_enum *outcome = agc_as_enum(vm, vm->rt->main->regs[n == 1 ? 4 : 6]);
+  assert(!vm->rt->main->awaiting && !vm->rt->main->await_deadline && !vm->rt->main->timer.heap);
   if (n == 1) {
     assert(outcome->variant == 1 && outcome->n == 0);
     assert(!sleeper->waiters && !sleeper->waiters_tail && sleeper->state == AGC_TASK_PARKED);
@@ -1316,7 +1316,7 @@ static void check_map_late_closes(agc_vm *vm, int64_t n) {
        will read, counts as observed. Item 2 is within its time. */
     assert(group->state == AGC_TASK_PARKED && closed_count == 2);
     assert(closed[0]->crashed && closed[0]->observed && !closed[1]->observed);
-    assert(vm->crash_count == 2 && vm->observed_count == 1 && vm->crashes == closed[1]);
+    assert(vm->rt->crash_count == 2 && vm->rt->observed_count == 1 && vm->rt->crashes == closed[1]);
     /* The late end of its closes settles nothing and wakes nobody. */
     finish_closes(vm, closed[0]);
     assert(group->state == AGC_TASK_PARKED);
@@ -1329,7 +1329,7 @@ static void check_map_late_closes(agc_vm *vm, int64_t n) {
     assert(timed_out(vm, agc_list_get(slots, 0)) && !timed_out(vm, agc_list_get(slots, 1)));
     assert(!agc_as_result(vm, agc_list_get(slots, 1))->ok && timed_out(vm, agc_list_get(slots, 2)));
     /* Every crash was read, by the caller or at the deadline, so none is reported at the end of the run. */
-    assert(vm->crash_count == 3 && vm->observed_count == 3 && !vm->crashes);
+    assert(vm->rt->crash_count == 3 && vm->rt->observed_count == 3 && !vm->rt->crashes);
     assert(closed[2]->closing == 2);
     finish_closes(vm, closed[2]);
   }

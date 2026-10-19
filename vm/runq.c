@@ -11,6 +11,9 @@
 
 #include <uv.h>
 
+/* The longest single condvar wait of agc_runq_wait_until. */
+#define WAIT_SLICE_MS UINT64_C(3600000)
+
 /* GC memory (agc_runq_new): the list links tasks, and a head that malloc memory held would hide them from the
    collector (docs/vm/16-architecture.md §16.5, "GC rule"). `solo` is true while one thread uses the queue: it takes no
    lock then, which is what one scheduler costs. */
@@ -19,6 +22,9 @@ struct agc_runq {
   uv_cond_t wake;
   agc_task *first, *last;
   bool solo, ended;
+  /* Work for a scheduler that is not a task (the end of a detached job, §16.11): set under the lock, so a waiter sees it
+     in its test, and read without it at the turn boundary of a busy scheduler. */
+  _Atomic bool nudged;
 };
 
 agc_runq *agc_runq_new(void) {
@@ -76,14 +82,61 @@ agc_task *agc_runq_pop(agc_runq *q) {
    A solo queue has no other thread to push, so it never waits and returns NULL when empty. The wait is a loop that
    tests the queue and the flag again: a condvar may return with no signal, and Boehm's suspend signals interrupt it.
    Both are tested under the lock that the pusher and agc_runq_end take, so no wake falls between the test and the
-   wait (§16.3, "Idle schedulers"). An ended queue returns NULL even if tasks are left: the run is over. */
+   wait (§16.3, "Idle schedulers"). An ended queue returns NULL even if tasks are left: the run is over. A nudge
+   (agc_runq_nudge) also ends the wait with NULL when no task is queued; the caller tells the two apart with
+   agc_runq_take_nudge. */
 agc_task *agc_runq_wait(agc_runq *q) {
   if (q->solo) return q->ended ? NULL : take_first(q);
   uv_mutex_lock(&q->lock);
-  while (!q->first && !q->ended) uv_cond_wait(&q->wake, &q->lock);
+  while (!q->first && !q->ended && !atomic_load_explicit(&q->nudged, memory_order_relaxed))
+    uv_cond_wait(&q->wake, &q->lock);
   agc_task *t = q->ended ? NULL : take_first(q);
   uv_mutex_unlock(&q->lock);
   return t;
+}
+
+/* The wait of an idle scheduler that has a timer: as agc_runq_wait, but it also returns NULL once agc_clock_ms reaches
+   DUE_MS, with no task (docs/vm/16-architecture.md §16.9, "Timers"). The caller tells the end, a nudge and the deadline
+   apart by asking the queue and the clock. Only the scheduler that owns the nearest deadline waits timed; the others wait
+   untimed, so one deadline does not wake every idle scheduler. A solo queue never waits. */
+agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms) {
+  if (q->solo) return q->ended ? NULL : take_first(q);
+  uv_mutex_lock(&q->lock);
+  while (!q->first && !q->ended && !atomic_load_explicit(&q->nudged, memory_order_relaxed)) {
+    uint64_t now = agc_clock_ms();
+    if (now >= due_ms) break;
+    /* At most an hour per wait, so the nanoseconds never overflow; the loop waits again for the rest. */
+    uint64_t left = due_ms - now < WAIT_SLICE_MS ? due_ms - now : WAIT_SLICE_MS;
+    (void)uv_cond_timedwait(&q->wake, &q->lock, left * UINT64_C(1000000));
+  }
+  agc_task *t = q->ended ? NULL : take_first(q);
+  uv_mutex_unlock(&q->lock);
+  return t;
+}
+
+/* Asks one scheduler to run the service work (agc_io_service). The flag is set under the lock and the signal comes
+   after the unlock; one waiter is enough, because the service takes the whole list. */
+void agc_runq_nudge(agc_runq *q) {
+  if (q->solo) {
+    atomic_store_explicit(&q->nudged, true, memory_order_relaxed);
+    return;
+  }
+  uv_mutex_lock(&q->lock);
+  atomic_store_explicit(&q->nudged, true, memory_order_relaxed);
+  uv_mutex_unlock(&q->lock);
+  uv_cond_signal(&q->wake);
+}
+
+bool agc_runq_nudged(const agc_runq *q) { return atomic_load_explicit(&q->nudged, memory_order_relaxed); }
+
+/* True for the one caller that clears the flag. It clears before it takes the work, and the work was published before
+   the nudge, so a nudge that falls after the clear is seen by the next waiter. */
+bool agc_runq_take_nudge(agc_runq *q) {
+  if (q->solo) return atomic_exchange_explicit(&q->nudged, false, memory_order_relaxed);
+  uv_mutex_lock(&q->lock);
+  bool was = atomic_exchange_explicit(&q->nudged, false, memory_order_relaxed);
+  uv_mutex_unlock(&q->lock);
+  return was;
 }
 
 /* The run is over: every agc_runq_wait returns NULL, now and later. The flag changes under the lock, as the wait

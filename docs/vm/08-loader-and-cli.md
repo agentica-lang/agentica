@@ -366,11 +366,14 @@ This note lists what the code chose.
   cut line ends with `...` after a whole escape or sequence.
 - Events by category: `sched` (spawn, turn, wake, cancel, `cancel_deferred`
   when a cancelled READY task is not in the queue and its popper ends it,
-  stall, fail, stop, exit); `io` (start, done, timeout, lock wait and handoff, stdin, poll, end; a
-  regular file as stdout or stderr shows as `kind=output` jobs, and a pipe,
+  stall, fail, stop, exit); `io` (start, done, timeout, lock wait and handoff,
+  stdin, poll, end; a regular file as stdout or stderr shows as `kind=output`
+  jobs, and a pipe,
   FIFO, terminal or socket as one `output_start stream=stdout|stderr` line and
-  one `output_done` line per run of data; channel waits appear as `kind=lock` in
-  `start` and `detach`, and have no `done` or `timeout` line); `proc` (spawn,
+  one `output_done` line per run of data; a lock wait of a handle has its own
+  `lock_wait` line; sleeps, channel waits, timed awaits and `Task.map` timers
+  are not jobs and print no `io` line); `sched` also prints `timer_arm
+  task=N in_ms=M` and `timer_fire task=N late_ms=M` for them; `proc` (spawn,
   spawn_failed, exit, close, term, kill, eof, truncated, stderr, guard_cleanup,
   and `reap pid=N alive=1` when a child is still alive after its bound);
   `loader` (file, format, tables, done, reject); `gc`

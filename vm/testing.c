@@ -207,13 +207,13 @@ static void cancel_leftovers(agc_vm *vm, const agc_task *caller, const agc_task 
 }
 
 static agc_task *unobserved_of(const agc_vm *vm, const agc_task *test) {
-  for (agc_task *t = vm->crashes; t; t = t->crash_next)
+  for (agc_task *t = vm->rt->crashes; t; t = t->crash_next)
     if (!t->observed && t->test == test && t != test) return t;
   return NULL;
 }
 
 static void observe_test(agc_vm *vm, const agc_task *test) {
-  for (agc_task *t = vm->crashes, *next; t; t = next) {
+  for (agc_task *t = vm->rt->crashes, *next; t; t = next) {
     next = t->crash_next;
     if (t->test == test) agc_task_observe(vm, t);
   }
@@ -276,7 +276,7 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *tests = agc_as_list(vm, args[0]);
   agc_test_run *r = vm->task->test_run;
   if (!r) {
-    if (vm->task != vm->main) agc_fail(vm, "RUNTIME-TEST-RUN", "call Test.run from main, outside every test", span);
+    if (vm->task != vm->rt->main) agc_fail(vm, "RUNTIME-TEST-RUN", "call Test.run from main, outside every test", span);
     check_names(vm, tests);
     run_mode mode = mode_of(vm);
     if (mode == MODE_NONE) {

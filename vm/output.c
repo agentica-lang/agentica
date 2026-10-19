@@ -417,7 +417,7 @@ static void settle(agc_output *s) {
        back for the run and takes it again. */
     bool held = agc_lock_held(s->lock);
     if (held) stream_drop(vm, s->lock);
-    bool alive = agc_io_run_for(vm, vm->rt->settle_by - now);
+    bool alive = agc_io_run_for(vm, vm->rt->settle_by - now, true);
     if (held) stream_take(vm, s->lock);
     if (!alive) return;
     now = agc_clock_ms();

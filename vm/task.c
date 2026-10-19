@@ -182,7 +182,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frame_capacity = 0;
   t->cursor = NULL;
   t->turn_cost = 0;
-  if (!t->group) vm->tasks_done++;
+  if (!t->group) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
   while (t->children) {
     agc_task *child = t->children;
     leave_parent(child);
@@ -198,6 +198,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
 /* The task is out of the run queue already (cancel_one took it out or claimed it PARKED) or was never in it. */
 static void unlink_task(agc_vm *vm, agc_task *t) {
   if (t->parked) agc_io_detach(vm, t);
+  agc_timers_disarm(vm, t);
   if (t->lock_wait) agc_handle_leave(vm, t);
   if (t->channel.channel) agc_channel_leave(vm, t);
   if (t->output.out) agc_output_leave(vm, t);
@@ -258,7 +259,7 @@ static void cancel_one(agc_vm *vm, agc_task *t) {
    to move; a running task only gets its flag and ends after its builtin. */
 void agc_task_cancel(agc_vm *vm, agc_task *root) {
   agc_sync_assert(vm);
-  if (root == vm->main || root->state == AGC_TASK_DONE || root->cancelled) return;
+  if (root == vm->rt->main || root->state == AGC_TASK_DONE || root->cancelled) return;
   agc_task *t = root;
   uint64_t count = 0;
   for (;;) {
@@ -284,6 +285,13 @@ static void resume(agc_vm *vm, agc_task *t) {
   if (t->parked) {
     agc_value result = agc_io_finish(vm, t);
     if (!t->retry) t->regs[t->park_reg] = result;
+  } else if (t->timer.timed) {
+    /* Only a park that armed a timer pays for rt->sync here: the heap fields belong to the lock. A void call's
+       register is never read (CHECK-VOID-VALUE), so a sleep writes no result. */
+    agc_sync_take(vm);
+    agc_timers_disarm(vm, t);
+    agc_sync_drop(vm);
+    t->timer.timed = false;
   }
   t->retry = false;
 }
@@ -336,7 +344,8 @@ static void trace_end(agc_vm *vm) {
 
 static uint64_t pending_tasks(const agc_vm *vm) {
   uint64_t made = atomic_load(&vm->rt->next_task_id) - 1;
-  return made > vm->tasks_done + 1 ? made - vm->tasks_done - 1 : 0;
+  uint64_t done = atomic_load_explicit(&vm->rt->tasks_done, memory_order_relaxed);
+  return made > done + 1 ? made - done - 1 : 0;
 }
 
 /* No await can observe a hidden task (an HTTP connection task), so of its
@@ -344,7 +353,7 @@ static uint64_t pending_tasks(const agc_vm *vm) {
    counted on it, which bounds the list in a long-running server. */
 static agc_task **quiet_slot(agc_vm *vm, const agc_task *t) {
   if (!t->hidden) return NULL;
-  return t->test ? &t->test->quiet : &vm->quiet;
+  return t->test ? &t->test->quiet : &vm->rt->quiet;
 }
 
 /* Runs under the run-level target: a failure here ends the run. */
@@ -360,18 +369,18 @@ static void crash(agc_vm *vm, agc_task *t) {
     *t->crash_stack = o->stack;
   }
   t->crashed = true;
-  vm->crash_count++;
+  vm->rt->crash_count++;
   agc_task **quiet = quiet_slot(vm, t);
   if (quiet && *quiet) {
     (*quiet)->quiet_more++;
   } else {
     if (quiet) *quiet = t;
-    t->crash_prev = vm->crashes_tail;
-    if (vm->crashes_tail)
-      vm->crashes_tail->crash_next = t;
+    t->crash_prev = vm->rt->crashes_tail;
+    if (vm->rt->crashes_tail)
+      vm->rt->crashes_tail->crash_next = t;
     else
-      vm->crashes = t;
-    vm->crashes_tail = t;
+      vm->rt->crashes = t;
+    vm->rt->crashes_tail = t;
   }
   agc_notice notice;
   agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
@@ -387,7 +396,7 @@ static void crash(agc_vm *vm, agc_task *t) {
 
 static bool fatal(const agc_vm *vm, const agc_task *t) {
   const agc_outcome *o = &vm->rt->outcome;
-  return t == vm->main || o->kind != AGC_FAILED || strcmp(o->code, "RUNTIME-STEP-LIMIT") == 0 ||
+  return t == vm->rt->main || o->kind != AGC_FAILED || strcmp(o->code, "RUNTIME-STEP-LIMIT") == 0 ||
          strcmp(o->code, "RUNTIME-INTERNAL") == 0;
 }
 
@@ -405,7 +414,7 @@ static bool run_turn(agc_vm *vm, agc_task *t, agc_turn_result *r) {
 }
 
 static agc_task *first_unobserved(const agc_vm *vm) {
-  for (agc_task *t = vm->crashes; t; t = t->crash_next)
+  for (agc_task *t = vm->rt->crashes; t; t = t->crash_next)
     if (!t->observed) return t;
   return NULL;
 }
@@ -414,7 +423,7 @@ bool agc_report_unobserved(agc_vm *vm) {
   const agc_task *first = first_unobserved(vm);
   if (!first) return false;
   agc_notice notice;
-  agc_print_unobserved(agc_notice_begin(&vm->rt->err, &notice), vm->crash_count - vm->observed_count, first->crash,
+  agc_print_unobserved(agc_notice_begin(&vm->rt->err, &notice), vm->rt->crash_count - vm->rt->observed_count, first->crash,
                        vm->rt->style);
   agc_notice_end(&notice, AGC_NOTICE_QUEUED);
   return true;
@@ -423,17 +432,17 @@ bool agc_report_unobserved(agc_vm *vm) {
 void agc_task_observe(agc_vm *vm, agc_task *t) {
   if (t->observed) return;
   t->observed = true;
-  vm->observed_count += 1 + t->quiet_more;
+  vm->rt->observed_count += 1 + t->quiet_more;
   agc_task **quiet = quiet_slot(vm, t);
   if (quiet && *quiet == t) *quiet = NULL;
   if (t->crash_prev)
     t->crash_prev->crash_next = t->crash_next;
-  else if (vm->crashes == t)
-    vm->crashes = t->crash_next;
+  else if (vm->rt->crashes == t)
+    vm->rt->crashes = t->crash_next;
   if (t->crash_next)
     t->crash_next->crash_prev = t->crash_prev;
-  else if (vm->crashes_tail == t)
-    vm->crashes_tail = t->crash_prev;
+  else if (vm->rt->crashes_tail == t)
+    vm->rt->crashes_tail = t->crash_prev;
   t->crash_next = t->crash_prev = NULL;
 }
 
@@ -470,8 +479,9 @@ agc_task *agc_task_next(agc_vm *vm) {
    again, and the task is claimed by a CAS (agc_task_claim), which a waker or a canceller may win instead, and then they
    own it. The cancel and this end of the turn are a store-then-load on both sides (the canceller stores the flag and
    reads the state; the scheduler stores the state with the commit and reads the flag), so all four accesses are
-   sequentially consistent: with weaker orders both sides could read the old value and nobody would end the task. Returns
-   true when `main` has returned. */
+   sequentially consistent: with weaker orders both sides could read the old value and nobody would end the task. A
+   cancel that loses to a normal end (cancel_one finds the task DONE) changes nothing: the task keeps its own result. A
+   flag set during the turn wins, even when the turn returned. Returns true when `main` has returned. */
 bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_turn(vm, t, r, ran);
   trace_gc(vm, "turn");
@@ -484,7 +494,7 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   } else if (atomic_load_explicit(&t->cancelled, memory_order_acquire)) {
     end_cancelled_locked(vm, t);
   } else if (r == AGC_TURN_DONE) {
-    if (t == vm->main) {
+    if (t == vm->rt->main) {
       AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
       main_done = true;
     } else {
@@ -502,17 +512,27 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   return main_done;
 }
 
+/* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true), and a loop with nothing
+   alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not. */
+static bool idle_wait(agc_vm *vm) {
+  uint64_t due = agc_timers_next_due(vm);
+  if (due == UINT64_MAX) return agc_io_poll(vm, true);
+  uint64_t now = agc_clock_ms();
+  return agc_io_run_for(vm, due > now ? due - now : 0, false);
+}
+
 agc_outcome agc_vm_run(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
     agc_profile_start(vm);
-    agc_task_enter(vm, vm->main, vm->rt->program->entry);
-    trace_spawn(vm, vm->main, NULL);
-    enqueue(vm, vm->main);
+    agc_task_enter(vm, vm->rt->main, vm->rt->program->entry);
+    trace_spawn(vm, vm->rt->main, NULL);
+    enqueue(vm, vm->rt->main);
     for (;;) {
       agc_task *t = agc_task_next(vm);
       if (!t) {
         check_stop(vm);
-        if (!agc_io_poll(vm, true)) {
+        if (agc_timers_run(vm)) continue;
+        if (!idle_wait(vm)) {
           check_stop(vm);
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
@@ -527,6 +547,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       agc_turn_finish(vm);
       if (agc_task_end_turn(vm, t, r, ran)) break;
       agc_io_poll(vm, false);
+      (void)agc_timers_run(vm);
       check_stop(vm);
     }
     vm->rt->outcome.kind = AGC_DONE;
@@ -693,8 +714,7 @@ static agc_value await_timeout(agc_vm *vm, agc_value *args, uint32_t span, bool 
   agc_task_parking(vm);
   t->awaiting = target;
   agc_task_enqueue(&target->waiters, &target->waiters_tail, t);
-  agc_io_start_marked(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->await_deadline - now));
-  agc_task_park(vm, true);
+  agc_task_park_until(vm, t->await_deadline, true);
   return agc_void();
 }
 
@@ -714,15 +734,6 @@ static agc_value builtin_await_timeout_result(agc_vm *vm, agc_value *args, uint3
   return await_timeout(vm, args, span, true);
 }
 
-static agc_value slept(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
-  (void)data;
-  (void)context;
-  return agc_void();
-}
-
-static const agc_io_kind sleep_io = {NULL, slept, slept, NULL, false, "sleep", NULL, false};
-
 static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t ms = agc_as_int(vm, args[0]);
   if (ms < 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", "sleep duration must be nonnegative", span + 1);
@@ -730,7 +741,8 @@ static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
     vm->yield = true;
     return agc_void();
   }
-  agc_io_start(vm, &sleep_io, NULL, agc_void(), ms);
+  agc_task_parking(vm);
+  agc_task_park_until(vm, agc_clock_ms() + (uint64_t)ms, false);
   return agc_void();
 }
 

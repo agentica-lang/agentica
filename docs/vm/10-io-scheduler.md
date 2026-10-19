@@ -90,8 +90,8 @@ section says how the scheduler and the loop keep them, as built.
     since the Boehm heap is shared. Only a global heap limit is possible (13).
 - **As built (tasks PR).** `vm/task.c` holds the scheduler and the `Task`
   builtins. `vm/interp.c` runs one turn and owns the budget code.
-  - `Task.sleep(0)` yields. `Task.sleep(n)` is a timer-only job. Under
-    `no_files` (the fuzzer) every sleep yields.
+  - `Task.sleep(0)` yields. `Task.sleep(n)` is a timer of the task (§16.9).
+    Under `no_files` (the fuzzer) every sleep yields.
   - Stdin EOF is delivered once to every task that waited for the read, so a TTY
     reader never waits for a second Ctrl-D.
   - `Task.await` parks the caller with *retry*: when the target ends, each
@@ -121,15 +121,15 @@ section says how the scheduler and the loop keep them, as built.
     `agc_clock_ms`; the timed form runs no cycle check, since it cannot wait
     forever, so a task that awaits its own handle with a timeout gets
     `Await.TimedOut`), the task joins the target's waiters as the plain await
-    does, a timer job of the time left is started (`agc_wait_io`, the job kind
-    of the lock and channel waits), and the task parks with retry. The first of
-    two wakes wins: the target's end (`finish_task` wakes the waiters; the retry
-    closes the timer job in `agc_io_finish`) or the timer (the retry leaves the
+    does, a timer of the task is armed for the deadline (`agc_task_park_until`,
+    §16.9 "Timers", as for the lock and channel waits), and the task parks with
+    retry. The first of two wakes wins: the target's end (`finish_task` wakes
+    the waiters; `resume` disarms the timer) or the timer (the retry leaves the
     target's waiters, clears `awaiting` and the deadline, and returns
     `Await.TimedOut`). A wake before the deadline, with the target unsettled,
     waits again for the time left. A caller that is cancelled while it waits
-    leaves through `unlink_task` as any awaiter does: its timer job is detached
-    and ended, and it leaves the target's waiters through `awaiting`; the case
+    leaves through `unlink_task` as any awaiter does: its timer is disarmed, and
+    it leaves the target's waiters through `awaiting`; the case
     is in `vm/tests/task_cancel_test.c`. After a timeout the target is
     untouched, and a later crash or cancel of it does not reach the caller. The
     value is built by `vm/task.c` from the program's `Await` enum, found by name
@@ -202,8 +202,8 @@ section says how the scheduler and the loop keep them, as built.
     children first. A cancelled task gets its flag, then: a ready task leaves
     the run queue; a parked task detaches from its job (Detached jobs); a task
     waiting for a handle's lock leaves the FIFO, and passes ownership on if it
-    was the `next_owner`; a task waiting on a channel leaves its FIFO, closes
-    its timer job (Detached jobs), and hands on a reservation it holds (Channel
+    was the `next_owner`; a task waiting on a channel leaves its FIFO, has its
+    timer disarmed (`unlink_task`), and hands on a reservation it holds (Channel
     waits); a task in `Task.await` or a stdin wait leaves its FIFO. The task
     then ends like a returning task. A later `Task.await` on it halts with
     `RUNTIME-TASK-CANCELLED` (the `Result` entry returns
@@ -225,38 +225,39 @@ section says how the scheduler and the loop keep them, as built.
     oldest running item whose deadline has passed (its slot is `error("task:
     timed out")` and `agc_task_cancel` stops it and its descendants), starts
     items up to `limit`, and, when every slot is set, ends with the list.
-    Otherwise it starts one `agc_wait_io` timer job for the oldest deadline and
-    waits. All items have the same timeout and start in input order, so the
-    deadlines grow along the running list and one timer is enough. The caller
-    does the spawning and the cancelling, so the random streams split in input
-    order and nothing runs on another task's turn. Each item is a child of the
-    caller (`agc_task_spawn_seeded`), and starting it costs one step
-    (`agc_count_step`); the result list costs one turn unit per item. An item
-    tells the group that it ended through a hook on the task (`end`,
-    `end_data`), which `finish_task` calls for a return, a crash and a cancel.
-    The hook ignores an item that already timed out and an item that was
+    Otherwise it arms one timer of the caller for the oldest deadline
+    (`agc_task_park_until`) and waits. All items have the same timeout and start
+    in input order, so the deadlines grow along the running list and one timer
+    is enough. The caller does the spawning and the cancelling, so the random
+    streams split in input order and nothing runs on another task's turn. Each
+    item is a child of the caller (`agc_task_spawn_seeded`), and starting it
+    costs one step (`agc_count_step`); the result list costs one turn unit per
+    item. An item tells the group that it ended through a hook on the task
+    (`end`, `end_data`), which `finish_task` calls for a return, a crash and a
+    cancel. The hook ignores an item that already timed out and an item that was
     cancelled by someone else, which can only be a cancel that reached it
     through its caller: the caller, a stepper parked on the group's timer, is
-    cancelled like any parked task (the timer job is detached), cancels its
-    children first, never runs the step function again, and so starts nothing
-    and writes no slot. An item that still has a file close pending (`closing`,
-    as `Task.await` checks) is not settled: the hook puts itself back and
+    cancelled like any parked task (its timer is disarmed), cancels its children
+    first, never runs the step function again, and so starts nothing and writes
+    no slot. An item that still has a file close pending (`closing`, as
+    `Task.await` checks) is not settled: the hook puts itself back and
     `agc_task_close_done` calls it when the last close ends. If the deadline
     comes first, the item is settled as timed out without waiting for the close
     (`expire` marks its crash, if any, as observed), and the hook, when the
-    close ends, finds a settled item and does nothing. An item that ends
-    after its deadline but before the caller runs keeps its result. The handles
-    an item opened are closed when it ends or is cancelled (Owners); an I/O job
-    it had in flight is detached and ends on its own. With more than one
-    scheduler (not built) the hook runs on the item's scheduler while the step
-    function runs on the caller's, so the group needs its small lock (10.2.3,
-    "Task.map group lock").
-- **Stall check (N=1).** If the queue is empty, no libuv handle is alive, and
-  `main` is not done, the VM fails with `RUNTIME-INTERNAL` ("every task is
-  waiting and nothing can wake them"). No program reaches it: every channel wait
-  and every timed await holds a timer, every other wait holds a libuv request or
-  a timer or a live task, and plain await cycles halt before they park
-  (`Task.await` below). For N>1 see 10.2.3.
+    close ends, finds a settled item and does nothing. An item that ends after
+    its deadline but before the caller runs keeps its result. The handles an
+    item opened are closed when it ends or is cancelled (Owners); an I/O job it
+    had in flight is detached and ends on its own. With more than one scheduler
+    (not built) the hook runs on the item's scheduler while the step function
+    runs on the caller's, so the group needs its small lock (10.2.3, "Task.map
+    group lock").
+- **Stall check (N=1).** If the queue is empty, no libuv handle is alive, no
+  timer of a task is armed (§16.9, "Timers"), and `main` is not done, the VM
+  fails with `RUNTIME-INTERNAL` ("every task is waiting and nothing can wake
+  them"). No program reaches it: every channel wait and every timed await holds
+  a timer, every other wait holds a libuv request or a timer or a live task, and
+  plain await cycles halt before they park (`Task.await` below). For N>1 see
+  10.2.3.
 - **Multi-task runs.** A runaway multi-task run must stop with
   `RUNTIME-STEP-LIMIT` (the black-box rule, §1). The `--max-steps` sweep (§12.1)
   needs each limit to give the full outcome, or the step limit with stdout a
@@ -276,8 +277,8 @@ section says how the scheduler and the loop keep them, as built.
   copies what the OS needs into a `malloc`'d request (paths through the rules of
   2.8), and starts the job. One `uv_queue_work` covers the whole operation
   (stat, open, read, close), so the task parks once per call. The call's timeout
-  is the job's timer (a negative timeout starts none; a kind without `work` is a
-  timer only). `CALL_BUILTIN` ends the turn.
+  is the job's timer (a negative timeout starts none). `CALL_BUILTIN` ends the
+  turn.
 - **Waking and parking.** The work and timer callbacks only set flags and put
   the job on the loop's ready list. After each `uv_run` the scheduler drains
   that list and queues the tasks. After each turn it calls
@@ -381,7 +382,7 @@ section says how the scheduler and the loop keep them, as built.
   Every handle builtin (`read_bytes`, `read_line`, `write`, `write_bytes`,
   `flush`, `close`) checks its arguments and timeout first, then takes the lock,
   and only then checks that the handle is open and has the right mode. A task
-  that cannot take the lock parks with retry on a timer-only job that ends at
+  that cannot take the lock parks with retry on a timer of the task at
   its deadline. One deadline covers the lock wait and the operation: a task that
   gets the lock after its deadline returns the timeout error. Release is a FIFO
   hand-off: the head waiter becomes `next_owner` and is the only one woken, so
@@ -400,12 +401,12 @@ section says how the scheduler and the loop keep them, as built.
   `Channel.new(1048576)` does not allocate a million slots. The copy of a
   growing ring charges one turn-cost unit per slot copied; other calls charge
   nothing, and a value is one pointer, never copied. A call that must wait parks
-  with retry on a timer-only job that ends at the call's deadline; it is the
-  lock wait's job kind (`agc_wait_io`), so the I/O trace skips its `done` and
-  `timeout` lines (`trace_finish`), and its `start` and `detach` lines print
-  `kind=lock`. The deadline is set at the first wait and kept across retries in
-  the task (`channel.deadline`), as `agc_handle_wait` does. A timeout of 0 never
-  parks: it tries once.
+  with retry on a timer of the task that ends at the call's deadline
+  (`agc_task_park_until`, `vm/timers.c`; no job, so the I/O trace has no line
+  for it and the `sched` trace has `timer_arm` and `timer_fire`). The deadline
+  is set at the first wait and kept across retries in the task
+  (`channel.deadline`), as `agc_handle_wait` does. A timeout of 0 never parks:
+  it tries once.
   - **Reservations.** A value that arrives while receivers wait is not put in
     the ring. The head receiver is popped from its FIFO, the value is stored in
     the task (`channel.value`), and the task is woken: a direct hand-off, so no
