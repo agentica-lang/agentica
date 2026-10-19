@@ -492,7 +492,7 @@ static agc_value where_done(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind where_io = {swift_work, where_done, where_done, swift_drop, false, "where", NULL};
+static const agc_io_kind where_io = {swift_work, where_done, where_done, swift_drop, false, "where", NULL, false};
 
 static void start_detached(void *arg) {
   agc_io_detached(&vm, &where_io, arg, agc_void(), AGC_JOB_QUIET);
