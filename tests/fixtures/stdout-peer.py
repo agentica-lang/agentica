@@ -1,12 +1,26 @@
 import argparse
 import json
 import os
-import pty
 import socket
 import subprocess
 import sys
 import threading
 import time
+
+
+def shrink_pipe(fd, size):
+    """Makes the pipe hold at most `size` bytes where the system lets a program say so (Linux); a no-op elsewhere.
+
+    Linux pipes hold 64 KiB and macOS and Windows pipes 16 KiB or less, so a test that needs a stuck pipe asks for the
+    smallest one.
+    """
+    if not size:
+        return
+    try:
+        import fcntl
+        fcntl.fcntl(fd, fcntl.F_SETPIPE_SZ, size)
+    except (ImportError, AttributeError, OSError):
+        pass
 
 
 def main():
@@ -22,6 +36,7 @@ def main():
     parser.add_argument("--socket", action="store_true")
     parser.add_argument("--pty", action="store_true")
     parser.add_argument("--close-after", type=int, default=0)
+    parser.add_argument("--pipe-size", type=int, default=0)
     parser.add_argument("--limit", type=float, default=60)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     options = parser.parse_args()
@@ -31,9 +46,12 @@ def main():
         reader, writer = socket.socketpair()
         read_fd, write_fd = reader.detach(), writer.detach()
     elif options.pty:
+        import pty
+
         read_fd, write_fd = pty.openpty()
     else:
         read_fd, write_fd = os.pipe()
+        shrink_pipe(write_fd, options.pipe_size)
     if options.merge or options.pty:
         error_read, error_write = None, write_fd
     else:
