@@ -27,7 +27,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   Wine, without a Windows machine.
 - The Windows CI job sends Ctrl+Break to a VM in its own process group (exit
   149, children stopped, file data written, a stuck stdout does not hold the
-  exit) and checks standard output and standard error on a pseudo console.
+  exit) and checks standard output and standard error on a pseudo console,
+  including a line longer than the buffer whose first write ends inside a
+  character.
 
 ### Changed
 

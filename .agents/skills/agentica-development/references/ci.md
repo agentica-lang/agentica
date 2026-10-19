@@ -243,10 +243,13 @@ Wine
 Windows console, so Wine skips it). It starts the VM with
 `CREATE_NEW_PROCESS_GROUP` and sends `CTRL_BREAK_EVENT`: the exit is 149
 (128 + `SIGBREAK`), a child that ignores the event is stopped, buffered file data
-is written, and a stuck stdout does not hold the exit. Another case writes
-stdout and stderr to a pseudo console (ConPTY) and checks the text and its
-order. A new process group turns Ctrl+C off, so Ctrl+C is not sent; libuv
-reports both events through one console handler (`uv_signal_t`).
+is written, and a stuck stdout does not hold the exit. Two more cases write
+stdout and stderr to a pseudo console (ConPTY), which the VM writes from a pool
+thread with `WriteConsoleW`: one checks the text and its order, the other a line
+longer than the 64 KiB buffer, whose first write ends inside a character, and
+that no replacement character reaches the console. A new process group turns
+Ctrl+C off, so Ctrl+C is not sent; libuv reports both events through one console
+handler (`uv_signal_t`).
 
 Piped-input tests do not exercise console input. After changing Windows stdin
 handling, a check on a native Windows terminal (not Wine) is useful but does not

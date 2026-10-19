@@ -5,8 +5,10 @@ it (libuv reports it as SIGBREAK), and ends as a stop: children die, buffered
 file data is written, the exit code is 128 + 21. Ctrl+C cannot be sent to a new
 group (CREATE_NEW_PROCESS_GROUP turns it off), but libuv reports both through
 one console handler, so Ctrl+Break covers that path. A pseudo console (ConPTY)
-is the console of the test that writes standard output and standard error to a
-console. The module needs a Windows console, so it does not run under Wine.
+is the console of the tests that write standard output and standard error to a
+console, which the VM writes from a pool thread with WriteConsoleW (UTF-8 in,
+UTF-16 out, a character cut by the end of one write kept for the next). The
+module needs a Windows console, so it does not run under Wine.
 """
 import ctypes
 import os
@@ -68,6 +70,24 @@ def main() -> Void
 end
 """
 
+# One line of 66560 bytes, 1024 more than the 64 KiB buffer, made of the pairs "€é" (3 + 2 bytes). The buffer holds
+# 65536 bytes, and 65536 % 5 = 1, so the first write ends after the first byte of a "€": the pool thread has to keep
+# that byte for the next write. The cut is 1024 bytes (about two rows) before the end, so it stays on the screen.
+CUT_PROGRAM = """\
+def main() -> Void
+  block = "€é"
+  for i in 0..9
+    block = block + block
+  end
+  line = ""
+  for i in 0..12
+    line = line + block
+  end
+  puts(line)
+  puts("cut end")
+end
+"""
+
 # The sequences a pseudo console adds around the text: CSI (colors, cursor), OSC (title) and the like.
 ESCAPES = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\x1b[=>]")
 
@@ -101,6 +121,8 @@ if os.name == "nt":
     kernel32.CreatePseudoConsole.restype = ctypes.c_long
     kernel32.ClosePseudoConsole.argtypes = [ctypes.c_void_p]
     kernel32.ClosePseudoConsole.restype = None
+    kernel32.DeleteProcThreadAttributeList.argtypes = [ctypes.c_void_p]
+    kernel32.DeleteProcThreadAttributeList.restype = None
     kernel32.InitializeProcThreadAttributeList.argtypes = [ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD,
                                                            ctypes.POINTER(ctypes.c_size_t)]
     kernel32.UpdateProcThreadAttribute.argtypes = [ctypes.c_void_p, wintypes.DWORD, ctypes.c_size_t, ctypes.c_void_p,
@@ -135,42 +157,25 @@ def alive(pid):
         kernel32.CloseHandle(handle)
 
 
+def close_handle(handle):
+    """Closes a handle that is set and marks it closed, so a second call does nothing."""
+    if handle.value:
+        kernel32.CloseHandle(handle)
+        handle.value = None
+
+
 def run_on_console(command, env, limit):
     """Runs the command with a pseudo console as its console, standard input and standard output.
 
     Returns (exit code, the text the console showed). The pseudo console is closed after the exit, while a thread
-    reads its output, because closing it waits for the output to be taken.
+    reads its output, because closing it waits for the output to be taken. Whatever step fails, the handles, the
+    pseudo console, the attribute list and the process are released.
     """
     in_read, in_write, out_read, out_write = (wintypes.HANDLE() for _ in range(4))
-    assert kernel32.CreatePipe(ctypes.byref(in_read), ctypes.byref(in_write), None, 0)
-    assert kernel32.CreatePipe(ctypes.byref(out_read), ctypes.byref(out_write), None, 0)
     console = ctypes.c_void_p()
-    result = kernel32.CreatePseudoConsole(Coord(100, 30), in_read, out_write, 0, ctypes.byref(console))
-    assert result == 0, "CreatePseudoConsole: 0x%08x" % (result & 0xFFFFFFFF)
-    kernel32.CloseHandle(in_read)
-    kernel32.CloseHandle(out_write)
-    size = ctypes.c_size_t()
-    kernel32.InitializeProcThreadAttributeList(None, 1, 0, ctypes.byref(size))
-    attributes = ctypes.create_string_buffer(size.value)
-    assert kernel32.InitializeProcThreadAttributeList(attributes, 1, 0, ctypes.byref(size))
-    # PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE takes the handle itself as the value.
-    assert kernel32.UpdateProcThreadAttribute(attributes, 0, 0x20016, console, ctypes.sizeof(ctypes.c_void_p),
-                                              None, None)
-    startup = StartupInfoEx()
-    startup.StartupInfo.cb = ctypes.sizeof(StartupInfoEx)
-    # With no standard handles named, a child of a parent whose own are redirected (a test run) gets those; asking for
-    # STARTF_USESTDHANDLES with null handles leaves it the console.
-    startup.StartupInfo.dwFlags = 0x00000100
-    startup.lpAttributeList = ctypes.addressof(attributes)
     info = ProcessInformation()
-    block = "".join("%s=%s\0" % item for item in env.items()) + "\0"
-    environment = ctypes.create_string_buffer(block.encode("utf-16-le"))
-    line = ctypes.create_unicode_buffer(subprocess.list2cmdline([str(word) for word in command]))
-    extended_startup_info_present, unicode_environment = 0x00080000, 0x00000400
-    created = kernel32.CreateProcessW(None, line, None, None, False,
-                                      extended_startup_info_present | unicode_environment, environment, None,
-                                      ctypes.byref(startup), ctypes.byref(info))
-    assert created, ctypes.WinError(ctypes.get_last_error())
+    attributes = None
+    reader = None
     chunks = []
 
     def drain():
@@ -179,17 +184,60 @@ def run_on_console(command, env, limit):
         while kernel32.ReadFile(out_read, buffer, len(buffer), ctypes.byref(got), None) and got.value:
             chunks.append(buffer.raw[:got.value])
 
-    reader = threading.Thread(target=drain, daemon=True)
-    reader.start()
-    if kernel32.WaitForSingleObject(info.hProcess, int(limit * 1000)) != 0:
-        kernel32.TerminateProcess(info.hProcess, 1)
-    code = wintypes.DWORD()
-    kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(code))
-    kernel32.ClosePseudoConsole(console)
-    reader.join(WAIT_SECONDS)
-    for handle in (info.hProcess, info.hThread, in_write, out_read):
-        kernel32.CloseHandle(handle)
-    return code.value, b"".join(chunks).decode("utf-8", errors="replace")
+    try:
+        assert kernel32.CreatePipe(ctypes.byref(in_read), ctypes.byref(in_write), None, 0)
+        assert kernel32.CreatePipe(ctypes.byref(out_read), ctypes.byref(out_write), None, 0)
+        result = kernel32.CreatePseudoConsole(Coord(100, 30), in_read, out_write, 0, ctypes.byref(console))
+        assert result == 0, "CreatePseudoConsole: 0x%08x" % (result & 0xFFFFFFFF)
+        close_handle(in_read)
+        close_handle(out_write)
+        # The reader starts before anything can fail, since closing the pseudo console waits for its output to be read.
+        reader = threading.Thread(target=drain, daemon=True)
+        reader.start()
+        size = ctypes.c_size_t()
+        kernel32.InitializeProcThreadAttributeList(None, 1, 0, ctypes.byref(size))
+        attributes = ctypes.create_string_buffer(size.value)
+        assert kernel32.InitializeProcThreadAttributeList(attributes, 1, 0, ctypes.byref(size))
+        # PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE takes the handle itself as the value.
+        assert kernel32.UpdateProcThreadAttribute(attributes, 0, 0x20016, console, ctypes.sizeof(ctypes.c_void_p),
+                                                  None, None)
+        startup = StartupInfoEx()
+        startup.StartupInfo.cb = ctypes.sizeof(StartupInfoEx)
+        # With no standard handles named, a child of a parent whose own are redirected (a test run) gets those; asking
+        # for STARTF_USESTDHANDLES with null handles leaves it the console.
+        startup.StartupInfo.dwFlags = 0x00000100
+        startup.lpAttributeList = ctypes.addressof(attributes)
+        block = "".join("%s=%s\0" % item for item in env.items()) + "\0"
+        environment = ctypes.create_string_buffer(block.encode("utf-16-le"))
+        line = ctypes.create_unicode_buffer(subprocess.list2cmdline([str(word) for word in command]))
+        extended_startup_info_present, unicode_environment = 0x00080000, 0x00000400
+        created = kernel32.CreateProcessW(None, line, None, None, False,
+                                          extended_startup_info_present | unicode_environment, environment, None,
+                                          ctypes.byref(startup), ctypes.byref(info))
+        assert created, ctypes.WinError(ctypes.get_last_error())
+        if kernel32.WaitForSingleObject(info.hProcess, int(limit * 1000)) != 0:
+            kernel32.TerminateProcess(info.hProcess, 1)
+        code = wintypes.DWORD()
+        kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(code))
+        kernel32.ClosePseudoConsole(console)
+        console = ctypes.c_void_p()
+        reader.join(WAIT_SECONDS)
+        assert not reader.is_alive(), "the output of the pseudo console was read to its end"
+        return code.value, b"".join(chunks).decode("utf-8", errors="replace")
+    finally:
+        if info.hProcess and kernel32.WaitForSingleObject(info.hProcess, 0) == 0x102:
+            kernel32.TerminateProcess(info.hProcess, 1)
+        if console.value:
+            kernel32.ClosePseudoConsole(console)
+        if reader is not None:
+            reader.join(WAIT_SECONDS)
+        if attributes is not None:
+            kernel32.DeleteProcThreadAttributeList(attributes)
+        for handle in (wintypes.HANDLE(info.hProcess), wintypes.HANDLE(info.hThread), in_read, out_write, in_write):
+            close_handle(handle)
+        # The reader may still be inside ReadFile if it did not end: its handle stays open then, as the test fails.
+        if reader is None or not reader.is_alive():
+            close_handle(out_read)
 
 
 def test_ctrl_break_takes_the_exit_path_the_child_dies_buffered_file_data_is_written_and_the_exit_is_149(
@@ -223,3 +271,15 @@ def test_standard_output_and_standard_error_on_a_console_arrive_in_order_as_text
     markers = ["tty line é", "tty error ü", "tty end"]
     positions = [text.find(marker) for marker in markers]
     assert -1 not in positions and positions == sorted(positions), text
+
+
+def test_a_line_longer_than_the_buffer_reaches_a_console_with_no_character_cut_in_two(tmp_path):
+    code, shown = run_on_console([*vm_command(), "--", bytecode(CUT_PROGRAM, tmp_path)], vm_environment(),
+                                 WAIT_SECONDS)
+    text = ESCAPES.sub("", shown)
+    assert code == 0, text
+    assert "\ufffd" not in text, "a character was cut in two"
+    # Rows of the console hold 100 cells, so a run of 20 pairs is inside one row; the count of pairs is not checked,
+    # since the console may drop rows that scrolled off between two of its repaints.
+    assert "€é" * 20 in text, text[-400:]
+    assert text.rfind("cut end") > text.rfind("€é"), text[-400:]
