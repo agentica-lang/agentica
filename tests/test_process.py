@@ -76,8 +76,9 @@ def alive(node, pid):
 
 def test_cli_capability_guards_execution_while_check_and_help_work_without_it(tmp_path):
     node = tool("node")
-    body = ("  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.inspect(System.args())\n"
-            "  Result.unwrap!(Process.wait(p, 5000))")
+    # The first node start of a test run can be slow on a cold Windows runner (virus scan), so this one waits longer.
+    body = ("  puts(Result.unwrap!(Process.read_line(p, 30000)))\n  IO.inspect(System.args())\n"
+            "  Result.unwrap!(Process.wait(p, 30000))")
     file = write(tmp_path, "program.agc", program(node, "args", body))
     assert tuple(cli_run("check", file)) == (0, "check ok\n", "")
     denied = cli_run("--json", file, "--allow-run")
