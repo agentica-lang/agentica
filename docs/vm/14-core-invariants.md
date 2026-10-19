@@ -54,6 +54,14 @@ Known exceptions, as built:
   it can close the loop. This is a portability exception, not a pattern for
   other I/O (§10.2.2, Stdin). With `UV_THREADPOOL_SIZE=1`, a pending stdin read
   leaves no worker for file I/O; keep spare pool capacity when stdin may wait.
+- **Windows stdout and stderr.** A pipe is written by a libuv pipe handle, one
+  write request at a time; a console, and a handle that libuv refuses, by a pool
+  job, so the loop never waits for the reader (a console is not written by
+  `uv_tty_t`, because libuv writes it on the loop thread). A pool job keeps one
+  pool thread while the reader is slow. Windows has no non-blocking try on a
+  pipe or a console, so a stop signal and the final notices wait for the request
+  instead, in one wait of up to 200 ms that the exit shares (§10.2.2). The
+  normal end of the run waits only within the flush limit.
 - **Fallbacks that still use a pool thread.** stdin stays a pool job with a
   blocking read when it cannot be made non-blocking: the reopen through
   `/proc/self/fd/N` fails (no `/proc`, or `EACCES` after `su` or `sudo -u`), a
@@ -69,13 +77,13 @@ Known exceptions, as built:
   keeps the blocking `fwrite` of its `FILE *` only when it cannot be put on the
   loop: the reopen or the `dup` fails (no `/proc`, or `EACCES`), the descriptor
   is not open for writing (a closed stdout that `main` refilled with
-  `/dev/null`), it is another descriptor type, or the build is not Linux. A full
-  pipe then stalls every task, a stop signal interrupts the write (`EINTR`, no
-  `SA_RESTART`) and ends the run (§14.4), and the final `fflush` is not bounded
-  by the flush limit. The stderr that a child process writes is forwarded by a
-  blocking `fwrite` too (`vm/process.c`), not through the buffer: the one write
-  outside `vm/output.c`, and it can block the loop on a stuck stderr. With N > 1
-  they are locked per stream (§16.8).
+  `/dev/null`), it is another descriptor type, or the build is not Linux, macOS
+  or Windows. A full pipe then stalls every task, a stop signal interrupts the
+  write (`EINTR`, no `SA_RESTART`) and ends the run (§14.4), and the final
+  `fflush` is not bounded by the flush limit. The stderr that a child process
+  writes is forwarded by a blocking `fwrite` too (`vm/process.c`), not through
+  the buffer: the one write outside `vm/output.c`, and it can block the loop on
+  a stuck stderr. With N > 1 they are locked per stream (§16.8).
 - **Notices (text the VM writes to stderr by itself).** A task crash diagnostic
   and the unobserved-task summary are queued (at most 1 MiB) and enter the
   stderr buffer ahead of waiting writers as room appears, in pieces if they are
@@ -89,7 +97,8 @@ Known exceptions, as built:
   stuck pipe will not take is dropped, so the exit stays bounded and the exit
   code still reports the result (§10.2.2, Notices).
 - **Stdout and stderr on one target.** When both descriptors are the same file
-  (`st_dev` and `st_ino`: a terminal, `2>&1`), they share one buffer and one
+  (`st_dev` and `st_ino`: a terminal, `2>&1`; on Windows `CompareObjectHandles`,
+  which matches only the same kernel object), they share one buffer and one
   FIFO, so `puts`, `IO.warn` and `puts` appear in the order of the calls.
 
 ### 14.2 Timeouts

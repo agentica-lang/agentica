@@ -15,8 +15,8 @@ import subprocess
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, TLS_BUILT, binary, compile_agc, require,
-                                 run, run_vm, scaled, vm_environment, write_files)
+from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, TLS_BUILT, UNDER_WINE, binary, compile_agc,
+                                 require, run, run_vm, scaled, vm_environment, write_files)
 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
@@ -108,6 +108,7 @@ def test_the_exit_status_and_the_problems_of_a_source_file(tmp_path):
     assert "50001 | \ufffd\ufffd\n" in agentica("big_bad.agc", cwd=directory).stderr
 
 
+@pytest.mark.skipif(UNDER_WINE, reason="Wine does not show that two descriptors are one pipe")
 def test_the_output_and_the_errors_of_a_program_keep_their_order_in_one_stream(tmp_path):
     """With 2>&1 the program writes both streams to one pipe; the binary leaves them as the program wrote them."""
     directory = make_suite(tmp_path, {"mixed.agc": INTERLEAVED})

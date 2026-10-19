@@ -165,7 +165,12 @@ Read first: `references/vm.md`.
     lets a queued notice and the next writer through, the end of run moving a
     notice held by a cut print, a record that starts a line after a cut print,
     the notice queue limit and a kept notice, and final notices (written
-    straight, or dropped when the pipe is full)
+    straight, or dropped when the pipe is full), and a stop signal not waiting
+    for a silent reader (on Windows also a socket, which libuv refuses, written
+    by a pool thread). It also runs on Windows, where the pipe has an overlapped
+    write end (the tests that fill it) or a synchronous one (the other tests, as
+    a Python parent gives it), and where a duplicate of the descriptor is one
+    target and two pipes are two
 
 - **Path:** `vm/tests/tree_test.c`
   - **Owns:** `agc_remove_tree` (`Path.remove`) on temp trees: links inside the
@@ -287,7 +292,10 @@ Read first: `references/vm.md`.
     diagnostic on blocking streams; a regular file drained by the pool while a
     child is stopped at the end of the run; a reader that went away
     (`RUNTIME-INTERNAL`, exit 1); a crashed parent whose waiting child leaves
-    the FIFO with nothing partial written
+    the FIFO with nothing partial written. The module runs on Linux, macOS and
+    Windows; the socket, pty, `/dev/full` and `/dev/stdout` cases are Unix only,
+    and the merged-pipe order case is skipped under Wine, which does not tell
+    the two descriptors of one pipe apart
 
 - **Path:** `tests/test_vm_test_protocol.py`
   - **Owns:** a Python peer (`tests/fixtures/test-protocol-peer.py`, with

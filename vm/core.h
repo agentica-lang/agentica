@@ -17,6 +17,7 @@ typedef struct {
 typedef struct {
   agc_output *out;
   FILE *file;
+  agc_memstream *mem;
   char *text;
   size_t len;
 } agc_notice;
@@ -127,6 +128,9 @@ void agc_close_owned(agc_vm *vm, agc_task *t);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
+/* Runs the loop once, for at most MS milliseconds, and hands the finished jobs to the scheduler. False when nothing in
+   the loop was alive, so nothing could have ended the wait and the caller stops waiting. */
+bool agc_io_run_for(agc_vm *vm, uint64_t ms);
 uint64_t agc_clock_ms(void);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);

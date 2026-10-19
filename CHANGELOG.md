@@ -61,9 +61,23 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   does not wait for it.
 - `File.try_lock` is available on Windows. Unlike Unix advisory locks, Windows
   locks also prevent reads and writes through other handles while held.
+- Writing to standard output or standard error no longer blocks the whole
+  program on Windows. A print waits in the same queue as on Linux and macOS
+  while the other tasks keep running, with the same 64 KiB buffer per stream,
+  `IO.flush`, `--flush-timeout`, and the order between the two streams when both
+  are given the same pipe (`2>&1`). A pipe is written by libuv without waiting
+  on the loop. A console and a file are written by the I/O pool, so a console
+  that is paused (a selection, Ctrl+S) cannot stop the other tasks; text is
+  converted to UTF-16 for the console. The normal end of the run waits for the
+  output within the flush limit. After a stop signal, and for the last error
+  messages, a pipe, a console or any other handle that may wait for its reader
+  gets one shared wait of up to 200 ms, because Windows has no non-blocking
+  write to try.
 
 ### Fixed
 
+- On macOS, a socket as standard output no longer stalls every task: a write is
+  checked with `poll` first and cut to what the socket takes.
 - Relative source paths containing a colon no longer gain an absolute source
   root; Windows drive paths require a letter, colon and separator.
 - The Windows Docker check explicitly requires BuildKit/buildx for the

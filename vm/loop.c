@@ -53,7 +53,7 @@ typedef struct {
 
 struct agc_loop {
   uv_loop_t uv;
-  uv_timer_t deadline;
+  uv_timer_t bound;
   uv_async_t wake;
 #if defined(_WIN32)
   uv_signal_t stop_signals[3];
@@ -70,7 +70,7 @@ struct agc_loop {
 #endif
 #endif
   job *ready, *ready_tail;
-  bool expired;
+  bool bound_init;
 };
 
 struct agc_io_job {
@@ -294,6 +294,7 @@ static agc_loop *new_loop(agc_vm *vm) {
   agc_loop *loop = malloc(sizeof(agc_loop));
   if (!loop) agc_out_of_memory();
   loop->ready = loop->ready_tail = NULL;
+  loop->bound_init = false;
 #if defined(_WIN32)
   loop->driver = NULL;
   loop->stop_signal_count = 0;
@@ -860,6 +861,39 @@ bool agc_io_poll(agc_vm *vm, bool wait) {
   return true;
 }
 
+static void bound_tick(uv_timer_t *timer) { (void)timer; }
+
+/* Runs the loop once, for at most MS milliseconds. One timer, made on first use and closed with the loop, bounds the
+   wait. The flush at the end of the run, the last writes after a stop signal and the native close all wait with it. */
+static void run_bounded(agc_loop *loop, uint64_t ms) {
+  if (!loop->bound_init) {
+    if (uv_timer_init(&loop->uv, &loop->bound) != 0) {
+      uv_run(&loop->uv, UV_RUN_NOWAIT);
+      return;
+    }
+    loop->bound_init = true;
+  }
+  uv_update_time(&loop->uv);
+  uv_timer_start(&loop->bound, bound_tick, ms, 0);
+  uv_run(&loop->uv, UV_RUN_ONCE);
+  uv_timer_stop(&loop->bound);
+}
+
+static void release_bound(agc_loop *loop) {
+  if (!loop->bound_init) return;
+  uv_close((uv_handle_t *)&loop->bound, NULL);
+  loop->bound_init = false;
+}
+
+bool agc_io_run_for(agc_vm *vm, uint64_t ms) {
+  agc_loop *loop = loop_of(vm);
+  /* The bound timer is stopped between runs, so it does not make a loop with nothing else in it look alive. */
+  bool alive = uv_loop_alive(&loop->uv);
+  if (alive) run_bounded(loop, ms);
+  drain(vm);
+  return alive;
+}
+
 /* libuv owns the platform-specific monotonic clock. Keep its header inside the loop layer, and preserve errno because
    tracing is observational and must not change the error of the operation it records. */
 uint64_t agc_trace_now(void) {
@@ -992,28 +1026,17 @@ static void close_files(agc_vm *vm) {
   }
 }
 
-static void flush_expired(uv_timer_t *timer) { ((agc_loop *)timer->data)->expired = true; }
-
 /* Every file close flushes its buffer in a pool job; the run waits for them,
    at most the flush limit (30 seconds, --flush-timeout or AGENTICA_FLUSH_TIMEOUT_MS). */
 static void finish_flushes(agc_vm *vm) {
-  agc_loop *loop = vm->loop;
   if (!flushing(vm)) return;
-  loop->expired = false;
-  uv_update_time(&loop->uv);
-  uv_timer_init(&loop->uv, &loop->deadline);
-  loop->deadline.data = loop;
-  uv_timer_start(&loop->deadline, flush_expired, (uint64_t)vm->rt->flush_timeout, 0);
+  uint64_t by = agc_clock_ms() + (uint64_t)vm->rt->flush_timeout;
   for (;;) {
     drain(vm);
-    if (!flushing(vm) || loop->expired) break;
-    uv_run(&loop->uv, UV_RUN_ONCE);
-    if (!uv_loop_alive(&loop->uv)) {
-      drain(vm);
-      break;
-    }
+    if (!flushing(vm)) break;
+    uint64_t now = agc_clock_ms();
+    if (now >= by || !agc_io_run_for(vm, by - now)) break;
   }
-  uv_close((uv_handle_t *)&loop->deadline, NULL);
   vm->rt->flush_expired = flushing(vm);
 }
 
@@ -1070,25 +1093,14 @@ static void unwatch_stop(agc_loop *loop) {
 #endif
 }
 
-static void close_tick(uv_timer_t *timer) { (void)timer; }
-
-static void close_bound(uv_handle_t *handle) { free(handle); }
-
 static bool finish_native_close(agc_loop *loop) {
-  uv_timer_t *bound = malloc(sizeof *bound);
-  if (!bound) agc_out_of_memory();
-  if (uv_timer_init(&loop->uv, bound) != 0) { free(bound); return false; }
   uint64_t deadline = uv_hrtime() + UINT64_C(1000000000);
   while (uv_loop_alive(&loop->uv)) {
     uint64_t now = uv_hrtime();
     if (now >= deadline) break;
-    uint64_t remaining = (deadline - now + 999999) / 1000000;
-    uv_update_time(&loop->uv);
-    if (uv_timer_start(bound, close_tick, remaining, 0) != 0) break;
-    uv_run(&loop->uv, UV_RUN_ONCE);
-    uv_timer_stop(bound);
+    run_bounded(loop, (deadline - now + 999999) / 1000000);
   }
-  uv_close((uv_handle_t *)bound, close_bound);
+  release_bound(loop);
   uv_run(&loop->uv, UV_RUN_NOWAIT);
   return uv_loop_close(&loop->uv) == 0;
 }
@@ -1107,6 +1119,7 @@ static bool close_all(agc_vm *vm) {
   release_handles(vm);
   if (!vm->loop) return true;
   unwatch_stop(vm->loop);
+  release_bound(vm->loop);
   for (int attempt = 0; attempt < 4; attempt++) {
     uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
     for (job *j = vm->loop->ready; j; j = j->ready_next) j->queued = false;
