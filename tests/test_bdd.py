@@ -16,14 +16,18 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import (ROOT, TESTS, binary, cli, front_end_command, report_cases, require, run,
+from tests.agentica_test import (ROOT, TESTS, binary, cli, front_end_command, report_cases, run,
                                  vm_environment, write_files)
 
-HANDLERS = str(TESTS / "bdd" / "handlers.agc")
-# The first binary of the bootstrap (the Makefile links it with stage0 and builds the release mode only).
-BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / ("agentica.exe" if os.name == "nt" else "agentica")
+# Paths are written with "/" on every system, as the driver reports them (it joins and resolves with "/").
+HANDLERS = (TESTS / "bdd" / "handlers.agc").as_posix()
 ADDS_TEST = 'def main() -> Void\n  Test.run([Test.test("adds") do\n    Test.eq(1 + 1, 2)\n  end])\nend\n'
-CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
+CUSTOM = (TESTS / "bdd" / "specs" / "custom.feature").as_posix()
+
+
+def joined(directory, name):
+    """The path of `name` in `directory`, written with "/" like the paths in a report."""
+    return (Path(directory) / name).as_posix()
 
 
 def code_of(item):
@@ -138,20 +142,6 @@ def test_the_programs_the_binary_carries_are_the_texts_the_driver_compiles_witho
         assert ast.literal_eval('"%s"' % literal) == (ROOT / "compiler" / "embedded" / (name + ".agc")).read_text(), name
 
 
-def test_the_first_binary_of_the_bootstrap_still_tests_with_the_driver_of_stage0(bdd):
-    """That binary has the driver of stage0: it compiles the runner and the steps from the std/ sources of this
-    checkout, writes the configuration it always wrote, and knows no embedded program. The current runner must
-    read that configuration."""
-    require(BOOTSTRAP.is_file(), "the first binary is not built (%s): run make" % BOOTSTRAP)
-    directory = bdd.suite({"c_test.agc": ADDS_TEST})
-    result = run([BOOTSTRAP, "test", "--json", directory], env=vm_environment())
-    assert (result.code, result.stderr) == (0, "")
-    assert json.loads(result.stdout)["passed"] == 1
-    result = run([BOOTSTRAP, "run", "--embedded", "runner", "--", "config.jsonl"], env=vm_environment())
-    assert (result.code, result.stdout) == (2, "")
-    assert result.stderr != ""
-
-
 def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(bdd):
     directory = bdd.suite({
         "a.feature": "Feature: invalid\nScenario: empty\n",
@@ -178,7 +168,7 @@ def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(b
     assert [statuses(results[0]), statuses(results[1]), statuses(results[5])] == [
         ["failed", "not_executed"], ["passed", "failed"], ["not_executed", "failed"]]
     assertion = results[0]["error"]
-    assert (assertion["file"], start_line(assertion)) == (os.path.join(directory, "b.feature"), 3)
+    assert (assertion["file"], start_line(assertion)) == (joined(directory, "b.feature"), 3)
     crash = results[2]["error"]
     assert (crash["file"], start_line(crash)) == (HANDLERS, 35)
     assert results[5]["error"]["actual"] == '"missing definition"'
@@ -186,7 +176,7 @@ def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(b
 
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
     directory = bdd.suite({"crash.feature": "Feature: Crash\nScenario: runtime\nThen execution crashes\n"})
-    feature = os.path.join(directory, "crash.feature")
+    feature = joined(directory, "crash.feature")
     place = HANDLERS + ":35:15"
     text = bdd.agentica_test(feature, "--steps", HANDLERS)
     assert text.code == 1
@@ -221,27 +211,27 @@ def test_tasks_may_assert_must_end_before_the_handler_returns_and_a_crashing_tas
                                    "def main() -> Void\n  task = Task.spawn(&wait, 0)\n  BDD.run([])\nend"),
         "crashed.agc": steps_program("def crash(n: Int) -> Int\n  return 1 / n\nend\n",
                                      "def main() -> Void\n  task = Task.spawn(&crash, 0)\n  Task.sleep(0)\n  BDD.run([])\nend")})
-    feature = os.path.join(directory, "tasks.feature")
-    status, report = bdd.json_test(feature, "--steps", os.path.join(directory, "steps.agc"))
+    feature = joined(directory, "tasks.feature")
+    status, report = bdd.json_test(feature, "--steps", joined(directory, "steps.agc"))
     assert status == 1
     assert [item["status"] for item in report_cases(report)] == ["passed", "failed", "failed", "passed"]
     assert [code_of(item) for item in report_cases(report)[1:3]] == [
         "RUNTIME-BDD-PENDING-TASKS", "RUNTIME-TASK-CRASHED"]
     assert "RUNTIME-DIVISION-BY-ZERO" in report_cases(report)[2]["error"]["message"]
-    _, early = bdd.json_test(feature, "--steps", os.path.join(directory, "early.agc"))
+    _, early = bdd.json_test(feature, "--steps", joined(directory, "early.agc"))
     assert file_error(early)["code"] == "RUNTIME-BDD-PENDING-TASKS"
     assert report_cases(early) == []
-    _, crashed = bdd.json_test(feature, "--steps", os.path.join(directory, "crashed.agc"))
+    _, crashed = bdd.json_test(feature, "--steps", joined(directory, "crashed.agc"))
     assert file_error(crashed)["code"] == "RUNTIME-TASK-CRASHED"
     assert report_cases(crashed) == []
 
 
 def test_a_step_program_with_invalid_utf8_is_one_file_error_at_the_bad_byte(bdd):
     directory = bdd.suite({"steps.feature": "Feature: Steps\nScenario: small\nThen 3 is small\n"})
-    steps = os.path.join(directory, "bad.agc")
+    steps = joined(directory, "bad.agc")
     with open(steps, "wb") as out:
         out.write(b"# caf\xc3\xa9\ndef main() -> Void\n  puts(\"\xff\")\nend\n")
-    status, report = bdd.json_test(os.path.join(directory, "steps.feature"), "--steps", steps)
+    status, report = bdd.json_test(joined(directory, "steps.feature"), "--steps", steps)
     assert status == 1
     problem = file_error(report)
     assert problem["code"] == "LEX-INVALID-UTF8"
@@ -276,7 +266,7 @@ def test_blocks_capture_ambiguous_steps_fail_and_a_bad_step_program_is_one_file_
             'BDD.step("fail later") do |ctx, args| BDD.assert(ctx, false, "later") end'))})
 
     def path(name):
-        return os.path.join(directory, name)
+        return joined(directory, name)
 
     status, report = bdd.json_test(path("steps.feature"), "--steps", path("blocks.agc"))
     assert status == 1
@@ -306,7 +296,7 @@ def test_usage_errors_exit_2_an_empty_directory_exits_1_and_missing_pieces_are_i
     directory = bdd.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
 
     def path(name):
-        return os.path.join(directory, name)
+        return joined(directory, name)
 
     for arguments in (["--steps"], ["--only"], ["--unknown"], ["--steps", "a.agc", "--steps", "b.agc"]):
         status, report = bdd.json_test(*arguments)
@@ -339,7 +329,7 @@ def test_without_paths_specs_and_test_are_searched_and_the_empty_message_says_wh
         result = bdd.agentica_test("--json", cwd=scratch)
         assert result.code == 1
         problem = file_error(json.loads(result.stdout))
-        assert (problem["code"], problem["file"]) == ("CHECK-BDD-EMPTY", str(scratch / "specs") + "/")
+        assert (problem["code"], problem["file"]) == ("CHECK-BDD-EMPTY", (scratch / "specs").as_posix() + "/")
         messages.append(problem["message"])
     assert messages == ["no .feature or *_test.agc files found: neither specs/ nor test/ exists",
                         "no .feature or *_test.agc files found"]

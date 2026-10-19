@@ -31,8 +31,8 @@ def test_bdd_handlers_can_always_spawn_and_programs_under_test_need_allow_run(tm
     denied = cli_run(*args)
     assert denied.code == 1, (denied.stdout, denied.stderr)
     report = json.loads(denied.stdout)
-    assert report["passed"] == 1
-    assert [item["status"] for item in report["files"][0]["scenarios"]] == ["failed", "passed"]
+    assert report["passed"] == 1, report
+    assert [item["status"] for item in report["files"][0]["scenarios"]] == ["failed", "passed"], report
     allowed = cli_run(*args, "--allow-run")
-    assert allowed.code == 0
+    assert allowed.code == 0, (allowed.stdout, allowed.stderr)
     assert json.loads(allowed.stdout)["passed"] == 2

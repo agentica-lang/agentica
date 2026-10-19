@@ -1,4 +1,5 @@
-"""`agentica test` cases that need a POSIX system: file modes and links, and a shell script as the binary.
+"""`agentica test` cases that need a POSIX system: file modes and links, a shell script as the binary, and the first
+binary of the bootstrap (its driver is the one of stage0, which does not know the Windows temporary folder).
 
 The Windows job does not run this module (the cases are not skipped there, they are not listed): a folder made
 unreadable with chmod, a symbolic link, a name that is not valid UTF-8 and a `#!/bin/sh` script have no Windows
@@ -11,8 +12,11 @@ import re
 
 import pytest
 
-from tests.agentica_test import binary, front_end_command
-from tests.test_bdd import HANDLERS, BddCli, bdd, file_error  # noqa: F401  (bdd is the fixture of that module)
+from tests.agentica_test import ROOT, binary, front_end_command, require, run, vm_environment
+from tests.test_bdd import ADDS_TEST, HANDLERS, BddCli, bdd, file_error  # noqa: F401  (bdd is the fixture of that module)
+
+# The first binary of the bootstrap (the Makefile links it with stage0 and builds the release mode only).
+BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / "agentica"
 
 
 def fake_binary(directory, script):
@@ -98,3 +102,17 @@ def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error
     assert ("cannot make a private directory in %s" % temporary) in problem["message"]
     assert "ermission denied" in problem["message"]
     assert os.listdir(temporary) == []
+
+
+def test_the_first_binary_of_the_bootstrap_still_tests_with_the_driver_of_stage0(bdd):
+    """That binary has the driver of stage0: it compiles the runner and the steps from the std/ sources of this
+    checkout, writes the configuration it always wrote, and knows no embedded program. The current runner must
+    read that configuration."""
+    require(BOOTSTRAP.is_file(), "the first binary is not built (%s): run make" % BOOTSTRAP)
+    directory = bdd.suite({"c_test.agc": ADDS_TEST})
+    result = run([BOOTSTRAP, "test", "--json", directory], env=vm_environment())
+    assert (result.code, result.stderr) == (0, "")
+    assert json.loads(result.stdout)["passed"] == 1
+    result = run([BOOTSTRAP, "run", "--embedded", "runner", "--", "config.jsonl"], env=vm_environment())
+    assert (result.code, result.stdout) == (2, "")
+    assert result.stderr != ""
