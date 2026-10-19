@@ -487,7 +487,7 @@ static void test_a_wait_on_an_idle_loop_returns_at_once(void) {
   open_pipe();
   fresh(pipe_fds[1]);
   uint64_t started = agc_clock_ms();
-  assert(!agc_io_run_for(&vm, 10000));
+  assert(!agc_io_run_for(&vm, 10000, true));
   assert(agc_clock_ms() - started < 1000);
   finish();
   close_pipe();

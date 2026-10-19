@@ -711,8 +711,9 @@ vm-test: $(VM_TESTS)
 	printf '%s\n' $(VM_TESTS_NORMAL) | xargs -P $(JOBS) -n 1 sh -c '$(VM_TEST_RUNNER) "$$0" || { echo "C test failed: $$0" >&2; exit 255; }'
 
 # TSan over the code that more than one thread touches (docs/vm/10-io-multicore.md §10.2.3, "Order of work"): the inbox, the
-# set-once outcome and reference count, the run queue, the wake against the park, and a job on the loop. The VM is built
-# without libgc (AGC_NO_GC), so the collector's own signals are out of the picture; the whole run is checked, so a race fails it.
+# set-once outcome and reference count, the run queue, the wake against the park, a job on the loop, rt->sync, the output
+# locks and a timer fired against a wake. The VM is built without libgc (AGC_NO_GC), so the collector's own signals are out
+# of the picture; the whole run is checked, so a race fails it.
 VM_TSAN_TESTS := inbox outcome runq task_wake job sync output timers
 vm-tsan:
 	$(MAKE) $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) TSAN=1 SANITIZE=0 GC_STRESS=0

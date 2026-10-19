@@ -42,11 +42,11 @@ static void test_order(void) {
     uint64_t offset = (uint64_t)((k * 37) % 50);
     tasks[k] = parked_on_timer(&vm, now - 1000 + offset);
   }
-  assert(agc_timers_armed(vm.rt) == TASKS);
+  assert(vm.timers.count == TASKS);
   assert(agc_timers_next_due(&vm) == now - 1000);
   vm.task = vm.rt->main;
   assert(agc_timers_run(&vm));
-  assert(agc_timers_armed(vm.rt) == 0 && agc_timers_next_due(&vm) == UINT64_MAX);
+  assert(vm.timers.count == 0 && agc_timers_next_due(&vm) == UINT64_MAX);
   uint64_t last = 0;
   uint64_t last_seq = 0;
   size_t popped = 0;
@@ -105,7 +105,7 @@ static void test_disarm_and_future(void) {
       if (tasks[k]->timer.deadline < earliest) earliest = tasks[k]->timer.deadline;
     }
   }
-  assert(agc_timers_armed(vm.rt) == woken_expected + left);
+  assert(vm.timers.count == woken_expected + left);
   vm.task = vm.rt->main;
   assert(agc_timers_run(&vm));
   size_t woken = 0;
@@ -116,14 +116,14 @@ static void test_disarm_and_future(void) {
   }
   assert(woken == woken_expected);
   check_heap();
-  assert(agc_timers_armed(vm.rt) == left && agc_timers_next_due(&vm) == earliest);
+  assert(vm.timers.count == left && agc_timers_next_due(&vm) == earliest);
   for (size_t k = 0; k < TASKS; k++) {
     if (gone[k] || due[k]) continue;
     assert(tasks[k]->timer.heap && atomic_load(&tasks[k]->state) == AGC_TASK_PARKED);
     agc_timers_disarm(&vm, tasks[k]);
     check_heap();
   }
-  assert(agc_timers_armed(vm.rt) == 0 && agc_timers_next_due(&vm) == UINT64_MAX);
+  assert(vm.timers.count == 0 && agc_timers_next_due(&vm) == UINT64_MAX);
 }
 
 static agc_task *racing;
@@ -180,7 +180,7 @@ static void test_fire_against_wake(void) {
     while (atomic_load_explicit(&finished, memory_order_acquire) < round) {}
     assert(agc_runq_pop(vm.rt->runq) == NULL);
     assert(atomic_load(&racing->state) == AGC_TASK_RUNNING);
-    assert(!racing->timer.heap && agc_timers_armed(vm.rt) == 0);
+    assert(!racing->timer.heap && vm.timers.count == 0);
     assert(!agc_timers_run(&vm));
     racing->timer.timed = false;
   }

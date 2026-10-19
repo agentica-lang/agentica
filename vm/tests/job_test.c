@@ -106,10 +106,10 @@ static void idle_drop(void *data) {
   idle_drops++;
 }
 
-/* A timer only: the timer is its one piece. */
-static const agc_io_kind idle_io = {NULL, idle_done, idle_expired, idle_drop, false, "idle", NULL, false};
+/* A wait on the loop that nothing ends: only its deadline does, so the job always expires. */
+static const agc_io_kind idle_io = {NULL, idle_done, idle_expired, idle_drop, true, "idle", NULL, false};
 
-static const agc_io_kind nap_io = {NULL, idle_done, idle_expired, NULL, false, "nap", NULL, false};
+static const agc_io_kind nap_io = {NULL, idle_done, idle_expired, NULL, true, "nap", NULL, false};
 
 static void quick_work(void *data) {
   ((gate *)data)->value = 7;
@@ -293,7 +293,7 @@ static void test_request_from_another_thread(void) {
   assert(uv_thread_create(&thread, extend_later, job) == 0);
   wait_woken(task);
   assert(uv_thread_join(&thread) == 0);
-  assert(take(task) == 1);
+  assert(take(task) == -1);
   settle_loop();
 }
 
@@ -430,12 +430,13 @@ static void test_poll_runs_queued_requests(void) {
   assert(!uv_loop_alive(agc_io_uv(&vm)));
   assert(agc_io_poll(&vm, false));
   wait_woken(task);
-  assert(take(task) == 1);
+  assert(take(task) == -1);
   settle_loop();
-  assert(idle_drops == 0);
+  assert(idle_drops == 1);
+  idle_drops = 0;
 }
 
-/* A scheduler's thread starts a job that ends at once (a timer of zero) and commits the park as the scheduler does:
+/* A scheduler's thread starts a job that expires at once (a deadline of zero) and commits the park as the scheduler does:
    it records its task before it posts the START, so the wake always finds it. The loop's thread polls meanwhile; a
    lost wake leaves the task parked for ever, and the deadline of the test ends the process. */
 static void start_instant(void *arg) {
@@ -457,7 +458,7 @@ static void test_instant_job_wakes_its_task(void) {
     agc_task *woken;
     while (!(woken = agc_runq_pop(vm.rt->runq))) agc_io_poll(&vm, false);
     assert(woken == task);
-    assert(take(task) == 1);
+    assert(take(task) == -1);
   }
   settle_loop();
 }
@@ -578,6 +579,119 @@ static void test_raising_done_on_a_scheduler(void) {
   settle_loop();
 }
 
+static int left_drops;
+
+static void left_drop(void *data) {
+  free(data);
+  left_drops++;
+}
+
+static const agc_io_kind left_io = {swift_work, where_done, where_done, left_drop, false, "left", NULL, false};
+
+static void start_left(void *arg) {
+  agc_io_detached(&vm, &left_io, arg, agc_void(), AGC_JOB_QUIET);
+}
+
+/* A detached job handed to a scheduler that never services it, because the run ends first: the close gives back the
+   count that the service list holds, `drop` frees the data once, `done` never runs, and the registry ends empty. */
+static void test_unserviced_job_is_freed_at_the_close(void) {
+  assert(agc_io_share(&vm, false));
+  int *data = calloc(1, sizeof *data);
+  assert(data);
+  swift_done_calls = 0;
+  on_thread(start_left, data);
+  wait_for_hand_over();
+  settle_loop();
+  assert(left_drops == 1 && swift_done_calls == 0);
+  /* An empty registry gives the next resource slot 0. */
+  agc_resource *probe = agc_register(&vm, NULL, NULL);
+  assert(probe->slot == 0);
+  agc_unregister(&vm, probe);
+}
+
+#define GUARDED_JOBS 4
+
+/* Stands for the shared state of the tasks (a waiter list, the task tree): changed only with rt->sync held. */
+static int guarded;
+static _Atomic bool hammering, hammer_started;
+
+static agc_value guarded_done(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  free(data);
+  guarded++;
+  swift_done_calls++;
+  return agc_void();
+}
+
+static const agc_io_kind guarded_io = {swift_work, guarded_done, guarded_done, swift_drop, false, "guarded", NULL,
+                                       false};
+
+static void start_guarded(void *arg) {
+  agc_io_detached(&vm, &guarded_io, arg, agc_void(), AGC_JOB_QUIET);
+}
+
+/* Another scheduler changes the same state under the lock until told to stop. It says it started before its first
+   change, so no change of it is ordered before the service by that flag. */
+static void hammer(void *arg) {
+  agc_vm *other = arg;
+  assert(agc_gc_thread_enter());
+  atomic_store(&hammer_started, true);
+  while (atomic_load(&hammering)) {
+    agc_sync_take(other);
+    guarded++;
+    agc_sync_drop(other);
+  }
+  agc_gc_thread_leave();
+}
+
+static void service_all(void *arg) {
+  (void)arg;
+  assert(agc_io_service(&vm));
+}
+
+/* The `done` of a detached job changes the shared state of the tasks, so agc_io_service runs it with rt->sync held:
+   make vm-tsan reports a race here if it did not, since another scheduler changes the same state under the lock. */
+static void test_service_holds_sync(void) {
+  agc_share(&vm);
+  assert(agc_io_share(&vm, false));
+  agc_vm other = vm;
+  other.sync_depth = 0;
+  swift_done_calls = 0;
+  for (int k = 0; k < GUARDED_JOBS; k++) {
+    int *data = calloc(1, sizeof *data);
+    assert(data);
+    on_thread(start_guarded, data);
+    wait_for_hand_over();
+  }
+  atomic_store(&hammering, true);
+  uv_thread_t thread;
+  assert(uv_thread_create(&thread, hammer, &other) == 0);
+  while (!atomic_load(&hammer_started)) {}
+  on_thread(service_all, NULL);
+  atomic_store(&hammering, false);
+  assert(uv_thread_join(&thread) == 0);
+  assert(swift_done_calls == GUARDED_JOBS);
+  pump_until_idle();
+  settle_loop();
+}
+
+static const agc_io_kind timer_only_io = {NULL, idle_done, idle_expired, NULL, false, "timer", NULL, false};
+
+/* A kind with no work and no wait would be a bare deadline, which is a task timer: start_job refuses it before it
+   registers anything. */
+static void test_timer_only_kind_is_refused(void) {
+  running();
+  agc_task *task = vm.task;
+  if (setjmp(vm.fail) == 0) {
+    (void)agc_io_start(&vm, &timer_only_io, NULL, agc_void(), 5);
+    assert(!"a timer-only kind was started");
+  }
+  assert(!task->parked);
+  task->parking = false;
+  settle_loop();
+}
+
 #ifndef _WIN32
 static void extend_after_close(void *arg) {
   agc_io_extend(arg, 5);
@@ -633,6 +747,9 @@ int main(void) {
   test_many_jobs_end();
   test_detached_ends_on_a_scheduler();
   test_raising_done_on_a_scheduler();
+  test_unserviced_job_is_freed_at_the_close();
+  test_timer_only_kind_is_refused();
+  test_service_holds_sync();
 #endif
   puts("job tests passed");
   return 0;

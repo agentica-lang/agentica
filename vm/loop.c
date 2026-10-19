@@ -88,10 +88,10 @@ struct agc_loop {
   job *ready, *ready_tail;
   /* Detached jobs that the drain found ready while a second thread runs the schedulers: the I/O role must not run
      their `done` (it builds values and may close handles), so it queues them here for a scheduler (agc_io_service). The
-     list holds the reference that the ready list held. A leaf lock protects it. */
+     list holds the reference that the ready list held. A leaf mutex protects it; it lives in this malloc block,
+     which holds no GC pointer. */
   job *service, *service_tail;
-  agc_lock *service_lock;
-  _Atomic size_t service_count;
+  uv_mutex_t service_lock;
   /* Jobs whose count reached zero, pushed by the holder that dropped the last reference. I/O role only: every
      reference is given back on the I/O thread (a scheduler posts a RELEASE), so the list needs no lock. */
   job *dead;
@@ -376,13 +376,12 @@ static int queue_work(agc_loop *loop, job *j) {
   return rc;
 }
 
-/* A job that is only a timer is done when the timer fires; a job with work or a wait has timed out. */
+/* The deadline of the job's work or wait has passed: the job has timed out. */
 static void timer_fired(uv_timer_t *timer) {
   job *j = timer_job((uv_handle_t *)timer);
   atomic_store(&j->timer_fired, true);
   note_end(j);
-  (void)agc_job_settle(&j->outcome,
-                       j->kind->work || j->kind->external ? AGC_JOB_EXPIRED : AGC_JOB_DONE);
+  (void)agc_job_settle(&j->outcome, AGC_JOB_EXPIRED);
   mark_ready(j);
 }
 
@@ -516,9 +515,7 @@ static bool on_io_thread(const agc_loop *loop) {
 /* Nothing posts after the inbox is closed: the schedulers have ended. A request from another thread now would have no
    consumer and would leak a reference, so it ends the process with a message instead of running or vanishing. */
 static _Noreturn void post_after_close(void) {
-  static const char message[] = "agentica: internal error: a request was posted to the I/O thread after the loop closed\n";
-  (void)!write(2, message, sizeof message - 1);
-  abort();
+  agc_internal_abort("a request was posted to the I/O thread after the loop closed");
 }
 
 /* A libuv step on a job, asked of the I/O role (§16.4). On the loop's thread it runs at once, with no entry and no
@@ -560,8 +557,6 @@ static agc_loop *new_loop(agc_vm *vm) {
   if (!loop) agc_out_of_memory();
   loop->ready = loop->ready_tail = NULL;
   loop->service = loop->service_tail = NULL;
-  loop->service_lock = agc_lock_new("service");
-  atomic_init(&loop->service_count, 0);
   loop->dead = NULL;
   loop->bound_init = false;
   loop->vm = vm;
@@ -579,7 +574,12 @@ static agc_loop *new_loop(agc_vm *vm) {
   loop->parent_check_init = false;
 #endif
 #endif
+  if (uv_mutex_init(&loop->service_lock) != 0) {
+    free(loop);
+    return NULL;
+  }
   if (uv_loop_init(&loop->uv) != 0) {
+    uv_mutex_destroy(&loop->service_lock);
     free(loop);
     return NULL;
   }
@@ -699,14 +699,13 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
 static void hand_to_scheduler(agc_vm *vm, job *j) {
   agc_loop *loop = vm->rt->loop;
   j->service_next = NULL;
-  agc_lock_take(loop->service_lock);
+  uv_mutex_lock(&loop->service_lock);
   if (loop->service_tail)
     loop->service_tail->service_next = j;
   else
     loop->service = j;
   loop->service_tail = j;
-  atomic_fetch_add_explicit(&loop->service_count, 1, memory_order_release);
-  agc_lock_drop(loop->service_lock);
+  uv_mutex_unlock(&loop->service_lock);
   agc_runq_nudge(vm->rt->runq);
 }
 
@@ -747,20 +746,20 @@ static void drain(agc_vm *vm) {
    raises. Returns whether it ended any job. */
 bool agc_io_service(agc_vm *vm) {
   agc_loop *loop = vm->rt->loop;
-  if (!loop || atomic_load_explicit(&loop->service_count, memory_order_acquire) == 0) return false;
+  if (!loop) return false;
   agc_task *saved = vm->task;
-  vm->task = agc_alloc(sizeof(agc_task));
+  agc_task *scratch = NULL;
   bool ran = false;
   for (;;) {
-    agc_lock_take(loop->service_lock);
+    uv_mutex_lock(&loop->service_lock);
     job *j = loop->service;
     if (j) {
       loop->service = j->service_next;
       if (!loop->service) loop->service_tail = NULL;
-      atomic_fetch_sub_explicit(&loop->service_count, 1, memory_order_relaxed);
     }
-    agc_lock_drop(loop->service_lock);
+    uv_mutex_unlock(&loop->service_lock);
     if (!j) break;
+    if (!scratch) vm->task = scratch = agc_alloc(sizeof(agc_task));
     j->service_next = NULL;
     ran = true;
     agc_sync_take(vm);
@@ -1115,6 +1114,8 @@ struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
                                int64_t timeout_ms, const agc_task *task, agc_more_fn more, unsigned flags) {
   if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
+  /* A plain deadline is a task timer (vm/timers.c), not a job. */
+  if (!kind->work && !kind->external) agc_fail(vm, "RUNTIME-INTERNAL", "a job needs pool work or a wait", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
   if (!j) agc_out_of_memory();
@@ -1122,19 +1123,18 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   j->data = data;
   j->more = more;
   j->loop = loop;
-  /* The holders (§16.5): the owner, and the wait piece when the job has pool work or waits on the loop. A job that is
-     only a timer has no wait piece. The timer is no holder: it never touches `data`, and sweep waits for its close. */
-  atomic_init(&j->refs, 1);
+  /* The holders (§16.5): the owner and the wait piece. The timer is no holder: it never touches `data`, and sweep waits
+     for its close. */
+  atomic_init(&j->refs, 2);
   atomic_init(&j->outcome, AGC_JOB_PENDING);
   atomic_init(&j->detached, task == NULL);
-  atomic_init(&j->busy, kind->work || kind->external);
+  atomic_init(&j->busy, true);
   atomic_init(&j->ended, false);
   atomic_init(&j->start_failed, false);
   atomic_init(&j->timer_fired, false);
   atomic_init(&j->dropping, false);
   atomic_init(&j->on_loop, false);
   j->flush = (flags & AGC_JOB_FLUSH) != 0;
-  if (kind->work || kind->external) agc_job_ref(&j->refs);
   agc_resource *r = agc_register(vm, j, NULL);
   r->kind = AGC_RESOURCE_JOB;
   r->context = context;
@@ -1161,24 +1161,13 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
 }
 
 /* The job is the wait of the task, so the task is marked PARKING before the job exists: the job's completion is
-   the wake (§10.2.3). A builtin that registers something else first (a waiter list, a request) marks before that and
-   calls agc_io_start_marked, so the task is marked once per park. */
-static agc_io_job *start_parked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                                int64_t timeout_ms, agc_more_fn more) {
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, 0);
-  agc_task_park(vm, false);
-  return r->native;
-}
-
+   the wake (§10.2.3). */
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more) {
   agc_task_parking(vm);
-  return start_parked(vm, kind, data, context, timeout_ms, more);
-}
-
-agc_io_job *agc_io_start_marked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                                int64_t timeout_ms) {
-  return start_parked(vm, kind, data, context, timeout_ms, NULL);
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, 0);
+  agc_task_park(vm, false);
+  return r->native;
 }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
@@ -1239,32 +1228,21 @@ static void release_bound(agc_loop *loop) {
   loop->bound_init = false;
 }
 
-/* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true): a loop with nothing alive
-   means a stall. With a timer, the loop runs once for at most the time to the deadline (the bound timer), alive or not,
-   because an armed timer is work that will come (docs/vm/16-architecture.md §16.9, "Timers"); a job that becomes ready
-   or a stop signal ends the wait sooner. */
-bool agc_io_wait(agc_vm *vm, uint64_t due_ms) {
-  if (due_ms == UINT64_MAX) return agc_io_poll(vm, true);
+/* A loop with nothing alive is run only when ALIVE_REQUIRED is false: the idle step of a scheduler with an armed timer
+   waits for its deadline, alive or not, because the timer is work that will come (docs/vm/16-architecture.md §16.9,
+   "Timers"). A job that becomes ready or a stop signal ends the wait sooner. */
+bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required) {
   agc_loop *loop = loop_of(vm);
   assert(on_io_thread(loop));
   if (loop->inbox) (void)agc_inbox_run(loop->inbox);
-  uint64_t now = agc_clock_ms();
-  if (loop->ready || due_ms <= now)
-    uv_run(&loop->uv, UV_RUN_NOWAIT);
-  else
-    run_bounded(loop, due_ms - now);
-  drain(vm);
-  return true;
-}
-
-bool agc_io_run_for(agc_vm *vm, uint64_t ms) {
-  agc_loop *loop = loop_of(vm);
-  if (loop->inbox) (void)agc_inbox_run(loop->inbox);
   /* The bound timer is stopped between runs, so it does not make a loop with nothing else in it look alive. */
-  bool alive = uv_loop_alive(&loop->uv);
-  if (alive) run_bounded(loop, ms);
+  bool go = !alive_required || uv_loop_alive(&loop->uv);
+  if (go && (loop->ready || ms == 0))
+    uv_run(&loop->uv, UV_RUN_NOWAIT);
+  else if (go)
+    run_bounded(loop, ms);
   drain(vm);
-  return alive;
+  return go;
 }
 
 /* libuv owns the platform-specific monotonic clock. Keep its header inside the loop layer, and preserve errno because
@@ -1426,7 +1404,7 @@ static void finish_flushes(agc_vm *vm) {
     drain(vm);
     if (!flushing(vm)) break;
     uint64_t now = agc_clock_ms();
-    if (now >= by || !agc_io_run_for(vm, by - now)) break;
+    if (now >= by || !agc_io_run_for(vm, by - now, true)) break;
   }
   vm->rt->flush_expired = flushing(vm);
 }
@@ -1499,6 +1477,12 @@ static bool finish_native_close(agc_loop *loop) {
   return uv_loop_close(&loop->uv) == 0;
 }
 
+static void free_loop(agc_vm *vm) {
+  uv_mutex_destroy(&vm->rt->loop->service_lock);
+  free(vm->rt->loop);
+  vm->rt->loop = NULL;
+}
+
 static bool close_all(agc_vm *vm) {
   agc_io_flush_files(vm);
   /* Requests still in the inbox hold references and may name jobs about to be closed: run them first. */
@@ -1539,19 +1523,16 @@ static bool close_all(agc_vm *vm) {
       drop_ref(j);
     }
     vm->rt->loop->service = vm->rt->loop->service_tail = NULL;
-    atomic_store(&vm->rt->loop->service_count, 0);
     sweep(vm);
     release_handles(vm);
     if (registry_count(vm)) continue;
     if (uv_loop_close(&vm->rt->loop->uv) == 0) {
-      free(vm->rt->loop);
-      vm->rt->loop = NULL;
+      free_loop(vm);
       return true;
     }
   }
   if (!registry_count(vm) && finish_native_close(vm->rt->loop)) {
-    free(vm->rt->loop);
-    vm->rt->loop = NULL;
+    free_loop(vm);
     return true;
   }
   return false;
@@ -1601,9 +1582,10 @@ bool agc_io_service(agc_vm *vm) {
   return false;
 }
 
-bool agc_io_wait(agc_vm *vm, uint64_t due_ms) {
+bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required) {
   (void)vm;
-  (void)due_ms;
+  (void)ms;
+  (void)alive_required;
   return false;
 }
 

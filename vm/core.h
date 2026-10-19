@@ -196,9 +196,10 @@ void agc_close_owned(agc_vm *vm, agc_task *t);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
-/* Runs the loop once, for at most MS milliseconds, and hands the finished jobs to the scheduler. False when nothing in
-   the loop was alive, so nothing could have ended the wait and the caller stops waiting. */
-bool agc_io_run_for(agc_vm *vm, uint64_t ms);
+/* Runs the loop once, for at most MS milliseconds (NOWAIT when MS is zero or a job is ready), and hands the finished
+   jobs to the scheduler. With ALIVE_REQUIRED a loop with nothing alive is not run and the call returns false, so the
+   caller stops waiting; without it the call always waits and returns true. */
+bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required);
 uint64_t agc_clock_ms(void);
 
 /* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other
@@ -211,10 +212,6 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t);
 bool agc_timers_run(agc_vm *vm);
 /* The earliest deadline of this scheduler's heap, or UINT64_MAX. */
 uint64_t agc_timers_next_due(const agc_vm *vm);
-uint64_t agc_timers_armed(const agc_runtime *rt);
-/* The idle step of a scheduler that has a timer: runs the loop once, for at most until DUE_MS (an agc_clock_ms value);
- * UINT64_MAX is agc_io_poll(vm, true). False when there is nothing to wait for. */
-bool agc_io_wait(agc_vm *vm, uint64_t due_ms);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 void agc_input_close(agc_vm *vm);

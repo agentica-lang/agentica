@@ -75,7 +75,6 @@ static void arm(agc_vm *vm, agc_task *t, uint64_t deadline) {
   place(h, h->count++, t);
   sift_up(h, t->timer.index);
   publish(h);
-  atomic_fetch_add_explicit(&vm->rt->timers_armed, 1, memory_order_relaxed);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "timer_arm task=%" PRIu64 " in_ms=%" PRIu64, t->id, remaining(deadline));
 }
 
@@ -94,7 +93,6 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t) {
     sift_down(h, last->timer.index);
   }
   publish(h);
-  atomic_fetch_sub_explicit(&h->rt->timers_armed, 1, memory_order_relaxed);
 }
 
 /* The task has marked itself PARKING and registered its other waits: the deadline is the one more thing that can wake
@@ -127,5 +125,3 @@ bool agc_timers_run(agc_vm *vm) {
 uint64_t agc_timers_next_due(const agc_vm *vm) {
   return atomic_load_explicit(&vm->timers.next_due, memory_order_relaxed);
 }
-
-uint64_t agc_timers_armed(const agc_runtime *rt) { return atomic_load_explicit(&rt->timers_armed, memory_order_relaxed); }

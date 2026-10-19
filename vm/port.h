@@ -276,9 +276,6 @@ typedef struct {
   agc_task *crashes, *crashes_tail, *quiet;
   uint64_t crash_count, observed_count;
   _Atomic uint64_t tasks_done;
-  /* How many timers are armed in all the heaps: a scheduler with nothing to run and no job on the loop is stalled only
-     when this is zero. Changed under rt->sync. */
-  _Atomic uint64_t timers_armed;
   /* The one lock for the shared state of the tasks (agc_sync_take): the task tree, the waiter lists, the channels, the
      Task.map groups and the logger table. `shared` is false until agc_share, and then the lock is real, and the
      interpreter takes it around each builtin whose row is marked `shared`. */
@@ -314,8 +311,9 @@ typedef enum { AGC_LOCK_TAKEN, AGC_LOCK_WAIT, AGC_LOCK_TIMEOUT } agc_lock_status
 
 /* The timed wait of a task (docs/vm/16-architecture.md §16.9, "Timers"): the task is its own timer entry, so a deadline
    needs no job, no registry slot and no libuv. `heap` is the heap that holds the entry (NULL when it is not armed),
-   `index` its place there, `seq` the order of arming that breaks a tie between equal deadlines, and `timed` says that
-   the task is parked on a timer, so `resume` disarms it and gives a wait that does not retry its void result. */
+   `index` its place there, `seq` the order of arming that breaks a tie between equal deadlines. `timed` says that the
+   task's last park armed a timer; only the scheduler running the task touches it, so `resume` takes rt->sync to disarm
+   only when it is set (`heap` itself is read under the lock: the owner's fire clears it). */
 typedef struct {
   uint64_t deadline, seq;
   struct agc_timers *heap;
@@ -332,7 +330,6 @@ typedef struct agc_timers {
   size_t count, cap;
   uint64_t seq;
   _Atomic uint64_t next_due;
-  agc_runtime *rt;
 } agc_timers;
 
 struct agc_task {
@@ -423,6 +420,9 @@ void agc_lock_share(agc_lock *l);
 void agc_lock_take_shared(agc_lock *l);
 void agc_lock_drop_shared(agc_lock *l);
 bool agc_lock_held(const agc_lock *l);
+/* A broken invariant of the VM's threads, where no diagnostic can be raised safely: writes "agentica: internal error: "
+   and DETAIL to stderr and aborts. */
+_Noreturn void agc_internal_abort(const char *detail);
 
 static inline void agc_lock_take(agc_lock *l) {
   if (__builtin_expect(!l->solo, 0)) agc_lock_take_shared(l);
@@ -488,9 +488,6 @@ void agc_task_cancel(agc_vm *vm, agc_task *t);
 
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
-/* agc_io_start for a builtin that called agc_task_parking already (it registered a waiter first): one mark per park. */
-agc_io_job *agc_io_start_marked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                                int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
 void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 #define AGC_JOB_FLUSH 1u

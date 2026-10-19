@@ -124,7 +124,7 @@ static agc_value napped(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind nap_io = {NULL, napped, napped, NULL, false, "nap", NULL, false};
+static const agc_io_kind nap_io = {NULL, napped, napped, NULL, true, "nap", NULL, false};
 
 static agc_value nap_again(agc_vm *vm) {
   assert(++tries < 1000);

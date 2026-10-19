@@ -277,8 +277,8 @@ section says how the scheduler and the loop keep them, as built.
   copies what the OS needs into a `malloc`'d request (paths through the rules of
   2.8), and starts the job. One `uv_queue_work` covers the whole operation
   (stat, open, read, close), so the task parks once per call. The call's timeout
-  is the job's timer (a negative timeout starts none; a kind without `work` is a
-  timer only). `CALL_BUILTIN` ends the turn.
+  is the job's timer (a negative timeout starts none). `CALL_BUILTIN` ends the
+  turn.
 - **Waking and parking.** The work and timer callbacks only set flags and put
   the job on the loop's ready list. After each `uv_run` the scheduler drains
   that list and queues the tasks. After each turn it calls

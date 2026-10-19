@@ -19,8 +19,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_runq_share`, which runs before a second thread touches it. A nudge
     (`agc_runq_nudge`, `agc_runq_nudged`, `agc_runq_take_nudge`) is work for a
     scheduler that is not a task: it ends one `agc_runq_wait` with NULL, and
-    the scheduler then calls `agc_io_service` (`vm/loop.c`), which ends the
-    detached jobs that the I/O role handed over.
+    in 3c the scheduler then calls `agc_io_service` (`vm/loop.c`), which ends
+    the detached jobs that the I/O role handed over (as built only C tests
+    call it).
 
 - **Path:** `vm/sync.c`
   - **Owns:** The locks of the shared state. `agc_lock` (a mutex that is solo
@@ -64,8 +65,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     no job. `agc_timers_run` (turn boundary and idle, in `agc_vm_run`) wakes the
     due tasks; `resume` and `unlink_task` take the entry out
     (`agc_timers_disarm`). Every change is made with `rt->sync` held, by any
-    scheduler. `agc_io_wait` is the idle step that sleeps until the nearest
-    deadline, `agc_runq_wait_until` the same for a scheduler thread.
+    scheduler. The idle step (`idle_wait` in `vm/task.c`) runs the loop until
+    the nearest deadline with `agc_io_run_for(vm, ms, false)`;
+    `agc_runq_wait_until` does the same for a scheduler thread.
 
 - **Path:** `vm/task_map.c`
   - **Owns:** `Task.map`: a stepper on the caller that starts, times and cancels

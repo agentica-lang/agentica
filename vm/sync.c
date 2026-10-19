@@ -38,12 +38,24 @@ static uintptr_t self(void) { return (uintptr_t)uv_thread_self(); }
 /* Names the lock, the owner it records and the calling thread's token, so that a failure seen once in CI says which
    lock and whether the owner was this thread. */
 static _Noreturn void misuse(const agc_lock *l, const char *what) {
-  char message[256];
-  int n = snprintf(message, sizeof message,
-                   "agentica: internal error: a thread %s (lock=%s owner=%#" PRIxPTR " self=%#" PRIxPTR " pid=%ld)\n",
-                   what, l->name ? l->name : "?", atomic_load_explicit(&l->owner, memory_order_relaxed), self(),
-                   (long)getpid());
-  if (n > 0) (void)!write(2, message, (size_t)n < sizeof message ? (size_t)n : sizeof message - 1);
+  char detail[200];
+  (void)snprintf(detail, sizeof detail, "a thread %s (lock=%s owner=%#" PRIxPTR " self=%#" PRIxPTR " pid=%ld)", what,
+                 l->name ? l->name : "?", atomic_load_explicit(&l->owner, memory_order_relaxed), self(),
+                 (long)getpid());
+  agc_internal_abort(detail);
+}
+
+/* One write of the whole line, so that it is not interleaved with another thread's output. */
+_Noreturn void agc_internal_abort(const char *detail) {
+  static const char prefix[] = "agentica: internal error: ";
+  char line[256];
+  size_t n = sizeof prefix - 1, len = strlen(detail);
+  memcpy(line, prefix, n);
+  if (len > sizeof line - n - 1) len = sizeof line - n - 1;
+  memcpy(line + n, detail, len);
+  n += len;
+  line[n++] = '\n';
+  (void)!write(2, line, n);
   abort();
 }
 

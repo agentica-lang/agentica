@@ -199,7 +199,6 @@ static void finish_task(agc_vm *vm, agc_task *t) {
 static void unlink_task(agc_vm *vm, agc_task *t) {
   if (t->parked) agc_io_detach(vm, t);
   agc_timers_disarm(vm, t);
-  t->timer.timed = false;
   if (t->lock_wait) agc_handle_leave(vm, t);
   if (t->channel.channel) agc_channel_leave(vm, t);
   if (t->output.out) agc_output_leave(vm, t);
@@ -287,11 +286,12 @@ static void resume(agc_vm *vm, agc_task *t) {
     agc_value result = agc_io_finish(vm, t);
     if (!t->retry) t->regs[t->park_reg] = result;
   } else if (t->timer.timed) {
+    /* Only a park that armed a timer pays for rt->sync here: the heap fields belong to the lock. A void call's
+       register is never read (CHECK-VOID-VALUE), so a sleep writes no result. */
     agc_sync_take(vm);
     agc_timers_disarm(vm, t);
     agc_sync_drop(vm);
     t->timer.timed = false;
-    if (!t->retry) t->regs[t->park_reg] = agc_void();
   }
   t->retry = false;
 }
@@ -512,6 +512,15 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   return main_done;
 }
 
+/* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true), and a loop with nothing
+   alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not. */
+static bool idle_wait(agc_vm *vm) {
+  uint64_t due = agc_timers_next_due(vm);
+  if (due == UINT64_MAX) return agc_io_poll(vm, true);
+  uint64_t now = agc_clock_ms();
+  return agc_io_run_for(vm, due > now ? due - now : 0, false);
+}
+
 agc_outcome agc_vm_run(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
     agc_profile_start(vm);
@@ -523,7 +532,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       if (!t) {
         check_stop(vm);
         if (agc_timers_run(vm)) continue;
-        if (!agc_io_wait(vm, agc_timers_next_due(vm))) {
+        if (!idle_wait(vm)) {
           check_stop(vm);
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
