@@ -47,6 +47,9 @@ typedef struct agc_runq agc_runq;
 typedef struct agc_lock agc_lock;
 typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
+/* A job's step on the I/O thread: after the pool work of a pool job (true keeps the job waiting on the loop, and
+   agc_io_ready ends it), or, for a wait on the loop, the start of that wait, before the deadline is armed (the result
+   is not used). */
 typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
 typedef struct agc_poller agc_poller;
 typedef struct agc_stdio agc_stdio;

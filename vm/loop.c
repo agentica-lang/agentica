@@ -448,13 +448,16 @@ static void close_timer(job *j) {
    so a START that reads it clear runs before any of them. The wait piece was never started: give its count back.
    A uv_queue_work that fails is known only here, on the I/O thread, after the task was parked: the outcome becomes
    EXPIRED with `start_failed` set, the task then fails in agc_io_finish ("cannot queue file work"), and a detached
-   job drops its data in end_detached (with a trace line, since nobody else would hear of it). */
+   job drops its data in end_detached (with a trace line, since nobody else would hear of it). A wait on the loop
+   (no pool work) with a `more` step starts its wait here, before the timer is armed, so the deadline always finds
+   the wait started and `pause` can stop it; posted as a second request, the wait could start after the deadline. */
 static void start_pieces(job *j, int64_t timeout_ms) {
   agc_loop *loop = j->loop;
   if (atomic_load(&j->ended)) {
     if (leave_wait(j)) drop_ref(j);
     return;
   }
+  if (!j->kind->work && j->more) (void)j->more(j->data, (agc_io_job *)j);
   if (timeout_ms >= 0) {
     uv_update_time(&loop->uv);
     uv_timer_init(&loop->uv, &j->timer);
@@ -1023,6 +1026,12 @@ void agc_io_children_stopped(void) {
   stop_at_once(now);
   _exit(128 + now);
 }
+
+/* A thread other than the loop's (a scheduler) keeps the stop signals blocked: the loop's thread handles them. */
+void agc_io_thread_signals(void) {
+  sigset_t saved;
+  agc_io_block_stop(&saved);
+}
 #else
 static const int stop_signal_numbers[] = {SIGINT, SIGBREAK, SIGHUP};
 
@@ -1093,6 +1102,9 @@ void agc_io_children_stopped(void) {
   int sig = atomic_load(&stop_status()->now);
   if (sig) ExitProcess((UINT)(128 + sig));
 }
+
+/* Windows has no signal mask: a console control event is handled where libuv delivers it. */
+void agc_io_thread_signals(void) {}
 #endif
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
@@ -1102,8 +1114,8 @@ static void poll_ready(uv_poll_t *handle, int status, int events) {
   p->ready(p->data, status);
 }
 
-static void poller_closed(uv_handle_t *handle) {
-  agc_poller *p = handle->data;
+/* Closes the poller's descriptor and frees it, once its handles are closed or were never made. */
+static void poller_free(agc_poller *p) {
 #ifdef _WIN32
   _close(p->fd);
 #else
@@ -1111,6 +1123,8 @@ static void poller_closed(uv_handle_t *handle) {
 #endif
   free(p);
 }
+
+static void poller_closed(uv_handle_t *handle) { poller_free(handle->data); }
 
 #ifdef __APPLE__
 static void poll_tick(uv_timer_t *timer) {
@@ -1245,12 +1259,7 @@ void agc_poller_pause(agc_poller *p) { call_on(p->loop, poller_pause_run, p); }
 static void poller_close_run(void *data) {
   agc_poller *p = data;
   if (p->broken) {
-#ifdef _WIN32
-    _close(p->fd);
-#else
-    close(p->fd);
-#endif
-    free(p);
+    poller_free(p);
     return;
   }
 #ifdef __APPLE__
@@ -1483,13 +1492,6 @@ void agc_io_serve(agc_vm *vm) {
       agc_run_stall(vm);
     }
   }
-}
-
-void agc_io_thread_signals(void) {
-#if !defined(_WIN32)
-  sigset_t saved;
-  agc_io_block_stop(&saved);
-#endif
 }
 
 /* libuv owns the platform-specific monotonic clock. Keep its header inside the loop layer, and preserve errno because

@@ -10,10 +10,17 @@ lines, exact sums, timers that fire, the end of the run from any scheduler, stan
 import os
 import re
 import shutil
+import socket
+import subprocess
 import sys
 import threading
 
 import pytest
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 from tests.agentica_test import FIXTURES, compile_text, run, vm_command, vm_environment
 from tests import vm_diff_support as diff
@@ -391,6 +398,28 @@ def test_two_tasks_share_standard_input_line_by_line(tmp_path, repeats):
     for _ in range(repeats):
         result = vm(bytecode, stdin=text)
         assert (result.code, result.stdout, result.stderr) == (0, "5000\n", "")
+
+
+@pytest.mark.skipif(fcntl is None, reason="needs fcntl")
+def test_a_socket_as_standard_input_keeps_its_blocking_flag_for_the_parent(tmp_path):
+    bytecode = program(tmp_path, "sock", "def main() -> Void\n  IO.inspect(IO.gets())\nend\n")
+    ours, theirs = socket.socketpair()
+    try:
+        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode], stdin=theirs.fileno(),
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   env=vm_environment(MULTICORE), text=True)
+        try:
+            ours.sendall(b"hello\n")
+            out, err = process.communicate(timeout=30)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+        blocking = not fcntl.fcntl(theirs.fileno(), fcntl.F_GETFL) & os.O_NONBLOCK
+    finally:
+        ours.close()
+        theirs.close()
+    assert (process.returncode, out, err, blocking) == (0, 'ok("hello")\n', "", True)
 
 
 FIFO = """\

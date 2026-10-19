@@ -453,10 +453,6 @@ static void check_stop(agc_vm *vm) {
   if (sig) agc_stop(vm, sig);
 }
 
-/* The next task to run. A DONE task is dropped (a cancel that raced a waker's push). So is a cancelled one that is not
-   running: the canceller could not take it out of the queue because a waker had set READY and not pushed yet, or a
-   scheduler had popped it already (cancel_one), so whoever pops it ends it. A cancel that comes after this check
-   is seen at the end of the turn. NULL when the queue is empty. */
 /* A popped task that may run, or NULL when it was ended instead (see agc_task_next). */
 static agc_task *admit(agc_vm *vm, agc_task *t) {
   if (atomic_load_explicit(&t->state, memory_order_acquire) == AGC_TASK_DONE) return NULL;
@@ -466,6 +462,10 @@ static agc_task *admit(agc_vm *vm, agc_task *t) {
   return NULL;
 }
 
+/* The next task to run. A DONE task is dropped (a cancel that raced a waker's push). So is a cancelled one that is not
+   running: the canceller could not take it out of the queue because a waker had set READY and not pushed yet, or a
+   scheduler had popped it already (cancel_one), so whoever pops it ends it. A cancel that comes after this check
+   is seen at the end of the turn. NULL when the queue is empty. */
 agc_task *agc_task_next(agc_vm *vm) {
   /* Between turns vm->task still names the last task, which may be DONE. That is safe for cancel_one: it compares a
      task with vm->task only in the states of a turn (RUNNING, PARKING, WOKEN), which a DONE task never has again. */
@@ -567,8 +567,12 @@ void agc_run_stall(agc_vm *vm) {
   o->code = "RUNTIME-INTERNAL";
   o->message = "every task is waiting and nothing can wake them";
   o->message_len = strlen(o->message);
+  /* No task ended the run (over_task 0); the I/O context keeps its own task for what runs after (a detached ending
+     reads it). */
+  agc_task *own = vm->task;
   vm->task = NULL;
   agc_run_over(vm);
+  vm->task = own;
 }
 
 /* The entry of a file with Globals slots writes them before it hands over to `main` (docs/vm/10-io-multicore.md
@@ -654,7 +658,6 @@ static agc_outcome run_threads(agc_vm *vm) {
   rt->program = agc_program_for_threads(rt->program);
   agc_share(vm);
   if (!agc_io_share(vm, true)) agc_internal_abort("cannot start the I/O thread's inbox");
-  agc_io_hand_off(vm, true);
   agc_gc_allow_threads();
   rt->scheds = agc_alloc(agc_size_mul(n, sizeof(agc_vm *)));
   for (size_t k = 0; k < n; k++) {
@@ -663,6 +666,7 @@ static agc_outcome run_threads(agc_vm *vm) {
     s->index = (uint32_t)k;
     rt->scheds[k] = s;
   }
+  agc_input_watch(vm);
   rt->threads = agc_threads_new(n);
   agc_runq_on_idle(rt->runq, agc_io_wake_idle, vm);
   /* The I/O thread's own failures (agc_io_serve) go to its own record too while the schedulers run. */

@@ -38,7 +38,8 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
 /* True for a builtin that only a prelude function may call: its name starts with two underscores
    (docs/future/25-ruby-typed-idioms.md §25.6). The loader refuses a call of one from any other function. */
 bool agc_builtin_prelude_only(const agc_builtin *b);
-/* True for a builtin that a run with several schedulers refuses: it still calls libuv from its scheduler. */
+/* The program as a run with several schedulers sees it: P, or a copy in which each builtin that still calls libuv
+   from its scheduler fails with RUNTIME-INTERNAL at the call. */
 const agc_program *agc_program_for_threads(const agc_program *p);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
@@ -252,6 +253,7 @@ bool agc_timers_run(agc_vm *vm);
 uint64_t agc_timers_next_due(const agc_vm *vm);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
+void agc_input_watch(agc_vm *vm);
 void agc_input_close(agc_vm *vm);
 agc_input_status agc_input_peek(agc_vm *vm, int *byte);
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line);

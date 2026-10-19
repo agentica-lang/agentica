@@ -1145,6 +1145,15 @@ static bool more(void *data, agc_io_job *job) {
   return true;
 }
 
+/* The `more` step of a polled wait (poll_io): the wait starts on the I/O thread, in the job's START, before its
+   deadline is armed. */
+static bool begin_wait(void *data, agc_io_job *job) {
+  op *o = data;
+  o->job = job;
+  agc_poller_wait(o->st->poller, writes(o), ready, o);
+  return true;
+}
+
 /* The kind's `pause`: the deadline of a polled wait passed, and the wait stops on the I/O thread before `expired`
    moves the buffer that its callback writes. */
 static void pause_wait(void *data) {
@@ -1275,7 +1284,7 @@ static agc_value closed(agc_vm *vm, void *data, agc_value context) {
 
 static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", NULL, true, NULL};
 
-static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "file", stop, true, pause_wait};
+static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "file", stop, true, NULL};
 
 /* The close of an ended task's file, or of a file still open when the run
    ends: pending while a job holds it. */
@@ -1327,13 +1336,6 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_OPEN_WRITE:
       case OP_OPEN_CREATE:
       case OP_OPEN_APPEND: {
-        /* `more` made the poller of a polled descriptor; a detached open never reaches it, and its result is dropped. */
-        if (o->st->polled && !o->st->poller) {
-          fail_op(o, FS_OPEN, EBADF);
-          result = common_error(vm, o);
-          o->owns_st = true;
-          break;
-        }
         agc_resource *r = agc_register(vm, o->st, release_state);
         agc_own(vm, r, close_file);
         r->pool_close = true;
@@ -1381,8 +1383,7 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
     return agc_void();
   }
   if (step(o)) return done(vm, o, context);
-  o->job = agc_io_start(vm, &poll_io, o, context, timeout);
-  agc_poller_wait(o->st->poller, writes(o), ready, o);
+  agc_io_start_then(vm, &poll_io, o, context, timeout, begin_wait);
   return agc_void();
 }
 

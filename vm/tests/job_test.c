@@ -374,6 +374,51 @@ static void test_more_keeps_the_wait(void) {
   finished_calls = more_calls = 0;
 }
 
+static bool wait_started, pause_saw_wait;
+
+static bool start_wait(void *data, agc_io_job *job) {
+  (void)data;
+  (void)job;
+  wait_started = true;
+  return true;
+}
+
+static void pause_idle(void *data) {
+  (void)data;
+  pause_saw_wait = wait_started;
+}
+
+/* A wait on the loop whose deadline stops it (`pause`) before EXPIRED is published. */
+static const agc_io_kind paused_io = {NULL, idle_done, idle_expired, idle_drop, true, "paused", NULL, false,
+                                      pause_idle};
+
+static void start_paused(void *arg) {
+  (void)arg;
+  running();
+  int *data = malloc(sizeof *data);
+  assert(data);
+  agc_io_start_then(&vm, &paused_io, data, agc_void(), 0, start_wait);
+}
+
+/* A scheduler starts a wait on the loop with a deadline of 0 ms. Its `more` step starts the wait in the job's START
+   on the loop's thread, before the timer is armed, so the timer, which can only fire after that request, always
+   finds the wait started and pauses it. A wait started by a second request could come after the deadline, and its
+   callback could then run beside `expired`. */
+static void test_wait_starts_before_its_deadline(void) {
+  assert(agc_io_share(&vm, false));
+  agc_task *task = vm.task;
+  wait_started = pause_saw_wait = false;
+  on_thread(start_paused, NULL);
+  park(task);
+  assert(!wait_started);
+  wait_woken(task);
+  assert(wait_started && pause_saw_wait);
+  assert(take(task) == -1);
+  settle_loop();
+  assert(idle_drops == 1);
+  idle_drops = 0;
+}
+
 /* The task gives up the wait on the loop (resumed with the outcome PENDING) and its releases are queued; a service
    callback then ends the wait late. Only the one that clears `busy` owns the wait piece's count, so the late end must
    change nothing: with a second drop the job would be freed while the ready list still names it. */
@@ -771,6 +816,7 @@ int main(void) {
   test_start_queued_then_ended_inline();
   test_finish_from_another_thread();
   test_more_keeps_the_wait();
+  test_wait_starts_before_its_deadline();
   test_late_end_after_abandon();
   test_close_runs_queued_requests();
   test_poll_runs_queued_requests();

@@ -458,16 +458,20 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   that drain is the push of §16.4, and it keeps a woken task behind the one
   whose turn just ended.
 - **Services make their own libuv calls**, on the loop's thread. They make
-  handles through `agc_io_uv` (§15.1), for example in `vm/tcp.c`,
-  `vm/process.c` and `vm/http_client.c`; the libuv part of their `done`,
-  `expired`, cancel and `drop` halves (for example `accept_done` in
-  `vm/tcp.c`, `request_expired` in `vm/process.c`, the file `drop` in
-  `vm/files.c`) and the poller calls of builtins run where the half runs. In
-  the model that code is the start step of a request. At N > 1 the steps of
-  the standard streams and of polled files (stdin, FIFOs) are requests: the
-  start of a stream write and every poller open, wait, pause and close go
-  through `agc_io_call`, and a job kind's `pause` stops the poller wait on the
-  I/O thread when the job's timer fires, before `expired` runs on a scheduler.
+  handles through `agc_io_uv` (§15.1), for example in `vm/tcp.c`, `vm/process.c`
+  and `vm/http_client.c`; the libuv part of their `done`, `expired`, cancel and
+  `drop` halves (for example `accept_done` in `vm/tcp.c`, `request_expired` in
+  `vm/process.c`, the file `drop` in `vm/files.c`) and the poller calls of
+  builtins run where the half runs. In the model that code is the start step of
+  a request. At N > 1 the steps of the standard streams and of polled files
+  (stdin, FIFOs) are requests: the start of a stream write, a poller wait with
+  no deadline (stdin, the close of a polled file) and every poller pause and
+  close go through `agc_io_call`. The poller of a polled file is opened in the
+  job's `more` step and the stdin poller before the schedulers start, both on
+  the I/O thread. A wait with a deadline starts in the job's START, before its
+  timer is armed (the `more` step of a wait on the loop), so the timer always
+  finds it started, and the kind's `pause` stops it on the I/O thread before
+  EXPIRED is published: `expired` never runs beside one of its callbacks.
   `agc_io_uv` aborts off the I/O thread, and the builtins of TCP, TLS, HTTP,
   `Process`, `Duplex` and `Test.run` fail with `RUNTIME-INTERNAL` at N > 1
   (`agc_program_for_threads`), until their steps move too.
@@ -589,21 +593,22 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1`, it exits 2 with a message before the
   program loads, so N > 1 never runs as 1. The front end always runs on one
   scheduler. The default is 1, not `uv_available_parallelism()`.
-- **Threads.** `agc_vm_run` with N > 1 (`run_threads` in `vm/task.c`) shares
-  the locks and the loop, lets threads register with the GC, makes one
-  scheduler context (`agc_vm`) per thread and starts scheduler 0; the calling
-  thread becomes the I/O thread (`agc_io_serve`). Scheduler 0 runs alone until
-  main leaves the entry function, which sets the module constants (at once
-  when there are none), and then starts the others: no other task can read a
-  constant before it is set. Each
-  scheduler pops tasks from the global queue, runs detached endings and its due
-  timers between turns, and waits on the queue when it is empty. A diagnostic,
-  `System.exit` or the end of main on any scheduler records the outcome once
-  (`agc_run_over`, a CAS on `rt->over`) in that scheduler's own record, copies
-  it to `rt->outcome`, ends the run queue and wakes the I/O thread. The I/O
-  thread then joins every scheduler thread and only then runs the detached
-  endings that are left, the report of unobserved crashes and the exit path, as
-  at N = 1.
+- **Threads.** `agc_vm_run` with N > 1 (`run_threads` in `vm/task.c`) shares the
+  locks and the loop, lets threads register with the GC, makes one scheduler
+  context (`agc_vm`) per thread and starts scheduler 0; the calling thread
+  becomes the I/O thread (`agc_io_serve`). Scheduler 0 runs alone until main
+  leaves the entry function, which sets the module constants (at once when there
+  are none), and then starts the others: no other task can read a constant
+  before it is set. Each scheduler pops tasks from the global queue, runs
+  detached endings and its due timers between turns, and waits on the queue when
+  it is empty. A diagnostic, `System.exit` or the end of main on any scheduler
+  records the outcome once (`agc_run_over`, a CAS on `rt->over`) in that
+  scheduler's own record, copies it to `rt->outcome`, ends the run queue and
+  wakes the I/O thread. The I/O thread then joins every scheduler thread and
+  only then runs the detached endings that are left, the report of unobserved
+  crashes and the exit path, as at N = 1. So `end_run` waits for the schedulers
+  to stop (at most one turn, as a stop signal does, §10.2.2), and no running
+  task uses a file while the exit path closes it.
 - **Stall.** At N > 1 the I/O thread runs the check when it has nothing to do,
   not the packed word of §10.2.3: every scheduler waits on an empty queue
   (`agc_runq_quiet`, with an epoch that any wake moves), the inbox and the
@@ -707,7 +712,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
 
 ### 16.10 Later iterations
 
-Only if measurements ask for them. Neither is planned.
+Only if measurements ask for them. The cost of the single global run queue
+for wake-heavy programs is measured in §16.11 ("Wakes between schedulers").
 
 - **K I/O threads**, K configurable (for example one per 4 to 8 cores). Each
   handle is fixed to one loop when it is created. There is one inbox per I/O
@@ -780,15 +786,24 @@ Only if measurements ask for them. Neither is planned.
   scheduler and the loop share a thread, so the lock arrives with N > 1. No
   scheduler blocks in a stdout write for a stream on the loop, so only the
   blocking fallback keeps a lock across a write.
-- **The end of the run (decided, built; §16.9, "Threads").** `end_run` waits for
-  the schedulers to stop (at most one turn, as a stop signal does, §10.2.2): the
-  I/O thread joins them first, so no running task uses a file while the exit
-  path closes it. What stays open is the blocking fallback (refused at N > 1
-  today). A scheduler can also be blocked in a stdout write that holds the
-  stream lock (a full pipe), while the I/O thread's flush of that stream waits
-  for the same lock. The second stop signal is one way out (the write gets
-  `EINTR`, §14.4), but a process signal may not be delivered to that thread.
-  Another is `pthread_kill` on the schedulers. Whether the flush takes the lock
-  with a limit is open. For streams on the loop this worry goes away: no
-  scheduler blocks in a stdout write, so no stream lock is held across one
-  (§10.2.2); it stays for the blocking fallback.
+- **The blocking fallback at the end of the run.** The end of the run waits for
+  the schedulers (decided, built; §16.9, "Threads"). What stays open is the
+  blocking fallback (refused at N > 1 today). A scheduler can be blocked in a
+  stdout write that holds the stream lock (a full pipe), while the I/O thread's
+  flush of that stream waits for the same lock. The second stop signal is one
+  way out (the write gets `EINTR`, §14.4), but a process signal may not be
+  delivered to that thread. Another is `pthread_kill` on the schedulers. Whether
+  the flush takes the lock with a limit is open. Streams on the loop do not have
+  this problem: no scheduler blocks in a stdout write for them (§10.2.2).
+- **Wakes between schedulers (measured; an optimization for later).** One global
+  run queue keeps the schedulers simple, and CPU work scales with the cores: 8
+  tasks of an integer loop run 4.3 times faster at N = 8 than at N = 1 (4
+  physical, 8 logical cores). A program where every step wakes another task pays
+  for it: at N > 1 the `benchmarks/programs` channel-pingpong and
+  deadline-pingpong run 3.5 to 9 times slower (N = 2 to N = 8), sleepers 1.6 to
+  2.4 times and print-lines about 1.8 times (`scale() = 10`, PR #386). Each wake
+  takes the queue's lock, signals its condvar (a futex wake) and moves the task
+  to another core; the I/O thread is not the cost. Per-scheduler queues or a
+  LIFO ("runnext") slot for the waker's own scheduler would cut it (§16.10).
+  They are a later optimization, not a condition for the default number of
+  schedulers.

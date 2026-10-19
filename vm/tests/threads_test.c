@@ -19,8 +19,8 @@
 #define WORKERS 400
 #define SCRATCH 20
 
-enum { B_SPAWN, B_SLEEP, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_ADD, B_FOREVER, B_DIE, B_COUNT };
-enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_COUNT };
+enum { B_SPAWN, B_SLEEP, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_ADD, B_FOREVER, B_DIE, B_WHERE, B_COUNT };
+enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_COUNT };
 
 typedef struct {
   agc_function fns[F_COUNT];
@@ -71,10 +71,28 @@ static agc_value test_die(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_fail(vm, "RUNTIME-TEST", "main fails", span);
 }
 
+/* One bit per scheduler that ran a call of Test.where. */
+static _Atomic uint64_t schedulers_seen;
+
+static int bits(uint64_t mask) {
+  int n = 0;
+  for (; mask; mask &= mask - 1) n++;
+  return n;
+}
+
+/* Records the scheduler that runs the calling task; true once two different ones have. */
+static agc_value test_where(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  uint64_t seen = atomic_fetch_or(&schedulers_seen, UINT64_C(1) << (vm->index % 64)) | UINT64_C(1) << (vm->index % 64);
+  return agc_bool(bits(seen) >= 2);
+}
+
 static const agc_builtin test_builtins[] = {
   {"Test.add", 1, test_add, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.forever", 1, test_forever, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.die", 1, test_die, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.where", 1, test_where, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 /* The index of the next instruction of F, the target of a jump. */
@@ -96,6 +114,17 @@ static void call_int(prog *p, uint32_t f, uint32_t builtin, int64_t v) {
   uint32_t k = constant(p, v);
   emit(p, f, AGC_OP_CONST, SCRATCH, k);
   emit(p, f, AGC_OP_CALL_BUILTIN, SCRATCH, builtin);
+}
+
+/* Calls Test.where and yields until it says that two schedulers have run it. */
+static void seen_loop(prog *p, uint32_t f) {
+  uint32_t top = here(p, f);
+  call_int(p, f, B_WHERE, 0);
+  uint32_t exit_jump = here(p, f);
+  emit(p, f, AGC_OP_JUMP_IF_TRUE, SCRATCH, 0);
+  call_int(p, f, B_SLEEP, 0);
+  emit(p, f, AGC_OP_JUMP, 0, top);
+  p->code[f][exit_jump].b = (uint16_t)here(p, f);
 }
 
 static void new_prog(prog *p) {
@@ -124,6 +153,10 @@ static void new_prog(prog *p) {
   /* park(_): waits for ever. */
   call_int(p, F_PARK, B_FOREVER, 0);
   emit(p, F_PARK, AGC_OP_RETURN, 0, 0);
+
+  /* seen(_): records its scheduler and yields until two schedulers have run such calls. */
+  seen_loop(p, F_SEEN);
+  emit(p, F_SEEN, AGC_OP_RETURN, 0, 0);
 
   /* spin(_): yields for ever, until the end of the run cancels it. */
   call_int(p, F_SPIN, B_SLEEP, 0);
@@ -188,6 +221,25 @@ static bool failed_with(const agc_outcome *o, const char *code) {
   return o->kind == AGC_FAILED && o->code && strcmp(o->code, code) == 0;
 }
 
+/* The tasks of a run with four schedulers run on more than one of them: four tasks and main record where they run
+   and yield until two schedulers have been seen. With one thread the run would never end, and the deadline of the
+   test fails it; nothing here depends on how long a step takes. */
+static void test_tasks_spread_over_schedulers(void) {
+  prog *p = agc_alloc(sizeof *p);
+  new_prog(p);
+  for (int k = 0; k < 4; k++) {
+    emit(p, F_MAIN, AGC_OP_CLOSURE, 10, F_SEEN);
+    emit(p, F_MAIN, AGC_OP_CONST, 11, constant(p, k));
+    emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_SPAWN);
+  }
+  seen_loop(p, F_MAIN);
+  emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
+  atomic_store(&schedulers_seen, 0);
+  agc_outcome out = run(p, 4);
+  assert(out.kind == AGC_DONE);
+  assert(bits(atomic_load(&schedulers_seen)) >= 2);
+}
+
 /* Every worker runs once, whichever scheduler takes it, and main sees every send. */
 static void test_storm(int64_t schedulers) {
   prog *p = agc_alloc(sizeof *p);
@@ -237,6 +289,7 @@ int main(void) {
   test_stall(1);
   test_stall(4);
   test_main_fails_beside_spinners(4);
+  test_tasks_spread_over_schedulers();
   fclose(quiet);
 #endif
   puts("threads tests passed");
