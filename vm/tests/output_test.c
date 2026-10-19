@@ -770,6 +770,9 @@ static void full_socket_pair(SOCKET *writer, SOCKET *reader) {
   /* A buffer size set on the listener may not stick to the accepted socket, and Windows grows a receive window that
      was not set by hand. */
   setsockopt(*reader, SOL_SOCKET, SO_RCVBUF, (const char *)&small, sizeof small);
+  /* Wine takes every write at once, and a socket that is not overlapped blocks in its send there whatever the mode, so
+     it has nothing to fill. */
+  if (getenv("AGENTICA_TEST_WINE")) return;
   u_long nonblocking = 1;
   assert(ioctlsocket(*writer, FIONBIO, &nonblocking) == 0);
   static const char junk[1024] = {0};
