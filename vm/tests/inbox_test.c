@@ -36,6 +36,10 @@ typedef struct {
 } ping;
 
 typedef struct {
+  int64_t handled;
+} tally;
+
+typedef struct {
   uv_loop_t loop;
   agc_inbox *inbox;
   uv_sem_t in_handler, go_on;
@@ -101,7 +105,8 @@ static int ping_payload[PING_ROUNDS];
 
 /* Each request is written, published and then waited for: the producer posts only after the loop answered the one
    before, so the loop is blocked in uv_run (or about to be) at every post. A wake that is lost leaves the producer
-   waiting on `answered` until the deadline of the test ends the process. */
+   waiting on `answered` until the deadline of the test ends the process. It catches a lost wake, not the order of the
+   publish and the send inside agc_inbox_post, which holds by construction (the send is after the unlock). */
 static void answer(void *owner, agc_request *list) {
   ping *p = owner;
   assert(list && !list->next);
@@ -189,6 +194,37 @@ static void test_post_during_handler(void) {
   assert(uv_loop_close(&o.loop) == 0);
 }
 
+static void count_all(void *owner, agc_request *list) {
+  tally *t = owner;
+  while (list) {
+    agc_request *next = list->next;
+    free(list);
+    t->handled++;
+    list = next;
+  }
+}
+
+/* Requests that are still queued when the inbox is closed are handled first: each holds a count that only its handler
+   gives back, so dropping them would leak what they name. */
+static void test_close_handles_queued_requests(void) {
+  uv_loop_t loop;
+  tally t = {0};
+  assert(uv_loop_init(&loop) == 0);
+  agc_inbox *inbox = agc_inbox_open(&loop, count_all, &t);
+  assert(inbox);
+  agc_inbox_keep(inbox, false);
+  for (int64_t k = 0; k < 5; k++) {
+    agc_request *req = malloc(sizeof *req);
+    assert(req);
+    *req = (agc_request){NULL, 0, NULL, k};
+    agc_inbox_post(inbox, req);
+  }
+  agc_inbox_close(inbox);
+  assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+  assert(t.handled == 5);
+  assert(uv_loop_close(&loop) == 0);
+}
+
 /* An inbox that nobody keeps alive does not hold the loop: uv_run returns at once with nothing queued. */
 static void test_unkept_inbox_does_not_hold_the_loop(void) {
   uv_loop_t loop;
@@ -206,6 +242,7 @@ static void test_unkept_inbox_does_not_hold_the_loop(void) {
 int main(void) {
   agc_test_deadline(120);
   test_unkept_inbox_does_not_hold_the_loop();
+  test_close_handles_queued_requests();
   test_wake_after_publish();
   test_post_during_handler();
   test_many_producers();

@@ -80,7 +80,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - `agc_job_settle` sets the outcome once by CAS from PENDING (DONE,
         EXPIRED or CANCELLED), the first writer wins; the count has the owner,
         the wait piece, the ready list and each request in flight as holders;
-        `sweep` frees at zero and after the timer closed
+        the holder that drops the last one puts the job on the loop's dead
+        list, and `sweep` (loop's thread only) walks that list and frees after
+        the timer closed
+      - a START finds `ended` set when the owner ended the job first, and
+        starts nothing
       - the libuv steps are requests (START, EXTEND, CLOSE_TIMER, RELEASE):
         inline on the loop's thread, queued in the inbox from any other
     - `agc_io_start` (

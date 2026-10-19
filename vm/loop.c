@@ -9,6 +9,7 @@
 #endif
 #include "core.h"
 
+#include <assert.h>
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -41,8 +42,15 @@ struct agc_registry {
 typedef struct agc_io_job job;
 
 /* The libuv steps a scheduler asks of the I/O thread (§16.4): start the pieces of a job, move its timer, close its
-   timer, and give back a reference. */
-typedef enum { REQ_START, REQ_EXTEND, REQ_CLOSE_TIMER, REQ_RELEASE } request_kind;
+   timer, give back a reference, and put a detached job on the ready list. */
+typedef enum { REQ_START, REQ_EXTEND, REQ_CLOSE_TIMER, REQ_RELEASE, REQ_READY } request_kind;
+
+/* What the trace line of a finished job needs, copied before the owner's reference goes: the job may be freed by the
+   I/O thread as soon as the release is posted. */
+typedef struct {
+  uint64_t id, started_ns, ended_ns;
+  const agc_io_kind *kind;
+} job_trace;
 
 typedef struct {
   atomic_int signal, now;
@@ -74,6 +82,9 @@ struct agc_loop {
 #endif
 #endif
   job *ready, *ready_tail;
+  /* Jobs whose count reached zero, pushed by the holder that dropped the last reference. I/O role only: every
+     reference is given back on the I/O thread (a scheduler posts a RELEASE), so the list needs no lock. */
+  job *dead;
   bool bound_init;
   /* The vm that owns the loop: the I/O role reads its registry and wakes its tasks. NULL inbox: one thread plays both
      roles (N = 1) and every request runs where it is posted. The inbox is made by agc_io_share, before a second thread
@@ -85,10 +96,12 @@ struct agc_loop {
 
 /* A job is malloc memory with up to three libuv pieces (pool work or a wait on the loop, the one timer) and its
    holders, counted in `refs` (docs/vm/16-architecture.md §16.5): the owner (the task until agc_io_finish, or the
-   detached ending), the wait piece (while `busy`), the ready list, and each request in flight. The job is freed by
-   `sweep` once the count is zero and the timer has closed.
-   `outcome` and `refs` are the cross-thread part: the outcome is set once by CAS and the task reads it at its next
-   turn; `busy` and `detached` are atomic because both sides read them. The other fields belong to the I/O role. */
+   detached ending), the wait piece (while `busy`), the ready list, and each request in flight. The holder that drops
+   the last reference puts the job on the loop's dead list, and `sweep` frees what is on it once the timer has closed.
+   The fields a scheduler and the I/O thread both touch are atomic: `outcome` (set once by CAS, read by the task at
+   its next turn), `refs`, `busy`, `detached`, `ended` (the owner is done with the job: a START that finds it set
+   does nothing), `start_failed`, `timer_fired`, `dropping` and `on_loop`. The other fields belong to the I/O role
+   (`flush` and `detached` are set before the START is posted). */
 struct agc_io_job {
   uv_work_t work;
   uv_timer_t timer;
@@ -99,9 +112,10 @@ struct agc_io_job {
   job *ready_next;
   size_t slot;
   uint64_t started_ns, ended_ns;
+  job *dead_next;
   _Atomic int refs, outcome;
-  _Atomic bool busy, detached;
-  bool timer_open, timer_live, timer_fired, on_loop, dropping, queued, ended, flush, start_failed;
+  _Atomic bool busy, detached, ended, start_failed, timer_fired, dropping, on_loop;
+  bool timer_open, timer_live, queued, dead, flush;
 };
 
 struct agc_poller {
@@ -263,17 +277,22 @@ static void note_end(job *j) {
   if (j->started_ns && !j->ended_ns) j->ended_ns = agc_trace_now();
 }
 
-/* The I/O role drops a reference. A job at zero is freed by the next sweep, never here: a libuv callback must not
-   change the registry that a caller is walking. */
-static void drop_ref(job *j) { (void)agc_job_unref(&j->refs); }
+static void push_dead(job *j) {
+  if (j->dead) return;
+  j->dead = true;
+  j->dead_next = j->loop->dead;
+  j->loop->dead = j;
+}
+
+/* The I/O role drops a reference. The job at zero goes on the dead list and is freed by the next sweep, never here: a
+   libuv callback must not change the registry that a caller is walking. */
+static void drop_ref(job *j) {
+  if (agc_job_unref(&j->refs)) push_dead(j);
+}
 
 /* Whoever clears `busy` ends the wait piece (pool work or a wait on the loop) and owns its reference, so a late
    completion after a give-up drops nothing twice. */
 static bool leave_wait(job *j) { return atomic_exchange_explicit(&j->busy, false, memory_order_acq_rel); }
-
-static void abandon_wait(job *j) {
-  if (leave_wait(j)) drop_ref(j);
-}
 
 /* The wait ended with a result: the first outcome to be set stands (§16.5, rule 3), and the task finds it at its
    next turn. A late end changes only the piece. */
@@ -292,7 +311,7 @@ static void work_finished(uv_work_t *req, int status) {
   job *j = (job *)(void *)req;
   if (agc_job_outcome_of(&j->outcome) == AGC_JOB_PENDING && !atomic_load(&j->detached) && j->more &&
       j->more(j->data, j)) {
-    j->on_loop = true;
+    atomic_store(&j->on_loop, true);
     return;
   }
   end_wait(j, AGC_JOB_DONE);
@@ -314,14 +333,19 @@ static int queue_work(agc_loop *loop, job *j) {
 /* A job that is only a timer is done when the timer fires; a job with work or a wait has timed out. */
 static void timer_fired(uv_timer_t *timer) {
   job *j = timer_job((uv_handle_t *)timer);
-  j->timer_fired = true;
+  atomic_store(&j->timer_fired, true);
   note_end(j);
   (void)agc_job_settle(&j->outcome,
                        j->kind->work || j->kind->external ? AGC_JOB_EXPIRED : AGC_JOB_DONE);
   mark_ready(j);
 }
 
-static void timer_closed(uv_handle_t *handle) { timer_job(handle)->timer_open = false; }
+/* The job may have been waiting for this close to be freed: put it back on the dead list if nobody holds it. */
+static void timer_closed(uv_handle_t *handle) {
+  job *j = timer_job(handle);
+  j->timer_open = false;
+  if (atomic_load_explicit(&j->refs, memory_order_acquire) == 0) push_dead(j);
+}
 
 static void close_timer(job *j) {
   if (!j->timer_live) return;
@@ -330,9 +354,17 @@ static void close_timer(job *j) {
   uv_close((uv_handle_t *)&j->timer, timer_closed);
 }
 
-/* The libuv steps of agc_io_start: the timer, then the pool work. The counts were taken when the job was made. */
+/* The libuv steps of agc_io_start: the timer, then the pool work. The counts were taken when the job was made. A START
+   can sit in the inbox while the owner already ended the job (a task woken by something else, a detach, the end of
+   the run): the owner's CLOSE_TIMER and RELEASE may then have run before it, so starting a timer here would leak the
+   timer and the job. `ended` is set before those requests are posted, and the I/O thread runs requests one at a time,
+   so a START that reads it clear runs before any of them. The wait piece was never started: give its count back. */
 static void start_pieces(job *j, int64_t timeout_ms) {
   agc_loop *loop = j->loop;
+  if (atomic_load(&j->ended)) {
+    if (leave_wait(j)) drop_ref(j);
+    return;
+  }
   if (timeout_ms >= 0) {
     uv_update_time(&loop->uv);
     uv_timer_init(&loop->uv, &j->timer);
@@ -340,7 +372,7 @@ static void start_pieces(job *j, int64_t timeout_ms) {
     j->timer_open = j->timer_live = true;
   }
   if (j->kind->work && queue_work(loop, j) != 0) {
-    j->start_failed = true;
+    atomic_store(&j->start_failed, true);
     end_wait(j, AGC_JOB_EXPIRED);
   }
 }
@@ -348,7 +380,7 @@ static void start_pieces(job *j, int64_t timeout_ms) {
 /* The timer counts from the loop's cached time, and nothing else refreshes it now that the schedulers' clock
    (agc_clock_ms) does not. */
 static void extend_timer(job *j, int64_t timeout_ms) {
-  if (!j->timer_live || j->timer_fired || agc_job_outcome_of(&j->outcome) != AGC_JOB_PENDING) return;
+  if (!j->timer_live || atomic_load(&j->timer_fired) || agc_job_outcome_of(&j->outcome) != AGC_JOB_PENDING) return;
   uv_update_time(&j->loop->uv);
   uv_timer_start(&j->timer, timer_fired, (uint64_t)timeout_ms, 0);
 }
@@ -368,6 +400,9 @@ static void handle_request(const agc_request *req) {
   case REQ_RELEASE:
     drop_ref(j);
     break;
+  case REQ_READY:
+    mark_ready(j);
+    break;
   }
 }
 
@@ -378,18 +413,28 @@ static job *job_at(const agc_vm *vm, size_t k) {
   return r->kind == AGC_RESOURCE_JOB ? r->native : NULL;
 }
 
-/* Frees the jobs nobody holds. The data goes to `drop` as soon as no holder is left, which is after the pool work or
-   the wait is over, never while a piece could still use it. The job itself waits for its timer to finish closing. */
+/* Frees the jobs on the dead list: the ones whose last holder is gone. The data goes to `drop` as soon as no holder is
+   left, which is after the pool work or the wait is over, never while a piece could still use it. The job itself waits
+   for its timer to finish closing (timer_closed puts it back on the list). The cost is the number of jobs that ended,
+   not the number of jobs alive. I/O role only. */
 static void sweep(agc_vm *vm) {
-  for (size_t k = registry_count(vm); k-- > 0;) {
-    job *j = job_at(vm, k);
-    if (!j || atomic_load_explicit(&j->refs, memory_order_acquire) != 0) continue;
+  agc_loop *loop = vm->loop;
+  job *list = loop->dead;
+  loop->dead = NULL;
+  for (job *next; list; list = next) {
+    job *j = list;
+    next = j->dead_next;
+    j->dead = false;
+    j->dead_next = NULL;
+    if (atomic_load_explicit(&j->refs, memory_order_acquire) != 0) continue;
+    /* A holder is gone only after it took itself off: a queued job or a live wait with no count is a double drop. */
+    assert(!j->queued && !atomic_load(&j->busy));
     if (j->data) {
       j->kind->drop(j->data);
       j->data = NULL;
     }
     if (j->timer_open) continue;
-    agc_resource *r = vm->registry->items[k];
+    agc_resource *r = vm->registry->items[j->slot];
     free(j);
     r->native = NULL;
     agc_unregister(vm, r);
@@ -435,14 +480,26 @@ static void post(job *j, request_kind kind, int64_t arg) {
   agc_inbox_post(loop->inbox, req);
 }
 
-/* Gives back a reference from any thread. The last one is freed on the I/O thread, because `drop` may call libuv. */
+/* Gives back a reference from any thread. A scheduler posts a RELEASE and the I/O thread drops it, so the count reaches
+   zero (and the job goes on the dead list) only on the I/O thread, where `drop` may call libuv. */
 static void release(job *j) { post(j, REQ_RELEASE, 0); }
+
+static void abandon_wait(job *j) {
+  if (leave_wait(j)) release(j);
+}
+
+/* sweep frees registry entries, which the I/O role owns: a scheduler leaves the dead list to run_inbox (when there is
+   an inbox, the loop's thread is the only one that sweeps). */
+static void sweep_here(agc_vm *vm) {
+  if (on_io_thread(vm->loop)) sweep(vm);
+}
 
 static agc_loop *new_loop(agc_vm *vm) {
   if (vm->loop) return vm->loop;
   agc_loop *loop = malloc(sizeof(agc_loop));
   if (!loop) agc_out_of_memory();
   loop->ready = loop->ready_tail = NULL;
+  loop->dead = NULL;
   loop->bound_init = false;
   loop->vm = vm;
   loop->inbox = NULL;
@@ -480,14 +537,18 @@ static agc_value wait_woken(agc_vm *vm, void *data, agc_value context) {
 
 const agc_io_kind agc_wait_io = {NULL, wait_woken, wait_woken, NULL, false, "lock", NULL};
 
-static void trace_finish(agc_vm *vm, const agc_resource *r, const job *j, bool done, agc_value result) {
+static job_trace trace_of(const agc_resource *r, const job *j) {
+  return (job_trace){r->id, j->started_ns, j->ended_ns, j->kind};
+}
+
+static void trace_finish(agc_vm *vm, const job_trace *job, bool done, agc_value result) {
   const agc_trace *tr = &vm->rt->trace;
-  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !j->started_ns || j->kind == &agc_wait_io) return;
-  uint64_t end = j->ended_ns ? j->ended_ns : agc_trace_now();
-  uint64_t us = end > j->started_ns ? (end - j->started_ns) / 1000u : 0;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !job->started_ns || job->kind == &agc_wait_io) return;
+  uint64_t end = job->ended_ns ? job->ended_ns : agc_trace_now();
+  uint64_t us = end > job->started_ns ? (end - job->started_ns) / 1000u : 0;
   const char *outcome = !agc_is(result, AGC_T_RESULT) ? "value" : agc_as_result(vm, result)->ok ? "ok" : "error";
-  AGC_TRACE(tr, AGC_TRACE_IO, "%s job=%" PRIu64 " kind=%s us=%" PRIu64 " result=%s", done ? "done" : "timeout", r->id,
-            j->kind->name, us, outcome);
+  AGC_TRACE(tr, AGC_TRACE_IO, "%s job=%" PRIu64 " kind=%s us=%" PRIu64 " result=%s", done ? "done" : "timeout", job->id,
+            job->kind->name, us, outcome);
 }
 
 static agc_value take_context(agc_vm *vm, agc_resource *r) {
@@ -520,36 +581,42 @@ static void discard(agc_vm *vm, agc_value result) {
 
 /* Only a loop wait can be cancelled: a pool job's work runs to its end
    (docs/vm/14-core-invariants.md, 14.3). */
-static bool cancellable(const job *j) { return j->kind->cancel && (!j->kind->work || j->on_loop); }
+static bool cancellable(const job *j) { return j->kind->cancel && (!j->kind->work || atomic_load(&j->on_loop)); }
 
 /* A detached job (its task was cancelled) ends here, between turns: its
    result is dropped, its `expired` half never runs, so it never closes a
    task's handle, and the turn cost of `done` is not charged to the current
-   task. The owner's reference goes at the end, as the task's does in agc_io_finish. */
+   task. The owner's reference goes at the end, as the task's does in agc_io_finish,
+   but before `done` runs when `done` is called: a `done` that raises must not leak the job. This runs on the I/O
+   thread (the ready list is drained there), so at N > 1 the `done` half runs there too; PR 3 must move it to a
+   scheduler (docs/vm/16-architecture.md §16.9). */
 static void end_detached(agc_vm *vm, agc_resource *r) {
   job *j = r->native;
-  if (j->start_failed) j->dropping = true;
-  if (!j->dropping && atomic_load(&j->busy)) {
-    if (!j->timer_fired || !cancellable(j) || !j->kind->cancel(vm, j->data, r->context, true)) return;
-    j->dropping = true;
+  if (atomic_load(&j->start_failed)) atomic_store(&j->dropping, true);
+  if (!atomic_load(&j->dropping) && atomic_load(&j->busy)) {
+    if (!atomic_load(&j->timer_fired) || !cancellable(j) || !j->kind->cancel(vm, j->data, r->context, true)) return;
+    atomic_store(&j->dropping, true);
   }
+  atomic_store(&j->ended, true);
   post(j, REQ_CLOSE_TIMER, 0);
-  j->ended = true;
   agc_value context = take_context(vm, r);
   void *data = j->data;
   j->data = NULL;
-  if (j->dropping) {
+  if (atomic_load(&j->dropping)) {
     abandon_wait(j);
     if (data) j->kind->drop(data);
+    close_pending(vm, context);
+    release(j);
   } else {
+    job_trace trace = trace_of(r, j);
+    release(j);
     int64_t cost = vm->task->turn_cost;
-    agc_value result = j->kind->done(vm, data, context);
+    agc_value result = trace.kind->done(vm, data, context);
     vm->task->turn_cost = cost;
-    trace_finish(vm, r, j, true, result);
+    trace_finish(vm, &trace, true, result);
     discard(vm, result);
+    close_pending(vm, context);
   }
-  close_pending(vm, context);
-  release(j);
   sweep(vm);
 }
 
@@ -564,7 +631,7 @@ static void drain(agc_vm *vm) {
     if (!loop->ready) loop->ready_tail = NULL;
     j->ready_next = NULL;
     j->queued = false;
-    if (!j->ended && reg && j->slot < reg->count && reg->items[j->slot]->native == j) {
+    if (!atomic_load(&j->ended) && reg && j->slot < reg->count && reg->items[j->slot]->native == j) {
       agc_resource *r = reg->items[j->slot];
       agc_task *t = r->task;
       r->task = NULL;
@@ -914,7 +981,7 @@ bool agc_io_share(agc_vm *vm, bool keep) {
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms, const agc_task *task, agc_more_fn more, bool quiet) {
+                               int64_t timeout_ms, const agc_task *task, agc_more_fn more, unsigned flags) {
   if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
@@ -927,27 +994,33 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
      only a timer has no wait piece. The timer is no holder: it never touches `data`, and sweep waits for its close. */
   atomic_init(&j->refs, 1);
   atomic_init(&j->outcome, AGC_JOB_PENDING);
-  atomic_init(&j->detached, false);
+  atomic_init(&j->detached, task == NULL);
   atomic_init(&j->busy, kind->work || kind->external);
+  atomic_init(&j->ended, false);
+  atomic_init(&j->start_failed, false);
+  atomic_init(&j->timer_fired, false);
+  atomic_init(&j->dropping, false);
+  atomic_init(&j->on_loop, false);
+  j->flush = (flags & AGC_JOB_FLUSH) != 0;
   if (kind->work || kind->external) agc_job_ref(&j->refs);
   agc_resource *r = agc_register(vm, j, NULL);
   r->kind = AGC_RESOURCE_JOB;
   r->context = context;
   j->slot = r->slot;
   const agc_trace *tr = &vm->rt->trace;
-  if (!quiet && AGC_TRACE_ON(tr, AGC_TRACE_IO)) {
+  if (!(flags & AGC_JOB_QUIET) && AGC_TRACE_ON(tr, AGC_TRACE_IO)) {
     j->started_ns = agc_trace_now();
     AGC_TRACE(tr, AGC_TRACE_IO, "start job=%" PRIu64 " kind=%s task=%" PRIu64 " timeout_ms=%" PRId64, r->id,
               kind->name, task ? task->id : 0, timeout_ms);
   }
-  /* The task is recorded before the start request is posted: once the I/O thread has the request, the job may finish
-     at any moment, and its completion wakes the task that r->task names (§16.11). */
+  /* Everything the I/O thread may read is set before the start request is posted: once it has the request, the job
+     may finish at any moment, and its completion wakes the task that r->task names, or ends the detached job (§16.11). */
   if (task) {
     r->task = vm->task;
     vm->task->parked = r;
   }
-  post(j, REQ_START, timeout_ms);
   if (agc_is(context, AGC_T_HANDLE)) agc_as_handle(vm, context)->holder = r;
+  post(j, REQ_START, timeout_ms);
   return r;
 }
 
@@ -956,7 +1029,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
    calls agc_io_start_marked, so the task is marked once per park. */
 static agc_io_job *start_parked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
                                 int64_t timeout_ms, agc_more_fn more) {
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, false);
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, 0);
   agc_task_park(vm, false);
   return r->native;
 }
@@ -977,16 +1050,12 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 }
 
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags) {
-  agc_resource *r = start_job(vm, kind, data, context, -1, NULL, NULL, (flags & AGC_JOB_QUIET) != 0);
-  job *j = r->native;
-  j->detached = true;
-  j->flush = (flags & AGC_JOB_FLUSH) != 0;
-  return j;
+  return start_job(vm, kind, data, context, -1, NULL, NULL, flags)->native;
 }
 
 /* A wait on the loop is over (a service callback): a pool job's work is not, so it is not ended from here. */
 void agc_io_ready(agc_io_job *j) {
-  if (j->kind->work && !j->on_loop) return;
+  if (j->kind->work && !atomic_load(&j->on_loop)) return;
   end_wait(j, AGC_JOB_DONE);
 }
 
@@ -994,6 +1063,7 @@ void agc_io_extend(agc_io_job *j, int64_t timeout_ms) { post(j, REQ_EXTEND, time
 
 bool agc_io_poll(agc_vm *vm, bool wait) {
   if (!vm->loop) return false;
+  if (vm->loop->inbox) (void)agc_inbox_run(vm->loop->inbox);
   if (uv_loop_alive(&vm->loop->uv)) {
     const agc_trace *tr = &vm->rt->trace;
     uint64_t before = AGC_TRACE_ON(tr, AGC_TRACE_IO) ? agc_trace_now() : 0;
@@ -1035,6 +1105,7 @@ static void release_bound(agc_loop *loop) {
 
 bool agc_io_run_for(agc_vm *vm, uint64_t ms) {
   agc_loop *loop = loop_of(vm);
+  if (loop->inbox) (void)agc_inbox_run(loop->inbox);
   /* The bound timer is stopped between runs, so it does not make a loop with nothing else in it look alive. */
   bool alive = uv_loop_alive(&loop->uv);
   if (alive) run_bounded(loop, ms);
@@ -1100,35 +1171,41 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 }
 
 /* The task takes the result of its job. The outcome is read with acquire; one that is still PENDING means the task was
-   woken by something else (a lock hand-on, an awaited task that ended), so the job gives up and is `expired`. The
-   timer is closed by a request, and the task's reference goes last. */
+   woken by something else (a lock hand-on, an awaited task that ended), so the job gives up and is `expired`. `ended`
+   goes first, then the timer is closed by a request, and the task's reference goes last. When `done` runs it owns the
+   data, so the reference goes before it: a `done` that raises must not leak the job. */
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   agc_resource *r = t->parked;
   t->parked = NULL;
   r->task = NULL;
   job *j = r->native;
+  atomic_store(&j->ended, true);
   post(j, REQ_CLOSE_TIMER, 0);
-  j->ended = true;
   (void)agc_job_settle(&j->outcome, AGC_JOB_EXPIRED);
   agc_value context = take_context(vm, r);
-  if (j->start_failed) {
+  if (atomic_load(&j->start_failed)) {
+    close_pending(vm, context);
     release(j);
     agc_fail(vm, "RUNTIME-INTERNAL", "cannot queue file work", 0);
   }
-  agc_value result;
+  job_trace trace = trace_of(r, j);
   bool done = agc_job_outcome_of(&j->outcome) == AGC_JOB_DONE;
+  bool waits = j->kind->external || atomic_load(&j->on_loop);
+  agc_value result;
   if (done) {
     void *data = j->data;
     j->data = NULL;
-    result = j->kind->done(vm, data, context);
+    if (waits) abandon_wait(j);
+    release(j);
+    result = trace.kind->done(vm, data, context);
   } else {
-    result = j->kind->expired(vm, j->data, context);
+    result = trace.kind->expired(vm, j->data, context);
+    if (waits) abandon_wait(j);
+    release(j);
   }
-  trace_finish(vm, r, j, done, result);
-  if (j->kind->external || j->on_loop) abandon_wait(j);
+  trace_finish(vm, &trace, done, result);
   close_pending(vm, context);
-  release(j);
-  sweep(vm);
+  sweep_here(vm);
   return result;
 }
 
@@ -1140,8 +1217,8 @@ void agc_io_detach(agc_vm *vm, agc_task *t) {
   atomic_store(&j->detached, true);
   (void)agc_job_settle(&j->outcome, AGC_JOB_CANCELLED);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "detach job=%" PRIu64 " kind=%s task=%" PRIu64, r->id, j->kind->name, t->id);
-  if (cancellable(j) && j->kind->cancel(vm, j->data, r->context, false)) j->dropping = true;
-  if (j->dropping || !atomic_load(&j->busy) || j->timer_fired) mark_ready(j);
+  if (cancellable(j) && j->kind->cancel(vm, j->data, r->context, false)) atomic_store(&j->dropping, true);
+  if (atomic_load(&j->dropping) || !atomic_load(&j->busy) || atomic_load(&j->timer_fired)) post(j, REQ_READY, 0);
 }
 
 /* The job still has pool work or a wait on the loop, so the handle that it holds is in use. */
@@ -1266,15 +1343,14 @@ static bool finish_native_close(agc_loop *loop) {
 
 static bool close_all(agc_vm *vm) {
   agc_io_flush_files(vm);
+  /* Requests still in the inbox hold references and may name jobs about to be closed: run them first. */
+  if (vm->loop && vm->loop->inbox) (void)agc_inbox_run(vm->loop->inbox);
   for (size_t k = registry_count(vm); k-- > 0;) {
     job *j = job_at(vm, k);
     if (!j) continue;
-    if (!j->ended) {
-      j->ended = true;
-      drop_ref(j);
-    }
+    if (!atomic_exchange(&j->ended, true)) drop_ref(j);
     (void)agc_job_settle(&j->outcome, AGC_JOB_CANCELLED);
-    if (j->kind->external || j->on_loop) abandon_wait(j);
+    if (j->kind->external || atomic_load(&j->on_loop)) abandon_wait(j);
     close_timer(j);
   }
   agc_input_close(vm);

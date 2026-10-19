@@ -82,6 +82,7 @@ typedef struct agc_inbox agc_inbox;
 typedef void (*agc_inbox_fn)(void *owner, agc_request *list);
 agc_inbox *agc_inbox_open(struct uv_loop_s *loop, agc_inbox_fn handle, void *owner);
 void agc_inbox_keep(agc_inbox *in, bool keep);
+bool agc_inbox_run(agc_inbox *in);
 void agc_inbox_post(agc_inbox *in, agc_request *entry);
 void agc_inbox_close(agc_inbox *in);
 

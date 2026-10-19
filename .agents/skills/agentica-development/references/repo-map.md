@@ -134,7 +134,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     process_test.c       # Process builtins
     random_test.c        # the generator
     runq_test.c          # the global run queue
-    inbox_test.c         # the inbox: many producers, wake after publish
+    inbox_test.c         # the inbox: many producers, no lost wake, close
     outcome_test.c       # job outcome (set once) and reference count, on threads
     job_test.c           # a job on the loop: timer against completion, cancel, request from a thread
     task_wake_test.c     # wake against the park path, on threads

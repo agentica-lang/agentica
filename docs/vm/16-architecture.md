@@ -253,11 +253,12 @@ The invariants:
    it has pushed. The poster takes the reference before it posts, and the
    request carries it; the I/O thread drops it as its last access after it
    handles the request, and then frees the request entry. A winning waker drops
-   its reference after its push. Whoever drops the last reference frees the job.
-   If the job has something to drop, the last reference goes to a "release job"
-   request, and nothing touches the job after its handler frees it. `drop`
-   always runs on the I/O thread because it calls libuv, even for drops that
-   only free memory, to keep one rule.
+   its reference after its push. A scheduler gives its references back by a
+   RELEASE request, so the last drop is always on the I/O thread: that holder
+   puts the job on the dead list, and the sweep that follows frees it (as built,
+   §16.9). Nothing touches the job after its handler frees it. `drop` always
+   runs on the I/O thread because it calls libuv, even for drops that only free
+   memory, to keep one rule.
 3. **The first to set the job's outcome wins.** The outcome (done, expired or
    cancelled; not the run's `outcome`) is set once, by CAS from "none". Only the
    winner takes the task off its wait list and does the state CAS, and it pushes
@@ -420,12 +421,12 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   the answer), and a call costs nothing. Every park with a deadline (a channel
   wait, a timed `Task.await`, `Task.sleep`) starts a timer job, so each one
   would pay it: the task-switch benchmark, which parks on channels with
-  deadlines, ran several times slower in the prototype. The run queue must take
-  its lock (+5% on that benchmark). And the libuv code of the services would
-  run beside the interpreter, which §16.11 leaves open. The code is the same at
-  any N; what differs is where the loop runs. A request posted on the loop's
-  thread runs at once, and one posted from another thread is queued and wakes
-  the loop.
+  deadlines, ran several times slower in the prototype (one run, not kept in
+  the tree). And the libuv code of the services would run beside the
+  interpreter, which §16.11 leaves open. The request code is the same at any N;
+  what differs is where the loop runs. A request posted on the loop's thread
+  runs at once, and one posted from another thread is queued and wakes the
+  loop.
 - **The inbox** (`vm/inbox.c`) is a locked queue of malloc'd entries
   `{next, kind, subject, arg}`, taken whole by the loop's thread, with the
   `uv_async_t` that wakes it; the poster sends after it unlocks (§16.3). It
@@ -440,12 +441,14 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
 - **The libuv steps of a job are requests** (`vm/loop.c`): START (the timer and
   the pool work of `start_job`), EXTEND (`agc_io_extend`, which calls
   `uv_update_time` itself because the clock of the schedulers does not refresh
-  the loop's cached time), CLOSE_TIMER (in `agc_io_finish`, `end_detached`) and
-  RELEASE (a reference given back from another thread, the last one freed on
-  the loop's thread). `post` runs one at once on the loop's thread, with no
-  entry. libuv callbacks put the job on a ready list, and the scheduler drains
-  it after `uv_run` and queues the tasks: that drain is the push of §16.4, and
-  it keeps a woken task behind the one whose turn just ended.
+  the loop's cached time), CLOSE_TIMER (in `agc_io_finish`, `end_detached`),
+  RELEASE (a reference given back; a scheduler posts it, so the count reaches
+  zero on the loop's thread) and READY (`agc_io_detach` puts the detached job
+  on the ready list, which only the loop's thread touches). `post` runs one at
+  once on the loop's thread, with no entry. libuv callbacks put the job on a
+  ready list, and the scheduler drains it after `uv_run` and queues the tasks:
+  that drain is the push of §16.4, and it keeps a woken task behind the one
+  whose turn just ended.
 - **Services make their own libuv calls**, on the loop's thread. They make
   handles through `agc_io_uv` (§15.1), for example in `vm/tcp.c`,
   `vm/process.c` and `vm/http_client.c`; the libuv part of their `done`,
@@ -461,15 +464,31 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   `agc_io_finish`, or the detached ending), the wait piece (while the pool work
   or the wait on the loop runs, the atomic `busy`), the ready list and each
   request in flight. The timer is no holder: it never touches `data`, and
-  `sweep` waits for its close. A pool or loop completion sets DONE, the timer
+  `sweep` waits for its close. Only the holder that clears `busy` gives back
+  the wait piece's count, so a late end of a wait that was abandoned changes
+  nothing. A pool or loop completion sets DONE, the timer
   sets EXPIRED (DONE for a job that is only a timer), a detach sets CANCELLED,
   and a task that resumes with the outcome still PENDING (a lock hand-on or an
   awaited task woke it) sets EXPIRED itself. So the first outcome stands: when a
   timeout and a completion fall in the same pass of the loop, the task sees the
   one that came first, where it used to see the completion if it had arrived by
-  the time the task ran. `sweep` frees by count: `drop` takes `data` when the
-  count is zero, and the job is freed once the timer has closed. `consumed` and
-  `work_done` are gone.
+  the time the task ran. The holder that brings the count to zero puts the job
+  on the loop's dead list, and `sweep` walks that list only (the cost is the
+  jobs that ended, not the jobs alive): `drop` takes `data` when the count is
+  zero, and the job is freed once the timer has closed. Only the loop's thread
+  sweeps, since a scheduler gives its references back by RELEASE; at N = 1 that
+  is the one thread. `consumed` and `work_done` are gone. A START that the
+  inbox still holds when the owner ended the job (a task woken by something
+  else, the end of the run) starts nothing: `ended` is set before the
+  CLOSE_TIMER and RELEASE are posted, and the START gives back the wait
+  piece's count.
+- **The detached ending runs where the ready list is drained.** `drain` calls
+  `end_detached`, which runs `done` for a detached job that finished. At
+  N > 1 the drain is on the I/O thread, so that `done` (which builds GC
+  values and may close a handle) would run there, against §16.5. This PR does
+  not change it; PR 3 must move it to a scheduler (§16.11, "Detached jobs").
+  The owner's count goes back before `done` runs, so a `done` that raises
+  does not leak the job.
 - **TSan covers the shared code.** `make vm-tsan` builds the VM without libgc
   (`TSAN=1`, `AGC_NO_GC`; TSan and Boehm's stop-the-world do not mix) and runs
   the C tests that use more than one thread: the inbox, the set-once outcome
@@ -532,7 +551,8 @@ Only if measurements ask for them. Neither is planned.
   discarding the result builds GC values and may close a handle
   (`end_detached`), so the options are: the I/O thread does it, an exception to
   §16.5 for this case; or the job goes back through the run queue to a
-  scheduler.
+  scheduler. As built, the drain runs it on the thread that drains, which is
+  the I/O thread at N > 1; PR 3 must move it to a scheduler.
 - **Cancel against PARKING (to fix in the N > 1 PR).** The scheduler reads
   `cancelled` at the end of a turn and then does the CAS to PARKED. A cancel
   from another thread that lands after that read and before
@@ -565,8 +585,9 @@ Only if measurements ask for them. Neither is planned.
   the lock, or a stable id with a map. Freeing a job clears `r->native` and
   calls `agc_unregister`, a registry write that moves the last entry; with a
   registry owned by the I/O thread, a free by a scheduler must be a request too.
-  As built, `sweep` walks the whole registry on every job finish, a point of
-  contention under a shared lock.
+  As built, only the loop's thread sweeps (it walks the dead list, not the
+  registry), but a scheduler still registers a job in `start_job`, so the
+  registry needs its lock or its owner before PR 3 runs two threads.
 - **Who owns the wait lists.** The handle's lock FIFO and the stdin waiters have
   no decided owner (the awaiters list is under the target task's lock, §10.2.3).
   For channels this is decided: a short lock for each channel (§27.2, "VM
