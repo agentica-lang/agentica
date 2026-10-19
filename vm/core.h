@@ -176,7 +176,8 @@ bool agc_io_init(void);
 bool agc_io_poll(agc_vm *vm, bool wait);
 /* The work that the I/O role leaves for a scheduler once a second thread runs the schedulers: the end of each detached
  * job (its `done` half). A scheduler calls it when agc_runq_nudged says so, with no task current. Returns whether it ran
- * anything. At N = 1 the drain runs the job itself and the list is always empty. */
+ * anything. At N = 1 the drain runs the job itself and the list is always empty. When a `done` half raises (agc_fail),
+ * vm->task is left on the scratch task and the caller restores its own. */
 bool agc_io_service(agc_vm *vm);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 void agc_io_detach(agc_vm *vm, agc_task *t);

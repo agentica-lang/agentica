@@ -33,8 +33,9 @@
 #endif
 
 /* Every resource of the run, in an array that the scheduler and the I/O role both reach. `lock` protects the array and
-   the ids (a leaf lock: nothing is called while it is held; solo until agc_share). A job keeps its own resource in
-   `res`, so the I/O role never looks a job up by slot, which unregister moves. */
+   the ids (a leaf lock: no other lock is taken while it is held, though agc_alloc may run under it; solo until
+   agc_share). A job keeps its own resource in `res`, so the I/O role never looks a job up by slot, which unregister
+   moves. */
 struct agc_registry {
   agc_lock *lock;
   size_t count, cap;
@@ -125,6 +126,8 @@ struct agc_io_job {
   agc_more_fn more;
   agc_loop *loop;
   job *ready_next, *service_next;
+  /* A GC pointer in malloc memory, which the collector does not scan: the registry keeps the resource alive until
+     sweep frees the job, so a job's resource must never be unregistered before that. */
   agc_resource *res;
   uint64_t started_ns;
   job *dead_next;
@@ -520,7 +523,8 @@ static _Noreturn void post_after_close(void) {
 
 /* A libuv step on a job, asked of the I/O role (§16.4). On the loop's thread it runs at once, with no entry and no
    extra reference: the caller holds one. From another thread it is a malloc'd entry in the inbox, with a reference
-   taken first and given back by the handler (a RELEASE carries the caller's own reference instead). */
+   taken first and given back by the handler (a RELEASE carries the caller's own reference instead). The check for a
+   closed loop is best effort: it catches a post that comes after the close, not one that races with it. */
 static void post(job *j, request_kind kind, int64_t arg) {
   agc_loop *loop = j->loop;
   if (on_io_thread(loop)) {

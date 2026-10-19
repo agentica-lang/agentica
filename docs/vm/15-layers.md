@@ -166,9 +166,10 @@ field of V3, which PR 1 added; it has its own header, `port.h`.
     `input.c` in the core)
 
 - **Job:** Set a timer
-  - **Functions:** no own function: a timer is the job's `timeout_ms` (§14.2);
-    `Task.sleep` is a job with no work. The three other timers of §14.2 use
-    libuv through `agc_io_uv` and stay exceptions
+  - **Functions:** no own function: an I/O deadline is the job's
+    `timeout_ms`, and a wait with only a deadline (`Task.sleep`) is a task
+    timer in the core (`agc_task_park_until`, §14.2). The three other timers
+    of §14.2 use libuv through `agc_io_uv` and stay exceptions
 
 - **Job:** Register, own and close a handle
   - **Functions:** `agc_register`, `agc_own` with an `agc_close_fn` (it takes
@@ -527,7 +528,7 @@ port.
 - **#:** V6
   - **Where:** `testing.c:186-206`
   - **What:** `cancel_leftovers`, `unobserved_of` and `observe_test` walk
-    `caller->children` and `vm->crashes` and read `t->test`
+    `caller->children` and `rt->crashes` and read `t->test`
   - **Fix:** **Accepted for now.** Reads only, and every change goes through
     `agc_task_cancel` and `agc_task_observe`. 24b's one hand-off form may give a
     task group to replace them; if it does, they move behind the port then

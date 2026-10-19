@@ -18,9 +18,11 @@ Each rule says what is **as built** today and what is **being built** or is a
 ### 14.1 Waiting
 
 **Rule.** A task waits only by parking: on a job (`agc_io_start`, the task's
-`parked`), or on a list the scheduler owns (a handle's lock FIFO, a task's
+`parked`), on a list the scheduler owns (a handle's lock FIFO, a task's
 awaiters, the stdin waiters `rt->in.waiters`, the output waiters
-`rt->out.waiters` and `rt->err.waiters`). Nothing else blocks. The loop thread
+`rt->out.waiters` and `rt->err.waiters`), or in its scheduler's timer heap
+(`agc_task_park_until`, `vm/timers.c`), alone or next to one of those lists.
+Nothing else blocks. The loop thread
 never blocks on a descriptor. Every wait has an exit that `agc_task_cancel`
 knows (§14.3).
 
@@ -103,12 +105,21 @@ Known exceptions, as built:
 
 ### 14.2 Timeouts
 
-**Rule.** One way: a timer on the job. A builtin that takes `timeout_ms` passes
-it to `agc_io_start`, whose job owns one `uv_timer_t` (`start_job` in
-`vm/loop.c`). When it fires, the job ends with the timeout error and the task
-wakes. No builtin starts its own timer for a timeout.
+**Rule.** Two ways, one per kind of wait.
 
-`Task.sleep` is a job with no work and a timer. `agc_io_extend` (20c) restarts a
+- **An I/O job's deadline is its job's timer.** A builtin that takes
+  `timeout_ms` for work or a wait on the loop passes it to `agc_io_start`, whose
+  job owns one `uv_timer_t` (`start_job` in `vm/loop.c`). When it fires, the job
+  ends with the timeout error and the task wakes. The timer lives with the job
+  because the START request that the job pays anyway starts it, and the job's
+  outcome decides between the timeout and the completion.
+- **A wait with only a deadline is a task timer.** `Task.sleep`, the timed
+  await, a channel deadline, `Task.map`'s oldest deadline and a handle lock's
+  deadline arm the task's own timer (`agc_task_park_until`, `vm/timers.c`) in
+  the scheduler's heap. Such a wait has no I/O, so it needs no job, no registry
+  slot and no request to the I/O thread (§16.9, "Timers").
+
+No builtin starts its own timer for a timeout. `agc_io_extend` (20c) restarts a
 job's own timer once, so `HttpWire.read_request`'s deadline runs from the
 request's first byte. It is the same timer, not a second one. As built, a few
 timers are not job timeouts and stay: a captured child's grace period (§10.4),
@@ -128,7 +139,8 @@ new kind of wait adds its case to `agc_task_cancel` and to
 leftovers (a test's tasks) cancel through it. Nothing else cancels a wait. A
 timer, a
 job's completion and a crash also unlink a task, but they end a wait; they do
-not cancel one.
+not cancel one. `unlink_task` takes a cancelled task out of every wait,
+its timer included (`agc_timers_disarm`).
 
 A cancelled job is detached (`agc_io_detach`). A loop job is stopped by its
 `cancel` half. A pool job runs to its end, which §14.1 keeps bounded except for

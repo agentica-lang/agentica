@@ -850,7 +850,7 @@ test-shared: dist/agentica$(EXE)
 vm-sanitize-build: dist/agentica$(EXE)
 
 vm-sanitize-test: vm-sanitize-build
-	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(JOBS)
+	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS)
 
 # Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's
 vendored-check:

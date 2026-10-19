@@ -61,6 +61,8 @@ static void arm(agc_vm *vm, agc_task *t, uint64_t deadline) {
   agc_sync_assert(vm);
   agc_timers *h = &vm->timers;
   if (t->timer.heap) agc_fail(vm, "RUNTIME-INTERNAL", "a task armed two timers", 0);
+  /* A job carries its own deadline, and `resume` takes a job's result before it looks at the timer. */
+  if (t->parked) agc_fail(vm, "RUNTIME-INTERNAL", "a task parked on a job armed a timer", 0);
   if (h->count == h->cap) {
     size_t cap = h->cap ? agc_size_mul(h->cap, 2) : 16;
     agc_task **items = agc_alloc(agc_size_mul(cap, sizeof(agc_task *)));
