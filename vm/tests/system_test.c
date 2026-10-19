@@ -54,6 +54,7 @@ int main(void) {
 #endif
   const agc_string *name_of_os = agc_as_string(&vm, call(&vm, "System.os"));
   assert(name_of_os->bytes == strlen(os) && memcmp(name_of_os->data, os, name_of_os->bytes) == 0);
+  assert(name_of_os->chars == strlen(os));
   assert(agc_io_close(&vm));
   puts("system tests passed");
   return 0;

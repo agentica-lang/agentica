@@ -60,37 +60,28 @@ static agc_value builtin_pid(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int((int64_t)uv_os_getpid());
 }
 
-static char os_name[64];
-static uv_once_t os_once = UV_ONCE_INIT;
-
-/* The name once, whatever thread asks first: linux, macos and windows for what uv_os_uname calls Linux, Darwin and
-   Windows_NT, the lowercase system name for any other, and "unknown" when the system will not say. */
-static void find_os(void) {
-  uv_utsname_t info;
-  if (uv_os_uname(&info) != 0) {
-    strcpy(os_name, "unknown");
-    return;
-  }
-  const char *known[][2] = {{"Linux", "linux"}, {"Darwin", "macos"}, {"Windows_NT", "windows"}};
-  for (size_t k = 0; k < sizeof known / sizeof known[0]; k++)
-    if (strcmp(info.sysname, known[k][0]) == 0) {
-      strcpy(os_name, known[k][1]);
-      return;
-    }
-  size_t n = 0;
-  for (; info.sysname[n] && n + 1 < sizeof os_name; n++) {
-    char c = info.sysname[n];
-    os_name[n] = c >= 'A' && c <= 'Z' ? (char)(c - 'A' + 'a') : c;
-  }
-  os_name[n] = '\0';
-}
-
+/* linux, macos and windows for what uv_os_uname calls Linux, Darwin and Windows_NT, the lowercase system name for any
+   other, and "unknown" when the system will not say. libuv built with MinGW reports Windows as
+   MINGW32_NT-<major>.<minor> (src/win/util.c), so that prefix is Windows as well. */
 static agc_value builtin_os(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)vm;
   (void)args;
   (void)span;
-  uv_once(&os_once, find_os);
-  return agc_string_value(agc_make_string(os_name, strlen(os_name), 0));
+  uv_utsname_t info;
+  char name[sizeof info.sysname] = "unknown";
+  if (uv_os_uname(&info) == 0) {
+    const char *known[][2] = {
+      {"Linux", "linux"}, {"Darwin", "macos"}, {"Windows_NT", "windows"}, {"MINGW32_NT", "windows"}};
+    size_t n = 0;
+    for (; info.sysname[n]; n++) {
+      char c = info.sysname[n];
+      name[n] = c >= 'A' && c <= 'Z' ? (char)(c - 'A' + 'a') : c;
+    }
+    name[n] = '\0';
+    for (size_t k = 0; k < sizeof known / sizeof known[0]; k++)
+      if (strncmp(info.sysname, known[k][0], strlen(known[k][0])) == 0) strcpy(name, known[k][1]);
+  }
+  return agc_string_value(agc_make_string(name, strlen(name), strlen(name)));
 }
 
 const agc_builtin agc_system_builtins[] = {
