@@ -43,6 +43,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `_` is a discard wherever a name is bound, including a `for` variable
+  (`for _ in 0...3` with `_ = f()` in the body); reading `_` is
+  `CHECK-UNKNOWN-NAME`.
 - A blocking call whose deadline and whose result fall in the same pass of the
   event loop now takes whichever the loop saw first: if the timer ran first the
   call times out, where it used to return the result if it had arrived by the

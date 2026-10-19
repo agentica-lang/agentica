@@ -22,6 +22,9 @@ def main_with(body, helpers=ENUMS):
     return helpers + "def main() -> Void\n" + body + "end\n\n"
 
 
+F_HELPER = "def f(x: Int) -> Int\n  return x\nend\n\n"
+
+
 def case_of(arms, scrutinee="Shape.Dot"):
     """A program whose main() is `case SCRUTINEE` over the arm lines (each indented by four spaces)."""
     lines = "".join("    " + arm + "\n" for arm in arms)
@@ -39,6 +42,10 @@ SINGLE_FILE = [
      case_of(["Shape.Circle(r) if r -> puts(r)", "_ -> puts(0)"]), "CHECK-TYPE-MISMATCH", "r"),
     ("a guard of a wildcard arm must be a Bool",
      case_of(["_ if 1 -> puts(0)", "_ -> puts(1)"]), "CHECK-TYPE-MISMATCH", "1"),
+    ("reading _ is an error: it binds nothing",
+     main_with("  _ = f(1)\n  puts(_)\n", F_HELPER), "CHECK-UNKNOWN-NAME", "_"),
+    ("reading a _ for variable is an error",
+     main_with("  for _ in [1]\n    puts(_)\n  end\n", F_HELPER), "CHECK-UNKNOWN-NAME", "_"),
     ("a guard does not see the names of another arm",
      case_of(["Shape.Circle(r) -> puts(r)", "Shape.Pair(a, _) if r > 1 -> puts(a)", "_ -> puts(0)"]),
      "CHECK-UNKNOWN-NAME", "r"),
@@ -176,6 +183,18 @@ RUNS = [
      ["evaluated", "other"]),
 ]
 
+# `_` binds nothing wherever a name is bound.
+DISCARD = [
+    ("_ is a for variable and a discard in its body",
+     main_with("  total = 0\n  for _ in 0...3\n    _ = f(1)\n    total += 1\n  end\n  puts(total)\n", F_HELPER),
+     ["3"]),
+    ("_ repeats as a block parameter, an assignment target and nested for variables",
+     main_with("  [1, 2].each do |_|\n    _ = f(1)\n    _ = \"text\"\n  end\n"
+               "  {\"a\": 1}.each do |_, _|\n    puts(\"pair\")\n  end\n"
+               "  for _ in [1]\n    for _ in [2]\n      puts(\"inner\")\n    end\n  end\n", F_HELPER),
+     ["pair", "inner"]),
+]
+
 # Several files: (title, files, code, file of the diagnostic, text the range covers).
 MODULES = [
     ("a nested variant through an import alias",
@@ -216,7 +235,7 @@ def test_programs_of_several_files(case, agentica_check):
 
 
 @pytest.mark.parametrize(
-    ("title", "program", "lines"), RUNS, ids=[case[0] for case in RUNS]
+    ("title", "program", "lines"), RUNS + DISCARD, ids=[case[0] for case in RUNS + DISCARD]
 )
 def test_programs_print_what_the_rules_say(title, program, lines, tmp_path):
     path = tmp_path / "run.agc"

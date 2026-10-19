@@ -113,6 +113,11 @@ which `x` the block captured. The rule also keeps diagnostics clear. Parameters
 and the `for` variable are initialized bindings; the `for` variable cannot be
 reassigned. Variables created in a block are not visible after its `end`.
 
+`_` is a discard wherever a name is bound: an assignment target (`_ = f()`), a
+`for` variable, a block or function parameter and a pattern slot. It binds
+nothing, so it can repeat and never conflicts with another name. Reading `_` is
+`CHECK-UNKNOWN-NAME`.
+
 ### Module constants
 
 A constant (section 5) is a value fixed for the whole run. It is read by its
