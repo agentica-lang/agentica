@@ -43,6 +43,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** on Windows, `Process.spawn_channel` gives the child a pipe per
+  direction (read 3, write 4, `AGENTICA_CHANNEL=3,4`), so `channel_close` ends
+  the child's input. A child that used the duplex pipe on descriptor 3, or a VM
+  older than this release, finds no channel.
+
 - `_` is a discard wherever a name is bound, including a `for` variable
   (`for _ in 0...3` with `_ = f()` in the body); reading `_` is
   `CHECK-UNKNOWN-NAME`.

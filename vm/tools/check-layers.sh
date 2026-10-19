@@ -9,9 +9,9 @@ obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
 cd "$(dirname "$0")/.."
 core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c runq.c inbox.c sync.c task_map.c channel.c loop.c input.c output.c stdio_posix.c stdio_windows.c random.c loader.c builtins.c diag.c trace.c"
 services="strings.c numbers.c json.c json_typed.c files.c tree.c stream.c duplex.c process.c system.c tcp.c http_fields.c http_client.c http_server.c logger.c testing.c front_end.c"
-adapters="tls_openssl.c http_pico.c http_body.c file_io.c file_windows.c process_posix.c process_windows.c"
+adapters="tls_openssl.c http_pico.c http_body.c file_io.c file_windows.c process_posix.c process_windows.c duplex_posix.c duplex_windows.c"
 driver="launch.c agentica.c builtin_tables.c fuzz.c fuzz_main.c"
-headers="value.h port.h core.h services.h net.h http_fields.h tls.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h"
+headers="value.h port.h core.h services.h net.h http_fields.h tls.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h"
 memory="agc_alloc agc_alloc_atomic agc_size_add agc_size_mul agc_out_of_memory"
 inc='^\s*#\s*include\s*["<](\./)?'
 found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 1; }; [ "$s" -eq 0 ]; }
@@ -47,7 +47,8 @@ chain launch.h port.h
 chain embedded.h
 chain file_io.h
 chain process_os.h
-if found -n "$inc(services|net|tls|http_parse|http_fields|file_io|process_os)\.h" $core; then bad "a core file includes a service or adapter header"; fi
+chain duplex_os.h
+if found -n "$inc(services|net|tls|http_parse|http_fields|file_io|process_os|duplex_os)\.h" $core; then bad "a core file includes a service or adapter header"; fi
 if found -n "${inc}core\.h" $services $adapters; then bad "a service or adapter includes core.h"; fi
 if found -n "$inc(port|services|net|http_fields)\.h" $adapters; then bad "an adapter includes the port or a service header"; fi
 only 'gc\.h' "value.c"
@@ -55,7 +56,7 @@ if found -n --max-depth 2 '^\s*#\s*include\s*"([^"]*/)?list_impl\.h"' --glob '*.
 only 'openssl/' "tls_openssl.c"
 only 'picohttpparser\.h' "http_pico.c"
 only 'yyjson\.h' "json.c"
-only 'uv\.h' "loop.c runq.c inbox.c sync.c stdio_windows.c stream.c duplex.c process.c system.c tcp.c http_client.c file_io.c file_windows.c launch.c"
+only 'uv\.h' "loop.c runq.c inbox.c sync.c stdio_windows.c stream.c duplex.c process.c system.c tcp.c http_client.c file_io.c file_windows.c duplex_posix.c duplex_windows.c launch.c"
 if found -n --max-depth 1 '^[A-Za-z_][\w \*]*\bagc_\w+\([^{]*\)\s*;\s*$' --glob '*.c' .; then bad "an agc_ prototype in a .c file"; fi
 if found -n --max-depth 1 '^\s*extern\b.*\bagc_|^[A-Za-z_][\w \*]*\bagc_\w+\s*\[[^\]]*\]\s*;' --glob '*.c' .; then bad "an agc_ variable declared in a .c file"; fi
 
