@@ -1,26 +1,21 @@
 /*
- * The private child channel: one bidirectional libuv pipe,
- * with line reads and writes, for a child process that talks to its parent.
- * Service layer. Design: docs/vm/10-io-processes.md §10.4.
+ * The private child channel: a libuv stream to read and one to write (two
+ * descriptors of one socket on POSIX, two pipes on Windows), with line reads
+ * and writes, for a child process that talks to its parent. Service layer.
+ * The system part is duplex_os.h. Design: docs/vm/10-io-processes.md §10.4.
  */
-#ifdef __APPLE__
-#define _DARWIN_C_SOURCE
-#endif
 #include "services.h"
 #include "file_io.h"
+#include "duplex_os.h"
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef _WIN32
-#include <sys/stat.h>
-#include <unistd.h>
-#endif
 #include <uv.h>
 
 #define LIMIT ((size_t)1048576)
 #define OWNER(ptr, field) ((agc_duplex *)(void *)((char *)(ptr) - offsetof(agc_duplex, field)))
+#define PIPE_OWNER(handle) ((agc_duplex *)(handle)->data)
 
 typedef struct request request;
 
@@ -32,7 +27,7 @@ struct request {
 };
 
 struct agc_duplex {
-  uv_pipe_t pipe;
+  uv_pipe_t rd_pipe, wr_pipe;
   uv_write_t write_req;
   uv_shutdown_t shutdown_req;
   uint8_t *write_data;
@@ -40,8 +35,8 @@ struct agc_duplex {
   request *reader, *writer;
   size_t refs;
   const char *overflow;
-  int fd, write_status;
-  bool attached, reading, closed, write_closed, sent;
+  int rd_fd, wr_fd, write_status;
+  bool attached, rd_live, wr_live, reading, closed, write_closed, sent;
 };
 
 static const char closed_text[] = "process: channel is closed";
@@ -62,45 +57,57 @@ static void unref(agc_duplex *d) {
   settle(d);
 }
 
-static void handle_closed(uv_handle_t *h) { unref(OWNER(h, pipe)); }
+static void handle_closed(uv_handle_t *h) { unref(PIPE_OWNER(h)); }
 
 static void shutdown_done(uv_shutdown_t *req, int status) {
   (void)status;
   unref(OWNER(req, shutdown_req));
 }
 
-static agc_duplex *make(int fd) {
+static agc_duplex *make(int rd_fd, int wr_fd) {
   agc_duplex *d = calloc(1, sizeof(agc_duplex));
   if (!d) agc_out_of_memory();
-  d->fd = fd;
+  d->rd_fd = rd_fd;
+  d->wr_fd = wr_fd;
   d->refs = 1;
   return d;
 }
 
-static int attach(agc_vm *vm, agc_duplex *d) {
-  int rc = uv_pipe_init(agc_io_uv(vm), &d->pipe, 0);
+/* Opens one libuv handle on *fd, which it takes on success. The handle stays initialized (and counted in refs) on a
+   failed open too, until agc_duplex_shut closes it. */
+static int open_end(agc_vm *vm, agc_duplex *d, uv_pipe_t *pipe, bool *live, int *fd) {
+  int rc = uv_pipe_init(agc_io_uv(vm), pipe, 0);
   if (rc) return rc;
-  d->attached = true;
+  pipe->data = d;
+  *live = true;
   d->refs++;
-  rc = uv_pipe_open(&d->pipe, d->fd);
-  if (rc) {
-    d->closed = true;
-    uv_close((uv_handle_t *)&d->pipe, handle_closed);
-    return rc;
+  rc = uv_pipe_open(pipe, *fd);
+  if (!rc) *fd = -1;
+  return rc;
+}
+
+static int attach(agc_vm *vm, agc_duplex *d) {
+  int rc = open_end(vm, d, &d->rd_pipe, &d->rd_live, &d->rd_fd);
+  if (!rc) rc = open_end(vm, d, &d->wr_pipe, &d->wr_live, &d->wr_fd);
+  d->attached = true;
+  if (rc) agc_duplex_shut(d);
+  return rc;
+}
+
+static void close_end(uv_pipe_t *pipe, bool *live, int *fd) {
+  if (*live && !uv_is_closing((uv_handle_t *)pipe)) uv_close((uv_handle_t *)pipe, handle_closed);
+  *live = false;
+  if (*fd >= 0) {
+    agc_fs_close(*fd);
+    *fd = -1;
   }
-  d->fd = -1;
-  return 0;
 }
 
 void agc_duplex_shut(agc_duplex *d) {
   if (d->closed) return;
   d->closed = true;
-  if (d->attached) {
-    if (!uv_is_closing((uv_handle_t *)&d->pipe)) uv_close((uv_handle_t *)&d->pipe, handle_closed);
-  } else if (d->fd >= 0) {
-    agc_fs_close(d->fd);
-    d->fd = -1;
-  }
+  close_end(&d->rd_pipe, &d->rd_live, &d->rd_fd);
+  close_end(&d->wr_pipe, &d->wr_live, &d->wr_fd);
   agc_inbuf_free(&d->in);
   if (d->reader) agc_io_ready(d->reader->job);
   if (d->writer) agc_io_ready(d->writer->job);
@@ -116,18 +123,16 @@ void agc_duplex_release(agc_duplex *d) {
   unref(d);
 }
 
-agc_duplex *agc_duplex_new(agc_vm *vm, int fd) {
-  agc_duplex *d = make(fd);
+agc_duplex *agc_duplex_new(agc_vm *vm, int read_fd, int write_fd) {
+  agc_duplex *d = make(read_fd, write_fd);
   if (attach(vm, d) == 0) return d;
-  if (d->fd >= 0) agc_fs_close(d->fd);
-  d->fd = -1;
   agc_duplex_release(d);
   return NULL;
 }
 
 static void alloc_in(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
   (void)suggested;
-  agc_duplex *d = OWNER(h, pipe);
+  agc_duplex *d = PIPE_OWNER(h);
   size_t size = agc_inbuf_want(&d->in, true, 0);
   uint8_t *room = agc_inbuf_room(&d->in, size);
   *buf = room ? uv_buf_init((char *)room, (unsigned)size) : uv_buf_init(NULL, 0);
@@ -135,13 +140,13 @@ static void alloc_in(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
 
 static void stop_reading(agc_duplex *d) {
   if (!d->reading) return;
-  uv_read_stop((uv_stream_t *)&d->pipe);
+  uv_read_stop((uv_stream_t *)&d->rd_pipe);
   d->reading = false;
 }
 
 static void read_in(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   (void)buf;
-  agc_duplex *d = OWNER(s, pipe);
+  agc_duplex *d = PIPE_OWNER(s);
   agc_inbuf_got(&d->in, n, n == UV_EOF || n == UV_ECONNRESET);
   const request *q = d->reader;
   bool ready = q && agc_inbuf_ready(&d->in, true, 0);
@@ -151,7 +156,7 @@ static void read_in(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
 
 static void start_reading(agc_duplex *d) {
   if (d->reading || d->in.eof || d->in.error) return;
-  int rc = uv_read_start((uv_stream_t *)&d->pipe, alloc_in, read_in);
+  int rc = uv_read_start((uv_stream_t *)&d->rd_pipe, alloc_in, read_in);
   if (rc)
     d->in.error = -rc;
   else
@@ -268,7 +273,7 @@ agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_val
   if (!agc_stream_lock(vm, lock, &timeout, &result) || !usable(d, d->writer, &result)) return result;
   if (d->write_closed) return agc_error_value(closed_text);
   d->write_status = 0;
-  int rc = agc_stream_write((uv_stream_t *)&d->pipe, &d->write_req, &d->write_data, (const uint8_t *)text->data,
+  int rc = agc_stream_write((uv_stream_t *)&d->wr_pipe, &d->write_req, &d->write_data, (const uint8_t *)text->data,
                             text->bytes, wrote);
   if (rc < 0) return agc_system_error(vm, write_failed, -rc);
   if (rc == 0) return ok_void();
@@ -286,40 +291,30 @@ agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, 
   if (d->write_closed) return ok_void();
   d->write_closed = true;
   d->refs++;
-  if (uv_shutdown(&d->shutdown_req, (uv_stream_t *)&d->pipe, shutdown_done)) d->refs--;
+  if (uv_shutdown(&d->shutdown_req, (uv_stream_t *)&d->wr_pipe, shutdown_done)) d->refs--;
   return ok_void();
 }
 
 static agc_duplex *parent_of(agc_vm *vm) {
   agc_duplex *d = vm->rt->parent ? vm->rt->parent->native : NULL;
-  if (d && !d->attached && !d->closed && attach(vm, d) != 0) {
-    agc_fs_close(d->fd);
-    d->fd = -1;
-    agc_duplex_shut(d);
-  }
+  if (d && !d->attached && !d->closed) attach(vm, d);
   return d;
 }
 
 static void release_parent(void *native) { agc_duplex_release(native); }
 
+static void forget_inherited(int fd, void *data) {
+  agc_vm *vm = data;
+  agc_files_forget(&vm->rt->inherited, fd);
+}
+
 void agc_parent_take(agc_vm *vm) {
   const char *marker = getenv(AGC_CHANNEL_ENV);
-  if (!marker || strcmp(marker, AGC_CHANNEL_VALUE) != 0) return;
-#ifdef _WIN32
-  int fd = agc_fs_take_channel(AGC_CHANNEL_FD);
-  if (fd < 0) return;
-#else
-  struct stat info;
-  if (fstat(AGC_CHANNEL_FD, &info) != 0 || !(S_ISFIFO(info.st_mode) || S_ISSOCK(info.st_mode))) return;
-  int mode = fcntl(AGC_CHANNEL_FD, F_GETFL);
-  if (mode < 0 || (mode & O_ACCMODE) != O_RDWR) return;
-  int fd = fcntl(AGC_CHANNEL_FD, F_DUPFD_CLOEXEC, AGC_CHANNEL_FD);
-  if (fd < 0) return;
-  agc_files_forget(&vm->rt->inherited, AGC_CHANNEL_FD);
-  close(AGC_CHANNEL_FD);
-#endif
+  if (!marker || strcmp(marker, agc_chan_value()) != 0) return;
+  int read_fd, write_fd;
+  if (!agc_chan_take(forget_inherited, vm, &read_fd, &write_fd)) return;
   uv_os_unsetenv(AGC_CHANNEL_ENV);
-  vm->rt->parent = agc_register(vm, make(fd), release_parent);
+  vm->rt->parent = agc_register(vm, make(read_fd, write_fd), release_parent);
   vm->rt->parent_locks = (agc_lines){agc_new_lock(vm), agc_new_lock(vm)};
 }
 
@@ -360,7 +355,7 @@ bool agc_parent_send(agc_vm *vm, const agc_string *text) {
     if (d->write_status >= 0) return true;
   } else if (d && !d->writer && !d->write_closed) {
     d->write_status = 0;
-    int rc = agc_stream_write((uv_stream_t *)&d->pipe, &d->write_req, &d->write_data, (const uint8_t *)text->data,
+    int rc = agc_stream_write((uv_stream_t *)&d->wr_pipe, &d->write_req, &d->write_data, (const uint8_t *)text->data,
                               text->bytes, wrote);
     if (rc == 0) return true;
     if (rc == 1) {

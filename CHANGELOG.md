@@ -43,6 +43,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** on Windows, `Process.spawn_channel` gives the child a pipe per
+  direction (read 3, write 4, `AGENTICA_CHANNEL=3,4`), so `channel_close` ends
+  the child's input. A child that used the duplex pipe on descriptor 3, or a VM
+  older than this release, finds no channel.
+
 - `AGENTICA_VM_TRACE=io` no longer prints `kind=sleep` and `kind=lock` job
   lines for sleeps and deadline waits; `AGENTICA_VM_TRACE=sched` prints
   `timer_arm` and `timer_fire` for them.

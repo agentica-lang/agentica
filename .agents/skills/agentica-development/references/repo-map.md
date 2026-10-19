@@ -88,7 +88,10 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   output.c        # stdout and stderr writers (references/vm-io.md)
   stdio_posix.c   # the Linux and macOS side of output.c: how a descriptor is written, one target, notice memory stream (references/vm-io.md)
   stdio_windows.c # the Windows side: pool thread for files and consoles, libuv pipe, CompareObjectHandles (references/vm-io.md)
-  duplex.c        # child channel (fd 3) and Process.spawn_channel (references/vm-net.md)
+  duplex.c        # child channel framing, limits and locks, over one or two libuv streams (references/vm-net.md)
+  duplex_os.h     # the channel ends that differ by system: the pair, the marker, how a child takes them
+  duplex_posix.c  # the POSIX side: one socket pair on fd 3, marker "3"
+  duplex_windows.c # the Windows side: a pipe per direction on fd 3 and 4, marker "3,4"
   process.c       # Process builtins, System.env and System.pid (references/vm-net.md)
   process_os.h    # command search rules that differ by system (references/vm-io.md)
   process_posix.c # the POSIX side of process_os.h: every file may run, PATH splits at ':'
@@ -181,7 +184,8 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_stdlib_modules.py  # unittest: stdlib/MODULES names each stdlib/ source once (no binary needed)
   test_stdlib_prelude.py  # pytest: the prelude table, stdlib/prelude/ files and Python peer agree; no O(n) builtin in a loop
   test_vm_test_protocol.py  # unittest: a Python peer plays a test runner over the child channel (references/vm-tests.md)
-  test_vm_child_channel.py  # unittest: the child channel on its own, against Python peers (references/vm-tests.md)
+  test_vm_child_channel.py  # pytest: the child channel on its own, against a Node peer, on every system (references/vm-tests.md)
+  test_vm_child_channel_linux.py  # pytest: pinned descriptors and a shell child, Linux only (references/vm-tests.md)
   test_vm_tls.py  # unittest: the VM TLS builtins against independent peers (references/vm-tests.md)
   test_vm_monotonic.py  # unittest: Time.monotonic_ns against Python's clock
   test_vm_bits.py  # unittest: spans of the Int and Float bit builtin errors (references/library-notes.md)

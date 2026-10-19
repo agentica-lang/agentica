@@ -9,6 +9,7 @@
 #include "services.h"
 #include "file_io.h"
 #include "process_os.h"
+#include "duplex_os.h"
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <errno.h>
@@ -20,7 +21,6 @@
 #ifdef _WIN32
 #include <io.h>
 #else
-#include <sys/socket.h>
 #include <unistd.h>
 #endif
 #include <uv.h>
@@ -34,7 +34,7 @@
 #define METRICS_ENV "AGENTICA_VM_METRICS="
 #define METRICS_FILE_ENV "AGENTICA_VM_METRICS_FILE="
 #define DRAIN_LIMIT ((size_t)2097152)
-#define STDIO_SLOTS 4
+#define STDIO_SLOTS 5
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
 typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE, REQ_AVAILABLE } req_kind;
@@ -702,7 +702,8 @@ static bool metrics_env(const char *entry) {
          env_prefix(entry, METRICS_FILE_ENV);
 }
 
-static char **child_env(bool drop_uring, const char *marker) {
+/* The environment of a child; `channel` is the value of AGENTICA_CHANNEL when the child gets a channel. */
+static char **child_env(bool drop_uring, const char *channel) {
   uv_env_item_t *host = NULL;
   int count = 0;
   if (uv_os_environ(&host, &count) != 0) return NULL;
@@ -720,9 +721,11 @@ static char **child_env(bool drop_uring, const char *marker) {
     else env[kept++] = entry;
   }
   uv_os_free_environ(host, count);
-  if (marker) {
-    env[kept] = strdup(marker);
+  if (channel) {
+    size_t size = strlen(CHANNEL_PREFIX) + strlen(channel) + 1;
+    env[kept] = malloc(size);
     if (!env[kept]) agc_out_of_memory();
+    snprintf(env[kept], size, "%s%s", CHANNEL_PREFIX, channel);
   }
   return env;
 }
@@ -747,7 +750,7 @@ static int open_pipe(uv_pipe_t *pipe, int *fd, int rc) {
 
 static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, const char *cwd, bool channel) {
   int fds[6] = {-1, -1, -1, -1, -1, -1};
-  int link[2] = {-1, -1};
+  agc_chan_ends link = {-1, -1, {-1, -1}, 0};
   int rc = 0;
   for (size_t k = 0; !rc && k < 3; k++) {
     int read_flags = 0, write_flags = 0;
@@ -757,21 +760,17 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
 #endif
     rc = uv_pipe(fds + 2 * k, read_flags, write_flags);
   }
-  if (!rc && channel) {
-#ifdef _WIN32
-    rc = agc_fs_pipepair(link);
-#else
-    rc = uv_socketpair(SOCK_STREAM, 0, link, 0, 0);
-#endif
-  }
+  if (!rc && channel) rc = agc_chan_pair(&link);
   if (!rc) {
     uv_stdio_container_t stdio[STDIO_SLOTS];
     for (size_t k = 0; k < 3; k++) {
       stdio[k].flags = UV_INHERIT_FD;
       stdio[k].data.fd = fds[2 * k + (k == 0 ? 0 : 1)];
     }
-    stdio[AGC_CHANNEL_FD].flags = UV_INHERIT_FD;
-    stdio[AGC_CHANNEL_FD].data.fd = link[1];
+    for (int k = 0; k < link.child_count; k++) {
+      stdio[3 + k].flags = UV_INHERIT_FD;
+      stdio[3 + k].data.fd = link.child[k];
+    }
     uv_process_options_t options;
     memset(&options, 0, sizeof options);
     options.exit_cb = exited;
@@ -779,7 +778,7 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
     options.args = argv;
     options.env = env;
     options.cwd = cwd;
-    options.stdio_count = channel ? STDIO_SLOTS : STDIO_SLOTS - 1;
+    options.stdio_count = 3 + link.child_count;
     options.stdio = stdio;
     link_child(g, p);
     rc = uv_spawn(g->loop, &p->process, &options);
@@ -793,7 +792,7 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
   close_fd(&fds[0]);
   close_fd(&fds[3]);
   close_fd(&fds[5]);
-  close_fd(&link[1]);
+  for (int k = 0; k < link.child_count; k++) close_fd(&link.child[k]);
   if (!rc) {
     uv_pipe_init(g->loop, &p->in, 0);
     uv_pipe_init(g->loop, &p->out, 0);
@@ -805,8 +804,8 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
     }
     rc = open_pipe(&p->err, &fds[4], open_pipe(&p->out, &fds[2], open_pipe(&p->in, &fds[1], 0)));
     if (!rc && channel) {
-      p->channel = agc_duplex_new(vm, link[0]);
-      link[0] = -1;
+      p->channel = agc_duplex_new(vm, link.read, link.write);
+      link.read = link.write = -1;
       if (!p->channel) rc = UV_ENOMEM;
     }
     if (!rc) rc = p->captured ? start_kept(p) : uv_read_start((uv_stream_t *)&p->err, alloc_err, forward_err);
@@ -814,7 +813,8 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
   close_fd(&fds[1]);
   close_fd(&fds[2]);
   close_fd(&fds[4]);
-  close_fd(&link[0]);
+  close_fd(&link.read);
+  close_fd(&link.write);
   if (rc && p->running) shut(p);
   return rc;
 }
@@ -881,9 +881,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     return agc_error_value("process: directory is unavailable");
   }
   char **argv = child_args(vm, path, list);
-  char *marker = channel ? strdup(CHANNEL_PREFIX AGC_CHANNEL_VALUE) : NULL;
-  if (channel && !marker) agc_out_of_memory();
-  char **env = child_env(vm->rt->drop_uring_env, marker);
+  char **env = child_env(vm->rt->drop_uring_env, channel ? agc_chan_value() : NULL);
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;
@@ -898,7 +896,6 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   for (size_t k = 0; argv[k]; k++) free(argv[k]);
   free(argv);
   free_env(env);
-  free(marker);
   free(cwd);
   if (rc) {
     settle(p);

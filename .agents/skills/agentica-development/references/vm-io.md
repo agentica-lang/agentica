@@ -29,6 +29,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     names that are refused (trailing dot or space, `:` that is not a drive).
     `process.c` keeps the search loop and the file test.
 
+- **Path:** `vm/duplex_os.h`, `vm/duplex_posix.c`, `vm/duplex_windows.c`
+  - **Owns:** The ends of a child channel: how the parent makes them (a socket
+    pair, or a pipe per direction on Windows), the `AGENTICA_CHANNEL` value
+    each system understands and how a child takes the inherited descriptors.
+    `duplex.c` keeps the framing, limits, locks and timeouts.
+
 - **Path:** `vm/tree.c`
   - **Owns:** `agc_tree_refused` (the pure test of the names never removed) and
     `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with

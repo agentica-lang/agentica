@@ -348,18 +348,24 @@ Read first: `references/vm.md`.
     a partial line, and the `RUNTIME-TEST-RUN` of a run without a channel
 
 - **Path:** `tests/test_vm_child_channel.py`
-  - **Owns:** the child channel on its own (`tests/fixtures/child-channel.agc`,
-    `child-channel-peer.py`): the VM as the child of a Python parent (lines in
-    pieces, a 300 KB line, the end of input, a timeout that closes the channel,
-    no channel, a marker without a socket and a socket without the marker, a
-    grandchild that gets neither) and the VM as the parent of a Python child
+  - **Owns:** the child channel on its own, on Linux, macOS and Windows
+    (`tests/fixtures/child-channel.agc`, `child-channel-peer.js`): the VM as the
+    child of a Node parent (lines in pieces, a 300 KB line, the end of input, a
+    timeout that closes the channel, no channel, a marker without a descriptor,
+    a descriptor without the marker) and the VM as the parent of a Node child
     (send, read, `read_available` order, a half close, a read timeout and a
     stalled send that close only the channel, a line over 1 MiB, a child with no
     channel, an uncaptured child, a UTF-8 character split between two
-    `read_available` calls, `channel_close` after the child exited, a stalled
-    send that keeps sending until one times out) and fd 3 given to the VM as a
-    regular file, a character device or a write-only FIFO (refused, left as it
-    was) or as a read-write FIFO (taken)
+    `read_available` calls, `channel_close` after the child exited), and a
+    child that is gone after its parent is killed (it reads the end of
+    input and leaves a mark on Linux and macOS; libuv's job object ends it on
+    Windows)
+
+- **Path:** `tests/test_vm_child_channel_linux.py`
+  - **Owns:** the Linux-only cases (`child-channel-peer.py`): descriptor 3 given
+    to the VM as a regular file, a character device or a write-only FIFO
+    (refused, left as it was) or as a read-write FIFO (taken), and a shell
+    grandchild that gets neither the marker nor the socket
 
 - **Path:** `tests/test_vm_logger.py`
   - **Owns:** `std/logger` (14c): a run with no setup prints one `INFO` line
