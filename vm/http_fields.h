@@ -32,5 +32,9 @@ bool agc_http_closes(const agc_http_head *head);
 agc_http_slice agc_http_text(agc_vm *vm, agc_value v);
 bool agc_http_list_closes(agc_vm *vm, const agc_list *headers);
 agc_value agc_http_error_result(const char *prefix, const char *reason);
+/* The HttpWire.Text of buf[0, len): its UTF-8 text up to an unfinished last
+   character, which comes back as the carry, and bytes, the count read. An
+   error result when the text is not UTF-8. */
+agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes);
 
 #endif

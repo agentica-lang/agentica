@@ -293,6 +293,16 @@ class TestModuleRules:
         for name, checked in zip(names, names_checked):
             self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
 
+    def test_the_http_wire_records_are_types_only_std_can_name_and_reserve_no_user_name(self):
+        uses = [("def main() -> Void\n  heads: List[HttpWire.Head] = []\nend\n\n", 2),
+                ("def f(chunk: HttpWire.Chunk) -> Void\nend\n\n" + MAIN, 1)]
+        own = "struct Head\n  n: Int\nend\n\nstruct Chunk\n  n: Int\nend\n\n" + MAIN
+        results = self.checks([({"root.agc": text}, "root.agc", None) for text, _line in uses]
+                              + [({"root.agc": own}, "root.agc", None)])
+        for (_text, line), checked in zip(uses, results[:2]):
+            self.assert_rejected(checked, "CHECK-UNKNOWN-NAME", line=line)
+        assert results[2][1] is None
+
     def test_a_type_after_a_function_is_out_of_order_at_the_type(self):
         problem = self.check({"root.agc": "def main() -> Void\nend\n\nstruct Late\n  n: Int\nend\n\n"})
         assert start(self.assert_rejected(problem, "CHECK-DECL-ORDER")) == (4, 1)

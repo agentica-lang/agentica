@@ -155,6 +155,10 @@ static void reserve(agc_http_body *b, size_t need) {
 
 static void append(agc_http_body *b, const uint8_t *data, size_t n) {
   if (!n) return;
+  if (b->discard) {
+    b->len += n;
+    return;
+  }
   reserve(b, b->len + n);
   memcpy(b->data + b->len, data, n);
   b->len += n;
@@ -350,6 +354,31 @@ agc_http_status agc_http_body_feed(agc_http_body *b, const uint8_t *in, size_t l
   }
   *used = k;
   return body_status(b);
+}
+
+agc_http_status agc_http_body_step(agc_http_body *b, const uint8_t *in, size_t len, size_t *used, size_t *start,
+                                   size_t *count) {
+  size_t k = 0;
+  *start = *count = 0;
+  while (k < len && b->state != AGC_HTTP_BODY_DONE && b->state != AGC_HTTP_BODY_FAILED) {
+    if (b->state == AGC_HTTP_BODY_DATA || b->state == AGC_HTTP_BODY_CHUNK) {
+      *start = k;
+      *count = data(b, in + k, len - k);
+      k += *count;
+      break;
+    }
+    frame_byte(b, in[k++]);
+  }
+  *used = k;
+  return body_status(b);
+}
+
+/* Counts n bytes of chunk data that the caller read past the decoder, in
+   discard mode only, so no byte is needed. Returns how many it counted: at
+   most the rest of the chunk, and 0 outside chunk data. */
+size_t agc_http_body_skip(agc_http_body *b, size_t n) {
+  if (!b->discard || b->state != AGC_HTTP_BODY_CHUNK) return 0;
+  return data(b, NULL, n);
 }
 
 agc_http_status agc_http_body_end(agc_http_body *b) {

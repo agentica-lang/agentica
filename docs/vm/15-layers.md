@@ -48,7 +48,8 @@ before it moved; the header split moved no line of a `.c` file except the
 - **Layer:** **Services**
   - **Files:** `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`,
     `tree.c`, `stream.c`, `duplex.c`, `process.c`, `system.c`, `tcp.c`,
-    `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c`
+    `http_fields.c`, `http_client.c`, `http_server.c`, `http_wire.c`,
+    `logger.c`, `testing.c`
   - **May use:** `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter
     headers, libuv, yyjson (`json.c` only)
 
@@ -130,11 +131,9 @@ Notes on the choices:
   in `launch.c` for executable discovery; `agentica.c` does not include it.
 - **Services may call each other.** `http_client.c` and `http_server.c` use
   `tcp.c` through `net.h` (`http_server.c` calls `agc_conn_observe`,
-  `agc_conn_unobserve`, `agc_conn_retain`, `agc_conn_release`, `agc_conn_read`,
-  `agc_conn_pause`, `agc_conn_send`, `agc_conn_sent`, `agc_conn_write_status`,
-  `agc_conn_half_close`, `agc_conn_shut`, `agc_conn_closed`, `agc_conn_failed`,
-  `agc_conn_error`, `agc_conn_heard`, `agc_conn_input`, `agc_conn_accept`,
-  `agc_conn_socket` and `agc_net_close`) and `http_fields.c`, `json_typed.c`
+  `agc_conn_retain`, `agc_conn_release`, `agc_conn_closed`, `agc_conn_accept`,
+  `agc_conn_socket` and `agc_net_close`) and `http_fields.c`; `tcp.c` and
+  `http_wire.c` share the body text through `http_fields.h`; `json_typed.c`
   uses `json.c`, `json.c` and `testing.c` use `strings.c` helpers. That is fine
   inside a layer.
 
@@ -158,8 +157,7 @@ field of V3, which PR 1 added; it has its own header, `port.h`.
     `expired`, `drop`, `cancel`), `agc_io_ready`, `agc_io_detached` (its context
     is the handle a close job holds, or void), `agc_io_start_then` (a pool job's
     `more` step, which may keep it waiting on the loop), `agc_io_extend` (20c:
-    restart the job's own timer, for `read_request`'s deadline from the first
-    byte)
+    restart the job's own timer once)
 
 - **Job:** Wait on a descriptor on the loop
   - **Functions:** `agc_poller_open`, `agc_poller_wait`, `agc_poller_pause`,

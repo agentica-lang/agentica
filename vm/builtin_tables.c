@@ -22,6 +22,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_tcp_builtins, &agc_tcp_builtin_count},
   {agc_http_builtins, &agc_http_builtin_count},
   {agc_http_server_builtins, &agc_http_server_builtin_count},
+  {agc_http_wire_builtins, &agc_http_wire_builtin_count},
   {agc_logger_builtins, &agc_logger_builtin_count},
   {agc_test_builtins, &agc_test_builtin_count},
   {agc_front_end_builtins, &agc_front_end_builtin_count},
