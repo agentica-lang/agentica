@@ -1,8 +1,8 @@
 """When a child process must be gone: the owner ends, the run is stopped, the driver of a VM dies.
 
 On Linux, macOS and Windows, with the Python peer (fixtures/process-peer.py) as the child and process_alive to see
-that it is gone. Windows ends a stopped run with Ctrl+Break and ends the descendants of a killed VM through libuv's job
-object (docs/vm/10-io-processes.md, 10.4); a VM that is killed outright leaves its children running on Linux and
+that it is gone. Windows ends a stopped run with Ctrl+Break and ends the direct children of a killed VM through libuv's
+job object (docs/vm/10-io-processes.md, 10.4); a VM that is killed outright leaves its children running on Linux and
 macOS, which is why the last case kills the driver of a VM, not the VM.
 """
 import os
