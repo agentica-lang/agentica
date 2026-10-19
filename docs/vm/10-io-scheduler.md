@@ -252,11 +252,12 @@ section says how the scheduler and the loop keep them, as built.
     runs on the caller's, so the group needs its small lock (10.2.3, "Task.map
     group lock").
 - **Stall check (N=1).** If the queue is empty, no libuv handle is alive, no
-  timer of a task is armed (§16.9, "Timers"), and `main` is not done, the VM fails with `RUNTIME-INTERNAL` ("every task is
-  waiting and nothing can wake them"). No program reaches it: every channel wait
-  and every timed await holds a timer, every other wait holds a libuv request or
-  a timer or a live task, and plain await cycles halt before they park
-  (`Task.await` below). For N>1 see 10.2.3.
+  timer of a task is armed (§16.9, "Timers"), and `main` is not done, the VM
+  fails with `RUNTIME-INTERNAL` ("every task is waiting and nothing can wake
+  them"). No program reaches it: every channel wait and every timed await holds
+  a timer, every other wait holds a libuv request or a timer or a live task, and
+  plain await cycles halt before they park (`Task.await` below). For N>1 see
+  10.2.3.
 - **Multi-task runs.** A runaway multi-task run must stop with
   `RUNTIME-STEP-LIMIT` (the black-box rule, §1). The `--max-steps` sweep (§12.1)
   needs each limit to give the full outcome, or the step limit with stdout a

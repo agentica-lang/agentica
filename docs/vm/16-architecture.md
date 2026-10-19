@@ -337,8 +337,8 @@ list and a timer. The winner takes the task out of the list before it pushes it
 owner), so the task is never in a list and in the run queue at once. If the
 timer of a job is still armed, the resumed task posts a request to stop it
 (§16.4), and the job is freed by its reference count (§16.5); a timer of the
-task (§16.9, "Timers") is disarmed by `resume` under `rt->sync`. A resumed task still re-checks
-its wait condition (§10.2.3), so a late wake is only a hint.
+task (§16.9, "Timers") is disarmed by `resume` under `rt->sync`. A resumed task
+still re-checks its wait condition (§10.2.3), so a late wake is only a hint.
 
 `agc_task_cancel` is not a wait kind. It is a waker for every row of the table,
 and it never touches the job. It runs on the scheduler of the task that cancels,
@@ -417,17 +417,16 @@ Today there is one scheduler and the loop on the same thread. The model with N =
 detached jobs, the handle lock FIFO, the owners and the one exit path are as in
 §16.1 to §16.6. What differs:
 
-- **One thread plays both roles, and stays one thread at N = 1.** The
-  scheduler calls `uv_run(UV_RUN_NOWAIT)` after each turn and
-  `uv_run(UV_RUN_ONCE)` when the run queue is empty (§10.2.1, §10.2.2). In the
-  model, the I/O thread sits in the loop and the schedulers wait on the condvar.
-  A real I/O thread beside one scheduler thread at N = 1 was built as a
-  prototype, measured and not taken. A request to another thread costs about 18
-  µs for the round trip (the post, `uv_async_send`, the wake of the loop and the
-  answer), and a call costs nothing. Every park with a deadline (a channel wait,
-  a timed `Task.await`, `Task.sleep`) started a timer job then (3b made them
-  timers of the task, §16.9, "Timers"), so each one would pay it: the
-  task-switch benchmark, which parks on channels with deadlines, ran several
+- **One thread plays both roles, and stays one thread at N = 1.** The scheduler
+  calls `uv_run(UV_RUN_NOWAIT)` after each turn and `uv_run(UV_RUN_ONCE)` when
+  the run queue is empty (§10.2.1, §10.2.2). In the model, the I/O thread sits
+  in the loop and the schedulers wait on the condvar. A real I/O thread beside
+  one scheduler thread at N = 1 was built as a prototype, measured and not
+  taken. A request to another thread costs about 18 µs for the round trip (the
+  post, `uv_async_send`, the wake of the loop and the answer), and a call costs
+  nothing. Every park with a deadline (a channel wait, a timed `Task.await`,
+  `Task.sleep`) started a timer job in that prototype, so each one would pay it:
+  the task-switch benchmark, which parks on channels with deadlines, ran several
   times slower in the prototype (one run, not kept in the tree). And the libuv
   code of the services would run beside the interpreter, which §16.11 leaves
   open. The request code is the same at any N; what differs is where the loop
@@ -499,9 +498,9 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   says it is the one to run it (the wait predicate tests the flag under the
   queue's lock, so a nudge is never lost). The service runs each ending with
   `rt->sync` held and a scratch task current, and gives the count back by a
-  RELEASE request. The scheduler threads that call it are 3c; until then the
-  C test (`job_test.c`) plays the scheduler. The owner's count goes back before
-  `done` runs, so a `done` that raises does not leak the job.
+  RELEASE request. No scheduler loop calls it yet; `job_test.c` does. The
+  owner's count goes back before `done` runs, so a `done` that raises does not
+  leak the job.
 - **The context split.** The state that every scheduler and the I/O role share
   is in `agc_runtime`: `main`, `registry`, `loop`, `process_guard`, `parent`
   and `parent_locks`, the crash and quiet lists with their counters, and
@@ -509,41 +508,36 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   the turn and stop counters, `yield`, `in_turn`, `sync_depth`, `gc_seen`, the
   profile and the two jmp_bufs. The registry has its own leaf lock (solo until
   `agc_share`), and a job points to its resource (`res`), so the I/O role never
-  looks a job up by slot, which `agc_unregister` moves. The slots stay
-  swap-with-last; the plan's stable slots were not needed once no one reads a
-  slot outside the lock.
+  looks a job up by slot, which `agc_unregister` moves. The slots are
+  swap-with-last: no code reads a slot outside the registry lock.
 - **Timers are per scheduler and live in the task.** A task that waits for a
   deadline (`Task.sleep`, a timed await, a channel timeout, a `Task.map`
-  timeout, a handle lock timeout) arms its own entry (`agc_timer` in
-  `agc_task`) in the min-heap of the scheduler that runs it (`vm->timers`,
-  `vm/timers.c`, ordered by deadline and then by the order of arming), and
-  parks (`agc_task_park_until`). There is no job, no registry slot and no
-  count, and so no START, CLOSE_TIMER or RELEASE request: the 1.2 to 1.65
-  million parks a second that the inbox allowed no longer limit a deadline
-  wait. The scheduler fires its due timers at its turn boundary and when its
-  run queue is empty (`agc_timers_run`), by waking the task like any waker.
-  Every change to a heap is made with `rt->sync` held. That is why the entry
-  can be removed at once by any scheduler: the task leaves the heap when it
-  resumes (`resume`) or is cancelled (`unlink_task`), under the lock that the
-  fire takes, so a fire never wakes a task that has left the wait. When
-  `rt->sync` is split, a removal from a scheduler that is not the owner
-  becomes lazy: the CAS of an outcome decides, the owner drops the dead entry
-  when it pops it and rebuilds the heap when the dead ones are twice the live
-  ones. A timer fires late by at most the owner's current turn, the same
-  bound as any wake. At N = 1 an idle scheduler runs the loop once bounded by
-  the nearest deadline (`agc_io_wait`), and an armed timer is work for the
-  stall check (its heap's `next_due`). For the scheduler threads of 3c, an
-  idle scheduler waits on the run queue with `agc_runq_wait_until`, only the
-  owner of the nearest deadline waits timed, and `rt->timers_armed` (the
-  timers of all heaps) tells a stall; until 3c only the C tests use those two
-  (`runq_test.c`, `timers_test.c`). The trace changed with it: the `io`
-  category no longer prints `start job kind=sleep` or `kind=lock` lines, and
-  `sched` prints `timer_arm task=N in_ms=M` and `timer_fire task=N
-  late_ms=M`. Deadlines of real I/O jobs (a work or external job)
-  stay on a libuv timer, started by the START request that the job pays
-  anyway, and `agc_io_extend` stays a request; a lock-free extend (store the
-  new deadline, re-key at the pop) is the step if an HTTP idle timer shows up in
-  a profile.
+  timeout, a handle lock timeout) arms its own entry (`agc_timer` in `agc_task`)
+  in the min-heap of the scheduler that runs it (`vm->timers`, `vm/timers.c`,
+  ordered by deadline and then by the order of arming), and parks
+  (`agc_task_park_until`). There is no job, no registry slot and no count, and
+  so no START, CLOSE_TIMER or RELEASE request. The scheduler fires its due
+  timers at its turn boundary and when its run queue is empty
+  (`agc_timers_run`), by waking the task like any waker. Every change to a heap
+  is made with `rt->sync` held. That is why the entry can be removed at once by
+  any scheduler: the task leaves the heap when it resumes (`resume`) or is
+  cancelled (`unlink_task`), under the lock that the fire takes, so a fire never
+  wakes a task that has left the wait. When `rt->sync` is split, a removal from
+  a scheduler that is not the owner becomes lazy: the CAS of an outcome decides,
+  the owner drops the dead entry when it pops it and rebuilds the heap when the
+  dead ones are twice the live ones. A due timer fires at the owner's next turn
+  boundary or idle step, so it is late by at most the rest of the current turn
+  and one poll of the loop. At N = 1 an idle scheduler runs the loop once
+  bounded by the nearest deadline (`agc_io_wait`), and an armed timer is work
+  for the stall check (its heap's `next_due`). `agc_runq_wait_until` (a timed
+  wait on the run queue) and `rt->timers_armed` (the timers of all heaps) are
+  for idle scheduler threads; only `runq_test.c` and `timers_test.c` use them.
+  The `io` trace has no line for these waits; `sched` prints `timer_arm task=N
+  in_ms=M` and `timer_fire task=N late_ms=M`. Deadlines of real I/O jobs (a work
+  or external job) stay on a libuv timer, started by the START request that the
+  job pays anyway, and `agc_io_extend` stays a request; a lock-free extend
+  (store the new deadline, re-key at the pop) is the step if an HTTP idle timer
+  shows up in a profile.
 - **A post after the loop closed is loud.** `agc_io_share` marks the loop
   shared for good, so `on_io_thread` keeps comparing thread ids after
   `agc_io_close` clears the inbox; `closed` is set there, and a post from
@@ -640,7 +634,7 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     the pop and the leave), the writers of the logger table (`set_level`,
     `install_default`, `attach`, `detach`), a handle's waiters, holder and
     `next_owner` (the hand-on, the wait, a job start on a handle, the closes of
-    files), the stdin waiters, and from 3b the timer heaps (`arm`,
+    files), the stdin waiters, and the timer heaps (`arm`,
     `agc_timers_disarm`). `agc_task_next` fails when a turn ended with
     the lock held. `vm/tests/sync_test.c` checks the marks: every row of the
     task, `Task.map`, channel, logger, process, duplex, TCP and HTTP tables is
@@ -685,7 +679,7 @@ Only if measurements ask for them. Neither is planned.
   "Detached jobs"). A cancelled outcome counts as detached: the task gives up
   the wait and the job runs to its end (§10.2.3, "Park and wake protocol"). Who
   ends a detached job is decided and built (§16.9): a scheduler does, through
-  `agc_io_service`; the scheduler threads that call it come in 3c.
+  `agc_io_service`.
 - **Cancel against PARKING and a ready task (decided, built; §16.9).** The
   scheduler re-reads `cancelled` after the commit CAS and claims the task if it
   is set, so a cancel that fell between the first look and the commit does not

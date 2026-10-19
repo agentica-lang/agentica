@@ -43,11 +43,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `Task.sleep`, timed awaits, channel timeouts, `Task.map` timeouts and handle
-  lock timeouts no longer start a job on the event loop: the task holds its own
-  timer, which its scheduler fires, and a deadline never wakes a task early. In
-  `AGENTICA_VM_TRACE=io` the `kind=sleep` and `kind=lock` job lines are gone;
-  `AGENTICA_VM_TRACE=sched` prints `timer_arm` and `timer_fire`.
+- `AGENTICA_VM_TRACE=io` no longer prints `kind=sleep` and `kind=lock` job
+  lines for sleeps and deadline waits; `AGENTICA_VM_TRACE=sched` prints
+  `timer_arm` and `timer_fire` for them.
 - A blocking call whose deadline and whose result fall in the same pass of the
   event loop now takes whichever the loop saw first: if the timer ran first the
   call times out, where it used to return the result if it had arrived by the

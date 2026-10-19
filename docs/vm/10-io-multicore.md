@@ -88,7 +88,7 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   it, and it is never held across a park. Ring growth copies the slots under the
   lock: an accepted exception, bounded by the capacity and charged as turn cost.
   The lock orders the write of a value before its read on another scheduler. As
-  built (3b), the waiter's deadline is a timer of the task (§16.9, "Timers"),
+  built, the waiter's deadline is a timer of the task (§16.9, "Timers"),
   not a job: a wake or a hand-on and the fire of the timer are two wakers, the
   state CAS lets one win, and both run under `rt->sync`, so the retry of the
   woken waiter sees either its reservation or the passed deadline, and a value

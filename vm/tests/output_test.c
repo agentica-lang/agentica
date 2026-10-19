@@ -849,7 +849,8 @@ static void write_lines(void *arg) {
    thread that does not own the loop. The stream's lock keeps the ring consistent: every byte is there, and each line
    is whole, since the text and its newline are one copy under the lock. The writers start together and the round
    repeats, because one round without the lock passes by chance in a plain build; make vm-tsan, which CI runs, sees the
-   race at once. agc_share cannot be undone, so every test after this one runs with the locks on (shared mode). */
+   race at once. agc_share holds for this test's runtime only: the next test's fresh() makes a new runtime, which is
+   solo. */
 static void test_shared_writers_keep_their_lines_whole(void) {
   open_pipe();
   fresh(pipe_fds[1]);
@@ -907,7 +908,6 @@ int main(void) {
   agc_gc_allow_threads();
   agc_io_init();
   run_unfilled_pipe_tests();
-  /* From here on the VM is shared: the later tests take the stream locks for real. */
   test_shared_writers_keep_their_lines_whole();
   test_waiters_do_not_jump_the_queue();
   test_the_buffer_wraps();
