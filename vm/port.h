@@ -154,7 +154,7 @@ typedef struct {
   bool newline, flush;
 } agc_output_wait;
 
-/* How a standard stream is written. vm/output.c asks, vm/stdio.c decides:
+/* How a standard stream is written. vm/output.c asks, vm/stdio_posix.c or vm/stdio_windows.c decides:
    - DISK: a pool job writes a file or a device that never waits for a reader; when the run is stopping the loop may
      write it itself.
    - POLL: the loop writes what the descriptor takes when its poller says it is ready (Linux and macOS pipes, sockets

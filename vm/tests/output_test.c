@@ -474,6 +474,42 @@ static void test_a_stream_on_the_same_target_shares_the_buffer(void) {
 }
 
 /* 2>&1 gives stderr a duplicate of the descriptor: another number, the same pipe. */
+/* A wait for a flush or a last write must not last its whole bound when nothing in the loop could end it. */
+static void test_a_wait_on_an_idle_loop_returns_at_once(void) {
+  open_pipe();
+  fresh(pipe_fds[1]);
+  uint64_t started = agc_clock_ms();
+  assert(!agc_io_run_for(&vm, 10000));
+  assert(agc_clock_ms() - started < 1000);
+  finish();
+  close_pipe();
+}
+
+/* `agentica file.agc` runs the front end and then the program in one process, so both open the same standard stream
+   one after the other, each with a loop of its own. A pipe that the parent made overlapped can join one completion
+   port, and a Windows file object keeps that join after the first loop is gone; libuv emulates the port for the second
+   handle. The second stream must write like the first, in the same mode and in order. */
+static void test_the_program_writes_the_pipe_that_the_front_end_wrote(void) {
+  open_pipe();
+  fresh(pipe_fds[1]);
+  agc_write_mode mode = out()->mode;
+  assert(mode == AGC_WRITE_POLL || mode == AGC_WRITE_STREAM);
+  agc_task *a = make_task();
+  assert(write_as(a, 'a', 5, true));
+  pump_until(6);
+  pump_idle();
+  finish();
+  fresh(pipe_fds[1]);
+  assert(out()->mode == mode);
+  a = make_task();
+  assert(write_as(a, 'b', 3, true));
+  pump_until(10);
+  assert(memcmp(collected, "aaaaa\nbbb\n", 10) == 0);
+  pump_idle();
+  finish();
+  close_pipe();
+}
+
 static void test_a_duplicate_of_the_descriptor_is_the_same_target(void) {
   open_pipe();
   fresh(pipe_fds[1]);
@@ -789,6 +825,8 @@ static void run_unfilled_pipe_tests(void) {
   test_flush_fails_when_the_reader_left();
   test_a_stream_on_the_same_target_shares_the_buffer();
   test_a_duplicate_of_the_descriptor_is_the_same_target();
+  test_the_program_writes_the_pipe_that_the_front_end_wrote();
+  test_a_wait_on_an_idle_loop_returns_at_once();
   test_two_pipes_are_two_targets();
   test_a_final_notice_is_written_straight();
 }

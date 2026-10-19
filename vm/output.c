@@ -129,6 +129,9 @@ static void fail_stream(agc_output *s) {
 }
 
 /* Writes what the descriptor takes without waiting, for a stream the loop may write (direct). */
+/* Writes while the descriptor takes data: until it would block, it fails, or a request holds the ring. On macOS every
+   pass is one chunk that agc_stdio_try has capped and checked with poll, and the loop goes on while the descriptor
+   stays writable, so a ready poll is not one chunk per round trip of the loop. */
 static void write_now(agc_output *s) {
   while (s->len && direct(s) && !held(s)) {
     ssize_t done = agc_stdio_try(s, s->buf + s->start, run_length(s));
@@ -359,7 +362,7 @@ static void settle(agc_output *s) {
   if (!vm->rt->settle_by) vm->rt->settle_by = now + FINAL_WAIT_MS;
   kick(s);
   while (s->writing && !s->failed && now < vm->rt->settle_by) {
-    agc_io_run_for(vm, vm->rt->settle_by - now);
+    if (!agc_io_run_for(vm, vm->rt->settle_by - now)) return;
     now = agc_clock_ms();
   }
 }
@@ -409,6 +412,10 @@ void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
   out->base = out;
 }
 
+/* With a request in flight (held) the 64 KiB ring is kept on purpose: a pool thread or libuv may still read it, even
+   after the stream is cancelled. drain_done frees it once the request has ended; if the job is dropped instead
+   (request_drop, at the close of a test harness), only the request is freed and the ring stays until the process
+   exits. */
 static void close_stream(agc_output *s) {
   if (!s->base) return;
   if (s->base == s) {

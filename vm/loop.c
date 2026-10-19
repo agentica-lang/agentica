@@ -885,9 +885,13 @@ static void release_bound(agc_loop *loop) {
   loop->bound_init = false;
 }
 
-void agc_io_run_for(agc_vm *vm, uint64_t ms) {
-  run_bounded(loop_of(vm), ms);
+bool agc_io_run_for(agc_vm *vm, uint64_t ms) {
+  agc_loop *loop = loop_of(vm);
+  /* The bound timer is stopped between runs, so it does not make a loop with nothing else in it look alive. */
+  bool alive = uv_loop_alive(&loop->uv);
+  if (alive) run_bounded(loop, ms);
   drain(vm);
+  return alive;
 }
 
 /* libuv owns the platform-specific monotonic clock. Keep its header inside the loop layer, and preserve errno because
@@ -1031,8 +1035,7 @@ static void finish_flushes(agc_vm *vm) {
     drain(vm);
     if (!flushing(vm)) break;
     uint64_t now = agc_clock_ms();
-    if (now >= by) break;
-    agc_io_run_for(vm, by - now);
+    if (now >= by || !agc_io_run_for(vm, by - now)) break;
   }
   vm->rt->flush_expired = flushing(vm);
 }

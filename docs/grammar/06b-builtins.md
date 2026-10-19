@@ -182,10 +182,9 @@ Expected types flow into these operations for empty collections and Results.
   When stdout and stderr are the same terminal or file, their output keeps the
   order of the calls (on Windows, when both descriptors are one handle object,
   as with a pipe given to both); otherwise there is no order between them. On
-  other
-  systems, output functions do not flush by themselves. A stdio protocol writes
-  one compact JSON message per line, flushes after each reply, and sends logs to
-  `IO.warn` (stderr).
+  other systems, output functions do not flush by themselves. A stdio protocol
+  writes one compact JSON message per line, flushes after each reply, and sends
+  logs to `IO.warn` (stderr).
 - `Time.now_ms()` is wall-clock milliseconds since the Unix epoch, and can jump;
   `Time.monotonic_ms()` never goes backward; `Time.monotonic_ns()` is the same
   clock in nanoseconds, for short durations. `Random.int(min, max)` is uniform

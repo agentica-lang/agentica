@@ -99,8 +99,7 @@ Known exceptions, as built:
 - **Stdout and stderr on one target.** When both descriptors are the same file
   (`st_dev` and `st_ino`: a terminal, `2>&1`; on Windows `CompareObjectHandles`,
   which matches only the same kernel object), they share one buffer and one
-  FIFO, so `puts`,
-  `IO.warn` and `puts` appear in the order of the calls.
+  FIFO, so `puts`, `IO.warn` and `puts` appear in the order of the calls.
 
 ### 14.2 Timeouts
 
