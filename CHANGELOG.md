@@ -43,6 +43,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- A blocking call whose deadline and whose result fall in the same pass of the
+  event loop now takes whichever the loop saw first: if the timer ran first the
+  call times out, where it used to return the result if it had arrived by the
+  time the task ran. The outcome of a job is set once, by the first writer
+  (the base of the multicore VM); with one scheduler the order of tasks does
+  not change.
 - Windows removal opens entries without backup intent, so enabled backup or
   restore privileges do not bypass ordinary delete ACL checks.
 - Confined Wine tests have a 3 GiB temporary storage limit: a fresh prefix

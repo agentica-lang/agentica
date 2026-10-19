@@ -52,6 +52,12 @@ typedef struct agc_stdio agc_stdio;
 typedef struct agc_memstream agc_memstream;
 typedef struct agc_native agc_native;
 
+/* The halves of a blocking call. `done` owns `data`, may raise (agc_fail) and is the only half that frees it itself;
+ * the job's owner count goes back before it runs, so a raise leaks nothing. `expired` must never raise: it runs
+ * while the job still owns `data` (a pool work may be using it) and the owner's count is given back after it, so a
+ * raise would leak the job, and at N > 1 the count cannot go back first because the I/O thread would then `drop`
+ * the data under the call. Every `expired` in the tree (task, process, tcp, duplex, files, http_client, http_server,
+ * output) only unlinks requests, shuts or closes handles and builds a value, and none calls agc_fail. */
 typedef struct {
   void (*work)(void *data);
   agc_value (*done)(agc_vm *vm, void *data, agc_value context);
