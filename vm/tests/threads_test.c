@@ -33,6 +33,12 @@ typedef struct {
   agc_program program;
 } prog;
 
+/* The library builtins the programs call, in the order of the B_ names. */
+static const struct {
+  const char *name;
+  uint32_t arity;
+} library[] = {{"Task.spawn", 2}, {"Task.sleep", 1}, {"Channel.new", 1}, {"Channel.send", 3}, {"Channel.recv", 2}};
+
 static _Atomic int64_t total;
 static FILE *quiet;
 
@@ -91,12 +97,6 @@ static void call_int(prog *p, uint32_t f, uint32_t builtin, int64_t v) {
   emit(p, f, AGC_OP_CONST, SCRATCH, k);
   emit(p, f, AGC_OP_CALL_BUILTIN, SCRATCH, builtin);
 }
-
-/* The library builtins the programs call, in the order of the B_ names. */
-static const struct {
-  const char *name;
-  uint32_t arity;
-} library[] = {{"Task.spawn", 2}, {"Task.sleep", 1}, {"Channel.new", 1}, {"Channel.send", 3}, {"Channel.recv", 2}};
 
 static void new_prog(prog *p) {
   memset(p, 0, sizeof *p);

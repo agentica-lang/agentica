@@ -163,6 +163,24 @@ struct agc_poller {
   void *data;
 };
 
+/* A wait asked by a scheduler: its arguments travel in the request, since the poller's own fields belong to the loop's
+   thread (a callback of the last wait may be reading them). */
+typedef struct {
+  agc_poller *p;
+  bool writing;
+  void (*ready)(void *data, int status);
+  void *data;
+} poller_wait_call;
+
+/* The walks of the whole registry at the end of the run work on a copy taken under its lock: they run on the I/O
+   thread once the scheduler threads have joined, and a release, a close or a sweep they cause unregisters entries
+   (which moves the last one into the gap), so an entry of the copy that is gone is skipped by its slot. The copy is
+   GC memory and keeps its resources alive meanwhile. */
+typedef struct {
+  agc_resource **items;
+  size_t count;
+} snapshot;
+
 static stop_state *stop_status(void) {
   static stop_state state;
   return &state;
@@ -1190,15 +1208,6 @@ static void poller_start(agc_poller *p, bool writing, void (*ready)(void *data, 
   if (uv_poll_start(&p->handle, writing ? UV_WRITABLE : UV_READABLE, poll_ready) != 0) ready(data, UV_EBADF);
 }
 
-/* A wait asked by a scheduler: its arguments travel in the request, since the poller's own fields belong to the loop's
-   thread (a callback of the last wait may be reading them). */
-typedef struct {
-  agc_poller *p;
-  bool writing;
-  void (*ready)(void *data, int status);
-  void *data;
-} poller_wait_call;
-
 static void poller_wait_run(void *data) {
   poller_wait_call *c = data;
   poller_start(c->p, c->writing, c->ready, c->data);
@@ -1595,15 +1604,6 @@ static bool held(const agc_resource *r) {
   const agc_resource *h = r->holder;
   return h && h->slot != SIZE_MAX && h->native && atomic_load(&((const job *)h->native)->busy);
 }
-
-/* The walks of the whole registry at the end of the run work on a copy taken under its lock: they run on the I/O
-   thread once the scheduler threads have joined, and a release, a close or a sweep they cause unregisters entries
-   (which moves the last one into the gap), so an entry of the copy that is gone is skipped by its slot. The copy is
-   GC memory and keeps its resources alive meanwhile. */
-typedef struct {
-  agc_resource **items;
-  size_t count;
-} snapshot;
 
 static snapshot registry_snapshot(agc_vm *vm) {
   snapshot shot = {NULL, 0};
