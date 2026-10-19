@@ -233,8 +233,10 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   relative entry such as `.` resolves against it. A command with `/` is a path,
   relative to the working directory unless absolute. A name that is not found,
   or names a directory, is `executable is unavailable`. Arguments go straight to
-  the program, with no shell. On Windows only `.exe` and `.com` run. A file that
-  is found but cannot run is an error Result from `spawn`.
+  the program, with no shell. On Windows only `.exe` and `.com` run (no
+  `PATHEXT`, no `.bat` or `.cmd`: that needs `cmd.exe`), and a name with a
+  trailing dot or space, or a `:` outside a drive, is refused. A file that is
+  found but cannot run is an error Result from `spawn`.
 - Timeouts are positive milliseconds and include the lock wait. A timeout during
   stream I/O kills and closes the child; a timeout while waiting for the lock
   keeps it; a timed-out wait for exit does not terminate it.

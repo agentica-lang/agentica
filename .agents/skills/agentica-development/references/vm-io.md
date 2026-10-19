@@ -23,6 +23,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - **Owns:** Windows UTF-8/native path conversion, drive and UNC resolution,
     and OS error mapping.
 
+- **Path:** `vm/process_os.h`, `vm/process_posix.c`, `vm/process_windows.c`
+  - **Owns:** The command search rules of `Process.spawn`: what is a path, the
+    PATH list split and quotes, the `.exe`/`.com` allowlist (no PATHEXT) and the
+    names that are refused (trailing dot or space, `:` that is not a drive).
+    `process.c` keeps the search loop and the file test.
+
 - **Path:** `vm/tree.c`
   - **Owns:** `agc_tree_refused` (the pure test of the names never removed) and
     `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with

@@ -8,6 +8,7 @@
 #endif
 #include "services.h"
 #include "file_io.h"
+#include "process_os.h"
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <errno.h>
@@ -613,10 +614,6 @@ static int start_kept(proc *p) {
 }
 
 static bool runnable(const char *path) {
-#ifdef _WIN32
-  size_t size = strlen(path);
-  if (size < 4 || _stricmp(path + size - 4, ".exe") != 0) return false;
-#endif
   agc_fs_info info;
   return agc_fs_stat(path, &info, true) == 0 && !AGC_FS_ISDIR(info.mode);
 }
@@ -630,40 +627,39 @@ static char *candidate(agc_vm *vm, const char *dir, size_t dir_len, const agc_st
   return agc_host_path(vm, joined);
 }
 
+/* Takes the malloc'd path; returns it, or a copy with a suffix added, when a
+   file that may run is there (process_os.h), else NULL. */
 static char *executable(char *path) {
-  if (runnable(path)) return path;
-#ifdef _WIN32
+  if (agc_proc_suffix_ok(path)) {
+    if (runnable(path)) return path;
+    free(path);
+    return NULL;
+  }
   size_t size = strlen(path);
-  char *with_suffix = realloc(path, agc_size_add(size, 5));
-  if (!with_suffix) { free(path); agc_out_of_memory(); }
-  path = with_suffix;
-  memcpy(path + size, ".exe", 5);
-  if (runnable(path)) return path;
-#endif
+  for (const char *const *suffix = agc_proc_suffixes(); *suffix; suffix++) {
+    size_t extra = strlen(*suffix);
+    char *with_suffix = malloc(agc_size_add(agc_size_add(size, extra), 1));
+    if (!with_suffix) agc_out_of_memory();
+    memcpy(with_suffix, path, size);
+    memcpy(with_suffix + size, *suffix, extra + 1);
+    if (runnable(with_suffix)) {
+      free(path);
+      return with_suffix;
+    }
+    free(with_suffix);
+  }
   free(path);
   return NULL;
 }
 
 static char *resolve(agc_vm *vm, const agc_string *command) {
-  bool explicit = memchr(command->data, '/', command->bytes) != NULL;
-#ifdef _WIN32
-  explicit = explicit || memchr(command->data, '\\', command->bytes) || memchr(command->data, ':', command->bytes);
-  const char separator = ';';
-#else
-  const char separator = ':';
-#endif
-  if (explicit) return executable(agc_host_path(vm, command));
+  if (!agc_proc_name_ok(command->data, command->bytes)) return NULL;
+  if (agc_proc_is_path(command->data, command->bytes)) return executable(agc_host_path(vm, command));
   char *search = agc_system_env("PATH");
   char *found = NULL;
-  for (const char *at = search; at && !found;) {
-    const char *end = strchr(at, separator);
-    size_t len = end ? (size_t)(end - at) : strlen(at);
-#ifdef _WIN32
-    if (len >= 2 && at[0] == '"' && at[len - 1] == '"') { at++; len -= 2; }
-#endif
-    if (len) found = executable(candidate(vm, at, len, command));
-    at = end ? end + 1 : NULL;
-  }
+  const char *at = search, *dir;
+  size_t len;
+  while (!found && agc_proc_next_dir(&at, &dir, &len)) found = executable(candidate(vm, dir, len, command));
   free(search);
   return found;
 }

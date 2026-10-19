@@ -81,6 +81,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Windows command search follows the documented rules: `.exe` and `.com` run
+  (only `.exe` did), a bare name is searched in `PATH` only (never the working
+  directory), and a name that ends in a dot or a space, or holds a `:` that is
+  not a drive, is refused. `.bat` and `.cmd` still do not run (that needs
+  `cmd.exe`, an implicit shell), and `PATHEXT` is not read.
 - On macOS, a socket as standard output no longer stalls every task: a write is
   checked with `poll` first and cut to what the socket takes.
 - Relative source paths containing a colon no longer gain an absolute source

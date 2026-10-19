@@ -5,6 +5,7 @@ Each case writes an Agentica program, runs it with `--allow-run --json` and
 compares its output, or its diagnostic code taken from the last line of stderr.
 """
 import json
+import os
 import re
 
 import pytest
@@ -93,6 +94,16 @@ def test_unavailable_and_malformed_commands_return_errors_without_a_child(tmp_pa
         'def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn("agentica-nonexistent-command-5l", [], 1000)))\n'
         '  IO.inspect(Result.ok?(Process.spawn("", [], 1000)))\n  nul = Result.unwrap!(String.from_bytes([0]))\n'
         '  IO.inspect(Result.ok?(Process.spawn("node", [nul], 1000)))\nend\n\n') == "false\nfalse\nfalse\n"
+
+
+def test_a_bare_command_is_searched_in_path(tmp_path):
+    node = tool("node")
+    name = os.path.splitext(os.path.basename(node))[0]
+    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn(%s, [%s, "args", "x"], 5000))\n'
+            '  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  Result.unwrap!(Process.wait(p, 5000))\nend\n\n'
+            % (agc_literal(name), agc_literal(PEER)))
+    result = cli_run("--allow-run", write(tmp_path, "program.agc", text))
+    assert tuple(result) == (0, '["x"]\n', "")
 
 
 def test_bdd_handlers_can_always_spawn_and_programs_under_test_need_allow_run(tmp_path):

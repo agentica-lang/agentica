@@ -51,6 +51,106 @@ static void init(void) {
   vm.in_turn = true;
 }
 
+/* Starts `command` as a captured child that exits with 3 and returns its status, or -1 when it does not start. */
+static int64_t status_of(const char *command) {
+  agc_value rest[] = {text("--exit")};
+  agc_value args[] = {text(command), agc_list_value(agc_list_from_array(rest, 1)), text("."), agc_int(5000)};
+  const agc_builtin *spawn = NULL;
+  for (size_t k = 0; k < agc_process_builtin_count; k++)
+    if (strcmp(agc_process_builtins[k].name, "Process.spawn_captured") == 0) spawn = &agc_process_builtins[k];
+  const agc_result *r = agc_as_result(&vm, agc_test_call(&vm, task, spawn, args));
+  if (!r->ok) return -1;
+  agc_value handle[] = {r->value, agc_int(5000)};
+  int64_t status = agc_as_int(&vm, ok(call("Process.wait", handle)));
+  call("Process.close", handle);
+  return status;
+}
+
+static void copy_file(const char *from, const char *to) {
+  uv_fs_t req;
+  assert(uv_fs_copyfile(NULL, &req, from, to, 0, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+}
+
+static void set_path(const char *head, const char *tail) {
+  char joined[32768];
+  snprintf(joined, sizeof joined, "%s%s", head, tail);
+  assert(uv_os_setenv("PATH", joined) == 0);
+}
+
+/* The command search of docs/vm/10-io-processes.md 10.4, with a copy of this program as the only candidate. */
+static void search_tests(const char *self) {
+  char base[4096], dir[4200], file[4400];
+  size_t size = sizeof base;
+  assert(uv_os_tmpdir(base, &size) == 0);
+  snprintf(dir, sizeof dir, "%s/agc-search-XXXXXX", base);
+  uv_fs_t req;
+  assert(uv_fs_mkdtemp(NULL, &req, dir, NULL) == 0);
+  snprintf(dir, sizeof dir, "%s", req.path);
+  uv_fs_req_cleanup(&req);
+  char old[32768];
+  size = sizeof old;
+  assert(uv_os_getenv("PATH", old, &size) == 0);
+#ifdef _WIN32
+  const char sep = ';';
+  const char *peer = "agc-peer.exe";
+#else
+  const char sep = ':';
+  const char *peer = "agc-peer";
+#endif
+  snprintf(file, sizeof file, "%s/%s", dir, peer);
+  copy_file(self, file);
+
+  /* The directory comes after an empty entry, and the rest of PATH stays, so the copy still finds its libraries. */
+  char head[4400];
+#ifdef _WIN32
+  snprintf(head, sizeof head, "%c\"%s\"%c", sep, dir, sep);
+#else
+  snprintf(head, sizeof head, "%c%s%c", sep, dir, sep);
+#endif
+  set_path(head, old);
+  assert(status_of("agc-peer") == 3);
+  assert(status_of("agc-peer.") == -1 && status_of("agc-peer ") == -1 && status_of("agc-pee") == -1);
+  assert(status_of(file) == 3);
+  assert(status_of("agc-peer/") == -1);
+#ifdef _WIN32
+  /* Case does not matter, `.com` runs, `.cmd` and `.bat` never do (that needs cmd.exe), and a stream name is refused. */
+  assert(status_of("AGC-PEER") == 3 && status_of("agc-peer.EXE") == 3);
+  char com[4400], script[4400];
+  snprintf(com, sizeof com, "%s/agc-com.com", dir);
+  copy_file(self, com);
+  assert(status_of("agc-com") == 3 && status_of("agc-com.com") == 3);
+  snprintf(script, sizeof script, "%s/agc-script.cmd", dir);
+  FILE *f = fopen(script, "wb");
+  assert(f && fputs("@exit 3\r\n", f) >= 0 && fclose(f) == 0);
+  assert(status_of("agc-script") == -1 && status_of("agc-script.cmd") == -1 && status_of(script) == -1);
+  snprintf(script, sizeof script, "%s:stream", file);
+  assert(status_of(script) == -1);
+#endif
+
+  /* The working directory is not searched: only PATH is. */
+  set_path("", old);
+  char here[4096];
+  size = sizeof here;
+  assert(uv_cwd(here, &size) == 0);
+  assert(uv_chdir(dir) == 0);
+  assert(status_of("agc-peer") == -1);
+  assert(uv_chdir(here) == 0);
+
+  assert(uv_os_setenv("PATH", old) == 0);
+  assert(uv_fs_unlink(NULL, &req, file, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+#ifdef _WIN32
+  assert(uv_fs_unlink(NULL, &req, com, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+  snprintf(script, sizeof script, "%s/agc-script.cmd", dir);
+  assert(uv_fs_unlink(NULL, &req, script, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+#endif
+  assert(uv_fs_rmdir(NULL, &req, dir, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+}
+
 static int child(int argc, char **argv) {
 #ifdef _WIN32
   _setmode(0, _O_BINARY);
@@ -131,6 +231,7 @@ int main(int argc, char **argv) {
   uv_sleep(500);
   args[0] = handle;
   call("Process.close", args);
+  search_tests(self);
   rest[0] = text("--channel");
   args[0] = text(self);
   args[1] = agc_list_value(agc_list_from_array(rest, 1));

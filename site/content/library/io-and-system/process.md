@@ -34,7 +34,7 @@ under the current folder, as in the shell. A command with `/` is a path,
 relative to the current folder unless it starts with `/`, so a program in the
 current folder runs as `"./tool"`. A name that is not found gives
 `error("process: executable is unavailable")`. On Windows only `.exe` and
-`.com` programs can be spawned.
+`.com` programs can be spawned (`PATHEXT` is not read, and `.bat` and `.cmd` never run, because that needs `cmd.exe`; start `cmd.exe` by name to use a shell). A name that ends in a dot or a space, or has a `:` that is not the drive of a path, fails.
 
 A file that is found but cannot run (no execute permission, say) is an error
 from `spawn`.
