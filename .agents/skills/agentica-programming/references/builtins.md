@@ -30,6 +30,7 @@ IO.eof?() -> Bool                       # peeks one byte; may block; not a readi
 System.args() -> List[String]
 System.exit(code: Int) -> Void
 System.env(name: String) -> Result[String]   # error if unset or the name is empty, has = or NUL; ok("") if set empty
+System.os() -> String                   # "linux", "macos", "windows", else the lowercase uname name ("unknown" if none)
 System.pid() -> Int                     # the process id of this program (VM only)
 Time.now_ms() -> Int                    # wall clock, Unix ms; may jump
 Time.monotonic_ms() -> Int              # never goes backward; use it for durations
