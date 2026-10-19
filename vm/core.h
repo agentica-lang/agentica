@@ -17,6 +17,7 @@ typedef struct {
 typedef struct {
   agc_output *out;
   FILE *file;
+  agc_memstream *mem;
   char *text;
   size_t len;
 } agc_notice;
@@ -117,6 +118,8 @@ void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
 uint64_t agc_io_now(agc_vm *vm);
+/* Runs the loop once, for at most MS milliseconds, and hands the finished jobs to the scheduler. */
+void agc_io_run_for(agc_vm *vm, uint64_t ms);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 void agc_input_close(agc_vm *vm);

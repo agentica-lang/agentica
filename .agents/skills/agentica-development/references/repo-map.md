@@ -86,6 +86,8 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   tree.c          # agc_tree_refused and agc_remove_tree for Path.remove: a tree walk that never follows a link (references/vm-io.md)
   input.c         # the only stdin reader (references/vm-io.md)
   output.c        # stdout and stderr writers (references/vm-io.md)
+  stdio_posix.c   # the Linux and macOS side of output.c: how a descriptor is written, one target, notice memory stream (references/vm-io.md)
+  stdio_windows.c # the Windows side: pool thread for files and consoles, libuv pipe, CompareObjectHandles (references/vm-io.md)
   duplex.c        # child channel (fd 3) and Process.spawn_channel (references/vm-net.md)
   process.c       # Process builtins, System.env and System.pid (references/vm-net.md)
   stream.c        # input buffer and write path shared by processes and TCP (references/vm-net.md)

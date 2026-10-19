@@ -395,6 +395,7 @@ def test_a_reader_that_never_reads_ends_the_run_after_the_flush_timeout_with_the
     assert 0 < len(out) < row_total(STUCK_ROWS), "the data that fits the pipe arrives"
 
 
+@not_wine
 def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_exit_code(tmp_path):
     summary, out, _ = run_case(tmp_path, "merged", ROWS_PROGRAM % STUCK_ROWS,
                                peer=["--read-after-exit", "--merge", "--pipe-size", "4096"],
