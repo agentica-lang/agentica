@@ -116,7 +116,7 @@ py-test/%: FORCE
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
 # diagnostics, the programs, `agentica test`, `agentica run`.
 CLI_TESTS ?= tests/test_cli_forms.py tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_process_bdd.py tests/test_source_paths.py \
-  tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
+  tests/test_source_utf8.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
 test-cli: $(PRODUCT)
 	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(PRODUCT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
 

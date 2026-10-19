@@ -27,15 +27,24 @@ export struct Run
   lock: FileHandle
 end
 
-## The places that can hold the temporary directory, best first: TMPDIR when it is set, then /var/tmp, /usr/tmp and
-## /tmp.
+## The places that can hold the temporary directory, best first. On Windows: the variables TMPDIR, TMP and TEMP in
+## that order (TMP and TEMP are the first two that `GetTempPath` reads) and no fixed folder. Elsewhere: TMPDIR when it
+## is set, then /var/tmp, /usr/tmp and /tmp.
 export def temporary_candidates() -> List[String]
   candidates: List[String] = []
-  from_environment = System.env("TMPDIR")
-  if from_environment.ok?
-    candidates = candidates.push(from_environment.unwrap!)
+  names = ["TMPDIR"]
+  fixed: List[String] = ["/var/tmp", "/usr/tmp", "/tmp"]
+  if windows?()
+    names = ["TMPDIR", "TMP", "TEMP"]
+    fixed = []
   end
-  return candidates.concat(["/var/tmp", "/usr/tmp", "/tmp"])
+  for name in names
+    from_environment = System.env(name)
+    if from_environment.ok?
+      candidates = candidates.push(from_environment.unwrap!)
+    end
+  end
+  return candidates.concat(fixed)
 end
 
 ## The temporary directory: the first of `temporary_candidates()` that is a directory.
@@ -98,8 +107,14 @@ export def sweep(temporary: String, own: Run) -> Void
   end
 end
 
-## A random name: 16 bytes of /dev/urandom as 32 hex digits, so it cannot be guessed (Random.int has a 31-bit seed).
+## A random name of 32 hex digits. Elsewhere it is 16 bytes of /dev/urandom, so it cannot be guessed (Random.int has a
+## 31-bit seed when the program is run with --seed). Windows has no such file: the name is 12 bytes of Random.int and
+## the process id, which is enough there because `Dir.mkdir_private` fails on a name that is taken and makes a folder
+## that only its owner can enter, so a guessed name costs a retry and gives no access.
 export def random_hex() -> Result[String]
+  if windows?()
+    return ok(process_hex())
+  end
   source = try File.open("/dev/urandom", "read", IO_TIMEOUT)
   bytes: List[Int] = []
   while bytes.size < 16
@@ -111,10 +126,32 @@ export def random_hex() -> Result[String]
     bytes = bytes.concat(got.unwrap!)
   end
   try File.close(source, IO_TIMEOUT)
+  return ok(hex_of(bytes))
+end
+
+# Whether the run is on Windows, where the temporary folder, the random names and the ownership checks differ.
+def windows?() -> Bool
+  return System.os() == "windows"
+end
+
+def hex_of(bytes: List[Int]) -> String
   digits = bytes.map do |byte: Int|
     "#{DIGITS.slice(byte.shift_right(4), 1)}#{DIGITS.slice(byte.bit_and(15), 1)}"
   end
-  return ok(digits.join(""))
+  return digits.join("")
+end
+
+# 12 bytes from Random.int and the process id as 4 bytes: 32 digits like the name from /dev/urandom.
+def process_hex() -> String
+  pid = System.pid()
+  bytes: List[Int] = []
+  while bytes.size < 12
+    bytes = bytes.push(Random.int(0, 255))
+  end
+  for shift in [24, 16, 8, 0]
+    bytes = bytes.push(pid.shift_right(shift).bit_and(255))
+  end
+  return hex_of(bytes)
 end
 
 # The first free name among ATTEMPTS random ones. A name that is taken is skipped, and any other error ends the
@@ -166,8 +203,12 @@ end
 # A temporary directory where other users can write and delete our entries is not safe for a run that trusts its
 # files: it is the case when others can write (mode o+w) or the group can write (g+w) and the directory is not ours
 # alone in user and group without the setgid bit, and the sticky bit (which stops others from deleting our entries) is
-# not set. `own` is a folder we just made, so it tells our user and group.
+# not set. `own` is a folder we just made, so it tells our user and group. Windows has no such mode bits, and the
+# folder we made there is only for its owner (an access list of the owner alone), so nothing is shared.
 def shared_and_not_sticky?(temporary: String, own: String) -> Result[Bool]
+  if windows?()
+    return ok(false)
+  end
   folder = try File.stat(temporary, IO_TIMEOUT)
   mine = try File.lstat(own, IO_TIMEOUT)
   mode = folder.mode

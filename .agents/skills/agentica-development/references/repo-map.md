@@ -201,6 +201,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_windows_console_stop.py  # pytest, native Windows only: Ctrl+Break exit 149 and a pseudo console as stdout (references/ci.md)
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
   test_bdd.py  # pytest: agentica test over the CLI: step programs, isolation (references/bdd.md)
+  test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes, links and a shell script; not in the Windows job (references/bdd.md)
   test_bdd_cleanup.py  # pytest: destructive cleanup in the Docker/Actions scratch (references/bdd.md)
   test_bdd_integration.py  # pytest: programs under test, limits, seed, cleanup; slow: large outputs and killed driver (references/bdd.md)
   test_unit_test.py  # unittest: agentica test on *_test.agc files; slow: the test timeout, stderr flood, endless print, flooding listing (references/bdd.md)

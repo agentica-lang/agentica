@@ -239,7 +239,7 @@ jobs:
           AGENTICA_VM_BINARY: build/vm/release/bootstrap/agentica.exe
         run: poetry run python -m pytest tests/test_platform_bootstrap.py
       - run: make fixed-point
-      - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py tests/test_process.py tests/test_process_windows.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_windows_console_stop.py tests/test_platform_bootstrap.py"
+      - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py tests/test_process.py tests/test_process_windows.py tests/test_process_bdd.py tests/test_bdd.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_windows_console_stop.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions PYTHON=python
         env:

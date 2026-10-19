@@ -1,7 +1,7 @@
 """`Process` inside `agentica test`: handlers always spawn, programs under test need --allow-run.
 
-Apart from tests/test_process.py because `agentica test` is not on Windows yet (its driver still keeps its run
-directory under /var/tmp), and the Windows job must not skip a case.
+A module of its own: the case runs `agentica test`, which the Wine check of the Windows job cannot do (Wine makes no
+owner-only folder, which the run directory of the driver is), so the Wine list leaves it out.
 """
 import json
 

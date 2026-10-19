@@ -36,8 +36,8 @@ and exits 2.
     the runner is compiled into the run dir) with `--self` naming a shell script
     that fakes the runner when it is asked for `runner.agcb` and runs the real
 binary otherwise
-    (`front_end_command` and `fake_binary` in `tests/agentica_test.py` and
-`tests/test_bdd.py`);
+    (`front_end_command` in `tests/agentica_test.py`, `fake_binary` in
+`tests/test_bdd_posix.py`, the module of the cases that need POSIX);
   - a missing binary is the driver's `cannot find agentica at PATH`
     infrastructure report in the chosen format.
 - `compiler/bdd_driver.agc` (the driver, over `compiler/bdd_*.agc`;
@@ -45,11 +45,12 @@ binary otherwise
   reads the arguments, usage errors included)
   - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the
     temporary directory (`TMPDIR` if it is a folder, else `/var/tmp`,
-    `/usr/tmp`, `/tmp`; the hex is 16 bytes of `/dev/urandom`; 16 tries),
-    refuses
-    a `TMPDIR` without the sticky bit that others can write to, or that its
-    group can write to unless it has the user's uid and gid and no setgid bit
-    (the user-private-group case), locks the dir's `lock` file exclusively for
+    `/usr/tmp`, `/tmp`; on Windows `TMPDIR`, `TMP`, `TEMP`; the hex is 16 bytes
+    of `/dev/urandom`, or on Windows 12 of `Random.int` and the process id; 16
+    tries),
+    refuses (not on Windows) a `TMPDIR` without the sticky bit that others can
+    write to, or that its group can write to unless it has the user's uid and
+    gid and no setgid bit (the user-private-group case), locks the dir's `lock` file exclusively for
     the whole run, then renames the dir to `agentica-bdd-<other hex>` with
     `Path.rename`, which never replaces, so the sweep never sees an unlocked
     new dir; then it removes the dirs of the same user whose `lock` it can take,

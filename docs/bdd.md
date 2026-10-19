@@ -261,7 +261,9 @@ then no scenario runs.
   sweep removes it too, once it is an hour old and its lock is free.
   Without `flock`, the run fails with `RUNTIME-BDD-INFRA` (exit 2), and so does
   a temporary directory that other users can write without the sticky bit; set
-  `TMPDIR` to a private folder.
+  `TMPDIR` to a private folder. On Windows the folder is the first of `TMPDIR`,
+  `TMP` and `TEMP` that is a folder, and the sticky-bit check does not apply:
+  the run folder is made for its owner alone.
 - **Shared resources.** Test files and scenarios run one at a time, each in its
   own child VM, next to other programs. A fixed temporary file name or port can
   collide with another run; use port 0 and a fresh temporary directory.
