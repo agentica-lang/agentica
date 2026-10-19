@@ -255,8 +255,8 @@ is no such place, so the plan adds none:
 - **Platforms** are chosen at compile time, not through a table. The shared
   logic is written once; an operating system difference that libuv does not
   hide is a function of a platform adapter: a plain header plus one file per
-  system family, each guarded whole (`file_io.h` and `file_windows.c`; `process_os.h` with
-  `process_posix.c` and `process_windows.c`).
+  system family, each guarded whole (`file_io.h` and `file_windows.c`;
+  `process_os.h` with `process_posix.c` and `process_windows.c`).
   Shared functions do not branch on `#ifdef`; older code that still does
   (`file_io.c`, and blocks in `files.c`, `loop.c`, `launch.c`, `process.c`,
   `input.c` and `output.c`) moves behind an adapter when a change adds a

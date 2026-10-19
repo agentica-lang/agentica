@@ -47,7 +47,7 @@ chain launch.h port.h
 chain embedded.h
 chain file_io.h
 chain process_os.h
-if found -n "$inc(services|net|tls|http_parse|http_fields|file_io)\.h" $core; then bad "a core file includes a service or adapter header"; fi
+if found -n "$inc(services|net|tls|http_parse|http_fields|file_io|process_os)\.h" $core; then bad "a core file includes a service or adapter header"; fi
 if found -n "${inc}core\.h" $services $adapters; then bad "a service or adapter includes core.h"; fi
 if found -n "$inc(port|services|net|http_fields)\.h" $adapters; then bad "an adapter includes the port or a service header"; fi
 only 'gc\.h' "value.c"
