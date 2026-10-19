@@ -590,7 +590,11 @@ def process_alive(pid):
 
 
 def agc_literal(text):
-    """`text` as an Agentica string literal: backslash, quote and `#` (which would start an interpolation) escaped."""
+    """`text` as an Agentica string literal: backslash, quote and `#` (which would start an interpolation) escaped.
+
+    Only the lexer's escape set is handled (those three, newline, CR and tab): use it for paths and printable
+    arguments, not for arbitrary bytes or other control characters.
+    """
     escapes = {"\\": "\\\\", '"': '\\"', "#": "\\#", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
     return '"' + "".join(escapes.get(c, c) for c in str(text)) + '"'
 

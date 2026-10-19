@@ -159,9 +159,11 @@ static void finished(proc *p, int64_t status) {
 
 /* UV_ESRCH means the child has already ended and only its exit callback is
    still to come, which is the state we wanted: it is not a failed stop. The
-   mask is for Windows: a POSIX zombie still takes a signal, but
-   TerminateProcess on an ended Windows process fails, and libuv maps that to
-   UV_ESRCH. A narrow race stays: libuv (win/process.c, uv__kill) reports
+   mask is deliberate on every system, with no #ifdef. On Windows,
+   TerminateProcess on an ended process fails and libuv maps that to
+   UV_ESRCH. On POSIX a zombie still takes a signal, so ESRCH there means
+   someone else reaped the child (a host with SIGCHLD set to SIG_IGN, or its
+   own reaper); no exit status is ever seen then. A narrow race stays: libuv (win/process.c, uv__kill) reports
    UV_EACCES instead when the process has exited with the code 259 or its
    handle is not yet signaled, and that is still a failed stop. If ESRCH ever
    comes while `running` is still true, the exit is awaited, for up to REAP_MS
