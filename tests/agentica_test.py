@@ -31,6 +31,11 @@ PYTHON = sys.executable
 # not to the machine that starts it, so a test reads this instead of os.name.
 TARGET_OS = os.environ.get("AGENTICA_TEST_TARGET_OS") or ("windows" if os.name == "nt" else sys.platform)
 
+# A Windows build run under Wine (`make windows-docker-check` sets AGENTICA_TEST_WINE). Wine gives a child two inherited
+# descriptors of one pipe as two unrelated objects, which no Windows call can match, so a test that needs the VM to see
+# that stdout and stderr are one pipe (`2>&1`) waits for the native Windows job.
+UNDER_WINE = os.environ.get("AGENTICA_TEST_WINE") == "1"
+
 # The VM builds the TLS adapter on Linux and macOS only (the Windows trust store is phase 11), so the long version
 # line names OpenSSL exactly there.
 TLS_BUILT = TARGET_OS in ("linux", "darwin")

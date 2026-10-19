@@ -4,19 +4,26 @@ fixtures/stdout-peer.py starts the VM with its stdout and stderr on a pipe, a
 socket, a pty or a merged pipe, reads them slowly (or never), and prints a
 JSON summary: the exit status and when the reader started, the VM exited, and
 the first error byte arrived. Programs that need no peer run with their
-streams on files.
+streams on files. The cases run on Linux, macOS and Windows; the few that need
+a Unix descriptor kind (a socket, a pty, /dev/full, /dev/stdout) are marked.
 """
 import json
 import re
+import sys
 import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, PYTHON, compile_text, run, scaled, vm_command, vm_environment
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, run, scaled, vm_command,
+                                 vm_environment)
 
 PEER = FIXTURES / "stdout-peer.py"
 PEER_LIMIT = scaled(90)
 FILLER = "x" * 1024
+WINDOWS = TARGET_OS == "windows"
+unix_only = pytest.mark.skipif(WINDOWS, reason="needs a descriptor kind that Windows does not have")
+linux_only = pytest.mark.skipif(not sys.platform.startswith("linux") or WINDOWS, reason="needs /dev/full")
+not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine does not show that two descriptors are one pipe")
 
 
 ROWS_PROGRAM = """\
@@ -260,15 +267,18 @@ end
 
 """
 
+# A child that is still running when the program ends.
+LIVE_CHILD = '"ping", ["-n", "30", "127.0.0.1"]' if WINDOWS else '"/bin/sh", ["-c", "cat"]'
+
 LIVE_CHILD_PROGRAM = """\
 def main() -> Void
-  child = Result.unwrap!(Process.spawn("/bin/sh", ["-c", "cat"], 5000))
+  child = Result.unwrap!(Process.spawn(%s, 5000))
   puts("child started")
   IO.inspect(Process.read_line(child, 100))
   puts("done")
 end
 
-"""
+""" % LIVE_CHILD
 
 
 def row_total(count):
@@ -331,7 +341,7 @@ def check_alternating(lines):
 
 def test_a_pipe_nobody_reads_does_not_stop_a_timer_task_and_the_run_ends_once_the_reader_drains(tmp_path):
     summary, out, err = run_case(tmp_path, "ticker", TICKER_PROGRAM % 400,
-                                 peer=["--delay", "1.0", "--chunk", "16384", "--pause", "0.001"])
+                                 peer=["--delay", "1.5", "--chunk", "16384", "--pause", "0.001"])
     assert summary["status"] == 0
     assert summary["ticks_before_read"] >= 5, "the ticker ran while stdout was stuck"
     check_rows(lines_of(out), 400)
@@ -390,6 +400,7 @@ def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_
     assert b"flush_timeout_ms" not in out, "the warning is dropped, not mixed into the data"
 
 
+@unix_only
 def test_a_socket_as_stdout_is_written_on_the_loop(tmp_path):
     summary, out, _ = run_case(tmp_path, "socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "1.0"])
     assert summary["status"] == 0
@@ -397,6 +408,7 @@ def test_a_socket_as_stdout_is_written_on_the_loop(tmp_path):
     check_rows(lines_of(out), 800)
 
 
+@not_wine
 def test_stdout_and_stderr_on_one_pipe_keep_the_order_of_the_calls_under_a_slow_reader(tmp_path):
     summary, out, _ = run_case(tmp_path, "alternate", ALTERNATE_PROGRAM,
                                peer=["--delay", "0.5", "--merge", "--chunk", "16384", "--pause", "0.001"])
@@ -404,6 +416,7 @@ def test_stdout_and_stderr_on_one_pipe_keep_the_order_of_the_calls_under_a_slow_
     check_alternating(lines_of(out))
 
 
+@unix_only
 def test_stdout_and_stderr_on_one_terminal_keep_the_order_of_the_calls_under_a_slow_reader(tmp_path):
     summary, out, _ = run_case(tmp_path, "terminal", ALTERNATE_PROGRAM,
                                peer=["--delay", "0.5", "--pty", "--chunk", "1024", "--pause", "0.0005"])
@@ -431,6 +444,7 @@ def test_a_crash_notice_waits_for_a_stderr_that_is_full_and_then_arrives_whole(t
     assert len([line for line in lines if re.fullmatch(r"warn [0-9]+ w+", line)]) == 200
 
 
+@linux_only
 def test_a_stderr_that_cannot_be_written_makes_the_exit_code_1(tmp_path):
     status, _, out, _ = run_to_file(tmp_path, "full-stderr", WARN_LAST_PROGRAM, stderr_file="/dev/full")
     assert status == 1
@@ -461,6 +475,7 @@ def test_blocking_stdout_and_stderr_on_one_pipe_the_program_output_comes_before_
     assert re.search(rb"\Abefore\npartial[^\n]*RUNTIME-DIVISION-BY-ZERO", out)
 
 
+@unix_only
 def test_file_calls_on_dev_stdout_and_dev_stderr_still_work_when_they_are_pipes(tmp_path):
     summary, out, err = run_case(tmp_path, "dev-stdout", DEV_STDOUT_PROGRAM)
     assert summary["status"] == 0

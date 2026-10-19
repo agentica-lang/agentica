@@ -97,6 +97,26 @@ struct agc_poller {
   void *data;
 };
 
+#ifdef _WIN32
+/* A standard output handle that libuv writes, one request at a time: a pipe or a console. uv_pipe_open and
+   uv_tty_init copy descriptors 0 to 2, so closing the handle never closes the process's own stream. libuv writes a
+   pipe that was not opened for overlapped I/O on a Windows worker thread, an overlapped one with I/O completion
+   ports, and a console on the loop thread; no write waits for a reader on the loop. */
+struct agc_wstream {
+  union {
+    uv_handle_t handle;
+    uv_stream_t stream;
+    uv_pipe_t pipe;
+    uv_tty_t tty;
+  } io;
+  uv_write_t req;
+  void (*done)(void *data, int status);
+  void *data;
+};
+
+typedef BOOL(WINAPI *compare_handles_fn)(HANDLE first, HANDLE second);
+#endif
+
 static stop_state *stop_status(void) {
   static stop_state state;
   return &state;
@@ -739,6 +759,144 @@ void agc_poller_close(agc_poller *p) {
 #endif
   uv_close((uv_handle_t *)&p->handle, poller_closed);
 }
+
+#ifdef _WIN32
+agc_stdio_kind agc_stdio_kind_of(int fd) {
+  switch (uv_guess_handle(fd)) {
+    case UV_FILE: return AGC_STDIO_FILE;
+    case UV_NAMED_PIPE: return AGC_STDIO_PIPE;
+    case UV_TTY: return AGC_STDIO_CONSOLE;
+    default: return AGC_STDIO_OTHER;
+  }
+}
+
+/* stdout and stderr given as one pipe, file or console (2>&1) are two handles to one kernel object, which is what
+   CompareObjectHandles asks (Windows 10 and later). Without it every pair counts as different. */
+bool agc_stdio_same(int first, int second) {
+  HANDLE a = (HANDLE)_get_osfhandle(first), b = (HANDLE)_get_osfhandle(second);
+  if (a == INVALID_HANDLE_VALUE || b == INVALID_HANDLE_VALUE) return false;
+  if (a == b) return true;
+  HMODULE base = GetModuleHandleW(L"kernelbase.dll");
+  FARPROC found = base ? GetProcAddress(base, "CompareObjectHandles") : NULL;
+  if (!found) return false;
+  compare_handles_fn compare = (compare_handles_fn)(void (*)(void))found;
+  return compare(a, b) != FALSE;
+}
+
+static void wstream_closed(uv_handle_t *handle) { free(handle->data); }
+
+static void wstream_written(uv_write_t *req, int status) {
+  agc_wstream *w = (agc_wstream *)((char *)req - offsetof(agc_wstream, req));
+  if (w->done) w->done(w->data, status);
+}
+
+/* libuv closes a descriptor above 2 when its handle closes, and copies one of 0 to 2. The handle gets a private,
+   non-inheritable copy either way, so the process's own stream and the descriptors of its tests stay open. */
+agc_wstream *agc_wstream_open(agc_vm *vm, int fd) {
+  agc_stdio_kind kind = agc_stdio_kind_of(fd);
+  int own = _dup(fd);
+  if (own < 0) return NULL;
+  SetHandleInformation((HANDLE)_get_osfhandle(own), HANDLE_FLAG_INHERIT, 0);
+  agc_wstream *w = calloc(1, sizeof *w);
+  if (!w) agc_out_of_memory();
+  uv_loop_t *loop = &loop_of(vm)->uv;
+  if (kind == AGC_STDIO_CONSOLE) {
+    if (uv_tty_init(loop, &w->io.tty, own, 0) != 0) {
+      free(w);
+      _close(own);
+      return NULL;
+    }
+    w->io.handle.data = w;
+  } else {
+    if (uv_pipe_init(loop, &w->io.pipe, 0) != 0) {
+      free(w);
+      _close(own);
+      return NULL;
+    }
+    w->io.handle.data = w;
+    if (uv_pipe_open(&w->io.pipe, own) != 0) {
+      uv_close(&w->io.handle, wstream_closed);
+      _close(own);
+      return NULL;
+    }
+  }
+  if (own <= 2) _close(own);
+  if (!uv_is_writable(&w->io.stream)) {
+    uv_close(&w->io.handle, wstream_closed);
+    return NULL;
+  }
+  return w;
+}
+
+/* Writes the bytes of two ranges (a ring that wrapped) as one request. They must stay unchanged until done runs, with
+   the status of libuv: 0 when all went out. done also runs at once when libuv refuses the request. */
+void agc_wstream_write(agc_wstream *w, const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,
+                       void (*done)(void *data, int status), void *data) {
+  uv_buf_t bufs[2];
+  unsigned count = 0;
+  if (first_len) bufs[count++] = uv_buf_init((char *)(uintptr_t)first, (unsigned)first_len);
+  if (second_len) bufs[count++] = uv_buf_init((char *)(uintptr_t)second, (unsigned)second_len);
+  w->done = done;
+  w->data = data;
+  int rc = uv_write(&w->req, &w->io.stream, bufs, count, wstream_written);
+  if (rc != 0) done(data, rc);
+}
+
+/* Cancels a request in flight and forgets its callback: the owner may free what the request pointed to. Closing the
+   handle does not cancel the request while another handle to the same pipe stays open (the process's own stdout does),
+   so it is cancelled by name, and the close finishes when libuv has seen the request end. */
+void agc_wstream_close(agc_wstream *w) {
+  uv_os_fd_t os = INVALID_HANDLE_VALUE;
+  w->done = NULL;
+  w->data = NULL;
+  if (w->io.handle.type == UV_NAMED_PIPE && uv_fileno(&w->io.handle, &os) == 0) CancelIoEx((HANDLE)os, NULL);
+  uv_close(&w->io.handle, wstream_closed);
+}
+
+/* Windows has no open_memstream. A notice, which is diagnostic text of any length, is written to an unnamed temporary
+   file that the system deletes when it is closed (vm/output.c reads it back). NULL when no such file can be made. */
+FILE *agc_scratch_open(void) {
+  wchar_t dir[MAX_PATH + 1], name[MAX_PATH + 1];
+  DWORD length = GetTempPathW(MAX_PATH, dir);
+  if (!length || length > MAX_PATH || !GetTempFileNameW(dir, L"agc", 0, name)) return NULL;
+  HANDLE handle = CreateFileW(name, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, NULL);
+  if (handle == INVALID_HANDLE_VALUE) {
+    DeleteFileW(name);
+    return NULL;
+  }
+  int fd = _open_osfhandle((intptr_t)handle, _O_RDWR | _O_BINARY | _O_NOINHERIT);
+  if (fd < 0) {
+    CloseHandle(handle);
+    return NULL;
+  }
+  FILE *file = _fdopen(fd, "w+b");
+  if (!file) _close(fd);
+  return file;
+}
+
+static void pump_tick(uv_timer_t *timer) { (void)timer; }
+
+static void pump_closed(uv_handle_t *handle) { free(handle); }
+
+/* Runs the loop once, for at most MS milliseconds, then wakes the tasks of the jobs that finished. The end of the run
+   uses it to give a write request a moment, because a pipe has no non-blocking write to try. */
+void agc_io_pump(agc_vm *vm, uint64_t ms) {
+  agc_loop *loop = vm->loop;
+  if (!loop) return;
+  uv_timer_t *tick = malloc(sizeof *tick);
+  if (!tick) agc_out_of_memory();
+  if (uv_timer_init(&loop->uv, tick) == 0) {
+    uv_update_time(&loop->uv);
+    uv_timer_start(tick, pump_tick, ms, 0);
+    uv_run(&loop->uv, UV_RUN_ONCE);
+    uv_close((uv_handle_t *)tick, pump_closed);
+  } else {
+    free(tick);
+  }
+  drain(vm);
+}
+#endif
 #endif
 
 bool agc_io_init(void) {

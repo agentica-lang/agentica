@@ -51,6 +51,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   does not wait for it.
 - `File.try_lock` is available on Windows. Unlike Unix advisory locks, Windows
   locks also prevent reads and writes through other handles while held.
+- Writing to standard output or standard error no longer blocks the whole
+  program on Windows. A print waits in the same queue as on Linux and macOS
+  while the other tasks keep running, with the same 64 KiB buffer per stream,
+  `IO.flush`, order between the two streams when they share a pipe or console
+  (`2>&1`) and `--flush-timeout`. A pipe is written by libuv without waiting on
+  the loop, a console by libuv's console writer, and a file by the I/O pool. At
+  the end of the run and on a stop signal a pipe is given up to 200 ms to take
+  what is left, because Windows has no non-blocking write to try.
 
 ### Fixed
 

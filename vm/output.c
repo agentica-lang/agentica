@@ -21,14 +21,25 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#elif defined(_WIN32)
+#include <io.h>
+#endif
 
+/* How long the end of the run and a stop signal wait for a Windows write request, which has no non-blocking try. */
+#define FINAL_WAIT_MS 200
+
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+/* The bytes of one write of a pool job or a Windows stream: the two ranges of the ring and what came of them. */
 typedef struct {
   bool to_err;
   int fd, status;
   const uint8_t *part[2];
   size_t length[2], written;
+  agc_io_job *job;
 } drain_request;
+#endif
 
+#if defined(__linux__) || defined(__APPLE__)
 typedef struct {
   bool to_err;
   int status;
@@ -55,7 +66,7 @@ bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->ta
 
 bool agc_output_failed(const agc_output *out) { return out->base && out->base->failed; }
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static size_t smaller(size_t a, size_t b) { return a < b ? a : b; }
 
 static size_t room(const agc_output *s) { return AGC_OUTPUT_BUFFER - s->len; }
@@ -130,7 +141,18 @@ static void fail_stream(agc_output *s) {
   for (agc_task *t = s->waiters; t; t = t->wait_next) agc_task_wake(s->vm, t, "output");
 }
 
+static ssize_t write_fd(int fd, const void *data, size_t n) {
+#ifdef _WIN32
+  return _write(fd, data, (unsigned)n);
+#else
+  return write(fd, data, n);
+#endif
+}
+
+/* Writes what the descriptor takes without waiting. A Windows pipe or console has no such write: a request or a pool job
+   writes it. */
 static void write_now(agc_output *s) {
+  if (s->waits) return;
   while (s->len) {
     size_t n = run_length(s);
 #ifdef __APPLE__
@@ -145,8 +167,12 @@ static void write_now(agc_output *s) {
       if (n > PIPE_BUF) n = PIPE_BUF;
     }
 #endif
+#ifdef _WIN32
+    ssize_t done = write_fd(s->fd, s->buf + s->start, n);
+#else
     ssize_t done = s->socket ? send(s->fd, s->buf + s->start, n, MSG_DONTWAIT | MSG_NOSIGNAL)
-                             : write(s->fd, s->buf + s->start, n);
+                             : write_fd(s->fd, s->buf + s->start, n);
+#endif
     if (done > 0) {
       consumed(s, (size_t)done);
       continue;
@@ -163,7 +189,7 @@ static void drain_work(void *data) {
   for (int k = 0; k < 2; k++) {
     size_t at = 0;
     while (at < q->length[k]) {
-      ssize_t n = write(q->fd, q->part[k] + at, q->length[k] - at);
+      ssize_t n = write_fd(q->fd, q->part[k] + at, q->length[k] - at);
       if (n < 0 && errno == EINTR) continue;
       if (n <= 0) {
         q->status = n < 0 ? errno : EIO;
@@ -177,33 +203,57 @@ static void drain_work(void *data) {
 
 static void request_drop(void *data) { free(data); }
 
+#ifdef _WIN32
+static void streamed(void *data, int status) {
+  drain_request *q = data;
+  q->status = status;
+  q->written = status ? 0 : q->length[0] + q->length[1];
+  agc_io_ready(q->job);
+}
+#else
 static void polled(void *data, int status) {
   poll_request *q = data;
   agc_poller_pause(q->poller);
   q->status = status;
   agc_io_ready(q->job);
 }
+#endif
 
 static const agc_io_kind drain_io;
+#ifdef _WIN32
+static const agc_io_kind stream_io;
+#else
 static const agc_io_kind poll_io;
+#endif
+
+/* The request for the bytes in the ring now. The ring only grows at its end while the request is out, so the two
+   ranges stay valid until its done half consumes them. */
+static drain_request *begin_drain(agc_output *s) {
+  drain_request *q = calloc(1, sizeof(drain_request));
+  if (!q) agc_out_of_memory();
+  size_t first = run_length(s);
+  q->to_err = s == &s->vm->rt->err;
+  q->fd = s->fd;
+  q->part[0] = s->buf + s->start;
+  q->length[0] = first;
+  q->part[1] = s->buf;
+  q->length[1] = s->len - first;
+  s->writing = true;
+  return q;
+}
 
 static void kick(agc_output *s) {
   if (s->failed || !s->len) return;
   if (s->pooled) {
-    if (s->writing) return;
-    drain_request *q = calloc(1, sizeof(drain_request));
-    if (!q) agc_out_of_memory();
-    size_t first = run_length(s);
-    q->to_err = s == &s->vm->rt->err;
-    q->fd = s->fd;
-    q->part[0] = s->buf + s->start;
-    q->length[0] = first;
-    q->part[1] = s->buf;
-    q->length[1] = s->len - first;
-    s->writing = true;
-    agc_io_detached(s->vm, &drain_io, q, agc_void(), 0);
+    if (!s->writing) agc_io_detached(s->vm, &drain_io, begin_drain(s), agc_void(), 0);
     return;
   }
+#ifdef _WIN32
+  if (s->writing) return;
+  drain_request *q = begin_drain(s);
+  q->job = agc_io_detached(s->vm, &stream_io, q, agc_void(), AGC_JOB_QUIET);
+  agc_wstream_write(s->stream, q->part[0], q->length[0], q->part[1], q->length[1], streamed, q);
+#else
   if (s->armed) return;
   poll_request *q = calloc(1, sizeof(poll_request));
   if (!q) agc_out_of_memory();
@@ -212,6 +262,7 @@ static void kick(agc_output *s) {
   s->armed = true;
   q->job = agc_io_detached(s->vm, &poll_io, q, agc_void(), AGC_JOB_QUIET);
   agc_poller_wait(s->poller, true, polled, q);
+#endif
 }
 
 static void wake_head(agc_output *s) {
@@ -245,6 +296,7 @@ static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
+#ifndef _WIN32
 static agc_value poll_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   poll_request *q = data;
@@ -258,9 +310,14 @@ static agc_value poll_done(agc_vm *vm, void *data, agc_value context) {
   advance(s);
   return agc_void();
 }
+#endif
 
 static const agc_io_kind drain_io = {drain_work, drain_done, drain_done, request_drop, false, "output", NULL};
+#ifdef _WIN32
+static const agc_io_kind stream_io = {NULL, drain_done, drain_done, request_drop, true, "output", NULL};
+#else
 static const agc_io_kind poll_io = {NULL, poll_done, poll_done, request_drop, true, "output", NULL};
+#endif
 
 static void flush_now(agc_output *s) {
   if (s->failed) return;
@@ -350,6 +407,21 @@ void agc_output_leave(agc_vm *vm, agc_task *t) {
   advance(s);
 }
 
+#ifdef _WIN32
+/* A Windows stream cannot try a write without a request, so the data goes out through one and the caller waits for it
+   a moment: long enough for a reader that is there, short enough that one that is not cannot hold the exit. */
+static void settle(agc_output *s) {
+  agc_vm *vm = s->vm;
+  uint64_t by = agc_io_now(vm) + FINAL_WAIT_MS;
+  kick(s);
+  while (s->writing && !s->failed) {
+    uint64_t now = agc_io_now(vm);
+    if (now >= by) return;
+    agc_io_pump(vm, by - now);
+  }
+}
+#endif
+
 bool agc_output_busy(agc_vm *vm) {
   bool stopping = agc_io_stop_signal() != 0;
   bool busy = false;
@@ -361,6 +433,14 @@ bool agc_output_busy(agc_vm *vm) {
       pump(s, true);
       kick(s);
       busy = true;
+#ifdef _WIN32
+    } else if (s->waits) {
+      if (!s->settled) {
+        s->settled = true;
+        pump(s, true);
+        settle(s);
+      }
+#endif
     } else if (!s->writing) {
       pump(s, true);
       write_now(s);
@@ -369,6 +449,36 @@ bool agc_output_busy(agc_vm *vm) {
   return busy;
 }
 
+/* Gives the stream its ring. FD is what the pool job writes, or what identifies the target of a Windows stream. */
+static void adopt(agc_vm *vm, agc_output *out, int fd, bool pooled) {
+  out->buf = malloc(AGC_OUTPUT_BUFFER);
+  if (!out->buf) agc_out_of_memory();
+  out->vm = vm;
+  out->fd = fd;
+  out->pooled = pooled;
+  out->base = out;
+}
+
+#ifdef _WIN32
+void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
+  agc_stdio_kind kind = agc_stdio_kind_of(fd);
+  if (kind == AGC_STDIO_OTHER) return;
+  const agc_output *first = out == &vm->rt->err ? &vm->rt->out : NULL;
+  if (first && first->base && agc_stdio_same(first->fd, fd)) {
+    out->base = first->base;
+    return;
+  }
+  bool pooled = kind == AGC_STDIO_FILE;
+  out->waits = !pooled;
+  if (!pooled) {
+    out->stream = agc_wstream_open(vm, fd);
+    /* A handle that libuv refuses (a pipe from an odd source, a console that is not a screen buffer) is still written
+       off the loop by a pool job, which blocks one pool thread and nothing else. */
+    pooled = !out->stream;
+  }
+  adopt(vm, out, fd, pooled);
+}
+#else
 void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
   struct stat info;
   int flags = fcntl(fd, F_GETFL);
@@ -406,17 +516,13 @@ void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
       pooled = true;
     }
   }
-  out->buf = malloc(AGC_OUTPUT_BUFFER);
-  if (!out->buf) agc_out_of_memory();
-  out->vm = vm;
-  out->fd = use;
+  adopt(vm, out, use, pooled);
   out->dev = (uint64_t)info.st_dev;
   out->ino = (uint64_t)info.st_ino;
   out->poller = poller;
-  out->pooled = pooled;
   out->socket = socket && poller;
-  out->base = out;
 }
+#endif
 
 static void close_stream(agc_output *s) {
   if (!s->base) return;
@@ -426,6 +532,12 @@ static void close_stream(agc_output *s) {
       agc_poller_close(s->poller);
       s->poller = NULL;
     }
+#ifdef _WIN32
+    if (s->stream) {
+      agc_wstream_close(s->stream);
+      s->stream = NULL;
+    }
+#endif
     if (!s->writing) {
       free(s->buf);
       s->buf = NULL;
@@ -447,8 +559,31 @@ FILE *agc_notice_begin(agc_output *out, agc_notice *n) {
   n->file = NULL;
   n->text = NULL;
   n->len = 0;
+#ifdef _WIN32
+  if (out->base) n->file = agc_scratch_open();
+#else
   if (out->base) n->file = open_memstream(&n->text, &n->len);
+#endif
   return n->file ? n->file : out->file;
+}
+
+/* Closes the notice's stream and leaves its text in n->text and n->len. */
+static void notice_text(agc_notice *n) {
+#ifdef _WIN32
+  FILE *file = n->file;
+  long size = fflush(file) == 0 && fseek(file, 0, SEEK_END) == 0 ? ftell(file) : -1;
+  n->text = size > 0 ? malloc((size_t)size) : NULL;
+  if (n->text && fseek(file, 0, SEEK_SET) == 0 && fread(n->text, 1, (size_t)size, file) == (size_t)size) {
+    n->len = (size_t)size;
+  } else {
+    free(n->text);
+    n->text = NULL;
+    n->len = 0;
+  }
+  fclose(file);
+#else
+  fclose(n->file);
+#endif
 }
 
 static void queue_notice(agc_output *s, const char *text, size_t n, bool kept) {
@@ -465,18 +600,30 @@ static void queue_notice(agc_output *s, const char *text, size_t n, bool kept) {
   s->notice_len += n;
 }
 
+/* The last write of a stream: what the descriptor takes at once, or for a Windows pipe or console what its request takes
+   in FINAL_WAIT_MS. */
+static void write_last(agc_output *s) {
+#ifdef _WIN32
+  if (s->waits) {
+    settle(s);
+    return;
+  }
+#endif
+  write_now(s);
+}
+
 static void finish_text(agc_output *s, const char *text, size_t n) {
-  if (s->writing) return;
+  if (s->writing && !s->waits) return;
   pump(s, true);
   size_t at = 0;
   while (at < n && !s->failed) {
-    write_now(s);
+    write_last(s);
     size_t k = smaller(n - at, room(s));
-    if (!k) break;
+    if (!k) return;
     put_bytes(s, text + at, k);
     at += k;
   }
-  write_now(s);
+  write_last(s);
 }
 
 void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
@@ -485,7 +632,7 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
     fflush(out->file);
     return;
   }
-  fclose(n->file);
+  notice_text(n);
   agc_output *s = out->base;
   bool write = !s->failed && n->len;
   if (write && mode == AGC_NOTICE_FINAL)
@@ -532,7 +679,7 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
 #endif
 
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   if (out->base) return put(vm, out, text, newline);
 #endif
   if (text->bytes && fwrite(text->data, 1, text->bytes, out->file) != text->bytes) write_failed(vm, out);
@@ -542,7 +689,7 @@ bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline
 
 void agc_flush(agc_vm *vm) {
   agc_output *out = &vm->rt->out;
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   if (out->base) {
     flush_now(out->base);
     return;

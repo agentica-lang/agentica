@@ -526,7 +526,20 @@ section says how the scheduler and the loop keep them, as built.
   drained by a pool job, as files are (§14.1), on the descriptor the process was
   given (a reopen would reset the file offset and `O_APPEND`); a device epoll
   refuses with `EPERM` (`/dev/null`, `/dev/full`) takes the same path. One job
-  runs at a time. The jobs do not set `flush`, since `agc_output_busy` counts
+  runs at a time. **Windows.** `agc_stdio_kind_of` (`vm/loop.c`) sorts the
+  descriptor with `uv_guess_handle`. A file, or `NUL`, is drained by the same
+  pool job on `_write`. A pipe is written by a libuv pipe handle (`agc_wstream`,
+  one write request at a time; libuv writes a pipe that is not overlapped on a
+  Windows worker thread and an overlapped one with I/O completion ports) and a
+  console by a libuv tty handle; neither waits for the reader on the loop. The
+  handle is a private, non-inheritable copy of the descriptor, so closing it
+  leaves stdout open, and closing it cancels the request in flight. A handle
+  that libuv refuses is written by a pool job, which holds one pool thread while
+  the reader is slow. A request takes the ranges of the ring as they are and
+  ends all or nothing, so the ring is consumed when the request ends. A Windows
+  pipe has no non-blocking try: where Unix makes one non-blocking write (a stop
+  signal, a final notice), Windows starts the request and waits up to 200 ms
+  for it. The jobs do not set `flush`, since `agc_output_busy` counts
   the buffered bytes (End of run, below). The trace shows a pool write as
   `kind=output` jobs, and a poller stream as one `output_start stream=...` and
   `output_done` line per run of data (the per-event jobs are quiet,
@@ -550,14 +563,15 @@ section says how the scheduler and the loop keep them, as built.
   works. These cases keep the blocking `fwrite` of the `FILE`, listed with the
   other fallbacks of §14.1: a reopen or a `dup` that fails (no `/proc`,
   `EACCES`), a descriptor that is not open for writing (a closed stdout that
-  `main` filled with `/dev/null`), another descriptor type, and every build that
-  is not Linux. The records of `agentica test` do not go through this module:
-  they travel on the child channel (§10.4), and `Test.run` only flushes stdout
-  before it sends one. **One target, one buffer.** When stdout and stderr are
-  the same file (the same `st_dev` and `st_ino` from `fstat`: a terminal,
-  `2>&1`, both to one file), stderr shares the buffer and the FIFO of stdout
-  (`err.base`). So `puts a`, `IO.warn b`, `puts c` appear in the order of the
-  calls. When they are different files there is no order between the two
+  `main` filled with `/dev/null`), another descriptor type, and every build
+  that is not Linux, macOS or Windows. The records of `agentica test` do not go
+  through this module: they travel on the child channel (§10.4), and `Test.run`
+  only flushes stdout before it sends one. **One target, one buffer.** When
+  stdout and stderr are the same file (the same `st_dev` and `st_ino` from
+  `fstat`: a terminal, `2>&1`, both to one file; on Windows
+  `CompareObjectHandles`, since `fstat` gives a pipe no device and inode),
+  stderr shares the buffer and the FIFO of stdout (`err.base`). So `puts a`,
+  `IO.warn b`, `puts c` appear in the order of the calls. When they are different files there is no order between the two
   streams. **Notices.** Text the VM itself writes to stderr goes through
   `agc_notice_begin` and `agc_notice_end`: a memory stream, written whole. A
   task crash diagnostic and the unobserved-task summary are non-final. The text
@@ -573,7 +587,8 @@ section says how the scheduler and the loop keep them, as built.
   than the pipe and the buffer reaches a reader that is slow but alive. The
   flush warnings, and the `RUNTIME-INTERNAL` diagnostic for a write error that
   is only known after the flush, are final: `end_run` prints them with
-  non-blocking writes until all of the text is written or the pipe would block.
+  non-blocking writes until all of the text is written or the pipe would block
+  (on Windows, each write waits up to 200 ms for its request).
   What a stuck pipe will not take is dropped (the exit code still reports the
   result), so a stuck stderr cannot hold the exit; a stop signal drops what is
   still queued. The flush-timeout warning is known only at the deadline, so it
@@ -587,7 +602,8 @@ section says how the scheduler and the loop keep them, as built.
   the pieces it already copied, and starts the writer again for each stream that
   is not writing, so the wait ends when the data is written and not at the flush
   limit. When a stop signal is set, `agc_output_busy` does one non-blocking
-  write per stream (when no pool job is writing it) and then stops waiting for
+  write per stream (when no pool job is writing it; on Windows, one wait of up
+  to 200 ms for the request) and then stops waiting for
   stdout and stderr, so a reader that never reads cannot hold a stopped VM for
   the flush limit; files keep their wait. `end_run` flushes the blocking
   `stdout` and `stderr` first and only then queues the diagnostic, so on

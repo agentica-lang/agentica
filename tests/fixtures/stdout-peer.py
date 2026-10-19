@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-import pty
 import socket
 import subprocess
 import sys
@@ -31,6 +30,8 @@ def main():
         reader, writer = socket.socketpair()
         read_fd, write_fd = reader.detach(), writer.detach()
     elif options.pty:
+        import pty
+
         read_fd, write_fd = pty.openpty()
     else:
         read_fd, write_fd = os.pipe()

@@ -48,7 +48,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/output.c`
   - **Owns:** The writer of stdout and stderr, with a buffer and a waiting queue
-    per stream.
+    per stream. On Linux and macOS a poller or a pool job writes them; on
+    Windows a libuv pipe or tty handle (`agc_wstream` in `vm/loop.c`, one
+    request at a time) or, for a file or a handle libuv refuses, a pool job. A
+    Windows pipe has no non-blocking try, so the end of the run, a stop signal
+    and a final notice wait up to 200 ms for the request (`settle`).
 
 - `vm/loop.c`
   - the event loop and the resource registry (`docs/vm/10-io-scheduler.md`

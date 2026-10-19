@@ -49,13 +49,13 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
 - `IO.eof?` does not consume a byte and does not wait for a whole UTF-8
   character. Reads have no timeout; step budgets do not interrupt blocking
   input.
-- `IO.flush` flushes stdout, not stderr. On Linux, a print is copied into a 64
-  KiB buffer per stream and written as the reader takes it, so output reaches a
-  pipe without `IO.flush`. Stdout and stderr to the same file keep the order of
-  the calls. `IO.flush` returns once the buffer is in the pipe, so it can wait
-  for a slow reader. On other systems, output does not auto-flush. For stdio
-  protocols, write one compact JSON message per line, flush after each response,
-  and send logs to `IO.warn`.
+- `IO.flush` flushes stdout, not stderr. On Linux, macOS and Windows, a print is
+  copied into a 64 KiB buffer per stream and written as the reader takes it, so
+  output reaches a pipe without `IO.flush`. Stdout and stderr to the same file
+  keep the order of the calls. `IO.flush` returns once the buffer is in the
+  pipe, so it can wait for a slow reader. On other systems, output does not
+  auto-flush. For stdio protocols, write one compact JSON message per line,
+  flush after each response, and send logs to `IO.warn`.
 - `System.env` needs no flag. A value that is not UTF-8 is decoded with U+FFFD
   for each bad byte. The home directory is `System.env("HOME")`. There is no
   call that lists the variables. `AGENTICA_CHANNEL` and a `UV_USE_IO_URING` the

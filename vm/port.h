@@ -47,6 +47,7 @@ typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
 typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
 typedef struct agc_poller agc_poller;
+typedef struct agc_wstream agc_wstream;
 typedef struct agc_native agc_native;
 
 typedef struct {
@@ -162,7 +163,8 @@ struct agc_output {
   uint8_t *notice;
   size_t notice_at, notice_len;
   agc_poller *poller;
-  bool pooled, socket, writing, armed, failed;
+  agc_wstream *stream;
+  bool pooled, socket, waits, writing, armed, failed, settled;
   agc_task *waiters, *waiters_tail;
 };
 
@@ -362,6 +364,20 @@ agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err);
 void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data);
 void agc_poller_pause(agc_poller *p);
 void agc_poller_close(agc_poller *p);
+#endif
+#ifdef _WIN32
+/* The standard streams of Windows, which have no poller: a file is written by a pool job, a pipe or a console by a
+   libuv stream (agc_wstream, one write request at a time). OTHER is anything else, left to the blocking FILE. */
+typedef enum { AGC_STDIO_OTHER, AGC_STDIO_FILE, AGC_STDIO_PIPE, AGC_STDIO_CONSOLE } agc_stdio_kind;
+
+agc_stdio_kind agc_stdio_kind_of(int fd);
+bool agc_stdio_same(int first, int second);
+agc_wstream *agc_wstream_open(agc_vm *vm, int fd);
+void agc_wstream_write(agc_wstream *w, const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,
+                       void (*done)(void *data, int status), void *data);
+void agc_wstream_close(agc_wstream *w);
+void agc_io_pump(agc_vm *vm, uint64_t ms);
+FILE *agc_scratch_open(void);
 #endif
 
 void agc_charge(agc_vm *vm, uint64_t units);
