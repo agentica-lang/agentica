@@ -38,11 +38,12 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   environment. Arguments are passed directly without shell interpolation. Empty
   commands, NUL-containing arguments, and unavailable executables fail. On
   Windows only `.exe` and `.com` programs run (`PATHEXT` is not read); other
-  files, such as `.bat` and `.cmd`, never run, because that needs `cmd.exe`: start
-  `cmd.exe` by name if you want a shell. A command may use `\` and a drive
-  (`C:\tool\a.exe`); a name ending in a dot or space, or with a `:` that is
-  not the drive, fails. A file that is found but cannot be executed is an error Result from
-  `spawn`.
+  files, such as `.bat` and `.cmd`, never run, because that needs `cmd.exe`:
+  start `cmd.exe` by name if you want a shell. A command with `\`, `/` or a
+  drive (`C:\tool\a.exe`) is a path, not searched in `PATH`; a name ending in
+  a dot or space, with a `:` that is not the drive, or ending in `.cmd` or
+  `.bat`, fails. A file that is found but cannot be executed is an error
+  Result from `spawn`.
 - Every `Process` function runs on the VM (Linux). A signal (`SIGINT`,
   `SIGTERM`, `SIGHUP`) to the VM or to `agentica` kills its running children,
   then writes open files, before it ends by that signal; a second signal ends it

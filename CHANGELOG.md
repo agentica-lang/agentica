@@ -81,11 +81,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Windows command search follows the documented rules: `.exe` and `.com` run
-  (only `.exe` did), a bare name is searched in `PATH` only (never the working
-  directory), and a name that ends in a dot or a space, or holds a `:` that is
-  not a drive, is refused. `.bat` and `.cmd` still do not run (that needs
-  `cmd.exe`, an implicit shell), and `PATHEXT` is not read.
+- On Windows, `.com` programs run through `Process.spawn` (only `.exe` did),
+  as the documentation said. The VM adds no implicit search of the working
+  directory, but a relative `PATH` entry such as `.` resolves against it.
+  `.bat` and `.cmd` still do not run (that needs `cmd.exe`, an implicit shell),
+  `PATHEXT` is not read, and a request for `x.cmd` or `x.bat` no longer finds a
+  planted `x.cmd.exe`.
 - On macOS, a socket as standard output no longer stalls every task: a write is
   checked with `poll` first and cut to what the socket takes.
 - Relative source paths containing a colon no longer gain an absolute source

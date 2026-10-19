@@ -7,6 +7,7 @@ compares its output, or its diagnostic code taken from the last line of stderr.
 import json
 import os
 import re
+import shutil
 
 import pytest
 
@@ -33,8 +34,8 @@ def program(node, mode, body, prefix="", extra=""):
     return prefix + "def main() -> Void\n" + spawn(node, mode, extra) + body + "\nend\n\n"
 
 
-def cli_run(*args):
-    return run(cli() + list(args), env=vm_environment())
+def cli_run(*args, env=None, cwd=None):
+    return run(cli() + list(args), env=vm_environment(env), cwd=cwd)
 
 
 def write(tmp_path, name, text):
@@ -104,6 +105,32 @@ def test_a_bare_command_is_searched_in_path(tmp_path):
             % (agc_literal(name), agc_literal(PEER)))
     result = cli_run("--allow-run", write(tmp_path, "program.agc", text))
     assert tuple(result) == (0, '["x"]\n', "")
+
+
+def test_a_bare_command_is_not_looked_for_in_the_working_directory_or_an_empty_path_entry(tmp_path):
+    # A runnable `tool` (a copy of node, which needs nothing beside it) is in the working directory of the run.
+    node = tool("node")
+    here = tmp_path / "here"
+    here.mkdir()
+    shutil.copy(node, here / ("tool.exe" if os.name == "nt" else "tool"))
+    text = ('def main() -> Void\n  started = Process.spawn("tool", ["-e", "console.log(7)"], 5000)\n'
+            '  puts(started.ok?)\n  if started.ok?\n    puts(Result.unwrap!(Process.read_line(started.unwrap!, 5000)))\n'
+            '  end\nend\n\n')
+    program_file = write(tmp_path, "program.agc", text)
+    sep = os.pathsep
+    name = next((key for key in os.environ if key.upper() == "PATH"), "PATH")  # "Path" on Windows
+    old = os.environ.get(name, "")
+
+    def spawned(path):
+        result = cli_run("--allow-run", program_file, env={name: path}, cwd=here)
+        assert result.code == 0, result.stderr
+        return result.stdout
+
+    assert spawned(old) == "false\n"  # the VM adds no implicit search of the working directory
+    assert spawned(sep + old) == "false\n"  # an empty PATH entry is skipped, not read as "."
+    assert spawned(old + sep + sep) == "false\n"
+    assert spawned(str(here) + sep + old) == "true\n7\n"  # the same file is found through PATH
+    assert spawned("." + sep + old) == "true\n7\n"  # a relative entry resolves against the working directory
 
 
 def test_permission_literal_argv_and_inherited_task_capability(tmp_path):
