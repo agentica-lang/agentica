@@ -40,6 +40,19 @@ UNDER_WINE = os.environ.get("AGENTICA_TEST_WINE") == "1"
 # line names OpenSSL exactly there.
 TLS_BUILT = TARGET_OS in ("linux", "darwin")
 
+# `make test-multicore` runs whole modules (TCP, TLS) on several schedulers: AGENTICA_VM_TEST_MODULE_SCHEDULERS=N makes
+# every VM the tests start run on N schedulers under the test switch. A case whose program still uses a builtin that
+# several schedulers refuse (HTTP, Process) calls one_scheduler() first.
+TEST_SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_MODULE_SCHEDULERS", "").strip()
+if TEST_SCHEDULERS:
+    os.environ.update(AGENTICA_SCHEDULERS=TEST_SCHEDULERS, AGENTICA_VM_TEST_MULTICORE="1")
+
+
+def one_scheduler():
+    """Skip the case on a several-scheduler run of its module (TEST_SCHEDULERS): its program needs one scheduler."""
+    if TEST_SCHEDULERS:
+        raise unittest.SkipTest("needs one scheduler (AGENTICA_VM_TEST_MODULE_SCHEDULERS)")
+
 
 
 def _timeout_scale():
@@ -395,6 +408,8 @@ def vm_environment(extra=None):
     """
     env = {k: v for k, v in os.environ.items() if k not in _VM_UNSET}
     env.update(LC_ALL="C.UTF-8", LANG="C.UTF-8")
+    if TEST_SCHEDULERS:
+        env["AGENTICA_SCHEDULERS"] = TEST_SCHEDULERS
     env.pop("LC_MESSAGES", None)
     for key, value in (extra or {}).items():
         if value is None:

@@ -29,14 +29,13 @@ const agc_builtin_table agc_builtin_tables[] = {
 
 const size_t agc_builtin_table_count = sizeof agc_builtin_tables / sizeof agc_builtin_tables[0];
 
-/* The tables whose builtins still make their own libuv handles and steps on the scheduler that calls them (TCP, TLS,
-   HTTP, Process, Duplex and the child channel): a run with several schedulers refuses them until those steps are
-   requests to the I/O thread (agc_io_uv aborts off that thread). */
+/* The tables whose builtins still make their own libuv handles and steps on the scheduler that calls them (HTTP,
+   Process, Duplex and the child channel): a run with several schedulers refuses them until those steps are requests
+   to the I/O thread (agc_io_uv aborts off that thread). TCP and TLS post every step there (vm/tcp.c). */
 static bool loop_bound(const agc_builtin *b) {
   static const agc_builtin_table bound[] = {
     {agc_process_builtins, &agc_process_builtin_count}, {agc_duplex_builtins, &agc_duplex_builtin_count},
-    {agc_tcp_builtins, &agc_tcp_builtin_count},         {agc_http_builtins, &agc_http_builtin_count},
-    {agc_http_server_builtins, &agc_http_server_builtin_count},
+    {agc_http_builtins, &agc_http_builtin_count},       {agc_http_server_builtins, &agc_http_server_builtin_count},
   };
   for (size_t k = 0; k < sizeof bound / sizeof bound[0]; k++)
     if (b >= bound[k].entries && b < bound[k].entries + *bound[k].count) return true;

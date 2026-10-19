@@ -27,7 +27,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     MiB + 1 bytes, searched once per byte through `scanned`, CRLF stripped, a
     final line only at EOF, the read error when bytes without LF end in an
     error, the caller's texts for too long and end of input; it says when the
-    line was too long so the caller closes) and `agc_inbuf_bytes`,
+    line was too long so the caller closes) and `agc_inbuf_bytes`; the same
+    cuts as a `malloc`'d `agc_inbuf_cut` (`agc_inbuf_cut_line`,
+    `agc_inbuf_cut_bytes`, made on the I/O thread) whose value a scheduler
+    builds later (`agc_inbuf_cut_line_value`, `agc_inbuf_cut_bytes_value`),
     `agc_stream_write` (`uv_try_write`, then one `uv_write` of a `malloc`'d copy
     in buffers of at most 1 GiB; 0 written, 1 queued, or a libuv error),
     `agc_new_lock` and `agc_stream_lock` (an unregistered lock record, and the
@@ -47,12 +50,24 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     so no prototype is needed), listen binds every resolved address on one port
     (one link per address, chained through `next`; `bind_all` retries a port-0
     listen when a later address finds the port taken), accept is one FIFO for
-    all links whose head is marked served by a link's connection callback
-    (`chosen`) and calls `uv_accept` in its `done` half (a failed `uv_accept`
-    closes the listener, since libuv stops watching that link), reads and writes
+    all links that `serve` feeds with `uv_accept` (a failed `uv_accept` closes
+    the listener, since libuv stops watching that link), reads and writes
     use the `agc_socket` reader and writer locks and `vm/stream.c`; `shut` is
-    the one close (trace `why`), and wakes every waiting request; `no_files`
-    (the fuzzer) makes connect and listen fail with `RUNTIME-INTERNAL`
+    the one close (trace `why`), and finishes every waiting request; `no_files`
+    (the fuzzer) makes connect and listen fail with `RUNTIME-INTERNAL`. Every
+    `net` belongs to the I/O thread (§16.9, "Services"): a builtin parks with
+    its `begin_*` step as the START's `more` step, a close or a resource's
+    release posts `release_step` with `agc_loop_call`, `finish` copies what
+    the `done` half needs into the request (`opened`, `closed`, the cut, the
+    write status, the accepted child), and `request_done` reads only that and
+    posts `drop_request`; `users` changes only on the I/O thread, and the `net`
+    fields `id` and `closed` are atomic for the scheduler's checks. `cancel`
+    (`request_cancel`) and `pause` (`stop_request`) touch the request and the
+    `net` only, never the resource. At N = 1 every step runs inline, and a
+    read of buffered bytes or a send that goes out at once returns without a
+    park (`agc_io_here`). Tested at N > 1 by `vm/tests/net_test.c` (exact
+    orders), `vm/tests/threads_test.c`, the net programs of
+    `tests/test_vm_multicore.py` and `make test-multicore-net`
 
 - **Path:** `vm/net.h`
   - **Owns:** tcp.c's connection object for other C modules (`agc_conn`,
@@ -60,7 +75,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     borrowed `agc_tls_config`) with a watch callback that runs on every state
     change, `agc_conn_send`/`agc_conn_sent`, `agc_conn_input`/`agc_conn_read`
     (the `agc_inbuf`), `agc_conn_ready`/`agc_conn_failed`/`agc_conn_error`,
-    `agc_conn_shut` and `agc_conn_release`; also `agc_tls_load_error`
+    `agc_conn_shut` and `agc_conn_release`; also `agc_tls_load_error`. Call
+    them on the I/O thread, except `agc_conn_socket` and `agc_conn_error` (on a
+    scheduler, see each) and `agc_conn_closed` (anywhere, a hint)
 
 - **Path:** `vm/http_parse.h`, `vm/http_pico.c`, `vm/http_body.c`
   - **Owns:** the HTTP head adapter and body decoder (§10.6, §10.6.1): limits as

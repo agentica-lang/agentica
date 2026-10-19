@@ -29,8 +29,9 @@ make vm-fuzz                         # compile fixtures, mutate, run accepted mu
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
 make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests (inbox, outcome, run queue, wake, job, sync, output, timers, threads) under TSan
-make vm-tsan-run                     # a TSan agentica (front end of the release build) running tests/test_vm_multicore.py
-make test-multicore                  # tests/test_vm_multicore.py: programs on 4 schedulers (AGENTICA_VM_TEST_MULTICORE=1)
+make vm-tsan-run                     # a TSan agentica (front end of the release build) running tests/test_vm_multicore.py and the TCP/TLS modules
+make test-multicore                  # tests/test_vm_multicore.py: programs on 4 schedulers (AGENTICA_VM_TEST_MULTICORE=1), then test-multicore-net
+make test-multicore-net              # tests/test_vm_tcp.py and tests/test_vm_tls.py with every VM on 4 schedulers
 make vm-latency                      # tests/test_vm_latency.py alone (see `vm-tasks.md`, Gotchas)
 make vm-task-map                     # tests/test_vm_task_map.py alone (the timing cases of Task.map, see `vm-tasks.md`)
 make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff

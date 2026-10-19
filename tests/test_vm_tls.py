@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_text, output_lines,
+from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_text, one_scheduler, output_lines,
                                  run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
@@ -358,6 +358,7 @@ def test_client_against_a_python_tls_12_server_closed_with_close_notify(tmp_path
 
 
 def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
+    one_scheduler()
     server, port = python_server(adopt, "http")
     result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
     assert (result.code, result.stdout) == (0, "ok\nok\n"), result.stderr

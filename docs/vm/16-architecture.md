@@ -92,14 +92,14 @@ enforces it.
   `uv_async_send` on the inbox's handle, which libuv allows from any thread.
   Every step that calls libuv is a request to the I/O thread (§16.5). The pool
   runs only the `work` half of a job on `malloc`'d memory (§10.2.2).
-- **The I/O thread only moves bytes.** It reads into and writes from `malloc`'d
-  buffers: a job's, and a socket's input buffer (`agc_conn.in`; who owns it is
-  open, §16.11). Stdin is read into a job's buffer and appended to the shared
-  input by the `done` half, on a scheduler. The `done` half of a job, which
-  builds GC values from those bytes, runs on the scheduler that resumes the
-  task. TLS crypto and HTTP parsing run on the scheduler that resumes the task,
-  over OpenSSL memory BIOs (`vm/tls_openssl.c` has them already), so a slow
-  handshake or a big parse never stalls the loop.
+- **The I/O thread moves bytes and builds no GC values.** It reads into and
+  writes from `malloc`'d buffers: a job's, and a socket's input buffer
+  (`agc_conn.in`), which it owns (§16.11). Stdin is read into a job's buffer
+  and appended to the shared input by the `done` half, on a scheduler. The
+  `done` half of a job, which builds GC values from those bytes, runs on the
+  scheduler that resumes the task. TLS crypto runs on the I/O thread, beside
+  the socket state it reads and writes (`vm/tcp.c`), so a slow handshake
+  delays the loop; moving it to the schedulers is a later step (§16.10).
 - **No dispatcher thread.** Schedulers pull work; nobody pushes a task at a
   chosen scheduler.
 
@@ -458,10 +458,10 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   that drain is the push of §16.4, and it keeps a woken task behind the one
   whose turn just ended.
 - **Services make their own libuv calls**, on the loop's thread. They make
-  handles through `agc_io_uv` (§15.1), for example in `vm/tcp.c`, `vm/process.c`
-  and `vm/http_client.c`; the libuv part of their `done`, `expired`, cancel and
-  `drop` halves (for example `accept_done` in `vm/tcp.c`, `request_expired` in
-  `vm/process.c`, the file `drop` in `vm/files.c`) and the poller calls of
+  handles through `agc_io_uv` (§15.1), for example in `vm/process.c` and
+  `vm/http_client.c`; the libuv part of their `done`, `expired`, cancel and
+  `drop` halves (for example `request_expired` in `vm/process.c`, the file
+  `drop` in `vm/files.c`) and the poller calls of
   builtins run where the half runs. In the model that code is the start step of
   a request. At N > 1 the steps of the standard streams and of polled files
   (stdin, FIFOs) are requests: the start of a stream write, a poller wait with
@@ -474,10 +474,20 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   starts in the job's START, before its timer is armed (the `more` step of a
   wait on the loop), so the timer always finds it started, and the kind's
   `pause` stops it on the I/O thread before EXPIRED is published: `expired`
-  never runs beside one of its callbacks. `agc_io_uv` aborts off the I/O thread,
-  and the builtins of TCP, TLS, HTTP, `Process`, `Duplex` and `Test.run` fail
-  with `RUNTIME-INTERNAL` at N > 1 (`agc_program_for_threads`), until their
-  steps move too.
+  never runs beside one of its callbacks. TCP and TLS are requests at every N:
+  the I/O thread owns each connection (`net` in `vm/tcp.c`: its TLS session,
+  buffers, request slots and counts). A builtin posts its step as the START's
+  `more` step (`agc_io_start_then`) and parks; a close and a resource's release
+  are posted with `agc_loop_call`. `finish` fills the request on the I/O thread
+  (a read cuts its line or bytes out of the buffer), and the `done` half reads
+  only the request and then posts its `drop`. A socket's `cancel` and `pause`
+  touch only the request and the connection, never a resource or a task. The
+  builtins post under `rt->sync`, so their steps reach the inbox in the order
+  of the calls. At N = 1 the steps run inline, and a read of buffered bytes or
+  a send that goes out at once returns without a park (`agc_io_here`).
+  `agc_io_uv` aborts off the I/O thread, and the builtins of HTTP, `Process`,
+  `Duplex` and `Test.run` fail with `RUNTIME-INTERNAL` at N > 1
+  (`agc_program_for_threads`).
 - **An outcome and a count, not flags.** A job has an atomic outcome (PENDING,
   DONE, EXPIRED or CANCELLED) that the first writer sets by CAS
   (`agc_job_settle`, release; `agc_io_finish` reads it with acquire), and an
@@ -576,7 +586,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   finds the task.
 - **TLS and HTTP steps run in libuv callbacks.** For example `advance` and
   `flush` in `vm/tcp.c` and `head_step` in `vm/http_server.c`. The model moves
-  them into the turn of the resumed task.
+  them into the turn of the resumed task; TLS stays on the I/O thread with the
+  socket state it touches (§16.2).
 - **Atomic task states, and a different READY.** The states are READY, RUNNING,
   PARKING, PARKED, WOKEN and DONE (`agc_task_state` in `vm/port.h`), in an
   `_Atomic` field. READY means "in the run queue", so a waker CASes PARKED to
@@ -695,7 +706,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
     `File` tables are checked by row. `tests/test_vm_shared.py` holds the
     programs for the paths the other modules do not reach.
     Not yet under the lock: the profiling counters, the I/O thread's side of the
-    handles. The later PRs of the plan cover those. The owner of a stream's
+    handles that N > 1 refuses. A socket needs no lock: the I/O thread owns it
+    ("Services" above). The owner of a stream's
     lock is the calling thread's context (`agc_notice_end`, `settle` and the
     start of a write take it), not the stream's own `vm`.
 - **The order of PR 3 of issue #345.** 3a (the blocking pop, the cancel by
@@ -725,6 +737,8 @@ for wake-heavy programs is measured in §16.11 ("Wakes between schedulers").
   the global run queue.
 - **Per-scheduler local queues with work stealing.** Wakes then go to a global
   inject queue.
+- **TLS crypto on the schedulers.** As built it runs on the I/O thread with the
+  socket state (§16.2), so a TLS-heavy server can make the loop its limit.
 
 ### 16.11 Open
 
@@ -761,27 +775,27 @@ for wake-heavy programs is measured in §16.11 ("Wakes between schedulers").
   run under `rt->sync` and the state CAS picks one. A losing lock hand-on must
   offer the lock to the next waiter; a losing channel wake passes the value or
   slot on (§27.2).
-- **Read buffers and request slots.** Socket bytes land in a connection's
-  `agc_conn.in`, a `realloc`'d buffer appended by a libuv read callback (on the
-  I/O thread in the model) and consumed by a builtin on a scheduler. Who owns
-  and locks it, and where the read-ahead goes when no task is parked, is open.
-  Options: the I/O thread appends under a lock of the buffer and the builtin
-  consumes under it; or every read is a request with its own buffer in the job,
-  and there is no read-ahead. The same question holds for a connection's or
-  process's request slots, which `drop_request` unlinks (`vm/tcp.c`,
-  `vm/process.c`) once `drop` runs on the I/O thread. On the polled file path,
-  `expired` (`vm/files.c`) moves `o->st->buf` while the I/O thread may still run
-  `ready`, `step` and `send_rest`: the poller pause must complete first. Stdin
-  is read into a job's buffer and `read_done` appends it to `rt->in.buf` (GC
-  memory) on a scheduler; how the schedulers lock `rt->in` between them is open.
-- **A libuv step whose result a half needs.** `accept_done` needs the result of
-  `uv_accept` (`vm/tcp.c`). The step runs on the I/O thread, so the half gets
-  the result another way: a second request and park, or the step done earlier on
-  the I/O thread.
+- **Read buffers and request slots.** Decided and built for sockets (§16.9,
+  "Services"): the I/O thread owns a connection's `agc_conn.in` and its request
+  slots. The read callback appends to the buffer, read-ahead stays there, and a
+  read request gets its line or bytes as a `malloc`'d copy cut on the I/O
+  thread. At N > 1 a read of bytes that are already buffered still posts a
+  request; a lock on the buffer that lets a scheduler take them at once is not
+  built. A process's request slots, which `drop_request` unlinks
+  (`vm/process.c`) once `drop` runs on the I/O thread, are open. On the polled
+  file path, `expired` (`vm/files.c`) moves `o->st->buf` while the I/O thread
+  may still run `ready`, `step` and `send_rest`: the poller pause must complete
+  first. Stdin is read into a job's buffer and `read_done` appends it to
+  `rt->in.buf` (GC memory) on a scheduler; how the schedulers lock `rt->in`
+  between them is open.
+- **A libuv step whose result a half needs.** Decided for sockets: `serve`
+  (`vm/tcp.c`) calls `uv_accept` on the I/O thread, a TLS child finishes its
+  handshake there, and the request hands the child to `accept_done`.
 - **Which port function posts each service request** (§15.2). The job
   requests are posted by `agc_io_start`, `agc_io_extend` and the finish and
-  detach paths of `vm/loop.c`; the libuv steps of the services have no request
-  yet (§16.9).
+  detach paths of `vm/loop.c`. The steps of TCP and TLS go through the START's
+  `more` step and `agc_loop_call` (§16.9); those of HTTP, `Process` and
+  `Duplex` have no request yet.
 - **stdout and stderr once they park** (row 7.2.1f, decided; built for N = 1).
   The per-stream lock of §10.2.3 cannot be held across a park, so the second
   option is taken: a short lock around each stream's buffer and FIFO, never held
