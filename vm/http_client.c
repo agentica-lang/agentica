@@ -672,7 +672,7 @@ static bool exchange_cancel(agc_vm *vm, void *data, agc_value context, bool dead
   return false;
 }
 
-static const agc_io_kind http_io = {NULL, exchange_done, exchange_expired, exchange_drop, true, "http", exchange_cancel};
+static const agc_io_kind http_io = {NULL, exchange_done, exchange_expired, exchange_drop, true, "http", exchange_cancel, true};
 
 static bool host_text(const agc_string *host) {
   if (host->bytes == 0 || host->bytes > MAX_HOST) return false;
@@ -842,9 +842,9 @@ static agc_value builtin_close_client(agc_vm *vm, agc_value *args, uint32_t span
 }
 
 const agc_builtin agc_http_builtins[] = {
-  {"HttpWire.client", 5, builtin_client, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.exchange", 8, builtin_exchange, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"HttpWire.close_client", 1, builtin_close_client, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"HttpWire.client", 5, builtin_client, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.exchange", 8, builtin_exchange, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"HttpWire.close_client", 1, builtin_close_client, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_http_builtin_count = sizeof agc_http_builtins / sizeof agc_http_builtins[0];

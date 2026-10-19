@@ -216,23 +216,33 @@ void agc_close_owned(agc_vm *vm, agc_task *t) {
   }
 }
 
+/* The one place that takes a task off a handle's waiters; they change under rt->sync like every shared list. */
+static void unwait(agc_vm *vm, agc_resource *handle, agc_task *t) {
+  agc_sync_assert(vm);
+  agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+}
+
 static void hand_on(agc_vm *vm, agc_resource *handle) {
+  agc_sync_assert(vm);
   agc_task *next = handle->waiters;
   if (!next) return;
-  agc_task_remove(&handle->waiters, &handle->waiters_tail, next);
+  unwait(vm, handle, next);
   handle->next_owner = next;
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_handoff handle=%" PRIu64 " task=%" PRIu64, handle->id, next->id);
   agc_task_wake(vm, next, "lock");
 }
 
 void agc_handle_leave(agc_vm *vm, agc_task *t) {
+  agc_sync_take(vm);
   agc_resource *handle = t->lock_wait;
   t->lock_wait = NULL;
   t->lock_deadline = 0;
-  agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
-  if (handle->next_owner != t) return;
-  handle->next_owner = NULL;
-  hand_on(vm, handle);
+  unwait(vm, handle, t);
+  if (handle->next_owner == t) {
+    handle->next_owner = NULL;
+    hand_on(vm, handle);
+  }
+  agc_sync_drop(vm);
 }
 
 void agc_unregister(agc_vm *vm, agc_resource *r) {
@@ -542,7 +552,7 @@ static agc_value wait_woken(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-const agc_io_kind agc_wait_io = {NULL, wait_woken, wait_woken, NULL, false, "lock", NULL};
+const agc_io_kind agc_wait_io = {NULL, wait_woken, wait_woken, NULL, false, "lock", NULL, false};
 
 static job_trace trace_of(const agc_resource *r, const job *j) {
   return (job_trace){r->id, j->started_ns, atomic_load_explicit(&j->ended_ns, memory_order_relaxed), j->kind};
@@ -563,10 +573,12 @@ static agc_value take_context(agc_vm *vm, agc_resource *r) {
   r->context = agc_void();
   if (agc_is(context, AGC_T_HANDLE)) {
     agc_resource *handle = agc_as_handle(vm, context);
+    agc_sync_take(vm);
     if (handle->holder == r) {
       handle->holder = NULL;
       hand_on(vm, handle);
     }
+    agc_sync_drop(vm);
   }
   return context;
 }
@@ -574,7 +586,21 @@ static agc_value take_context(agc_vm *vm, agc_resource *r) {
 static void close_pending(agc_vm *vm, agc_value context) {
   if (!agc_is(context, AGC_T_HANDLE)) return;
   agc_resource *handle = agc_as_handle(vm, context);
+  agc_sync_take(vm);
   if (handle->closing && handle->native && !handle->holder) handle->close(vm, handle, NULL);
+  agc_sync_drop(vm);
+}
+
+/* A half of a job. A kind whose halves change shared lists (stdin's waiters, a handle's FIFO, a service's state) is
+   marked `locked`, and its halves run with rt->sync held; the others (a file read, the drain of a stream) run unlocked,
+   so a megabyte of text is built beside the other schedulers. */
+static agc_value run_half(agc_vm *vm, const agc_io_kind *kind, bool done, void *data, agc_value context) {
+  agc_value (*half)(agc_vm *, void *, agc_value) = done ? kind->done : kind->expired;
+  if (!kind->locked) return half(vm, data, context);
+  agc_sync_take(vm);
+  agc_value result = half(vm, data, context);
+  agc_sync_drop(vm);
+  return result;
 }
 
 static void discard(agc_vm *vm, agc_value result) {
@@ -620,7 +646,7 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
     job_trace trace = trace_of(r, j);
     release(j);
     int64_t cost = vm->task->turn_cost;
-    agc_value result = trace.kind->done(vm, data, context);
+    agc_value result = run_half(vm, trace.kind, true, data, context);
     vm->task->turn_cost = cost;
     trace_finish(vm, &trace, true, result);
     discard(vm, result);
@@ -1136,9 +1162,10 @@ uint64_t agc_trace_now(void) {
 uint64_t agc_clock_ms(void) { return agc_trace_now() / 1000000u; }
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
+  agc_sync_assert(vm);
   agc_task *t = vm->task;
   if (handle->closing && !handle->holder) {
-    agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+    unwait(vm, handle, t);
     if (handle->next_owner == t) handle->next_owner = NULL;
     t->lock_wait = NULL;
     t->lock_deadline = 0;
@@ -1206,9 +1233,9 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
     j->data = NULL;
     if (waits) abandon_wait(j);
     release(j);
-    result = trace.kind->done(vm, data, context);
+    result = run_half(vm, trace.kind, true, data, context);
   } else {
-    result = trace.kind->expired(vm, j->data, context);
+    result = run_half(vm, trace.kind, false, j->data, context);
     if (waits) abandon_wait(j);
     release(j);
   }
@@ -1287,7 +1314,10 @@ static void finish_flushes(agc_vm *vm) {
 
 void agc_io_flush_files(agc_vm *vm) {
   if (!vm->loop) return;
+  /* Closing a file wakes the tasks waiting on it, which changes the shared lists. */
+  agc_sync_take(vm);
   close_files(vm);
+  agc_sync_drop(vm);
   finish_flushes(vm);
 }
 
@@ -1446,7 +1476,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 
 uint64_t agc_clock_ms(void) { return 0; }
 
-const agc_io_kind agc_wait_io = {NULL, NULL, NULL, NULL, false, "lock", NULL};
+const agc_io_kind agc_wait_io = {NULL, NULL, NULL, NULL, false, "lock", NULL, false};
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)t;

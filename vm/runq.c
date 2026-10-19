@@ -78,7 +78,7 @@ agc_task *agc_runq_pop(agc_runq *q) {
    Both are tested under the lock that the pusher and agc_runq_end take, so no wake falls between the test and the
    wait (§16.3, "Idle schedulers"). An ended queue returns NULL even if tasks are left: the run is over. */
 agc_task *agc_runq_wait(agc_runq *q) {
-  if (q->solo) return take_first(q);
+  if (q->solo) return q->ended ? NULL : take_first(q);
   uv_mutex_lock(&q->lock);
   while (!q->first && !q->ended) uv_cond_wait(&q->wake, &q->lock);
   agc_task *t = q->ended ? NULL : take_first(q);

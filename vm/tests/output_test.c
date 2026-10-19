@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <setjmp.h>
+#include <stdatomic.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -832,17 +833,23 @@ static void test_a_handle_that_libuv_refuses_is_written_by_a_pool_thread(void) {
 #define SHARED_WRITERS 4
 #define SHARED_LINES 200
 #define SHARED_LEN 49
+#define SHARED_ROUNDS 40
+
+static _Atomic int shared_go;
 
 static void write_lines(void *arg) {
   shared_writer *w = arg;
   assert(agc_gc_thread_enter());
+  while (!atomic_load_explicit(&shared_go, memory_order_acquire)) {}
   for (int k = 0; k < SHARED_LINES; k++) assert(agc_write(&w->vm, &w->vm.rt->out, w->line, true));
   agc_gc_thread_leave();
 }
 
 /* Several schedulers print at once into a stream whose drain is held (`writing`), so no libuv call is made from a
    thread that does not own the loop. The stream's lock keeps the ring consistent: every byte is there, and each line
-   is whole, since the text and its newline are one copy under the lock. */
+   is whole, since the text and its newline are one copy under the lock. The writers start together and the round
+   repeats, because one round without the lock passes by chance in a plain build; make vm-tsan, which CI runs, sees the
+   race at once. */
 static void test_shared_writers_keep_their_lines_whole(void) {
   open_pipe();
   fresh(pipe_fds[1]);
@@ -850,26 +857,31 @@ static void test_shared_writers_keep_their_lines_whole(void) {
   out()->writing = true;
   shared_writer writers[SHARED_WRITERS];
   uv_thread_t threads[SHARED_WRITERS];
-  for (int k = 0; k < SHARED_WRITERS; k++) {
-    writers[k].vm = vm;
-    writers[k].task = *make_task();
-    writers[k].vm.task = &writers[k].task;
-    writers[k].line = letters_of((char)('a' + k), SHARED_LEN);
-  }
   size_t total = (size_t)SHARED_WRITERS * SHARED_LINES * (SHARED_LEN + 1);
   assert(total <= CAP);
-  for (int k = 0; k < SHARED_WRITERS; k++) assert(uv_thread_create(&threads[k], write_lines, &writers[k]) == 0);
-  for (int k = 0; k < SHARED_WRITERS; k++) assert(uv_thread_join(&threads[k]) == 0);
-  assert(out()->len == total && !out()->waiters);
-  int lines[SHARED_WRITERS] = {0};
-  for (size_t at = 0; at < total; at += SHARED_LEN + 1) {
-    const uint8_t *line = out()->buf + out()->start + at;
-    assert(line[0] >= 'a' && line[0] < 'a' + SHARED_WRITERS && line[SHARED_LEN] == '\n');
-    for (size_t k = 1; k < SHARED_LEN; k++) assert(line[k] == line[0]);
-    lines[line[0] - 'a']++;
+  for (int round = 0; round < SHARED_ROUNDS; round++) {
+    atomic_store(&shared_go, 0);
+    for (int k = 0; k < SHARED_WRITERS; k++) {
+      writers[k].vm = vm;
+      writers[k].task = *make_task();
+      writers[k].vm.task = &writers[k].task;
+      writers[k].line = letters_of((char)('a' + k), SHARED_LEN);
+      assert(uv_thread_create(&threads[k], write_lines, &writers[k]) == 0);
+    }
+    atomic_store_explicit(&shared_go, 1, memory_order_release);
+    for (int k = 0; k < SHARED_WRITERS; k++) assert(uv_thread_join(&threads[k]) == 0);
+    assert(out()->len == total && !out()->waiters);
+    int lines[SHARED_WRITERS] = {0};
+    for (size_t at = 0; at < total; at += SHARED_LEN + 1) {
+      const uint8_t *line = out()->buf + out()->start + at;
+      assert(line[0] >= 'a' && line[0] < 'a' + SHARED_WRITERS && line[SHARED_LEN] == '\n');
+      for (size_t k = 1; k < SHARED_LEN; k++) assert(line[k] == line[0]);
+      lines[line[0] - 'a']++;
+    }
+    for (int k = 0; k < SHARED_WRITERS; k++) assert(lines[k] == SHARED_LINES);
+    out()->len = 0;
+    out()->start = 0;
   }
-  for (int k = 0; k < SHARED_WRITERS; k++) assert(lines[k] == SHARED_LINES);
-  out()->len = 0;
   out()->writing = false;
   finish();
   close_pipe();

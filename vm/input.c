@@ -169,10 +169,10 @@ static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
 
 static void read_drop(void *data) { free(data); }
 
-static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin", NULL};
+static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin", NULL, true};
 
 #if defined(__linux__) || defined(__APPLE__)
-static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", NULL};
+static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", NULL, true};
 #endif
 #endif
 
@@ -181,6 +181,7 @@ static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true,
 static read_request *begin_read(agc_vm *vm, agc_input *in) {
   if (in->reading) {
     agc_task_parking(vm);
+    agc_sync_assert(vm);
     agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
     agc_task_park(vm, true);
     return NULL;

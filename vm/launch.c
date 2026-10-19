@@ -149,6 +149,7 @@ static void flush_files(agc_vm *vm) {
     agc_io_flush_files(vm);
     return;
   }
+  agc_sync_reset(vm);
   const agc_outcome *o = &vm->rt->outcome;
   agc_notice notice;
   agc_print_flush_failed(agc_notice_begin(&vm->rt->err, &notice), o->code, o->message, o->message_len, vm->rt->style);

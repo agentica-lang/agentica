@@ -329,7 +329,7 @@ static bool read_cancel(agc_vm *vm, void *data, agc_value context, bool deadline
   return true;
 }
 
-static const agc_io_kind read_io = {NULL, read_done, read_expired, read_drop, true, "http_read", read_cancel};
+static const agc_io_kind read_io = {NULL, read_done, read_expired, read_drop, true, "http_read", read_cancel, true};
 
 static agc_conn *live_conn(const agc_socket *sk) {
   agc_conn *c = sk->state->native;
@@ -469,7 +469,7 @@ static bool write_cancel(agc_vm *vm, void *data, agc_value context, bool deadlin
   return true;
 }
 
-static const agc_io_kind write_io = {NULL, write_done, write_expired, write_drop, true, "http_write", write_cancel};
+static const agc_io_kind write_io = {NULL, write_done, write_expired, write_drop, true, "http_write", write_cancel, true};
 
 static agc_value builtin_write_response(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -547,7 +547,7 @@ static bool waiter_cancel(agc_vm *vm, void *data, agc_value context, bool deadli
   return true;
 }
 
-static const agc_io_kind wait_io = {NULL, waited, waited, waiter_drop, true, "http_server", waiter_cancel};
+static const agc_io_kind wait_io = {NULL, waited, waited, waiter_drop, true, "http_server", waiter_cancel, true};
 
 /* accept and wait are retry builtins: the job only wakes the task, which
    then checks the server again. */
@@ -691,14 +691,14 @@ static agc_value builtin_local_port(agc_vm *vm, agc_value *args, uint32_t span) 
 }
 
 const agc_builtin agc_http_server_builtins[] = {
-  {"HttpWire.read_request", 4, builtin_read_request, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.write_response", 4, builtin_write_response, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.server", 3, builtin_server, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.accept", 1, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.close_server", 1, builtin_close_server, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.wait", 1, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"HttpWire.read_request", 4, builtin_read_request, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.write_response", 4, builtin_write_response, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.server", 3, builtin_server, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.accept", 1, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.close_server", 1, builtin_close_server, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.wait", 1, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_http_server_builtin_count = sizeof agc_http_server_builtins / sizeof agc_http_server_builtins[0];

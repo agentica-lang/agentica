@@ -234,8 +234,8 @@ static PROFILE_HOOK void profile_builtin_call(agc_vm *vm, uint32_t id) { vm->pro
  * task tree, the waiter lists, the channels, the handles and the logger table are seen by one scheduler at a time. The
  * lock is not held when the builtin returns: a builtin that must wait registers the wait and returns, and the task
  * parks outside the lock. A builtin that fails leaves the lock to agc_sync_reset. */
-static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, uint32_t id, agc_value *args, uint32_t span) {
-  if (__builtin_expect(vm->rt->shared, 0) && vm->rt->builtin_sync[id]) {
+static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
+  if (__builtin_expect(vm->rt->shared, 0) && b->shared) {
     agc_sync_take(vm);
     agc_value result = b->fn(vm, args, span);
     agc_sync_drop(vm);
@@ -249,7 +249,7 @@ static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, uint32_t 
 static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, uint32_t id, agc_value *args,
                                               uint32_t span) {
   uint64_t began = agc_trace_now();
-  agc_value result = call_builtin(vm, b, id, args, span);
+  agc_value result = call_builtin(vm, b, args, span);
   vm->profile->builtin_calls[id]++;
   vm->profile->builtin_ns[id] += agc_trace_now() - began;
   return result;
@@ -1032,7 +1032,7 @@ reload:
         uint64_t units = 0;
         if (b->cost == AGC_COST_SIZE)
           for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(args[k]);
-        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN) : call_builtin(vm, b, bx, args, SPAN);
+        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN) : call_builtin(vm, b, args, SPAN);
         if (t->stepper) {
           start_stepper(vm, b, base + in.a, SPAN);
           if (t->parking) return park_task(t);

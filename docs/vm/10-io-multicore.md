@@ -143,8 +143,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     the ten `LogRegistry` builtins. It is the language's one piece of global
     mutable state and is a field of the runtime, not a `static`. With N>1 it
     needs a lock; as built it is `rt->sync`, the one coarse lock (§16.9), taken
-    around each `LogRegistry` builtin. `install_default` is one native call, so
-    the check for level -1 and the writes cannot interleave with another task.
+    around each `LogRegistry` builtin (its rows are marked `shared`).
+    `install_default` is one native call, so the check for level -1 and the
+    writes cannot interleave with another task.
   - I/O thread: the loop, the inbox (§16.4) and the resource registry. Whether
     the registry is owned by the I/O thread or shared under a lock is open
     (§16.11).

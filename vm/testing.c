@@ -323,12 +323,12 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_test_builtins[] = {
-  {"Test.test", 2, builtin_test, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.run", 1, builtin_run, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.eq", 2, builtin_eq, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.ok?", 1, builtin_ok, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.error?", 1, builtin_error, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.assert", 2, builtin_assert, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.test", 2, builtin_test, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.run", 1, builtin_run, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.eq", 2, builtin_eq, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.ok?", 1, builtin_ok, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.error?", 1, builtin_error, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.assert", 2, builtin_assert, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_test_builtin_count = sizeof agc_test_builtins / sizeof agc_test_builtins[0];
