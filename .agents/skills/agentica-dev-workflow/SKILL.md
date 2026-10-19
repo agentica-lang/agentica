@@ -1,20 +1,29 @@
 ---
 name: agentica-dev-workflow
-description: Run the Agentica pull-request loop from branch to merge with this repository's rules - worktrees, make targets, the CI and Platforms checks, the vm-c-critic review for VM code, the review-fix loop with its third-pass stop, merge commits and cleanup. Use when developing, reviewing, fixing or merging an Agentica PR (or a stack), or when coordinating agents that do. It does not review code itself (use pr-reviewer-new or vm-c-critic) and does not answer human review comments.
+description: >-
+  Run the Agentica pull-request loop from branch to merge with this
+  repository's rules - worktrees, make targets, the CI and Platforms checks,
+  the vm-c-critic review for VM code, the review-fix loop with its third-pass
+  stop, merge commits and cleanup. Use when developing, reviewing, fixing or
+  merging an Agentica PR (or a stack), or when coordinating agents that do.
+  It does not review code itself (use pr-reviewer-new or vm-c-critic) and
+  does not answer human review comments.
 ---
 
 # Agentica development workflow
 
-One loop per change: **build → PR → review → fix → CI → merge**. Report each
-step to the owner in a line or two, in the owner's language. Code rules
-live in `AGENTS.md` and `agentica-development`; this skill is the loop.
+One loop per change: **build → PR → review → fix → CI → merge**. Report
+each step to the owner in a line or two, in the owner's language. Code
+rules live in `AGENTS.md` and `agentica-development`; this skill is the
+loop.
 
 ## 1. Build
 
 - One branch and one PR per step, each in its own worktree:
   `git -C <repo> worktree add -b <branch> ../agentica-<topic> origin/master`,
-  then `git submodule update --init`. Never touch the main checkout (it may be
-  on another branch) or other agents' worktrees.
+  then `git submodule update --init`. Do not edit or switch branches in the
+  main checkout (it may be on another branch) or in other agents' worktrees;
+  read-only `git` and `gh` commands from it are fine.
 - A PR holds its own contracts: tests, docs, the site page and skill for a
   language change, a `CHANGELOG.md` entry for a user-visible change. Never
   defer them to a later PR in a stack.
@@ -26,12 +35,14 @@ live in `AGENTS.md` and `agentica-development`; this skill is the loop.
   `make test TESTS="tests/test_<area>.py ..."`, `make site` for site changes.
   Never `make test` without `TESTS`, the slow tier, sanitizer sweeps, fuzz or
   gc-stress (CI runs them); `KIND=files` only through Docker.
-- The pre-commit hook runs `make dup-check` when `vm/` or `tests/` is staged
-  and blocks new clones: refactor them.
+- A local pre-commit hook (`.git/hooks/pre-commit`, untracked, installed by
+  hand) may run `make dup-check` when `vm/` or `tests/` is staged and block
+  new clones: refactor them. CI's `dup-check` fails on them either way.
 - Commits: a summary line, then short bullets; no attribution lines. Never
   rebase or force-push; merge `origin/master` into the branch.
-- Plans never go into `docs/` (`AGENTS.md`). A local, untracked plan file is
-  where progress gets ticked; evidence goes in the PR body.
+- `AGENTS.md` forbids new files under `docs/`, so plans are not written
+  there. Evidence goes in the PR body; a done phase item is ticked in the
+  roadmap; a local, untracked plan file tracks only the agent's own steps.
 
 ## 2. Review
 
@@ -71,8 +82,9 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
 
 ## 4. CI
 
-- Code PRs need **CI** (`ci.yml`), **Platforms** (`platforms.yml`: Windows,
-  macOS Intel and ARM) and **Site examples** green on the head commit.
+- Code PRs need **CI** (`ci.yml`) and **Platforms** (`platforms.yml`:
+  Windows, macOS Intel and ARM) green on the head commit, plus **Site
+  examples** when the PR touches `site/content/` or its test.
   Docs-only PRs skip `ci.yml`, but Platforms still runs, and GitHub refuses
   the merge as "not mergeable" while checks are pending: wait, then merge.
 - Wait with one background loop on `gh run list --branch <b>` filtered by the
