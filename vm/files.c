@@ -1913,7 +1913,7 @@ void agc_files_forget(agc_file_ids *ids, int fd) {
 
 void agc_files_close(agc_vm *vm) { (void)vm; }
 
-const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
+const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_file_builtin_count = 0;
 #endif

@@ -703,7 +703,7 @@ const agc_builtin agc_http_server_builtins[] = {
 
 const size_t agc_http_server_builtin_count = sizeof agc_http_server_builtins / sizeof agc_http_server_builtins[0];
 #else
-const agc_builtin agc_http_server_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
+const agc_builtin agc_http_server_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_http_server_builtin_count = 0;
 #endif

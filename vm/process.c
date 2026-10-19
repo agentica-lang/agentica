@@ -1148,7 +1148,7 @@ const agc_builtin agc_process_builtins[] = {
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];
 #else
-const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
+const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_process_builtin_count = 0;
 
