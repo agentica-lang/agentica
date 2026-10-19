@@ -150,6 +150,7 @@ def test_a_discard_checks_and_runs_wherever_a_name_is_bound(tmp_path):
                          "  {\"a\": 1}.each do |_, _|\n    puts(\"pair\")\n  end\n"
                          "  for _ in [1]\n    for _ in [2]\n      puts(\"inner\")\n    end\n  end"),
          ["pair", "inner"]),
+        (discard_program("  _ = f(1)\n  [1].each do |x|\n    _ = f(x)\n  end\n  puts(\"done\")"), ["done"]),
         (discard_program("  puts(g(1, 2))", g), ["7"]),
     ]
     for text, lines in programs:

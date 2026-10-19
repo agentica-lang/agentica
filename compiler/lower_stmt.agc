@@ -225,8 +225,8 @@ def lower_control(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.LoopControl) -> Re
   return ok(Lowering.emit_at(fx, "jump", [label], node.span))
 end
 
-# The loop variable names its register, except `_`: a discard must not alias the register of the loop, which a later
-# `_ = value` would otherwise overwrite.
+# The variable of a range loop names the register of its counter, except `_`: a discard must not alias that register,
+# which a later `_ = value` would otherwise overwrite.
 def bind_variable(fx: Lowering.Fx, name: String, slot: Int) -> Lowering.Fx
   if name == "_"
     return fx
