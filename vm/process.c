@@ -702,7 +702,8 @@ static bool metrics_env(const char *entry) {
          env_prefix(entry, METRICS_FILE_ENV);
 }
 
-static char **child_env(bool drop_uring, const char *marker) {
+/* The environment of a child; `channel` is the value of AGENTICA_CHANNEL when the child gets a channel. */
+static char **child_env(bool drop_uring, const char *channel) {
   uv_env_item_t *host = NULL;
   int count = 0;
   if (uv_os_environ(&host, &count) != 0) return NULL;
@@ -720,9 +721,11 @@ static char **child_env(bool drop_uring, const char *marker) {
     else env[kept++] = entry;
   }
   uv_os_free_environ(host, count);
-  if (marker) {
-    env[kept] = strdup(marker);
+  if (channel) {
+    size_t size = strlen(CHANNEL_PREFIX) + strlen(channel) + 1;
+    env[kept] = malloc(size);
     if (!env[kept]) agc_out_of_memory();
+    snprintf(env[kept], size, "%s%s", CHANNEL_PREFIX, channel);
   }
   return env;
 }
@@ -878,7 +881,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     return agc_error_value("process: directory is unavailable");
   }
   char **argv = child_args(vm, path, list);
-  char **env = child_env(vm->rt->drop_uring_env, channel ? agc_chan_marker() : NULL);
+  char **env = child_env(vm->rt->drop_uring_env, channel ? agc_chan_value() : NULL);
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;

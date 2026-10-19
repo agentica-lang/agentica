@@ -36,7 +36,7 @@ int agc_chan_pair(agc_chan_ends *ends) {
   return 0;
 }
 
-const char *agc_chan_marker(void) { return "AGENTICA_CHANNEL=3,4"; }
+const char *agc_chan_value(void) { return "3,4"; }
 
 /* True when the descriptor is a named pipe whose handle grants `right` (FILE_READ_DATA or FILE_WRITE_DATA). */
 static bool pipe_with(int fd, ULONG right) {

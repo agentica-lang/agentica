@@ -4,12 +4,15 @@ fixtures/child-channel.agc is the program; fixtures/child-channel-peer.py drives
 mkfifo, /proc and sh, so the module runs on Linux only; test_vm_child_channel.py has the cases of every system.
 """
 import json
+import sys
 
 import pytest
 
 from tests.agentica_test import FIXTURES, PYTHON, compile_agc, run, vm_binary
 
 PEER = FIXTURES / "child-channel-peer.py"
+# CI lists the module on Linux only; this keeps a developer run of the whole suite on another system clean.
+pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="needs /proc, mkfifo and sh")
 
 
 def lines(*items):

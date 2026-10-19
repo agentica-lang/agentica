@@ -192,6 +192,9 @@ Windows is still to come.
   descriptors 3 and 4 from the `lpReserved2` block that libuv builds for each
   spawn, and libuv passes only those handles
   (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so a grandchild gets none of them.
+  The child's write end is not overlapped, so libuv queues writes to it on a
+  worker thread: a child stuck in a large `parent_send` waits until the parent
+  reads or closes the channel, as a child does with a full stdout pipe.
 - **Lines.** The stream is text lines in both directions, as in the other
   `Process` streams: `\n` ends a line, a trailing `\r` is removed, a last line
   without `\n` is a line, and invalid UTF-8 is an error.

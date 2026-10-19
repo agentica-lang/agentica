@@ -34,7 +34,7 @@ int agc_chan_pair(agc_chan_ends *ends) {
   return 0;
 }
 
-const char *agc_chan_marker(void) { return "AGENTICA_CHANNEL=3"; }
+const char *agc_chan_value(void) { return "3"; }
 
 /* A socket or FIFO open for both reading and writing: an anonymous pipe end never is, and a regular file or a
    character device is not a channel. */

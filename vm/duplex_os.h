@@ -23,8 +23,8 @@ typedef struct {
 /* Makes the pair. Returns 0, or a negative libuv error with nothing left open. */
 int agc_chan_pair(agc_chan_ends *ends);
 
-/* The whole environment entry that a child of this system understands: "AGENTICA_CHANNEL=3" or "...=3,4". */
-const char *agc_chan_marker(void);
+/* The value of AGENTICA_CHANNEL that a child of this system understands: "3", or "3,4" on Windows. */
+const char *agc_chan_value(void);
 
 /* The child side. When the inherited descriptors are the ends of a channel (kind and direction), moves them above
    the standard streams, close-on-exec, calls before_close(fd, data) for each original and closes it, and returns the

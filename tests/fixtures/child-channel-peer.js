@@ -67,7 +67,8 @@ function launch(argv, { channel = true, marker = WINDOWS ? "3,4" : "3" } = {}) {
   const child = spawn(argv[0], argv.slice(1), { stdio, env });
   const output = [];
   child.stdout.on("data", (chunk) => output.push(chunk));
-  child.stderr.resume();
+  const errors = [];
+  child.stderr.on("data", (chunk) => errors.push(chunk));
   const exited = new Promise((resolve) => child.on("close", (code) => resolve(code)));
   const toChild = channel ? child.stdio[3] : null;
   const fromChild = channel ? child.stdio[WINDOWS ? 4 : 3] : null;
@@ -84,6 +85,7 @@ function launch(argv, { channel = true, marker = WINDOWS ? "3,4" : "3" } = {}) {
       if (fromChild) fromChild.destroy();
     },
     stdout: () => Buffer.concat(output).toString("utf8"),
+    stderr: () => Buffer.concat(errors).toString("utf8"),
   };
 }
 
@@ -92,7 +94,7 @@ async function finish(peer, started, extra = {}) {
   const exit = await peer.exited;
   clearTimeout(timer);
   peer.close();
-  return Object.assign({ exit, stdout: peer.stdout(), waited: Date.now() - started >= 250 }, extra);
+  return Object.assign({ exit, stdout: peer.stdout(), stderr: peer.stderr(), waited: Date.now() - started >= 250 }, extra);
 }
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -144,20 +146,26 @@ function ends() {
   return null;
 }
 
+// The errors that mean the other end is gone: a socket reset, or a broken or closed pipe on Windows.
+const ENDED = new Set(["EOF", "EPIPE", "ECONNRESET", "ERROR_BROKEN_PIPE"]);
+
+// Reads one line (with its "\n") from the descriptor; null is the end of input. Any other error is thrown.
 function readLine(fd) {
   const one = Buffer.alloc(1);
   const bytes = [];
+  const deadline = Date.now() + 30000;
   for (;;) {
     let n = 0;
     try {
       n = fs.readSync(fd, one, 0, 1, null);
     } catch (error) {
       // A descriptor that was given non-blocking has nothing yet: wait a little and read again.
-      if (error.code === "EAGAIN") {
+      if (error.code === "EAGAIN" && Date.now() < deadline) {
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
         continue;
       }
-      n = 0; // a closed pipe may report itself as an error instead of an end
+      if (ENDED.has(error.code)) return null;
+      throw error;
     }
     if (n === 0) return null;
     bytes.push(one[0]);
@@ -184,6 +192,7 @@ function asChild(mode) {
   if (channel === null) throw new Error("child mode " + mode + " needs the channel, and AGENTICA_CHANNEL is not 3 or 3,4");
   if (mode === "echo") {
     const data = readLine(channel.read);
+    if (data === null) return;
     writeAll(1, "out:" + data.toString().trim() + "\n");
     writeAll(channel.write, data.toString().toUpperCase());
     while (readLine(channel.read) !== null);
@@ -206,8 +215,13 @@ function asChild(mode) {
   } else if (mode === "watch") {
     // Reports its pid, then reads until the parent's end goes away and leaves a mark file (argument 4) saying so.
     writeAll(1, process.pid + "\n");
-    while (readLine(channel.read) !== null);
-    fs.writeFileSync(process.argv[4], "end\n");
+    let mark = "end\n";
+    try {
+      while (readLine(channel.read) !== null);
+    } catch (error) {
+      mark = "error:" + error.code + "\n";
+    }
+    fs.writeFileSync(process.argv[4], mark);
   } else {
     return pause(30000);
   }

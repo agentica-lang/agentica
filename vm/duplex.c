@@ -1,8 +1,8 @@
 /*
  * The private child channel: a libuv stream to read and one to write (two
  * descriptors of one socket on POSIX, two pipes on Windows), with line reads
- * and writes, for a child process that talks to its parent. Service layer. The system part is
- * duplex_os.h. Design: docs/vm/10-io-processes.md §10.4.
+ * and writes, for a child process that talks to its parent. Service layer.
+ * The system part is duplex_os.h. Design: docs/vm/10-io-processes.md §10.4.
  */
 #include "services.h"
 #include "file_io.h"
@@ -310,8 +310,7 @@ static void forget_inherited(int fd, void *data) {
 
 void agc_parent_take(agc_vm *vm) {
   const char *marker = getenv(AGC_CHANNEL_ENV);
-  /* sizeof the name counts its NUL, which steps over the '=' of the entry. */
-  if (!marker || strcmp(marker, agc_chan_marker() + sizeof AGC_CHANNEL_ENV) != 0) return;
+  if (!marker || strcmp(marker, agc_chan_value()) != 0) return;
   int read_fd, write_fd;
   if (!agc_chan_take(forget_inherited, vm, &read_fd, &write_fd)) return;
   uv_os_unsetenv(AGC_CHANNEL_ENV);

@@ -271,7 +271,8 @@ static void take_channel(void) {
   assert(agc_parent_open(&vm));
 }
 
-/* True when the CRT descriptor is not open in this process. */
+/* True when the CRT descriptor is not open in this process. On Windows, _get_osfhandle on a closed descriptor does not
+   abort: libuv installs a no-op invalid-parameter handler, so the call returns INVALID_HANDLE_VALUE. */
 static bool fd_absent(int fd) {
 #ifdef _WIN32
   return _get_osfhandle(fd) == (intptr_t)INVALID_HANDLE_VALUE;
@@ -367,7 +368,7 @@ static void start_leaf(const char *self, const char *mark) {
   static uv_process_t leaf;
   assert(agc_chan_pair(&ends) == 0);
   assert(uv_loop_init(&loop) == 0);
-  assert(uv_os_setenv(AGC_CHANNEL_ENV, agc_chan_marker() + sizeof AGC_CHANNEL_ENV) == 0);
+  assert(uv_os_setenv(AGC_CHANNEL_ENV, agc_chan_value()) == 0);
   assert(chan_spawn(&loop, &leaf, self, "--leaf", mark, &ends, ends.child_count, false, UV_PROCESS_DETACHED, NULL) == 0);
   uv_os_unsetenv(AGC_CHANNEL_ENV);
 #else
@@ -547,7 +548,7 @@ static void wait_for_mark(const char *path, const char *expected) {
 /* A child that is given something other than its channel takes nothing: the marker of the other system, a marker
    with no descriptors, and (where there are two) the descriptors the wrong way round. A valid channel is the control. */
 static void refusal_tests(const char *self) {
-  const char *mine = agc_chan_marker() + sizeof AGC_CHANNEL_ENV;
+  const char *mine = agc_chan_value();
   const char *other = strchr(mine, ',') ? "3" : "3,4";
   assert(probe_child(self, "--probe", mine, true, false) == 0);
   assert(probe_child(self, "--take", mine, true, false) == 0);

@@ -16,7 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   socket on descriptor 3 and `3`). A byte pipe cannot be shut down for writing,
   so with one pipe `channel_close` did not end the child's input. A VM takes the
   channel only when the variable has the value of its own system. `agentica
-  test` is not yet supported on Windows.
+  test` is not yet supported on Windows. A Windows child that is no VM and was
+  written for the old duplex pipe on descriptor 3 must now read 3 and write 4.
 
 - `--schedulers N` and the variable `AGENTICA_SCHEDULERS` set the number of
   scheduler threads (1 to 1024; the flag wins over a valid variable; a bad

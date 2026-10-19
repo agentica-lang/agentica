@@ -42,7 +42,7 @@ static unsigned char pattern(size_t at) { return (unsigned char)(at * 31 + (at >
 
 /* The child: reads descriptor 3 to its end, checks the bytes and answers with how many it saw. */
 static int child(void) {
-  int answer_fd = strchr(agc_chan_marker(), ',') ? 4 : 3;
+  int answer_fd = strchr(agc_chan_value(), ',') ? 4 : 3;
 #ifdef _WIN32
   _setmode(3, _O_BINARY);
   _setmode(answer_fd, _O_BINARY);

@@ -59,7 +59,7 @@ def test_child_side_lines_partial_lines_eof_timeouts_and_no_channel(bytecode, no
     for name in ("bare", "bare_marker_only", "bare_marker_pair_only"):
         assert answer[name]["stdout"] == bare, name
     for name in ("serve", "idle", "bare", "bare_marker_only", "bare_marker_pair_only"):
-        assert answer[name]["exit"] == 0, name
+        assert answer[name]["exit"] == 0, (name, answer[name]["stderr"])
 
 
 def test_parent_side_send_read_available_close_timeouts_and_limits(bytecode, node):
