@@ -245,12 +245,11 @@ from `AGENTICA_SWEEP_SEED`, else the
   default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
   `-municode` and defaults `CC` to `gcc` (UCRT64 has no `cc`), and Darwin
   only drops `-pie` and RELRO. Every binary
-  target ends in `$(EXE)`, a leftover of the Windows build: the binary embeds
-  the front end with `.incbin` in ELF assembly, so only Linux builds it (since
-  8d-2). The `platforms.yml` workflow, run by hand, runs `make vm-test` (the C
-  VM and its C tests) on `macos-15` and `windows-2025`; run it before merging
-  platform code. macOS and Windows are paused (`references/ci.md`); Linux code
-  goes under `#ifdef __linux__`.
+  target ends in `$(EXE)` (`.exe` on Windows); the front end is embedded as
+  ELF, Mach-O or COFF data. The `platforms.yml` workflow runs on every PR and
+  push: `make vm-test`, the bootstrap and a test subset on `windows-2025`,
+  `macos-15-intel` and `macos-latest`. Platform code follows "Platform code"
+  in `references/vm-c.md`.
 
 ## Files
 

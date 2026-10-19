@@ -65,7 +65,7 @@ return function pointers or that start with a macro or attribute; it reports
 static arrays whose size contains `(` (`x[sizeof(y)]`) as prototypes; it
 miscounts when `#if` branches open or close different numbers of braces; and
 a `\`+newline inside a literal shifts its line numbers. The `_WIN32` and
-macOS branches are not linted: `make vm-lint` runs on Linux only.
+macOS branches are not linted: CI runs `make vm-lint` on Linux only.
 
 **Platform code (Linux, macOS, Windows).** One behavior, one copy; only the
 operating system call differs.
@@ -84,15 +84,17 @@ operating system call differs.
   - one file per system family (`<area>_posix.c`, `<area>_windows.c`), each
     guarded whole by `#ifdef _WIN32` or `#ifndef _WIN32`, like
     `file_windows.c`; `__APPLE__` and `__linux__` only for a real API gap
-    inside the POSIX file;
+    inside the POSIX file. `file_io.c` still mixes POSIX and Windows
+    branches: split it into `file_io_posix.c` the next time it changes;
   - no VM state, scheduling, timeouts or resource ownership in the adapter.
 - Signal to split: a shared file whose `#if` count grows with a port, two
   copies of one function under `#ifdef`, or flags that only make sense on one
   system. Move the operation behind the adapter header in the same PR, and
   add the new file to the Makefile, `vm/tools/check-layers.sh` and
   `references/repo-map.md`.
-- Tests of the shared behavior run on every system (Platforms CI); a test of
-  one system's adapter says so in its name or skip reason.
+- Tests of the shared behavior go in the Platforms CI subset, so they run on
+  every system; a test of one system's adapter says so in its name and runs
+  only in that system's job (a skip fails the native Windows gate).
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C

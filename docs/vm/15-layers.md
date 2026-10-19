@@ -248,9 +248,9 @@ is no such place, so the plan adds none:
 - **Platforms** are chosen at compile time, not through a table. The shared
   logic is written once; an operating system difference that libuv does not
   hide is a function of a platform adapter: a plain header plus one file per
-  system family, each guarded whole (`file_io.h`, `file_io.c`,
-  `file_windows.c`). Shared functions do not branch on `#ifdef`; older code
-  that still does moves behind an adapter when its area is ported.
+  system family, each guarded whole (`file_io.h` and `file_windows.c`).
+  Shared functions do not branch on `#ifdef`; older code that still does
+  (`file_io.c` among it) moves behind an adapter when its area changes.
 
 The function pointers that exist are callbacks (job kinds, close and release
 functions, builtins, `agc_conn_watch`), not tables of implementations, and they
