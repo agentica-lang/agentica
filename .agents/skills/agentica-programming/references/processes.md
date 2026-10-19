@@ -41,8 +41,9 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   files, such as `.bat` and `.cmd`, never run, because that needs `cmd.exe`:
   start `cmd.exe` by name if you want a shell. A command with `\`, `/` or a
   drive (`C:\tool\a.exe`) is a path, not searched in `PATH`; a name ending in
-  a dot or space, with a `:` that is not the drive, or ending in `.cmd` or
-  `.bat`, fails. A file that is found but cannot be executed is an error
+  a dot or space, with a `:` that is not the drive, starting with `\\?\` or
+  `\\.\`, or ending in `.cmd` or `.bat`, fails. A bare name tries `.exe`
+  before `.com`. A file that is found but cannot be executed is an error
   Result from `spawn`.
 - Every `Process` function runs on the VM (Linux). A signal (`SIGINT`,
   `SIGTERM`, `SIGHUP`) to the VM or to `agentica` kills its running children,
@@ -105,8 +106,10 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   Agentica program can stop its own children first. `close` and a timeout close
   the handle at once and never wait; the end of the run waits about one second
   at most for a captured child before it kills it. Children from `spawn` are
-  still killed at once. On Windows every stop is immediate, and when the VM ends
-  the child's descendants end too (unless an outer job forbids breakaway).
+  still killed at once. On Windows every stop is immediate. Where libuv can
+  assign its job object, the direct children die when the VM ends, and a child
+  that is itself an Agentica program stops its own children the same way; other
+  descendants are not covered.
 - `agentica test` runs each BDD scenario, and each program under test, as a
   captured child.
 - Channels (Linux and macOS; Windows in progress). `spawn_channel` works like

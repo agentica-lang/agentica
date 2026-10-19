@@ -29,6 +29,10 @@ static bool ends_with(const char *text, size_t size, const char *suffix) {
    component may not end in a dot or a space, nor in .cmd or .bat: a request
    for x.cmd must not find a planted x.cmd.exe once a suffix is added. */
 bool agc_proc_name_ok(const char *command, size_t size) {
+  /* The \\?\ and \\.\ prefixes switch off Win32 name parsing (and reach devices), so they are refused outright. */
+  if (size >= 4 && separator(command[0]) && separator(command[1]) && (command[2] == '?' || command[2] == '.') &&
+      separator(command[3]))
+    return false;
   size_t last = 0;
   for (size_t k = 0; k < size; k++) {
     if (separator(command[k])) last = k + 1;

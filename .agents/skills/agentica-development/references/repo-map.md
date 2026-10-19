@@ -149,7 +149,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_modules.py  # pytest: programs of several files, pkg roots, JSON and step handlers through the CLI (references/language-notes.md)
   test_examples.py  # pytest: examples/*.agc, rejected fragments, CLI exit codes; slow: malformed algorithm inputs (references/stages.md)
   test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # pytest: Agentica stages against frozen outputs and goldens; frontend_support.py and frontend_cases.py hold helpers; test_frontend_refreeze.py covers tools/refreeze.py (references/frontend.md)
-  test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
+  test_process.py  # pytest: Process builtins on the VM, every way a run ends (references/vm-net.md)
   test_process_bdd.py  # pytest: Process in agentica test; apart from test_process.py until it runs on Windows
   test_process_windows.py  # pytest, native Windows only: the exit pair libuv reports for a stopped child (references/ci.md)
   test_process_lifecycle.py  # pytest: a child is gone when its owner ends, the run is stopped or the driver of its VM is killed, on every system (references/vm-tests.md)
