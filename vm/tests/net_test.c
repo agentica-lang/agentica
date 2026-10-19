@@ -1,17 +1,13 @@
 /*
- * TCP and TLS steps posted from a scheduler (docs/vm/16-architecture.md §16.9): the I/O thread owns every socket, so a
- * builtin called on a scheduler only posts its START and parks. The test's thread is the I/O thread (agc_io_share), a
- * second thread plays the scheduler and calls the TCP rows, and the peer is a plain POSIX socket. The order of events
- * comes from the order of the calls; a case that needs a deadline to pass waits it out. The cases: a close queued
- * behind a read's START, a deadline before the bytes and the bytes before a deadline, a served accept whose task was
- * cancelled, and a cancelled TLS connect whose deadline passes. `make vm-tsan` runs it under ThreadSanitizer.
+ * TCP and TLS builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9), against a POSIX
+ * peer, in orders set by the calls: a close behind a read's START, the deadline before and after the bytes, a served
+ * accept of a cancelled task, and a cancelled TLS connect past its deadline. `make vm-tsan` runs it under TSan.
  */
 #include "../core.h"
 #include "io_harness.h"
 #include "test_support.h"
 
 #include <assert.h>
-#include <errno.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
@@ -19,6 +15,7 @@
 #if defined(__linux__) || defined(__APPLE__)
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <uv.h>
@@ -126,7 +123,7 @@ static int raw_connect(int64_t port) {
   struct sockaddr_in a = {0};
   a.sin_family = AF_INET;
   a.sin_port = htons((uint16_t)port);
-  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  assert(inet_pton(AF_INET, "127.0.0.1", &a.sin_addr) == 1);
   assert(connect(fd, (struct sockaddr *)&a, sizeof a) == 0);
   return fd;
 }
@@ -137,7 +134,7 @@ static int raw_listen(int64_t *port) {
   assert(fd >= 0);
   struct sockaddr_in a = {0};
   a.sin_family = AF_INET;
-  a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  assert(inet_pton(AF_INET, "127.0.0.1", &a.sin_addr) == 1);
   assert(bind(fd, (struct sockaddr *)&a, sizeof a) == 0 && listen(fd, 8) == 0);
   socklen_t len = sizeof a;
   assert(getsockname(fd, (struct sockaddr *)&a, &len) == 0);
@@ -149,9 +146,12 @@ static int raw_listen(int64_t *port) {
 static void wait_eof(int fd) {
   char buf[64];
   for (;;) {
-    ssize_t got = recv(fd, buf, sizeof buf, MSG_DONTWAIT);
-    if (got == 0) return;
-    assert(got > 0 || errno == EAGAIN || errno == EWOULDBLOCK);
+    struct pollfd p = {fd, POLLIN, 0};
+    if (poll(&p, 1, 0) > 0) {
+      ssize_t got = recv(fd, buf, sizeof buf, 0);
+      if (got == 0) return;
+      assert(got > 0);
+    }
     (void)agc_io_poll(&vm, false);
   }
 }

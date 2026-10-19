@@ -585,9 +585,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   `t->parked` before it posts START, so a completion that follows at once
   finds the task.
 - **TLS and HTTP steps run in libuv callbacks.** For example `advance` and
-  `flush` in `vm/tcp.c` and `head_step` in `vm/http_server.c`. The model moves
-  them into the turn of the resumed task; TLS stays on the I/O thread with the
-  socket state it touches (§16.2).
+  `flush` in `vm/tcp.c` and `head_step` in `vm/http_server.c`. TLS runs on the
+  I/O thread with the socket state it touches (§16.2).
 - **Atomic task states, and a different READY.** The states are READY, RUNNING,
   PARKING, PARKED, WOKEN and DONE (`agc_task_state` in `vm/port.h`), in an
   `_Atomic` field. READY means "in the run queue", so a waker CASes PARKED to

@@ -1,9 +1,7 @@
 /*
- * Runs with several scheduler threads (docs/vm/16-architecture.md §16.9): agc_vm_run with rt->schedulers > 1 starts the
- * schedulers and makes the calling thread the I/O thread. A storm of tasks that yield and meet on a channel; a stall
- * that the I/O thread finds (no program can reach one, since every wait of the language has a deadline); and a
- * failure of main while other tasks spin, which ends the run once; and TCP calls issued and resumed on several
- * schedulers while the I/O thread owns every socket. `make vm-tsan` runs it under ThreadSanitizer.
+ * Runs with several scheduler threads (§16.9; agc_vm_run with rt->schedulers > 1): a storm of tasks on a channel, a
+ * stall that the I/O thread finds, main failing beside spinners (the run ends once), and TCP calls issued and resumed
+ * on several schedulers while the I/O thread owns every socket. `make vm-tsan` runs it under ThreadSanitizer.
  */
 #include "../core.h"
 #include "test_program.h"

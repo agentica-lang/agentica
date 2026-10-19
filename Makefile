@@ -717,9 +717,11 @@ vm-test: $(VM_TESTS)
 # locks and a timer fired against a wake. The VM is built without libgc (AGC_NO_GC), so the collector's own signals are out
 # of the picture; the whole run is checked, so a race fails it.
 VM_TSAN_TESTS := inbox outcome runq task_wake job sync output timers threads net
+# vm/tools/tsan.supp: the calls from the system libcrypto, whose own locking TSan cannot see (TLS setup on pool threads).
+VM_TSAN_OPTIONS := halt_on_error=1 suppressions=$(CURDIR)/vm/tools/tsan.supp
 vm-tsan:
 	$(MAKE) $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) TSAN=1 SANITIZE=0 GC_STRESS=0
-	printf '%s\n' $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) | TSAN_OPTIONS=halt_on_error=1 xargs -n 1 sh -c '$(VM_TEST_RUNNER) "$$0" || { echo "C test failed: $$0" >&2; exit 255; }'
+	printf '%s\n' $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) | TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" xargs -n 1 sh -c '$(VM_TEST_RUNNER) "$$0" || { echo "C test failed: $$0" >&2; exit 255; }'
 
 # Programs on several schedulers (tests/test_vm_multicore.py): the test-only switch AGENTICA_VM_TEST_MULTICORE=1 lets
 # --schedulers N run them on N threads. test-multicore runs them on dist/agentica; vm-tsan-run runs them on a TSan
@@ -736,9 +738,9 @@ test-multicore-net: dist/agentica$(EXE)
 
 vm-tsan-run: dist/agentica$(EXE)
 	$(MAKE) build/vm/tsan/agentica$(EXE) TSAN=1 SANITIZE=0 GC_STRESS=0
-	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS=halt_on_error=1 \
+	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" \
 	  $(MAKE) --no-print-directory test-py TESTS="tests/test_vm_multicore.py"
-	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS=halt_on_error=1 \
+	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" \
 	  AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py TESTS="$(VM_NET_MODULES)"
 
 # The C tests as programs, without running them: windows-docker-build builds them in a container.

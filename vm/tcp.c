@@ -95,6 +95,12 @@ struct agc_conn {
   void *watcher;
 };
 
+/* A posted close: release_step runs it on the I/O thread. */
+typedef struct {
+  net *n;
+  const char *why;
+} release_call;
+
 static const char socket_closed[] = "network: socket is closed";
 static const char listener_closed[] = "network: listener is closed";
 static const char write_failed[] = "error writing to stream port";
@@ -257,11 +263,6 @@ static void shut(net *n, const char *why) {
 
 static void say_goodbye(void *native) { goodbye(native); }
 
-typedef struct {
-  net *n;
-  const char *why;
-} release_call;
-
 /* The resource gave its count back: the close and the count, on the I/O thread. */
 static void release_step(void *data) {
   release_call *call = data;
@@ -313,8 +314,9 @@ static void close_net(agc_vm *vm, agc_resource *r, agc_task *ender) {
   disown(vm, r, "owner");
 }
 
-/* COUNTED: the resource takes a new count on the net, which only a net no other thread has seen yet may do; an
-   accepted socket comes with the count its accept held, so the I/O thread's counts are not touched here. */
+/* COUNTED: the resource takes a new count on the net, which only a net that no other thread has seen yet may do (a
+   socket or listener this builtin just made); an accepted socket comes with the count its accept took on the I/O
+   thread, so the counts are not touched here. */
 static agc_resource *own(agc_vm *vm, net *n, bool counted) {
   agc_resource *r = agc_register(vm, n, release_net);
   r->goodbye = say_goodbye;
@@ -963,7 +965,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   } else {
     result = q->write_status < 0 ? agc_system_error(vm, write_failed, -q->write_status) : ok_value(agc_void());
   }
-  agc_loop_call(n->io, drop_request, q);
+  agc_loop_call(agc_io_loop(vm), drop_request, q);
   return result;
 }
 
@@ -980,7 +982,8 @@ static void stop_request(void *data) {
 
 static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   request *q = data;
-  agc_loop_call(q->n->io, stop_request, q);
+  /* Not q->n: a request whose START never ran holds no count, so its net may be gone. */
+  agc_loop_call(agc_io_loop(vm), stop_request, q);
   if (q->kind == REQ_CONNECT) disown(vm, agc_as_socket(vm, context)->state, "timeout");
   return agc_stream_timed_out();
 }
@@ -1219,7 +1222,11 @@ static bool begin_send(void *data, agc_io_job *job) {
   request *q = data;
   net *n = q->n;
   link_request(q, job);
-  if (n->closed || (q->sends && send_now(n, q->data, q->len) != 1)) finish(q);
+  bool out = !n->closed && q->sends && send_now(n, q->data, q->len) != 1;
+  /* send_now keeps its own copy of what it could not write (tls_queue, agc_stream_write). */
+  free(q->data);
+  q->data = NULL;
+  if (n->closed || out) finish(q);
   return true;
 }
 
@@ -1396,6 +1403,8 @@ agc_conn *agc_conn_accept(agc_conn *l) {
     AGC_TRACE(&l->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", l->id, -rc);
     return NULL;
   }
+  /* The count that agc_conn_socket's resource then holds, taken here on the I/O thread. */
+  c->users++;
   if (!l->secure) return c;
   c->secure = true;
   c->tls = agc_tls_server(l->config, &c->failure);
@@ -1409,7 +1418,7 @@ agc_conn *agc_conn_accept(agc_conn *l) {
 }
 
 agc_value agc_conn_socket(agc_vm *vm, agc_conn *c) {
-  agc_socket *sk = new_socket(vm, c, true);
+  agc_socket *sk = new_socket(vm, c, false);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_accept listener=%" PRIu64 " socket=%" PRIu64, c->parent, c->id);
   return agc_socket_value(sk);
 }

@@ -60,8 +60,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     release posts `release_step` with `agc_loop_call`, `finish` copies what
     the `done` half needs into the request (`opened`, `closed`, the cut, the
     write status, the accepted child), and `request_done` reads only that and
-    posts `drop_request`; `users` changes only on the I/O thread, and the `net`
-    fields `id` and `closed` are atomic for the scheduler's checks. `cancel`
+    posts `drop_request`; `users` changes only on the I/O thread, except the
+    first count of a `net` a builtin has just made (`own`, before any other
+    thread sees it), and the `net` fields `id` and `closed` are atomic for the
+    scheduler's checks. `cancel`
     (`request_cancel`) and `pause` (`stop_request`) touch the request and the
     `net` only, never the resource. At N = 1 every step runs inline, and a
     read of buffered bytes or a send that goes out at once returns without a

@@ -53,6 +53,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- A plain `TCP.accept` whose task is cancelled after a connection arrived
+  closes that connection (the peer reads end of input) instead of leaving it
+  for the next accept, as TLS accepts already did.
+
 - **Breaking:** on Windows, `Process.spawn_channel` gives the child a pipe per
   direction (read 3, write 4, `AGENTICA_CHANNEL=3,4`), so `channel_close` ends
   the child's input. A child that used the duplex pipe on descriptor 3, or a VM

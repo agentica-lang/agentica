@@ -1,0 +1,2 @@
+# OpenSSL's internal locking is invisible to TSan (system libcrypto is not instrumented), so its calls on pool threads look racy.
+called_from_lib:libcrypto

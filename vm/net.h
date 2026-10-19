@@ -39,7 +39,8 @@ void agc_conn_unobserve(agc_conn *c, const void *watcher);
 bool agc_conn_closed(const agc_conn *c);
 uint64_t agc_conn_heard(const agc_conn *c);
 agc_conn *agc_conn_accept(agc_conn *l);
-/* On a scheduler: the socket value of a connection that agc_conn_accept made and that no step has used yet. */
+/* On a scheduler: the socket value of a connection that agc_conn_accept made and that no step has used yet; the
+   resource takes the count that agc_conn_accept took. */
 agc_value agc_conn_socket(agc_vm *vm, agc_conn *c);
 void agc_net_close(agc_vm *vm, agc_resource *r, const char *why);
 agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f);
