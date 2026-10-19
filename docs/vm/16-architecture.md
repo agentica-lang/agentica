@@ -485,13 +485,35 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   else, the end of the run) starts nothing: `ended` is set before the
   CLOSE_TIMER and RELEASE are posted, and the START gives back the wait
   piece's count.
-- **The detached ending runs where the ready list is drained.** `drain` calls
-  `end_detached`, which runs `done` for a detached job that finished. At
-  N > 1 the drain is on the I/O thread, so that `done` (which builds GC
-  values and may close a handle) would run there, against §16.5. This PR does
-  not change it; PR 3 must move it to a scheduler (§16.11, "Detached jobs").
-  The owner's count goes back before `done` runs, so a `done` that raises
-  does not leak the job.
+- **The detached ending runs on a scheduler once threads exist.** `drain` calls
+  `end_detached` itself while one thread plays both roles (no inbox). When the
+  loop is shared (`agc_io_share`), the drain only queues the detached job on
+  `loop->service` (it keeps the ready list's count on it) and nudges the run
+  queue (`agc_runq_nudge`): `done`, which builds GC values and may close a
+  handle, never runs on the I/O thread (§16.5). A scheduler calls
+  `agc_io_service` when `agc_runq_nudged` is set at its turn boundary, or when
+  `agc_runq_wait` returned NULL with a nudge pending and `agc_runq_take_nudge`
+  says it is the one to run it (the wait predicate tests the flag under the
+  queue's lock, so a nudge is never lost). The service runs each ending with
+  `rt->sync` held and a scratch task current, and gives the count back by a
+  RELEASE request. The scheduler threads that call it are 3c; until then the
+  C test (`job_test.c`) plays the scheduler. The owner's count goes back before
+  `done` runs, so a `done` that raises does not leak the job.
+- **The context split.** The state that every scheduler and the I/O role share
+  is in `agc_runtime`: `main`, `registry`, `loop`, `process_guard`, `parent`
+  and `parent_locks`, the crash and quiet lists with their counters, and
+  `tasks_done` (atomic). `agc_vm` keeps the scheduler's own context: `task`,
+  the turn and stop counters, `yield`, `in_turn`, `sync_depth`, `gc_seen`, the
+  profile and the two jmp_bufs. The registry has its own leaf lock (solo until
+  `agc_share`), and a job points to its resource (`res`), so the I/O role never
+  looks a job up by slot, which `agc_unregister` moves. The slots stay
+  swap-with-last; the plan's stable slots were not needed once no one reads a
+  slot outside the lock.
+- **A post after the loop closed is loud.** `agc_io_share` marks the loop
+  shared for good, so `on_io_thread` keeps comparing thread ids after
+  `agc_io_close` clears the inbox; `closed` is set there, and a post from
+  another thread after it writes a message and aborts (`post_after_close`,
+  `job_test.c` runs it in a child).
 - **TSan covers the shared code.** `make vm-tsan` builds the VM without libgc
   (`TSAN=1`, `AGC_NO_GC`; TSan and Boehm's stop-the-world do not mix) and runs
   the C tests that use more than one thread: the inbox, the set-once outcome
@@ -572,7 +594,7 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   real parallelism, behind the test-only `AGENTICA_VM_TEST_MULTICORE`), 3d
   (process and duplex, the end of the refusal of N > 1, the default of one
   scheduler per logical core).
-- **One resource registry on the scheduler** (`vm->registry`). Boehm is built
+- **One resource registry on the runtime** (`rt->registry`). Boehm is built
   with thread support (§10.2.3, "GC"), but no thread registers with it yet:
   `agc_gc_allow_threads`, `agc_gc_thread_enter` and `agc_gc_thread_leave`
   (`vm/value.c`) are the helpers, and only the C tests call them. N = 1 starts
@@ -597,17 +619,8 @@ Only if measurements ask for them. Neither is planned.
 - **Detached jobs.** A job whose task was cancelled has no owner (§10.2.2,
   "Detached jobs"). A cancelled outcome counts as detached: the task gives up
   the wait and the job runs to its end (§10.2.3, "Park and wake protocol"). Who
-  ends a detached job is open. For a job that finished, running `done` and
-  discarding the result builds GC values and may close a handle
-  (`end_detached`), so the options are: the I/O thread does it, an exception to
-  §16.5 for this case; or the job goes back through the run queue to a
-  scheduler. As built, the drain runs it on the thread that drains, which is
-  the I/O thread at N > 1; PR 3 must move it to a scheduler.
-- **Posting after the inbox is closed.** `agc_inbox_close` clears
-  `loop->inbox`, and `on_io_thread` is then true for every thread, so a
-  request posted from another thread after the close would run inline instead
-  of failing. Nothing posts after the close today (the schedulers have ended).
-  PR 3 must make a post from another thread after the close fail loudly.
+  ends a detached job is decided and built (§16.9): a scheduler does, through
+  `agc_io_service`; the scheduler threads that call it come in 3c.
 - **Cancel against PARKING and a ready task (decided, built; §16.9).** The
   scheduler re-reads `cancelled` after the commit CAS and claims the task if it
   is set, so a cancel that fell between the first look and the commit does not

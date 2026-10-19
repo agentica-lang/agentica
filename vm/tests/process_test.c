@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
   agc_unregister(&vm, spare);
   bool closed = agc_io_close(&vm);
   if (!closed) uv_print_all_handles(agc_io_uv(&vm), stderr);
-  assert(closed && vm.loop == NULL);
+  assert(closed && vm.rt->loop == NULL);
   init();
   assert(uv_os_setenv("AGENTICA_PROCESS_TEST", "\xC3\xB1\xF0\x9F\x99\x82") == 0);
   assert(uv_os_setenv(AGC_CHANNEL_ENV, "private") == 0);

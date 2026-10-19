@@ -79,7 +79,14 @@ bool agc_runq_remove(agc_runq *q, const agc_task *t);
  * has been called (the run is over) or, on a solo queue, when it is empty. */
 agc_task *agc_runq_wait(agc_runq *q);
 void agc_runq_end(agc_runq *q);
+/* A nudge is work for a scheduler that is not a task: agc_runq_nudge ends one wait with NULL, agc_runq_nudged is the
+ * test of a busy scheduler at its turn boundary, and agc_runq_take_nudge clears it for the one that runs the work. */
+void agc_runq_nudge(agc_runq *q);
+bool agc_runq_nudged(const agc_runq *q);
+bool agc_runq_take_nudge(agc_runq *q);
 void agc_sync_reset(agc_vm *vm);
+/* Turns on the lock of the resource registry (made here if it does not exist yet); agc_share calls it. */
+void agc_registry_share(agc_vm *vm);
 /* Turns on the locks of the run queue, rt->sync and the two streams, and rt->shared. It runs on the thread that starts
  * the others, before the second one exists. Only the C tests call it until the scheduler threads exist. */
 void agc_share(agc_vm *vm);
@@ -172,6 +179,10 @@ void agc_profile_report(agc_vm *vm);
 const char *agc_uv_version(void);
 bool agc_io_init(void);
 bool agc_io_poll(agc_vm *vm, bool wait);
+/* The work that the I/O role leaves for a scheduler once a second thread runs the schedulers: the end of each detached
+ * job (its `done` half). A scheduler calls it when agc_runq_nudged says so, with no task current. Returns whether it ran
+ * anything. At N = 1 the drain runs the job itself and the list is always empty. */
+bool agc_io_service(agc_vm *vm);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 void agc_io_detach(agc_vm *vm, agc_task *t);
 bool agc_io_share(agc_vm *vm, bool keep);

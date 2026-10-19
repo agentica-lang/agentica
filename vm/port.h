@@ -261,6 +261,18 @@ typedef struct {
   uint64_t settle_by;
   agc_front_end *front_end;
   agc_runq *runq;
+  /* The state that every scheduler and the I/O role share (docs/vm/16-architecture.md §16.9, "The context split"): the
+     main task, the resource registry and the loop, the process service's guard and parent channel, and the records of
+     crashed and quiet tasks. The tasks' lists and counters are under rt->sync; the registry has its own lock. What stays
+     in agc_vm is the scheduler's own context. */
+  agc_task *main;
+  agc_registry *registry;
+  agc_loop *loop;
+  agc_resource *process_guard, *parent;
+  agc_lines parent_locks;
+  agc_task *crashes, *crashes_tail, *quiet;
+  uint64_t crash_count, observed_count;
+  _Atomic uint64_t tasks_done;
   /* The one lock for the shared state of the tasks (agc_sync_take): the task tree, the waiter lists, the channels, the
      Task.map groups and the logger table. `shared` is false until agc_share, and then the lock is real, and
      `builtin_sync` (made by agc_share) says for each builtin of the program whether the interpreter takes the lock
@@ -350,14 +362,9 @@ typedef struct {
 
 struct agc_vm {
   agc_runtime *rt;
-  agc_task *task, *main;
-  agc_registry *registry;
-  agc_loop *loop;
-  agc_resource *process_guard, *parent;
-  agc_lines parent_locks;
+  agc_task *task;
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
-  agc_task *crashes, *crashes_tail, *quiet;
-  uint64_t tasks_done, gc_seen, crash_count, observed_count;
+  uint64_t gc_seen;
   agc_profile *profile;
   bool yield, in_turn;
   /* How many times this scheduler has taken rt->sync and not dropped it (agc_sync_take). */

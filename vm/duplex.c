@@ -291,7 +291,7 @@ agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, 
 }
 
 static agc_duplex *parent_of(agc_vm *vm) {
-  agc_duplex *d = vm->parent ? vm->parent->native : NULL;
+  agc_duplex *d = vm->rt->parent ? vm->rt->parent->native : NULL;
   if (d && !d->attached && !d->closed && attach(vm, d) != 0) {
     agc_fs_close(d->fd);
     d->fd = -1;
@@ -319,8 +319,8 @@ void agc_parent_take(agc_vm *vm) {
   close(AGC_CHANNEL_FD);
 #endif
   uv_os_unsetenv(AGC_CHANNEL_ENV);
-  vm->parent = agc_register(vm, make(fd), release_parent);
-  vm->parent_locks = (agc_lines){agc_new_lock(vm), agc_new_lock(vm)};
+  vm->rt->parent = agc_register(vm, make(fd), release_parent);
+  vm->rt->parent_locks = (agc_lines){agc_new_lock(vm), agc_new_lock(vm)};
 }
 
 bool agc_parent_open(agc_vm *vm) {
@@ -329,7 +329,7 @@ bool agc_parent_open(agc_vm *vm) {
 }
 
 static agc_duplex *opened(agc_vm *vm) {
-  agc_duplex *d = vm->parent ? vm->parent->native : NULL;
+  agc_duplex *d = vm->rt->parent ? vm->rt->parent->native : NULL;
   return d && d->attached && !d->closed ? d : NULL;
 }
 
@@ -380,7 +380,7 @@ static agc_value builtin_parent_read_line(agc_vm *vm, agc_value *args, uint32_t 
   if (timeout <= 0) return agc_stream_bad_timeout();
   agc_duplex *d = parent_of(vm);
   if (!d) return agc_error_value("process: no parent channel");
-  return agc_duplex_read_line(vm, d, vm->parent_locks.reader, timeout);
+  return agc_duplex_read_line(vm, d, vm->rt->parent_locks.reader, timeout);
 }
 
 static agc_value builtin_parent_send(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -389,7 +389,7 @@ static agc_value builtin_parent_send(agc_vm *vm, agc_value *args, uint32_t span)
   if (timeout <= 0) return agc_stream_bad_timeout();
   agc_duplex *d = parent_of(vm);
   if (!d) return agc_error_value("process: no parent channel");
-  return agc_duplex_send(vm, d, vm->parent_locks.writer, args[0], timeout);
+  return agc_duplex_send(vm, d, vm->rt->parent_locks.writer, args[0], timeout);
 }
 
 const agc_builtin agc_duplex_builtins[] = {

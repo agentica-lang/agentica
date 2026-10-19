@@ -584,7 +584,7 @@ static spec pair_spec(const agc_instr *first, uint32_t first_count, const agc_in
 static void expect_global_alive(agc_vm *vm, const agc_program *p) {
   agc_gc_info info;
   if (!agc_gc_stats(&info)) return;
-  if (vm->main->regs) memset(vm->main->regs, 0, vm->main->reg_capacity * sizeof(agc_value));
+  if (vm->rt->main->regs) memset(vm->rt->main->regs, 0, vm->rt->main->reg_capacity * sizeof(agc_value));
   uint64_t stop = info.collections + 3;
   for (size_t round = 0; info.collections < stop; round++) {
     assert(round < 4000000);

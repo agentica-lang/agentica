@@ -63,5 +63,6 @@ void agc_share(agc_vm *vm) {
   agc_lock_share(rt->sync);
   agc_lock_share(rt->out.lock);
   agc_lock_share(rt->err.lock);
+  agc_registry_share(vm);
   rt->shared = true;
 }

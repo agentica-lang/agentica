@@ -199,7 +199,7 @@ static void test_deferred_native_close(void) {
   timer.data = &done;
   assert(uv_timer_start(&timer, native_close, 50, 0) == 0);
   assert(agc_io_close(&vm));
-  assert(done && vm.loop == NULL);
+  assert(done && vm.rt->loop == NULL);
 }
 #endif
 
@@ -237,7 +237,7 @@ int main(void) {
   assert(agc_io_close(&vm));
   assert(dropped == 1);
   assert(released == 500);
-  assert(vm.loop == NULL);
+  assert(vm.rt->loop == NULL);
   agc_resource *again = agc_register(&vm, &released, release_count);
   assert(again->slot == 0);
   agc_unregister(&vm, again);
@@ -250,17 +250,17 @@ int main(void) {
     if (!closed) pause_ms(10);
   }
   assert(closed);
-  assert(vm.loop == NULL);
+  assert(vm.rt->loop == NULL);
   /* The single binary runs two VMs in one process, one after the other: the second watches the stop signals with a
      wake handle of its own once the first is closed, and both closes settle. */
   agc_vm second;
   agc_vm_init(&second, NULL, stdout, stderr, INT64_MAX);
   agc_io_watch_stop(&vm, (int64_t)uv_os_getpid());
   assert(agc_io_close(&vm));
-  assert(vm.loop == NULL);
+  assert(vm.rt->loop == NULL);
   agc_io_watch_stop(&second, (int64_t)uv_os_getpid());
   assert(agc_io_close(&second));
-  assert(second.loop == NULL);
+  assert(second.rt->loop == NULL);
   agc_io_watch_stop(&vm, (int64_t)uv_os_getpid());
   assert(agc_io_close(&vm));
   assert(agc_io_stop_signal() == 0);

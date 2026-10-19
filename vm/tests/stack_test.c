@@ -92,7 +92,7 @@ static agc_outcome failure(uint32_t span) {
 
 static void begin(agc_vm *vm, fixture *f, agc_task *t) {
   agc_vm_init(vm, &f->program, stdout, stderr, INT64_MAX);
-  vm->task = t ? t : vm->main;
+  vm->task = t ? t : vm->rt->main;
   vm->in_turn = true;
 }
 
@@ -134,7 +134,7 @@ static void alone(void) {
   fixture *f = build();
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   frames(t, 1);
   frame(t, 0, F_MAIN, 3, false);
   agc_outcome o = failure(span_at(F_MAIN, 3));
@@ -179,7 +179,7 @@ static void nested(void) {
   fixture *f = build();
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   frames(t, 4);
   frame(t, 0, F_MAIN, 2, false);
   frame(t, 1, F_PUSH, 3, false);
@@ -216,7 +216,7 @@ static void repeats(void) {
   fixture *f = build();
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   frames(t, 9);
   frame(t, 0, F_MAIN, 2, false);
   for (uint32_t i = 1; i <= 5; i++) frame(t, i, F_WALK, 3, false);
@@ -251,7 +251,7 @@ static void cap(uint32_t depth, uint32_t omitted) {
   fixture *f = build();
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   frames(t, depth);
   for (uint32_t i = 0; i < depth; i++) frame(t, i, i % 2 ? F_PUSH : F_WALK, 1 + i % 3, false);
   agc_outcome o = failure(span_at(F_PUSH, 1));
@@ -284,7 +284,7 @@ static void exact(void) {
   fixture *f = build();
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   frames(t, 20);
   for (uint32_t i = 0; i < 20; i++) frame(t, i, i % 2 ? F_PUSH : F_WALK, 1 + i % 3, false);
   agc_outcome o = failure(span_at(F_PUSH, 1));
@@ -299,7 +299,7 @@ static void hostile(void) {
   fixture *f = build();
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   frames(t, 6);
   frame(t, 0, F_MAIN, 0, false);
   frame(t, 1, FUNCTIONS, 2, false);
@@ -351,7 +351,7 @@ static void names(void) {
   fixture *f = build();
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   f->fns[F_WALK].name = agc_make_string("caf\xC3\xA9\x7f\t", 7, 6);
   frames(t, 5);
   frame(t, 0, F_SPARE, 1, false);
@@ -380,7 +380,7 @@ static void long_names(void) {
   f->source.name = agc_make_string(path, 304, 304);
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   frames(t, 2);
   frame(t, 0, F_MAIN, 2, false);
   frame(t, 1, F_WALK, 1, false);
@@ -441,7 +441,7 @@ static void prelude_frames(void) {
   f->code[F_BLOCK][1] = (agc_instr){AGC_OP_CALL, 0, F_WALK, 0};
   agc_vm vm;
   begin(&vm, f, NULL);
-  agc_task *t = vm.main;
+  agc_task *t = vm.rt->main;
   agc_outcome *o = &vm.rt->outcome;
 
   /* A prelude function, a native frame it started and the prelude block that native called form one run: the error

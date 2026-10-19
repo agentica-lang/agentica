@@ -158,7 +158,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->log.lowest = AGC_LOG_NO_HANDLER;
   agc_trace_parse(&rt->trace, NULL, 2);
   vm->rt = rt;
-  vm->main = vm->task = agc_new_task(vm);
+  vm->rt->main = vm->task = agc_new_task(vm);
   agc_random_seed(&vm->task->random, 0);
 }
 
@@ -1060,7 +1060,7 @@ reload:
         if (r->ok) {
           R[in.a] = r->value;
         } else {
-          if (t->frame_count == 1 && t == vm->main)
+          if (t->frame_count == 1 && t == vm->rt->main)
             agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", SPAN);
           if (!return_value(vm, R[in.b])) return AGC_TURN_DONE;
           if (t->parking) return park_task(t);

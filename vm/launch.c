@@ -541,7 +541,7 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   const char *shared = getenv("AGENTICA_VM_TEST_SHARED");
   if (shared && strcmp(shared, "1") == 0 && !front_end) agc_share(vm);
   rt->seed = options->seen_seed ? options->seed : entropy_seed();
-  agc_random_seed(&vm->main->random, rt->seed);
+  agc_random_seed(&vm->rt->main->random, rt->seed);
   rt->args = args;
   if (!front_end) {
     agc_parent_take(vm);

@@ -11,6 +11,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <uv.h>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 typedef struct {
@@ -190,7 +197,7 @@ static int64_t take(agc_task *task) {
 static void settle_loop(void) {
   bool closed = false;
   for (int attempt = 0; attempt < 500 && !closed; attempt++) closed = agc_io_close(&vm);
-  assert(closed && vm.loop == NULL);
+  assert(closed && vm.rt->loop == NULL);
 }
 
 static void pump_until_idle(void) {
@@ -473,10 +480,97 @@ static void test_many_jobs_end(void) {
   assert(swift_done_calls == MANY_JOBS);
   swift_done_calls = 0;
 }
+static uv_thread_t done_thread;
+
+/* The `done` half records the thread that runs it. */
+static agc_value where_done(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  free(data);
+  done_thread = uv_thread_self();
+  swift_done_calls++;
+  return agc_void();
+}
+
+static const agc_io_kind where_io = {swift_work, where_done, where_done, swift_drop, false, "where", NULL};
+
+static void start_detached(void *arg) {
+  agc_io_detached(&vm, &where_io, arg, agc_void(), AGC_JOB_QUIET);
+}
+
+static void service_on_thread(void *arg) {
+  (void)arg;
+  assert(agc_io_service(&vm));
+  assert(!agc_io_service(&vm));
+}
+
+/* A detached job that finishes while a second thread runs the schedulers is ended by a scheduler: the I/O role finds it
+   ready, queues it and nudges the run queue, and `done` runs on the thread that services (agc_io_service), never on the
+   loop's thread. The nudge ends an idle wait with NULL and one caller takes it. */
+static void test_detached_ends_on_a_scheduler(void) {
+  assert(agc_io_share(&vm, false));
+  agc_runq_share(vm.rt->runq);
+  uv_thread_t loop_thread = uv_thread_self();
+  int *data = calloc(1, sizeof *data);
+  assert(data);
+  swift_done_calls = 0;
+  on_thread(start_detached, data);
+  while (!agc_runq_nudged(vm.rt->runq)) assert(agc_io_poll(&vm, true));
+  assert(swift_done_calls == 0);
+  assert(agc_runq_wait(vm.rt->runq) == NULL);
+  assert(agc_runq_take_nudge(vm.rt->runq) && !agc_runq_take_nudge(vm.rt->runq));
+  on_thread(service_on_thread, NULL);
+  assert(swift_done_calls == 1 && !uv_thread_equal(&done_thread, &loop_thread));
+  pump_until_idle();
+  settle_loop();
+}
+
+#ifndef _WIN32
+static void extend_after_close(void *arg) {
+  agc_io_extend(arg, 5);
+}
+
+/* Child process: closes the inbox while a job is still held by its pool work, then a second thread posts to it. */
+static void post_after_close_child(void) {
+  struct rlimit none = {0, 0};
+  setrlimit(RLIMIT_CORE, &none);
+  alarm(60);
+  int quiet = open("/dev/null", O_WRONLY);
+  if (quiet >= 0) dup2(quiet, 2);
+  agc_init();
+  agc_gc_allow_threads();
+  agc_io_init();
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  assert(agc_io_share(&vm, false));
+  gate *g = new_gate();
+  running();
+  agc_io_job *job = agc_io_start(&vm, &gate_io, g, agc_int(1), 60000);
+  vm.task->parking = false;
+  uv_sem_wait(&g->entered);
+  assert(!agc_io_close(&vm));
+  on_thread(extend_after_close, job);
+  _exit(0);
+}
+
+/* A post from another thread after agc_inbox_close has no consumer: it must end the process loudly (SIGABRT), not run
+   inline or vanish. It runs in a child, first of all, before any thread exists in this process. */
+static void test_post_after_close_is_loud(void) {
+  pid_t pid = fork();
+  assert(pid >= 0);
+  if (pid == 0) post_after_close_child();
+  int status = 0;
+  assert(waitpid(pid, &status, 0) == pid);
+  assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT);
+}
+#endif
+
 #endif
 
 int main(void) {
   agc_test_deadline(120);
+#if defined(__linux__) || defined(__APPLE__)
+  test_post_after_close_is_loud();
+#endif
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   agc_init();
   agc_gc_allow_threads();
@@ -494,6 +588,7 @@ int main(void) {
   test_poll_runs_queued_requests();
   test_instant_job_wakes_its_task();
   test_many_jobs_end();
+  test_detached_ends_on_a_scheduler();
 #endif
   puts("job tests passed");
   return 0;

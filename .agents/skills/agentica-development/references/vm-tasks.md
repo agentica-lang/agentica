@@ -16,7 +16,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_runq_remove`, and for an idle scheduler `agc_runq_wait` (blocks on a
     condvar until a task is queued, NULL after `agc_runq_end` or, on a solo
     queue, when empty). The queue is solo (no lock, never waits) until
-    `agc_runq_share`, which runs before a second thread touches it.
+    `agc_runq_share`, which runs before a second thread touches it. A nudge
+    (`agc_runq_nudge`, `agc_runq_nudged`, `agc_runq_take_nudge`) is work for a
+    scheduler that is not a task: it ends one `agc_runq_wait` with NULL, and
+    the scheduler then calls `agc_io_service` (`vm/loop.c`), which ends the
+    detached jobs that the I/O role handed over.
 
 - **Path:** `vm/sync.c`
   - **Owns:** The locks of the shared state. `agc_lock` (a mutex that is solo
