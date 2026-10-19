@@ -250,7 +250,9 @@ is no such place, so the plan adds none:
   hide is a function of a platform adapter: a plain header plus one file per
   system family, each guarded whole (`file_io.h` and `file_windows.c`).
   Shared functions do not branch on `#ifdef`; older code that still does
-  (`file_io.c` among it) moves behind an adapter when its area changes.
+  (`file_io.c`, and blocks in `files.c`, `loop.c`, `launch.c`, `process.c`,
+  `input.c` and `output.c`) moves behind an adapter when a change adds a
+  platform branch there.
 
 The function pointers that exist are callbacks (job kinds, close and release
 functions, builtins, `agc_conn_watch`), not tables of implementations, and they
@@ -314,9 +316,9 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   `agc_lock_status`, `struct agc_task`, `struct agc_vm`; `agc_file_id` and
   `agc_file_ids` (`rt->inherited`); and the port functions of §15.2 (among them
   `agc_stack_members`, which builds the stack members of a Json failure record
-  for `testing.c`), with `agc_io_block_stop`, `agc_io_start_then` and the poller
-  functions under `__linux__` (so `port.h` includes `<signal.h>` and
-  `<locale.h>` there).
+  for `testing.c`), with `agc_io_block_stop` off Windows, and
+  `agc_io_start_then` and the poller functions on Linux, macOS and Windows
+  (`port.h` includes `<signal.h>` and `<locale.h>` on Linux and macOS).
 - **`core.h`**: what only the core and the driver call: `agc_builtin_table`;
   `agc_vm_init`; tasks and turns (`agc_new_task`, `agc_task_call`,
   `agc_task_enter`, `agc_task_remove`, `agc_turn_begin`, `agc_turn_charge`,

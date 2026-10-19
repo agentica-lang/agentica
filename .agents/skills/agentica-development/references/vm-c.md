@@ -85,17 +85,21 @@ operating system call differs.
   - one file per system family (`<area>_posix.c`, `<area>_windows.c`), each
     guarded whole by `#ifdef _WIN32` or `#ifndef _WIN32`, like
     `file_windows.c`; `__APPLE__` and `__linux__` only for a real API gap
-    inside the POSIX file. `file_io.c` still mixes POSIX and Windows
-    branches: any PR that changes it first splits it into
-    `file_io_posix.c`;
+    inside the POSIX file;
   - no VM state, scheduling, timeouts or resource ownership in the adapter.
+- Older code is debt: `file_io.c` (POSIX and Windows mixed; split it into
+  `file_io_posix.c`) and the platform `#if` blocks in shared files such as
+  `files.c`, `loop.c`, `launch.c`, `process.c`, `input.c` and `output.c`. A PR
+  that adds a platform branch to one of them moves that operation behind an
+  adapter instead; a PR that only touches nearby code need not.
 - Signal to split: a shared file whose `#if` count grows with a port, two
   copies of one function under `#ifdef`, or flags that only make sense on one
   system. Move the operation behind the adapter header in the same PR, and
   add the new file to the Makefile, `vm/tools/check-layers.sh` and
   `references/repo-map.md`.
 - Tests of the shared behavior go in the Platforms CI subset (add a new test
-  file to the job lists of `platforms.yml` and `WINDOWS_TEST_MODULES`), so they
+  file to the job lists of `platforms.yml`, and on Windows also to
+  `WINDOWS_TEST_MODULES` for the local Wine check), so they
   run on every system; a test of one system's adapter says so in its name and
   runs only in that system's job (a skip fails the native Windows gate).
 

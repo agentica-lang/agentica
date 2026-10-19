@@ -144,7 +144,8 @@
   - **Runner:** GitHub-hosted `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc,
     make), submodules
   - **Runs:** `make vm-test`, `make fixed-point` (the binary) and the test
-    subset of `WINDOWS_TEST_MODULES` in the Makefile
+    subset listed in `platforms.yml` (the Makefile's `WINDOWS_TEST_MODULES`
+    is the same list, for the local Wine check)
 
 - **Job:** Fuzz (`fuzz.yml`, by hand)
   - **Runner:** GitHub-hosted `ubuntu-latest`, clang

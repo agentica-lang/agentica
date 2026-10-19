@@ -42,7 +42,7 @@ The Unicode tables for case mapping and for printing text are not a submodule: t
 
 ## Platforms
 
-The release archive is for Linux x86-64 with glibc 2.28 or newer. The `agentica` binary also builds on macOS (Intel and ARM) and Windows x86-64: CI bootstraps it there and runs the C tests and a subset of the program tests (files, paths, processes on macOS, the single binary). Native release archives for those systems, and their process and network support, are still in progress.
+The release archive is for Linux x86-64 with glibc 2.28 or newer. The `agentica` binary also builds on macOS (Intel and ARM) and Windows x86-64: CI bootstraps it there and runs the C tests and a subset of the program tests (files, paths, OS calls, processes on macOS, the single binary and the bootstrap). Native release archives for those systems, and their process and network support, are still in progress.
 
 ## Learn more
 
