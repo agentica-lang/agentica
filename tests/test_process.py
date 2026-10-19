@@ -10,9 +10,10 @@ import re
 
 import pytest
 
-from tests.agentica_test import FIXTURES, agc_literal, cli, run, tool, vm_environment
+from tests.agentica_test import FIXTURES, PYTHON, TARGET_OS, agc_literal, cli, run, tool, vm_environment
 
 PEER = FIXTURES / "process-peer.js"
+PY_PEER = FIXTURES / "process-peer.py"
 
 
 def spawn(node, mode, extra=""):
@@ -33,8 +34,8 @@ def program(node, mode, body, prefix="", extra=""):
     return prefix + "def main() -> Void\n" + spawn(node, mode, extra) + body + "\nend\n\n"
 
 
-def cli_run(*args):
-    return run(cli() + list(args), env=vm_environment())
+def cli_run(*args, env=None):
+    return run(cli() + list(args), env=vm_environment(env))
 
 
 def write(tmp_path, name, text):
@@ -43,11 +44,11 @@ def write(tmp_path, name, text):
     return path
 
 
-def run_program(tmp_path, text, allowed=True, limit=None):
+def run_program(tmp_path, text, allowed=True, limit=None, env=None):
     """Returns (result, stdout, stderr): result is None for a clean run, the diagnostic code for a failure
     that printed one (stderr then loses that last line), else the exit status."""
     args = (["--allow-run"] if allowed else []) + ["--json"] + (["--max-steps", str(limit)] if limit else [])
-    result = cli_run(*args, write(tmp_path, "program.agc", text))
+    result = cli_run(*args, write(tmp_path, "program.agc", text), env=env)
     lines = result.stderr.strip("\n").split("\n") if result.stderr.strip("\n") else []
     problem = None
     if lines:
@@ -62,8 +63,8 @@ def run_program(tmp_path, text, allowed=True, limit=None):
     return result.code, result.stdout, result.stderr
 
 
-def output(tmp_path, text, expected=""):
-    result, out, err = run_program(tmp_path, text)
+def output(tmp_path, text, expected="", env=None):
+    result, out, err = run_program(tmp_path, text, env=env)
     assert result is None, err
     assert err == expected
     return out
@@ -242,3 +243,61 @@ def test_closing_a_plain_child_returns_only_after_it_is_gone_even_when_it_ignore
     node = tool("node")
     body = ("  pid = Result.unwrap!(Process.read_line(p, 5000))\n  Process.close(p)\n  IO.inspect(%s)" % probe(node, "pid"))
     assert output(tmp_path, program(node, "stubborn", body)) == "ok(1)\n"
+
+
+def python_child(mode, words=(), dir=None, timeout=5000):
+    """Program text that starts the Python peer in `mode` (captured in `dir`, else plain) and prints its first line."""
+    arguments = ", ".join([agc_literal(PY_PEER), '"%s"' % mode] + [agc_literal(word) for word in words])
+    start = ('Process.spawn_captured(%s, [%s], %s, %d)' % (agc_literal(PYTHON), arguments, agc_literal(dir), timeout)
+             if dir else 'Process.spawn(%s, [%s], %d)' % (agc_literal(PYTHON), arguments, timeout))
+    return ('def main() -> Void\n  started = %s\n  if !started.ok?\n    puts("not started")\n    return\n  end\n'
+            '  p = Result.unwrap!(started)\n  puts(Result.unwrap!(Process.read_line(p, 5000)))\n'
+            '  Process.close(p)\nend\n\n' % start)
+
+
+WORDS = ["back\\slash\\", 'say "hi"', "#{x}", "tail\\\\", "", "ñ 🙂 ^&|<>%PATH%", "two  spaces", "-", "--allow-run"]
+
+
+def test_arguments_reach_an_independent_python_child_unchanged(tmp_path):
+    out = output(tmp_path, python_child("args", WORDS))
+    assert json.loads(out) == WORDS
+
+
+def test_the_child_starts_in_the_given_directory_and_a_bad_directory_is_an_error(tmp_path):
+    directory = tmp_path / "dir ñ 🙂"
+    directory.mkdir()
+    out = output(tmp_path, python_child("cwd", dir=str(directory)))
+    assert os.path.samefile(out.strip("\n"), directory)
+    (tmp_path / "file").write_text("x")
+    for bad in (tmp_path / "file", tmp_path / "missing"):
+        assert output(tmp_path, python_child("cwd", dir=str(bad))) == "not started\n"
+
+
+def test_the_child_environment_is_inherited_without_the_vm_private_entries(tmp_path):
+    # Windows names are case-insensitive, so a differently cased private name must go too; elsewhere it is another variable.
+    channel = "Agentica_Channel" if TARGET_OS == "windows" else "AGENTICA_CHANNEL"
+    env = {"PROBE_TEXT": "ñ 🙂 = x", channel: "7", "AGENTICA_VM_METRICS": "1", "AGENTICA_VM_METRICS_FILE": "m"}
+    shown = json.loads(output(tmp_path, python_child("env"), env=env))
+    assert shown["PROBE_TEXT"] == "ñ 🙂 = x"
+    private = {"AGENTICA_CHANNEL", "AGENTICA_VM_METRICS", "AGENTICA_VM_METRICS_FILE"}
+    assert not private.intersection(name.upper() for name in shown)
+
+
+def test_a_very_long_argument_is_an_error_where_the_system_limits_the_command_line_else_it_arrives(tmp_path):
+    word = "x" * 40000
+    text = ('def main() -> Void\n  p = Process.spawn(%s, [%s, "args", %s], 5000)\n  puts(p.ok?)\n'
+            '  if p.ok?\n    puts(String.length(Result.unwrap!(Process.read_line(p.unwrap!, 5000))))\n'
+            '    Process.close(p.unwrap!)\n  end\nend\n\n' % (agc_literal(PYTHON), agc_literal(PY_PEER), agc_literal(word)))
+    out = output(tmp_path, text)
+    # CreateProcess takes at most 32767 characters of command line; Linux and macOS take a word this size.
+    assert out == ("false\n" if TARGET_OS == "windows" else "true\n%d\n" % (len(word) + 4))
+
+
+def test_a_file_that_cannot_run_is_an_error_and_the_next_spawn_still_works(tmp_path):
+    bad = tmp_path / "bad.exe"
+    bad.write_text("#!/nonexistent/interpreter\n")
+    bad.chmod(0o755)
+    text = ('def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn(%s, [], 5000)))\n%s'
+            % (agc_literal(bad), "  puts(Result.unwrap!(Process.read_line(Result.unwrap!(Process.spawn(%s, [%s, \"args\"], 5000)), 5000)))\nend\n\n"
+               % (agc_literal(PYTHON), agc_literal(PY_PEER))))
+    assert output(tmp_path, text) == "false\n[]\n"
