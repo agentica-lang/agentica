@@ -124,7 +124,7 @@ cost:
    endpoint, the label set or the file interval.
 7. **Linux first.** On other systems the VM ignores both variables and writes
    one line `agc-metrics not supported on this system`; the code sits under
-   `#ifdef __linux__`, like other untested platform code (AGENTS.md).
+   a Linux branch of a platform adapter (`docs/vm/15-layers.md` §15.3).
 
 ### 28.3 What is measured
 

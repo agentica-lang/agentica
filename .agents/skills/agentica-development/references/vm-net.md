@@ -33,7 +33,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     timeout check plus `agc_handle_wait`), and the `network:` timeout texts
 
 - **Path:** `vm/tcp.c`
-  - **Owns:** the `TCP` and `TLS` builtins (`agc_tcp_builtins`, Linux only;
+  - **Owns:** the `TCP` and `TLS` builtins (`agc_tcp_builtins`, Linux and macOS;
     §10.3.1, TLS in §10.3): one `malloc`'d `net` for a socket or a listener
     (users: the resource and each request; callbacks: a DNS lookup in flight and
     one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its
@@ -82,11 +82,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/http_server.c`
   - **Owns:** The `HttpWire` server builtins: request reading, response writing
-    and the server task group (Linux only).
+    and the server task group (Linux and macOS; stubs on Windows).
 
 - **Path:** `vm/http_client.c`
   - **Owns:** `HttpWire.client`, `exchange` and `close_client`
-    (`agc_http_builtins`, Linux only, a stub table elsewhere; §10.7.1): a
+    (`agc_http_builtins`, Linux and macOS, a stub table on Windows; §10.7.1): a
     `malloc`'d `client` per handle with its origins (idle connections, open
     slots, a FIFO of waiting exchanges), one idle timer and a lazily built
     `agc_tls_config` (a pool job on the first HTTPS call); each `exchange` parks
@@ -114,10 +114,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - `vm/duplex.c`
   - the child channel (25c, service; `docs/vm/10-io-processes.md` §10.4 "As
-    built (25c)"; Linux only, stubs elsewhere): an `agc_duplex` is one
-    bidirectional libuv pipe over a socket end with an `agc_inbuf` (line reads,
-    1 MiB), at most one reader request and one writer request, a reference count
-    (the owner, each request, the pipe handle and the shutdown request) the
+    built (25c)"; Linux and macOS, a pipe path on Windows): an `agc_duplex`
+    is one bidirectional libuv pipe over a socket end with an `agc_inbuf`
+    (line reads, 1 MiB), at most one reader request and one writer request, a
+    reference count (the owner, each request, the pipe handle and the shutdown
+    request) the
     `overflow` text and the flags `closed`, `write_closed` and `sent`.
   - `agc_duplex_overflow` (called by `process.c` when stdout or stderr is cut)
     stores the output-exceeds text and readies a pending reader

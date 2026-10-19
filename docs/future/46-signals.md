@@ -375,7 +375,7 @@ The recommendation (46.8, question 5) is to gate `System.signal` and
 - `spawn_group`, `signal_group` and `System.signal` need Linux, for process
   groups and pidfd. Other systems build none of them, as they build none of the
   other `Process` channel builtins (`docs/vm/10-io-processes.md`).
-- Windows (paused) would map Ctrl-C and Ctrl-Break to INT and TERM later. A
+- Windows would map Ctrl-C and Ctrl-Break to INT and TERM later. A
   Windows console has no POSIX process groups. Its group story would need a job
   object, as `docs/vm/08-loader-and-cli.md` plans. Not designed here.
 
