@@ -20,6 +20,9 @@ from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compil
 PEER = FIXTURES / "stdout-peer.py"
 PEER_LIMIT = scaled(90)
 FILLER = "x" * 1024
+# Rows that fit the 64 KiB buffer of a stream, so the program ends while the pipe (4 KiB to 16 KiB once shrunk) is
+# full and the end of the run has to wait for a reader that does not come. More rows would keep the program printing.
+STUCK_ROWS = 58
 WINDOWS = TARGET_OS == "windows"
 unix_only = pytest.mark.skipif(WINDOWS, reason="needs a descriptor kind that Windows does not have")
 linux_only = pytest.mark.skipif(not sys.platform.startswith("linux") or WINDOWS, reason="needs /dev/full")
@@ -341,7 +344,7 @@ def check_alternating(lines):
 
 def test_a_pipe_nobody_reads_does_not_stop_a_timer_task_and_the_run_ends_once_the_reader_drains(tmp_path):
     summary, out, err = run_case(tmp_path, "ticker", TICKER_PROGRAM % 400,
-                                 peer=["--delay", "1.5", "--chunk", "16384", "--pause", "0.001"])
+                                 peer=["--delay", "2.0", "--chunk", "16384", "--pause", "0.001"])
     assert summary["status"] == 0
     assert summary["ticks_before_read"] >= 5, "the ticker ran while stdout was stuck"
     check_rows(lines_of(out), 400)
@@ -383,26 +386,28 @@ def test_the_end_of_the_run_drains_standard_output_within_the_flush_limit(tmp_pa
 
 
 def test_a_reader_that_never_reads_ends_the_run_after_the_flush_timeout_with_the_warning(tmp_path):
-    summary, out, err = run_case(tmp_path, "stuck", ROWS_PROGRAM % 100, peer=["--read-after-exit"],
+    summary, out, err = run_case(tmp_path, "stuck", ROWS_PROGRAM % STUCK_ROWS,
+                                 peer=["--read-after-exit", "--pipe-size", "4096"],
                                  vm=["--json", "--flush-timeout", "500"])
     assert summary["status"] == 0
     assert 0.4 <= summary["exit"] <= 20, "the run waits for the flush limit"
     assert '"flush_timeout_ms":500' in err
-    assert 0 < len(out) < row_total(100), "the data that fits the pipe arrives"
+    assert 0 < len(out) < row_total(STUCK_ROWS), "the data that fits the pipe arrives"
 
 
 def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_exit_code(tmp_path):
-    summary, out, _ = run_case(tmp_path, "merged", ROWS_PROGRAM % 100, peer=["--read-after-exit", "--merge"],
+    summary, out, _ = run_case(tmp_path, "merged", ROWS_PROGRAM % STUCK_ROWS,
+                               peer=["--read-after-exit", "--merge", "--pipe-size", "4096"],
                                vm=["--json", "--flush-timeout", "500"])
     assert summary["status"] == 0
     assert 0.4 <= summary["exit"] <= 20, "the run waits for the flush limit"
-    assert 0 < len(out) < row_total(100)
+    assert 0 < len(out) < row_total(STUCK_ROWS)
     assert b"flush_timeout_ms" not in out, "the warning is dropped, not mixed into the data"
 
 
 @unix_only
 def test_a_socket_as_stdout_is_written_on_the_loop(tmp_path):
-    summary, out, _ = run_case(tmp_path, "socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "1.0"])
+    summary, out, _ = run_case(tmp_path, "socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "2.0"])
     assert summary["status"] == 0
     assert summary["ticks_before_read"] >= 5, "the ticker ran while stdout was stuck"
     check_rows(lines_of(out), 800)
