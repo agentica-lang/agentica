@@ -151,6 +151,9 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   }
   atomic_init(&rt->next_task_id, 1);
   rt->runq = agc_runq_new();
+  rt->sync = agc_lock_new();
+  rt->out.lock = agc_lock_new();
+  rt->err.lock = agc_lock_new();
   rt->log.level = -1;
   rt->log.lowest = AGC_LOG_NO_HANDLER;
   agc_trace_parse(&rt->trace, NULL, 2);
@@ -227,12 +230,26 @@ static PROFILE_HOOK void profile_call(agc_vm *vm, uint32_t function) { vm->profi
 
 static PROFILE_HOOK void profile_builtin_call(agc_vm *vm, uint32_t id) { vm->profile->builtin_calls[id]++; }
 
+/* The call of a builtin. Once the VM is shared (agc_share) a builtin of a shared library runs with rt->sync held, so the
+ * task tree, the waiter lists, the channels, the handles and the logger table are seen by one scheduler at a time. The
+ * lock is not held when the builtin returns: a builtin that must wait registers the wait and returns, and the task
+ * parks outside the lock. A builtin that fails leaves the lock to agc_sync_reset. */
+static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
+  if (__builtin_expect(vm->rt->shared, 0) && b->shared) {
+    agc_sync_take(vm);
+    agc_value result = b->fn(vm, args, span);
+    agc_sync_drop(vm);
+    return result;
+  }
+  return b->fn(vm, args, span);
+}
+
 /* A builtin call with its count and time: the time of the call itself, so a builtin that parks is timed until it
  * does. */
 static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, uint32_t id, agc_value *args,
                                               uint32_t span) {
   uint64_t began = agc_trace_now();
-  agc_value result = b->fn(vm, args, span);
+  agc_value result = call_builtin(vm, b, args, span);
   vm->profile->builtin_calls[id]++;
   vm->profile->builtin_ns[id] += agc_trace_now() - began;
   return result;
@@ -452,7 +469,9 @@ static void resume_stepper(agc_vm *vm) {
   agc_frame *frame = &t->frames[t->frame_count - 1];
   agc_native *st = frame->native;
   uint32_t base = frame->base;
+  agc_sync_take(vm);
   agc_step next = st->stepper->step(vm, st->stepper, t->regs[base]);
+  agc_sync_drop(vm);
   switch (next.kind) {
     case AGC_STEP_CALL:
       count_step(vm, st->span);
@@ -761,8 +780,8 @@ static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
 }
 
 /* The turn ends in a wait (docs/vm/10-io-multicore.md §10.2.3). The state stays PARKING (or WOKEN): the scheduler
-   decides about the cancel flag and the trace first, and then publishes PARKED with agc_task_commit_park, the last
-   thing it does with the task. */
+   decides about the cancel flag and the trace first, and then publishes PARKED with agc_task_commit_park (agc_task_end_turn
+   reads the flag once more after it). */
 static agc_turn_result park_task(agc_task *t) {
   t->parking = false;
   return AGC_TURN_PARKED;
@@ -1013,7 +1032,7 @@ reload:
         uint64_t units = 0;
         if (b->cost == AGC_COST_SIZE)
           for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(args[k]);
-        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN) : b->fn(vm, args, SPAN);
+        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN) : call_builtin(vm, b, args, SPAN);
         if (t->stepper) {
           start_stepper(vm, b, base + in.a, SPAN);
           if (t->parking) return park_task(t);

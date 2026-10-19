@@ -220,6 +220,8 @@ handles. A second way for any of them is a finding.
 - Docs claims (CHANGELOG, `docs/vm/`, the skills, the site) must match what
   you ran. Report overstated claims, such as "constant time" for an
   O(log n) path.
+- Flag doc changes that were not needed: restating the code, per-PR
+  narration, status logs in design docs (`documentation-writing`).
 
 ## Proving a finding
 

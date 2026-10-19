@@ -884,7 +884,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   return true;
 }
 
-static const agc_io_kind tcp_io = {NULL, request_done, request_expired, drop_request, true, "tcp", request_cancel};
+static const agc_io_kind tcp_io = {NULL, request_done, request_expired, drop_request, true, "tcp", request_cancel, true};
 
 static request *park(agc_vm *vm, net *n, req_kind kind, agc_value context, int64_t timeout) {
   request *q = new_request(n, kind);
@@ -1260,23 +1260,23 @@ agc_value agc_conn_socket(agc_vm *vm, agc_conn *c) {
 }
 
 const agc_builtin agc_tcp_builtins[] = {
-  {"TCP.connect", 3, builtin_connect, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"TCP.listen", 2, builtin_listen, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"TCP.accept", 2, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"TCP.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"TCP.close_listener", 1, builtin_close_listener, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"TCP.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"TCP.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"TCP.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"TCP.recv_bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"TLS.listen", 4, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"TCP.connect", 3, builtin_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"TCP.listen", 2, builtin_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"TCP.accept", 2, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"TCP.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"TCP.close_listener", 1, builtin_close_listener, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"TCP.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"TCP.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"TCP.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"TCP.recv_bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"TLS.listen", 4, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_tcp_builtin_count = sizeof agc_tcp_builtins / sizeof agc_tcp_builtins[0];
 #else
-const agc_builtin agc_tcp_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
+const agc_builtin agc_tcp_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_tcp_builtin_count = 0;
 #endif

@@ -68,7 +68,10 @@ static agc_value pop_front(agc_channel *c) {
   return v;
 }
 
-static agc_task *pop_live(agc_task **head, agc_task **tail) {
+/* The waiter queues change under rt->sync, like every shared list: pop_live, leave_queue and the enqueue in `wait`
+   check it. */
+static agc_task *pop_live(agc_vm *vm, agc_task **head, agc_task **tail) {
+  agc_sync_assert(vm);
   while (*head) {
     agc_task *t = *head;
     agc_task_remove(head, tail, t);
@@ -78,7 +81,7 @@ static agc_task *pop_live(agc_task **head, agc_task **tail) {
 }
 
 static bool reserve_value(agc_vm *vm, agc_channel *c, agc_value v, uint64_t seq) {
-  agc_task *t = pop_live(&c->receivers, &c->receivers_tail);
+  agc_task *t = pop_live(vm, &c->receivers, &c->receivers_tail);
   if (!t) return false;
   t->channel.value = v;
   t->channel.seq = seq;
@@ -88,7 +91,7 @@ static bool reserve_value(agc_vm *vm, agc_channel *c, agc_value v, uint64_t seq)
 }
 
 static bool reserve_slot(agc_vm *vm, agc_channel *c) {
-  agc_task *t = pop_live(&c->senders, &c->senders_tail);
+  agc_task *t = pop_live(vm, &c->senders, &c->senders_tail);
   if (!t) return false;
   t->channel.reserved = true;
   agc_task_wake(vm, t, "channel");
@@ -122,7 +125,8 @@ static void drained(agc_vm *vm, agc_channel *c) {
     agc_task_wake_all(vm, &c->receivers, &c->receivers_tail, "channel");
 }
 
-static void leave_queue(agc_channel *c, agc_task *t) {
+static void leave_queue(agc_vm *vm, agc_channel *c, agc_task *t) {
+  agc_sync_assert(vm);
   if (t->channel.reserved) return;
   if (t->channel.sending)
     agc_task_remove(&c->senders, &c->senders_tail, t);
@@ -149,6 +153,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     stop_waiting(t);
     return timed_out_error();
   }
+  agc_sync_assert(vm);
   agc_task_parking(vm);
   t->channel.channel = c;
   t->channel.sending = sending;
@@ -179,7 +184,7 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
   check_timeout(vm, timeout, span + 3);
   agc_task *t = vm->task;
   if (resumed(t, c)) {
-    leave_queue(c, t);
+    leave_queue(vm, c, t);
     if (c->closed) {
       stop_waiting(t);
       return closed_error();
@@ -209,7 +214,7 @@ static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
   check_timeout(vm, timeout, span + 2);
   agc_task *t = vm->task;
   if (resumed(t, c)) {
-    leave_queue(c, t);
+    leave_queue(vm, c, t);
     if (t->channel.reserved) {
       agc_value v = t->channel.value;
       stop_waiting(t);
@@ -269,9 +274,10 @@ agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
 }
 
 void agc_channel_leave(agc_vm *vm, agc_task *t) {
+  agc_sync_assert(vm);
   const agc_channel_wait w = t->channel;
   agc_channel *c = w.channel;
-  leave_queue(c, t);
+  leave_queue(vm, c, t);
   stop_waiting(t);
   if (!w.reserved) return;
   if (w.sending) {
@@ -283,11 +289,11 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
 }
 
 const agc_builtin agc_channel_builtins[] = {
-  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_channel_builtin_count = sizeof agc_channel_builtins / sizeof agc_channel_builtins[0];

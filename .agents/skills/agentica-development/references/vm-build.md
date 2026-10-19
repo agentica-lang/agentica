@@ -28,7 +28,7 @@ AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # steps a
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
-make vm-tsan                         # TSAN=1 build, no libgc: the inbox, outcome, run queue, wake and job C tests under TSan
+make vm-tsan                         # TSAN=1 build, no libgc: the inbox, outcome, run queue, wake, job, sync and output C tests under TSan
 make vm-latency                      # tests/test_vm_latency.py alone (see `vm-tasks.md`, Gotchas)
 make vm-task-map                     # tests/test_vm_task_map.py alone (the timing cases of Task.map, see `vm-tasks.md`)
 make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff

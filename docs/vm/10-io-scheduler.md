@@ -67,7 +67,8 @@ section says how the scheduler and the loop keep them, as built.
   Linux. `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost charge. It
   changes only when tasks switch, never output, step counts or diagnostics. It
   is for tests only, so the latency test (`make vm-latency`) can show that it
-  fails without the rule.
+  fails without the rule. `AGENTICA_VM_TEST_SHARED=1` calls `agc_share`, so a
+  run on one scheduler takes every lock (§16.9); it is for tests only.
 - **Fairness with I/O.** After each turn the scheduler calls
   `uv_run(UV_RUN_NOWAIT)`, so ready I/O and timers wake their tasks while others
   compute. Tasks woken during a `NOWAIT` go behind the queued ones. With N=1 it
