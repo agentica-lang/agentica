@@ -92,6 +92,9 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   duplex_os.h     # the channel ends that differ by system: the pair, the marker, how a child takes them
   duplex_posix.c  # the POSIX side: one socket pair on fd 3, marker "3"
   duplex_windows.c # the Windows side: a pipe per direction on fd 3 and 4, marker "3,4"
+  system_os.h     # the name the operating system gives itself, for System.os
+  system_posix.c  # the POSIX side: the sysname of uname(2), through libuv
+  system_windows.c # the Windows side: "Windows_NT"
   process.c       # Process builtins, System.env and System.pid (references/vm-net.md)
   process_os.h    # command search rules that differ by system (references/vm-io.md)
   process_posix.c # the POSIX side of process_os.h: every file may run, PATH splits at ':'

@@ -67,6 +67,24 @@ false
 
 The VM hides the variables it keeps for itself: `AGENTICA_CHANNEL`, and `UV_USE_IO_URING` when the VM set it. A program started with `Process.spawn` does not get them either. It also does not get `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE`, which are reserved for the metrics of the VM (a later phase); `System.env` still shows them to your program.
 
+## System.os
+
+```text
+System.os() -> String
+```
+
+The operating system of the running program: `"linux"`, `"macos"` or `"windows"`, and on any other system the lowercase name that `uname` gives (`"unknown"` when the system cannot say or the name is not printable ASCII). It needs no flag.
+
+```agentica
+def main() -> Void
+  puts(System.os().length > 0)
+end
+```
+
+```output
+true
+```
+
 ## System.pid
 
 ```text

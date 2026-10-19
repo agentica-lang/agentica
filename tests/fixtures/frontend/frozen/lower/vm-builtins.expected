@@ -182,6 +182,7 @@ String.upcase
 System.args
 System.env
 System.exit
+System.os
 System.pid
 TCP.accept
 TCP.close

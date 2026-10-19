@@ -56,7 +56,8 @@ before it moved; the header split moved no line of a `.c` file except the
   - **Files:** `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c`
     (`http_parse.h`), `file_io.c` and `file_windows.c` (`file_io.h`),
     `process_posix.c` and `process_windows.c` (`process_os.h`: command search),
-    `duplex_posix.c` and `duplex_windows.c` (`duplex_os.h`: child channel ends)
+    `duplex_posix.c` and `duplex_windows.c` (`duplex_os.h`: child channel ends),
+    `system_posix.c` and `system_windows.c` (`system_os.h`: the system name)
   - **May use:** their own header, their library, and from `value.h` only the
     memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`,
     `agc_size_mul`, `agc_out_of_memory`)
@@ -259,7 +260,8 @@ is no such place, so the plan adds none:
   hide is a function of a platform adapter: a plain header plus one file per
   system family, each guarded whole (`file_io.h` and `file_windows.c`;
   `process_os.h` with `process_posix.c` and `process_windows.c`;
-  `duplex_os.h` with `duplex_posix.c` and `duplex_windows.c`).
+  `duplex_os.h` with `duplex_posix.c` and `duplex_windows.c`;
+  `system_os.h` with `system_posix.c` and `system_windows.c`).
   Shared functions do not branch on `#ifdef`; older code that still does
   (`file_io.c`, and blocks in `files.c`, `loop.c`, `launch.c`, `process.c`,
   `input.c` and `output.c`) moves behind an adapter when a change adds a

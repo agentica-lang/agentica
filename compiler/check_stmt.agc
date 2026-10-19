@@ -168,6 +168,10 @@ end
 
 def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State.St]
   try State.reserve_local(cx, st, node.name, node.span)
+  if node.name == "_"
+    out = try State.expr(cx, st, node.value, T.Type.Unknown)
+    return ok(out.st)
+  end
   declared = T.Type.Unknown
   case node.type
     Ast.Optional.Present(annotation) -> declared = try Types.resolve_type(cx, st, annotation, false)

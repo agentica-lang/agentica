@@ -279,7 +279,7 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Res
   seen: Set[String] = Set.new([])
   params: List[T.Type] = []
   for param in node.params
-    if seen.include?(param.name)
+    if param.name != "_" and seen.include?(param.name)
       return error(
         State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate parameter \"#{param.name}\"", param.span),
       )

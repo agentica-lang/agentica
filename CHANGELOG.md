@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `System.os()` returns the operating system: `"linux"`, `"macos"`, `"windows"`,
+  or the lowercase `uname` name on another system.
+
 - `--schedulers N` and the variable `AGENTICA_SCHEDULERS` set the number of
   scheduler threads (1 to 1024; the flag wins over a valid variable; a bad
   value in either exits 2). This is the first step of the multicore VM: the VM
@@ -48,6 +51,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the child's input. A child that used the duplex pipe on descriptor 3, or a VM
   older than this release, finds no channel.
 
+- **Breaking:** `_` is a discard wherever a name is bound, including a `for`
+  variable (`for _ in 0...3` with `_ = f()` in the body). Reading `_` was
+  allowed before and is now `CHECK-UNKNOWN-NAME`, and `_: Type = x` is now
+  `PARSE-UNEXPECTED-TOKEN`.
 - `AGENTICA_VM_TRACE=io` no longer prints `kind=sleep` and `kind=lock` job
   lines for sleeps and deadline waits; `AGENTICA_VM_TRACE=sched` prints
   `timer_arm` and `timer_fire` for them.

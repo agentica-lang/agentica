@@ -100,7 +100,8 @@ Types: `Int` (64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`,
 `Fn[A, ..., R]`, `Task[R]`,
 `Await[T]`, `Channel[T]`, `Process`, your `struct`/`enum`/alias names.
 `type Names = List[String]` names a long type. Types start uppercase; values,
-functions and fields start lowercase or `_`. Details: `references/language.md`.
+functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
+`for _ in`); reading it is an error. Details: `references/language.md`.
 
 ## Rules agents break
 
