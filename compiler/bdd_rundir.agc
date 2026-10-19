@@ -13,6 +13,10 @@
 ## belongs to a run that has ended, and the sweep removes it. A run killed between steps 1 and 3 leaves an
 ## `agentica-bdd-new-HEX`; the sweep removes it too, on the same checks, but only when it has not changed for an hour,
 ## because a run that is alive is in step 1 or 2 for a moment and has no lock held yet.
+##
+## Windows cannot rename a folder that holds a file somebody has open, so there the run makes the final name in step 1
+## and has no step 3. A sweep that meets that folder between the creation of `lock` and the lock itself takes the
+## lock first and the run fails to lock (`claim` is an error then); the gap is two calls long.
 
 import {IO_TIMEOUT} from "bdd_files"
 
@@ -61,7 +65,11 @@ end
 
 ## Makes the run directory in `temporary`, locked and under its final name. Nothing is left behind on a failure.
 export def claim(temporary: String) -> Result[Run]
-  current = try make_private(temporary)
+  prefix = "agentica-bdd-new-"
+  if windows?()
+    prefix = "agentica-bdd-"
+  end
+  current = try make_private(temporary, prefix)
   claimed = lock_and_name(temporary, current)
   if !claimed.ok?
     Path.remove(current, IO_TIMEOUT)
@@ -71,8 +79,7 @@ end
 
 ## Removes the run directory and releases its lock. The removal is best effort: what stays is swept by a later run.
 export def release(run: Run) -> Void
-  Path.remove(run.path, IO_TIMEOUT)
-  File.close(run.lock, IO_TIMEOUT)
+  discard(run.path, run.lock)
 end
 
 ## Removes the run directories of runs that have ended: the folders named `agentica-bdd-HEX` in `temporary`, and the
@@ -100,8 +107,7 @@ export def sweep(temporary: String, own: Run) -> Void
     if age >= 0
       held = abandoned(path, owner.unwrap!.user_id, age)
       if held.ok?
-        Path.remove(path, IO_TIMEOUT)
-        File.close(held.unwrap!, IO_TIMEOUT)
+        discard(path, held.unwrap!)
       end
     end
   end
@@ -154,14 +160,26 @@ def process_hex() -> String
   return hex_of(bytes)
 end
 
-# The first free name among ATTEMPTS random ones. A name that is taken is skipped, and any other error ends the
-# attempts the same way, with the last system error.
-def make_private(temporary: String) -> Result[String]
+# Removes the run folder and releases its lock. Elsewhere the lock is held until the folder is gone, so no other sweep
+# takes the same folder; Windows cannot remove a folder with an open file in it, so the lock is closed first there.
+def discard(path: String, lock: FileHandle) -> Void
+  if windows?()
+    File.close(lock, IO_TIMEOUT)
+    Path.remove(path, IO_TIMEOUT)
+  else
+    Path.remove(path, IO_TIMEOUT)
+    File.close(lock, IO_TIMEOUT)
+  end
+end
+
+# The first free name among ATTEMPTS random ones, made as `prefix` and the name. A name that is taken is skipped, and
+# any other error ends the attempts the same way, with the last system error.
+def make_private(temporary: String, prefix: String) -> Result[String]
   last = "no attempt was made"
   attempt = 0
   while attempt < ATTEMPTS
     name = try random_hex()
-    path = try Path.join([temporary, "agentica-bdd-new-#{name}"])
+    path = try Path.join([temporary, "#{prefix}#{name}"])
     made = Dir.mkdir_private(path, IO_TIMEOUT)
     if made.ok?
       return ok(path)
@@ -180,6 +198,9 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
   name = try random_hex()
   final = try Path.join([temporary, "agentica-bdd-#{name}"])
   lock = try take_lock(current)
+  if windows?()
+    return ok(Run(path: current, lock: lock))
+  end
   renamed = Path.rename(current, final, IO_TIMEOUT)
   if !renamed.ok?
     File.close(lock, IO_TIMEOUT)
