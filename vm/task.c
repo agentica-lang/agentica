@@ -479,8 +479,9 @@ agc_task *agc_task_next(agc_vm *vm) {
    again, and the task is claimed by a CAS (agc_task_claim), which a waker or a canceller may win instead, and then they
    own it. The cancel and this end of the turn are a store-then-load on both sides (the canceller stores the flag and
    reads the state; the scheduler stores the state with the commit and reads the flag), so all four accesses are
-   sequentially consistent: with weaker orders both sides could read the old value and nobody would end the task. Returns
-   true when `main` has returned. */
+   sequentially consistent: with weaker orders both sides could read the old value and nobody would end the task. A
+   cancel that loses to a normal end (cancel_one finds the task DONE) changes nothing: the task keeps its own result. A
+   flag set during the turn wins, even when the turn returned. Returns true when `main` has returned. */
 bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_turn(vm, t, r, ran);
   trace_gc(vm, "turn");

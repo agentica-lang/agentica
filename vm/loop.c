@@ -262,7 +262,7 @@ static void hand_on(agc_vm *vm, agc_resource *handle) {
 }
 
 void agc_handle_leave(agc_vm *vm, agc_task *t) {
-  agc_sync_take(vm);
+  agc_sync_assert(vm);
   agc_resource *handle = t->lock_wait;
   t->lock_wait = NULL;
   t->lock_deadline = 0;
@@ -271,7 +271,6 @@ void agc_handle_leave(agc_vm *vm, agc_task *t) {
     handle->next_owner = NULL;
     hand_on(vm, handle);
   }
-  agc_sync_drop(vm);
 }
 
 void agc_unregister(agc_vm *vm, agc_resource *r) {
@@ -1283,7 +1282,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   uint64_t now = deadline ? agc_clock_ms() : 0;
   t->lock_wait = NULL;
   if (handle->next_owner == t || (!handle->holder && !handle->next_owner)) {
-    if (deadline) agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+    if (deadline) unwait(vm, handle, t);
     t->lock_deadline = 0;
     if (handle->next_owner == t) {
       handle->next_owner = NULL;
@@ -1298,7 +1297,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     now = agc_clock_ms();
     deadline = t->lock_deadline = now + (uint64_t)*timeout_ms;
   }
-  agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+  unwait(vm, handle, t);
   if (now >= deadline) {
     t->lock_deadline = 0;
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_timeout handle=%" PRIu64 " task=%" PRIu64, handle->id, t->id);

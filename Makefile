@@ -844,12 +844,12 @@ SANITIZE_JOBS ?= 4
 # The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only): the lock checks of
 # agc_sync_assert and the owner token then run on every builtin, so a builtin that touches shared state without its lock fails here.
 test-shared: dist/agentica$(EXE)
-	AGENTICA_VM_TEST_SHARED=1 $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS)
+	AGENTICA_VM_TEST_SHARED=1 $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(JOBS)
 
 vm-sanitize-build: dist/agentica$(EXE)
 
 vm-sanitize-test: vm-sanitize-build
-	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS)
+	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(JOBS)
 
 # Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's
 vendored-check:

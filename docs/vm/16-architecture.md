@@ -571,8 +571,8 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   trace and the cancel flag first, and the CAS from PARKING to PARKED is its
   last access to the task, but for one more read of the cancel flag (a cancel
   can fall between the first read and the CAS), which is claimed by a CAS. When
-  the CAS finds WOKEN it queues the task, so the
-  task is queued once and its next turn takes up the wait again.
+  the CAS finds WOKEN it queues the task, so the task is queued once and its
+  next turn takes up the wait again.
 - **`--schedulers N` is parsed and checked, and only 1 runs.** `vm/launch.c`
   reads the flag and `AGENTICA_SCHEDULERS` (1 to 1024, the flag wins). A count
   above 1 exits 2 with a message before the program loads, so N > 1 never runs
