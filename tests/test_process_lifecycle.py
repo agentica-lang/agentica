@@ -89,8 +89,11 @@ def kill(pid):
         return
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, check=False)
-    else:
+        return
+    try:
         os.kill(int(pid), signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # it ended between the check and the signal
 
 
 def gone(pid):
@@ -125,8 +128,9 @@ def test_a_vm_and_its_child_end_when_their_driver_is_killed(adopt, request, tmp_
     driver = adopt(start_vm(bytecode(DRIVER_PROGRAM, tmp_path, "driver"), vm_binary(), child, tmp_path / "private",
                             PYTHON, PEER, flags=["--allow-run"]))
     vm_pid = driver.next_line(WAIT).strip()
+    request.addfinalizer(lambda: kill(vm_pid))
     peer_pid = driver.next_line(WAIT).strip()
-    request.addfinalizer(lambda: [kill(vm_pid), kill(peer_pid)])
+    request.addfinalizer(lambda: kill(peer_pid))
     assert process_alive(vm_pid) and process_alive(peer_pid)
     driver.process.kill()
     driver.wait(WAIT)

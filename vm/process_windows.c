@@ -18,8 +18,16 @@ bool agc_proc_is_path(const char *command, size_t size) {
   return false;
 }
 
+static const char *const runnable[] = {".exe", ".com", NULL};
+
+static bool ends_with(const char *text, size_t size, const char *suffix) {
+  size_t n = strlen(suffix);
+  return size >= n && _strnicmp(text + size - n, suffix, n) == 0;
+}
+
 /* A `:` is allowed only as the drive letter of `C:\` or `C:/`. The last
-   component may not end in a dot or a space. */
+   component may not end in a dot or a space, nor in .cmd or .bat: a request
+   for x.cmd must not find a planted x.cmd.exe once a suffix is added. */
 bool agc_proc_name_ok(const char *command, size_t size) {
   size_t last = 0;
   for (size_t k = 0; k < size; k++) {
@@ -30,7 +38,7 @@ bool agc_proc_name_ok(const char *command, size_t size) {
   }
   if (last >= size) return false;
   char end = command[size - 1];
-  return end != '.' && end != ' ';
+  return end != '.' && end != ' ' && !ends_with(command, size, ".cmd") && !ends_with(command, size, ".bat");
 }
 
 bool agc_proc_next_dir(const char **cursor, const char **dir, size_t *size) {
@@ -52,11 +60,10 @@ bool agc_proc_next_dir(const char **cursor, const char **dir, size_t *size) {
 
 bool agc_proc_suffix_ok(const char *path) {
   size_t size = strlen(path);
-  return size >= 4 && (_stricmp(path + size - 4, ".exe") == 0 || _stricmp(path + size - 4, ".com") == 0);
+  for (const char *const *suffix = runnable; *suffix; suffix++)
+    if (ends_with(path, size, *suffix)) return true;
+  return false;
 }
 
-const char *const *agc_proc_suffixes(void) {
-  static const char *const both[] = {".exe", ".com", NULL};
-  return both;
-}
+const char *const *agc_proc_suffixes(void) { return runnable; }
 #endif

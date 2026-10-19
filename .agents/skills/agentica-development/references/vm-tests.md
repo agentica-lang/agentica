@@ -233,6 +233,18 @@ Read first: `references/vm.md`.
     `http-server-close` traced as `parent=group:N` (N the group's owner); skips
     on a `TRACE=0` VM
 
+- **Path:** `tests/test_process.py`, `tests/test_process_lifecycle.py`,
+  `tests/test_process_windows.py`
+  - **Owns:** `Process` on Linux, macOS and Windows, with Node and Python
+    peers (`tests/fixtures/process-peer.js`, `process-peer.py`): literal
+    arguments, working directory, environment, spawn failures, the ways a run
+    ends (`test_process.py`); a child is gone when its owner ends, the run is
+    stopped or the driver of its VM is killed (`test_process_lifecycle.py`); the
+    exit pair libuv reports for a stopped child, Windows only
+    (`test_process_windows.py`). `test_process_bdd.py` keeps the `agentica
+    test` case, which is not on Windows yet. The C side is
+    `vm/tests/process_test.c`.
+
 - **Path:** `tests/test_vm_stop.py`
   - **Owns:** the one exit path under stop signals, with
     `tests/fixtures/stop-peer.py` (Python): `SIGTERM`, `SIGINT` and `SIGHUP`

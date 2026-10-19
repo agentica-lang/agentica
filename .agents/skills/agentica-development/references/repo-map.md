@@ -90,7 +90,9 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   stdio_windows.c # the Windows side: pool thread for files and consoles, libuv pipe, CompareObjectHandles (references/vm-io.md)
   duplex.c        # child channel (fd 3) and Process.spawn_channel (references/vm-net.md)
   process.c       # Process builtins, System.env and System.pid (references/vm-net.md)
-  process_os.h    # command search rules that differ by system; process_posix.c and process_windows.c implement it (references/vm-io.md)
+  process_os.h    # command search rules that differ by system (references/vm-io.md)
+  process_posix.c # the POSIX side of process_os.h: every file may run, PATH splits at ':'
+  process_windows.c # the Windows side: .exe and .com only, ';' and quoted PATH entries, refused names
   stream.c        # input buffer and write path shared by processes and TCP (references/vm-net.md)
   tcp.c           # TCP and TLS builtins on libuv handles (references/vm-net.md)
   net.h           # tcp.c connection object for other C modules (references/vm-net.md)
@@ -148,7 +150,8 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_examples.py  # pytest: examples/*.agc, rejected fragments, CLI exit codes; slow: malformed algorithm inputs (references/stages.md)
   test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # pytest: Agentica stages against frozen outputs and goldens; frontend_support.py and frontend_cases.py hold helpers; test_frontend_refreeze.py covers tools/refreeze.py (references/frontend.md)
   test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
-  test_process_bdd.py  # pytest: Process in agentica test; apart from test_process.py until agentica test runs on Windows
+  test_process_bdd.py  # pytest: Process in agentica test; apart from test_process.py until it runs on Windows
+  test_process_windows.py  # pytest, native Windows only: the exit pair libuv reports for a stopped child (references/ci.md)
   test_process_lifecycle.py  # pytest: a child is gone when its owner ends, the run is stopped or the driver of its VM is killed, on every system (references/vm-tests.md)
   test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
   test_filesystem.py  # pytest: File and Path programs on the VM (references/vm-io.md)

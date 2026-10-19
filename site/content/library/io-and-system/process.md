@@ -30,11 +30,11 @@ Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Pr
 Starts a program. A name with no `/`, such as `"echo"`, is looked up in each
 `PATH` folder in order. The current folder is never added (empty `PATH`
 entries are skipped), but a relative entry such as `.` or `bin` is looked up
-under the current folder, as in the shell. A command with `/` is a path,
+under the current folder, as in the shell. A command with `/` is a path (on Windows `\` and a drive such as `C:` also make a path),
 relative to the current folder unless it starts with `/`, so a program in the
 current folder runs as `"./tool"`. A name that is not found gives
 `error("process: executable is unavailable")`. On Windows only `.exe` and
-`.com` programs can be spawned (`PATHEXT` is not read, and `.bat` and `.cmd` never run, because that needs `cmd.exe`; start `cmd.exe` by name to use a shell). A name that ends in a dot or a space, or has a `:` that is not the drive of a path, fails.
+`.com` programs can be spawned (`PATHEXT` is not read, and `.bat` and `.cmd` never run, because that needs `cmd.exe`; start `cmd.exe` by name to use a shell). A name that ends in a dot, a space, `.cmd` or `.bat`, or has a `:` that is not the drive of a path, fails.
 
 A file that is found but cannot run (no execute permission, say) is an error
 from `spawn`.
@@ -181,7 +181,7 @@ When more than 1 MiB of standard output is waiting, or standard error passes
 `error("process: output exceeds 1048576 bytes")`. `Process.read_bytes(p, 0,
 timeout)` gives that error at once, so you can check for it without waiting.
 
-Closing a captured program asks it to stop first (`SIGTERM`) and kills it one second later if it still runs, so a program that is itself an Agentica program can stop its own children. Windows has no `SIGTERM`: the program ends at once and its exit code is 1. When the VM itself ends on Windows, the programs it started and their descendants end too. `agentica test` runs each [BDD](/library/testing/bdd/) scenario, and each program under test, as a captured program.
+Closing a captured program asks it to stop first (`SIGTERM`) and kills it one second later if it still runs, so a program that is itself an Agentica program can stop its own children. Windows has no `SIGTERM`: the program ends at once. When the VM itself ends on Windows, the programs it started and their descendants end too (this needs the job object that libuv assigns, which an outer job that forbids breakaway prevents). `agentica test` runs each [BDD](/library/testing/bdd/) scenario, and each program under test, as a captured program.
 
 ```agentica {mode="check"}
 def main() -> Void

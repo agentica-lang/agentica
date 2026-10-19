@@ -230,12 +230,14 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   programs.
 - A command without `/` is looked up in each `PATH` entry, in order. An empty
   entry is skipped, so `./name` runs a program in the working directory; a
-  relative entry such as `.` resolves against it. A command with `/` is a path,
-  relative to the working directory unless absolute. A name that is not found,
+  relative entry such as `.` resolves against it. A command with `/` is a path
+  (on Windows `\` and a drive such as `C:` also make a path), relative to the
+  working directory unless absolute. A name that is not found,
   or names a directory, is `executable is unavailable`. Arguments go straight to
   the program, with no shell. On Windows only `.exe` and `.com` run (no
   `PATHEXT`, no `.bat` or `.cmd`: that needs `cmd.exe`), and a name with a
-  trailing dot or space, or a `:` outside a drive, is refused. A file that is
+  trailing dot or space, a `:` outside a drive, or ending in `.bat` or `.cmd`,
+  is refused. A file that is
   found but cannot run is an error Result from `spawn`.
 - Timeouts are positive milliseconds and include the lock wait. A timeout during
   stream I/O kills and closes the child; a timeout while waiting for the lock
@@ -255,8 +257,8 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   up the children started directly; their descendants are not covered.
   Operational failures are String error Results. A failed explicit cleanup is
   `RUNTIME-PROCESS-CLOSE` at the call. On Windows a stop is always immediate (no
-  `SIGTERM` grace), a stopped child's exit code is 1, and the descendants of a
-  program the VM started die when the VM itself ends.
+  `SIGTERM` grace), and, where libuv can assign its job object, the
+  descendants of a program the VM started die when the VM itself ends.
 - `spawn_captured` works like `spawn`, with the same lookup, permission and
   cleanup, except that the child starts in `dir` (`"."` keeps the working
   directory; an empty, NUL or non-directory `dir` is an error) and its streams

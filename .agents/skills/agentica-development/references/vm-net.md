@@ -485,8 +485,8 @@ Native process regression tests use their own C executable as the child. They
 cover quoted and empty arguments, UTF-8 environment values, filtering the
 private marker, binary stdio, a duplex channel round trip and guard cleanup.
 Windows executable lookup searches nonempty PATH entries separated by `;`,
-accepts drive and UNC paths, and resolves `.exe` files without an implicit
-shell.
+accepts drive and UNC paths, and resolves `.exe` and `.com` files (no
+`PATHEXT`) without an implicit shell.
 The child environment comes from `uv_os_environ` and owns its copied strings;
 Windows private names are filtered case-insensitively. Windows channel pairs
 have random names, one local instance and a protected owner-only DACL.

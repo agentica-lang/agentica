@@ -1,6 +1,7 @@
 /* Native child processes: literal arguments, inherited environment, pipes, private channel and guard cleanup. */
 #include "builtin_test.h"
 #include "../services.h"
+#include "../process_os.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -78,9 +79,43 @@ static void copy_file(const char *from, const char *to) {
 }
 
 static void set_path(const char *head, const char *tail) {
-  char joined[32768];
+  char joined[40000];
   snprintf(joined, sizeof joined, "%s%s", head, tail);
   assert(uv_os_setenv("PATH", joined) == 0);
+}
+
+/* The name rules and the path test of process_os.h, on the strings alone: `win` is the answer on Windows, and every
+   name is accepted on POSIX. */
+static void name_rules(void) {
+  static const struct { const char *name; bool win_ok; bool win_path; bool posix_path; } cases[] = {
+    {"tool", true, false, false},
+    {"tool.exe", true, false, false},
+    {"a b.exe", true, false, false},
+    {"dir/tool.exe", true, true, true},
+    {"dir\\tool.exe", true, true, false},
+    {"C:\\x.exe", true, true, false},
+    {"C:/x.exe", true, true, true},
+    {"C:foo.exe", false, true, false},
+    {"x.exe:s.exe", false, true, false},
+    {"x.exe::$DATA", false, true, false},
+    {"\\\\?\\C:\\x.exe", false, true, false},
+    {"tool.exe.", false, false, false},
+    {"tool.exe ", false, false, false},
+    {"dir\\", false, true, false},
+    {"x.cmd", false, false, false},
+    {"X.BAT", false, false, false},
+    {"x.cmd.exe", true, false, false},
+  };
+  for (size_t k = 0; k < sizeof cases / sizeof cases[0]; k++) {
+    size_t n = strlen(cases[k].name);
+#ifdef _WIN32
+    assert(agc_proc_name_ok(cases[k].name, n) == cases[k].win_ok);
+    assert(agc_proc_is_path(cases[k].name, n) == cases[k].win_path);
+#else
+    assert(agc_proc_name_ok(cases[k].name, n));
+    assert(agc_proc_is_path(cases[k].name, n) == cases[k].posix_path);
+#endif
+  }
 }
 
 /* The command search of docs/vm/10-io-processes.md 10.4, with a copy of this program as the only candidate. */
@@ -106,7 +141,8 @@ static void search_tests(const char *self) {
   snprintf(file, sizeof file, "%s/%s", dir, peer);
   copy_file(self, file);
 
-  /* The directory comes after an empty entry, and the rest of PATH stays, so the copy still finds its libraries. */
+  /* An empty entry, then the directory; the rest of PATH stays, so the copy still finds its libraries. That an empty
+     entry or the working directory is not searched is checked end to end in tests/test_process.py. */
   char head[4400];
 #ifdef _WIN32
   snprintf(head, sizeof head, "%c\"%s\"%c", sep, dir, sep);
@@ -119,7 +155,8 @@ static void search_tests(const char *self) {
   assert(status_of(file) == 3);
   assert(status_of("agc-peer/") == -1);
 #ifdef _WIN32
-  /* Case does not matter, `.com` runs, `.cmd` and `.bat` never do (that needs cmd.exe), and a stream name is refused. */
+  /* Case does not matter, `.com` runs, `.cmd` and `.bat` never do (that needs cmd.exe), and a planted x.cmd.exe does
+     not answer a request for x.cmd. */
   assert(status_of("AGC-PEER") == 3 && status_of("agc-peer.EXE") == 3);
   char com[4400], script[4400];
   snprintf(com, sizeof com, "%s/agc-com.com", dir);
@@ -129,18 +166,11 @@ static void search_tests(const char *self) {
   FILE *f = fopen(script, "wb");
   assert(f && fputs("@exit 3\r\n", f) >= 0 && fclose(f) == 0);
   assert(status_of("agc-script") == -1 && status_of("agc-script.cmd") == -1 && status_of(script) == -1);
-  snprintf(script, sizeof script, "%s:stream", file);
-  assert(status_of(script) == -1);
+  char plant[4400];
+  snprintf(plant, sizeof plant, "%s/agc-plant.cmd.exe", dir);
+  copy_file(self, plant);
+  assert(status_of("agc-plant.cmd") == -1 && status_of("agc-plant.cmd.exe") == 3);
 #endif
-
-  /* The working directory is not searched: only PATH is. */
-  set_path("", old);
-  char here[4096];
-  size = sizeof here;
-  assert(uv_cwd(here, &size) == 0);
-  assert(uv_chdir(dir) == 0);
-  assert(status_of("agc-peer") == -1);
-  assert(uv_chdir(here) == 0);
 
   assert(uv_os_setenv("PATH", old) == 0);
   assert(uv_fs_unlink(NULL, &req, file, NULL) == 0);
@@ -150,6 +180,8 @@ static void search_tests(const char *self) {
   uv_fs_req_cleanup(&req);
   snprintf(script, sizeof script, "%s/agc-script.cmd", dir);
   assert(uv_fs_unlink(NULL, &req, script, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+  assert(uv_fs_unlink(NULL, &req, plant, NULL) == 0);
   uv_fs_req_cleanup(&req);
 #endif
   assert(uv_fs_rmdir(NULL, &req, dir, NULL) == 0);
@@ -173,7 +205,8 @@ static long long inheritable(void) {
 #endif
 }
 
-/* The child's check, made before any set-up of its own: true when the parent's descriptor or handle did not arrive. */
+/* The child's check, made before any set-up of its own: true when the parent's descriptor or handle did not arrive.
+   On Windows it assumes no handle of the child's own sits at the same value and is a character device. */
 static bool absent(long long number) {
 #ifdef _WIN32
   HANDLE h = (HANDLE)(intptr_t)number;
@@ -229,6 +262,7 @@ int main(int argc, char **argv) {
   size_t size = sizeof self;
   assert(uv_exepath(self, &size) == 0);
   long long leak = inheritable();
+  assert(!absent(leak)); /* positive control: the parent does hold it */
   init();
   agc_resource *spare = agc_register(&vm, NULL, NULL);
   agc_value rest[] = {text("--wait")};
@@ -280,6 +314,7 @@ int main(int argc, char **argv) {
   args[1] = agc_int(5000);
   assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
   call("Process.close", args);
+  name_rules();
   search_tests(self);
   rest[0] = text("--channel");
   args[0] = text(self);
