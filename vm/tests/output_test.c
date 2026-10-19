@@ -722,7 +722,10 @@ static void full_socket_pair(SOCKET *writer, SOCKET *reader) {
   assert(bind(listener, (struct sockaddr *)&address, length) == 0);
   assert(getsockname(listener, (struct sockaddr *)&address, &length) == 0);
   assert(listen(listener, 1) == 0);
-  *writer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  /* Not overlapped, as the socket a parent hands to a child is: WriteFile with no OVERLAPPED fails on an overlapped
+     one. */
+  *writer = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0);
+  assert(*writer != INVALID_SOCKET);
   setsockopt(*writer, SOL_SOCKET, SO_SNDBUF, (const char *)&small, sizeof small);
   assert(connect(*writer, (struct sockaddr *)&address, length) == 0);
   *reader = accept(listener, NULL, NULL);
