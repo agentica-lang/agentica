@@ -116,7 +116,7 @@ reassigned. Variables created in a block are not visible after its `end`.
 `_` is a discard wherever a name is bound: an assignment target (`_ = f()`), a
 `for` variable, a block or function parameter and a pattern slot. It binds
 nothing, so it can repeat and never conflicts with another name. Reading `_` is
-`CHECK-UNKNOWN-NAME`.
+`CHECK-UNKNOWN-NAME`, and `_: Int = x` is `PARSE-UNEXPECTED-TOKEN`.
 
 ### Module constants
 

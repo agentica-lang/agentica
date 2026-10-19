@@ -1,4 +1,4 @@
-"""Checker rules through the product CLI: where diagnostics point, pipes and the nesting limit.
+"""Checker rules through the product CLI: where diagnostics point, pipes, the nesting limit and the `_` discard.
 
 These are the cases of the old checker test about the spans of diagnostics, the pipe rules and the nesting
 limit. The other cases are in tests/test_spec_checker_rest.py.
@@ -6,7 +6,7 @@ limit. The other cases are in tests/test_spec_checker_rest.py.
 Each program is written to a file and checked with `--json check FILE`. A test asserts the diagnostic code and its
 range (the 1-based line and column of the start and of the end, which is exclusive). Message and help texts are not
 asserted (AGENTS.md). The programs are also in the frozen corpus (tests/fixtures/frontend/frozen/corpus/), which the
-Agentica checker is compared with.
+Agentica checker is compared with, except the `_` discard programs at the end.
 """
 from tests.agentica_test import cli, run
 from tests.spec_support import check_diagnostic as problem, covered
@@ -129,9 +129,14 @@ def discard_program(body, helpers=DISCARD_HELPERS):
 
 
 def test_reading_a_discard_is_an_unknown_name(tmp_path):
-    cases = [("  _ = f(1)\n  puts(_)", (7, 8)), ("  for _ in [1]\n    puts(_)\n  end", (7, 10))]
-    for body, start in cases:
-        expect(discard_program(body), "CHECK-UNKNOWN-NAME", start, tmp_path, "_")
+    cases = [
+        ("  _ = f(1)\n  puts(_)", "CHECK-UNKNOWN-NAME", (7, 8), "_"),
+        ("  for _ in [1]\n    puts(_)\n  end", "CHECK-UNKNOWN-NAME", (7, 10), "_"),
+        ("  _ = 1\n  _ += 1", "CHECK-UNKNOWN-NAME", (7, 3), "_"),
+        ('  _ = puts("x")', "CHECK-VOID-VALUE", (6, 7), 'puts("x")'),
+    ]
+    for body, code, start, covers in cases:
+        expect(discard_program(body), code, start, tmp_path, covers)
 
 
 def test_a_discard_checks_and_runs_wherever_a_name_is_bound(tmp_path):
