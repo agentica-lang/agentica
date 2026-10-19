@@ -283,7 +283,9 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   and also opens a channel to the child: a bidirectional socket pair, separate
   from its stdin, stdout and stderr, that carries text lines in both directions.
   The child finds it on descriptor 3, and its environment holds
-  `AGENTICA_CHANNEL=3`. `spawn` and `spawn_captured` remove that variable from
+  `AGENTICA_CHANNEL=3`. On Windows the channel is a pipe in each direction: the
+  child reads descriptor 3 and writes descriptor 4, and the variable is
+  `AGENTICA_CHANNEL=3,4`. `spawn` and `spawn_captured` remove that variable from
   the child's environment, even when the parent inherited it, so a program only
   ever sees a channel its own parent opened for it. The channel works on Linux
   and macOS; Windows support is in progress.
@@ -311,11 +313,13 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   timeout_ms)` are the child's side of the same channel, with the same rules and
   errors. A program that was not given a channel gets `error("process: no parent
   channel")`. The timeout must be positive, and a timeout closes the channel for
-  good. The VM takes the channel at startup only when the marker is present and
-  descriptor 3 is a socket, or a FIFO opened for reading and writing; a regular
-  file, a device or a one-way FIFO there is left alone and the program has no
-  channel. These two calls are for runner code such as `Test.run`: a test or
-  step that calls them can break the protocol, and nothing stops it.
+  good. The VM takes the channel at startup only when the marker is present with
+  the value of its system and descriptor 3 is a socket, or a FIFO opened for
+  reading and writing (on Windows: 3 a pipe that can be read and 4 one that can
+  be written); a regular file, a device or a one-way FIFO there is left alone
+  and the program has no channel. These two calls are for runner code such as
+  `Test.run`: a test or step that calls them can break the protocol, and nothing
+  stops it.
 
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md
 [agentica-link-2]: ../../site/content/library/io-and-system/files.md

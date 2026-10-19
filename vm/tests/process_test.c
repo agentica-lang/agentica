@@ -263,6 +263,56 @@ static void wait_ended(const char *path) {
   assert(ended(pid));
 }
 
+/* The VM side of a channel child: it takes the channel from the descriptors the parent gave it. */
+static void take_channel(void) {
+  init();
+  agc_parent_take(&vm);
+  assert(agc_parent_open(&vm));
+}
+
+/* True when the CRT descriptor is not open in this process. */
+static bool fd_absent(int fd) {
+#ifdef _WIN32
+  return _get_osfhandle(fd) == (intptr_t)INVALID_HANDLE_VALUE;
+#else
+  return fcntl(fd, F_GETFD) == -1 && errno == EBADF;
+#endif
+}
+
+/* Starts this program again in `mode` (with one more word when `extra` is given) with Process.spawn_channel or
+   Process.spawn_captured, and returns the handle. */
+static agc_value start(const char *builtin, const char *self, const char *mode, const char *extra) {
+  agc_value words[] = {text(mode), text(extra ? extra : "")};
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, extra ? 2 : 1)), text("."), agc_int(5000)};
+  return ok(call(builtin, args));
+}
+
+static agc_value read_line(agc_value handle, int64_t ms) {
+  agc_value args[] = {handle, agc_int(ms)};
+  return call("Process.channel_read_line", args);
+}
+
+static agc_value send_line(agc_value handle, agc_value line) {
+  agc_value args[] = {handle, line, agc_int(5000)};
+  return call("Process.channel_send", args);
+}
+
+static void fails(agc_value result, const char *message) {
+  const agc_result *r = agc_as_result(&vm, result);
+  assert(!r->ok);
+  equal(r->value, message);
+}
+
+static int64_t exit_status(agc_value handle) {
+  agc_value args[] = {handle, agc_int(5000)};
+  return agc_as_int(&vm, ok(call("Process.wait", args)));
+}
+
+static void close_process(agc_value handle) {
+  agc_value args[] = {handle};
+  call("Process.close", args);
+}
+
 static int child(int argc, char **argv) {
 #ifdef _WIN32
   _setmode(0, _O_BINARY);
@@ -283,10 +333,87 @@ static int child(int argc, char **argv) {
     }
     return 3;
   }
+  if (strcmp(argv[1], "--lines") == 0) {
+    /* Counts the lines until the channel ends, and reports how many came and why it ended. */
+    take_channel();
+    int count = 0;
+    for (;;) {
+      agc_value args[] = {agc_int(5000), agc_void()};
+      const agc_result *r = agc_as_result(&vm, call("Process.parent_read_line", args));
+      if (!r->ok) {
+        const agc_string *why = agc_as_string(&vm, r->value);
+        char reply[160];
+        snprintf(reply, sizeof reply, "%d %.*s\n", count, (int)why->bytes, why->data);
+        args[0] = text(reply);
+        args[1] = agc_int(5000);
+        ok(call("Process.parent_send", args));
+        break;
+      }
+      count++;
+    }
+    assert(agc_io_close(&vm));
+    return 0;
+  }
+  if (strcmp(argv[1], "--flood") == 0) {
+    /* More than a line may hold, written to the raw channel descriptor with no newline. */
+    static char block[65536];
+    memset(block, 'x', sizeof block);
+    size_t left = 1048700;
+    while (left) {
+      size_t n = left < sizeof block ? left : sizeof block;
+#ifdef _WIN32
+      int done = _write(4, block, (unsigned)n);
+#else
+      long done = write(3, block, n);
+#endif
+      if (done <= 0) return 0;
+      left -= (size_t)done;
+    }
+    uv_sleep(30000);
+    return 0;
+  }
+  if (strcmp(argv[1], "--isolated") == 0) {
+    /* What a child of a channel child must not inherit: the marker and the channel descriptors. */
+    char value[64];
+    size_t room = sizeof value;
+    return uv_os_getenv(AGC_CHANNEL_ENV, value, &room) == UV_ENOENT && fd_absent(3) && fd_absent(4) ? 0 : 1;
+  }
+  if (strcmp(argv[1], "--leaf") == 0 && argc > 2) {
+    /* Leaves a mark when its parent's end of the channel goes away. */
+    take_channel();
+    agc_value args[] = {agc_int(10000)};
+    const agc_result *r = agc_as_result(&vm, call("Process.parent_read_line", args));
+    if (!r->ok) {
+      const agc_string *why = agc_as_string(&vm, r->value);
+      FILE *f = fopen(argv[2], "wb");
+      if (f) {
+        fprintf(f, "%.*s\n", (int)why->bytes, why->data);
+        fclose(f);
+      }
+    }
+    return 0;
+  }
+  if (strcmp(argv[1], "--middle") == 0 && argc > 2) {
+    /* A channel child with two children of its own: a channel child and a plain one. It reports whether the plain one
+       inherited anything, then ends at once without the clean-up of a VM, so its end of the leaf's channel closes
+       with the process. */
+    take_channel();
+    char self[32768];
+    size_t size = sizeof self;
+    assert(uv_exepath(self, &size) == 0);
+    start("Process.spawn_channel", self, "--leaf", argv[2]);
+    agc_value plain = start("Process.spawn_captured", self, "--isolated", NULL);
+    agc_value args[] = {plain, agc_int(5000)};
+    int64_t status = agc_as_int(&vm, ok(call("Process.wait", args)));
+    args[0] = text(status == 0 ? "isolated\n" : "inherited\n");
+    args[1] = agc_int(5000);
+    ok(call("Process.parent_send", args));
+    args[0] = text("ready\n");
+    ok(call("Process.parent_send", args));
+    _exit(0);
+  }
   if (strcmp(argv[1], "--channel") == 0) {
-    init();
-    agc_parent_take(&vm);
-    assert(agc_parent_open(&vm));
+    take_channel();
     agc_value args[] = {agc_int(5000), agc_void()};
     const agc_string *line = agc_as_string(&vm, ok(call("Process.parent_read_line", args)));
     agc_string *reply = agc_new_string(agc_size_add(line->bytes, 1), 0);
@@ -309,6 +436,69 @@ static int child(int argc, char **argv) {
   size_t n;
   while ((n = fread(bytes, 1, sizeof bytes, stdin)) != 0) assert(fwrite(bytes, 1, n, stdout) == n);
   return fflush(stdout) == 0 ? 0 : 1;
+}
+
+/* Waits, for at most five seconds, for the file the leaf writes, and checks its line. */
+static void wait_for_mark(const char *path, const char *expected) {
+  for (int k = 0; k < 500; k++) {
+    FILE *f = fopen(path, "rb");
+    if (f) {
+      char text_[160] = "";
+      bool whole = fgets(text_, sizeof text_, f) && strchr(text_, '\n');
+      fclose(f);
+      if (whole) {
+        assert(strcmp(text_, expected) == 0);
+        return;
+      }
+    }
+    uv_sleep(10);
+  }
+  assert(!"the leaf never saw its parent go");
+}
+
+/* The channel contract with children that are this program: lines in both directions, the end of input after a half
+   close and what still comes back, a line over the limit, a timeout, a child that ends, and a parent that vanishes. */
+static void channel_tests(const char *self) {
+  agc_value handle = start("Process.spawn_channel", self, "--lines", NULL);
+  ok(send_line(handle, text("one\n")));
+  ok(send_line(handle, text("two\n")));
+  agc_value args[] = {handle, agc_int(5000)};
+  ok(call("Process.channel_close", args));
+  equal(ok(read_line(handle, 5000)), "2 process: end of input");
+  assert(exit_status(handle) == 0);
+  close_process(handle);
+
+  handle = start("Process.spawn_channel", self, "--flood", NULL);
+  fails(read_line(handle, 10000), "process: line exceeds 1048576 bytes");
+  fails(read_line(handle, 100), "process: channel is closed");
+  close_process(handle);
+
+  handle = start("Process.spawn_channel", self, "--wait", NULL);
+  agc_string *big = agc_new_string(1048577, 0);
+  memset(big->data, 'y', big->bytes);
+  fails(send_line(handle, agc_string_value(big)), "process: send exceeds 1048576 bytes");
+  fails(read_line(handle, 100), "network: operation timed out");
+  fails(read_line(handle, 100), "process: channel is closed");
+  fails(send_line(handle, text("late\n")), "process: channel is closed");
+  close_process(handle);
+
+  handle = start("Process.spawn_channel", self, "--exit", NULL);
+  fails(read_line(handle, 5000), "process: end of input");
+  assert(exit_status(handle) == 3);
+  close_process(handle);
+
+  char base[4096], mark[4200];
+  size_t base_size = sizeof base;
+  assert(uv_os_tmpdir(base, &base_size) == 0);
+  snprintf(mark, sizeof mark, "%s/agc-leaf-%ld.txt", base, (long)uv_os_getpid());
+  remove(mark);
+  handle = start("Process.spawn_channel", self, "--middle", mark);
+  equal(ok(read_line(handle, 10000)), "isolated");
+  equal(ok(read_line(handle, 10000)), "ready");
+  assert(exit_status(handle) == 0);
+  close_process(handle);
+  wait_for_mark(mark, "process: end of input\n");
+  remove(mark);
 }
 
 int main(int argc, char **argv) {
@@ -396,6 +586,7 @@ int main(int argc, char **argv) {
   equal(ok(call("Process.channel_read_line", args)), "private \xC3\xB1\xF0\x9F\x99\x82");
   assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
   call("Process.close", args);
+  channel_tests(self);
   assert(uv_os_unsetenv("AGENTICA_PROCESS_TEST") == 0);
   assert(uv_os_unsetenv(AGC_CHANNEL_ENV) == 0);
   assert(agc_io_close(&vm));

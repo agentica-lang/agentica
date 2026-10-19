@@ -116,7 +116,9 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   `spawn_captured` and also opens a channel: a bidirectional socket pair,
   separate from the child's stdin,
   stdout and stderr, that carries text lines in both directions. The child finds
-  it on descriptor 3, and its environment has `AGENTICA_CHANNEL=3`. `spawn` and
+  it on descriptor 3, and its environment has `AGENTICA_CHANNEL=3`. On Windows
+  the channel is a pipe per direction: the child reads descriptor 3, writes
+  descriptor 4, and the variable is `AGENTICA_CHANNEL=3,4`. `spawn` and
   `spawn_captured` remove that variable from the child's environment, even when
   your program inherited it. `channel_read_line` reads like `read_line` (at most
   1 MiB, LF or CRLF removed, strict UTF-8, `error("process: end of input")` at
@@ -144,11 +146,11 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   `Process.parent_send(text, timeout_ms)` use the channel the parent opened,
   with the same rules and errors. A program with no channel gets
   `error("process: no parent channel")`. The timeout must be positive, and a
-  timeout closes the channel for good. The VM takes descriptor 3 at startup only
-  when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a socket, or a FIFO
-  opened for reading and writing (a regular file, a device or a one-way FIFO is
-  left alone), then hides it and removes the variable, so your own children
-  never inherit it. These two calls are for runner code: under `agentica test`,
-  `Test.run` and the BDD step programs use the channel
-  (`references/testing.md`), and a test or step that calls them can break the
-  protocol, with nothing to stop it.
+  timeout closes the channel for good. The VM takes the channel at startup only
+  when `AGENTICA_CHANNEL` has the value of the system (`3`, `3,4` on Windows)
+  and descriptor 3 is a socket, or a FIFO opened for reading and writing (a
+  regular file, a device or a one-way FIFO is left alone), then hides it and
+  removes the variable, so your own children never inherit it. These two calls
+  are for runner code: under `agentica test`, `Test.run` and the BDD step
+  programs use the channel (`references/testing.md`), and a test or step that
+  calls them can break the protocol, with nothing to stop it.

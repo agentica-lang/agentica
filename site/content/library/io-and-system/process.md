@@ -230,7 +230,7 @@ Process.spawn_channel(command: String, args: List[String], dir: String, timeout_
 
 Starts a program like `Process.spawn_captured`, and also opens a channel to it: a bidirectional socket pair, apart from its standard input, standard output and standard error, that carries lines of text in both directions. Linux and macOS; Windows support is in progress.
 
-The program finds the channel on file descriptor 3, and its environment holds `AGENTICA_CHANNEL=3`. `Process.spawn` and `Process.spawn_captured` remove that variable from the environment they pass on, so a program only sees a channel that its own parent opened for it.
+The program finds the channel on file descriptor 3, and its environment holds `AGENTICA_CHANNEL=3`. On Windows the channel is a pipe in each direction: the program reads descriptor 3 and writes descriptor 4, and the variable is `AGENTICA_CHANNEL=3,4`. `Process.spawn` and `Process.spawn_captured` remove that variable from the environment they pass on, so a program only sees a channel that its own parent opened for it.
 
 A program that talks to its parent on a channel keeps its own standard input and output for itself. `agentica test` uses one for the unit test files and BDD scenarios it runs.
 
@@ -294,7 +294,7 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 
 The program's side of the channel its parent opened with `Process.spawn_channel`. The rules are those of `channel_read_line` and `channel_send`, and the timeout must be positive. A program that was not given a channel gets `error("process: no parent channel")`. A timeout closes the channel for good.
 
-The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a socket, or a FIFO opened for reading and writing. A regular file, a device or a one-way FIFO on descriptor 3 is left alone and the program has no channel. The VM hides the descriptor and removes the variable, so the program's own children do not inherit either.
+The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL` has the value of the system (`3`, or `3,4` on Windows) and descriptor 3 is a socket, or a FIFO opened for reading and writing (on Windows: descriptor 3 a pipe that can be read and descriptor 4 one that can be written). A regular file, a device or a one-way FIFO on descriptor 3 is left alone and the program has no channel. The VM hides the descriptor and removes the variable, so the program's own children do not inherit either.
 
 These two calls are for runner code such as `agentica test`. A test or step that calls them can break the protocol between the runner and its file, and nothing stops it.
 

@@ -146,43 +146,65 @@ code above.
   in milliseconds. A failed `SIGTERM` in `Process.close` is
   `RUNTIME-PROCESS-CLOSE`.
 
-**As built (25c, the child channel).** A second descriptor, a socket
-pair separate from stdin, stdout and stderr, carries the protocol of
+**As built (25c, the child channel).** Descriptors separate from stdin, stdout
+and stderr (a socket pair, or on Windows two pipes) carry the protocol of
 `agentica test` and of BDD children, so a test or a step program owns its own
 stdin and stdout. `Process.spawn_channel`, `channel_read_line`, `channel_send`,
 `channel_close` and `read_available` are in `vm/process.c`;
 `Process.parent_read_line` and `Process.parent_send` (the child side) and the
-shared duplex stream are in `vm/duplex.c`, a service (`docs/vm/15-layers.md`).
-The signatures are in `docs/grammar/06d-io-and-network.md`. Linux and macOS
-use a socket pair; Windows has a pipe path (`agc_fs_take_channel`) that the
-platform tests do not cover yet.
+shared duplex stream are in `vm/duplex.c`, a service (`docs/vm/15-layers.md`);
+the system part (making the ends, the marker, taking them in the child) is
+`vm/duplex_os.h` with `duplex_posix.c` and `duplex_windows.c`. The signatures
+are in `docs/grammar/06d-io-and-network.md`. Linux and macOS use a socket
+pair; Windows uses a pipe per direction (below). The C tests
+`vm/tests/pipe_pair_test.c` and `vm/tests/process_test.c` run on Windows; the
+Python and `agentica test` coverage on Windows is still to come.
 
 - **The socket pair.** One `uv_socketpair` (`SOCK_STREAM`) per child. The parent
   keeps one end as a libuv pipe handle, and the child gets the other as
   descriptor 3 (`stdio[3]`, so `stdio_count` is 4) and the variable
   `AGENTICA_CHANNEL=3`. A socket and not a FIFO, so the child cannot reopen it
   through `/proc/self/fd/3` with a different mode, and one object carries both
-  directions. The stream is text lines in both directions, as in the other
+  directions.
+- **Windows: a pipe per direction.** A byte pipe cannot be shut down for
+  writing: libuv's `uv_shutdown` on a pipe that is also read starts a 50 ms
+  timer that closes both directions, and only when a read is pending. So
+  `agc_chan_pair` makes two pipes like the ones of stdin and stdout (the
+  child's end blocking, the parent's end non-blocking): the child reads
+  descriptor 3 (the parent's lines) and writes descriptor 4 (its own), the
+  stdio count is 5, and the variable is `AGENTICA_CHANNEL=3,4`. The parent's
+  write end is write-only, so `uv_shutdown` on it closes the handle and the
+  child reads the end of its input; the parent keeps reading the other pipe.
+  `vm/tests/pipe_pair_test.c` checks this against the system, with a plain C
+  child that uses `_read` and `_write`. The CRT of the child rebuilds
+  descriptors 3 and 4 from the `lpReserved2` block that libuv builds for each
+  spawn, and libuv passes only those handles
+  (`PROC_THREAD_ATTRIBUTE_HANDLE_LIST`), so a grandchild gets none of them.
+- **Lines.** The stream is text lines in both directions, as in the other
   `Process` streams: `\n` ends a line, a trailing `\r` is removed, a last line
   without `\n` is a line, and invalid UTF-8 is an error.
 - **Environment.** Every spawn builds the child's environment from the VM's own:
   `AGENTICA_CHANNEL` is always removed, `UV_USE_IO_URING` is removed as before
-  (§10.2.2), and only `spawn_channel` adds `AGENTICA_CHANNEL=3`. So a parent
-  that spawns without the pipe never passes an inherited marker on, and a
-  grandchild sees neither the marker nor descriptor 3 unless its own parent
-  opened a channel for it. `System.env` hides the same entries from the
+  (§10.2.2), and only `spawn_channel` adds `AGENTICA_CHANNEL=3` (`3,4` on
+  Windows). So a parent that spawns without the pipe never passes an inherited
+  marker on, and a grandchild sees neither the marker nor descriptor 3 unless
+  its own parent opened a channel for it. `System.env` hides the same entries from the
   program (`own_env` in `vm/process.c` decides for both). `AGENTICA_VM_METRICS`
   and `AGENTICA_VM_METRICS_FILE` are also removed from a child's environment
   (`metrics_env`, matched with their `=`), so a child VM or a BDD runner never
   fights for the metrics port or file (`docs/future/28-vm-metrics.md` §28.5);
   `System.env` still shows them to the program.
 - **Child start.** `agc_parent_take` runs in `agentica.c` before the program
-  does. If `AGENTICA_CHANNEL` is `3` and `fstat(3)` says socket or FIFO and
-  `fcntl(F_GETFL)` says it is open for both reading and writing (an anonymous
-  pipe end never is), the VM moves the descriptor with `F_DUPFD_CLOEXEC`, closes
-  3, forgets it in the table of inherited files (so no `File` call can reach
-  it), removes the variable from its own environment, and keeps the stream until
-  the end of the run. In any other case, such as a regular file, a character
+  does. The variable must be exactly the value of this system (`3`, or `3,4` on
+  Windows): a VM never guesses from another form. If `AGENTICA_CHANNEL` is `3`
+  and `fstat(3)` says socket or FIFO and `fcntl(F_GETFL)` says it is open for
+  both reading and writing (an anonymous pipe end never is), the VM moves the
+  descriptor with `F_DUPFD_CLOEXEC`, closes 3, forgets it in the table of
+  inherited files (so no `File` call can reach it), removes the variable from
+  its own environment, and keeps the stream until the end of the run. On
+  Windows it needs descriptor 3 to be a pipe that grants reading and 4 one that
+  grants writing; it duplicates both without inheritance and closes the
+  originals. In any other case, such as a regular file, a character
   device or a FIFO open for only one direction on descriptor 3, nothing is
   touched (the descriptor stays as it was) and the child-side builtins return
   `error("process: no parent channel")`. The libuv handle is attached on first

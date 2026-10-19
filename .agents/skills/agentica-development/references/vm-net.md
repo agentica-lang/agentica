@@ -8,9 +8,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 ## Files
 
 - **Path:** `vm/duplex.c`
-  - **Owns:** The child channel (fd 3) and the duplex stream of
-    `Process.spawn_channel` over Unix socket pairs or owner-only native Windows
-    named pipes.
+  - **Owns:** The child channel and the duplex stream of
+    `Process.spawn_channel`: a libuv stream to read and one to write (one
+    socket on Unix, a pipe per direction on Windows). The ends are made and
+    taken in `duplex_os.h` (`references/vm-io.md`).
 
 - **Path:** `vm/process.c`
   - **Owns:** The `Process` builtins behind `--allow-run`, using libuv on Unix
@@ -137,11 +138,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_duplex_release`)
   - the child side is `agc_parent_take` (called by `agc_launch_vm` in
     `vm/launch.c` after
-    `agc_files_init`: takes fd 3 only with `AGENTICA_CHANNEL=3`, a socket or a
-    FIFO opened `O_RDWR` (`F_GETFL`; a one-way FIFO would fail the read start
-    and park `Test.run` for ever), moves it with `F_DUPFD_CLOEXEC`, forgets it
-    in the inherited-file table, removes the variable, registers the duplex as
-    `vm->parent`; the libuv handle is attached on first use), the builtins
+    `agc_files_init`: takes the descriptors only when `AGENTICA_CHANNEL` is
+    exactly the value `agc_chan_marker()` gives (`3` on POSIX, `3,4` on
+    Windows) and `agc_chan_take` accepts them: on POSIX fd 3 a socket or a FIFO
+    opened `O_RDWR` (`F_GETFL`; a one-way FIFO would fail the read start and
+    park `Test.run` for ever), moved with `F_DUPFD_CLOEXEC`; on Windows fd 3 a
+    pipe that grants reading and fd 4 one that grants writing, duplicated
+    without inheritance. The originals are forgotten in the inherited-file
+    table and closed, the variable is removed, and the duplex is registered as
+    `vm->parent`; the libuv handles are attached on first use), the builtins
     `Process.parent_read_line` and `Process.parent_send` (a positive timeout,
     the `vm->parent_locks` pair; `error("process: no parent channel")` without a
     channel; `process: the channel is in use` only when a request in that
@@ -202,12 +207,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - the end of the run waits for captured children under one `await_exits` bound
     before it kills them (a second bound waits for the exits)
   - the child channel (25c, §10.4 "As built (25c)"): `Process.spawn_channel` is
-    `spawn_child` with `channel` true: a `uv_socketpair`, a fourth stdio slot
-    that hands the child end over as fd 3, and `child_env`, which rebuilds the
+    `spawn_child` with `channel` true: `agc_chan_pair` (a `uv_socketpair`, or on
+    Windows two `uv_pipe` pairs whose child ends are blocking), stdio slots 3
+    (and 4) that hand the child ends over, and `child_env`, which rebuilds the
     child environment on every spawn (it removes `AGENTICA_CHANNEL`, removes
     `UV_USE_IO_URING` when `drop_uring_env`, and adds `AGENTICA_CHANNEL=3` for a
     channel spawn only, as a separate `marker` string the caller frees;
-    `AGC_CHANNEL_ENV` and `AGC_CHANNEL_FD` are in `vm/services.h`)
+    `AGC_CHANNEL_ENV` is in `vm/services.h`)
   - the parent end is an `agc_duplex` (`vm/duplex.c`) in `proc.channel`, and the
     `agc_process` has a third pair of lock records, `channel.reader` and
     `channel.writer`

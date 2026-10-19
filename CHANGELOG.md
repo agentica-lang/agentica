@@ -10,6 +10,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- On Windows, `Process.spawn_channel` gives the child a pipe in each direction
+  instead of one duplex pipe: the child reads descriptor 3 and writes
+  descriptor 4, and `AGENTICA_CHANNEL` is `3,4` (Linux and macOS keep one
+  socket on descriptor 3 and `3`). A byte pipe cannot be shut down for writing,
+  so with one pipe `channel_close` did not end the child's input. A VM takes the
+  channel only when the variable has the value of its own system. `agentica
+  test` is not yet supported on Windows.
+
 - `--schedulers N` and the variable `AGENTICA_SCHEDULERS` set the number of
   scheduler threads (1 to 1024; the flag wins over a valid variable; a bad
   value in either exits 2). This is the first step of the multicore VM: the VM

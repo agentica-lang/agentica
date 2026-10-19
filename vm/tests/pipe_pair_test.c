@@ -17,6 +17,14 @@
 
 #define TOTAL ((size_t)1048576 + 17)
 
+#ifdef _WIN32
+#define fd_read(fd, data, size) _read(fd, data, (unsigned)(size))
+#define fd_write(fd, data, size) _write(fd, data, (unsigned)(size))
+#else
+#define fd_read(fd, data, size) read(fd, data, size)
+#define fd_write(fd, data, size) write(fd, data, size)
+#endif
+
 typedef struct {
   uv_pipe_t to, from;
   uv_write_t write;
@@ -26,16 +34,6 @@ typedef struct {
   size_t reply_size;
   bool eof, shut;
 } link_state;
-
-#ifdef _WIN32
-typedef struct {
-  uv_pipe_t pipe;
-  uv_shutdown_t shutdown;
-  uv_timer_t timer;
-  uv_process_t process;
-  bool ended, killed;
-} duplex_state;
-#endif
 
 static uv_loop_t loop;
 static int exit_status = -1;
@@ -52,7 +50,7 @@ static int child(void) {
   size_t seen = 0;
   bool intact = true;
   for (;;) {
-    int n = (int)read(3, buffer, sizeof buffer);
+    int n = (int)fd_read(3, buffer, sizeof buffer);
     if (n < 0) return 2;
     if (n == 0) break;
     for (int k = 0; k < n; k++) intact = intact && buffer[k] == pattern(seen + (size_t)k);
@@ -60,15 +58,7 @@ static int child(void) {
   }
   char answer[64];
   int length = snprintf(answer, sizeof answer, "%zu %d\n", seen, intact ? 1 : 0);
-  return write(4, answer, (unsigned)length) == length ? 0 : 3;
-}
-
-/* The child of the observation: reads descriptor 3 until its end. */
-static int drain(void) {
-  char buffer[64];
-  while (read(3, buffer, sizeof buffer) > 0) {
-  }
-  return 0;
+  return fd_write(4, answer, length) == length ? 0 : 3;
 }
 
 static void exited(uv_process_t *p, int64_t status, int signal) {
@@ -175,91 +165,13 @@ static void probe(const char *self) {
 }
 
 
-#ifdef _WIN32
-/* Observation only (not an assertion): what a duplex pipe does when the parent shuts it down, with and without a read
-   pending. The child drains descriptor 3 and exits on its end. */
-static void duplex_alloc(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
-  static char scratch[64];
-  (void)h;
-  (void)suggested;
-  *buf = uv_buf_init(scratch, sizeof scratch);
-}
-
-static void duplex_got(uv_stream_t *stream, ssize_t n, const uv_buf_t *buf) {
-  (void)stream;
-  (void)n;
-  (void)buf;
-}
-
-static void duplex_exit(uv_process_t *p, int64_t status, int signal) {
-  duplex_state *s = p->data;
-  (void)status;
-  (void)signal;
-  s->ended = true;
-}
-
-static void duplex_late(uv_timer_t *timer) {
-  duplex_state *s = timer->data;
-  if (!s->ended) {
-    s->killed = true;
-    uv_process_kill(&s->process, SIGKILL);
-  }
-  uv_close((uv_handle_t *)timer, NULL);
-}
-
-static void duplex_shut(uv_shutdown_t *req, int status) {
-  (void)req;
-  (void)status;
-}
-
-static void observe_duplex(const char *self, bool reading) {
-  int fds[2];
-  assert(agc_fs_pipepair(fds) == 0);
-  uv_stdio_container_t stdio[4];
-  for (int k = 0; k < 3; k++) stdio[k].flags = UV_IGNORE;
-  stdio[3].flags = UV_INHERIT_FD;
-  stdio[3].data.fd = fds[1];
-  char *argv[] = {(char *)self, (char *)"--drain", NULL};
-  uv_process_options_t options;
-  memset(&options, 0, sizeof options);
-  options.exit_cb = duplex_exit;
-  options.file = self;
-  options.args = argv;
-  options.stdio_count = 4;
-  options.stdio = stdio;
-  duplex_state *s = calloc(1, sizeof *s);
-  assert(s);
-  s->process.data = s;
-  s->timer.data = s;
-  assert(uv_spawn(&loop, &s->process, &options) == 0);
-  agc_fs_close(fds[1]);
-  assert(uv_pipe_init(&loop, &s->pipe, 0) == 0);
-  assert(uv_pipe_open(&s->pipe, fds[0]) == 0);
-  if (reading) assert(uv_read_start((uv_stream_t *)&s->pipe, duplex_alloc, duplex_got) == 0);
-  assert(uv_shutdown(&s->shutdown, (uv_stream_t *)&s->pipe, duplex_shut) == 0);
-  assert(uv_timer_init(&loop, &s->timer) == 0);
-  assert(uv_timer_start(&s->timer, duplex_late, 2000, 0) == 0);
-  while (!s->ended) uv_run(&loop, UV_RUN_ONCE);
-  fprintf(stderr, "observation: duplex pipe, read pending=%d: the child %s\n", reading ? 1 : 0,
-          s->killed ? "never saw the end (killed after 2 s)" : "saw the end");
-  uv_close((uv_handle_t *)&s->pipe, NULL);
-  uv_run(&loop, UV_RUN_DEFAULT);
-  free(s);
-}
-#endif
-
 int main(int argc, char **argv) {
   if (argc > 1 && strcmp(argv[1], "--child") == 0) return child();
-  if (argc > 1 && strcmp(argv[1], "--drain") == 0) return drain();
   assert(uv_loop_init(&loop) == 0);
   char self[32768];
   size_t size = sizeof self;
   assert(uv_exepath(self, &size) == 0);
   probe(self);
-#ifdef _WIN32
-  observe_duplex(self, false);
-  observe_duplex(self, true);
-#endif
   assert(uv_loop_close(&loop) == 0);
   puts("pipe pair tests passed");
   return 0;
