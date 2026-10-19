@@ -37,7 +37,7 @@ RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark
 # which a run on several threads does not fix.
 ORDER = {"channel-fan-in", "channel-owner-handoff", "channel-returned-order", "logger-tasks",
          "task-await-cycle", "task-crash-descendants", "task-crash-result", "task-pending-count", "task-preempt-fail",
-         "test-run-task"}
+         "task-file-close", "test-run-task"}
 # Builtins that a run with several schedulers refuses (agc_program_for_threads in vm/builtin_tables.c, and Test.run on
 # the parent channel): such a fixture keeps its golden or stops with RUNTIME-INTERNAL.
 LOOP_BOUND = re.compile(r"\b(TCP|TLS|HTTP|HTTPServer|Process)\.|\bTest\.run\b")
