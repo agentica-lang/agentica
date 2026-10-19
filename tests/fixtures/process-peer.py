@@ -1,11 +1,10 @@
 """A child for tests/test_process.py that reports what it was given, with the standard library only.
 
 Modes: args (argv as one JSON line), env (the AGENTICA_* and PROBE_* variables as JSON), cwd (the working directory),
-hold (prints its pid and waits), tree (starts a `hold` child and prints its own pid, then the child's).
+hold (prints its pid and waits; tests/test_process_lifecycle.py uses it).
 """
 import json
 import os
-import subprocess
 import sys
 import time
 
@@ -15,14 +14,6 @@ sys.stdout.reconfigure(encoding="utf-8", newline="\n")
 
 def hold():
     print(os.getpid(), flush=True)
-    time.sleep(120)
-
-
-def tree():
-    child = subprocess.Popen([sys.executable, __file__, "hold"], stdout=subprocess.PIPE, text=True)
-    grandchild = child.stdout.readline().strip()
-    print(os.getpid(), flush=True)
-    print(grandchild, flush=True)
     time.sleep(120)
 
 
@@ -37,8 +28,6 @@ def main():
         print(os.getcwd(), flush=True)
     elif mode == "hold":
         hold()
-    elif mode == "tree":
-        tree()
     else:
         sys.exit(2)
 

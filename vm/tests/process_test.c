@@ -205,7 +205,8 @@ static long long inheritable(void) {
 #endif
 }
 
-/* The child's check, made before any set-up of its own: true when the parent's descriptor or handle did not arrive. */
+/* The child's check, made before any set-up of its own: true when the parent's descriptor or handle did not arrive.
+   On Windows it assumes no handle of the child's own sits at the same value and is a character device. */
 static bool absent(long long number) {
 #ifdef _WIN32
   HANDLE h = (HANDLE)(intptr_t)number;
@@ -261,6 +262,7 @@ int main(int argc, char **argv) {
   size_t size = sizeof self;
   assert(uv_exepath(self, &size) == 0);
   long long leak = inheritable();
+  assert(!absent(leak)); /* positive control: the parent does hold it */
   init();
   agc_resource *spare = agc_register(&vm, NULL, NULL);
   agc_value rest[] = {text("--wait")};
