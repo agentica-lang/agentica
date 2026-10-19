@@ -42,6 +42,8 @@ def main() -> Void
 end
 """
 
+# 50 KiB fit the 64 KiB buffer of the stream whatever the size of the pipe (4 KiB for a Windows anonymous pipe), so the
+# program reaches "ready" while the pipe is full; more would keep it printing.
 STUCK_STDOUT = """\
 def main() -> Void
   line = "y"
@@ -49,7 +51,7 @@ def main() -> Void
     line = line + line
   end
   n = 0
-  while n < 100
+  while n < 50
     puts(line)
     n += 1
   end
@@ -156,6 +158,9 @@ def run_on_console(command, env, limit):
                                               None, None)
     startup = StartupInfoEx()
     startup.StartupInfo.cb = ctypes.sizeof(StartupInfoEx)
+    # With no standard handles named, a child of a parent whose own are redirected (a test run) gets those; asking for
+    # STARTF_USESTDHANDLES with null handles leaves it the console.
+    startup.StartupInfo.dwFlags = 0x00000100
     startup.lpAttributeList = ctypes.addressof(attributes)
     info = ProcessInformation()
     block = "".join("%s=%s\0" % item for item in env.items()) + "\0"
