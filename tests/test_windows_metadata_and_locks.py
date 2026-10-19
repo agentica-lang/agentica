@@ -291,7 +291,6 @@ def test_a_killed_holder_frees_the_lock(root, work, adopt):
     assert _probe_lock(root, target, bytecode) == "true"
 
 
-@REQUIRES_WINDOWS_VM
 def test_cancelled_owner_releases_its_lock_without_ending_the_process(root, work):
     target, bytecode = _lock_case(root, work)
     cancelled = compile_work_text(work, CANCELLED_LOCK_PROGRAM, "windows-cancelled-lock")
@@ -303,7 +302,6 @@ def test_cancelled_owner_releases_its_lock_without_ending_the_process(root, work
     assert result.stdout == "true\nfalse\nfalse\ntrue\n"
 
 
-@REQUIRES_WINDOWS_VM
 def test_a_lock_of_a_task_and_of_main_frees_when_its_owner_ends(root, work):
     target, bytecode = _lock_case(root, work)
     task = compile_work_text(work, TASK_LOCK_PROGRAM, "windows-task-lock")

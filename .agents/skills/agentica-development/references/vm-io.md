@@ -242,8 +242,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       path of the failed entry (`failed`), which replaces `o->path` in the error
     - `Path.rename` (`OP_RENAME`): Unix uses `renameat2` with
       `RENAME_NOREPLACE` (macOS: `renameatx_np` with `RENAME_EXCL`); Windows
-      uses `MoveFileW`, which fails if the destination exists; there is no
-      cross-volume copy fallback. The second path is `op.to`; the error is
+      uses `MoveFileExW` with no flags, which fails if the destination exists;
+      there is no cross-volume copy fallback. The second path is `op.to`; the error is
       `FS_RENAME` with both paths
   - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_fs_realpath`, the
     job
@@ -395,18 +395,15 @@ without locking the range again. Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`
 tests and portable bootstrap smoke cover read-handle locking, repeat calls,
 contention and close/reacquire.
 
-Windows special file streams and `Path.remove` are not enabled by this
-increment. Removal returns an error without changing the path. Keep it disabled
-until native no-follow traversal, raw root/dot validation and junction tests are
-implemented; normalizing `.` before checking it would erase the evidence needed
-to refuse it. Windows `Path.rename` uses `MoveFileW`, which is atomic on one
-volume and fails rather than replacing an existing destination; it has no
-copy/delete fallback.
+Windows `Path.remove` uses handle-relative no-follow traversal; raw path
+validation precedes normalization. Destructive tests require the scratch
+harness. `Path.rename` uses `MoveFileExW` with no replace/copy flags.
+Windows special file streams remain separate work.
 
 `vm/tests/files_test.c` exercises real builtin calls without needing a
 self-hosted compiler: text and all-byte round trips, append/flush/close,
 Unicode paths, invalid writes that leave data intact, Windows path roots and
-refused Windows removal. All native `vm-test` jobs run it.
+Windows lock exclusion. All native `vm-test` jobs run it.
 
 New filesystem adapter files and headers belong in the explicit lists of
 `vm/tools/check-layers.sh`. Keep `file_io.h` forbidden to core files, keep

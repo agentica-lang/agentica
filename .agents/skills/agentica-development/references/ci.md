@@ -217,9 +217,11 @@ job `timeout-minutes` of the workflow, which must
   named container; it never falls back to the host. Isolated modules cannot be
   selected through ordinary local `test-py`: the Makefile points them to
   `make tests KIND=files`. `make test-remove-actions` is CI-only: it fails
-  unless running on a GitHub-hosted Actions runner; each case gets a unique
-  `RUNNER_TEMP` subtree and an outside sentinel detects an escape, with
-  bounded subprocesses and cleanup. This is a regression guard on an ephemeral
+  unless running on a GitHub-hosted Actions runner; it also runs
+  `windows_remove-test`, the ordinary-file line tests (every OS) and the two
+  portable lock tests (non-Windows). Each case gets a unique `RUNNER_TEMP`
+  subtree and an outside sentinel detects an escape, with bounded subprocesses
+  and cleanup. This is a regression guard on an ephemeral
   OS-enforced sandbox. The Linux, macOS and Windows platform jobs use that
   native route, including Windows private-handoff deletion and refusal tests.
 Wine

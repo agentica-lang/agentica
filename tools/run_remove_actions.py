@@ -89,12 +89,18 @@ def _run_bdd(repository: Path, product: Path, environment: dict[str, str]) -> in
 
 
 def _run_filesystem_tests(repository: Path, vm_build: Path, environment: dict[str, str]) -> int:
+    if os.name == "nt":
+        # tests/conftest.py turns any skip into a failure: a native Windows
+        # gate that skips a case would pass without testing it.
+        environment = {**environment, "AGENTICA_FAIL_ON_SKIP": "1"}
     suffix = ".exe" if os.name == "nt" else ""
     binaries = [vm_build / f"files_private-test{suffix}"]
     modules = ["tests.test_windows_filesystem_safety"] if os.name == "nt" else [
         "tests.test_vm_os_remove",
         "tests.test_bdd_cleanup",
     ]
+    if os.name == "nt":
+        binaries.append(vm_build / f"windows_remove-test{suffix}")
     if sys.platform.startswith("linux"):
         binaries.insert(0, vm_build / f"tree-test{suffix}")
 
@@ -106,6 +112,24 @@ def _run_filesystem_tests(repository: Path, vm_build: Path, environment: dict[st
         if status:
             return status
 
+    # Select only regular-file cases: FIFO and /proc probes belong to the
+    # platform-specific stream suite, not this filesystem conformance gate.
+    status = _run(
+        [sys.executable, "-m", "pytest", "tests/test_vm_file_lines.py", "-k", "ordinary_files"],
+        cwd=repository,
+        env=environment,
+    )
+    if status:
+        return status
+    if os.name != "nt":
+        status = _run(
+            [sys.executable, "-m", "pytest", "tests/test_windows_metadata_and_locks.py",
+             "-k", "cancelled_owner or a_lock_of_a_task"],
+            cwd=repository,
+            env=environment,
+        )
+        if status:
+            return status
     module_paths = [module.replace(".", "/") + ".py" for module in modules]
     return _run(
         [sys.executable, "-m", "pytest", *module_paths],
