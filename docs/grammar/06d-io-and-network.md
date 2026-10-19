@@ -255,8 +255,8 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   up the children started directly; their descendants are not covered.
   Operational failures are String error Results. A failed explicit cleanup is
   `RUNTIME-PROCESS-CLOSE` at the call. On Windows a stop is always immediate (no
-  `SIGTERM` grace), a stopped child's exit code is 1, and the descendants of a
-  program the VM started die when the VM itself ends.
+  `SIGTERM` grace), and, where libuv can assign its job object, the
+  descendants of a program the VM started die when the VM itself ends.
 - `spawn_captured` works like `spawn`, with the same lookup, permission and
   cleanup, except that the child starts in `dir` (`"."` keeps the working
   directory; an empty, NUL or non-directory `dir` is an error) and its streams
