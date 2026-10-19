@@ -1,7 +1,10 @@
 name: Platforms
 
+# Pull requests run these jobs only with the `platforms` label (adding it
+# starts a run); pushes to master and manual runs always do.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [master]
   workflow_dispatch:
@@ -20,8 +23,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   embedded-object:
+    if: (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +41,7 @@ jobs:
       - run: cc -c embedded.s -o embedded.o
 
   embedded-object-windows:
+    if: (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     runs-on: windows-2025
     defaults:
       run:
@@ -49,7 +58,7 @@ jobs:
       - run: gcc -c embedded.s -o embedded.o
 
   vm-macos:
-    if: inputs.os != 'windows'
+    if: inputs.os != 'windows' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     runs-on: macos-15-intel
     env:
       AGENTICA_REQUIRE_VM: '1'
@@ -113,7 +122,7 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
 
   vm-macos-latest:
-    if: inputs.os != 'windows'
+    if: inputs.os != 'windows' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     runs-on: macos-latest
     env:
       AGENTICA_REQUIRE_VM: '1'
@@ -177,7 +186,7 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
 
   vm-windows:
-    if: inputs.os != 'macos'
+    if: inputs.os != 'macos' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     runs-on: windows-2025
     env:
       AGENTICA_REQUIRE_VM: '1'
