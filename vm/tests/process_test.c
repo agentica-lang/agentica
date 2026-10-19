@@ -13,6 +13,8 @@
 #include <io.h>
 #include <windows.h>
 #else
+#include <errno.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -190,6 +192,35 @@ static void search_tests(const char *self) {
   uv_fs_req_cleanup(&req);
 }
 
+/* A descriptor or handle that the parent made inheritable before its first spawn; its number reaches the child as a word. */
+static long long inheritable(void) {
+#ifdef _WIN32
+  SECURITY_ATTRIBUTES attributes = {sizeof attributes, NULL, TRUE};
+  HANDLE h = CreateFileA("NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &attributes, OPEN_EXISTING, 0, NULL);
+  assert(h != INVALID_HANDLE_VALUE);
+  return (long long)(intptr_t)h;
+#else
+  int fd = open("/dev/null", O_RDONLY);
+  assert(fd >= 0);
+  int high = fcntl(fd, F_DUPFD, 100);
+  assert(high >= 100);
+  close(fd);
+  return high;
+#endif
+}
+
+/* The child's check, made before any set-up of its own: true when the parent's descriptor or handle did not arrive.
+   On Windows it assumes no handle of the child's own sits at the same value and is a character device. */
+static bool absent(long long number) {
+#ifdef _WIN32
+  HANDLE h = (HANDLE)(intptr_t)number;
+  DWORD flags;
+  return !(GetHandleInformation(h, &flags) && GetFileType(h) == FILE_TYPE_CHAR);
+#else
+  return fcntl((int)number, F_GETFD) == -1 && errno == EBADF;
+#endif
+}
+
 /* True once the process has ended, whether or not anyone has collected its status (a POSIX zombie counts as ended,
    and WNOWAIT leaves it for libuv). */
 static bool ended(long pid) {
@@ -281,12 +312,15 @@ static int child(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+  if (argc > 2 && strcmp(argv[1], "--leak") == 0) return absent(atoll(argv[2])) ? 0 : 1;
   agc_init();
   agc_io_init();
   if (argc > 1) return child(argc, argv);
   char self[32768];
   size_t size = sizeof self;
   assert(uv_exepath(self, &size) == 0);
+  long long leak = inheritable();
+  assert(!absent(leak)); /* positive control: the parent does hold it */
   init();
   agc_resource *spare = agc_register(&vm, NULL, NULL);
   agc_value rest[] = {text("--wait")};
@@ -333,6 +367,20 @@ int main(int argc, char **argv) {
   /* A close that failed would have ended the run; this one left the handle closed. */
   args[1] = agc_int(5000);
   assert(!agc_as_result(&vm, call("Process.wait", args))->ok);
+  /* Only the standard streams and the channel reach a child: not a descriptor or handle that the VM process holds. */
+  char number[32];
+  snprintf(number, sizeof number, "%lld", leak);
+  rest[0] = text("--leak");
+  agc_value leak_words[] = {rest[0], text(number)};
+  args[0] = text(self);
+  args[1] = agc_list_value(agc_list_from_array(leak_words, 2));
+  args[2] = text(".");
+  args[3] = agc_int(5000);
+  handle = ok(call("Process.spawn_captured", args));
+  args[0] = handle;
+  args[1] = agc_int(5000);
+  assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
+  call("Process.close", args);
   name_rules();
   search_tests(self);
   rest[0] = text("--channel");

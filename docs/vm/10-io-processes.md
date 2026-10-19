@@ -50,6 +50,13 @@
   Windows that is `TerminateProcess` on an exited process. On POSIX it means
   someone else reaped the child (a host with `SIGCHLD` set to `SIG_IGN`, or its
   own reaper), and then `Process.close` waits up to `REAP_MS`.
+- Windows arguments: libuv quotes each argument with the rules of the C
+  runtime (`CommandLineToArgvW`), so a program that parses its command line
+  that way sees every word unchanged, including empty ones, spaces, quotes and
+  trailing backslashes. The whole command line, counting the quotes that libuv
+  adds, may hold 32767 characters; a longer one is an error `Result`. Only the
+  standard streams and the channel reach a child: libuv passes a handle list,
+  so no other handle of the VM is inherited.
 
 **As built (processes PR, Linux).** `vm/process.c` holds the eight `Process`
 builtins. Other systems get none.
