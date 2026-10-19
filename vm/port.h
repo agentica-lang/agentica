@@ -43,6 +43,7 @@ typedef void (*agc_end_fn)(agc_vm *vm, agc_task *t);
 typedef struct agc_test_note agc_test_note;
 typedef struct agc_test_run agc_test_run;
 typedef struct agc_registry agc_registry;
+typedef struct agc_runq agc_runq;
 typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
 typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
@@ -153,7 +154,7 @@ typedef struct {
   bool newline, flush;
 } agc_output_wait;
 
-/* How a standard stream is written. vm/output.c asks, vm/stdio.c decides:
+/* How a standard stream is written. vm/output.c asks, vm/stdio_posix.c or vm/stdio_windows.c decides:
    - DISK: a pool job writes a file or a device that never waits for a reader; when the run is stopping the loop may
      write it itself.
    - POLL: the loop writes what the descriptor takes when its poller says it is ready (Linux and macOS pipes, sockets
@@ -249,6 +250,7 @@ typedef struct {
      signal and the final diagnostics share it, so that the exit does not wait once per stream and notice. */
   uint64_t settle_by;
   agc_front_end *front_end;
+  agc_runq *runq;
 #ifdef __linux__
   locale_t messages_locale;
 #endif
@@ -264,7 +266,14 @@ typedef struct {
   agc_file_ids inherited;
 } agc_runtime;
 
-typedef enum { AGC_TASK_READY, AGC_TASK_RUNNING, AGC_TASK_PARKED, AGC_TASK_DONE } agc_task_state;
+/* The life of a task (docs/vm/10-io-multicore.md §10.2.3, "Park and wake protocol"). READY: in the run queue, from a
+   spawn, a yield or a wake. RUNNING: a scheduler runs its turn. PARKING: the turn is about to wait (agc_task_parking,
+   before the wait is registered), and a wake that arrives now has to be seen by the task. PARKED: waiting, in no
+   queue. WOKEN: a waker got in while the task was PARKING; nothing was queued, and the end of the turn sends the task
+   back to the queue. DONE: ended. Only agc_task_wake changes the state of a task that is not running its turn. */
+typedef enum {
+  AGC_TASK_READY, AGC_TASK_RUNNING, AGC_TASK_PARKING, AGC_TASK_PARKED, AGC_TASK_WOKEN, AGC_TASK_DONE
+} agc_task_state;
 
 typedef enum { AGC_TURN_YIELD, AGC_TURN_PARKED, AGC_TURN_DONE } agc_turn_result;
 
@@ -285,8 +294,11 @@ struct agc_task {
   agc_stepper *stepper;
   int64_t turn_cost;
   uint64_t lock_deadline, await_deadline, input_seen;
-  agc_task_state state;
-  bool cancelled, crashed, observed, left_children, group, hidden, spawned;
+  _Atomic agc_task_state state;
+  /* Atomic: a canceller on another scheduler sets it while the task runs, and the scheduler reads it at the end of the
+     turn, before it publishes PARKED (agc_vm_run). */
+  _Atomic bool cancelled;
+  bool crashed, observed, left_children, group, hidden, spawned;
   uint32_t spawn_span;
   agc_value result;
   agc_string *crash, *crash_message;
@@ -322,7 +334,6 @@ typedef struct {
 struct agc_vm {
   agc_runtime *rt;
   agc_task *task, *main;
-  agc_task *ready, *ready_tail;
   agc_registry *registry;
   agc_loop *loop;
   agc_resource *process_guard, *parent;
@@ -346,6 +357,9 @@ void agc_unregister(agc_vm *vm, agc_resource *r);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
+bool agc_task_waiting(const agc_task *t);
+void agc_task_parking(agc_vm *vm);
+void agc_task_unpark(agc_vm *vm);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
@@ -366,6 +380,9 @@ void agc_task_cancel(agc_vm *vm, agc_task *t);
 
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
+/* agc_io_start for a builtin that called agc_task_parking already (it registered a waiter first): one mark per park. */
+agc_io_job *agc_io_start_marked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
+                                int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
 void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 #define AGC_JOB_FLUSH 1u

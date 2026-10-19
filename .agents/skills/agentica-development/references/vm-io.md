@@ -61,8 +61,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - the event loop and the resource registry (`docs/vm/10-io-scheduler.md`
     §10.2.2), with `vm/stdio_windows.c`, `vm/stream.c`, `vm/process.c`,
     `vm/system.c`, `vm/tcp.c` and `vm/http_client.c` the only files that include
-    `uv.h` (`vm/http_server.c`
-    reaches libuv only through `vm/net.h` and jobs)
+    `uv.h` (`vm/http_server.c` reaches libuv only through `vm/net.h` and jobs)
     - `agc_io_init` (
       - the `UV_USE_IO_URING=0` setenv at start-up
       - returns whether it set it)

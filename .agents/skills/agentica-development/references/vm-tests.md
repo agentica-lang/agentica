@@ -109,7 +109,35 @@ Read first: `references/vm.md`.
     `test_closing_task` also checks that the end hook of a task runs once, when
     `agc_task_close_done` brings `closing` to 0; 17c adds
     `test_timed_await_cancel` and `test_timed_await_ends` (they build the
-    `Await` enum tables in `new_prog`)
+    `Await` enum tables in `new_prog`); `test_woken_while_parking` (the
+    `Test.window` builtin marks its task, wakes it, then parks: the CAS makes it
+    WOKEN, queues nothing, and the end of the turn queues the task instead of
+    parking it, so it is queued once)
+
+- **Path:** `vm/tests/runq_test.c`
+  - **Owns:** The global run queue (`vm/runq.c`): FIFO order and removal from
+    the middle on the solo queue, then three pushers against three poppers on
+    libuv threads after `agc_runq_share` (every task comes out exactly once).
+
+- **Path:** `vm/tests/task_wake_test.c`
+  - **Owns:** The wake against the park path: the task marks itself PARKING and
+    two waker threads call `agc_task_wake` twice each while the scheduler thread
+    does `agc_task_commit_park`, 20000 rounds with different timings. The task
+    ends in the queue exactly once per round (a dropped wake leaves none, a
+    double push leaves two). The single-thread part checks the marks, unpark
+    and a stale wake.
+
+- **Path:** `vm/tests/test_support.h`
+  - **Owns:** `agc_test_deadline(seconds)` (an alarm, so a broken park path
+    fails a test instead of hanging `make vm-test`; none on Windows) and
+    `agc_test_ready_head` (the first ready task, for tests that run on one
+    thread).
+
+- **Path:** `vm/tests/gc_thread_test.c`
+  - **Owns:** Boehm with threads: libuv threads that call `agc_gc_thread_enter`
+    allocate checked lists, held only on their stacks, while they and the main
+    thread force collections. A collector that missed a stack would free live
+    nodes. The sanitizer build has no collector, so it only runs the threads.
 
 - **Path:** `vm/tests/channel_test.c`
   - **Owns:** the `Channel` builtins called directly with hand-made tasks (no
@@ -139,10 +167,10 @@ Read first: `references/vm.md`.
     the notice queue limit and a kept notice, and final notices (written
     straight, or dropped when the pipe is full), and a stop signal not waiting
     for a silent reader (on Windows also a socket, which libuv refuses, written
-    by a pool thread). It also runs on Windows, where
-    the pipe has an overlapped write end (the tests that fill it) or a
-    synchronous one (the other tests, as a Python parent gives it), and where a
-    duplicate of the descriptor is one target and two pipes are two
+    by a pool thread). It also runs on Windows, where the pipe has an overlapped
+    write end (the tests that fill it) or a synchronous one (the other tests, as
+    a Python parent gives it), and where a duplicate of the descriptor is one
+    target and two pipes are two
 
 - **Path:** `vm/tests/tree_test.c`
   - **Owns:** `agc_remove_tree` (`Path.remove`) on temp trees: links inside the
@@ -264,10 +292,10 @@ Read first: `references/vm.md`.
     diagnostic on blocking streams; a regular file drained by the pool while a
     child is stopped at the end of the run; a reader that went away
     (`RUNTIME-INTERNAL`, exit 1); a crashed parent whose waiting child leaves
-    the FIFO with nothing partial written. The module runs on Linux, macOS
-    and Windows; the socket, pty, `/dev/full` and `/dev/stdout` cases are Unix
-    only, and the merged-pipe order case is skipped under Wine, which does not
-    tell the two descriptors of one pipe apart
+    the FIFO with nothing partial written. The module runs on Linux, macOS and
+    Windows; the socket, pty, `/dev/full` and `/dev/stdout` cases are Unix only,
+    and the merged-pipe order case is skipped under Wine, which does not tell
+    the two descriptors of one pipe apart
 
 - **Path:** `tests/test_vm_test_protocol.py`
   - **Owns:** a Python peer (`tests/fixtures/test-protocol-peer.py`, with

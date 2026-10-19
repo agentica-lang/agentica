@@ -7,7 +7,7 @@ bad() { printf 'vm layers: %s\n' "$*" >&2; fail=1; }
 for tool in rg nm; do command -v "$tool" >/dev/null || { bad "$tool is not installed"; exit 1; }; done
 obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
 cd "$(dirname "$0")/.."
-core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c task_map.c channel.c loop.c input.c output.c stdio_posix.c stdio_windows.c random.c loader.c builtins.c diag.c trace.c"
+core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c runq.c task_map.c channel.c loop.c input.c output.c stdio_posix.c stdio_windows.c random.c loader.c builtins.c diag.c trace.c"
 services="strings.c numbers.c json.c json_typed.c files.c tree.c stream.c duplex.c process.c system.c tcp.c http_fields.c http_client.c http_server.c logger.c testing.c front_end.c"
 adapters="tls_openssl.c http_pico.c http_body.c file_io.c file_windows.c"
 driver="launch.c agentica.c builtin_tables.c fuzz.c fuzz_main.c"
@@ -54,7 +54,7 @@ if found -n --max-depth 2 '^\s*#\s*include\s*"([^"]*/)?list_impl\.h"' --glob '*.
 only 'openssl/' "tls_openssl.c"
 only 'picohttpparser\.h' "http_pico.c"
 only 'yyjson\.h' "json.c"
-only 'uv\.h' "loop.c stdio_windows.c stream.c duplex.c process.c system.c tcp.c http_client.c file_io.c file_windows.c launch.c"
+only 'uv\.h' "loop.c runq.c stdio_windows.c stream.c duplex.c process.c system.c tcp.c http_client.c file_io.c file_windows.c launch.c"
 if found -n --max-depth 1 '^[A-Za-z_][\w \*]*\bagc_\w+\([^{]*\)\s*;\s*$' --glob '*.c' .; then bad "an agc_ prototype in a .c file"; fi
 if found -n --max-depth 1 '^\s*extern\b.*\bagc_|^[A-Za-z_][\w \*]*\bagc_\w+\s*\[[^\]]*\]\s*;' --glob '*.c' .; then bad "an agc_ variable declared in a .c file"; fi
 

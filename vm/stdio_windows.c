@@ -138,7 +138,8 @@ static pipe_stream *pipe_open(agc_vm *vm, int fd) {
 
 /* Cancels a request in flight and forgets its callback: the owner may free what the request pointed to. Closing the
    handle does not cancel the request while another handle to the same pipe stays open (the process's own stdout does),
-   so it is cancelled by name, and the close finishes when libuv has seen the request end. */
+   so it is cancelled by name, and the close finishes when libuv has seen the request end. The ring that the request
+   reads is not freed meanwhile: output.c keeps it while a request is held (close_stream). */
 static void pipe_close(pipe_stream *w) {
   uv_os_fd_t os = INVALID_HANDLE_VALUE;
   w->done = NULL;

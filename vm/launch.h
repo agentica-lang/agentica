@@ -9,17 +9,21 @@
 
 #include "port.h"
 
-/* The options that the VM takes before the program. max_steps and flush_timeout are the values after the defaults
- * and the flags; the seen_ flags say what was typed (the environment may still set the flush timeout). embedded is the
- * word after --embedded, which only `agentica run` takes: the program is one the binary carries, not a file. */
+/* The most schedulers a run may ask for (--schedulers, AGENTICA_SCHEDULERS). */
+#define AGC_SCHEDULERS_MAX 1024
+
+/* The options that the VM takes before the program. max_steps, flush_timeout and schedulers are the values after the
+ * defaults and the flags; the seen_ flags say what was typed (the environment may still set the flush timeout and the
+ * schedulers). embedded is the word after --embedded, which only `agentica run` takes: the program is one the binary
+ * carries, not a file. */
 typedef struct {
-  int64_t max_steps, flush_timeout, driver;
+  int64_t max_steps, flush_timeout, driver, schedulers;
   uint32_t seed;
   agc_style style;
   const char *source_root;
   const char *embedded;
   size_t source_root_chars;
-  bool seen_flush, seen_seed, seen_driver, allow_run;
+  bool seen_flush, seen_schedulers, seen_seed, seen_driver, allow_run;
 } agc_launch_options;
 
 typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_BAD } agc_launch_status;
@@ -54,9 +58,13 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
 /* The options of a run that has no flags. */
 void agc_launch_defaults(agc_launch_options *options);
 
-/* Applies AGENTICA_FLUSH_TIMEOUT_MS unless --flush-timeout was given. False, with a message on stderr, when the
- * variable is not valid. */
-bool agc_launch_flush_env(const char *name, agc_launch_options *options);
+/* Applies AGENTICA_FLUSH_TIMEOUT_MS unless --flush-timeout was given, and AGENTICA_SCHEDULERS unless --schedulers was
+ * given. False, with a message on stderr, when a variable is not valid. */
+bool agc_launch_env(const char *name, agc_launch_options *options);
+
+/* False, with a message on stderr, when the options ask for more than this build does: more than one scheduler. Call it
+ * once the flags and the environment are both applied. */
+bool agc_launch_supported(const char *name, const agc_launch_options *options);
 
 /* --driver-pid: false when the parent process is not the driver that named itself. */
 bool agc_launch_bind(int64_t driver);

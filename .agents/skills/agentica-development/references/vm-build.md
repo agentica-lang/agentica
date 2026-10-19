@@ -57,7 +57,8 @@ builtin
   reaches it today.
   `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
   handles it when `run` is the first word, with the VM flags (`--max-steps`,
-  `--seed`, `--flush-timeout`, `--allow-run`, `--ai`, `--json`, `--source-root`,
+  `--seed`, `--flush-timeout`, `--schedulers`, `--allow-run`, `--ai`, `--json`,
+  `--source-root`,
   `--version`) and the hidden `--driver-pid PID` and `--embedded NAME` (run
   the `runner` or `steps` program that the binary carries; the front end may
   not pass it on in a hand-off). The VM then deletes its
@@ -217,8 +218,9 @@ from `AGENTICA_SWEEP_SEED`, else the
   run another build of the binary (`make vm-gc-stress` uses it
   for `build/vm/gcstress/agentica`).
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
-  `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS
-  -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when its stamp
+  `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION
+  -DGC_THREADS -DGC_BUILTIN_ATOMIC -DPARALLEL_MARK -DTHREAD_LOCAL_ALLOC`
+  (`build/vm/gc.o` rebuilds when its stamp
   `build/vm/gc-flags` changes). `yyjson.c` is built per mode into
 `$(VM_BUILD)/yyjson.o`
   with `YY_CFLAGS` (the sanitizers in `SANITIZE=1`, no `-Werror`) and the

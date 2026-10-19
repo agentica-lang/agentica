@@ -105,6 +105,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   logger.c        # LogRegistry builtins over vm->rt->log, the std/logger registry (references/library-notes.md)
   front_end.c     # FrontEnd.hand_off and FrontEnd.std_source, guarded by rt->front_end (references/vm-builtins.md)
   task.c          # scheduler, task cancellation, Task builtins (references/vm-tasks.md)
+  runq.c          # the locked global run queue (references/vm-tasks.md)
   task_map.c      # Task.map: a stepper on the caller that starts, times and cancels the items (references/vm-tasks.md)
   channel.c       # Channel builtins (references/vm-tasks.md)
   testing.c       # Test builtins for unit tests (references/vm-tasks.md)
@@ -121,6 +122,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     channel_test.c       # Channel builtins called directly
     each_line_test.c     # File.each_line steps that bytecode cannot reach
     float_text_test.c    # Float text forms
+    gc_thread_test.c     # threads registered with Boehm
     http_parse_test.c    # HTTP head parser
     json_test.c          # JSON parser and builtins
     list_test.c          # opaque lists at the 32-way boundaries
@@ -130,6 +132,8 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     output_test.c        # stdout and stderr writers
     process_test.c       # Process builtins
     random_test.c        # the generator
+    runq_test.c          # the global run queue
+    task_wake_test.c     # wake against the park path, on threads
     stack_test.c         # stack traces
     string_test.c        # String builtins
     task_cancel_test.c   # task cancellation

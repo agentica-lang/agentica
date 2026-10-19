@@ -57,6 +57,17 @@ bool agc_load_front_end(const uint8_t *data, size_t len, agc_program **program, 
  * name, when the bytes it would add pass SOURCE_ROOT_BUDGET (64 MiB) in loader.c. */
 bool agc_program_set_source_root(agc_program *program, const char *root, size_t root_chars);
 
+/* The global run queue (docs/vm/16-architecture.md §16.3): one FIFO of ready tasks for every scheduler. The caller
+ * sets the state of a task before it pushes it. agc_runq_pop returns NULL when the queue is empty. agc_runq_remove
+ * takes a task out of the middle (a cancel) and says whether it found it. A new queue is solo: its one thread takes no
+ * lock. Whoever starts a second thread that touches the queue calls agc_runq_share first, before that thread exists. */
+agc_runq *agc_runq_new(void);
+void agc_runq_share(agc_runq *q);
+void agc_runq_push(agc_runq *q, agc_task *t);
+agc_task *agc_runq_pop(agc_runq *q);
+bool agc_runq_remove(agc_runq *q, const agc_task *t);
+bool agc_task_commit_park(agc_task *t);
+
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
 agc_task *agc_new_task(agc_vm *vm);
 void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
@@ -117,9 +128,10 @@ void agc_close_owned(agc_vm *vm, agc_task *t);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
-uint64_t agc_io_now(agc_vm *vm);
-/* Runs the loop once, for at most MS milliseconds, and hands the finished jobs to the scheduler. */
-void agc_io_run_for(agc_vm *vm, uint64_t ms);
+/* Runs the loop once, for at most MS milliseconds, and hands the finished jobs to the scheduler. False when nothing in
+   the loop was alive, so nothing could have ended the wait and the caller stops waiting. */
+bool agc_io_run_for(agc_vm *vm, uint64_t ms);
+uint64_t agc_clock_ms(void);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 void agc_input_close(agc_vm *vm);

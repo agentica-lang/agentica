@@ -492,13 +492,13 @@ after them may run in parallel when needed and keep their relative order.
   - **Outcome:** Hot functions run as native code with the same results
 
 - **Order:** 11
-  - **Next work:** Multicore schedulers (7h item, gated), decided with the
-    numbers of step 9 (and the 6c pilot of step 7.2.2). **After the JIT (9.1)**,
-    by the owner's decision of 2026-10-16 (it was right after step 9 by the
-    decision of 2026-10-14); the work stops before it so the owner reviews the
-    next steps. The front end is decided: self-hosting, in this table from row
+  - **Next work:** Multicore schedulers (7h item): started now, in parallel
+    with the other work, by the owner's decision of 2026-10-19 (it was after the
+    JIT (9.1) by the decision of 2026-10-16, and before that right after step
+    9); one I/O thread and N scheduler threads, in small PRs that keep N=1
+    unchanged. The front end is decided: self-hosting, in this table from row
     7.2.7 on ([§18](../future/18-front-end-language.md))
-  - **Outcome:** Build multicore only if the numbers ask for it
+  - **Outcome:** One I/O thread and N schedulers, N from `--schedulers`
 
 - **Order:** 10
   - **Next work:** Evaluation round: Agentica against typed Python on harder

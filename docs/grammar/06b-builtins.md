@@ -182,10 +182,9 @@ Expected types flow into these operations for empty collections and Results.
   When stdout and stderr are the same terminal or file, their output keeps the
   order of the calls (on Windows, when both descriptors are one handle object,
   as with a pipe given to both); otherwise there is no order between them. On
-  other
-  systems, output functions do not flush by themselves. A stdio protocol writes
-  one compact JSON message per line, flushes after each reply, and sends logs to
-  `IO.warn` (stderr).
+  other systems, output functions do not flush by themselves. A stdio protocol
+  writes one compact JSON message per line, flushes after each reply, and sends
+  logs to `IO.warn` (stderr).
 - `Time.now_ms()` is wall-clock milliseconds since the Unix epoch, and can jump;
   `Time.monotonic_ms()` never goes backward; `Time.monotonic_ns()` is the same
   clock in nanoseconds, for short durations. `Random.int(min, max)` is uniform
@@ -289,6 +288,12 @@ and stderr gets `agentica: file data may not be written: the flush took longer
 than MS ms` (with `--json`, `{"flush_timeout_ms": MS, "warning": "file data may
 not be written"}`).
 
+`agentica --schedulers N program.agc` or the environment variable
+`AGENTICA_SCHEDULERS` sets the number of scheduler threads (an integer from 1 to
+1024; the flag wins over a valid variable, and a bad value in either exits 2).
+The VM runs one scheduler today, so the default is 1 and a larger number exits 2
+with a message, before the program starts (also for `agentica test`).
+
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user
 function) replaces the caller's frame and does not count, so deep tail recursion
@@ -302,19 +307,19 @@ call of a builtin are not tail calls.
 front end: nothing is read, checked or compiled. `run` must be the first word
 after `agentica`; after an option it is taken as a source file name and the
 front end answers with a usage error (exit 2). The options are `--max-steps N`,
-`--seed N`, `--flush-timeout MS`, `--allow-run`, `--source-root DIR` (the folder
-put before the file names that the bytecode stores, except the `std/` modules),
-`--ai` and `--json`, each at most once and with the values and limits they have
-for `agentica FILE.agc`; `--version` prints the Agentica version and the
-versions of the libraries the VM links. The words after the file are the
-program's arguments, even when they look like options. The loader treats the
-file as untrusted. A file that is not valid bytecode, or whose format or
-Agentica version is not the binary's, is refused before anything runs; a source
-file also gets the hint to run it as `agentica FILE.agc`. The exit status is the
-program's own: `System.exit(n)`, 1 for a diagnostic, and 2 for a command line or
-a start that fails (a bad option, an unreadable file, bad bytecode), with a
-message that starts `agentica run:`. The old `agentica-vm` command and the
-`AGENTICA_VM` variable are gone: nothing reads the variable.
+`--seed N`, `--flush-timeout MS`, `--schedulers N`, `--allow-run`,
+`--source-root DIR` (the folder put before the file names that the bytecode
+stores, except the `std/` modules), `--ai` and `--json`, each at most once and
+with the values and limits they have for `agentica FILE.agc`; `--version` prints
+the Agentica version and the versions of the libraries the VM links. The words
+after the file are the program's arguments, even when they look like options.
+The loader treats the file as untrusted. A file that is not valid bytecode, or
+whose format or Agentica version is not the binary's, is refused before anything
+runs; a source file also gets the hint to run it as `agentica FILE.agc`. The
+exit status is the program's own: `System.exit(n)`, 1 for a diagnostic, and 2
+for a command line or a start that fails (a bad option, an unreadable file, bad
+bytecode), with a message that starts `agentica run:`. The old `agentica-vm`
+command and the `AGENTICA_VM` variable are gone: nothing reads the variable.
 
 [agentica-link-1]: ../../site/content/library/data-structures/list.md
 [agentica-link-2]: ../../site/content/library/data-structures/map.md

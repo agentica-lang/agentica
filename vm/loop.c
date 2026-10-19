@@ -795,13 +795,27 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   return r;
 }
 
-agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
-                              agc_more_fn more) {
+/* The job is the wait of the task, so the task is marked PARKING before the job exists: the job's completion is
+   the wake (§10.2.3). A builtin that registers something else first (a waiter list, a request) marks before that and
+   calls agc_io_start_marked, so the task is marked once per park. */
+static agc_io_job *start_parked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
+                                int64_t timeout_ms, agc_more_fn more) {
   agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, false);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
   return r->native;
+}
+
+agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                              agc_more_fn more) {
+  agc_task_parking(vm);
+  return start_parked(vm, kind, data, context, timeout_ms, more);
+}
+
+agc_io_job *agc_io_start_marked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
+                                int64_t timeout_ms) {
+  return start_parked(vm, kind, data, context, timeout_ms, NULL);
 }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
@@ -824,6 +838,9 @@ void agc_io_ready(agc_io_job *j) {
 
 void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
   if (j->consumed || j->timer_closing || j->timer_fired || j->work_done) return;
+  /* The timer counts from the loop's cached time, and nothing else refreshes it now that the schedulers' clock
+     (agc_clock_ms) does not. */
+  uv_update_time(&j->loop->uv);
   uv_timer_start(&j->timer, timer_fired, (uint64_t)timeout_ms, 0);
 }
 
@@ -868,9 +885,13 @@ static void release_bound(agc_loop *loop) {
   loop->bound_init = false;
 }
 
-void agc_io_run_for(agc_vm *vm, uint64_t ms) {
-  run_bounded(loop_of(vm), ms);
+bool agc_io_run_for(agc_vm *vm, uint64_t ms) {
+  agc_loop *loop = loop_of(vm);
+  /* The bound timer is stopped between runs, so it does not make a loop with nothing else in it look alive. */
+  bool alive = uv_loop_alive(&loop->uv);
+  if (alive) run_bounded(loop, ms);
   drain(vm);
+  return alive;
 }
 
 /* libuv owns the platform-specific monotonic clock. Keep its header inside the loop layer, and preserve errno because
@@ -882,11 +903,9 @@ uint64_t agc_trace_now(void) {
   return now;
 }
 
-uint64_t agc_io_now(agc_vm *vm) {
-  agc_loop *loop = loop_of(vm);
-  uv_update_time(&loop->uv);
-  return uv_now(&loop->uv);
-}
+/* The clock of the schedulers: milliseconds of libuv's monotonic clock. It does not read the loop (uv_now is the
+   loop's own cached time, and the loop belongs to the I/O thread), so any thread may call it. */
+uint64_t agc_clock_ms(void) { return agc_trace_now() / 1000000u; }
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   agc_task *t = vm->task;
@@ -898,7 +917,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     return AGC_LOCK_TAKEN;
   }
   uint64_t deadline = t->lock_deadline;
-  uint64_t now = deadline ? agc_io_now(vm) : 0;
+  uint64_t now = deadline ? agc_clock_ms() : 0;
   t->lock_wait = NULL;
   if (handle->next_owner == t || (!handle->holder && !handle->next_owner)) {
     if (deadline) agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
@@ -913,7 +932,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     return AGC_LOCK_TAKEN;
   }
   if (!deadline) {
-    now = agc_io_now(vm);
+    now = agc_clock_ms();
     deadline = t->lock_deadline = now + (uint64_t)*timeout_ms;
   }
   agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
@@ -924,9 +943,10 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   }
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_wait handle=%" PRIu64 " task=%" PRIu64 " wait_ms=%" PRIu64, handle->id,
             t->id, deadline - now);
+  agc_task_parking(vm);
   agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
   t->lock_wait = handle;
-  agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(deadline - now));
+  agc_io_start_marked(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(deadline - now));
   agc_task_park(vm, true);
   return AGC_LOCK_WAIT;
 }
@@ -1010,13 +1030,12 @@ static void close_files(agc_vm *vm) {
    at most the flush limit (30 seconds, --flush-timeout or AGENTICA_FLUSH_TIMEOUT_MS). */
 static void finish_flushes(agc_vm *vm) {
   if (!flushing(vm)) return;
-  uint64_t by = agc_io_now(vm) + (uint64_t)vm->rt->flush_timeout;
+  uint64_t by = agc_clock_ms() + (uint64_t)vm->rt->flush_timeout;
   for (;;) {
     drain(vm);
     if (!flushing(vm)) break;
-    uint64_t now = agc_io_now(vm);
-    if (now >= by) break;
-    agc_io_run_for(vm, by - now);
+    uint64_t now = agc_clock_ms();
+    if (now >= by || !agc_io_run_for(vm, by - now)) break;
   }
   vm->rt->flush_expired = flushing(vm);
 }
@@ -1168,10 +1187,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   return AGC_LOCK_TAKEN;
 }
 
-uint64_t agc_io_now(agc_vm *vm) {
-  (void)vm;
-  return 0;
-}
+uint64_t agc_clock_ms(void) { return 0; }
 
 const agc_io_kind agc_wait_io = {NULL, NULL, NULL, NULL, false, "lock", NULL};
 
