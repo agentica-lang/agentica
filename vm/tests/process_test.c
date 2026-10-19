@@ -71,6 +71,15 @@ static bool ended(long pid) {
 #endif
 }
 
+/* Closes the process in args[0]. A failed close longjmps out of the builtin (the VM is in a turn), so the jump is
+   caught here and turned into an assert, not left to jump through a dead frame. */
+static void close_must_not_fail(agc_value *args) {
+  if (setjmp(vm.turn) == 0)
+    call("Process.close", args);
+  else
+    assert(!"Process.close failed");
+}
+
 /* Waits, for at most five seconds, for the child that wrote its pid to `path` to be gone. */
 static void wait_ended(const char *path) {
   long pid = 0;
@@ -169,8 +178,9 @@ int main(int argc, char **argv) {
   assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
   equal(ok(call("Process.read_available", args)), "hello\r\n\xC3\xB1\xF0\x9F\x99\x82\n");
   call("Process.close", args);
-  /* The child has ended, but the loop has not run, so its exit callback is still to come: stopping it must not fail
-     (TerminateProcess on a Windows process that exited gives UV_ESRCH). */
+  /* The child has ended, but the loop has not run, so its exit callback is still to come: stopping it must not fail.
+     Only Windows exercises the ESRCH path here (TerminateProcess on an exited process gives UV_ESRCH); on POSIX the
+     zombie still accepts the signal. */
   char base[4096], pid_file[4200];
   size_t base_size = sizeof base;
   assert(uv_os_tmpdir(base, &base_size) == 0);
@@ -184,7 +194,7 @@ int main(int argc, char **argv) {
   wait_ended(pid_file);
   remove(pid_file);
   args[0] = handle;
-  call("Process.close", args);
+  close_must_not_fail(args);
   /* A close that failed would have ended the run; this one left the handle closed. */
   args[1] = agc_int(5000);
   assert(!agc_as_result(&vm, call("Process.wait", args))->ok);

@@ -33,7 +33,10 @@
   way. Other descendants are not covered.
   `Process.close` and the end of a run still stop only the direct child.
   Stopping a child that has already ended, before its exit callback ran, is not
-  a failure on any system (`UV_ESRCH` is read as stopped).
+  a failure on any system (`UV_ESRCH` is read as stopped, with no `#ifdef`). On
+  Windows that is `TerminateProcess` on an exited process. On POSIX it means
+  someone else reaped the child (a host with `SIGCHLD` set to `SIG_IGN`, or its
+  own reaper), and then `Process.close` waits up to `REAP_MS`.
 
 **As built (processes PR, Linux).** `vm/process.c` holds the eight `Process`
 builtins. Other systems get none.
