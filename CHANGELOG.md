@@ -89,6 +89,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   checksum-verified toolchain download and installs its Perl dependency.
 - Repeated `File.try_lock` calls on the same Windows handle succeed, and only
   lock contention returns `ok(false)`; access failures remain errors.
+- `Process.close` of a child that has already ended, before the VM noticed its
+  exit, no longer fails with `RUNTIME-PROCESS-CLOSE` on Windows, where stopping
+  an ended process reports "no such process". The process tests also run on
+  Windows now.
 
 ## [0.4.1-beta.1] - 2026-10-17
 

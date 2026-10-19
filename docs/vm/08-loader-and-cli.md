@@ -220,7 +220,9 @@ following
   of a failed test run.
 - `make` builds `dist/agentica` from `bootstrap/stage0.agcb` (§18.2). The
   release builds it against glibc 2.28 (11).
-- Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.
+- On Windows libuv puts the VM and every child it starts in one job object
+  that kills its members when the VM ends, so a driver that dies takes its
+  children with it (`PR_SET_PDEATHSIG` has no counterpart there; 10.4).
   On macOS there is no parent-death signal, so the closest safe thing is the
   delete-after-load flag alone, or a pipe the VM watches. All three systems
   check the parent PID. On Windows, a temporary loop initializes libuv before

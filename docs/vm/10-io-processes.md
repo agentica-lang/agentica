@@ -11,10 +11,22 @@
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
 - A child must not get `UV_USE_IO_URING=0` from the VM's own environment
   (§10.2.2), unless the user set it before the VM started.
-- Windows (not built): allow only `.exe` and `.com` after resolution,
+- Windows: allow only `.exe` and `.com` after resolution,
   case-insensitively, and reject names with a trailing dot or space or any `:`.
   The allowlist applies to the last component of the resolved path. The port
-  must not search the current directory before `PATH`.
+  must not search the current directory before `PATH`. `PATHEXT` is not read:
+  `.bat` and `.cmd` need `cmd.exe`, an implicit shell, so they never run. A
+  program that wants a shell starts `cmd.exe` by name.
+- Windows stops: there is no `SIGTERM`. libuv ends a child with
+  `TerminateProcess` for `SIGTERM`, `SIGKILL` and `SIGINT` alike, so the grace
+  wait of a captured child ends at once, and the exit status of a stopped child
+  is 1, not 128 plus the signal. A child that is a VM ends its own children,
+  because libuv puts every child it starts in a job object that kills its
+  members when the VM that made it ends. That job also covers a VM that is
+  killed: its children and their descendants die with it. `Process.close` and
+  the end of a run still stop only the direct child. Stopping a child that has
+  already ended, before its exit callback ran, is not a failure on any system
+  (`UV_ESRCH` is read as stopped).
 
 **As built (processes PR, Linux).** `vm/process.c` holds the eight `Process`
 builtins. Other systems get none.

@@ -156,8 +156,13 @@ static void finished(proc *p, int64_t status) {
   if (p->linked) unlink_child(p);
 }
 
+/* UV_ESRCH means the child has already ended and only its exit callback is
+   still to come, which is the state we wanted: it is not a failed stop. A
+   POSIX zombie still takes a signal, but TerminateProcess on a Windows
+   process that has exited fails, and libuv reports that as UV_ESRCH. */
 static int signal_child(proc *p, int sig) {
   int rc = uv_process_kill(&p->process, sig);
+  if (rc == UV_ESRCH) rc = 0;
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "%s pid=%d rc=%d", sig == SIGKILL ? "kill" : "term", (int)p->process.pid, rc);
   p->stop = sig == SIGTERM && !rc ? STOP_TERM : STOP_KILLED;
   p->stop_failed = rc != 0;

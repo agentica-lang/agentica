@@ -58,6 +58,7 @@ static int child(int argc, char **argv) {
   _setmode(2, _O_BINARY);
 #endif
   if (strcmp(argv[1], "--wait") == 0) { uv_sleep(30000); return 0; }
+  if (strcmp(argv[1], "--exit") == 0) return 3;
   if (strcmp(argv[1], "--channel") == 0) {
     init();
     agc_parent_take(&vm);
@@ -118,6 +119,17 @@ int main(int argc, char **argv) {
   ok(call("Process.close_stdin", args));
   assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
   equal(ok(call("Process.read_available", args)), "hello\r\n\xC3\xB1\xF0\x9F\x99\x82\n");
+  call("Process.close", args);
+  /* The child has ended, but the loop has not run, so its exit callback is still to come: stopping it must not fail
+     (TerminateProcess on a Windows process that exited gives UV_ESRCH). */
+  rest[0] = text("--exit");
+  args[0] = text(self);
+  args[1] = agc_list_value(agc_list_from_array(rest, 1));
+  args[2] = text(".");
+  args[3] = agc_int(5000);
+  handle = ok(call("Process.spawn_captured", args));
+  uv_sleep(500);
+  args[0] = handle;
   call("Process.close", args);
   rest[0] = text("--channel");
   args[0] = text(self);

@@ -9,22 +9,23 @@ import re
 
 import pytest
 
-from tests.agentica_test import FIXTURES, cli, run, tool, vm_environment
+from tests.agentica_test import FIXTURES, agc_literal, cli, run, tool, vm_environment
 
 PEER = FIXTURES / "process-peer.js"
 
 
 def spawn(node, mode, extra=""):
-    return '  p = Result.unwrap!(Process.spawn("%s", ["%s", "%s"%s], 5000))\n' % (node, PEER, mode, extra)
+    return '  p = Result.unwrap!(Process.spawn(%s, [%s, "%s"%s], 5000))\n' % (agc_literal(node), agc_literal(PEER), mode, extra)
 
 
 def captured(node, mode, body, prefix=""):
-    return ('%sdef main() -> Void\n  p = Result.unwrap!(Process.spawn_captured("%s", ["%s", "%s"], ".", 5000))\n%s\nend\n\n'
-            % (prefix, node, PEER, mode, body))
+    return ('%sdef main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, "%s"], ".", 5000))\n%s\nend\n\n'
+            % (prefix, agc_literal(node), agc_literal(PEER), mode, body))
 
 
 def probe(node, pid):
-    return 'Process.wait(Result.unwrap!(Process.spawn("%s", ["%s", "probe", %s], 5000)), 5000)' % (node, PEER, pid)
+    return ('Process.wait(Result.unwrap!(Process.spawn(%s, [%s, "probe", %s], 5000)), 5000)'
+            % (agc_literal(node), agc_literal(PEER), pid))
 
 
 def program(node, mode, body, prefix="", extra=""):
@@ -131,6 +132,15 @@ def test_permission_literal_argv_and_inherited_task_capability(tmp_path):
     assert denied == "RUNTIME-UNWRAP-ERROR"
     assert out == ""
     assert output(tmp_path, text) == '["a b;$x","--allow-run"]\nok(0)\n'
+
+
+def test_arguments_with_backslashes_quotes_and_interpolation_marks_reach_the_child_unchanged(tmp_path):
+    node = tool("node")
+    words = ['back\\slash\\', 'say "hi"', "#{x}", "tail\\\\", "", "ñ 🙂 ^&|<>%PATH%"]
+    extra = "".join(", " + agc_literal(word) for word in words)
+    out = output(tmp_path, program(node, "args", "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n"
+                                   "  Result.unwrap!(Process.wait(p, 5000))", "", extra))
+    assert json.loads(out) == words
 
 
 def test_flushed_text_and_bytes_reply_before_stdin_eof_stderr_stays_separate(tmp_path):
