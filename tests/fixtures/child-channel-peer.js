@@ -169,20 +169,11 @@ function writeAll(fd, data) {
   }
 }
 
-// Node keeps descriptors of its own (an epoll on Linux), so what matters is whether 3 is a stream a parent gave.
-function streamOpen(fd) {
-  try {
-    const stat = fs.fstatSync(fd);
-    return stat.isSocket() || stat.isFIFO();
-  } catch (error) {
-    return false;
-  }
-}
-
 function asChild(mode) {
   if (mode === "plain") {
     const marker = process.env[MARKER] === undefined ? "None" : process.env[MARKER];
-    writeAll(1, "marker=" + marker + " fd3=" + (streamOpen(3) ? "True" : "False") + "\n");
+    // Node keeps descriptors of its own at 3 (an epoll, a wake-up pipe), so only the marker says what the parent gave.
+    writeAll(1, "marker=" + marker + "\n");
     return;
   }
   const channel = ends();

@@ -85,7 +85,7 @@ def test_parent_side_send_read_available_close_timeouts_and_limits(bytecode, nod
     assert ask("plain") == lines(
         'read: error("process: the child has no channel")', 'send: error("process: the child has no channel")',
         'close: error("process: the child has no channel")', "exit: ok(0)",
-        'printed: ok("marker=None fd3=False\\n")', 'not captured: error("process: output is not captured")')
+        'printed: ok("marker=None\\n")', 'not captured: error("process: output is not captured")')
 
 
 def test_a_child_ends_when_its_parent_is_killed(tmp_path, request, adopt, node):
