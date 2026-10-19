@@ -239,11 +239,11 @@ written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only
 `read_available`, `parent_read_line` and `parent_send`; `vm/process.c`,
 `vm/duplex.c`), `Task.pending_count`, `Task.spawn_owning` (24b, `vm/task.c`),
 `Task.map` (17a, `vm/task_map.c`) and the `Channel` builtins (`vm/channel.c`). A
-channel call that must wait, and `Task.map`, need the event loop, so off Linux
-they fail like the other loop builtins. The event loop,
-files, processes, TCP, TLS and HTTP (client and server) are Linux only for now
-(the `__linux__` guards in `vm/loop.c`, `vm/files.c`, `vm/process.c`,
-`vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_client.c` and `vm/http_server.c`).
+channel call that must wait, and `Task.map`, need the event loop. The event
+loop, files and processes build on Linux, macOS and Windows; TCP, TLS and HTTP
+(client and server) build on Linux and macOS, with stub tables on Windows (the
+guards in `vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_client.c` and
+`vm/http_server.c`).
 
 ### 7.3 Builtin safety and streams
 

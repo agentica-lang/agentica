@@ -10,13 +10,11 @@
 
 /* A broken park or wake path leaves a test waiting for ever instead of failing it. The deadline ends the process with
    SIGALRM's default action, so `make vm-test` fails. Windows has no alarm; its job has the time limit of the CI step. */
-static inline void agc_test_deadline(unsigned seconds) {
 #ifndef _WIN32
-  alarm(seconds);
+static inline void agc_test_deadline(unsigned seconds) { alarm(seconds); }
 #else
-  (void)seconds;
+static inline void agc_test_deadline(unsigned seconds) { (void)seconds; }
 #endif
-}
 
 /* The first ready task, left in the queue: it pops every task and pushes them back in order. For tests that run on
    one thread. */

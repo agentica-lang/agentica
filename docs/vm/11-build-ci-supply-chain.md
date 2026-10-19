@@ -6,8 +6,8 @@
   and the hardening flags `-fstack-protector-strong -D_FORTIFY_SOURCE=2`, and
   links `dist/agentica` (the VM with the front end inside, the one product;
   §18.2). On Linux it links PIE with full RELRO. The binary embeds the front end
-  with `.incbin` in ELF assembly, so only Linux builds it; `make vm-test` builds
-  the C VM and its tests on macOS and MinGW too (`platforms.yml`). The Makefile
+  as ELF, Mach-O or COFF data and builds on Linux, macOS and MinGW
+  (`platforms.yml`). The Makefile
   picks the platform from `OS=Windows_NT` or `uname -s`. The warning flags apply
   to our own `vm/*.c` only.
 - `AGENTICA_GC` picks the libgc build, like `AGENTICA_OPENSSL` picks OpenSSL.
@@ -143,13 +143,17 @@
     run, GC stress run
 
 - **Job:** macOS (`platforms.yml`)
-  - **Runner:** GitHub-hosted `macos-15` (Apple clang, arm64), submodules
-  - **Runs:** `make vm-test` (the C VM only: the binary is Linux only)
+  - **Runner:** GitHub-hosted `macos-15-intel` and `macos-latest` (Apple
+    clang, x86-64 and arm64), submodules
+  - **Runs:** `make vm-test`, `make fixed-point` (the binary) and the test
+    subset listed in `platforms.yml`
 
 - **Job:** Windows (`platforms.yml`)
   - **Runner:** GitHub-hosted `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc,
     make), submodules
-  - **Runs:** `make vm-test` (the C VM only: the binary is Linux only)
+  - **Runs:** `make vm-test`, `make fixed-point` (the binary) and the test
+    subset listed in `platforms.yml` (the Makefile's `WINDOWS_TEST_MODULES`
+    is the same list, for the local Wine check)
 
 - **Job:** Fuzz (`fuzz.yml`, by hand)
   - **Runner:** GitHub-hosted `ubuntu-latest`, clang
@@ -159,9 +163,9 @@
   `platforms.yml` runs on pull requests and pushes to `master`, and either can
   be started by hand. No job installs Racket (the Racket front end was deleted,
   PR #313), and no step checks or regenerates the frozen `vm/unicode_data.c`
-  (its header gives the provenance). The macOS and Windows jobs build and run
-  the C tests only: the binary and the process and network tests are not
-  portable yet.
+  (its header gives the provenance). The macOS and Windows jobs run the test
+  subset named in `platforms.yml`; the network tests are Linux only until
+  the multiplatform port reaches TCP, TLS and HTTP.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,
   and git detects the `string-inspect.agc` fixture as binary from its NUL bytes.
   So Windows sees the same sources, spans and output as Linux.

@@ -152,10 +152,9 @@ byte of a file with a type table, an Updates section or Globals.
   (`agc_launch_supported`), so it never runs as 1; `agentica test` refuses a
   flag above 1 the same way. `agentica` passes the flag to the VM, and `check`
   and `compile` ignore it.
-- Windows: not supported since 8d-2. The binary embeds the front end with
-  `.incbin` in ELF assembly, so it builds on Linux only; the Windows code of
-  `vm/main.c` (`wmain`, `_wopen`) went with that file. The C VM and its C tests
-  still build there (`platforms.yml`).
+- Windows and macOS: the binary embeds the front end as ELF, Mach-O or COFF
+  data and builds on all three systems (`platforms.yml`); `vm/launch.c` finds
+  the executable path through libuv.
 - `agentica file.agc [args...]` runs in the same process: the front end
   compiles in memory and hands the bytes to C with `FrontEnd.hand_off`, and C
   runs them in a new runtime (see "The single binary" below). No temporary file
