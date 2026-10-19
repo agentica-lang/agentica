@@ -90,6 +90,9 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   stdio_windows.c # the Windows side: pool thread for files and consoles, libuv pipe, CompareObjectHandles (references/vm-io.md)
   duplex.c        # child channel (fd 3) and Process.spawn_channel (references/vm-net.md)
   process.c       # Process builtins, System.env and System.pid (references/vm-net.md)
+  process_os.h    # command search rules that differ by system (references/vm-io.md)
+  process_posix.c # the POSIX side of process_os.h: every file may run, PATH splits at ':'
+  process_windows.c # the Windows side: .exe and .com only, ';' and quoted PATH entries, refused names
   stream.c        # input buffer and write path shared by processes and TCP (references/vm-net.md)
   tcp.c           # TCP and TLS builtins on libuv handles (references/vm-net.md)
   net.h           # tcp.c connection object for other C modules (references/vm-net.md)

@@ -11,10 +11,23 @@
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
 - A child must not get `UV_USE_IO_URING=0` from the VM's own environment
   (§10.2.2), unless the user set it before the VM started.
-- Windows (not built): allow only `.exe` and `.com` after resolution,
-  case-insensitively, and reject names with a trailing dot or space or any `:`.
+- Windows: allow only `.exe` and `.com` after resolution, case-insensitively
+  (`.exe` is tried first when the name has neither, on purpose: `.com` files
+  are the older, rarer kind, and a plain name should not be taken by one). A
+  command with `\`, `/` or a `:` is a path and is not searched in `PATH`.
+  Reject a name that ends in a dot or a space, or in `.cmd` or `.bat`, any `:`
+  that is not the drive letter of `C:\` or `C:/`, and the `\\?\` and `\\.\`
+  prefixes (so `C:foo.exe`, `x.exe:stream`, `\\?\C:\x.exe` and
+  `\\.\C:\x.exe` are refused). The checks are on the command as given
+  (`agc_proc_name_ok`).
   The allowlist applies to the last component of the resolved path. The port
-  must not search the current directory before `PATH`.
+  does not search the current directory before `PATH`, but a relative `PATH`
+  entry such as `.` resolves against it, as on POSIX. `PATHEXT` is not read:
+  `.bat` and `.cmd` need `cmd.exe`, an implicit shell, so they never run, and a
+  planted `x.cmd.exe` cannot answer a request for `x.cmd`. A program that
+  wants a shell starts `cmd.exe` by name. A quoted `PATH` entry that holds `;`
+  is split inside the quotes, and no device-name check (`CON`, `NUL`) is made:
+  such a name is a file that does not run, or an error from `uv_spawn`.
 - Windows stops: there is no `SIGTERM`. libuv ends a child with
   `TerminateProcess` for `SIGTERM`, `SIGKILL` and `SIGINT` alike, so the grace
   wait of a captured child ends at once. libuv reports the raw exit code 1 and

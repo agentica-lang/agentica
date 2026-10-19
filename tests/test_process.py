@@ -5,7 +5,9 @@ Each case writes an Agentica program, runs it with `--allow-run --json` and
 compares its output, or its diagnostic code taken from the last line of stderr.
 """
 import json
+import os
 import re
+import shutil
 
 import pytest
 
@@ -32,8 +34,8 @@ def program(node, mode, body, prefix="", extra=""):
     return prefix + "def main() -> Void\n" + spawn(node, mode, extra) + body + "\nend\n\n"
 
 
-def cli_run(*args):
-    return run(cli() + list(args), env=vm_environment())
+def cli_run(*args, env=None, cwd=None):
+    return run(cli() + list(args), env=vm_environment(env), cwd=cwd)
 
 
 def write(tmp_path, name, text):
@@ -94,6 +96,49 @@ def test_unavailable_and_malformed_commands_return_errors_without_a_child(tmp_pa
         'def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn("agentica-nonexistent-command-5l", [], 1000)))\n'
         '  IO.inspect(Result.ok?(Process.spawn("", [], 1000)))\n  nul = Result.unwrap!(String.from_bytes([0]))\n'
         '  IO.inspect(Result.ok?(Process.spawn("node", [nul], 1000)))\nend\n\n') == "false\nfalse\nfalse\n"
+
+
+def test_a_bare_command_is_searched_in_path(tmp_path):
+    node = tool("node")
+    name = os.path.splitext(os.path.basename(node))[0]
+    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn(%s, [%s, "args", "x"], 5000))\n'
+            '  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  Result.unwrap!(Process.wait(p, 5000))\nend\n\n'
+            % (agc_literal(name), agc_literal(PEER)))
+    result = cli_run("--allow-run", write(tmp_path, "program.agc", text))
+    assert tuple(result) == (0, '["x"]\n', "")
+
+
+def test_a_bare_command_is_not_looked_for_in_the_working_directory_or_an_empty_path_entry(tmp_path):
+    # A runnable `tool` is in the working directory of the run: a shell script, or on Windows a copy of node.exe, which
+    # needs nothing beside it (a Homebrew node needs its libnode, so it is not copied elsewhere).
+    here = tmp_path / "here"
+    here.mkdir()
+    if os.name == "nt":
+        shutil.copy(tool("node"), here / "tool.exe")
+    else:
+        (here / "tool").write_text("#!/bin/sh\necho 7\n")
+        (here / "tool").chmod(0o755)
+    text = ('def main() -> Void\n  started = Process.spawn("tool", ["-e", "console.log(7)"], 5000)\n'
+            '  puts(started.ok?)\n  if started.ok?\n    puts(Result.unwrap!(Process.read_line(started.unwrap!, 5000)))\n'
+            '  end\nend\n\n')
+    program_file = write(tmp_path, "program.agc", text)
+    sep = os.pathsep
+    # Windows spells the variable "Path"; the copy that the VM gets must replace it, not sit beside it.
+    name = next((key for key in os.environ if key.upper() == "PATH"), "PATH")
+    elsewhere = tmp_path / "elsewhere"  # a fixed, empty folder: nothing in the ambient PATH can answer for `tool`
+    elsewhere.mkdir()
+    old = str(elsewhere)
+
+    def spawned(path):
+        result = cli_run("--allow-run", program_file, env={name: path}, cwd=here)
+        assert result.code == 0, result.stderr
+        return result.stdout
+
+    assert spawned(old) == "false\n"  # the VM adds no implicit search of the working directory
+    assert spawned(sep + old) == "false\n"  # an empty PATH entry is skipped, not read as "."
+    assert spawned(old + sep + sep) == "false\n"
+    assert spawned(str(here) + sep + old) == "true\n7\n"  # the same file is found through PATH
+    assert spawned("." + sep + old) == "true\n7\n"  # a relative entry resolves against the working directory
 
 
 def test_permission_literal_argv_and_inherited_task_capability(tmp_path):
