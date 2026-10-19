@@ -223,10 +223,13 @@ following
 - On Windows libuv puts the VM and every child it starts in one job object
   that kills its members when the VM ends, so a driver that dies takes its
   children with it (`PR_SET_PDEATHSIG` has no counterpart there; 10.4).
-  On macOS there is no parent-death signal, so the closest safe thing is the
-  delete-after-load flag alone, or a pipe the VM watches. All three systems
-  check the parent PID. On Windows, a temporary loop initializes libuv before
-  the early parent query; no VM loop exists yet. The `O_NOFOLLOW`, privacy and
+  On macOS there is no parent-death signal: a driven VM polls `getppid()` every
+  250 ms and takes a stop (like `SIGTERM`) when the driver is gone; Windows does
+  the same by waiting on the driver's process handle (`vm/loop.c`). All three
+  systems check the parent PID at start. On Windows, a temporary loop
+  initializes libuv before the early parent query; no VM loop exists yet.
+  `tests/test_process_lifecycle.py` kills a driver and checks that its VM and
+  that VM's child end, on all three. The `O_NOFOLLOW`, privacy and
   inode checks run on every non-Windows system.
 - `PR_SET_PDEATHSIG` follows the OS thread that forked the VM, so the driver
   must call `subprocess` from the main thread.
