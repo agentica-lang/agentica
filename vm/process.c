@@ -163,7 +163,9 @@ static void finished(proc *p, int64_t status) {
    TerminateProcess on an ended Windows process fails, and libuv maps that to
    UV_ESRCH. A narrow race stays: libuv (win/process.c, uv__kill) reports
    UV_EACCES instead when the process has exited with the code 259 or its
-   handle is not yet signaled, and that is still a failed stop. */
+   handle is not yet signaled, and that is still a failed stop. If ESRCH ever
+   comes while `running` is still true, the exit is awaited, for up to REAP_MS
+   at the end of a run. */
 static int signal_child(proc *p, int sig) {
   int rc = uv_process_kill(&p->process, sig);
   if (rc == UV_ESRCH) rc = 0;

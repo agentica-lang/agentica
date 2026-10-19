@@ -551,7 +551,8 @@ def _windows_process_alive(number):
     # opened, so the wait on its handle (signaled at the end), not the open, tells whether it is alive.
     handle = kernel32.OpenProcess(0x00100000 | 0x1000, False, number)
     if not handle:
-        return False
+        # ERROR_ACCESS_DENIED (5): it exists and belongs to someone else, like the POSIX PermissionError branch.
+        return ctypes.get_last_error() == 5
     try:
         return kernel32.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT
     finally:
