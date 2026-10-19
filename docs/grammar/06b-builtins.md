@@ -289,9 +289,9 @@ not be written"}`).
 
 `agentica --schedulers N program.agc` or the environment variable
 `AGENTICA_SCHEDULERS` sets the number of scheduler threads (an integer from 1 to
-1024; the flag wins and a bad value exits 2). The VM runs one scheduler today,
-so the default is 1 and a larger number exits 2 with a message, before the
-program starts.
+1024; the flag wins over a valid variable, and a bad value in either exits 2).
+The VM runs one scheduler today, so the default is 1 and a larger number exits 2
+with a message, before the program starts (also for `agentica test`).
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user

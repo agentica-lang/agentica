@@ -6,6 +6,7 @@
 #define _DARWIN_C_SOURCE
 #endif
 #include "../core.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <string.h>
@@ -310,16 +311,19 @@ static agc_value test_crash(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_fail(vm, "RUNTIME-INVALID-COUNT", "test crash", span);
 }
 
-/* A waker that gets in between the park mark and the end of the turn: the first call wakes its own task, as another
-   thread could. The task must not park: the turn ends with the task woken, and the builtin runs again. */
+/* A waker that gets in after the park mark and before the end of the turn: the first call marks the task, wakes it as
+   another thread could, and only then registers and parks. The park keeps the mark the waker left (WOKEN), so the
+   task does not park: the turn ends with the task queued once, and the builtin runs again. */
 static agc_value test_window(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
   if (window_calls++ == 0) {
-    agc_task_park(vm, true);
+    agc_task_parking(vm);
     assert(vm->task->state == AGC_TASK_PARKING);
     agc_task_wake(vm, vm->task, "test");
-    assert(vm->task->state == AGC_TASK_WOKEN && !agc_runq_peek(vm->rt->runq));
+    assert(vm->task->state == AGC_TASK_WOKEN && !agc_test_ready_head(vm->rt->runq));
+    agc_task_park(vm, true);
+    assert(vm->task->state == AGC_TASK_WOKEN);
   }
   return agc_void();
 }
@@ -808,7 +812,7 @@ static void test_parked_await(void) {
 static void check_ready(agc_vm *vm, int64_t n) {
   (void)n;
   agc_task *r = reg_task(vm, 0);
-  assert(cancelled(r) && !r->next && !agc_runq_peek(vm->rt->runq) && !vm->main->children);
+  assert(cancelled(r) && !r->next && !agc_test_ready_head(vm->rt->runq) && !vm->main->children);
 }
 
 static void test_ready_then_await(void) {
@@ -1323,6 +1327,7 @@ static void test_map_late_closes(void) {
 
 int main(void) {
 #if defined(__linux__) || defined(__APPLE__)
+  agc_test_deadline(300);
   agc_init();
   agc_io_init();
   quiet = fopen("/dev/null", "w");

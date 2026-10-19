@@ -143,12 +143,15 @@ byte of a file with a type table, an Updates section or Globals.
   statically in the release.
 - `--schedulers N` (10.2.3) sets the number of scheduler threads: an integer
   from 1 to 1024, without a sign, a space or a trailing letter. The environment
-  variable `AGENTICA_SCHEDULERS` (same range) sets it when the flag is absent;
-  the flag wins, and a bad flag or variable value exits 2. The default is 1.
-  A count above 1 exits 2 with `agentica: N schedulers were asked for, but this
-  build runs one` before the program loads (`agc_launch_supported`), so it
-  never runs as 1. `agentica` passes the flag to the VM, and `check` and the
-  other commands that run no program ignore it.
+  variable `AGENTICA_SCHEDULERS` (same range) sets it when the flag is absent.
+  The flag wins over a valid value of the variable; a bad flag or a bad
+  variable exits 2 even when the other is valid, and the variable is read
+  before the front end starts, so it is checked for every command, also
+  `check`. The default is 1. A count above 1 exits 2 with `agentica: N
+  schedulers were asked for, but this build runs one` before the program loads
+  (`agc_launch_supported`), so it never runs as 1; `agentica test` refuses a
+  flag above 1 the same way. `agentica` passes the flag to the VM, and `check`
+  and `compile` ignore it.
 - Windows: not supported since 8d-2. The binary embeds the front end with
   `.incbin` in ELF assembly, so it builds on Linux only; the Windows code of
   `vm/main.c` (`wmain`, `_wopen`) went with that file. The C VM and its C tests

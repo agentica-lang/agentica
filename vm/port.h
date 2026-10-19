@@ -242,10 +242,10 @@ typedef struct {
 } agc_runtime;
 
 /* The life of a task (docs/vm/10-io-multicore.md §10.2.3, "Park and wake protocol"). READY: in the run queue, from a
-   spawn, a yield or a wake. RUNNING: a scheduler runs its turn. PARKING: the turn is registering a wait, and a wake
-   that arrives now has to be seen by the task. PARKED: waiting, in no queue. WOKEN: a waker got in while the task was
-   PARKING; nothing was queued, and the end of the turn sends the task back to the queue. DONE: ended. Only
-   agc_task_wake changes the state of a task that is not running its turn. */
+   spawn, a yield or a wake. RUNNING: a scheduler runs its turn. PARKING: the turn is about to wait (agc_task_parking,
+   before the wait is registered), and a wake that arrives now has to be seen by the task. PARKED: waiting, in no
+   queue. WOKEN: a waker got in while the task was PARKING; nothing was queued, and the end of the turn sends the task
+   back to the queue. DONE: ended. Only agc_task_wake changes the state of a task that is not running its turn. */
 typedef enum {
   AGC_TASK_READY, AGC_TASK_RUNNING, AGC_TASK_PARKING, AGC_TASK_PARKED, AGC_TASK_WOKEN, AGC_TASK_DONE
 } agc_task_state;
@@ -270,7 +270,10 @@ struct agc_task {
   int64_t turn_cost;
   uint64_t lock_deadline, await_deadline, input_seen;
   _Atomic agc_task_state state;
-  bool cancelled, crashed, observed, left_children, group, hidden, spawned;
+  /* Atomic: a canceller on another scheduler sets it while the task runs, and the scheduler reads it at the end of the
+     turn, before it publishes PARKED (agc_vm_run). */
+  _Atomic bool cancelled;
+  bool crashed, observed, left_children, group, hidden, spawned;
   uint32_t spawn_span;
   agc_value result;
   agc_string *crash, *crash_message;
@@ -330,6 +333,8 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 bool agc_task_waiting(const agc_task *t);
+void agc_task_parking(agc_vm *vm);
+void agc_task_unpark(agc_vm *vm);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);

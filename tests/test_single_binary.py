@@ -395,9 +395,6 @@ def test_the_scheduler_count_is_checked_and_more_than_one_is_refused_before_the_
     assert (ran.code, ran.stdout, ran.stderr) == (0, "hello\n", "")
     refused = agentica("--schedulers", "2", HELLO, timeout=scaled(10))
     assert (refused.code, refused.stdout) == (2, "") and MORE_THAN_ONE in refused.stderr
-    # The variable is read before the front end compiles; the flag overrides it, valid or not.
-    bad = agentica(HELLO, env=vm_environment({"AGENTICA_SCHEDULERS": "many"}), timeout=scaled(10))
-    assert (bad.code, bad.stdout) == (2, "") and "AGENTICA_SCHEDULERS " + SCHEDULERS_RANGE in bad.stderr
     many = vm_environment({"AGENTICA_SCHEDULERS": "3"})
     assert agentica(HELLO, env=many, timeout=scaled(10)).code == 2
     assert agentica("check", HELLO, env=many, timeout=scaled(10)).code == 0
@@ -408,6 +405,37 @@ def test_the_scheduler_count_is_checked_and_more_than_one_is_refused_before_the_
         assert run_vm(program, *words, timeout=scaled(10), env=vm_environment()).code == code
     got = run_vm(program, env=vm_environment({"AGENTICA_SCHEDULERS": "2"}), timeout=scaled(10))
     assert (got.code, got.stdout) == (2, "") and MORE_THAN_ONE in got.stderr
+
+
+@pytest.mark.parametrize("value, flag, code", (
+    ("0", None, 2), ("1025", None, 2), ("", None, 2), ("many", None, 2), ("-1", None, 2),
+    ("0001", None, 0), ("1", None, 0), ("1024", "1", 0),
+    # A bad variable is an error even next to a valid flag: the flag wins over a valid value only.
+    ("many", "1", 2), ("0", "1", 2), ("", "1", 2),
+))
+def test_the_scheduler_variable_is_checked_for_every_command(value, flag, code):
+    """AGENTICA_SCHEDULERS is read before the front end starts, so a bad value stops `check` and a program alike."""
+    env = vm_environment({"AGENTICA_SCHEDULERS": value})
+    words = ("--schedulers", flag) if flag else ()
+    for command in ((HELLO,), ("check", HELLO)):
+        got = agentica(*words, *command, env=env, timeout=scaled(10))
+        assert got.code == code, (value, flag, command, got.stderr)
+        if code == 2:
+            assert (got.stdout, "AGENTICA_SCHEDULERS " + SCHEDULERS_RANGE in got.stderr) == ("", True)
+
+
+def test_the_test_command_refuses_more_than_one_scheduler_like_a_program(tmp_path):
+    """The test files run in VMs that the driver starts, so a flag above 1 is refused up front instead of dropped
+    (the variable reaches those VMs and stops them)."""
+    refused = agentica("--schedulers", "4", "test", cwd=tmp_path, timeout=scaled(10))
+    assert (refused.code, refused.stdout) == (2, "") and "4 " + MORE_THAN_ONE in refused.stderr
+    allowed = agentica("--schedulers", "1", "test", cwd=tmp_path, timeout=scaled(10))
+    assert MORE_THAN_ONE not in allowed.stdout + allowed.stderr
+    env = vm_environment({"AGENTICA_SCHEDULERS": "4"})
+    (tmp_path / "test").mkdir()
+    (tmp_path / "test" / "x_test.agc").write_text('def main() -> Void\n  Test.run([])\nend\n')
+    stopped = agentica("test", cwd=tmp_path, env=env, timeout=scaled(30))
+    assert stopped.code == 2 and MORE_THAN_ONE in stopped.stdout + stopped.stderr
 
 
 def test_a_problem_in_a_std_module_shows_that_module_not_a_file_of_the_working_folder(tmp_path):

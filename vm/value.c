@@ -83,7 +83,10 @@ bool agc_gc_thread_enter(void) {
   return true;
 #else
   struct GC_stack_base base;
-  return GC_get_stack_base(&base) == GC_SUCCESS && GC_register_my_thread(&base) == GC_SUCCESS;
+  if (GC_get_stack_base(&base) != GC_SUCCESS) return false;
+  /* GC_DUPLICATE: the collector knows the thread already (it started it, or it was registered before). */
+  int status = GC_register_my_thread(&base);
+  return status == GC_SUCCESS || status == GC_DUPLICATE;
 #endif
 }
 

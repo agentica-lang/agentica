@@ -3,6 +3,7 @@
  * ring growth and its turn cost, wrap-around, capacity and waiter order.
  */
 #include "../core.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <string.h>
@@ -98,7 +99,7 @@ static bool failed(agc_value result, const char *text) {
   return !r->ok && s->bytes == strlen(text) && memcmp(s->data, text, s->bytes) == 0;
 }
 
-static agc_task *ready_head(void) { return agc_runq_peek(vm.rt->runq); }
+static agc_task *ready_head(void) { return agc_test_ready_head(vm.rt->runq); }
 
 static agc_task *next_ready(void) {
   agc_task *t = agc_runq_pop(vm.rt->runq);
@@ -107,7 +108,7 @@ static agc_task *next_ready(void) {
 }
 
 static void settle(void) {
-  assert(!agc_runq_peek(vm.rt->runq));
+  assert(!ready_head());
   vm.task = main_task;
 }
 
@@ -440,6 +441,7 @@ static void test_reservation_beats_deadline(void) {
 }
 
 int main(void) {
+  agc_test_deadline(300);
   agc_init();
   agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);

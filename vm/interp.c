@@ -760,16 +760,12 @@ static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
   agc_fail(vm, "RUNTIME-KEY-NOT-FOUND", message, span);
 }
 
-/* The end of a turn that waits (docs/vm/10-io-multicore.md §10.2.3). PARKING to PARKED is the one CAS that decides:
-   it holds unless a waker got in first, and then the state is WOKEN and nobody queued the task. That task is not
-   parked: it yields, so the scheduler queues it and its next turn re-checks the wait. */
+/* The turn ends in a wait (docs/vm/10-io-multicore.md §10.2.3). The state stays PARKING (or WOKEN): the scheduler
+   decides about the cancel flag and the trace first, and then publishes PARKED with agc_task_commit_park, the last
+   thing it does with the task. */
 static agc_turn_result park_task(agc_task *t) {
   t->parking = false;
-  agc_task_state expected = AGC_TASK_PARKING;
-  if (atomic_compare_exchange_strong_explicit(&t->state, &expected, AGC_TASK_PARKED, memory_order_acq_rel,
-                                              memory_order_acquire))
-    return AGC_TURN_PARKED;
-  return AGC_TURN_YIELD;
+  return AGC_TURN_PARKED;
 }
 
 /* The span of the running instruction, read only where a failure or a call needs it. */

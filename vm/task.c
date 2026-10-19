@@ -80,17 +80,52 @@ void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t) {
   }
 }
 
-/* Marks the running task PARKING (§10.2.3): its turn ends in a wait, and from now on a wake is not lost. A second
-   call in the same turn must not store PARKING again: a waker may have changed it to WOKEN since, and the store
-   would erase that. The mark belongs before the wait is registered; while one thread both runs tasks and completes
-   jobs, nothing can wake the task in between, and the callers register first. */
+/* Starts a wait (§10.2.3): the running task becomes PARKING. It is called BEFORE the wait is registered (before the
+   task joins a waiter list, posts a request or starts a job), then the code registers, looks at its condition and
+   either parks (agc_task_park) or gives up (agc_task_unpark). From the mark on, a wake finds PARKING and sets WOKEN
+   instead of being dropped as the stale wake of a running task, so a wake between the registration and the end of
+   the turn cannot be lost. Only the thread that runs the task writes RUNNING, and a waker acts on PARKING and PARKED
+   only, so the check and the store cannot race. A second call in the same turn keeps what it finds: a waker may have
+   changed PARKING to WOKEN, and a store would erase that. The release store orders the mark before the registration
+   that a waker's acquire load reads. */
+void agc_task_parking(agc_vm *vm) {
+  agc_task *t = vm->task;
+  if (atomic_load_explicit(&t->state, memory_order_relaxed) == AGC_TASK_RUNNING)
+    atomic_store_explicit(&t->state, AGC_TASK_PARKING, memory_order_release);
+}
+
+/* The wait is not needed after all (the condition is already true, or the task was cancelled): back to RUNNING from
+   PARKING or from WOKEN, whichever a waker left. A task that was woken has nothing to do with the wake, which was
+   only a hint. */
+void agc_task_unpark(agc_vm *vm) {
+  agc_task *t = vm->task;
+  agc_task_state seen = atomic_load_explicit(&t->state, memory_order_acquire);
+  while (seen == AGC_TASK_PARKING || seen == AGC_TASK_WOKEN)
+    if (atomic_compare_exchange_weak_explicit(&t->state, &seen, AGC_TASK_RUNNING, memory_order_acq_rel,
+                                              memory_order_acquire))
+      return;
+}
+
+/* Says that this turn ends in a wait: the interpreter parks the task when the builtin returns (park_task in
+   interp.c), and with `retry` it runs the builtin again when the task resumes. The task is marked already (the caller
+   called agc_task_parking before it registered); the call here is a safety net for a caller that did not, which would
+   otherwise reach the end of the turn as RUNNING. The state is not touched by anything after this call: the
+   scheduler publishes PARKED in agc_vm_run, after it has finished with the task. */
 void agc_task_park(agc_vm *vm, bool retry) {
   agc_task *t = vm->task;
-  if (!t->parking) {
-    t->parking = true;
-    atomic_store_explicit(&t->state, AGC_TASK_PARKING, memory_order_release);
-  }
+  agc_task_parking(vm);
+  t->parking = true;
   t->retry = retry;
+}
+
+/* The end of a turn that waits: PARKING to PARKED, the one CAS that decides. It holds unless a waker got in first,
+   and then the state is WOKEN and nobody queued the task: the caller queues it, and its next turn looks at the wait
+   again (a job's result is taken by `resume`, a retry runs the builtin again). The CAS is the last access of the
+   scheduler to the task: once the task is PARKED a waker may queue it and another scheduler run it. */
+bool agc_task_commit_park(agc_task *t) {
+  agc_task_state expected = AGC_TASK_PARKING;
+  return atomic_compare_exchange_strong_explicit(&t->state, &expected, AGC_TASK_PARKED, memory_order_acq_rel,
+                                                 memory_order_acquire);
 }
 
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper) { vm->task->stepper = stepper; }
@@ -144,6 +179,8 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   if (end) end(vm, t);
 }
 
+/* A READY task is in the run queue, or a waker set READY and has not pushed it yet. In the second case the remove
+   finds nothing and the waker pushes a task that is about to end: whoever pops it drops it (agc_vm_run). */
 static void unlink_task(agc_vm *vm, agc_task *t) {
   if (t->state == AGC_TASK_READY) agc_runq_remove(vm->rt->runq, t);
   if (t->parked) agc_io_detach(vm, t);
@@ -363,6 +400,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
     enqueue(vm, vm->main);
     for (;;) {
       agc_task *t = agc_runq_pop(vm->rt->runq);
+      if (t && atomic_load_explicit(&t->state, memory_order_acquire) == AGC_TASK_DONE) continue;
       if (!t) {
         check_stop(vm);
         if (!agc_io_poll(vm, true)) {
@@ -378,6 +416,9 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       agc_turn_result r = AGC_TURN_DONE;
       bool ran = run_turn(vm, t, &r);
       agc_turn_finish(vm);
+      /* Everything the scheduler reads or does with the task comes before the park is published: the trace, the
+         cancel flag and the end of a cancelled task. After agc_task_commit_park succeeds the task belongs to its
+         waker. */
       trace_turn(vm, t, r, ran);
       trace_gc(vm, "turn");
       if (!ran) {
@@ -392,6 +433,8 @@ agc_outcome agc_vm_run(agc_vm *vm) {
         }
         finish_task(vm, t);
       } else if (r == AGC_TURN_YIELD) {
+        enqueue(vm, t);
+      } else if (!agc_task_commit_park(t)) {
         enqueue(vm, t);
       }
       agc_io_poll(vm, false);
@@ -474,6 +517,7 @@ static agc_value builtin_spawn_owning(agc_vm *vm, agc_value *args, uint32_t span
 bool agc_task_join(agc_vm *vm, agc_task *target) {
   vm->task->awaiting = NULL;
   if (target->state == AGC_TASK_DONE && !target->closing) return false;
+  agc_task_parking(vm);
   vm->task->awaiting = target;
   agc_task_enqueue(&target->waiters, &target->waiters_tail, vm->task);
   agc_task_park(vm, true);
@@ -555,6 +599,7 @@ static agc_value await_timeout(agc_vm *vm, agc_value *args, uint32_t span, bool 
     t->await_deadline = 0;
     return await_timed_out(vm);
   }
+  agc_task_parking(vm);
   t->awaiting = target;
   agc_task_enqueue(&target->waiters, &target->waiters_tail, t);
   agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->await_deadline - now));

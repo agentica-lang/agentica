@@ -149,6 +149,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     stop_waiting(t);
     return timed_out_error();
   }
+  agc_task_parking(vm);
   t->channel.channel = c;
   t->channel.sending = sending;
   t->channel.reserved = false;

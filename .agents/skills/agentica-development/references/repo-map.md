@@ -131,6 +131,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     process_test.c       # Process builtins
     random_test.c        # the generator
     runq_test.c          # the global run queue
+    task_wake_test.c     # wake against the park path, on threads
     stack_test.c         # stack traces
     string_test.c        # String builtins
     task_cancel_test.c   # task cancellation

@@ -234,6 +234,12 @@ def test(session: Session, words: List[String]) -> Int
   if binary == ""
     return emit(Reply.failed(2, Texts.test_without_binary_text()))
   end
+  # The test files run in VMs that the driver starts, which do not get the flag. Until a VM can run more than one
+  # scheduler, a larger count is refused here as it is for a program, instead of being dropped without a word.
+  if options.schedulers != "" and options.schedulers != "1"
+    asked = "#{options.schedulers} schedulers were asked for, but this build runs one"
+    return emit(Reply.failed(2, "agentica: #{asked}\n"))
+  end
   driver: List[String] = [
     "--vm", binary, "--version", session.settings.version, "--style", options.style,
     "--test-timeout-ms", "30000",

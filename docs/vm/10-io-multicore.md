@@ -9,7 +9,8 @@ loop, one global queue and no home scheduler. Multicore is built in steps
 
 - **Schedulers.** `N` defaults to `uv_available_parallelism()` (respects CPU
   affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it,
-  capped at 1024, and the flag wins. Invalid values exit 2. As built, both are
+  capped at 1024, and the flag wins over a valid variable. Invalid values exit
+  2, also a bad variable next to a valid flag. As built, both are
   parsed and checked, the default is 1, and a count above 1 exits 2 before the
   program loads, because only one scheduler runs (§16.9). `--schedulers 1`
   gives the N=1 order, which still depends on timer and pool timing. `--seed`
@@ -45,11 +46,31 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   WOKEN is stale and dropped. The scheduler sets WOKEN to RUNNING when the turn
   starts. A resumed task re-checks its condition, so a wake is only a hint. No
   wake is lost, and a task is queued at most once. Which waker wins is in §16.5.
-  As built (`agc_task_wake` in `vm/task.c`, `park_task` in `vm/interp.c`), a
-  waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the run
-  queue", and the scheduler sets READY to RUNNING when it pops the task. A task
-  that finds WOKEN when it tries PARKING to PARKED yields instead. PARKING is
-  taken in `agc_task_park`, after the builtin registered its wait (§16.9).
+  As built (`vm/task.c`):
+  - `agc_task_parking` marks the running task PARKING before the builtin
+    registers anything: before it joins a waiter list or the FIFO of a stream,
+    posts a request or starts a job (`agc_io_start_then` marks before the job
+    exists). `agc_task_unpark` takes the task back to RUNNING, from PARKING or
+    WOKEN, when the wait turns out to be unneeded. `agc_task_park` only says
+    that the turn ends in a wait.
+  - A waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the
+    run queue", and the scheduler sets READY to RUNNING when it pops the task.
+    On PARKING it CASes to WOKEN and queues nothing.
+  - The end of the turn is in the scheduler (`agc_vm_run`). It traces, reads the
+    cancel flag (an atomic) and ends a cancelled task first. Then it does the CAS
+    from PARKING to PARKED (`agc_task_commit_park`), which is the last thing it
+    does with the task: from then on a waker may queue it and another scheduler
+    may run it. A CAS that finds WOKEN queues the task, so the turn yields.
+  - A yield after WOKEN does not skip anything the waker prepared. A task that
+    parked on a job has `parked` set, and `resume` takes the job's result and
+    writes it to `park_reg` when the task runs again, whichever way it got
+    there; a retry park (`agc_task_park(vm, true)`) runs the builtin again. So
+    for a park that does not retry (the job path) the waker never writes the
+    register, and WOKEN needs only the yield.
+  - The re-check of the wait condition after the registration belongs to each
+    builtin; with one thread it cannot change between the check and the
+    registration. Waiter lists and FIFOs that more than one thread touches get
+    their locks with those threads (§16.11).
 - **Channel lock (17b).** Each channel has a short lock. `send`, `recv`,
   `close`, a wake, a hand-on and a cancelled waiter that leaves its FIFO take
   it, and it is never held across a park. Ring growth copies the slots under the
@@ -167,9 +188,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   after `agc_init`, which also starts the mark threads. The libuv pool threads
   stay unregistered on purpose, since they never touch GC memory. With N=1 no
   one calls `agc_gc_allow_threads`, so no mark thread exists. The runtime struct
-  stays on the main thread's stack for the whole run. The run queue lives in GC
-  memory or is a registered root, so a head in `malloc` memory never hides a
-  task from the collector. Jobs and the inbox are `malloc` memory with no GC
+  is GC memory (`agc_vm_init` allocates it), reached from the `agc_vm` that stays
+  on the main thread's stack for the whole run. The run queue lives in GC
+  memory, so a head in `malloc` memory never hides a task from the collector. Jobs and the inbox are `malloc` memory with no GC
   pointer, and a GC resource owns each job (§16.5). Collections stop the world.
   That cost is accepted and measured in round 2 of the benchmarks, which also
   measures contention on the packed word and the run queue's lock. Boehm stops

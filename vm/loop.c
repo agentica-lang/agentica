@@ -794,8 +794,11 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   return r;
 }
 
+/* The job is the wait of the task, so the task is marked PARKING before the job exists: the job's completion is
+   the wake (§10.2.3). A builtin that registers something else first (a waiter list, a request) marks before that. */
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more) {
+  agc_task_parking(vm);
   agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, false);
   r->task = vm->task;
   vm->task->parked = r;
@@ -823,6 +826,9 @@ void agc_io_ready(agc_io_job *j) {
 
 void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
   if (j->consumed || j->timer_closing || j->timer_fired || j->work_done) return;
+  /* The timer counts from the loop's cached time, and nothing else refreshes it now that the schedulers' clock
+     (agc_clock_ms) does not. */
+  uv_update_time(&j->loop->uv);
   uv_timer_start(&j->timer, timer_fired, (uint64_t)timeout_ms, 0);
 }
 
@@ -892,6 +898,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   }
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_wait handle=%" PRIu64 " task=%" PRIu64 " wait_ms=%" PRIu64, handle->id,
             t->id, deadline - now);
+  agc_task_parking(vm);
   agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
   t->lock_wait = handle;
   agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(deadline - now));

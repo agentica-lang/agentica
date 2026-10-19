@@ -110,15 +110,28 @@ Read first: `references/vm.md`.
     `agc_task_close_done` brings `closing` to 0; 17c adds
     `test_timed_await_cancel` and `test_timed_await_ends` (they build the
     `Await` enum tables in `new_prog`); `test_woken_while_parking` (the
-    `Test.window` builtin wakes its own task while the task is PARKING: the CAS
-    makes it WOKEN, queues nothing, and the end of the turn yields instead of
-    parking, so the task is queued once)
+    `Test.window` builtin marks its task, wakes it, then parks: the CAS makes it
+    WOKEN, queues nothing, and the end of the turn queues the task instead of
+    parking it, so it is queued once)
 
 - **Path:** `vm/tests/runq_test.c`
   - **Owns:** The global run queue (`vm/runq.c`): FIFO order and removal from
-    the middle, three pushers against three poppers on libuv threads (every task
-    comes out exactly once), a waiter that sleeps until a push, and
-    `agc_runq_end` waking every waiter.
+    the middle on the solo queue, then three pushers against three poppers on
+    libuv threads after `agc_runq_share` (every task comes out exactly once).
+
+- **Path:** `vm/tests/task_wake_test.c`
+  - **Owns:** The wake against the park path: the task marks itself PARKING and
+    two waker threads call `agc_task_wake` twice each while the scheduler thread
+    does `agc_task_commit_park`, 20000 rounds with different timings. The task
+    ends in the queue exactly once per round (a dropped wake leaves none, a
+    double push leaves two). The single-thread part checks the marks, unpark
+    and a stale wake.
+
+- **Path:** `vm/tests/test_support.h`
+  - **Owns:** `agc_test_deadline(seconds)` (an alarm, so a broken park path fails
+    a test instead of hanging `make vm-test`; none on Windows) and
+    `agc_test_ready_head` (the first ready task, for tests that run on one
+    thread).
 
 - **Path:** `vm/tests/gc_thread_test.c`
   - **Owns:** Boehm with threads: libuv threads that call `agc_gc_thread_enter`
