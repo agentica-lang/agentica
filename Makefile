@@ -738,6 +738,9 @@ WINDOWS_CROSS := VM_OS=Windows_NT CC=x86_64-w64-mingw32-gcc AR=llvm-ar RUN_PROGR
   AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored
 # The modules the vm-windows job of platforms.yml runs: the bootstrap binary alone, then the product. TESTS= picks
 # others (test_cli_forms.py drives only the command line, for instance).
+# tests/test_process.py and tests/test_process_lifecycle.py stay out: their peers are host programs that Wine cannot
+# start, and the stop case of the lifecycle module needs a Windows console (it would need a Wine skip, which the
+# native job must not have).
 WINDOWS_TEST_MODULES ?= tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py \
   tests/test_vm_stdout.py tests/test_platform_bootstrap.py
 WINDOWS_DOCKER := docker run --rm -v '$(CURDIR):$(CURDIR)' -w '$(CURDIR)' --user "$$(id -u):$$(id -g)" \

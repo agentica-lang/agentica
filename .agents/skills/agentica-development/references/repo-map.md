@@ -156,6 +156,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_process.py  # pytest: Process builtins on the VM, every way a run ends (references/vm-net.md)
   test_process_bdd.py  # pytest: Process in agentica test; apart from test_process.py until it runs on Windows
   test_process_windows.py  # pytest, native Windows only: the exit pair libuv reports for a stopped child (references/ci.md)
+  test_process_lifecycle.py  # pytest: a child is gone when its owner ends, the run is stopped or the driver of its VM is killed, on every system (references/vm-tests.md)
   test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
   test_filesystem.py  # pytest: File and Path programs on the VM (references/vm-io.md)
   vm_diff_support.py  # the golden harness: fixtures, sidecars, sweeps, `make goldens` (references/vm-build.md)
