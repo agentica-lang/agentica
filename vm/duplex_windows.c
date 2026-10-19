@@ -11,17 +11,10 @@
 #include <io.h>
 #include <uv.h>
 #include <windows.h>
+#include <winternl.h>
 
 #define READ_FD 3
 #define WRITE_FD 4
-#define ACCESS_CLASS 8 /* FileAccessInformation of NtQueryInformationFile */
-
-typedef struct {
-  LONG status;
-  ULONG_PTR information;
-} status_block;
-
-NTSTATUS NTAPI NtQueryInformationFile(HANDLE file, status_block *block, PVOID data, ULONG size, ULONG kind);
 
 /* The child ends are blocking, like those of stdin and stdout, so a child that is no VM can read and write them
    with plain calls; the parent's ends are the non-blocking ones that libuv drives. */
@@ -43,21 +36,25 @@ int agc_chan_pair(agc_chan_ends *ends) {
   return 0;
 }
 
-const char *agc_chan_marker(void) { return "3,4"; }
+const char *agc_chan_marker(void) { return "AGENTICA_CHANNEL=3,4"; }
 
 /* True when the descriptor is a named pipe whose handle grants `right` (FILE_READ_DATA or FILE_WRITE_DATA). */
 static bool pipe_with(int fd, ULONG right) {
   if (uv_guess_handle(fd) != UV_NAMED_PIPE) return false;
   HANDLE handle = (HANDLE)_get_osfhandle(fd);
   if (handle == INVALID_HANDLE_VALUE) return false;
-  status_block block;
-  ULONG granted = 0;
-  return NtQueryInformationFile(handle, &block, &granted, sizeof granted, ACCESS_CLASS) >= 0 && (granted & right);
+  IO_STATUS_BLOCK block;
+  ULONG granted = 0; /* the one field of FILE_ACCESS_INFORMATION: an ACCESS_MASK */
+  return NtQueryInformationFile(handle, &block, &granted, sizeof granted, FileAccessInformation) >= 0 &&
+         (granted & right);
 }
 
-/* A duplicate that no spawn passes on: handle lists already keep it from a grandchild, and this makes it explicit. */
+/* A duplicate above the standard streams (a closed stdin leaves 0 free, and _dup takes the lowest) that no spawn
+   passes on: handle lists already keep it from a grandchild, and this makes it explicit. */
 static int moved(int fd) {
-  int taken = _dup(fd);
+  int low[3], held = 0, taken;
+  while ((taken = _dup(fd)) >= 0 && taken <= 2) low[held++] = taken;
+  for (int k = 0; k < held; k++) _close(low[k]);
   if (taken < 0) return -1;
   if (!SetHandleInformation((HANDLE)_get_osfhandle(taken), HANDLE_FLAG_INHERIT, 0)) {
     _close(taken);

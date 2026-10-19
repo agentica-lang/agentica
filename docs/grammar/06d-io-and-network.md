@@ -280,8 +280,9 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   `close` and a timeout never wait. At the end of a run a captured child gets
   about one second; a child from `spawn` is killed at once.
 - `spawn_channel(command, args, dir, timeout_ms)` works like `spawn_captured`
-  and also opens a channel to the child: a bidirectional socket pair, separate
-  from its stdin, stdout and stderr, that carries text lines in both directions.
+  and also opens a channel to the child: a private channel (a socket pair; on
+  Windows a pipe per direction), separate from its stdin, stdout and stderr,
+  that carries text lines in both directions.
   The child finds it on descriptor 3, and its environment holds
   `AGENTICA_CHANNEL=3`. On Windows the channel is a pipe in each direction: the
   child reads descriptor 3 and writes descriptor 4, and the variable is

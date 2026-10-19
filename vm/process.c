@@ -745,16 +745,6 @@ static int open_pipe(uv_pipe_t *pipe, int *fd, int rc) {
   return rc;
 }
 
-/* AGENTICA_CHANNEL=value, in a block the caller frees. */
-static char *channel_marker(void) {
-  const char *value = agc_chan_marker();
-  size_t size = strlen(CHANNEL_PREFIX) + strlen(value) + 1;
-  char *text = malloc(size);
-  if (!text) agc_out_of_memory();
-  snprintf(text, size, "%s%s", CHANNEL_PREFIX, value);
-  return text;
-}
-
 static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, const char *cwd, bool channel) {
   int fds[6] = {-1, -1, -1, -1, -1, -1};
   agc_chan_ends link = {-1, -1, {-1, -1}, 0};
@@ -820,12 +810,8 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
   close_fd(&fds[1]);
   close_fd(&fds[2]);
   close_fd(&fds[4]);
-  bool shared = link.write == link.read;
   close_fd(&link.read);
-  if (shared)
-    link.write = -1;
-  else
-    close_fd(&link.write);
+  close_fd(&link.write);
   if (rc && p->running) shut(p);
   return rc;
 }
@@ -892,8 +878,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     return agc_error_value("process: directory is unavailable");
   }
   char **argv = child_args(vm, path, list);
-  char *marker = channel ? channel_marker() : NULL;
-  char **env = child_env(vm->rt->drop_uring_env, marker);
+  char **env = child_env(vm->rt->drop_uring_env, channel ? agc_chan_marker() : NULL);
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;
@@ -908,7 +893,6 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   for (size_t k = 0; argv[k]; k++) free(argv[k]);
   free(argv);
   free_env(env);
-  free(marker);
   free(cwd);
   if (rc) {
     settle(p);

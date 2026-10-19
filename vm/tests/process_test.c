@@ -2,6 +2,7 @@
 #include "builtin_test.h"
 #include "../services.h"
 #include "../process_os.h"
+#include "chan_spawn.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -313,6 +314,67 @@ static void close_process(agc_value handle) {
   call("Process.close", args);
 }
 
+static void ignore_fd(int fd, void *data) {
+  (void)fd;
+  (void)data;
+}
+
+static int direct_code = -1;
+
+static void direct_exited(uv_process_t *p, int64_t status, int signal) {
+  direct_code = signal ? 100 + signal : (int)status; /* a failed assert in the child is a signal, not a status */
+  uv_close((uv_handle_t *)p, NULL);
+}
+
+/* Starts this program in `mode` (--probe or --take) with libuv directly, giving it a fresh channel pair (none when
+   `with_ends` is false, the two ends swapped when `swap`) and `value` as AGENTICA_CHANNEL (unset when NULL). Returns
+   its exit status: 0 it took a channel (and for --take, that the take left what it promises), 1 it was refused with
+   "process: no parent channel", 2 anything else. */
+static int probe_child(const char *self, const char *mode, const char *value, bool with_ends, bool swap) {
+  agc_chan_ends ends;
+  assert(agc_chan_pair(&ends) == 0);
+  uv_loop_t loop;
+  assert(uv_loop_init(&loop) == 0);
+  int count = with_ends ? ends.child_count : 0;
+  char kept[64];
+  size_t room = sizeof kept;
+  bool had = uv_os_getenv(AGC_CHANNEL_ENV, kept, &room) == 0;
+  if (value)
+    assert(uv_os_setenv(AGC_CHANNEL_ENV, value) == 0);
+  else
+    uv_os_unsetenv(AGC_CHANNEL_ENV);
+  uv_process_t process;
+  assert(chan_spawn(&loop, &process, self, mode, NULL, &ends, count, swap, 0, direct_exited) == 0);
+  if (had)
+    uv_os_setenv(AGC_CHANNEL_ENV, kept);
+  else
+    uv_os_unsetenv(AGC_CHANNEL_ENV);
+  assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+  agc_fs_close(ends.read);
+  agc_fs_close(ends.write);
+  assert(uv_loop_close(&loop) == 0);
+  return direct_code;
+}
+
+/* Starts the leaf that leaves a mark when its parent's end of the channel goes away, and keeps the parent's ends open
+   until this process ends without clean-up. On Windows the VM's own spawns put a child in libuv's kill-on-close job,
+   which ends it with its parent before it can read the end of input, so the leaf breaks away with UV_PROCESS_DETACHED
+   (the VM never does that). */
+static void start_leaf(const char *self, const char *mark) {
+#ifdef _WIN32
+  static agc_chan_ends ends;
+  static uv_loop_t loop;
+  static uv_process_t leaf;
+  assert(agc_chan_pair(&ends) == 0);
+  assert(uv_loop_init(&loop) == 0);
+  assert(uv_os_setenv(AGC_CHANNEL_ENV, agc_chan_marker() + sizeof AGC_CHANNEL_ENV) == 0);
+  assert(chan_spawn(&loop, &leaf, self, "--leaf", mark, &ends, ends.child_count, false, UV_PROCESS_DETACHED, NULL) == 0);
+  uv_os_unsetenv(AGC_CHANNEL_ENV);
+#else
+  start("Process.spawn_channel", self, "--leaf", mark);
+#endif
+}
+
 static int child(int argc, char **argv) {
 #ifdef _WIN32
   _setmode(0, _O_BINARY);
@@ -378,20 +440,65 @@ static int child(int argc, char **argv) {
     size_t room = sizeof value;
     return uv_os_getenv(AGC_CHANNEL_ENV, value, &room) == UV_ENOENT && fd_absent(3) && fd_absent(4) ? 0 : 1;
   }
-  if (strcmp(argv[1], "--middle") == 0) {
-    /* A channel child with a plain child of its own: it reports whether that one inherited the marker or a channel
-       descriptor. */
+  if (strcmp(argv[1], "--probe") == 0) {
+    init();
+    agc_parent_take(&vm);
+    if (agc_parent_open(&vm)) return 0;
+    agc_value args[] = {agc_int(100)};
+    const agc_result *r = agc_as_result(&vm, call("Process.parent_read_line", args));
+    const agc_string *why = r->ok ? NULL : agc_as_string(&vm, r->value);
+    const char *none = "process: no parent channel";
+    return why && why->bytes == strlen(none) && memcmp(why->data, none, why->bytes) == 0 ? 1 : 2;
+  }
+  if (strcmp(argv[1], "--take") == 0) {
+    /* The contract of agc_chan_take: the descriptors it was given are gone, and the two it returns are distinct, above
+       the standard streams and (where the system has it) close-on-exec, so that no spawn passes them on. */
+    int in = -1, out = -1;
+    assert(agc_chan_take(ignore_fd, NULL, &in, &out));
+    assert(fd_absent(3));
+#ifdef _WIN32
+    assert(fd_absent(4));
+#else
+    assert((fcntl(in, F_GETFD) & FD_CLOEXEC) && (fcntl(out, F_GETFD) & FD_CLOEXEC));
+#endif
+    assert(in > 2 && out > 2 && in != out);
+    return 0;
+  }
+  if (strcmp(argv[1], "--leaf") == 0 && argc > 2) {
     take_channel();
+    agc_value args[] = {agc_int(10000)};
+    const agc_result *r = agc_as_result(&vm, call("Process.parent_read_line", args));
+    if (!r->ok) {
+      const agc_string *why = agc_as_string(&vm, r->value);
+      FILE *f = fopen(argv[2], "wb");
+      if (f) {
+        fprintf(f, "%.*s\n", (int)why->bytes, why->data);
+        fclose(f);
+      }
+    }
+    return 0;
+  }
+  if (strcmp(argv[1], "--middle") == 0 && argc > 2) {
+    /* A channel child with two children of its own: a channel child (the leaf) and a plain one. It checks that the
+       take unset the marker, reports whether the plain one inherited anything, then ends at once without the
+       clean-up of a VM, so its ends of the leaf's channel close with the process. */
+    take_channel();
+    char value[64];
+    size_t room = sizeof value;
+    assert(uv_os_getenv(AGC_CHANNEL_ENV, value, &room) == UV_ENOENT);
     char self[32768];
     size_t size = sizeof self;
     assert(uv_exepath(self, &size) == 0);
+    start_leaf(self, argv[2]);
     agc_value plain = start("Process.spawn_captured", self, "--isolated", NULL);
     agc_value args[] = {plain, agc_int(5000)};
     int64_t status = agc_as_int(&vm, ok(call("Process.wait", args)));
     args[0] = text(status == 0 ? "isolated\n" : "inherited\n");
     args[1] = agc_int(5000);
     ok(call("Process.parent_send", args));
-    return 0;
+    args[0] = text("ready\n");
+    ok(call("Process.parent_send", args));
+    _exit(0);
   }
   if (strcmp(argv[1], "--channel") == 0) {
     take_channel();
@@ -419,8 +526,46 @@ static int child(int argc, char **argv) {
   return fflush(stdout) == 0 ? 0 : 1;
 }
 
+/* Waits, for at most five seconds, for the file the leaf writes, and checks its line. */
+static void wait_for_mark(const char *path, const char *expected) {
+  for (int k = 0; k < 500; k++) {
+    FILE *f = fopen(path, "rb");
+    if (f) {
+      char text_[160] = "";
+      bool whole = fgets(text_, sizeof text_, f) && strchr(text_, '\n');
+      fclose(f);
+      if (whole) {
+        assert(strcmp(text_, expected) == 0);
+        return;
+      }
+    }
+    uv_sleep(10);
+  }
+  assert(!"the leaf never saw its parent go");
+}
+
+/* A child that is given something other than its channel takes nothing: the marker of the other system, a marker
+   with no descriptors, and (where there are two) the descriptors the wrong way round. A valid channel is the control. */
+static void refusal_tests(const char *self) {
+  const char *mine = agc_chan_marker() + sizeof AGC_CHANNEL_ENV;
+  const char *other = strchr(mine, ',') ? "3" : "3,4";
+  assert(probe_child(self, "--probe", mine, true, false) == 0);
+  assert(probe_child(self, "--take", mine, true, false) == 0);
+  assert(probe_child(self, "--probe", other, true, false) == 1);
+  assert(probe_child(self, "--probe", mine, false, false) == 1);
+  assert(probe_child(self, "--probe", NULL, true, false) == 1);
+  agc_chan_ends ends;
+  assert(agc_chan_pair(&ends) == 0);
+  bool two = ends.child_count == 2;
+  agc_fs_close(ends.read);
+  agc_fs_close(ends.write);
+  for (int k = 0; k < ends.child_count; k++) agc_fs_close(ends.child[k]);
+  if (two) assert(probe_child(self, "--probe", mine, true, true) == 1);
+}
+
 /* The channel contract with children that are this program: lines in both directions, the end of input after a half
-   close and what still comes back, a line over the limit, a timeout, a child that ends, and the isolation of a grandchild. */
+   close and what still comes back, a line over the limit, a timeout, a child that ends, a parent that vanishes, and
+   a channel that is not offered. */
 static void channel_tests(const char *self) {
   agc_value handle = start("Process.spawn_channel", self, "--lines", NULL);
   ok(send_line(handle, text("one\n")));
@@ -450,10 +595,19 @@ static void channel_tests(const char *self) {
   assert(exit_status(handle) == 3);
   close_process(handle);
 
-  handle = start("Process.spawn_channel", self, "--middle", NULL);
+  char base[4096], mark[4200];
+  size_t base_size = sizeof base;
+  assert(uv_os_tmpdir(base, &base_size) == 0);
+  snprintf(mark, sizeof mark, "%s/agc-leaf-%ld.txt", base, (long)uv_os_getpid());
+  remove(mark);
+  handle = start("Process.spawn_channel", self, "--middle", mark);
   equal(ok(read_line(handle, 10000)), "isolated");
+  equal(ok(read_line(handle, 10000)), "ready");
   assert(exit_status(handle) == 0);
   close_process(handle);
+  wait_for_mark(mark, "process: end of input\n");
+  remove(mark);
+  refusal_tests(self);
 }
 
 int main(int argc, char **argv) {
