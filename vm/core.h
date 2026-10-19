@@ -99,6 +99,7 @@ void agc_thread_join(void *threads, size_t k);
  * caller's failure, or an end it wrote into its own record) and every caller ends the run queue and wakes the I/O
  * thread. agc_run_stall is the end of a run where every task waits and nothing can wake one. */
 void agc_run_over(agc_vm *vm);
+void agc_run_over_untasked(agc_vm *vm);
 void agc_run_stall(agc_vm *vm);
 void agc_sync_reset(agc_vm *vm);
 /* Turns on the lock of the resource registry (made here if it does not exist yet); agc_share calls it. */
@@ -266,7 +267,8 @@ bool agc_output_busy(agc_vm *vm);
 bool agc_output_failed(const agc_output *out);
 void agc_output_close(agc_vm *vm);
 FILE *agc_notice_begin(agc_output *out, agc_notice *n);
-void agc_notice_end(agc_notice *n, agc_notice_mode mode);
+/* VM is the calling thread's context: it owns the stream lock and starts the write. */
+void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode);
 
 void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome);
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,

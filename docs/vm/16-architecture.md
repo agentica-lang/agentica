@@ -468,13 +468,16 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   no deadline (stdin, the close of a polled file) and every poller pause and
   close go through `agc_io_call`. The poller of a polled file is opened in the
   job's `more` step and the stdin poller before the schedulers start, both on
-  the I/O thread. A wait with a deadline starts in the job's START, before its
-  timer is armed (the `more` step of a wait on the loop), so the timer always
-  finds it started, and the kind's `pause` stops it on the I/O thread before
-  EXPIRED is published: `expired` never runs beside one of its callbacks.
-  `agc_io_uv` aborts off the I/O thread, and the builtins of TCP, TLS, HTTP,
-  `Process`, `Duplex` and `Test.run` fail with `RUNTIME-INTERNAL` at N > 1
-  (`agc_program_for_threads`), until their steps move too.
+  the I/O thread (`agc_poller_open` aborts on another thread). So at N > 1 stdin
+  is watched at the start of the run, where N = 1 watches it at the first read;
+  a default above 1 changes that for every program. A wait with a deadline
+  starts in the job's START, before its timer is armed (the `more` step of a
+  wait on the loop), so the timer always finds it started, and the kind's
+  `pause` stops it on the I/O thread before EXPIRED is published: `expired`
+  never runs beside one of its callbacks. `agc_io_uv` aborts off the I/O thread,
+  and the builtins of TCP, TLS, HTTP, `Process`, `Duplex` and `Test.run` fail
+  with `RUNTIME-INTERNAL` at N > 1 (`agc_program_for_threads`), until their
+  steps move too.
 - **An outcome and a count, not flags.** A job has an atomic outcome (PENDING,
   DONE, EXPIRED or CANCELLED) that the first writer sets by CAS
   (`agc_job_settle`, release; `agc_io_finish` reads it with acquire), and an
@@ -689,11 +692,9 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
     `File` tables are checked by row. `tests/test_vm_shared.py` holds the
     programs for the paths the other modules do not reach.
     Not yet under the lock: the profiling counters, the I/O thread's side of the
-    handles, and the owner of a stream's lock, which is recorded on the
-    stream's own `vm` (`s->vm`, in `agc_notice_end` and `settle`), not on the
-    scheduler that prints; 3c passes the calling scheduler through
-    `agc_notice` and `settle`.
-    The later PRs of the plan cover those.
+    handles. The later PRs of the plan cover those. The owner of a stream's
+    lock is the calling thread's context (`agc_notice_end`, `settle` and the
+    start of a write take it), not the stream's own `vm`.
 - **The order of PR 3 of issue #345.** 3a (the blocking pop, the cancel by
   claim and these locks), 3b (the context split of the scheduler and
   per-scheduler timers), 3c (threads, pollers and the standard streams, then

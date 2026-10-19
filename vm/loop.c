@@ -150,10 +150,9 @@ struct agc_io_job {
 
 struct agc_poller {
   uv_poll_t handle;
-  /* The loop of the poller. A scheduler's open, wait, pause or close is a call request to its thread (agc_io_call);
-     `broken` says that the open, made there later, failed: a wait then reports EBADF and the close only frees. */
+  /* The loop of the poller. The open runs on its thread; a scheduler's wait, pause or close is a call request to that
+     thread (agc_io_call). */
   agc_loop *loop;
-  bool broken;
 #ifdef __APPLE__
   uv_timer_t timer;
   bool timed, writing, named;
@@ -1114,8 +1113,8 @@ static void poll_ready(uv_poll_t *handle, int status, int events) {
   p->ready(p->data, status);
 }
 
-/* Closes the poller's descriptor and frees it, once its handles are closed or were never made. */
-static void poller_free(agc_poller *p) {
+static void poller_closed(uv_handle_t *handle) {
+  agc_poller *p = handle->data;
 #ifdef _WIN32
   _close(p->fd);
 #else
@@ -1123,8 +1122,6 @@ static void poller_free(agc_poller *p) {
 #endif
   free(p);
 }
-
-static void poller_closed(uv_handle_t *handle) { poller_free(handle->data); }
 
 #ifdef __APPLE__
 static void poll_tick(uv_timer_t *timer) {
@@ -1180,22 +1177,16 @@ static int poller_init(agc_poller *p) {
   return rc;
 }
 
-static void poller_init_call(void *data) {
-  agc_poller *p = data;
-  if (poller_init(p) != 0) p->broken = true;
-}
-
-/* On the loop's thread a failed open returns NULL with ERR set. From a scheduler the open is a call request, so the
-   poller comes back at once and a failure shows at its first wait, as EBADF (`broken`). */
+/* Only on the loop's thread, so that its caller learns of a failure at once (a failed open returns NULL with ERR set)
+   and can fall back: a file's `more` step, the stdin poller set up before the schedulers start, and the standard
+   streams at launch. */
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
+  agc_loop *loop = loop_of(vm);
+  if (!on_io_thread(loop)) agc_internal_abort("a scheduler thread opened a poller");
   agc_poller *p = calloc(1, sizeof(agc_poller));
   if (!p) agc_out_of_memory();
   p->fd = fd;
-  p->loop = loop_of(vm);
-  if (!on_io_thread(p->loop)) {
-    call_on(p->loop, poller_init_call, p);
-    return p;
-  }
+  p->loop = loop;
   int rc = poller_init(p);
   if (rc != 0) {
     free(p);
@@ -1208,10 +1199,6 @@ agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
 static void poller_start(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data) {
   p->ready = ready;
   p->data = data;
-  if (p->broken) {
-    ready(data, UV_EBADF);
-    return;
-  }
 #ifdef __APPLE__
   if (p->timed) {
     p->writing = writing;
@@ -1242,7 +1229,6 @@ void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int 
 
 static void poller_pause_run(void *data) {
   agc_poller *p = data;
-  if (p->broken) return;
 #ifdef __APPLE__
   if (p->timed) {
     uv_timer_stop(&p->timer);
@@ -1258,10 +1244,6 @@ void agc_poller_pause(agc_poller *p) { call_on(p->loop, poller_pause_run, p); }
 
 static void poller_close_run(void *data) {
   agc_poller *p = data;
-  if (p->broken) {
-    poller_free(p);
-    return;
-  }
 #ifdef __APPLE__
   if (p->timed) {
     uv_close((uv_handle_t *)&p->timer, poller_closed);
@@ -1475,7 +1457,7 @@ void agc_io_serve(agc_vm *vm) {
   agc_loop *loop = rt->loop;
   if (setjmp(vm->fail) != 0) {
     agc_sync_reset(vm);
-    agc_run_over(vm);
+    agc_run_over_untasked(vm);
     return;
   }
   while (!atomic_load_explicit(&rt->over, memory_order_acquire)) {
@@ -1487,7 +1469,7 @@ void agc_io_serve(agc_vm *vm) {
       AGC_TRACE(&rt->trace, AGC_TRACE_SCHED, "stop signal=%d", sig);
       vm->outcome->kind = AGC_EXITED;
       vm->outcome->exit_code = 128 + sig;
-      agc_run_over(vm);
+      agc_run_over_untasked(vm);
     } else if (stalled(vm)) {
       agc_run_stall(vm);
     }

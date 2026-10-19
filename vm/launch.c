@@ -153,13 +153,13 @@ static void flush_files(agc_vm *vm) {
   const agc_outcome *o = &vm->rt->outcome;
   agc_notice notice;
   agc_print_flush_failed(agc_notice_begin(&vm->rt->err, &notice), o->code, o->message, o->message_len, vm->rt->style);
-  agc_notice_end(&notice, AGC_NOTICE_FINAL);
+  agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
 }
 
 static void print_outcome(agc_vm *vm, const agc_outcome *outcome, agc_notice_mode mode) {
   agc_notice notice;
   agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, outcome, vm->rt->style, false);
-  agc_notice_end(&notice, mode);
+  agc_notice_end(vm, &notice, mode);
 }
 
 static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
@@ -182,7 +182,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   if (vm->rt->flush_expired) {
     agc_notice notice;
     agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->style);
-    agc_notice_end(&notice, AGC_NOTICE_FINAL);
+    agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
   }
   const char *write_error = NULL;
   if (outcome->kind != AGC_FAILED && !agc_io_stop_signal()) {

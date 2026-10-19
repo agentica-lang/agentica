@@ -384,7 +384,7 @@ static void crash(agc_vm *vm, agc_task *t) {
   }
   agc_notice notice;
   agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
-  agc_notice_end(&notice, AGC_NOTICE_QUEUED);
+  agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
   o->kind = AGC_DONE;
   unlink_task(vm, t);
   for (agc_task *child = t->children, *next; child; child = next) {
@@ -425,7 +425,7 @@ bool agc_report_unobserved(agc_vm *vm) {
   agc_notice notice;
   agc_print_unobserved(agc_notice_begin(&vm->rt->err, &notice), vm->rt->crash_count - vm->rt->observed_count, first->crash,
                        vm->rt->style);
-  agc_notice_end(&notice, AGC_NOTICE_QUEUED);
+  agc_notice_end(vm, &notice, AGC_NOTICE_QUEUED);
   return true;
 }
 
@@ -551,10 +551,19 @@ void agc_run_over(agc_vm *vm) {
   if (atomic_compare_exchange_strong_explicit(&rt->over, &expected, true, memory_order_acq_rel,
                                               memory_order_acquire)) {
     if (vm->outcome != &rt->outcome) rt->outcome = *vm->outcome;
-    rt->over_task = vm->task ? vm->task->id : 0;
+    rt->over_task = vm->task && executing(vm->task) ? vm->task->id : 0;
   }
   agc_runq_end(rt->runq);
   agc_io_wake(vm);
+}
+
+/* agc_run_over for an end that no task caused (a stop signal, a stall, a failure of the I/O thread): the trace names
+   no task. The I/O context keeps its own task for what runs after (a detached ending reads it). */
+void agc_run_over_untasked(agc_vm *vm) {
+  agc_task *own = vm->task;
+  vm->task = NULL;
+  agc_run_over(vm);
+  vm->task = own;
 }
 
 /* The stall of a run with several schedulers, found by the I/O thread (agc_io_serve): the same end as at N = 1, with
@@ -567,12 +576,7 @@ void agc_run_stall(agc_vm *vm) {
   o->code = "RUNTIME-INTERNAL";
   o->message = "every task is waiting and nothing can wake them";
   o->message_len = strlen(o->message);
-  /* No task ended the run (over_task 0); the I/O context keeps its own task for what runs after (a detached ending
-     reads it). */
-  agc_task *own = vm->task;
-  vm->task = NULL;
-  agc_run_over(vm);
-  vm->task = own;
+  agc_run_over_untasked(vm);
 }
 
 /* The entry of a file with Globals slots writes them before it hands over to `main` (docs/vm/10-io-multicore.md
@@ -655,6 +659,14 @@ static void sched_main(void *arg) {
 static agc_outcome run_threads(agc_vm *vm) {
   agc_runtime *rt = vm->rt;
   size_t n = (size_t)rt->schedulers;
+  /* A failure of the setup (the loop cannot be made: no descriptor left) ends the run here, before any scheduler
+     starts; agc_io_serve sets its own target once they run. */
+  if (setjmp(vm->fail) != 0) {
+    agc_sync_reset(vm);
+    agc_io_hand_off(vm, false);
+    trace_end(vm);
+    return rt->outcome;
+  }
   rt->program = agc_program_for_threads(rt->program);
   agc_share(vm);
   if (!agc_io_share(vm, true)) agc_internal_abort("cannot start the I/O thread's inbox");

@@ -7,6 +7,7 @@ refuses (TCP, TLS, HTTP, Process, Duplex and the Test protocol). The other cases
 lines, exact sums, timers that fire, the end of the run from any scheduler, standard input and FIFOs, and the switch.
 `make test-multicore` runs this module; `make vm-tsan-run` runs it on a ThreadSanitizer build.
 """
+import json
 import os
 import re
 import shutil
@@ -22,7 +23,7 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import FIXTURES, compile_text, run, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, ROOT, compile_text, run, vm_command, vm_environment
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -40,7 +41,7 @@ ORDER = {"channel-fan-in", "channel-owner-handoff", "channel-returned-order", "l
          "task-file-close", "test-run-task"}
 # Builtins that a run with several schedulers refuses (agc_program_for_threads in vm/builtin_tables.c, and Test.run on
 # the parent channel): such a fixture keeps its golden or stops with RUNTIME-INTERNAL.
-LOOP_BOUND = re.compile(r"\b(TCP|TLS|HTTP|HTTPServer|Process)\.|\bTest\.run\b")
+LOOP_BOUND = re.compile(r"\b(TCP|TLS|HTTP|HTTPServer|Process|Duplex)\.|\bTest\.run\b")
 
 
 def vm(bytecode, *flags, args=(), stdin=None, env=None, timeout=None):
@@ -81,8 +82,27 @@ def test_a_fixture_keeps_its_golden_on_four_schedulers(path, bound, tmp_path):
         result = diff.run_vm(fixture, bytecode, 0, root=root, cwd=tmp_path, env=MULTICORE)
     seen = diff.outcome(diff.unfixture(result))
     if bound and seen[3] == "RUNTIME-INTERNAL":
+        assert refused_at_a_bound_call(result[2]), result[2]
         return
     assert seen == diff.read_expected(path)
+
+
+def refused_at_a_bound_call(stderr):
+    """True when the last diagnostic's span starts on a source line that calls a refused builtin: the refusal, not
+    another RUNTIME-INTERNAL (a stall has no span)."""
+    try:
+        parsed = json.loads(stderr.rstrip("\n").rsplit("\n", 1)[-1])
+        name, line = parsed["file"], parsed["range"]["start"]["line"]
+    except (ValueError, KeyError, TypeError):
+        return False
+    if name.startswith("@"):
+        source = ROOT / "tests" / name[1:]
+    elif name.startswith("std/"):
+        source = ROOT / "stdlib" / name[len("std/"):]
+    else:
+        source = ROOT / name
+    lines = source.read_text(encoding="utf-8").splitlines()
+    return 0 < line <= len(lines) and LOOP_BOUND.search(lines[line - 1]) is not None
 
 
 FAN_OUT = """\
@@ -472,6 +492,52 @@ def test_fifos_are_read_through_the_io_thread(tmp_path, repeats):
                 w.join()
         assert (result.code, result.stdout, result.stderr) == (
             0, "3000\n100000\nerror(\"filesystem: operation timed out\")\n", "")
+
+
+BLOCKED = """\
+def blocked(path: String) -> Result[String]
+  input = try File.open(path, "read", 10000)
+  return File.read_line(input, %(per_call)d)
+end
+
+def main() -> Void
+  paths = [System.args()[0], System.args()[0], System.args()[0], System.args()[0], System.args()[0],
+    System.args()[0], System.args()[0], System.args()[0]]
+  results = Task.map(paths, 8, 100, &blocked)
+  failed = 0
+  for r in results
+    if !r.ok?
+      failed = failed + 1
+    end
+  end
+  puts(failed)
+  Task.sleep(%(settle)d)
+  puts(Task.pending_count())
+  IO.inspect(File.read_line(Result.unwrap!(File.open(System.args()[0], "read", 10000)), 50))
+end
+"""
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs FIFOs")
+@pytest.mark.parametrize("per_call_ms", [60000, 300], ids=["deadline-never", "deadline-after-cancel"])
+@RACE
+def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms):
+    # Eight tasks wait in File.read_line on a FIFO that is held open and never written; Task.map's limit of 100 ms
+    # cancels them from whichever scheduler runs the caller, so each job is detached by a scheduler (a DETACH request).
+    # With a per-call deadline of 300 ms the deadline then passes after the detach. Every task ends, nothing is left
+    # pending, and the FIFO still works afterwards.
+    settle = 2 * per_call_ms if per_call_ms < 1000 else 50
+    bytecode = program(tmp_path, "blocked", BLOCKED % {"per_call": per_call_ms, "settle": settle})
+    for k in range(repeats):
+        fifo = tmp_path / ("blocked-%d" % k)
+        os.mkfifo(fifo)
+        held = os.open(fifo, os.O_RDWR)
+        try:
+            result = vm(bytecode, args=(str(fifo),))
+        finally:
+            os.close(held)
+        assert (result.code, result.stdout, result.stderr) == (
+            0, "8\n0\nerror(\"filesystem: operation timed out\")\n", "")
 
 
 def test_a_network_call_is_refused_on_several_schedulers(tmp_path):

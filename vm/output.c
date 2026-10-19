@@ -145,20 +145,20 @@ static void stop_waiting(agc_output *s, agc_task *t) {
   t->output = (agc_output_wait){0};
 }
 
-static void fail_stream(agc_output *s) {
+static void fail_stream(agc_vm *vm, agc_output *s) {
   /* A request in flight points into the ring; only its done half may clear it. */
   assert(!held(s));
   s->failed = true;
   s->start = s->len = 0;
   drop_notices(s);
-  for (agc_task *t = s->waiters; t; t = t->wait_next) agc_task_wake(s->vm, t, "output");
+  for (agc_task *t = s->waiters; t; t = t->wait_next) agc_task_wake(vm, t, "output");
 }
 
 /* Writes what the descriptor takes without waiting, for a stream the loop may write (direct). */
 /* Writes while the descriptor takes data: until it would block, it fails, or a request holds the ring. On macOS every
    pass is one chunk that agc_stdio_try has capped and checked with poll, and the loop goes on while the descriptor
    stays writable, so a ready poll is not one chunk per round trip of the loop. */
-static void write_now(agc_output *s) {
+static void write_now(agc_vm *vm, agc_output *s) {
   while (s->len && direct(s) && !held(s)) {
     ssize_t done = agc_stdio_try(s, s->buf + s->start, run_length(s));
     if (done > 0) {
@@ -167,7 +167,7 @@ static void write_now(agc_output *s) {
     }
     if (done < 0 && errno == EINTR) continue;
     if (done < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return;
-    fail_stream(s);
+    fail_stream(vm, s);
     return;
   }
 }
@@ -230,27 +230,27 @@ static void start_stream(void *data) {
 
 /* Starts a write of the ring if none is out: a pool job, or a request that tells the loop when the descriptor can be
    written (POLL) or when the stream has taken the bytes (STREAM). */
-static void kick(agc_output *s) {
+static void kick(agc_vm *vm, agc_output *s) {
   if (s->failed || !s->len || s->writing) return;
   drain_request *q = begin_drain(s);
   if (s->mode == AGC_WRITE_DISK || s->mode == AGC_WRITE_THREAD) {
-    agc_io_detached(s->vm, &drain_io, q, agc_void(), 0);
+    agc_io_detached(vm, &drain_io, q, agc_void(), 0);
     return;
   }
   q->out = s;
-  q->job = agc_io_detached(s->vm, &watch_io, q, agc_void(), AGC_JOB_QUIET);
-  agc_io_call(s->vm, start_stream, q);
+  q->job = agc_io_detached(vm, &watch_io, q, agc_void(), AGC_JOB_QUIET);
+  agc_io_call(vm, start_stream, q);
 }
 
-static void wake_head(agc_output *s) {
+static void wake_head(agc_vm *vm, agc_output *s) {
   agc_task *head = s->waiters;
-  if (head && room(s) >= need(&head->output)) agc_task_wake(s->vm, head, "output");
+  if (head && room(s) >= need(&head->output)) agc_task_wake(vm, head, "output");
 }
 
-static void advance(agc_output *s) {
+static void advance(agc_vm *vm, agc_output *s) {
   pump(s, false);
-  wake_head(s);
-  kick(s);
+  wake_head(vm, s);
+  kick(vm, s);
 }
 
 /* The done half of every write. A POLL stream is told that the descriptor can be written and writes what it takes;
@@ -270,17 +270,17 @@ static agc_value drain_done_locked(agc_vm *vm, void *data) {
   }
   if (s->mode == AGC_WRITE_POLL) {
     if (s->failed) return agc_void();
-    write_now(s);
-    if (status < 0 && s->len && !s->failed) fail_stream(s);
-    advance(s);
+    write_now(vm, s);
+    if (status < 0 && s->len && !s->failed) fail_stream(vm, s);
+    advance(vm, s);
     return agc_void();
   }
   s->cut = cut;
   if (status) {
-    fail_stream(s);
+    fail_stream(vm, s);
   } else {
     consumed(s, written);
-    advance(s);
+    advance(vm, s);
   }
   return agc_void();
 }
@@ -298,10 +298,10 @@ static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
 static const agc_io_kind drain_io = {drain_work, drain_done, drain_done, request_drop, false, "output", NULL, false, NULL};
 static const agc_io_kind watch_io = {NULL, drain_done, drain_done, request_drop, true, "output", NULL, false, NULL};
 
-static void flush_now(agc_output *s) {
+static void flush_now(agc_vm *vm, agc_output *s) {
   if (s->failed) return;
-  if (s->mode == AGC_WRITE_POLL) write_now(s);
-  advance(s);
+  if (s->mode == AGC_WRITE_POLL) write_now(vm, s);
+  advance(vm, s);
 }
 
 static void copy_piece(agc_output *s, const agc_output_wait *w, size_t n) {
@@ -334,14 +334,14 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
     size_t n = smaller(total(w) - w->done, room(s));
     copy_piece(s, w, n);
     w->done += n;
-    kick(s);
+    kick(vm, s);
     if (w->done < total(w)) {
       agc_task_park(vm, true);
       return false;
     }
   }
   stop_waiting(s, t);
-  advance(s);
+  advance(vm, s);
   agc_task_unpark(vm);
   return true;
 }
@@ -377,7 +377,7 @@ static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newlin
     }
     if (!s->waiters && !queued(s) && total(&w) <= room(s)) {
       copy_piece(s, &w, total(&w));
-      kick(s);
+      kick(vm, s);
       stream_drop(vm, s->lock);
       return true;
     }
@@ -395,7 +395,7 @@ bool agc_drain(agc_vm *vm) {
   agc_output *s = out->base;
   bool new_writer = enter(vm, out);
   if (new_writer) {
-    flush_now(s);
+    flush_now(vm, s);
     if (s->failed) fail_locked(vm, out);
     if (!s->len && !s->waiters && !queued(s)) {
       stream_drop(vm, s->lock);
@@ -410,18 +410,17 @@ void agc_output_leave(agc_vm *vm, agc_task *t) {
   agc_output *s = t->output.out->base;
   stream_take(vm, s->lock);
   stop_waiting(s, t);
-  advance(s);
+  advance(vm, s);
   stream_drop(vm, s->lock);
 }
 
 /* A pipe or a console has no non-blocking try: the data goes out through a request or a pool job, and the caller gives
    it a moment. The moment is shared (agc_runtime.settle_by): long enough for a reader that is there, short enough that
    a reader that is not cannot hold the exit once per stream and per notice. */
-static void settle(agc_output *s) {
-  agc_vm *vm = s->vm;
+static void settle(agc_vm *vm, agc_output *s) {
   uint64_t now = agc_clock_ms();
   if (!vm->rt->settle_by) vm->rt->settle_by = now + FINAL_WAIT_MS;
-  kick(s);
+  kick(vm, s);
   while (s->writing && !s->failed && now < vm->rt->settle_by) {
     /* The loop runs the drain of this very stream (drain_done takes the lock), so a caller that holds the lock gives it
        back for the run and takes it again. */
@@ -436,11 +435,11 @@ static void settle(agc_output *s) {
 
 /* The last write of a stream: what the descriptor takes at once, or what a request or a pool job writes in the time
    that settle allows. */
-static void write_last(agc_output *s) {
+static void write_last(agc_vm *vm, agc_output *s) {
   if (direct(s))
-    write_now(s);
+    write_now(vm, s);
   else
-    settle(s);
+    settle(vm, s);
 }
 
 /* True while a stream still has data to send. The normal end of the run kicks every stream and the caller waits, up to
@@ -455,11 +454,11 @@ bool agc_output_busy(agc_vm *vm) {
     if (s->base != s || (!s->len && !queued(s))) continue;
     if (!stopping) {
       pump(s, true);
-      kick(s);
+      kick(vm, s);
       busy = true;
     } else if (!(direct(s) && held(s))) {
       pump(s, true);
-      write_last(s);
+      write_last(vm, s);
     }
   }
   return busy;
@@ -527,21 +526,21 @@ static void queue_notice(agc_output *s, const char *text, size_t n, bool kept) {
   s->notice_len += n;
 }
 
-static void finish_text(agc_output *s, const char *text, size_t n) {
+static void finish_text(agc_vm *vm, agc_output *s, const char *text, size_t n) {
   if (s->mode == AGC_WRITE_DISK && s->writing) return;
   pump(s, true);
   size_t at = 0;
   while (at < n && !s->failed) {
-    write_last(s);
+    write_last(vm, s);
     size_t k = smaller(n - at, room(s));
     if (!k) return;
     put_bytes(s, text + at, k);
     at += k;
   }
-  write_last(s);
+  write_last(vm, s);
 }
 
-void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
+void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
   static const char lost[] = "agentica: a diagnostic was lost: out of memory\n";
   agc_output *out = n->out;
   if (!n->file) {
@@ -556,15 +555,14 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
     len = sizeof lost - 1;
   }
   agc_output *s = out->base;
-  agc_vm *vm = s->vm;
   stream_take(vm, s->lock);
   bool write = !s->failed && len;
   if (write && mode == AGC_NOTICE_FINAL)
-    finish_text(s, text, len);
+    finish_text(vm, s, text, len);
   else if (write)
     queue_notice(s, text, len, mode == AGC_NOTICE_KEPT);
   free(n->text);
-  if (write && mode != AGC_NOTICE_FINAL) flush_now(s);
+  if (write && mode != AGC_NOTICE_FINAL) flush_now(vm, s);
   stream_drop(vm, s->lock);
 }
 #else
@@ -597,7 +595,8 @@ FILE *agc_notice_begin(agc_output *out, agc_notice *n) {
   return out->file;
 }
 
-void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
+void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
+  (void)vm;
   (void)mode;
   fflush(n->out->file);
 }
@@ -629,7 +628,7 @@ void agc_flush(agc_vm *vm) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   if (out->base) {
     stream_take(vm, out->base->lock);
-    flush_now(out->base);
+    flush_now(vm, out->base);
     stream_drop(vm, out->base->lock);
     return;
   }

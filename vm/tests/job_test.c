@@ -605,6 +605,108 @@ static void test_job_ready_twice_is_listed_once(void) {
   finished_calls = swift_done_calls = 0;
 }
 
+static int counted_done, counted_drop;
+
+static agc_value counted_done_half(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  free(data);
+  counted_done++;
+  return agc_int(1);
+}
+
+static agc_value counted_expired(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return agc_int(-1);
+}
+
+static void counted_drop_half(void *data) {
+  free(data);
+  counted_drop++;
+}
+
+/* Stops the wait only at its deadline, as a request whose send cannot be taken back does. */
+static bool cancel_at_deadline(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return deadline;
+}
+
+static const agc_io_kind counted_io = {NULL,  counted_done_half, counted_expired, counted_drop_half, true, "counted",
+                                       NULL,  false,             NULL};
+static const agc_io_kind deadline_cancel_io = {NULL,  counted_done_half, counted_expired, counted_drop_half,
+                                               true,  "deadline",        cancel_at_deadline, false, NULL};
+
+static agc_task *to_detach;
+
+static void detach_on_thread(void *arg) {
+  (void)arg;
+  agc_io_detach(&vm, to_detach);
+}
+
+/* Runs inside uv_run: a scheduler detaches the job after this pass's requests ran and before its drain. */
+static void detach_during_run(uv_timer_t *timer) {
+  on_thread(detach_on_thread, NULL);
+  uv_close((uv_handle_t *)timer, NULL);
+}
+
+/* A job whose wait is over sits on the ready list when a scheduler detaches it. The drain of that pass finds it
+   detached before its DETACH request ran and leaves it alone; the request then puts it back on the list, it is handed
+   to a scheduler, and it ends once: `done` runs (the outcome was DONE first), `drop` never. */
+static void test_detach_from_a_scheduler_while_ready(void) {
+  assert(agc_io_share(&vm, false));
+  agc_task *task = vm.task;
+  running();
+  int *data = malloc(sizeof *data);
+  assert(data);
+  agc_io_job *job = agc_io_start(&vm, &counted_io, data, agc_void(), -1);
+  park(task);
+  agc_io_ready(job);
+  task->state = AGC_TASK_RUNNING;
+  to_detach = task;
+  static uv_timer_t timer;
+  assert(uv_timer_init(agc_io_uv(&vm), &timer) == 0);
+  assert(uv_timer_start(&timer, detach_during_run, 0, 0) == 0);
+  counted_done = counted_drop = 0;
+  assert(agc_io_poll(&vm, false));
+  assert(counted_done == 0 && counted_drop == 0 && !task->parked);
+  wait_for_hand_over();
+  on_thread(service_on_thread, NULL);
+  assert(counted_done == 1 && counted_drop == 0);
+  pump_until_idle();
+  settle_loop();
+  assert(counted_done == 1 && counted_drop == 0);
+}
+
+/* A detached job on a shared loop whose deadline passes while it still waits: a scheduler ends it (agc_io_service),
+   finds it busy, and posts its deadline cancel (EXPIRE_CANCEL) instead of ending it. The I/O thread runs the cancel,
+   which stops the wait, and puts the job back on the ready list; a scheduler then ends it with `drop`, once. */
+static void test_expire_cancel_from_a_scheduler(void) {
+  assert(agc_io_share(&vm, false));
+  agc_runq_share(vm.rt->runq);
+  agc_task *task = vm.task;
+  running();
+  int *data = malloc(sizeof *data);
+  assert(data);
+  (void)agc_io_start(&vm, &deadline_cancel_io, data, agc_void(), 5);
+  park(task);
+  task->state = AGC_TASK_RUNNING;
+  agc_io_detach(&vm, task);
+  counted_done = counted_drop = 0;
+  wait_for_hand_over();
+  on_thread(service_on_thread, NULL);
+  assert(counted_done == 0 && counted_drop == 0);
+  wait_for_hand_over();
+  on_thread(service_on_thread, NULL);
+  assert(counted_done == 0 && counted_drop == 1);
+  pump_until_idle();
+  settle_loop();
+  assert(counted_drop == 1);
+}
+
 /* The `done` half of the first job raises, as a failing builtin would. */
 static agc_value raising_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
@@ -824,6 +926,8 @@ int main(void) {
   test_many_jobs_end();
   test_detached_ends_on_a_scheduler();
   test_job_ready_twice_is_listed_once();
+  test_detach_from_a_scheduler_while_ready();
+  test_expire_cancel_from_a_scheduler();
   test_raising_done_on_a_scheduler();
   test_unserviced_job_is_freed_at_the_close();
   test_timer_only_kind_is_refused();
