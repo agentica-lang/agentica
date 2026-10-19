@@ -264,7 +264,8 @@ site-serve: site-sass
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
 # make AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
 #                         non-Linux hosts do); pass it to every make command or export it. The Linux default AGENTICA_GC=system links the system
-#                         libgc 8.2 or newer found by pkg-config (Debian: libgc-dev pkg-config) and checks it before any vm/*.c compile.
+#                         libgc 8.2 or newer found by pkg-config (Debian: libgc-dev pkg-config) and checks it before any vm/*.c compile
+#                         (the version, and a link test of GC_register_my_thread: the library must be built with thread support).
 # make AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
 #                         every make command or export it. The default AGENTICA_OPENSSL=system links the system OpenSSL 3 found by pkg-config
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
@@ -491,6 +492,9 @@ $(VM_BUILD)/gc-system: FORCE
 	@$(PKG_CONFIG) --exists bdw-gc || { echo "pkg-config cannot find bdw-gc: install the Boehm GC development files (Debian: apt install libgc-dev), or build with AGENTICA_GC=vendored" >&2; exit 1; }
 	@$(PKG_CONFIG) --atleast-version=$(GC_MIN) bdw-gc || { echo "the VM needs libgc $(GC_MIN) or newer, pkg-config found $$($(PKG_CONFIG) --modversion bdw-gc); install a newer libgc-dev or build with AGENTICA_GC=vendored" >&2; exit 1; }
 	@mkdir -p $(VM_BUILD)
+	@probe=$(VM_BUILD)/gc-thread-probe.$$$$; \
+	  printf '%s\n' '#define GC_THREADS' '#include <gc.h>' 'int main(void) { struct GC_stack_base b; GC_get_stack_base(&b); return GC_register_my_thread(&b); }' | $(VM_CC) -x c - $(GC_INC) $(GC_LINK) -o $$probe >/dev/null 2>&1; status=$$?; rm -f $$probe; \
+	  [ $$status -eq 0 ] || { echo "the system libgc has no thread support (GC_register_my_thread does not link): the VM registers its threads with the collector; build with AGENTICA_GC=vendored" >&2; exit 1; }
 	@$(GC_SYSTEM_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 $(YY_DIR)/src/yyjson.c:

@@ -795,15 +795,26 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
 }
 
 /* The job is the wait of the task, so the task is marked PARKING before the job exists: the job's completion is
-   the wake (§10.2.3). A builtin that registers something else first (a waiter list, a request) marks before that. */
-agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
-                              agc_more_fn more) {
-  agc_task_parking(vm);
+   the wake (§10.2.3). A builtin that registers something else first (a waiter list, a request) marks before that and
+   calls agc_io_start_marked, so the task is marked once per park. */
+static agc_io_job *start_parked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
+                                int64_t timeout_ms, agc_more_fn more) {
   agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, false);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
   return r->native;
+}
+
+agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                              agc_more_fn more) {
+  agc_task_parking(vm);
+  return start_parked(vm, kind, data, context, timeout_ms, more);
+}
+
+agc_io_job *agc_io_start_marked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
+                                int64_t timeout_ms) {
+  return start_parked(vm, kind, data, context, timeout_ms, NULL);
 }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
@@ -901,7 +912,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   agc_task_parking(vm);
   agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
   t->lock_wait = handle;
-  agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(deadline - now));
+  agc_io_start_marked(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(deadline - now));
   agc_task_park(vm, true);
   return AGC_LOCK_WAIT;
 }

@@ -355,6 +355,9 @@ void agc_task_cancel(agc_vm *vm, agc_task *t);
 
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
+/* agc_io_start for a builtin that called agc_task_parking already (it registered a waiter first): one mark per park. */
+agc_io_job *agc_io_start_marked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
+                                int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
 void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 #define AGC_JOB_FLUSH 1u

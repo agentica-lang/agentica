@@ -451,10 +451,10 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   that finds PARKING CASes it to WOKEN and queues nothing, as in the model. The
   task is marked PARKING before it registers its wait (`agc_task_parking`, as
   the model says), and the end of the turn is in the scheduler: it decides the
-  trace and the cancel flag first, and the CAS from PARKING to PARKED is its last
-  access to the task. When the CAS finds WOKEN it queues the task, so the task is
-  queued once and its next turn takes up the wait again. There are no stream
-  locks.
+  trace and the cancel flag first, and the CAS from PARKING to PARKED is its
+  last access to the task. When the CAS finds WOKEN it queues the task, so the
+  task is queued once and its next turn takes up the wait again. There are no
+  stream locks.
 - **`--schedulers N` is parsed and checked, and only 1 runs.** `vm/launch.c`
   reads the flag and `AGENTICA_SCHEDULERS` (1 to 1024, the flag wins). A count
   above 1 exits 2 with a message before the program loads, so N > 1 never runs
@@ -463,7 +463,9 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   (`vm/task.c`) sets the target's cancel flag, and when the target is the task
   that runs (RUNNING, PARKING or WOKEN) it also sets `vm->yield` of the one
   scheduler, so the turn ends. That is a per-scheduler flag and is right for N =
-  1 only; another scheduler's task needs a signal of its own.
+  1 only; another scheduler's task needs a signal of its own. The N > 1 PR must
+  also close the race of a cancel against PARKING (§16.11, "Cancel against
+  PARKING").
 - **One resource registry on the scheduler** (`vm->registry`). Boehm is built
   with thread support (§10.2.3, "GC"), but no thread registers with it yet:
   `agc_gc_allow_threads`, `agc_gc_thread_enter` and `agc_gc_thread_leave`
@@ -492,6 +494,18 @@ Only if measurements ask for them. Neither is planned.
   (`end_detached`), so the options are: the I/O thread does it, an exception to
   §16.5 for this case; or the job goes back through the run queue to a
   scheduler.
+- **Cancel against PARKING (to fix in the N > 1 PR).** The scheduler reads
+  `cancelled` at the end of a turn and then does the CAS to PARKED. A cancel
+  from another thread that lands after that read and before
+  `agc_task_commit_park` sets the flag on a task that then becomes PARKED, and
+  nobody ends it: a cancelled task stays parked until its wait ends. With one
+  scheduler the canceller runs on the same thread, so it cannot happen and this
+  PR does not handle it. The N > 1 PR must close it, either with a re-check of
+  `cancelled` after the CAS (if it is set, take the task back with a CAS from
+  PARKED to READY and end it) or with a CAS handshake where the canceller and
+  the scheduler both move the state and one of them ends the task. It must
+  also replace the canceller's use of `vm->yield`, which belongs to the
+  canceller's own scheduler, with a signal for each task.
 - **Cancelling a ready task.** `agc_task_cancel` already walks the run queue
   today (`agc_runq_remove` in `vm/runq.c`, which takes the queue's lock), on the
   one thread. With several schedulers the options are:

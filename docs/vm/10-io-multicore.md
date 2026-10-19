@@ -15,8 +15,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   program loads, because only one scheduler runs (§16.9). `--schedulers 1`
   gives the N=1 order, which still depends on timer and pool timing. `--seed`
   does not imply one scheduler; at N>1 only per-task random values repeat
-  (7.4). The thread split and shared queue are in §16.2–16.3. Tasks are green VM
-  stacks; turns and reductions are in §10.2.1, thread-pool details in §10.2.2.
+  (7.4). The thread split and shared queue are in §16.2–16.3. Tasks are green
+  VM stacks; turns and reductions are in §10.2.1, thread-pool details in
+  §10.2.2.
 - **Run queue and idle schedulers.** FIFO order, push/pop and condvar rules are
   specified in §16.3. Requeueing a preempted task does not change the packed
   Stall-check word: it remains live.
@@ -56,11 +57,12 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   - A waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the
     run queue", and the scheduler sets READY to RUNNING when it pops the task.
     On PARKING it CASes to WOKEN and queues nothing.
-  - The end of the turn is in the scheduler (`agc_vm_run`). It traces, reads the
-    cancel flag (an atomic) and ends a cancelled task first. Then it does the CAS
-    from PARKING to PARKED (`agc_task_commit_park`), which is the last thing it
-    does with the task: from then on a waker may queue it and another scheduler
-    may run it. A CAS that finds WOKEN queues the task, so the turn yields.
+  - The end of the turn is in the scheduler (`agc_vm_run`). It traces, reads
+    the cancel flag (an atomic) and ends a cancelled task first. Then it does
+    the CAS from PARKING to PARKED (`agc_task_commit_park`), which is the last
+    thing it does with the task: from then on a waker may queue it and another
+    scheduler may run it. A CAS that finds WOKEN queues the task, so the turn
+    yields.
   - A yield after WOKEN does not skip anything the waker prepared. A task that
     parked on a job has `parked` set, and `resume` takes the job's result and
     writes it to `park_reg` when the task runs again, whichever way it got
@@ -187,11 +189,12 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once
   after `agc_init`, which also starts the mark threads. The libuv pool threads
   stay unregistered on purpose, since they never touch GC memory. With N=1 no
-  one calls `agc_gc_allow_threads`, so no mark thread exists. The runtime struct
-  is GC memory (`agc_vm_init` allocates it), reached from the `agc_vm` that stays
-  on the main thread's stack for the whole run. The run queue lives in GC
-  memory, so a head in `malloc` memory never hides a task from the collector. Jobs and the inbox are `malloc` memory with no GC
-  pointer, and a GC resource owns each job (§16.5). Collections stop the world.
+  one calls `agc_gc_allow_threads`, so no mark thread exists. The runtime
+  struct is GC memory (`agc_vm_init` allocates it), reached from the `agc_vm`
+  that stays on the main thread's stack for the whole run. The run queue lives
+  in GC memory, so a head in `malloc` memory never hides a task from the
+  collector. Jobs and the inbox are `malloc` memory with no GC pointer, and a GC
+  resource owns each job (§16.5). Collections stop the world.
   That cost is accepted and measured in round 2 of the benchmarks, which also
   measures contention on the packed word and the run queue's lock. Boehm stops
   threads with signals installed with `SA_RESTART`. The VM's syscall paths retry

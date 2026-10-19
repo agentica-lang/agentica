@@ -128,8 +128,8 @@ Read first: `references/vm.md`.
     and a stale wake.
 
 - **Path:** `vm/tests/test_support.h`
-  - **Owns:** `agc_test_deadline(seconds)` (an alarm, so a broken park path fails
-    a test instead of hanging `make vm-test`; none on Windows) and
+  - **Owns:** `agc_test_deadline(seconds)` (an alarm, so a broken park path
+    fails a test instead of hanging `make vm-test`; none on Windows) and
     `agc_test_ready_head` (the first ready task, for tests that run on one
     thread).
 

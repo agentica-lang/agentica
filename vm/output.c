@@ -279,14 +279,13 @@ static void copy_piece(agc_output *s, const agc_output_wait *w, size_t n) {
   if (at < end) put_bytes(s, "\n", 1);
 }
 
-/* One look at the wait of the running task. The mark comes first (a turn that resumes marks here, a task that joins
-   the FIFO marked before it linked itself), so a drain that frees room after the check below finds PARKING and sets
-   WOKEN instead of being dropped; a turn that ends the wait puts the state back. */
+/* One look at the wait of the running task, which is marked PARKING already (a task that joins the FIFO marks before
+   it links itself, a turn that resumes marks first: `put` and `agc_drain`), so a drain that frees room after the check
+   below finds PARKING and sets WOKEN instead of being dropped; a turn that ends the wait puts the state back. */
 static bool wait_turn(agc_vm *vm, agc_output *out) {
   agc_output *s = out->base;
   agc_task *t = vm->task;
   agc_output_wait *w = &t->output;
-  agc_task_parking(vm);
   if (s->failed) {
     stop_waiting(s, t);
     fail_write(vm, out);
@@ -326,6 +325,8 @@ static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newlin
     t->output = w;
     agc_task_parking(vm);
     agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
+  } else {
+    agc_task_parking(vm);
   }
   return wait_turn(vm, out);
 }
@@ -346,6 +347,8 @@ bool agc_drain(agc_vm *vm) {
     t->output = (agc_output_wait){.out = out, .flush = true};
     agc_task_parking(vm);
     agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
+  } else {
+    agc_task_parking(vm);
   }
   return wait_turn(vm, out);
 }

@@ -18,8 +18,8 @@ static void enqueue(agc_vm *vm, agc_task *t) {
 
 /* A waker acts only on a task that waits (docs/vm/10-io-multicore.md §10.2.3), and the CAS lets one waker win, so a
    task is queued at most once. A PARKED task is in no queue: the winner makes it READY and pushes it. A PARKING task
-   is still in its own turn: the winner only marks it WOKEN and queues nothing; the task finds the mark when it tries to
-   become PARKED (park_task in interp.c) and goes back to the queue itself. acq_rel: whoever runs the task next sees
+   is still in its own turn: the winner only marks it WOKEN and queues nothing; the scheduler finds the mark when it
+   tries to publish PARKED (agc_task_commit_park) and queues the task itself. acq_rel: whoever runs the task next sees
    what the waker wrote first (a job's result). Any other state is a stale wake and changes nothing. */
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by) {
   agc_task_state seen = atomic_load_explicit(&t->state, memory_order_acquire);
@@ -30,6 +30,8 @@ void agc_task_wake(agc_vm *vm, agc_task *t, const char *by) {
     if (next == AGC_TASK_READY) {
       AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "wake task=%" PRIu64 " by=%s", t->id, by);
       agc_runq_push(vm->rt->runq, t);
+    } else {
+      AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "woken task=%" PRIu64 " by=%s", t->id, by);
     }
     return;
   }
@@ -107,13 +109,13 @@ void agc_task_unpark(agc_vm *vm) {
 }
 
 /* Says that this turn ends in a wait: the interpreter parks the task when the builtin returns (park_task in
-   interp.c), and with `retry` it runs the builtin again when the task resumes. The task is marked already (the caller
-   called agc_task_parking before it registered); the call here is a safety net for a caller that did not, which would
-   otherwise reach the end of the turn as RUNNING. The state is not touched by anything after this call: the
-   scheduler publishes PARKED in agc_vm_run, after it has finished with the task. */
+   interp.c), and with `retry` it runs the builtin again when the task resumes. The caller marked the task already
+   (agc_task_parking, once per park, before it registered anything), and the state is not touched here or by anything
+   after this call: the scheduler publishes PARKED in agc_vm_run, after it has finished with the task. A caller that
+   forgot the mark ends its turn as RUNNING; the commit fails and the scheduler queues the task, so it spins instead of
+   waiting, which a test shows at once. */
 void agc_task_park(agc_vm *vm, bool retry) {
   agc_task *t = vm->task;
-  agc_task_parking(vm);
   t->parking = true;
   t->retry = retry;
 }
@@ -602,7 +604,7 @@ static agc_value await_timeout(agc_vm *vm, agc_value *args, uint32_t span, bool 
   agc_task_parking(vm);
   t->awaiting = target;
   agc_task_enqueue(&target->waiters, &target->waiters_tail, t);
-  agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->await_deadline - now));
+  agc_io_start_marked(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->await_deadline - now));
   agc_task_park(vm, true);
   return agc_void();
 }

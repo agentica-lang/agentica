@@ -17,10 +17,12 @@
   clear message when `pkg-config` or the package is missing, or when the version
   is older than `GC_MIN` (8.2.0, the series the VM is tested with; Debian 12 and
   13 and Ubuntu 24.04 and newer ship 8.2.x), and names the fixes (Debian:
-  `apt install libgc-dev pkg-config`, or `AGENTICA_GC=vendored`). The stamp
-  holds the version and flags, so a new system libgc relinks, and the submodule
-  is not compiled. `vendored` (the default off Linux, where there is no
-  pkg-config module to count on) compiles libgc once from its submodule with
+  `apt install libgc-dev pkg-config`, or `AGENTICA_GC=vendored`). It also links
+  a tiny program that calls `GC_register_my_thread`, so a libgc built without
+  thread support stops the build with a hint to use `AGENTICA_GC=vendored`. The
+  stamp holds the version and flags, so a new system libgc relinks, and the
+  submodule is not compiled. `vendored` (the default off Linux, where there is
+  no pkg-config module to count on) compiles libgc once from its submodule with
   `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION -DGC_THREADS
   -DGC_BUILTIN_ATOMIC -DPARALLEL_MARK -DTHREAD_LOCAL_ALLOC` into
   `build/vm/gc.o`, and links it with `-lpthread` (not on Windows). The first
