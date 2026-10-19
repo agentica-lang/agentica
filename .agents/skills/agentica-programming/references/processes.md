@@ -101,8 +101,10 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   Agentica program can stop its own children first. `close` and a timeout close
   the handle at once and never wait; the end of the run waits about one second
   at most for a captured child before it kills it. Children from `spawn` are
-  still killed at once. On Windows every stop is immediate, and when the VM ends
-  the child's descendants end too (unless an outer job forbids breakaway).
+  still killed at once. On Windows every stop is immediate. Where libuv can
+  assign its job object, the direct children die when the VM ends, and a child
+  that is itself an Agentica program stops its own children the same way; other
+  descendants are not covered.
 - `agentica test` runs each BDD scenario, and each program under test, as a
   captured child.
 - Channels (Linux and macOS; Windows in progress). `spawn_channel` works like
