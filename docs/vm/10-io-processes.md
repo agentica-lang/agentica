@@ -105,7 +105,9 @@ builtins. Other systems get none.
 - **Signals.** A stop signal takes the one exit path (§10.2.2): children are
   killed and reaped, files are flushed, and the signal is raised again. Children
   are killed before the file flush. A VM killed by `SIGKILL`, or ended by the
-  out-of-memory exit (70, §6.3), leaves its children running. On a break,
+  out-of-memory exit (70, §6.3), leaves its children running; one that has a
+  channel reads the end of input (on Windows the job above ends it).
+  `tests/test_vm_child_channel.py` kills a VM to check both. On a break,
   `agentica` waits 2 seconds, sends `SIGTERM`, and kills the VM 2 seconds later
   (`docs/vm/08-loader-and-cli.md`).
 - **Behavior notes.**
@@ -157,8 +159,9 @@ the system part (making the ends, the marker, taking them in the child) is
 `vm/duplex_os.h` with `duplex_posix.c` and `duplex_windows.c`. The signatures
 are in `docs/grammar/06d-io-and-network.md`. Linux and macOS use a socket
 pair; Windows uses a pipe per direction (below). The C tests
-`vm/tests/pipe_pair_test.c` and `vm/tests/process_test.c` run on Windows; the
-Python and `agentica test` coverage on Windows is still to come.
+`vm/tests/pipe_pair_test.c` and `vm/tests/process_test.c` and the Node peer of
+`tests/test_vm_child_channel.py` run on all three systems; `agentica test` on
+Windows is still to come.
 
 - **The socket pair.** One `uv_socketpair` (`SOCK_STREAM`) per child. The parent
   keeps one end as a libuv pipe handle, and the child gets the other as

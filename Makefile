@@ -738,8 +738,8 @@ WINDOWS_CROSS := VM_OS=Windows_NT CC=x86_64-w64-mingw32-gcc AR=llvm-ar RUN_PROGR
   AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored
 # The modules the vm-windows job of platforms.yml runs: the bootstrap binary alone, then the product. TESTS= picks
 # others (test_cli_forms.py drives only the command line, for instance).
-# tests/test_process.py and tests/test_process_lifecycle.py stay out: their peers are host programs that Wine cannot
-# start, and the stop case of the lifecycle module needs a Windows console (it would need a Wine skip, which the
+# tests/test_process.py, tests/test_process_lifecycle.py and tests/test_vm_child_channel.py stay out: their peers are
+# host programs that Wine cannot start, and the stop case of the lifecycle module needs a Windows console (it would need a Wine skip, which the
 # native job must not have).
 WINDOWS_TEST_MODULES ?= tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py \
   tests/test_vm_stdout.py tests/test_platform_bootstrap.py
@@ -838,7 +838,7 @@ sweep-full: vm-diff-build
 
 # The test modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
-VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py tests/test_vm_trace.py
+VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py
 SANITIZE_JOBS ?= 4
 
 vm-sanitize-build: dist/agentica$(EXE)
