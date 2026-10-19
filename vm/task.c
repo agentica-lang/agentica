@@ -260,9 +260,13 @@ void agc_task_cancel(agc_vm *vm, agc_task *root) {
   if (vm->task && executing(vm->task)) agc_charge(vm, count);
 }
 
+/* The halves of a job (`done`, `expired`) read and write the state of the service that the task waited on, and a
+   lock hand-on wakes the next waiter, so they run with rt->sync held like a builtin does. */
 static void resume(agc_vm *vm, agc_task *t) {
   if (t->parked) {
+    agc_sync_take(vm);
     agc_value result = agc_io_finish(vm, t);
+    agc_sync_drop(vm);
     if (!t->retry) t->regs[t->park_reg] = result;
   }
   t->retry = false;
@@ -374,6 +378,7 @@ static bool fatal(const agc_vm *vm, const agc_task *t) {
 static bool run_turn(agc_vm *vm, agc_task *t, agc_turn_result *r) {
   if (setjmp(vm->turn)) {
     vm->in_turn = false;
+    agc_sync_reset(vm);
     return false;
   }
   vm->in_turn = true;
@@ -434,7 +439,9 @@ agc_task *agc_task_next(agc_vm *vm) {
     if (atomic_load_explicit(&t->state, memory_order_acquire) == AGC_TASK_DONE) continue;
     if (!atomic_load_explicit(&t->cancelled, memory_order_acquire)) return t;
     vm->task = t;
+    agc_sync_take(vm);
     end_cancelled(vm, t);
+    agc_sync_drop(vm);
   }
 }
 
@@ -447,25 +454,35 @@ agc_task *agc_task_next(agc_vm *vm) {
 bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_turn(vm, t, r, ran);
   trace_gc(vm, "turn");
+  bool main_done = false;
   if (!ran) {
     if (fatal(vm, t)) longjmp(vm->fail, 1);
+    agc_sync_take(vm);
     crash(vm, t);
+    agc_sync_drop(vm);
   } else if (atomic_load_explicit(&t->cancelled, memory_order_acquire)) {
+    agc_sync_take(vm);
     end_cancelled(vm, t);
+    agc_sync_drop(vm);
   } else if (r == AGC_TURN_DONE) {
     if (t == vm->main) {
       AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
-      return true;
+      main_done = true;
+    } else {
+      agc_sync_take(vm);
+      finish_task(vm, t);
+      agc_sync_drop(vm);
     }
-    finish_task(vm, t);
   } else if (r == AGC_TURN_YIELD) {
     enqueue(vm, t);
   } else if (!agc_task_commit_park(t)) {
     enqueue(vm, t);
   } else if (atomic_load_explicit(&t->cancelled, memory_order_acquire) && agc_task_claim(t)) {
+    agc_sync_take(vm);
     end_cancelled(vm, t);
+    agc_sync_drop(vm);
   }
-  return false;
+  return main_done;
 }
 
 agc_outcome agc_vm_run(agc_vm *vm) {

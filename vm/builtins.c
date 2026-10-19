@@ -563,6 +563,23 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
 
 bool agc_builtin_prelude_only(const agc_builtin *b) { return b->name[0] == '_' && b->name[1] == '_'; }
 
+/* The stdin builtins read and wait on rt->in (the buffer and the FIFO of waiting readers). */
+static bool reads_stdin(const char *name) {
+  static const char *const names[] = {"IO.gets", "IO.gets!", "IO.read", "IO.read_bytes", "IO.eof?"};
+  for (size_t k = 0; k < sizeof names / sizeof names[0]; k++)
+    if (strcmp(name, names[k]) == 0) return true;
+  return false;
+}
+
+bool agc_builtin_shared(const agc_builtin *b) {
+  for (size_t t = 0; t < agc_builtin_table_count; t++) {
+    const agc_builtin_table *table = &agc_builtin_tables[t];
+    if (b < table->entries || b >= table->entries + *table->count) continue;
+    return table->shared || (table->entries == agc_core_builtins && reads_stdin(b->name));
+  }
+  return false;
+}
+
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {
   const agc_program *p = vm->rt->program;
   for (uint32_t k = 0; k < p->struct_count; k++) {

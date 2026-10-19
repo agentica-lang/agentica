@@ -9,9 +9,13 @@
 
 #include "port.h"
 
+/* `shared` marks a library whose builtins read or write state that several schedulers can reach (tasks, channels,
+   handles, the logger table, stdin): the interpreter calls them with rt->sync held (agc_sync_take). The pure
+   libraries (strings, numbers, JSON, lists, maps) run in parallel. */
 typedef struct {
   const agc_builtin *entries;
   const size_t *count;
+  bool shared;
 } agc_builtin_table;
 
 typedef struct {
@@ -38,6 +42,10 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
 /* True for a builtin that only a prelude function may call: its name starts with two underscores
    (docs/future/25-ruby-typed-idioms.md §25.6). The loader refuses a call of one from any other function. */
 bool agc_builtin_prelude_only(const agc_builtin *b);
+/* True for a builtin that the interpreter calls with rt->sync held once the VM is shared: a builtin of a shared
+   library (agc_builtin_table), and the stdin builtins of the core library. The output builtins are not among them:
+   a stream has its own lock. */
+bool agc_builtin_shared(const agc_builtin *b);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
@@ -71,6 +79,10 @@ bool agc_runq_remove(agc_runq *q, const agc_task *t);
  * has been called (the run is over) or, on a solo queue, when it is empty. */
 agc_task *agc_runq_wait(agc_runq *q);
 void agc_runq_end(agc_runq *q);
+void agc_sync_reset(agc_vm *vm);
+/* Turns on the locks of the run queue, rt->sync and the two streams, and rt->shared. It runs on the thread that starts
+ * the others, before the second one exists. Only the C tests call it until the scheduler threads exist. */
+void agc_share(agc_vm *vm);
 bool agc_task_commit_park(agc_task *t);
 bool agc_task_claim(agc_task *t);
 agc_task *agc_task_next(agc_vm *vm);
