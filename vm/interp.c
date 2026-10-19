@@ -761,8 +761,8 @@ static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
 }
 
 /* The turn ends in a wait (docs/vm/10-io-multicore.md §10.2.3). The state stays PARKING (or WOKEN): the scheduler
-   decides about the cancel flag and the trace first, and then publishes PARKED with agc_task_commit_park, the last
-   thing it does with the task. */
+   decides about the cancel flag and the trace first, and then publishes PARKED with agc_task_commit_park (agc_task_end_turn
+   reads the flag once more after it). */
 static agc_turn_result park_task(agc_task *t) {
   t->parking = false;
   return AGC_TURN_PARKED;

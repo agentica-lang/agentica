@@ -13,8 +13,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - **Path:** `vm/runq.c`
   - **Owns:** The global run queue: a FIFO through `agc_task.next` and one
     mutex, in GC memory (`agc_runtime.runq`). `agc_runq_push`, `agc_runq_pop`,
-    `agc_runq_remove`. The queue is solo (no lock) until `agc_runq_share`, which
-    runs before a second thread touches it.
+    `agc_runq_remove`, and for an idle scheduler `agc_runq_wait` (blocks on a
+    condvar until a task is queued, NULL after `agc_runq_end` or, on a solo
+    queue, when empty). The queue is solo (no lock, never waits) until
+    `agc_runq_share`, which runs before a second thread touches it.
 
 - **Path:** `vm/task_map.c`
   - **Owns:** `Task.map`: a stepper on the caller that starts, times and cancels
@@ -41,19 +43,25 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         anything (a waiter list, a FIFO, a job: `agc_io_start_then` does it for
         a job), then `agc_task_park(vm, retry)`; `agc_task_unpark` undoes the
         mark when it does not wait after all
-      - `agc_vm_run` ends the turn: trace, cancel flag, then
-        `agc_task_commit_park` (PARKING to PARKED), which is the last access to
-        the task; a CAS that finds WOKEN queues the task instead
+      - `agc_task_end_turn` (called by `agc_vm_run`) ends the turn: trace,
+        cancel flag, then `agc_task_commit_park` (PARKING to PARKED); a CAS that
+        finds WOKEN queues the task instead, and after a commit the cancel flag
+        is read once more and the task is claimed (`agc_task_claim`, PARKED to
+        READY) and ended if it is set
+      - `agc_task_next` pops the next task, dropping a DONE one and ending a
+        cancelled one that a canceller could not take out of the queue
       - `agc_clock_ms` is the clock for deadlines; it does not read the loop)
     - task cancellation (
       - 20b, `docs/vm/10-io-scheduler.md` §10.2.1: each task has `parent` and a
         `children` list
       - a task that ends moves its running children to its parent
-      - `agc_task_cancel` cancels a task and its descendants, children first: it
-        leaves the run queue, detaches its job, leaves lock, await and stdin
-        FIFOs and ends
-      - the running task only gets `cancelled` and `vm->yield`, so it stops
-        after the current builtin and the scheduler ends it
+      - `agc_task_cancel` cancels a task and its descendants, children first:
+        it sets `cancelled`, and then by the state the one party that ends the
+        task takes it out of the run queue (READY) or claims it (PARKED),
+        detaches its job, leaves lock, await and stdin FIFOs and ends
+      - a task on a turn only gets `cancelled` (and `vm->yield` when it is the
+        canceller's own task), so it stops after the current builtin and the
+        scheduler ends it
       - `Task.await` on a cancelled task halts with `RUNTIME-TASK-CANCELLED` at
         the call
       - `vm/tests/task_cancel_test.c` runs hand-built bytecode with test

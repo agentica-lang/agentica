@@ -60,13 +60,21 @@ bool agc_program_set_source_root(agc_program *program, const char *root, size_t 
 /* The global run queue (docs/vm/16-architecture.md §16.3): one FIFO of ready tasks for every scheduler. The caller
  * sets the state of a task before it pushes it. agc_runq_pop returns NULL when the queue is empty. agc_runq_remove
  * takes a task out of the middle (a cancel) and says whether it found it. A new queue is solo: its one thread takes no
- * lock. Whoever starts a second thread that touches the queue calls agc_runq_share first, before that thread exists. */
+ * lock and never waits. Whoever starts a second thread that touches the queue calls agc_runq_share first, before that
+ * thread exists. */
 agc_runq *agc_runq_new(void);
 void agc_runq_share(agc_runq *q);
 void agc_runq_push(agc_runq *q, agc_task *t);
 agc_task *agc_runq_pop(agc_runq *q);
 bool agc_runq_remove(agc_runq *q, const agc_task *t);
+/* agc_runq_wait is the pop of an idle scheduler: it blocks until a task is queued, and returns NULL once agc_runq_end
+ * has been called (the run is over) or, on a solo queue, when it is empty. */
+agc_task *agc_runq_wait(agc_runq *q);
+void agc_runq_end(agc_runq *q);
 bool agc_task_commit_park(agc_task *t);
+bool agc_task_claim(agc_task *t);
+agc_task *agc_task_next(agc_vm *vm);
+bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran);
 
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
 agc_task *agc_new_task(agc_vm *vm);

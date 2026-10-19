@@ -29,7 +29,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
 - **Cancel and stop flags.** The task's cancel flag and the run's stop flag are
   atomics, checked only on the `STEP` slow path, when the "next stop" counter
   runs out. The fast path still touches no atomic. A cancel or stop takes effect
-  within one turn budget.
+  within one turn budget. A task that a cancel finds on a turn is ended by its
+  own scheduler at the end of the turn, so no signal crosses schedulers (the
+  `vm->yield` of the canceller's scheduler is for the canceller's own task).
 - **Park and wake protocol.** Each task has an atomic state: RUNNING, PARKING,
   PARKED or WOKEN. To park, the task sets PARKING before it registers its wait
   (before it posts its start request, joins a waiter list, or registers on
@@ -57,12 +59,13 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   - A waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the
     run queue", and the scheduler sets READY to RUNNING when it pops the task.
     On PARKING it CASes to WOKEN and queues nothing.
-  - The end of the turn is in the scheduler (`agc_vm_run`). It traces, reads
-    the cancel flag (an atomic) and ends a cancelled task first. Then it does
-    the CAS from PARKING to PARKED (`agc_task_commit_park`), which is the last
-    thing it does with the task: from then on a waker may queue it and another
-    scheduler may run it. A CAS that finds WOKEN queues the task, so the turn
-    yields.
+  - The end of the turn is in the scheduler (`agc_task_end_turn`). It traces,
+    reads the cancel flag (an atomic) and ends a cancelled task first. Then it
+    does the CAS from PARKING to PARKED (`agc_task_commit_park`): from then on a
+    waker may queue the task and another scheduler may run it. The one thing it
+    does after that is read the cancel flag again (a cancel can fall between the
+    first read and the CAS) and claim the task by a CAS from PARKED to READY, to
+    end it. A CAS that finds WOKEN queues the task, so the turn yields.
   - A yield after WOKEN does not skip anything the waker prepared. A task that
     parked on a job has `parked` set, and `resume` takes the job's result and
     writes it to `park_reg` when the task runs again, whichever way it got
