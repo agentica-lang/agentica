@@ -60,7 +60,7 @@ static agc_value builtin_pid(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int((int64_t)uv_os_getpid());
 }
 
-static char os_name[sizeof(((uv_utsname_t *)0)->sysname)];
+static char os_name[64];
 static uv_once_t os_once = UV_ONCE_INIT;
 
 /* The name once, whatever thread asks first: linux, macos and windows for what uv_os_uname calls Linux, Darwin and
