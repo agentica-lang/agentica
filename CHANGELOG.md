@@ -10,12 +10,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- On Windows, `Process.spawn_channel` gives the child a pipe per direction:
-  descriptor 3 to read, 4 to write, `AGENTICA_CHANNEL=3,4`, so `channel_close`
-  ends the child's input. A Windows child that is no VM and reads the old
-  duplex pipe on descriptor 3 must read 3 and write 4. `agentica test` is not
-  yet supported on Windows.
-
 - `--schedulers N` and the variable `AGENTICA_SCHEDULERS` set the number of
   scheduler threads (1 to 1024; the flag wins over a valid variable; a bad
   value in either exits 2). This is the first step of the multicore VM: the VM
@@ -48,6 +42,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   character.
 
 ### Changed
+
+- **Breaking:** on Windows, `Process.spawn_channel` gives the child a pipe per
+  direction (read 3, write 4, `AGENTICA_CHANNEL=3,4`), so `channel_close` ends
+  the child's input. A child that used the duplex pipe on descriptor 3, or a VM
+  older than this release, finds no channel.
 
 - A blocking call whose deadline and whose result fall in the same pass of the
   event loop now takes whichever the loop saw first: if the timer ran first the
