@@ -9,7 +9,6 @@
 #endif
 #include "core.h"
 
-#include <assert.h>
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -111,8 +110,9 @@ struct agc_io_job {
   agc_loop *loop;
   job *ready_next;
   size_t slot;
-  uint64_t started_ns, ended_ns;
+  uint64_t started_ns;
   job *dead_next;
+  _Atomic uint64_t ended_ns;
   _Atomic int refs, outcome;
   _Atomic bool busy, detached, ended, start_failed, timer_fired, dropping, on_loop;
   bool timer_open, timer_live, queued, dead, flush;
@@ -273,8 +273,11 @@ static void mark_ready(job *j) {
   loop->ready_tail = j;
 }
 
+/* The I/O thread writes the end time once; the task reads it for the trace line after it was woken (`ended_ns` is
+   atomic because the two sides are different threads). */
 static void note_end(job *j) {
-  if (j->started_ns && !j->ended_ns) j->ended_ns = agc_trace_now();
+  if (j->started_ns && !atomic_load_explicit(&j->ended_ns, memory_order_relaxed))
+    atomic_store_explicit(&j->ended_ns, agc_trace_now(), memory_order_relaxed);
 }
 
 static void push_dead(job *j) {
@@ -358,7 +361,10 @@ static void close_timer(job *j) {
    can sit in the inbox while the owner already ended the job (a task woken by something else, a detach, the end of
    the run): the owner's CLOSE_TIMER and RELEASE may then have run before it, so starting a timer here would leak the
    timer and the job. `ended` is set before those requests are posted, and the I/O thread runs requests one at a time,
-   so a START that reads it clear runs before any of them. The wait piece was never started: give its count back. */
+   so a START that reads it clear runs before any of them. The wait piece was never started: give its count back.
+   A uv_queue_work that fails is known only here, on the I/O thread, after the task was parked: the outcome becomes
+   EXPIRED with `start_failed` set, the task then fails in agc_io_finish ("cannot queue file work"), and a detached
+   job drops its data in end_detached (with a trace line, since nobody else would hear of it). */
 static void start_pieces(job *j, int64_t timeout_ms) {
   agc_loop *loop = j->loop;
   if (atomic_load(&j->ended)) {
@@ -427,8 +433,9 @@ static void sweep(agc_vm *vm) {
     j->dead = false;
     j->dead_next = NULL;
     if (atomic_load_explicit(&j->refs, memory_order_acquire) != 0) continue;
-    /* A holder is gone only after it took itself off: a queued job or a live wait with no count is a double drop. */
-    assert(!j->queued && !atomic_load(&j->busy));
+    /* A holder is gone only after it took itself off: a queued job or a live wait with no count is a double drop, and
+       freeing it would leave a dangling pointer on the ready list. Fail with a diagnostic, not a bare abort. */
+    if (j->queued || atomic_load(&j->busy)) agc_fail(vm, "RUNTIME-INTERNAL", "a job was freed while held", 0);
     if (j->data) {
       j->kind->drop(j->data);
       j->data = NULL;
@@ -538,7 +545,7 @@ static agc_value wait_woken(agc_vm *vm, void *data, agc_value context) {
 const agc_io_kind agc_wait_io = {NULL, wait_woken, wait_woken, NULL, false, "lock", NULL};
 
 static job_trace trace_of(const agc_resource *r, const job *j) {
-  return (job_trace){r->id, j->started_ns, j->ended_ns, j->kind};
+  return (job_trace){r->id, j->started_ns, atomic_load_explicit(&j->ended_ns, memory_order_relaxed), j->kind};
 }
 
 static void trace_finish(agc_vm *vm, const job_trace *job, bool done, agc_value result) {
@@ -602,6 +609,8 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
   agc_value context = take_context(vm, r);
   void *data = j->data;
   j->data = NULL;
+  if (atomic_load(&j->start_failed))
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "start_failed job=%" PRIu64 " kind=%s detached", r->id, j->kind->name);
   if (atomic_load(&j->dropping)) {
     abandon_wait(j);
     if (data) j->kind->drop(data);

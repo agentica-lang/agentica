@@ -553,6 +553,11 @@ Only if measurements ask for them. Neither is planned.
   §16.5 for this case; or the job goes back through the run queue to a
   scheduler. As built, the drain runs it on the thread that drains, which is
   the I/O thread at N > 1; PR 3 must move it to a scheduler.
+- **Posting after the inbox is closed.** `agc_inbox_close` clears
+  `loop->inbox`, and `on_io_thread` is then true for every thread, so a
+  request posted from another thread after the close would run inline instead
+  of failing. Nothing posts after the close today (the schedulers have ended).
+  PR 3 must make a post from another thread after the close fail loudly.
 - **Cancel against PARKING (to fix in the N > 1 PR).** The scheduler reads
   `cancelled` at the end of a turn and then does the CAS to PARKED. A cancel
   from another thread that lands after that read and before
