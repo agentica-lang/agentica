@@ -766,6 +766,29 @@ static void test_timer_fired_then_cancel(void) {
   run_done(&p, check_timer_ready);
 }
 
+/* A waker that read PARKED before the cancel pushes the task after it: the entry is stale and the scheduler drops it. */
+static void check_stale_push(agc_vm *vm, int64_t n) {
+  agc_task *a = reg_task(vm, 0);
+  if (n == 1) {
+    assert(cancelled(a));
+    agc_runq_push(vm->rt->runq, a);
+  } else {
+    assert(cancelled(a) && !agc_runq_pop(vm->rt->runq) && mark_count == 1 && marks[0] == 1);
+  }
+}
+
+static void test_stale_push_of_a_done_task(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_SLEEPER, 1);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  run_done(&p, check_stale_push);
+}
+
 static void test_woken_while_parking(void) {
   prog p;
   new_prog(&p);
@@ -1342,6 +1365,7 @@ int main(void) {
   test_closing_task();
   test_children_move();
   test_timer_fired_then_cancel();
+  test_stale_push_of_a_done_task();
   test_channel_waiters();
   test_timed_await_cancel();
   test_timed_await_ends();
