@@ -65,6 +65,9 @@ phase 13).
   (`DOCKER=1` puts any group there, `WINE=1` runs its Windows checks under
   Wine) and in the scratch of an ephemeral CI runner. Encapsulation and the
   Actions route: `references/ci.md` of the development skill.
+- `make vm-tsan`: the C tests of the code that threads share (inbox, job
+  outcome, run queue, wake, job) under ThreadSanitizer, in a build without
+  libgc; CI runs it in the sanitizer job.
 - `make vm-task-map`: the timing cases of `Task.map`
   (`tests/test_vm_task_map.py`), alone like `make vm-latency`.
 - `make smoke`, `make site` (before merging a site change).
