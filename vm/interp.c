@@ -481,7 +481,7 @@ static void resume_stepper(agc_vm *vm) {
       apply_cost(vm);
       return;
     case AGC_STEP_WAIT:
-      if (!t->parking) agc_fail(vm, "RUNTIME-INTERNAL", "a step waited without a pending job", st->span);
+      if (!t->parking) agc_fail(vm, "RUNTIME-INTERNAL", "a step waited without parking", st->span);
       t->park_reg = base;
       return;
     case AGC_STEP_END: finish_native(vm, next.value); return;

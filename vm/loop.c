@@ -135,6 +135,8 @@ struct agc_io_job {
   _Atomic int refs, outcome;
   _Atomic bool busy, detached, ended, start_failed, timer_fired, dropping, on_loop;
   bool timer_open, timer_live, queued, dead, flush;
+  /* On loop->service; read and written only under service_lock. */
+  bool in_service;
 };
 
 struct agc_poller {
@@ -699,18 +701,27 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
 }
 
 /* The I/O role queues the detached job for a scheduler and keeps its ready-list reference on it; the nudge comes after
-   the unlock, so the scheduler that wakes finds the job. */
-static void hand_to_scheduler(agc_vm *vm, job *j) {
+   the unlock, so the scheduler that wakes finds the job. A job can be ready twice before a scheduler takes it (its
+   timer fires, then its work ends): it is listed once, and false tells the caller to give back the second ready-list
+   reference, since the one listing already holds one. The service reads the job's state when it runs, so it sees the
+   second event too. */
+static bool hand_to_scheduler(agc_vm *vm, job *j) {
   agc_loop *loop = vm->rt->loop;
-  j->service_next = NULL;
   uv_mutex_lock(&loop->service_lock);
-  if (loop->service_tail)
-    loop->service_tail->service_next = j;
-  else
-    loop->service = j;
-  loop->service_tail = j;
+  bool listed = j->in_service;
+  if (!listed) {
+    j->in_service = true;
+    j->service_next = NULL;
+    if (loop->service_tail)
+      loop->service_tail->service_next = j;
+    else
+      loop->service = j;
+    loop->service_tail = j;
+  }
   uv_mutex_unlock(&loop->service_lock);
+  if (listed) return false;
   agc_runq_nudge(vm->rt->runq);
+  return true;
 }
 
 static void drain(agc_vm *vm) {
@@ -731,10 +742,10 @@ static void drain(agc_vm *vm) {
         agc_task_wake(vm, t, "job");
       } else if (atomic_load(&j->detached)) {
         if (loop->inbox) {
-          hand_to_scheduler(vm, j);
-          continue;
+          if (hand_to_scheduler(vm, j)) continue;
+        } else {
+          end_detached(vm, r);
         }
-        end_detached(vm, r);
       }
     }
     drop_ref(j);
@@ -760,11 +771,12 @@ bool agc_io_service(agc_vm *vm) {
     if (j) {
       loop->service = j->service_next;
       if (!loop->service) loop->service_tail = NULL;
+      j->service_next = NULL;
+      j->in_service = false;
     }
     uv_mutex_unlock(&loop->service_lock);
     if (!j) break;
     if (!scratch) vm->task = scratch = agc_alloc(sizeof(agc_task));
-    j->service_next = NULL;
     ran = true;
     agc_sync_take(vm);
     bool live = !atomic_load(&j->ended) && j->res->native == j;
@@ -1524,6 +1536,7 @@ static bool close_all(agc_vm *vm) {
     for (job *j = vm->rt->loop->service, *next; j; j = next) {
       next = j->service_next;
       j->service_next = NULL;
+      j->in_service = false;
       drop_ref(j);
     }
     vm->rt->loop->service = vm->rt->loop->service_tail = NULL;
@@ -1586,10 +1599,10 @@ bool agc_io_service(agc_vm *vm) {
   return false;
 }
 
+/* Only a task timer (a sleep, a deadline) waits without alive_required, and there is no clock to fire it here. */
 bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required) {
-  (void)vm;
   (void)ms;
-  (void)alive_required;
+  if (!alive_required) agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
   return false;
 }
 
@@ -1601,7 +1614,6 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 }
 
 uint64_t agc_clock_ms(void) { return 0; }
-
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)t;

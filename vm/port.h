@@ -324,7 +324,9 @@ typedef struct {
 /* The armed timers of one scheduler: a binary min-heap of tasks ordered by (deadline, seq), in GC memory. Every change
    to a heap is made with rt->sync held, by any scheduler (a cancel or a resume on another scheduler removes the entry
    from the arming scheduler's heap); `next_due` is the earliest deadline (UINT64_MAX when empty), written under the
-   lock and read without it at the turn boundary of the owner. */
+   lock and read without it at the turn boundary of the owner. In a zeroed heap `next_due` is 0, a timer due at once:
+   every turn would then take rt->sync to find nothing, so every scheduler context is made by agc_vm_init, which sets
+   UINT64_MAX. */
 typedef struct agc_timers {
   struct agc_task **items;
   size_t count, cap;

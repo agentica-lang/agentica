@@ -524,6 +524,42 @@ static void test_detached_ends_on_a_scheduler(void) {
   settle_loop();
 }
 
+static void wait_for_hand_over(void) {
+  while (!agc_runq_nudged(vm.rt->runq)) assert(agc_io_poll(&vm, true));
+  assert(agc_runq_take_nudge(vm.rt->runq));
+}
+
+/* A detached job that is ready twice before a scheduler takes it: its timer fires and it is handed over, then its work
+   ends and the drain finds it again, with another job listed behind it. It stays listed once (a second link would cut
+   the list and lose that job), the second ready-list count goes back, each `done` runs once, and the loop closes with
+   an empty registry. */
+static void test_job_ready_twice_is_listed_once(void) {
+  assert(agc_io_share(&vm, false));
+  gate *g = new_gate();
+  agc_task *task = park_on(g, 5);
+  uv_sem_wait(&g->entered);
+  task->state = AGC_TASK_RUNNING;
+  agc_io_detach(&vm, task);
+  wait_for_hand_over();
+  /* A second job behind it, so a second link of the first would cut the list here. */
+  swift_done_calls = 0;
+  int *data = calloc(1, sizeof *data);
+  assert(data);
+  on_thread(start_detached, data);
+  wait_for_hand_over();
+  uv_sem_post(&g->go);
+  pump_until_idle();
+  assert(finished_calls == 0 && swift_done_calls == 0);
+  on_thread(service_on_thread, NULL);
+  assert(finished_calls == 1 && swift_done_calls == 1 && dropped == 0);
+  pump_until_idle();
+  settle_loop();
+  agc_resource *probe = agc_register(&vm, NULL, NULL);
+  assert(probe->slot == 0);
+  agc_unregister(&vm, probe);
+  finished_calls = swift_done_calls = 0;
+}
+
 /* The `done` half of the first job raises, as a failing builtin would. */
 static agc_value raising_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
@@ -554,11 +590,6 @@ static void service_raising(void *arg) {
   assert(swift_done_calls == 0);
   assert(agc_io_service(&vm) && swift_done_calls == 1);
   assert(!agc_io_service(&vm));
-}
-
-static void wait_for_hand_over(void) {
-  while (!agc_runq_nudged(vm.rt->runq)) assert(agc_io_poll(&vm, true));
-  assert(agc_runq_take_nudge(vm.rt->runq));
 }
 
 /* A `done` that raises on a scheduler: the jobs after it stay on the service list for the next call, every reference
@@ -746,6 +777,7 @@ int main(void) {
   test_instant_job_wakes_its_task();
   test_many_jobs_end();
   test_detached_ends_on_a_scheduler();
+  test_job_ready_twice_is_listed_once();
   test_raising_done_on_a_scheduler();
   test_unserviced_job_is_freed_at_the_close();
   test_timer_only_kind_is_refused();
