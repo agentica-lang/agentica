@@ -269,6 +269,7 @@ agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
 }
 
 void agc_channel_leave(agc_vm *vm, agc_task *t) {
+  agc_sync_assert(vm);
   const agc_channel_wait w = t->channel;
   agc_channel *c = w.channel;
   leave_queue(c, t);
@@ -283,11 +284,11 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
 }
 
 const agc_builtin agc_channel_builtins[] = {
-  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Channel.new", 1, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Channel.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Channel.recv", 2, builtin_recv, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_channel_builtin_count = sizeof agc_channel_builtins / sizeof agc_channel_builtins[0];

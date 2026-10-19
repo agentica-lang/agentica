@@ -87,6 +87,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- On Windows, `.com` programs run through `Process.spawn` (only `.exe` did),
+  as the documentation said. The VM adds no implicit search of the working
+  directory, but a relative `PATH` entry such as `.` resolves against it.
+  `.bat` and `.cmd` still do not run (that needs `cmd.exe`, an implicit shell),
+  `PATHEXT` is not read, and a request for `x.cmd` or `x.bat` no longer finds a
+  planted `x.cmd.exe`. A Windows name such as `C:foo.exe`, `x.exe:stream`,
+  `tool.exe.` (trailing dot or space), `\\?\C:\x.exe` or a path ending in
+  `.cmd` or `.bat` fails with `executable is unavailable`.
 - On macOS, a socket as standard output no longer stalls every task: a write is
   checked with `poll` first and cut to what the socket takes.
 - Relative source paths containing a colon no longer gain an absolute source
@@ -95,6 +103,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   checksum-verified toolchain download and installs its Perl dependency.
 - Repeated `File.try_lock` calls on the same Windows handle succeed, and only
   lock contention returns `ok(false)`; access failures remain errors.
+- `Process.close` of a child that has already ended, before the VM noticed its
+  exit, no longer fails with `RUNTIME-PROCESS-CLOSE` on Windows, where stopping
+  an ended process reports "no such process". The process tests also run on
+  Windows now.
 
 ## [0.4.1-beta.1] - 2026-10-17
 

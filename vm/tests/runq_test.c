@@ -53,6 +53,16 @@ static void test_solo_wait(void) {
   assert(agc_runq_wait(q) == a && agc_runq_wait(q) == NULL);
 }
 
+/* An ended queue returns NULL from its wait whether or not it is solo, tasks left or not. */
+static void test_solo_end(void) {
+  agc_vm other;
+  agc_vm_init(&other, NULL, stdout, stderr, INT64_MAX);
+  agc_runq *q = other.rt->runq;
+  agc_runq_push(q, agc_new_task(&other));
+  agc_runq_end(q);
+  assert(agc_runq_wait(q) == NULL);
+}
+
 static void spin(int n) {
   for (volatile int k = 0; k < n; k++) {}
 }
@@ -117,8 +127,8 @@ static void wait_one(void *arg) {
 }
 
 /* The push falls before the waiter starts, while it starts and after it blocks (the spin grows with the round). A
-   push whose signal is lost, or a wait that tests the queue outside the lock, leaves the waiter blocked and the
-   deadline of main ends the test. */
+   push whose signal is lost leaves the waiter blocked, and the deadline of main ends the test. A wait that tests the
+   queue outside the lock is a data race that this test does not see in a plain build; make vm-tsan does. */
 static void test_wait_gets_the_push(void) {
   agc_runq *q = vm.rt->runq;
   for (int round = 0; round < WAIT_ROUNDS; round++) {
@@ -153,6 +163,7 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_order_and_removal();
   test_solo_wait();
+  test_solo_end();
   test_threads();
   test_shared_removal();
   test_wait_gets_the_push();

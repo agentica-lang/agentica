@@ -9,13 +9,9 @@
 
 #include "port.h"
 
-/* `shared` marks a library whose builtins read or write state that several schedulers can reach (tasks, channels,
-   handles, the logger table, stdin): the interpreter calls them with rt->sync held (agc_sync_take). The pure
-   libraries (strings, numbers, JSON, lists, maps) run in parallel. */
 typedef struct {
   const agc_builtin *entries;
   const size_t *count;
-  bool shared;
 } agc_builtin_table;
 
 typedef struct {
@@ -42,10 +38,6 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
 /* True for a builtin that only a prelude function may call: its name starts with two underscores
    (docs/future/25-ruby-typed-idioms.md §25.6). The loader refuses a call of one from any other function. */
 bool agc_builtin_prelude_only(const agc_builtin *b);
-/* True for a builtin that the interpreter calls with rt->sync held once the VM is shared: a builtin of a shared
-   library (agc_builtin_table), and the stdin builtins of the core library. The output builtins are not among them:
-   a stream has its own lock. */
-bool agc_builtin_shared(const agc_builtin *b);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
@@ -76,7 +68,7 @@ void agc_runq_push(agc_runq *q, agc_task *t);
 agc_task *agc_runq_pop(agc_runq *q);
 bool agc_runq_remove(agc_runq *q, const agc_task *t);
 /* agc_runq_wait is the pop of an idle scheduler: it blocks until a task is queued, and returns NULL once agc_runq_end
- * has been called (the run is over) or, on a solo queue, when it is empty. */
+ * has been called (the run is over, also on a solo queue) or, on a solo queue, when it is empty. */
 agc_task *agc_runq_wait(agc_runq *q);
 void agc_runq_end(agc_runq *q);
 /* A nudge is work for a scheduler that is not a task: agc_runq_nudge ends one wait with NULL, agc_runq_nudged is the

@@ -83,7 +83,7 @@ agc_task *agc_runq_pop(agc_runq *q) {
    (agc_runq_nudge) also ends the wait with NULL when no task is queued; the caller tells the two apart with
    agc_runq_take_nudge. */
 agc_task *agc_runq_wait(agc_runq *q) {
-  if (q->solo) return take_first(q);
+  if (q->solo) return q->ended ? NULL : take_first(q);
   uv_mutex_lock(&q->lock);
   while (!q->first && !q->ended && !atomic_load_explicit(&q->nudged, memory_order_relaxed))
     uv_cond_wait(&q->wake, &q->lock);

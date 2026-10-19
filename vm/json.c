@@ -377,22 +377,22 @@ static agc_value builtin_float(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_json_builtins[] = {
-  {"JSON.parse", 1, builtin_parse, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"JSON.encode", 1, builtin_encode, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.from", 1, builtin_from, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.object", 1, builtin_from, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.array", 1, builtin_from, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.null", 0, builtin_null, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.null?", 1, builtin_is_null, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.get", 2, builtin_get, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"JSON.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.string", 1, builtin_string, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.int", 1, builtin_int, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.float", 1, builtin_float, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.bool", 1, builtin_bool, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"JSON.decode", 2, builtin_decode, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"JSON.schema", 1, builtin_schema, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"JSON.parse", 1, builtin_parse, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"JSON.encode", 1, builtin_encode, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.from", 1, builtin_from, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.object", 1, builtin_from, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.array", 1, builtin_from, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.null", 0, builtin_null, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.null?", 1, builtin_is_null, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.get", 2, builtin_get, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"JSON.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.string", 1, builtin_string, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.int", 1, builtin_int, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.float", 1, builtin_float, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.bool", 1, builtin_bool, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"JSON.decode", 2, builtin_decode, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.schema", 1, builtin_schema, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };
 
 const size_t agc_json_builtin_count = sizeof agc_json_builtins / sizeof agc_json_builtins[0];

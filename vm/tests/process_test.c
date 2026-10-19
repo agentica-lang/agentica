@@ -1,6 +1,7 @@
 /* Native child processes: literal arguments, inherited environment, pipes, private channel and guard cleanup. */
 #include "builtin_test.h"
 #include "../services.h"
+#include "../process_os.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -10,6 +11,12 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#include <windows.h>
+#else
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 static agc_vm vm;
@@ -51,6 +58,211 @@ static void init(void) {
   vm.in_turn = true;
 }
 
+/* Starts `command` as a captured child that exits with 3 and returns its status, or -1 when it does not start. */
+static int64_t status_of(const char *command) {
+  agc_value rest[] = {text("--exit")};
+  agc_value args[] = {text(command), agc_list_value(agc_list_from_array(rest, 1)), text("."), agc_int(5000)};
+  const agc_builtin *spawn = NULL;
+  for (size_t k = 0; k < agc_process_builtin_count; k++)
+    if (strcmp(agc_process_builtins[k].name, "Process.spawn_captured") == 0) spawn = &agc_process_builtins[k];
+  const agc_result *r = agc_as_result(&vm, agc_test_call(&vm, task, spawn, args));
+  if (!r->ok) return -1;
+  agc_value handle[] = {r->value, agc_int(5000)};
+  int64_t status = agc_as_int(&vm, ok(call("Process.wait", handle)));
+  call("Process.close", handle);
+  return status;
+}
+
+static void copy_file(const char *from, const char *to) {
+  uv_fs_t req;
+  assert(uv_fs_copyfile(NULL, &req, from, to, 0, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+}
+
+static void set_path(const char *head, const char *tail) {
+  char joined[40000];
+  snprintf(joined, sizeof joined, "%s%s", head, tail);
+  assert(uv_os_setenv("PATH", joined) == 0);
+}
+
+/* The name rules and the path test of process_os.h, on the strings alone: `win` is the answer on Windows, and every
+   name is accepted on POSIX. */
+static void name_rules(void) {
+  static const struct { const char *name; bool win_ok; bool win_path; bool posix_path; } cases[] = {
+    {"tool", true, false, false},
+    {"tool.exe", true, false, false},
+    {"a b.exe", true, false, false},
+    {"dir/tool.exe", true, true, true},
+    {"dir\\tool.exe", true, true, false},
+    {"C:\\x.exe", true, true, false},
+    {"C:/x.exe", true, true, true},
+    {"C:foo.exe", false, true, false},
+    {"x.exe:s.exe", false, true, false},
+    {"x.exe::$DATA", false, true, false},
+    {"\\\\?\\C:\\x.exe", false, true, false},
+    {"\\\\.\\C:\\x.exe", false, true, false},
+    {"\\\\?\\UNC\\h\\s\\x.exe", false, true, false},
+    {"//./x.exe", false, true, true},
+    {"tool.exe.", false, false, false},
+    {"tool.exe ", false, false, false},
+    {"dir\\", false, true, false},
+    {"x.cmd", false, false, false},
+    {"X.BAT", false, false, false},
+    {"x.cmd.exe", true, false, false},
+  };
+  for (size_t k = 0; k < sizeof cases / sizeof cases[0]; k++) {
+    size_t n = strlen(cases[k].name);
+#ifdef _WIN32
+    assert(agc_proc_name_ok(cases[k].name, n) == cases[k].win_ok);
+    assert(agc_proc_is_path(cases[k].name, n) == cases[k].win_path);
+#else
+    assert(agc_proc_name_ok(cases[k].name, n));
+    assert(agc_proc_is_path(cases[k].name, n) == cases[k].posix_path);
+#endif
+  }
+}
+
+/* The command search of docs/vm/10-io-processes.md 10.4, with a copy of this program as the only candidate. */
+static void search_tests(const char *self) {
+  char base[4096], dir[4200], file[4400];
+  size_t size = sizeof base;
+  assert(uv_os_tmpdir(base, &size) == 0);
+  snprintf(dir, sizeof dir, "%s/agc-search-XXXXXX", base);
+  uv_fs_t req;
+  assert(uv_fs_mkdtemp(NULL, &req, dir, NULL) == 0);
+  snprintf(dir, sizeof dir, "%s", req.path);
+  uv_fs_req_cleanup(&req);
+  char old[32768];
+  size = sizeof old;
+  assert(uv_os_getenv("PATH", old, &size) == 0);
+#ifdef _WIN32
+  const char sep = ';';
+  const char *peer = "agc-peer.exe";
+#else
+  const char sep = ':';
+  const char *peer = "agc-peer";
+#endif
+  snprintf(file, sizeof file, "%s/%s", dir, peer);
+  copy_file(self, file);
+
+  /* An empty entry, then the directory; the rest of PATH stays, so the copy still finds its libraries. That an empty
+     entry or the working directory is not searched is checked end to end in tests/test_process.py. */
+  char head[4400];
+#ifdef _WIN32
+  snprintf(head, sizeof head, "%c\"%s\"%c", sep, dir, sep);
+#else
+  snprintf(head, sizeof head, "%c%s%c", sep, dir, sep);
+#endif
+  set_path(head, old);
+  assert(status_of("agc-peer") == 3);
+  assert(status_of("agc-peer.") == -1 && status_of("agc-peer ") == -1 && status_of("agc-pee") == -1);
+  assert(status_of(file) == 3);
+  assert(status_of("agc-peer/") == -1);
+#ifdef _WIN32
+  /* Case does not matter, `.com` runs, `.cmd` and `.bat` never do (that needs cmd.exe), and a planted x.cmd.exe does
+     not answer a request for x.cmd. */
+  assert(status_of("AGC-PEER") == 3 && status_of("agc-peer.EXE") == 3);
+  char com[4400], script[4400];
+  snprintf(com, sizeof com, "%s/agc-com.com", dir);
+  copy_file(self, com);
+  assert(status_of("agc-com") == 3 && status_of("agc-com.com") == 3);
+  snprintf(script, sizeof script, "%s/agc-script.cmd", dir);
+  FILE *f = fopen(script, "wb");
+  assert(f && fputs("@exit 3\r\n", f) >= 0 && fclose(f) == 0);
+  assert(status_of("agc-script") == -1 && status_of("agc-script.cmd") == -1 && status_of(script) == -1);
+  char plant[4400];
+  snprintf(plant, sizeof plant, "%s/agc-plant.cmd.exe", dir);
+  copy_file(self, plant);
+  assert(status_of("agc-plant.cmd") == -1 && status_of("agc-plant.cmd.exe") == 3);
+#endif
+
+  assert(uv_os_setenv("PATH", old) == 0);
+  assert(uv_fs_unlink(NULL, &req, file, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+#ifdef _WIN32
+  assert(uv_fs_unlink(NULL, &req, com, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+  snprintf(script, sizeof script, "%s/agc-script.cmd", dir);
+  assert(uv_fs_unlink(NULL, &req, script, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+  assert(uv_fs_unlink(NULL, &req, plant, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+#endif
+  assert(uv_fs_rmdir(NULL, &req, dir, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+}
+
+/* A descriptor or handle that the parent made inheritable before its first spawn; its number reaches the child as a word. */
+static long long inheritable(void) {
+#ifdef _WIN32
+  SECURITY_ATTRIBUTES attributes = {sizeof attributes, NULL, TRUE};
+  HANDLE h = CreateFileA("NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &attributes, OPEN_EXISTING, 0, NULL);
+  assert(h != INVALID_HANDLE_VALUE);
+  return (long long)(intptr_t)h;
+#else
+  int fd = open("/dev/null", O_RDONLY);
+  assert(fd >= 0);
+  int high = fcntl(fd, F_DUPFD, 100);
+  assert(high >= 100);
+  close(fd);
+  return high;
+#endif
+}
+
+/* The child's check, made before any set-up of its own: true when the parent's descriptor or handle did not arrive.
+   On Windows it assumes no handle of the child's own sits at the same value and is a character device. */
+static bool absent(long long number) {
+#ifdef _WIN32
+  HANDLE h = (HANDLE)(intptr_t)number;
+  DWORD flags;
+  return !(GetHandleInformation(h, &flags) && GetFileType(h) == FILE_TYPE_CHAR);
+#else
+  return fcntl((int)number, F_GETFD) == -1 && errno == EBADF;
+#endif
+}
+
+/* True once the process has ended, whether or not anyone has collected its status (a POSIX zombie counts as ended,
+   and WNOWAIT leaves it for libuv). */
+static bool ended(long pid) {
+#ifdef _WIN32
+  HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)pid);
+  if (!h) return true;
+  bool done = WaitForSingleObject(h, 0) == WAIT_OBJECT_0;
+  CloseHandle(h);
+  return done;
+#else
+  siginfo_t info;
+  memset(&info, 0, sizeof info);
+  return waitid(P_PID, (id_t)pid, &info, WEXITED | WNOHANG | WNOWAIT) != 0 || info.si_pid == pid;
+#endif
+}
+
+/* Closes the process in args[0]. A failed close longjmps out of the builtin (the VM is in a turn), so the jump is
+   caught here and turned into an assert, not left to jump through a dead frame. */
+static void close_must_not_fail(agc_value *args) {
+  if (setjmp(vm.turn) == 0)
+    call("Process.close", args);
+  else
+    assert(!"Process.close failed");
+}
+
+/* Waits, for at most five seconds, for the child that wrote its pid to `path` to be gone. */
+static void wait_ended(const char *path) {
+  long pid = 0;
+  for (int k = 0; k < 500 && pid == 0; k++) {
+    FILE *f = fopen(path, "rb");
+    if (f) {
+      char line[32] = "";
+      if (fgets(line, sizeof line, f) && strchr(line, '\n')) pid = atol(line);
+      fclose(f);
+    }
+    if (pid == 0) uv_sleep(10);
+  }
+  assert(pid > 0);
+  for (int k = 0; k < 500 && !ended(pid); k++) uv_sleep(10);
+  assert(ended(pid));
+}
+
 static int child(int argc, char **argv) {
 #ifdef _WIN32
   _setmode(0, _O_BINARY);
@@ -58,6 +270,19 @@ static int child(int argc, char **argv) {
   _setmode(2, _O_BINARY);
 #endif
   if (strcmp(argv[1], "--wait") == 0) { uv_sleep(30000); return 0; }
+  if (strcmp(argv[1], "--exit") == 0) {
+    /* Say who we are, then end: the parent waits for this pid to be gone without running its loop. */
+    FILE *f = argc > 2 ? fopen(argv[2], "wb") : NULL;
+    if (f) {
+#ifdef _WIN32
+      fprintf(f, "%lu\n", (unsigned long)GetCurrentProcessId());
+#else
+      fprintf(f, "%ld\n", (long)getpid());
+#endif
+      fclose(f);
+    }
+    return 3;
+  }
   if (strcmp(argv[1], "--channel") == 0) {
     init();
     agc_parent_take(&vm);
@@ -87,12 +312,15 @@ static int child(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+  if (argc > 2 && strcmp(argv[1], "--leak") == 0) return absent(atoll(argv[2])) ? 0 : 1;
   agc_init();
   agc_io_init();
   if (argc > 1) return child(argc, argv);
   char self[32768];
   size_t size = sizeof self;
   assert(uv_exepath(self, &size) == 0);
+  long long leak = inheritable();
+  assert(!absent(leak)); /* positive control: the parent does hold it */
   init();
   agc_resource *spare = agc_register(&vm, NULL, NULL);
   agc_value rest[] = {text("--wait")};
@@ -119,6 +347,42 @@ int main(int argc, char **argv) {
   assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
   equal(ok(call("Process.read_available", args)), "hello\r\n\xC3\xB1\xF0\x9F\x99\x82\n");
   call("Process.close", args);
+  /* The child has ended, but the loop has not run, so its exit callback is still to come: stopping it must not fail.
+     Only Windows exercises the ESRCH path here (TerminateProcess on an exited process gives UV_ESRCH); on POSIX the
+     zombie still accepts the signal. */
+  char base[4096], pid_file[4200];
+  size_t base_size = sizeof base;
+  assert(uv_os_tmpdir(base, &base_size) == 0);
+  snprintf(pid_file, sizeof pid_file, "%s/agc-exit-%ld.txt", base, (long)uv_os_getpid());
+  agc_value exit_words[] = {text("--exit"), text(pid_file)};
+  args[0] = text(self);
+  args[1] = agc_list_value(agc_list_from_array(exit_words, 2));
+  args[2] = text(".");
+  args[3] = agc_int(5000);
+  handle = ok(call("Process.spawn_captured", args));
+  wait_ended(pid_file);
+  remove(pid_file);
+  args[0] = handle;
+  close_must_not_fail(args);
+  /* A close that failed would have ended the run; this one left the handle closed. */
+  args[1] = agc_int(5000);
+  assert(!agc_as_result(&vm, call("Process.wait", args))->ok);
+  /* Only the standard streams and the channel reach a child: not a descriptor or handle that the VM process holds. */
+  char number[32];
+  snprintf(number, sizeof number, "%lld", leak);
+  rest[0] = text("--leak");
+  agc_value leak_words[] = {rest[0], text(number)};
+  args[0] = text(self);
+  args[1] = agc_list_value(agc_list_from_array(leak_words, 2));
+  args[2] = text(".");
+  args[3] = agc_int(5000);
+  handle = ok(call("Process.spawn_captured", args));
+  args[0] = handle;
+  args[1] = agc_int(5000);
+  assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
+  call("Process.close", args);
+  name_rules();
+  search_tests(self);
   rest[0] = text("--channel");
   args[0] = text(self);
   args[1] = agc_list_value(agc_list_from_array(rest, 1));

@@ -233,6 +233,11 @@ typedef struct {
   agc_builtin_fn fn;
   agc_native_kind native;
   agc_cost_rule cost;
+  /* The builtin reads or writes state that several schedulers can reach (tasks, channels, handle locks, the logger
+     table, stdin, service state): the interpreter calls it with rt->sync held once the VM is shared (agc_share). The
+     rest, such as strings, numbers, JSON, lists, maps and the file calls that name a path, run in parallel. A row that
+     is not marked must touch none of that state; make test-shared checks it by running programs with the locks on. */
+  bool shared;
 } agc_builtin;
 
 /* prelude marks a function of the compiler prelude (docs/future/25-ruby-typed-idioms.md §25.6): its spans are not

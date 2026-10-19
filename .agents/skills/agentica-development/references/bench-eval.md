@@ -26,10 +26,15 @@ it as the guard; `list-bulk` (`repeat`, `to_a`, `reverse`, `take`, `drop`,
 `concat`, `join`, `String.split` and `sort` of 60,000 to 500,000 items) guards
 bulk builds, which must stay within 1.3 times the flat array; compare against a
 VM built from master, alternating the runs, and time loop-bound programs under
-more than one link layout before blaming list code. `deadline-pingpong` (a channel ping-pong where every send and receive has a
-deadline) and `sleepers` (100 tasks that sleep 1 ms ten times, then 3,000 awaits
-with a long deadline that the finished task cancels) time the timed parks; run
-them at `--size 8` to compare a change near the timers. A new program needs `def
+more than one link layout before blaming list code. `channel-pingpong` (two
+tasks on two channels) and `print-lines` guard the cost of the shared-state
+locks: compare a change to the locks or the scheduler against a VM built from
+master, and run them again with `AGENTICA_VM_TEST_SHARED=1` to see the cost of
+the locks when they are on. `deadline-pingpong` (a channel ping-pong where
+every send and receive has a deadline) and `sleepers` (100 tasks that sleep
+1 ms ten times, then 3,000 awaits with a long deadline that the finished task
+cancels) time the timed parks; run them at `--size 8` to compare a change near
+the timers. A new program needs `def
 scale() -> Int` returning 1 (the script rewrites it for `--size`), a
 deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
 The HTTP sanity check (20c) is apart: `python3 benchmarks/http_bench.py` (Python

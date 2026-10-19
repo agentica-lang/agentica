@@ -34,6 +34,8 @@ NAMES = [
     "case",
     "string-library",
     "small-values",
+    "channel-pingpong",
+    "print-lines",
     "deadline-pingpong",
     "sleepers",
 ]

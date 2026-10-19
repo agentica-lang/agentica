@@ -86,7 +86,7 @@ static void gate_drop(void *data) {
   dropped++;
 }
 
-static const agc_io_kind gate_io = {gate_work, gate_done, gate_expired, gate_drop, false, "gate", NULL};
+static const agc_io_kind gate_io = {gate_work, gate_done, gate_expired, gate_drop, false, "gate", NULL, false};
 
 /* The `done` half owns the data it is given, so it frees it; a job that is dropped or expired leaves it to `drop`. */
 static agc_value idle_done(agc_vm *vm, void *data, agc_value context) {
@@ -109,15 +109,15 @@ static void idle_drop(void *data) {
 }
 
 /* A timer only: the timer is its one piece. */
-static const agc_io_kind idle_io = {NULL, idle_done, idle_expired, idle_drop, false, "idle", NULL};
+static const agc_io_kind idle_io = {NULL, idle_done, idle_expired, idle_drop, false, "idle", NULL, false};
 
-static const agc_io_kind nap_io = {NULL, idle_done, idle_expired, NULL, false, "nap", NULL};
+static const agc_io_kind nap_io = {NULL, idle_done, idle_expired, NULL, false, "nap", NULL, false};
 
 static void quick_work(void *data) {
   ((gate *)data)->value = 7;
 }
 
-static const agc_io_kind more_io = {quick_work, gate_done, gate_expired, gate_drop, false, "more", NULL};
+static const agc_io_kind more_io = {quick_work, gate_done, gate_expired, gate_drop, false, "more", NULL, false};
 
 static void swift_work(void *data) {
   *(int *)data = 1;
@@ -137,7 +137,7 @@ static void swift_drop(void *data) {
 }
 
 /* Pool work that ends at once, for the many-jobs test. */
-static const agc_io_kind swift_io = {swift_work, swift_done, swift_done, swift_drop, false, "swift", NULL};
+static const agc_io_kind swift_io = {swift_work, swift_done, swift_done, swift_drop, false, "swift", NULL, false};
 
 static gate *new_gate(void) {
   gate *g = calloc(1, sizeof *g);

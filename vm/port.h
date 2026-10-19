@@ -67,6 +67,9 @@ typedef struct {
   bool external;
   const char *name;
   bool (*cancel)(agc_vm *vm, void *data, agc_value context, bool deadline);
+  /* The halves change state that several schedulers reach: the interpreter runs them with rt->sync held (run_half in
+     vm/loop.c). A kind whose halves only build a value from its own data leaves it false. */
+  bool locked;
 } agc_io_kind;
 
 typedef struct {
@@ -274,12 +277,10 @@ typedef struct {
   uint64_t crash_count, observed_count;
   _Atomic uint64_t tasks_done;
   /* The one lock for the shared state of the tasks (agc_sync_take): the task tree, the waiter lists, the channels, the
-     Task.map groups and the logger table. `shared` is false until agc_share, and then the lock is real, and
-     `builtin_sync` (made by agc_share) says for each builtin of the program whether the interpreter takes the lock
-     around its call. */
+     Task.map groups and the logger table. `shared` is false until agc_share, and then the lock is real, and the
+     interpreter takes it around each builtin whose row is marked `shared`. */
   agc_lock *sync;
   bool shared;
-  bool *builtin_sync;
 #ifdef __linux__
   locale_t messages_locale;
 #endif
@@ -367,21 +368,52 @@ struct agc_vm {
   uint64_t gc_seen;
   agc_profile *profile;
   bool yield, in_turn;
-  /* How many times this scheduler has taken rt->sync and not dropped it (agc_sync_take). */
+  /* How many times this scheduler has taken rt->sync and not dropped it (agc_sync_take), and the stream lock it holds, if
+     any (output.c): agc_sync_reset gives both back after a failure. */
   uint32_t sync_depth;
+  agc_lock *stream_lock;
   jmp_buf fail, turn;
 };
 
 /* The one test of a profile hook: false at compile time when the trace points are compiled out (make TRACE=0). */
 #define AGC_PROFILE_ON(vm) (AGC_TRACE_BUILD && __builtin_expect((vm)->profile != NULL, 0))
 
-/* rt->sync, the one lock of the shared state of the tasks (docs/vm/16-architecture.md §16.9). Take it around every read
-   or write of the task tree (parent, children, waiters, awaiting), a channel, a Task.map group or the logger table, and
-   drop it before the builtin returns: never hold it across a park or a turn. It nests (a count per scheduler), and a
-   failure that jumps out of the code that holds it is undone by the scheduler (agc_sync_reset). Lock order: sync, then
-   a stream's lock, then the run queue's. With one scheduler (before agc_share) these are a test of one flag. */
+/* A lock that costs one flag test until the VM is shared (agc_share) and is a mutex after it. Once shared, a thread that
+   takes a lock it holds, or drops one it does not hold, ends the process with a message instead of deadlocking (or, on
+   Windows, silently re-entering): `owner` is a per-thread token, zero when free. The mutex is a uv_mutex_t made in
+   vm/sync.c. */
+struct agc_lock {
+  bool solo;
+  _Atomic uintptr_t owner;
+  void *mutex;
+};
+
+agc_lock *agc_lock_new(void);
+void agc_lock_share(agc_lock *l);
+void agc_lock_take_shared(agc_lock *l);
+void agc_lock_drop_shared(agc_lock *l);
+bool agc_lock_held(const agc_lock *l);
+
+static inline void agc_lock_take(agc_lock *l) {
+  if (__builtin_expect(!l->solo, 0)) agc_lock_take_shared(l);
+}
+
+static inline void agc_lock_drop(agc_lock *l) {
+  if (__builtin_expect(!l->solo, 0)) agc_lock_drop_shared(l);
+}
+
+/* rt->sync, the one lock of the shared state of the tasks (docs/vm/16-architecture.md §16.9). It protects the task tree
+   (parent, children, waiters, awaiting), the waiter lists of channels, handles and stdin, the Task.map groups and the
+   logger table. The interpreter takes it around the builtins whose row is marked `shared` and the code that ends a task
+   or hands a handle on takes it itself, so take it wherever such a list changes, and drop it before the builtin
+   returns: never across a park or a turn. It is held across the libuv calls that those paths make inline at N = 1 (a job
+   start, a close), which become requests to the I/O thread with the services. It nests (a count per scheduler), and a
+   failure that jumps out of the code that holds it is undone by the scheduler (agc_sync_reset). Lock order: sync, then a
+   stream's lock, then the I/O inbox's and the run queue's. With one scheduler (before agc_share) these are a test of
+   one flag. In a shared VM agc_sync_assert fails when a mutator of those lists runs without it. */
 void agc_sync_take_shared(agc_vm *vm);
 void agc_sync_drop_shared(agc_vm *vm);
+_Noreturn void agc_sync_missing(agc_vm *vm);
 
 static inline void agc_sync_take(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_take_shared(vm);
@@ -391,10 +423,9 @@ static inline void agc_sync_drop(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_drop_shared(vm);
 }
 
-agc_lock *agc_lock_new(void);
-void agc_lock_share(agc_lock *l);
-void agc_lock_take(agc_lock *l);
-void agc_lock_drop(agc_lock *l);
+static inline void agc_sync_assert(agc_vm *vm) {
+  if (__builtin_expect(vm->rt->shared, 0) && !vm->sync_depth) agc_sync_missing(vm);
+}
 
 uint64_t agc_resource_id(agc_vm *vm);
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);

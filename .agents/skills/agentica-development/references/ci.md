@@ -120,9 +120,11 @@ lists
   (`next_line`, `next_stderr_line`, `stdout_text`, `wait`, `close_stdin`;
 `read_stdout=False`
   for a pipe that must stay full), killed with its process group when the test
-  ends, also on Ctrl-C or SIGTERM; `process_alive` and `wait_until` check
-  that a test left no process, and `make_suite` and `report_cases` build and
-  read `agentica test --json` suites. Without `python3`, `CI` set fails the run
+  ends, also on Ctrl-C or SIGTERM; `process_alive` (Windows: ctypes; POSIX:
+  `kill 0` plus a zombie check) and `wait_until` check that a test left no
+  process, `agc_literal` writes a path as an Agentica string, and `make_suite`
+  and `report_cases` build and read
+  `agentica test --json` suites. Without `python3`, `CI` set fails the run
   and a local run reports a skip; a missing VM binary does the same for a
   test.
 - `test-slow` runs the slow tier (`AGENTICA_TEST_SLOW=1`). Existing
@@ -284,7 +286,9 @@ Ubuntu runners.
 - `test`: first the `changes` step (below), then `make -j vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them, from `bootstrap/stage0.agcb`), `make test JOBS=6` (the whole suite on
-  the binary; it builds the binary first), `make fixed-point` (stage2 == stage3
+  the binary; it builds the binary first), `make test-shared` (the binary
+  modules again with every shared-state lock on), `make fixed-point` (stage2
+  == stage3
   from stage0, and the binary compiling the front end to stage2 again; about
   15 s after `make test` built the stages, as a step of its own so a failure
   shows alone), `make test-cli`, `make test-slow` (the `@slow` cases of the test

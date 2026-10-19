@@ -21,7 +21,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -115,7 +115,7 @@ py-test/%: FORCE
 
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
 # diagnostics, the programs, `agentica test`, `agentica run`.
-CLI_TESTS ?= tests/test_cli_forms.py tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
+CLI_TESTS ?= tests/test_cli_forms.py tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_process_bdd.py tests/test_source_paths.py \
   tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
 test-cli: $(PRODUCT)
 	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(PRODUCT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
@@ -282,7 +282,7 @@ PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/system.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/sync.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/system.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/sync.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -738,6 +738,9 @@ WINDOWS_CROSS := VM_OS=Windows_NT CC=x86_64-w64-mingw32-gcc AR=llvm-ar RUN_PROGR
   AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored
 # The modules the vm-windows job of platforms.yml runs: the bootstrap binary alone, then the product. TESTS= picks
 # others (test_cli_forms.py drives only the command line, for instance).
+# tests/test_process.py and tests/test_process_lifecycle.py stay out: their peers are host programs that Wine cannot
+# start, and the stop case of the lifecycle module needs a Windows console (it would need a Wine skip, which the
+# native job must not have).
 WINDOWS_TEST_MODULES ?= tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py \
   tests/test_vm_stdout.py tests/test_platform_bootstrap.py
 WINDOWS_DOCKER := docker run --rm -v '$(CURDIR):$(CURDIR)' -w '$(CURDIR)' --user "$$(id -u):$$(id -g)" \
@@ -837,6 +840,11 @@ sweep-full: vm-diff-build
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
 VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py tests/test_vm_trace.py
 SANITIZE_JOBS ?= 4
+
+# The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only): the lock checks of
+# agc_sync_assert and the owner token then run on every builtin, so a builtin that touches shared state without its lock fails here.
+test-shared: dist/agentica$(EXE)
+	AGENTICA_VM_TEST_SHARED=1 $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS)
 
 vm-sanitize-build: dist/agentica$(EXE)
 

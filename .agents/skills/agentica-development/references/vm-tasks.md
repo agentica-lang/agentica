@@ -24,17 +24,24 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/sync.c`
   - **Owns:** The locks of the shared state. `agc_lock` (a mutex that is solo
-    until `agc_share`), `rt->sync`, the one coarse lock for the task tree, the
+    until `agc_share`, with an owner token that aborts a drop by a thread that
+    does not hold it), `rt->sync`, the one coarse lock for the task tree, the
     waiter lists, the channels, the `Task.map` groups, the logger table, stdin
     and the FIFOs, and the lock of each output stream. `agc_sync_take` and
     `agc_sync_drop` nest per scheduler (`vm->sync_depth`); `agc_sync_reset`
     undoes them after `agc_fail`. The interpreter takes the lock around each
-    builtin of a shared library (`agc_builtin_table.shared`), a stepper step,
-    the halves of a job and each end of a task; never hold it across a park or
-    a turn. Order: sync, a stream's lock, the run queue's. `agc_share` turns
-    all of it on; `AGENTICA_VM_TEST_SHARED=1` does it for a whole run on one
-    scheduler (test only). A new builtin library that touches shared state must
-    set `.shared` in `vm/builtin_tables.c`.
+    builtin whose row has `shared` set (`agc_builtin.shared`; every row of every
+    table says `true` or `false`), a stepper step, the halves of a job whose
+    kind says `locked`, and each end of a task; never hold it across a park or
+    a turn. Order: sync, a stream's lock, then the inbox's and the run queue's.
+    Held checks: `agc_sync_assert` in every mutator of the shared lists fails
+    the run when a shared VM calls it without the lock, and `agc_task_next`
+    fails if a turn ended with it held. `agc_share` turns all of it on;
+    `AGENTICA_VM_TEST_SHARED=1` does it for a whole run on one scheduler (test
+    only): `make test-shared` runs the binary modules that way (CI runs it) and
+    `tests/test_vm_shared.py` has the programs for the rarer paths. A new
+    builtin that touches shared state must set `shared` to true in its row;
+    `vm/tests/sync_test.c` lists the rows that must be marked.
 
 - **Path:** `vm/inbox.c`
   - **Owns:** The inbox of the I/O thread (`agc_inbox_open`, `agc_inbox_post`,
@@ -84,9 +91,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         it sets `cancelled`, and then by the state the one party that ends the
         task takes it out of the run queue (READY) or claims it (PARKED),
         detaches its job, leaves lock, await and stdin FIFOs and ends
-      - a task on a turn only gets `cancelled` (and `vm->yield` when it is the
-        canceller's own task), so it stops after the current builtin and the
-        scheduler ends it
+      - a task on a turn only gets `cancelled`; its scheduler ends it at the
+        end of the turn. Only when it is the canceller's own task does the
+        cancel set `vm->yield`, so it stops after the current builtin; a task
+        that runs on another scheduler finishes its turn first (at most the
+        turn's step budget, §10.2.3)
       - `Task.await` on a cancelled task halts with `RUNTIME-TASK-CANCELLED` at
         the call
       - `vm/tests/task_cancel_test.c` runs hand-built bytecode with test

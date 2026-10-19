@@ -8,6 +8,7 @@
 #endif
 #include "services.h"
 #include "file_io.h"
+#include "process_os.h"
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <errno.h>
@@ -156,8 +157,20 @@ static void finished(proc *p, int64_t status) {
   if (p->linked) unlink_child(p);
 }
 
+/* UV_ESRCH means the child has already ended and only its exit callback is
+   still to come, which is the state we wanted: it is not a failed stop. The
+   mask is deliberate on every system, with no #ifdef. On Windows,
+   TerminateProcess on an ended process fails and libuv maps that to
+   UV_ESRCH. On POSIX a zombie still takes a signal, so ESRCH there means
+   someone else reaped the child (a host with SIGCHLD set to SIG_IGN, or its
+   own reaper); no exit status is ever seen then. A narrow race stays: libuv (win/process.c, uv__kill) reports
+   UV_EACCES instead when the process has exited with the code 259 or its
+   handle is not yet signaled, and that is still a failed stop. If ESRCH ever
+   comes while `running` is still true, the exit is awaited, for up to REAP_MS
+   at the end of a run. */
 static int signal_child(proc *p, int sig) {
   int rc = uv_process_kill(&p->process, sig);
+  if (rc == UV_ESRCH) rc = 0;
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "%s pid=%d rc=%d", sig == SIGKILL ? "kill" : "term", (int)p->process.pid, rc);
   p->stop = sig == SIGTERM && !rc ? STOP_TERM : STOP_KILLED;
   p->stop_failed = rc != 0;
@@ -407,7 +420,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   return deadline && q->kind != REQ_SEND;
 }
 
-static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process", request_cancel};
+static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process", request_cancel, true};
 
 static void wrote(uv_write_t *w, int status) {
   proc *p = OWNER(w, write_req);
@@ -608,10 +621,6 @@ static int start_kept(proc *p) {
 }
 
 static bool runnable(const char *path) {
-#ifdef _WIN32
-  size_t size = strlen(path);
-  if (size < 4 || _stricmp(path + size - 4, ".exe") != 0) return false;
-#endif
   agc_fs_info info;
   return agc_fs_stat(path, &info, true) == 0 && !AGC_FS_ISDIR(info.mode);
 }
@@ -625,40 +634,39 @@ static char *candidate(agc_vm *vm, const char *dir, size_t dir_len, const agc_st
   return agc_host_path(vm, joined);
 }
 
+/* Takes the malloc'd path; returns it, or a copy with a suffix added, when a
+   file that may run is there (process_os.h), else NULL. */
 static char *executable(char *path) {
-  if (runnable(path)) return path;
-#ifdef _WIN32
+  if (agc_proc_suffix_ok(path)) {
+    if (runnable(path)) return path;
+    free(path);
+    return NULL;
+  }
   size_t size = strlen(path);
-  char *with_suffix = realloc(path, agc_size_add(size, 5));
-  if (!with_suffix) { free(path); agc_out_of_memory(); }
-  path = with_suffix;
-  memcpy(path + size, ".exe", 5);
-  if (runnable(path)) return path;
-#endif
+  for (const char *const *suffix = agc_proc_suffixes(); *suffix; suffix++) {
+    size_t extra = strlen(*suffix);
+    char *with_suffix = malloc(agc_size_add(agc_size_add(size, extra), 1));
+    if (!with_suffix) agc_out_of_memory();
+    memcpy(with_suffix, path, size);
+    memcpy(with_suffix + size, *suffix, extra + 1);
+    if (runnable(with_suffix)) {
+      free(path);
+      return with_suffix;
+    }
+    free(with_suffix);
+  }
   free(path);
   return NULL;
 }
 
 static char *resolve(agc_vm *vm, const agc_string *command) {
-  bool explicit = memchr(command->data, '/', command->bytes) != NULL;
-#ifdef _WIN32
-  explicit = explicit || memchr(command->data, '\\', command->bytes) || memchr(command->data, ':', command->bytes);
-  const char separator = ';';
-#else
-  const char separator = ':';
-#endif
-  if (explicit) return executable(agc_host_path(vm, command));
+  if (!agc_proc_name_ok(command->data, command->bytes)) return NULL;
+  if (agc_proc_is_path(command->data, command->bytes)) return executable(agc_host_path(vm, command));
   char *search = agc_system_env("PATH");
   char *found = NULL;
-  for (const char *at = search; at && !found;) {
-    const char *end = strchr(at, separator);
-    size_t len = end ? (size_t)(end - at) : strlen(at);
-#ifdef _WIN32
-    if (len >= 2 && at[0] == '"' && at[len - 1] == '"') { at++; len -= 2; }
-#endif
-    if (len) found = executable(candidate(vm, at, len, command));
-    at = end ? end + 1 : NULL;
-  }
+  const char *at = search, *dir;
+  size_t len;
+  while (!found && agc_proc_next_dir(&at, &dir, &len)) found = executable(candidate(vm, dir, len, command));
   free(search);
   return found;
 }
@@ -1121,26 +1129,26 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 }
 
 const agc_builtin agc_process_builtins[] = {
-  {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];
 #else
-const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
+const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_process_builtin_count = 0;
 

@@ -563,29 +563,47 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   wakes its awaiters, which ends a `Task.map` item, which cancels its siblings),
   so many small locks need one fixed order across the whole task code and would
   still be taken in long chains; the coarse lock is held for a short stretch of
-  pointer work, never across a park, a turn or a libuv call, so the work that
-  takes long (the Agentica code of the turns, strings, numbers, JSON, lists and
-  maps) runs in parallel. It is cheap to split later, when a measurement shows
-  the contention. The pieces:
-  - The interpreter takes `rt->sync` around the call of every builtin of a
-    shared library (`agc_builtin_table.shared`; `builtin_sync` per builtin, built
-    by `agc_share`), around the steps of a stepper, around the `done` and
-    `expired` halves of a job (`resume` in `vm/task.c`), and around each ending
-    of a task in `agc_task_end_turn` and `agc_task_next`. The pure libraries are
-    not locked. The output builtins are not either: a stream has its own lock.
+  pointer work and never across a park or a turn, so the work that takes long
+  (the Agentica code of the turns, strings, numbers, JSON, lists and maps) runs
+  in parallel. It is held across the libuv calls that a locked path makes inline
+  at N = 1 (a job start, a close); with the services of 3c those become
+  requests to the I/O thread, and the lock is not held while the scheduler
+  waits for one. It is cheap to split later, when a measurement shows the
+  contention: 3c measures it (the benchmarks `prints`, `ping-pong` and `files`
+  with the locks on) before the split is chosen. The pieces:
+  - What takes the lock is marked per builtin: `agc_builtin.shared` (a flag in
+    each row of the builtin tables, so a new row must say `true` or `false`).
+    `call_builtin` (`vm/interp.c`) takes `rt->sync` around a row marked shared;
+    the rows of the pure libraries (strings, numbers, lists, maps, JSON,
+    `Path`) are not marked. A builtin that touches the task tree, a channel,
+    the logger table, a handle's FIFO or stdin is marked, and so is every
+    `IO` row that reads stdin. The same interpreter takes the lock around the
+    steps of a stepper, and `resume` (`vm/task.c`) around the halves of a job
+    whose kind says `locked` (`agc_io_kind.locked`); the ending of a task takes
+    it in `agc_task_end_turn` and `agc_task_next`. The output builtins are not
+    marked: a stream has its own lock, taken inside `vm/output.c`.
   - The lock nests. A scheduler counts its depth (`vm->sync_depth`) and takes
     and drops the mutex at the outer level, so a cancel that wakes a task that
     ends a `Task.map` item does not lock itself. `agc_sync_reset` drops it after
     an `agc_fail` jumped out of a locked builtin (`run_turn`, `agc_vm_run`).
   - Each stream has a lock (the base's, when two streams share one buffer). A
     print takes it for the copy into the ring or the join of the FIFO, and drops
-    it before it returns, parks or fails. The lock order is `rt->sync`, then a
-    stream's lock, then the run queue's. No lock is held across a park.
+    it before it returns, parks or fails (`agc_sync_reset` also drops the stream
+    lock a failure left). The lock order is `rt->sync`, then a stream's lock,
+    then the I/O inbox's and the run queue's. No lock is held across a park.
   - Both are solo until `agc_share`, which runs before a second thread exists:
     `rt->shared` is false, `agc_sync_take` tests that one flag and nothing is
     locked. Only the C tests and `AGENTICA_VM_TEST_SHARED=1` call `agc_share`
-    today. That switch is test-only: it runs the whole suite on one scheduler
-    with every lock on, so the lock placement meets the same programs as N = 1.
+    today. That switch is test-only: it runs a program on one scheduler with
+    every lock on. `make test-shared` (a step of CI) runs the binary test
+    modules that way, and in that mode the lock placement is checked, not
+    only exercised: `agc_lock_drop` aborts when the caller is not the owner,
+    `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of
+    the shared lists (`finish_task`, `agc_task_wake_all`, `agc_task_cancel`,
+    the end of a cancelled task, the hand-on of a handle, the stdin waiters, a
+    channel leave) runs without the lock, and `agc_task_next` fails when a turn
+    ended with the lock held. `tests/test_vm_shared.py` holds the programs for
+    the paths the other modules do not reach.
     Not yet under the lock: the profiling counters, the timers and the I/O
     thread's side of the handles; the later PRs of the plan cover those.
 - **The order of PR 3 of issue #345.** 3a (the blocking pop, the cancel by
