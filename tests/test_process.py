@@ -110,11 +110,15 @@ def test_a_bare_command_is_searched_in_path(tmp_path):
 
 
 def test_a_bare_command_is_not_looked_for_in_the_working_directory_or_an_empty_path_entry(tmp_path):
-    # A runnable `tool` (a copy of node, which needs nothing beside it) is in the working directory of the run.
-    node = tool("node")
+    # A runnable `tool` is in the working directory of the run: a shell script, or on Windows a copy of node.exe, which
+    # needs nothing beside it (a Homebrew node needs its libnode, so it is not copied elsewhere).
     here = tmp_path / "here"
     here.mkdir()
-    shutil.copy(node, here / ("tool.exe" if os.name == "nt" else "tool"))
+    if os.name == "nt":
+        shutil.copy(tool("node"), here / "tool.exe")
+    else:
+        (here / "tool").write_text("#!/bin/sh\necho 7\n")
+        (here / "tool").chmod(0o755)
     text = ('def main() -> Void\n  started = Process.spawn("tool", ["-e", "console.log(7)"], 5000)\n'
             '  puts(started.ok?)\n  if started.ok?\n    puts(Result.unwrap!(Process.read_line(started.unwrap!, 5000)))\n'
             '  end\nend\n\n')
