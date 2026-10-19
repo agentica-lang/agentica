@@ -45,18 +45,25 @@ binary otherwise
   reads the arguments, usage errors included)
   - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the
     temporary directory (`TMPDIR` if it is a folder, else `/var/tmp`,
-    `/usr/tmp`, `/tmp`; on Windows `TMPDIR`, `TMP`, `TEMP`; the hex is 16 bytes
-    of `/dev/urandom`, or on Windows 12 of `Random.int` and the process id; 16
-    tries),
-    refuses (not on Windows) a `TMPDIR` without the sticky bit that others can
-    write to, or that its group can write to unless it has the user's uid and
-    gid and no setgid bit (the user-private-group case), locks the dir's `lock` file exclusively for
-    the whole run, then renames the dir to `agentica-bdd-<other hex>` with
-    `Path.rename`, which never replaces, so the sweep never sees an unlocked
-    new dir; then it removes the dirs of the same user whose `lock` it can take,
-    left by a killed driver (links and dirs without `lock` are left alone);
-    an `agentica-bdd-new-<hex>` with a free `lock` goes too, once its mtime
-    is over an hour old (a live run is in that state only for a moment)
+    `/usr/tmp`, `/tmp`; the hex is 16 bytes of `/dev/urandom`; 16 tries),
+    refuses a `TMPDIR` without the sticky bit that others can write to, or
+    that its group can write to unless it has the user's uid and gid and no
+    setgid bit (the user-private-group case), locks the dir's `lock` file
+    exclusively for the whole run (`flock`), then renames the dir to
+    `agentica-bdd-<other hex>` with `Path.rename`, which never replaces, so the
+    sweep never sees an unlocked new dir; then it removes the dirs of the same
+    user whose `lock` it can take, left by a killed driver (links and dirs
+    without `lock` are left alone); an `agentica-bdd-new-<hex>` with a free
+    `lock` goes too, once its mtime is over an hour old (a live run is in that
+    state only for a moment)
+  - on Windows the same file differs in these points: the folder is the first
+    of `TMPDIR`, `TMP`, `TEMP` that is a folder; the hex is 12 bytes of
+    `Random.int` and the process id; the dir has its final name at once (a
+    folder with an open file cannot be renamed, so there is no `-new-` name and
+    no rename); the lock is `LockFileEx`; there is no sticky-bit check (it
+    assumes a temporary folder that only the user can modify); the sweep takes a
+    dir only when it is a minute old, and closes the lock before removing it
+    (a folder with an open file cannot be removed)
   - it writes the `std/` sources into `std/` of the run dir, compiles the
     step program and discovers the feature files (`bdd_discover.agc`;
     `bdd_compile.agc` is the Agentica pipeline from a file to the bytes, or the

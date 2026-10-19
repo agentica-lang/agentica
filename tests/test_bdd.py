@@ -8,10 +8,12 @@ as the binary it starts again (front_end_command; the cases that need a shell sc
 tests/test_bdd_posix.py).
 """
 import ast
+import contextlib
 import json
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -354,3 +356,35 @@ def test_the_temporary_directory_is_tmpdir_when_it_is_a_folder_else_a_system_one
         result = bdd.agentica_test("--json", scratch / "empty", env={"TMPDIR": given}, cwd=scratch)
         assert (result.code, json.loads(result.stdout)["files"][0]["error"]["code"]) == (1, "CHECK-BDD-EMPTY"), str(given)
     assert sorted(os.listdir(scratch)) == ["empty", "file"]
+
+
+@contextlib.contextmanager
+def held_lock(path):
+    """The file at `path` with an exclusive lock that this process holds while the block runs."""
+    with open(path, "r+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
+def test_a_run_removes_the_folder_of_an_ended_run_and_leaves_the_folder_of_a_live_one(bdd):
+    """The sweep of the run directories in the private TMPDIR of the case: a folder with a free `lock` goes (it is old,
+    which Windows asks for), a folder whose `lock` another process holds stays."""
+    scratch = bdd.make_suite({"c_test.agc": ADDS_TEST}, "agentica-bdd-sweep-")
+    temporary = scratch / "tmp"
+    temporary.mkdir()
+    ended, live = temporary / "agentica-bdd-0123456789abcdef", temporary / "agentica-bdd-fedcba9876543210"
+    for folder in (ended, live):
+        folder.mkdir()
+        (folder / "lock").write_text("x")
+        old = time.time() - 3600
+        os.utime(folder, (old, old))
+    with held_lock(live / "lock"):
+        status, report = bdd.json_test(scratch / "c_test.agc", env={"TMPDIR": temporary})
+    assert (status, report["passed"]) == (0, 1)
+    assert sorted(os.listdir(temporary)) == [live.name]
+

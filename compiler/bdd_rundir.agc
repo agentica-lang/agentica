@@ -16,13 +16,21 @@
 ##
 ## Windows cannot rename a folder that holds a file somebody has open, so there the run makes the final name in step 1
 ## and has no step 3. A sweep that meets that folder between the creation of `lock` and the lock itself takes the
-## lock first and the run fails to lock (`claim` is an error then); the gap is two calls long.
+## lock first and the run fails to lock (`claim` is an error then); the gap is two calls long. For the same reason the
+## sweep leaves a final name alone until it is a minute old on Windows (WINDOWS_MIN_AGE_SECONDS), so a run that is
+## still starting is not taken by a run that overlaps it.
+##
+## Windows has no sticky bit, so nothing there tells a shared temporary folder from a private one. The protection of
+## the run folder assumes a temporary folder that only the user can modify, as the default per-user one is: another
+## user with the right to delete entries of the parent (FILE_DELETE_CHILD) could replace the run folder before `lock`
+## pins it.
 
 import {IO_TIMEOUT} from "bdd_files"
 
 # How many names a run tries before it gives up: a name can be taken, and a hostile user could take names on purpose.
 ATTEMPTS = 16
 STALE_NEW_SECONDS = 3600
+WINDOWS_MIN_AGE_SECONDS = 60
 DIGITS = "0123456789abcdef"
 
 ## A claimed run directory: its final path, and the open lock file. The lock is released when the handle is closed.
@@ -84,7 +92,9 @@ end
 
 ## Removes the run directories of runs that have ended: the folders named `agentica-bdd-HEX` in `temporary`, and the
 ## old ones named `agentica-bdd-new-HEX`, made by the user of `own` (a folder of another user is never touched), that
-## have a `lock` file nobody holds. `own` is not removed. A folder that cannot be inspected or removed stays.
+## have a `lock` file nobody holds. `own` is not removed. A folder that cannot be inspected or removed stays. On
+## Windows the user id is 0 for every folder, so it does not tell the users apart: the folder of another user stays
+## because its owner-only access list makes the inspection of `lock` fail.
 export def sweep(temporary: String, own: Run) -> Void
   owner = File.lstat(own.path, IO_TIMEOUT)
   names = Dir.list(temporary, IO_TIMEOUT)
@@ -101,6 +111,9 @@ export def sweep(temporary: String, own: Run) -> Void
     age = -1
     if hex_name?(name, "agentica-bdd-") and path != own.path
       age = 0
+      if windows?()
+        age = WINDOWS_MIN_AGE_SECONDS
+      end
     elsif hex_name?(name, "agentica-bdd-new-")
       age = STALE_NEW_SECONDS
     end
@@ -195,12 +208,13 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
   if shared
     return error("the temporary directory #{temporary} is shared and not sticky; set TMPDIR to a private folder")
   end
+  if windows?()
+    lock = try take_lock(current)
+    return ok(Run(path: current, lock: lock))
+  end
   name = try random_hex()
   final = try Path.join([temporary, "agentica-bdd-#{name}"])
   lock = try take_lock(current)
-  if windows?()
-    return ok(Run(path: current, lock: lock))
-  end
   renamed = Path.rename(current, final, IO_TIMEOUT)
   if !renamed.ok?
     File.close(lock, IO_TIMEOUT)
@@ -224,8 +238,9 @@ end
 # A temporary directory where other users can write and delete our entries is not safe for a run that trusts its
 # files: it is the case when others can write (mode o+w) or the group can write (g+w) and the directory is not ours
 # alone in user and group without the setgid bit, and the sticky bit (which stops others from deleting our entries) is
-# not set. `own` is a folder we just made, so it tells our user and group. Windows has no such mode bits, and the
-# folder we made there is only for its owner (an access list of the owner alone), so nothing is shared.
+# not set. `own` is a folder we just made, so it tells our user and group. Windows has no such mode bits, so the check
+# cannot run there; the run folder is only for its owner, but it relies on a temporary folder that only the user can
+# modify (see the header).
 def shared_and_not_sticky?(temporary: String, own: String) -> Result[Bool]
   if windows?()
     return ok(false)
@@ -258,8 +273,9 @@ def hex_name?(name: String, prefix: String) -> Bool
 end
 
 # The lock of a folder that may belong to a run that ended: ok(handle) when the folder is a real folder (not a link) of
-# `owner` with a real `lock` file whose lock this call took, and not changed in the last `age` seconds. The handle
-# keeps the folder from being claimed by another sweep until it is closed. A lock held by a live run is an error.
+# `owner` (on Windows every folder has the user id 0; another user's folder fails at `lock`, see `sweep`) with a real
+# `lock` file whose lock this call took, and not changed in the last `age` seconds. The handle keeps the folder from
+# being claimed by another sweep until it is closed. A lock held by a live run is an error.
 def abandoned(path: String, owner: Int, age: Int) -> Result[FileHandle]
   folder = try File.lstat(path, IO_TIMEOUT)
   lock_path = try Path.join([path, "lock"])
