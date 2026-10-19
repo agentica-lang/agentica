@@ -230,11 +230,16 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   programs.
 - A command without `/` is looked up in each `PATH` entry, in order. An empty
   entry is skipped, so `./name` runs a program in the working directory; a
-  relative entry such as `.` resolves against it. A command with `/` is a path,
-  relative to the working directory unless absolute. A name that is not found,
-  or names a directory, is `executable is unavailable`. Arguments go straight to
-  the program, with no shell. On Windows only `.exe` and `.com` run. A file that
-  is found but cannot run is an error Result from `spawn`.
+  relative entry such as `.` resolves against it. A command with `/` is a path
+  (on Windows `\` and a drive such as `C:` also make a path), relative to the
+  working directory unless absolute. A name that is not found, or names a
+  directory, is `executable is unavailable`. Arguments go straight to the
+  program, with no shell. On Windows only `.exe` and `.com` run (no `PATHEXT`,
+  no `.bat` or `.cmd`: that needs `cmd.exe`), and a name with a trailing dot or
+  space, a `:` outside a drive, a `\\?\` or `\\.\` prefix, or ending in `.bat`
+  or `.cmd`, is refused. The `.exe` suffix is tried before `.com` on purpose: a
+  plain `tool` finds `tool.exe` first. A file that is found but cannot run is an
+  error Result from `spawn`.
 - Timeouts are positive milliseconds and include the lock wait. A timeout during
   stream I/O kills and closes the child; a timeout while waiting for the lock
   keeps it; a timed-out wait for exit does not terminate it.
@@ -252,7 +257,11 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   diagnostic, a task failure, step exhaustion and an external interruption clean
   up the children started directly; their descendants are not covered.
   Operational failures are String error Results. A failed explicit cleanup is
-  `RUNTIME-PROCESS-CLOSE` at the call.
+  `RUNTIME-PROCESS-CLOSE` at the call. On Windows a stop is always immediate (no
+  `SIGTERM` grace). Where libuv can assign its job object, the direct children
+  of the VM die when the VM ends, and a child that is itself an Agentica
+  program stops its own children the same way. Other descendants are not
+  covered.
 - `spawn_captured` works like `spawn`, with the same lookup, permission and
   cleanup, except that the child starts in `dir` (`"."` keeps the working
   directory; an empty, NUL or non-directory `dir` is an error) and its streams

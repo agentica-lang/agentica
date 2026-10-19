@@ -198,11 +198,13 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - --allow-run defaults off and reaches the VM. `agentica test --allow-run`
   passes it to step handlers and programs under test. The end of a run kills and
   reaps directly spawned children. Expected operations return Results.
-- tests/test_process.py uses independent Node standard-library children, CLI
-  capability checks, binary/full-duplex streams, nonzero exits, deadline
-  policies and PID cleanup. Node is required in CI; local absence visibly skips.
-  CI also exercises the compiled executable and examples/process-tool.agc with
-  --allow-run.
+- tests/test_process.py uses independent Node standard-library children and a
+  Python one (`tests/fixtures/process-peer.py`: argv, environment, working
+  directory, a child that holds), CLI capability checks, binary/full-duplex
+  streams, nonzero exits, deadline policies and PID cleanup. Node is required in CI; local absence visibly skips.
+  It runs on Linux, macOS and Windows (not in `WINDOWS_TEST_MODULES`: Wine
+  cannot start host peers). CI also exercises the compiled executable and
+  examples/process-tool.agc with --allow-run.
 
 ## Int and Float bits, std/binary (phases 13a, 13b)
 

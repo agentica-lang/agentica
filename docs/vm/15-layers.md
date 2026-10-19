@@ -54,7 +54,8 @@ before it moved; the header split moved no line of a `.c` file except the
 
 - **Layer:** **Adapters**
   - **Files:** `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c`
-    (`http_parse.h`), `file_io.c` and `file_windows.c` (`file_io.h`)
+    (`http_parse.h`), `file_io.c` and `file_windows.c` (`file_io.h`),
+    `process_posix.c` and `process_windows.c` (`process_os.h`: command search)
   - **May use:** their own header, their library, and from `value.h` only the
     memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`,
     `agc_size_mul`, `agc_out_of_memory`)
@@ -254,7 +255,8 @@ is no such place, so the plan adds none:
 - **Platforms** are chosen at compile time, not through a table. The shared
   logic is written once; an operating system difference that libuv does not
   hide is a function of a platform adapter: a plain header plus one file per
-  system family, each guarded whole (`file_io.h` and `file_windows.c`).
+  system family, each guarded whole (`file_io.h` and `file_windows.c`;
+  `process_os.h` with `process_posix.c` and `process_windows.c`).
   Shared functions do not branch on `#ifdef`; older code that still does
   (`file_io.c`, and blocks in `files.c`, `loop.c`, `launch.c`, `process.c`,
   `input.c` and `output.c`) moves behind an adapter when a change adds a

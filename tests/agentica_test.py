@@ -539,18 +539,64 @@ def check_lines(text, expected, message):
             assert line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1])
 
 
+def _windows_process_alive(number):
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION. A process that ended but whose handle someone still holds can be
+    # opened, so the wait on its handle (signaled at the end), not the open, tells whether it is alive.
+    handle = kernel32.OpenProcess(0x00100000 | 0x1000, False, number)
+    if not handle:
+        # ERROR_ACCESS_DENIED (5): it exists and belongs to someone else, like the POSIX PermissionError branch.
+        return ctypes.get_last_error() == 5
+    try:
+        return kernel32.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _zombie(number):
+    """True for a process that ended but is not reaped yet. Linux reads /proc; other systems ask ps."""
+    try:
+        with open("/proc/%d/stat" % number) as stat:
+            return stat.read().rsplit(") ", 1)[-1][:1] == "Z"
+    except OSError:
+        pass
+    if os.path.isdir("/proc/self"):
+        return False  # /proc exists and has no entry: the process is gone
+    shown = subprocess.run(["ps", "-o", "stat=", "-p", str(number)], capture_output=True, text=True, check=False)
+    return shown.stdout.strip()[:1] == "Z"
+
+
 def process_alive(pid):
-    """True while the process exists and is not a zombie (Linux /proc)."""
+    """True while the process exists and is not a zombie (Windows: until it ends)."""
     try:
         number = int(pid)
     except ValueError:
         raise AssertionError("not a process id: %r" % (pid,)) from None
+    if os.name == "nt":
+        return _windows_process_alive(number)
     try:
-        with open("/proc/%d/stat" % number) as stat:
-            text = stat.read()
-    except OSError:
+        os.kill(number, 0)
+    except ProcessLookupError:
         return False
-    return text.rsplit(") ", 1)[-1][:1] != "Z"
+    except PermissionError:
+        pass  # it exists and belongs to someone else
+    return not _zombie(number)
+
+
+def agc_literal(text):
+    """`text` as an Agentica string literal: backslash, quote and `#` (which would start an interpolation) escaped.
+
+    Only the lexer's escape set is handled (those three, newline, CR and tab): use it for paths and printable
+    arguments, not for arbitrary bytes or other control characters.
+    """
+    escapes = {"\\": "\\\\", '"': '\\"', "#": "\\#", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    return '"' + "".join(escapes.get(c, c) for c in str(text)) + '"'
 
 
 def wait_until(predicate, timeout=WAIT_SECONDS, interval=0.05):
