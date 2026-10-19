@@ -173,6 +173,10 @@ def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State
     Ast.Optional.Present(annotation) -> declared = try Types.resolve_type(cx, st, annotation, false)
     Ast.Optional.Absent -> declared = declared
   end
+  if node.name == "_"
+    out = try State.expr(cx, st, node.value, declared)
+    return ok(out.st)
+  end
   existing = State.lookup(st, node.name)
   if existing.ok?
     return check_assignment(cx, st, node, existing.unwrap!)

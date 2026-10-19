@@ -113,6 +113,18 @@ end
 # A name in scope. A function name is not a value, and the help of an unknown name is a close name or a name of another
 # language.
 def check_name(cx: State.Cx, st: State.St, node: Ast.NameRef) -> Result[State.Out]
+  if node.name == "_"
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-UNKNOWN-NAME",
+        "\"_\" discards a value and cannot be read",
+        node.span,
+        "give the value a name where it is bound",
+      ),
+    )
+  end
   binding = State.lookup(st, node.name)
   if binding.ok?
     return ok(State.Out(st: st, type: binding.unwrap!.type))
