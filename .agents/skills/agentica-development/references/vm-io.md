@@ -65,6 +65,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     - `agc_register`/`agc_unregister` (
       - GC `agc_resource` objects owning `malloc` memory
       - a job keeps its registry slot index, fixed when an entry moves)
+    - job outcome and count (`core.h`)
+      - `agc_job_settle` sets the outcome once by CAS from PENDING (DONE,
+        EXPIRED or CANCELLED), the first writer wins; the count has the owner,
+        the wait piece, the ready list and each request in flight as holders;
+        `sweep` frees at zero and after the timer closed
+      - the libuv steps are requests (START, EXTEND, CLOSE_TIMER, RELEASE):
+        inline on the loop's thread, queued in the inbox from any other
     - `agc_io_start` (
       - one `uv_queue_work` job plus an optional timer per blocking call
       - a kind without `work` is a timer only

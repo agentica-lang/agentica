@@ -939,6 +939,12 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
     AGC_TRACE(tr, AGC_TRACE_IO, "start job=%" PRIu64 " kind=%s task=%" PRIu64 " timeout_ms=%" PRId64, r->id,
               kind->name, task ? task->id : 0, timeout_ms);
   }
+  /* The task is recorded before the start request is posted: once the I/O thread has the request, the job may finish
+     at any moment, and its completion wakes the task that r->task names (§16.11). */
+  if (task) {
+    r->task = vm->task;
+    vm->task->parked = r;
+  }
   post(j, REQ_START, timeout_ms);
   if (agc_is(context, AGC_T_HANDLE)) agc_as_handle(vm, context)->holder = r;
   return r;
@@ -950,8 +956,6 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
 static agc_io_job *start_parked(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
                                 int64_t timeout_ms, agc_more_fn more) {
   agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, false);
-  r->task = vm->task;
-  vm->task->parked = r;
   agc_task_park(vm, false);
   return r->native;
 }

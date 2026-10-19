@@ -410,37 +410,74 @@ Today there is one scheduler and the loop on the same thread. The model with N =
 detached jobs, the handle lock FIFO, the owners and the one exit path are as in
 §16.1 to §16.6. What differs:
 
-- **One thread plays both roles.** The scheduler calls `uv_run(UV_RUN_NOWAIT)`
-  after each turn and `uv_run(UV_RUN_ONCE)` when the run queue is empty
-  (§10.2.1, §10.2.2). In the model, the I/O thread sits in the loop and the
-  schedulers wait on the condvar.
-- **No inbox.** `agc_io_start` calls libuv directly. libuv callbacks put the
-  job on a ready list, and the scheduler drains it after `uv_run` and queues
-  the tasks. That drain is the push of §16.4. The run queue is the locked queue
-  of §16.3 (`vm/runq.c`, reached by `agc_runtime.runq`, in GC memory), in its
+- **One thread plays both roles, and stays one thread at N = 1.** The
+  scheduler calls `uv_run(UV_RUN_NOWAIT)` after each turn and
+  `uv_run(UV_RUN_ONCE)` when the run queue is empty (§10.2.1, §10.2.2). In the
+  model, the I/O thread sits in the loop and the schedulers wait on the
+  condvar. A real I/O thread beside one scheduler thread at N = 1 was built as
+  a prototype, measured and not taken. A request to another thread costs about
+  18 µs for the round trip (the post, `uv_async_send`, the wake of the loop and
+  the answer), and a call costs nothing. Every park with a deadline (a channel
+  wait, a timed `Task.await`, `Task.sleep`) starts a timer job, so each one
+  would pay it: the task-switch benchmark, which parks on channels with
+  deadlines, ran several times slower in the prototype. The run queue must take
+  its lock (+5% on that benchmark). And the libuv code of the services would
+  run beside the interpreter, which §16.11 leaves open. The code is the same at
+  any N; what differs is where the loop runs. A request posted on the loop's
+  thread runs at once, and one posted from another thread is queued and wakes
+  the loop.
+- **The inbox** (`vm/inbox.c`) is a locked queue of malloc'd entries
+  `{next, kind, subject, arg}`, taken whole by the loop's thread, with the
+  `uv_async_t` that wakes it; the poster sends after it unlocks (§16.3). It
+  does not exist at N = 1: no handle, no descriptor. `agc_io_share` makes it
+  and gives the loop to the calling thread, and only the C tests call it until
+  N > 1, as they do `agc_runq_share`. The run queue is the locked queue of
+  §16.3 (`vm/runq.c`, reached by `agc_runtime.runq`, in GC memory), in its
   solo mode: while one thread uses the queue it takes no lock, and
   `agc_runq_share` turns the lock on for push, pop and remove. It must run
   before a second thread touches the queue (the threaded C tests call it
   first).
-- **Libuv steps run on the scheduler.** The timer close in `agc_io_finish` and
-  `end_detached`; the libuv part of `done`, `expired`, cancel and `drop` (for
-  example `accept_done` in `vm/tcp.c`, `request_expired` in `vm/process.c`, the
-  file `drop` in `vm/files.c`); the poller calls of builtins; the timer and
-  `uv_queue_work` of `start_job`; and `loop_now` and `agc_io_extend`
-  (`vm/loop.c`). In the model they are requests to the I/O thread. The clock
-  is already apart from the loop: `agc_clock_ms` (the monotonic `uv_hrtime`,
-  in milliseconds) is what the scheduler, the channel waits and `Task.map` read
-  for deadlines. It no longer refreshes the loop's cached time, so
-  `agc_io_extend` calls `uv_update_time` itself before it restarts a timer.
-- **Services make their own handles** through `agc_io_uv` (§15.1), for example
-  in `vm/tcp.c`, `vm/process.c` and `vm/http_client.c`. In the model that code
-  is the start step of a request.
-- **Flags, not an outcome and a count.** `agc_io_finish` picks `done` or
-  `expired` from `work_done` when the task resumes, sets `consumed` first and
-  still reads the job; `sweep` frees by flags. In the model: the outcome CAS and
-  the reference count (§16.5).
-- **The task is recorded after the job starts.** `agc_io_start_then` sets
-  `r->task` and `t->parked` after `start_job` (§16.11).
+- **The libuv steps of a job are requests** (`vm/loop.c`): START (the timer and
+  the pool work of `start_job`), EXTEND (`agc_io_extend`, which calls
+  `uv_update_time` itself because the clock of the schedulers does not refresh
+  the loop's cached time), CLOSE_TIMER (in `agc_io_finish`, `end_detached`) and
+  RELEASE (a reference given back from another thread, the last one freed on
+  the loop's thread). `post` runs one at once on the loop's thread, with no
+  entry. libuv callbacks put the job on a ready list, and the scheduler drains
+  it after `uv_run` and queues the tasks: that drain is the push of §16.4, and
+  it keeps a woken task behind the one whose turn just ended.
+- **Services make their own libuv calls**, on the loop's thread. They make
+  handles through `agc_io_uv` (§15.1), for example in `vm/tcp.c`,
+  `vm/process.c` and `vm/http_client.c`; the libuv part of their `done`,
+  `expired`, cancel and `drop` halves (for example `accept_done` in
+  `vm/tcp.c`, `request_expired` in `vm/process.c`, the file `drop` in
+  `vm/files.c`) and the poller calls of builtins run where the half runs. In
+  the model that code is the start step of a request, and the N > 1 PR moves
+  it.
+- **An outcome and a count, not flags.** A job has an atomic outcome (PENDING,
+  DONE, EXPIRED or CANCELLED) that the first writer sets by CAS
+  (`agc_job_settle`, release; `agc_io_finish` reads it with acquire), and an
+  atomic reference count. The holders are the owner (the task until
+  `agc_io_finish`, or the detached ending), the wait piece (while the pool work
+  or the wait on the loop runs, the atomic `busy`), the ready list and each
+  request in flight. The timer is no holder: it never touches `data`, and
+  `sweep` waits for its close. A pool or loop completion sets DONE, the timer
+  sets EXPIRED (DONE for a job that is only a timer), a detach sets CANCELLED,
+  and a task that resumes with the outcome still PENDING (a lock hand-on or an
+  awaited task woke it) sets EXPIRED itself. So the first outcome stands: when a
+  timeout and a completion fall in the same pass of the loop, the task sees the
+  one that came first, where it used to see the completion if it had arrived by
+  the time the task ran. `sweep` frees by count: `drop` takes `data` when the
+  count is zero, and the job is freed once the timer has closed. `consumed` and
+  `work_done` are gone.
+- **TSan covers the shared code.** `make vm-tsan` builds the VM without libgc
+  (`TSAN=1`, `AGC_NO_GC`; TSan and Boehm's stop-the-world do not mix) and runs
+  the C tests that use more than one thread: the inbox, the set-once outcome
+  and the count, the run queue, the wake against the park, and a job on the
+  loop with a request from another thread.
+- **The task is recorded before the job starts.** `start_job` sets `r->task` and
+  `t->parked` before it posts START, so a completion that follows at once
+  finds the task.
 - **TLS and HTTP steps run in libuv callbacks.** For example `advance` and
   `flush` in `vm/tcp.c` and `head_step` in `vm/http_server.c`. The model moves
   them into the turn of the resumed task.
@@ -471,7 +508,9 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   `agc_gc_allow_threads`, `agc_gc_thread_enter` and `agc_gc_thread_leave`
   (`vm/value.c`) are the helpers, and only the C tests call them. N = 1 starts
   no marker thread.
-- **`end_run` runs on the scheduler's thread**, which is the main thread.
+- **`end_run` runs on the loop's thread**, which is the main thread. It is
+  `agc_launch_settle` and `agc_io_close`, called by the driver; the main thread
+  is the I/O thread once N > 1 as well (§16.2).
 
 ### 16.10 Later iterations
 
@@ -555,9 +594,10 @@ Only if measurements ask for them. Neither is planned.
   `uv_accept` (`vm/tcp.c`). The step runs on the I/O thread, so the half gets
   the result another way: a second request and park, or the step done earlier on
   the I/O thread.
-- **Which port function posts each request** (§15.2).
-- **The order of `r->task` and `t->parked` in the PARKING window.** Both must be
-  written before the start request is posted; the inbox lock publishes them.
+- **Which port function posts each service request** (§15.2). The job
+  requests are posted by `agc_io_start`, `agc_io_extend` and the finish and
+  detach paths of `vm/loop.c`; the libuv steps of the services have no request
+  yet (§16.9).
 - **stdout and stderr once they park** (row 7.2.1f, decided; built for N = 1).
   The per-stream lock of §10.2.3 cannot be held across a park, so the second
   option is taken: a short lock around each stream's buffer and FIFO, never held
@@ -577,6 +617,3 @@ Only if measurements ask for them. Neither is planned.
   limit is open. For streams on the loop this worry goes away: no scheduler
   blocks in a stdout write, so no stream lock is held across one (§10.2.2); it
   stays for the blocking fallback.
-- **The form of N = 1 once N > 1 exists.** Keep the single-thread shortcut of
-  §16.9 (a second code path), or use the same threads with N = 1 (two threads,
-  one code path).

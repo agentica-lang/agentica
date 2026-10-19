@@ -119,6 +119,24 @@ Read first: `references/vm.md`.
     the middle on the solo queue, then three pushers against three poppers on
     libuv threads after `agc_runq_share` (every task comes out exactly once).
 
+- **Path:** `vm/tests/inbox_test.c`
+  - **Owns:** The inbox (`vm/inbox.c`): six producers post 20000 requests each
+    and the one consumer sees every request once, in each producer's order; a
+    ping that waits for its answer (a lost wake hangs until the deadline); a
+    post while the handler runs; an inbox that is not kept does not hold the
+    loop. The inbox is closed only after the producers are joined.
+
+- **Path:** `vm/tests/outcome_test.c`
+  - **Owns:** The job outcome and count of `core.h`: three threads race to
+    settle one outcome (the first wins, every thread and an observer see that
+    one), and the last `agc_job_unref` is the only one that sees zero.
+
+- **Path:** `vm/tests/job_test.c`
+  - **Owns:** A job on the loop, with a pool work held by a semaphore so the
+    test, not the clock, orders the events: the timer before the completion,
+    the completion before the timer, a cancel before the completion, and a
+    request from another thread through the inbox (`agc_io_share`).
+
 - **Path:** `vm/tests/task_wake_test.c`
   - **Owns:** The wake against the park path: the task marks itself PARKING and
     two waker threads call `agc_task_wake` twice each while the scheduler thread

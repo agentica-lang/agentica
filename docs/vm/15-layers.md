@@ -40,7 +40,8 @@ before it moved; the header split moved no line of a `.c` file except the
 - **Layer:** **Core**
   - **Files:** `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`,
     `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`,
-    `runq.c`, `task_map.c`, `channel.c`, `loop.c`, `input.c`, `output.c`,
+    `runq.c`, `inbox.c`, `task_map.c`, `channel.c`, `loop.c`, `input.c`,
+    `output.c`,
     `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c`
   - **May use:** `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv
 
@@ -404,7 +405,8 @@ if not. The script fails when:
 5. a third-party header is included outside its place: `<gc.h>` only in
    `value.c`; `<openssl/...>` only in `tls_openssl.c`; `<picohttpparser.h>` only
    in `http_pico.c`; `"yyjson.h"` only in `json.c`; `<uv.h>` only in `loop.c`,
-   `runq.c` (for `uv_mutex_t`, the one mutex type that also builds on Windows)
+   `runq.c` and `inbox.c` (for `uv_mutex_t`, the one mutex type that also builds
+   on Windows, and `uv_async_t`, which wakes the loop)
    and the stream services (`stream.c`, `duplex.c`, `process.c`, `system.c`,
    `tcp.c`, `http_client.c`). `input.c` and `files.c` put stdin, FIFOs and
    character devices on loop handles through `agc_poller_*` (§15.2) and include
