@@ -346,6 +346,10 @@ def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
             os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
+    except PermissionError:
+        # macOS answers EPERM, not ESRCH, for a group whose only process exited a moment ago and is not reaped yet.
+        if process.poll() is None:
+            raise
 
 
 def _kill_and_collect(process):

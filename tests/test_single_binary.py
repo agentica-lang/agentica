@@ -424,16 +424,20 @@ def test_the_scheduler_variable_is_checked_for_every_command(value, flag, code):
             assert (got.stdout, "AGENTICA_SCHEDULERS " + SCHEDULERS_RANGE in got.stderr) == ("", True)
 
 
-def test_the_test_command_refuses_more_than_one_scheduler_like_a_program(tmp_path):
-    """The test files run in VMs that the driver starts, so a flag above 1 is refused up front instead of dropped
-    (the variable reaches those VMs and stops them)."""
+def test_the_test_command_refuses_a_flag_above_one_like_a_program(tmp_path):
+    """The test files run in VMs that the driver starts, so a flag above 1 is refused up front instead of dropped."""
     refused = agentica("--schedulers", "4", "test", cwd=tmp_path, timeout=scaled(10))
     assert (refused.code, refused.stdout) == (2, "") and "4 " + MORE_THAN_ONE in refused.stderr
     allowed = agentica("--schedulers", "1", "test", cwd=tmp_path, timeout=scaled(10))
     assert MORE_THAN_ONE not in allowed.stdout + allowed.stderr
-    env = vm_environment({"AGENTICA_SCHEDULERS": "4"})
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the test driver needs TMPDIR or a POSIX temporary folder")
+def test_the_scheduler_variable_reaches_the_vms_that_the_test_driver_starts(tmp_path):
+    """The driver cannot see the variable in a flag, so the VM it starts stops with the same message."""
     (tmp_path / "test").mkdir()
     (tmp_path / "test" / "x_test.agc").write_text('def main() -> Void\n  Test.run([])\nend\n')
+    env = vm_environment({"AGENTICA_SCHEDULERS": "4", "TMPDIR": tmp_path})
     stopped = agentica("test", cwd=tmp_path, env=env, timeout=scaled(30))
     assert stopped.code == 2 and MORE_THAN_ONE in stopped.stdout + stopped.stderr
 
