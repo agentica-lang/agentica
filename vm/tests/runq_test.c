@@ -107,7 +107,7 @@ static void test_shared_removal(void) {
   assert(agc_runq_pop(q) == a && agc_runq_pop(q) == c && agc_runq_pop(q) == NULL);
 }
 
-static _Atomic(agc_task *) waited;
+static agc_task *_Atomic waited;
 
 static void wait_one(void *arg) {
   (void)arg;

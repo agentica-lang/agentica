@@ -1,11 +1,7 @@
 /*
- * The wake against the park path (docs/vm/10-io-multicore.md §10.2.3): a task marks PARKING and two wakers race the
- * scheduler's agc_task_commit_park. Per round the task is queued exactly once, by the waker that found it PARKED or
- * by the commit that lost to a waker that found PARKING. A dropped wake or a double queue fails the round.
- *
- * Then the cancel against the park (docs/vm/16-architecture.md §16.11): a canceller on another thread races the end
- * of the turn (agc_task_end_turn). Per round the task is ended exactly once, whichever side sees the flag, and is
- * never left PARKED. A task that a cancel could not take out of the queue is ended by agc_task_next.
+ * The wake and the cancel against the park (docs/vm/10-io-multicore.md §10.2.3, docs/vm/16-architecture.md §16.11):
+ * threads race the scheduler's agc_task_commit_park and agc_task_end_turn. Per round the task is queued, or ended,
+ * exactly once, whichever side sees the flag, and is never left PARKED. A dropped wake or a double queue fails.
  */
 #include "../core.h"
 #include "test_support.h"
