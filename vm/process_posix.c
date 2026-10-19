@@ -1,6 +1,7 @@
 /*
  * Command search rules for POSIX systems. Platform adapter (process_os.h);
- * no VM state or scheduling.
+ * no VM state or scheduling. Every file may run, a name is only a name,
+ * and PATH splits at ':'.
  */
 #include "process_os.h"
 
