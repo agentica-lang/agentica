@@ -151,9 +151,9 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   }
   atomic_init(&rt->next_task_id, 1);
   rt->runq = agc_runq_new();
-  rt->sync = agc_lock_new();
-  rt->out.lock = agc_lock_new();
-  rt->err.lock = agc_lock_new();
+  rt->sync = agc_lock_new("sync");
+  rt->out.lock = agc_lock_new("stdout");
+  rt->err.lock = agc_lock_new("stderr");
   rt->log.level = -1;
   rt->log.lowest = AGC_LOG_NO_HANDLER;
   agc_trace_parse(&rt->trace, NULL, 2);

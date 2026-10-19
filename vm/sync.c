@@ -10,12 +10,15 @@
 
 #include <uv.h>
 
+#include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-agc_lock *agc_lock_new(void) {
+agc_lock *agc_lock_new(const char *name) {
   agc_lock *l = agc_alloc(sizeof *l);
+  l->name = name;
   uv_mutex_t *mutex = agc_alloc(sizeof *mutex);
   if (uv_mutex_init(mutex) != 0) agc_out_of_memory();
   l->mutex = mutex;
@@ -33,8 +36,15 @@ static uintptr_t self(void) {
   return (uintptr_t)&token;
 }
 
-static _Noreturn void misuse(const char *message) {
-  (void)!write(2, message, strlen(message));
+/* Names the lock, the owner it records and the calling thread's token, so that a failure seen once in CI says which
+   lock and whether the owner was this thread. */
+static _Noreturn void misuse(const agc_lock *l, const char *what) {
+  char message[256];
+  int n = snprintf(message, sizeof message,
+                   "agentica: internal error: a thread %s (lock=%s owner=%#" PRIxPTR " self=%#" PRIxPTR " pid=%ld)\n",
+                   what, l->name ? l->name : "?", atomic_load_explicit(&l->owner, memory_order_relaxed), self(),
+                   (long)getpid());
+  if (n > 0) (void)!write(2, message, (size_t)n < sizeof message ? (size_t)n : sizeof message - 1);
   abort();
 }
 
@@ -43,13 +53,13 @@ bool agc_lock_held(const agc_lock *l) {
 }
 
 void agc_lock_take_shared(agc_lock *l) {
-  if (agc_lock_held(l)) misuse("agentica: internal error: a thread took a lock it already holds\n");
+  if (agc_lock_held(l)) misuse(l, "took a lock it already holds");
   uv_mutex_lock(l->mutex);
   atomic_store_explicit(&l->owner, self(), memory_order_relaxed);
 }
 
 void agc_lock_drop_shared(agc_lock *l) {
-  if (!agc_lock_held(l)) misuse("agentica: internal error: a thread dropped a lock it does not hold\n");
+  if (!agc_lock_held(l)) misuse(l, "dropped a lock it does not hold");
   atomic_store_explicit(&l->owner, 0, memory_order_relaxed);
   uv_mutex_unlock(l->mutex);
 }

@@ -708,7 +708,7 @@ $(VM_BUILD)/windows_remove-test$(EXE): $(OSSL_DEP) $(GC_DEP) $(filter-out $(VM_O
 VM_TESTS_NORMAL := $(filter-out $(VM_BUILD)/tree-test$(EXE) $(VM_BUILD)/files_private-test$(EXE) $(VM_BUILD)/windows_remove-test$(EXE),$(VM_TESTS))
 
 vm-test: $(VM_TESTS)
-	printf '%s\n' $(VM_TESTS_NORMAL) | xargs -P $(JOBS) -n 1 $(VM_TEST_RUNNER)
+	printf '%s\n' $(VM_TESTS_NORMAL) | xargs -P $(JOBS) -n 1 sh -c '$(VM_TEST_RUNNER) "$$0" || { echo "C test failed: $$0" >&2; exit 255; }'
 
 # TSan over the code that more than one thread touches (docs/vm/10-io-multicore.md §10.2.3, "Order of work"): the inbox, the
 # set-once outcome and reference count, the run queue, the wake against the park, and a job on the loop. The VM is built
@@ -716,7 +716,7 @@ vm-test: $(VM_TESTS)
 VM_TSAN_TESTS := inbox outcome runq task_wake job sync output timers
 vm-tsan:
 	$(MAKE) $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) TSAN=1 SANITIZE=0 GC_STRESS=0
-	printf '%s\n' $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) | TSAN_OPTIONS=halt_on_error=1 xargs -n 1 $(VM_TEST_RUNNER)
+	printf '%s\n' $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) | TSAN_OPTIONS=halt_on_error=1 xargs -n 1 sh -c '$(VM_TEST_RUNNER) "$$0" || { echo "C test failed: $$0" >&2; exit 255; }'
 
 # The C tests as programs, without running them: windows-docker-build builds them in a container.
 vm-test-binaries: $(VM_TESTS)

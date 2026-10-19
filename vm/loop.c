@@ -152,7 +152,7 @@ static stop_state *stop_status(void) {
 static agc_registry *registry_of(agc_vm *vm) {
   if (!vm->rt->registry) {
     agc_registry *reg = agc_alloc(sizeof(agc_registry));
-    reg->lock = agc_lock_new();
+    reg->lock = agc_lock_new("registry");
     vm->rt->registry = reg;
   }
   return vm->rt->registry;
@@ -557,7 +557,7 @@ static agc_loop *new_loop(agc_vm *vm) {
   if (!loop) agc_out_of_memory();
   loop->ready = loop->ready_tail = NULL;
   loop->service = loop->service_tail = NULL;
-  loop->service_lock = agc_lock_new();
+  loop->service_lock = agc_lock_new("service");
   atomic_init(&loop->service_count, 0);
   loop->dead = NULL;
   loop->bound_init = false;

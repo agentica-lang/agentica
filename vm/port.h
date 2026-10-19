@@ -411,12 +411,14 @@ struct agc_vm {
    Windows, silently re-entering): `owner` is a per-thread token, zero when free. The mutex is a uv_mutex_t made in
    vm/sync.c. */
 struct agc_lock {
+  /* What the lock guards ("sync", "stdout", ...), named in the message of a misuse. */
+  const char *name;
   bool solo;
   _Atomic uintptr_t owner;
   void *mutex;
 };
 
-agc_lock *agc_lock_new(void);
+agc_lock *agc_lock_new(const char *name);
 void agc_lock_share(agc_lock *l);
 void agc_lock_take_shared(agc_lock *l);
 void agc_lock_drop_shared(agc_lock *l);
