@@ -33,7 +33,9 @@ benchmarks/         make bench programs and Python twins
 .agents/skills/     agentica-development (working on this repo), agentica-programming
                     (writing .agc), agentica-code-guidelines (.agc style and
                     speed), vm-c-critic (C VM PR review), agentica-dev-workflow
-                    (the PR loop: review, fix, CI, merge)
+                    (the PR loop: review, fix, CI, merge), documentation-writing
+                    (whether and how to change docs), documentation-pruning
+                    (shrinking docs)
 ```
 
 Each of `docs/grammar/`, `docs/future/`, `docs/roadmap/` and `docs/vm/` has a
@@ -92,6 +94,10 @@ phase 13).
 
 - **Task:** taking a PR from branch to merge (reviews, fixes, CI, merge)
   - **Read:** `.agents/skills/agentica-dev-workflow/`
+
+- **Task:** writing or updating docs, a site page, a skill, a CHANGELOG
+  entry or a PR body
+  - **Read:** `.agents/skills/documentation-writing/`
 
 - **Task:** language rules
   - **Read:** `docs/grammar/`
@@ -162,7 +168,8 @@ phase 13).
 - Do not create new files under `docs/` (the Markdown tree outside Hugo's
   `site/content/`) unless the user asks for them or suggests one and accepts
   it. Record progress and evidence in the PR, the roadmap checklist or the
-  CHANGELOG instead. Existing files are updated in place.
+  CHANGELOG instead. Existing files are updated in place. Change docs only
+  when strictly necessary (`.agents/skills/documentation-writing/`).
 - Prose wrapping: `site/content/` keeps one line per paragraph or list item.
   Markdown prose in `docs/` and `.agents/skills/` wraps at 80 characters;
   code blocks keep their line breaks.
