@@ -32,6 +32,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     scheduler (test only). A new builtin library that touches shared state must
     set `.shared` in `vm/builtin_tables.c`.
 
+- **Path:** `vm/inbox.c`
+  - **Owns:** The inbox of the I/O thread (`agc_inbox_open`, `agc_inbox_post`,
+    `agc_inbox_keep`, `agc_inbox_close`): a locked queue taken whole and the
+    `uv_async_t` that wakes the loop. `agc_io_share` makes it; none exists at
+    N = 1, where a request runs inline. The threaded C tests run under TSan:
+    `make vm-tsan` (`TSAN=1`, no libgc, `AGC_NO_GC`).
+
 - **Path:** `vm/task_map.c`
   - **Owns:** `Task.map`: a stepper on the caller that starts, times and cancels
     the items.

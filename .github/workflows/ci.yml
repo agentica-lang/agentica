@@ -250,5 +250,8 @@ jobs:
       - name: vm-sanitize-test, with tests/test_single_binary.py (the hand-off and run) on the sanitizer binary
         if: ${{ !cancelled() && steps.changes.outputs.vm != 'false' }}
         run: make vm-sanitize-test
+      - name: vm-tsan, the threaded C tests under ThreadSanitizer (no libgc)
+        if: ${{ !cancelled() && steps.changes.outputs.vm != 'false' }}
+        run: make vm-tsan
       - if: ${{ steps.changes.outputs.vm != 'false' }}
         run: make -j"$(nproc)" vm-gc-stress JOBS=4

@@ -72,6 +72,13 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     there; a retry park (`agc_task_park(vm, true)`) runs the builtin again. So
     for a park that does not retry (the job path) the waker never writes the
     register, and WOKEN needs only the yield.
+  - A job's task is recorded before the job is started: `start_job` sets the
+    resource's `task` and the task's `parked` before it posts the start request
+    (§16.4), so a completion that follows at once finds the task. The outcome
+    of the job (§16.5, rule 3) is an atomic that the first writer sets by CAS;
+    the resumed task reads it in `agc_io_finish`, and a task that resumes with
+    it still pending (woken by a lock hand-on or an awaited task) sets
+    EXPIRED itself. The job is freed by its reference count (§16.9).
   - The re-check of the wait condition after the registration belongs to each
     builtin; with one thread it cannot change between the check and the
     registration. Waiter lists and FIFOs that more than one thread touches get
@@ -172,7 +179,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   `uv_async_send` on it. At the end of the run it is unref'd, so an in-process
   harness can close the loop. The real binary ends with `_exit` and closes no
   loop (Shutdown). With N=1 there is no inbox handle, and the "no active
-  handles" check of 10.2.1 still holds.
+  handles" check of 10.2.1 still holds. As built, `agc_io_share` makes the
+  inbox (`vm/inbox.c`) and gives the loop to the thread that calls it; until it
+  runs, every request executes on the thread that posts it.
 - **Stall check.** For N>1 it uses only atomic counters, never `uv_run`'s return
   value. One 64-bit atomic word packs the idle scheduler count and the live
   count (jobs and timers started on the loop or the pool, requests in the inbox,
@@ -255,9 +264,11 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   nothing is racy.
 - **Order of work.** First the tasks PR, on these split structures, with N=1.
   Then the multicore schedulers item: N>1 with the I/O
-  thread and its inbox, the global run queue, Boehm threads, the TLS and HTTP
+  thread running its loop (the inbox itself is built, §16.9), the global run
+  queue, Boehm threads, the TLS and HTTP
   steps moved into the resumed task's turn (§16.9), and a stress test of the
-  task fixtures with `--schedulers 4`, under TSan when available. TSan does not
+  task fixtures with `--schedulers 4`, under TSan when available (`make
+  vm-tsan` runs the C tests of the shared code, §16.9). TSan does not
   work with Boehm's stop-the-world, so that run uses an `AGC_NO_GC`-style build
   with `-fsanitize=thread` that never calls `agc_set_alloc_limit`. ASan and
   TSan, both without GC, cover memory errors and races in the scheduler code.

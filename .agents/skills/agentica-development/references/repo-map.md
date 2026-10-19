@@ -106,6 +106,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   front_end.c     # FrontEnd.hand_off and FrontEnd.std_source, guarded by rt->front_end (references/vm-builtins.md)
   task.c          # scheduler, task cancellation, Task builtins (references/vm-tasks.md)
   runq.c          # the locked global run queue (references/vm-tasks.md)
+  inbox.c         # the I/O thread's inbox: a locked queue and a uv_async_t (references/vm-tasks.md)
   sync.c          # rt->sync and the stream locks (references/vm-tasks.md)
   task_map.c      # Task.map: a stepper on the caller that starts, times and cancels the items (references/vm-tasks.md)
   channel.c       # Channel builtins (references/vm-tasks.md)
@@ -134,6 +135,9 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     process_test.c       # Process builtins
     random_test.c        # the generator
     runq_test.c          # the global run queue
+    inbox_test.c         # the inbox: many producers, no lost wake, close
+    outcome_test.c       # job outcome (set once) and reference count, on threads
+    job_test.c           # a job on the loop: timer against completion, cancel, request from a thread
     task_wake_test.c     # wake against the park path, on threads
     stack_test.c         # stack traces
     string_test.c        # String builtins

@@ -119,6 +119,35 @@ Read first: `references/vm.md`.
     the middle on the solo queue, then three pushers against three poppers on
     libuv threads after `agc_runq_share` (every task comes out exactly once).
 
+- **Path:** `vm/tests/inbox_test.c`
+  - **Owns:** The inbox (`vm/inbox.c`): six producers post 20000 requests each
+    and the one consumer sees every request once, in each producer's order; a
+    ping that waits for its answer (a lost wake hangs until the deadline); a
+    post while the handler runs; an inbox that is not kept does not hold the
+    loop; a close handles the requests still queued. The ping catches a lost
+    wake, not the order of publish and send, which holds by construction. The
+    inbox is closed only after the producers are joined.
+
+- **Path:** `vm/tests/outcome_test.c`
+  - **Owns:** The job outcome and count of `core.h`: three threads race to
+    settle one outcome (the first wins, every thread and an observer see that
+    one), and the last `agc_job_unref` is the only one that sees zero.
+
+- **Path:** `vm/tests/job_test.c`
+  - **Owns:** A job on the loop, with a pool work held by a semaphore so the
+    test, not the clock, orders the events: the timer before the completion
+    (the job stays while the work runs), the completion before the timer, a
+    cancel before the completion (a later extend is refused), and the requests
+    of a second thread through the inbox (`agc_io_share`): an extend, a START
+    still queued when the owner ended the job inline, a finish whose
+    CLOSE_TIMER and RELEASE are queued, the `more` path and a late end of the
+    wait, a close and a poll that run the queued requests, 2000 jobs that end
+    at once on a scheduler thread's START, and 20000 jobs that end in one run.
+    `sweep` asserts that a freed job is on no list and has no live wait, which
+    catches a double drop. Not caught: the task recorded after the START post
+    (a window of a few instructions, no hook) and `agc_io_finish` without its
+    EXPIRED settle (the same result on one thread).
+
 - **Path:** `vm/tests/task_wake_test.c`
   - **Owns:** The wake against the park path: the task marks itself PARKING and
     two waker threads call `agc_task_wake` twice each while the scheduler thread
