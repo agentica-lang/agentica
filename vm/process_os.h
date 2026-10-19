@@ -1,15 +1,11 @@
 /*
- * The rules of command search that differ between systems: what counts as a
- * path, how the PATH list splits, which files may run, and which names are
- * refused. Port interface: plain strings, no VM values, no scheduling.
- * Implemented by process_posix.c and process_windows.c.
- *
- * The real differences: on Windows a command may also use `\` and a drive
- * (`C:`), `PATH` splits at `;` and may quote an entry, only `.exe` and `.com`
- * files run (no `PATHEXT`: `.bat` and `.cmd` need `cmd.exe`, an implicit
- * shell), and a name with a trailing dot or space, or a `:` that is not a
- * drive letter, is refused (the system drops the dot or space, and a `:` names
- * an alternate data stream).
+ * The rules of command search that differ between systems: what is a path,
+ * how PATH splits, which files may run, which names are refused. Port
+ * interface: plain strings, no VM values. Implemented by process_posix.c and
+ * process_windows.c. Windows: `\` and drives in paths, `;` and quoted PATH
+ * entries, only `.exe` and `.com` (no PATHEXT: `.bat` and `.cmd` need the
+ * implicit shell `cmd.exe`), and no name with a trailing dot or space or a
+ * `:` that is not a drive (an alternate data stream).
  */
 #ifndef AGC_PROCESS_OS_H
 #define AGC_PROCESS_OS_H
