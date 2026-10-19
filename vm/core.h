@@ -93,6 +93,7 @@ bool agc_runq_still_quiet(agc_runq *q, uint64_t epoch);
 /* Scheduler threads, as libuv threads (vm/sync.c): an array of N ids, the start of one with its entry and argument
  * (false when the system refuses), and its join. */
 void *agc_threads_new(size_t n);
+void agc_threads_free(void *threads);
 bool agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg);
 void agc_thread_join(void *threads, size_t k);
 /* The end of a run with several schedulers (vm/task.c): the first caller of agc_run_over records the end (the

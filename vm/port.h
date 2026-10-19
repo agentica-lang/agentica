@@ -69,6 +69,9 @@ typedef struct {
   void (*drop)(void *data);
   bool external;
   const char *name;
+  /* Stops the wait (DEADLINE: at the job's deadline, else at a detach). It runs on the I/O thread, with the loop's own
+     `vm` and without rt->sync, so it may only stop waits and handles of its own data; true when the wait is stopped
+     and the job can be dropped. */
   bool (*cancel)(agc_vm *vm, void *data, agc_value context, bool deadline);
   /* The halves change state that several schedulers reach: the interpreter runs them with rt->sync held (run_half in
      vm/loop.c). A kind whose halves only build a value from its own data leaves it false. */

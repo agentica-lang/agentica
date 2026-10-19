@@ -15,6 +15,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifndef _WIN32
+#include <sys/resource.h>
+#endif
 
 agc_lock *agc_lock_new(const char *name) {
   agc_lock *l = agc_alloc(sizeof *l);
@@ -120,10 +123,31 @@ void *agc_threads_new(size_t n) {
   return threads;
 }
 
-/* libuv gives a new thread the stack size of RLIMIT_STACK on Linux and macOS (the main thread's), and the system's
-   default on Windows (docs.libuv.org, uv_thread_create_ex). */
+/* After every thread of the array was joined. */
+void agc_threads_free(void *threads) { free(threads); }
+
+#define SCHEDULER_STACK_MIN ((size_t)8 << 20)
+#define SCHEDULER_STACK_MAX ((size_t)64 << 20)
+
+/* A scheduler runs the same interpreter and builtins as the main thread, so it gets the main thread's stack: the soft
+   RLIMIT_STACK, kept between 8 MiB and 64 MiB, or 8 MiB where there is no such limit (Windows, or unlimited, where
+   libuv would fall back to a platform default that can be much smaller). */
+static size_t scheduler_stack(void) {
+#ifndef _WIN32
+  struct rlimit lim;
+  if (getrlimit(RLIMIT_STACK, &lim) == 0 && lim.rlim_cur != RLIM_INFINITY) {
+    size_t size = (size_t)lim.rlim_cur;
+    if (size < SCHEDULER_STACK_MIN) return SCHEDULER_STACK_MIN;
+    return size > SCHEDULER_STACK_MAX ? SCHEDULER_STACK_MAX : size;
+  }
+#endif
+  return SCHEDULER_STACK_MIN;
+}
+
+/* libuv rounds the size up to the page size and to the system minimum (docs.libuv.org, uv_thread_create_ex). */
 bool agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg) {
-  return uv_thread_create(&((uv_thread_t *)threads)[k], fn, arg) == 0;
+  uv_thread_options_t options = {UV_THREAD_HAS_STACK_SIZE, scheduler_stack()};
+  return uv_thread_create_ex(&((uv_thread_t *)threads)[k], &options, fn, arg) == 0;
 }
 
 void agc_thread_join(void *threads, size_t k) { (void)uv_thread_join(&((uv_thread_t *)threads)[k]); }

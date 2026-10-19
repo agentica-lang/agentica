@@ -604,14 +604,17 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   are none), and then starts the others: no other task can read a constant
   before it is set. Each scheduler pops tasks from the global queue, runs
   detached endings and its due timers between turns, and waits on the queue when
-  it is empty. A diagnostic, `System.exit` or the end of main on any scheduler
-  records the outcome once (`agc_run_over`, a CAS on `rt->over`) in that
-  scheduler's own record, copies it to `rt->outcome`, ends the run queue and
-  wakes the I/O thread. The I/O thread then joins every scheduler thread and
+  it is empty. A fatal diagnostic, `System.exit` or the end of main on any
+  scheduler records the outcome once (`agc_run_over`, a CAS on `rt->over`) in
+  that scheduler's own record, copies it to `rt->outcome`, ends the run queue
+  and wakes the I/O thread. The I/O thread then joins every scheduler thread and
   only then runs the detached endings that are left, the report of unobserved
   crashes and the exit path, as at N = 1. So `end_run` waits for the schedulers
   to stop (at most one turn, as a stop signal does, §10.2.2), and no running
-  task uses a file while the exit path closes it.
+  task uses a file while the exit path closes it. `--max-steps` is approximate
+  at N > 1: each scheduler takes steps from the shared budget in batches of up
+  to `AGC_TURN_STEPS`, so the limit can trip while other schedulers still hold
+  unused steps of their batch.
 - **Stall.** At N > 1 the I/O thread runs the check when it has nothing to do,
   not the packed word of §10.2.3: every scheduler waits on an empty queue
   (`agc_runq_quiet`, with an epoch that any wake moves), the inbox and the
@@ -797,14 +800,11 @@ for wake-heavy programs is measured in §16.11 ("Wakes between schedulers").
   the flush takes the lock with a limit is open. Streams on the loop do not have
   this problem: no scheduler blocks in a stdout write for them (§10.2.2).
 - **Wakes between schedulers (measured; an optimization for later).** One global
-  run queue keeps the schedulers simple, and CPU work scales with the cores: 8
-  tasks of an integer loop run 4.3 times faster at N = 8 than at N = 1 (4
-  physical, 8 logical cores). A program where every step wakes another task pays
-  for it: at N > 1 the `benchmarks/programs` channel-pingpong and
-  deadline-pingpong run 3.5 to 9 times slower (N = 2 to N = 8), sleepers 1.6 to
-  2.4 times and print-lines about 1.8 times (`scale() = 10`, PR #386). Each wake
-  takes the queue's lock, signals its condvar (a futex wake) and moves the task
-  to another core; the I/O thread is not the cost. Per-scheduler queues or a
-  LIFO ("runnext") slot for the waker's own scheduler would cut it (§16.10).
-  They are a later optimization, not a condition for the default number of
-  schedulers.
+  run queue keeps the schedulers simple, and CPU work scales with the cores. A
+  program where every step wakes another task pays for it: each wake takes the
+  queue's lock, signals its condvar (a futex wake) and moves the task to another
+  core, so wake-heavy programs are several times slower at N > 1 (roughly 4 to 9
+  times for the channel ping-pong benchmarks); the I/O thread is not the cost.
+  Per-scheduler queues or a LIFO ("runnext") slot for the waker's own scheduler
+  would cut it (§16.10). They are a later optimization, not a condition for 3d
+  or for the default number of schedulers.

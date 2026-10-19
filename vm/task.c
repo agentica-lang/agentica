@@ -697,6 +697,8 @@ static agc_outcome run_threads(agc_vm *vm) {
   agc_thread_join(rt->threads, 0);
   uint32_t started = atomic_load_explicit(&rt->started, memory_order_acquire);
   for (uint32_t k = 1; k < started; k++) agc_thread_join(rt->threads, k);
+  agc_threads_free(rt->threads);
+  rt->threads = NULL;
   vm->outcome = &rt->outcome;
   /* One thread again: what the I/O thread hands over now it ends itself, and the detached jobs still listed. */
   agc_io_hand_off(vm, false);

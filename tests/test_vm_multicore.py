@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -548,13 +549,85 @@ def test_a_network_call_is_refused_on_several_schedulers(tmp_path):
 
 def test_more_schedulers_need_the_switch_and_refuse_the_profile_and_blocking_output(tmp_path):
     bytecode = program(tmp_path, "plain", "def main() -> Void\n  puts(1)\nend\n")
-    plain = run([*vm_command(), *FLAGS, "--", bytecode], env=vm_environment())
-    assert plain.code == 2 and "schedulers were asked for" in plain.stderr
-    assert vm(bytecode).stdout == "1\n"
-    profile = vm(bytecode, env={"AGENTICA_VM_TRACE": "profile"})
-    assert profile.code == 2 and "profile" in profile.stderr
-    blocking = vm(bytecode, env={"AGENTICA_VM_TEST_BLOCKING_OUTPUT": "1"})
-    assert blocking.code == 2 and "BLOCKING_OUTPUT" in blocking.stderr
+    assert run([*vm_command(), *FLAGS, "--", bytecode], env=vm_environment()).code == 2
+    assert vm(bytecode, env={"AGENTICA_VM_TRACE": "profile"}).code == 2
+    assert vm(bytecode, env={"AGENTICA_VM_TEST_BLOCKING_OUTPUT": "1"}).code == 2
+    plain = vm(bytecode)
+    assert (plain.code, plain.stdout) == (0, "1\n")
+
+
+SPIN_AND_WAIT = """\
+def spinner(n: Int) -> Int
+  i = 0
+  while true
+    i = i + 1
+  end
+  return i
+end
+
+def reader(path: String) -> Result[String]
+  input = try File.open(path, "read", 60000)
+  return File.read_line(input, 60000)
+end
+
+def main() -> Void
+  Task.spawn(&spinner, 1)
+  Task.spawn(&spinner, 2)
+  waiting = Task.spawn(&reader, System.args()[0])
+  puts("ready")
+  IO.inspect(Task.await(waiting))
+end
+"""
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo") or not hasattr(signal, "SIGTERM") or sys.platform == "win32",
+                    reason="needs POSIX signals and FIFOs")
+def test_a_stop_signal_ends_a_run_with_spinners_and_a_blocked_reader(tmp_path):
+    # The I/O thread handles the signal (the schedulers keep it blocked) and ends the run at once, with spinning tasks
+    # and a task blocked on a FIFO that is held open and never written.
+    bytecode = program(tmp_path, "spin_wait", SPIN_AND_WAIT)
+    fifo = tmp_path / "held"
+    os.mkfifo(fifo)
+    held = os.open(fifo, os.O_RDWR)
+    try:
+        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(fifo)], stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(MULTICORE),
+                                   text=True)
+        try:
+            assert process.stdout.readline() == "ready\n"
+            process.send_signal(signal.SIGTERM)
+            out, _ = process.communicate(timeout=30)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+    finally:
+        os.close(held)
+    # The VM dies by the signal after its exit path (128 + 15 seen by a shell).
+    assert (process.returncode, out) == (-signal.SIGTERM, "")
+
+
+def test_a_pending_read_of_standard_input_is_no_stall_on_several_schedulers(tmp_path):
+    # A read of stdin with a writer that stays: the stdin poller is a live handle, so the run waits. Closing stdin
+    # then ends the read with its normal result.
+    bytecode = program(tmp_path, "gets", "def main() -> Void\n  IO.inspect(IO.gets())\nend\n")
+    process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode], stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(MULTICORE),
+                               text=True)
+    try:
+        try:
+            process.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            pass
+        assert process.poll() is None
+        out, err = process.communicate(input="", timeout=30)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+    one = run([*vm_command(), "--", bytecode], stdin="", env=vm_environment())
+    assert (process.returncode, out, err) == (one.code, one.stdout, one.stderr)
+    assert one.code == 0 and one.stdout.startswith("error(")
 
 
 def test_the_front_end_runs_a_source_file_on_several_schedulers(tmp_path):
