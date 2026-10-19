@@ -82,12 +82,10 @@ int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t
                      size_t len, void (*done)(struct uv_write_s *req, int status));
 
 #define AGC_CHANNEL_ENV "AGENTICA_CHANNEL"
-#define AGC_CHANNEL_VALUE "3"
-#define AGC_CHANNEL_FD 3
 
 typedef struct agc_duplex agc_duplex;
 
-agc_duplex *agc_duplex_new(agc_vm *vm, int fd);
+agc_duplex *agc_duplex_new(agc_vm *vm, int read_fd, int write_fd);
 void agc_duplex_shut(agc_duplex *d);
 void agc_duplex_release(agc_duplex *d);
 void agc_duplex_overflow(agc_duplex *d, const char *text);

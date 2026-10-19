@@ -599,6 +599,19 @@ def agc_literal(text):
     return '"' + "".join(escapes.get(c, c) for c in str(text)) + '"'
 
 
+def kill_process(pid):
+    """Last resort at the end of a test, so a failure leaves no process behind."""
+    if not process_alive(pid):
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, check=False)
+        return
+    try:
+        os.kill(int(pid), signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # it ended between the check and the signal
+
+
 def wait_until(predicate, timeout=WAIT_SECONDS, interval=0.05):
     """Poll `predicate` until it is true (returns True) or `timeout` seconds pass (returns False)."""
     deadline = time.monotonic() + timeout
