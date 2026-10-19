@@ -36,16 +36,18 @@ loop.
   `make test TESTS="tests/test_<area>.py ..."`, `make site` for site changes.
   Never `make test` without `TESTS`, the slow tier, sanitizer sweeps, fuzz or
   gc-stress (CI runs them); `KIND=files` only through Docker.
-- **VM C code or concurrency:** give the author the `vm-c-critic` checklist
-  before it builds, so the first push already has the tests reviewers ask
-  for: cancel from another thread, deadlines, stop signals, stalls, exact
-  interleavings through C tests, and tests that can fail without the change.
-  Before the first push, run the new concurrency tests several times in
-  parallel copies, so order-dependent cases fail locally, not in CI.
+- **VM C code or concurrency:** tell the author to read `vm-c-critic` (its
+  "Scheduler, tasks and the core rules (§14)" section above all) before it
+  builds, so the first push already has the tests reviewers ask for: cancel
+  from another thread, deadlines, stop signals, stalls, exact interleavings
+  through C tests, and tests that can fail without the change. Before the
+  first push, run the built test binary of the new concurrency tests about 8
+  times at once, all under one memory cap, so order-dependent cases fail
+  locally, not in CI.
 - **Speed:** only the author measures, and only when the PR touches the
   interpreter or scheduler hot path: an interleaved A/B against master with
   medians (`benchmarks/`; code layout alone moves a binary by 20-35 %),
-  numbers in the PR body.
+  numbers in the PR body. Critics and reviewers do not time.
 - A local pre-commit hook (`.git/hooks/pre-commit`, untracked, installed by
   hand) may run `make dup-check` when `vm/` or `tests/` is staged and block
   new clones: refactor them. CI's `dup-check` fails on them either way.
@@ -72,7 +74,8 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   park/wake protocol, ownership, untrusted input,
   `docs/vm/14-core-invariants.md`) in its own scratch worktree, never
   editing the branch. Send all agreed fixes from both to the author in one
-  batch; the next normal review confirms the fixed head.
+  batch. This round is pass 1 for section 3: a normal review of the fixed
+  head follows only if either agent found a critical or major.
 - Wait for each completion notice; do not read agent transcripts.
 
 ## 3. Fix and repeat
