@@ -58,6 +58,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   variable (`for _ in 0...3` with `_ = f()` in the body). Reading `_` was
   allowed before and is now `CHECK-UNKNOWN-NAME`, and `_: Type = x` is now
   `PARSE-UNEXPECTED-TOKEN`.
+- `AGENTICA_VM_TRACE=io` no longer prints `kind=sleep` and `kind=lock` job
+  lines for sleeps and deadline waits; `AGENTICA_VM_TRACE=sched` prints
+  `timer_arm` and `timer_fire` for them.
 - A blocking call whose deadline and whose result fall in the same pass of the
   event loop now takes whichever the loop saw first: if the timer ran first the
   call times out, where it used to return the result if it had arrived by the

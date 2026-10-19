@@ -16,7 +16,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_runq_remove`, and for an idle scheduler `agc_runq_wait` (blocks on a
     condvar until a task is queued, NULL after `agc_runq_end` or, on a solo
     queue, when empty). The queue is solo (no lock, never waits) until
-    `agc_runq_share`, which runs before a second thread touches it.
+    `agc_runq_share`, which runs before a second thread touches it. A nudge
+    (`agc_runq_nudge`, `agc_runq_nudged`, `agc_runq_take_nudge`) is work for a
+    scheduler that is not a task: it ends one `agc_runq_wait` with NULL, and
+    in 3c the scheduler then calls `agc_io_service` (`vm/loop.c`), which ends
+    the detached jobs that the I/O role handed over (as built only C tests
+    call it).
 
 - **Path:** `vm/sync.c`
   - **Owns:** The locks of the shared state. `agc_lock` (a mutex that is solo
@@ -50,6 +55,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `uv_async_t` that wakes the loop. `agc_io_share` makes it; none exists at
     N = 1, where a request runs inline. The threaded C tests run under TSan:
     `make vm-tsan` (`TSAN=1`, no libgc, `AGC_NO_GC`).
+
+- **Path:** `vm/timers.c`
+  - **Owns:** The timed waits. `agc_timer` lives in `agc_task`; the heap
+    (`agc_timers`) in `agc_vm`, one per scheduler, ordered by (deadline,
+    arming order). A builtin that waits for a deadline calls
+    `agc_task_parking`, registers its other waits, then
+    `agc_task_park_until(vm, deadline_ms, retry)` (an `agc_clock_ms` value);
+    no job. `agc_timers_run` (turn boundary and idle, in `agc_vm_run`) wakes the
+    due tasks; `resume` and `unlink_task` take the entry out
+    (`agc_timers_disarm`). Every change is made with `rt->sync` held, by any
+    scheduler. The idle step (`idle_wait` in `vm/task.c`) runs the loop until
+    the nearest deadline with `agc_io_run_for(vm, ms, false)`;
+    `agc_runq_wait_until` does the same for a scheduler thread.
 
 - **Path:** `vm/task_map.c`
   - **Owns:** `Task.map`: a stepper on the caller that starts, times and cancels
@@ -146,16 +164,17 @@ Read first: `references/vm.md` and `references/vm-c.md`.
           `await_deadline` in the caller on the first call, runs no cycle check
           (`awaits_caller` stops at a task whose `await_deadline` is set, so a
           timed waiter is not an edge of the plain walk), joins the target's
-          waiters and starts an `agc_wait_io` timer job before it parks with
-          retry
-        - the first wake wins: the target's end finishes the job on the retry,
+          waiters and arms its own timer (`agc_task_park_until`) as it parks
+          with retry
+        - the first wake wins: the target's end (`resume` disarms the timer),
           and a fired timer takes the caller off the target's waiters
           (`leave_target`), clears the deadline and returns `Await.TimedOut`
           without touching the target)
-      - sleep as a timer job, `sleep(0)` and fuzz sleeps yield, `pending_count`
-        from `pending_tasks`, tasks made minus tasks done minus `main`: it
-        counts ready, running and parked tasks, not tasks that returned or
-        crashed (even unawaited ones), `unobserved_crash`)
+      - sleep as a timer of the task (`agc_task_park_until`), `sleep(0)` and
+        fuzz sleeps yield, `pending_count` from `pending_tasks`, tasks made
+        minus tasks done minus `main`: it counts ready, running and parked
+        tasks, not tasks that returned or crashed (even unawaited ones),
+        `unobserved_crash`)
   - `agc_task_spawn` (shared by `Task.spawn` and `Test.run`; the child inherits
     its parent's `test`), `agc_task_observe`
   - a crash keeps `crash_code`, `crash_message` and `crash_span` for `Test.run`,
@@ -176,7 +195,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `error("task: timed out")`, then `agc_task_cancel`), `start` items up to
     `limit` (one `agc_count_step` each, `agc_task_spawn_seeded` with the caller
     as parent), and, if every slot is set, charge `count` and end with the list;
-    else one `agc_wait_io` timer job for the oldest deadline
+    else one timer of the caller for the oldest deadline
+    (`agc_task_park_until`)
   - one timer is enough because every item has the same timeout and starts in
     input order, so the deadlines grow along the running list
   - an item tells the group through the task hook (`end`, `end_data`, called by
@@ -203,9 +223,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     its send sequence number, so a value handed back by a cancelled receiver is
     inserted by it and FIFO holds), two FIFOs of waiting tasks through
     `wait_next`, and counters for the reserved values and slots.
-  - A call that must wait parks with retry on `agc_wait_io`, the lock wait's
-    timer-only job kind (the I/O trace skips its `done` and `timeout` lines;
-    `start` and `detach` print `kind=lock`)
+  - A call that must wait parks with retry on the task's own timer
+    (`agc_task_park_until`; no job, so no I/O trace line)
   - the deadline lives in the task (`channel.deadline`) and a retry is told by
     `channel.channel == c`.
   - A value for a waiting receiver is reserved in the task (`channel.value`), a

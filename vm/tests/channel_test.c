@@ -413,7 +413,7 @@ static void test_timeout_before_reservation(void) {
   wait_recv(b, ch, 5000);
   struct timespec delay = {0, 80000000L};
   while (nanosleep(&delay, &delay) != 0) {}
-  agc_io_poll(&vm, false);
+  assert(agc_timers_run(&vm));
   assert(ready_head() == a && a->channel.channel);
   send(main_task, ch, 8, 0);
   assert(a->next == b);
@@ -433,7 +433,7 @@ static void test_reservation_beats_deadline(void) {
   send(main_task, ch, 4, 0);
   struct timespec delay = {0, 80000000L};
   while (nanosleep(&delay, &delay) != 0) {}
-  agc_io_poll(&vm, false);
+  assert(agc_timers_run(&vm));
   assert(next_ready() == a);
   settle();
   agc_value args[2] = {ch, agc_int(20)};

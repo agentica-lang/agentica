@@ -68,10 +68,20 @@ void agc_runq_push(agc_runq *q, agc_task *t);
 agc_task *agc_runq_pop(agc_runq *q);
 bool agc_runq_remove(agc_runq *q, const agc_task *t);
 /* agc_runq_wait is the pop of an idle scheduler: it blocks until a task is queued, and returns NULL once agc_runq_end
- * has been called (the run is over, also on a solo queue) or, on a solo queue, when it is empty. */
+ * has been called (the run is over, also on a solo queue), when a nudge is pending (agc_runq_nudge), or, on a solo
+ * queue, when it is empty. */
 agc_task *agc_runq_wait(agc_runq *q);
 void agc_runq_end(agc_runq *q);
+/* The same wait with a deadline (an agc_clock_ms value): NULL also when the clock reaches it. */
+agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms);
+/* A nudge is work for a scheduler that is not a task: agc_runq_nudge ends one wait with NULL, agc_runq_nudged is the
+ * test of a busy scheduler at its turn boundary, and agc_runq_take_nudge clears it for the one that runs the work. */
+void agc_runq_nudge(agc_runq *q);
+bool agc_runq_nudged(const agc_runq *q);
+bool agc_runq_take_nudge(agc_runq *q);
 void agc_sync_reset(agc_vm *vm);
+/* Turns on the lock of the resource registry (made here if it does not exist yet); agc_share calls it. */
+void agc_registry_share(agc_vm *vm);
 /* Turns on the locks of the run queue, rt->sync and the two streams, and rt->shared. It runs on the thread that starts
  * the others, before the second one exists. Only the C tests call it until the scheduler threads exist. */
 void agc_share(agc_vm *vm);
@@ -164,6 +174,11 @@ void agc_profile_report(agc_vm *vm);
 const char *agc_uv_version(void);
 bool agc_io_init(void);
 bool agc_io_poll(agc_vm *vm, bool wait);
+/* The work that the I/O role leaves for a scheduler once a second thread runs the schedulers: the end of each detached
+ * job (its `done` half). A scheduler calls it when agc_runq_nudged says so, with no task current. Returns whether it ran
+ * anything. At N = 1 the drain runs the job itself and the list is always empty. When a `done` half raises (agc_fail),
+ * vm->task is left on the scratch task and the caller restores its own. */
+bool agc_io_service(agc_vm *vm);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 void agc_io_detach(agc_vm *vm, agc_task *t);
 bool agc_io_share(agc_vm *vm, bool keep);
@@ -182,10 +197,22 @@ void agc_close_owned(agc_vm *vm, agc_task *t);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
-/* Runs the loop once, for at most MS milliseconds, and hands the finished jobs to the scheduler. False when nothing in
-   the loop was alive, so nothing could have ended the wait and the caller stops waiting. */
-bool agc_io_run_for(agc_vm *vm, uint64_t ms);
+/* Runs the loop once, for at most MS milliseconds (NOWAIT when MS is zero or a job is ready), and hands the finished
+   jobs to the scheduler. With ALIVE_REQUIRED a loop with nothing alive is not run and the call returns false, so the
+   caller stops waiting; without it the call always waits and returns true. */
+bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required);
 uint64_t agc_clock_ms(void);
+
+/* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other
+ * waits, and calls agc_task_park_until; the deadline is an agc_clock_ms value. All of these run with rt->sync held,
+ * except agc_timers_run, which takes it itself, and agc_timers_next_due, which only reads. */
+void agc_task_park_until(agc_vm *vm, uint64_t deadline_ms, bool retry);
+void agc_timers_disarm(agc_vm *vm, agc_task *t);
+/* Wakes the tasks whose deadline has passed in this scheduler's heap. Called at the turn boundary and when the run
+ * queue is empty; true when it woke any. A heap with no timer costs one relaxed load. */
+bool agc_timers_run(agc_vm *vm);
+/* The earliest deadline of this scheduler's heap, or UINT64_MAX. */
+uint64_t agc_timers_next_due(const agc_vm *vm);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 void agc_input_close(agc_vm *vm);

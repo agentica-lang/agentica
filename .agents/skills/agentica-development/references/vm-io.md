@@ -84,7 +84,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     - `agc_io_run_for` (
       - runs the loop once for at most N ms with one reusable timer, then hands
         the finished jobs on; the flush wait, the last writes after a stop
-        signal and the native close all wait with it)
+        signal and the native close all wait with it (`alive_required`: a
+        loop with nothing alive is not run); the idle step of a scheduler
+        with a timer waits with it too, alive or not)
     - `agc_register`/`agc_unregister` (
       - GC `agc_resource` objects owning `malloc` memory
       - a job keeps its registry slot index, fixed when an entry moves)
@@ -101,7 +103,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         inline on the loop's thread, queued in the inbox from any other
     - `agc_io_start` (
       - one `uv_queue_work` job plus an optional timer per blocking call
-      - a kind without `work` is a timer only
+      - a kind needs `work` or `external`; a bare deadline is a task timer
       - parks the current task through `r->task` and `task->parked`)
     - `agc_io_poll` (
       - `uv_run` NOWAIT or ONCE, then the ready list of finished jobs wakes
@@ -144,7 +146,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - a cancelled `next_owner` passes the lock on)
     - `agc_handle_wait` (
       - the per-handle FIFO lock: take it as `next_owner` or when free, else
-        queue and park with retry on a timer-only job at the task's own deadline
+        queue and park with retry on the task's own timer
+        (`agc_task_park_until`) at its deadline
       - a `closing` handle lets every caller through, so the builtin returns its
         closed error)
     - the one exit path (

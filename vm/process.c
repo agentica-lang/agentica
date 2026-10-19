@@ -457,7 +457,7 @@ static void release_guard(void *native) {
 }
 
 void agc_processes_stop(agc_vm *vm) {
-  if (vm->process_guard && vm->process_guard->native) close_children(vm->process_guard->native);
+  if (vm->rt->process_guard && vm->rt->process_guard->native) close_children(vm->rt->process_guard->native);
 }
 
 #ifndef _WIN32
@@ -471,7 +471,7 @@ static bool keep_private(int fd, void *data) {
 #endif
 
 static guard *guard_of(agc_vm *vm) {
-  if (vm->process_guard) return vm->process_guard->native;
+  if (vm->rt->process_guard) return vm->rt->process_guard->native;
   agc_resource *r = agc_register(vm, NULL, release_guard);
   guard *g = calloc(1, sizeof(guard));
   if (!g) agc_out_of_memory();
@@ -481,7 +481,7 @@ static guard *guard_of(agc_vm *vm) {
   agc_each_fd(keep_private, NULL);
 #endif
   r->native = g;
-  vm->process_guard = r;
+  vm->rt->process_guard = r;
   return g;
 }
 

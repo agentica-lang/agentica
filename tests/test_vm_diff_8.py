@@ -417,6 +417,17 @@ def test_deep_tail_calls_run_on_the_vm(tmp_path):
     assert run_vm(PLAIN, bytecode, None, cwd=tmp_path) == (0, "1000000\nfalse\n", "")
 
 
+def test_a_due_timer_fires_while_another_task_keeps_the_run_queue_busy(tmp_path):
+    # main yields until the sleeper sets the flag, so the run queue is never empty and the idle step never runs: only
+    # the timer check at the turn boundary wakes the sleeper. Without it the run hangs until the time limit.
+    bytecode = compile_program(
+        tmp_path, "busy-sleeper",
+        "def flagger(flag: Channel[Int]) -> Int\n  Task.sleep(20)\n  flag.send(1, 0).unwrap!\n  return 7\nend\n\n"
+        "def main() -> Void\n  flag: Channel[Int] = Channel.new(1)\n  t = Task.spawn(&flagger, flag)\n"
+        "  while !flag.recv(0).ok?\n    Task.sleep(0)\n  end\n  puts(Task.await(t))\nend\n")
+    assert run_vm(PLAIN, bytecode, None, cwd=tmp_path, timeout=scaled(20)) == (0, "7\n", "")
+
+
 def test_string_at_and_slice_over_a_long_non_ascii_string_on_the_vm(tmp_path):
     bytecode = compile_program(
         tmp_path, "string-cursor",

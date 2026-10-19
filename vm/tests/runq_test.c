@@ -143,6 +143,45 @@ static void test_wait_gets_the_push(void) {
   }
 }
 
+static agc_task *pushed_late;
+
+static void push_late(void *arg) {
+  (void)arg;
+  assert(agc_gc_thread_enter());
+  uv_sleep(20);
+  agc_runq_push(vm.rt->runq, pushed_late);
+  agc_gc_thread_leave();
+}
+
+static void nudge_late(void *arg) {
+  (void)arg;
+  assert(agc_gc_thread_enter());
+  uv_sleep(20);
+  agc_runq_nudge(vm.rt->runq);
+  agc_gc_thread_leave();
+}
+
+/* The timed wait of a scheduler that has a timer: it returns NULL once the clock reaches the deadline, and not before;
+   a push, a nudge or the end before the deadline ends it at once. A wait that ignored the deadline would leave the test
+   to its own deadline. */
+static void test_wait_until(void) {
+  agc_runq *q = vm.rt->runq;
+  uint64_t due = agc_clock_ms() + 30;
+  assert(agc_runq_wait_until(q, due) == NULL && agc_clock_ms() >= due);
+  assert(agc_runq_wait_until(q, agc_clock_ms()) == NULL);
+  uv_thread_t thread;
+  pushed_late = fresh();
+  due = agc_clock_ms() + 60000;
+  assert(uv_thread_create(&thread, push_late, NULL) == 0);
+  assert(agc_runq_wait_until(q, due) == pushed_late && agc_clock_ms() < due);
+  assert(uv_thread_join(&thread) == 0);
+  assert(!agc_runq_nudged(q));
+  assert(uv_thread_create(&thread, nudge_late, NULL) == 0);
+  assert(agc_runq_wait_until(q, due) == NULL && agc_clock_ms() < due);
+  assert(uv_thread_join(&thread) == 0);
+  assert(agc_runq_take_nudge(q) && !agc_runq_take_nudge(q));
+}
+
 /* The end wakes all the waiters at once, and a wait after the end returns NULL at once, with tasks left in the queue. */
 static void test_end_wakes_everyone(void) {
   agc_runq *q = vm.rt->runq;
@@ -167,6 +206,7 @@ int main(void) {
   test_threads();
   test_shared_removal();
   test_wait_gets_the_push();
+  test_wait_until();
   test_end_wakes_everyone();
   puts("run queue tests passed");
   return 0;

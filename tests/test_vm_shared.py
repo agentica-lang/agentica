@@ -6,7 +6,6 @@ paths those modules do not reach: a builtin that fails while it holds the lock, 
 for a handle's lock that times out, and a second reader of standard input that waits for the first.
 """
 import subprocess
-import time
 
 from tests.agentica_test import RUN_TIMEOUT, compile_text, run_vm, vm_command, vm_environment
 
@@ -96,6 +95,8 @@ end
 def main() -> Void
   first = Task.spawn(&reader, 1)
   Task.sleep(0)
+  puts("waiting")
+  IO.flush()
   second = IO.read()
   puts("main read #{second.length} bytes")
   puts("task read #{Task.await(first).length} bytes")
@@ -139,7 +140,9 @@ def test_a_second_reader_of_standard_input_waits_for_the_first(tmp_path):
     bytecode = compile_text(STDIN_PARKS, "stdin_parks", tmp_path)
     process = subprocess.Popen([*map(str, vm_command()), "--", str(bytecode)], stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(SHARED))
-    time.sleep(0.2)
+    # The marker comes after the reader task has parked on stdin and just before main's own IO.read, in the same turn:
+    # stdin is written only after it, so main always joins the waiters of standard input.
+    assert process.stdout.readline() == b"waiting\n"
     out, err = process.communicate(b"hello\n", timeout=RUN_TIMEOUT)
     assert process.returncode == 0, err
     assert sorted(out.decode().splitlines()) == ["main read 0 bytes", "task read 6 bytes"]

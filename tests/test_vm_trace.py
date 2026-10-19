@@ -297,3 +297,23 @@ def test_a_vm_started_with_stdout_closed_fails_to_write_as_before(tmp_path, trac
     status, _, err = run_closed(vm, ">&-", bytecode, stdin_file)
     assert status == 1
     assert b"RUNTIME-INTERNAL" in err
+
+
+def test_a_sleep_traces_its_timer_arm_and_fire_under_sched(tmp_path, traced_vm):
+    vm = traced_vm[0]
+    source = tmp_path / "nap.agc"
+    source.write_text("def main() -> Void\n  Task.sleep(1)\n  puts(\"done\")\nend\n", encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "nap.agcb")
+    path = tmp_path / "nap.trace"
+    status, out, err = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": path})
+    assert (status, out, err) == (0, b"done\n", b"")
+    lines = trace_lines(path)
+    arms = [line for line in lines if b" sched timer_arm " in line]
+    fires = [line for line in lines if b" sched timer_fire " in line]
+    assert len(arms) == 1 and len(fires) == 1, lines
+    arm = re.search(rb" sched timer_arm task=([0-9]+) in_ms=([0-9]+)$", arms[0])
+    fire = re.search(rb" sched timer_fire task=([0-9]+) late_ms=([0-9]+)$", fires[0])
+    assert arm and fire, (arms, fires)
+    assert arm.group(1) == fire.group(1)
+    assert int(arm.group(2)) <= 1
+    assert lines.index(arms[0]) < lines.index(fires[0])

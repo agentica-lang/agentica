@@ -273,9 +273,9 @@ pair; Windows uses a pipe per direction (below).
   pipes. A pending channel read or write wakes with
   `process: channel is closed`.
 - **`Test.run` and the BDD children** use the child side. `Test.run` must be
-  called from `main`'s own task (`vm->task == vm->main`): a call from a test or
-  any other task is `RUNTIME-TEST-RUN`, "call Test.run from main, outside every
-  test". After the name checks, a call with no channel under
+  called from `main`'s own task (`vm->task == vm->rt->main`): a call from a test
+  or any other task is `RUNTIME-TEST-RUN`, "call Test.run from main, outside
+  every test". After the name checks, a call with no channel under
   `--agentica-test list|run` (`agc_parent_open`) is `RUNTIME-TEST-RUN` too. In
   run mode, an index line that is not a plain index naming a test, or that
   cannot be read as a UTF-8 line (`AGC_INPUT_FAILED`), is a `RUNTIME-BDD-INFRA`

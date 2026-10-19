@@ -151,14 +151,15 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   }
   atomic_init(&rt->next_task_id, 1);
   rt->runq = agc_runq_new();
-  rt->sync = agc_lock_new();
-  rt->out.lock = agc_lock_new();
-  rt->err.lock = agc_lock_new();
+  rt->sync = agc_lock_new("sync");
+  rt->out.lock = agc_lock_new("stdout");
+  rt->err.lock = agc_lock_new("stderr");
   rt->log.level = -1;
   rt->log.lowest = AGC_LOG_NO_HANDLER;
   agc_trace_parse(&rt->trace, NULL, 2);
   vm->rt = rt;
-  vm->main = vm->task = agc_new_task(vm);
+  atomic_init(&vm->timers.next_due, UINT64_MAX);
+  vm->rt->main = vm->task = agc_new_task(vm);
   agc_random_seed(&vm->task->random, 0);
 }
 
@@ -230,10 +231,10 @@ static PROFILE_HOOK void profile_call(agc_vm *vm, uint32_t function) { vm->profi
 
 static PROFILE_HOOK void profile_builtin_call(agc_vm *vm, uint32_t id) { vm->profile->builtin_calls[id]++; }
 
-/* The call of a builtin. Once the VM is shared (agc_share) a builtin of a shared library runs with rt->sync held, so the
- * task tree, the waiter lists, the channels, the handles and the logger table are seen by one scheduler at a time. The
- * lock is not held when the builtin returns: a builtin that must wait registers the wait and returns, and the task
- * parks outside the lock. A builtin that fails leaves the lock to agc_sync_reset. */
+/* The call of a builtin. Once the VM is shared (agc_share) a builtin whose row is marked `shared` runs with rt->sync
+ * held, so the task tree, the waiter lists, the channels, the handles and the logger table are seen by one scheduler
+ * at a time. The lock is not held when the builtin returns: a builtin that must wait registers the wait and returns,
+ * and the task parks outside the lock. A builtin that fails leaves the lock to agc_sync_reset. */
 static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
   if (__builtin_expect(vm->rt->shared, 0) && b->shared) {
     agc_sync_take(vm);
@@ -480,7 +481,7 @@ static void resume_stepper(agc_vm *vm) {
       apply_cost(vm);
       return;
     case AGC_STEP_WAIT:
-      if (!t->parking) agc_fail(vm, "RUNTIME-INTERNAL", "a step waited without a pending job", st->span);
+      if (!t->parking) agc_fail(vm, "RUNTIME-INTERNAL", "a step waited without parking", st->span);
       t->park_reg = base;
       return;
     case AGC_STEP_END: finish_native(vm, next.value); return;
@@ -1060,7 +1061,7 @@ reload:
         if (r->ok) {
           R[in.a] = r->value;
         } else {
-          if (t->frame_count == 1 && t == vm->main)
+          if (t->frame_count == 1 && t == vm->rt->main)
             agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", SPAN);
           if (!return_value(vm, R[in.b])) return AGC_TURN_DONE;
           if (t->parking) return park_task(t);

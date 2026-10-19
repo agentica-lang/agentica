@@ -87,16 +87,16 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   `close`, a wake, a hand-on and a cancelled waiter that leaves its FIFO take
   it, and it is never held across a park. Ring growth copies the slots under the
   lock: an accepted exception, bounded by the capacity and charged as turn cost.
-  The lock orders the write of a value before its read on another scheduler. A
-  wake or a hand-on is a scheduler waker that reaches the waiter's timer job:
-  under the channel lock it takes the job's reference and sets the outcome by
-  the CAS of §16.5 rule 3. If the timer wins instead, the timer side takes the
-  channel lock before it pushes the task, and a wake or hand-on that lost passes
-  the value or the slot to the next waiter, so nothing is lost. With N=1 the
-  lock is not needed, and the VM does not take one. Each task also writes its
-  `awaiting` field before it parks, under the target's lock (Park and wake
-  protocol), so two tasks that close a cycle at the same time cannot both miss
-  it: the second to take the lock sees the first's field.
+  The lock orders the write of a value before its read on another scheduler. As
+  built, the waiter's deadline is a timer of the task (§16.9, "Timers"),
+  not a job: a wake or a hand-on and the fire of the timer are two wakers, the
+  state CAS lets one win, and both run under `rt->sync`, so the retry of the
+  woken waiter sees either its reservation or the passed deadline, and a value
+  or slot it does not take is passed to the next waiter, so nothing is lost.
+  With N=1 the lock is not needed, and the VM does not take one. Each task also
+  writes its `awaiting` field before it parks, under the target's lock (Park and
+  wake protocol), so two tasks that close a cycle at the same time cannot both
+  miss it: the second to take the lock sees the first's field.
 - **Task.map group lock (17a, planned for N>1; not built).** Each `Task.map`
   group will have a small lock for its running list, its ended list and its
   counters. The step function on the caller's scheduler and the end hook of an
@@ -117,8 +117,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   one (as built).
 - **State split.** As built (`vm/port.h`): `agc_runtime` (shared),
   `struct agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
-  current `task`, `loop`, `registry`, the turn counters and the `fail`
-  jmp_buf), and `agc_task`. The run queue is a field of the runtime
+  current `task`, the turn counters and the `fail` jmp_buf), and `agc_task`.
+  The loop, the registry, the main task and the crash lists are fields of the
+  runtime (§16.9, "The context split"). The run queue is a field of the runtime
   (`agc_runtime.runq`, `vm/runq.c`). With N=1 there are these deviations: the
   runtime is GC-allocated by `agc_vm_init` (both are roots for Boehm), the
   `fail` jmp_buf is per scheduler (the only `setjmp` is the scheduler's own),
@@ -146,9 +147,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     around each `LogRegistry` builtin (its rows are marked `shared`).
     `install_default` is one native call, so the check for level -1 and the
     writes cannot interleave with another task.
-  - I/O thread: the loop, the inbox (§16.4) and the resource registry. Whether
-    the registry is owned by the I/O thread or shared under a lock is open
-    (§16.11).
+  - I/O thread: the loop, the inbox (§16.4) and the resource registry. As
+    built, the registry has its own leaf lock for register and unregister
+    (§16.9).
   - Per scheduler: the turn counter and the running task's context (`task`,
     `fail`).
   - Per task: the registers and frames, `random` (7.4), the `fail` jmp_buf
