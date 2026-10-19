@@ -206,7 +206,8 @@ Expected types flow into these operations for empty collections and Results.
   program.
 - `System.os()` is the operating system of the running program, a `String`:
   `"linux"`, `"macos"` or `"windows"`, and on any other system the lowercase
-  name `uname` gives (`"unknown"` when the system cannot say). It needs no flag.
+  name `uname` gives (`"unknown"` when the system cannot say or the name is not
+  printable ASCII). It needs no flag.
 - `System.pid()` is the process id of the running program, an `Int`. It needs no
   flag. A program that starts a VM with `--driver-pid` passes it, because the
   child VM checks it against its parent.

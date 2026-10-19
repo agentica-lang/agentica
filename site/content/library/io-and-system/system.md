@@ -73,7 +73,7 @@ The VM hides the variables it keeps for itself: `AGENTICA_CHANNEL`, and `UV_USE_
 System.os() -> String
 ```
 
-The operating system of the running program: `"linux"`, `"macos"` or `"windows"`, and on any other system the lowercase name that `uname` gives (`"unknown"` when the system cannot say). It needs no flag.
+The operating system of the running program: `"linux"`, `"macos"` or `"windows"`, and on any other system the lowercase name that `uname` gives (`"unknown"` when the system cannot say or the name is not printable ASCII). It needs no flag.
 
 ```agentica
 def main() -> Void

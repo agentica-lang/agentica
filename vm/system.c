@@ -4,6 +4,7 @@
  * Service layer; the VM's private channel marker stays hidden.
  */
 #include "services.h"
+#include "system_os.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -60,27 +61,36 @@ static agc_value builtin_pid(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_int((int64_t)uv_os_getpid());
 }
 
-/* linux, macos and windows for what uv_os_uname calls Linux, Darwin and Windows_NT, the lowercase system name for any
-   other, and "unknown" when the system will not say. libuv built with MinGW reports Windows as
-   MINGW32_NT-<major>.<minor> (src/win/util.c), so that prefix is Windows as well. */
+/* The name System.os gives for `sysname`: linux, macos or windows for Linux, Darwin or Windows_NT, else the lowercase
+   sysname when it is 1 to size-1 printable ASCII bytes (so its length in characters is its length in bytes), else
+   "unknown". `out` has `size` bytes. */
+void agc_system_os_name(const char *sysname, char *out, size_t size) {
+  const char *known[][2] = {{"Linux", "linux"}, {"Darwin", "macos"}, {"Windows_NT", "windows"}};
+  for (size_t k = 0; sysname && k < sizeof known / sizeof known[0]; k++) {
+    if (strcmp(sysname, known[k][0]) == 0) {
+      strcpy(out, known[k][1]);
+      return;
+    }
+  }
+  size_t n = sysname ? strlen(sysname) : 0;
+  bool printable = n > 0 && n < size;
+  for (size_t k = 0; printable && k < n; k++) printable = sysname[k] >= 0x20 && sysname[k] <= 0x7e;
+  if (!printable) {
+    strcpy(out, "unknown");
+    return;
+  }
+  for (size_t k = 0; k <= n; k++) {
+    char c = sysname[k];
+    out[k] = c >= 'A' && c <= 'Z' ? (char)(c - 'A' + 'a') : c;
+  }
+}
+
 static agc_value builtin_os(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)vm;
   (void)args;
   (void)span;
-  uv_utsname_t info;
-  char name[sizeof info.sysname] = "unknown";
-  if (uv_os_uname(&info) == 0) {
-    const char *known[][2] = {
-      {"Linux", "linux"}, {"Darwin", "macos"}, {"Windows_NT", "windows"}, {"MINGW32_NT", "windows"}};
-    size_t n = 0;
-    for (; info.sysname[n]; n++) {
-      char c = info.sysname[n];
-      name[n] = c >= 'A' && c <= 'Z' ? (char)(c - 'A' + 'a') : c;
-    }
-    name[n] = '\0';
-    for (size_t k = 0; k < sizeof known / sizeof known[0]; k++)
-      if (strncmp(info.sysname, known[k][0], strlen(known[k][0])) == 0) strcpy(name, known[k][1]);
-  }
+  char sysname[AGC_OS_NAME_MAX], name[AGC_OS_NAME_MAX];
+  agc_system_os_name(agc_system_sysname(sysname, sizeof sysname) ? sysname : NULL, name, sizeof name);
   return agc_string_value(agc_make_string(name, strlen(name), strlen(name)));
 }
 

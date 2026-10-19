@@ -55,6 +55,18 @@ int main(void) {
   const agc_string *name_of_os = agc_as_string(&vm, call(&vm, "System.os"));
   assert(name_of_os->bytes == strlen(os) && memcmp(name_of_os->data, os, name_of_os->bytes) == 0);
   assert(name_of_os->chars == strlen(os));
+  const char *names[][2] = {{"Linux", "linux"}, {"Darwin", "macos"}, {"Windows_NT", "windows"}, {"FreeBSD", "freebsd"},
+                            {"", "unknown"}, {"Caf\xc3\xa9", "unknown"}, {"a\tb", "unknown"}, {NULL, "unknown"}};
+  for (size_t k = 0; k < sizeof names / sizeof names[0]; k++) {
+    char got[AGC_OS_NAME_MAX];
+    agc_system_os_name(names[k][0], got, sizeof got);
+    assert(strcmp(got, names[k][1]) == 0);
+  }
+  char too_long[AGC_OS_NAME_MAX + 1], got[AGC_OS_NAME_MAX];
+  memset(too_long, 'x', AGC_OS_NAME_MAX);
+  too_long[AGC_OS_NAME_MAX] = '\0';
+  agc_system_os_name(too_long, got, sizeof got);
+  assert(strcmp(got, "unknown") == 0);
   assert(agc_io_close(&vm));
   puts("system tests passed");
   return 0;
