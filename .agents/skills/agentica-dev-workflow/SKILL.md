@@ -26,7 +26,8 @@ loop.
   read-only `git` and `gh` commands from it are fine.
 - A PR holds its own contracts: tests, docs, the site page and skill for a
   language change, a `CHANGELOG.md` entry for a user-visible change. Never
-  defer them to a later PR in a stack.
+  defer them to a later PR in a stack. When a PR touches docs, authors and
+  critics apply `documentation-writing`.
 - Wrap every build, test or program in a memory cap:
   `systemd-run --user --scope -q -p MemoryMax=<2G..8G> -p MemorySwapMax=0 --
   <cmd>` (6G-8G for VM builds and sanitizers). Repeat this in agent prompts.
