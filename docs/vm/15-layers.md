@@ -245,9 +245,12 @@ is no such place, so the plan adds none:
 - **The loop backend** is not ours: libuv picks io_uring or epoll inside. The VM
   only sets `UV_USE_IO_URING=0` for itself (`loop.c:481-482`) and drops it from
   children's environment (`process.c:21`, `process.c:759`).
-- **Platforms** are chosen at compile time with `#ifdef __linux__` stubs
-  (`loop.c:757`, `files.c:1365`, `tcp.c:1270`, `process.c:926`,
-  `http_client.c:845`, `http_server.c:707`, `input.c:237`). That stays.
+- **Platforms** are chosen at compile time, not through a table. The shared
+  logic is written once; an operating system difference that libuv does not
+  hide is a function of a platform adapter: a plain header plus one file per
+  system family, each guarded whole (`file_io.h`, `file_io.c`,
+  `file_windows.c`). Shared functions do not branch on `#ifdef`; older code
+  that still does moves behind an adapter when its area is ported.
 
 The function pointers that exist are callbacks (job kinds, close and release
 functions, builtins, `agc_conn_watch`), not tables of implementations, and they

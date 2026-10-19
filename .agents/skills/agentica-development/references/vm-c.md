@@ -65,7 +65,34 @@ return function pointers or that start with a macro or attribute; it reports
 static arrays whose size contains `(` (`x[sizeof(y)]`) as prototypes; it
 miscounts when `#if` branches open or close different numbers of braces; and
 a `\`+newline inside a literal shifts its line numbers. The `_WIN32` and
-macOS branches are not linted while those platforms are paused.
+macOS branches are not linted: `make vm-lint` runs on Linux only.
+
+**Platform code (Linux, macOS, Windows).** One behavior, one copy; only the
+operating system call differs.
+
+- Use libuv's portable API first (`uv_fs_*`, `uv_pipe_t`, `uv_hrtime`,
+  `uv_os_*`). Write an OS branch only where libuv has no call, or where its
+  call breaks a rule of `docs/vm/14-core-invariants.md` (for example a write
+  that runs on the loop thread).
+- Shared files (validation, buffers, ownership, scheduling, Result and
+  timeout) keep no `#ifdef` inside a function body. An OS difference is a
+  function of a platform adapter, in the façade/adapter shape of
+  `docs/vm/15-layers.md` §15.3:
+  - one plain header (`file_io.h` is the model) with a few operations, opaque
+    handles, no VM values, and one error convention (libuv codes or errno);
+    its comment names each real difference between systems;
+  - one file per system family (`<area>_posix.c`, `<area>_windows.c`), each
+    guarded whole by `#ifdef _WIN32` or `#ifndef _WIN32`, like
+    `file_windows.c`; `__APPLE__` and `__linux__` only for a real API gap
+    inside the POSIX file;
+  - no VM state, scheduling, timeouts or resource ownership in the adapter.
+- Signal to split: a shared file whose `#if` count grows with a port, two
+  copies of one function under `#ifdef`, or flags that only make sense on one
+  system. Move the operation behind the adapter header in the same PR, and
+  add the new file to the Makefile, `vm/tools/check-layers.sh` and
+  `references/repo-map.md`.
+- Tests of the shared behavior run on every system (Platforms CI); a test of
+  one system's adapter says so in its name or skip reason.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
