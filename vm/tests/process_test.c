@@ -11,6 +11,10 @@
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#include <windows.h>
+#else
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 static agc_vm vm;
@@ -183,6 +187,39 @@ static void search_tests(const char *self) {
   uv_fs_req_cleanup(&req);
 }
 
+/* True once the process has ended, whether or not anyone has collected its status (a POSIX zombie counts as ended,
+   and WNOWAIT leaves it for libuv). */
+static bool ended(long pid) {
+#ifdef _WIN32
+  HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)pid);
+  if (!h) return true;
+  bool done = WaitForSingleObject(h, 0) == WAIT_OBJECT_0;
+  CloseHandle(h);
+  return done;
+#else
+  siginfo_t info;
+  memset(&info, 0, sizeof info);
+  return waitid(P_PID, (id_t)pid, &info, WEXITED | WNOHANG | WNOWAIT) != 0 || info.si_pid == pid;
+#endif
+}
+
+/* Waits, for at most five seconds, for the child that wrote its pid to `path` to be gone. */
+static void wait_ended(const char *path) {
+  long pid = 0;
+  for (int k = 0; k < 500 && pid == 0; k++) {
+    FILE *f = fopen(path, "rb");
+    if (f) {
+      char line[32] = "";
+      if (fgets(line, sizeof line, f) && strchr(line, '\n')) pid = atol(line);
+      fclose(f);
+    }
+    if (pid == 0) uv_sleep(10);
+  }
+  assert(pid > 0);
+  for (int k = 0; k < 500 && !ended(pid); k++) uv_sleep(10);
+  assert(ended(pid));
+}
+
 static int child(int argc, char **argv) {
 #ifdef _WIN32
   _setmode(0, _O_BINARY);
@@ -190,7 +227,19 @@ static int child(int argc, char **argv) {
   _setmode(2, _O_BINARY);
 #endif
   if (strcmp(argv[1], "--wait") == 0) { uv_sleep(30000); return 0; }
-  if (strcmp(argv[1], "--exit") == 0) return 3;
+  if (strcmp(argv[1], "--exit") == 0) {
+    /* Say who we are, then end: the parent waits for this pid to be gone without running its loop. */
+    FILE *f = argc > 2 ? fopen(argv[2], "wb") : NULL;
+    if (f) {
+#ifdef _WIN32
+      fprintf(f, "%lu\n", (unsigned long)GetCurrentProcessId());
+#else
+      fprintf(f, "%ld\n", (long)getpid());
+#endif
+      fclose(f);
+    }
+    return 3;
+  }
   if (strcmp(argv[1], "--channel") == 0) {
     init();
     agc_parent_take(&vm);
@@ -254,15 +303,23 @@ int main(int argc, char **argv) {
   call("Process.close", args);
   /* The child has ended, but the loop has not run, so its exit callback is still to come: stopping it must not fail
      (TerminateProcess on a Windows process that exited gives UV_ESRCH). */
-  rest[0] = text("--exit");
+  char base[4096], pid_file[4200];
+  size_t base_size = sizeof base;
+  assert(uv_os_tmpdir(base, &base_size) == 0);
+  snprintf(pid_file, sizeof pid_file, "%s/agc-exit-%ld.txt", base, (long)uv_os_getpid());
+  agc_value exit_words[] = {text("--exit"), text(pid_file)};
   args[0] = text(self);
-  args[1] = agc_list_value(agc_list_from_array(rest, 1));
+  args[1] = agc_list_value(agc_list_from_array(exit_words, 2));
   args[2] = text(".");
   args[3] = agc_int(5000);
   handle = ok(call("Process.spawn_captured", args));
-  uv_sleep(500);
+  wait_ended(pid_file);
+  remove(pid_file);
   args[0] = handle;
   call("Process.close", args);
+  /* A close that failed would have ended the run; this one left the handle closed. */
+  args[1] = agc_int(5000);
+  assert(!agc_as_result(&vm, call("Process.wait", args))->ok);
   name_rules();
   search_tests(self);
   rest[0] = text("--channel");

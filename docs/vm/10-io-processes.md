@@ -31,11 +31,16 @@
   the signal that was asked for, and `exited` records 128 plus that signal: 137
   for the `SIGKILL` of a plain child, 143 for the `SIGTERM` of a captured one
   (`tests/test_process_windows.py` reads the pair from the `proc` trace). The
-  program cannot read that status, because the handle is closed by then.
-  When libuv can assign its job object (an outer job that forbids breakaway
-  prevents it), every child it starts is in one job that kills its members when
-  the VM that made it ends: a child that is a VM ends its own children, and a
-  VM that is killed takes its children and their descendants with it.
+  program cannot read that status, because the handle is closed by then; and
+  137 and 143 hold only when the stop reached a live child, since after an
+  `ESRCH` the real exit code is recorded.
+  Unless libuv cannot assign its job object (a Windows version without nested
+  jobs, `win/process.c`), every child it starts is in one job that kills its
+  members when the VM that made it ends. That job has
+  `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct children are in
+  it, not their subprocesses: the direct children of a VM that is killed die
+  with it, and a child that is itself a VM stops its own children the same
+  way. Other descendants are not covered.
   `Process.close` and the end of a run still stop only the direct child.
   Stopping a child that has already ended, before its exit callback ran, is not
   a failure on any system (`UV_ESRCH` is read as stopped).
