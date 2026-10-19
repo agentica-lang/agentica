@@ -67,6 +67,46 @@ agc_task *agc_runq_pop(agc_runq *q);
 bool agc_runq_remove(agc_runq *q, const agc_task *t);
 bool agc_task_commit_park(agc_task *t);
 
+/* The inbox of the I/O thread (docs/vm/16-architecture.md §16.4): requests from any thread, handled on the loop's
+ * thread. A request is malloc'd by the poster and freed by the handler; `subject` and `arg` mean what the handler says.
+ * agc_inbox_post links it under the inbox's lock and then wakes the loop (wake after publish). The handler gets every
+ * request that was queued, as one list in posting order, and keeps none. */
+typedef struct agc_request {
+  struct agc_request *next;
+  int kind;
+  void *subject;
+  int64_t arg;
+} agc_request;
+typedef struct agc_inbox agc_inbox;
+typedef void (*agc_inbox_fn)(void *owner, agc_request *list);
+agc_inbox *agc_inbox_open(struct uv_loop_s *loop, agc_inbox_fn handle, void *owner);
+void agc_inbox_keep(agc_inbox *in, bool keep);
+void agc_inbox_post(agc_inbox *in, agc_request *entry);
+void agc_inbox_close(agc_inbox *in);
+
+/* The outcome of a job and its reference count (docs/vm/16-architecture.md §16.5, rules 2 to 4). The outcome starts as
+ * AGC_JOB_PENDING and is set once, by the first thread that gets a CAS through (release): the winner owns the wake, a
+ * loser changes nothing. A reader takes it with acquire, so it sees what the winner wrote before it. The count starts
+ * at the number of holders; agc_job_unref says whether the caller dropped the last one (acq_rel, so the freeing thread
+ * sees every earlier use). */
+typedef enum { AGC_JOB_PENDING, AGC_JOB_DONE, AGC_JOB_EXPIRED, AGC_JOB_CANCELLED } agc_job_outcome;
+
+static inline bool agc_job_settle(_Atomic int *outcome, agc_job_outcome value) {
+  int pending = AGC_JOB_PENDING;
+  return atomic_compare_exchange_strong_explicit(outcome, &pending, value, memory_order_acq_rel,
+                                                 memory_order_acquire);
+}
+
+static inline agc_job_outcome agc_job_outcome_of(const _Atomic int *outcome) {
+  return (agc_job_outcome)atomic_load_explicit(outcome, memory_order_acquire);
+}
+
+static inline void agc_job_ref(_Atomic int *refs) { atomic_fetch_add_explicit(refs, 1, memory_order_relaxed); }
+
+static inline bool agc_job_unref(_Atomic int *refs) {
+  return atomic_fetch_sub_explicit(refs, 1, memory_order_acq_rel) == 1;
+}
+
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
 agc_task *agc_new_task(agc_vm *vm);
 void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
@@ -112,6 +152,7 @@ bool agc_io_init(void);
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 void agc_io_detach(agc_vm *vm, agc_task *t);
+bool agc_io_share(agc_vm *vm, bool keep);
 bool agc_io_close(agc_vm *vm);
 
 void agc_io_watch_stop(agc_vm *vm, int64_t driver);
