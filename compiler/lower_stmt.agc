@@ -27,7 +27,9 @@ export def lower_function(
 ) -> Result[Built]
   for param in params
     fx = Lowering.alloc(fx)
-    fx = fx.with(vars: fx.vars.put(param, fx.next - 1))
+    if param != "_"
+      fx = fx.with(vars: fx.vars.put(param, fx.next - 1))
+    end
   end
   count = fx.next
   for capture in captures
@@ -111,6 +113,11 @@ end
 # A new name takes the register its value is computed in; an assignment to a name in scope computes the value anywhere
 # and moves it.
 def lower_binding(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binding, saved: Int) -> Result[Lowering.Fx]
+  if node.name == "_"
+    # A discard keeps no register: the value is computed for its effects and the registers are free again.
+    out = try Expr.lower_expression(cx, fx, node.value, -1, false, false)
+    return ok(out.fx.with(next: saved))
+  end
   existing = Lowering.lookup(fx, node.name)
   if existing >= 0
     out = try Expr.lower_expression(cx, fx, node.value, -1, false, false)
@@ -218,6 +225,15 @@ def lower_control(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.LoopControl) -> Re
   return ok(Lowering.emit_at(fx, "jump", [label], node.span))
 end
 
+# The variable of a range loop names the register of its counter, except `_`: a discard must not alias that register,
+# which a later `_ = value` would otherwise overwrite.
+def bind_variable(fx: Lowering.Fx, name: String, slot: Int) -> Lowering.Fx
+  if name == "_"
+    return fx
+  end
+  return fx.with(vars: fx.vars.put(name, slot))
+end
+
 # A for over a list or a set (a set is read as a list in first-insertion order): the length is read once, an index
 # counts up, and each pass starts by reading the element, in the instruction put after the body's first `step`.
 def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -> Result[Lowering.Fx]
@@ -253,11 +269,13 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
     outer_exit = fx.loop_exit
     fx = fx.with(loop_next: increment, loop_exit: exit)
     before = fx
-    fx = Lowering.alloc(fx)
-    element = fx.next - 1
-    fx = fx.with(vars: fx.vars.put(node.variable, element))
     fx = Lowering.place(fx, top)
-    fx = fx.with(pending: [Ir.instr("list-get", [element, items, index], fx.file, [span])])
+    if node.variable != "_"
+      fx = Lowering.alloc(fx)
+      element = fx.next - 1
+      fx = fx.with(vars: fx.vars.put(node.variable, element))
+      fx = fx.with(pending: [Ir.instr("list-get", [element, items, index], fx.file, [span])])
+    end
     fx = try lower_block(cx, fx, node.body)
     fx = leave(fx, before)
     fx = fx.with(loop_next: outer_next, loop_exit: outer_exit)
@@ -316,7 +334,7 @@ def lower_range_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, span: S
   outer_exit = fx.loop_exit
   fx = fx.with(loop_next: increment, loop_exit: exit)
   before = fx
-  fx = fx.with(vars: fx.vars.put(node.variable, bounds))
+  fx = bind_variable(fx, node.variable, bounds)
   fx = Lowering.place(fx, top)
   fx = Lowering.step(fx, span)
   fx = try lower_block(cx, fx, node.body)

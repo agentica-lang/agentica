@@ -36,7 +36,7 @@ end
 ## The help of CHECK-CAPTURED-ASSIGNMENT: a for loop can assign.
 export def captured_help(name: String, capture: State.Capture) -> String
   element = "x"
-  if capture.params.size == 1
+  if capture.params.size == 1 and capture.params[0].name != "_"
     element = capture.params[0].name
   end
   path = ""

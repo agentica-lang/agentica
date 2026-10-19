@@ -248,6 +248,9 @@ end
 - The first assignment to a name creates it in the current block. Later
   assignments change its value, never its type. An annotation is allowed only on
   creation (`total: Float = 0.5`).
+- `_` binds nothing: `_ = f()` drops a result, and `_` can be a `for` variable,
+  a block or function parameter, or a pattern slot, repeated freely. Reading
+  `_` is `CHECK-UNKNOWN-NAME`; `_: Int = x` is `PARSE-UNEXPECTED-TOKEN`.
 - `x += e`, `-=`, `*=`, `/=`, `%=` mean `x = x op e`; `x` must already exist.
 - A name created in a block is not visible after that block's `end`. A new
   variable cannot reuse a name visible in an outer scope (no shadowing).

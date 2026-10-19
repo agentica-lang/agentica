@@ -1,4 +1,4 @@
-"""Checker rules through the product CLI: where diagnostics point, pipes and the nesting limit.
+"""Checker rules through the product CLI: where diagnostics point, pipes, the nesting limit and the `_` discard.
 
 These are the cases of the old checker test about the spans of diagnostics, the pipe rules and the nesting
 limit. The other cases are in tests/test_spec_checker_rest.py.
@@ -6,8 +6,9 @@ limit. The other cases are in tests/test_spec_checker_rest.py.
 Each program is written to a file and checked with `--json check FILE`. A test asserts the diagnostic code and its
 range (the 1-based line and column of the start and of the end, which is exclusive). Message and help texts are not
 asserted (AGENTS.md). The programs are also in the frozen corpus (tests/fixtures/frontend/frozen/corpus/), which the
-Agentica checker is compared with.
+Agentica checker is compared with, except the `_` discard programs at the end.
 """
+from tests.agentica_test import cli, run
 from tests.spec_support import check_diagnostic as problem, covered
 
 
@@ -118,3 +119,43 @@ def test_expressions_and_statements_nest_at_most_1000_levels(tmp_path):
     nested_ifs = ("".join("  if x == 1\n" for _ in range(300)) + "  y = " + nested_chains(2, 500) + "\n"
                   + "".join("  end\n" for _ in range(300)))
     expect(main_with("  x = 1\n" + nested_ifs), "CHECK-TOO-DEEP", (303, 12), tmp_path)
+
+
+DISCARD_HELPERS = "def f(x: Int) -> Int\n  return x\nend\n\n"
+
+
+def discard_program(body, helpers=DISCARD_HELPERS):
+    return helpers + main_with(body)
+
+
+def test_reading_a_discard_is_an_unknown_name(tmp_path):
+    cases = [
+        ("  _ = f(1)\n  puts(_)", "CHECK-UNKNOWN-NAME", (7, 8), "_"),
+        ("  for _ in [1]\n    puts(_)\n  end", "CHECK-UNKNOWN-NAME", (7, 10), "_"),
+        ("  _ = 1\n  _ += 1", "CHECK-UNKNOWN-NAME", (7, 3), "_"),
+        ('  _ = puts("x")', "CHECK-VOID-VALUE", (6, 7), 'puts("x")'),
+    ]
+    for body, code, start, covers in cases:
+        expect(discard_program(body), code, start, tmp_path, covers)
+
+
+def test_a_discard_checks_and_runs_wherever_a_name_is_bound(tmp_path):
+    g = "def g(_: Int, _: Int) -> Int\n  return 7\nend\n\n"
+    programs = [
+        (discard_program("  total = 0\n  for _ in 0...3\n    _ = f(1)\n    total += 1\n  end\n  puts(total)"),
+         ["3"]),
+        (discard_program("  total = 0\n  for _ in [5, 6]\n    _ = f(1)\n    total += 1\n  end\n  puts(total)"),
+         ["2"]),
+        (discard_program("  [1, 2].each do |_|\n    _ = f(1)\n    _ = \"text\"\n  end\n"
+                         "  {\"a\": 1}.each do |_, _|\n    puts(\"pair\")\n  end\n"
+                         "  for _ in [1]\n    for _ in [2]\n      puts(\"inner\")\n    end\n  end"),
+         ["pair", "inner"]),
+        (discard_program("  _ = f(1)\n  [1].each do |x|\n    _ = f(x)\n  end\n  puts(\"done\")"), ["done"]),
+        (discard_program("  puts(g(1, 2))", g), ["7"]),
+    ]
+    for text, lines in programs:
+        assert_clean(text, tmp_path)
+        path = tmp_path / "run.agc"
+        path.write_text(text, encoding="utf-8")
+        result = run(cli() + [str(path)])
+        assert (result.code, result.stdout.splitlines()) == (0, lines), (text, result.stderr)

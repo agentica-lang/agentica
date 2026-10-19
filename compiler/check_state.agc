@@ -222,8 +222,11 @@ export def leave(st: St, before: St) -> St
 end
 
 ## Introduces a name (a parameter, a binding, a pattern variable, a for variable) in the scope: no builtin constructor
-## or function name, and no shadowing.
+## or function name, and no shadowing. `_` binds nothing: it can repeat and it is never in scope to be read.
 export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Source.Span, immutable: Bool) -> Result[St]
+  if name == "_"
+    return ok(st)
+  end
   try reserve_local(cx, st, name, span)
   existing = st.vars.get(name)
   if existing.ok?

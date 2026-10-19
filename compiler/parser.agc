@@ -1214,6 +1214,16 @@ def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   type: Ast.Optional[Ast.TypeRef] = Ast.Optional.Absent
   next_id = ids
   if e.tokens[cursor].kind == "colon"
+    if e.tokens[pos].lexeme == "_"
+      return error(
+        Base.unexpected_help(
+          e,
+          cursor,
+          "a discard \"_\" has no type to declare",
+          "write _ = value",
+        ),
+      )
+    end
     parsed = try Base.parse_type(e, cursor + 1, next_id)
     type = Ast.Optional.Present(parsed.node)
     cursor = parsed.pos

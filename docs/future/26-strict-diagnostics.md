@@ -60,13 +60,12 @@ with `_` is the one way to keep a name that is unused on purpose (26.2).
 - Each item is its own small PR, in the order 26.1, 26.3, 26.2, 26.4: the two
   small migrations first; 26.2 after 26.3, so a read in dead code never has to
   be counted (26.2, "Code that never runs"); and 26.4 last, because its one
-  explicit discard, `_ = f(...)`, comes with 26.2 (before 26.2, `sent = f(...)`
-  would silence 26.4 and leave no trace). Each PR comes after 7i (order 7.2), so
-the Racket evaluator and its tests are gone and need no migration. All four are
-front end only: the linker (`compiler/linker.agc`) for 26.1, the checker
-(`compiler/checker.agc`) for 26.2, 26.3 and 26.4. Only the discard of 26.2
-touches the parser and `compiler/lowering.agc`, in a few lines; the bytecode
-format and the VM do not change.
+  explicit discard, `_ = f(...)`, is already there (#381); before 26.2,
+  `sent = f(...)` would silence 26.4 and leave no trace. Each PR comes after 7i
+  (order 7.2), so the Racket evaluator and its tests are gone and need no
+  migration. All four are front end only: the linker (`compiler/linker.agc`)
+  for 26.1, the checker (`compiler/checker.agc`) for 26.2, 26.3 and 26.4; the
+  bytecode format and the VM do not change.
 
 - Each PR is a breaking change and migrates the repo in the same PR: the
   programs in `examples/`, `stdlib/`, `benchmarks/`, `tests/` (the `.agc`
@@ -345,40 +344,13 @@ with `_` (`_count`) is never reported; reading one stays valid. This is the
 opt-out for a name kept on purpose, and it is only about this rule; to drop a
 value, the discard below is the form.
 
-**The discard `_`.** Decided by the user on 2026-10-12, as Go's `_ =` and Rust's
-`let _ =`. Today a bare `_` is the discard only in patterns
-(`pattern_binding = NAME | "_"`); everywhere else it is an ordinary variable, so
-two nested `for _ in` loops are `CHECK-SHADOWED-NAME`, and `_ = "s"` after
-`_ = 3` is `CHECK-TYPE-MISMATCH`. With this item, a bare `_` is the discard in
-every place that binds a name:
-
-- **Assignment:** `_ = f(...)` evaluates the value and drops it. `_` binds
-  nothing, so it can be assigned any number of times, with values of any type.
-  An annotation (`_: Int = x`) is `PARSE-UNEXPECTED-TOKEN` with the help
-  `write _ = x`, since a discard has no type to declare. A `Void` value is still
-  `CHECK-VOID-VALUE`, as for any assignment: there is nothing to drop. `_ =` is
-  accepted for every type, not only for a `Result`, because a discard is equally
-  explicit for every value.
-- **`for` variable and block parameter:** `for _ in 0...n` and `do |_, v|` bind
-  nothing, like `_` in a pattern, so `|_, _|` and nested `for _` loops are
-  valid. A block parameter `_` may keep an annotation (`|_: Int|`), which is
-  part of the block's type.
-- **Reading `_`** as a value is `CHECK-UNKNOWN-NAME`, at the `_`, with the help
-  `_ discards a value and cannot be read; give the value a name`. No new code is
-  needed: `_` is never a visible name. `_ += 1` reads `_` (it means
-  `_ = _ + 1`), so it gets the same error.
-- **Grammar:** the EBNF does not change (`_` is already a `NAME`); `grammar.md`
-  "Variables and scope" gets the meaning of `_`, and "Statements and blocks" and
-  "Blocks and closures" its use in `for` and block parameters. **Parser:**
-  `parse-binding` (`compiler/parser.agc`) rejects the annotation. **Checker:**
-  `check-binding`, `check-for` and `check-block-body` do not introduce `_`.
-  **Lowering:** `_ = e` lowers as the expression statement `e`, and a `_` loop
-  variable or block parameter gets a slot that nothing reads.
-- **What breaks:** a program that reads a `_` variable, or gives `_` an
-  annotation. The scan (the impact list) found neither; it found three
-  `for _ in` loops (`tests/fixtures/vm/random.agc`), which stay valid as
-  discards. Two nested `for _` loops and `|_, _|`, `CHECK-SHADOWED-NAME` today,
-  become valid.
+**The discard `_`.** Landed in #381 (decided on 2026-10-12, as Go's `_ =` and
+Rust's `let _ =`). A bare `_` binds nothing wherever a name is bound: an
+assignment, a `for` variable, a block or function parameter and a pattern slot.
+It can repeat, reading it is `CHECK-UNKNOWN-NAME`, and `_: Int = x` is
+`PARSE-UNEXPECTED-TOKEN` with the help `write _ = value`. A `Void` value is
+still `CHECK-VOID-VALUE`. The rest of this item, the unused-variable check, is
+planned.
 
 **Discarding a value.** `sent = TCP.send(socket, text, 1000)` with `sent` never
 read is reported. The help depends on the value's type. For a `Result`, it shows
