@@ -43,7 +43,12 @@
   `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct children are in
   it, not their subprocesses: the direct children of a VM that is killed die
   with it, and a child that is itself a VM stops its own children the same
-  way. Other descendants are not covered.
+  way. Other descendants are not covered. The tree holds only while each level
+  is a libuv process (a VM): when a channel child dies on Windows, its own
+  libuv children die with it, so a grandchild never reads the end of input from
+  the death of its parent there (on Linux and macOS it does). A parent that is
+  no libuv process, or that spawns with `UV_PROCESS_DETACHED`, leaves a child
+  that reads the end of input; `vm/tests/process_test.c` uses the second form.
   `Process.close` and the end of a run still stop only the direct child.
   Stopping a child that has already ended, before its exit callback ran, is not
   a failure on any system (`UV_ESRCH` is read as stopped, with no `#ifdef`). On
@@ -161,10 +166,14 @@ pair; Windows uses a pipe per direction (below). The C tests
 Python and `agentica test` coverage on Windows is still to come.
 
 - **The socket pair.** One `uv_socketpair` (`SOCK_STREAM`) per child. The parent
-  keeps one end as a libuv pipe handle, and the child gets the other as
-  descriptor 3 (`stdio[3]`, so `stdio_count` is 4) and the variable
-  `AGENTICA_CHANNEL=3`. A socket and not a FIFO, so the child cannot reopen it
-  through `/proc/self/fd/3` with a different mode, and one object carries both
+  keeps one end as two libuv pipe handles, one to read and one to write, on two
+  descriptors of the same socket (a `F_DUPFD_CLOEXEC` duplicate: one more
+  descriptor per channel), so the VM treats every system alike, and
+  `shutdown(SHUT_WR)` on the write one half-closes the socket. The child gets
+  the other end as descriptor 3 (`stdio[3]`, so `stdio_count` is 4) and the
+  variable `AGENTICA_CHANNEL=3`, and its VM duplicates it the same way. A
+  socket and not a FIFO, so the child cannot reopen it through
+  `/proc/self/fd/3` with a different mode, and one object carries both
   directions.
 - **Windows: a pipe per direction.** A byte pipe cannot be shut down for
   writing: libuv's `uv_shutdown` on a pipe that is also read starts a 50 ms

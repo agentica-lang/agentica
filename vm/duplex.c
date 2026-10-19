@@ -1,12 +1,9 @@
 /*
- * The private child channel: a libuv stream to read and one to write (the same
- * socket on POSIX, two pipes on Windows), with line reads and writes, for a
- * child process that talks to its parent. Service layer. The system part is
+ * The private child channel: a libuv stream to read and one to write (two
+ * descriptors of one socket on POSIX, two pipes on Windows), with line reads
+ * and writes, for a child process that talks to its parent. Service layer. The system part is
  * duplex_os.h. Design: docs/vm/10-io-processes.md §10.4.
  */
-#ifdef __APPLE__
-#define _DARWIN_C_SOURCE
-#endif
 #include "services.h"
 #include "file_io.h"
 #include "duplex_os.h"
@@ -30,9 +27,7 @@ struct request {
 };
 
 struct agc_duplex {
-  /* wr_pipe is unused when one stream carries both directions (rd == wr). */
   uv_pipe_t rd_pipe, wr_pipe;
-  uv_pipe_t *rd, *wr;
   uv_write_t write_req;
   uv_shutdown_t shutdown_req;
   uint8_t *write_data;
@@ -41,7 +36,7 @@ struct agc_duplex {
   size_t refs;
   const char *overflow;
   int rd_fd, wr_fd, write_status;
-  bool shared, attached, rd_live, wr_live, reading, closed, write_closed, sent;
+  bool attached, rd_live, wr_live, reading, closed, write_closed, sent;
 };
 
 static const char closed_text[] = "process: channel is closed";
@@ -69,13 +64,11 @@ static void shutdown_done(uv_shutdown_t *req, int status) {
   unref(OWNER(req, shutdown_req));
 }
 
-/* One descriptor given twice carries both directions: it belongs to the read side alone, so it is closed once. */
 static agc_duplex *make(int rd_fd, int wr_fd) {
   agc_duplex *d = calloc(1, sizeof(agc_duplex));
   if (!d) agc_out_of_memory();
-  d->shared = rd_fd == wr_fd;
   d->rd_fd = rd_fd;
-  d->wr_fd = d->shared ? -1 : wr_fd;
+  d->wr_fd = wr_fd;
   d->refs = 1;
   return d;
 }
@@ -93,17 +86,9 @@ static int open_end(agc_vm *vm, agc_duplex *d, uv_pipe_t *pipe, bool *live, int 
   return rc;
 }
 
-/* Both streams are open and point the right way: the Windows ends are one-way pipes, and a pipe that does not grant
-   the direction it is used for would fail on its first request. */
 static int attach(agc_vm *vm, agc_duplex *d) {
   int rc = open_end(vm, d, &d->rd_pipe, &d->rd_live, &d->rd_fd);
-  d->rd = &d->rd_pipe;
-  d->wr = d->rd;
-  if (!rc && !d->shared) {
-    rc = open_end(vm, d, &d->wr_pipe, &d->wr_live, &d->wr_fd);
-    d->wr = &d->wr_pipe;
-  }
-  if (!rc && (!uv_is_readable((uv_stream_t *)d->rd) || !uv_is_writable((uv_stream_t *)d->wr))) rc = UV_EBADF;
+  if (!rc) rc = open_end(vm, d, &d->wr_pipe, &d->wr_live, &d->wr_fd);
   d->attached = true;
   if (rc) agc_duplex_shut(d);
   return rc;
@@ -155,7 +140,7 @@ static void alloc_in(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
 
 static void stop_reading(agc_duplex *d) {
   if (!d->reading) return;
-  uv_read_stop((uv_stream_t *)d->rd);
+  uv_read_stop((uv_stream_t *)&d->rd_pipe);
   d->reading = false;
 }
 
@@ -171,7 +156,7 @@ static void read_in(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
 
 static void start_reading(agc_duplex *d) {
   if (d->reading || d->in.eof || d->in.error) return;
-  int rc = uv_read_start((uv_stream_t *)d->rd, alloc_in, read_in);
+  int rc = uv_read_start((uv_stream_t *)&d->rd_pipe, alloc_in, read_in);
   if (rc)
     d->in.error = -rc;
   else
@@ -288,7 +273,7 @@ agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_val
   if (!agc_stream_lock(vm, lock, &timeout, &result) || !usable(d, d->writer, &result)) return result;
   if (d->write_closed) return agc_error_value(closed_text);
   d->write_status = 0;
-  int rc = agc_stream_write((uv_stream_t *)d->wr, &d->write_req, &d->write_data, (const uint8_t *)text->data,
+  int rc = agc_stream_write((uv_stream_t *)&d->wr_pipe, &d->write_req, &d->write_data, (const uint8_t *)text->data,
                             text->bytes, wrote);
   if (rc < 0) return agc_system_error(vm, write_failed, -rc);
   if (rc == 0) return ok_void();
@@ -306,7 +291,7 @@ agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, 
   if (d->write_closed) return ok_void();
   d->write_closed = true;
   d->refs++;
-  if (uv_shutdown(&d->shutdown_req, (uv_stream_t *)d->wr, shutdown_done)) d->refs--;
+  if (uv_shutdown(&d->shutdown_req, (uv_stream_t *)&d->wr_pipe, shutdown_done)) d->refs--;
   return ok_void();
 }
 
@@ -325,7 +310,8 @@ static void forget_inherited(int fd, void *data) {
 
 void agc_parent_take(agc_vm *vm) {
   const char *marker = getenv(AGC_CHANNEL_ENV);
-  if (!marker || strcmp(marker, agc_chan_marker()) != 0) return;
+  /* sizeof the name counts its NUL, which steps over the '=' of the entry. */
+  if (!marker || strcmp(marker, agc_chan_marker() + sizeof AGC_CHANNEL_ENV) != 0) return;
   int read_fd, write_fd;
   if (!agc_chan_take(forget_inherited, vm, &read_fd, &write_fd)) return;
   uv_os_unsetenv(AGC_CHANNEL_ENV);
@@ -370,7 +356,7 @@ bool agc_parent_send(agc_vm *vm, const agc_string *text) {
     if (d->write_status >= 0) return true;
   } else if (d && !d->writer && !d->write_closed) {
     d->write_status = 0;
-    int rc = agc_stream_write((uv_stream_t *)d->wr, &d->write_req, &d->write_data, (const uint8_t *)text->data,
+    int rc = agc_stream_write((uv_stream_t *)&d->wr_pipe, &d->write_req, &d->write_data, (const uint8_t *)text->data,
                               text->bytes, wrote);
     if (rc == 0) return true;
     if (rc == 1) {

@@ -149,7 +149,9 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   timeout closes the channel for good. The VM takes the channel at startup only
   when `AGENTICA_CHANNEL` has the value of the system (`3`, `3,4` on Windows)
   and descriptor 3 is a socket, or a FIFO opened for reading and writing (a
-  regular file, a device or a one-way FIFO is left alone), then hides it and
+  regular file, a device or a one-way FIFO is left alone; on Windows descriptor
+  3 must be a pipe that grants reading and 4 one that grants writing), then
+  hides it and
   removes the variable, so your own children never inherit it. These two calls
   are for runner code: under `agentica test`, `Test.run` and the BDD step
   programs use the channel (`references/testing.md`), and a test or step that

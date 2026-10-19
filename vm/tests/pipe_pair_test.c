@@ -1,5 +1,5 @@
-/* The pair of one-way pipes that carries the child channel on Windows (and works the same elsewhere): the contract with
-   libuv and the system, checked with a plain C child that reads descriptors 3 and 4 with read() and write(). */
+/* The channel pair of the system (agc_chan_pair): the contract with libuv and the system, checked with a plain C
+   child that reads descriptor 3 and writes descriptor 4 (3 again on POSIX) with read() and write(). */
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
@@ -13,7 +13,7 @@
 #include <assert.h>
 #include <uv.h>
 
-#include "../file_io.h"
+#include "chan_spawn.h"
 
 #define TOTAL ((size_t)1048576 + 17)
 
@@ -40,11 +40,12 @@ static int exit_status = -1;
 
 static unsigned char pattern(size_t at) { return (unsigned char)(at * 31 + (at >> 8)); }
 
-/* The child: reads descriptor 3 to its end, checks the bytes and answers on descriptor 4 with how many it saw. */
+/* The child: reads descriptor 3 to its end, checks the bytes and answers with how many it saw. */
 static int child(void) {
+  int answer_fd = strchr(agc_chan_marker(), ',') ? 4 : 3;
 #ifdef _WIN32
   _setmode(3, _O_BINARY);
-  _setmode(4, _O_BINARY);
+  _setmode(answer_fd, _O_BINARY);
 #endif
   unsigned char buffer[4096];
   size_t seen = 0;
@@ -58,7 +59,7 @@ static int child(void) {
   }
   char answer[64];
   int length = snprintf(answer, sizeof answer, "%zu %d\n", seen, intact ? 1 : 0);
-  return fd_write(4, answer, length) == length ? 0 : 3;
+  return fd_write(answer_fd, answer, length) == length ? 0 : 3;
 }
 
 static void exited(uv_process_t *p, int64_t status, int signal) {
@@ -100,47 +101,17 @@ static void written(uv_write_t *req, int status) {
 }
 
 static void probe(const char *self) {
-  /* The same two pipes as the standard streams of a child: the end the child holds is blocking, the parent's is not. */
-  int into[2], outof[2];
-#ifdef _WIN32
-  assert(uv_pipe(into, 0, UV_NONBLOCK_PIPE) == 0);
-  assert(uv_pipe(outof, UV_NONBLOCK_PIPE, 0) == 0);
-#else
-  /* Elsewhere a pipe cannot be shut down (shutdown(2) wants a socket), and one socket pair per direction can. */
-  assert(uv_socketpair(SOCK_STREAM, 0, into, 0, 0) == 0);
-  assert(uv_socketpair(SOCK_STREAM, 0, outof, 0, 0) == 0);
-  int swap = into[0];
-  into[0] = into[1];
-  into[1] = swap;
-  swap = outof[0];
-  outof[0] = outof[1];
-  outof[1] = swap;
-#endif
-  uv_stdio_container_t stdio[5];
-  for (int k = 0; k < 3; k++) stdio[k].flags = UV_IGNORE;
-  stdio[3].flags = UV_INHERIT_FD;
-  stdio[3].data.fd = into[0];
-  stdio[4].flags = UV_INHERIT_FD;
-  stdio[4].data.fd = outof[1];
-  char *argv[] = {(char *)self, (char *)"--child", NULL};
-  uv_process_options_t options;
-  memset(&options, 0, sizeof options);
-  options.exit_cb = exited;
-  options.file = self;
-  options.args = argv;
-  options.stdio_count = 5;
-  options.stdio = stdio;
+  agc_chan_ends ends;
+  assert(agc_chan_pair(&ends) == 0);
   uv_process_t process;
-  assert(uv_spawn(&loop, &process, &options) == 0);
-  agc_fs_close(into[0]);
-  agc_fs_close(outof[1]);
+  assert(chan_spawn(&loop, &process, self, "--child", NULL, &ends, ends.child_count, false, 0, exited) == 0);
 
   link_state *s = calloc(1, sizeof *s);
   assert(s);
   assert(uv_pipe_init(&loop, &s->to, 0) == 0);
   assert(uv_pipe_init(&loop, &s->from, 0) == 0);
-  assert(uv_pipe_open(&s->to, into[1]) == 0);
-  assert(uv_pipe_open(&s->from, outof[0]) == 0);
+  assert(uv_pipe_open(&s->to, ends.write) == 0);
+  assert(uv_pipe_open(&s->from, ends.read) == 0);
 #ifdef _WIN32
   /* libuv must see the direction of each end: a write end that looked readable could not be shut down for good. */
   assert(uv_is_writable((uv_stream_t *)&s->to) && !uv_is_readable((uv_stream_t *)&s->to));
