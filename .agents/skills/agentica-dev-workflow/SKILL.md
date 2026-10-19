@@ -6,15 +6,15 @@ description: Run the Agentica pull-request loop from branch to merge with this r
 # Agentica development workflow
 
 One loop per change: **build → PR → review → fix → CI → merge**. Report each
-step to the owner in a line or two, in Spanish, in simple words. Code rules
+step to the owner in a line or two, in the owner's language. Code rules
 live in `AGENTS.md` and `agentica-development`; this skill is the loop.
 
 ## 1. Build
 
 - One branch and one PR per step, each in its own worktree:
   `git -C <repo> worktree add -b <branch> ../agentica-<topic> origin/master`,
-  then `git submodule update --init`. Never touch the owner's checkout (it may
-  be on another branch) or other agents' worktrees.
+  then `git submodule update --init`. Never touch the main checkout (it may be
+  on another branch) or other agents' worktrees.
 - A PR holds its own contracts: tests, docs, the site page and skill for a
   language change, a `CHANGELOG.md` entry for a user-visible change. Never
   defer them to a later PR in a stack.
@@ -30,13 +30,13 @@ live in `AGENTS.md` and `agentica-development`; this skill is the loop.
   and blocks new clones: refactor them.
 - Commits: a summary line, then short bullets; no attribution lines. Never
   rebase or force-push; merge `origin/master` into the branch.
-- Plans never go into `docs/`. The owner's `plan.md` is local and untracked;
-  tick its boxes there. Evidence goes in the PR body.
+- Plans never go into `docs/` (`AGENTS.md`). A local, untracked plan file is
+  where progress gets ticked; evidence goes in the PR body.
 
 ## 2. Review
 
-Start a fresh agent per review with only this prompt (Haiku for docs-only,
-Sonnet for code):
+Start a fresh agent per review with only this prompt; pick its model in the
+agent call (a small model for docs-only, a stronger one for code):
 
 ```text
 Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review GitHub pull request #N in the repository at /home/sonic182/apps/agentica (sonic182/agentica). Do not modify local files, switch branches, commit, push, run tests or programs, or post comments on GitHub. Return the full review report as your final answer.
@@ -73,8 +73,8 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
 
 - Code PRs need **CI** (`ci.yml`), **Platforms** (`platforms.yml`: Windows,
   macOS Intel and ARM) and **Site examples** green on the head commit.
-  Docs-only PRs skip `ci.yml`, but branch protection still waits for
-  Platforms: "not mergeable" usually means checks are pending.
+  Docs-only PRs skip `ci.yml`, but Platforms still runs, and GitHub refuses
+  the merge as "not mergeable" while checks are pending: wait, then merge.
 - Wait with one background loop on `gh run list --branch <b>` filtered by the
   head SHA, started from the main checkout; run the query once in the
   foreground first.
@@ -91,7 +91,9 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   tell the author of any PR that now conflicts to merge `origin/master`.
 - Stacks merge bottom-up; merge the updated lower branch into the next one.
 - After merge: check the worktree is clean with no unpushed commits, then
-  `git worktree remove --force`, delete the branch locally and on origin.
+  `git worktree remove --force`. Retarget any open PR based on the branch
+  (`gh pr edit N --base master`) before deleting the branch locally and on
+  origin.
 - Issues created for follow-ups go into the "Agentica Roadmap" project
   (users/sonic182/projects/1) as Todo; set In Progress when work starts.
 
