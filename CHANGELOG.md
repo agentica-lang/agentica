@@ -46,6 +46,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** on Windows, `Process.spawn_channel` gives the child a pipe per
+  direction (read 3, write 4, `AGENTICA_CHANNEL=3,4`), so `channel_close` ends
+  the child's input. A child that used the duplex pipe on descriptor 3, or a VM
+  older than this release, finds no channel.
+
 - A blocking call whose deadline and whose result fall in the same pass of the
   event loop now takes whichever the loop saw first: if the timer ran first the
   call times out, where it used to return the result if it had arrived by the

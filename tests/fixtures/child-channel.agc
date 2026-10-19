@@ -60,8 +60,8 @@ def spawning() -> Void
   spawn_shell(probe, true)
 end
 
-def ask(python: String, peer: String, mode: String) -> Void
-  p = Process.spawn_channel(python, [peer, "child", mode], ".", 5000).unwrap!
+def ask(peer_program: String, peer: String, mode: String) -> Void
+  p = Process.spawn_channel(peer_program, [peer, "child", mode], ".", 5000).unwrap!
   Process.close_stdin(p, 1000)
   if mode == "echo"
     done("send", Process.channel_send(p, "hello\n", 2000))
@@ -108,15 +108,15 @@ def ask(python: String, peer: String, mode: String) -> Void
   Process.close(p)
 end
 
-def plain(python: String, peer: String) -> Void
-  p = Process.spawn_captured(python, [peer, "child", "plain"], ".", 5000).unwrap!
+def plain(peer_program: String, peer: String) -> Void
+  p = Process.spawn_captured(peer_program, [peer, "child", "plain"], ".", 5000).unwrap!
   show("read", Process.channel_read_line(p, 300))
   done("send", Process.channel_send(p, "x\n", 300))
   done("close", Process.channel_close(p, 300))
   puts("exit: #{Process.wait(p, 3000).inspect}")
   show("printed", Process.read_available(p, 3000))
   Process.close(p)
-  q = Process.spawn(python, ["-c", "pass"], 1000).unwrap!
+  q = Process.spawn(peer_program, ["--version"], 1000).unwrap!
   show("not captured", Process.read_available(q, 300))
   Process.close(q)
 end

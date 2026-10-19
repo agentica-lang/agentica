@@ -11,7 +11,8 @@ import subprocess
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, compile_agc, process_alive, scaled, start_vm, vm_binary, wait_until)
+from tests.agentica_test import (FIXTURES, PYTHON, compile_agc, kill_process, process_alive, scaled, start_vm, vm_binary,
+                                 wait_until)
 
 PEER = FIXTURES / "process-peer.py"
 NEW_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -83,19 +84,6 @@ def bytecode(text, tmp_path, name):
     return compile_agc(source, tmp_path / (name + ".agcb"))
 
 
-def kill(pid):
-    """Last resort at the end of a test, so a failure leaves no process behind."""
-    if not process_alive(pid):
-        return
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, check=False)
-        return
-    try:
-        os.kill(int(pid), signal.SIGKILL)
-    except ProcessLookupError:
-        pass  # it ended between the check and the signal
-
-
 def gone(pid):
     return wait_until(lambda: not process_alive(pid), WAIT, 0.1)
 
@@ -103,7 +91,7 @@ def gone(pid):
 def test_a_child_is_closed_when_the_task_that_owns_it_ends(adopt, request, tmp_path):
     vm = adopt(start_vm(bytecode(OWNER_PROGRAM, tmp_path, "owner"), PYTHON, PEER, flags=["--allow-run"]))
     pid = vm.next_line(WAIT).strip()
-    request.addfinalizer(lambda: kill(pid))
+    request.addfinalizer(lambda: kill_process(pid))
     assert gone(pid)
     assert vm.process.poll() is None  # the run goes on: only the child was closed
 
@@ -112,7 +100,7 @@ def test_a_stop_signal_ends_the_run_and_its_children(adopt, request, tmp_path):
     vm = adopt(start_vm(bytecode(HOLD_PROGRAM, tmp_path, "hold"), PYTHON, PEER, flags=["--allow-run"],
                         creationflags=NEW_GROUP))
     pid = vm.next_line(WAIT).strip()
-    request.addfinalizer(lambda: kill(pid))
+    request.addfinalizer(lambda: kill_process(pid))
     assert process_alive(pid)
     if os.name == "nt":
         vm.process.send_signal(signal.CTRL_BREAK_EVENT)
@@ -128,9 +116,9 @@ def test_a_vm_and_its_child_end_when_their_driver_is_killed(adopt, request, tmp_
     driver = adopt(start_vm(bytecode(DRIVER_PROGRAM, tmp_path, "driver"), vm_binary(), child, tmp_path / "private",
                             PYTHON, PEER, flags=["--allow-run"]))
     vm_pid = driver.next_line(WAIT).strip()
-    request.addfinalizer(lambda: kill(vm_pid))
+    request.addfinalizer(lambda: kill_process(vm_pid))
     peer_pid = driver.next_line(WAIT).strip()
-    request.addfinalizer(lambda: kill(peer_pid))
+    request.addfinalizer(lambda: kill_process(peer_pid))
     assert process_alive(vm_pid) and process_alive(peer_pid)
     driver.process.kill()
     driver.wait(WAIT)
