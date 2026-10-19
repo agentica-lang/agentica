@@ -420,7 +420,7 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   return deadline && q->kind != REQ_SEND;
 }
 
-static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process", request_cancel};
+static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process", request_cancel, true};
 
 static void wrote(uv_write_t *w, int status) {
   proc *p = OWNER(w, write_req);
@@ -1129,26 +1129,26 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 }
 
 const agc_builtin agc_process_builtins[] = {
-  {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];
 #else
-const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
+const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_process_builtin_count = 0;
 

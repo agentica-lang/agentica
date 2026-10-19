@@ -1,7 +1,8 @@
 /*
  * The global run queue (docs/vm/16-architecture.md §16.3): FIFO order and removal from the middle on one thread (the
  * solo queue, which takes no lock), then the same queue shared by many pushers and poppers on threads, after
- * agc_runq_share. Every pushed task comes out exactly once.
+ * agc_runq_share. Every pushed task comes out exactly once. Then the blocking pop of an idle scheduler: a waiter gets
+ * the task pushed before or after it starts to wait, and agc_runq_end wakes every waiter, now and later.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -15,6 +16,7 @@
 #define POPPERS 3
 #define PER_PUSHER 2000
 #define TASKS 6000 /* PUSHERS * PER_PUSHER */
+#define WAIT_ROUNDS 300
 
 static agc_vm vm;
 static agc_task *tasks[TASKS];
@@ -42,6 +44,29 @@ static void test_order_and_removal(void) {
   assert(agc_runq_pop(q) == a && !a->next && !agc_test_ready_head(q));
 }
 
+/* A solo queue has no other thread to push, so its wait never blocks. */
+static void test_solo_wait(void) {
+  agc_runq *q = vm.rt->runq;
+  agc_task *a = fresh();
+  assert(agc_runq_wait(q) == NULL);
+  agc_runq_push(q, a);
+  assert(agc_runq_wait(q) == a && agc_runq_wait(q) == NULL);
+}
+
+/* An ended queue returns NULL from its wait whether or not it is solo, tasks left or not. */
+static void test_solo_end(void) {
+  agc_vm other;
+  agc_vm_init(&other, NULL, stdout, stderr, INT64_MAX);
+  agc_runq *q = other.rt->runq;
+  agc_runq_push(q, agc_new_task(&other));
+  agc_runq_end(q);
+  assert(agc_runq_wait(q) == NULL);
+}
+
+static void spin(int n) {
+  for (volatile int k = 0; k < n; k++) {}
+}
+
 static void push_all(void *arg) {
   assert(agc_gc_thread_enter());
   size_t first = (size_t)(uintptr_t)arg * PER_PUSHER;
@@ -51,8 +76,8 @@ static void push_all(void *arg) {
 
 static size_t index_of(const agc_task *t) { return (size_t)(t->id - tasks[0]->id); }
 
-/* Pops until every task has come out. The queue has no blocking pop (one scheduler never waits on it), so a popper
-   that finds it empty yields the processor and looks again. */
+/* Pops until every task has come out. This popper polls: it yields the processor when the queue is empty and looks
+   again (the blocking pop has its own tests below). */
 static void pop_all(void *arg) {
   (void)arg;
   assert(agc_gc_thread_enter());
@@ -92,14 +117,57 @@ static void test_shared_removal(void) {
   assert(agc_runq_pop(q) == a && agc_runq_pop(q) == c && agc_runq_pop(q) == NULL);
 }
 
+static agc_task *_Atomic waited;
+
+static void wait_one(void *arg) {
+  (void)arg;
+  assert(agc_gc_thread_enter());
+  atomic_store(&waited, agc_runq_wait(vm.rt->runq));
+  agc_gc_thread_leave();
+}
+
+/* The push falls before the waiter starts, while it starts and after it blocks (the spin grows with the round). A
+   push whose signal is lost leaves the waiter blocked, and the deadline of main ends the test. A wait that tests the
+   queue outside the lock is a data race that this test does not see in a plain build; make vm-tsan does. */
+static void test_wait_gets_the_push(void) {
+  agc_runq *q = vm.rt->runq;
+  for (int round = 0; round < WAIT_ROUNDS; round++) {
+    agc_task *t = fresh();
+    atomic_store(&waited, NULL);
+    uv_thread_t waiter;
+    assert(uv_thread_create(&waiter, wait_one, NULL) == 0);
+    spin((round * 977) % 60000);
+    agc_runq_push(q, t);
+    assert(uv_thread_join(&waiter) == 0);
+    assert(atomic_load(&waited) == t && agc_runq_pop(q) == NULL);
+  }
+}
+
+/* The end wakes all the waiters at once, and a wait after the end returns NULL at once, with tasks left in the queue. */
+static void test_end_wakes_everyone(void) {
+  agc_runq *q = vm.rt->runq;
+  uv_thread_t waiters[POPPERS];
+  for (size_t k = 0; k < POPPERS; k++) assert(uv_thread_create(&waiters[k], wait_one, NULL) == 0);
+  spin(50000);
+  agc_runq_end(q);
+  for (size_t k = 0; k < POPPERS; k++) assert(uv_thread_join(&waiters[k]) == 0);
+  assert(atomic_load(&waited) == NULL);
+  agc_runq_push(q, fresh());
+  assert(agc_runq_wait(q) == NULL);
+}
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
   agc_gc_allow_threads();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_order_and_removal();
+  test_solo_wait();
+  test_solo_end();
   test_threads();
   test_shared_removal();
+  test_wait_gets_the_push();
+  test_end_wakes_everyone();
   puts("run queue tests passed");
   return 0;
 }

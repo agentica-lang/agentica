@@ -10,9 +10,11 @@
 #include <string.h>
 
 /* The state READY means "in the run queue": a task that spawns, yields or is woken is READY before it is pushed. The
-   store is relaxed: the push under the queue lock publishes it to whoever pops the task. */
+   store is sequentially consistent because a cancel of a task that yields is a store-then-load pair like the one at the
+   park (cancel_one stores the flag and reads the state; this stores the state and agc_task_next reads the flag): with
+   weaker orders both could miss the other on a weakly ordered machine and the cancel would wait for another turn. */
 static void enqueue(agc_vm *vm, agc_task *t) {
-  atomic_store_explicit(&t->state, AGC_TASK_READY, memory_order_relaxed);
+  atomic_store_explicit(&t->state, AGC_TASK_READY, memory_order_seq_cst);
   agc_runq_push(vm->rt->runq, t);
 }
 
@@ -58,6 +60,7 @@ void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t) {
 }
 
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by) {
+  agc_sync_assert(vm);
   agc_task *t = *head;
   *head = *tail = NULL;
   while (t) {
@@ -126,13 +129,23 @@ void agc_task_park(agc_vm *vm, bool retry) {
    scheduler to the task: once the task is PARKED a waker may queue it and another scheduler run it. */
 bool agc_task_commit_park(agc_task *t) {
   agc_task_state expected = AGC_TASK_PARKING;
-  return atomic_compare_exchange_strong_explicit(&t->state, &expected, AGC_TASK_PARKED, memory_order_acq_rel,
+  return atomic_compare_exchange_strong_explicit(&t->state, &expected, AGC_TASK_PARKED, memory_order_seq_cst,
+                                                 memory_order_seq_cst);
+}
+
+/* Takes a PARKED task for the caller, the way a waker does but without queueing it: PARKED to READY. Whoever wins the
+   CAS owns the task (nobody else can queue or run it) and either pushes it or ends it. The cancel uses it (cancel_one,
+   agc_task_end_turn); a loser finds the state changed by a waker, who queues the task. */
+bool agc_task_claim(agc_task *t) {
+  agc_task_state expected = AGC_TASK_PARKED;
+  return atomic_compare_exchange_strong_explicit(&t->state, &expected, AGC_TASK_READY, memory_order_acq_rel,
                                                  memory_order_acquire);
 }
 
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper) { vm->task->stepper = stepper; }
 
-static void adopt(agc_task *parent, agc_task *child) {
+static void adopt(agc_vm *vm, agc_task *parent, agc_task *child) {
+  agc_sync_assert(vm);
   child->parent = parent;
   child->prev_sibling = NULL;
   child->next_sibling = parent->children;
@@ -159,6 +172,7 @@ void agc_task_close_done(agc_vm *vm, agc_task *t) {
 }
 
 static void finish_task(agc_vm *vm, agc_task *t) {
+  agc_sync_assert(vm);
   t->left_children = t->children != NULL;
   agc_close_owned(vm, t);
   atomic_store_explicit(&t->state, AGC_TASK_DONE, memory_order_release);
@@ -172,7 +186,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   while (t->children) {
     agc_task *child = t->children;
     leave_parent(child);
-    if (t->parent) adopt(t->parent, child);
+    if (t->parent) adopt(vm, t->parent, child);
   }
   leave_parent(t);
   if (!t->closing) agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
@@ -181,10 +195,8 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   if (end) end(vm, t);
 }
 
-/* A READY task is in the run queue, or a waker set READY and has not pushed it yet. In the second case the remove
-   finds nothing and the waker pushes a task that is about to end: whoever pops it drops it (agc_vm_run). */
+/* The task is out of the run queue already (cancel_one took it out or claimed it PARKED) or was never in it. */
 static void unlink_task(agc_vm *vm, agc_task *t) {
-  if (t->state == AGC_TASK_READY) agc_runq_remove(vm->rt->runq, t);
   if (t->parked) agc_io_detach(vm, t);
   if (t->lock_wait) agc_handle_leave(vm, t);
   if (t->channel.channel) agc_channel_leave(vm, t);
@@ -196,22 +208,56 @@ static void unlink_task(agc_vm *vm, agc_task *t) {
 }
 
 static void end_cancelled(agc_vm *vm, agc_task *t) {
+  agc_sync_assert(vm);
   unlink_task(vm, t);
   finish_task(vm, t);
 }
 
+/* The ending of a cancelled task by a scheduler at the end of its turn or at the pop: rt->sync is not held there. */
+static void end_cancelled_locked(agc_vm *vm, agc_task *t) {
+  agc_sync_take(vm);
+  end_cancelled(vm, t);
+  agc_sync_drop(vm);
+}
+
+/* The flag is set first, then the state decides who ends the task, and exactly one party does (§16.11):
+   - A task that runs, parks or was woken (RUNNING, PARKING, WOKEN) is on a scheduler's turn. That scheduler reads the
+     flag at the end of the turn and again after it publishes PARKED (agc_task_end_turn), so it ends the task within a
+     turn; a canceller on the same scheduler only has to end the turn (`yield`).
+   - A READY task is in the queue, or a waker set READY and has not pushed yet. The canceller takes it out of the queue
+     and ends it. If it is not there, the pusher or a scheduler that popped it ends it: agc_task_next checks the flag.
+   - A PARKED task is claimed by a CAS (agc_task_claim), the same race as a waker's. The winner owns it. A loser looks
+     at the state again: a waker made it READY. */
 static void cancel_one(agc_vm *vm, agc_task *t) {
-  t->cancelled = true;
+  atomic_store_explicit(&t->cancelled, true, memory_order_seq_cst);
   if (!t->group) AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64, t->id);
-  if (executing(t))
-    vm->yield = true;
-  else
-    end_cancelled(vm, t);
+  for (;;) {
+    switch (atomic_load_explicit(&t->state, memory_order_seq_cst)) {
+    case AGC_TASK_RUNNING:
+    case AGC_TASK_PARKING:
+    case AGC_TASK_WOKEN:
+      if (t == vm->task) vm->yield = true;
+      return;
+    case AGC_TASK_READY:
+      if (agc_runq_remove(vm->rt->runq, t))
+        end_cancelled(vm, t);
+      else
+        AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel_deferred task=%" PRIu64, t->id);
+      return;
+    case AGC_TASK_PARKED:
+      if (!agc_task_claim(t)) continue;
+      end_cancelled(vm, t);
+      return;
+    case AGC_TASK_DONE:
+      return;
+    }
+  }
 }
 
 /* Children before parents, so each cancelled task has no live child left
    to move; a running task only gets its flag and ends after its builtin. */
 void agc_task_cancel(agc_vm *vm, agc_task *root) {
+  agc_sync_assert(vm);
   if (root == vm->main || root->state == AGC_TASK_DONE || root->cancelled) return;
   agc_task *t = root;
   uint64_t count = 0;
@@ -231,6 +277,9 @@ void agc_task_cancel(agc_vm *vm, agc_task *root) {
   if (vm->task && executing(vm->task)) agc_charge(vm, count);
 }
 
+/* The task takes the result of its job. agc_io_finish takes rt->sync itself for the parts that change shared lists (the
+   hand-on of a handle's lock, a close) and for the halves of a kind marked `locked`; the rest, such as the text of a
+   file read, is built outside the lock. */
 static void resume(agc_vm *vm, agc_task *t) {
   if (t->parked) {
     agc_value result = agc_io_finish(vm, t);
@@ -345,6 +394,7 @@ static bool fatal(const agc_vm *vm, const agc_task *t) {
 static bool run_turn(agc_vm *vm, agc_task *t, agc_turn_result *r) {
   if (setjmp(vm->turn)) {
     vm->in_turn = false;
+    agc_sync_reset(vm);
     return false;
   }
   vm->in_turn = true;
@@ -394,6 +444,64 @@ static void check_stop(agc_vm *vm) {
   if (sig) agc_stop(vm, sig);
 }
 
+/* The next task to run. A DONE task is dropped (a cancel that raced a waker's push). So is a cancelled one that is not
+   running: the canceller could not take it out of the queue because a waker had set READY and not pushed yet, or a
+   scheduler had popped it already (cancel_one), so whoever pops it ends it. A cancel that comes after this check
+   is seen at the end of the turn. NULL when the queue is empty. */
+agc_task *agc_task_next(agc_vm *vm) {
+  /* Between turns vm->task still names the last task, which may be DONE. That is safe for cancel_one: it compares a
+     task with vm->task only in the states of a turn (RUNNING, PARKING, WOKEN), which a DONE task never has again. */
+  /* A scheduler holds rt->sync only inside a builtin or an ending, never between turns. */
+  if (vm->sync_depth) agc_fail(vm, "RUNTIME-INTERNAL", "rt->sync held between turns", 0);
+  for (;;) {
+    agc_task *t = agc_runq_pop(vm->rt->runq);
+    if (!t) return NULL;
+    if (atomic_load_explicit(&t->state, memory_order_acquire) == AGC_TASK_DONE) continue;
+    if (!atomic_load_explicit(&t->cancelled, memory_order_seq_cst)) return t;
+    vm->task = t;
+    end_cancelled_locked(vm, t);
+  }
+}
+
+/* What the scheduler does with a task when its turn is over. Everything it reads or does with the task comes before
+   the park is published: the trace, the cancel flag and the end of a cancelled task. Once agc_task_commit_park has
+   succeeded the task belongs to its waker, with one more read: a cancel can set the flag after the first look and
+   before the commit, and the canceller saw PARKING and left the task to this turn. So after the commit the flag is read
+   again, and the task is claimed by a CAS (agc_task_claim), which a waker or a canceller may win instead, and then they
+   own it. The cancel and this end of the turn are a store-then-load on both sides (the canceller stores the flag and
+   reads the state; the scheduler stores the state with the commit and reads the flag), so all four accesses are
+   sequentially consistent: with weaker orders both sides could read the old value and nobody would end the task. Returns
+   true when `main` has returned. */
+bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
+  trace_turn(vm, t, r, ran);
+  trace_gc(vm, "turn");
+  bool main_done = false;
+  if (!ran) {
+    if (fatal(vm, t)) longjmp(vm->fail, 1);
+    agc_sync_take(vm);
+    crash(vm, t);
+    agc_sync_drop(vm);
+  } else if (atomic_load_explicit(&t->cancelled, memory_order_acquire)) {
+    end_cancelled_locked(vm, t);
+  } else if (r == AGC_TURN_DONE) {
+    if (t == vm->main) {
+      AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
+      main_done = true;
+    } else {
+      agc_sync_take(vm);
+      finish_task(vm, t);
+      agc_sync_drop(vm);
+    }
+  } else if (r == AGC_TURN_YIELD) {
+    enqueue(vm, t);
+  } else if (!agc_task_commit_park(t)) {
+    enqueue(vm, t);
+  } else if (atomic_load_explicit(&t->cancelled, memory_order_seq_cst) && agc_task_claim(t)) {
+    end_cancelled_locked(vm, t);
+  }
+  return main_done;
+}
+
 agc_outcome agc_vm_run(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
     agc_profile_start(vm);
@@ -401,8 +509,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
     trace_spawn(vm, vm->main, NULL);
     enqueue(vm, vm->main);
     for (;;) {
-      agc_task *t = agc_runq_pop(vm->rt->runq);
-      if (t && atomic_load_explicit(&t->state, memory_order_acquire) == AGC_TASK_DONE) continue;
+      agc_task *t = agc_task_next(vm);
       if (!t) {
         check_stop(vm);
         if (!agc_io_poll(vm, true)) {
@@ -418,27 +525,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       agc_turn_result r = AGC_TURN_DONE;
       bool ran = run_turn(vm, t, &r);
       agc_turn_finish(vm);
-      /* Everything the scheduler reads or does with the task comes before the park is published: the trace, the
-         cancel flag and the end of a cancelled task. After agc_task_commit_park succeeds the task belongs to its
-         waker. */
-      trace_turn(vm, t, r, ran);
-      trace_gc(vm, "turn");
-      if (!ran) {
-        if (fatal(vm, t)) longjmp(vm->fail, 1);
-        crash(vm, t);
-      } else if (t->cancelled) {
-        end_cancelled(vm, t);
-      } else if (r == AGC_TURN_DONE) {
-        if (t == vm->main) {
-          AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
-          break;
-        }
-        finish_task(vm, t);
-      } else if (r == AGC_TURN_YIELD) {
-        enqueue(vm, t);
-      } else if (!agc_task_commit_park(t)) {
-        enqueue(vm, t);
-      }
+      if (agc_task_end_turn(vm, t, r, ran)) break;
       agc_io_poll(vm, false);
       check_stop(vm);
     }
@@ -447,6 +534,8 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       vm->rt->outcome.kind = AGC_EXITED;
       vm->rt->outcome.exit_code = 1;
     }
+  } else {
+    agc_sync_reset(vm);
   }
   trace_end(vm);
   return vm->rt->outcome;
@@ -460,7 +549,7 @@ agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const ag
   child->spawned = true;
   child->spawn_span = span;
   agc_task_call(vm, child, fn, args, argc, span);
-  adopt(parent, child);
+  adopt(vm, parent, child);
   trace_spawn(vm, child, parent);
   enqueue(vm, child);
   return child;
@@ -479,7 +568,7 @@ agc_task *agc_task_group(agc_vm *vm) {
   atomic_store_explicit(&g->state, AGC_TASK_PARKED, memory_order_relaxed);
   g->result = agc_void();
   g->test = vm->task->test;
-  adopt(vm->task, g);
+  adopt(vm, vm->task, g);
   return g;
 }
 
@@ -632,7 +721,7 @@ static agc_value slept(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind sleep_io = {NULL, slept, slept, NULL, false, "sleep", NULL};
+static const agc_io_kind sleep_io = {NULL, slept, slept, NULL, false, "sleep", NULL, false};
 
 static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t ms = agc_as_int(vm, args[0]);
@@ -660,15 +749,15 @@ static agc_value builtin_unobserved_crash(agc_vm *vm, agc_value *args, uint32_t 
 }
 
 const agc_builtin agc_task_builtins[] = {
-  {"Task.spawn", 2, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Task.await", 1, builtin_await, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Task.await", 2, builtin_await_timeout, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Task.sleep", 1, builtin_sleep, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Task.pending_count", 0, builtin_pending_count, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Task.await_result", 1, builtin_await_result, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Task.await_result", 2, builtin_await_timeout_result, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Task.spawn", 2, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.await", 1, builtin_await, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.await", 2, builtin_await_timeout, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.sleep", 1, builtin_sleep, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.pending_count", 0, builtin_pending_count, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.await_result", 1, builtin_await_result, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.await_result", 2, builtin_await_timeout_result, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

@@ -60,13 +60,25 @@ bool agc_program_set_source_root(agc_program *program, const char *root, size_t 
 /* The global run queue (docs/vm/16-architecture.md §16.3): one FIFO of ready tasks for every scheduler. The caller
  * sets the state of a task before it pushes it. agc_runq_pop returns NULL when the queue is empty. agc_runq_remove
  * takes a task out of the middle (a cancel) and says whether it found it. A new queue is solo: its one thread takes no
- * lock. Whoever starts a second thread that touches the queue calls agc_runq_share first, before that thread exists. */
+ * lock and never waits. Whoever starts a second thread that touches the queue calls agc_runq_share first, before that
+ * thread exists. */
 agc_runq *agc_runq_new(void);
 void agc_runq_share(agc_runq *q);
 void agc_runq_push(agc_runq *q, agc_task *t);
 agc_task *agc_runq_pop(agc_runq *q);
 bool agc_runq_remove(agc_runq *q, const agc_task *t);
+/* agc_runq_wait is the pop of an idle scheduler: it blocks until a task is queued, and returns NULL once agc_runq_end
+ * has been called (the run is over, also on a solo queue) or, on a solo queue, when it is empty. */
+agc_task *agc_runq_wait(agc_runq *q);
+void agc_runq_end(agc_runq *q);
+void agc_sync_reset(agc_vm *vm);
+/* Turns on the locks of the run queue, rt->sync and the two streams, and rt->shared. It runs on the thread that starts
+ * the others, before the second one exists. Only the C tests call it until the scheduler threads exist. */
+void agc_share(agc_vm *vm);
 bool agc_task_commit_park(agc_task *t);
+bool agc_task_claim(agc_task *t);
+agc_task *agc_task_next(agc_vm *vm);
+bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran);
 
 /* The inbox of the I/O thread (docs/vm/16-architecture.md §16.4): requests from any thread, handled on the loop's
  * thread. A request is malloc'd by the poster and freed by the handler; `subject` and `arg` mean what the handler says.

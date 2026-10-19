@@ -364,8 +364,9 @@ This note lists what the code chose.
 - Every line is valid UTF-8. A text value with a byte that is not part of a
   valid UTF-8 sequence is quoted, and each such byte is written as `\u00XX`. A
   cut line ends with `...` after a whole escape or sequence.
-- Events by category: `sched` (spawn, turn, wake, cancel, stall, fail, stop,
-  exit); `io` (start, done, timeout, lock wait and handoff, stdin, poll, end; a
+- Events by category: `sched` (spawn, turn, wake, cancel, `cancel_deferred`
+  when a cancelled READY task is not in the queue and its popper ends it,
+  stall, fail, stop, exit); `io` (start, done, timeout, lock wait and handoff, stdin, poll, end; a
   regular file as stdout or stderr shows as `kind=output` jobs, and a pipe,
   FIFO, terminal or socket as one `output_start stream=stdout|stderr` line and
   one `output_done` line per run of data; channel waits appear as `kind=lock` in

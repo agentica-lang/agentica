@@ -26,7 +26,12 @@ it as the guard; `list-bulk` (`repeat`, `to_a`, `reverse`, `take`, `drop`,
 `concat`, `join`, `String.split` and `sort` of 60,000 to 500,000 items) guards
 bulk builds, which must stay within 1.3 times the flat array; compare against a
 VM built from master, alternating the runs, and time loop-bound programs under
-more than one link layout before blaming list code. A new program needs `def
+more than one link layout before blaming list code. `channel-pingpong` (two
+tasks on two channels) and `print-lines` guard the cost of the shared-state
+locks. From PR 3c of issue #345 on (real scheduler threads; before it, no
+speed comparison is asked for a multicore change), compare a change to the
+locks or the scheduler against a VM built from master, and run them again with
+`AGENTICA_VM_TEST_SHARED=1` to see the cost of the locks when they are on. A new program needs `def
 scale() -> Int` returning 1 (the script rewrites it for `--size`), a
 deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
 The HTTP sanity check (20c) is apart: `python3 benchmarks/http_bench.py` (Python
