@@ -149,14 +149,17 @@ static ssize_t write_fd(int fd, const void *data, size_t n) {
 #endif
 }
 
-/* Writes what the descriptor takes without waiting. A Windows pipe or console has no such write: a request or a pool job
-   writes it. */
+/* Writes what the descriptor takes without waiting. A Windows pipe or console has no such write: a request or a pool
+   job writes it. */
 static void write_now(agc_output *s) {
   if (s->waits) return;
   while (s->len) {
     size_t n = run_length(s);
 #ifdef __APPLE__
-    if (!s->socket) {
+    /* The description is shared with the program that started this one, so it is not left non-blocking, and on macOS
+       send with MSG_DONTWAIT still stalled the loop on such a socket (seen on CI). A write of at most PIPE_BUF to a
+       pipe, or of SO_SNDLOWAT to a socket, cannot block once poll reports the descriptor writable. */
+    {
       struct pollfd fd = {.fd = s->fd, .events = POLLOUT};
       int rc = poll(&fd, 1, 0);
       if (rc == 0 || (rc < 0 && errno == EINTR)) return;
@@ -164,7 +167,11 @@ static void write_now(agc_output *s) {
         fail_stream(s);
         return;
       }
-      if (n > PIPE_BUF) n = PIPE_BUF;
+      size_t most = PIPE_BUF;
+      int low = 0;
+      socklen_t size = sizeof low;
+      if (s->socket) most = getsockopt(s->fd, SOL_SOCKET, SO_SNDLOWAT, &low, &size) == 0 && low > 0 ? (size_t)low : 1;
+      if (n > most) n = most;
     }
 #endif
 #ifdef _WIN32
@@ -600,8 +607,8 @@ static void queue_notice(agc_output *s, const char *text, size_t n, bool kept) {
   s->notice_len += n;
 }
 
-/* The last write of a stream: what the descriptor takes at once, or for a Windows pipe or console what its request takes
-   in FINAL_WAIT_MS. */
+/* The last write of a stream: what the descriptor takes at once, or for a Windows pipe or console what its request
+   takes in FINAL_WAIT_MS. */
 static void write_last(agc_output *s) {
 #ifdef _WIN32
   if (s->waits) {
