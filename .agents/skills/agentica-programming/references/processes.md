@@ -104,8 +104,9 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   still killed at once.
 - `agentica test` runs each BDD scenario, and each program under test, as a
   captured child.
-- Channels (Linux only). `spawn_channel` works like `spawn_captured` and also
-  opens a channel: a bidirectional socket pair, separate from the child's stdin,
+- Channels (Linux and macOS; Windows in progress). `spawn_channel` works like
+  `spawn_captured` and also opens a channel: a bidirectional socket pair,
+  separate from the child's stdin,
   stdout and stderr, that carries text lines in both directions. The child finds
   it on descriptor 3, and its environment has `AGENTICA_CHANNEL=3`. `spawn` and
   `spawn_captured` remove that variable from the child's environment, even when

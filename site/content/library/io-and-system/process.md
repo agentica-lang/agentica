@@ -235,7 +235,7 @@ false
 Process.spawn_channel(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
 ```
 
-Starts a program like `Process.spawn_captured`, and also opens a channel to it: a bidirectional socket pair, apart from its standard input, standard output and standard error, that carries lines of text in both directions. Linux only.
+Starts a program like `Process.spawn_captured`, and also opens a channel to it: a bidirectional socket pair, apart from its standard input, standard output and standard error, that carries lines of text in both directions. Linux and macOS; Windows support is in progress.
 
 The program finds the channel on file descriptor 3, and its environment holds `AGENTICA_CHANNEL=3`. `Process.spawn` and `Process.spawn_captured` remove that variable from the environment they pass on, so a program only sees a channel that its own parent opened for it.
 
