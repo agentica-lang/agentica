@@ -25,6 +25,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `make windows-docker-build` and `make windows-docker-check`: cross-build the
   Windows VM, then run its C tests and the Windows CI fast Python modules under
   Wine, without a Windows machine.
+- The Windows CI job sends Ctrl+Break to a VM in its own process group (exit
+  149, children stopped, file data written, a stuck stdout does not hold the
+  exit) and checks standard output and standard error on a pseudo console.
 
 ### Changed
 

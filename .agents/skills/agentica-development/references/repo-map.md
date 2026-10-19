@@ -155,6 +155,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_vm_logger.py  # unittest: std/logger: the default line, the async example, the Python peer (references/library-notes.md)
   test_vm_stop.py  # unittest: the exit path under stop signals (references/vm-tests.md)
   test_vm_channel.py  # unittest: a socket handed to a worker over a Channel (references/vm-tests.md)
+  test_windows_console_stop.py  # pytest, native Windows only: Ctrl+Break exit 149 and a pseudo console as stdout (references/ci.md)
   test_vm_stdout.py  # unittest: stdout and stderr on the loop (references/vm-tests.md)
   test_vm_stack.py  # unittest: stack-trace stderr in the three formats (references/vm-tests.md)
   test_vm_file_lines.py  # pytest: File.each_line on the VM (references/vm-tests.md)
