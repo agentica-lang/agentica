@@ -263,7 +263,7 @@ static void close_owned(void *arg) {
   agc_close_owned(&vm, vm.task);
 }
 
-/* A TLS connect to a peer that never answers the handshake; its task is cancelled, then the deadline passes. A
+/* A TLS connect reaches a peer that never answers the handshake; its task is cancelled, then the deadline passes. A
    scheduler finds the job busy and posts its cancel; the I/O thread runs `cancel` (the request leaves its slot and the
    socket is shut, no resource touched), the job comes back dropping and a scheduler ends it with `drop`, which runs on
    the I/O thread. The owner's end then closes the socket resource, and the peer reads the end of input. */
@@ -272,16 +272,18 @@ static void test_cancelled_tls_connect_past_its_deadline(void) {
   agc_runq_share(vm.rt->runq);
   int64_t port = 0;
   int silent = raw_listen(&port);
-  calling dial = call("TLS.connect", 4, text("127.0.0.1"), agc_int(port), text(CERTS "ca.pem"), agc_int(50));
+  calling dial = call("TLS.connect", 4, text("127.0.0.1"), agc_int(port), text(CERTS "ca.pem"), agc_int(1000));
   assert(start(&dial));
-  (void)agc_io_poll(&vm, false);
+  /* The loop runs the setup and the connect until the peer has the connection; the deadline is far enough off. */
+  struct pollfd p = {silent, POLLIN, 0};
+  while (poll(&p, 1, 0) == 0) (void)agc_io_poll(&vm, false);
+  int peer = accept(silent, NULL, NULL);
+  assert(peer >= 0);
   on_thread(detach_task, NULL);
   agc_test_wait_for_hand_over(&vm);
   on_thread(service_on_thread, NULL);
   agc_test_wait_for_hand_over(&vm);
   on_thread(service_on_thread, NULL);
-  int peer = accept(silent, NULL, NULL);
-  assert(peer >= 0);
   on_thread(close_owned, NULL);
   wait_eof(peer);
   close(peer);
