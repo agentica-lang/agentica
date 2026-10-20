@@ -4,15 +4,9 @@ weight: 5
 description: Ranges of Int values, and the Int loop methods times, upto and downto.
 ---
 
-`a..b` is the range from `a` to `b`, both included. `a...b` leaves `b` out.
-Both ends are `Int`, and the value has the type `Range`. A range holds only its
-start, its end and its kind, never a list, so `0...1000000000` costs nothing
-until you use it.
+`a..b` includes both ends; `a...b` leaves `b` out. Both ends are `Int`, and the type is `Range`. A range stores only its start, end and kind, so `0...1000000000` costs nothing until used. An end that is not `Int` is `CHECK-TYPE-MISMATCH`, as in `"a"..."c"`.
 
-An end that is not an `Int` is `CHECK-TYPE-MISMATCH`, as in `"a"..."c"`.
-
-`for` walks through a range in order. A range whose end is before its start is
-empty. Counting up to the largest `Int` does not overflow.
+`for` walks a range in order. An empty range (end before start) does nothing. Counting up to the largest `Int` does not overflow.
 
 ```agentica
 def main() -> Void
@@ -31,10 +25,7 @@ end
 2
 ```
 
-Ranges bind looser than every other operator, so `0...n + 1` is
-`0...(n + 1)`. A method call on a range needs parentheses: `(1..5).to_a`. A
-range prints as `1..5` or `1...5`, and two ranges are equal when their start,
-end and kind match.
+Ranges bind looser than every other operator, so `0...n + 1` is `0...(n + 1)`. A method call on a range needs parentheses: `(1..5).to_a`. A range prints as `1..5` or `1...5`, and two ranges are equal when their start, end and kind match.
 
 ```agentica
 def main() -> Void
@@ -59,8 +50,7 @@ Every function here is also a method: `Range.size(r)` is `r.size`.
 Range.size(r: Range) -> Int
 ```
 
-The number of values. A count that does not fit in `Int`, as for
-`(0..9223372036854775807).size`, stops the program.
+The number of values. A count that does not fit in `Int`, as for `(0..9223372036854775807).size`, stops the program.
 
 ```agentica
 def main() -> Void
@@ -82,8 +72,7 @@ end
 Range.to_a(r: Range) -> List[Int]
 ```
 
-The values as a list, in order. A range with more than 1048576 values stops
-the program.
+The values as a list, in order. A range with more than 1048576 values stops the program.
 
 ```agentica
 def main() -> Void
@@ -145,8 +134,7 @@ Range.first(r: Range) -> Result[Int]
 Range.last(r: Range) -> Result[Int]
 ```
 
-The first and the last included value, or an error for an empty range. Unlike
-Ruby, `(1...5).last` is `ok(4)`.
+The first and the last included value, or an error for an empty range. Unlike Ruby, `(1...5).last` is `ok(4)`.
 
 ```agentica
 def main() -> Void
@@ -170,10 +158,7 @@ Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void
 Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void
 ```
 
-Methods on `Int` for loops. `n.times` calls the block with `0` to `n - 1`, and
-nothing when `n <= 0`. `a.upto(b)` counts from `a` up to `b`, and `a.downto(b)`
-from `a` down to `b`, both ends included; they do nothing when the end is
-already past. A negative receiver needs parentheses: `(-2).upto(2)`.
+Methods on `Int` for loops. `n.times` calls the block with `0` to `n - 1`, and nothing when `n <= 0`. `a.upto(b)` counts from `a` up to `b`, and `a.downto(b)` from `a` down to `b`, both ends included; they do nothing when the end is already past. A negative receiver needs parentheses: `(-2).upto(2)`.
 
 ```agentica
 def main() -> Void

@@ -4,9 +4,11 @@ weight: 3
 description: Functions for Set[T], a collection of distinct Int or String values. Each one is also a method on sets.
 ---
 
-A set holds each value once and keeps the order in which values were first added. Elements are `Int` or `String`, like map keys. Sets are immutable: `add` and `delete` give a new set and leave the old one as it was. Every function here is also a method: `Set.size(s)` is `s.size`.
+A set holds each value once, in the order first added. Elements are `Int` or `String`, like map keys. Sets are immutable. Each function is also a method: `Set.size(s)` is `s.size`.
 
-`for` walks through a set in order. A set prints as `Set[1, 2]`. There is no `==` on sets (check `a.subset?(b) and b.subset?(a)`), and a set is not JSON-encodable, so it cannot go through `JSON.encode`. A set can be a struct field, a list item or a map value.
+- `for` walks a set in order. A set prints as `Set[1, 2]`.
+- There is no `==`; use `a.subset?(b) and b.subset?(a)`.
+- A set is not JSON-encodable, so `JSON.encode` refuses it.
 
 ```agentica
 def main() -> Void
@@ -51,7 +53,7 @@ Set[]
 Set.add(set: Set[T], value: T) -> Set[T]
 ```
 
-Adds an element at the end. A member leaves the set unchanged.
+Adds an element at the end. A member leaves the set as it is.
 
 ```agentica
 def main() -> Void
