@@ -39,7 +39,7 @@ vendored_openssl() {
   "$binary" run --version | grep -qF "OpenSSL $ossl" || die "$name does not report the vendored OpenSSL $ossl"
 }
 
-[ "$(host_arch)" = "$arch" ] || die "this machine is $(host_arch), not $arch: the $arch package must be built and tested on a $arch machine"
+[ "$(host_arch)" = "$arch" ] || die "this machine is $(host_arch), not $arch: the $arch package must be built and tested on $arch hardware"
 
 case "$kind" in
   elf)

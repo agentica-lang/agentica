@@ -180,6 +180,7 @@ def package(platform: str, binary: Path, out: Path) -> Path:
 # ---------------------------------------------------------------------------------------------------------------
 # smoke: the extracted package, away from the checkout and the build environment
 
+# std/http is left out on purpose: it needs the TCP builtins, so network_smoke imports it where the binary has them.
 HELLO = 'def main() -> Void\n  puts("hola, mundo ✓ ñandú")\nend\n'
 BAD = 'def main() -> Void\n  count = 1\n  count = "two"\n  puts(count)\nend\n'
 STD = """\
@@ -187,7 +188,6 @@ import Queue from "std/queue"
 import Binary from "std/binary"
 import Toml from "std/toml"
 import Logger from "std/logger"
-import HTTP from "std/http"
 import BDD from "std/bdd"
 
 def main() -> Void
