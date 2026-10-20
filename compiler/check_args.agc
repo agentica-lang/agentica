@@ -1,4 +1,4 @@
-## The first argument of a builtin call that must be a collection, a channel or a Result Each checks
+## The first argument of a builtin call that must be a collection, a channel, a task or a Result Each checks
 ## argument 0 against the context given and returns the new state with its type, or CHECK-TYPE-MISMATCH naming the type
 ## it should have been.
 
@@ -24,6 +24,11 @@ end
 ## Argument 0 as a Channel[T].
 export def channel_argument(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   return shaped(cx, st, site, T.Type.Unknown, "Channel", T.Type.Channel(T.Type.Var("T")))
+end
+
+## Argument 0 as a Task[R].
+export def task_argument(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  return shaped(cx, st, site, T.Type.Unknown, "Task", T.Type.Task(T.Type.Var("R")))
 end
 
 ## Argument 0 as a Result[T].

@@ -49,11 +49,27 @@ on.
 Result, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`. For
 any other type, the awaiter halts with `RUNTIME-TASK-CRASHED` at its await, with
 that text, so the crash moves up. Each await gives the same outcome.
-Cancellation reaches the running descendants of a crash, and the handler tasks
-of `HTTP.close_server`. A program can hold such a task, since a task can send
-its child's handle over a channel. An await of a cancelled task gives
+A task is cancelled, with its running descendants, by `Task.cancel`, by a crash
+of one of its ancestors, by the timeout of its `Task.map` item, and by
+`HTTP.close_server` (the handler tasks). An await of a cancelled task gives
 `error("task: cancelled")` when the result type is a Result, and halts with
 `RUNTIME-TASK-CANCELLED` otherwise.
+
+`Task.cancel(task: Task[R]) -> Void` cancels a task and its running descendants
+and returns at once; it never waits. A cancelled task runs at most the rest of
+its current turn: a task parked on a sleep, a channel, an await or I/O ends at
+once, and a task in the middle of a turn (on another scheduler) keeps running
+until that turn ends. So a task in its last turn on another scheduler may end as
+cancelled even though it reached its return. Its handles close as at any task
+end, so a channel it owns is closed and its receivers see the close. A task that
+has ended (returned, crashed or cancelled) is left as it is, so a second cancel
+does nothing, and an await after the cancel gives the cancelled outcome above.
+Any task that holds the handle may cancel it, whatever scheduler it runs on. A
+task that cancels itself, or one of its ancestors, is a descendant of the task
+it cancels, so it is cancelled too and stops right after the call. No handle
+reaches `main`, so `main` cannot be cancelled. A cancel is not a crash: it gives
+no crash report and does not change the exit code. A wrong argument type is
+`CHECK-TYPE-MISMATCH` at the argument.
 
 Some errors end the whole run, whichever task raises them: a runtime error in
 `main`, `RUNTIME-STEP-LIMIT`, an internal VM error, and `System.exit` in any

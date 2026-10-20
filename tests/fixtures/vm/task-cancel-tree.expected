@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 213,
+  "stdout": [
+    "root: task: cancelled",
+    "descendant: task: cancelled",
+    "descendant: task: cancelled",
+    "descendant: task: cancelled",
+    "descendant: task: cancelled",
+    "owner: task: cancelled",
+    "reader: channel: closed",
+    "closed? true",
+    "pending 0",
+    ""
+  ],
+  "stderr": []
+}

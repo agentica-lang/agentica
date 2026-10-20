@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 122,
+  "stdout": [
+    "stopper: ok 1",
+    "worker: task: cancelled",
+    "selfish: task: cancelled",
+    "parent: task: cancelled",
+    ""
+  ],
+  "stderr": []
+}

@@ -1,0 +1,10 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-TASK-CANCELLED",
+  "steps": 30,
+  "stdout": [
+    "ready 4",
+    ""
+  ],
+  "stderr": []
+}

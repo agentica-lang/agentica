@@ -364,7 +364,9 @@ This note lists what the code chose.
 - Every line is valid UTF-8. A text value with a byte that is not part of a
   valid UTF-8 sequence is quoted, and each such byte is written as `\u00XX`. A
   cut line ends with `...` after a whole escape or sequence.
-- Events by category: `sched` (spawn, turn, wake, cancel, `cancel_deferred`
+- Events by category: `sched` (spawn, turn, wake, cancel (`at=call` on the
+  task that `Task.cancel` names, `at=spawn` on a child that a cancelled task
+  spawned), `cancel_deferred`
   when a cancelled READY task is not in the queue and its popper ends it,
   stall, fail, stop, exit); `io` (start, done, timeout, lock wait and handoff,
   stdin, poll, end; a regular file as stdout or stderr shows as `kind=output`
