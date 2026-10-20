@@ -129,19 +129,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/http_service.c`
   - **Owns:** `HttpWire.service`, `jobs` and `options`
-    (`agc_http_service_builtins`, Linux, macOS and Windows; §10.7.1). `service` runs the client's owner task with `agc_task_service`
-    (`vm/task.c`): a root with no parent, so the client outlives a crash or
-    cancel of its maker, `Task.pending_count` and `Test.test` leave its tasks
-    out, and their timers are weak for the stall check (`rt->timers_weak`). The
-    `HttpClient` value holds the jobs channel and the options. The pool itself
-    (owner, one worker per connection, FIFO, retry) is `stdlib/http.agc`, on
-    `TCP`, `TLS`, `Channel` and `Task`; the workers' sockets are tcp.c sockets,
-    so the end of the run sends their TLS close_notify. `service` builds the
-    client first and passes it to its owner function. The client's TLS context
+    (`agc_http_service_builtins`, Linux, macOS and Windows; §10.7.1). `service`
+    runs the client's owner task with `agc_task_service` (`vm/task.c`): a root
+    with no parent, so the client outlives a crash or cancel of its maker,
+    `Task.pending_count` and `Test.test` leave its tasks out, and their timers
+    are weak for the stall check (`rt->timers_weak`). The `HttpClient` value
+    holds the jobs channel and the options. The pool itself (owner, one worker
+    per connection, FIFO, retry) is `stdlib/http.agc`, on `TCP`, `TLS`,
+    `Channel` and `Task`; the workers' sockets are tcp.c sockets, so the end of
+    the run sends their TLS close_notify. `service` builds the client first and
+    passes it to its owner function. The client's TLS context
     (`HttpWire.connect_tls`, `HttpWire.drop_tls`, #394) is a reference-counted
-    `tls_shared` in `vm/tcp.c`, built once on a pool thread; each connection
-    and the build hold a reference, so `drop_tls` never frees it under a
-    handshake
+    `tls_shared` in `vm/tcp.c`, built once on a pool thread; each connection and
+    the build hold a reference, so `drop_tls` never frees it under a handshake
 
 - **Path:** `vm/tls.h`, `vm/tls_openssl.c`, `vm/tls_trust.h`, `vm/tls_trust.c`,
   `vm/tls_trust_{posix,darwin,windows}.c`
@@ -509,20 +509,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     since the tests and `make goldens` run from different directories).
   - Certificates come from `tests/fixtures/tls/make-certs.sh` (OpenSSL 3.4 or
     newer for the expired one).
-- **HTTP client (20a; Linux, macOS, Windows)**: `stdlib/http.agc` on `vm/http_service.c`,
-  `vm/http_wire.c` and the reads of `vm/tcp.c` (the std-only guard). The
-  `http-client-service` and `test-client-no-leftover` fixtures hold the service
-  task's rules. The `http-*` fixtures are their own peers (a TCP
-  server task in the same program; only `main` prints); the std/http URL
-  parser costs about 500 steps per call, so the sweep samples them. Put the
-  other cases in `tests/test_vm_http.py`, which starts one Python peer
+- **HTTP client (20a; Linux, macOS, Windows)**: `stdlib/http.agc` on
+  `vm/http_service.c`, `vm/http_wire.c` and the reads of `vm/tcp.c` (the
+  std-only guard). The `http-client-service` and `test-client-no-leftover`
+  fixtures hold the service task's rules. The `http-*` fixtures are their own
+  peers (a TCP server task in the same program; only `main` prints); the
+  std/http URL parser costs about 500 steps per call, so the sweep samples them.
+  Put the other cases in `tests/test_vm_http.py`, which starts one Python peer
   per client case (`tests/fixtures/http-peer.py`: a `ThreadingHTTPServer`, the
-same over `ssl`, and a raw socket server with
-  canned hostile responses) and runs three programs once. Python 3
-  (standard library only) is required in CI, as Node is for TCP: with `CI`
-  set the test fails without it, locally it prints a skip. picohttpparser
-  is the submodule `vm/third_party/picohttpparser` (v1.4); bumping it: check
-  out the new tag inside it, `git add` it, and rerun
+  same over `ssl`, and a raw socket server with canned hostile responses) and
+  runs three programs once. Python 3 (standard library only) is required in CI,
+  as Node is for TCP: with `CI` set the test fails without it, locally it prints
+  a skip. picohttpparser is the submodule `vm/third_party/picohttpparser`
+  (v1.4); bumping it: check out the new tag inside it, `git add` it, and rerun
   `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/test_vm_http.py`.
 - **HTTP server (20c; Linux, macOS, Windows)**
   - `vm/http_server.c` on `vm/net.h`; `vm/http_wire.c` on the same parser and

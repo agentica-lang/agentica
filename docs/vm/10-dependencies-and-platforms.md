@@ -12,7 +12,7 @@ special file streams, locks, rename, recursive removal and asynchronous
 standard I/O remain separate follow-up work. `Path.remove` on Windows returns
 an error without deleting anything. The network runs on Windows as on Linux:
 TCP, TLS and `std/http` (client and server) use the same libuv sockets and the
-same C helpers, with no Windows-only protocol code.
+same C helpers, with no Windows-only HTTP code.
 
 The release (`release.yml`) builds one native archive per system on a runner of
 that system (11): Linux x86-64 against glibc 2.28, macOS Intel and Apple silicon

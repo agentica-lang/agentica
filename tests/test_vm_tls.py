@@ -620,6 +620,7 @@ class BlockingFile:
             os.mkfifo(fifo)
             self.path = fifo
             return
+        import ctypes
         import _winapi
         self.path = r"\\.\pipe\agentica-test-%d-%d" % (os.getpid(), id(self))
         # PIPE_ACCESS_OUTBOUND (2), and PIPE_TYPE_BYTE | PIPE_WAIT (0): _winapi does not name all of them.
@@ -634,6 +635,11 @@ class BlockingFile:
                     if error.winerror != 535:
                         raise
                 _winapi.WriteFile(handle, self._data.get())
+                # Wait until the reader has taken every byte, so closing the pipe cannot drop unread data.
+                flush = ctypes.WinDLL("kernel32", use_last_error=True).FlushFileBuffers
+                flush.argtypes = [ctypes.c_void_p]
+                if not flush(handle):
+                    raise ctypes.WinError(ctypes.get_last_error())
             finally:
                 _winapi.CloseHandle(handle)
 

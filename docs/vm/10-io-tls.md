@@ -151,8 +151,7 @@ vendored OpenSSL 3.5 LTS statically, and a default source build links the system
   (`tests/fixtures/tls-peer.py`): EOF with and without `close_notify`, the 1 MiB
   limit, every verify error on both sides, timeouts, and system trust through
   `SSL_CERT_FILE`, and HTTPS through `std/http`. It runs on Linux, macOS and
-  Windows. The
-  certificates in `tests/fixtures/tls/` come from `make-certs.sh`.
+  Windows. The certificates in `tests/fixtures/tls/` come from `make-certs.sh`.
 
 ### 10.3.1 TCP (as built)
 
