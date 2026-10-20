@@ -228,7 +228,7 @@ The C client this replaced differs in ways no test sees:
   `std/http` has read past a chunked body are, and they stop the connection
   from being kept.
 - A cancelled caller only stops waiting: its job runs to its end or its
-  deadline.
+  deadline, and then its connection is closed.
 - `TLS.connect` loads the CA file for each connection, so each has its own
   `SSL_CTX`, where the C client loaded one per client.
 - A body that is not UTF-8 also closes the connection.
