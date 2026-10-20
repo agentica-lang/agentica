@@ -86,7 +86,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 `docs/vm/10-io-scheduler.md`
    §10.2.1, "Builtins"): a builtin whose work grows with its input takes
    `AGC_COST_SIZE` or charges `agc_charge` from inside; never touch
-   `steps_left` for that. State goes in `vm->rt` (shared runtime),
+   `steps_left` for that. CPU work with no wait (`Crypto.sha256`, a sort)
+   stays on the scheduler with that cost; the libuv pool is for blocking
+   calls. State goes in `vm->rt` (shared runtime),
    `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files`
    first in file builtins and in `TCP.connect` and `TCP.listen`, so the
    fuzzer never touches the disk or the network.

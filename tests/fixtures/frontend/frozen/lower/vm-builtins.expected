@@ -3,6 +3,7 @@ Channel.closed?
 Channel.new
 Channel.recv
 Channel.send
+Crypto.sha256
 Dir.list
 Dir.mkdir
 Dir.mkdir_private

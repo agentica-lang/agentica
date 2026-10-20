@@ -88,6 +88,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   builtin_tables.c # the list of every builtin table (references/vm-core.md)
   strings.c       # String builtins (references/vm-core.md)
   numbers.c       # Int and Float builtins, bit builtins, Time (references/vm-core.md)
+  crypto.c        # Crypto builtins (Crypto.sha256) on the digest adapter (references/vm-builtins.md)
   random.c        # the xoshiro256** generator (references/vm-core.md)
   json.c          # the JSON parser and builtins (references/vm-core.md)
   json_value.c    # the Json value: nodes, encoder, builders (references/vm-core.md)
@@ -128,6 +129,8 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   net_windows.c   # the Windows side: libuv code to the UCRT errno
   tls.h           # TLS adapter types (references/vm-net.md)
   tls_openssl.c   # the TLS adapter over OpenSSL (references/vm-net.md)
+  digest.h        # digest adapter: one-shot SHA-256 of a byte buffer
+  digest_openssl.c # the digest adapter over OpenSSL EVP (no openssl.cnf, no atexit, as TLS)
   tls_trust.h     # system trust store: tls_trust.c (once per process, rejected certs, leaf verify callback), loaders tls_trust_posix.c (PEM bundle), tls_trust_darwin.c (Security), tls_trust_windows.c (Crypt32)
   http_parse.h    # HTTP head adapter (references/vm-net.md)
   http_pico.c     # the only file that includes picohttpparser (references/vm-net.md)
