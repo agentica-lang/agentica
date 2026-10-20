@@ -447,8 +447,12 @@ def next_line_or_stderr(child):
 
 # A reader task is cancelled while its read of stdin waits, with one pool thread: a file call still runs, the read
 # stays in flight and its line goes to the next reader, and the EOF then reaches both of two waiting readers once.
+# The reader warns "reading" in the turn that starts its read: a task cancelled before it runs never runs, so the
+# warning shows the reader ran before the cancel (only a turn that ends between the warning and the read is not ruled
+# out).
 CANCELLED_READER = """\
 def reader(n: Int) -> Int
+  IO.warn("reading")
   IO.inspect(IO.gets())
   return n
 end
@@ -480,6 +484,7 @@ def test_a_cancelled_stdin_reader_leaves_its_read_to_the_next_reader_and_eof_rea
     bytecode = compile_agc(source, tmp_path / "stdin.agcb")
     child = adopt(Child([*vm_command(), "--", bytecode, tmp_path / "out.txt"], cwd=tmp_path, env=env, stdin=True,
                         capture_stderr=True))
+    assert child.next_stderr_line(VM_WAIT_SECONDS) == "reading"
     assert next_line_or_stderr(child) == "ok()"
     child.process.stdin.write(b"late\n")
     child.process.stdin.flush()

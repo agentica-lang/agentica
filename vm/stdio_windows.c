@@ -20,7 +20,8 @@
 /* The most that one WriteConsoleW call takes, in UTF-16 units, as libuv's own console writer uses (older Windows fails
    for a larger one). A byte of UTF-8 makes at most one unit, so a slice of that many bytes always fits. */
 #define CONSOLE_UNITS 8192
-/* How many times the close of the stdin reader tries to cancel a read that has not ended, 1 ms apart. */
+/* How many times the close of the stdin reader tries to cancel a read that has not ended. The tries are uv_sleep(1)
+   apart, which is Sleep(1): about one timer tick (some 15.6 ms), so the close waits at most about 150 ms. */
 #define CANCEL_TRIES 10
 
 /* A pipe that libuv writes, one request at a time. libuv writes a pipe that was not opened for overlapped I/O on a
@@ -393,7 +394,8 @@ int64_t agc_stdin_take(agc_stdin_reader *r, const uint8_t **data) {
 static void reader_closed(uv_handle_t *handle) { reader_unref(handle->data); }
 
 /* The thread is told to end, and a read it is in is cancelled where Windows can (a pipe). A cancel that comes after the
-   thread set `in_read` but before it entered _read does nothing, so it is tried a few times while `in_read` stays set.
+   thread set `in_read` but before it entered _read does nothing, so it is tried a few times, about a timer tick apart,
+   while `in_read` stays set.
    What is left: a read that Windows cannot cancel (a console on some versions), or a thread that has not entered _read
    after the tries, stays in _read until input or EOF comes and takes that input; no later runtime in the process may
    read the descriptor. Such a thread touches nothing of the closed loop and frees the reader when it leaves. */

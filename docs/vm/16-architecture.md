@@ -100,9 +100,8 @@ enforces it.
   writes from `malloc`'d buffers: a job's, and a socket's input buffer
   (`agc_conn.in`), which it owns (§16.11). Stdin is read into a job's buffer
   (on Windows, the reader thread's own buffer) and appended to the shared input
-  by the `done` half, on a scheduler. The
-  `done` half of a job, which builds GC values from those bytes, runs on the
-  scheduler that resumes the task. TLS crypto runs on the I/O thread, beside
+  by the `done` half, on a scheduler. The `done` half of a job, which builds GC
+  values from those bytes, runs on the scheduler that resumes the task. TLS crypto runs on the I/O thread, beside
   the socket state it reads and writes (`vm/tcp.c`), so a slow handshake
   delays the loop; moving it to the schedulers is a later step (§16.10).
 - **No dispatcher thread.** Schedulers pull work; nobody pushes a task at a
@@ -826,8 +825,7 @@ a runnext slot and a short spin (§16.9, "Wakes between schedulers").
   may still run `ready`, `step` and `send_rest`: the poller pause must complete
   first. Stdin is read into a job's buffer (on Windows, the reader's buffer,
   `reader_done`) and `read_end` appends it to `rt->in.buf` (GC memory) on a
-  scheduler; how the schedulers lock `rt->in`
-  between them is open.
+  scheduler; how the schedulers lock `rt->in` between them is open.
 - **A libuv step whose result a half needs.** Decided for sockets: `serve`
   (`vm/tcp.c`) calls `uv_accept` on the I/O thread, a TLS child finishes its
   handshake there, and the request hands the child to `accept_done`.

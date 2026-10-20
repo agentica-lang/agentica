@@ -152,6 +152,7 @@ static void test_the_loop_closes_while_a_read_waits(void) {
   for (int round = 0; round < 20; round++) (void)agc_io_poll(&vm, false);
   agc_test_settle_loop(&vm);
   /* A reader still in its read ends with this input; it touches nothing of the closed loop. */
+  /* pipe_fds[0] stays open on purpose: the reader thread may still be in _read on it. */
   put("late\n");
   close(pipe_fds[1]);
 }
