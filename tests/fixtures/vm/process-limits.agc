@@ -1,5 +1,5 @@
 def main() -> Void
-  p = Result.unwrap!(Process.spawn("/bin/sh", ["-c", "printf '\\377\\nvalid\\r\\n'; cat"], 5000))
+  p = Result.unwrap!(Process.spawn("sh", ["-c", "printf '\\377\\nvalid\\r\\n'; cat"], 5000))
   IO.inspect(Process.read_line(p, 5000))
   IO.inspect(Process.read_line(p, 5000))
   IO.inspect(Process.read_bytes(p, -1, 1000))
@@ -18,7 +18,7 @@ def main() -> Void
   IO.inspect(Process.spawn("./agentica-no-such-command-7h", [], 1000))
   Process.close(p)
   big = "head -c 1048576 /dev/zero | tr '\\0' c; echo; head -c 1048577 /dev/zero | tr '\\0' b; echo; echo tail"
-  q = Result.unwrap!(Process.spawn("/bin/sh", ["-c", big], 5000))
+  q = Result.unwrap!(Process.spawn("sh", ["-c", big], 5000))
   IO.inspect(String.length(Result.unwrap!(Process.read_line(q, 5000))))
   IO.inspect(Process.read_line(q, 5000))
   IO.inspect(Process.read_line(q, 5000))

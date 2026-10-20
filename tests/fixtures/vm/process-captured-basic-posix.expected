@@ -1,0 +1,10 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 15,
+  "stdout": [
+    "ok(ProcessOutput(stdout: \"/\n\", stderr: \"\", truncated: false))",
+    ""
+  ],
+  "stderr": []
+}

@@ -214,9 +214,19 @@ Signatures are in
   empty path or one with NUL gives the same contract error as `File.stat`. A
   relative path starts at the working directory. `.`, `..` and repeated `/` are
   removed, and `..` after a link follows the link's target. The length of the
-  path has no buffer limit. In the result, each byte that is not part of a valid
+  path has no buffer limit in the VM; the system's own limit applies (1024 on
+  macOS, 260 on Windows). In the result, each byte that is not part of a valid
   UTF-8 sequence becomes U+FFFD, as in `Dir.list` names. The call has no timeout
   argument; it runs in the pool of file threads and does not stop other tasks.
+  Where the systems differ, the difference is the system's:
+  - macOS accepts a `/` after a file (`file/` gives the file); Linux and Windows
+    give an error.
+  - Windows removes `.` and `..` from the typed text before it follows any link,
+    so `link/..` is the folder that holds the link, not the parent of its
+    target, and `missing/..` is not an error. A name under a file gives
+    ENOENT (Linux and macOS: ENOTDIR). The path starts with a drive letter
+    (`/` is `C:/`), and a path over 260 characters is an error (the VM does not
+    opt in to long paths).
 
 ### Processes
 

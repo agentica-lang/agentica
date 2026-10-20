@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 94,
+  "stdout": [
+    "error(\"filesystem: path does not refer to a regular file\")",
+    "error(\"open-output-file: error opening file\n  path: @tmp/file.txt/x\n  system error: Not a directory; errno=20\")",
+    "\"  system error: Not a directory; errno=20\"",
+    "\"  system error: Not a directory; errno=20\"",
+    ""
+  ],
+  "stderr": []
+}

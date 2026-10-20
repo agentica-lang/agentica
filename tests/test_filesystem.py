@@ -608,7 +608,14 @@ end
     assert 'ok("linked")' in output
 
 
-@known_issue(WINDOWS, 436, "the Path.real link chains, loops and long paths are compared with POSIX realpath only")
+def symlink(target, path):
+    """A link to `target`; Windows needs to know whether it points at a folder, and keeps the target as typed."""
+    folder = os.path.isdir(os.path.join(os.path.dirname(path), target))
+    if WINDOWS:
+        target = target.replace("/", "\\")
+    os.symlink(target, path, target_is_directory=folder)
+
+
 def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains_loops_and_long_paths(new_dir, os_lines,
                                                                                                      os_peer_lines):
     root = new_dir()
@@ -619,8 +626,8 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
              ("link2", "link1"), ("loop2", "loop1"), ("loop1", "loop2"), ("nowhere", "dangling"), (".", "self"),
              ("/", "slash"), ("link1/file.txt", "file-link")]
     for target, *parts in links:
-        os.symlink(target, root.joinpath(*parts))
-    os.symlink(str(root / "real" / "dir"), root / "abs")
+        symlink(target, root.joinpath(*parts))
+    symlink(str(root / "real" / "dir"), root / "abs")
 
     def repeat(part: str) -> str:
         count = 1500
@@ -636,7 +643,9 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
              directory + "/link1/file.txt", directory + "/link1/../rel",
              "real" + repeat("/dir/.."), "real/dir" + repeat("/../dir")]
     seen = os_lines("real", items, cwd=root)
-    assert seen == os_peer_lines("real", items, cwd=root)
+    peer = os_peer_lines("real", items, cwd=root)
+    # Python answers with backslashes on Windows; the VM writes the slashes that a program types.
+    assert seen == ([line.replace("\\", "/") for line in peer] if WINDOWS else peer)
     table = dict(zip(items, seen))
     real_root = table["."][3:]
 
@@ -645,10 +654,19 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
 
     assert table["link1"] == ok_at("/real/dir")
     assert table["link1/file.txt"] == ok_at("/real/dir/file.txt")
-    assert table["link1/.."] == ok_at("/real")
-    assert table["abs/../rel"] == ok_at("/real/dir/file.txt")
     assert table["real/dir/up"] == ok_at("")
-    assert table["slash"] == "ok:/"
+    if WINDOWS:
+        # The system removes `..` from the typed text before it follows any link, so `link1/..` is the folder that
+        # holds the link, not the parent of its target, and the root link answers the drive.
+        assert table["link1/.."] == ok_at("")
+        assert table["abs/../rel"] == "error"
+        assert table["link2/../rel"] == "error"
+        assert seen[items.index(directory + "/link1/../rel")] == "error"
+        assert table["slash"] == "ok:" + real_root[:3]
+    else:
+        assert table["link1/.."] == ok_at("/real")
+        assert table["abs/../rel"] == ok_at("/real/dir/file.txt")
+        assert table["slash"] == "ok:/"
     assert table["loop1"] == "error"
     assert table["dangling"] == "error"
     assert table["real/dir/file.txt/x"] == "error"
@@ -657,6 +675,38 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
     if sys.platform == "darwin":
         overlong = ["real" + "/dir/.." * 1500, "real/dir" + "/../dir" * 1500]
         assert os_lines("real", overlong, cwd=root) == ["error", "error"]
+
+
+@host_only(WINDOWS, "files-real-windows.agc holds the Windows answer: a path over MAX_PATH cannot be made or resolved")
+def test_path_real_resolves_a_deep_folder_longer_than_a_small_buffer_where_the_system_allows_one(new_dir, os_lines,
+                                                                                                os_peer_lines):
+    root = new_dir()
+    deep = root.joinpath(*["d" * 100] * 30)
+    if sys.platform == "darwin":
+        # PATH_MAX is 1024 there, so the folder cannot exist and the answer is the error of a missing path.
+        with pytest.raises(OSError) as refused:
+            os.makedirs(deep)
+        assert refused.value.errno == errno.ENAMETOOLONG
+        assert os_lines("real", [str(deep)]) == ["error"]
+        return
+    os.makedirs(deep)
+    assert len(str(deep)) > 3000
+    seen = os_lines("real", [str(deep), str(deep) + "/..", "d" * 100], cwd=deep.parent)
+    assert seen[:2] == os_peer_lines("real", [str(deep), str(deep) + "/.."])
+    assert seen[0].endswith("/" + "/".join(["d" * 100] * 30)) and seen[2] == seen[0]
+
+
+def test_path_real_of_a_file_with_a_trailing_slash_is_an_error_except_on_macos_and_a_child_name_is_always_one(
+        new_dir, os_lines):
+    file = new_dir() / "file.txt"
+    file.write_text("data")
+    plain, slash, child = os_lines("real", [str(file), str(file) + "/", str(file) + "/x"])
+    assert plain.startswith("ok:") and child == "error"
+    if sys.platform == "darwin":
+        # realpath of macOS accepts the slash after a file and answers the file.
+        assert slash.rstrip("/") == plain
+    else:
+        assert slash == "error"
 
 
 @host_only(WINDOWS, "the Windows environment is UTF-16, so it cannot hold bytes that are not UTF-8")

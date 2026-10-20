@@ -93,7 +93,10 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 - `Path.join` uses host path rules. `Path.resolve` makes a lexical absolute path
   without resolving symlinks. `Path.real` resolves every symlink like POSIX
   `realpath`: the path must exist (else an error), a relative path starts at the
-  current directory, and it has no timeout argument.
+  current directory, and it has no timeout argument. Windows drops `..` from
+  the text before it follows a link (`link/..` is the link's folder), answers a
+  drive letter, and fails over 260 characters; macOS fails over 1024 and
+  accepts `file/`.
 - `File.read_text` of a pipe reads to EOF. A FIFO with no writer gives EOF;
   opening one for writing with no reader is an error.
 
