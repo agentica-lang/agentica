@@ -215,6 +215,8 @@ bool agc_stdio_open(agc_vm *vm, agc_output *out, int fd) {
 static bool same_object(HANDLE a, HANDLE b) {
   if (a == INVALID_HANDLE_VALUE || b == INVALID_HANDLE_VALUE) return false;
   if (a == b) return true;
+  /* NULL is no handle, and -2 is the CRT's mark of a descriptor that has none. */
+  if (!a || !b || a == (HANDLE)-2 || b == (HANDLE)-2) return false;
   HMODULE base = GetModuleHandleW(L"kernelbase.dll");
   FARPROC found = base ? GetProcAddress(base, "CompareObjectHandles") : NULL;
   if (!found) return false;
@@ -226,21 +228,38 @@ bool agc_stdio_same(const agc_output *first, int fd) {
   return same_object((HANDLE)_get_osfhandle(first->fd), (HANDLE)_get_osfhandle(fd));
 }
 
+/* The standard handle of FD 0, 1 or 2, from the process (not the CRT, whose lookup of a closed descriptor calls the
+   invalid parameter handler). */
+static HANDLE std_handle(int fd) {
+  return GetStdHandle(fd == 0 ? STD_INPUT_HANDLE : fd == 1 ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+}
+
 /* Windows resets a socket whose last handle closes with the process, and its reader loses what it has not read yet.
    After shutdown the bytes already sent stay readable and then the reader sees the end; shutdown does not wait for the
    reader. A socket that another process still holds (a parent, a child, a second writer) is left open for it: it is
-   shut down only when this process's standard handles are all the handles to it. */
-void agc_stdio_end(agc_output *out) {
+   shut down only when this process's stdin, stdout and stderr handles are all the handles to it. Two of them are
+   counted as one socket through CompareObjectHandles, which Windows 10 before 1607 lacks: there a socket given as two
+   standard streams is left open (and reset). A socket that is also stdin (inetd) is shut down only while the stdin
+   reader is not in a read of it, under the reader's lock: on a handle that is not overlapped, shutdown would wait for
+   that read. */
+void agc_stdio_end(agc_output *out, agc_input *in) {
   if (!out->io->socket) return;
   HANDLE handle = (HANDLE)_get_osfhandle(out->fd);
   ULONG ours = 1;
-  for (int fd = 1; fd <= 2; fd++) {
-    HANDLE other = (HANDLE)_get_osfhandle(fd);
-    if (fd != out->fd && other != handle && same_object(handle, other)) ours++;
+  bool is_stdin = false;
+  for (int fd = 0; fd <= 2; fd++) {
+    if (fd == out->fd) continue;
+    HANDLE other = std_handle(fd);
+    if (!same_object(handle, other)) continue;
+    if (other != handle) ours++;
+    if (fd == 0) is_stdin = true;
   }
   PUBLIC_OBJECT_BASIC_INFORMATION info;
   if (NtQueryObject(handle, ObjectBasicInformation, &info, sizeof info, NULL) != 0 || info.HandleCount > ours) return;
-  (void)shutdown((SOCKET)handle, SD_SEND);
+  agc_stdin_reader *r = is_stdin ? in->reader : NULL;
+  if (r) uv_mutex_lock(&r->lock);
+  if (!r || !r->in_read) (void)shutdown((SOCKET)handle, SD_SEND);
+  if (r) uv_mutex_unlock(&r->lock);
 }
 
 ssize_t agc_stdio_try(agc_output *s, const uint8_t *data, size_t n) { return _write(s->fd, data, (unsigned)n); }

@@ -51,17 +51,20 @@ def stream_socket(size):
     """A connected socket pair for a standard stream of the VM: (the reader's socket, the writer as a descriptor).
 
     On Windows a Winsock handle is not a descriptor: the writer becomes a CRT descriptor over its handle, which is what
-    Popen duplicates for the child. SIZE, when given, sets the buffers of both ends.
+    Popen duplicates for the child. SIZE, when given, asks for buffers of that size at both ends (the system may cap
+    it). Elsewhere the pair is a Unix socketpair.
     """
+    reader, writer = winsock_pair() if os.name == "nt" else socket.socketpair()
+    if size:
+        for end, option in ((reader, socket.SO_RCVBUF), (writer, socket.SO_SNDBUF)):
+            try:
+                end.setsockopt(socket.SOL_SOCKET, option, size)
+            except OSError:
+                pass
     if os.name != "nt":
-        reader, writer = socket.socketpair()
         return reader, writer.detach()
     import msvcrt
 
-    reader, writer = winsock_pair()
-    if size:
-        reader.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, size)
-        writer.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, size)
     return reader, msvcrt.open_osfhandle(writer.detach(), 0)
 
 
@@ -77,6 +80,7 @@ def main():
     parser.add_argument("--merge", action="store_true")
     parser.add_argument("--socket", action="store_true")
     parser.add_argument("--error-socket", action="store_true")
+    parser.add_argument("--stdin-socket", action="store_true")
     parser.add_argument("--pty", action="store_true")
     parser.add_argument("--close-after", type=int, default=0)
     parser.add_argument("--pipe-size", type=int, default=0)
@@ -87,12 +91,8 @@ def main():
 
     read_socket = None
     if options.socket:
-        if os.name == "nt":
-            read_socket, write_fd = stream_socket(options.pipe_size)
-            read_fd = None
-        else:
-            reader, writer = socket.socketpair()
-            read_fd, write_fd = reader.detach(), writer.detach()
+        read_socket, write_fd = stream_socket(options.pipe_size)
+        read_fd = None
     elif options.pty:
         import pty
 
@@ -110,7 +110,9 @@ def main():
         error_read, error_write = os.pipe()
 
     start = time.monotonic()
-    vm = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=write_fd, stderr=error_write, close_fds=True)
+    # --stdin-socket: the socket of stdout is also stdin (inetd style); the peer never writes to it.
+    stdin = write_fd if options.stdin_socket else subprocess.DEVNULL
+    vm = subprocess.Popen(command, stdin=stdin, stdout=write_fd, stderr=error_write, close_fds=True)
     os.close(write_fd)
     if error_read is not None:
         os.close(error_write)

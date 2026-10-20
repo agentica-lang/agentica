@@ -641,10 +641,10 @@ void agc_poller_close(agc_poller *p);
    when it is full). start asks for DONE to be called when a POLL descriptor can be written, or when a STREAM has
    written the two ranges. write is one blocking write on a pool thread (DISK and THREAD): like write(2), it returns
    the bytes written or -1 with errno. end runs just before the process exits, with no write of OUT in flight: it
-   tells the reader of a Windows socket that the output is over. */
+   tells the reader of a Windows socket that the output is over, unless IN (stdin) is in a read of the same socket. */
 bool agc_stdio_open(agc_vm *vm, agc_output *out, int fd);
 bool agc_stdio_same(const agc_output *first, int fd);
-void agc_stdio_end(agc_output *out);
+void agc_stdio_end(agc_output *out, agc_input *in);
 void agc_stdio_close(agc_stdio *io);
 ssize_t agc_stdio_try(agc_output *out, const uint8_t *data, size_t n);
 void agc_stdio_start(agc_output *out, const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,

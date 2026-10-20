@@ -554,10 +554,13 @@ section says how the scheduler and the loop keep them, as built.
   processes. The loop never writes a pipe, a console or a refused handle.
   Windows resets a socket whose last handle closes with the process, and its
   reader loses what it has not read. So just before the exit, a socket given as
-  stdout or stderr, with no write in flight and no handle outside the VM's
-  standard ones, gets `shutdown(SD_SEND)` (`agc_output_end`), which does not
-  wait for the reader. The pipe's handle is a private, non-inheritable copy of
-  the descriptor, so closing it leaves stdout open, and closing it cancels the
+  stdout or stderr gets `shutdown(SD_SEND)` (`agc_output_end`), which does not
+  wait for the reader, when no write of it is in flight, when this process's
+  stdin, stdout and stderr hold every handle to it, and, if it is also stdin,
+  when no read of stdin is in flight. Windows 10 before 1607 has no
+  `CompareObjectHandles`, so there a socket given as two standard streams is not
+  shut down. The pipe's handle is a private, non-inheritable copy of the
+  descriptor, so closing it leaves stdout open, and closing it cancels the
   request in flight. A request takes the ranges of the ring as they are and ends
   all or nothing, so the ring is consumed when the request ends. Neither a pipe
   request nor a pool job has a non-blocking try: where Unix makes one
@@ -659,8 +662,9 @@ section says how the scheduler and the loop keep them, as built.
     the flush limit, and with a reader that never reads, the run ends after
     `--flush-timeout` with the existing warning, also when stderr is the same
     stuck pipe (and then no warning is mixed into the data); a socket as stdout
-    not read yet while a timer task keeps running, and on Windows a socket read
-    only after the exit that still gets every row; `puts` and `IO.warn` on
+    not read yet while a timer task keeps running, and a socket as stdout,
+    stderr, both, or stdin and stdout, read only after the exit, that still gets
+    every row; `puts` and `IO.warn` on
     one pipe and on one pty keep the order of the calls under a slow reader;
     `IO.flush` returns only after the reader started; a task crash diagnostic
     that arrives while stderr is full arrives whole when the reader reads later;
