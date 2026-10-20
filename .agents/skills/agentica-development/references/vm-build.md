@@ -24,7 +24,8 @@ make CCACHE=                         # without ccache (used when installed and i
 make SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm-test TRACE=0                 # trace points compiled out (still type-checked); `agentica run --version` says "trace off"
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica run -- prog.agcb   # sched,io,proc,tls,loader,gc
-AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # steps and calls per function and source file, time per builtin, at the end of the run (not part of `all`)
+AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # steps and calls per function and source file, time per builtin, Profile.measure sections, at the end of the run (not part of `all`)
+AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded AGENTICA_VM_TRACE_FILE=out.folded dist/agentica prog.agc   # folded stacks for flamegraph.pl, inferno, speedscope; AGENTICA_PROFILE_SAMPLE=N (default 1000 steps)
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers

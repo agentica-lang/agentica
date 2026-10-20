@@ -46,6 +46,11 @@
 #define TRACE_MODE 0600
 #endif
 
+/* Steps between two samples of the folded profile: a sample walks the stack, so one every 1000 steps keeps its cost to
+   a few percent of a profiled run, and a run of a million steps still gets a thousand samples. */
+#define PROFILE_SAMPLE 1000
+#define PROFILE_SAMPLE_MAX 1000000000
+
 #ifndef _WIN32
 static bool urandom_entropy(uint8_t *out, size_t len) {
   int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
@@ -312,6 +317,39 @@ bool agc_launch_utf8_args(int *argc, char ***argv) {
   return true;
 }
 
+static bool parse_count(const char *text, int64_t *count) {
+  if (!*text) return false;
+  int64_t value = 0;
+  bool clamped = false;
+  for (const char *c = text; *c; c++) {
+    if (*c < '0' || *c > '9') return false;
+    if (!clamped && (__builtin_mul_overflow(value, 10, &value) || __builtin_add_overflow(value, *c - '0', &value)))
+      clamped = true;
+  }
+  if (clamped) value = INT64_MAX;
+  *count = value;
+  return true;
+}
+
+/* The sampling period of the folded profile output (AGENTICA_PROFILE_FORMAT=folded), in steps: AGENTICA_PROFILE_SAMPLE
+   or PROFILE_SAMPLE. 0 keeps the report. A value that is not understood is said on the trace output and changes
+   nothing. */
+static uint64_t profile_every(int fd) {
+  const char *format = getenv("AGENTICA_PROFILE_FORMAT");
+  if (!format || !*format || strcmp(format, "report") == 0) return 0;
+  if (strcmp(format, "folded") != 0) {
+    agc_trace_message(fd, "unknown profile format", format, strlen(format), true);
+    return 0;
+  }
+  const char *sample = getenv("AGENTICA_PROFILE_SAMPLE");
+  int64_t every = PROFILE_SAMPLE;
+  if (sample && *sample && (!parse_count(sample, &every) || every < 1 || every > PROFILE_SAMPLE_MAX)) {
+    agc_trace_message(fd, "AGENTICA_PROFILE_SAMPLE needs 1 to 1000000000 steps, not", sample, strlen(sample), true);
+    every = PROFILE_SAMPLE;
+  }
+  return (uint64_t)every;
+}
+
 void agc_launch_trace(agc_launch *launch) {
   const char *names = getenv("AGENTICA_VM_TRACE");
   const char *path = getenv("AGENTICA_VM_TRACE_FILE");
@@ -326,6 +364,7 @@ void agc_launch_trace(agc_launch *launch) {
     }
   }
   agc_trace_parse(&launch->trace, names, fd);
+  if (AGC_TRACE_ON(&launch->trace, AGC_TRACE_PROFILE)) launch->trace.profile_every = profile_every(fd);
 }
 
 agc_value agc_launch_args(int argc, char **argv, int first) {
@@ -364,20 +403,6 @@ static bool once(const char *name, bool *seen, const char *option) {
     return false;
   }
   *seen = true;
-  return true;
-}
-
-static bool parse_count(const char *text, int64_t *count) {
-  if (!*text) return false;
-  int64_t value = 0;
-  bool clamped = false;
-  for (const char *c = text; *c; c++) {
-    if (*c < '0' || *c > '9') return false;
-    if (!clamped && (__builtin_mul_overflow(value, 10, &value) || __builtin_add_overflow(value, *c - '0', &value)))
-      clamped = true;
-  }
-  if (clamped) value = INT64_MAX;
-  *count = value;
   return true;
 }
 

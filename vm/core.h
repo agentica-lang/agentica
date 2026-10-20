@@ -32,6 +32,8 @@ typedef struct {
 
 extern const agc_builtin agc_core_builtins[];
 extern const size_t agc_core_builtin_count;
+extern const agc_builtin agc_profile_builtins[];
+extern const size_t agc_profile_builtin_count;
 extern const agc_builtin agc_task_builtins[];
 extern const size_t agc_task_builtin_count;
 extern const agc_builtin agc_task_map_builtins[];
@@ -178,7 +180,9 @@ void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
 void agc_count_step(agc_vm *vm, uint32_t span);
 void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
 void agc_turn_begin(agc_vm *vm);
-void agc_turn_finish(agc_vm *vm);
+uint64_t agc_turn_finish(agc_vm *vm);
+uint64_t agc_task_steps(const agc_vm *vm);
+bool agc_frame_runs(const agc_task *t, uint32_t at, const agc_stepper *stepper);
 agc_turn_result agc_run_turn(agc_vm *vm);
 
 /* Opcode helpers: the arithmetic, comparison and equality opcodes as pure functions of `agc_value`s, shared by
@@ -209,6 +213,16 @@ agc_outcome agc_vm_run(agc_vm *vm);
 
 void agc_profile_start(agc_vm *vm);
 void agc_profile_report(agc_vm *vm);
+
+/* A frame of a folded stack (vm/profile.c) is one code: its kind in the high 32 bits and an index in the low ones (a
+   function, a builtin of the program's table, a Profile.measure label). CUT stands for the frames that a stack deeper
+   than AGC_PROFILE_FRAMES leaves out. */
+#define AGC_PROFILE_FRAMES 512
+enum { AGC_PROFILE_FUNCTION, AGC_PROFILE_BUILTIN, AGC_PROFILE_LABEL, AGC_PROFILE_CUT };
+#define AGC_PROFILE_CODE(kind, id) (((uint64_t)(kind) << 32) | (uint64_t)(id))
+agc_step agc_profile_measure_step(agc_vm *vm, agc_stepper *self, agc_value last);
+uint32_t agc_profile_measure_label(const agc_stepper *stepper);
+void agc_profile_add_stack(agc_profile *profile, const uint64_t *codes, uint32_t n, uint64_t weight);
 
 const char *agc_uv_version(void);
 bool agc_io_init(void);

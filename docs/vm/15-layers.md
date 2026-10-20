@@ -42,7 +42,7 @@ before it moved; the header split moved no line of a `.c` file except the
     `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `runq.c`,
     `inbox.c`, `sync.c`, `timers.c`, `task_map.c`, `channel.c`, `loop.c`,
     `input.c`, `output.c`, `stdio_posix.c`, `stdio_windows.c`, `random.c`,
-    `loader.c`, `builtins.c`, `diag.c`, `trace.c`
+    `loader.c`, `builtins.c`, `diag.c`, `trace.c`, `profile.c`
   - **May use:** `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv
 
 - **Layer:** **Services**

@@ -1,5 +1,5 @@
-## The checking rules of the Map, Set, Task and Channel builtins A rule takes the call (State.Site) and returns the new
-## state with the type of the call.
+## The checking rules of the Map, Set, Task, Channel and Profile builtins A rule takes the call (State.Site) and returns
+## the new state with the type of the call.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -12,7 +12,7 @@ import Source from "source"
 import T from "types"
 import {HANDLES} from "builtins"
 
-## Checks a call of a Task, Channel, Map or Set builtin by its rule. Any other rule is the caller's.
+## Checks a call of a Task, Channel, Map, Set or Profile builtin by its rule. Any other rule is the caller's.
 export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
     Model.Rule.TaskSpawn -> return check_spawn(cx, st, site, false)
@@ -25,6 +25,7 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.ChannelSend -> return check_channel_send(cx, st, site)
     Model.Rule.ChannelRecv -> return check_channel_recv(cx, st, site)
     Model.Rule.ChannelTarget -> return check_target(cx, st, site, &Args.channel_argument)
+    Model.Rule.ProfileMeasure -> return check_profile_measure(cx, st, site)
     _ -> return check_map_rule(cx, st, site, rule)
   end
 end
@@ -198,6 +199,36 @@ def check_target(
 ) -> Result[State.Out]
   target = try argument.call(cx, st, site)
   return ok(State.Out(st: target.st, type: site.selected.result))
+end
+
+# Profile.measure(label) do ... end: a String label and a block or function of no parameters; the call has the type the
+# block returns. The context of the call is the block's expected result.
+def check_profile_measure(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  label = try State.expr(cx, st, site.args[0], T.Type.String)
+  wanted = site.expected
+  if CheckTypes.has_variables?(wanted)
+    wanted = T.Type.Unknown
+  end
+  callback = site.args[1]
+  case callback
+    Ast.Expr.BlockLit(block) ->
+      checked = try Stmt.check_block_body(cx, label.st, block, Ast.Optional.Present([]), wanted, Ast.Optional.Absent)
+      return ok(State.Out(st: checked.st, type: T.result(checked.type)))
+    _ ->
+      checked = try State.expr(cx, label.st, callback, T.Type.Unknown)
+      if !T.is(checked.type, "Fn") or T.params(checked.type).size != 0
+        return error(
+          State.fail(
+            cx,
+            checked.st,
+            "CHECK-TYPE-MISMATCH",
+            "Profile.measure requires a block or a function with no parameters",
+            Ast.expr_span(callback),
+          ),
+        )
+      end
+      return ok(State.Out(st: checked.st, type: T.result(checked.type)))
+  end
 end
 
 def check_map_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]

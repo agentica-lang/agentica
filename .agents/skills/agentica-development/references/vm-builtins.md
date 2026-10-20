@@ -148,12 +148,23 @@ must never crash or change the run):
   in `vm/trace.c`, the regex in `tests/test_vm_trace.py`, and the list in
   `docs/vm/08-loader-and-cli.md` §9.
 - `profile` is not an event category: `agc_profile_start` and
-  `agc_profile_report` (`vm/trace.c`) own its counters, `interp.c` counts
+  `agc_profile_report` (`vm/profile.c`) own its counters, `interp.c` counts
   through the `profile_*` hooks (out of line and cold, and only in the copy of
   `turn_loop` that has `profiling` true), and a new hook goes in the same
   way, so the plain copy keeps its code. Hooks in the one loop had made
   `calls` 26% and `arithmetic` 14% slower (PR #315). Measure a change of the
   loop on more than one link layout (`docs/vm-benchmarks.md`): the same code
   moves by 10 % with the order of the objects.
+- Folded stacks (`AGENTICA_PROFILE_FORMAT=folded`) are sampled in
+  `profile_steps`, the hook every `STEP` reaches with the profile on, every
+  `profile->every` steps: `interp.c` turns the task's frames into codes
+  (`AGC_PROFILE_CODE`: function, builtin of a native frame, measure label,
+  cut) and `agc_profile_add_stack` keeps one entry per distinct stack. Names
+  are written only at the end. `Profile.measure` with the profile on is a
+  stepper (`agc_profile_measure_step`, which `frame_code` recognizes); its
+  `measures` list on the task is checked against the frames
+  (`agc_frame_runs`), so a block that a runtime error ended leaves no stale
+  entry. Off, it calls `agc_task_call_block`: `start_stepper` calls the block
+  with no native frame and counts the same one step.
 - Every test file that starts the VM itself removes `AGENTICA_VM_TRACE` and
   `AGENTICA_VM_TRACE_FILE` when it loads (the Makefile `unexport`s them).

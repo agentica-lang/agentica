@@ -1,4 +1,4 @@
-program #188 0:1:1-1178:52:1
+program #200 0:1:1-1269:54:1
   module "rules.agc"
     declaration: struct-decl #4 0:1:1-50:5:1 name="Reading"
       field: field-decl #1 17:2:3-31:3:1 name="label"
@@ -37,7 +37,7 @@ program #188 0:1:1-1178:52:1
           arg: binary #33 227:16:13-232:16:18 op=multiply op-span=229:16:15-230:16:16 type=Int
             left: name-ref #31 227:16:13-228:16:14 name="n" type=Int
             right: literal #32 231:16:17-232:16:18 value=int:2 type=Int
-    declaration: function-decl #187 239:19:1-1178:52:1 name="main"
+    declaration: function-decl #199 239:19:1-1269:54:1 name="main"
       result: type-ref #37 253:19:15-257:19:19 name="Void"
       body: binding #48 260:20:3-304:21:1 name="scores"
         type: type-ref #40 268:20:11-284:20:27 name="Map"
@@ -105,87 +105,99 @@ program #188 0:1:1-1178:52:1
       body: expr-stmt #102 671:33:3-689:34:1
         value: call #101 671:33:3-688:33:20 name="Task.cancel" piped=false type=Void
           arg: name-ref #100 683:33:15-687:33:19 name="task" type=Task(Int)
-      body: binding #120 691:34:3-786:38:1 name="doubled"
-        value: call #119 701:34:13-785:37:6 name="Task.map" piped=false type=List(Result(Int))
-          arg: list-lit #105 710:34:22-716:34:28 type=List(Int)
-            element: literal #103 711:34:23-712:34:24 value=int:1 type=Int
-            element: literal #104 714:34:26-715:34:27 value=int:2 type=Int
-          arg: literal #106 718:34:30-719:34:31 value=int:2 type=Int
-          arg: literal #107 721:34:33-724:34:36 value=int:100 type=Int
-          arg: block-lit #118 726:34:38-785:37:6 type=Fn([Int], Result(Int))
-            param: block-param #108 730:34:42-731:34:43 name="n"
-            body: binding #112 737:35:5-760:36:1 name="twice_n"
-              value: try-expr #111 747:35:15-759:35:27 type=Int
-                operand: call #110 751:35:19-759:35:27 name="twice" piped=false type=Result(Int)
-                  arg: name-ref #109 757:35:25-758:35:26 name="n" type=Int
-            body: expr-stmt #117 764:36:5-780:37:1
-              value: call #116 764:36:5-779:36:20 name="ok" piped=false type=Result(Int)
-                arg: binary #115 767:36:8-778:36:19 op=plus op-span=775:36:16-776:36:17 type=Int
-                  left: name-ref #113 767:36:8-774:36:15 name="twice_n" type=Int
-                  right: literal #114 777:36:18-778:36:19 value=int:1 type=Int
-      body: expr-stmt #123 788:38:3-802:39:1
-        value: call #122 788:38:3-801:38:16 name="puts" piped=false type=Void
-          arg: name-ref #121 793:38:8-800:38:15 name="doubled" type=List(Result(Int))
-      body: binding #133 804:39:3-861:40:1 name="named"
-        type: type-ref #126 811:39:10-828:39:27 name="List"
-          arg: type-ref #125 816:39:15-827:39:26 name="Result"
-            arg: type-ref #124 823:39:22-826:39:25 name="Int"
-        value: call #132 831:39:30-860:39:59 name="Task.map" piped=false type=List(Result(Int))
-          arg: list-lit #128 840:39:39-843:39:42 type=List(Int)
-            element: literal #127 841:39:40-842:39:41 value=int:3 type=Int
-          arg: literal #129 845:39:44-846:39:45 value=int:1 type=Int
-          arg: literal #130 848:39:47-851:39:50 value=int:100 type=Int
-          arg: function-ref #131 853:39:52-859:39:58 name="twice" type=Fn([Int], Result(Int))
-      body: expr-stmt #136 863:40:3-875:41:1
-        value: call #135 863:40:3-874:40:14 name="puts" piped=false type=Void
-          arg: name-ref #134 868:40:8-873:40:13 name="named" type=List(Result(Int))
-      body: binding #141 877:41:3-916:42:1 name="channel"
-        type: type-ref #138 886:41:12-898:41:24 name="Channel"
-          arg: type-ref #137 894:41:20-897:41:23 name="Int"
-        value: call #140 901:41:27-915:41:41 name="Channel.new" piped=false type=Channel(Int)
-          arg: literal #139 913:41:39-914:41:40 value=int:2 type=Int
-      body: expr-stmt #146 918:42:3-948:43:1
-        value: call #145 918:42:3-947:42:32 name="Channel.send" piped=false type=Result(Void)
-          arg: name-ref #142 931:42:16-938:42:23 name="channel" type=Channel(Int)
-          arg: literal #143 940:42:25-941:42:26 value=int:1 type=Int
-          arg: literal #144 943:42:28-946:42:31 value=int:100 type=Int
-      body: binding #150 950:43:3-982:44:1 name="got"
-        value: call #149 956:43:9-981:43:34 name="Channel.recv" piped=false type=Result(Int)
-          arg: name-ref #147 969:43:22-976:43:29 name="channel" type=Channel(Int)
-          arg: literal #148 978:43:31-980:43:33 value=int:10 type=Int
-      body: expr-stmt #154 984:44:3-1002:45:1
-        value: call #153 984:44:3-1001:44:20 name="puts" piped=false type=Void
-          arg: field-access #152 989:44:8-1000:44:19 name="message" type=String resolved=call("Result.message", Result(Int))
-            target: name-ref #151 989:44:8-992:44:11 name="got" type=Result(Int)
-      body: expr-stmt #157 1004:45:3-1018:46:1
-        value: field-access #156 1004:45:3-1017:45:16 name="close" type=Void resolved=call("Channel.close", Channel(Int))
-          target: name-ref #155 1004:45:3-1011:45:10 name="channel" type=Channel(Int)
-      body: expr-stmt #161 1020:46:3-1042:47:1
-        value: call #160 1020:46:3-1041:46:24 name="puts" piped=false type=Void
-          arg: field-access #159 1025:46:8-1040:46:23 name="closed?" type=Bool resolved=call("Channel.closed?", Channel(Int))
-            target: name-ref #158 1025:46:8-1032:46:15 name="channel" type=Channel(Int)
-      body: expr-stmt #166 1044:47:3-1072:48:1
-        value: call #165 1044:47:3-1071:47:30 name="puts" piped=false type=Void
-          arg: call #164 1049:47:8-1070:47:29 name="IO.inspect" piped=false type=Int
-            arg: field-access #163 1060:47:19-1069:47:28 name="size" type=Int resolved=call("List.size", List(String))
-              target: name-ref #162 1060:47:19-1064:47:23 name="keys" type=List(String)
-      body: expr-stmt #176 1074:48:3-1113:49:1
-        value: call #175 1074:48:3-1112:48:41 name="puts" piped=false type=Void
-          arg: binary #174 1079:48:8-1111:48:40 op=plus op-span=1103:48:32-1104:48:33 type=String
-            left: binary #171 1079:48:8-1102:48:31 op=plus op-span=1088:48:17-1089:48:18 type=String
-              left: field-access #168 1079:48:8-1087:48:16 name="to_s" type=String resolved=self(String)
-                target: literal #167 1079:48:8-1082:48:11 value=string:"a" type=String
-              right: field-access #170 1090:48:19-1102:48:31 name="inspect" type=String resolved=inspect(List(String))
-                target: name-ref #169 1090:48:19-1094:48:23 name="keys" type=List(String)
-            right: field-access #173 1105:48:34-1111:48:40 name="to_s" type=String resolved=call("String.from_int", Int)
-              target: literal #172 1105:48:34-1106:48:35 value=int:1 type=Int
-      body: expr-stmt #181 1115:49:3-1142:50:1
-        value: call #180 1115:49:3-1141:49:29 name="puts" piped=false type=Void
-          arg: call #179 1120:49:8-1140:49:28 name="Test.ok?" piped=false type=Result(Void)
-            arg: call #178 1129:49:17-1139:49:27 name="parse" piped=false type=Result(Int)
-              arg: literal #177 1135:49:23-1138:49:26 value=string:"1" type=String
-      body: expr-stmt #186 1144:50:3-1174:51:1
-        value: call #185 1144:50:3-1173:50:32 name="puts" piped=false type=Void
-          arg: call #184 1149:50:8-1172:50:31 name="Test.error?" piped=false type=Result(Void)
-            arg: call #183 1161:50:20-1171:50:30 name="parse" piped=false type=Result(Int)
-              arg: literal #182 1167:50:26-1170:50:29 value=string:"x" type=String
+      body: binding #109 691:34:3-745:35:1 name="measured"
+        value: call #108 702:34:14-744:34:56 name="Profile.measure" piped=false type=Int
+          arg: literal #103 718:34:30-726:34:38 value=string:"square" type=String
+          arg: block-lit #107 728:34:40-744:34:56 type=Fn([], Int)
+            body: expr-stmt #106 731:34:43-740:34:52
+              value: call #105 731:34:43-740:34:52 name="square" piped=false type=Int
+                arg: literal #104 738:34:50-739:34:51 value=int:3 type=Int
+      body: expr-stmt #114 747:35:3-780:36:1
+        value: call #113 747:35:3-779:35:35 name="puts" piped=false type=Void
+          arg: binary #112 752:35:8-778:35:34 op=plus op-span=761:35:17-762:35:18 type=Int
+            left: name-ref #110 752:35:8-760:35:16 name="measured" type=Int
+            right: call #111 763:35:19-778:35:34 name="Profile.steps" piped=false type=Int
+      body: binding #132 782:36:3-877:40:1 name="doubled"
+        value: call #131 792:36:13-876:39:6 name="Task.map" piped=false type=List(Result(Int))
+          arg: list-lit #117 801:36:22-807:36:28 type=List(Int)
+            element: literal #115 802:36:23-803:36:24 value=int:1 type=Int
+            element: literal #116 805:36:26-806:36:27 value=int:2 type=Int
+          arg: literal #118 809:36:30-810:36:31 value=int:2 type=Int
+          arg: literal #119 812:36:33-815:36:36 value=int:100 type=Int
+          arg: block-lit #130 817:36:38-876:39:6 type=Fn([Int], Result(Int))
+            param: block-param #120 821:36:42-822:36:43 name="n"
+            body: binding #124 828:37:5-851:38:1 name="twice_n"
+              value: try-expr #123 838:37:15-850:37:27 type=Int
+                operand: call #122 842:37:19-850:37:27 name="twice" piped=false type=Result(Int)
+                  arg: name-ref #121 848:37:25-849:37:26 name="n" type=Int
+            body: expr-stmt #129 855:38:5-871:39:1
+              value: call #128 855:38:5-870:38:20 name="ok" piped=false type=Result(Int)
+                arg: binary #127 858:38:8-869:38:19 op=plus op-span=866:38:16-867:38:17 type=Int
+                  left: name-ref #125 858:38:8-865:38:15 name="twice_n" type=Int
+                  right: literal #126 868:38:18-869:38:19 value=int:1 type=Int
+      body: expr-stmt #135 879:40:3-893:41:1
+        value: call #134 879:40:3-892:40:16 name="puts" piped=false type=Void
+          arg: name-ref #133 884:40:8-891:40:15 name="doubled" type=List(Result(Int))
+      body: binding #145 895:41:3-952:42:1 name="named"
+        type: type-ref #138 902:41:10-919:41:27 name="List"
+          arg: type-ref #137 907:41:15-918:41:26 name="Result"
+            arg: type-ref #136 914:41:22-917:41:25 name="Int"
+        value: call #144 922:41:30-951:41:59 name="Task.map" piped=false type=List(Result(Int))
+          arg: list-lit #140 931:41:39-934:41:42 type=List(Int)
+            element: literal #139 932:41:40-933:41:41 value=int:3 type=Int
+          arg: literal #141 936:41:44-937:41:45 value=int:1 type=Int
+          arg: literal #142 939:41:47-942:41:50 value=int:100 type=Int
+          arg: function-ref #143 944:41:52-950:41:58 name="twice" type=Fn([Int], Result(Int))
+      body: expr-stmt #148 954:42:3-966:43:1
+        value: call #147 954:42:3-965:42:14 name="puts" piped=false type=Void
+          arg: name-ref #146 959:42:8-964:42:13 name="named" type=List(Result(Int))
+      body: binding #153 968:43:3-1007:44:1 name="channel"
+        type: type-ref #150 977:43:12-989:43:24 name="Channel"
+          arg: type-ref #149 985:43:20-988:43:23 name="Int"
+        value: call #152 992:43:27-1006:43:41 name="Channel.new" piped=false type=Channel(Int)
+          arg: literal #151 1004:43:39-1005:43:40 value=int:2 type=Int
+      body: expr-stmt #158 1009:44:3-1039:45:1
+        value: call #157 1009:44:3-1038:44:32 name="Channel.send" piped=false type=Result(Void)
+          arg: name-ref #154 1022:44:16-1029:44:23 name="channel" type=Channel(Int)
+          arg: literal #155 1031:44:25-1032:44:26 value=int:1 type=Int
+          arg: literal #156 1034:44:28-1037:44:31 value=int:100 type=Int
+      body: binding #162 1041:45:3-1073:46:1 name="got"
+        value: call #161 1047:45:9-1072:45:34 name="Channel.recv" piped=false type=Result(Int)
+          arg: name-ref #159 1060:45:22-1067:45:29 name="channel" type=Channel(Int)
+          arg: literal #160 1069:45:31-1071:45:33 value=int:10 type=Int
+      body: expr-stmt #166 1075:46:3-1093:47:1
+        value: call #165 1075:46:3-1092:46:20 name="puts" piped=false type=Void
+          arg: field-access #164 1080:46:8-1091:46:19 name="message" type=String resolved=call("Result.message", Result(Int))
+            target: name-ref #163 1080:46:8-1083:46:11 name="got" type=Result(Int)
+      body: expr-stmt #169 1095:47:3-1109:48:1
+        value: field-access #168 1095:47:3-1108:47:16 name="close" type=Void resolved=call("Channel.close", Channel(Int))
+          target: name-ref #167 1095:47:3-1102:47:10 name="channel" type=Channel(Int)
+      body: expr-stmt #173 1111:48:3-1133:49:1
+        value: call #172 1111:48:3-1132:48:24 name="puts" piped=false type=Void
+          arg: field-access #171 1116:48:8-1131:48:23 name="closed?" type=Bool resolved=call("Channel.closed?", Channel(Int))
+            target: name-ref #170 1116:48:8-1123:48:15 name="channel" type=Channel(Int)
+      body: expr-stmt #178 1135:49:3-1163:50:1
+        value: call #177 1135:49:3-1162:49:30 name="puts" piped=false type=Void
+          arg: call #176 1140:49:8-1161:49:29 name="IO.inspect" piped=false type=Int
+            arg: field-access #175 1151:49:19-1160:49:28 name="size" type=Int resolved=call("List.size", List(String))
+              target: name-ref #174 1151:49:19-1155:49:23 name="keys" type=List(String)
+      body: expr-stmt #188 1165:50:3-1204:51:1
+        value: call #187 1165:50:3-1203:50:41 name="puts" piped=false type=Void
+          arg: binary #186 1170:50:8-1202:50:40 op=plus op-span=1194:50:32-1195:50:33 type=String
+            left: binary #183 1170:50:8-1193:50:31 op=plus op-span=1179:50:17-1180:50:18 type=String
+              left: field-access #180 1170:50:8-1178:50:16 name="to_s" type=String resolved=self(String)
+                target: literal #179 1170:50:8-1173:50:11 value=string:"a" type=String
+              right: field-access #182 1181:50:19-1193:50:31 name="inspect" type=String resolved=inspect(List(String))
+                target: name-ref #181 1181:50:19-1185:50:23 name="keys" type=List(String)
+            right: field-access #185 1196:50:34-1202:50:40 name="to_s" type=String resolved=call("String.from_int", Int)
+              target: literal #184 1196:50:34-1197:50:35 value=int:1 type=Int
+      body: expr-stmt #193 1206:51:3-1233:52:1
+        value: call #192 1206:51:3-1232:51:29 name="puts" piped=false type=Void
+          arg: call #191 1211:51:8-1231:51:28 name="Test.ok?" piped=false type=Result(Void)
+            arg: call #190 1220:51:17-1230:51:27 name="parse" piped=false type=Result(Int)
+              arg: literal #189 1226:51:23-1229:51:26 value=string:"1" type=String
+      body: expr-stmt #198 1235:52:3-1265:53:1
+        value: call #197 1235:52:3-1264:52:32 name="puts" piped=false type=Void
+          arg: call #196 1240:52:8-1263:52:31 name="Test.error?" piped=false type=Result(Void)
+            arg: call #195 1252:52:20-1262:52:30 name="parse" piped=false type=Result(Int)
+              arg: literal #194 1258:52:26-1261:52:29 value=string:"x" type=String

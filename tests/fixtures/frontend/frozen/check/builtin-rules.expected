@@ -146,6 +146,8 @@ Process.spawn Plain
 Process.spawn_captured Plain
 Process.spawn_channel Plain
 Process.wait Plain
+Profile.measure ProfileMeasure
+Profile.steps Plain
 Random.float Plain
 Random.int Plain
 Range.each Plain

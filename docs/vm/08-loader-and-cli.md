@@ -394,7 +394,7 @@ This note lists what the code chose.
   category costs nothing; with it, every `STEP` takes the slow path of the
   budget counter and the run is about a third slower. When the run ends (once
   for each runtime: the front end hands its program over in a second one)
-  `vm/trace.c` writes `total wall_ms= steps= calls= builtin_calls=
+  `vm/profile.c` writes `total wall_ms= steps= calls= builtin_calls=
   builtin_ms= gc_ms= collections=`, then the 30 functions with the most steps
   (`fn calls= steps= name= at=FILE:LINE`; the step of each pass of a range
   `each`, `times`, `upto`, `downto` or `File.each_line` loop is `<native>`,
@@ -405,3 +405,28 @@ This note lists what the code chose.
   timed until it does. `gc_ms` is Boehm's own clock of its collections, and
   `gc_ms` and `collections` count the whole process so far: the second report
   of `agentica FILE.agc` includes the collections of the front end.
+  Then come up to 30 `section calls= steps= us= gc_ms= name=` rows, one for
+  each label of `Profile.measure`, the most steps first. A section counts the
+  steps of its task, the wall time and Boehm's clock from the start of the
+  block to its end; sections are inclusive, and a label inside itself in one
+  task counts each call but its numbers once (the outermost call). With the
+  profile off, `Profile.measure` only has its block called in its place
+  (`agc_task_call_block`): one step, no native frame; with it on, it is a
+  stepper whose native frame names the label. `Profile.steps` is the task's
+  steps (`agc_task_steps`: its finished turns plus the running one), the same
+  with the profile on or off.
+- `AGENTICA_PROFILE_FORMAT=folded` (with `profile`; `report` or unset keeps the
+  report, another value is one `agc-trace unknown profile format` line) writes
+  folded stacks instead of the report, to the trace output: a line per
+  distinct stack, frames outermost first joined by `;`, a space and the weight
+  in steps, in the order the stacks were first seen. Each `STEP` already goes
+  through the profile hook, which takes a sample of the running task's frames
+  every `AGENTICA_PROFILE_SAMPLE` steps of the run (1 to 1000000000, default
+  1000; a bad value is one warning line and the default), weighted by the
+  steps it stands for. No timer or signal is involved, so the output is the
+  same on every run and every system. Frames are `name@FILE:LINE`,
+  `block@FILE:LINE:COL`, the builtin of a native frame (`Int.times`,
+  `List.map`) and `measure:LABEL`; a stack deeper than 512 frames keeps the
+  outer and inner halves around `...`, and `;` and control bytes in a name
+  become `_`. The front end of `agentica FILE.agc` writes no stacks once it has
+  handed its program over, so the output is the program's.

@@ -227,6 +227,15 @@ Expected types flow into these operations for empty collections and Results.
   over `min .. max`, both included; `min > max` halts with
   `RUNTIME-INVALID-RANGE`. `Random.float()` is in `0.0` up to, not including,
   `1.0`.
+- `Profile.measure(label) do ... end` runs the block (no parameters) once and
+  gives what it gives, a `Result` included; a function value of no parameters
+  works too. With `AGENTICA_VM_TRACE=profile` it adds a `section` row for
+  `label` to the profile: calls, steps, microseconds and GC milliseconds.
+  Sections are inclusive (a section holds the measures nested in it), and a
+  label inside itself in one task counts each call but its numbers once.
+  `Profile.steps()` is the step count of the running task (the entries that
+  `--max-steps` counts): the same on every run of the same work, with or
+  without the profile. `Profile` is a reserved type name.
 - `System.env(name)` reads one environment variable of the process: `ok(value)`,
   with `ok("")` for a variable set to the empty string, and `error(message)` for
   one that is not set. A name that is empty or contains `=` or NUL is an error

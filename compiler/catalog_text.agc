@@ -226,6 +226,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.Ok -> return "Ok"
     Model.Rule.OkVoid -> return "OkVoid"
     Model.Rule.Prelude -> return "Prelude"
+    Model.Rule.ProfileMeasure -> return "ProfileMeasure"
     Model.Rule.ResultDefault -> return "ResultDefault"
     Model.Rule.ResultMessage -> return "ResultMessage"
     Model.Rule.ResultOk -> return "ResultOk"

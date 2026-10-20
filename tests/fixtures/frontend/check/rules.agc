@@ -31,6 +31,8 @@ def main() -> Void
   task = Task.spawn(&square, 4)
   puts(Task.await(task))
   Task.cancel(task)
+  measured = Profile.measure("square") do square(3) end
+  puts(measured + Profile.steps())
   doubled = Task.map([1, 2], 2, 100) do |n|
     twice_n = try twice(n)
     ok(twice_n + 1)

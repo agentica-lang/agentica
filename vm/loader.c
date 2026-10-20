@@ -616,7 +616,7 @@ static bool load_guarded(reader *r, agc_program *p) {
 
 static bool load_program(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
                          const agc_trace *trace, bool any_version) {
-  static const agc_trace off = {0, 2, 0};
+  static const agc_trace off = {0, 2, 0, 0};
   const agc_trace *tr = trace ? trace : &off;
   reader r;
   r.data = data;
