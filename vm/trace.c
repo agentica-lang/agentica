@@ -312,6 +312,7 @@ void agc_trace_parse(agc_trace *trace, const char *names, int fd) {
   trace->mask = 0;
   trace->fd = fd;
   trace->profile_every = 0;
+  trace->profile_stacks = 0;
   trace->start_ns = agc_trace_now();
   if (!AGC_TRACE_BUILD || !names) return;
   for (const char *at = names;;) {

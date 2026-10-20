@@ -13,6 +13,16 @@
 #define PROFILE_TOP 30
 #define PROFILE_FILES 12
 #define FOLDED_FLUSH 65536
+/* The most labels of Profile.measure with a section of their own; later ones share OVERFLOW_LABEL. A dynamic label
+   ("item #{i}") would otherwise keep one entry per value for the whole run. */
+#define PROFILE_SECTIONS 4096
+#define OVERFLOW_LABEL "[overflow]"
+#define NO_SECTION UINT32_MAX
+/* The most distinct folded stacks, and the most frames they hold together (256 MiB): recursion that branches on its
+   data can see a new stack of up to AGC_PROFILE_FRAMES frames on most samples. Past either limit the weight goes to one
+   "[truncated]" stack. */
+#define PROFILE_STACKS (1u << 20)
+#define PROFILE_CODES (((size_t)256 << 20) / sizeof(uint64_t))
 
 /* One label of Profile.measure and its counts: calls, and the steps, wall time and GC time of the outermost calls. */
 typedef struct {
@@ -20,12 +30,15 @@ typedef struct {
   uint64_t calls, steps, ns, gc_ms;
 } section;
 
-/* The labels in the order they were first seen, and an open-addressing index of them (slot = position + 1, 0 free). */
+/* The labels in the order they were first seen, and an open-addressing index of them (slot = position + 1, 0 free).
+   `overflow` is the section that the labels past PROFILE_SECTIONS share (NO_SECTION until one comes); it is not in
+   the index, so a label with its text keeps a section of its own. */
 struct agc_profile_sections {
   section *items;
   uint32_t count, cap;
   uint32_t *index;
   uint32_t slots;
+  uint32_t overflow;
 };
 
 /* One distinct stack of the folded output: its frames (codes[at .. at + len)), their hash and the weight of the
@@ -37,12 +50,15 @@ typedef struct {
 } stack;
 
 /* The stacks in the order they were first seen (so the output is the same on every run), their frames in one array,
-   and an open-addressing index like the sections'. */
+   and an open-addressing index like the sections'. `limit` is the most stacks it keeps; `truncated` is the weight of
+   the samples whose new stack did not fit. */
 struct agc_profile_stacks {
   stack *items;
   uint32_t count, cap;
   uint32_t *index;
   uint32_t slots;
+  uint32_t limit;
+  uint64_t truncated;
   uint64_t *codes;
   size_t used, room;
 };
@@ -123,7 +139,18 @@ static uint32_t *index_add(uint32_t *index, uint32_t *slots, uint32_t at, uint32
   return build_index(*slots, count, hash_of, items);
 }
 
-/* The section of LABEL, made on first use. */
+/* The section that the labels past PROFILE_SECTIONS share, made on first use. */
+static uint32_t overflow_section(struct agc_profile_sections *s) {
+  if (s->overflow == NO_SECTION) {
+    s->items = room_for_one(s->items, s->count, &s->cap, sizeof *s->items, false);
+    s->overflow = s->count++;
+    s->items[s->overflow] = (section){.label = agc_make_string(OVERFLOW_LABEL, strlen(OVERFLOW_LABEL),
+                                                               strlen(OVERFLOW_LABEL))};
+  }
+  return s->overflow;
+}
+
+/* The section of LABEL, made on first use while there are fewer than PROFILE_SECTIONS. */
 static uint32_t section_of(agc_profile *profile, const agc_string *label) {
   struct agc_profile_sections *s = profile->sections;
   uint64_t h = label_hash(label);
@@ -132,6 +159,7 @@ static uint32_t section_of(agc_profile *profile, const agc_string *label) {
     const agc_string *seen = s->items[s->index[at] - 1].label;
     if (seen->bytes == label->bytes && memcmp(seen->data, label->data, label->bytes) == 0) return s->index[at] - 1;
   }
+  if (s->count >= PROFILE_SECTIONS) return overflow_section(s);
   s->items = room_for_one(s->items, s->count, &s->cap, sizeof *s->items, false);
   uint32_t id = s->count++;
   s->items[id] = (section){.label = label};
@@ -139,7 +167,8 @@ static uint32_t section_of(agc_profile *profile, const agc_string *label) {
   return id;
 }
 
-/* Adds WEIGHT to the stack of N frames CODES, outermost first, recording the stack the first time it is seen. */
+/* Adds WEIGHT to the stack of N frames CODES, outermost first, recording the stack the first time it is seen, or to
+   the truncated weight when a new stack does not fit in the limits. */
 void agc_profile_add_stack(agc_profile *profile, const uint64_t *codes, uint32_t n, uint64_t weight) {
   struct agc_profile_stacks *s = profile->stacks;
   uint64_t h = hash_bytes(0xcbf29ce484222325ULL, codes, (size_t)n * sizeof *codes);
@@ -150,6 +179,10 @@ void agc_profile_add_stack(agc_profile *profile, const uint64_t *codes, uint32_t
       seen->weight += weight;
       return;
     }
+  }
+  if (s->count >= s->limit || n > PROFILE_CODES - s->used) {
+    s->truncated += weight;
+    return;
   }
   if (s->room - s->used < n) {
     size_t room = agc_size_mul(agc_size_add(s->room, n), 2);
@@ -244,14 +277,21 @@ const agc_builtin agc_profile_builtins[] = {
 
 const size_t agc_profile_builtin_count = sizeof agc_profile_builtins / sizeof agc_profile_builtins[0];
 
-/* The indexes of the `limit` (at most PROFILE_TOP) largest non-zero counts, largest first (the lower index first among
- * equal counts). Returns how many there are. */
-static size_t top_counts(const uint64_t *counts, size_t n, uint32_t *top, size_t limit) {
+/* Whether entry A comes before entry B: a larger count, then a larger THEN (when given). */
+static bool ranks_before(const uint64_t *counts, const uint64_t *then, size_t a, size_t b) {
+  if (counts[a] != counts[b]) return counts[a] > counts[b];
+  return then && then[a] > then[b];
+}
+
+/* The indexes of the `limit` (at most PROFILE_TOP) entries with the largest counts, ranked by COUNTS and then by THEN
+ * (NULL: counts alone), the lower index first among equal ones; entries whose keys are all zero are left out. Returns
+ * how many there are. */
+static size_t top_counts(const uint64_t *counts, const uint64_t *then, size_t n, uint32_t *top, size_t limit) {
   size_t found = 0;
   for (size_t k = 0; k < n; k++) {
-    if (counts[k] == 0) continue;
+    if (counts[k] == 0 && (!then || then[k] == 0)) continue;
     size_t at = found;
-    while (at > 0 && counts[top[at - 1]] < counts[k]) at--;
+    while (at > 0 && ranks_before(counts, then, k, top[at - 1])) at--;
     if (at >= limit) continue;
     if (found < limit) found++;
     memmove(top + at + 1, top + at, (found - at - 1) * sizeof *top);
@@ -283,6 +323,7 @@ void agc_profile_start(agc_vm *vm) {
   sections->items = agc_alloc(sections->cap * sizeof *sections->items);
   sections->slots = 16;
   sections->index = build_index(sections->slots, 0, section_hash, NULL);
+  sections->overflow = NO_SECTION;
   profile->sections = sections;
   profile->every = profile->left = tr->profile_every;
   if (profile->every) {
@@ -291,6 +332,7 @@ void agc_profile_start(agc_vm *vm) {
     stacks->items = agc_alloc_atomic(stacks->cap * sizeof *stacks->items);
     stacks->slots = 128;
     stacks->index = build_index(stacks->slots, 0, stack_hash, NULL);
+    stacks->limit = tr->profile_stacks && tr->profile_stacks < PROFILE_STACKS ? tr->profile_stacks : PROFILE_STACKS;
     stacks->room = 1024;
     stacks->codes = agc_alloc_atomic(stacks->room * sizeof *stacks->codes);
     profile->stacks = stacks;
@@ -310,13 +352,17 @@ static void sum_by_file(const agc_program *p, const agc_profile *profile, uint64
   }
 }
 
-/* The sections with the most steps (then those with the most calls, whose steps a recursive or failed call left at
-   0), with their counts. */
+/* The sections with the most steps, then the most calls (a recursive or failed call leaves its steps at 0), with
+   their counts. */
 static void report_sections(const agc_trace *tr, const struct agc_profile_sections *s) {
-  uint64_t *order = agc_alloc_atomic(agc_size_mul((size_t)s->count + 1, sizeof *order));
-  for (uint32_t k = 0; k < s->count; k++) order[k] = s->items[k].steps * 2 + (s->items[k].calls ? 1 : 0);
+  uint64_t *steps = agc_alloc_atomic(agc_size_mul((size_t)s->count + 1, sizeof *steps));
+  uint64_t *calls = agc_alloc_atomic(agc_size_mul((size_t)s->count + 1, sizeof *calls));
+  for (uint32_t k = 0; k < s->count; k++) {
+    steps[k] = s->items[k].steps;
+    calls[k] = s->items[k].calls;
+  }
   uint32_t top[PROFILE_TOP];
-  size_t found = top_counts(order, s->count, top, PROFILE_TOP);
+  size_t found = top_counts(steps, calls, s->count, top, PROFILE_TOP);
   for (size_t k = 0; k < found; k++) {
     const section *it = &s->items[top[k]];
     AGC_TRACE(tr, AGC_TRACE_PROFILE,
@@ -338,17 +384,20 @@ static void out_bytes(out_buffer *out, const char *s, size_t n) {
   out->len += n;
 }
 
-/* A name in a frame: ';' separates frames and a line ends the stack, so those and the other control bytes become
-   '_'. Spaces stay: the readers take the weight after the last one. */
+/* A name in a frame: ';' separates frames and a line ends the stack, so those and the other control bytes are written
+   as %XX, and so is '%' itself, which keeps two different names apart and no stack is written twice. Spaces stay:
+   the readers take the weight after the last one. Every caller writes a frame that is not empty for an empty name
+   (`measure:`, `@FILE:LINE`), so an empty name stays empty. */
 static void out_name(out_buffer *out, const char *s, size_t n) {
-  if (n == 0) {
-    out_bytes(out, "?", 1);
-    return;
-  }
+  static const char hex[] = "0123456789ABCDEF";
   for (size_t k = 0; k < n; k++) {
     unsigned char c = (unsigned char)s[k];
-    char safe = c == ';' || c < 0x20 || c == 0x7f ? '_' : (char)c;
-    out_bytes(out, &safe, 1);
+    if (c == ';' || c == '%' || c < 0x20 || c == 0x7f) {
+      char escaped[3] = {'%', hex[c >> 4], hex[c & 15]};
+      out_bytes(out, escaped, 3);
+    } else {
+      out_bytes(out, s + k, 1);
+    }
   }
 }
 
@@ -374,6 +423,10 @@ static void out_frame(out_buffer *out, const agc_program *p, const agc_profile *
       return;
     }
     case AGC_PROFILE_LABEL: {
+      if (id == profile->sections->overflow) {
+        out_bytes(out, "measure" OVERFLOW_LABEL, sizeof "measure" OVERFLOW_LABEL - 1);
+        return;
+      }
       const agc_string *label = profile->sections->items[id].label;
       out_bytes(out, "measure:", 8);
       out_name(out, label->data, label->bytes);
@@ -383,7 +436,8 @@ static void out_frame(out_buffer *out, const agc_program *p, const agc_profile *
   }
 }
 
-/* The folded stacks, one line each: the frames outermost first, separated by ';', a space and the weight in steps. */
+/* The folded stacks, one line each: the frames outermost first, separated by ';', a space and the weight in steps.
+   The weight of the stacks that did not fit comes last, as the one-frame stack "[truncated]", with a warning line. */
 static void report_folded(const agc_vm *vm, const agc_profile *profile) {
   const agc_program *p = vm->rt->program;
   const struct agc_profile_stacks *s = profile->stacks;
@@ -398,7 +452,18 @@ static void report_folded(const agc_vm *vm, const agc_profile *profile) {
     int n = snprintf(weight, sizeof weight, " %" PRIu64 "\n", it->weight);
     out_bytes(&out, weight, (size_t)n);
   }
+  if (s->truncated) {
+    char weight[40];
+    int n = snprintf(weight, sizeof weight, "[truncated] %" PRIu64 "\n", s->truncated);
+    out_bytes(&out, weight, (size_t)n);
+  }
   agc_trace_write(out.fd, out.data, out.len);
+  if (s->truncated) {
+    char kept[16];
+    int n = snprintf(kept, sizeof kept, "%" PRIu32, s->count);
+    agc_trace_message(out.fd, "folded profile full: new stacks weigh on [truncated]; stacks kept", kept, (size_t)n,
+                      false);
+  }
 }
 
 /* One total line, then the functions with the most steps, the source files with the most steps, the builtins that
@@ -431,7 +496,7 @@ void agc_profile_report(agc_vm *vm) {
             sum_counts(profile->calls, functions), sum_counts(profile->builtin_calls, builtins),
             sum_counts(profile->builtin_ns, builtins) / 1000000u, gc.total_ms, gc.collections);
   uint32_t top[PROFILE_TOP];
-  size_t found = top_counts(profile->steps, functions, top, PROFILE_TOP);
+  size_t found = top_counts(profile->steps, NULL, functions, top, PROFILE_TOP);
   for (size_t k = 0; k < found; k++) {
     uint32_t id = top[k];
     if (id == profile->functions) {
@@ -448,13 +513,13 @@ void agc_profile_report(agc_vm *vm) {
   uint64_t *file_steps = agc_alloc(agc_size_mul((size_t)p->source_count + 1, sizeof(uint64_t)));
   uint64_t *file_calls = agc_alloc(agc_size_mul((size_t)p->source_count + 1, sizeof(uint64_t)));
   sum_by_file(p, profile, file_steps, file_calls);
-  found = top_counts(file_steps, p->source_count, top, PROFILE_FILES);
+  found = top_counts(file_steps, NULL, p->source_count, top, PROFILE_FILES);
   for (size_t k = 0; k < found; k++) {
     const agc_string *file = p->sources[top[k]].name;
     AGC_TRACE(tr, AGC_TRACE_PROFILE, "file calls=%" PRIu64 " steps=%" PRIu64 " name=%.*s", file_calls[top[k]],
               file_steps[top[k]], agc_trace_len(file->bytes), file->data);
   }
-  found = top_counts(profile->builtin_ns, builtins, top, PROFILE_TOP);
+  found = top_counts(profile->builtin_ns, NULL, builtins, top, PROFILE_TOP);
   for (size_t k = 0; k < found; k++) {
     uint32_t id = top[k];
     const char *name = id < profile->builtins ? p->builtins[id]->name : "";

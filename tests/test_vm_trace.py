@@ -409,6 +409,64 @@ def test_the_folded_profile_is_the_same_on_every_run_and_names_each_frame(tmp_pa
     assert int(total.group(1)) - 100 < sum(weights) <= int(total.group(1))
 
 
+def test_the_folded_profile_puts_the_stacks_past_its_limit_on_one_truncated_line(tmp_path, traced_vm):
+    """Past the stack limit (lowered by a test switch), the weight of each new stack goes to one last [truncated] line
+    and one warning line follows; the weights still add up to the steps of the report."""
+    vm = traced_vm[0]
+    bytecode = profiled_bytecode(tmp_path)
+    path = tmp_path / "truncated.trace"
+    settings = {"AGENTICA_VM_TRACE": "profile", "AGENTICA_PROFILE_FORMAT": "folded", "AGENTICA_PROFILE_SAMPLE": "1",
+                "AGENTICA_VM_TEST_PROFILE_STACKS": "3", "AGENTICA_VM_TRACE_FILE": path}
+    assert run_vm(vm, bytecode, settings) == run_vm(vm, bytecode)
+    lines = trace_lines(path)
+    assert len(lines) == 5, lines
+    assert all(FOLDED_LINE.match(line) for line in lines[:3]), lines
+    assert re.match(rb"^\[truncated\] [1-9][0-9]*$", lines[3]), lines[3]
+    assert lines[4] == b"agc-trace folded profile full: new stacks weigh on [truncated]; stacks kept 3"
+    report = tmp_path / "report.trace"
+    run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": report})
+    total = re.match(rb"^agc-trace \S+ profile total wall_ms=[0-9]+ steps=([0-9]+) ", trace_lines(report)[0])
+    assert sum(int(line.rsplit(b" ", 1)[1]) for line in lines[:4]) == int(total.group(1))
+
+
+LABELS = """def main() -> Void
+  puts(Profile.measure("a;b") do 1 end)
+  puts(Profile.measure("a%3Bb") do 2 end)
+  puts(Profile.measure("[overflow]") do 3 end)
+  total = (0...4100).to_a.map do |i|
+    Profile.measure("item #{i}") do i end
+  end
+  puts(total.size)
+end
+"""
+
+
+def test_labels_past_the_section_limit_share_one_overflow_section_and_names_stay_apart(tmp_path, traced_vm):
+    """4096 labels keep a section each; the 7 after them count in one [overflow] section, apart from a label of that
+    text. In folded stacks ';' and '%' are written as %XX, so labels that differ there never share a line."""
+    vm = traced_vm[0]
+    source = tmp_path / "labels.agc"
+    source.write_text(LABELS)
+    bytecode = compile_fixture(source, tmp_path)
+    plain = run_vm(vm, bytecode)
+    assert plain[0] == 0, plain
+    path = tmp_path / "labels.trace"
+    assert run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path}) == plain
+    rows = [found.groups() for found in map(SECTION.match, trace_lines(path)) if found]
+    overflow = [int(calls) for calls, _, name in rows if name == b"[overflow]"]
+    assert overflow == [7, 1], rows[:5]
+    assert rows[0][2] == b"[overflow]" and rows[0][0] == b"7"
+    folded = tmp_path / "labels.folded"
+    run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_PROFILE_FORMAT": "folded",
+                          "AGENTICA_PROFILE_SAMPLE": "1", "AGENTICA_VM_TRACE_FILE": folded})
+    lines = trace_lines(folded)
+    assert all(FOLDED_LINE.match(line) for line in lines), lines
+    stacks = [line.rsplit(b" ", 1)[0] for line in lines]
+    assert len(set(stacks)) == len(stacks)
+    frames = {frame for stack in stacks for frame in stack.split(b";")}
+    assert {b"measure:a%3Bb", b"measure:a%253Bb", b"measure:[overflow]", b"measure[overflow]"} <= frames, frames
+
+
 def test_a_bad_profile_format_or_sample_costs_one_warning_line(tmp_path, traced_vm):
     vm = traced_vm[0]
     bytecode = profiled_bytecode(tmp_path)

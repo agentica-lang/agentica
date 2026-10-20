@@ -364,7 +364,13 @@ void agc_launch_trace(agc_launch *launch) {
     }
   }
   agc_trace_parse(&launch->trace, names, fd);
-  if (AGC_TRACE_ON(&launch->trace, AGC_TRACE_PROFILE)) launch->trace.profile_every = profile_every(fd);
+  if (!AGC_TRACE_ON(&launch->trace, AGC_TRACE_PROFILE)) return;
+  launch->trace.profile_every = profile_every(fd);
+  /* Test-only: a small limit of folded stacks, so a test reaches it with a short program. */
+  const char *stacks = getenv("AGENTICA_VM_TEST_PROFILE_STACKS");
+  int64_t limit = 0;
+  if (stacks && parse_count(stacks, &limit) && limit > 0 && limit <= UINT32_MAX)
+    launch->trace.profile_stacks = (uint32_t)limit;
 }
 
 agc_value agc_launch_args(int argc, char **argv, int first) {

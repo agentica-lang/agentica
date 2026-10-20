@@ -9,7 +9,6 @@
 
 const agc_builtin_table agc_builtin_tables[] = {
   {agc_core_builtins, &agc_core_builtin_count},
-  {agc_profile_builtins, &agc_profile_builtin_count},
   {agc_string_builtins, &agc_string_builtin_count},
   {agc_number_builtins, &agc_number_builtin_count},
   {agc_json_builtins, &agc_json_builtin_count},
@@ -28,6 +27,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_logger_builtins, &agc_logger_builtin_count},
   {agc_test_builtins, &agc_test_builtin_count},
   {agc_front_end_builtins, &agc_front_end_builtin_count},
+  {agc_profile_builtins, &agc_profile_builtin_count},
 };
 
 const size_t agc_builtin_table_count = sizeof agc_builtin_tables / sizeof agc_builtin_tables[0];

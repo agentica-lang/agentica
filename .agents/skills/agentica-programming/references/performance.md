@@ -124,6 +124,8 @@ parameters, or `&f`). With `AGENTICA_VM_TRACE=profile` each label adds a row
 most steps first. Without the profile it is one block call (one step), so it
 can stay in the code.
 
+- A run keeps 4096 labels; later labels share one `[overflow]` section
+  (frame `measure[overflow]`). Do not build labels from data.
 - Sections are inclusive: an outer section counts the sections inside it. A
   label inside itself in one task (recursion) counts every call, but its steps
   and time once, for the outermost call.
@@ -162,6 +164,9 @@ flamegraph.pl app.folded > app.svg
   `AGENTICA_PROFILE_SAMPLE=N` sets N (1 counts every step, and the weights add
   up to the report's `steps`). The file is the same on every run; there is no
   time weight.
+- `;`, `%` and control bytes in a name are written as `%XX`. At most
+  1,048,576 distinct stacks; the weight of later new stacks goes to one
+  `[truncated]` line, followed by an `agc-trace folded profile full` line.
 - With `agentica FILE.agc` the file has the program's stacks only. Write it to
   a file: on stderr it mixes with the program's own output.
 - The sampling adds a few percent to a profiled run at N = 1000 and about a

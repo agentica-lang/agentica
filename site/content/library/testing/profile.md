@@ -136,6 +136,8 @@ agc-trace +0.004015 profile section calls=2 steps=2228 us=31 gc_ms=0 name=inner
 
 `agentica FILE.agc` prints two reports, the front end's and then the program's; the sections are in the program's.
 
+A run keeps up to 4096 labels. Every label after that counts in one `[overflow]` section (the frame `measure[overflow]` in folded stacks), so a label built from data, such as `"item #{i}"`, cannot grow the profile without bound.
+
 ## Flame graphs
 
 Add `AGENTICA_PROFILE_FORMAT=folded` to the profile to get folded stacks instead of the report: one line per distinct stack, the frames from the outermost in, separated by `;`, then a space and the weight in steps. flamegraph.pl, inferno and speedscope read this format.
@@ -156,7 +158,8 @@ main@app.agc:25;Int.times;block@app.agc:40:11 1000
 - A function is `name@FILE:LINE`, a block `block@FILE:LINE:COL`, a native loop or callback (`Int.times`, `List.map`) its builtin's name, and a `Profile.measure` `measure:LABEL`.
 - The VM takes a sample of the running task's stack every 1000 steps, each with a weight of 1000. `AGENTICA_PROFILE_SAMPLE=N` sets N (1 to 1000000000); `AGENTICA_PROFILE_SAMPLE=1` counts every step, and the weights then add up to the report's `steps`.
 - Sampling counts steps, not time, so the file is the same on every run of the same program, on every system. There is no time weight, since it would differ from run to run.
-- Stacks deeper than 512 frames keep the outer and inner halves around a `...` frame. A `;` or a control character in a name becomes `_`.
+- Stacks deeper than 512 frames keep the outer and inner halves around a `...` frame. A `;`, a `%` or a control character in a name is written as `%XX` (`%3B`, `%25`), so two different stacks never share a line.
+- The file keeps up to 1,048,576 distinct stacks (and 256 MiB of frames). Past that, the weight of each new stack goes to one `[truncated]` line at the end, and an `agc-trace folded profile full` line follows it.
 - Use `AGENTICA_VM_TRACE_FILE`: on stderr, the lines mix with what the program writes there. With `agentica FILE.agc`, the file holds the program's stacks only; `agentica check FILE.agc` writes the front end's.
 
 ## Performance notes

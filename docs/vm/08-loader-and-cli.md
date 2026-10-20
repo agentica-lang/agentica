@@ -406,8 +406,10 @@ This note lists what the code chose.
   `gc_ms` and `collections` count the whole process so far: the second report
   of `agentica FILE.agc` includes the collections of the front end.
   Then come up to 30 `section calls= steps= us= gc_ms= name=` rows, one for
-  each label of `Profile.measure`, the most steps first. A section counts the
-  steps of its task, the wall time and Boehm's clock from the start of the
+  each label of `Profile.measure`, the most steps first, then the most calls.
+  A run keeps 4096 labels; later ones share one `[overflow]` section (frame
+  `measure[overflow]`), which the label index does not hold. A section counts
+  the steps of its task, the wall time and Boehm's clock from the start of the
   block to its end; sections are inclusive, and a label inside itself in one
   task counts each call but its numbers once (the outermost call). With the
   profile off, `Profile.measure` only has its block called in its place
@@ -427,6 +429,10 @@ This note lists what the code chose.
   same on every run and every system. Frames are `name@FILE:LINE`,
   `block@FILE:LINE:COL`, the builtin of a native frame (`Int.times`,
   `List.map`) and `measure:LABEL`; a stack deeper than 512 frames keeps the
-  outer and inner halves around `...`, and `;` and control bytes in a name
-  become `_`. The front end of `agentica FILE.agc` writes no stacks once it has
+  outer and inner halves around `...`, and `;`, `%` and control bytes in a
+  name are written as `%XX`, so no two stacks print the same line. At most
+  1,048,576 stacks and 256 MiB of frames are kept; the weight of a later new
+  stack goes to one last `[truncated]` line, followed by one
+  `agc-trace folded profile full` warning (`AGENTICA_VM_TEST_PROFILE_STACKS=N`
+  lowers the stack limit for tests). The front end of `agentica FILE.agc` writes no stacks once it has
   handed its program over, so the output is the program's.

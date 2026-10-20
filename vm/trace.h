@@ -43,12 +43,14 @@ enum {
 };
 
 /* `profile_every`: the profile writes folded stacks sampled every that many steps instead of its report
-   (AGENTICA_PROFILE_FORMAT=folded), or 0. */
+   (AGENTICA_PROFILE_FORMAT=folded), or 0. `profile_stacks`: the most distinct stacks it keeps, or 0 for its own limit
+   (set only by the test switch AGENTICA_VM_TEST_PROFILE_STACKS). */
 typedef struct {
   unsigned mask;
   int fd;
   uint64_t start_ns;
   uint64_t profile_every;
+  uint32_t profile_stacks;
 } agc_trace;
 
 typedef struct {
