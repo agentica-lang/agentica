@@ -124,7 +124,7 @@ values, functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
 - Imports: `import Models from "models"` then `Models.User`, or `import {User,
   greet as hello} from "models"`. Never both on one line. Renames keep case:
   types stay capitalized, functions lowercase. A package declared in
-  `agentica.toml` is `import S from "owner/repo/mod"` (`references/modules.md`).
+  `agentica.toml` is `import S from "pkg/name/mod"` (`references/modules.md`).
 - Defaults: a literal, `true`, `false`, `nil`, `[]`, `{}` or a payload-free
   variant (else `CHECK-DEFAULT-VALUE`). Defaulted parameters go last
   (`CHECK-DEFAULT-ORDER`), except a last `Fn` that a block fills. A function

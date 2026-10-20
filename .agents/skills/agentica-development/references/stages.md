@@ -137,20 +137,23 @@ stage:
     `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL`,
     `CHECK-MODULE-CONTEXT`, `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`,
     `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`,
-    `CHECK-IMPORT-AMBIGUOUS`, `CHECK-IMPORT-PACKAGE`,
+    `CHECK-IMPORT-PACKAGE`,
     `CHECK-DECL-ORDER`, `CHECK-TYPE-ALIAS-CYCLE`, `CHECK-UNKNOWN-VARIANT`,
     `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE`,
     `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
     `CHECK-UNREACHABLE-CASE-ARM`, `CHECK-LOOP-CONTROL`, `CHECK-TOO-DEEP`
 
-- **Stage:** packages (`manifest.agc`, `lock.agc`, `project.agc`, `package_import.agc`)
+- **Stage:** packages (`packages/`: `manifest.agc`, `lock.agc`, `project.agc`,
+  `package_import.agc`)
   - **Codes:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
-    `PKG-LOCK-STALE`, `PKG-MAJOR-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
-    (45a). The manifest and lock ones are at a key path of the file
-    (`Failure.fail_key`, `Problem.key_path`, `key_path` in `--json`, with
-    `range` at the start of the file); a TOML syntax error is at its line and
-    column. The hash and link ones are at the import. `CHECK-IMPORT-AMBIGUOUS`
-    and `CHECK-IMPORT-PACKAGE` are import checks (`resolve_import.agc`).
+    `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`,
+    `PKG-SYMLINK` (45a). The manifest, lock, stale and conflict ones are at a
+    key path of a file (`Failure.fail_key`, `Problem.key_path`, `key_path` in
+    `--json`, with `range` at the start of the file); a TOML syntax error is
+    at its line and column. The hash and link ones are at the import.
+    `CHECK-IMPORT-PACKAGE` is an import check (`package_import.agc`): a
+    declared package that is not in the cache, or a `pkg/` name that a
+    package file did not declare.
 
 - **Stage:** runtime (VM)
   - **Codes:** `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`,

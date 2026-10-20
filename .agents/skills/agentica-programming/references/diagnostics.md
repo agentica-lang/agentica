@@ -214,17 +214,18 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     updated with `.with` from another module; `Mod.NAME` on a constant is also
     `CHECK-IMPORT-NAME` (write `import {NAME} from "path"`)
 
-- **Code:** `CHECK-IMPORT-AMBIGUOUS`, `CHECK-IMPORT-PACKAGE`
-  - **Meaning:** an import names a package of `agentica.toml` and also a file
-    or folder beside the importing file: rename one; a declared package is not
-    in the package cache (run `agentica install`, once it exists)
+- **Code:** `CHECK-IMPORT-PACKAGE`
+  - **Meaning:** a package declared in `agentica.toml` is not in the package
+    cache (run `agentica install`, once it exists), or a file of a package
+    imports a `pkg/` name that its own `agentica.toml` does not declare
 
 - **Code:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
-  `PKG-LOCK-STALE`, `PKG-MAJOR-CONFLICT`
+  `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`
   - **Meaning:** `agentica.toml` or `agentica.lock` is bad, missing, or does not
-    agree with the other; the report names the file and a key path such as
-    `dependencies.owner/repo` (`key_path` in `--json`), or a line and column for
-    a TOML syntax error
+    agree with the other (stale); one name has two sources in the project and
+    its packages (conflict). The report names the file and a key path such as
+    `dependencies.sqlite.git` (`key_path` in `--json`), or a line and column
+    for a TOML syntax error
 
 - **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
   - **Meaning:** the `.agc` files of a package in the cache are not the ones the

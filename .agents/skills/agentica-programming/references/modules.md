@@ -129,40 +129,45 @@ packages it declares. This version only reads the cache: nothing downloads, so
 the cache has to be filled already (`agentica install` comes later).
 
 ```toml
-name = "acme/notes"
-version = "0.3.0"
+name = "notes"
 
 [dependencies]
-"owner/sqlite-ac" = "1.2.0"
-"gitlab.com/team/json-tools" = "0.4.1"
+sqlite = { git = "https://github.com/owner/sqlite-ac", tag = "v1.2.0" }
+json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
 ```
 
 ```ruby
-import Sqlite from "owner/sqlite-ac/sqlite"
-import Json from "gitlab.com/team/json-tools/util/json"
+import Sqlite from "pkg/sqlite/db"
+import Json from "pkg/json5/util/json"
 ```
 
-- A key is `owner/repo` (GitHub, no host) or `host/owner/repo`, lowercase, with
-  letters, digits and `. _ -`. The import is the key, then a path inside the
-  repo without `.agc`. A path whose first parts are not a declared key is a
-  relative path, as always. `github.com/owner/repo/x` and the bare `owner/repo`
-  are `CHECK-IMPORT-PATH`; a local file or folder that the path also names is
-  `CHECK-IMPORT-AMBIGUOUS`.
-- `agentica.lock` (TOML, beside the manifest) lists every package, direct or
-  not: `name`, `version`, `source`, `commit`, `hash`, `requires`. A manifest
-  with dependencies and no lock is `PKG-LOCK-MISSING`; a lock that does not meet
-  a minimum is `PKG-LOCK-STALE`; another major is `PKG-MAJOR-CONFLICT`; a bad
-  file is `PKG-MANIFEST-INVALID` or `PKG-LOCK-INVALID`, at a file and key path.
-  A build never writes the lock.
-- The program may import only the packages of its own manifest; a package
-  imports its own files by relative paths (never out of the package) and its
-  dependencies by key. A package that is not in the cache folder is
-  `CHECK-IMPORT-PACKAGE`.
+- A dependency is a local name (a lowercase letter, then lowercase letters,
+  digits, `_` and `-`) and a table with `git` (`https://host/owner/repo`, an
+  optional `.git` at the end) and exactly one of `tag` or `ref` (a commit, 7 to
+  64 lowercase hex digits). Only `git` sources exist: a `path`, a branch or a
+  version range is `PKG-MANIFEST-INVALID`.
+- The import is `pkg/<name>/<module path>` without `.agc`. A declared name is a
+  package and shadows a library of the same name in `agc_libs/` and the other
+  `pkg/` roots; an undeclared name is the `pkg/` search above, unchanged.
+- A file of the project imports the names of the project's manifest. A file of
+  a package imports only the names of its own `agentica.toml` (never out of the
+  package by `../`, never a hidden folder or `agc_libs/`); another `pkg/` name
+  there is `CHECK-IMPORT-PACKAGE`. Its own modules are relative paths.
+- `agentica.lock` (TOML, beside the manifest) has one `[[package]]` for each
+  name of the whole project, direct or not: `name`, `git`, `tag` or `ref`,
+  `commit`, `hash`. A manifest with dependencies and no lock is
+  `PKG-LOCK-MISSING`; a dependency the lock lacks or holds with another source
+  is `PKG-LOCK-STALE`; one name with two sources between the project and its
+  packages is `PKG-SOURCE-CONFLICT`; a bad file is `PKG-MANIFEST-INVALID` or
+  `PKG-LOCK-INVALID`, at a file and key path. A build never writes the lock.
 - The cache is `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`
-  (`~/.cache` when `XDG_CACHE_HOME` is not absolute; `github.com` is the host of
-  GitHub keys; on Windows `%LOCALAPPDATA%/agentica/cache/pkg/`). When a build
-  first imports a package it hashes its `.agc` files and compares them with the
-  lock: a changed, added or missing file is `PKG-HASH-MISMATCH`.
+  (`~/.cache` when `XDG_CACHE_HOME` is not absolute; on Windows
+  `%LOCALAPPDATA%/agentica/cache/pkg/`). A package that is not there is
+  `CHECK-IMPORT-PACKAGE`. When a build first imports a package it hashes its
+  `.agc` files and compares them with the lock: a changed, added or missing
+  file is `PKG-HASH-MISMATCH`.
+- A package file is stored as `pkg/<name>@<tag>/path.agc` (the first 12 digits
+  of the commit for a `ref`), so stack traces do not show the cache folder.
 - `agc_libs/` for `pkg/` is beside `agentica.toml` when there is one.
 
 ## String queue (`std/queue`)

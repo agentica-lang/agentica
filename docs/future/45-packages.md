@@ -5,18 +5,32 @@ it comes after the native Windows and macOS builds (issue
 [#344](https://github.com/sonic182/agentica/issues/344)) and before the FFI
 ([§40.5](40-native-code.md#405-order)). 45-0 (`std/toml`) and 45a (manifest,
 lock and imports from the cache) are done. The owner answered the questions of
-45.14 on 2026-10-20. Asked by the owner on 2026-10-15 ("Shall we plan this?").
+45.14 on 2026-10-20, and on the same day replaced the import form of 45.3 and
+the versions of 45.7 with named git dependencies (issue
+[#468](https://github.com/sonic182/agentica/issues/468)). Asked by the owner on
+2026-10-15 ("Shall we plan this?").
 
 Decided by the owner on 2026-10-15:
 
 - `std/toml` comes first (45-0, 45.4).
 - The manifest and the lock are TOML (45.5, 45.6).
 - `Toml.parse` returns the recursive enum `Toml.Value` (45.4).
-- The import form: GitHub with no prefix (`owner/repo/mod`), and every other
-  host as a prefix (`host/owner/repo/mod`) (45.3).
 
-The owner decided the questions of 45.14 on 2026-10-20. The rest is the
-design that 45a and the later phases build.
+Decided by the owner on 2026-10-20 (#468), which replaces the `owner/repo/mod`
+import form and semver with minimal version selection of 2026-10-15:
+
+- A dependency has a local name, a git source and a pin: `sqlite = { git =
+  "https://github.com/owner/sqlite-ac", tag = "v1.2.0" }`, with a `tag` or a
+  `ref` (a commit) (45.5).
+- The import is `pkg/<name>/<module path>`. The `pkg/` prefix already means
+  "external library", and a declared dependency becomes the first root searched
+  for its name (45.3).
+- The lock pins each dependency to a commit and a content hash. There is no
+  semver and no MVS: one name with two different sources in the tree is an error
+  (45.6, 45.7).
+
+The owner decided the questions of 45.14 on 2026-10-20. The rest is the design
+that 45a and the later phases build.
 
 ### 45.1 Today
 
@@ -47,8 +61,8 @@ stored differently (45.8).
   package has no build script, no install hook and no post-install step. npm
   runs lifecycle scripts, and pip has run `setup.py` at install, so both let a
   package run code when it is installed. This design does not.
-- **One import form.** A package has one name and one way to import it. GitHub
-  is never written `github.com/owner/repo`.
+- **One import form.** A package has one local name and one way to import it,
+  `pkg/<name>/mod`. The name does not depend on the URL.
 - **Offline after one fetch.** Once a package is in the cache or vendored, a
   build needs no network.
 - **Hermetic tests.** A local git repository can stand in for the remote, so
@@ -59,58 +73,53 @@ See 45.13.
 
 ### 45.3 Import form
 
-Decided by the owner on 2026-10-15:
+Decided by the owner on 2026-10-20 (#468), in place of the `owner/repo/mod` form
+of 2026-10-15:
 
-- **GitHub packages have no host prefix.** `import Sqlite from
-  "owner/sqlite-ac/sqlite"` loads `sqlite.agc` at the root of the repository
-  `owner/sqlite-ac`. The part after the repo name is a path inside the repo.
-  It uses forward slashes, has no extension, and each part follows the rules
-  of 05b. `"owner/sqlite-ac/util/json"` loads `util/json.agc`.
-- **Other hosts come first.** `import X from "gitlab.com/owner/repo/mod"`. As
-  in Go, a first segment with a dot names a host. A host has no port and no
-  user name in v1.
-- **One canonical form.** Writing `github.com/owner/repo/...` is
-  `CHECK-IMPORT-PATH`, with the help "write owner/repo/... for GitHub".
+- **`pkg/<name>/<module path>`.** `import Sqlite from "pkg/sqlite/db"` loads
+  `db.agc` at the root of the package that the manifest calls `sqlite`. The part
+  after the name is a path inside the repository. It uses forward slashes, has
+  no extension, and each part follows the rules of 05b. `"pkg/sqlite/util/json"`
+  loads `util/json.agc`. `pkg/sqlite` with no module is `CHECK-IMPORT-PATH`.
+- **The name is local.** It is the key of the dependency in the manifest (45.5).
+  It is decoupled from the URL: moving a repository changes only the `git` line,
+  and no import changes. A name is a lowercase letter followed by lowercase
+  letters, digits, `_` and `-`, at most 64 characters.
+- **A declared name comes first.** A name declared in the manifest of the
+  importing module is the first root searched for `pkg/<name>`: the package at
+  the locked commit in the cache. It shadows a folder of the same name in
+  `agc_libs/`, `AGENTICA_PATH` or the user root, and the search of those roots
+  does not run for it, so a missing module of a declared package is
+  `CHECK-IMPORT-IO` and never falls through.
+- **An undeclared name is today's search.** A `pkg/` import whose first part is
+  not declared searches `agc_libs/`, `AGENTICA_PATH`, the user data directory
+  and the system directories, exactly as before
+  ([05b](../grammar/05b-modules.md)). The libraries installed by hand keep
+  working (45.14 question 2, decided).
+- **No clash with local files.** The `pkg/` prefix makes a package import
+  unambiguous: it can never name a file or folder beside the importing file. So
+  `CHECK-IMPORT-AMBIGUOUS` does not exist, and neither does a rule for
+  `github.com/...` in an import path.
 
-Proposed, with the form above:
-
-- **Key grammar.** Each segment is lowercase, from `[a-z0-9._-]`. No segment
-  is `.` or `..`, and none starts with `-`. A first segment with a dot is a
-  host. `std` and `pkg` are reserved as first segments. Keys and imports are
-  spelled the same way, so one package has one spelling. GitHub ignores case
-  in names, so the tool must not accept two spellings of one package.
-- **A bare key.** An `owner/repo` import with no module part is
-  `CHECK-IMPORT-PATH` when `owner/repo` is a declared key. Otherwise it is an
-  ordinary relative path.
-- **The manifest decides.** An import is a package import only when its first
-  segments are a key of the manifest of the package that owns the importing
-  file (`owner/repo` or `host/owner/repo`). Otherwise it is a relative import,
-  as today.
-
-The clash comes from today's rules. `owner/repo/x` names the file
-`owner/repo/x.agc` beside the importing file. A dot in a folder name is legal,
-because 05b checks only the last part of a path. So a folder called
-`gitlab.com` could exist. The manifest rule settles the choice (45.14
-question 1, decided).
-
-When the rule finds both a declared package and a relative file or folder that
-matches its leading path (the file `owner/repo/x.agc`, or the folder
-`owner/repo/` beside the importing file), the import is
-`CHECK-IMPORT-AMBIGUOUS`, located at the import. Nothing is chosen silently.
+**Which manifest decides.** For a file of the project, the manifest of the
+project (and for a `pkg/` library file that the project loads, the same). For a
+file of a package, the `agentica.toml` of that package, read from its folder in
+the cache. A package file imports only the names its own manifest declares: it
+cannot reach a dependency of the project, and the project cannot reach a
+dependency of a package unless the project declares the name too (with the same
+source, 45.6). A `pkg/` name that a package file did not declare is
+`CHECK-IMPORT-PACKAGE`, and a package file never searches the `pkg/` roots, so a
+package does not depend on what is installed on the machine.
 
 **Inside a package.** A package imports its own modules by a relative path
 (`import Parse from "json/parse"`), and that path must stay inside the package
 root. A `../` that leaves the root is `CHECK-IMPORT-PATH`. Hidden folders and
 `agc_libs/` are not importable from a package.
 
-A package imports its direct dependencies by the package form. The build never
-reads a dependency's manifest (45.5). So for a dependency's files, the list of
-its direct keys is its `requires` in the lock (45.6). For the root project, the
-list is its own manifest. The root may import only its own direct dependencies.
-Transitive dependencies are in the lock, and their versions come from there.
-
-Today's `pkg/` roots stay for libraries installed by hand, and are revisited
-after 45c (45.14 question 2, decided).
+The root project imports a dependency by the name it gave it. A package imports
+its dependencies by the names in its own manifest. The names that two manifests
+give to one repository do not have to match, but one name must mean one source
+in the whole build (45.7).
 
 ### 45.4 The TOML parser: `std/toml` (phase 45-0)
 
@@ -193,135 +202,157 @@ files follow PR #273 (the entry file's folder, §18.3). Packages, vendored ones
 included, use the logical path of 45.8.
 
 ```toml
-name = "acme/notes"
-version = "0.3.0"
+name = "notes"
 
 [dependencies]
-"owner/sqlite-ac" = "1.2.0"
-"gitlab.com/team/json-tools" = "0.4.1"
+sqlite = { git = "https://github.com/owner/sqlite-ac", tag = "v1.2.0" }
+json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
 
 [style]
 max_line_width = 119
 ```
 
-- `name` is the project's own name. For a package it must equal the key it was
-  fetched as. A mismatch is `PKG-NAME-MISMATCH`.
-- `version` is the project's own version, as semver. For a package it should
-  equal its tag.
-- `[dependencies]` maps a key (`owner/repo` or `host/owner/repo`) to a minimum
-  version. The version is semver, written without the `v`. The lock says which
-  version the build uses (45.6 and 45.7).
-- The keys are quoted, because `/` and `.` are not bare-key characters in TOML.
+- `name` is the project's own name, optional. It follows the rule of a
+  dependency name below. A package's `name` is the default local name that
+  `agentica add` (45c) proposes; nothing checks it against the names that others
+  give.
+- `[dependencies]` maps a local name to a source. The key is the local name used
+  in imports (45.3). It is a lowercase letter followed by lowercase letters,
+  digits, `_` and `-`, at most 64 characters. A key that is not a bare TOML key
+  is quoted by the author and rejected by the rule above, so `"owner/repo"` is
+  not a name.
+- A source is an inline table with `git` and exactly one of `tag` and `ref`.
+  Only `git` sources exist for now: a `path`, a `branch`, a `version` or any
+  other key is `PKG-MANIFEST-INVALID` at its key path
+  (`dependencies.sqlite.path`).
+- `git` is an `https://host/owner/repo` URL, with an optional `.git` at the end.
+  The host is lowercase, with no port and no user name. There are exactly an
+  owner and a repository, in letters, digits and `. _ -`, neither `.` nor `..`
+  and neither starting with `-`. No query, no fragment, no trailing slash. Only
+  https: `http://`, `ssh://` and `git@host:` forms are `PKG-MANIFEST-INVALID`.
+  Two spellings of one repository (with and without `.git`) are one source. The
+  cache path is built from this URL, `<host>/<owner>/<repo>` (45.8). A host such
+  as a company server works the same way as `github.com`.
+- `tag` is a git tag: letters, digits and `. _ + -`, at most 128 characters, no
+  `/`, not starting with `.` or `-`. `ref` is a commit, as 7 to 64 lowercase hex
+  digits (a prefix of the commit, or the whole of it). Exactly one of them:
+  both, or neither, is `PKG-MANIFEST-INVALID` at the dependency. There are no
+  branches and no version ranges, so a build never follows a moving target.
 - `[style]` holds style rules for the `.agc` files under the folder of the
   manifest. All keys are optional, and a manifest with no `[style]` sets no
   rule. Decided by the owner on 2026-10-15. Later style keys go in the same
-  table; today there is one:
-  - `max_line_width` is the longest line allowed, in characters (Unicode code
-    points, not bytes). It counts every line, comments and doc comments
-    included. With no `max_line_width` there is no limit. A line over it is an
-    error, never a warning (section 26). `agentica check` reports it as
-    `CHECK-LINE-TOO-LONG`, at the first character past the limit (proposed in
-    §47.2 and owned by phase 28, 47c; the owner confirms the code). The rule
-    covers every `.agc` file under the folder that holds that `agentica.toml`.
-    `agentica fmt` does not enforce it: a line it cannot break stays long.
-  - Today `compiler/agentica.toml` and `stdlib/agentica.toml` set it to 119, and
-    `tests/test_style_line_width.py` enforces it. `agentica check` reads
-    `[style]` after port step 8 (§18.3), with `std/toml`, and phase 28 (47c)
-moves
-    the check there and removes the test.
-    The manager accepts `[style]` and its known keys, and an unknown style key
-    is `PKG-MANIFEST-INVALID` like any other unknown key.
-- An unknown key, a bad key or a bad version is `PKG-MANIFEST-INVALID`. The
-  manager lists the keys of the parsed table itself and rejects any it does not
-  know. It does not leave this to a typed decode, which ignores extra keys. A
-  TOML syntax error is the same code, with the line and column from `std/toml`.
-- A dependency's manifest is read only when that package is fetched or added,
-  and there `PKG-NAME-MISMATCH` is checked (45.8). The build never reads it. The
-  lock's `requires` is the authority at build time (45.6).
+  table; today there is one: `max_line_width` is the longest line allowed, in
+  characters (Unicode code points, not bytes). It counts every line, comments
+  and doc comments included. With no `max_line_width` there is no limit. A line
+  over it is an error, never a warning (section 26). `agentica check` reports it
+  as `CHECK-LINE-TOO-LONG`, at the first character past the limit (proposed in
+  §47.2 and owned by phase 28, 47c; the owner confirms the code). The rule
+  covers every `.agc` file under the folder that holds that `agentica.toml`.
+  `agentica fmt` does not enforce it: a line it cannot break stays long. Today
+  `compiler/agentica.toml` and `stdlib/agentica.toml` set it to 119, and
+  `tests/test_style_line_width.py` enforces it. `agentica check` reads `[style]`
+  after port step 8 (§18.3), with `std/toml`, and phase 28 (47c) moves the check
+  there and removes the test. The manager accepts `[style]` and its known keys,
+  and an unknown style key is `PKG-MANIFEST-INVALID` like any other unknown key.
+- An unknown key, a bad name or URL or pin, or a value of the wrong type is
+  `PKG-MANIFEST-INVALID`. The manager lists the keys of the parsed table itself
+  and rejects any it does not know. It does not leave this to a typed decode,
+  which ignores extra keys. A TOML syntax error is the same code, with the line
+  and column from `std/toml`.
+- The manifest of a dependency is read when a build first loads the package
+  (from its folder in the cache), and then only to learn which names its files
+  may import and to check that each agrees with the lock (45.6, 45.7). It is not
+  hashed (45.6). The build does not use anything else from it.
 
 ### 45.6 Lock `agentica.lock`
 
-The lock is TOML and is committed to git. It lists every package in the graph,
-direct and transitive, with the exact version, the commit and a hash. The
-layout follows Cargo.lock and uv.lock. The examples below are shortened.
+The lock is TOML and is committed to git. It lists every package of the build,
+direct and transitive, one entry for each local name, flat, with the git source,
+the pin, the exact commit and a hash. The layout follows Cargo.lock and uv.lock.
+The examples below are shortened.
 
 ```toml
 version = 1
 
 [[package]]
-name = "gitlab.com/team/json-tools"
-version = "0.4.1"
-source = "https://gitlab.com/team/json-tools.git"
-commit = "2b7e0c9d4f1a..."
-hash = "sha256:a41f09c2e7bd..."
-requires = []
-
-[[package]]
-name = "owner/sqlite-ac"
-version = "1.2.3"
-source = "https://github.com/owner/sqlite-ac.git"
+name = "greeter"
+git = "https://github.com/owner/greeter"
+tag = "v1.2.0"
 commit = "9f2c4e1a0b7d..."
 hash = "sha256:e3b0c44298fc..."
-requires = ["gitlab.com/team/json-tools@0.4.1"]
+
+[[package]]
+name = "json5"
+git = "https://gitlab.com/someone/json5"
+ref = "3f2a9c1"
+commit = "3f2a9c1d44e0..."
+hash = "sha256:a41f09c2e7bd..."
 ```
 
 - **Layout.** `version = 1` is the lock format. Each `[[package]]` table has its
-  keys in this fixed order: name, version, source, commit, hash, requires. The
-  manager sorts the tables by name, and `Toml.encode` writes them. So a rewrite
-  with no change makes no diff.
-- **`source`** is the URL the key stands for, not the URL after a
-  `url.<base>.insteadOf` rewrite. So the lock does not depend on one machine's
-  git config.
-- **`requires`** lists each direct dependency of the package as `key@minimum`.
-  The minimum is the one the package's own manifest asks for, not the version
-  used. The build reads the graph from here.
+  keys in this fixed order: name, git, tag or ref, commit, hash. The manager
+  sorts the tables by name, and `Toml.encode` writes them. So a rewrite with no
+  change makes no diff. A bad key, value or shape is `PKG-LOCK-INVALID` at its
+  key path. A name locked twice is `PKG-LOCK-INVALID`.
+- **One entry for each name.** The lock is flat: a name is one package, whoever
+  declares it. It holds the `git` URL and the `tag` or `ref` as the manifests
+  write them, not the URL after a `url.<base>.insteadOf` rewrite, so the lock
+  does not depend on one machine's git config. `commit` is the full commit (40
+  or 64 lowercase hex digits). When the pin is a `ref`, the commit starts with
+  it.
 - **The hash.** Take the `.agc` files of the package. Their paths are relative
   to the repo root, written with `/`. Sort them in bytewise order. For each file
   write its path, a zero byte, its size in decimal, a zero byte and its bytes.
-  The SHA-256 of that stream is the hash, written as `sha256:` and hex. Hidden
-  folders and `agc_libs/` are not copied, not hashed and not importable. A
-  symlink or gitlink among the copied `.agc` files is refused (`PKG-SYMLINK`).
-  Elsewhere in the repo such entries are ignored.
+  The SHA-256 of that stream is the hash, written as `sha256:` and hex
+  (`Crypto.sha256`; issue #455). Hidden folders and `agc_libs/` are not copied,
+  not hashed and not importable. A symlink or gitlink among the copied `.agc`
+  files is refused (`PKG-SYMLINK`). Elsewhere in the repo such entries are
+  ignored. The package's `agentica.toml` is not part of the hash: what it can do
+  is limited to naming dependencies, and each must agree with the lock (below).
 - **One lock per build.** Only the root project's lock counts. A package's own
   lock is ignored when the package is a dependency.
 - **Who writes it.** Only `add` and `update` write the lock (45.9).
 - **When a build fails.** Any command that loads code (`agentica file.agc`,
   `check`, `test`) fails in these cases:
-  - A manifest that declares a dependency with no lock is `PKG-LOCK-MISSING`.
-  - `PKG-LOCK-STALE` checks the whole graph, not only the root. Every locked
-    version must meet the minimum of each dependent that names it, transitive
-    dependents included. The root's manifest is one dependent, and each
-    package's `requires` is another. A declared dependency that is missing from
-    the lock is `PKG-LOCK-STALE` too.
-  - Two majors for one key is `PKG-MAJOR-CONFLICT` (45.7).
+- A manifest that declares a dependency with no lock is `PKG-LOCK-MISSING`.
+- A dependency of the manifest of the project that is not in the lock, or that
+  the lock holds with another `git` URL, `tag` or `ref`, is `PKG-LOCK-STALE`, at
+  `dependencies.<name>` of the manifest. This runs once, before any file is
+  read.
+- The same check runs on the manifest of each package when the build first loads
+  it. A dependency that the lock does not hold at all is `PKG-LOCK-STALE`. A
+  name that the lock holds with another source is `PKG-SOURCE-CONFLICT` (45.7).
+  Both are reported at `dependencies.<name>` of the package's manifest, in the
+  cache.
 
-  The build does not fix the lock itself.
+The build does not fix the lock itself.
 
-### 45.7 Versions
+### 45.7 Pins and sources
 
-- **A version is a git tag** `vMAJOR.MINOR.PATCH`. A tag that is not semver is
-  ignored. Prerelease tags are ignored by default: `add` and `update` never pick
-  one, though a minimum can still name one exactly. A branch or a commit cannot
-  be a version in v1, so a build never follows a moving target.
-- **Minimal version selection,** as in Go. For each package, the build uses the
-  highest minimum that any manifest in the graph asks for. The graph is read
-  from the `requires` of the lock (45.6). There is no solver and no
-  backtracking. The result depends only on the manifests, so every machine picks
-  the same versions.
-- **A new release changes nothing by itself.** Only `add` and `update` pick a
-  newer tag and rewrite the lock. A build never reads the remote for versions.
-- **`add` without a version** picks the newest tag and writes it as the
-  minimum. **`update name`** re-resolves that package to the newest tag with the
-  same major as the lock, and writes the new minimum for it. **`update`** with
-  no name re-resolves every direct dependency, and recomputes MVS over the whole
-  graph, so transitive versions can move too.
-- **Majors.** A key has one major. A tag of a higher major under a key whose
-  locked major is 1 is not a candidate for `add` or `update`. An `add` of a key
-  with no locked major takes the newest tag, whatever its major, and that major
-  is locked from then on. A minimum of another major for the same key is
-  `PKG-MAJOR-CONFLICT`: two majors of one key cannot be in one build. A new
-  major is a new repo, so it has its own key, such as `owner/sqlite-ac-v2`
-  (45.14 question 3, decided).
+Decided by the owner on 2026-10-20 (#468), in place of semantic versions and
+minimal version selection.
+
+- **A pin is a git tag or a commit.** A dependency says `tag = "v1.2.0"` or `ref
+  = "<commit>"`. A tag is any git tag name that fits the rules of 45.5: the tool
+  does not read it as a version, and does not order tags or ignore a tag that is
+  not semver. There are no branches, so a build never follows a moving target,
+  and there are no version ranges.
+- **No solver.** There is no semver, no minimal version selection and no
+  major-version rule. The lock holds the source that each name stands for, and
+  the build uses it.
+- **One name, one source.** In a build, a local name stands for one source: the
+  same `git` URL and the same `tag` or `ref`. The project and the packages may
+  all declare the same name, but only with the same source. The same name with
+  two different sources anywhere in the tree is `PKG-SOURCE-CONFLICT`, reported
+  at the declaration in the package's manifest that disagrees with the lock.
+  When the manifest of the project disagrees with the lock, it is
+  `PKG-LOCK-STALE` instead: the lock is out of date.
+- **Two names for one repository** are allowed. They are two entries of the
+  lock, with one folder in the cache for each commit, and the build loads the
+  repository once for each name, as two packages. In particular, two
+  incompatible majors of one library can be used together under two names.
+- **A new release changes nothing by itself.** Only `add` and `update` write the
+  lock (45.9). A build never reads the remote.
 - **A moved tag.** When the commit of a fetched tag is not the commit in the
   lock, the fetch fails with `PKG-TAG-MOVED`. The lock is never changed
   silently.
@@ -331,85 +362,85 @@ requires = ["gitlab.com/team/json-tools@0.4.1"]
 - **Git does the fetching.** The system `git` runs, so any host works with the
   user's git config, SSH keys and credential helpers. The tool keeps no tokens
   and has no HTTP client of its own.
-- **URLs.** `owner/repo` is fetched from `https://github.com/owner/repo.git`,
-  and `host/owner/repo` from `https://host/owner/repo.git`. The user's
-  `url.<base>.insteadOf` setting in git config can rewrite either to SSH.
-- **Fetch.** git fetches the tag `refs/tags/vX.Y.Z` with depth 1 into a bare
-  temporary repository. No working tree is made, so no checkout hook can run.
-  The tag is peeled to its commit, and that commit must equal the lock's
-  `commit`. The files are then read from that commit's tree with `git ls-tree`
-  and `git cat-file`, so the package's `.gitattributes` has no effect on the
-  bytes. Two copied `.agc` paths that differ only in case, in a file name or a
-  folder name (`A.agc` and `a.agc`, or `Util/x.agc` and `util/y.agc`), are
-  refused at fetch (`PKG-PATH-COLLISION`), so the package works on
-  case-insensitive file systems too.
+- **URLs.** The `git` value of the dependency is fetched as written
+  (`https://host/owner/repo`, with or without `.git`). The user's
+  `url.<base>.insteadOf` setting in git config can rewrite it to SSH.
+- **Fetch.** git fetches the tag `refs/tags/<tag>` with depth 1 into a bare
+  temporary repository, or, for a `ref`, the commit. No working tree is made, so
+  no checkout hook can run. A tag is peeled to its commit, and that commit must
+  equal the lock's `commit`. The files are then read from that commit's tree
+  with `git ls-tree` and `git cat-file`, so the package's `.gitattributes` has
+  no effect on the bytes. Two copied `.agc` paths that differ only in case, in a
+  file name or a folder name (`A.agc` and `a.agc`, or `Util/x.agc` and
+  `util/y.agc`), are refused at fetch (`PKG-PATH-COLLISION`), so the package
+  works on case-insensitive file systems too.
 - **Manifest.** At fetch, the package's `agentica.toml` is read from the commit
-  tree (`git cat-file`), not from a working tree. Its `name` is checked against
-  the key (`PKG-NAME-MISMATCH`), and its `[dependencies]` become the `requires`
-  of the package when `add` or `update` writes the lock (45.6). The manifest is
-  not copied or hashed. A symlink or gitlink among the copied `.agc` files is
-  refused (`PKG-SYMLINK`).
+  tree (`git cat-file`), not from a working tree, and checked as a manifest
+  (45.5). Its `[dependencies]` must agree with the lock when `add` or `update`
+  writes it (`PKG-SOURCE-CONFLICT`, or the lock gets the new names). The fetch
+  copies it to the cache beside the `.agc` files, because the build reads it
+  (45.3); it is not hashed (45.6). A symlink or gitlink among the copied `.agc`
+  files is refused (`PKG-SYMLINK`).
 - **Hash check.** The hash of 45.6 must match the lock, or the fetch fails with
   `PKG-HASH-MISMATCH`.
 - **Cache.** The files go to
   `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, which defaults
   to `~/.cache/agentica/pkg/`; on Windows, to
-  `%LOCALAPPDATA%/agentica/cache/pkg/` (45a: `XDG_CACHE_HOME` and `HOME` are
-  not read there, and a relative or unset `LOCALAPPDATA` leaves no cache).
-  GitHub uses the host `github.com`. The commit in
-  the path means two versions never share a folder. The fill goes into a
-  temporary folder that is renamed into place, so a half-written folder is never
-  read. If the target already exists, the fill checks its hash. A match is a
-  success, because another process filled it first. A mismatch is
-  `PKG-HASH-MISMATCH`, and nothing is overwritten. The folder is read-only after
-  the fill.
-- **Stored paths.** Project files are stored as PR #273 (in flight) defines:
-  relative to the entry file's folder, as §18.3 asks. Package files live in the
-  cache, outside any project. A path relative to the entry file would depend on
-  how deep that file is, so a package file is stored under its logical path:
-  `<key>@<version>/path/in/repo.agc`, for example
-  `owner/sqlite-ac@1.2.3/sqlite.agc`. The `.agcb` stores that path, so its bytes
-  do not depend on the machine's cache folder. Vendored packages use the same
-  path. 45a implements this for packages.
-- **Only `.agc` files** are used. Other files in a package are not copied.
+  `%LOCALAPPDATA%/agentica/cache/pkg/` (45a: `XDG_CACHE_HOME` and `HOME` are not
+  read there, and a relative or unset `LOCALAPPDATA` leaves no cache). The
+  `<host>/<owner>/<repo>` part is the `git` URL without `https://` and `.git`,
+  so it does not depend on the local name. The commit in the path means two
+  versions never share a folder. The fill goes into a temporary folder that is
+  renamed into place, so a half-written folder is never read. If the target
+  already exists, the fill checks its hash. A match is a success, because
+  another process filled it first. A mismatch is `PKG-HASH-MISMATCH`, and
+  nothing is overwritten. The folder is read-only after the fill.
+- **Stored paths.** Project files are stored as PR #273 defines: relative to the
+  entry file's folder, as §18.3 asks. Package files live in the cache, outside
+  any project. A path relative to the entry file would depend on how deep that
+  file is, so a package file is stored under its logical path:
+  `pkg/<name>@<version>/path/in/repo.agc`, for example
+  `pkg/sqlite@v1.2.0/db.agc`. `<version>` is the tag, or the first 12 hex digits
+  of the commit for a `ref`, so two machines that write the same commit with
+  different refs store the same bytes. The `.agcb` stores that path, so its
+  bytes do not depend on the machine's cache folder. Vendored packages use the
+  same path. 45a implements this for packages.
+- **Only `.agc` files** are used and hashed, and the root `agentica.toml` of a
+  package is kept for the build to read. Other files in a package are not
+  copied.
 - **A build never fetches.** Only `add`, `install`, `update` and `vendor` run
   git.
 
 **Vendoring.** `agentica vendor` copies every locked package into
-`agc_libs/<key>/`, for example `agc_libs/owner/sqlite-ac/` and
-`agc_libs/gitlab.com/team/json-tools/`. The `agc_libs/` location follows
-question 9 (recommended: beside `agentica.toml` when a manifest exists). The
-command fills missing cache entries first, as `install` does. A CI job with no
-network then builds from the vendored files, and the hash check proves they are
-the locked ones. The build
-looks in `agc_libs/<key>/` first and in the cache second. A vendored copy whose
-hash does not match is an error, never a silent fallback. The `pkg/` search
-skips these package folders, so a vendored copy is reached only through its
-key, where the hash is checked. Otherwise a `pkg/` import would load an
-unhashed copy. `vendor` writes only the paths of locked packages. It leaves
-other files in `agc_libs/` alone, including the `pkg/` libraries of 05b (45.14
-question 2).
+`agc_libs/<name>/`, for example `agc_libs/sqlite/`. The `agc_libs/` location
+follows question 9 (beside `agentica.toml` when a manifest exists). The command
+fills missing cache entries first, as `install` does. A CI job with no network
+then builds from the vendored files, and the hash check proves they are the
+locked ones. For a declared name the build looks in `agc_libs/<name>/` first and
+in the cache second. A vendored copy whose hash does not match is an error,
+never a silent fallback. A declared name never reaches the `pkg/` search of 05b
+(45.3), so a vendored copy is loaded only through its name, where the hash is
+checked. Otherwise a `pkg/` import would load an unhashed copy. `vendor` writes
+only the paths of locked packages. It leaves other files in `agc_libs/` alone,
+including the `pkg/` libraries of 05b (45.14 question 2).
 
 **No code runs at install.** A package is data until a program imports it.
-Importing it runs what any import runs: a module has no top-level statements,
-so only its module constants are evaluated, and only when the program
-uses it.
+Importing it runs what any import runs: a module has no top-level statements, so
+only its module constants are evaluated, and only when the program uses it.
 
 ### 45.9 Commands and errors
 
 These commands are in the single `agentica` binary, written in Agentica, after
-step 8 of §18.3:
+step 8 of §18.3. Their exact command line is decided in 45b and 45c; the
+behavior is:
 
-- `agentica add owner/repo[@version]` and
-  `agentica add host/owner/repo[@version]` pick the version (the newest tag by
-  default), add the key and its minimum to `agentica.toml`, rewrite the lock and
-  fill the cache.
+- `agentica add NAME URL` with a tag or a ref adds the dependency to
+  `agentica.toml`, rewrites the lock and fills the cache.
 - `agentica install` fills the cache with what the lock says. It never changes
   the lock. If the manifest asks for more than the lock has, it fails with
   `PKG-LOCK-STALE`.
-- `agentica update [name]` re-resolves the named package, or every direct
-  dependency when no name is given, to the newest tag with the same major. It
-  rewrites the lock, and it recomputes MVS over the graph (45.7).
+- `agentica update [NAME]` re-resolves the named package, or every dependency
+  when no name is given, from the pins in the manifest. It rewrites the lock.
 - `agentica vendor` copies the locked packages into `agc_libs/` (45.8).
 
 The commands start `git`. The VM refuses a process start without `--allow-run`
@@ -419,37 +450,32 @@ git.
 
 Errors use stable codes, with the `PKG-` prefix (45.14 question 4, decided).
 
-- `PKG-MANIFEST-INVALID`: `agentica.toml` is not valid TOML, has an unknown
-  key, or has a key or version of the wrong form. A TOML syntax error carries
-  the line and column from `std/toml`.
+- `PKG-MANIFEST-INVALID`: `agentica.toml` is not valid TOML, has an unknown key,
+  or has a name, a URL, a tag or a ref of the wrong form, or a source that is
+  not git. A TOML syntax error carries the line and column from `std/toml`.
 - `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`, `PKG-LOCK-STALE`: the lock is bad,
-  absent, or does not match the graph (45.6).
-- `PKG-NO-VERSION`: no tag matches the request (none, only non-semver tags, only
-  prereleases, or only tags of another major).
-- `PKG-MAJOR-CONFLICT`: two majors of one key are asked for (45.7).
-- `PKG-FETCH`: git failed. Git's message goes in the help.
+  absent, or does not agree with a manifest (45.6).
+- `PKG-SOURCE-CONFLICT`: one name has two different sources in the tree (45.7).
+- `PKG-FETCH`: git failed, or the tag or commit is not in the repository. Git's
+  message goes in the help.
 - `PKG-TAG-MOVED`: the tag now points to another commit than the lock says.
 - `PKG-HASH-MISMATCH`: a file, the listing or a cache folder does not match the
   lock.
 - `PKG-PATH-COLLISION`: two copied `.agc` paths differ only in case, in a file
   or folder name (45.8).
-- `PKG-NAME-MISMATCH`: a package's `name` differs from its key.
 - `PKG-SYMLINK`: a symlink or gitlink is among the copied `.agc` files (45.6).
-- `CHECK-IMPORT-PATH`: the path is not valid. It also covers `github.com/...`,
-  a `../` that leaves a package root, an import into a hidden folder or
-  `agc_libs/` of a package, and a bare `owner/repo` that is a declared key
-  (45.3).
-- `CHECK-IMPORT-AMBIGUOUS`: an import matches both a declared package and a
-  relative file or folder (45.3).
-- `CHECK-IMPORT-PACKAGE`: an import matches a declared package that is not in
-  the cache or in `agc_libs/`. The help says to run `agentica install`.
+- `CHECK-IMPORT-PATH`: the path is not valid. It also covers `pkg/<name>` with
+  no module, a `../` that leaves a package root, and an import into a hidden
+  folder or `agc_libs/` of a package (45.3).
+- `CHECK-IMPORT-PACKAGE`: a declared package is not in the cache or in
+  `agc_libs/`, with the help to run `agentica install`; or a file of a package
+  imports a `pkg/` name that its own manifest does not declare.
 
 The last two belong to the import checks, and the rest to the package tool.
-Manifest and lock errors have no source span, so they name the file and the
-key path (for example `dependencies.owner/sqlite-ac`), with the line and column
-when the error is a TOML syntax error. AGENTS.md says codes carry a span, so
-45a changes the diagnostic format and AGENTS.md lists the `PKG-` prefix (45.14
-question 4).
+Manifest and lock errors have no source span, so they name the file and the key
+path (for example `dependencies.sqlite.git`), with the line and column when the
+error is a TOML syntax error. AGENTS.md says codes carry a span, so 45a changes
+the diagnostic format and AGENTS.md lists the `PKG-` prefix (45.14 question 4).
 
 ### 45.10 Native code
 
@@ -502,22 +528,23 @@ binaries with hashes in the lock. A build step would break "no code at install"
   for git. A test points it at `file://` paths of the bare repositories. It
   changes where git fetches from, and the commit and hash checks still apply to
   what it serves. No test touches the network.
-- **Unittest.** The tests are Python `unittest` in `tests/test_packages.py`,
-  standard library only, deriving from `tests.agentica_test.TestCase`. They run
-  the `agentica` binary on fixture programs. CI installs git and fails if it is
+- **Pytest.** 45a tests are in `tests/test_spec_packages.py`, through the CLI
+  with `--json check`: they assert the code and the span, or the file and key
+  path, never message text. They run the `agentica` binary on fixture programs.
+  The tests of the fetch (45b) need git: CI installs it and fails if it is
   missing. Local runs may skip.
 - **A peer for the hash.** The rule of 45.6 is written again in Python with
   `hashlib` and `os.walk`, so a second implementation checks the Agentica one.
 - **Few tests, each one important** (CLAUDE.md, "Writing Tests"):
   1. End to end: `add`, then `install` into an empty cache, then a program
-     imports `owner/repo/mod` and prints. This covers the import form, the
-     cache and the lock together.
+     imports `pkg/name/mod` and prints. This covers the import form, the cache
+     and the lock together.
   2. Round trip: read `agentica.lock`, write it back, and compare the bytes.
      The manifest gets the same test.
   3. Failures, checked by code and not by text: a tampered file gives
-     `PKG-HASH-MISMATCH`; a moved tag gives `PKG-TAG-MOVED`; a minimum raised in
-     the manifest gives `PKG-LOCK-STALE`; a relative folder beside the importing
-     file gives `CHECK-IMPORT-AMBIGUOUS`.
+     `PKG-HASH-MISMATCH`; a moved tag gives `PKG-TAG-MOVED`; a tag changed in
+     the manifest gives `PKG-LOCK-STALE`; one name with two sources gives
+     `PKG-SOURCE-CONFLICT`.
   4. Offline: with the cache filled and no `git` on `PATH`, a build still
      succeeds. This proves that a build never fetches.
   5. Import paths: a `../` that leaves a package root, and an import into a
@@ -535,19 +562,20 @@ come after port step 8.
   `docs/grammar/05b-modules.md`, a library page, a row in the programming
   skill's library references, and a `CHANGELOG.md` entry, because the module is
   new for users.
-- **45a. Manifest and lock (done).** Read `agentica.toml` and `agentica.lock` with
-  `std/toml`. Resolve `owner/repo/...` imports from the cache, with the hash
-  check and the `CHECK-IMPORT-*` and `PKG-LOCK-*` checks. Packages are stored
-  under their logical path (45.8). There is no fetching: the tests fill the
-  cache by hand. The import resolution lands in `compiler/` only
-  (`compiler/modules/resolve_import.agc`), after step 8, when the Racket front
-  end is gone. That is consistent with the freeze.
+- **45a. Manifest and lock (done).** Read `agentica.toml` and `agentica.lock`
+  with `std/toml`. Resolve `pkg/<name>/...` imports from the cache, with the
+  hash check (`Crypto.sha256`) and the `CHECK-IMPORT-*`, `PKG-LOCK-*` and
+  `PKG-SOURCE-CONFLICT` checks. Packages are stored under their logical path
+  (45.8). There is no fetching: the tests fill the cache by hand. The code lands
+  in `compiler/` only (`compiler/packages/`, and
+  `compiler/modules/resolve_import.agc` for the import), after step 8, when the Racket front end is gone. That is
+  consistent with the freeze.
 - **45b. Fetch and install.** The git fetch of the tag, the commit check, the
   hash check, the cache fill, `install`, and the fetch errors.
-- **45c. Add and update.** `add`, `update`, the `@version` form, the lock writer
-  and minimal version selection, with the major rules of 45.7.
-- **45d. Vendor.** `vendor`, the `agc_libs/<key>/` layout, the build order that
-  prefers the vendored copy, and the `pkg/` skip of 45.8.
+- **45c. Add and update.** `add`, `update`, the lock writer and the manifest
+  writer, with the rules of 45.7.
+- **45d. Vendor.** `vendor`, the `agc_libs/<name>/` layout, and the build order
+  that prefers the vendored copy of a declared name (45.8).
 
 Each manager PR has its own tests (45.11), and updates
 [`05b-modules.md`](../grammar/05b-modules.md), the programming skill and a
@@ -562,7 +590,9 @@ One line each, as possible later work:
 - Publishing commands: a release is a tag, so there is nothing to publish.
 - Signatures: the commit and the hash come first; signed tags can follow.
 - Workspaces and monorepos: one manifest per project in v1.
-- Branch or commit versions: tags only, so builds stay reproducible.
+- Branches and version ranges: a pin is a tag or a commit, so builds stay
+  reproducible.
+- Sources other than git, such as a local path: `git` only for now.
 - Typed decoding into structs: not needed for the manager.
   `JSON.decode(JSON.encode(j), T)` on the output of `Toml.to_json` does it
   (45.4, question 10).
@@ -585,6 +615,9 @@ recommendation (10 and 12 were decided earlier).
      `stdlib/`, `tests/` and the docs.
    - **Decided (2026-10-20):** A. It keeps every import that works today, and it
      makes a clash visible.
+   - **Replaced (2026-10-20, #468):** B, with a local name: `pkg/<name>/mod`.
+     The `pkg/` prefix makes a clash impossible, so `CHECK-IMPORT-AMBIGUOUS` and
+     the host-prefix rule are gone (45.3).
 
 2. **The fate of today's `pkg/` roots.**
    - Option A: keep them for libraries that are installed by hand, and revisit
@@ -600,8 +633,10 @@ recommendation (10 and 12 were decided earlier).
      the major, and two majors can be in one build.
    - Option C: one major per build. A second major is an error.
    - **Decided (2026-10-20):** B. It needs no new rule in the import form, and
-     it has no clash. (This is separate from the rule of 45.7 that forbids two
-     majors of one key.)
+     it has no clash.
+   - **Replaced (2026-10-20, #468):** there is no semver and no major rule. A
+     pin is a tag or a commit, and one name has one source (45.7); two majors of
+     one library can be used together under two names.
 
 4. **Error codes and their prefix.**
    - Option A: a new `PKG-` prefix for the manifest, the lock, fetching, the
@@ -623,7 +658,9 @@ recommendation (10 and 12 were decided earlier).
    - Option A: only `.agc` files are used and hashed.
    - Option B: a `files` list in the manifest adds data files, such as a SQL
      schema, to the hash and to the vendored copy.
-   - **Decided (2026-10-20):** A. Add B when a package needs one.
+   - **Decided (2026-10-20):** A. Add B when a package needs one. The root
+     `agentica.toml` of a package is kept beside its `.agc` files, because the
+     build reads it (45.3), but it is not hashed.
 
 7. **Hashing at build.**
    - Option A: every build hashes each package it loads, from the cache or from
@@ -642,8 +679,8 @@ recommendation (10 and 12 were decided earlier).
 9. **Where `agc_libs/` sits when a manifest exists.** Decided (2026-10-20): B.
    - Option A: beside the root program, as today.
    - Option B: beside `agentica.toml` when a manifest exists, and beside the
-     root program otherwise, as today. The vendored paths are not reachable
-     through `pkg/` (45.8).
+     root program otherwise, as today. A vendored package is reached through
+     its declared name, where the hash is checked (45.8).
 
 10. **The shape of `parse`.** Decided by the owner on 2026-10-15: B.
     - Option A: a `JSON` value, reusing the JSON builtins (`JSON.get`,

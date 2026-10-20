@@ -10,6 +10,24 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Packages, phase 45a: an `agentica.toml` manifest and an `agentica.lock` lock
+  (both TOML, read with `std/toml`). A dependency has a local name, a git URL
+  and a pin: `sqlite = { git = "https://github.com/owner/sqlite-ac", tag =
+  "v1.2.0" }`, with a `tag` or a `ref` (a commit). The import is
+  `import Sqlite from "pkg/sqlite/db"`: a name that the manifest of the
+  importing file declares (the project's, or the package's own) is loaded from
+  a package cache that you fill by hand, and comes before the `pkg/` library
+  folders; any other name is the `pkg/` search as before. Fetching and the
+  `add`, `install`, `update` and `vendor` commands come in later phases. A
+  build hashes the `.agc` files of every package it loads with `Crypto.sha256`
+  and compares the hash with the lock. The cache is
+  `$XDG_CACHE_HOME/agentica/pkg/` (`~/.cache/agentica/pkg/`,
+  `%LOCALAPPDATA%\agentica\cache\pkg\` on Windows). New codes:
+  `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
+  `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
+  and `CHECK-IMPORT-PACKAGE`. A `PKG-` error about `agentica.toml` or
+  `agentica.lock` names the file and the key path (`key_path` in `--json`) in
+  place of a source span.
 - `String.to_bytes(s)`: the UTF-8 bytes of a String as a `List[Int]`, the
   inverse of `String.from_bytes`.
 - Generic type aliases: `type Matrix[T] = List[List[T]]`, used as
@@ -42,6 +60,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** when an `agentica.toml` is in the folder of the root file or
+  above it, `pkg/` searches `agc_libs/` beside that manifest, not beside the
+  root file. Without a manifest nothing changes.
 - **Breaking:** `Lazy` is now a reserved type name.
 - **Breaking:** `Profile` is now a reserved type name.
 - **Breaking:** `Crypto` is now a reserved type name.
