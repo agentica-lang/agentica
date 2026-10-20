@@ -278,9 +278,10 @@ parameter at each use and means the type with the arguments put in
 (`Matrix[Int]` is `List[List[Int]]`). The arguments are never inferred, and a
 wrong count is `CHECK-UNKNOWN-TYPE` at the use. The expanded type is checked
 where the alias is used: an error in the part written in the alias target (a
-`Void` item, a bad key) is reported at the use, and an error in an argument
-(`Index[Float]` for `type Index[K] = Map[K, Int]`) at the argument. A type
-parameter of an enum is never taken for a name in the alias target.
+`Void` item, a bad key such as `Map[Float, T]`) is reported at the declaration,
+and an error in an argument (`Index[Float]` for `type Index[K] = Map[K, Int]`)
+at the argument. A type parameter of an enum is never taken for a name in the
+alias target.
 
 `case value ... end` is a statement. An arm may put one simple statement on the
 arrow line (`1 -> puts("one")`), and more lines of the same arm may follow. A
