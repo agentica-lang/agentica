@@ -18,8 +18,6 @@
 #include <Security/SecTrustSettings.h>
 #include <stdbool.h>
 
-typedef enum { NO_SETTING, TRUSTED, DENIED } verdict;
-
 typedef struct {
   struct x509_store_st *store;
   CFMutableSetRef decided;
@@ -51,10 +49,10 @@ static bool tls_policy(CFDictionaryRef d) {
  * Unspecified gives no verdict. Any matching denial wins, which is stricter than Apple's first match and fails
  * closed. A grant on a non-self-signed certificate (TrustAsRoot) has no effect: without X509_V_FLAG_PARTIAL_CHAIN,
  * OpenSSL only ends a chain at a self-signed certificate. */
-static verdict tls_verdict(CFArrayRef settings) {
+agc_tls_trust_verdict agc_tls_trust_settings_verdict(CFArrayRef settings) {
   CFIndex n = CFArrayGetCount(settings);
-  if (n == 0) return TRUSTED;
-  verdict v = NO_SETTING;
+  if (n == 0) return AGC_TLS_TRUST_ROOT;
+  agc_tls_trust_verdict v = AGC_TLS_TRUST_NONE;
   for (CFIndex k = 0; k < n; k++) {
     CFTypeRef item = CFArrayGetValueAtIndex(settings, k);
     if (!item || CFGetTypeID(item) != CFDictionaryGetTypeID()) continue;
@@ -63,13 +61,13 @@ static verdict tls_verdict(CFArrayRef settings) {
     SInt32 result = (SInt32)kSecTrustSettingsResultTrustRoot, use = 0;
     if (CFDictionaryContainsKey(d, kSecTrustSettingsResult) && !number_is(d, kSecTrustSettingsResult, &result))
       continue;
-    if (result == (SInt32)kSecTrustSettingsResultDeny) return DENIED;
+    if (result == (SInt32)kSecTrustSettingsResultDeny) return AGC_TLS_TRUST_DENIED;
     bool narrow = CFDictionaryContainsKey(d, kSecTrustSettingsApplication) ||
                   CFDictionaryContainsKey(d, kSecTrustSettingsPolicyString) ||
                   (number_is(d, kSecTrustSettingsKeyUsage, &use) && use != (SInt32)kSecTrustSettingsKeyUseAny);
     bool grant = result == (SInt32)kSecTrustSettingsResultTrustRoot ||
                  result == (SInt32)kSecTrustSettingsResultTrustAsRoot;
-    if (grant && !narrow) v = TRUSTED;
+    if (grant && !narrow) v = AGC_TLS_TRUST_ROOT;
   }
   return v;
 }
@@ -91,11 +89,11 @@ static void load_domain(loader *l, SecTrustSettingsDomain domain) {
     if (CFSetContainsValue(l->decided, cert)) continue;
     CFArrayRef settings = NULL;
     if (SecTrustSettingsCopyTrustSettings(cert, domain, &settings) != errSecSuccess || !settings) continue;
-    verdict v = tls_verdict(settings);
+    agc_tls_trust_verdict v = agc_tls_trust_settings_verdict(settings);
     CFRelease(settings);
-    if (v == NO_SETTING) continue;
+    if (v == AGC_TLS_TRUST_NONE) continue;
     CFSetAddValue(l->decided, cert);
-    add_cert(l, cert, v == DENIED);
+    add_cert(l, cert, v == AGC_TLS_TRUST_DENIED);
   }
   CFRelease(certs);
 }

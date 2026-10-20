@@ -33,7 +33,8 @@ listen. A host containing NUL is an error. TLS listeners and sockets use the
 same TCP operations. TLS verifies certificates and hostnames with TLS 1.2 or
 later; there is no way to turn verification off. An empty CA path uses
 system trust (`SSL_CERT_FILE`, else the system store: the CA bundle on
-Linux, the Keychain trust settings on macOS, the ROOT store on Windows, with
+Linux, the Security framework's roots plus the Keychain trust settings on
+macOS, the ROOT store on Windows, with
 the certificates the system distrusts rejected; read once per process; plus
 `SSL_CERT_DIR`); a nonempty path is a PEM CA file that replaces system
 trust, and a missing or empty file makes the connect fail. An IP address

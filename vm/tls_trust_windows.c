@@ -16,7 +16,7 @@
 /* CertGetEnhancedKeyUsage with no flags combines the EKU extension and the EKU property. An empty list means every
  * use when the last error is CRYPT_E_NOT_FOUND, and no use when it is 0 (Microsoft Learn, CertGetEnhancedKeyUsage),
  * so the error is cleared before the call that fills the list. */
-static bool server_auth(PCCERT_CONTEXT cert) {
+bool agc_tls_trust_server_auth(PCCERT_CONTEXT cert) {
   DWORD size = 0;
   if (!CertGetEnhancedKeyUsage(cert, 0, NULL, &size)) return GetLastError() == (DWORD)CRYPT_E_NOT_FOUND;
   CERT_ENHKEY_USAGE *usage = malloc(size);
@@ -32,22 +32,28 @@ static bool server_auth(PCCERT_CONTEXT cert) {
   return ok;
 }
 
-/* Copies one system store. Each CertEnumCertificatesInStore call frees the context passed in and returns the next;
+/* Copies one Crypt32 store. Each CertEnumCertificatesInStore call frees the context passed in and returns the next;
  * the loop ends on NULL, so nothing is left to free (Microsoft Learn, CertEnumCertificatesInStore). */
-static void load_store(struct x509_store_st *store, const wchar_t *name, bool rejected) {
-  HCERTSTORE system = CertOpenSystemStoreW(0, name);
-  if (!system) return;
+static void copy_store(struct x509_store_st *store, HCERTSTORE from, bool rejected) {
+  if (!from) return;
   PCCERT_CONTEXT cert = NULL;
-  while ((cert = CertEnumCertificatesInStore(system, cert)) != NULL) {
-    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || (!rejected && !server_auth(cert))) continue;
+  while ((cert = CertEnumCertificatesInStore(from, cert)) != NULL) {
+    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || (!rejected && !agc_tls_trust_server_auth(cert)))
+      continue;
     (void)agc_tls_trust_add_der(store, cert->pbCertEncoded, cert->cbCertEncoded, rejected);
   }
-  CertCloseStore(system, 0);
 }
 
 /* Disallowed first: the store keeps the first copy of a certificate, so a distrusted root stays rejected. */
+void agc_tls_trust_copy_stores(struct x509_store_st *store, void *disallowed, void *root) {
+  copy_store(store, disallowed, true);
+  copy_store(store, root, false);
+}
+
 void agc_tls_trust_load(struct x509_store_st *store) {
-  load_store(store, L"Disallowed", true);
-  load_store(store, L"ROOT", false);
+  HCERTSTORE disallowed = CertOpenSystemStoreW(0, L"Disallowed"), root = CertOpenSystemStoreW(0, L"ROOT");
+  agc_tls_trust_copy_stores(store, disallowed, root);
+  if (disallowed) CertCloseStore(disallowed, 0);
+  if (root) CertCloseStore(root, 0);
 }
 #endif

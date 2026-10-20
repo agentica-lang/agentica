@@ -156,6 +156,8 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     task_cancel_test.c   # task cancellation
     text_test.c          # text forms
     tls_test.c           # TLS adapter in memory, trust sources, rejected certificates, system store; every system
+    tls_trust_darwin_test.c  # macOS trust settings verdicts (macOS only)
+    tls_trust_windows_test.c # Windows EKU rule and Disallowed-before-ROOT on memory stores (Windows only)
     trace_test.c         # trace points
 tests/            # pytest modules (test_<area>.py; existing unittest.TestCase modules remain supported); the lists of references/vm-tests.md say which covers what
   test_spec_<area>.py  # pytest language rules through the CLI (code and span from --json, never message text); shared helpers live in spec_support.py. Covers lexer, parser, module linker, checker, bytecode writer and diagnostic text.

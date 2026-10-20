@@ -33,8 +33,9 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
   - The system store is read once per process (`vm/tls_trust.c`, under
     `CRYPTO_THREAD_run_once`, in the first setup pool job that needs it, never
     on the scheduler or I/O thread) and copied into each new context, so a
-    trust change while the process runs is not seen. Its certificates are
-    shared, read-only `X509` objects.
+    trust change while the process runs is not seen. A first load that fails
+    also lasts for the whole process, and verification then fails closed. Its
+    certificates are shared, read-only `X509` objects.
   - A certificate the system distrusts is added with an explicit reject of
     `serverAuth` (`X509_add1_reject_object`), before any trusted copy (the
     store keeps the first copy). OpenSSL's `check_trust` then fails a chain
@@ -114,12 +115,17 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
   `ca_file` over both), rejected roots and leaves (through `X509_verify_cert`
   and a handshake), and a client config that holds the system store with a root
   that verifies (required on macOS and Windows). It needs no socket, so it runs
-  on Linux, macOS and Windows. The goldens `tls-echo` and `tls-errors` are their
-  own peers. `tests/test_vm_tls.py` covers the rest against Node
-  (`tests/fixtures/tls-peer.js`) and Python (`tests/fixtures/tls-peer.py`): EOF
-  with and without `close_notify`, the 1 MiB limit, every verify error on both
-  sides, timeouts, and system trust through `SSL_CERT_FILE`. The certificates in
-  `tests/fixtures/tls/` come from `make-certs.sh`.
+  on Linux, macOS and Windows. The platform policies have their own tests:
+  `vm/tests/tls_trust_darwin_test.c` (trust settings arrays: empty, missing
+  result, Deny, narrow grants, Unspecified, other policies) and
+  `vm/tests/tls_trust_windows_test.c` (EKU properties on in-memory Crypt32
+  stores, and a Disallowed copy that wins over ROOT). The goldens `tls-echo` and
+  `tls-errors` are their own peers. `tests/test_vm_tls.py` covers the rest
+  against Node (`tests/fixtures/tls-peer.js`) and Python
+  (`tests/fixtures/tls-peer.py`): EOF with and without `close_notify`, the 1 MiB
+  limit, every verify error on both sides, timeouts, and system trust through
+  `SSL_CERT_FILE`. The certificates in `tests/fixtures/tls/` come from
+  `make-certs.sh`.
 
 ### 10.3.1 TCP (as built)
 

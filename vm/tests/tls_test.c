@@ -247,7 +247,8 @@ static int verify(X509_STORE *store, X509 *leaf) {
 
 /* A certificate the system distrusts is in the store marked rejected. The test CA trusted verifies server.pem;
  * rejected it gives X509_V_ERR_CERT_REJECTED, also when a trusted copy is added after it (the store keeps the first
- * copy). A rejected leaf is refused by the verify callback, which OpenSSL alone would accept. */
+ * copy). A rejected leaf is refused by the verify callback, which OpenSSL alone would accept. DER with trailing
+ * bytes is refused. */
 static void test_rejected(void) {
   X509 *leaf = read_pem(CERTS "server.pem");
   X509_STORE *trusted = X509_STORE_new();
@@ -266,6 +267,17 @@ static void test_rejected(void) {
   X509_STORE_free(leaf_rejected);
   X509_STORE *garbage = X509_STORE_new();
   assert(!agc_tls_trust_add_der(garbage, (const unsigned char *)"not der", 7, true));
+  unsigned char *der = NULL;
+  int len = i2d_X509(leaf, &der);
+  assert(len > 0);
+  unsigned char *longer = OPENSSL_malloc((size_t)len + 1);
+  assert(longer);
+  memcpy(longer, der, (size_t)len);
+  longer[len] = 0;
+  assert(!agc_tls_trust_add_der(garbage, longer, (size_t)len + 1, false));
+  assert(agc_tls_trust_add_der(garbage, longer, (size_t)len, false));
+  OPENSSL_free(longer);
+  OPENSSL_free(der);
   X509_STORE_free(garbage);
   X509_free(leaf);
 }

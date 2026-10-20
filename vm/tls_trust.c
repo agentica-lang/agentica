@@ -43,7 +43,15 @@ size_t agc_tls_trust_system(struct x509_store_st *store) {
 int agc_tls_trust_verify(int ok, struct x509_store_ctx_st *ctx) {
   if (!ok || X509_STORE_CTX_get_error_depth(ctx) != 0) return ok;
   X509 *leaf = X509_STORE_CTX_get_current_cert(ctx);
+  unsigned long before = ERR_peek_last_error();
   STACK_OF(X509) *same = leaf ? X509_STORE_CTX_get1_certs(ctx, X509_get_subject_name(leaf)) : NULL;
+  /* OpenSSL 3 returns an empty stack when nothing matches; NULL with a new error is a failed lookup (no memory),
+   * and the chain fails closed. */
+  if (leaf && !same && ERR_peek_last_error() != before) {
+    ERR_clear_error();
+    X509_STORE_CTX_set_error(ctx, X509_V_ERR_OUT_OF_MEM);
+    return 0;
+  }
   bool rejected = false;
   for (int k = 0; k < sk_X509_num(same) && !rejected; k++) {
     X509 *x = sk_X509_value(same, k);
@@ -63,7 +71,7 @@ bool agc_tls_trust_add_der(struct x509_store_st *store, const unsigned char *der
   if (len > LONG_MAX) return false;
   const unsigned char *p = der;
   X509 *x = d2i_X509(NULL, &p, (long)len);
-  bool ok = x && (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
+  bool ok = x && p == der + len && (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
             X509_STORE_add_cert(store, x) == 1;
   X509_free(x);
   ERR_clear_error();
