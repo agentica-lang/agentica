@@ -16,12 +16,14 @@
 /* The most CPU pauses between two looks of a spinning scheduler: the steps double up to it (agc_runq_spin). */
 #define SPIN_PAUSES_MAX 32u
 
-/* One CPU pause of a spinning scheduler: `pause` on x86 and `yield` on ARM tell the core that this is a busy wait
-   (less power, the other hyperthread runs); elsewhere it is a compiler barrier only. Every compiler the VM builds with
+/* One CPU pause of a spinning scheduler: `pause` on x86 and `yield` on AArch64 and on ARMv6K and later (older ARM has
+   no such hint) tell the core that this is a busy wait (less power, the other hyperthread runs); elsewhere it is a
+   compiler barrier only. Every compiler the VM builds with
    (GCC, Clang, llvm-mingw) takes these builtins and this asm. */
 #if defined(__x86_64__) || defined(__i386__)
 #define CPU_PAUSE() __builtin_ia32_pause()
-#elif defined(__aarch64__) || defined(__arm__)
+#elif defined(__aarch64__) || (defined(__arm__) && (__ARM_ARCH >= 7 || defined(__ARM_ARCH_6K__) || \
+                                                    defined(__ARM_ARCH_6KZ__)))
 #define CPU_PAUSE() __asm__ __volatile__("yield" ::: "memory")
 #else
 #define CPU_PAUSE() atomic_signal_fence(memory_order_seq_cst)
@@ -138,11 +140,25 @@ static bool must_wait(const agc_runq *q) {
          !atomic_load_explicit(&q->nudged, memory_order_relaxed);
 }
 
-/* The task a waiting scheduler leaves with, under the lock: none once the run has ended. */
-static agc_task *take_waited(agc_runq *q) {
+/* The task a waiting or spinning scheduler leaves with, under the lock: none once the run has ended. When it leaves
+   with a task, more are queued, others wait and nobody spins, it passes the wake on (*CHAIN, signalled by the caller
+   after the unlock): a spinner absorbs the signals of every push it sees, and this chain wakes one parked scheduler
+   per task taken until the queue is empty or a scheduler spins again. */
+static agc_task *take_waited(agc_runq *q, bool *chain) {
+  *chain = false;
   if (atomic_load_explicit(&q->ended, memory_order_relaxed)) return NULL;
   agc_task *t = take_first(q);
-  if (t && !q->solo) note_work(q);
+  if (!t || q->solo) return t;
+  note_work(q);
+  *chain = q->first && q->idle && atomic_load_explicit(&q->spinning, memory_order_seq_cst) == 0;
+  if (*chain) q->signals++;
+  return t;
+}
+
+/* The end of a wait or a spin: unlocks, then sends the chained wake if take_waited asked for one. */
+static agc_task *leave_with(agc_runq *q, agc_task *t, bool chain) {
+  uv_mutex_unlock(&q->lock);
+  if (chain) uv_cond_signal(&q->wake);
   return t;
 }
 
@@ -157,16 +173,16 @@ static void leave_idle(agc_runq *q) {
 }
 
 agc_task *agc_runq_wait(agc_runq *q) {
-  if (q->solo) return take_waited(q);
+  bool chain;
+  if (q->solo) return take_waited(q, &chain);
   uv_mutex_lock(&q->lock);
   if (must_wait(q)) {
     enter_idle(q);
     while (must_wait(q)) uv_cond_wait(&q->wake, &q->lock);
     leave_idle(q);
   }
-  agc_task *t = take_waited(q);
-  uv_mutex_unlock(&q->lock);
-  return t;
+  agc_task *t = take_waited(q, &chain);
+  return leave_with(q, t, chain);
 }
 
 /* The wait of an idle scheduler that has a timer: as agc_runq_wait, but it also returns NULL once agc_clock_ms reaches
@@ -174,7 +190,8 @@ agc_task *agc_runq_wait(agc_runq *q) {
    apart by asking the queue and the clock. Only the scheduler that owns the nearest deadline waits timed; the others wait
    untimed, so one deadline does not wake every idle scheduler. A solo queue never waits. */
 agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms) {
-  if (q->solo) return take_waited(q);
+  bool chain;
+  if (q->solo) return take_waited(q, &chain);
   uv_mutex_lock(&q->lock);
   bool idle = false;
   while (must_wait(q)) {
@@ -187,9 +204,8 @@ agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms) {
     (void)uv_cond_timedwait(&q->wake, &q->lock, left * UINT64_C(1000000));
   }
   if (idle) leave_idle(q);
-  agc_task *t = take_waited(q);
-  uv_mutex_unlock(&q->lock);
-  return t;
+  agc_task *t = take_waited(q, &chain);
+  return leave_with(q, t, chain);
 }
 
 /* Sets the spin of idle schedulers: at most MAX of them spin at once, each for BUDGET_NS. Called before the scheduler
@@ -218,10 +234,10 @@ static bool spin_found(agc_runq *q) {
 
 /* The busy wait of an idle scheduler before it waits on the condvar: it polls `work` with growing runs of CPU pauses
    (1, 2, 4, ... SPIN_PAUSES_MAX between two looks), never a system sleep, until a task shows up or spin_ns has passed.
-   It leaves the spinners before it takes the lock, so a push from then on signals or is found by its wait. A spinner
-   that takes a task while more are queued and nobody else spins signals one waiter: the pushes it absorbed sent no
-   signal, and the parked schedulers would idle beside the queued work. NULL when it found no task (the caller waits,
-   and that wait returns at once on a nudge or the end); also NULL at once when spinning is off or spin_max spin. */
+   It leaves the spinners before it takes the lock, so a push from then on signals or is found by its wait. Its take
+   starts the chained wake of take_waited: the pushes it absorbed sent no signal. NULL when it found no task (the
+   caller waits, and that wait returns at once on a nudge or the end); also NULL at once when spinning is off or
+   spin_max spin. */
 agc_task *agc_runq_spin(agc_runq *q) {
   if (q->solo || !join_spinners(q)) return NULL;
   uint64_t start = uv_hrtime();
@@ -234,12 +250,9 @@ agc_task *agc_runq_spin(agc_runq *q) {
   atomic_fetch_sub_explicit(&q->spinning, 1, memory_order_seq_cst);
   if (!found) return NULL;
   uv_mutex_lock(&q->lock);
-  agc_task *t = take_waited(q);
-  bool more = t && q->first && q->idle && atomic_load_explicit(&q->spinning, memory_order_seq_cst) == 0;
-  if (more) q->signals++;
-  uv_mutex_unlock(&q->lock);
-  if (more) uv_cond_signal(&q->wake);
-  return t;
+  bool chain;
+  agc_task *t = take_waited(q, &chain);
+  return leave_with(q, t, chain);
 }
 
 agc_runq_counts agc_runq_stats(agc_runq *q) {

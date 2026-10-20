@@ -120,7 +120,9 @@ Read first: `references/vm.md`.
     libuv threads after `agc_runq_share` (every task comes out exactly once);
     the blocking waits; the spin (`test_spin`: a push that a spinner takes
     sends no signal, counted by `agc_runq_stats`; a spinner that runs out of
-    budget waits and still gets the push), ordered by the counts, not by time.
+    budget waits and still gets the push; `test_burst_wakes_every_waiter`: a
+    burst beside a spinner reaches every parked waiter through the chained
+    wake), ordered by the counts, not by time.
 
 - **Path:** `vm/tests/inbox_test.c`
   - **Owns:** The inbox (`vm/inbox.c`): six producers post 20000 requests each

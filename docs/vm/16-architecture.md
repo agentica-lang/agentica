@@ -633,23 +633,22 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
 - **Wakes between schedulers.** The run queue stays one global FIFO, with no
   local queues, no stealing and no thread affinity. Two things keep a wake
   cheap (`vm/task.c`, `vm/runq.c`):
-  - Each scheduler thread has one runnext slot (`agc_vm.runnext`). A task that
-    a scheduler wakes (`agc_task_wake`: a channel, an await, a timer, a lock
-    hand-on, a detached ending) goes into that scheduler's slot when it is
-    free, and to the global queue when it is full; the slot keeps its task. A
-    spawn and a yield go to the queue, and so does every wake by the I/O
-    thread, and the slot is off at N = 1. `agc_task_next` takes the slot
-    first, at most `RUNNEXT_LIMIT` (3) times in a row, then pops the queue
-    once and resets the count; with the queue empty it takes the slot after
-    all. So two tasks that wake each other run on one core with no lock of
-    the queue and no futex wake. Only the owner thread touches the slot.
-    Another scheduler never takes its task, so it waits for the owner's turn
-    to end. A task in a slot is READY like a queued one: it counts as pending,
-    the owner never spins or waits while its slot is full (so the stall check
-    never sees it idle), a cancel by the owner takes it out of the slot and
-    ends it, and a cancel from another thread leaves it to the owner's
-    `agc_task_next`, as for a popped task. At the end of the run it is left
-    like the queued tasks.
+  - Each scheduler thread has one runnext slot (`agc_vm.runnext`). A task that a
+    scheduler wakes (`agc_task_wake`: a channel, an await, a timer, a lock
+    hand-on, a detached ending) goes into that scheduler's slot when it is free,
+    and to the global queue when it is full; the slot keeps its task. A spawn
+    and a yield go to the queue, and so does every wake by the I/O thread, and
+    the slot is off at N = 1. `agc_task_next` takes the slot first, at most
+    `RUNNEXT_LIMIT` (3) times in a row, then pops the queue once and resets the
+    count; with the queue empty it takes the slot after all. So two tasks that
+    wake each other run on one core, taking the queue's lock only every fourth
+    pick, with no futex wake. Only the owner thread touches the slot. Another
+    scheduler never takes its task, so it waits for the owner's turn to end. A
+    task in a slot is READY like a queued one: it counts as pending, the owner
+    never spins or waits while its slot is full (so the stall check never sees
+    it idle), a cancel by the owner takes it out of the slot and ends it, and a
+    cancel from another thread leaves it to the owner's `agc_task_next`, as for
+    a popped task. At the end of the run it is left like the queued tasks.
   - An idle scheduler spins before it waits on the condvar
     (`agc_runq_spin`): it polls the queue's atomic `work` flag, not the lock,
     with CPU pauses whose runs double up to 32, for `SPIN_BUDGET_US` (10 µs),
@@ -658,11 +657,11 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
     queue's lock and skips the condvar signal while one spins. No wake is
     lost: a spinner leaves the count before it takes the lock for its wait,
     so it either sees `work`, finds the task in that wait, or left before the
-    push read the count, which then signals. A spinner that takes a task
-    while more are queued and nobody spins signals one waiter, so the pushes
-    it absorbed do not leave parked schedulers beside queued work. Spinners
-    are not idle for the stall check: a scheduler counts as idle only in the
-    condvar wait.
+    push read the count, which then signals. A spinner may see several pushes
+    that sent no signal, so the wake is chained: any scheduler that leaves a
+    spin or a wait with a task, while more tasks are queued, others wait and
+    none spins, signals one more waiter. Spinners are not idle for the stall
+    check: a scheduler counts as idle only in the condvar wait.
 - **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic
   cancel flag, and then the state says who ends the task, and exactly one party
   does. A task on a turn (RUNNING, PARKING or WOKEN) is left to its scheduler,

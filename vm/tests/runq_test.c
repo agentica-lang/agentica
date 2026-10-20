@@ -232,7 +232,7 @@ static void await_counts(agc_runq *q, uint32_t spinning, uint32_t idle) {
    spinner takes a push and the push sends no signal; a second spinner past spin_max returns at once. A push while one
    waits and none spins signals once. A spinner that runs out of budget waits, and the push after that wakes it with a
    signal. A spinner that takes one of two pushes while another scheduler waits leaves the other task to it with one
-   signal (or a spare one), whichever way the pushes and the spinner's pop fall. The end stops a spinner. */
+   one or two signals for this pair, whichever way the pushes and the spinner's pop fall. The end stops a spinner. */
 static void test_spin(void) {
   agc_vm_init(&spun, NULL, stdout, stderr, INT64_MAX);
   agc_runq *q = spun.rt->runq;
@@ -294,6 +294,44 @@ static void test_spin(void) {
   assert(atomic_load(&spun_task) == NULL);
 }
 
+static agc_vm burst;
+static _Atomic int burst_taken;
+
+/* One idle scheduler of the burst: spins if ARG is non-NULL, else only waits, and takes one task. */
+static void burst_one(void *arg) {
+  assert(agc_gc_thread_enter());
+  agc_runq *q = burst.rt->runq;
+  agc_task *t = arg ? agc_runq_spin(q) : NULL;
+  if (!t) t = agc_runq_wait(q);
+  if (t) atomic_fetch_add(&burst_taken, 1);
+  agc_gc_thread_leave();
+}
+
+/* A burst while one scheduler spins (without end) and WAITERS wait: WAITERS + 1 pushes, each scheduler takes one task.
+   The spinner absorbs the signals of the pushes it sees, so the wake must be passed on by each scheduler that leaves
+   with a task while more are queued (take_waited); without that chain a waiter can stay parked beside a queued task
+   and the join below blocks until the test's deadline. Many rounds, so the pushes fall at different points of the
+   spinner's take. */
+static void test_burst_wakes_every_waiter(uint32_t waiters, int rounds) {
+  for (int round = 0; round < rounds; round++) {
+    agc_vm_init(&burst, NULL, stdout, stderr, INT64_MAX);
+    agc_runq *q = burst.rt->runq;
+    agc_runq_share(q);
+    agc_runq_spin_setup(q, 1, SPIN_FOREVER_NS);
+    for (uint32_t k = 0; k <= waiters; k++) agc_runq_add_scheduler(q);
+    atomic_store(&burst_taken, 0);
+    uv_thread_t threads[4];
+    assert(waiters < 4);
+    for (uint32_t k = 0; k < waiters; k++) assert(uv_thread_create(&threads[k], burst_one, NULL) == 0);
+    await_counts(q, 0, waiters);
+    assert(uv_thread_create(&threads[waiters], burst_one, &burst) == 0);
+    await_counts(q, 1, waiters);
+    for (uint32_t k = 0; k <= waiters; k++) agc_runq_push(q, agc_new_task(&burst));
+    for (uint32_t k = 0; k <= waiters; k++) assert(uv_thread_join(&threads[k]) == 0);
+    assert(atomic_load(&burst_taken) == (int)waiters + 1 && agc_runq_pop(q) == NULL);
+  }
+}
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
@@ -308,6 +346,8 @@ int main(void) {
   test_wait_until();
   test_end_wakes_everyone();
   test_spin();
+  test_burst_wakes_every_waiter(2, 300);
+  test_burst_wakes_every_waiter(3, 300);
   puts("run queue tests passed");
   return 0;
 }

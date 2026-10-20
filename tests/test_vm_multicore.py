@@ -341,9 +341,9 @@ end
 def echo(p: Pair) -> Int
   n = 0
   while n >= 0
-    case p.ping.recv(60000)
+    case p.ping.recv(2000)
       ok(v) ->
-        _ = p.pong.send(v + 1, 60000)
+        _ = p.pong.send(v + 1, 2000)
         n += 1
       error(_) -> return -1
     end
@@ -354,8 +354,8 @@ end
 def play(p: Pair) -> Int
   i = 0
   while i >= 0
-    _ = p.ping.send(i, 60000)
-    case p.pong.recv(60000)
+    _ = p.ping.send(i, 2000)
+    case p.pong.recv(2000)
       ok(v) -> i = v
       error(_) -> return -1
     end
@@ -407,7 +407,9 @@ def test_tasks_that_wake_each_other_end_when_cancelled_from_any_scheduler(tmp_pa
     # Pairs of tasks wake each other for ever, so most of the time one of each pair waits in the runnext slot of the
     # scheduler that woke it (§16.9, "Wakes between schedulers"). Task.map cancels eight such pairs at their deadline
     # and a crashing owner cancels three more, from whichever scheduler runs the canceller: every task ends (the pending
-    # count reaches 0) and the run exits normally.
+    # count reaches 0) and the run exits normally. The waits have a 2 s deadline because a task cancelled on another
+    # scheduler finishes its turn first: an item that starts only after its deadline (a loaded machine) spawns its echo
+    # after the cancel, and that echo ends at its deadline, not by the cancel.
     bytecode = program(tmp_path, "rallies", RALLIES)
     for _ in range(repeats):
         result = vm(bytecode)
