@@ -5376,6 +5376,8 @@
         "  r: String = IO.read()",
         "  bytes: Result[List[Int]] = IO.read_bytes(3)",
         "  decoded: Result[String] = String.from_bytes([195, 177])",
+        "  encoded: List[Int] = String.to_bytes(\"n\")",
+        "  methodic: List[Int] = \"n\".to_bytes",
         "  IO.flush()",
         "  e: Bool = IO.eof?()",
         "  a: List[String] = System.args()",
@@ -5445,6 +5447,38 @@
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = String.to_bytes(65)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 23],
+      "covers": "65"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x: String = String.to_bytes(\"A\")",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  x = String.to_bytes()",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-ARITY"
     },
     {
       "program": [

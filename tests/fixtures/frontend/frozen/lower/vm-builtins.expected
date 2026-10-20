@@ -189,6 +189,7 @@ String.reverse
 String.slice
 String.split
 String.starts_with?
+String.to_bytes
 String.to_float
 String.to_float!
 String.to_int

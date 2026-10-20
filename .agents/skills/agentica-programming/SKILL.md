@@ -185,8 +185,9 @@ values, functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
 
 Not in Agentica, and what to write instead: `Map.new` (`{}` with a type),
 `IO.read_all` (`IO.read()`), `s.chars` (`s.split("")`), `s.ord`
-(`String.code(s)`), `s.len` (`s.length`), `s.empty?` (`s.length == 0`),
-`r.is_err?` or `r.error?` (`!r.ok?`), `=~` and `matches?` (no regex builtin).
+(`String.code(s)`), `s.bytes` (`s.to_bytes`), `s.len` (`s.length`), `s.empty?`
+(`s.length == 0`), `r.is_err?` or `r.error?` (`!r.ok?`), `=~` and `matches?`
+(no regex builtin).
 
 ## When to read a reference
 

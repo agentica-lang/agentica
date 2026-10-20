@@ -68,6 +68,12 @@ def main() -> Void
   puts(String.from_bytes([192, 128]).inspect)
   puts(String.from_bytes([195, 256]).inspect)
   puts(String.from_bytes([-1]).inspect)
+  puts(String.to_bytes("aé€😀").inspect)
+  puts("".to_bytes.inspect)
+  puts("hi".to_bytes.size)
+  for sample in ["", "plain ascii", "é", "€ and ñ", "😀", "a#{String.from_code(0)}b", "aé€😀 mixed"]
+    puts(String.from_bytes(String.to_bytes(sample)).unwrap! == sample)
+  end
   puts("42".to_int.inspect)
   puts("-0042".to_int.inspect)
   puts("+7".to_int.inspect)

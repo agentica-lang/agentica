@@ -12,7 +12,7 @@ description: The Crypto builtins, which hash bytes with SHA-256.
 Crypto.sha256(data: List[Int]) -> List[Int]
 ```
 
-`Crypto.sha256` gives the SHA-256 digest of a list of bytes: 32 integers from 0 to 255. Bytes are a `List[Int]`, as `IO.read_bytes`, `File.read_bytes` and [std/binary](/library/text-and-data/binary/) use. For ASCII text, the codes of its characters are its bytes, as `ascii` below shows.
+`Crypto.sha256` gives the SHA-256 digest of a list of bytes: 32 integers from 0 to 255. Bytes are a `List[Int]`, as `IO.read_bytes`, `File.read_bytes` and [std/binary](/library/text-and-data/binary/) use. To hash text, hash its UTF-8 bytes from `String.to_bytes`.
 
 ```agentica
 def hex(digest: List[Int]) -> String
@@ -20,12 +20,8 @@ def hex(digest: List[Int]) -> String
   return digest.map do |b| digits.at(b / 16) + digits.at(b % 16) end.join("")
 end
 
-def ascii(text: String) -> List[Int]
-  return text.split("").map do |c| c.code end
-end
-
 def main() -> Void
-  digest = Crypto.sha256(ascii("abc"))
+  digest = Crypto.sha256(String.to_bytes("abc"))
   puts(digest.size)
   puts(hex(digest))
   puts(hex(Crypto.sha256([])))

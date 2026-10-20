@@ -241,7 +241,9 @@ Expected types flow into these operations for empty collections and Results.
   integers 0 to 255 with no decoding. Counts are 0 to 1048576; zero gives
   `ok([])` without consuming input. `String.from_bytes` decodes strictly as
   UTF-8: invalid, overlong, surrogate and incomplete sequences are errors, never
-  replacement characters.
+  replacement characters. `String.to_bytes(s)` is its inverse: the UTF-8 bytes
+  of `s` as a `List[Int]` of 0 to 255 (`[]` for `""`); it cannot fail, so
+  `String.from_bytes(String.to_bytes(s))` is `ok(s)`.
 - `Crypto.sha256(data)` gives the SHA-256 digest of the bytes in `data` as a
   `List[Int]` of 32 integers 0 to 255 (`Crypto.sha256([])` starts `[227, 176,
   196, ...]`, hex `e3b0c442...`). An item outside 0 to 255 is

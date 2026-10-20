@@ -3241,6 +3241,16 @@ ROWS_44: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "String.to_bytes",
+      parameters: [Model.Named(name: "s", type: Types.Type.String)],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "String.to_bytes",
+      effects: [],
+      description: "Encode a string as its UTF-8 bytes; the inverse of String.from_bytes.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "String.to_float",
       parameters: [Model.Named(name: "s", type: Types.Type.String)],
       result: Types.Type.Result(Types.Type.Float),
