@@ -30,6 +30,8 @@ A release archive needs none of the build tools. It holds the one program (`bin/
 - **macOS Apple silicon** (`agentica-VERSION-macos-arm64.tar.gz`): macOS 12 or newer on an Apple silicon Mac, unpacked the same way. The program is not an Intel program: it needs no Rosetta.
 - **Windows x86-64** (`agentica-VERSION-windows-x86_64.zip`): Windows 10 or newer, 64-bit; the program depends only on the system DLLs and the Universal C Runtime that Windows 10 includes, so it needs no MSYS2 or Visual C++ redistributable. In PowerShell: `Get-FileHash agentica-VERSION-windows-x86_64.zip` (compare with `SHA256SUMS`), then `Expand-Archive agentica-VERSION-windows-x86_64.zip .`.
 
+The minimum versions are what the programs are built for. CI runs each archive on the current GitHub-hosted runner of its system (Ubuntu, macOS 15 on Intel and on Apple silicon, Windows Server 2025), not on the oldest supported release.
+
 The archives are not signed with a developer identity and are not notarized. The macOS programs carry only the ad hoc signature that Apple silicon requires of every program. A file downloaded with a browser gets a quarantine mark, and macOS then refuses to open the program; remove the mark with `xattr -d com.apple.quarantine bin/agentica` (a download with `curl` has none). Windows SmartScreen may warn about an unsigned program the first time. The checksum file is the only proof of origin for now.
 
 Networking (`TCP`, `TLS` and `std/http`) works on Linux and macOS; the Windows program does not have it yet.

@@ -358,7 +358,8 @@ def network_smoke(s: Smoke, work: Path, platform: str) -> None:
     (work / "tcp.agc").write_text(TCP, encoding="utf-8")
     proc = s.run("tcp.agc", code=None)
     if proc.returncode != 0 and NO_BUILTIN in proc.stderr and not platform.startswith(("linux", "macos")):
-        print(f"skip: networking, this binary has no TCP builtins ({platform}): {proc.stderr.strip()}")
+        note = f"networking skipped: this binary has no TCP builtins ({platform}): {proc.stderr.strip()}"
+        print(f"::notice title=Release smoke::{note}" if os.environ.get("GITHUB_ACTIONS") else f"skip: {note}")
         return
     s.expect("TCP loopback echo", proc.returncode == 0 and proc.stdout == "echo ñandú\n", proc)
     (work / "http.agc").write_text(HTTP_LOOP, encoding="utf-8")
