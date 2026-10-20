@@ -128,7 +128,7 @@ def check_type_parameters(
   seen: Set[String] = Set.new([])
   for parameter in parameters
     if seen.include?(parameter)
-      return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate type parameter in this #{owner}", span))
+      return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate #{owner} type parameter", span))
     end
     seen = seen.add(parameter)
   end
@@ -139,13 +139,20 @@ def check_type_parameters(
           cx,
           st,
           "CHECK-REDEFINED-NAME",
-          "\"#{parameter}\" cannot be used as a type parameter in this #{owner}",
+          "\"#{parameter}\" cannot be used as #{article(owner)} #{owner} type parameter",
           span,
         ),
       )
     end
   end
   return ok(true)
+end
+
+def article(owner: String) -> String
+  if owner == "enum"
+    return "an"
+  end
+  return "a"
 end
 
 # CHECK-REDEFINED-NAME when a declared type name is reserved or already taken.
