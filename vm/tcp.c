@@ -1250,7 +1250,8 @@ static bool begin_read(void *data, agc_io_job *job) {
   request *q = data;
   net *n = q->n;
   link_request(q, job);
-  if (q->rest) put_back(n, q);
+  /* A closed net's input is gone; drop_request frees the rest. */
+  if (q->rest && !n->closed) put_back(n, q);
   if (!read_ready(n, q)) start_reading(n);
   if (read_ready(n, q)) finish_reader(n);
   return true;
@@ -1270,7 +1271,7 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
   if (kind == REQ_TEXT) {
     const agc_list *carry = agc_as_list(vm, args[2]);
     const uint8_t *kept = agc_byte_list(vm, carry, sizeof want->carry);
-    if (!kept) return agc_error_value("network: the carry must be at most 3 bytes");
+    if (!kept) agc_fail(vm, "RUNTIME-INTERNAL", "HttpWire.read_text: the carry must be at most 3 bytes", span);
     want->kept = (uint8_t)agc_list_len(carry);
     memcpy(want->carry, kept, want->kept);
   }

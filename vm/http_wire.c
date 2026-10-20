@@ -1,10 +1,10 @@
 /*
- * The pure HttpWire builtins that std/http reads and writes HTTP with: the
- * request head, the chunked framing, body text, response heads and error
- * answers. No I/O and no state: std/http owns the socket, its buffer and the
- * deadlines, and passes the bytes it read as a List[Int]. Each function works
- * with several schedulers. Linux and macOS, like the TCP builtins std/http
- * needs; a stub table elsewhere. Service layer. Design:
+ * The pure HttpWire builtins std/http's server uses: chunked framing, body
+ * text, response heads and error answers. No I/O and no state: std/http owns
+ * the socket and the deadlines. Heads and body data come through
+ * HttpWire.read_head and read_text in vm/tcp.c, which build their records with
+ * agc_http_head_value and agc_http_text_value here. Linux and macOS, like the
+ * TCP builtins; a stub table elsewhere. Service layer. Design:
  * docs/vm/10-io-http.md §10.7.
  */
 #include "http_fields.h"
@@ -398,20 +398,23 @@ static const char *response_head(agc_vm *vm, agc_http_bytes *b, const agc_struct
   return NULL;
 }
 
-/* HttpWire.encode_response: the head bytes, and whether the connection closes
-   after this response (either side said Connection: close). */
+/* HttpWire.encode_response: the head as text, and whether the connection
+   closes after this response (either side said Connection: close). The head
+   is the status line and the handler's String headers, so it is UTF-8. */
 static agc_value builtin_encode_response(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_http_bytes out = {0};
   bool closes = false;
   const char *bad = response_head(vm, &out, agc_as_struct(vm, args[0]), agc_as_struct(vm, args[1]),
                                   agc_as_int(vm, args[2]), &closes);
+  size_t chars = 0;
+  if (!bad && !agc_utf8_chars(out.data, out.len, &chars)) bad = "invalid response";
   agc_value result = agc_void();
   if (bad) {
     result = agc_error_value(bad);
   } else {
     agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Reply", reply_fields, 2), 2);
-    r->fields[0] = byte_list(out.data, out.len);
+    r->fields[0] = agc_string_value(agc_make_string((const char *)out.data, out.len, chars));
     r->fields[1] = agc_bool(closes);
     result = agc_result_value(true, agc_struct_value(r));
   }

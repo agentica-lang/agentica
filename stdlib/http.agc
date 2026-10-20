@@ -7,6 +7,7 @@
 READ_BYTES = 65536
 # Chunked framing is read in small pieces, since chunk data goes straight into text.
 FRAME_BYTES = 512
+# A body of at most this many characters goes in the same send as the head.
 SMALL_BODY = 16384
 TEXT_BYTES = 1048576
 BAD_TEXT = "400 request body is not valid UTF-8"
@@ -539,19 +540,11 @@ def send_response(
   if request.method == "HEAD"
     body = ""
   end
-  case String.from_bytes(reply.head)
-    ok(text) ->
-      if String.length(body) <= SMALL_BODY
-        try TCP.send(socket, text + body, timeout)
-      else
-        try TCP.send(socket, text, timeout)
-        try TCP.send(socket, body, try time_left(socket, deadline))
-      end
-    error(_) ->
-      try TCP.send_bytes(socket, reply.head, timeout)
-      if body != ""
-        try TCP.send(socket, body, try time_left(socket, deadline))
-      end
+  if String.length(body) <= SMALL_BODY
+    try TCP.send(socket, reply.head + body, timeout)
+  else
+    try TCP.send(socket, reply.head, timeout)
+    try TCP.send(socket, body, try time_left(socket, deadline))
   end
   if reply.closes
     linger(socket, "", deadline)

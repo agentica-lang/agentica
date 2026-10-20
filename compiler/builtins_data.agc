@@ -118,7 +118,7 @@ export RECORDS: List[Model.Record] = [
     Model.Record(
       name: "HttpWire.Reply",
       fields: [
-        Model.Named(name: "head", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "head", type: Types.Type.String),
         Model.Named(name: "closes", type: Types.Type.Bool),
       ],
     ),
@@ -783,7 +783,7 @@ ROWS_10: List[Model.Builtin] = [
       implementation: "HttpWire.encode_response",
       effects: [],
       description: (
-        "Internal to std/http: the bytes of a response head with Content-Length and Date, and whether the " +
+        "Internal to std/http: the text of a response head with Content-Length and Date, and whether the " +
         "connection closes after it, or the reason it cannot be sent."
       ),
       alternatives: [],

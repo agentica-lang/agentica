@@ -144,7 +144,9 @@ def expect_continue():
 
 def pipelined():
     s = connect()
-    send(s, head(b"GET /one HTTP/1.1") + head(b"POST /two HTTP/1.1", b"Content-Length: 3") + b"abc" + head(b"GET /three HTTP/1.1", CLOSE))
+    # The chunked body's last framing read takes the next request's bytes too; they must reach the next head.
+    send(s, head(b"GET /one HTTP/1.1") + head(b"POST /two HTTP/1.1", b"Content-Length: 3") + b"abc"
+         + head(b"POST /four HTTP/1.1", CHUNKED) + b"3\r\nabc\r\n0\r\n\r\n" + head(b"GET /three HTTP/1.1", CLOSE))
     got, end = drain(s)
     bodies = []
     rest = got

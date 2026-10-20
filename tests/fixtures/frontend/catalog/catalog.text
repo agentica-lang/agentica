@@ -77,7 +77,7 @@ builtin HttpWire.close_server forms=1
 builtin HttpWire.close_write forms=1
   HttpWire.close_write(socket: Socket) -> Void shape=(Opaque(Socket)) -> Void rule=Plain impl="HttpWire.close_write" effects=["network"] desc="Internal to std/http: close the write side of a socket once its output is sent; reads go on."
 builtin HttpWire.encode_response forms=1
-  HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[HttpWire.Reply] shape=(Struct(HttpRequest), Struct(HttpResponse), Int) -> Result(Struct(HttpWire.Reply)) rule=Plain impl="HttpWire.encode_response" effects=[] desc="Internal to std/http: the bytes of a response head with Content-Length and Date, and whether the connection closes after it, or the reason it cannot be sent."
+  HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[HttpWire.Reply] shape=(Struct(HttpRequest), Struct(HttpResponse), Int) -> Result(Struct(HttpWire.Reply)) rule=Plain impl="HttpWire.encode_response" effects=[] desc="Internal to std/http: the text of a response head with Content-Length and Date, and whether the connection closes after it, or the reason it cannot be sent."
 builtin HttpWire.error_answer forms=1
   HttpWire.error_answer(status: Int) -> String shape=(Int) -> String rule=Plain impl="HttpWire.error_answer" effects=[] desc="Internal to std/http: the error answer with this status, an empty body and Connection: close."
 builtin HttpWire.exchange forms=1
@@ -497,7 +497,7 @@ record HttpResponse status: Int, headers: List(Struct(Header)), body: String
 record HttpServerOptions request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int
 record HttpWire.Chunk done: Bool, next: Int, runs: List(Int), state: Int, remaining: Int, size: Int, line: Int, block: Int, count: Int, name: String, name_length: Int, total: Int, limit: Int
 record HttpWire.Head method: String, target: String, path: String, headers: List(Struct(Header)), length: Int, chunked: Bool, expect_continue: Bool, buffered: Int, status: Int, reason: String
-record HttpWire.Reply head: List(Int), closes: Bool
+record HttpWire.Reply head: String, closes: Bool
 record HttpWire.Text text: String, carry: List(Int), bytes: Int, valid: Bool
 record LogEvent level: Enum(LogLevel, []), message: String, fields: Map(String, String), time_ms: Int, task: Int
 record ProcessOutput stdout: String, stderr: String, truncated: Bool

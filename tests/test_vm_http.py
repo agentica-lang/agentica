@@ -219,7 +219,7 @@ SERVER_PYTHON_LINES = [
     "partial-head none closed bounded",
     "expect-over-limit HTTP/1.1 413 Content Too Large False closed",
     "expect-continue HTTP/1.1 100 Continue 200 POST /expect hello closed",
-    "pipelined ['GET /one ', 'POST /two abc', 'GET /three '] closed",
+    "pipelined ['GET /one ', 'POST /two abc', 'POST /four abc', 'GET /three '] closed",
     "client-chunked 200 POST /chunked abñcd",
     "client-head 200 11 b''",
     "client-again 200 GET /again  True",
