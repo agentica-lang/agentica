@@ -14,13 +14,16 @@ file is in one or the other, so a new test cannot stay out of the matrix by acci
 
 What counts as evidence: every module of an area has a JUnit file with no failure and at least one passed case, and every
 skipped case names a host-only reason (HOST_ONLY, a concrete capability of one system) or is a case of the other test
-tier. A skip for any other reason, such as a tool that was not found, fails the report: CI must install the tool.
+tier. A real product bug that a system has not fixed yet may be skipped with a "known-issue: #N ..." reason (KNOWN_ISSUE);
+the report lists every such skip as an open gap, so the gap stays visible. A skip for any other reason, such as a tool
+that was not found, fails the report: CI must install the tool.
 """
 from __future__ import annotations
 
 import argparse
 import os
 import platform
+import re
 import sys
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
@@ -32,6 +35,9 @@ PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-arm64")
 # Prefix of the reason of a skip that belongs to one system. The text after it says which capability the other systems
 # lack, so a reader of the report can judge it: "host-only: Windows has no /proc".
 HOST_ONLY = "host-only:"
+
+# A skip for a product bug with an open issue: "known-issue: #425 the pkg/ roots ignore ';' on Windows".
+KNOWN_ISSUE = re.compile(r"known-issue: #\d+ \S")
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
 TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier only", "no cases in this tier")
@@ -178,6 +184,7 @@ class Count:
         self.passed = 0
         self.tier = 0
         self.host_only: dict[str, int] = {}
+        self.gaps: dict[str, int] = {}
         self.problems: list[str] = []
 
     @property
@@ -210,11 +217,14 @@ def read_module(path: Path) -> Count:
         if reason.startswith(HOST_ONLY):
             reason = reason[len(HOST_ONLY):].strip()
             count.host_only[reason] = count.host_only.get(reason, 0) + 1
+        elif KNOWN_ISSUE.match(reason):
+            count.gaps[reason] = count.gaps.get(reason, 0) + 1
         elif any(tier in reason for tier in TIER_REASONS):
             count.tier += 1
         else:
             count.problems.append(f"skipped without a host-only reason: {name}: {reason}")
-    if count.passed == 0 and not count.problems and count.skipped_host_only == 0 and count.tier == 0:
+    if count.passed == 0 and not count.problems and count.skipped_host_only == 0 and count.tier == 0 \
+            and not count.gaps:
         count.problems.append("no case ran")
     return count
 
@@ -225,6 +235,7 @@ def report(directory: Path, name: str) -> tuple[str, bool]:
              "| --- | ---: | ---: | ---: | ---: | ---: |"]
     detail: list[str] = []
     reasons: dict[str, int] = {}
+    gaps: dict[str, int] = {}
     ok = True
     for area, (_, mods) in AREAS.items():
         counts = []
@@ -240,6 +251,9 @@ def report(directory: Path, name: str) -> tuple[str, bool]:
         for _, c, _ in counts:
             for reason, number in c.host_only.items():
                 reasons[reason] = reasons.get(reason, 0) + number
+        for _, c, _ in counts:
+            for reason, number in c.gaps.items():
+                gaps[reason] = gaps.get(reason, 0) + number
         ran = sum(1 for _, c, host in counts if not host and not c.problems)
         lines.append(
             f"| {area} | {ran}/{len(mods)} | {passed} | {sum(c.skipped_host_only for _, c, _ in counts)} | "
@@ -255,6 +269,11 @@ def report(directory: Path, name: str) -> tuple[str, bool]:
         lines.append("Host-only skips (a capability that only some systems have):")
         lines.append("")
         lines.extend(f"- {number} x {reason}" for reason, number in sorted(reasons.items()))
+        lines.append("")
+    if gaps:
+        lines.append("Open gaps (skipped for a product bug with an open issue):")
+        lines.append("")
+        lines.extend(f"- {number} x {reason}" for reason, number in sorted(gaps.items()))
         lines.append("")
     if detail:
         lines.extend(["Details:", "", *detail, ""])

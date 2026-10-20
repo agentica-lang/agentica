@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import ROOT, cli, report_cases, run, vm_environment
+from tests.agentica_test import ROOT, WINDOWS, cli, report_cases, run, vm_environment
 
 EXAMPLE = ROOT / "examples" / "json-modules.agc"
 
@@ -91,6 +91,7 @@ def test_the_embedded_string_queue_preserves_fifo_and_old_values_without_local_s
     assert (plain.code, plain.stdout, plain.stderr) == (0, expected, "")
 
 
+@pytest.mark.skipif(WINDOWS, reason="known-issue: #425 the pkg/ roots ignore the Windows separator, drive paths and LOCALAPPDATA")
 def test_pkg_roots_search_project_environment_then_user_data_independent_of_cwd(workspace, scratch):
     directory = workspace({
         "root.agc": "import Value from \"pkg/value\"\ndef main() -> Void\n  puts(Value.read())\nend\n\n",

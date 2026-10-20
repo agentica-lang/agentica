@@ -79,3 +79,20 @@ def test_a_module_that_is_host_only_on_this_system_needs_no_passed_case(tmp_path
     text, ok = conformance.report(tmp_path, "linux-x86_64")
     assert ok, text
     assert "test_process_windows.py is host-only here" in text
+
+
+def test_a_skip_for_a_product_bug_needs_an_issue_number_and_is_listed_as_an_open_gap(tmp_path):
+    fill(tmp_path, "known-issue: #425 the pkg roots ignore the semicolon on Windows")
+    text, ok = conformance.report(tmp_path, "windows-x86_64")
+    assert ok, text
+    assert "Open gaps" in text and "#425" in text
+    fill(tmp_path, "known-issue: the pkg roots ignore the semicolon on Windows")
+    assert not conformance.report(tmp_path, "windows-x86_64")[1]
+
+
+def test_the_golden_paths_of_windows_come_back_as_tokens_in_every_spelling_the_vm_prints():
+    from tests.vm_diff_support import relocate_windows
+    from pathlib import PureWindowsPath
+    folder = PureWindowsPath("D:/a/_temp/fixtures")
+    text = 'D:\\a\\_temp\\fixtures\\vm\\x.agc "D:\\\\a\\\\_temp\\\\fixtures\\\\y" D:/a/_temp/fixtures/z/w.agc:3'
+    assert relocate_windows(text, folder, "@fixtures") == '@fixtures/vm/x.agc "@fixtures/y" @fixtures/z/w.agc:3'
