@@ -57,7 +57,6 @@ KNOWN_ISSUES = {
     434: "Windows: process cleanup and handoff cases are tested with /bin/sh or POSIX signals only",
     436: "macOS and Windows: golden fixtures for paths, errno text and processes only run on Linux",
     437: "Windows: Ctrl+C through the CLI and a signal during a blocked wait have no test",
-    440: "Windows: standard output that is a socket has no test",
 }
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).

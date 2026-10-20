@@ -6,7 +6,7 @@ JSON summary: the exit status and when the reader started, the VM exited, and
 the first error byte arrived. Programs that need no peer run with their
 streams on files. The cases run on Linux, macOS and Windows; the few that need
 a Unix descriptor kind (a pty, /dev/full, /dev/stdout) are marked "host-only:"
-with the reason. The socket case runs on Windows with a Winsock socket that is not in overlapped mode.
+with the reason. On Windows the socket cases use a Winsock socket that is not in overlapped mode.
 """
 import json
 import re
@@ -33,6 +33,11 @@ dev_full = pytest.mark.skipif(
     not sys.platform.startswith("linux") or WINDOWS,
     reason="host-only: needs /dev/full (Linux); a reader that went away is the case of the same name on every system")
 not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine does not show that two descriptors are one pipe")
+windows_socket = pytest.mark.skipif(
+    not WINDOWS or UNDER_WINE,
+    reason="host-only: a Windows socket whose last handle closes with the process is reset; Unix closes it gently")
+# Socket buffers that hold all the rows, so the run ends with every row sent and none read yet.
+SOCKET_BUFFER = 1 << 20
 
 
 ROWS_PROGRAM = """\
@@ -46,6 +51,29 @@ def main() -> Void
     puts("row #{n} #{filler}")
     n += 1
   end
+end
+
+"""
+
+ERROR_ROWS_PROGRAM = ROWS_PROGRAM.replace("puts(", "IO.warn(")
+
+# A task that prints until the run ends: main returns while the stream is still full.
+FLOOD_PROGRAM = """\
+def flood(filler: String) -> Void
+  n = 0
+  while true
+    puts("row #{n} #{filler}")
+    n += 1
+  end
+end
+
+def main() -> Void
+  filler = "x"
+  for i in 0..9
+    filler = filler + filler
+  end
+  Task.spawn(&flood, filler)
+  Task.sleep(500)
 end
 
 """
@@ -412,11 +440,49 @@ def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_
     assert b"flush_timeout_ms" not in out, "the warning is dropped, not mixed into the data"
 
 
-def test_a_socket_as_stdout_is_written_on_the_loop(tmp_path):
+def test_a_socket_as_stdout_that_nobody_reads_yet_does_not_stop_a_timer_task(tmp_path):
     summary, out, _ = run_case(tmp_path, "socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "2.0"])
     assert summary["status"] == 0
     assert summary["ticks_before_read"] >= 5, "the ticker ran while stdout was stuck"
     check_rows(lines_of(out), 800)
+
+
+@windows_socket
+def test_a_socket_as_stdout_read_only_after_the_exit_gets_every_row(tmp_path):
+    summary, out, err = run_case(tmp_path, "socket_exit", ROWS_PROGRAM % 400,
+                                 peer=["--socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    assert summary["read_start"] >= summary["exit"], "the reader started after the exit"
+    check_rows(lines_of(out), 400)
+    assert err == ""
+
+
+@windows_socket
+def test_a_socket_as_stderr_read_only_after_the_exit_gets_every_row(tmp_path):
+    summary, out, err = run_case(tmp_path, "socket_exit_err", ERROR_ROWS_PROGRAM % 400,
+                                 peer=["--error-socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    check_rows(lines_of(err.encode("latin-1")), 400)
+    assert summary["first_error_at"] >= summary["exit"], "the reader started after the exit"
+    assert out == b""
+
+
+@windows_socket
+def test_a_socket_as_stdout_that_is_full_at_the_end_does_not_hold_the_exit_past_the_flush_limit(tmp_path):
+    summary, _, err = run_case(tmp_path, "socket_full", FLOOD_PROGRAM,
+                               peer=["--socket", "--read-after-exit", "--pipe-size", "4096"],
+                               vm=["--json", "--flush-timeout", "500"])
+    assert summary["status"] == 0
+    assert 0.9 <= summary["exit"] <= 20, "the run waits for the flush limit, not for the reader"
+    assert '"flush_timeout_ms":500' in err
+
+
+@windows_socket
+def test_stdout_and_stderr_on_one_socket_read_only_after_the_exit_get_every_row(tmp_path):
+    summary, out, _ = run_case(tmp_path, "socket_exit_merged", ERROR_ROWS_PROGRAM % 400,
+                               peer=["--socket", "--merge", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    check_rows(lines_of(out), 400)
 
 
 @not_wine

@@ -1,8 +1,9 @@
 /*
  * The Windows side of the standard output and error streams. vm/output.c owns the ring, the queue of writers and the
  * notices; this file decides how a handle is written (a file or a console by a pool thread, a pipe by a libuv stream),
- * whether two descriptors are one target, does the writes, and makes the in-memory stream of a notice. The Linux and
- * macOS side is vm/stdio_posix.c. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
+ * whether two descriptors are one target, does the writes, makes the in-memory stream of a notice, and at the exit
+ * shuts down the sending side of a socket. The Linux and macOS side is vm/stdio_posix.c. Core layer. Design:
+ * docs/vm/10-io-scheduler.md §10.2.2.
  */
 #ifdef _WIN32
 #include "core.h"
@@ -14,6 +15,7 @@
 #include <string.h>
 #include <uv.h>
 #include <windows.h>
+#include <winternl.h>
 
 /* The most that one WriteConsoleW call takes, in UTF-16 units, as libuv's own console writer uses (older Windows fails
    for a larger one). A byte of UTF-8 makes at most one unit, so a slice of that many bytes always fits. */
@@ -36,6 +38,7 @@ typedef BOOL(WINAPI *compare_handles_fn)(HANDLE first, HANDLE second);
 
 struct agc_stdio {
   pipe_stream *stream;
+  bool socket;
 };
 
 /* Windows has no open_memstream: a thread reads the other end of a pipe into memory as it is written. */
@@ -148,8 +151,16 @@ static void pipe_close(pipe_stream *w) {
   uv_close(&w->io.handle, pipe_closed);
 }
 
+/* Asked when the stream opens, while no write of ours is in flight: on a handle that is not overlapped, a query waits
+   for a write that is. libuv has started Winsock with the loop. */
+static bool is_socket(int fd) {
+  int type = 0, length = (int)sizeof type;
+  return getsockopt((SOCKET)_get_osfhandle(fd), SOL_SOCKET, SO_TYPE, (char *)&type, &length) == 0;
+}
+
 bool agc_stdio_open(agc_vm *vm, agc_output *out, int fd) {
   pipe_stream *stream = NULL;
+  bool on_socket = false;
   agc_write_mode mode;
   switch (uv_guess_handle(fd)) {
     case UV_FILE: mode = AGC_WRITE_DISK; break;
@@ -160,12 +171,14 @@ bool agc_stdio_open(agc_vm *vm, agc_output *out, int fd) {
       stream = pipe_open(vm, fd);
       /* A handle that libuv refuses is still written off the loop, by a pool thread that may wait for the reader. */
       mode = stream ? AGC_WRITE_STREAM : AGC_WRITE_THREAD;
+      on_socket = !stream && is_socket(fd);
       break;
     default: return false;
   }
   agc_stdio *io = calloc(1, sizeof *io);
   if (!io) agc_out_of_memory();
   io->stream = stream;
+  io->socket = on_socket;
   out->fd = fd;
   out->io = io;
   out->mode = mode;
@@ -175,8 +188,7 @@ bool agc_stdio_open(agc_vm *vm, agc_output *out, int fd) {
 /* stdout and stderr given as one pipe, file or console (2>&1) are two handles to one kernel object, which is what
    CompareObjectHandles asks (Windows 10 and later). Two separate opens of one file are two objects, so unlike Unix
    (device and inode) they count as two targets; without the function every pair does. */
-bool agc_stdio_same(const agc_output *first, int fd) {
-  HANDLE a = (HANDLE)_get_osfhandle(first->fd), b = (HANDLE)_get_osfhandle(fd);
+static bool same_object(HANDLE a, HANDLE b) {
   if (a == INVALID_HANDLE_VALUE || b == INVALID_HANDLE_VALUE) return false;
   if (a == b) return true;
   HMODULE base = GetModuleHandleW(L"kernelbase.dll");
@@ -184,6 +196,27 @@ bool agc_stdio_same(const agc_output *first, int fd) {
   if (!found) return false;
   compare_handles_fn compare = (compare_handles_fn)(void (*)(void))found;
   return compare(a, b) != FALSE;
+}
+
+bool agc_stdio_same(const agc_output *first, int fd) {
+  return same_object((HANDLE)_get_osfhandle(first->fd), (HANDLE)_get_osfhandle(fd));
+}
+
+/* Windows resets a socket whose last handle closes with the process, and its reader loses what it has not read yet.
+   After shutdown the bytes already sent stay readable and then the reader sees the end; shutdown does not wait for the
+   reader. A socket that another process still holds (a parent, a child, a second writer) is left open for it: it is
+   shut down only when this process's standard handles are all the handles to it. */
+void agc_stdio_end(agc_output *out) {
+  if (!out->io->socket) return;
+  HANDLE handle = (HANDLE)_get_osfhandle(out->fd);
+  ULONG ours = 1;
+  for (int fd = 1; fd <= 2; fd++) {
+    HANDLE other = (HANDLE)_get_osfhandle(fd);
+    if (fd != out->fd && other != handle && same_object(handle, other)) ours++;
+  }
+  PUBLIC_OBJECT_BASIC_INFORMATION info;
+  if (NtQueryObject(handle, ObjectBasicInformation, &info, sizeof info, NULL) != 0 || info.HandleCount > ours) return;
+  (void)shutdown((SOCKET)handle, SD_SEND);
 }
 
 ssize_t agc_stdio_try(agc_output *s, const uint8_t *data, size_t n) { return _write(s->fd, data, (unsigned)n); }

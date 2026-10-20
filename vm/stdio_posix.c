@@ -162,6 +162,9 @@ void agc_stdio_start(agc_output *s, const uint8_t *first, size_t first_len, cons
   agc_poller_wait(io->poller, true, watch_ready, io);
 }
 
+/* Unix closes a socket gently when the process exits: nothing to do. */
+void agc_stdio_end(agc_output *out) { (void)out; }
+
 void agc_stdio_close(agc_stdio *io) {
   if (io->poller) {
     agc_poller_pause(io->poller);

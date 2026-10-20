@@ -47,6 +47,24 @@ def winsock_pair():
     return reader, writer
 
 
+def stream_socket(size):
+    """A connected socket pair for a standard stream of the VM: (the reader's socket, the writer as a descriptor).
+
+    On Windows a Winsock handle is not a descriptor: the writer becomes a CRT descriptor over its handle, which is what
+    Popen duplicates for the child. SIZE, when given, sets the buffers of both ends.
+    """
+    if os.name != "nt":
+        reader, writer = socket.socketpair()
+        return reader, writer.detach()
+    import msvcrt
+
+    reader, writer = winsock_pair()
+    if size:
+        reader.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, size)
+        writer.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, size)
+    return reader, msvcrt.open_osfhandle(writer.detach(), 0)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stdout-file", required=True)
@@ -58,6 +76,7 @@ def main():
     parser.add_argument("--read-after-exit", action="store_true")
     parser.add_argument("--merge", action="store_true")
     parser.add_argument("--socket", action="store_true")
+    parser.add_argument("--error-socket", action="store_true")
     parser.add_argument("--pty", action="store_true")
     parser.add_argument("--close-after", type=int, default=0)
     parser.add_argument("--pipe-size", type=int, default=0)
@@ -68,18 +87,11 @@ def main():
 
     read_socket = None
     if options.socket:
-        reader, writer = winsock_pair() if os.name == "nt" else socket.socketpair()
         if os.name == "nt":
-            # Winsock handles are not descriptors: the reader stays a socket object, and the writer becomes a CRT
-            # descriptor over its handle, which is what Popen duplicates for the child.
-            import msvcrt
-
-            read_socket = reader
-            if options.pipe_size:
-                reader.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, options.pipe_size)
-                writer.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, options.pipe_size)
-            read_fd, write_fd = None, msvcrt.open_osfhandle(writer.detach(), 0)
+            read_socket, write_fd = stream_socket(options.pipe_size)
+            read_fd = None
         else:
+            reader, writer = socket.socketpair()
             read_fd, write_fd = reader.detach(), writer.detach()
     elif options.pty:
         import pty
@@ -88,8 +100,12 @@ def main():
     else:
         read_fd, write_fd = os.pipe()
         shrink_pipe(write_fd, options.pipe_size)
+    error_socket = None
     if options.merge or options.pty:
         error_read, error_write = None, write_fd
+    elif options.error_socket:
+        error_socket, error_write = stream_socket(options.pipe_size)
+        error_read = -1
     else:
         error_read, error_write = os.pipe()
 
@@ -99,6 +115,7 @@ def main():
     if error_read is not None:
         os.close(error_write)
 
+    exited = threading.Event()
     state = {"exit": None, "read_start": None, "status": None, "ticks": 0, "first_error": None}
     error_data = bytearray()
 
@@ -110,11 +127,17 @@ def main():
             state["status"] = vm.wait()
             state["status"] = "timeout"
         state["exit"] = time.monotonic() - start
+        exited.set()
 
     def read_errors():
         time.sleep(options.error_delay)
+        if error_socket and options.read_after_exit:
+            exited.wait()
         while True:
-            data = os.read(error_read, 65536)
+            try:
+                data = error_socket.recv(65536) if error_socket else os.read(error_read, 65536)
+            except OSError:
+                break
             if not data:
                 break
             if state["first_error"] is None:
@@ -153,6 +176,8 @@ def main():
         os.close(read_fd)
     for thread in threads:
         thread.join()
+    if error_socket:
+        error_socket.close()
 
     with open(options.stdout_file, "wb") as handle:
         handle.write(out_data)

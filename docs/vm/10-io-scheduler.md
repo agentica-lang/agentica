@@ -545,15 +545,19 @@ section says how the scheduler and the loop keep them, as built.
   also written by a pool job, which holds one pool thread while the reader is
   slow. Stdout and stderr in this mode hold one thread each, so with the default
   pool of 4 a stuck stdout and stderr leave 2 threads for files, DNS and
-  processes. The loop never writes a pipe, a console or a refused handle. The
-  pipe's
-  handle is a private, non-inheritable copy of the descriptor, so closing it
-  leaves stdout open, and closing it cancels the request in flight. A request
-  takes the ranges of the ring as they are and ends all or nothing, so the ring
-  is consumed when the request ends. Neither a pipe request nor a pool job has a
-  non-blocking try: where Unix makes one non-blocking write (a stop signal, a
-  final notice), Windows starts the request and waits for it, in one wait of up
-  to 200 ms that the stop and the final notices of the exit share (`settle`).
+  processes. The loop never writes a pipe, a console or a refused handle.
+  Windows resets a socket whose last handle closes with the process, and its
+  reader loses what it has not read. So just before the exit, a socket given as
+  stdout or stderr, with no write in flight and no handle outside the VM's
+  standard ones, gets `shutdown(SD_SEND)` (`agc_output_end`), which does not
+  wait for the reader. The pipe's handle is a private, non-inheritable copy of
+  the descriptor, so closing it leaves stdout open, and closing it cancels the
+  request in flight. A request takes the ranges of the ring as they are and ends
+  all or nothing, so the ring is consumed when the request ends. Neither a pipe
+  request nor a pool job has a non-blocking try: where Unix makes one
+  non-blocking write (a stop signal, a final notice), Windows starts the request
+  and waits for it, in one wait of up to 200 ms that the stop and the final
+  notices of the exit share (`settle`).
   The normal end of the run does not use that wait: it is bounded by the flush
   limit. The jobs do not set `flush`, since `agc_output_busy` counts the
   buffered bytes (End of run, below). The trace shows a pool write as
@@ -649,7 +653,8 @@ section says how the scheduler and the loop keep them, as built.
     the flush limit, and with a reader that never reads, the run ends after
     `--flush-timeout` with the existing warning, also when stderr is the same
     stuck pipe (and then no warning is mixed into the data); a socket as stdout
-    written on the loop (the timer task keeps running); `puts` and `IO.warn` on
+    not read yet while a timer task keeps running, and on Windows a socket read
+    only after the exit that still gets every row; `puts` and `IO.warn` on
     one pipe and on one pty keep the order of the calls under a slow reader;
     `IO.flush` returns only after the reader started; a task crash diagnostic
     that arrives while stderr is full arrives whole when the reader reads later;
