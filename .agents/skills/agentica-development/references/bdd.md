@@ -1,8 +1,8 @@
 # `agentica test`: BDD and unit test runner
 
-How `agentica test` works: the driver (`compiler/bdd_driver.agc`, part of the
-front end), `std/bdd`, the runner in `stdlib/test/`, step programs, unit test
-files and the child channel records. Read before changing any of them.
+How `agentica test` works: the driver (`compiler/bdd/bdd_driver.agc`, part of
+the front end), `std/bdd`, the runner in `stdlib/test/`, step programs, unit
+test files and the child channel records. Read before changing any of them.
 
 ## BDD (`agentica test`)
 
@@ -15,7 +15,7 @@ module, but not in the programming skill or the site). All are registered in
 `src/stdlib.rkt`.
 
 - `agentica test` is part of the front end of the binary (port steps 7 and 8,
-  §18.3; `compiler/cli.agc` calls
+  §18.3; `compiler/app/cli.agc` calls
   `Driver.run(options, settings)` in its own process, with the settings of the
 command line: the version, the provider
   of the `std/` sources and `self_path`, the path of the binary). The runner and
@@ -40,7 +40,7 @@ binary otherwise
 `tests/test_bdd_posix.py`, the module of the cases that need POSIX);
   - a missing binary is the driver's `cannot find agentica at PATH`
     infrastructure report in the chosen format.
-- `compiler/bdd_driver.agc` (the driver, over `compiler/bdd_*.agc`;
+- `compiler/bdd/bdd_driver.agc` (the driver, over `compiler/bdd_*.agc`;
   `bdd_options.agc`
   reads the arguments, usage errors included)
   - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the

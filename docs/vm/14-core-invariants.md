@@ -47,15 +47,12 @@ knows (§14.3).
 
 Known exceptions, as built:
 
-- **Windows stdin.** Every stdin kind uses one blocking `_read` in the pool
-  because the Unix poller setup cannot watch Windows console handles. At most
-  one read is in flight, shared by all readers; it can occupy one pool thread
-  indefinitely. Timers and stop signals still run on the loop. Cancelling a
-  reader detaches the job rather than interrupting the OS read. Process exit
-  does not wait for it, but an in-process harness must supply data or EOF before
-  it can close the loop. This is a portability exception, not a pattern for
-  other I/O (§10.2.2, Stdin). With `UV_THREADPOOL_SIZE=1`, a pending stdin read
-  leaves no worker for file I/O; keep spare pool capacity when stdin may wait.
+- **Windows stdin.** The Unix poller cannot watch Windows console handles, so
+  every stdin kind is read by one blocking `_read` on a thread of the VM's own,
+  not in the pool; the task waits on the loop for the read's job, which an async
+  handle ends. At most one read is in flight, shared by all readers. Cancelling
+  a reader detaches the job rather than interrupting the OS read. This is a
+  portability exception, not a pattern for other I/O (§10.2.2, Stdin).
 - **Windows stdout and stderr.** A pipe is written by a libuv pipe handle, one
   write request at a time; a console, and a handle that libuv refuses, by a pool
   job, so the loop never waits for the reader (a console is not written by
@@ -223,6 +220,9 @@ recorded and acted on right after, and an `alarm` bounds that at 3 seconds. A
 driven VM whose driver is gone takes the immediate path on its first signal.
 `agc_io_close` is only for the in-process harnesses and for the single binary,
 which closes the front end's loop before it runs the program in a new runtime.
+The Windows stdin reader thread (§14.1) is not joined: the close cancels its
+read where Windows can, and a read it cannot cancel stays in `_read` and takes
+the next input, so no later runtime in the process may read that descriptor.
 Children are reaped by libuv's exit callback, never by `waitpid` or a sleep, and
 step 1 runs the loop for the exits (§10.4 Close; row 7.2.1d, first part, done).
 The streams on the loop drain inside the file flush, so the flush limit bounds

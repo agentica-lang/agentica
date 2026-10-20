@@ -1,9 +1,9 @@
 /*
  * Standard input, the only stdin reader: gets, read, read_bytes and eof?
  * share one buffer. On Unix a pipe, FIFO, terminal or socket is read on the
- * loop when possible; other stdin, including Windows stdin, uses one pool job.
- * Windows stop signals still run on the loop, not the blocking reader. Core layer. Design:
- * docs/vm/10-io-scheduler.md §10.2.2.
+ * loop when possible, other stdin by one pool job; Windows stdin is read by a
+ * thread of its own (vm/stdio_windows.c), never by the pool. Core layer.
+ * Design: docs/vm/10-io-scheduler.md §10.2.2.
  */
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
@@ -15,9 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <io.h>
-#else
+#ifndef _WIN32
 #include <unistd.h>
 #endif
 
@@ -35,14 +33,12 @@
 #define INPUT_ROOM ((size_t)4096)
 #define FILL_WAIT 3
 
-#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+#if defined(__linux__) || defined(__APPLE__)
 typedef struct {
   int fd;
-#if defined(__linux__) || defined(__APPLE__)
   bool socket;
   agc_io_job *job;
   agc_poller *poller;
-#endif
   size_t room;
   int64_t got;
   uint8_t data[];
@@ -55,6 +51,9 @@ void agc_input_open(agc_vm *vm, int fd, bool flush_out) {
   in->poll_fd = -1;
   in->poll_tried = in->poll_socket = false;
   in->poller = NULL;
+#ifdef _WIN32
+  in->reader = NULL;
+#endif
   in->flush_out = flush_out;
   in->pending_eof = false;
   in->reading = false;
@@ -129,71 +128,68 @@ static void read_work(void *data) {
     return;
   }
 }
-#elif defined(_WIN32)
-static void read_work(void *data) {
-  read_request *q = data;
-  for (;;) {
-    int n = _read(q->fd, q->data, (unsigned)q->room);
-    if (n >= 0) {
-      q->got = n;
-      return;
-    }
-    if (errno != EINTR) {
-      q->got = -1;
-      return;
-    }
-  }
-}
 #endif
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
+/* The end of a read: GOT bytes at DATA, 0 at EOF or -1. Every reader that waited re-runs its builtin. */
+static void read_end(agc_vm *vm, int64_t got, const uint8_t *data) {
+  agc_input *in = &vm->rt->in;
+  in->reading = false;
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "stdin bytes=%" PRId64 " status=%s", got > 0 ? got : 0,
+            got > 0 ? "data" : got == 0 ? "eof" : "error");
+  if (got > 0) {
+    reserve(in, (size_t)got);
+    memcpy(in->buf + in->end, data, (size_t)got);
+    in->end += (size_t)got;
+  } else {
+    in->got = got == 0 ? 0 : -1;
+    in->eof_seq++;
+  }
+  agc_task_wake_all(vm, &in->waiters, &in->waiters_tail, "stdin");
+}
+
+/* True with the room of a new read in *ROOM, or false when this task waits for the one already in flight. */
+static bool begin_read(agc_vm *vm, agc_input *in, size_t *room) {
+  if (in->reading) {
+    agc_task_parking(vm);
+    agc_sync_assert(vm);
+    agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
+    agc_task_park(vm, true);
+    return false;
+  }
+  *room = read_room(in);
+  if (in->flush_out) agc_flush(vm);
+  in->reading = true;
+  return true;
+}
+#endif
+
+#if defined(__linux__) || defined(__APPLE__)
 static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   read_request *q = data;
-  agc_input *in = &vm->rt->in;
-  in->reading = false;
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "stdin bytes=%" PRId64 " status=%s", q->got > 0 ? (int64_t)q->got : 0,
-            q->got > 0 ? "data" : q->got == 0 ? "eof" : "error");
-  if (q->got > 0) {
-    reserve(in, (size_t)q->got);
-    memcpy(in->buf + in->end, q->data, (size_t)q->got);
-    in->end += (size_t)q->got;
-  } else {
-    in->got = q->got == 0 ? 0 : -1;
-    in->eof_seq++;
-  }
+  read_end(vm, q->got, q->data);
   free(q);
-  agc_task_wake_all(vm, &in->waiters, &in->waiters_tail, "stdin");
   return agc_void();
 }
 
 static void read_drop(void *data) { free(data); }
 
 static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin", NULL, true, NULL};
-
-#if defined(__linux__) || defined(__APPLE__)
 static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", NULL, true, NULL};
-#endif
-#endif
-
-#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-/* The request of a read, or NULL when this task waits for the one already in flight. */
-static read_request *begin_read(agc_vm *vm, agc_input *in) {
-  if (in->reading) {
-    agc_task_parking(vm);
-    agc_sync_assert(vm);
-    agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
-    agc_task_park(vm, true);
-    return NULL;
-  }
-  size_t room = read_room(in);
-  if (in->flush_out) agc_flush(vm);
-  read_request *q = calloc(1, sizeof(read_request) + room);
-  if (!q) agc_out_of_memory();
-  q->room = room;
-  in->reading = true;
-  return q;
+#elif defined(_WIN32)
+/* The job's data is the reader, which the input owns: nothing to free. */
+static agc_value reader_done(agc_vm *vm, void *data, agc_value context) {
+  (void)context;
+  const uint8_t *bytes;
+  int64_t got = agc_stdin_take(data, &bytes);
+  read_end(vm, got, bytes);
+  return agc_void();
 }
+
+static void reader_drop(void *data) { (void)data; }
+
+static const agc_io_kind reader_io = {NULL, reader_done, NULL, reader_drop, true, "stdin", NULL, true, NULL};
 #endif
 
 #if defined(__linux__) || defined(__APPLE__)
@@ -275,8 +271,11 @@ void agc_input_close(agc_vm *vm) {
 }
 
 static int start_read(agc_vm *vm, agc_input *in) {
-  read_request *q = begin_read(vm, in);
-  if (!q) return FILL_WAIT;
+  size_t room;
+  if (!begin_read(vm, in, &room)) return FILL_WAIT;
+  read_request *q = calloc(1, sizeof(read_request) + room);
+  if (!q) agc_out_of_memory();
+  q->room = room;
   watch_stdin(vm, in);
   q->fd = in->poller ? in->poll_fd : in->fd;
   q->socket = in->poll_socket;
@@ -294,18 +293,25 @@ static int start_read(agc_vm *vm, agc_input *in) {
   return FILL_WAIT;
 }
 #elif defined(_WIN32)
+/* The reader's thread waits for input, the task waits on the loop for the job (§14.1). */
 static int start_read(agc_vm *vm, agc_input *in) {
-  read_request *q = begin_read(vm, in);
-  if (!q) return FILL_WAIT;
-  q->fd = in->fd;
-  agc_io_start(vm, &read_io, q, agc_void(), -1);
+  size_t room;
+  if (!begin_read(vm, in, &room)) return FILL_WAIT;
+  if (!in->reader) in->reader = agc_stdin_new(in->fd);
+  agc_io_job *job = agc_io_start(vm, &reader_io, in->reader, agc_void(), -1);
+  agc_stdin_read(vm, in->reader, job, room);
   vm->task->retry = true;
   return FILL_WAIT;
 }
 
 void agc_input_watch(agc_vm *vm) { (void)vm; }
 
-void agc_input_close(agc_vm *vm) { (void)vm; }
+void agc_input_close(agc_vm *vm) {
+  agc_input *in = &vm->rt->in;
+  if (!in->reader) return;
+  agc_stdin_close(in->reader);
+  in->reader = NULL;
+}
 #else
 static int start_read(agc_vm *vm, agc_input *in) {
   size_t room = read_room(in);

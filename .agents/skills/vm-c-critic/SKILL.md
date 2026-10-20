@@ -153,9 +153,9 @@ handles. A second way for any of them is a finding.
   builtin that blocks other tasks well past one turn.
 - Diagnostics: one code with a span. Changes to diagnostic output (new JSON
   keys, new lines) must not break their readers: `stdlib/test/child.agc`
-  (`vm_shape?`), `compiler/bdd_runner.agc` and the tests that parse `--json`.
-  PR #225 needed a fix in the child helpers for its new stack keys (commit
-  "tests: the child helpers accept the stack keys of a VM diagnostic").
+  (`vm_shape?`), `compiler/bdd/bdd_runner.agc` and the tests that parse
+  `--json`. PR #225 needed a fix in the child helpers for its new stack keys
+  (commit "tests: the child helpers accept the stack keys of a VM diagnostic").
 
 ### Efficiency
 

@@ -37,24 +37,24 @@ and merging or moving `STEP`s. A runaway loop must still hit
 .agc files
   -> lexer, parser, module linker, checker      (compiler/, Agentica)
   -> checked AST + expression type table
-  -> compiler/lowering.agc        IR: functions, slots, typed ops, labels, spans
-  -> compiler/bytecode_writer.agc bytecode: instructions, constants, tables, spans
+  -> compiler/lower/lowering.agc        IR: functions, slots, typed ops, labels, spans
+  -> compiler/bytecode/bytecode_writer.agc bytecode: instructions, constants, tables, spans
   -> .agcb file (binary, versioned)
   -> vm/ (C11 + Boehm GC): load, validate, run
 ```
 
-- **Place:** `compiler/checker.agc`
+- **Place:** `compiler/check/checker.agc`
   - **Owns:** Gives the checked type of each expression node, by node id.
 
-- **Place:** `compiler/lowering.agc`
+- **Place:** `compiler/lower/lowering.agc`
   - **Owns:** Checked program to IR. Resolves names to slots and indexes, makes
     types explicit, keeps spans, converts closures.
 
-- **Place:** `compiler/bytecode_writer.agc`
+- **Place:** `compiler/bytecode/bytecode_writer.agc`
   - **Owns:** IR to bytecode: label resolution, constant pool, builtin imports,
     struct, enum, JSON type and span tables, step merging, binary writer.
 
-- **Place:** `compiler/cli.agc`
+- **Place:** `compiler/app/cli.agc`
   - **Owns:** `--dump-ir`, `compile`, and running every program on the VM.
     Printing and exit codes stay here.
 

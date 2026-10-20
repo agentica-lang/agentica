@@ -247,7 +247,7 @@ after them may run in parallel when needed and keep their relative order.
     writer), step 7 (BDD driver), step 8 (CLI, single binary, frozen
     goldens, test move, the 8d switch to `dist/agentica`). #313 deleted
     `src/`, froze `vm/unicode_data.c` as checked-in source, left
-    `compiler/builtins_data.agc`, `check_tables.agc` and
+    `compiler/catalog/builtins_data.agc`, `check_tables.agc` and
     `unicode_table.agc` as hand-edited sources, and tagged
     `bootstrap-racket`. History in git; the freeze record stays in §18.
   - **Outcome:** The front end is written once, in Agentica; every language
@@ -286,7 +286,7 @@ after them may run in parallel when needed and keep their relative order.
     44e (static data, only if start-up numbers ask for it). Step 4 (PRs #258 and
     #263) is merged: 44a0-2 changes one message text in `src/checker.rkt` (the
     import form in a help), and 44a2 changes both checkers, `src/checker.rkt`
-    and `compiler/checker.agc`, in the same PR. Bytecode format versions: this
+    and `compiler/check/checker.agc`, in the same PR. Bytecode format versions: this
     takes 5, so the reservations of §41 and §42 move to 6 and 7
   - **Outcome:** The tables of the Agentica front end are values built once per
     run, a file names what it imports, and any program can name a fixed value at
@@ -736,7 +736,7 @@ programming reference contain the current signatures.
   `std/logger`. A public raw layer next to `std/http` would be a second way to
   do HTTP, and a public registry would let user code change the handlers without
   the `Logger` functions. So the linker lets only modules embedded from
-  `stdlib/` call them (`std_only_name?` in `compiler/builtins.agc`),
+  `stdlib/` call them (`std_only_name?` in `compiler/catalog/builtins.agc`),
   and user code
   gets `CHECK-UNKNOWN-NAME` with a help that names the std module to import.
 - Not retroactive: existing builtins, JSON included, stay as they are.

@@ -1,4 +1,4 @@
-"""The Agentica checker (compiler/check.agc) against the frozen output of the original checker.
+"""The Agentica checker (compiler/check/check.agc) against the frozen output of the original checker.
 
 This module compares the Agentica checker with what the original checker printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the programs of the cases
@@ -25,7 +25,7 @@ UNREACHABLE_CODES = ("CHECK-INTERNAL", "CHECK-MODULE-CONTEXT", "CHECK-BLOCK-TYPE
 
 
 class CheckStage(PytestStageCase):
-    ENTRY = "check.agc"
+    ENTRY = "check/check.agc"
     STDLIB = True
 
     def check_files(self, files, directory):
@@ -54,8 +54,8 @@ def test_the_checker_matches_the_goldens_of_the_fixtures_types_resolutions_and_d
 
 
 def test_the_method_tables_are_the_ones_of_the_freeze(check_stage):
-    # compiler/check_tables.agc was generated once from the tables of the original checker; it is edited by hand.
-    source = (ROOT / "compiler" / "check_tables.agc").read_bytes().decode("utf-8")
+    # compiler/check/check_tables.agc was generated once from the tables of the original checker; it is edited by hand.
+    source = (ROOT / "compiler" / "check" / "check_tables.agc").read_bytes().decode("utf-8")
     check_stage.assert_golden(source, FROZEN / "check" / "tables.expected")
 
 

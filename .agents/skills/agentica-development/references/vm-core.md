@@ -9,8 +9,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - **Path:** `vm/value.h`, `vm/port.h`, `vm/core.h`, `vm/services.h`
   - **Owns:** the layer headers ("Which layer" in `vm.md`): `value.h` the
     values, program tables, memory and Json value API, with `agc_opcode` (same
-    order as `OPCODES` in `compiler/bytecode_tables.agc`); `port.h` the runtime
-    structs and the port a service uses (with `agc_step`, `agc_stepper`,
+    order as `OPCODES` in `compiler/bytecode/bytecode_tables.agc`); `port.h` the
+    runtime structs and the port a service uses (with `agc_step`, `agc_stepper`,
     `agc_step_fn` and `agc_task_stepper`, the stepper protocol under "Adding a
     builtin"); `core.h` what only the core and the driver call; `services.h` the
     exports of the services
@@ -327,7 +327,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     time
 - `vm/diag.c`
   - the plain, `--ai` and `--json` diagnostic formats, the same formats as
-    `compiler/diagnostic_*.agc`
+    `compiler/diagnostics/diagnostic_*.agc`
   - only the code must match
   - a task crash adds ` in a task` (plain, `--ai`) or `"task":true` (`--json`)
   - `agc_crash_text` and the unobserved summary line (`agc_print_unobserved`)

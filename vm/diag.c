@@ -1,6 +1,6 @@
 /*
  * Diagnostics in the plain, --ai and --json formats (the same as
- * compiler/diagnostic_*.agc), the unobserved-crash summary, and the stack trace of a
+ * compiler/diagnostics/diagnostic_*.agc), the unobserved-crash summary, and the stack trace of a
  * runtime error (agc_stack_capture and its printers). Core layer. Design:
  * docs/vm/02-reference-behavior.md §2.5.
  */

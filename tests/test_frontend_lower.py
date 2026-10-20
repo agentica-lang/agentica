@@ -1,4 +1,4 @@
-"""The Agentica lowering (compiler/lower.agc) against the frozen output of the original lowering.
+"""The Agentica lowering (compiler/lower/lower.agc) against the frozen output of the original lowering.
 
 This module compares the Agentica lowering with what the original lowering printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
@@ -24,7 +24,7 @@ def golden_text():
 
 
 class LowerStage(PytestStageCase):
-    ENTRY = "lower.agc"
+    ENTRY = "lower/lower.agc"
     STDLIB = True
 
     def lower_files(self, files):
@@ -55,9 +55,9 @@ def test_the_lowering_matches_the_goldens_of_the_fixtures(stage):
 
 
 def test_vm_builtins_of_the_lowering_tables_are_the_ones_of_the_freeze():
-    # VM_BUILTINS of compiler/lower_tables.agc is the table of the original lowering, frozen in
+    # VM_BUILTINS of compiler/lower/lower_tables.agc is the table of the original lowering, frozen in
     # lower/vm-builtins.expected.
-    text = (ROOT / "compiler" / "lower_tables.agc").read_bytes().decode("utf-8")
+    text = (ROOT / "compiler" / "lower" / "lower_tables.agc").read_bytes().decode("utf-8")
     start = text.index("VM_BUILTINS = Set.new([")
     names = sorted(re.findall(r'"([^"]+)"', text[start:text.index("\n])", start)]))
     assert_golden("".join(name + "\n" for name in names), FROZEN / "lower" / "vm-builtins.expected")

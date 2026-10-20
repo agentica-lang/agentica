@@ -1,5 +1,5 @@
-import Cli from "front_end_cli"
-import Inputs from "front_end_inputs"
+import Cli from "app/front_end_cli"
+import Inputs from "app/front_end_inputs"
 
 # The front end of the `agentica` binary: the program that C loads from its own data (or from --front-end FILE), that
 # compiles what the user asks for in memory and hands the program to C to run. docs/future/35-self-hosting.md, 35.3,

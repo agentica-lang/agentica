@@ -1,5 +1,5 @@
-import Paths from "../../../compiler/import_path"
-import Imports from "../../../compiler/resolve_import"
+import Paths from "../../../compiler/modules/import_path"
+import Imports from "../../../compiler/modules/resolve_import"
 
 def main() -> Void
   for path in System.args()
