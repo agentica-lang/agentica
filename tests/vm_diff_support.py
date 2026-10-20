@@ -504,9 +504,7 @@ VARIANT_FAMILY = re.compile(r"-(posix|windows)\.agc$")
 
 # Fixtures that have a gap on one system: the behavior exists there, so the case is an open gap (a known-issue skip),
 # not a host-only one. The reason says what differs.
-KNOWN_ISSUE_FIXTURES = {
-    "file-each-line-stop.agc": {"windows": (435, "the program counts the entries of a folder of open descriptors")},
-}
+KNOWN_ISSUE_FIXTURES = {}
 
 
 def skip_reason(name):
