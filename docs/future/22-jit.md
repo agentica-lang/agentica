@@ -34,23 +34,30 @@ multicore rules of `docs/vm/16-architecture.md`. No language change.
   stderr and diagnostic codes do not depend on the tier.
 
 **Code generation** (decided in the JIT PR). No LLVM or libgccjit at run time
-(size, and libgccjit is GPL). The release builds x86-64 and arm64, so the
-choice must cover both. Options seen in 2026:
+(size, and libgccjit is GPL). The release ships x86-64 (Linux, Windows,
+macOS) and arm64 (macOS), so the choice must cover both. Options seen in 2026:
 
 | Option | Gain | Cost |
 | --- | --- | --- |
 | Small hand-written assembler | No dependency | One backend per architecture |
-| sljit (C, BSD; used by PCRE2) | One emitter for x86-64, arm64 and more | Third-party library (owner approval); no register allocation |
+| sljit (C, BSD; used by PCRE2) | One emitter for x86-64, arm64 and more | A `vm/third_party` submodule (owner approval); no register allocation |
 | Copy-and-patch (CPython) | Very fast compile | Needs clang at build time; CPython gained only 4-12% by 3.15, and was at times slower than its interpreter |
 | MIR (C11, SSA, linear scan) | Real optimizations without LLVM | Larger dependency; release status unclear |
 
-Lessons published by ZJIT: inlining calls to C helpers pays the most; spilling
-VM frame state at every side-effecting operation is expensive; count events in
-compiled code (for example C calls) before choosing what to optimize.
+Lessons published by ZJIT (2026): inlining calls to C helpers pays the most;
+spilling VM frame state at every side-effecting operation is expensive; count
+events in compiled code (for example C calls) before choosing what to optimize.
 
-**Memory:** W^X: code is mapped RW, written, then made RX; never RWX. Linux
-uses `mprotect`, Windows `VirtualProtect`, macOS arm64 `MAP_JIT` with
-`pthread_jit_write_protect_np`. A code cache with a size cap.
+Sources: [Sparkplug](https://v8.dev/blog/sparkplug),
+[ZJIT in Ruby 4.0](https://bernsteinbear.com/blog/launch-zjit/),
+[ZJIT load and store removal](https://railsatscale.com/2026-03-18-how-zjit-removes-redundant-object-loads-and-stores/),
+[PEP 836](https://peps.python.org/pep-0836/),
+[MIR](https://developers.redhat.com/articles/2022/02/16/code-specialization-mir-lightweight-jit-compiler).
+
+**Memory:** W^X: code is written RW, then made RX; never writable and
+executable at once for a thread. Linux uses `mprotect` and Windows
+`VirtualProtect`. macOS arm64 maps `MAP_JIT` pages and switches them per thread
+with `pthread_jit_write_protect_np`. A code cache with a size cap.
 
 **GC:** Boehm scans native stacks conservatively, so JIT frames need no stack
 maps. Constants embedded in code must still stay reachable: each code object
