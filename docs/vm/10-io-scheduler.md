@@ -298,9 +298,10 @@ section says how the scheduler and the loop keep them, as built.
   is no `AGENTICA_*` variable). It is read once, when the pool is created, so it
   must be set before the VM starts. The default is 4, and the cap 1024. The pool
   runs regular-file I/O, opens and path calls, DNS (`getaddrinfo`), and the TLS
-  setup jobs. Blocking stdin is the exception: a failed Unix poller setup or
-  any Windows stdin read can keep one pool thread until input arrives (Stdin
-  below). All other work must finish without waiting indefinitely for input.
+  setup jobs. Blocking stdin is the exception: a failed Unix poller setup can
+  keep one pool thread until input arrives (Stdin below). Windows stdin never
+  uses the pool. All other work must finish without waiting indefinitely for
+  input.
 - **We only wait where the loop can cancel** (§14.1). Files open with
   `O_CLOEXEC` and `O_NONBLOCK`, so opening a FIFO never waits for a peer. The
   pool job then picks the path by `fstat` and an `epoll_ctl` probe, never by
@@ -478,13 +479,18 @@ section says how the scheduler and the loop keep them, as built.
   poller stays a pool job with one blocking `read`, which keeps a pool thread
   until data comes (§14.1). One read of up to 1 MiB is in flight at a time. A
   second reader parks in the input's FIFO. A read with no data at the end of the
-  run is not waited for. On Windows, all stdin kinds (including pipes and the
-  console) use one blocking `_read` in the pool, in binary mode. This keeps the
-  interpreter and its timers responsive but occupies one pool thread until
-  data or EOF arrives; cancellation detaches the job and does not interrupt
-  `_read`. Windows stop signals are handled by libuv on the loop, independently
-  of the reader. The process exits without waiting for that read; in-process
-  harnesses must finish the read before `agc_io_close` can release its loop.
+  run is not waited for. On Windows, every stdin kind (a pipe, the console, a
+  file, `NUL`) is read by one thread of the VM's own (`vm/stdio_windows.c`),
+  never by the pool: it waits until a read is asked for, does one blocking
+  `_read` in binary mode, and wakes the loop with an async handle, which ends
+  the read's `external` job. The handle keeps the loop alive only while a read
+  is out. The thread and its handle are made on the I/O thread at the first
+  read, after the job's start. A cancelled reader leaves the read in flight, as
+  on Unix: its bytes or EOF go to the next reader. Stop signals are handled by
+  libuv on the loop, independently of the reader. At the end of the run the
+  read is cancelled where Windows can (`CancelSynchronousIo`, a pipe); a read
+  that cannot be cancelled ends with the process, or, in an in-process harness,
+  when input comes, and then touches nothing of the closed loop.
   Other unsupported hosts keep a blocking read on the interpreter thread.
 - **stdout and stderr (row 7.2.1f, `vm/output.c`).** Each stream has one output
   buffer, a `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of

@@ -1,6 +1,6 @@
 ## The List methods of the compiler prelude (docs/future/25-ruby-typed-idioms.md 25.6). Not a module: no program
 ## imports it. The checker reads a call of xs.find do |x| ... end, picks the function here that the catalog row names,
-## and the compiler adds it to the program (compiler/prelude.agc). A is the element type, B the type a callback gives,
+## and the compiler adds it to the program (catalog/prelude.agc). A is the element type, B the type a callback gives,
 ## K a key that is an Int or a String; the checker has checked the call, so these names stand for the real types. A
 ## runtime error of a function here is reported at the call of the program, not in this file.
 ##

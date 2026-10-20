@@ -90,6 +90,43 @@ def main() -> Void
 end
 """
 
+# A task waits for a line of the console while the program, with one pool thread, writes and reads a file. The run
+# ends with main, without waiting for the read. The results go to a file, not to the console that the test reads.
+CONSOLE_STDIN = """\
+def reader(n: Int) -> Int
+  IO.inspect(IO.gets())
+  return n
+end
+
+def main() -> Void
+  Task.spawn(&reader, 1)
+  Task.sleep(50)
+  File.write_text(System.args()[0], "x", 1000).unwrap!
+  text = File.read_text(System.args()[0], 1000).unwrap!
+  File.write_text(System.args()[1], "read " + text, 1000).unwrap!
+end
+"""
+
+# A line typed on the console, written to a file.
+CONSOLE_LINE = """\
+def main() -> Void
+  File.write_text(System.args()[0], IO.gets().unwrap!, 1000).unwrap!
+end
+"""
+
+# A task waits for standard input while main waits on it: the stop signal ends the run, not the read.
+WAITING_FOR_INPUT = """\
+def reader(n: Int) -> Result[String]
+  return IO.gets()
+end
+
+def main() -> Void
+  r = Task.spawn(&reader, 1)
+  IO.warn("ready")
+  IO.inspect(Task.await(r))
+end
+"""
+
 # The sequences a pseudo console adds around the text: CSI (colors, cursor), OSC (title) and the like.
 ESCAPES = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|\x1b[=>]")
 
@@ -134,6 +171,8 @@ if os.name == "nt":
                                         ctypes.POINTER(StartupInfoEx), ctypes.POINTER(ProcessInformation)]
     kernel32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
                                   ctypes.c_void_p]
+    kernel32.WriteFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+                                   ctypes.c_void_p]
     kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
     kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
     kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
@@ -166,9 +205,10 @@ def close_handle(handle):
         handle.value = None
 
 
-def run_on_console(command, env, limit):
+def run_on_console(command, env, limit, typed=None):
     """Runs the command with a pseudo console as its console, standard input and standard output.
 
+    `typed` is text typed into the console after the start (a line ends with a carriage return, the Enter key).
     Returns (exit code, the text the console showed). The pseudo console is closed after the exit, while a thread
     reads its output, because closing it waits for the output to be taken. Whatever step fails, the handles, the
     pseudo console, the attribute list and the process are released.
@@ -217,6 +257,10 @@ def run_on_console(command, env, limit):
                                           extended_startup_info_present | unicode_environment, environment, None,
                                           ctypes.byref(startup), ctypes.byref(info))
         assert created, ctypes.WinError(ctypes.get_last_error())
+        if typed:
+            data = typed.encode("utf-8")
+            written = wintypes.DWORD()
+            assert kernel32.WriteFile(in_write, data, len(data), ctypes.byref(written), None)
         if kernel32.WaitForSingleObject(info.hProcess, int(limit * 1000)) != 0:
             kernel32.TerminateProcess(info.hProcess, 1)
         code = wintypes.DWORD()
@@ -306,3 +350,31 @@ def test_ctrl_break_with_standard_output_full_ends_the_run_without_a_diagnostic(
     status = stop_a_vm_that_fills_its_stdout(vm, lambda: vm.process.send_signal(signal.CTRL_BREAK_EVENT), WAIT_SECONDS)
     assert status == 128 + SIGBREAK
     assert vm.stderr_text() == ""
+
+
+def test_a_task_waiting_for_a_line_of_the_console_leaves_the_one_pool_thread_to_file_calls(tmp_path):
+    env = vm_environment({"UV_THREADPOOL_SIZE": "1"})
+    result = tmp_path / "result.txt"
+    command = [*vm_command(), "--", bytecode(CONSOLE_STDIN, tmp_path), tmp_path / "out.txt", result]
+    code, shown = run_on_console(command, env, WAIT_SECONDS)
+    assert code == 0, ESCAPES.sub("", shown)
+    assert result.read_text() == "read x"
+
+
+def test_a_line_typed_on_the_console_reaches_a_waiting_reader(tmp_path):
+    result = tmp_path / "result.txt"
+    code, shown = run_on_console([*vm_command(), "--", bytecode(CONSOLE_LINE, tmp_path), result],
+                                 vm_environment({"UV_THREADPOOL_SIZE": "1"}), WAIT_SECONDS, typed="typed line\r")
+    assert code == 0, ESCAPES.sub("", shown)
+    assert result.read_text() == "typed line"
+
+
+def test_ctrl_break_ends_a_run_whose_task_waits_for_standard_input(tmp_path, adopt):
+    vm = adopt(start_vm(bytecode(WAITING_FOR_INPUT, tmp_path), env={"UV_THREADPOOL_SIZE": "1"}, stdin=True,
+                        creationflags=NEW_GROUP))
+    assert vm.next_stderr_line(WAIT_SECONDS) == "ready"
+    time.sleep(0.2)
+    start = time.monotonic()
+    vm.process.send_signal(signal.CTRL_BREAK_EVENT)
+    assert vm.wait(WAIT_SECONDS) == 128 + SIGBREAK
+    assert time.monotonic() - start < min(scaled(5), 25), "the run does not wait for the read"

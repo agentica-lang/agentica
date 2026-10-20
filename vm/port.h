@@ -55,6 +55,7 @@ typedef struct agc_io_job agc_io_job;
 typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
 typedef struct agc_poller agc_poller;
 typedef struct agc_stdio agc_stdio;
+typedef struct agc_stdin_reader agc_stdin_reader;
 typedef struct agc_memstream agc_memstream;
 typedef struct agc_native agc_native;
 
@@ -169,6 +170,9 @@ typedef struct {
   int fd, poll_fd;
   bool flush_out, pending_eof, reading, poll_tried, poll_socket;
   agc_poller *poller;
+#ifdef _WIN32
+  agc_stdin_reader *reader;
+#endif
   int got;
   uint8_t *buf;
   size_t start, end, cap, scanned;
@@ -650,6 +654,17 @@ ssize_t agc_stdio_write(int fd, const uint8_t *data, size_t n, agc_utf8_cut *cut
    take closes it and gives the text (malloc'd) and its length; false when text was lost. */
 FILE *agc_memstream_open(agc_memstream **ms);
 bool agc_memstream_take(FILE *file, agc_memstream *ms, char **text, size_t *len);
+#endif
+#ifdef _WIN32
+/* The reader of Windows stdin (vm/stdio_windows.c): a thread of its own makes one blocking read at a time, so a read
+   that waits for input keeps no pool thread. new makes it for FD (no thread yet). read asks for up to ROOM bytes and
+   ends JOB, an external job, when they are in (the thread and its wake are made on the I/O thread at the first read).
+   take gives the result in the job's done half: the bytes read, 0 at EOF or -1, and where they are. close, on the I/O
+   thread at the end of the run, leaves a read in flight to the thread, which ends when the read returns. */
+agc_stdin_reader *agc_stdin_new(int fd);
+void agc_stdin_read(agc_vm *vm, agc_stdin_reader *r, agc_io_job *job, size_t room);
+int64_t agc_stdin_take(agc_stdin_reader *r, const uint8_t **data);
+void agc_stdin_close(agc_stdin_reader *r);
 #endif
 
 void agc_charge(agc_vm *vm, uint64_t units);

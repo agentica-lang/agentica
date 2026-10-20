@@ -70,9 +70,9 @@ value: `agc_map_put` and `agc_map_add_hash` never write their input.
 
 Left out, after a measurement or because the gain is small:
 
-- `CONCAT` with an empty side returning the other String. A loop of
-  `(s + "")` allocates 198 MB before and 6.7 MB after, but
-  `check compiler/parser.agc` allocates the same bytes, so no real program
+- `CONCAT` with an empty side returning the other String. A loop of `(s + "")`
+  allocates 198 MB before and 6.7 MB after, but `check
+  compiler/syntax/parser.agc` allocates the same bytes, so no real program
   gains.
 - `filter` and `map` with nothing to return. It saves one list of about 40
   bytes for each call. The edit is in `resume_native`, which also runs

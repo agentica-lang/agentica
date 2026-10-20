@@ -148,13 +148,13 @@ job `timeout-minutes` of the workflow, which must
   deadline of `agentica test`, which has no flag.
 - `dist/agentica` is built before `make test` and `make smoke`, and `make test`
   then starts its test workers in parallel.
-- `smoke` is the example smoke runs
-  (`tests/smoke.sh`, on `dist/agentica`). `dist/agentica` is a real Makefile
-  rule over `compiler/*.agc`, `stdlib/*.agc`, `VERSION`, the VM objects and
-  `bootstrap/stage0.agcb`, and `test`, `test-bdd`, `test-cli` and `smoke` all
-  use it, so a pull never leaves a stale binary and an up-to-date one is not
-  rebuilt. The process, module and distribution tests are ordinary modules of
-  `make test` now (there is no `test-ci`, `test-exe` or second executable).
+- `smoke` is the example smoke runs (`tests/smoke.sh`, on `dist/agentica`).
+  `dist/agentica` is a real Makefile rule over every `.agc` under `compiler/`,
+  `stdlib/*.agc`, `VERSION`, the VM objects and `bootstrap/stage0.agcb`, and
+  `test`, `test-bdd`, `test-cli` and `smoke` all use it, so a pull never leaves
+  a stale binary and an up-to-date one is not rebuilt. The process, module and
+  distribution tests are ordinary modules of `make test` now (there is no
+  `test-ci`, `test-exe` or second executable).
 - `vendored-check` links the VM against the vendored OpenSSL and checks it
   (static, the submodule's version); `vendored-test` adds the TLS and HTTP
   tests on that binary.
@@ -257,9 +257,11 @@ is not sent; libuv reports both events through one console handler
 `tests/test_windows_handle_counts.py` also needs native Windows (named pipes and
 `GetProcessHandleCount`), so it runs on the Windows job and Wine skips it.
 
-Piped-input tests do not exercise console input. After changing Windows stdin
-handling, a check on a native Windows terminal (not Wine) is useful but does not
-block a change. Save this as `console-input.agc` in a scratch directory:
+`test_windows_console_stop.py` also types a line into the pseudo console and
+reads it, and keeps a console read waiting with one pool thread while file calls
+run. After changing Windows stdin handling, a check on a native Windows terminal
+(not Wine) is still useful but does not block a change. Save this as
+`console-input.agc` in a scratch directory:
 
 ```agentica
 def main() -> Void
@@ -273,8 +275,9 @@ end
    `waiting`, type `hello` and Enter. Expect `ok("hello")` and exit 0.
 2. Run it again, wait for `waiting`, then press Ctrl+C without entering text.
    Expect a prompt return, no read-error diagnostic and no surviving VM.
-   libuv handles the signal on the loop even if `_read` remains blocked in
-   the pool; retrying an interrupted `_read` must not be the signal handler.
+   libuv handles the signal on the loop even if `_read` remains blocked on
+   the reader thread; retrying an interrupted `_read` must not be the signal
+   handler.
 
 The fast `test_platform_bootstrap.py` cases separately check binary stdin
 (NUL, CR/LF, Ctrl+Z and 0xff), an empty open pipe while a timer runs and the
@@ -368,8 +371,8 @@ The first steps of the `test` job (the `changes` step, checkout with
 `vm-sanitizers` only when the VM,
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
-- `vm/`, `bootstrap/`, `compiler/front_end*`, `compiler/lower*`,
-  `compiler/bytecode*`, `VERSION`;
+- `vm/`, `bootstrap/`, `compiler/front_end.agc`, `compiler/app/front_end*`,
+  `compiler/lower/lower*`, `compiler/bytecode/*`, `VERSION`;
 - `tests/test_vm_diff_*`, `tests/vm_diff_support.py`, `tests/test_vm_trace.py`,
   `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,

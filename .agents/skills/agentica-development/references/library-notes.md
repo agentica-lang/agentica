@@ -49,7 +49,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 - Task.spawn takes Fn[A, R] and one argument and returns Task[R] and moves no
   handle; Task.spawn_owning (24b) takes a handle type as the argument (the
-  handle types of the catalog, `compiler/builtins_data.agc`, else
+  handle types of the catalog, `compiler/catalog/builtins_data.agc`, else
   `CHECK-NOT-A-HANDLE`; keep it in step with the tag list of `agc_owned_of` in
   `vm/loop.c`, so a new handle kind goes into both) and gives it to the new task
   (`RUNTIME-HANDLE-NOT-OWNED` at run time); a `Channel[T]` is accepted too (24c,
@@ -64,7 +64,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   nonnegative milliseconds, zero yields and negative values halt with
   RUNTIME-INVALID-DURATION. Reserve Task, Await and Channel; use Todo for the
   demonstration struct. `Task.await(task, timeout_ms)` (17c) is a second arity
-  of the same catalog row in `compiler/builtins_data.agc` (rule
+  of the same catalog row in `compiler/catalog/builtins_data.agc` (rule
   `TaskAwaitTimeout` in the checker: the task is a `Task`, the timeout an `Int`,
   the result `Await[R]`) and returns the builtin enum `Await[T]` (`Done(T)`,
   `TimedOut`); see the next bullet for how a builtin enum is wired. No CPU
@@ -86,10 +86,10 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## TCP, TLS and HTTP
 
-- The catalog data (`compiler/builtins_data.agc`) centralizes opaque atoms,
-  builtin record field layouts and builtin enums (`Await`). A builtin enum
-  reuses the user-enum paths: the checker starts its enum table with them and
-  adds their names to the reserved type names (`CHECK-REDEFINED-NAME`), so
+- The catalog data (`compiler/catalog/builtins_data.agc`) centralizes opaque
+  atoms, builtin record field layouts and builtin enums (`Await`). A builtin
+  enum reuses the user-enum paths: the checker starts its enum table with them
+  and adds their names to the reserved type names (`CHECK-REDEFINED-NAME`), so
   annotation, constructors, patterns, exhaustiveness and printing need no
   special case, and the data-type check also accepts a `Void` payload for them
   (`Await[Void]`); the linker keeps the name unmangled and turns
@@ -122,9 +122,10 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   the logging task. Ranks are Ints (debug 0 to error 3), so no row mentions an
   enum.
 - `LogEvent` is a builtin record and `LogLevel` a builtin enum
-  (`compiler/builtins_data.agc`). A builtin record with an enum field has no
-  JSON types (`compiler/lower_program.agc` skips it as not decodable), because
-  the bytecode writer's type section (`bytecode_types.agc`) has no Enum clause.
+  (`compiler/catalog/builtins_data.agc`). A builtin record with an enum field
+  has no JSON types (`compiler/lower/lower_program.agc` skips it as not
+  decodable), because the bytecode writer's type section (`bytecode_types.agc`)
+  has no Enum clause.
 - The JSON line is `JSON.encode` of the private struct `JsonLine`, not of
   `JSON.object`: `JSON.object` and `JSON.from` sort keys, a struct keeps
   declaration order and a map keeps its order.
@@ -181,7 +182,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   takes `rt->sync` only around those two calls (`lazy_lines_next`,
   `lazy_receive`); `resume_stepper` fails `RUNTIME-INTERNAL` if an unlocked step
   returns holding it.
-  `CHECK-LAZY-NO-STEP` (`compiler/check_method.agc`) rejects
+  `CHECK-LAZY-NO-STEP` (`compiler/check/check_method.agc`) rejects
   `File.foreach(...).each` written as one chain. Goldens:
   `tests/fixtures/vm/lazy-file.agc`, `lazy-channel.agc`,
   `step-limited/lazy-channel-endless.agc`; closes on every path:

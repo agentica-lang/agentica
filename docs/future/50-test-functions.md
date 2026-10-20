@@ -10,10 +10,10 @@ Nothing is implemented. The `main` and `Test.run` form of the grammar's
 - A test file is a `*_test.agc` program whose `main` calls `Test.run` with a
   list of `Test.test(name) do ... end` blocks (the grammar's `Test` rules).
 - Every program needs `main() -> Void`: `check_main` in
-  `compiler/check_register.agc` reports CHECK-MAIN otherwise. So a test file
-  with no `main` is CHECK-MAIN today.
+  `compiler/check/check_register.agc` reports CHECK-MAIN otherwise. So a test
+  file with no `main` is CHECK-MAIN today.
 - `agentica test` decides that a file is a test file by its name:
-  `kind_of` in `compiler/bdd_discover.agc` returns "tests" for `_test.agc`.
+  `kind_of` in `compiler/bdd/bdd_discover.agc` returns "tests" for `_test.agc`.
   Only the driver reads the name; the compiler never does.
 - The driver compiles a test file with `Compile.file`, which reaches
   `Linker.link_file` through `Pipeline.compile` and `Pipeline.check_file`.
@@ -43,20 +43,20 @@ end
   `main` declaration equivalent to `def main() -> Void` with
   `Test.run([Test.test("parses port", &test_parses_port), ...])`. The test
   name is the function name without `test_`, with `_` turned into spaces.
-  - The pass belongs in the linker stage: it runs in `compiler/linker.agc`
-    after `Modules.load` and before `rewrite_all`. The linker owns the
-    declarations of the root file, and `check_main` already reads them from
-    `linked.modules`, so the generated code goes through the same rewrite and
-    the same checker as any code. A pass after the linker would also have to
-    change `Linked`.
+  - The pass belongs in the linker stage: it runs in
+    `compiler/modules/linker.agc` after `Modules.load` and before `rewrite_all`.
+    The linker owns the declarations of the root file, and `check_main` already
+    reads them from `linked.modules`, so the generated code goes through the
+    same rewrite and the same checker as any code. A pass after the linker would
+    also have to change `Linked`.
   - Only functions declared in that file count, not imported ones. A `test_`
     in a comment or a string never counts, because the pass reads
     declarations, not text.
-  - The generated nodes take their spans from the test function they stand
-    for, so a diagnostic about them is reported at that function. Their node
-    ids come from the numbering that `Linked.ids` counts (`parser_ids` and
-    `id_count` in `compiler/linker.agc`). The checker sizes its type table
-    from `Linked.ids` (`ids_of` in `compiler/checker.agc`), so the generated
+  - The generated nodes take their spans from the test function they stand for,
+    so a diagnostic about them is reported at that function. Their node ids come
+    from the numbering that `Linked.ids` counts (`parser_ids` and `id_count` in
+    `compiler/modules/linker.agc`). The checker sizes its type table from
+    `Linked.ids` (`ids_of` in `compiler/check/checker.agc`), so the generated
     ids must fall inside it.
   - The checker then checks the generated code like any code, so a wrong
     signature gets a normal diagnostic at the test function. Proposed codes:
@@ -73,19 +73,19 @@ end
     the report do not change. The lowering, the bytecode and the VM do not
     change.
 
-- **How the driver knows it is a test file**: `agentica test` decides by
-  name, in the driver only (§50.1). The front end gets that fact as a flag of
-  the compile call, not from the file name inside `compiler/`. The change:
-  `compile_test` in `compiler/bdd_driver.agc` passes `test_file: true` down
-  through `Compile.file` (`compiler/bdd_compile.agc`), `Pipeline.compile` and
-  `Pipeline.check_file` (`compiler/pipeline.agc`) to `Linker.link_file`
-  (`compiler/linker.agc`). Every other caller passes `false`: `agentica check`
-  and `agentica FILE.agc` (`compiler/cli.agc`), the runner and the step
-  program (`compiler/bdd_driver.agc`), `compiler/bytecode.agc`, and the text
-  forms in `check_text.agc`, `lower_text.agc` and `link_text.agc`. So
-  `agentica check` and `agentica FILE.agc` still report CHECK-MAIN for a test
-  file with no `main`. Whether they should set the flag too is for the PR to
-  decide.
+- **How the driver knows it is a test file**: `agentica test` decides by name,
+  in the driver only (§50.1). The front end gets that fact as a flag of the
+  compile call, not from the file name inside `compiler/`. The change:
+  `compile_test` in `compiler/bdd/bdd_driver.agc` passes `test_file: true` down
+  through `Compile.file` (`compiler/bdd/bdd_compile.agc`), `Pipeline.compile`
+  and `Pipeline.check_file` (`compiler/app/pipeline.agc`) to `Linker.link_file`
+  (`compiler/modules/linker.agc`). Every other caller passes `false`: `agentica
+  check` and `agentica FILE.agc` (`compiler/app/cli.agc`), the runner and the
+  step program (`compiler/bdd/bdd_driver.agc`),
+  `compiler/bytecode/bytecode.agc`, and the text forms in `check_text.agc`,
+  `lower_text.agc` and `link_text.agc`. So `agentica check` and `agentica
+  FILE.agc` still report CHECK-MAIN for a test file with no `main`. Whether they
+  should set the flag too is for the PR to decide.
 
 - **Not in 50a**: a `test` keyword form (`test name() ... end`). It is
   rejected for now by the one-way rule, since `def test_...` needs no new

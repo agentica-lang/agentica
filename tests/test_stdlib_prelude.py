@@ -12,13 +12,13 @@ import re
 from tests.agentica_test import ROOT, cli, run
 
 PRELUDE = ROOT / "stdlib" / "prelude"
-TABLE = (ROOT / "compiler" / "prelude_data.agc").read_text(encoding="utf-8")
+TABLE = (ROOT / "compiler" / "catalog" / "prelude_data.agc").read_text(encoding="utf-8")
 SLOW_IN_A_LOOP = re.compile(r"\.(concat|take|drop|reverse|sort|sort_by|keys|values|delete)\b")
 LOOP_START = re.compile(r"^(\s*)(for|while)\b")
 
 
 def table_functions() -> set[tuple[str, str]]:
-    """Return (file stem, function name) pairs from compiler/prelude_data.agc rows."""
+    """Return (file stem, function name) pairs from compiler/catalog/prelude_data.agc rows."""
     found = set()
     row = re.compile(
         r'Model\.PreludeRow\((?:(?!Model\.PreludeRow\().)*?'
