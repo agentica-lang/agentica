@@ -61,7 +61,7 @@ typedef struct {
   int64_t next, last;     /* a range source: the next value and the last one */
   bool more, started;     /* a range source has values left; produce gave its seed */
   agc_value seed;         /* produce: the last item it gave */
-  agc_line_reader *lines;       /* a file source: its reader, which owns the open file */
+  agc_line_reader *lines; /* a file source: its reader, which owns the open file */
   agc_value io_last;      /* a file source: the result of the job it waited on */
   agc_value final;        /* the result, kept while the file closes */
   uint32_t span;
