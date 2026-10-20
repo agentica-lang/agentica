@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 28297,
+  "stdout": [
+    "5 primes, the last 11",
+    "10 primes, the last 29",
+    "20 primes, the last 71",
+    "40 primes, the last 173",
+    ""
+  ],
+  "stderr": []
+}
