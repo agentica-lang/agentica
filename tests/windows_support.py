@@ -87,7 +87,6 @@ end
 """
 
 
-
 def process_handle_count(pid: int) -> int:
     """The number of kernel handles that the process `pid` holds open (GetProcessHandleCount), the Windows counterpart
     of counting the entries of /proc/self/fd."""

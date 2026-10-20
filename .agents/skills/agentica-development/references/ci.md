@@ -250,9 +250,18 @@ does not hold the exit. Two more cases write stdout and stderr to a pseudo
 console (ConPTY), which the VM writes from a pool thread with `WriteConsoleW`:
 one checks the text and its order, the other a line longer than the 64 KiB
 buffer, whose first write ends inside a character, and that no replacement
-character reaches the console. A new process group turns Ctrl+C off, so Ctrl+C
-is not sent; libuv reports both events through one console handler
+character reaches the console. A new process group turns Ctrl+C off, so these
+cases send Ctrl+Break; libuv reports both events through one console handler
 (`uv_signal_t`).
+
+Ctrl+C itself is tested by `test_vm_stop.py` (Ctrl+C through the CLI): the CLI
+runs in a pseudo console and the test types the character 3 into it
+(`run_on_console` of `tests/windows_console_support.py`), which sends
+`CTRL_C_EVENT` to the CLI, the VM and a Python child that ignores it. The
+helper turns Ctrl+C on in the test process first, because a run started from a
+new process group (a service, some job runners) hands "ignore Ctrl+C" to every
+child. `test_vm_diff_8.py` (a stop that arrives while the VM waits for its last
+child) uses Ctrl+Break and a Python child.
 
 `tests/test_windows_handle_counts.py` also needs native Windows (named pipes and
 `GetProcessHandleCount`), so it runs on the Windows job and Wine skips it.
