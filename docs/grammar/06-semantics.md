@@ -105,13 +105,10 @@ The first assignment introduces a variable in the current scope, and an
 annotation is allowed only there. Later assignments change its value, not its
 type. Each function and control block is a lexical scope. An assignment without
 annotation updates a visible variable of that name, or else introduces a local
-in the current block. A new name cannot shadow a visible one. One name means one
-variable in a scope:
-`x = ...` without an annotation updates the visible variable or creates a new
-one, and a block captures by value, so a shadowed name would make it unclear
-which `x` the block captured. The rule also keeps diagnostics clear. Parameters
-and the `for` variable are initialized bindings; the `for` variable cannot be
-reassigned. Variables created in a block are not visible after its `end`.
+in the current block. A new name cannot shadow a visible one, so one name means
+one variable in a scope. Parameters and the `for` variable are initialized
+bindings; the `for` variable cannot be reassigned. Variables created in a block
+are not visible after its `end`.
 
 `_` is a discard wherever a name is bound: an assignment target (`_ = f()`), a
 `for` variable, a block or function parameter and a pattern slot. It binds
@@ -384,7 +381,7 @@ for i in 0...3 do
 end
 ```
 
-- `for x in range` yields each `Int` in order, without a list. An end before the
+- `for x in range` yields each `Int` in order. An end before the
   start is empty, and there is no reverse iteration. Iterating up to the largest
   `Int` does not overflow. Each iteration costs one step plus its body. The
   range is evaluated once.

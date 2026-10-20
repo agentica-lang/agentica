@@ -4,8 +4,7 @@ weight: 2
 description: Test programs with Gherkin feature files and the agentica test command.
 ---
 
-`agentica test` runs `.feature` files written in Gherkin. Each scenario starts
-your program as a separate process, sends it input and checks its output.
+`agentica test` runs `.feature` files written in Gherkin. Each scenario starts your program as a separate process, sends it input and checks its output.
 
 ## A first feature
 
@@ -44,19 +43,15 @@ Run it:
 agentica test specs/
 ```
 
-The exit code is `0` when every scenario passes, `1` when one fails, and `2`
-when the tests could not run. `--ai` and `--json` change the report format.
-`--seed N` makes `Random` repeat in steps and programs. A program under test
-can start other programs only with `agentica test --allow-run`.
+The exit code is `0` when every scenario passes, `1` when one fails, and `2` when the tests could not run. `--ai` and `--json` change the report format. `--seed N` makes `Random` repeat in steps and programs. A program under test can start other programs only with `agentica test --allow-run`.
 
-`agentica test` also runs `*_test.agc` unit test files ([Test](/library/testing/test/)) in the same report. With no paths it searches `specs/` and `test/`. `--only TEXT` keeps the scenarios and tests whose name contains `TEXT`. Without `--seed`, the runner draws one seed and every step program and program under test shares it; the report shows it when the run fails.
-`agentica test` refuses a shared temporary directory without the sticky bit
-(exit `2`); set `TMPDIR` to a private folder.
+`agentica test` also runs `*_test.agc` unit test files ([Test](/library/testing/test/)) in the same report. With no paths it searches `specs/` and `test/`. `--only TEXT` keeps the scenarios and tests whose name contains `TEXT`. Without `--seed`, the runner draws one seed, shared by every step program and program under test; the report shows it when the run fails.
+
+`agentica test` refuses a shared temporary directory without the sticky bit (exit `2`). Set `TMPDIR` to a private folder.
 
 ## Built-in steps
 
-These steps work without any code. `{string}` is text in double quotes and
-`{int}` is a whole number.
+These steps work without any code. `{string}` is text in double quotes and `{int}` is a whole number.
 
 | Step | Does |
 |---|---|
@@ -72,15 +67,11 @@ These steps work without any code. `{string}` is text in double quotes and
 | `the program exits with code {int} within {int} milliseconds` | waits for the exit code |
 | `stdout is:` / `stderr is:` | after the program ends, compares the stdout that no line step has read yet, or all of stderr |
 
-`Given`, `When`, `Then`, `And` and `But` all match the same steps.
-`Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and
-Data Tables are supported.
+`Given`, `When`, `Then`, `And` and `But` all match the same steps. `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and Data Tables are supported.
 
 ## Your own steps
 
-Write steps in Agentica, in a step program: a program whose `main` builds a
-list of steps with `BDD.step` and passes it to `BDD.run`. Load it with
-`--steps`:
+Write steps in Agentica, in a step program: a program whose `main` builds a list of steps with `BDD.step` and passes it to `BDD.run`. Load it with `--steps`:
 
 ```sh
 agentica test specs/ --steps steps.agc
@@ -114,19 +105,11 @@ Feature: Memory
     Then the count is 3
 ```
 
-A step gets the context of its scenario, `ctx`, and returns it. Most `BDD` calls take the context first and return it: keep the one they return. `BDD.doc_string`, `BDD.table` and `BDD.get` take it and return their value. The next step of the scenario gets the context the step returned.
+A step gets the context of its scenario, `ctx`, and returns it. Most `BDD` calls take the context and return it: keep the one they return. `BDD.doc_string`, `BDD.table` and `BDD.get` take it and return their value. The next step of the scenario gets the context the step returned. Every `Then` step must make at least one check with a `BDD` function.
 
-Every `Then` step must make at least one check with a `BDD` function.
+Each scenario runs in its own process, so a step that crashes, calls `System.exit` or loops forever fails only its scenario. A step must finish the tasks it starts before it returns (`RUNTIME-BDD-PENDING-TASKS`); a crash that nothing awaited fails the step with `RUNTIME-TASK-CRASHED`. `main` runs again for each scenario, so it should only build the list of steps and call `BDD.run`. Run on its own, a step program prints how to run it and exits with code 2.
 
-Each scenario runs in its own process, so a step that crashes, calls
-`System.exit` or loops forever fails only its scenario. Tasks a step starts
-must end before it returns (`RUNTIME-BDD-PENDING-TASKS`), and a task that
-crashed without being awaited fails the step with `RUNTIME-TASK-CRASHED`. `main` runs again for
-each scenario: it should only build the list of steps and call `BDD.run`.
-Run on its own, a step program only prints how to run it and exits with
-code 2. Steps can import other files and start other programs with
-`Process.spawn`.
-A step's standard input is empty, so `IO.gets` returns the end-of-input error, and what a step prints is only output: the runner talks to the step program on a channel of its own. A step must not call `Process.parent_read_line` or `Process.parent_send`, which belong to the runner's protocol.
+A step may import files and start programs with `Process.spawn`. Its standard input is empty, so `IO.gets` returns the end-of-input error, and what it prints is only output. It must not call `Process.parent_read_line` or `Process.parent_send`: they belong to the runner's protocol.
 
 ## BDD.step and BDD.run
 
@@ -135,9 +118,7 @@ BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -
 BDD.run(steps: List[BDD.Step]) -> Void
 ```
 
-`BDD.step` makes a step. The handler gets the context and the `{string}`
-and `{int}` captures as strings, in order. A block works too, and it can use
-the variables around it:
+`BDD.step` makes a step. The handler gets the context and the `{string}` and `{int}` captures as strings, in order. A block works too, and it can use the variables around it:
 
 ```agentica {mode="check"}
 import BDD from "std/bdd"
@@ -152,8 +133,7 @@ def main() -> Void
 end
 ```
 
-`BDD.run` adds the built-in steps in front of the list and runs the steps
-that `agentica test` asks for. It never returns.
+`BDD.run` adds the built-in steps in front of the list and runs the steps that `agentica test` asks for. It never returns.
 
 ## BDD.assert
 
@@ -170,9 +150,7 @@ BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
 BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
 ```
 
-Keep JSON values between the steps of one scenario. `BDD.set` returns the
-context with the value; each scenario starts empty, and a missing name gives
-an error Result.
+Keep JSON values between the steps of one scenario. Each scenario starts empty. `BDD.get` gives an error Result for a missing name.
 
 ## BDD.doc_string and BDD.table
 
@@ -218,9 +196,7 @@ BDD.then_stdout(ctx: BDD.Context, expected: String) -> BDD.Context
 BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
-These do what the built-in steps do, so your own steps can combine them.
-`BDD.given_program` returns the context that holds the program: pass that one
-on.
+These do what the built-in steps do, so your own steps can combine them. `BDD.given_program` returns the context that holds the program: pass that one on.
 
 ```agentica {mode="check"}
 import BDD from "std/bdd"
@@ -243,13 +219,10 @@ def main() -> Void
 end
 ```
 
-`stdout is:` compares the output that no line step has read yet. Output is
-kept up to 1 MiB on each stream.
+`stdout is:` compares the output that no line step has read yet. Output is kept up to 1 MiB on each stream.
 
-A failed `then_*` check compares with `Test.eq` and reports `expected` and `actual` as `Test.eq` does, in the inspect form: a line or output in quotes, an exit code as a number, a JSON line as its canonical text (sorted keys). The text report prints them as they are; an undefined or ambiguous step's `actual` is the step text in quotes. A text longer than 64 Ki characters is cut there and ends with `...` and the number of characters left out. A front-end error of the step program keeps its own `expected` and `actual`, the raw type names (`Int`, `String`), so in `--json` their form depends on the code.
+A failed `then_*` check reports `expected` and `actual` as `Test.eq` does, in the inspect form: a line or output in quotes, an exit code as a number, a JSON line as its sorted-key text. An undefined or ambiguous step's `actual` is the step text in quotes. A text over 64 Ki characters is cut and ends with `...` and the count of the characters left out. A front-end error of the step program keeps the raw type names (`Int`, `String`) as `expected` and `actual`, so in `--json` their form depends on the code.
 
 ## Running tests from a program
 
-There is no function that runs features from a program. Start
-`agentica test --json` with `Process.spawn` (it needs `--allow-run`) and read
-the report it prints.
+There is no function that runs features from a program. Start `agentica test --json` with `Process.spawn` (it needs `--allow-run`) and read the report it prints.
