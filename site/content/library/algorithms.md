@@ -118,24 +118,32 @@ end
 
 ## Recursion
 
-A recursive function calls itself on a smaller input and stops at a base case.
+A recursive function calls itself on a smaller input and stops at a base case. A recursive enum, such as a tree, is walked the same way.
 
 ```agentica
+# A tree is a leaf with a number, or a node with more trees inside.
+enum Tree
+  Leaf(Int)
+  Node(List[Tree])
+end
+
 def factorial(n: Int) -> Int
   if n <= 1
-    return 1
+    return 1                                   # base case
   end
   return n * factorial(n - 1)
 end
 
-def flatten(groups: List[List[Int]]) -> List[Int]
-  result: List[Int] = []
-  for group in groups
-    result = result.concat(group)
+# Every leaf of the tree, left to right: a node flattens each child.
+def flatten(tree: Tree) -> List[Int]
+  case tree
+    Tree.Leaf(value) -> return [value]
+    Tree.Node(children) ->
+      return children.reduce([]) do |all, child| all.concat(flatten(child)) end
   end
-  return result
 end
 
+# Moves needed for n disks: move n - 1 aside, move one, move n - 1 back on top.
 def hanoi(n: Int, from: String, to: String, via: String) -> Int
   if n == 0
     return 0
@@ -145,13 +153,14 @@ end
 
 def main() -> Void
   puts(factorial(10))
-  puts(flatten([[1, 2], [3], [4, 5]]))
+  tree = Tree.Node([Tree.Leaf(1), Tree.Node([Tree.Leaf(2), Tree.Leaf(3)]), Tree.Leaf(4)])
+  puts(flatten(tree))
   puts(hanoi(5, "a", "c", "b"))
 end
 ```
 
 ```output
 3628800
-[1, 2, 3, 4, 5]
+[1, 2, 3, 4]
 31
 ```
