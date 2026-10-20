@@ -98,17 +98,17 @@ class Workspace:
         for name, data in BINARY_FILES.items():
             (self.work / name).write_bytes(data)
 
-    def plain(self, text):
+    def plain(self, text, escapes=True):
         # On Windows the folder is typed with backslashes in the arguments and printed with slashes by the binary, or
         # with doubled backslashes in a JSON string; each spelling becomes <work> and the rest of the path has slashes.
         if sys.platform == "win32":
-            text = relocate_windows(text, PureWindowsPath(self.work), "<work>")
+            text = relocate_windows(text, PureWindowsPath(self.work), "<work>", escapes)
         else:
             text = text.replace(str(self.work), "<work>")
         return text.replace(agentica_version(), "<version>")
 
     def key(self, arguments, options):
-        return json.dumps([[self.plain(str(argument)) for argument in arguments], options], sort_keys=True)
+        return json.dumps([[self.plain(str(argument), escapes=False) for argument in arguments], options], sort_keys=True)
 
     def observe(self, arguments, stdin="", cwd=None, outputs=()):
         """What the binary does for the arguments: exit code, stdout, stderr, and which of `outputs` it wrote.

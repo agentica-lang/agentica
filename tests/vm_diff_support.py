@@ -184,16 +184,18 @@ def relocate(text, folder, token):
     return relocate_windows(text, PureWindowsPath(folder), token)
 
 
-def relocate_windows(text, folder, token):
+def relocate_windows(text, folder, token, escapes=True):
     """The same for a Windows folder. The VM prints a path the way it was typed (backslashes, doubled in JSON and in an
     inspected string) and the stored names of a program with slashes, so one path shows the folder in several
     spellings and a tail that mixes both separators. Each spelling of the folder becomes the token, and the rest of
-    that path is written with slashes. A backslash before n, r, t, u, a quote or another backslash is an escape of
-    the printed text, not a separator, so it ends the path (no fixture names a folder with one of those letters)."""
+    that path is written with slashes. In printed text (escapes=True) a backslash before n, r, u, a quote or another
+    backslash is an escape, not a separator, so it ends the path (no fixture names a folder with one of those
+    letters); the text of an argument list has no escapes (escapes=False)."""
     native = str(folder)
     forms = sorted({native, native.replace("\\", "\\\\"), folder.as_posix()}, key=len, reverse=True)
     name = r"[^\s\"':,<>|\\/]"
-    tail = r"((?:/" + name + r"*|\\{1,2}(?![ntru\"\\])" + name + r"+)*)"
+    guard = r"(?![nru\"\\])" if escapes else ""
+    tail = r"((?:/" + name + r"*|\\{1,2}" + guard + name + r"+)*)"
     pattern = re.compile("(?:" + "|".join(re.escape(form) for form in forms) + ")" + tail)
     return pattern.sub(lambda found: token + found.group(1).replace("\\\\", "/").replace("\\", "/"), text)
 
@@ -505,6 +507,8 @@ HOST_ONLY_FIXTURES = {
     "files-errors.agc": {"darwin": _MACOS_PATHS, "windows": _WINDOWS_PATHS},
     "files-private.agc": {"windows": _WINDOWS_PATHS},
     "files-paths.agc": {"windows": _WINDOWS_PATHS},
+    "file-each-line-stop.agc": {"windows": "the program counts the entries of a folder of open descriptors, which "
+                                           "Windows does not have"},
     "system-env.agc": {"windows": "Windows environment variable names are not case sensitive"},
     "process-limits.agc": {"windows": "the program runs /bin/sh, which Windows does not have (test_process_windows.py)"},
     "process-captured-basic.agc": {"windows": "the program runs /bin/pwd (test_process_windows.py)"},

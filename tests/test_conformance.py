@@ -99,3 +99,7 @@ def test_the_golden_paths_of_windows_come_back_as_tokens_in_every_spelling_the_v
     # The escapes of a printed message end the path: "\\n" is a newline, not a folder named n.
     printed = 'path: D:/a/_temp/fixtures/missing\\n  system error D:\\a\\_temp\\fixtures/x\\\\n'
     assert relocate_windows(printed, folder, "@fixtures") == 'path: @fixtures/missing\\n  system error @fixtures/x\\\\n'
+    # An argument has no escapes, so a folder named after one is a separator there.
+    assert relocate_windows("D:\\a\\_temp\\fixtures\\tab.agc", folder, "@f", escapes=False) == "@f/tab.agc"
+    assert relocate_windows("D:\\a\\_temp\\fixtures\\new.agc", folder, "@f", escapes=False) == "@f/new.agc"
+    assert relocate_windows("D:\\\\a\\\\_temp\\\\fixtures\\\\tab.agc", folder, "@f") == "@f/tab.agc"
