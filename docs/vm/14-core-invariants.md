@@ -140,18 +140,32 @@ job's completion and a crash also unlink a task, but they end a wait; they do
 not cancel one. `unlink_task` takes a cancelled task out of every wait,
 its timer included (`agc_timers_disarm`).
 
+A task cancelled from another scheduler finishes its turn first (§10.2.3), after
+the cancel walk over its descendants. A task it spawns in that turn starts
+cancelled: the spawn reads the flag of the parent (or of the task that owns the
+groups above it) under `rt->sync`, which the walk holds too, and ends the child
+before it runs (`spawn_child` in `vm/task.c`, #392). A handle handed to the
+child is moved first, so the child's end closes it. Cancel reaches every
+descendant.
+
 A cancelled job is detached (`agc_io_detach`). A loop job is stopped by its
-`cancel` half. A pool job runs to its end, which §14.1 keeps bounded except for
-its explicit stdin exceptions. A pool job that goes on to wait on the loop
-(`agc_io_start_then`, a whole-file call on a
-FIFO) is cancelled only in that loop phase: `cancellable` in `vm/loop.c` calls
-the `cancel` half only for a job with no `work`, or one past it (`on_loop`). A
-pool kind with a `cancel` half that is started with no `more` step is
-`RUNTIME-INTERNAL` when it starts (`start_job`), never later in a cancel.
-`vm/tests/task_cancel_test.c` covers both phases. A task parked in the FIFO of
-stdout or stderr leaves it (`agc_output_leave`, called from `unlink_task`), and
-the next writer is woken if its text now fits; the test cancels the head of a
-full buffer's FIFO.
+`cancel` half. A wait that has taken nothing yet leaves its queue at once, on
+the I/O thread: a `TCP.accept` leaves the listener's queue and a read leaves the
+reader slot (`request_cancel` in `vm/tcp.c`, #403), as an HTTP server's waiter
+does (`waiter_cancel`). The next connection then goes to a live accept, and the
+bytes stay in the input for the next read, whose reader lock the job's end hands
+on. A wait that has taken something keeps its result: its `done` half runs and
+the result is dropped, so a served accept's socket is closed. A pool job runs to
+its end, which §14.1 keeps bounded except for its explicit stdin exceptions. A
+pool job that goes on to wait on the loop (`agc_io_start_then`, a whole-file
+call on a FIFO) is cancelled only in that loop phase: `cancellable` in
+`vm/loop.c` calls the `cancel` half only for a job with no `work`, or one past
+it (`on_loop`). A pool kind with a `cancel` half that is started with no `more`
+step is `RUNTIME-INTERNAL` when it starts (`start_job`), never later in a
+cancel. `vm/tests/task_cancel_test.c` covers both phases. A task parked in the
+FIFO of stdout or stderr leaves it (`agc_output_leave`, called from
+`unlink_task`), and the next writer is woken if its text now fits; the test
+cancels the head of a full buffer's FIFO.
 
 ### 14.4 Ending
 

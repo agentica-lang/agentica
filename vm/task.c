@@ -801,8 +801,19 @@ agc_outcome agc_vm_run(agc_vm *vm) {
   return vm->rt->outcome;
 }
 
-agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
-                            uint32_t span) {
+/* Whether a task made under PARENT would escape a cancel: PARENT, or the task that owns the groups above it, is
+   cancelled. Such a task is still finishing its last turn on another scheduler (§10.2.3), after the cancel walk
+   over its descendants, so a child it spawns now would be missed by that walk (#392). Read under rt->sync, which
+   the walk holds too: a child adopted before the walk is cancelled by it, one adopted after sees the flag here. */
+static bool cancelled_parent(const agc_task *parent) {
+  for (const agc_task *t = parent; t; t = t->group ? t->parent : NULL)
+    if (atomic_load_explicit(&t->cancelled, memory_order_seq_cst)) return true;
+  return false;
+}
+
+/* HANDED, when not NULL, moves to the child before it can end, so a child that starts cancelled closes it. */
+static agc_task *spawn_child(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                             uint32_t span, agc_resource *handed) {
   agc_task *child = agc_new_task(vm);
   child->input_seen = vm->rt->in.eof_seq;
   child->service = parent->service;
@@ -814,8 +825,21 @@ agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const ag
   agc_task_call(vm, child, fn, args, argc, span);
   adopt(vm, parent, child);
   trace_spawn(vm, child, parent);
-  enqueue(vm, child);
+  if (handed) agc_hand_over(handed, child);
+  if (!cancelled_parent(parent)) {
+    enqueue(vm, child);
+    return child;
+  }
+  /* The child of a cancelled task starts cancelled: it never runs, and Task.await on it reports the cancel. */
+  atomic_store_explicit(&child->cancelled, true, memory_order_seq_cst);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64 " at=spawn", child->id);
+  end_cancelled(vm, child);
   return child;
+}
+
+agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                            uint32_t span) {
+  return spawn_child(vm, parent, fn, args, argc, span, NULL);
 }
 
 agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span) {
@@ -837,12 +861,17 @@ agc_task *agc_task_group(agc_vm *vm) {
   return g;
 }
 
-agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
-                                uint32_t span) {
+static agc_task *spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                              uint32_t span, agc_resource *handed) {
   uint64_t seed = agc_random_next(&vm->task->random);
-  agc_task *child = agc_task_spawn_in(vm, parent, fn, args, argc, span);
+  agc_task *child = spawn_child(vm, parent, fn, args, argc, span, handed);
   agc_random_seed(&child->random, seed);
   return child;
+}
+
+agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                                uint32_t span) {
+  return spawn_seeded(vm, parent, fn, args, argc, span, NULL);
 }
 
 static agc_resource *owned_by_caller(agc_vm *vm, agc_value handle) {
@@ -863,9 +892,7 @@ static agc_resource *claim(agc_vm *vm, agc_value handle, uint32_t span) {
 
 agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
   agc_resource *r = claim(vm, handle, span);
-  agc_task *child = agc_task_spawn_seeded(vm, parent, fn, &handle, 1, span);
-  agc_hand_over(r, child);
-  return child;
+  return spawn_seeded(vm, parent, fn, &handle, 1, span, r);
 }
 
 /* Runs fn(arg) as the owner of handle under a service root, the task tree of an HttpClient (HttpWire.service). The
@@ -881,9 +908,8 @@ agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value
   root->service = true;
   atomic_store_explicit(&root->state, AGC_TASK_PARKED, memory_order_relaxed);
   root->result = agc_void();
-  agc_task *child = agc_task_spawn_in(vm, root, fn, &arg, 1, span);
+  agc_task *child = spawn_child(vm, root, fn, &arg, 1, span, r);
   agc_random_seed(&child->random, child->id);
-  agc_hand_over(r, child);
   return child;
 }
 

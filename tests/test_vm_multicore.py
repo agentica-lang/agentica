@@ -407,14 +407,59 @@ def test_tasks_that_wake_each_other_end_when_cancelled_from_any_scheduler(tmp_pa
     # Pairs of tasks wake each other for ever, so most of the time one of each pair waits in the runnext slot of the
     # scheduler that woke it (§16.9, "Wakes between schedulers"). Task.map cancels eight such pairs at their deadline
     # and a crashing owner cancels three more, from whichever scheduler runs the canceller: every task ends (the pending
-    # count reaches 0) and the run exits normally. The waits have a 2 s deadline because a task cancelled on another
-    # scheduler finishes its turn first: an item that starts only after its deadline (a loaded machine) spawns its echo
-    # after the cancel, and that echo ends at its deadline, not by the cancel.
+    # count reaches 0) and the run exits normally. A task cancelled on another scheduler finishes its turn first, so an
+    # item that starts only after its deadline (a loaded machine) may spawn its echo after the cancel; that echo starts
+    # cancelled (#392). The waits keep a 2 s deadline as a bound.
     bytecode = program(tmp_path, "rallies", RALLIES)
     for _ in range(repeats):
         result = vm(bytecode)
         assert (result.code, result.stdout) == (0, "8\ncrashed\n0\n")
         assert result.stderr.count("RUNTIME-DIVISION-BY-ZERO") == 1
+
+
+SPAWNS_AFTER_CANCEL = """\
+def sleeper(k: Int) -> Int
+  Task.sleep(30000)
+  return k
+end
+
+def spawner(k: Int) -> Result[Int]
+  n = 0
+  while n >= 0
+    i = 0
+    while i < 150
+      i += 1
+    end
+    Task.spawn(&sleeper, n)
+    n += 1
+  end
+  return ok(n)
+end
+
+def main() -> Void
+  IO.inspect(Task.map([1, 2, 3], 3, 20, &spawner))
+  tries = 0
+  while Task.pending_count() > 0 && tries < 300
+    Task.sleep(10)
+    tries += 1
+  end
+  puts(Task.pending_count())
+end
+"""
+
+
+@RACE
+def test_a_task_cancelled_on_another_scheduler_spawns_only_cancelled_children(tmp_path, repeats):
+    # Three items spawn a sleeper every few hundred steps, so they run nearly all the time (few children wait ahead of
+    # them in the queue), and when Task.map cancels them at their 20 ms deadline one is almost always in a turn on another
+    # scheduler, which it finishes before the cancel takes effect (§10.2.3). The sleepers spawned in that last turn,
+    # after the cancel walk over the item's children, start cancelled (#392): no task is left. Before, they slept their
+    # 30 s and the pending count stayed above 0 (the race was hit in 20 of 20 traced runs).
+    bytecode = program(tmp_path, "spawns_after_cancel", SPAWNS_AFTER_CANCEL)
+    for _ in range(repeats):
+        result = vm(bytecode)
+        timed_out = ", ".join(['error("task: timed out")'] * 3)
+        assert (result.code, result.stdout) == (0, "[%s]\n0\n" % timed_out), result.stderr
 
 
 CRASH = """\
