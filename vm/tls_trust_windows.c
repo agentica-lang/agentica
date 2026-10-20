@@ -1,8 +1,10 @@
 /*
  * The system trust store on Windows, read with Crypt32: the certificates of
  * the current user's Disallowed store, added as rejected, then those of the
- * ROOT store (both views include the machine's stores) whose valid uses
- * include server authentication. Platform adapter behind tls_trust.h.
+ * ROOT store whose valid uses include server authentication, then those of
+ * the CA store (intermediates) valid for it, added as chain certificates
+ * only, as CPython's ssl.load_default_certs reads ROOT and CA. Every view
+ * includes the machine's stores. Platform adapter behind tls_trust.h.
  */
 #include "tls_trust.h"
 
@@ -12,6 +14,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* How copy_store adds the certificates of one store. */
+typedef enum { COPY_REJECTED, COPY_ROOT, COPY_INTERMEDIATE } copy_kind;
 
 /* CertGetEnhancedKeyUsage with no flags combines the EKU extension and the EKU property. An empty list means every
  * use when the last error is CRYPT_E_NOT_FOUND, and no use when it is 0 (Microsoft Learn, CertGetEnhancedKeyUsage),
@@ -34,26 +39,33 @@ bool agc_tls_trust_server_auth(PCCERT_CONTEXT cert) {
 
 /* Copies one Crypt32 store. Each CertEnumCertificatesInStore call frees the context passed in and returns the next;
  * the loop ends on NULL, so nothing is left to free (Microsoft Learn, CertEnumCertificatesInStore). */
-static void copy_store(struct x509_store_st *store, HCERTSTORE from, bool rejected) {
+static void copy_store(struct x509_store_st *store, HCERTSTORE from, copy_kind kind) {
   if (!from) return;
   PCCERT_CONTEXT cert = NULL;
   while ((cert = CertEnumCertificatesInStore(from, cert)) != NULL) {
-    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || (!rejected && !agc_tls_trust_server_auth(cert)))
+    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || (kind != COPY_REJECTED && !agc_tls_trust_server_auth(cert)))
       continue;
-    (void)agc_tls_trust_add_der(store, cert->pbCertEncoded, cert->cbCertEncoded, rejected);
+    if (kind == COPY_INTERMEDIATE)
+      (void)agc_tls_trust_add_intermediate_der(store, cert->pbCertEncoded, cert->cbCertEncoded);
+    else
+      (void)agc_tls_trust_add_der(store, cert->pbCertEncoded, cert->cbCertEncoded, kind == COPY_REJECTED);
   }
 }
 
-/* Disallowed first: the store keeps the first copy of a certificate, so a distrusted root stays rejected. */
-void agc_tls_trust_copy_stores(struct x509_store_st *store, void *disallowed, void *root) {
-  copy_store(store, disallowed, true);
-  copy_store(store, root, false);
+/* Disallowed first: the store keeps the first copy of a certificate, so a distrusted root or intermediate stays
+ * rejected. CA last: an intermediate only helps build a chain to a root of ROOT. */
+void agc_tls_trust_copy_stores(struct x509_store_st *store, void *disallowed, void *root, void *ca) {
+  copy_store(store, disallowed, COPY_REJECTED);
+  copy_store(store, root, COPY_ROOT);
+  copy_store(store, ca, COPY_INTERMEDIATE);
 }
 
 void agc_tls_trust_load(struct x509_store_st *store) {
-  HCERTSTORE disallowed = CertOpenSystemStoreW(0, L"Disallowed"), root = CertOpenSystemStoreW(0, L"ROOT");
-  agc_tls_trust_copy_stores(store, disallowed, root);
+  HCERTSTORE disallowed = CertOpenSystemStoreW(0, L"Disallowed"), root = CertOpenSystemStoreW(0, L"ROOT"),
+             ca = CertOpenSystemStoreW(0, L"CA");
+  agc_tls_trust_copy_stores(store, disallowed, root, ca);
   if (disallowed) CertCloseStore(disallowed, 0);
   if (root) CertCloseStore(root, 0);
+  if (ca) CertCloseStore(ca, 0);
 }
 #endif

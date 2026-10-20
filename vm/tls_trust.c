@@ -12,6 +12,7 @@
 #include <openssl/objects.h>
 #include <openssl/x509.h>
 #include <openssl/x509_vfy.h>
+#include <openssl/x509v3.h>
 
 /* The process-wide copy of the platform store: written once by load_system under system_once, read-only after.
  * Its X509 objects are shared by every store (reference counted, never changed after loading). Never freed. The
@@ -66,15 +67,37 @@ int agc_tls_trust_verify(int ok, struct x509_store_ctx_st *ctx) {
   return 0;
 }
 
+/* One DER certificate, exactly `len` bytes with nothing after it, or NULL. */
+static X509 *parse_der(const unsigned char *der, size_t len) {
+  if (len > LONG_MAX) return NULL;
+  const unsigned char *p = der;
+  X509 *x = d2i_X509(NULL, &p, (long)len);
+  if (x && p != der + len) {
+    X509_free(x);
+    x = NULL;
+  }
+  return x;
+}
+
 /* OpenSSL's check_trust (crypto/x509/x509_vfy.c) asks X509_check_trust of each chain certificate that came from the
  * store; for the SSL server trust id, an explicit reject of serverAuth answers X509_TRUST_REJECTED
  * (obj_trust in crypto/x509/x509_trust.c), and the chain fails with X509_V_ERR_CERT_REJECTED. */
 bool agc_tls_trust_add_der(struct x509_store_st *store, const unsigned char *der, size_t len, bool rejected) {
-  if (len > LONG_MAX) return false;
-  const unsigned char *p = der;
-  X509 *x = d2i_X509(NULL, &p, (long)len);
-  bool ok = x && p == der + len && (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
+  X509 *x = parse_der(der, len);
+  bool ok = x && (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
             X509_STORE_add_cert(store, x) == 1;
+  X509_free(x);
+  ERR_clear_error();
+  return ok;
+}
+
+/* A store certificate with no trust settings is an anchor only when it is self-signed (trust_compat in
+ * crypto/x509/x509_trust.c); X509_V_FLAG_PARTIAL_CHAIN stays off, so any other one only helps build a chain that
+ * must still end at a root. EXFLAG_SI (subject equals issuer) covers every certificate OpenSSL calls self-signed,
+ * so refusing it keeps an intermediate store from adding an anchor. */
+bool agc_tls_trust_add_intermediate_der(struct x509_store_st *store, const unsigned char *der, size_t len) {
+  X509 *x = parse_der(der, len);
+  bool ok = x && !(X509_get_extension_flags(x) & EXFLAG_SI) && X509_STORE_add_cert(store, x) == 1;
   X509_free(x);
   ERR_clear_error();
   return ok;
