@@ -146,9 +146,9 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 40
   - Title: Native code and FFI
   - File: [`40-native-code.md`](40-native-code.md)
-  - Status: Decided by the owner on 2026-10-15: the FFI before the JIT
-    (row 9.1), after the bootstrap; AOT last, only if measurements ask for
-    it
+  - Status: Decided by the owner on 2026-10-20: packages (§45), then the FFI,
+    then the JIT (row 9.1), then AOT only if measurements ask for it. This
+    replaces the 2026-10-15 order (the FFI before the JIT)
 
 - §: 41
   - Title: Dates and times
@@ -171,7 +171,8 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 45
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)
-  - Status: Design, not scheduled; decided by the owner on 2026-10-15:
+  - Status: Design, not scheduled; before the FFI (§40) by the owner's decision
+    of 2026-10-20; decided by the owner on 2026-10-15:
     `std/toml` first (45-0, may land before the bootstrap), TOML manifest and
     lock, `Toml.Value` decode, `owner/repo` imports; the manager waits for after
     the bootstrap (port step 8); asked by the owner on 2026-10-15

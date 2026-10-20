@@ -1,8 +1,10 @@
 ## 45. Packages
 
-**Status:** Design, not scheduled: the code waits until after the bootstrap
-(port step 8), except 45-0 (`std/toml`), which may land before it. Asked by the
-owner on 2026-10-15 ("Shall we plan this?").
+**Status:** Design, not scheduled. Decided by the owner on 2026-10-20: the
+package system comes before the FFI (§40), so native packages come after it
+(45.10). The code waits until after the bootstrap (port step 8), except 45-0
+(`std/toml`), which may land before it. Asked by the owner on 2026-10-15 ("Shall
+we plan this?").
 
 Decided by the owner on 2026-10-15:
 
@@ -448,6 +450,11 @@ when the error is a TOML syntax error. AGENTS.md says codes carry a span, so
 needs native code, and the VM cannot load native code today: there is no FFI.
 §40 is planned, and its FFI is a sketch (§40.3a). This design covers pure
 Agentica packages only.
+
+The order is: the package manager first, then the FFI (§40.5), then native
+packages. Packages are the distribution channel for native libraries. A program
+that needs a C, C++ or Rust library gets it as a package, and loading it still
+needs `--allow-native` (§40.4). The one-binary goal stays for simple programs.
 
 A native package is a separate topic, after §40. It needs more than an FFI. It
 needs the trust flag of §40.4, and it needs either a build step or prebuilt

@@ -78,7 +78,7 @@ lifetime".
 The port followed the order of [`docs/roadmap/README.md`](../roadmap/README.md);
 its steps are PRs, not rows of that table. What is left is the post-bootstrap
 work listed there: the parser pass of the speed targets, `agentica doc`, the
-FFI and the JIT path.
+package system (§45), the FFI (§40) and the JIT path.
 
 ### 18.7 Tests
 

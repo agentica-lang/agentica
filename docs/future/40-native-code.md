@@ -1,9 +1,11 @@
 ## 40. Native code and FFI
 
-**Status:** decided by the owner on 2026-10-15: the FFI before the JIT, after
-the bootstrap (40.5). The owner raised the idea on 2026-10-14: "something like
-Cython, but for Agentica", and "FFI will be needed to use interesting things
-already done in C/C++/Rust". Nothing here is built yet.
+**Status:** decided by the owner on 2026-10-20: the package system (§45), then
+the FFI, then the JIT, then AOT if measurements ask for it (40.5). This replaces
+the order of 2026-10-15 ("the FFI before the JIT, right after the bootstrap").
+The owner raised the idea on 2026-10-14: "something like Cython, but for
+Agentica", and "FFI will be needed to use interesting things already done in
+C/C++/Rust". Nothing here is built yet.
 
 ### 40.1 Goal
 
@@ -53,6 +55,12 @@ bounded work ([`14-core-invariants.md`](../vm/14-core-invariants.md) §14.1), so
 a call that may wait for a long time cannot go there. Long-lived native work
 needs its own thread with a cancel exit. Calls that need their own event loop
 are out of scope at first.
+
+The first FFI has no generator: native code is written by hand against the C
+API header (40.3.1). Two layers come later. A thin `extern` layer generates the
+C glue for simple signatures (Int, Float, Bool, String and `Bytes`, with no raw
+pointers). A generator that reads C headers, as cgo or bindgen do, may come much
+later, as an optional tool. The Cython-style dialect stays rejected (40.2).
 
 **b. The JIT** ([section 22](22-jit.md), roadmap 9.1, already required). Hot
 functions become native code and give the same results. There is no language
@@ -136,9 +144,12 @@ only, immutable inputs, new values through the API, and no GC pointer in
   break memory. So native code needs an explicit flag, such as `--allow-native`,
   as `--allow-run` does for processes
   ([`10-io-processes.md`](../vm/10-io-processes.md)).
-- **Distribution.** Shared libraries conflict with the one-binary goal of
-  [§18](18-front-end-language.md). Either link native modules statically into
-  the binary at build time, or load `.so` files only when the flag is set.
+- **Distribution.** The one-binary goal of [§18](18-front-end-language.md) is
+  for simple programs. A program that needs native C, C++ or Rust libraries may
+  ship or load them, and that is acceptable. The package system
+  ([§45](45-packages.md)) is how such libraries get distributed and installed.
+  Loading still needs `--allow-native`. Open: link native modules statically
+  into the binary at build time, or load `.so` files only when the flag is set.
 - **Multicore.** If more schedulers come
   ([`16-architecture.md`](../vm/16-architecture.md)), the C API must follow its
   rules. The C API is also a new part of the core, so it must pass the entry
@@ -165,16 +176,18 @@ only, immutable inputs, new values through the API, and no GC pointer in
 
 ### 40.5 Order
 
-The owner decided this order on 2026-10-15. It changes the earlier rule, "the
-JIT first": the FFI now comes before the JIT.
+The owner decided this order on 2026-10-20. This replaces the order of
+2026-10-15 ("the FFI before the JIT, right after the bootstrap").
 
-1. The FFI with the native module header (40.3a, 40.3.1), after the bootstrap
+1. The package manager ([§45](45-packages.md)). Native packages come after the
+   FFI (45.10). Packages are how native libraries get installed.
+2. The FFI with the native module header (40.3a, 40.3.1), after the bootstrap
    and the post-bootstrap list of
    [`docs/roadmap/README.md`](../roadmap/README.md). Its first native module is
    chosen when a concrete library asks for it, such as SQLite or a compression
    library.
-2. The JIT (40.3b, roadmap row 9.1). Then measure.
-3. AOT last, and only if measurements ask for it (40.3c).
+3. The JIT (40.3b, roadmap row 9.1). Then measure.
+4. AOT last, and only if measurements ask for it (40.3c).
 
 The roadmap rule "std first, C later"
 ([roadmap](../roadmap/README.md#new-library-features-std-first))
