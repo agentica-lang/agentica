@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (RUN_TIMEOUT, TESTS, WINDOWS, Child, cli, compile_agc, host_only, process_alive, scaled,
+from tests.agentica_test import (RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only, process_alive, scaled,
                                  vm_binary, vm_command, vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
@@ -200,7 +200,7 @@ def test_a_bytecode_file_may_have_a_non_ascii_name_and_a_bad_one_is_rejected(tmp
     assert rejected[2].startswith("agentica run: invalid bytecode: "), rejected[2]
 
 
-@windows_gap(434, "the private input of --driver-pid has no Windows test (test_platform_bootstrap.py checks only that the flag names the parent)")
+@host_only(WINDOWS, "chmod 600 and 644 and a symbolic link decide what is private; Windows has an access list for the owner only (test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_it in test_windows_process_cleanup.py checks it)")
 def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_it(tmp_path):
     bytecode = fixture_bytecode(tmp_path, "calls")
     copy = tmp_path / "driver-copy.agcb"
@@ -292,7 +292,7 @@ def test_a_program_that_is_stopped_by_sigterm_kills_the_vms_running_children(ado
     assert gone(pid), pid
 
 
-@windows_gap(434, "grandchild cleanup after close has no Windows test (test_process_windows.py checks only the raw status of the closed child)")
+@host_only(WINDOWS, "/bin/sh and SIGTERM, which lets a VM child stop its own children; Windows ends the child with TerminateProcess and its job object ends the rest (test_closing_a_captured_vm_child_ends_the_child_and_its_own_child in test_windows_process_cleanup.py checks the tree)")
 def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_own_children(request, tmp_path):
     inner = compile_program(
         tmp_path, "captured-inner",
@@ -319,7 +319,7 @@ def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_
             assert gone(pid), "%s: %s" % (mode, pid)
 
 
-@windows_gap(434, "close never waiting and the SIGKILL escalation have no Windows test")
+@host_only(WINDOWS, "a shell that traps SIGTERM and the SIGKILL a second later; Windows has only TerminateProcess (test_close_never_waits_for_a_captured_child_and_one_that_ignores_the_console_signals_is_killed in test_windows_process_cleanup.py checks the close)")
 def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_gets_sigkill_a_second_later(
         request, tmp_path):
     bytecode = compile_program(
@@ -350,16 +350,24 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_get
             assert re.search(r" io end code=0 signal=0", result[2]), mode
 
 
-@windows_gap(434, "the output timeout and invalid UTF-8 output of a captured child have no Windows test")
+# The child writes the byte 0xFF to stderr at once and "hi\n" to stdout a second later. Windows has no /bin/sh: a Python
+# child writes the same bytes (without the newline translation of its text streams).
+SHELL_OUTPUT_CHILD = ["/bin/sh", "-c", "printf '\\377' >&2; sleep 1; echo hi"]
+PYTHON_OUTPUT_CHILD = [sys.executable, "-c", "import sys,time;sys.stderr.buffer.write(bytes([255]));sys.stderr.flush();"
+                       "time.sleep(1);sys.stdout.buffer.write(b'hi\\n');sys.stdout.flush()"]
+
+
+@pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which starts neither /bin/sh nor a Linux Python")
 def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_utf8_as_ufffd(tmp_path):
     bytecode = compile_program(
         tmp_path, "captured-output",
-        "def main() -> Void\n"
-        "  p = Result.unwrap!(Process.spawn_captured(\"/bin/sh\", [\"-c\", \"printf '\\\\377' >&2; sleep 1; echo hi\"],"
-        " \".\", 60000))\n  IO.inspect(Process.output(p, 50))\n  out = Result.unwrap!(Process.output(p, 60000))\n"
+        "def main() -> Void\n  args = System.args()\n"
+        "  p = Result.unwrap!(Process.spawn_captured(args[0], [args[1], args[2]], \".\", 60000))\n"
+        "  IO.inspect(Process.output(p, 50))\n  out = Result.unwrap!(Process.output(p, 60000))\n"
         "  puts(\"#{out.stdout.inspect} #{out.stderr.length} #{String.code(out.stderr)} #{out.truncated}\")\n"
         "  Process.close(p)\nend\n")
-    assert run_vm(ALLOWED, bytecode, None, cwd=tmp_path) == \
+    child = PYTHON_OUTPUT_CHILD if os.name == "nt" else SHELL_OUTPUT_CHILD
+    assert run_vm(ALLOWED, bytecode, None, extra=child, cwd=tmp_path) == \
         (0, "error(\"network: operation timed out\")\n\"hi\\n\" 1 65533 false\n", "")
 
 

@@ -235,9 +235,10 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_windows_filesystem_safety.py  # pytest: Windows filesystem mutation regressions, in Docker or Actions scratch (references/ci.md)
   test_windows_console_stop.py  # pytest, native Windows only: Ctrl+Break exit 149 and a pseudo console as stdout (references/ci.md)
   test_windows_handle_counts.py  # pytest, native Windows only: no file call reaches the VM's own named pipes, and its handle count stays flat (GetProcessHandleCount); POSIX lists /proc/self/fd
+  test_windows_process_cleanup.py  # pytest, native Windows only: the Windows-only cases of the process cleanup: close ends the child tree and never waits, --driver-pid with an access list, an unwritable temporary folder (references/ci.md)
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
   test_bdd.py  # pytest: agentica test over the CLI: step programs, isolation (references/bdd.md)
-  test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes, links and a shell script; host-only on Windows (references/bdd.md)
+  test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes and links; host-only on Windows (references/bdd.md)
   test_bdd_cleanup.py  # pytest: destructive cleanup in the Docker/Actions scratch (references/bdd.md)
   test_bdd_integration.py  # pytest: programs under test, limits, seed, cleanup; slow: large outputs and killed driver (references/bdd.md)
   test_unit_test.py  # unittest: agentica test on *_test.agc files; slow: the test timeout, stderr flood, endless print, flooding listing (references/bdd.md)

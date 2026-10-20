@@ -257,6 +257,16 @@ is not sent; libuv reports both events through one console handler
 `tests/test_windows_handle_counts.py` also needs native Windows (named pipes and
 `GetProcessHandleCount`), so it runs on the Windows job and Wine skips it.
 
+`tests/test_windows_process_cleanup.py` is the Windows side of the cleanup
+cases that use SIGTERM, SIGKILL or chmod (those are host-only on Windows and
+name it): close ends a child and its children and never waits, `--driver-pid`
+reads an input with an owner-only access list, and a temporary folder is made
+unwritable with `icacls`. Wine skips it. The other cleanup cases (output of a
+captured child, a failed scenario, a killed driver, a crashed runner) run on
+every system: a harness limit is not host-only, so they pick a Python child, the
+PowerShell process list or a copy of `node.exe` with a preloaded script as the
+binary on Windows, because the VM starts only `.exe` and `.com` files there.
+
 `test_windows_console_stop.py` also types a line into the pseudo console and
 reads it, and keeps a console read waiting with one pool thread while file calls
 run. After changing Windows stdin handling, a check on a native Windows terminal
