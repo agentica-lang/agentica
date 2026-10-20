@@ -37,14 +37,14 @@ export def parse(reading: Reading, text: String) -> Result[Map[String, Toml.Valu
   return table(reading, parsed.unwrap!, "")
 end
 
-## The failure for a key path: "" is the file as a whole.
+## The failure for a key path: "" is the file as a whole, which has no position to show.
 export def fail(reading: Reading, key_path: String, message: String) -> String
-  return Failure.fail_key(reading.file, key_path, reading.code, message, Diag.Help.NoHelp)
+  return fail_with(reading, key_path, message, Diag.Help.NoHelp)
 end
 
 ## Like fail, with a help text.
 export def fail_help(reading: Reading, key_path: String, message: String, help: String) -> String
-  return Failure.fail_key(reading.file, key_path, reading.code, message, Failure.hint(help))
+  return fail_with(reading, key_path, message, Failure.hint(help))
 end
 
 ## The path of a key inside the table at path.
@@ -132,6 +132,13 @@ def position_of(source: String, message: String) -> Source.Position
     end
   end
   return Source.Position(offset: before + column.unwrap! - 1, line: line.unwrap!, column: column.unwrap!)
+end
+
+def fail_with(reading: Reading, key_path: String, message: String, help: Diag.Help) -> String
+  if key_path == ""
+    return Failure.fail_file(reading.file, reading.code, message, help)
+  end
+  return Failure.fail_key(reading.file, key_path, reading.code, message, help)
 end
 
 def located(reading: Reading, at: Source.Position, message: String, help: Diag.Help) -> String

@@ -197,8 +197,12 @@ because the manager needs it and any program can use it.
 
 The manifest is `agentica.toml`. Its directory is the manifest directory:
 `agentica.lock` and `agc_libs/` sit beside it. For a package, that is the root
-of its repository. Without a manifest, nothing changes. Stored paths of project
-files follow PR #273 (the entry file's folder, §18.3). Packages, vendored ones
+of its repository. Without a manifest, nothing changes. The manifest is the
+nearest one going up from the folder of the root file, as far as the root of the
+file system, so an `agentica.toml` in a shared parent folder (such as `/tmp`)
+counts for every script below it. This is a known choice, and it is a breaking
+change for those scripts (see the CHANGELOG). Stored paths of project files
+follow PR #273 (the entry file's folder, §18.3). Packages, vendored ones
 included, use the logical path of 45.8.
 
 ```toml
@@ -228,11 +232,14 @@ max_line_width = 119
 - `git` is an `https://host/owner/repo` URL, with an optional `.git` at the end.
   The host is lowercase, with no port and no user name. There are exactly an
   owner and a repository, in letters, digits and `. _ -`, neither `.` nor `..`
-  and neither starting with `-`. No query, no fragment, no trailing slash. Only
-  https: `http://`, `ssh://` and `git@host:` forms are `PKG-MANIFEST-INVALID`.
-  Two spellings of one repository (with and without `.git`) are one source. The
-  cache path is built from this URL, `<host>/<owner>/<repo>` (45.8). A host such
-  as a company server works the same way as `github.com`.
+  and neither starting with `-` or ending in `.`, and neither a Windows device
+  name (`con`, `prn`, `aux`, `nul`, `com1` to `com9`, `lpt1` to `lpt9`, in any
+  case, with or without an extension), because they are folders of the cache. No
+  query, no fragment, no trailing slash. Only https: `http://`, `ssh://` and
+  `git@host:` forms are `PKG-MANIFEST-INVALID`. Two spellings of one repository
+  (with and without `.git`) are one source. The cache path is built from this
+  URL, `<host>/<owner>/<repo>` (45.8). A host such as a company server works the
+  same way as `github.com`.
 - `tag` is a git tag: letters, digits and `. _ + -`, at most 128 characters, no
   `/`, not starting with `.` or `-`. `ref` is a commit, as 7 to 64 lowercase hex
   digits (a prefix of the commit, or the whole of it). Exactly one of them:
@@ -259,10 +266,12 @@ max_line_width = 119
   and rejects any it does not know. It does not leave this to a typed decode,
   which ignores extra keys. A TOML syntax error is the same code, with the line
   and column from `std/toml`.
-- The manifest of a dependency is read when a build first loads the package
-  (from its folder in the cache), and then only to learn which names its files
-  may import and to check that each agrees with the lock (45.6, 45.7). It is not
-  hashed (45.6). The build does not use anything else from it.
+- The manifest of a dependency is read from its folder in the cache, and only to
+  learn which names its files may import and to check that each agrees with the
+  lock (45.6, 45.7). It is not hashed (45.6). The build does not use anything
+  else from it. It must be a regular file of the package folder: a symbolic
+  link, a folder or a pipe under that name (in any case) is `PKG-SYMLINK` at the
+  import that loads the package, and it is never opened.
 
 ### 45.6 Lock `agentica.lock`
 
@@ -305,8 +314,11 @@ hash = "sha256:a41f09c2e7bd..."
   write its path, a zero byte, its size in decimal, a zero byte and its bytes.
   The SHA-256 of that stream is the hash, written as `sha256:` and hex
   (`Crypto.sha256`; issue #455). Hidden folders and `agc_libs/` are not copied,
-  not hashed and not importable. A symlink or gitlink among the copied `.agc`
-  files is refused (`PKG-SYMLINK`). Elsewhere in the repo such entries are
+  not hashed and not importable. The `.agc` extension and the name `agc_libs`
+  are compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is
+  left out on every system (a case-insensitive file system could open them by
+  their lowercase names). A symlink or gitlink among the copied `.agc` files is
+  refused (`PKG-SYMLINK`). Elsewhere in the repo such entries are
   ignored. The package's `agentica.toml` is not part of the hash: what it can do
   is limited to naming dependencies, and each must agree with the lock (below).
 - **One lock per build.** Only the root project's lock counts. A package's own
@@ -319,11 +331,22 @@ hash = "sha256:a41f09c2e7bd..."
   the lock holds with another `git` URL, `tag` or `ref`, is `PKG-LOCK-STALE`, at
   `dependencies.<name>` of the manifest. This runs once, before any file is
   read.
-- The same check runs on the manifest of each package when the build first loads
-  it. A dependency that the lock does not hold at all is `PKG-LOCK-STALE`. A
-  name that the lock holds with another source is `PKG-SOURCE-CONFLICT` (45.7).
-  Both are reported at `dependencies.<name>` of the package's manifest, in the
-  cache.
+- The same check runs on the manifest of every locked package that is in the
+  cache, right after the check above and before any file is read, so a conflict
+  anywhere in the tree is reported whether or not an import reaches that
+  package. A dependency that the lock does not hold at all is `PKG-LOCK-STALE`.
+  A name that the lock holds with another source is `PKG-SOURCE-CONFLICT`
+  (45.7). Both are reported at `dependencies.<name>` of the package's manifest,
+  in the cache. What cannot be looked at is left for the import that loads the
+  package, with its own code, as before: a locked package that is not in the
+  cache (`CHECK-IMPORT-PACKAGE`), a package folder that cannot be listed
+  (`CHECK-IMPORT-IO`) and a manifest that is not a regular file
+  (`PKG-SYMLINK`). So a conflict in such a package is reported only when it is
+  imported.
+- A failure about `agentica.toml` or `agentica.lock` as a whole, such as a lock
+  that is missing or a file that cannot be read, has no key path and no place in
+  the file: the plain and `--ai` forms show the file name alone, and `--json`
+  has no `key_path` and a `range` at line 0, column 0.
 
 The build does not fix the lock itself.
 
@@ -568,8 +591,8 @@ come after port step 8.
   `PKG-SOURCE-CONFLICT` checks. Packages are stored under their logical path
   (45.8). There is no fetching: the tests fill the cache by hand. The code lands
   in `compiler/` only (`compiler/packages/`, and
-  `compiler/modules/resolve_import.agc` for the import), after step 8, when the Racket front end is gone. That is
-  consistent with the freeze.
+  `compiler/modules/resolve_import.agc` for the import), after step 8, when the
+  Racket front end is gone. That is consistent with the freeze.
 - **45b. Fetch and install.** The git fetch of the tag, the commit check, the
   hash check, the cache fill, `install`, and the fetch errors.
 - **45c. Add and update.** `add`, `update`, the lock writer and the manifest

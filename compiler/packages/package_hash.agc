@@ -4,8 +4,13 @@
 ## hex. Hidden folders (any depth) and agc_libs/ (at the root) are left out. A symbolic link named *.agc is refused, as
 ## the fetch refuses it; other links, and files that are not .agc, are ignored.
 ##
-## The folder is listed and read through the Workspace. The stream is built in memory and hashed once with
-## Crypto.sha256, so the cost is the size of the .agc files of the package.
+## The names `.agc` and `agc_libs` are compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
+## out on every system. A case-insensitive file system (macOS, Windows) can open `x.AGC` or `AGC_LIBS/y.agc` by the
+## lowercase name, and the hash must cover what a build can load; on Linux those files are hashed or left out the same
+## way and simply cannot be imported.
+##
+## The folder is listed and read through the Workspace. The stream is built in memory (the pieces of the files are
+## collected and joined once) and hashed once with Crypto.sha256, so the cost is the size of the .agc files.
 
 import Paths from "../modules/import_path"
 import Workspace from "../modules/workspace"
@@ -32,16 +37,57 @@ export def hash_folder(workspace: Workspace.Workspace, root: String) -> Hashed
   end
 end
 
+## Whether a file name is a source file of a package: it ends in `.agc`, in any case.
+export def source_file?(name: String) -> Bool
+  return fold(name).ends_with?(".agc")
+end
+
+## Whether a folder is left out of the hash, and cannot be imported: a hidden one at any depth, or agc_libs at the root
+## of the package (`top`).
+export def skipped_folder?(name: String, top: Bool) -> Bool
+  return name.starts_with?(".") or (top and fold(name) == "agc_libs")
+end
+
+## The name without its case, for comparing it with a fixed name. Upper then lower case, so that a letter that has no
+## lowercase form of its own (such as the long s, which a case-insensitive file system folds to S) is folded too.
+export def fold(name: String) -> String
+  return name.upcase.downcase
+end
+
 def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Hashed
-  stream: List[Int] = []
+  # The pieces are joined at the end, in pairs level by level: appending each file to the stream would copy the whole
+  # stream once for each file (a list cannot grow by a long piece in constant time).
+  pieces: List[List[Int]] = []
   for path in paths
     read = workspace.read_bytes.call(Paths.join(root, path))
     if !read.ok?
       return Hashed.Unreadable(read.message)
     end
-    stream = stream.concat(header(path, read.unwrap!.size)).concat(read.unwrap!)
+    pieces = pieces.push(header(path, read.unwrap!.size).concat(read.unwrap!))
   end
-  return Hashed.Hash("sha256:#{hex(Crypto.sha256(stream))}")
+  return Hashed.Hash("sha256:#{hex(Crypto.sha256(concat_all(pieces)))}")
+end
+
+# The pieces one after the other. Each level joins neighbours, so a byte is copied about log2(pieces) times.
+def concat_all(pieces: List[List[Int]]) -> List[Int]
+  level = pieces
+  while level.size > 1
+    merged: List[List[Int]] = []
+    index = 0
+    while index < level.size
+      if index + 1 < level.size
+        merged = merged.push(level[index].concat(level[index + 1]))
+      else
+        merged = merged.push(level[index])
+      end
+      index += 2
+    end
+    level = merged
+  end
+  if level.size == 0
+    return []
+  end
+  return level[0]
 end
 
 # The relative paths of the .agc files, walking the folders with an explicit stack.
@@ -59,15 +105,15 @@ def list_files(workspace: Workspace.Workspace, root: String) -> Listing
       path = join(folder, entry.name)
       case entry.kind
         Workspace.EntryKind.Directory ->
-          if !entry.name.starts_with?(".") and !(folder == "" and entry.name == "agc_libs")
+          if !skipped_folder?(entry.name, folder == "")
             pending = pending.push(path)
           end
         Workspace.EntryKind.Link ->
-          if entry.name.ends_with?(".agc")
+          if source_file?(entry.name)
             return Listing.Stopped(Hashed.Link(path))
           end
         Workspace.EntryKind.File ->
-          if entry.name.ends_with?(".agc")
+          if source_file?(entry.name)
             files = files.push(path)
           end
         _ -> next

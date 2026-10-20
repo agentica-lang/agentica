@@ -139,8 +139,9 @@ phase 13).
   `RUNTIME-`, `LOWER-`, `BYTECODE-`) or by area (`PKG-`: the manifest, the lock
   and the package cache), and carry a source span. A `PKG-` error about
   `agentica.toml` or `agentica.lock` carries the file and the key path instead
-  (`key_path` in `--json`). Tests assert the code (and the span, or the file
-  and key path, when it matters), never message text.
+  (`key_path` in `--json`; a missing or unreadable file has the file alone).
+  Tests assert the code (and the span, or the file and key path, when it
+  matters), never message text.
 - `compiler/` is the front end: every language change (syntax, checker rule,
   builtin row, builtin record or enum entry, message text) goes there, with its
   golden. The files `builtins_data.agc`, `check_tables.agc` and

@@ -162,10 +162,12 @@ import Sqlite from "pkg/sqlite/db"
   with the URL, so moving a repository changes only its `git` line. The table
   has `git`, an `https://host/owner/repo` URL (an optional `.git` at the end; a
   lowercase host with no port and no user name; exactly an owner and a
-  repository), and exactly one of `tag` (letters, digits and `. _ + -`, no `/`)
-  or `ref` (7 to 64 lowercase hex digits of a commit). Only git sources exist: a
-  `path`, a branch, a version range or another key is `PKG-MANIFEST-INVALID`, at
-  the key path (`dependencies.sqlite.path`).
+  repository, neither ending in `.` nor a Windows device name such as `con` or
+  `nul`), and exactly one of `tag` (1 to 128 letters, digits and `. _ + -`; no
+  `/`, and not starting with `.` or `-`) or `ref` (7 to 64 lowercase hex digits
+  of a commit). Only git sources exist: a `path`, a branch, a version range or
+  another key is `PKG-MANIFEST-INVALID`, at the key path
+  (`dependencies.sqlite.path`).
 - The import is `pkg/<name>/<module path>`, with no extension:
   `"pkg/sqlite/util/json"` loads `util/json.agc` of the package. `pkg/sqlite`
   with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the
@@ -190,17 +192,25 @@ import Sqlite from "pkg/sqlite/db"
   lowercase hex digits). A bad lock is `PKG-LOCK-INVALID`. Every dependency of
   the manifest must be in the lock with the same `git` (a `.git` at the end does
   not count) and the same `tag` or `ref`, or the lock is `PKG-LOCK-STALE`; the
-  same check runs on the manifest of each package when the build first loads it.
+  same check runs on the manifest of every locked package that is in the cache.
   One name with two different sources anywhere in the tree (the project and a
   package, or two packages) is `PKG-SOURCE-CONFLICT`; there are no versions to
-  compare and no ranges to solve. The first check runs once for every command
-  that loads code, before any file is read. The build never writes the lock.
+  compare and no ranges to solve. Both checks run once for every command that
+  loads code, before any file is read, so a conflict is reported whether or not
+  an import reaches that package. A package that is not in the cache, one whose
+  folder cannot be listed and one whose manifest is not a regular file are left
+  for the import that loads them (so a conflict in them shows only then). A
+  manifest that is a symbolic link, a folder or a pipe is `PKG-SYMLINK` and is
+  never opened. The build never writes the lock.
 - Manifest and lock errors have no source span. They name the file and the key
   path, such as `dependencies.sqlite.git` or `package[1].hash` (`[n]` counts
   from 0); a TOML syntax error has the line and column instead. In the plain
   form the key path replaces the source lines (`= key: ...`); in `--ai` it is
   the `key:` line; in `--json` it is `key_path`, and `range` is the start of the
-  file. `AGENTS.md` lists the `PKG-` prefix with `LEX-`, `PARSE-`, `CHECK-`,
+  file. A failure about the file as a whole (a lock that is missing, a file that
+  cannot be read) has no key: the plain and `--ai` forms show the file name
+  alone, and `--json` has no `key_path` and a `range` at line 0, column 0.
+  `AGENTS.md` lists the `PKG-` prefix with `LEX-`, `PARSE-`, `CHECK-`,
   `RUNTIME-`, `LOWER-` and `BYTECODE-`.
 - The cache holds one folder for each commit:
   `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, from the `git`
@@ -214,11 +224,13 @@ import Sqlite from "pkg/sqlite/db"
   a zero byte, its size in decimal, a zero byte and its bytes. The hash is
   `sha256:` and the SHA-256 of that stream in hex (`Crypto.sha256`). Hidden
   folders (any depth), `agc_libs/` at the root and files that are not `.agc` are
-  left out, so the `agentica.toml` of a package is not hashed: it can only
-  choose among the names of the lock. The first time a build loads a package, it
-  hashes the folder and compares the result with the lock (`PKG-HASH-MISMATCH`);
-  a symbolic link named `*.agc` is `PKG-SYMLINK`. A package that no import
-  reaches is not hashed. Nothing in the cache is changed.
+  left out (`.agc` and `agc_libs` are compared without regard to case, so
+  `x.AGC` is hashed and `AGC_LIBS/` is left out on every system), so the
+  `agentica.toml` of a package is not hashed: it can only choose among the names
+  of the lock. The first time a build loads a package, it hashes the folder and
+  compares the result with the lock (`PKG-HASH-MISMATCH`); a symbolic link named
+  `*.agc` is `PKG-SYMLINK`. A package that no import reaches is not hashed.
+  Nothing in the cache is changed.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/repo.agc`, such as `pkg/sqlite@v1.2.0/db.agc`; for a
   package pinned by a `ref` it is `pkg/<name>@<first 12 digits of the

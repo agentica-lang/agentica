@@ -27,7 +27,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
   and `CHECK-IMPORT-PACKAGE`. A `PKG-` error about `agentica.toml` or
   `agentica.lock` names the file and the key path (`key_path` in `--json`) in
-  place of a source span.
+  place of a source span; a lock that is missing or a file that cannot be read
+  shows the file name alone. The manifests of all locked packages that are in
+  the cache are checked against the lock before any file is loaded. The
+  `.agc` extension and `agc_libs` are compared without regard to case when a
+  package is hashed.
 - `String.to_bytes(s)`: the UTF-8 bytes of a String as a `List[Int]`, the
   inverse of `String.from_bytes`.
 - Generic type aliases: `type Matrix[T] = List[List[T]]`, used as

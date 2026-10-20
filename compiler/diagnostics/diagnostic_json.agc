@@ -1,8 +1,9 @@
 ## A diagnostic as the JSON object `--json` writes.  The keys are `code`, `message`, `file` and `range` (`start` and
 ## `end`, each with a `line` and a `column`), then, only when the diagnostic has them, `key_path` (the place in
-## agentica.toml or agentica.lock of a problem that has no source span: `range` is then the start of the file),
-## `expected`, `actual`, `callee`, `function` (the signature of the function being checked), `help` and `labels` (a
-## `range` and a `text` each). The BDD driver sends it to the runner as the text of a file that did not compile.
+## agentica.toml or agentica.lock of a problem that has no source span: `range` is then the start of the file; a
+## problem about such a file as a whole has no `key_path` and a `range` at line 0, column 0), `expected`, `actual`,
+## `callee`, `function` (the signature of the function being checked), `help` and `labels` (a `range` and a `text`
+## each). The BDD driver sends it to the runner as the text of a file that did not compile.
 
 import Problems from "../check/check_failure"
 import Diag from "diagnostic"

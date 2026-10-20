@@ -113,7 +113,8 @@ export def load(root: String, settings: Env.Settings) -> Result[Loaded]
   end
   root_dir = Paths.directory_of(key.unwrap!)
   project = try Project.find(workspace, root_dir)
-  build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: Packages.scope_of(project))
+  scope = try Packages.check_manifests(workspace, settings.env, Packages.scope_of(project))
+  build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: scope)
   empty = Walk(stack: [], seen: {}, done: {}, order: [], next_id: 0, root_dir: root_dir, build: build)
   first = Parsed(
     key: key.unwrap!,

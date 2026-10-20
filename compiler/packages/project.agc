@@ -1,8 +1,9 @@
 ## The project of a build (docs/future/45-packages.md, 45.5 and 45.6): the manifest agentica.toml that is nearest to
 ## the root file, going up from its folder, and the lock beside it. A build with no manifest is as before. A manifest
 ## that declares dependencies needs a lock that has every one of them, from the same source and with the same pin: that
-## is checked here, once, before any file is loaded, and the build never writes the lock. The manifest of each package
-## is checked against the lock when the package is loaded (package_import.agc).
+## is checked here, once, before any file is loaded, and the build never writes the lock. The manifest of each locked
+## package that is in the cache is checked against the lock just after, also before any file is loaded
+## (package_import.agc, check_manifests).
 
 import GitSource from "git_source"
 import Lock from "lock"
@@ -43,12 +44,11 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
   end
   if !workspace.file_exists.call(empty.file)
     return error(
-      Failure.fail_key(
+      Failure.fail_file(
         empty.file,
-        "",
         "PKG-LOCK-MISSING",
         "#{MANIFEST_FILE} declares dependencies but there is no #{LOCK_FILE}",
-        Failure.hint("the lock is written by agentica add and agentica update"),
+        Failure.hint("write #{LOCK_FILE} beside #{MANIFEST_FILE}, with an entry for each dependency"),
       ),
     )
   end
@@ -115,7 +115,8 @@ def nearest(workspace: Workspace.Workspace, dir: String) -> String
 end
 
 def stale(file: String, path: String, message: String) -> String
-  return Failure.fail_key(file, path, "PKG-LOCK-STALE", message, Failure.hint("agentica update rewrites the lock"))
+  help = Failure.hint("make #{LOCK_FILE} list the source and the pin that the manifest names")
+  return Failure.fail_key(file, path, "PKG-LOCK-STALE", message, help)
 end
 
 def conflict(file: String, path: String, message: String) -> String

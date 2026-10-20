@@ -143,9 +143,11 @@ import Json from "pkg/json5/util/json"
 
 - A dependency is a local name (a lowercase letter, then lowercase letters,
   digits, `_` and `-`) and a table with `git` (`https://host/owner/repo`, an
-  optional `.git` at the end) and exactly one of `tag` or `ref` (a commit, 7 to
-  64 lowercase hex digits). Only `git` sources exist: a `path`, a branch or a
-  version range is `PKG-MANIFEST-INVALID`.
+  optional `.git` at the end; the owner and the repository do not end in `.` and
+  are not Windows device names such as `con`) and exactly one of `tag` (1 to 128
+  letters, digits and `. _ + -`; no `/`, not starting with `.` or `-`) or `ref`
+  (a commit, 7 to 64 lowercase hex digits). Only `git` sources exist: a `path`,
+  a branch or a version range is `PKG-MANIFEST-INVALID`.
 - The import is `pkg/<name>/<module path>` without `.agc`. A declared name is a
   package and shadows a library of the same name in `agc_libs/` and the other
   `pkg/` roots; an undeclared name is the `pkg/` search above, unchanged.
@@ -158,8 +160,12 @@ import Json from "pkg/json5/util/json"
   `commit`, `hash`. A manifest with dependencies and no lock is
   `PKG-LOCK-MISSING`; a dependency the lock lacks or holds with another source
   is `PKG-LOCK-STALE`; one name with two sources between the project and its
-  packages is `PKG-SOURCE-CONFLICT`; a bad file is `PKG-MANIFEST-INVALID` or
-  `PKG-LOCK-INVALID`, at a file and key path. A build never writes the lock.
+  packages is `PKG-SOURCE-CONFLICT`, found in the manifests of all locked
+  packages that are in the cache, imported or not; a bad file is
+  `PKG-MANIFEST-INVALID` or `PKG-LOCK-INVALID`, at a file and key path (a file
+  that is missing or unreadable has no key path and no position). A manifest of
+  a package that is a link or not a regular file is `PKG-SYMLINK`. A build never
+  writes the lock.
 - The cache is `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`
   (`~/.cache` when `XDG_CACHE_HOME` is not absolute; on Windows
   `%LOCALAPPDATA%/agentica/cache/pkg/`). A package that is not there is

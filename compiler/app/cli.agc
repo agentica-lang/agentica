@@ -190,7 +190,7 @@ def reject(session: Session, problem: Problems.Problem, source: String) -> Int
     IO.warn(JSON.encode(DiagnosticJson.json(shown)))
   else
     text = ""
-    if problem.key_path == ""
+    if Problems.at_source?(problem)
       text = source_text(problem.file, root, session.settings)
     end
     if style == "ai"

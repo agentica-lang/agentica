@@ -39,6 +39,14 @@ export def fail_key(file: String, key_path: String, code: String, message: Strin
   return "#{file.length}\n#{file}#{key_path.length}\n#{key_path}#{packed}"
 end
 
+## The failure for agentica.toml or agentica.lock as a whole: the file is missing or cannot be read, so there is no key
+## path and no place in it. The span is empty at line 0, which the text forms read as "no place" (Problems.at_source?),
+## so they print the file name and no position.
+export def fail_file(file: String, code: String, message: String, help: Diag.Help) -> String
+  none = Source.Position(offset: 0, line: 0, column: 0)
+  return in_file(file, Base.bail_span(code, message, Source.Span(start: none, stop: none), help))
+end
+
 ## The failure for a diagnostic of the lexer or the parser, which have no file.
 export def from_stage(file: String, problem: Diag.Diagnostic) -> String
   return in_file(file, Base.bail_span(problem.code, problem.message, problem.span, problem.help))

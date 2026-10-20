@@ -28,6 +28,13 @@ export struct Problem
   labels: List[Label]
 end
 
+## Whether the problem points at the text of its file: false for a problem at a key of agentica.toml or agentica.lock,
+## and for one about such a file as a whole (no line 0 span, see link_failure.agc, fail_file). The text forms print the
+## file name alone for those.
+export def at_source?(found: Problem) -> Bool
+  return found.key_path == "" and found.span.start.line > 0
+end
+
 ## A problem with no notes.
 export def problem(
   file: String,

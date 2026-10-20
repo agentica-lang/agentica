@@ -16,14 +16,14 @@ COMMIT = "a" * 40
 def package_hash(folder):
     """sha256: and the hex SHA-256 of: for each .agc file in bytewise order of its path from `folder` (written with "/"),
     the path, a zero byte, the size in decimal, a zero byte and the bytes. Hidden folders and the agc_libs folder at
-    the root are left out."""
+    the root are left out. The `.agc` extension and the name agc_libs are compared without regard to case."""
     folder = Path(folder)
     paths = []
     for directory, names, files in os.walk(folder):
         relative = Path(directory).relative_to(folder)
         root = str(relative) == "."
-        names[:] = [name for name in names if not name.startswith(".") and not (root and name == "agc_libs")]
-        paths += [(relative / name).as_posix() for name in files if name.endswith(".agc")]
+        names[:] = [name for name in names if not name.startswith(".") and not (root and name.lower() == "agc_libs")]
+        paths += [(relative / name).as_posix() for name in files if name.lower().endswith(".agc")]
     digest = hashlib.sha256()
     for path in sorted(paths, key=lambda text: text.encode("utf-8")):
         data = (folder / path).read_bytes()

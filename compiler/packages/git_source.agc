@@ -10,6 +10,15 @@ HOST_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyz0123456789.-".split(""))
 SEGMENT_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-".split(""))
 TAG_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-".split(""))
 HEX = Set.new("0123456789abcdef".split(""))
+# The names Windows keeps for devices, with or without an extension. The owner and the repository are folders of the
+# cache, so such a name could not be made there.
+WINDOWS_DEVICES = Set.new(
+  [
+    "con", "prn", "aux", "nul",
+    "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+    "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+  ],
+)
 
 MAX_NAME = 64
 MAX_TAG = 128
@@ -62,6 +71,9 @@ export def git_problem(url: String) -> String
     end
     if !segment.split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
       return "the owner and the repository of a git URL hold only letters, digits, . _ and -"
+    end
+    if segment.ends_with?(".") or WINDOWS_DEVICES.include?(segment.split(".")[0].downcase)
+      return "the owner and the repository of a git URL do not end in . and are not a Windows device name such as con"
     end
   end
   return ""

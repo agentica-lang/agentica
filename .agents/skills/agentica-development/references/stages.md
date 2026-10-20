@@ -150,7 +150,11 @@ stage:
     `PKG-SYMLINK` (45a). The manifest, lock, stale and conflict ones are at a
     key path of a file (`Failure.fail_key`, `Problem.key_path`, `key_path` in
     `--json`, with `range` at the start of the file); a TOML syntax error is
-    at its line and column. The hash and link ones are at the import.
+    at its line and column; a file that is missing or unreadable is
+    `Failure.fail_file` (no key, `range` at line 0, `Problem.at_source?` false,
+    so the plain and `--ai` forms show the file name alone). The manifests of
+    the locked packages are checked before any file loads
+    (`check_manifests`). The hash and link ones are at the import.
     `CHECK-IMPORT-PACKAGE` is an import check (`package_import.agc`): a
     declared package that is not in the cache, or a `pkg/` name that a
     package file did not declare.

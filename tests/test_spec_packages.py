@@ -10,12 +10,15 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, run, vm_environment
+from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, host_only, run, vm_environment
 from tests.package_support import COMMIT, Workspace, dependency, package_hash
 
 # No AGENTICA_PATH roots and no user data folder, so only what a case builds resolves; the cache is each case's own.
 HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
             "LOCALAPPDATA": "/nonexistent-agentica-xdg"}
+
+# root can read a folder whatever its mode, so the cases that need an unreadable one do not hold for it.
+ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 GREETER_GIT = "https://github.com/owner/greeter.git"
 TOOLS_GIT = "https://gitlab.com/team/tools"
@@ -70,8 +73,10 @@ def start(problem):
 def assert_at_key(problem, code, file, key_path):
     assert problem["code"] == code
     assert Path(problem["file"]) == Path(file)
-    # A failure of the file as a whole (the lock that is missing) has no key path.
+    # A failure of the file as a whole (the lock that is missing) has no key path and no place in the file.
     assert problem.get("key_path", "") == key_path
+    if key_path == "":
+        assert start(problem) == (0, 0)
 
 
 def assert_at_import(problem, code, line=1):
@@ -171,6 +176,17 @@ MANIFEST_CASES = [
      "dependencies.sqlite.git"),
     ("a git URL with a query", deps('sqlite = { git = "https://github.com/o/r?x=1", tag = "v1" }'),
      "dependencies.sqlite.git"),
+    ("a git owner that is a Windows device name", deps('sqlite = { git = "https://github.com/con/r", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a git repository that is a device name with an extension",
+     deps('sqlite = { git = "https://github.com/o/NUL.txt", tag = "v1" }'), "dependencies.sqlite.git"),
+    ("a git repository that is a numbered device name",
+     deps('sqlite = { git = "https://github.com/o/com1", tag = "v1" }'), "dependencies.sqlite.git"),
+    ("a git repository that ends in a dot", deps('sqlite = { git = "https://github.com/o/x..git", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a tag that starts with a dot", deps('sqlite = { %s, tag = ".v1" }' % SOURCE), "dependencies.sqlite.tag"),
+    ("a tag that starts with a dash", deps('sqlite = { %s, tag = "-v1" }' % SOURCE), "dependencies.sqlite.tag"),
+    ("a tag of 129 characters", deps('sqlite = { %s, tag = "%s" }' % (SOURCE, "v" * 129)), "dependencies.sqlite.tag"),
     ("an unknown style key", '[style]\ncolour = 1\n', "style.colour"),
     ("a style width that is not positive", '[style]\nmax_line_width = 0\n', "style.max_line_width"),
 ]
@@ -445,3 +461,181 @@ def test_a_package_file_may_import_only_inside_itself_and_what_its_manifest_decl
     assert problem["code"] == code
     assert Path(problem["file"]) == ws.folder(GREETER_GIT, "c" * 40) / "greet.agc"
     assert start(problem) == (1, 1)
+
+
+# A package of one module that imports nothing: its manifest and its files are what a case changes.
+ALONE_GIT = "https://github.com/owner/alone"
+USE_ALONE = 'import Alone from "pkg/alone/one"\n'
+
+
+def add_alone(ws, files=None, **extra):
+    """Adds the package `alone` (in the cache, the lock and the manifest of the project) and a file that imports it."""
+    ws.add_package("alone", ALONE_GIT, files or {"one.agc": ONE}, tag="v1.0.0", **extra)
+    ws.write_manifest({"greeter": GREETER, "alone": dependency(ALONE_GIT, tag="v1.0.0")})
+    ws.write_lock()
+    (ws.project / "use.agc").write_text(USE_ALONE + "\ndef main() -> Void\nend\n", encoding="utf-8")
+    return ws.folder(ALONE_GIT)
+
+
+@host_only(WINDOWS, "a symbolic link needs a privilege that Windows does not give by default")
+def test_a_manifest_that_is_a_symbolic_link_is_refused_and_never_read(ws, tmp_path):
+    folder = add_alone(ws)
+    outside = tmp_path / "outside.toml"
+    outside.write_text("secret_token_key = 1\n", encoding="utf-8")
+    (folder / "agentica.toml").symlink_to(outside)
+    # PKG-SYMLINK at the import, not PKG-MANIFEST-INVALID, which would name a key of the file outside the package.
+    assert_at_import(check(ws, "use.agc"), "PKG-SYMLINK")
+    # Nothing imports the package: the manifest is not opened, so the build passes.
+    (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
+    assert check(ws, "plain.agc") is None
+
+
+def test_a_manifest_that_is_not_a_regular_file_is_refused(ws):
+    folder = add_alone(ws)
+    (folder / "agentica.toml").mkdir()
+    assert_at_import(check(ws, "use.agc"), "PKG-SYMLINK")
+
+
+@host_only(WINDOWS, "a symbolic link needs a privilege that Windows does not give by default")
+def test_a_symbolic_link_to_a_folder_that_leaves_the_package_is_not_importable(ws, tmp_path):
+    folder = add_alone(ws)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "stolen.agc").write_text(ONE, encoding="utf-8")
+    (folder / "out").symlink_to(outside, target_is_directory=True)
+    write_main(ws, 'import Stolen from "pkg/alone/out/stolen"\n')
+    # The link is not .agc, so the hash ignores it and the package is intact; the file it leads to is outside.
+    assert_at_import(check(ws), "CHECK-IMPORT-PATH")
+    assert check(ws, "use.agc") is None
+
+
+def test_the_agc_extension_and_agc_libs_are_compared_without_regard_to_case(ws):
+    # x.AGC is hashed (the peer hashes it too, so the lock matches) and AGC_LIBS/ is left out, as on a system that
+    # ignores case, where a build could open them by their lowercase names.
+    folder = add_alone(ws, {"one.agc": ONE, "x.AGC": ONE, "AGC_LIBS/y.agc": ONE})
+    assert check(ws, "use.agc") is None
+    (folder / "x.AGC").write_text(ONE + "# changed\n", encoding="utf-8")
+    assert_at_import(check(ws, "use.agc"), "PKG-HASH-MISMATCH")
+    (folder / "x.AGC").write_text(ONE, encoding="utf-8")
+    (folder / "AGC_LIBS" / "y.agc").write_text(ONE + "# changed\n", encoding="utf-8")
+    assert check(ws, "use.agc") is None
+    # What the hash leaves out cannot be imported, whatever the case of its name.
+    write_main(ws, 'import Y from "pkg/alone/AGC_LIBS/y"\n')
+    assert_at_import(check(ws), "CHECK-IMPORT-PATH")
+
+
+@host_only(WINDOWS, "a folder made unreadable with chmod 000 does not exist on Windows")
+@pytest.mark.skipif(ROOT_USER, reason="root can read any folder")
+def test_a_package_folder_or_file_that_cannot_be_read_is_an_import_error_not_a_crash(ws, request):
+    folder = add_alone(ws, {"one.agc": ONE, "inner/two.agc": ONE})
+    # An unreadable subfolder: the walk of the hash cannot list it.
+    (folder / "inner").chmod(0o000)
+    request.addfinalizer(lambda: (folder / "inner").chmod(0o700))
+    assert_at_import(check(ws, "use.agc"), "CHECK-IMPORT-IO")
+    (folder / "inner").chmod(0o700)
+    # An unreadable .agc file: the hash cannot read its bytes.
+    (folder / "inner" / "two.agc").chmod(0o000)
+    request.addfinalizer(lambda: (folder / "inner" / "two.agc").chmod(0o600))
+    assert_at_import(check(ws, "use.agc"), "CHECK-IMPORT-IO")
+    (folder / "inner" / "two.agc").chmod(0o600)
+    # An unreadable package folder: the manifests are checked up front, but only what can be listed.
+    folder.chmod(0o000)
+    request.addfinalizer(lambda: folder.chmod(0o700))
+    assert_at_import(check(ws, "use.agc"), "CHECK-IMPORT-IO")
+    folder.chmod(0o700)
+    assert check(ws, "use.agc") is None
+
+
+def test_a_package_with_no_manifest_declares_nothing(ws):
+    folder = add_alone(ws)
+    assert not (folder / "agentica.toml").exists()
+    assert check(ws, "use.agc") is None
+    # Its files may import each other, but no package: nothing declares one.
+    ws.locked = [entry for entry in ws.locked if entry["name"] != "alone"]
+    folder = add_alone(ws, {"one.agc": 'import Tools from "pkg/tools/bang"\n' + ONE})
+    problem = check(ws, "use.agc")
+    assert problem["code"] == "CHECK-IMPORT-PACKAGE"
+    assert Path(problem["file"]) == folder / "one.agc"
+
+
+def test_two_local_names_for_one_repository_are_two_packages_in_one_cache_folder(ws):
+    ws.add_package("alone", ALONE_GIT, {"one.agc": ONE}, tag="v1.0.0")
+    ws.add_package("other", ALONE_GIT, {"one.agc": ONE}, tag="v1.0.0")
+    ws.write_manifest({"alone": dependency(ALONE_GIT, tag="v1.0.0"), "other": dependency(ALONE_GIT, tag="v1.0.0")})
+    ws.write_lock()
+    both_text = ('import A from "pkg/alone/one"\nimport B from "pkg/other/one"\n\n'
+                 'def main() -> Void\n  puts(A.one() + B.one())\nend\n')
+    (ws.project / "both.agc").write_text(both_text, encoding="utf-8")
+    ran = run(cli() + [str(ws.project / "both.agc")], cwd=ws.base, env=environment(ws))
+    assert (ran.code, ran.stdout) == (0, "2\n"), ran.stderr
+    # A name that the lock lacks for the same repository is still stale: the names are local to each manifest.
+    ws.write_manifest({"alone": dependency(ALONE_GIT, tag="v1.0.0"), "third": dependency(ALONE_GIT, tag="v1.0.0")})
+    assert_at_key(check(ws, "both.agc"), "PKG-LOCK-STALE", ws.project / "agentica.toml", "dependencies.third")
+
+
+def test_a_conflict_in_a_package_that_no_import_reaches_is_still_reported(ws):
+    # The manifest of greeter asks for another tag of tools than the lock has, and the build imports nothing.
+    manifest = ws.folder(GREETER_GIT) / "agentica.toml"
+    manifest.write_text('[dependencies]\ntools = { git = "%s", tag = "v9.9.9" }\n' % TOOLS_GIT, encoding="utf-8")
+    (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
+    assert_at_key(check(ws, "plain.agc"), "PKG-SOURCE-CONFLICT", manifest, "dependencies.tools")
+    manifest.write_text('[dependencies]\nmore = { git = "https://gitlab.com/else/more", ref = "bbbbbbb" }\n',
+                        encoding="utf-8")
+    assert_at_key(check(ws, "plain.agc"), "PKG-LOCK-STALE", manifest, "dependencies.more")
+
+
+def test_a_locked_package_that_is_not_in_the_cache_fails_only_when_it_is_imported(ws):
+    import shutil
+    shutil.rmtree(ws.folder(TOOLS_GIT, TOOLS_COMMIT))
+    (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
+    assert check(ws, "plain.agc") is None
+    # greeter is there, and imports tools from the cache: the missing package is told at that import.
+    problem = check(ws)
+    assert problem["code"] == "CHECK-IMPORT-PACKAGE"
+
+
+def run_text(ws, *flags):
+    """The stderr and exit code of a text form of `check` on main.agc."""
+    result = run(cli() + list(flags) + ["check", str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws))
+    assert result.code == 1, result.stderr
+    return result.stderr
+
+
+def test_a_lock_that_is_missing_shows_the_file_and_no_place_in_the_plain_and_ai_forms(ws):
+    (ws.project / "agentica.lock").unlink()
+    lock = str(ws.project / "agentica.lock")
+    plain = run_text(ws)
+    head, rest = plain.split(": error[", 1)
+    assert Path(head) == Path(lock) and rest.startswith("PKG-LOCK-MISSING]")
+    # No position, no source box, no key line.
+    assert ":1:1" not in plain and "|" not in plain and "= key:" not in plain
+    ai = run_text(ws, "--ai").splitlines()
+    assert "[PKG-LOCK-MISSING]" in ai
+    at = [line for line in ai if line.startswith("  at: ")]
+    assert len(at) == 1 and Path(at[0][len("  at: "):]) == Path(lock)
+    assert not [line for line in ai if line.startswith(("  source:", "  key:"))]
+
+
+def test_a_manifest_or_lock_error_with_a_key_shows_the_key_in_the_plain_and_ai_forms(ws):
+    ws.write_lock(drop("hash"))
+    plain = run_text(ws)
+    head, rest = plain.split(": error[", 1)
+    assert Path(head) == ws.project / "agentica.lock" and rest.startswith("PKG-LOCK-INVALID]")
+    assert "  = key: package[0].hash" in plain.splitlines()
+    assert ":1:1" not in plain and "|" not in plain
+    ai = run_text(ws, "--ai").splitlines()
+    assert "  key: package[0].hash" in ai
+    assert not [line for line in ai if line.startswith("  source:")]
+    assert [line for line in ai if line.startswith("  at: ")] == ["  at: " + head]
+
+
+@host_only(WINDOWS, "a file made unreadable with chmod 000 does not exist on Windows")
+@pytest.mark.skipif(ROOT_USER, reason="root can read any file")
+def test_a_manifest_or_lock_that_cannot_be_read_is_a_failure_of_the_whole_file(ws, request):
+    for name, code in [("agentica.toml", "PKG-MANIFEST-INVALID"), ("agentica.lock", "PKG-LOCK-INVALID")]:
+        path = ws.project / name
+        path.chmod(0o000)
+        request.addfinalizer(lambda path=path: path.chmod(0o600))
+        assert_at_key(check(ws), code, path, "")
+        assert ":1:1" not in run_text(ws)
+        path.chmod(0o600)
