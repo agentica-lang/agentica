@@ -5,6 +5,7 @@ sequence that does not decode, not a U+FFFD in the text. Python's strict decoder
 place.
 """
 import json
+from pathlib import Path
 
 import pytest
 
@@ -51,7 +52,7 @@ def test_invalid_byte_is_reported_where_python_stops(tmp_path, name, prefix, bad
     path.write_bytes(content)
     problem = check_file(path)
     assert problem["code"] == "LEX-INVALID-UTF8"
-    assert problem["file"] == str(path)
+    assert Path(problem["file"]) == path
     assert problem["range"] == {"start": {"line": line, "column": column},
                                 "end": {"line": line, "column": column + 1}}
 
@@ -61,7 +62,7 @@ def test_invalid_byte_in_an_import_names_the_imported_file(tmp_path):
     (directory / "bad.agc").write_bytes(b"export def one() -> Int\n  return \xff\nend\n")
     problem = check_file(directory / "root.agc")
     assert problem["code"] == "LEX-INVALID-UTF8"
-    assert problem["file"] == str(directory / "bad.agc")
+    assert Path(problem["file"]) == directory / "bad.agc"
     assert problem["range"]["start"] == {"line": 2, "column": 10}
 
 

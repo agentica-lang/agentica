@@ -150,7 +150,7 @@ def test_absolute_paths_require_a_drive_and_separator() -> None:
 @pytest.mark.parametrize("folder", ("1:", "C:relative"))
 def test_a_relative_colon_path_keeps_a_relative_source_root(folder, project_factory):
     if TARGET_OS == "windows":
-        pytest.skip("Windows filenames cannot contain a colon")
+        pytest.skip("host-only: Windows filenames cannot contain a colon")
     program = """\
 def main() -> Void
   xs = [1]

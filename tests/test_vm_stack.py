@@ -13,7 +13,7 @@ import pytest
 
 from tests.agentica_test import FIXTURES, compile_agc, vm_binary
 from tests.vm_diff_support import (
-    FIXTURE_TOKEN, FIXTURES_PREFIX, Fixture, VmCase, check_fixture_filter, fixture_selected,
+    Fixture, VmCase, check_fixture_filter, fixture_selected, relocate,
     run_vm_process)
 
 CASES = [
@@ -60,7 +60,7 @@ def stderr_of(program, bytecode, extra, options, work):
         Fixture(), [*extra, *options, "--source-root", str(program.parent)], bytecode, [], cwd=work)
     if status != 1:
         raise AssertionError("%s: exit %r, stderr: %s" % (program.stem, status, stderr))
-    return stderr.replace(FIXTURES_PREFIX, FIXTURE_TOKEN)
+    return relocate(stderr, FIXTURES, "@fixtures")
 
 
 def selected_cases():

@@ -1,10 +1,13 @@
 """File.each_line on the VM.
 
-A 10 MB file streams in order with bounded memory and about size/buffer reads;
+A 10 MB file streams in order with about size/buffer reads (and, on Linux, bounded memory);
 FIFOs fed by fixtures/lines-peer.py check partial reads, stalls, early closes
 and a crash that frees the descriptor of a parked task. Ordinary files check
-line decoding, the end-of-file and overlong errors and descriptor cleanup.
+line decoding, the end-of-file and overlong errors and descriptor cleanup. The
+descriptor count reads /proc/self/fd (Linux) or /dev/fd (macOS); Windows has
+no such folder and no FIFO, so those cases are marked "host-only:".
 """
+import os
 import re
 import sys
 
@@ -15,6 +18,12 @@ from tests.agentica_test import (FIXTURES, PYTHON, WAIT_SECONDS, Child, compile_
 
 PEER = FIXTURES / "lines-peer.py"
 LINUX = sys.platform.startswith("linux")
+# The folder that lists the open descriptors of the process: the programs below name /proc/self/fd, and a macOS run
+# swaps it for /dev/fd when the program is written.
+FD_ROOT = "/dev/fd" if sys.platform == "darwin" else "/proc/self/fd"
+needs_fifo = pytest.mark.skipif(os.name != "posix", reason="host-only: needs mkfifo; Windows has no FIFO files")
+needs_fd_folder = pytest.mark.skipif(
+    os.name != "posix", reason="host-only: counts the entries of /proc/self/fd or /dev/fd; Windows has no such folder")
 BUFFER_BYTES = 4096
 LINE_COUNT = 1400000
 
@@ -25,6 +34,12 @@ def main() -> Void
     ok()
   end
   puts(r)
+end
+"""
+
+# The peak resident memory comes from /proc, so only Linux appends this report to the stream program.
+HWM_REPORT = """\
+def hwm() -> Void
   status = Result.unwrap!(File.read_text("/proc/self/status", 10000))
   for entry in status.split("\\n")
     if entry.starts_with?("VmHWM")
@@ -33,6 +48,14 @@ def main() -> Void
   end
 end
 """
+
+
+def stream_program():
+    """The stream program, which on Linux also prints the peak memory (HWM_REPORT) after the last line."""
+    if not LINUX:
+        return STREAM_PROGRAM
+    return HWM_REPORT + "\n" + STREAM_PROGRAM.replace("  puts(r)\n", "  puts(r)\n  hwm()\n")
+
 
 BASELINE_PROGRAM = """\
 def main() -> Void
@@ -196,7 +219,7 @@ def _ordinary_file_output(tmp_path, data, program, name, *args):
     target = tmp_path / "case.txt"
     target.write_bytes(data)
     source = tmp_path / f"{name}.agc"
-    source.write_text(program, encoding="utf-8")
+    source.write_text(program.replace("/proc/self/fd", FD_ROOT), encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / f"{name}.agcb")
     result = run_vm(
         bytecode, args=[str(target), *args], env=vm_environment(), cwd=tmp_path
@@ -242,7 +265,7 @@ def test_each_line_on_ordinary_files_passes_lines_and_stops_on_errors(tmp_path, 
         assert len(tail) == 1 and tail[0].startswith("error("), lines
 
 
-@pytest.mark.skipif(not LINUX, reason="counts /proc/self/fd")
+@needs_fd_folder
 @pytest.mark.parametrize("data,delivered", (
     (b"a\nb\n", ['"a"', '"b"']),
     (b"a\nstop\nc\n", ['"a"', '"stop"']),
@@ -259,7 +282,7 @@ def hwm_kib(text):
 
 def run_program(tmp_path, name, text, *args, env=None, flags=()):
     source = tmp_path / (name + ".agc")
-    source.write_text(text, encoding="utf-8")
+    source.write_text(text.replace("/proc/self/fd", FD_ROOT), encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / (name + ".agcb"))
     return run_vm(bytecode, *flags, args=args, env=vm_environment(env), timeout=WAIT_SECONDS)
 
@@ -288,14 +311,14 @@ def test_a_10_mb_file_of_short_lines_streams_in_order_with_size_over_buffer_read
     size = data.stat().st_size
     assert size > 10000000
     trace = tmp_path / "trace.txt"
-    result = run_program(tmp_path, "stream", STREAM_PROGRAM, data,
+    result = run_program(tmp_path, "stream", stream_program(), data,
                          env={"AGENTICA_VM_TRACE": "io", "AGENTICA_VM_TRACE_FILE": trace})
     assert result.code == 0, result.stderr
     expected = data.read_text()
     assert result.stdout.startswith(expected), "every line, in order, once"
     rest = result.stdout[len(expected):]
-    assert re.fullmatch(r"ok\(\)\nVmHWM:\s+[0-9]+ kB\n", rest)
-    if collected():
+    assert re.fullmatch(r"ok\(\)\n(VmHWM:\s+[0-9]+ kB\n)?", rest)
+    if LINUX and collected():
         baseline = run_program(tmp_path, "baseline", BASELINE_PROGRAM)
         assert baseline.code == 0, baseline.stderr
         growth = hwm_kib(rest) - hwm_kib(baseline.stdout)
@@ -307,11 +330,12 @@ def test_a_10_mb_file_of_short_lines_streams_in_order_with_size_over_buffer_read
 
 def test_max_steps_ends_a_long_file_with_runtime_step_limit(tmp_path):
     data = write_lines(tmp_path)
-    result = run_program(tmp_path, "stream", STREAM_PROGRAM, data, flags=["--max-steps", "50000"])
+    result = run_program(tmp_path, "stream", stream_program(), data, flags=["--max-steps", "50000"])
     assert result.code == 1
     assert "RUNTIME-STEP-LIMIT" in result.stderr
 
 
+@needs_fifo
 def test_a_fifo_fed_in_pieces_lines_and_a_crlf_split_across_reads_a_last_line_without_a_newline(tmp_path, request):
     peer, fifo = start_fifo_peer(tmp_path, "pieces", request)
     result = run_program(tmp_path, "fifo", FIFO_PROGRAM, fifo, "5000")
@@ -320,6 +344,7 @@ def test_a_fifo_fed_in_pieces_lines_and_a_crlf_split_across_reads_a_last_line_wi
     assert peer.next_line() == "closed"
 
 
+@needs_fifo
 def test_a_fifo_that_stalls_times_out_one_read_with_a_line_half_read_and_the_descriptor_is_closed(tmp_path, request):
     _, fifo = start_fifo_peer(tmp_path, "stall", request)
     result = run_program(tmp_path, "fifo", FIFO_PROGRAM, fifo, "1200")
@@ -327,6 +352,7 @@ def test_a_fifo_that_stalls_times_out_one_read_with_a_line_half_read_and_the_des
     assert result.stdout == '"first"\nerror("filesystem: operation timed out")\ntrue\n'
 
 
+@needs_fifo
 def test_closing_a_read_fifo_that_still_holds_buffered_lines_is_ok_after_an_early_stop_and_after_read_line(
     tmp_path, request
 ):
@@ -336,6 +362,7 @@ def test_closing_a_read_fifo_that_still_holds_buffered_lines_is_ok_after_an_earl
     assert result.stdout == '"one"\nerror("stop at one")\ntrue\nok("four")\nok()\ntrue\n'
 
 
+@needs_fifo
 def test_a_crash_cancels_a_task_parked_in_file_each_line_on_a_fifo_and_frees_its_descriptor(tmp_path, request):
     _, fifo = start_fifo_peer(tmp_path, "idle", request)
     result = run_program(tmp_path, "crash", CRASH_PROGRAM, fifo, env={"UV_THREADPOOL_SIZE": "1"})

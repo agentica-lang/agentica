@@ -76,7 +76,7 @@ NATIVE_WINDOWS_SCRATCH = (
 WINDOWS = os.environ.get("AGENTICA_TEST_TARGET_OS") == "windows"
 
 REQUIRES_NATIVE_WINDOWS = pytest.mark.skipif(not NATIVE_WINDOWS_SCRATCH, reason="requires the native Windows VM and scratch")
-REQUIRES_WINDOWS = pytest.mark.skipif(not WINDOWS, reason="requires the Windows VM")
+REQUIRES_WINDOWS = pytest.mark.skipif(not WINDOWS, reason="host-only: Windows path rules exist on Windows only")
 
 
 def run_with_stdout(bytecode, arguments, root, expected_stdout):

@@ -11,6 +11,7 @@ keeps that output. A change of the command line on purpose rewrites it with `mak
 `poetry run python -m tests.test_cli_forms freeze`), and the diff of the file is the review. The temp folder and the version are written as <work> and <version>.
 A file that `compile` writes is only noted as written or not (its bytes carry the version)."""
 import json
+import re
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -97,7 +98,13 @@ class Workspace:
             (self.work / name).write_bytes(data)
 
     def plain(self, text):
-        return text.replace(str(self.work), "<work>").replace(agentica_version(), "<version>")
+        # On Windows the folder is typed with backslashes in the arguments and printed with slashes by the binary;
+        # both become <work>, and the rest of such a path is written with slashes, as the golden has it.
+        for form in {str(self.work), self.work.as_posix()}:
+            text = text.replace(form, "<work>")
+        if sys.platform == "win32":
+            text = re.sub(r"<work>[\\/][^\s\"':]*", lambda found: found.group(0).replace("\\", "/"), text)
+        return text.replace(agentica_version(), "<version>")
 
     def key(self, arguments, options):
         return json.dumps([[self.plain(str(argument)) for argument in arguments], options], sort_keys=True)

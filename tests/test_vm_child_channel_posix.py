@@ -1,18 +1,19 @@
-"""The Linux-only side of the child channel: descriptors pinned to a file, a device, a FIFO, and a shell child.
+"""The POSIX side of the child channel: descriptors pinned to a file, a device, a FIFO, and a shell child.
 
 fixtures/child-channel.agc is the program; fixtures/child-channel-peer.py drives its child side. They need fcntl,
-mkfifo, /proc and sh, so the module runs on Linux only; test_vm_child_channel.py has the cases of every system.
+mkfifo and sh, so the module runs on Linux and macOS; test_vm_child_channel.py has the cases of every system. Where
+/proc exists the peer also reads where descriptor 3 of the child points.
 """
 import json
-import sys
+import os
 
 import pytest
 
 from tests.agentica_test import FIXTURES, PYTHON, compile_agc, run, vm_binary
 
 PEER = FIXTURES / "child-channel-peer.py"
-# CI lists the module on Linux only; this keeps a developer run of the whole suite on another system clean.
-pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="needs /proc, mkfifo and sh")
+pytestmark = pytest.mark.skipif(
+    os.name != "posix", reason="host-only: needs fcntl, mkfifo and sh; Windows has the cases of test_vm_child_channel.py")
 
 
 def lines(*items):
@@ -40,9 +41,11 @@ def test_a_pinned_descriptor_is_refused_unless_it_is_a_channel_and_a_shell_child
     for kind in ("file", "device", "writeonly", "fifo"):
         assert pinned[kind]["exit"] == 0, kind
     assert pinned["file"]["head"] == refused
-    assert pinned["file"]["target"].endswith("/plain.txt") is True
+    # The target is read from /proc, so only where /proc exists.
+    if "target" in pinned["file"]:
+        assert pinned["file"]["target"].endswith("/plain.txt") is True
+        assert pinned["device"]["target"] == "/dev/null"
     assert pinned["file"]["content"] == ""
     assert pinned["writeonly"]["head"] == refused
     assert pinned["device"]["head"] == refused
-    assert pinned["device"]["target"] == "/dev/null"
     assert pinned["fifo"]["head"] == lines('read: ok("hello")', "ready")

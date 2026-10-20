@@ -36,6 +36,20 @@ TARGET_OS = os.environ.get("AGENTICA_TEST_TARGET_OS") or ("windows" if os.name =
 # that stdout and stderr are one pipe (`2>&1`) waits for the native Windows job.
 UNDER_WINE = os.environ.get("AGENTICA_TEST_WINE") == "1"
 
+# A case that only some systems can run carries host_only(condition, reason): the skip text always starts with
+# "host-only:" and names the capability the other systems lack. tools/conformance.py accepts only such skips (and the
+# other test tier), so a skip for any other reason, such as a missing tool, fails the conformance report.
+WINDOWS = TARGET_OS == "windows"
+# The Python that runs the tests has os.mkfifo, os.killpg, fcntl and SIGHUP (it is not Windows' Python).
+POSIX_PYTHON = os.name == "posix"
+
+
+def host_only(condition, reason):
+    """pytest.mark.skipif(condition, ...) with a "host-only:" reason."""
+    import pytest
+    return pytest.mark.skipif(condition, reason="host-only: " + reason)
+
+
 # `make test-multicore` runs whole modules (TCP, TLS, HTTP) on several schedulers: AGENTICA_VM_TEST_MODULE_SCHEDULERS=N
 # makes every VM started with vm_environment() run on N schedulers under the test switch. A case whose program still
 # uses a builtin that several schedulers refuse (Process, Duplex) calls one_scheduler() first.
@@ -359,9 +373,13 @@ def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
     except ProcessLookupError:
         pass
     except PermissionError:
-        # macOS answers EPERM, not ESRCH, for a group whose only process exited a moment ago and is not reaped yet.
-        if process.poll() is None:
-            raise
+        # macOS answers EPERM, not ESRCH, for a group whose only process is a zombie, and also while that process is
+        # still leaving (it is not reapable yet, so poll() says None). A process that really ignores the signal
+        # would still be there after the wait.
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            raise PermissionError("killpg(%d) was refused and the process is still running" % process.pid) from None
 
 
 def _kill_and_collect(process):
@@ -579,6 +597,34 @@ def _zombie(number):
         return False  # /proc exists and has no entry: the process is gone
     shown = subprocess.run(["ps", "-o", "stat=", "-p", str(number)], capture_output=True, text=True, check=False)
     return shown.stdout.strip()[:1] == "Z"
+
+
+def wait_readable(fd, timeout):
+    """True when a read of the pipe `fd` would not block (data, or the end of the stream) within `timeout` seconds.
+
+    select() does this for pipes on POSIX; on Windows it only takes sockets, so the pipe is asked how many bytes wait."""
+    if os.name != "nt":
+        import select
+        return bool(select.select([fd], [], [], timeout)[0])
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.PeekNamedPipe.argtypes = [wintypes.HANDLE, wintypes.LPVOID, wintypes.DWORD, wintypes.LPDWORD,
+                                       wintypes.LPDWORD, wintypes.LPDWORD]
+    kernel32.PeekNamedPipe.restype = wintypes.BOOL
+    handle = msvcrt.get_osfhandle(fd)
+    available = wintypes.DWORD()
+    deadline = time.monotonic() + timeout
+    while True:
+        if not kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(available), None):
+            return True  # the writer is gone: a read reports the end
+        if available.value:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.01)
 
 
 def process_alive(pid):

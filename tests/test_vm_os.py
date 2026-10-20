@@ -10,7 +10,7 @@ import stat
 
 import pytest
 
-from tests.agentica_test import run_vm, start_vm, vm_environment
+from tests.agentica_test import WINDOWS, host_only, run_vm, start_vm, vm_environment
 from tests.vm_os_support import CONTENTION_PROGRAM, compile_work_text, root, run_program, work
 
 MODES_PROGRAM = """\
@@ -91,6 +91,7 @@ def main() -> Void
 end
 """
 
+@host_only(WINDOWS, "checks the owner-only mode bits 0600 and 0700 and a dangling link; test_windows_metadata_and_locks.py checks the owner and ACL of private entries on Windows")
 def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(root, work):
     # With umask 0 only the mode the VM asks for can explain 0600 and 0700.
     old_umask = os.umask(0)
@@ -110,6 +111,7 @@ def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(ro
     finally:
         os.umask(old_umask)
 
+@host_only(WINDOWS, "compares POSIX mode bits, owners and symbolic links with Python's lstat; test_windows_metadata_and_locks.py checks the Windows metadata")
 def test_lstat_describes_links_themselves_and_reports_mode_and_owner_like_python(root, work):
     (root / "file").write_text("hello")
     os.chmod(root / "file", 0o640)
@@ -154,7 +156,8 @@ def test_lstat_describes_links_themselves_and_reports_mode_and_owner_like_python
 def test_try_lock_on_two_handles_of_one_file_is_released_by_close(root, work):
     lines = run_program(root, work, LOCK_PROGRAM, "lock", root / "lock")
     assert lines == ["ok(true)", "ok(true)", "ok(false)", "true", "ok(true)", "false", "false"]
-    assert stat.S_IMODE((root / "lock").stat().st_mode) == 0o600
+    if not WINDOWS:
+        assert stat.S_IMODE((root / "lock").stat().st_mode) == 0o600
 
 def test_try_lock_contends_across_processes_and_dies_with_its_holder(root, work, adopt):
     path = root / "lock"
@@ -178,7 +181,10 @@ def test_try_lock_contends_across_processes_and_dies_with_its_holder(root, work,
     killed = adopt(start_vm(bytecode, str(path), "hold", stdin=True, cwd=root))
     assert killed.next_line() == "true"
     assert probe() == "false"
-    os.killpg(killed.process.pid, signal.SIGKILL)
+    if WINDOWS:
+        killed.process.kill()
+    else:
+        os.killpg(killed.process.pid, signal.SIGKILL)
     killed.wait()
     assert probe() == "true"
 
@@ -195,6 +201,7 @@ def test_a_child_does_not_keep_the_lock_after_the_handle_closes(root, work, adop
     holder.close_stdin()
     assert holder.wait() == 0
 
+@host_only(WINDOWS, "needs mkfifo; test_windows_metadata_and_locks.py checks that a device cannot be locked on Windows")
 def test_try_lock_refuses_what_is_not_a_regular_file(root, work):
     os.mkfifo(root / "fifo")
     lines = run_program(root, work, DEVICE_LOCK_PROGRAM, "devicelock", root)
@@ -210,7 +217,7 @@ end
     lines = run_program(root, work, text, "make-directory-error", root)
     assert lines == [
         'error("make-directory: cannot make directory\\n  path: %s/missing/x\\n  system error: '
-        'No such file or directory; errno=2")' % root]
+        'No such file or directory; errno=2")' % root.as_posix()]
     assert not (root / "missing").exists()
 
 def test_children_never_get_the_metrics_variables_but_the_program_reads_them(root, work):

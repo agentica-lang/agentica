@@ -25,6 +25,18 @@ from tests.agentica_test import (
 )
 
 
+if os.name == "nt":
+    # Python writes "\n" as "\r\n" in text mode on Windows, and the sources of these tests are meant byte for byte:
+    # a "\r\n" the test wrote on purpose (the CRLF cases of the lexer) would become "\r\r\n". Linux and macOS write
+    # what the test says, so Windows does too.
+    _write_text = Path.write_text
+
+    def _write_text_exactly(self, data, encoding=None, errors=None, newline=None):
+        return _write_text(self, data, encoding=encoding, errors=errors, newline="" if newline is None else newline)
+
+    Path.write_text = _write_text_exactly
+
+
 @pytest.fixture
 def adopt(request):
     """Stop a Child when the test ends (also after a failure or Ctrl-C); return it."""

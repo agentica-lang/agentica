@@ -13,8 +13,12 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, cli, compile_agc, process_alive, scaled, start_vm,
-                                 vm_command, vm_environment, wait_until)
+from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, cli, compile_agc, host_only, process_alive, scaled,
+                                 start_vm, vm_command, vm_environment, wait_until)
+
+# SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals; the Windows console events are tested by
+# tests/test_windows_console_stop.py and tests/test_process_windows.py.
+pytestmark = host_only(WINDOWS, "POSIX stop signals (Windows: test_windows_console_stop.py)")
 
 PEER = FIXTURES / "stop-peer.py"
 WAIT_SECONDS = scaled(10)
@@ -48,6 +52,8 @@ def main() -> Void
 end
 """
 
+# 70 KiB: more than the 64 KiB that a Linux pipe holds, so the output is stuck there, and less than the 16 KiB pipe of
+# macOS plus the 64 KiB buffer of the VM, so the program still reaches the warning there.
 STUCK_STDOUT = """\
 def main() -> Void
   line = "y"
@@ -55,7 +61,7 @@ def main() -> Void
     line = line + line
   end
   n = 0
-  while n < 100
+  while n < 70
     puts(line)
     n += 1
   end

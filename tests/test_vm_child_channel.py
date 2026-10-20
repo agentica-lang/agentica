@@ -2,8 +2,8 @@
 
 fixtures/child-channel.agc is the program; fixtures/child-channel-peer.js is the independent peer (Node): it drives
 the child side, and it is the child the parent side spawns. The peer opens the channel the way the system does, one
-socket pair at descriptor 3, or one pipe per direction at 3 and 4 on Windows. The cases that need a shell, /proc or a
-FIFO are in test_vm_child_channel_linux.py, together with the check that a plain child inherits nothing (the
+socket pair at descriptor 3, or one pipe per direction at 3 and 4 on Windows. The cases that need a shell or a
+FIFO are in test_vm_child_channel_posix.py, together with the check that a plain child inherits nothing (the
 `spawning` mode); vm/tests/process_test.c checks that, and the take itself, in C.
 """
 import json

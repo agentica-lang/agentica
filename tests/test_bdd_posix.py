@@ -1,10 +1,9 @@
 """`agentica test` cases that need a POSIX system: file modes and links, a shell script as the binary, and the first
 binary of the bootstrap (its driver is the one of stage0, which does not know the Windows temporary folder).
 
-The Windows job does not run this module (the cases are not skipped there, they are not listed): a folder made
-unreadable with chmod, a symbolic link, a name that is not valid UTF-8 and a `#!/bin/sh` script have no Windows
-counterpart that the test could build with the standard library. Every other `agentica test` case is in
-tests/test_bdd.py, which the Linux CI and the Windows job run.
+Windows skips this module as host-only: a folder made unreadable with chmod, a symbolic link, a name that is not
+valid UTF-8 and a `#!/bin/sh` script have no Windows counterpart that the test could build with the standard library.
+Every other `agentica test` case is in tests/test_bdd.py, which every system runs.
 """
 import json
 import os
@@ -14,6 +13,10 @@ import pytest
 
 from tests.agentica_test import ROOT, binary, run, vm_environment
 from tests.test_bdd import ADDS_TEST, HANDLERS, BddCli, bdd, file_error  # noqa: F401  (bdd is the fixture of that module)
+
+pytestmark = pytest.mark.skipif(
+    os.name != "posix", reason="host-only: needs chmod, symbolic links, non-UTF-8 names and #!/bin/sh scripts")
+ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 # The first binary of the bootstrap (the Makefile links it with stage0 and builds the release mode only).
 BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / "agentica"
@@ -93,7 +96,7 @@ def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_ea
     assert not re.search("DIVISION-BY-ZERO", message)
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root can make folders anywhere")
+@pytest.mark.skipif(ROOT_USER, reason="root can make folders anywhere")
 def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error_that_names_it(bdd, request):
     scratch = bdd.make_suite({"nothing.txt": ""}, "agentica-bdd-readonly-")
     temporary = scratch / "tmp"

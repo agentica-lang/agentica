@@ -22,7 +22,7 @@ import pytest
 
 from tests.agentica_test import PYTHON, compile_agc, scaled, start_vm, vm_command, vm_environment, wait_until
 
-pytestmark = pytest.mark.skipif(os.name != "nt", reason="needs a Windows console")
+pytestmark = pytest.mark.skipif(os.name != "nt", reason="host-only: CTRL_BREAK_EVENT and ConPTY exist on Windows only")
 
 WAIT_SECONDS = scaled(20)
 SIGBREAK = 21

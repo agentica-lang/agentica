@@ -9,6 +9,7 @@ import itertools
 import json
 import os
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -170,7 +171,7 @@ def test_a_runtime_failure_in_a_dependency_keeps_the_original_file_span(workspac
     assert problem is not None, errors
     assert problem["code"] == "RUNTIME-DIVISION-BY-ZERO"
     assert problem["range"]["start"]["line"] == 2
-    assert problem["file"] == str(directory / "a.agc")
+    assert Path(problem["file"]) == directory / "a.agc"
 
 
 def test_imported_task_callbacks_keep_the_execution_budget(workspace, scratch):
