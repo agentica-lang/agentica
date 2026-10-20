@@ -168,9 +168,9 @@ end
 # A file of the prelude is only a name in the program: no text, so no program can show its lines.
 def source_of(module: Linker.LinkedModule) -> Ir.SourceFile
   if module.file.starts_with?(PRELUDE_PREFIX)
-    return Ir.SourceFile(file: module.file, text: "")
+    return Ir.SourceFile(file: module.file, name: module.name, text: "")
   end
-  return Ir.SourceFile(file: module.file, text: module.text)
+  return Ir.SourceFile(file: module.file, name: module.name, text: module.text)
 end
 
 # Every span in a function of the prelude becomes the first character of its file: the file has no text, and the VM

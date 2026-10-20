@@ -214,6 +214,27 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     updated with `.with` from another module; `Mod.NAME` on a constant is also
     `CHECK-IMPORT-NAME` (write `import {NAME} from "path"`)
 
+- **Code:** `CHECK-IMPORT-PACKAGE`
+  - **Meaning:** a package declared in `agentica.toml` is not in the package
+    cache (run `agentica install`, once it exists), or a file of a package
+    imports a `pkg/` name that its own `agentica.toml` does not declare
+
+- **Code:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
+  `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`
+  - **Meaning:** `agentica.toml` or `agentica.lock` is bad, missing, or does not
+    agree with the other (stale); one name has two sources in the project and
+    its packages (conflict). The report names the file and a key path such as
+    `dependencies.sqlite.git` (`key_path` in `--json`), or a line and column
+    for a TOML syntax error. A missing or unreadable file has only its name.
+    The manifests of all locked packages in the cache are checked before any
+    file is loaded, imported or not
+
+- **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
+  - **Meaning:** the `.agc` files of a package in the cache are not the ones the
+    lock hashes (an edited, added or missing file), or one is a symbolic link,
+    or the `agentica.toml` of the package is not a regular file; remove the
+    folder and fill the cache again
+
 - **Code:** `CHECK-IMPORT-RENAME`
   - **Meaning:** `import {A as b}` where the new name breaks the case rule of
     what it renames: a struct or enum gets a capitalized name, a function a

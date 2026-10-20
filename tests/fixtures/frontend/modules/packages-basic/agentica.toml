@@ -1,0 +1,4 @@
+name = "app"
+
+[dependencies]
+greeter = { git = "https://github.com/owner/greeter.git", tag = "v1.2.3" }

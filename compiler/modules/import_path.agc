@@ -50,6 +50,16 @@ export def rooted?(path: String) -> Bool
   return letter and path.at(1) == ":" and (separator == "/" or separator == "\\")
 end
 
+## A root that does not depend on the working directory. Elsewhere it starts with "/". On Windows it is a drive path
+## (C:\ or C:/), a UNC path (\\server\share) or a path from the root of the current drive (/ or \); "C:libs" is
+## relative.
+export def absolute?(path: String, on_windows: Bool) -> Bool
+  if on_windows
+    return path.starts_with?("\\") or rooted?(path)
+  end
+  return path.starts_with?("/")
+end
+
 ## The path a file is stored under in the program and in the .agcb, and printed by the text forms. root_dir is the
 ## folder of the root file. A file inside it is its path from there, with no "./"; a file above it keeps the ".." parts
 ## ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a std/ folder is "./std/NAME.agc". The
@@ -154,6 +164,40 @@ export def validate_library_path(path: String, site: Failure.Site) -> Result[Voi
   return ok()
 end
 
+## The parts of a canonical path, with no empty part.
+export def path_parts(path: String) -> List[String]
+  return path.split("/").filter do |part| part != "" end
+end
+
+## The parts of a path, with the "." and ".." parts folded in as text: a ".." removes the part before it, and one at
+## the start is dropped. Joined with "/" they only serve to compare with inside?.
+export def folded(path: String) -> String
+  kept: List[String] = []
+  for part in path_parts(path)
+    if part == ".."
+      kept = kept.take(kept.size - 1)
+    elsif part != "."
+      kept = kept.push(part)
+    end
+  end
+  return kept.join("/")
+end
+
+## True when file is below the folder root: every part of root begins the parts of file.
+export def inside?(root: String, file: String) -> Bool
+  base = path_parts(root)
+  target = path_parts(file)
+  if target.size < base.size
+    return false
+  end
+  for index in 0...base.size
+    if base[index] != target[index]
+      return false
+    end
+  end
+  return true
+end
+
 def invalid_library_path(site: Failure.Site) -> String
   return Failure.fail_at(site, "CHECK-IMPORT-PATH", "invalid library path", Diag.Help.NoHelp)
 end
@@ -175,9 +219,4 @@ def without_extension(path: String) -> String
     return path
   end
   return path.slice(0, path.length - pieces[pieces.size - 1].length - 1)
-end
-
-# The parts of an absolute path, with no empty part.
-def path_parts(path: String) -> List[String]
-  return path.split("/").filter do |part| part != "" end
 end

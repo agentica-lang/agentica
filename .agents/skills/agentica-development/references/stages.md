@@ -137,10 +137,20 @@ stage:
     `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL`,
     `CHECK-MODULE-CONTEXT`, `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`,
     `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`,
+    `CHECK-IMPORT-PACKAGE`,
     `CHECK-DECL-ORDER`, `CHECK-TYPE-ALIAS-CYCLE`, `CHECK-UNKNOWN-VARIANT`,
     `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE`,
     `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
     `CHECK-UNREACHABLE-CASE-ARM`, `CHECK-LOOP-CONTROL`, `CHECK-TOO-DEEP`
+
+- **Stage:** packages (`packages/`, `package_import.agc`)
+  - **Codes:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
+    `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK`.
+    Manifest, lock, stale and conflict errors are at a key path
+    (`Failure.fail_key`, `Problem.key_path`); a TOML syntax error is at its line
+    and column; a missing or unreadable file has no key (`Failure.fail_file`).
+    The manifests of the locked packages are checked before any file loads
+    (`check_manifests`). The hash and link errors are at the import.
 
 - **Stage:** runtime (VM)
   - **Codes:** `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`,

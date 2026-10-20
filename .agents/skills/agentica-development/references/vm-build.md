@@ -151,9 +151,12 @@ goes in
     after the last, and writes everything to its stdout in the order the child
     produced it: the child's stdout as it is, each channel line as `channel> `
     and the line. Stdout is drained before each channel line is shown, which is
-    why the order is fixed. The `test-*` fixtures use it; the plain golden reads
-    of `agentica test` modes (`--agentica-test run`) need a `.channel` file, and
-    a fixture without one is the no-channel case (`test-no-channel`).
+    why the order is fixed. On Windows the wrapper is `channel-run.js` (Node;
+    two pipes at fd 3 and 4, `AGENTICA_CHANNEL=3,4`, the child's stdout a file
+    read before each channel line). The `test-*` fixtures use it; the plain
+    golden reads of `agentica test` modes (`--agentica-test run`) need a
+    `.channel` file, and a fixture without one is the no-channel case
+    (`test-no-channel`).
   - `process-` name prefix: runs with `--allow-run`.
   - `HEAVY_FIXTURES` (in `tests/vm_diff_support.py`): fixtures pinned to a
     shard;

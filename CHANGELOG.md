@@ -10,6 +10,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Packages: `agentica.toml` declares git dependencies by local name, pinned to a
+  tag or a commit, and `agentica.lock` pins their commits and hashes. Import one
+  as `import Sqlite from "pkg/sqlite/db"`. Packages load from a cache that you
+  fill yourself; fetching is planned. New codes: `PKG-MANIFEST-INVALID`,
+  `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`, `PKG-LOCK-STALE`,
+  `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK` and
+  `CHECK-IMPORT-PACKAGE`.
 - `String.to_bytes(s)`: the UTF-8 bytes of a String as a `List[Int]`, the
   inverse of `String.from_bytes`.
 - Generic type aliases: `type Matrix[T] = List[List[T]]`, used as
@@ -42,6 +49,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** when an `agentica.toml` is in the folder of the root file or
+  above it, `pkg/` searches `agc_libs/` beside that manifest, not beside the
+  root file. Without a manifest nothing changes.
 - **Breaking:** `Lazy` is now a reserved type name.
 - **Breaking:** `Profile` is now a reserved type name.
 - **Breaking:** `Crypto` is now a reserved type name.

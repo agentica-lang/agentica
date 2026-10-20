@@ -15,9 +15,9 @@ Each stage takes the previous stage's data and returns its typed outcome
 stages may use `Result` with a packed `Problem`. `try` stops at the first error.
 
 `compiler/` has one folder per context: `app/`, `io/`, `syntax/`, `modules/`,
-`check/`, `catalog/`, `lower/`, `bytecode/`, `diagnostics/`, `bdd/` and
-`embedded/`, with `front_end.agc` at the root. A new file goes in the folder of
-its context. Names below are bare; the folder is in each label
+`packages/`, `check/`, `catalog/`, `lower/`, `bytecode/`, `diagnostics/`,
+`bdd/` and `embedded/`, with `front_end.agc` at the root. A new file goes in the
+folder of its context. Names below are bare; the folder is in each label
 (`references/repo-map.md` has every file). An import inside a folder is the
 bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
 
@@ -37,8 +37,14 @@ bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
   `resolve.agc`, `rewrite.agc` (linked name of every name), `linker.agc`
   (`Linker.link_file`, `Linker.program`), `declarations.agc`
   (`CHECK-DECL-ORDER`), `suggest.agc` (did-you-mean), `link_env.agc` (`Env`
-  and `Settings`: `stdlib/` and environment, passed in, never read inside),
-  `link_failure.agc`.
+  and `Settings`: `stdlib/` and environment, passed in, never read inside; a
+  new environment variable gets a `--name=V` flag in `link.agc`, `check.agc`,
+  `lower.agc` and `bytecode.agc`, and a value in the hermetic environment of
+  the tests), `link_failure.agc`.
+- Packages (`packages/`, §45): the manifest, the lock, the git source rules, the
+  cache and the package import, all pure. The rules are in
+  `docs/grammar/05b-modules.md`; the file list is in `repo-map.md`. They read
+  the disk only through the `Workspace` and the environment only through `Env`.
 - Catalog (`catalog/`, `types.agc` in `check/`): `types.agc`,
   `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`, the `Rule` enum),
   `builtins.agc` (lookups), `builtins_data.agc` (hand-edited rows, records,
@@ -63,7 +69,8 @@ bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
 ### Pure core, one port
 
 Every folder of `compiler/` except `io/`, `app/`, `bdd/` and `embedded/`
-(`syntax`, `modules`, `check`, `catalog`, `lower`, `bytecode`, `diagnostics`)
+(`syntax`, `modules`, `packages`, `check`, `catalog`, `lower`, `bytecode`,
+`diagnostics`)
 is pure: it never calls `File`, `Dir`, `Path` (only `Path.join`, which is
 string work), `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`,
 `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or a bare `puts`,
@@ -72,7 +79,8 @@ and it never imports `io/`, `app/`, `bdd/` or a `std/` module that is not on
 When a stage needs the machine it calls a function of
 `Workspace` (`modules/workspace.agc`), a record of function values that
 travels in `Env.Settings.workspace`: `read_text`, `file_exists`,
-`directory_exists`, `real_path`, `resolve_path`, `std_source`. The
+`directory_exists`, `real_path`, `resolve_path`, `std_source`, `list_folder`
+and `read_bytes` (the last two serve the package hash). The
 environment variables and the host (`windows`) are data in `Env.Env`.
 `io/host.agc` builds the real `Workspace` and `process_env`; a test can build
 a `Workspace` over an in-memory tree. `app/` (the command line), `bdd/` (the

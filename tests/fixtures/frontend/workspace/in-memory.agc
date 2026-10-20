@@ -36,6 +36,14 @@ def nothing(name: String) -> Result[String]
   return error("no embedded source #{name}")
 end
 
+def no_folder(path: String) -> Result[List[Workspace.Entry]]
+  return error("no such folder")
+end
+
+def no_bytes(path: String) -> Result[List[Int]]
+  return error("no such file")
+end
+
 def main() -> Void
   workspace = Workspace.Workspace(
     read_text: &read_text,
@@ -44,8 +52,10 @@ def main() -> Void
     real_path: &same_path,
     resolve_path: &same_path,
     std_source: &nothing,
+    list_folder: &no_folder,
+    read_bytes: &no_bytes,
   )
-  env = Env.Env(agentica_path: "", xdg_data_home: "", home: "", local_app_data: "", windows: false)
+  env = Env.Env(agentica_path: "", xdg_data_home: "", xdg_cache_home: "", home: "", local_app_data: "", windows: false)
   settings = Env.settings(workspace, "stdlib", env)
   puts(LinkText.ids_text("/mem/root.agc", settings))
   puts(LinkText.ids_text("/mem/broken.agc", settings))

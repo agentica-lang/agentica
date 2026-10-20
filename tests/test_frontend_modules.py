@@ -23,7 +23,7 @@ MODULE_FIXTURES = FIXTURES / "frontend" / "modules"
 
 # Hermetic: no AGENTICA_PATH, and a user data folder that does not exist.
 DEFAULT_ENV = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
-               "LOCALAPPDATA": "/nonexistent-agentica-local-app-data"}
+               "XDG_CACHE_HOME": "/nonexistent-agentica-cache", "LOCALAPPDATA": "/nonexistent-agentica-local-app-data"}
 
 # compiler/io/source_reader.agc reads 262144 bytes at a time. The cases put a character, or the start of an invalid
 # sequence, across the edges of the reads.
@@ -39,7 +39,7 @@ def fixture_names():
 
 def env_arguments(env):
     arguments = ["--agentica-path=" + env["AGENTICA_PATH"], "--xdg-data-home=" + env["XDG_DATA_HOME"],
-                 "--local-app-data=" + env["LOCALAPPDATA"]]
+                 "--xdg-cache-home=" + env["XDG_CACHE_HOME"], "--local-app-data=" + env["LOCALAPPDATA"]]
     if "HOME" in env:
         arguments.append("--home=" + env["HOME"])
     return arguments
@@ -219,6 +219,11 @@ class ModulesStage(PytestStageCase):
                 if line:
                     key, value = line.split("=", 1)
                     env[key] = value.replace("@/", str(destination.resolve()) + "/")
+        if WINDOWS and "XDG_CACHE_HOME" in env:
+            # Windows reads the package cache from %LOCALAPPDATA%/agentica/cache/pkg, not from XDG_CACHE_HOME.
+            local = destination.resolve() / "local"
+            shutil.copytree(Path(env["XDG_CACHE_HOME"]) / "agentica" / "pkg", local / "agentica" / "cache" / "pkg")
+            env["LOCALAPPDATA"] = str(local)
         return env
 
 
@@ -353,8 +358,8 @@ def test_the_user_library_root_is_the_home_local_share_or_the_local_app_data_fol
         "local/agentica/lib/homelib.agc": "export def answer() -> Int\n  return 42\nend\n",
         "home-root/root.agc":
             "import Homelib from \"pkg/homelib\"\n\ndef main() -> Void\n  puts(Homelib.answer().to_s)\nend\n"})
-    env = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "relative/data", "HOME": str(directory / "home"),
-           "LOCALAPPDATA": str(directory / "local") if WINDOWS else "relative/local"}
+    env = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "relative/data", "XDG_CACHE_HOME": "relative/cache",
+           "HOME": str(directory / "home"), "LOCALAPPDATA": str(directory / "local") if WINDOWS else "relative/local"}
     output = stage.link([(env, "home-root/root.agc")], directory)["home-root/root.agc"]
     assert not output.startswith("ERROR"), output
     assert re.search(r'module "[^"]*homelib.agc"', output)

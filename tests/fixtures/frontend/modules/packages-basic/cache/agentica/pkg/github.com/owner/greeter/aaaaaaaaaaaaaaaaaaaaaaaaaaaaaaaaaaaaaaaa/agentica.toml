@@ -1,0 +1,2 @@
+[dependencies]
+tools = { git = "https://gitlab.com/team/tools", ref = "aaaaaaa" }

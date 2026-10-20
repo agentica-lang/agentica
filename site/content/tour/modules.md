@@ -208,6 +208,26 @@ See [Queue](/library/data-structures/queue/) for every function.
 
 ## Other libraries
 
-Paths that start with `pkg/` load installed libraries. `import Tools from "pkg/acme/tools"` looks for `acme/tools.agc` in `agc_libs/` next to the main program, then in each directory listed in `AGENTICA_PATH`, then in `~/.local/share/agentica/lib/`, `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`. On Windows, `AGENTICA_PATH` is separated by `;` (drive paths such as `C:\libs` are fine), the user directory is `%LOCALAPPDATA%\agentica\lib\`, and there are no system directories.
+Paths that start with `pkg/` load installed libraries. `import Tools from "pkg/acme/tools"` looks for `acme/tools.agc` in `agc_libs/` next to the main program (next to `agentica.toml` when the project has one), then in each directory listed in `AGENTICA_PATH`, then in `~/.local/share/agentica/lib/`, `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`. On Windows, `AGENTICA_PATH` is separated by `;` (drive paths such as `C:\libs` are fine), the user directory is `%LOCALAPPDATA%\agentica\lib\`, and there are no system directories.
 
-Import cycles are errors (`CHECK-IMPORT-CYCLE`), and so are missing files (`CHECK-IMPORT-IO`).
+## Packages
+
+A package is a git repository of `.agc` files. A project with an `agentica.toml` next to its main file, or in a folder above it, can import the packages the manifest declares. Each dependency has a local name and one pin, a `tag` or a `ref` (a commit):
+
+```toml
+name = "notes"
+
+[dependencies]
+sqlite = { git = "https://github.com/owner/sqlite-ac", tag = "v1.2.0" }
+json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
+```
+
+Import a package by its local name, then a path inside the repository, without `.agc`:
+
+```text
+import Sqlite from "pkg/sqlite/db"
+```
+
+The local name does not have to match the URL, so moving a repository changes only its `git` line.
+
+`agentica.lock` holds the exact commit and a hash of each package's `.agc` files. A build checks both, and it never downloads anything. The packages come from a cache folder, `~/.cache/agentica/pkg/`, which you fill yourself. A package that is not in the cache is `CHECK-IMPORT-PACKAGE`. The commands that fill the cache are planned.

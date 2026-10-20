@@ -29,9 +29,10 @@ def refreezing():
     return os.environ.get("AGENTICA_REFREEZE", "") == "1"
 
 
-# The stages read the environment of the pkg/ search when they are not given the flags; the original writers ran with
-# no AGENTICA_PATH and a user data folder that does not exist, and so do the stages here.
+# The stages read the environment of the pkg/ search and of the package cache when they are not given the flags; the
+# original writers ran with no AGENTICA_PATH and a user data folder that does not exist, and so do the stages here.
 HERMETIC_ENVIRONMENT = vm_environment({"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
+                                       "XDG_CACHE_HOME": "/nonexistent-agentica-xdg",
                                        "LOCALAPPDATA": "/nonexistent-agentica-xdg"})
 
 # The default limit of one stage run over a corpus; a case that is big or slow passes its own.

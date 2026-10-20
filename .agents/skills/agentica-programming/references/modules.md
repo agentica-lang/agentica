@@ -96,7 +96,7 @@ Two prefixes select where a module comes from:
 - `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in, in
   order:
   1. `agc_libs/` beside the root program (not beside each dependency, and not
-     the working directory);
+     the working directory), or beside `agentica.toml` when the project has one;
   2. absolute roots in `AGENTICA_PATH`, in the listed order;
   3. `$XDG_DATA_HOME/agentica/lib/`, defaulting to
      `~/.local/share/agentica/lib/`;
@@ -121,6 +121,41 @@ the import. Embedded-module diagnostics name their source, such as
 directory; external modules may use ordinary relative imports for their
 dependencies.
 
+## Packages (`agentica.toml`)
+
+A project with an `agentica.toml` in the folder of the root file (or above it)
+can import the packages it declares. Nothing downloads: the cache is filled by
+hand, and a missing package is `CHECK-IMPORT-PACKAGE`.
+
+```toml
+name = "notes"
+
+[dependencies]
+sqlite = { git = "https://github.com/owner/sqlite-ac", tag = "v1.2.0" }
+json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
+```
+
+```ruby
+import Sqlite from "pkg/sqlite/db"
+```
+
+- A dependency is a local name (lowercase letters, digits, `_`, `-`) and a table
+  with `git` (`https://host/owner/repo`) and exactly one of `tag` or `ref` (a
+  commit). Only git sources exist; a `path`, a branch or a version range is
+  `PKG-MANIFEST-INVALID`.
+- `pkg/<name>/<module path>` is a declared name, and it comes before the `pkg/`
+  library folders. An undeclared name is the search above.
+- A file of a package imports only the names of its own `agentica.toml`, and
+  its own modules by relative paths inside the package.
+- `agentica.lock` (beside the manifest) lists every package of the project, with
+  its commit and hash. A missing or stale lock is `PKG-LOCK-MISSING` or
+  `PKG-LOCK-STALE`; one name with two sources is `PKG-SOURCE-CONFLICT`; a
+  changed file is `PKG-HASH-MISMATCH`. Bad `agentica.toml` or `agentica.lock`
+  errors are `PKG-MANIFEST-INVALID` or `PKG-LOCK-INVALID`, and they name a file
+  and a key path.
+- The cache is `~/.cache/agentica/pkg/<host>/<owner>/<repo>/<commit>/` (on
+  Windows `%LOCALAPPDATA%\agentica\cache\pkg\`).
+
 ## String queue (`std/queue`)
 
 `std/queue` is a library written in Agentica. Its exported records are
@@ -140,10 +175,8 @@ Push adds at the back; pop removes the oldest value. Pop and peek on an empty
 queue return an error Result. Inputs are never changed: assign the returned
 queue (or `Popped.remaining`). Empty strings and duplicates are valid.
 `QueueState` is a normal exported struct, not an opaque handle. There are no
-user generics and no blocking cross-task queue operations. The implementation
-uses Lists: push, peek, size, empty? and new take near constant time, but pop is
-O(n) because it drops the first item of the list; no constant-time FIFO is
-promised.
+user generics and no blocking cross-task queue operations. `push`, `pop`,
+`peek`, `size` and `empty?` are O(n); no constant-time FIFO is promised.
 
 ## Other standard modules
 

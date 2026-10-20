@@ -21,7 +21,8 @@ check a signature with `agentica help NAME`.
    returns ARGS). `agentica compile F -o F.agcb`, then `agentica run [FLAGS]
    -- F.agcb ARGS`. Use the path the user gives if `agentica` is not on PATH.
 3. Exit 0: success. Exit 1: first diagnostic on stderr (stable code `LEX-`,
-   `PARSE-`, `CHECK-` or `RUNTIME-`, a span, often a `help` line). Exit 2: bad
+   `PARSE-`, `CHECK-`, `RUNTIME-` or `PKG-`, a span or, for `agentica.toml` and
+   `agentica.lock`, a key path, often a `help` line). Exit 2: bad
    usage or unreadable file. Fix the first error and rerun.
 4. Done means exit 0 and the output matches the request. A check does not test
    runtime behavior.
@@ -122,7 +123,8 @@ values, functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
   later one.
 - Imports: `import Models from "models"` then `Models.User`, or `import {User,
   greet as hello} from "models"`. Never both on one line. Renames keep case:
-  types stay capitalized, functions lowercase.
+  types stay capitalized, functions lowercase. A package declared in
+  `agentica.toml` is `import S from "pkg/name/mod"` (`references/modules.md`).
 - Defaults: a literal, `true`, `false`, `nil`, `[]`, `{}` or a payload-free
   variant (else `CHECK-DEFAULT-VALUE`). Defaulted parameters go last
   (`CHECK-DEFAULT-ORDER`), except a last `Fn` that a block fills. A function
@@ -205,7 +207,8 @@ Read only what the task needs:
 - `references/performance.md`: slow programs, 100,000+ items or about 1 MB,
   hot paths, `AGENTICA_VM_TRACE=profile`, `Profile.measure` sections,
   `Profile.steps` budgets, flame graphs.
-- `references/modules.md`: several files, shared constants, `std/` or `pkg/`.
+- `references/modules.md`: several files, shared constants, `std/`, `pkg/` or
+  packages (`agentica.toml`, `agentica.lock`).
 - `references/json.md`: JSON. `references/toml.md`: TOML (`std/toml`).
 - `references/files.md`: files, directories, paths, locks, private files,
   removing or renaming paths or trees.

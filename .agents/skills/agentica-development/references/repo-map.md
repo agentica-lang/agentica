@@ -13,7 +13,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     cli_options.agc cli_help.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; the fixed texts; what a command answers; Launch
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2, 8b): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
   io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
-    host.agc  # workspace(): the real Workspace (read_text, file_exists, directory_exists, real_path, resolve_path, std_source); process_env(): the Env of this process
+    host.agc  # workspace(): the real Workspace (read_text, file_exists, directory_exists, real_path, resolve_path, std_source, list_folder, read_bytes); process_env(): the Env of this process
     source_reader.agc  # read, read_shown: a whole file as strict UTF-8 text in chunks (the rules are in syntax/source_file.agc)
     save_file.agc  # a file written in pieces (compile -o)
   syntax/  # source text, tokens, lexer, parser, AST
@@ -33,7 +33,11 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     resolve.agc rewrite.agc  # resolve: the linked name of a name; rewrite: the declarations of a file with linked names
     linker.agc      # link_file: Linking.Done(Linked) | Failed(Failure); program(): the flat Program for the checker
     declarations.agc link_env.agc link_failure.agc  # declaration helpers and CHECK-DECL-ORDER; Env and Settings (with the Workspace); Site and packed failures with a file
-    link.agc link_text.agc  # entry: prints the text form of the linked program of each root file argument (flags: --stdlib=, --agentica-path=, --xdg-data-home=, --home=, --ids)
+    link.agc link_text.agc  # entry: prints the text form of the linked program of each root file argument (flags: --stdlib=, --agentica-path=, --xdg-data-home=, --xdg-cache-home=, --home=, --local-app-data=, --ids)
+  packages/  # §45: the manifest, the lock and the package cache (core: no I/O, only the Workspace)
+    project.agc manifest.agc lock.agc  # the nearest agentica.toml and its lock checks (PKG-LOCK-*); the manifest and the lock as data with PKG-*-INVALID at a key path
+    git_source.agc toml_read.agc  # the rules of a name, a git URL, a tag and a ref; the TOML helpers the manifest and the lock share
+    package_import.agc package_cache.agc package_hash.agc  # which pkg/<name>/ imports are packages, the hash check, the stored name; the cache folder of a commit; the hash of the .agc files (Crypto.sha256)
   check/  # the checker, types, suggestions, constants and defaults
     suggest.agc  # did_you_mean (the linker also calls it)
     types.agc  # the Type enum (the catalog, lowering and the writer import it)
@@ -61,7 +65,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
   bytecode/  # the bytecode writer
     bytecode_tables.agc bytecode_bytes.agc bytecode_pool.agc  # bytecode writer: format constants and opcode numbers, little-endian integers, UTF-8 and chunk lists, interned tables
     bytecode_spans.agc bytecode_types.agc bytecode_function.agc bytecode_failure.agc  # the span table, the Types and Decodable sections, one function (constants, updates, builtins, labels), BYTECODE- problems
-    bytecode_writer.agc  # write(workspace, root_dir, program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
+    bytecode_writer.agc  # write(program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
     bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc, and `--version=V` for the header)
   diagnostics/  # the diagnostic record and its plain, JSON and AI text
     diagnostic.agc  # Diagnostic and Outcome[T]
