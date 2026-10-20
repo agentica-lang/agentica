@@ -23,6 +23,30 @@ def shrink_pipe(fd, size):
         pass
 
 
+def winsock_pair():
+    """A connected pair of TCP sockets on 127.0.0.1 whose writer is not in overlapped mode.
+
+    socket.socketpair() makes overlapped sockets, which a child cannot write with WriteFile (the call behind _write)
+    and so cannot use as a standard handle. WSASocketW without WSA_FLAG_OVERLAPPED makes the kind that a console or
+    an inetd-style parent hands over.
+    """
+    import ctypes
+
+    wsa_socket = ctypes.WinDLL("ws2_32").WSASocketW
+    wsa_socket.restype = ctypes.c_size_t
+    wsa_socket.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint]
+    handle = wsa_socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, None, 0, 0)
+    if handle == (1 << (8 * ctypes.sizeof(ctypes.c_void_p))) - 1:
+        raise OSError("WSASocketW failed: %d" % ctypes.get_last_error())
+    writer = socket.socket(socket.AF_INET, socket.SOCK_STREAM, fileno=handle)
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        writer.connect(listener.getsockname())
+        reader, _ = listener.accept()
+    return reader, writer
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stdout-file", required=True)
@@ -42,9 +66,21 @@ def main():
     options = parser.parse_args()
     command = options.command[1:] if options.command[:1] == ["--"] else options.command
 
+    read_socket = None
     if options.socket:
-        reader, writer = socket.socketpair()
-        read_fd, write_fd = reader.detach(), writer.detach()
+        reader, writer = winsock_pair() if os.name == "nt" else socket.socketpair()
+        if os.name == "nt":
+            # Winsock handles are not descriptors: the reader stays a socket object, and the writer becomes a CRT
+            # descriptor over its handle, which is what Popen duplicates for the child.
+            import msvcrt
+
+            read_socket = reader
+            if options.pipe_size:
+                reader.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, options.pipe_size)
+                writer.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, options.pipe_size)
+            read_fd, write_fd = None, msvcrt.open_osfhandle(writer.detach(), 0)
+        else:
+            read_fd, write_fd = reader.detach(), writer.detach()
     elif options.pty:
         import pty
 
@@ -101,7 +137,7 @@ def main():
     state["read_start"] = time.monotonic() - start
     while True:
         try:
-            data = os.read(read_fd, options.chunk)
+            data = read_socket.recv(options.chunk) if read_socket else os.read(read_fd, options.chunk)
         except OSError:
             break
         if not data:
@@ -111,7 +147,10 @@ def main():
             break
         if options.pause:
             time.sleep(options.pause)
-    os.close(read_fd)
+    if read_socket:
+        read_socket.close()
+    else:
+        os.close(read_fd)
     for thread in threads:
         thread.join()
 

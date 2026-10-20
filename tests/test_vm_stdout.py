@@ -6,7 +6,7 @@ JSON summary: the exit status and when the reader started, the VM exited, and
 the first error byte arrived. Programs that need no peer run with their
 streams on files. The cases run on Linux, macOS and Windows; the few that need
 a Unix descriptor kind (a pty, /dev/full, /dev/stdout) are marked "host-only:"
-with the reason, and the socket case is a known issue on Windows (#440).
+with the reason. The socket case runs on Windows with a Winsock socket that is not in overlapped mode.
 """
 import json
 import re
@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, known_issue, run, scaled,
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, run, scaled,
                                  vm_command, vm_environment)
 
 PEER = FIXTURES / "stdout-peer.py"
@@ -25,7 +25,6 @@ FILLER = "x" * 1024
 # full and the end of the run has to wait for a reader that does not come. More rows would keep the program printing.
 STUCK_ROWS = 58
 WINDOWS = TARGET_OS == "windows"
-socket_stdout = known_issue(WINDOWS, 440, "the Python peer hands the VM a socketpair as stdout; a Winsock peer is missing")
 pty_stdout = pytest.mark.skipif(
     WINDOWS, reason="host-only: needs a Unix pseudo terminal; test_windows_console_stop.py has the ConPTY cases")
 dev_stdout = pytest.mark.skipif(
@@ -413,7 +412,6 @@ def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_
     assert b"flush_timeout_ms" not in out, "the warning is dropped, not mixed into the data"
 
 
-@socket_stdout
 def test_a_socket_as_stdout_is_written_on_the_loop(tmp_path):
     summary, out, _ = run_case(tmp_path, "socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "2.0"])
     assert summary["status"] == 0
