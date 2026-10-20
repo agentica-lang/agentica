@@ -27,6 +27,9 @@ WORD_ACTIONS = {
 ## the end of the text only because the sentinel is in no set.
 NAME_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".split(""))
 
+## The characters a lowercase name starts with. Never the sentinel `""`, as for NAME_CHARS.
+NAME_STARTS = Set.new("abcdefghijklmnopqrstuvwxyz_".split(""))
+
 ## The characters of a number: digits and `_`. Never the sentinel `""`, as for NAME_CHARS.
 NUMBER_CHARS = Set.new("0123456789_".split(""))
 
@@ -104,6 +107,14 @@ PAIR_SECONDS = Set.new(["=", ">", "&", "|", "."])
 
 ## The only operator of three characters.
 ELLIPSIS = Op(kind: "dot-dot-dot", lexeme: "...", value: Tokens.Value.Text("..."), width: 3)
+
+## The token kinds that can end an expression: a line that starts with `.name` continues a line that ends in one.
+ENDS_EXPRESSION = Set.new(
+  [
+    "name", "type-name", "integer", "float", "string", "interp-end", "right-paren", "right-bracket", "right-brace",
+    "end", "true", "false", "nil",
+  ],
+)
 
 ## The opener that each closing bracket needs on top of the frames.
 OPENERS = {")": "(", "]": "[", "}": "{"}
@@ -429,16 +440,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         if top.inside >= 0
           return Diag.Outcome.Failed(unterminated(delimiters[top.inside].start, start))
         end
-        if top.kind == "kw"
-          tokens = tokens.push(
-            Tokens.Token(
-              kind: "NL",
-              lexeme: lexeme,
-              value: Tokens.Value.NoValue,
-              span: Source.Span(start: start, stop: Source.Position(offset: next, line: line + 1, column: 1)),
-            ),
-          )
-        end
+        newline_end = Source.Position(offset: next, line: line + 1, column: 1)
         index = next
         line += 1
         line_start = next
@@ -450,6 +452,25 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
           resume = NO_RESUME
         end
         column_base = 1 - line_start
+        if top.kind == "kw"
+          # A line that starts with `.name` continues the line before, so its NL is dropped. It needs a token that
+          # can end an expression just before (not an NL, so a blank line ends the statement, nor a `do` or an
+          # operator); the parser rejects any other leading dot.
+          joined = false
+          if tokens.size > 0 and ENDS_EXPRESSION.include?(tokens[tokens.size - 1].kind)
+            joined = dot_follows?(chars, index) and !ends_in_type?(tokens)
+          end
+          if !joined
+            tokens = tokens.push(
+              Tokens.Token(
+                kind: "NL",
+                lexeme: lexeme,
+                value: Tokens.Value.NoValue,
+                span: Source.Span(start: start, stop: newline_end),
+              ),
+            )
+          end
+        end
       CharClass.Hash ->
         if chars[index + 1] == "#" and only_blanks?(chars, line_start, index)
           scan = scan_doc(input, index, line, line_start)
@@ -1092,6 +1113,45 @@ def scan_doc(input: Input, from: Int, line: Int, line_start: Int) -> DocScan
     text: lines.join("\n"),
     next: line_after_doc(chars, size, index),
   )
+end
+
+## Whether the last token is the name of a type in a type annotation (`-> Void`, `a: Int`) and not a value such as
+## `Color.Red`: a leading dot after a def or struct line is then the stray dot of a block, not a continuation.
+def ends_in_type?(tokens: List[Tokens.Token]) -> Bool
+  size = tokens.size
+  if size < 2 or tokens[size - 1].kind != "type-name"
+    return false
+  end
+  before = tokens[size - 2].kind
+  return before == "arrow" or before == "colon"
+end
+
+## Whether the first line that is not a plain `#` comment line starts, after its indentation, with a dot and a name
+## (`.map`, `.with(`), not `..`, `...` or a number. A blank line stops the look-ahead (it ends the statement) and so
+## does a `##` doc line. `from` is the start of the line after a line break.
+def dot_follows?(chars: List[String], from: Int) -> Bool
+  index = from
+  while true
+    while blank?(chars[index])
+      index += 1
+    end
+    char = chars[index]
+    if char == "."
+      return NAME_STARTS.include?(chars[index + 1])
+    end
+    if char != "#" or chars[index + 1] == "#"
+      return false
+    end
+    index = skip_until(chars, index, LINE_ENDS)
+    if chars[index] == "\r"
+      index += 1
+    end
+    if chars[index] != "\n"
+      return false
+    end
+    index += 1
+  end
+  return false
 end
 
 def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool

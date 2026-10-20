@@ -1,0 +1,24 @@
+program #23 0:1:1-267:12:1
+  declaration: function-decl #22 0:1:1-267:12:1 name="main"
+    result: type-ref #0 14:1:15-18:1:19 name="Void"
+    body: binding #18 21:2:3-249:10:1 name="lines"
+      value: struct-update #17 29:2:11-248:9:16
+        target: method-call #14 29:2:11-232:8:19 name="filter"
+          target: method-call #12 29:2:11-213:7:8 name="map"
+            target: method-call #6 29:2:11-81:3:13 name="drop"
+              target: call #4 29:2:11-68:2:50 name="File.foreach" piped=false
+                arg: literal #1 42:2:24-54:2:36 value=string:"ledger.csv"
+                arg: literal #2 56:2:38-61:2:43 value=int:65536
+                arg: literal #3 63:2:45-67:2:49 value=int:1000
+              arg: literal #5 79:3:11-80:3:12 value=int:1
+            arg: block-lit #11 178:5:10-213:7:8
+              param: block-param #7 182:5:14-186:5:18 name="line"
+              body: expr-stmt #10 194:6:7-206:7:1
+                value: call #9 194:6:7-205:6:18 name="parse" piped=false
+                  arg: name-ref #8 200:6:13-204:6:17 name="line"
+          arg: function-ref #13 226:8:13-231:8:18 name="big?"
+        arg: named-arg #16 243:9:11-247:9:15 name="a"
+          value: literal #15 246:9:14-247:9:15 value=int:1
+    body: expr-stmt #21 251:10:3-263:11:1
+      value: call #20 251:10:3-262:10:14 name="puts" piped=false
+        arg: name-ref #19 256:10:8-261:10:13 name="lines"

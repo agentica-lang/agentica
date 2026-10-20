@@ -312,6 +312,14 @@ blank and comment lines. Several `NL` can appear between statements. The parser
 skips stray `NL` at top level and between statements; keep that skip when adding
 statement forms.
 
+A line that starts with `.name` drops the NL before it (`dot_follows?`, in the
+`CharClass.Newline` arm of `lex_from`), when the last token is in
+`ENDS_EXPRESSION` and is not a type name after `->` or `:` (`ends_in_type?`).
+The look-ahead skips `#` comment lines; a blank line or a `##` line stops it.
+Any other leading dot stays and the parser rejects it
+(`PARSE-UNEXPECTED-TOKEN` at the dot). Do not use the form in `compiler/`
+until `bootstrap/stage0.agcb` lexes it.
+
 Top-level declarations need a blank line after `end`
 (`PARSE-MISSING-BLANK-LINE`).
 A `##` block is one `DOC` followed by the NL of its last line, not a blank line;

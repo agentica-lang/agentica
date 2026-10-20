@@ -48,6 +48,18 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression
   may span lines, and a trailing comma is allowed. To split a long expression,
   wrap it in parentheses.
+- A line that starts with `.name` continues the line before it, so a method
+  chain spans lines with no parentheses (also after a `do ... end` block). A
+  `#` comment may end a line or sit alone between two steps; a blank line, a
+  `##` line, `..`, `...` and `|>` at the start of a line do not continue
+  (`PARSE-UNEXPECTED-TOKEN`).
+
+  ```ruby
+  lines = File.foreach(path, 65536, 1000)
+    .drop(1)                          # header
+    .map do |line| parse(line) end
+    .filter(&big?)
+  ```
 - Reserved words: `def struct enum case do import export end if elsif else while
   for in return try true false nil and or not`. `with` is not reserved, but
   `value.with(...)` is always the struct update.
@@ -382,7 +394,8 @@ Operators, from highest to lowest precedence:
   (`f(a)`, `Alias.f(a)`), optionally after `try`; pipes group to the left (`x |>
   f() |> g()` is `g(f(x))`). A builtin with a method form is written with `.`;
   see `PARSE-PIPE-TARGET` and `CHECK-PIPE-METHOD` in `diagnostics.md`. A chain
-  over several lines goes in parentheses, one step per line. Prefer it to
+  over several lines goes in parentheses, one step per line (a leading `|>` does
+  not continue a line, unlike a leading `.name`). Prefer it to
   reassigning the same name in a row:
 
   ```ruby

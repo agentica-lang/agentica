@@ -15,13 +15,25 @@
 - Names of variables, functions and fields start with a lowercase letter or `_`.
   Type names start with an uppercase letter. Identifiers are case-sensitive.
 - Spaces, tabs and indentation have no structural meaning. CRLF is read as LF.
-- A newline separates statements, except inside `(...)`, `[...]` and `{...}`.
+- A newline separates statements, except inside `(...)`, `[...]` and `{...}`,
+  and before a line that starts with `.name` (see below).
 - The lexer emits one `NL` token for each newline outside those delimiters,
   including blank and comment lines. Inside a block that is itself within
   `(...)`, `[...]` or `{...}`, newlines are emitted too, so a multi-line block
   can be an argument. The parser ignores extra `NL` tokens between declarations
   and statements.
 - If the file does not end with a newline, the lexer adds one before `EOF`.
+- A line whose first token is a `.` followed by a name (`.map`, `.with(`)
+  continues the expression of the line before: the lexer drops the `NL` that
+  ends that line, so a method chain can span lines without parentheses. The
+  line before must end in a token that can end an expression (a name, a
+  literal, a closing bracket or `end`; not a type annotation such as `-> Void`).
+  Comment-only lines (`#`) between the two lines are skipped, and a trailing
+  comment on the line before is fine. A blank line ends the statement, and so
+  does a `##` doc line. `..` and `...` at the start of a line do not continue
+  (ranges stay as they are), and neither does `|>`. A leading dot that
+  continues nothing (the first line of a block, after a blank line, after `do
+  |x|` or after an operator) is `PARSE-UNEXPECTED-TOKEN` at the dot.
 - `;`, backslash continuation and implicit continuation after an operator are
   not supported. Wrap a long expression in parentheses. Inside lists and calls,
   use several lines and a trailing comma.
@@ -31,6 +43,11 @@ total = (
   base +
   extra
 )
+
+lines = File.foreach("ledger.csv", 65536, TIMEOUT_MS)
+  .drop(1)                                     # header
+  .map do |line| parse(line) end
+  .filter(&big_expense?)
 ```
 
 Reserved words of the core, which cannot be used as identifiers:
@@ -66,7 +83,8 @@ Variables, fields and parameters cannot have the suffix.
 
 The pipe operator `|>` is one token (the longest match next to `|` and `||`), so
 block parameters `do |x|` and `||` are unchanged. It does not continue a line: a
-chain over several lines goes in parentheses (see section 5).
+chain over several lines goes in parentheses (see section 5). Only a leading
+`.name` continues a line.
 
 ### Doc comments
 

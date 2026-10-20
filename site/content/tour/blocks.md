@@ -153,6 +153,29 @@ end
 [2, 3]
 ```
 
+## Chains over several lines
+
+A line that starts with a dot and a name continues the line before it, so a long chain of method calls and blocks reads one step per line, with no parentheses. A comment may end a line, or sit alone on a line between two steps. A blank line ends the statement.
+
+```agentica
+def main() -> Void
+  scores = [3, 8, 5, 10, 1]
+    .filter do |x| x > 2 end   # drop the small ones
+    # then double what is left
+    .map do |x|
+      x * 2
+    end
+    .take(3)
+  puts(scores)
+end
+```
+
+```output
+[6, 16, 10]
+```
+
+A line that starts with `..`, `...` or `|>` does not continue: put a pipe chain in parentheses.
+
 ## Annotate when needed
 
 Parameter types come from the call. When the call cannot tell, write the type after the name:
