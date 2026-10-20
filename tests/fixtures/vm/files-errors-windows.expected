@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 68,
+  "stdout": [
+    "error(\"open-input-file: cannot open input file\\n  path: @tmp/file.txt/\\n  system error: No such file or directory; errno=2\")",
+    "error(\"open-output-file: error opening file\\n  path: @tmp/file.txt/x\\n  system error: No such file or directory; errno=2\")",
+    "error(\"make-directory: cannot make directory\\n  path: @tmp/file.txt/sub/\\n  system error: No such file or directory; errno=2\")",
+    "error(\"make-directory: cannot make directory\\n  path: @tmp/file.txt/sub\\n  system error: No such file or directory; errno=2\")",
+    ""
+  ],
+  "stderr": []
+}

@@ -18,9 +18,9 @@ Every C edit also reads `references/vm-c.md`.
 ## Pipeline and files
 
 ```text
-check          (compiler/checker.agc)         the type of each expression, by node id
-lower          (compiler/lowering.agc)        checked program -> IR, or LOWER-UNSUPPORTED / LOWER-INTERNAL
-bytecode write (compiler/bytecode_writer.agc) IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL; the versioned .agcb file (magic, format version, Agentica version)
+check          (compiler/check/checker.agc)         the type of each expression, by node id
+lower          (compiler/lower/lowering.agc)        checked program -> IR, or LOWER-UNSUPPORTED / LOWER-INTERNAL
+bytecode write (compiler/bytecode/bytecode_writer.agc) IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL; the versioned .agcb file (magic, format version, Agentica version)
 vm/agentica.c dist/agentica WORDS...: the front end (compiler/front_end.agc, carried in the binary) in a first runtime, then the program it hands over in a second (references/vm-core.md)
 vm/agentica.c dist/agentica run [--max-steps N] [--seed N] [--flush-timeout MS] [--schedulers N] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000; AGENTICA_SCHEDULERS sets the scheduler count, default 1, above 1 only with the test-only AGENTICA_VM_TEST_MULTICORE=1)
 ```
@@ -115,12 +115,12 @@ still compute wrong values or end with
     HTTP client and server
 
 - **Read:** `references/vm-lowering.md`
-  - **When:** `compiler/lower_*.agc`, `compiler/bytecode_*.agc`, a new form or
+  - **When:** `compiler/lower/*.agc`, `compiler/bytecode/*.agc`, a new form or
     opcode, linked programs, closures, ranges, Results, tail calls
 
 - **Read:** `references/vm-builtins.md`
   - **When:** adding or changing a C builtin (`VM_BUILTINS` in
-    `compiler/lower_tables.agc`, the tables) or a trace point
+    `compiler/lower/lower_tables.agc`, the tables) or a trace point
 
 - **Read:** `references/vm-build.md`
   - **When:** make targets, the golden harness (`tests/vm_diff_support.py`,

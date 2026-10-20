@@ -29,9 +29,10 @@ Checked on `origin/master` at `95a45635`:
   width matches the compiler manifest. No other folder has a manifest. With no
   `[style]` there is no limit (§45.5).
 - **Plain comments are dropped.** The lexer skips a `#` line without making a
-  token: `src/lexer.rkt:232` and `compiler/lexer.agc:102-110`. Only a `##` line
-  that starts a line makes a `DOC` token (`src/lexer.rkt:229`,
-  `compiler/lexer.agc:103`). A `##` after code is an ordinary comment (§32.2).
+  token: `src/lexer.rkt:232` and `compiler/syntax/lexer.agc:102-110`. Only a
+  `##` line that starts a line makes a `DOC` token (`src/lexer.rkt:229`,
+  `compiler/syntax/lexer.agc:103`). A `##` after code is an ordinary comment
+  (§32.2).
 - **Blank and comment lines look alike to the tokens.** The lexer emits one `NL`
   for each newline outside brackets, "including blank and comment lines"
   (`docs/grammar/04-lexical.md`). A blank line and a comment line both count as
@@ -40,9 +41,9 @@ Checked on `origin/master` at `95a45635`:
   source spans, not the `NL` tokens.
 - **The tree has no grouping node.** Parentheses around an expression leave no
   trace in the AST. A call does record whether it had parentheses (`Call`,
-  `parenthesized`, `compiler/ast.agc:314-320`), because a pipe target needs
-  them. `else` and `->` have no node either: `IfStmt` has `else_body` as a list
-  of statements, and `CaseArm` has a pattern and a body. Map entries
+  `parenthesized`, `compiler/syntax/ast.agc:314-320`), because a pipe target
+  needs them. `else` and `->` have no node either: `IfStmt` has `else_body` as a
+  list of statements, and `CaseArm` has a pattern and a body. Map entries
   (`MapEntry`), block parameters (`BlockParam`), fields and variants have nodes.
   The module doc is not a node (§32.4).
 - **Every node has a span.** The step-2 text form of the tree
@@ -57,12 +58,12 @@ Checked on `origin/master` at `95a45635`:
     does not produce;
   - 72 multi-line `def` headers, each closed by `) -> Type` on its own line.
     Most parameters take one line each (274 lines with one parameter, against 28
-    lines with several), but `compiler/lower_stmt.agc:26` packs five;
+    lines with several), but `compiler/lower/lower_stmt.agc:26` packs five;
   - a trailing comma after the last parameter of a broken header, as in
-    `compiler/parse_text.agc:243`;
+    `compiler/syntax/parse_text.agc:243`;
   - 80 lines in `compiler/` end in `and` or `or` (113 in the three folders,
-    comment lines included), as in `compiler/resolve.agc:89-91`; 52 code lines
-    end in ` +`, the pieces of a split string (PR #284);
+    comment lines included), as in `compiler/modules/resolve.agc:89-91`; 52 code
+    lines end in ` +`, the pieces of a split string (PR #284);
   - method chains broken with a leading dot inside parentheses
     (`stdlib/logger.agc:284-288`), multi-line `if (` conditions
     (`stdlib/bdd/gherkin.agc:260`), and map and struct literals with one entry
@@ -72,10 +73,11 @@ Checked on `origin/master` at `95a45635`:
     lines and 896 `##` lines in `compiler/`. Two blank lines in a row occur in
     one place, `stdlib/test/runner.agc:531`, and in none of `compiler/` or
     `examples/`.
-- **Generated files are not edited by hand.** `compiler/builtins_data.agc` and
-  `compiler/check_tables.agc` say to change `src/` and run the generator. Both
-  generators require `../src/` (`tools/gen-builtins-data.rkt:12-14`), so they
-  cannot run once step 8 removes the Racket front end (question 7 in 47.9).
+- **Generated files are not edited by hand.**
+  `compiler/catalog/builtins_data.agc` and `compiler/check/check_tables.agc` say
+  to change `src/` and run the generator. Both generators require `../src/`
+  (`tools/gen-builtins-data.rkt:12-14`), so they cannot run once step 8 removes
+  the Racket front end (question 7 in 47.9).
 - **`std/toml` has landed** (`stdlib/toml.agc`; the roadmap says it landed
   before the bootstrap). A formatter can read `[style]` with it, as §45.5 plans
   for `agentica check`.
@@ -119,17 +121,21 @@ Checked on `origin/master` at `95a45635`:
 ### 47.3 Where it lives
 
 - It is written in Agentica in `compiler/`, after step 8 of §18.3. It reuses the
-  self-hosted lexer (`compiler/lexer.agc`) and parser (`compiler/parser.agc`).
-  That is why it waits. With one parser there is no second grammar to keep in
-  sync. Before step 8 the front end is Racket, and row 7.2.7 freezes it: `src/`
-  takes no new syntax. A Racket formatter would be a second parser in that
-  frozen tree.
+  self-hosted lexer (`compiler/syntax/lexer.agc`) and parser
+  (`compiler/syntax/parser.agc`). That is why it waits. With one parser there is
+  no second grammar to keep in sync. Before step 8 the front end is Racket, and
+  row 7.2.7 freezes it: `src/` takes no new syntax. A Racket formatter would be
+  a second parser in that frozen tree.
 - Step 8 ports the CLI driver (§18.3), so the subcommand goes into the Agentica
-  CLI. These files are proposed, flat like the other stages in `compiler/`:
-  - `compiler/format.agc`: the driver, text in and text or a diagnostic out;
-  - `compiler/format_comments.agc`: the comment list and its attachment (47.4);
-  - `compiler/format_doc.agc`: the document type and the fit check (47.5);
-  - `compiler/format_layout.agc`: one function per node kind.
+  CLI. These files are proposed, in their own context folder `compiler/format/`
+  (#456):
+  - `compiler/format/format.agc`: the driver, text in and text or a diagnostic
+    out;
+  - `compiler/format/format_comments.agc`: the comment list and its attachment
+    (47.4);
+  - `compiler/format/format_doc.agc`: the document type and the fit check
+    (47.5);
+  - `compiler/format/format_layout.agc`: one function per node kind.
 
 ### 47.4 Comments: the hard part
 
@@ -314,7 +320,8 @@ proposal, to be confirmed by the goldens of phase 47b.
    closing bracket goes on its own line at the indent of the opening line.
 3. **`def` headers.** On one line if they fit. Otherwise one parameter goes on
    each line, indented two spaces, with a trailing comma after the last one, and
-   `) -> Type` goes on the closing line (`compiler/parse_text.agc:235-244`).
+   `) -> Type` goes on the closing line
+   (`compiler/syntax/parse_text.agc:235-244`).
 4. **Parentheses.** The printer chooses grouping parentheses from the tree. It
    adds them where precedence needs them, such as `(x |> f()).unwrap!`, where
    the precedence follows `docs/grammar/05-syntax.md:143-147`. It adds them
@@ -336,8 +343,8 @@ proposal, to be confirmed by the goldens of phase 47b.
    words into more `#` lines (question 6 in 47.9).
 7. **Long boolean and arithmetic.** Wrap the expression in parentheses and break
    after each operator, with the operator at the end of the line
-   (`compiler/resolve.agc:89-91`). The next operand goes on the next line,
-   indented two spaces.
+   (`compiler/modules/resolve.agc:89-91`). The next operand goes on the next
+   line, indented two spaces.
 8. **Doc comments.** A `##` block keeps its lines as written. Only a paragraph
    that has a line over the width is re-flowed, and only that paragraph.
    Paragraphs are separated by empty `##` lines. The room is `max_line_width`
@@ -492,8 +499,8 @@ The checklist lives in [§47.10 Implementation](#4710-implementation-row-79)
 below; there is no separate roadmap phase file.
 
 - **47a: comments and the side list.** `lex_with_comments` in
-  `compiler/lexer.agc`, the attachment pass in `compiler/format_comments.agc`,
-  with the table of 47.4, and tests of the (node, role) pairs for a set of
+  `compiler/syntax/lexer.agc`, the attachment pass in
+  `compiler/format/format_comments.agc`, with the table of 47.4, and tests of the (node, role) pairs for a set of
   inputs. Plain `lex` and `parse` do not change, so their goldens do not move.
   No user-visible change.
 - **47b: printer and `--check`.** The document type with the pieces of 47.5, the
@@ -543,8 +550,8 @@ Each question has options and a recommendation.
    list, call, map or `def` header; (b) never; (c) only where the grammar text
    says so. **Recommendation:** (a), the repo's habit. The grammar text mentions
    trailing commas only for lists and calls (`docs/grammar/04-lexical.md:11`). A
-   `def` header in `compiler/parse_text.agc:243` has one, and the bootstrap
-   compiles that file. The grammar note should say so in 47b.
+   `def` header in `compiler/syntax/parse_text.agc:243` has one, and the
+   bootstrap compiles that file. The grammar note should say so in 47b.
 5. **A file that does not parse.** Options: (a) refuse: exit 1 with the lexer or
    parser diagnostic, the file untouched, and `--check` the same; (b) format the
    part before the error, which is not possible, because the parser stops at the

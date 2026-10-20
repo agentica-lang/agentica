@@ -279,7 +279,7 @@ then no scenario runs.
 
 ```text
 agentica test [PATH...] [--steps FILE]
-  (the driver, compiler/bdd_driver.agc, runs in the front end of the binary)
+  (the driver, compiler/bdd/bdd_driver.agc, runs in the front end of the binary)
   compiles std/test/runner (embedded) and the step program to .agcb files
   in a private temporary directory, then runs the runner with
   `agentica run` of the same binary:
@@ -382,14 +382,14 @@ closes each child on every path.
   would be cancelled silently, and its failed assertion would never be reported.
   Then, if a program under test is running, the child probes it with a zero-byte
   `Process.read_bytes`; a truncated stream is `RUNTIME-BDD-OUTPUT-LIMIT`.
-- **Driver.** The driver (`compiler/bdd_driver.agc`, part of the front end of
-  the binary, so it runs in the process that `agentica test` started) parses
-  the options and writes the
-  configuration to `config.jsonl`, one line per file, so long lists never meet
-  an argument or line limit. The runner writes its report to a file of the run
-  directory, which the driver prints, so a report is not limited to the 1 MiB
-  that a captured stream keeps. If the runner fails with stderr output, the
-  driver reports one `RUNTIME-BDD-INFRA` file error and exits 2.
+- **Driver.** The driver (`compiler/bdd/bdd_driver.agc`, part of the front end
+  of the binary, so it runs in the process that `agentica test` started) parses
+  the options and writes the configuration to `config.jsonl`, one line per file,
+  so long lists never meet an argument or line limit. The runner writes its
+  report to a file of the run directory, which the driver prints, so a report is
+  not limited to the 1 MiB that a captured stream keeps. If the runner fails
+  with stderr output, the driver reports one `RUNTIME-BDD-INFRA` file error and
+  exits 2.
 
 ## Unit test files (`Test.run`)
 

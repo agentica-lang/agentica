@@ -1,9 +1,6 @@
 def main() -> Void
-  root = Process.spawn_captured("/bin/pwd", [], "/", 60000).unwrap!
-  IO.inspect(Process.output(root, 60000))
-  Process.close(root)
-  here = Process.spawn_captured("/bin/pwd", [], ".", 60000).unwrap!
-  cwd = Process.spawn_captured("/bin/pwd", [], Path.cwd().unwrap!, 60000).unwrap!
+  here = Process.spawn_captured("pwd", [], ".", 60000).unwrap!
+  cwd = Process.spawn_captured("pwd", [], Path.cwd().unwrap!, 60000).unwrap!
   puts(Process.output(here, 60000).unwrap!.stdout == Process.output(cwd, 60000).unwrap!.stdout)
   Process.close(here)
   Process.close(cwd)

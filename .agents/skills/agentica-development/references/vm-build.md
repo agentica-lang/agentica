@@ -57,7 +57,7 @@ the VM paths listed
   (`compiler/front_end.agc`) compiles in memory and hands the bytes to C with
   `FrontEnd.hand_off`; `vm/agentica.c` runs them in a new runtime. A
   `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1. Every catalog
-  implementation is in `VM_BUILTINS` (`compiler/lower_tables.agc`), so no
+  implementation is in `VM_BUILTINS` (`compiler/lower/lower_tables.agc`), so no
 builtin
   reaches it today.
   `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
@@ -74,7 +74,7 @@ builtin
   --driver-pid ... --embedded runner` (see `references/bdd.md`). A new VM option
 goes in
   `agc_launch_parse` and in the pass-through list of the front end
-  (`compiler/cli_options.agc` and the hand-off check in
+  (`compiler/app/cli_options.agc` and the hand-off check in
   `vm/agentica.c`). A new builtin goes into `VM_BUILTINS` with its C
   implementation. There is no `AGENTICA_VM`: no code reads it, and
   `AGENTICA_VM_BINARY` is a test knob only (the Python tests run that build of
