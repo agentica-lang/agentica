@@ -16,23 +16,23 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 **Decision.** Strings, lists, maps, structs, enums and results never change in place. Mutable state lives only in handles (tasks, channels, files, sockets, processes), and each handle has one owner task, which decides who closes it.
 
-**Why.** Tasks share immutable values without locks or copies, also once more threads arrive (planned).
+**Why.** Tasks share immutable values without locks or copies, also across scheduler threads.
 
 ## Garbage collection with Boehm
 
-**Decision.** The Boehm GC frees program values. Linux builds use the system copy by default; the release links its own static copy.
+**Decision.** The Boehm GC frees program values. Linux builds use the system copy by default; the release links its own static copy on every system.
 
-**Why.** No manual frees or reference counts, so values are shared freely. The collector scans conservatively, so pointers need no tags, and the static copy keeps the release at glibc only.
+**Why.** No manual frees or reference counts, so values are shared freely. The collector scans conservatively, so pointers need no tags, and the static copy keeps the Linux release at glibc only.
 
-## Green tasks on one scheduler
+## Green tasks on schedulers
 
-**Decision.** A green task has its own registers and frames, and a blocking call parks only its task. One scheduler thread runs all tasks today, in turns of 2000 steps; more are planned.
+**Decision.** A green task has its own registers and frames, and a blocking call parks only its task. By default one scheduler thread runs all tasks, in turns of 2000 steps. N scheduler threads with one I/O thread (`--schedulers N`) are built and tested, but stay behind a test switch until they open to everyone.
 
 **Why.** Frames live on the task's stack, not the C stack, so a switch changes only the current task. The turn limit stops a busy loop starving the others, and a slow read waits alone.
 
 ## One libuv event loop for I/O
 
-**Decision.** One libuv loop handles sockets, timers, child processes and the standard streams; regular files use its thread pool. A print copies its text into a 64 KiB buffer per stream, so a slow reader stalls only the tasks that print. It runs on Linux, macOS and Windows.
+**Decision.** One libuv loop handles sockets, timers, child processes and the standard streams; regular files use its thread pool. With several schedulers the loop runs on its own I/O thread. A print copies its text into a 64 KiB buffer per stream, so a slow reader stalls only the tasks that print. It runs on Linux, macOS and Windows.
 
 **Why.** libevent had no file I/O, no UTF-8 paths on Windows and no spawn with stdio pipes; libuv has all three. The pool runs only bounded work, because a pool thread that waits forever cannot be cancelled or joined.
 
@@ -52,7 +52,7 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 **Decision.** Five libraries, each a submodule pinned to a release tag: Boehm GC, yyjson, libuv, OpenSSL, picohttpparser. Each must be permissive, with no copyleft.
 
-**Why.** The release links them into one binary that needs only glibc, so they must be permissive, and each license ships with it.
+**Why.** The release links them into one binary per system (on Linux it needs only glibc), so they must be permissive, and each license ships with it.
 
 ## Learn more
 
