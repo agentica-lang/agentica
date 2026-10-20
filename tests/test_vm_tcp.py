@@ -33,6 +33,15 @@ def ipv6_localhost():
         return False
 
 
+def require_ipv6():
+    """Skips without IPv6 localhost, but fails in CI, where every runner has it (as for a missing tool)."""
+    if ipv6_localhost():
+        return
+    if os.environ.get("CI"):
+        pytest.fail("no IPv6 localhost on this CI runner")
+    pytest.skip("no IPv6 localhost")
+
+
 CLIENT_PROGRAM = """\
 def main() -> Void
   echo = Result.unwrap!(TCP.connect("localhost", %d, 5000))
@@ -301,8 +310,7 @@ def test_listener_on_localhost_takes_ipv4_and_ipv6_clients(tmp_path, adopt):
 
 
 def test_listen_on_localhost_fails_when_another_program_holds_the_port_on_ipv6(tmp_path):
-    if not ipv6_localhost():
-        pytest.skip("no IPv6 localhost")
+    require_ipv6()
     # No SO_REUSEADDR, like the original holder: the VM must find the port taken.
     with socket.socket(socket.AF_INET6) as holder:
         holder.bind(("::1", 0))
@@ -455,9 +463,10 @@ def assert_port_free(host, port):
         time.sleep(0.05)
 
 
-def test_cancel_during_connect_and_accept_closes_both_and_releases_the_port(tmp_path, adopt):
-    """A crashed parent cancels a task in TCP.connect and one in TCP.accept: the Python peer of the connect sees
-    the socket close (or never sees it), and the listener's port is free while the VM still runs."""
+def test_a_crashed_owner_cancels_its_tasks_and_frees_the_listener_port(tmp_path, adopt):
+    """A crashed parent cancels its task that dials (its connect job may have finished or not) and the one that owns
+    the listener and waits in TCP.accept: the Python peer of the dial sees the socket close (or never sees it), and
+    the listener's port is free while the VM still runs."""
     with listener_on("127.0.0.1") as peer:
         trace, env = trace_env(tmp_path)
         vm = adopt(start_vm(compile_text(CANCEL_PROGRAM % peer.getsockname()[1], "cancel", tmp_path), stdin=True, env=env))
@@ -475,7 +484,7 @@ def test_cancel_during_connect_and_accept_closes_both_and_releases_the_port(tmp_
                 connection.settimeout(scaled(10))
                 try:
                     assert connection.recv(1) == b""
-                except ConnectionResetError:
+                except (ConnectionResetError, ConnectionAbortedError):
                     pass
         vm.close_stdin()
         assert vm.wait() == 0, vm.stderr_text()
@@ -505,6 +514,7 @@ def serve_python_clients(tmp_path, adopt, host, count):
         thread.start()
     for thread in threads:
         thread.join(scaled(30))
+        assert not thread.is_alive(), "a client hung"
     for k in range(count):
         assert replies.get("p%d" % k) == "p%d-ñ!\n" % k, replies
         assert replies.get("p%d/eof" % k) == b"", replies
@@ -522,6 +532,7 @@ def python_echo(server, count):
     """Answers COUNT connections of SERVER at once, one thread each, with `name!`."""
     def answer(connection):
         with connection:
+            connection.settimeout(scaled(20))
             reader = connection.makefile("rb")
             line = reader.readline()
             connection.sendall(line.rstrip(b"\n") + b"!\n")
@@ -535,6 +546,7 @@ def python_echo(server, count):
         threads.append(thread)
     for thread in threads:
         thread.join(scaled(30))
+        assert not thread.is_alive(), "a server thread hung"
 
 
 def dial_python_server(tmp_path, host, count):
@@ -543,6 +555,7 @@ def dial_python_server(tmp_path, host, count):
         peer.start()
         result = run_text(tmp_path, "dial", DIAL_PROGRAM % (count, host, server.getsockname()[1]))
         peer.join(scaled(30))
+        assert not peer.is_alive(), "the Python server hung"
     assert result.code == 0, result.stderr
     assert result.stdout == "".join('ok("c%d!")\n' % k for k in range(count))
 
@@ -552,8 +565,7 @@ def test_simultaneous_client_tasks_talk_to_a_python_server(tmp_path):
 
 
 def test_ipv6_client_and_server_with_python_peers(tmp_path, adopt):
-    if not ipv6_localhost():
-        pytest.skip("no IPv6 localhost")
+    require_ipv6()
     dial_python_server(tmp_path, "::1", 3)
     serve_python_clients(tmp_path, adopt, "::1", 3)
 
@@ -576,3 +588,83 @@ def test_tls_returns_an_error_where_it_is_not_built(tmp_path):
     assert result.code == 0, result.stderr
     assert result.stdout == ('error("ssl-connect: connect failed (TLS needs Linux or macOS)")\n'
                              'error("ssl-make-server-context: setup failed (TLS needs Linux or macOS)")\n')
+
+
+BACKLOG_PROGRAM = """\
+def wait_accept(listener: Listener) -> Result[Socket]
+  return TCP.accept(listener, 60000)
+end
+
+def parent(listener: Listener) -> Result[Int]
+  Task.spawn(&wait_accept, listener)
+  Task.sleep(0)
+  zero = 0
+  return ok(1 / zero)
+end
+
+def answer(socket: Socket) -> Void
+  Result.unwrap!(TCP.send(socket, "answered\\n", 5000))
+  TCP.close(socket)
+end
+
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  puts(TCP.local_port(listener))
+  IO.flush()
+  IO.gets()
+  count = 0
+  while count < %d
+    answer(Result.unwrap!(TCP.accept(listener, 5000)))
+    count = count + 1
+  end
+  IO.inspect(TCP.accept(listener, 50))
+  puts(Task.await(Task.spawn(&parent, listener)).ok?)
+  IO.flush()
+  IO.gets()
+  TCP.close_listener(listener)
+  IO.inspect(TCP.accept(listener, 1000))
+end
+"""
+
+
+def go(vm):
+    """One line on the program's stdin: its IO.gets returns."""
+    vm.process.stdin.write(b"go\n")
+    vm.process.stdin.flush()
+
+
+def read_reply(client):
+    client.settimeout(scaled(10))
+    try:
+        return client.makefile("rb").readline()
+    except (ConnectionResetError, ConnectionAbortedError):
+        return b""
+
+
+def test_listener_takes_every_connection_that_waited_in_its_backlog(tmp_path, adopt):
+    """N clients are connected before the program calls TCP.accept: N accepts take all N (Windows reports several
+    AcceptEx completions before the first uv_accept). Then, after a timed-out accept and a cancelled one, closing the
+    listener with one connection pending makes the next accept return `listener is closed`.
+
+    The cancelled accept keeps its place until its deadline (`request_cancel` stops a TCP wait only then), so it may
+    take the pending connection and drop it: the client reads the end either way."""
+    count = 16
+    vm = adopt(start_vm(compile_text(BACKLOG_PROGRAM % count, "backlog", tmp_path), stdin=True))
+    port = int(vm.next_line())
+    clients = [socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) for _ in range(count)]
+    try:
+        time.sleep(0.3)
+        go(vm)
+        assert [read_reply(client) for client in clients] == [b"answered\n"] * count
+        assert vm.next_line() == 'error("network: operation timed out")'
+        assert vm.next_line() == "false"
+        pending = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
+        clients.append(pending)
+        go(vm)
+        assert vm.next_line() == 'error("network: listener is closed")'
+        assert read_reply(pending) == b""
+        vm.close_stdin()
+        assert vm.wait() == 0, vm.stderr_text()
+    finally:
+        for client in clients:
+            client.close()

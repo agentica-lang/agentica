@@ -698,7 +698,7 @@ static void tls_read_in(net *n, ssize_t got) {
     n->in.error = agc_net_errno((int)got);
   }
   if (got < 0)
-    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : (int)-got);
+    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : agc_net_errno((int)got));
   advance(n);
   request *q = n->reader;
   bool done = n->handshaken && q && read_ready(n, q);
@@ -716,7 +716,7 @@ static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
   }
   agc_inbuf_got(&n->in, got, got == UV_EOF);
   if (got < 0)
-    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : (int)-got);
+    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : agc_net_errno((int)got));
   request *q = n->reader;
   bool done = q && read_ready(n, q);
   if (got < 0 || (!q && !n->watch) || done) stop_reading(n);
@@ -776,8 +776,8 @@ static request *next_accept(net *n) {
 
 /* Waiting accepts take the connections in the backlog, here on the I/O thread: the accepted socket travels in the
    request, which holds a count on it until its done half adopts it. A TLS connection first handshakes, under the
-   accept's deadline, and finishes its accept when the handshake ends. A failed uv_accept closes the listener, since
-   libuv stops watching that link. */
+   accept's deadline, and finishes its accept when the handshake ends. A failed uv_accept closes the listener: on Unix
+   libuv stops watching that link, and on Windows the socket it held is gone, so the link is not trusted again. */
 static void serve(net *n) {
   while (n->accepts) {
     tcp_link *k = n->conn;
@@ -810,11 +810,15 @@ static void serve(net *n) {
 static void incoming(uv_stream_t *server, int status) {
   tcp_link *k = TCP_LINK(server, tcp);
   net *n = k->owner;
+  /* Only Windows reports an error here (Unix libuv retries or sheds load itself), and only once it has stopped
+     listening on the link (src/win/tcp.c uv__process_tcp_accept_req), so no connection would ever come: the head
+     waiter gets the error and the listener closes, which ends every other wait. */
   if (status < 0) {
-    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", n->id, -status);
+    AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", n->id, agc_net_errno(status));
     request *q = next_accept(n);
     if (q) q->error = status;
     finish(q);
+    shut(n, "accept");
     return;
   }
   k->backlog++;
@@ -922,7 +926,7 @@ static void connected(uv_connect_t *req, int status) {
     notify(n, n->opener);
     return;
   }
-  AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_connect_error socket=%" PRIu64 " error=%d", n->id, -status);
+  AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_connect_error socket=%" PRIu64 " error=%d", n->id, agc_net_errno(status));
   n->error = status;
   n->conn = NULL;
   drop_link(k);
@@ -984,7 +988,7 @@ static void setup_done(uv_work_t *w, int status) {
   if (!n->config) {
     if (status < 0) {
       n->failure.code = AGC_TLS_ERR_INTERNAL;
-      n->failure.sys = -status;
+      n->failure.sys = agc_net_errno(status);
     }
     n->tls_failed = true;
     AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_setup_error %s=%" PRIu64 " error=%s", kind_name(n), n->id,
@@ -1539,7 +1543,7 @@ agc_conn *agc_conn_accept(agc_conn *l) {
   int rc = 0;
   net *c = accept_link(l, k, &rc);
   if (!c) {
-    AGC_TRACE(&l->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", l->id, -rc);
+    AGC_TRACE(&l->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", l->id, agc_net_errno(rc));
     return NULL;
   }
   /* The count that agc_conn_socket's resource then holds, taken here on the I/O thread. */

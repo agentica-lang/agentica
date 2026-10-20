@@ -114,8 +114,10 @@ and the `network:` texts. Other systems get no `TCP` builtins.
 - **Accept.** `listener is closed` is checked first, then the timeout. Waiting
   accepts form one FIFO for all of a listener's handles, and a connection is
   accepted only into the head waiter's `done` half, so it never waits without an
-  owner. If `uv_accept` fails, the listener is closed: that accept returns the
-  error, and every other waiting accept returns `network: listener is closed`. A
+  owner. If `uv_accept` fails, or libuv reports an accept error (only Windows
+  does, once it has stopped listening on that handle), the listener is closed:
+  the head accept returns the error, and every other waiting accept returns
+  `network: listener is closed`. A
   timed-out accept leaves the listener open.
 - **Reads.** `recv_bytes` checks 1..1048576 first, then the timeout, the reader
   lock and the open state. The socket is read only while a reader waits, 4 KiB

@@ -441,11 +441,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   arrived, so a fixture reads bytes only after the writer is done (await it
   first). Network tests bind 127.0.0.1 port 0 and use Node or Python peers; no
   name that needs DNS beyond `/etc/hosts`. A connect timeout has no hermetic
-  test (it needs an address that drops SYNs); it was checked by hand. A fixture
-  that needs a write to stay parked sends one String far bigger than the
-  loopback buffers (64 MiB), never a loop of sends: the number of sends
-  that complete depends on the kernel's buffer sizes, and so would the
-  step count.
+  test (it needs an address that drops SYNs); it was checked by hand. A golden
+  fixture that needs a write to stay parked sends one String far bigger than
+  the loopback buffers (64 MiB), never a loop of sends: the number of sends
+  that complete depends on the kernel's buffer sizes, and so would the step
+  count. Windows takes even a 32 MiB send whole, so a pytest case (no step
+  counts) that needs a send to time out loops sends, bounded, until one
+  fails (`CLIENT_PROGRAM` in `tests/test_vm_tcp.py`).
 - **TLS (7h, in on Linux)**
   - `TLS.connect` and `TLS.listen` in `vm/tcp.c` on the adapter of `vm/tls.h`
     (`docs/vm/10-io-tls.md` §10.3).
