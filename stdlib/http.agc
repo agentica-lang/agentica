@@ -592,9 +592,10 @@ def refuse_problem(socket: Socket, problem: String, deadline: Int) -> String
   return refuse(socket, String.to_int!(String.slice(problem, 0, 3)), rest_of(problem, 4), deadline)
 end
 
-# Sends text, closes the write side, and reads and drops input until the peer closes, deadline, or DRAIN_BYTES bytes, so
-# unread request bytes cannot turn the close into a reset that loses the answer. Then it closes the socket. The answer
-# gets at least ANSWER_MS even when the deadline has passed; only the drain is bound by the deadline and the byte limit.
+# Sends text, closes the write side, and reads and drops input until the peer closes, deadline, or DRAIN_BYTES bytes,
+# so unread request bytes cannot turn the close into a reset that loses the answer. Then it closes the socket. The
+# answer gets at least ANSWER_MS even when the deadline has passed; only the drain is bound by the deadline and the
+# byte limit.
 def linger(socket: Socket, text: String, deadline: Int) -> Void
   wait = deadline - Time.monotonic_ms()
   if wait < ANSWER_MS
