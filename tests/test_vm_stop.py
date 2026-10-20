@@ -111,9 +111,6 @@ def gone_soon(pid):
     return False
 
 
-
-
-
 def bytecode(text, tmp_path, name="program"):
     source = tmp_path / (name + ".agc")
     source.write_text(text, encoding="utf-8")
@@ -248,8 +245,10 @@ def ctrl_c_through_the_cli(request, adopt, source, path):
         text = pid_file.read_text() if pid_file.exists() else ""
         return int(text) if text.isdigit() else None
 
-    # Whatever fails, the child (it sleeps 60 s) must not outlive the test; run_on_console ends the CLI itself.
-    request.addfinalizer(lambda: child_pid() and kill_process(child_pid()))
+    # Whatever fails, the child (it sleeps 60 s) must not outlive the test; run_on_console ends the CLI itself. Once
+    # the test has seen the child gone, its pid may belong to another process, so it is not killed then.
+    seen_gone = []
+    request.addfinalizer(lambda: child_pid() and not seen_gone and kill_process(child_pid()))
 
     def press_ctrl_c(type_text):
         assert wait_until(lambda: child_pid() is not None, 6 * WAIT_SECONDS, 0.1), "the child wrote its pid"
@@ -257,6 +256,7 @@ def ctrl_c_through_the_cli(request, adopt, source, path):
         # Checked while the console is open: closing a pseudo console may end what is attached to it, and then a child
         # that the VM left alive would look gone.
         assert wait_until(lambda: not process_alive(child_pid()), WAIT_SECONDS, 0.1), "the VM ended the child"
+        seen_gone.append(True)
 
     command = cli() + ["--allow-run", source, path, "sleep", PYTHON, WINDOWS_CHILD, pid_file]
     status, shown = run_on_console(command, vm_environment(), WAIT_SECONDS, during=press_ctrl_c)

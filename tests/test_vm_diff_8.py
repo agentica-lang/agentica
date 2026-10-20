@@ -386,8 +386,8 @@ def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child
                         cwd=tmp_path, read_stdout=False,
                         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0))
     pid = child.process.stdout.readline().decode().strip()
-    request.addfinalizer(lambda: kill_alive([pid]))
     assert pid.isdigit(), pid
+    request.addfinalizer(lambda: kill_alive([pid]))
     time.sleep(0.5)
     kill_process(pid)
     time.sleep(0.3)
