@@ -348,7 +348,8 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 8.2
   - **Next work:** **The prelude and the Enumerable methods (15f) are done
     (2026-10-16)**, in `compiler/`, `stdlib/prelude/` and the VM; `format`
-    (15k) and `Stream[T]` (17e) are still deferred (rows 7.6 and 7.3).
+    (15k) is still deferred (row 7.6); `Lazy[T]` (17e, PR 1: lists, ranges
+    and `Lazy.produce`) is built, its I/O sources are next.
   - **Outcome:** Enumerable methods, written in Agentica, O(n) on the new lists
 
 - **Order:** 8.3
@@ -365,7 +366,7 @@ after them may run in parallel when needed and keep their relative order.
     `docs/future/27-iteration-and-concurrency.md` §27): `Task.map` (17a,
     **done**, PR #316); `Channel[T]` (17b) at row 7.2.1e; `Task.await`
     with a timeout (17c, built); `File.each_line` (row 7.2.1h);
-    `Stream[T]` (17e) at step 8.2.
+    `Lazy[T]` (17e; PR 1 built, I/O sources next).
   - **Outcome:** Programs run I/O for each item of a list N at a time, and build
     producer and consumer pipelines, with one form for each job
 

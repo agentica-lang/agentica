@@ -15,11 +15,13 @@ where `T` is inferred from the block comes with the first of 27.1 and
 `File.open` with a block (§25.9). 27.3 (`Task.await` with a timeout, returning
 the builtin enum `Await[T]`) is built (roadmap 17c): the owner decided on
 2026-10-14 to build it as a C builtin now, in place of the prelude code planned
-for order step 8.2. 27.4 (`File.each_line` and `Stream[T]`) is in two steps,
-decided by the owner on 2026-10-14: step 1 is item 17d at order row 7.2.1h
-(built), step 2 is item 17e at order step 8.2. 27.5 records what was decided
-against (generators, fibers, Agent-style shared state, public locks), so it is
-not proposed again. This section finalizes the earlier channel proposal and
+for order step 8.2. 27.4 (`File.each_line` and lazy pipelines) is in two
+steps, decided by the owner on 2026-10-14: step 1 is item 17d at order row
+7.2.1h (built), step 2 is item 17e, renamed `Lazy[T]` by the owner on
+2026-10-20; its PR 1 (lists, ranges and `Lazy.produce`) is built, and its I/O
+sources are PR 2. 27.5 records what was decided against (generators, fibers,
+Agent-style shared state, public locks), so it is not proposed again. This
+section finalizes the earlier channel proposal and
 answers [section
 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
 
@@ -31,8 +33,9 @@ concurrency.
 closures"): `Task.spawn`, `Task.await` and `Task.sleep` give I/O concurrency on
 one core (the VM runs one scheduler, `docs/vm/10-io-scheduler.md` §10.2.1).
 `List` and `Range` methods are eager; `for` over a range does not build a list;
-`reduce` is the accumulator. Channels (27.2) are built; there are no lazy
-streams and no CPU parallelism. `Task.await(task, timeout_ms)` (27.3) bounds a
+`reduce` is the accumulator. Channels (27.2) and `Lazy[T]` over lists, ranges
+and `Lazy.produce` (27.4) are built; there is no CPU parallelism.
+`Task.await(task, timeout_ms)` (27.3) bounds a
 wait without stopping the task, and a task cannot be cancelled by the program.
 
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms):
@@ -87,9 +90,11 @@ own row:
 - **Job:** Read a big file line by line
   - **The one form:** `File.each_line` (27.4, step 1, built)
 
-- **Job:** An endless sequence, or the lines of a file that a step filters,
-  takes or folds
-  - **The one form:** a `while` loop; `Stream[T]` (27.4, step 2) once 17e lands
+- **Job:** An endless sequence, or a long chain of steps of which only the
+  first results are needed
+  - **The one form:** `Lazy[T]` (27.4, step 2): `Lazy.produce`, `xs.lazy` or
+    `(a..b).lazy`, then steps and one terminal; the lines of a file through a
+    `Lazy` wait for PR 2
 
 - **Job:** State that several tasks update
   - **The one form:** one owner task that receives messages on a channel (27.5);
@@ -114,9 +119,11 @@ own row:
   - **Roadmap:** 17c
 
 - **§:** 27.4
-  - **Item:** `File.each_line` (step 1) and `Stream[T]` (step 2)
-  - **Decision:** step 1 built (17d); step 2 planned (owner, 2026-10-14)
-  - **Where it lives:** step 1 a C builtin; step 2 prelude code
+  - **Item:** `File.each_line` (step 1) and `Lazy[T]` (step 2)
+  - **Decision:** step 1 built (17d); step 2 PR 1 built, PR 2 (I/O sources)
+    planned (owner, 2026-10-14 and 2026-10-20)
+  - **Where it lives:** step 1 a C builtin; step 2 prelude signatures over C
+    builtins (`vm/lazy.c`)
   - **Roadmap:** 17d, 17e
 
 - **§:** 27.5
@@ -532,19 +539,19 @@ timed waiter always holds a timer, so the stall check still only guards VM bugs.
 `Task.pending_count` are not affected: a timed-out await leaves only the target,
 which is the program's own task.
 
-### 27.4 Streams: `File.each_line` and `Stream[T]`
+### 27.4 Streams: `File.each_line` and `Lazy[T]`
 
 **Decision:** two steps, decided by the owner on 2026-10-14. Step 1 is
 `File.each_line`, a C builtin that reads a big file line by line in bounded
-memory and adds no type (roadmap 17d, order row 7.2.1h, built). Step 2 is
-`Stream[T]`, a lazy recipe over sources such as lines, written in the prelude
-(roadmap 17e, order step 8.2).
+memory and adds no type (roadmap 17d, order row 7.2.1h, built). Step 2 is a
+lazy recipe over sources, named `Lazy[T]` by the owner on 2026-10-20 (after
+Ruby's `Enumerator::Lazy`; it was planned as `Stream[T]`), roadmap 17e. Its PR
+1 (lists, ranges and `Lazy.produce`) is built; PR 2 adds the I/O sources.
 
 The owner judged that streaming without loading everything is needed: Python
 iterators and Ruby `yield` cover it, and Agentica's loop and channel forms are
 too much ceremony to compose. This replaces the earlier criteria for planning
-streams (a real program first, then a narrower fix). The rules that stay are at
-the end of this section.
+streams (a real program first, then a narrower fix).
 
 **Step 1: `File.each_line` (roadmap 17d, order row 7.2.1h).** Built: a C
 builtin, VM-only, that reads a file line by line in bounded memory and calls a
@@ -557,66 +564,93 @@ job: it replaces a composition of `File.open`, a loop, `eof?`, `read_line` and
 (`Process.each_line`, `TCP.each_line`); each waits for its own item when a real
 program needs it.
 
-**Step 2: `Stream[T]` (roadmap 17e, order step 8.2, after the prelude of 15f).**
-The shape below is its base. Its checker and VM rules are added to this section
-before its code lands, as 27.1 and 27.2 were.
+**Step 2: `Lazy[T]` (roadmap 17e).** The contract is in the grammar
+([`06b-builtins.md`](../grammar/06b-builtins.md), "`Lazy[T]`") and the site page
+`library/data-structures/lazy.md`. The decisions:
 
-- `Stream[T]` is a builtin opaque generic and an immutable recipe, not a cursor:
-  building one does no work and opens nothing. Only a terminal step runs it, and
-  two terminals on the same stream run its source twice. Elixir's streams are
-  recipes too.
-- Sources, only where a list cannot be:
-  `Stream.lines(path, buffer_bytes, timeout_ms)`, the lines of a file by path,
-  read with the block buffer of step 1; and an endless
-  `Stream.iterate(seed, f)`. `Stream.unfold` waits for tuples (§12.5). Socket
-  and process lines are an open question: a handle cannot be reopened, so a
-  second run would go on where the first one stopped.
-- Lazy steps: `map`, `filter`, `take(n)`, `take_while`. Terminals:
-  `to_list(max)` (an error when the stream has more than `max` items, so an
-  endless stream cannot fill memory), `each`, `reduce`. Terminals return a
-  `Result`, and a read error of the source ends the terminal with that error.
-- Resources: a file source opens its file when a terminal starts and closes it
-  when the terminal returns, whether it reached the end, `take` or `take_while`
-  had enough, a step returned an error, or a `try` failed in a block. That is
-  the guarantee of `File.open` with a block (§25.9), with the terminal call as
-  the block. A stream that is dropped without a terminal opened nothing, so
-  nothing leaks. A runtime diagnostic ends the run, which closes the file as
-  today.
-- Costs: each element pulled costs one step plus its callbacks, like
-  `Range.each`, and a terminal can be switched out between elements (a resumable
-  native frame, §10.2.1).
-- **Form.** Stream steps are methods on `Stream[T]`, since methods come from
-  the receiver's module. So the one form of a step is `s.filter(f)`, and
-  `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD`, with the help `s.filter(...)`.
-  A source is a plain call; `|>` is for user functions between them:
+- **Names.** Ruby's names first (`Enumerator::Lazy`, `Enumerator.produce`),
+  Elixir's `Stream` only where simpler. Each method has one name, and a name
+  `List` already has keeps its meaning: `filter` (not `select` or `reject`),
+  `find`, `take`, `each_slice`, `reduce`.
+- **A recipe, not a cursor.** `Lazy[T]` is a builtin generic type and an
+  immutable value: building one does no work and opens nothing. A step returns
+  a new `Lazy`; only a terminal runs it, and two terminals on the same `Lazy`
+  run its source twice. There is no `next`, no `yield`, no generator and no
+  `Enumerator.new` (27.5).
+- **Sources (PR 1).** `xs.lazy` on a `List[T]`, `(a..b).lazy` and
+  `(a...b).lazy` on a `Range` (`Lazy[Int]`), and the endless
+  `Lazy.produce(seed) do |x| ... end` (Ruby's `Enumerator.produce`): `seed`,
+  then `f(seed)`, and so on. `xs.lazy` and `Range.lazy` were decided against
+  under the plan's one-way test ("no `list.stream`"); the owner reversed that on
+  2026-10-20: a recipe over a list is how `take`, `first` and `find` stop early
+  on a long chain without building each list in between.
+- **Steps.** `map`, `filter`, `take(n)`, `take_while`, `drop(n)`,
+  `drop_while`, `flat_map` (the block gives a `List[U]`), `with_index`,
+  `each_slice(n)`, `each_cons(n)` and `chunk_while do |a, b| ... end`.
+  `with_index do |x, i| ... end` maps each item with its index from 0, since
+  the language has no tuples to pair them (`List.each_with_index` passes the
+  index to its block the same way); a program that needs both returns a
+  struct. `filter_map` is left out: the language has no optional type, and a
+  `Result` from the block would mix "skip this item" with "this failed"; it is
+  `filter` then `map`.
+- **Terminals return a `Result`, always.** One rule, since the I/O sources of
+  PR 2 can fail in the middle. `to_a` and `first(n)` give `Result[List[T]]`,
+  `reduce(init) do |acc, x| ... end` gives `Result[B]`, `find` gives `ok(item)`
+  or `error("not found")` as `List.find` does, and `each` takes a block that
+  returns `Result[Void]`, as `File.each_line` does: its first `error` stops the
+  pipeline and is the result, and `try` works in the block. `to_list(max)` of
+  the old plan is not taken: `first(n)` bounds the items, and `to_a` is Ruby's
+  name.
+- **Fused, bounded, preemptible.** The steps run in one pull loop: a terminal
+  pulls one item from the source and moves it through every step before the
+  next, with no list in between. `take`, `take_while`, `first` and `find` stop
+  the source (`Lazy.produce` does not call its block for an item no step
+  needs), and a slice or chunk still held is given out at the end. Each item
+  pulled costs one step, and each callback a step plus its body; the terminal
+  is a resumable native frame (`docs/vm/03-ir-and-bytecode.md` §4.3) that can
+  end its turn between two items, so `--max-steps`, the turns of other tasks
+  and a cancel reach even a pipeline with no callback.
+- **Tasks.** Callbacks run on the task that calls the terminal. A recipe has no
+  state, so tasks on any scheduler can share it; each terminal call has its own
+  run state. No builtin of `Lazy` touches state other tasks can reach, so no
+  row takes the shared lock.
+- **Where it lives.** The catalog rows are prelude rows
+  (`stdlib/prelude/lazy.agc`), so the checker binds the type variables as for
+  the other prelude methods. The bodies call prelude-only builtins in
+  `vm/lazy.c`: a heterogeneous chain of steps (each with its own item type)
+  has no static type in the language, so the recipe cannot be written in the
+  prelude itself.
+- **Form.** Steps are methods of `Lazy`, since methods come from the
+  receiver's module: `lz |> Lazy.map() do ... end` is `CHECK-PIPE-METHOD`. A
+  `List` method on a `Lazy` (`lz.size`) is `CHECK-UNKNOWN-METHOD` with a help
+  that shows `to_a`; a step only `Lazy` has, called on a list or a range
+  (`xs.each_cons(2)`), is `CHECK-UNKNOWN-METHOD` with a help that shows
+  `.lazy`.
 
-```agentica
-def is_valid(line: String) -> Bool
-  return line.length > 0
-end
+**Step 2, PR 2 (planned).** The I/O sources, under the same terminal rules:
 
-def add_length(total: Int, line: String) -> Int
-  return total + line.length
-end
+- `File.foreach(path, buffer_bytes, timeout_ms)`, the lines of a file by path,
+  read with the block buffer of step 1. The file opens when a terminal starts
+  and closes when it returns, whether it reached the end, a step had enough, a
+  callback returned an error or a `try` failed in a block: the guarantee of
+  `File.open` with a block (§25.9), with the terminal call as the block. A
+  `Lazy` that is dropped without a terminal opened nothing. A read error ends
+  the terminal with that error.
+- `ch.lazy(timeout_ms)`, the values of a channel until it is closed and
+  drained. A channel cannot be read twice, so a second terminal goes on where
+  the first stopped; PR 2 decides whether that is allowed. Socket and process
+  lines stay an open question for the same reason.
+- A source with no step before its terminal (`File.foreach(...).each`) is the
+  job of `File.each_line`; whether the checker rejects it, with a help that
+  shows `File.each_line`, is decided in PR 2, as the principle of §25 asks.
 
-def total_length(path: String) -> Result[Int]
-  return Stream.lines(path, 65536, 1000).filter(&is_valid).take(1000).reduce(0, &add_length)
-end
-```
-
-- **One form per job.** Each line of a file, in order, is `File.each_line`. A
-  stream is for steps before a terminal (`filter`, `take`, `take_while`, `map`,
-  `reduce`, `to_list`). A stream with no step before its terminal
-  (`Stream.lines(path, ...).each`) is the same job as `File.each_line`; whether
-  the checker rejects it, with a help that shows `File.each_line`, is decided in
-  step 2's spec, as the principle of §25 asks.
-- **Rules that stay.** Step 2 waits for the prelude (15f) and for faster lists
-  (8d), since its steps are generic code over closures. Each step passes
-  the one-way test against `List`: no `list.stream`, no `Range.stream`, and no
-  step that only re-spells a `List` method over a source that a list can hold.
-- **Generators stay decided against** (§27.5): a task that sends into a channel
-  is the producer, and a stream is a recipe of fixed steps, not a producer with
-  `yield`.
+**Later.** An Elixir-style `transform` (an accumulator, 0 to n items out per
+item in, and a halt), if a program needs it, returns a std builtin struct from
+its block, such as `Lazy.Step(emit: [row], state: key, halt: false)`: the
+language has no tuples (owner, 2026-10-20; §25.12.6), and a struct carries the
+grouped values. It is not in PR 1 or PR 2. Generators stay decided against
+(§27.5): a task that sends into a channel is the producer, and a `Lazy` is a
+recipe of fixed steps, not a producer with `yield`.
 
 ### 27.5 Decided against
 
@@ -632,14 +666,13 @@ Each of these is decided; it gets a help that names the Agentica form.
     switches.
   - `yield` is already decided against (§25.13: the block is a named `Fn`
     parameter, called with `.call`).
-  - A lazy `Stream[T]` (27.4) is not a generator either: it is a recipe of fixed
-    steps over a source, with no `yield`.
+  - A `Lazy[T]` (27.4) is not a generator either: it is a recipe of fixed steps
+    over a source, with no `yield` and no external `next`.
   - Help: `Enumerator.new(...)` and `Fiber.new(...)` (today
     `CHECK-UNKNOWN-NAME`) show a producer task that sends into a `Channel`
-    (`Task.spawn(&produce, ch)`, then `ch.recv(timeout_ms)`). `xs.lazy` on a
-    `List` or a `Range` (today `CHECK-UNKNOWN-METHOD`) shows that lists are
-    eager, and that a source too big for a list is read in a `while` loop. Added
-    by 17b.
+    (`Task.spawn(&produce, ch)`, then `ch.recv(timeout_ms)`). Added by 17b.
+    `xs.lazy` was on this list until the owner made it the source of `Lazy[T]`
+    (2026-10-20).
 - **Elixir `Agent` and other shared mutable accumulators:** `Agent.start_link`,
   `Agent.update` and `Agent.get`, Ruby's `Concurrent::AtomicFixnum`, or a
   counter that blocks change.
@@ -733,8 +766,9 @@ results.
 
 - 17a `Task.map` is built (PR #316); 17b channels, 17c `Task.await`
   with a timeout and 17d `File.each_line` are built (records in §27.1–
-  §27.4 and the grammar). 17e `Stream[T]` (§27.4, step 2, order step
-  8.2, after the prelude) is one item with its own tests and docs.
+  §27.4 and the grammar). 17e `Lazy[T]` (§27.4, step 2) is two PRs: PR 1
+  (lists, ranges, `Lazy.produce`, the steps and the terminals) is built;
+  PR 2 adds `File.foreach` and `ch.lazy`.
 - Done when: the site examples run on the VM; timed-out items leave no
   open socket, task or shared handle; the pipeline, await-cycle and
   `Await.TimedOut` cases hold; and agents pick `Task.map` for fan-out

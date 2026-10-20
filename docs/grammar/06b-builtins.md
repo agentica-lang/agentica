@@ -110,6 +110,43 @@ Collection operations preserve their inputs. Costs exclude callback work.
   `Set.delete` of a missing element give the same set. `Set.delete` is O(n) like
   `Map.delete`; `Set.include?` and `Set.add` take effectively constant time.
 
+`Lazy[T]` is a lazy pipeline: an immutable recipe of a source and steps, not a
+cursor. Building one runs nothing; a terminal runs it, pulling one item at a
+time through every step, so no step builds a list of all the items. Each
+terminal runs the source again from the start. The library page is
+[`library/data-structures/lazy.md`][agentica-link-5].
+
+- Sources: `xs.lazy` (`List[T]` to `Lazy[T]`), `(a..b).lazy` and
+  `(a...b).lazy` (`Lazy[Int]`), and `Lazy.produce(seed) do |x| ... end`, the
+  endless `seed`, `f(seed)`, `f(f(seed))`, ...
+- Steps give a new `Lazy`: `map`, `filter`, `take(n)`, `take_while`, `drop(n)`,
+  `drop_while`, `flat_map` (the block gives a `List[U]`), `with_index do |x, i|
+  ... end` (maps each item with its index from 0), `each_slice(n)`,
+  `each_cons(n)` (windows of `n` items; none when the source has fewer) and
+  `chunk_while do |a, b| ... end` (a new group where the block is false for
+  two neighbours); the last three give `Lazy[List[T]]`. A negative count, or a
+  size below 1, is `RUNTIME-INVALID-COUNT` at the argument, when the step is
+  built.
+- Terminals always give a `Result`: `to_a` and `first(n)` give
+  `Result[List[T]]`, `reduce(init) do |acc, x| ... end` gives `Result[B]`,
+  `find` gives `ok(item)` or `error("not found")` (as `List.find`), and `each`
+  takes a block that returns `Result[Void]` (as `File.each_line`), stops at its
+  first `error` and gives it back. `take`, `take_while`, `first` and `find`
+  stop the source: an endless source then ends, and `Lazy.produce` does not
+  call its block for an item that no step needs. `to_a`, `reduce` and `each` on
+  an endless source never end.
+- Each item pulled from the source costs one step, and each callback a step
+  plus its body, as in `Range.each`. A terminal can be switched out between
+  items, so `--max-steps` (`RUNTIME-STEP-LIMIT`), the turns of other tasks and
+  a cancel reach a pipeline with no callback. Callbacks run on the task that
+  called the terminal; a recipe can be shared by tasks on any scheduler. A
+  runtime error in a callback ends the run as anywhere else.
+- A `Lazy` has no `==`, no `to_s` and no JSON form (`CHECK-TYPE-MISMATCH`,
+  `CHECK-NOT-ENCODABLE`); `IO.inspect` prints `<Lazy>`. `Lazy` is a reserved
+  type name. A `List` method on a `Lazy` (`lz.size`) and a step that only
+  `Lazy` has on a `List` or `Range` (`xs.each_cons(2)`) are
+  `CHECK-UNKNOWN-METHOD`, with a help that shows `to_a` or `.lazy`.
+
 Expected types flow into these operations for empty collections and Results.
 
 - `String.length` and `String.slice` count characters, not bytes. An
@@ -329,3 +366,4 @@ command and the `AGENTICA_VM` variable are gone: nothing reads the variable.
 [agentica-link-2]: ../../site/content/library/data-structures/map.md
 [agentica-link-3]: ../../site/content/library/data-structures/set.md
 [agentica-link-4]: ../../site/content/library/text-and-data/json.md
+[agentica-link-5]: ../../site/content/library/data-structures/lazy.md

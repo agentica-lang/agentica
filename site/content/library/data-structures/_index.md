@@ -1,7 +1,7 @@
 ---
 title: Data structures
 weight: 1
-description: Lists, maps, sets, queues and ranges, and when to use each.
+description: Lists, maps, sets, queues, ranges and lazy pipelines, and when to use each.
 ---
 
 Pick the form that matches the job.
@@ -11,6 +11,7 @@ Pick the form that matches the job.
 - A [Set](/library/data-structures/set/) holds each `Int` or `String` once, in the order it was first added. Use it to remove duplicates and to ask whether a value was seen.
 - A [Queue](/library/data-structures/queue/) (from `std/queue`) is first in, first out, and holds strings. Use it when the oldest value must come out first.
 - A [Range](/library/data-structures/range/) such as `0...n` counts through `Int` values without building a list. Use it in a `for` loop.
+- A [Lazy](/library/data-structures/lazy/) is a recipe of steps over a list, a range or an endless source, run one item at a time by a terminal such as `first` or `to_a`. Use it when only the first few results are needed, or when the source has no end.
 - A struct groups a fixed set of named fields of different types, and an enum is one of a few named cases. Use them when the data has a shape of its own. They are in the tour pages [Structs](/tour/structs/) and [Enums and case](/tour/enums-and-case/).
 
 All values are immutable: every function gives a new value and leaves its input as it was. See the tour pages [Lists](/tour/lists/) and [Maps](/tour/maps/) first if they are new to you.

@@ -47,8 +47,8 @@ before it moved; the header split moved no line of a `.c` file except the
 
 - **Layer:** **Services**
   - **Files:** `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`,
-    `tree.c`, `stream.c`, `duplex.c`, `process.c`, `system.c`, `tcp.c`,
-    `http_fields.c`, `http_service.c`, `http_server.c`, `http_wire.c`,
+    `tree.c`, `stream.c`, `lazy.c`, `duplex.c`, `process.c`, `system.c`,
+    `tcp.c`, `http_fields.c`, `http_service.c`, `http_server.c`, `http_wire.c`,
     `logger.c`, `testing.c`
   - **May use:** `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter
     headers, libuv, yyjson (`json.c` only)

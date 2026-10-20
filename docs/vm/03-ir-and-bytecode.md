@@ -408,6 +408,14 @@ Details that code and tests rely on:
   the call stack is resumed at the start of the task's next turn. Each block
   call costs one step, charged as for the other native frames, and the turn cost
   of the bytes read.
+- The terminals of `Lazy` (`to_a`, `each`, `reduce`, `find`; `vm/lazy.c`) are
+  steppers too, with no block of their own: each call names its function
+  (`AGC_STEP_CALL` with `fn`, `AGC_STEP_CALL2` for two arguments). A step that
+  moves an item with no callback (a list or range source, `take`,
+  `each_slice`) counts it with `agc_step_turn`, and when that says the turn is
+  over the step returns `AGC_STEP_YIELD`: the native frame stays on the stack
+  and runs again at the task's next turn. So `--max-steps`, the turns of other
+  tasks and a cancel reach a pipeline that calls no block.
 - `Range.each`, `Int.times`, `Int.upto` and `Int.downto` are counting native
   frames. Before each callback they charge one step at the call span, the same
   check as `STEP`. They stop by comparing with the last value before adding, so
