@@ -6,8 +6,8 @@ import subprocess
 import sys
 import time
 
-# Windows would print CRLF; the tests compare LF lines.
-sys.stdout.reconfigure(newline="\n")
+# Windows would print CRLF in the ANSI code page; the tests compare UTF-8 LF lines.
+sys.stdout.reconfigure(encoding="utf-8", newline="\n")
 
 PORT = int(sys.argv[1])
 HOST = b"Host: x\r\n"

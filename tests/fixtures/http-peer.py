@@ -7,8 +7,8 @@ import ssl
 import sys
 import threading
 
-# Windows would print CRLF; the tests compare LF lines.
-sys.stdout.reconfigure(newline="\n")
+# Windows would print CRLF in the ANSI code page; the tests compare UTF-8 LF lines.
+sys.stdout.reconfigure(encoding="utf-8", newline="\n")
 
 CERTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tls")
 GATE = threading.Barrier(3, timeout=10)

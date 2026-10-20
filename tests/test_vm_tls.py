@@ -622,9 +622,8 @@ class BlockingFile:
             return
         import _winapi
         self.path = r"\\.\pipe\agentica-test-%d-%d" % (os.getpid(), id(self))
-        handle = _winapi.CreateNamedPipe(self.path, _winapi.PIPE_ACCESS_OUTBOUND,
-                                         _winapi.PIPE_TYPE_BYTE | _winapi.PIPE_WAIT, 1, 65536, 65536, 0,
-                                         _winapi.NULL)
+        # PIPE_ACCESS_OUTBOUND (2), and PIPE_TYPE_BYTE | PIPE_WAIT (0): _winapi does not name all of them.
+        handle = _winapi.CreateNamedPipe(self.path, 2, 0, 1, 65536, 65536, 0, _winapi.NULL)
 
         def serve():
             try:
