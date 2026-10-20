@@ -13,11 +13,11 @@ its header; a future generator must reproduce it byte for byte).
 The steps of `ci.yml` and `sweep.yml`, and the test steps of `release.yml`,
 call `make` targets, so those checks run locally with the same command. In
 those files only setup stays in the YAML: checkout, toolchain and `apt`
-installs, caches and their keys, and the `changes` step. Still inline are
-`site-examples.yml`, `platforms.yml`, `fuzz.yml` (its `make vm-fuzz` was
-already a target) and the packaging steps of `release.yml` (the `strip` and
-ELF checks, the archive). A new check in
-`ci.yml` or `sweep.yml` gets a target first (in `.PHONY` and with a one-line
+installs, caches and their keys, and the `changes` step of `vm-sanitizers`.
+Still inline are `site-examples.yml`, `platforms.yml`, `fuzz.yml` (its
+`make vm-fuzz` was already a target) and the packaging steps of `release.yml`
+(the `strip` and ELF checks, the archive). A new check in `ci.yml` or
+`sweep.yml` gets a target first (in `.PHONY` and with a one-line
 comment), then a step that calls it. Targets that are not obvious:
 
 - `all` (the default goal, also `agentica`) builds `dist/agentica`, the one
@@ -289,7 +289,7 @@ The native C file test also checks Windows-enforced read exclusion.
 CI runs its checks on pull requests and pushes to `master`, on GitHub-hosted
 Ubuntu runners.
 
-- `test`: first the `changes` step (below), then `make -j vm-test test-bdd`
+- `test`: `make -j vm-test test-bdd`
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them, from `bootstrap/stage0.agcb`), `make test JOBS=6` (the whole suite on
   the binary; it builds the binary first), `make test-shared` (the binary
@@ -377,9 +377,8 @@ Otherwise its steps show as skipped. If the `changes` step does not set its
 outputs, `vm-sanitizers` still runs. A manual run always runs it. Changes to
 `compiler/`, `bootstrap/`, `stdlib/`, `tests/` and `VERSION` skip it on
 purpose: the `test` job still runs the `vm-diff` golden shards and every CLI
-test with the real VM. The `test` job has its own `changes` step with a wider
-path list; no step reads its outputs today. Keep the `vm-sanitizers` list in
-`ci.yml` in step with new C directories.
+test with the real VM. Keep the `vm-sanitizers` list in `ci.yml` in step with
+new C directories.
 
 Only a manual run, or a pull request that changes `vm/trace.*` or
 `vm/tests/trace_test.c`, also runs `make vm-trace-off` (`make vm-test
