@@ -72,15 +72,22 @@ vendored OpenSSL 3.5 LTS statically, and a default source build links the system
     `Disallowed` system store, every certificate added rejected, then the
     `ROOT` store (`CertOpenSystemStoreW`), each certificate whose valid uses
     (`CertGetEnhancedKeyUsage`) include server authentication, then the `CA`
-    store of intermediates with the same filter, as CPython's
-    `ssl.load_default_certs` reads `ROOT` and `CA`. Every view includes the
-    machine's stores. A `CA` certificate is only a chain certificate, never a
-    trust anchor: one whose subject equals its issuer is left out
-    (`agc_tls_trust_add_intermediate_der`), because OpenSSL trusts a
-    self-signed certificate in the store, and without
+    store of intermediates, as CPython's `ssl.load_default_certs` reads `ROOT`
+    and `CA`. Every view includes the machine's stores. A `CA` certificate is
+    only a chain certificate, never a trust anchor: one whose subject equals
+    its issuer is left out (`agc_tls_trust_add_intermediate_der`), because
+    OpenSSL trusts a self-signed certificate in the store, and without
     `X509_V_FLAG_PARTIAL_CHAIN` any other one only helps build a chain that
     must still end at a `ROOT` certificate. So a server that sends only its
-    leaf still verifies when Windows keeps its intermediate. A root that
+    leaf still verifies when Windows keeps its intermediate. A `CA`
+    certificate with the subject and public key of a self-signed certificate
+    already in the store (a cross-signed copy of an anchor) is left out too:
+    OpenSSL looks issuers up by name and could take the copy instead of the
+    anchor, and the store order that decides it is not stable. A `CA`
+    certificate whose valid uses exclude server authentication is added
+    rejected, not skipped: OpenSSL looks in the store first, so a server that
+    sends that intermediate itself still fails with `VERIFY_UNTRUSTED`
+    (`X509_V_ERR_CERT_REJECTED`). A root that
     Windows would download on demand (automatic root update) is not in the
     store until Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that
     case.
@@ -132,7 +139,8 @@ vendored OpenSSL 3.5 LTS statically, and a default source build links the system
   result, Deny, narrow grants, Unspecified, other policies) and
   `vm/tests/tls_trust_windows_test.c` (EKU properties on in-memory Crypt32
   stores, a Disallowed copy that wins over ROOT, and CA intermediates that
-  complete a chain to ROOT but are never anchors). The goldens `tls-echo` and
+  complete a chain to ROOT but are never anchors); `tls_test.c` tests the
+  intermediate rule itself on every system. The goldens `tls-echo` and
   `tls-errors` are their own peers. `tests/test_vm_tls.py` covers the rest
   against Node (`tests/fixtures/tls-peer.js`) and Python
   (`tests/fixtures/tls-peer.py`): EOF with and without `close_notify`, the 1 MiB

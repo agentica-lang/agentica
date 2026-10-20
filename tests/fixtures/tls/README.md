@@ -26,9 +26,13 @@ use the checked-in files; nothing regenerates them during a test run.
   - **What it is:** self-signed for `localhost` (untrusted)
 
 - **File:** `chain-root.pem`, `chain-intermediate.pem`, `chain-leaf.pem`
-  - **What it is:** a three-level chain (root, intermediate, leaf for
-    `localhost`) for the Windows CA-store test; no key is kept. Added on
-    2026-10-20 with OpenSSL 3.5.7
+  - **What it is:** a three-level chain (root, intermediate without an EKU
+    extension, leaf for `localhost`) for the CA-store tests; no key is kept.
+    Added on 2026-10-20 with OpenSSL 3.5.7
+
+- **File:** `chain-cross-signer.pem`, `chain-root-cross.pem`
+  - **What it is:** another root, and a cross-signed copy of `chain-root.pem`
+    (same subject and key) that it signs; no key is kept
 
 The other certificates are valid for 36,500 days, so they do not expire
 during the project's life. They test verified TLS both ways, rejection

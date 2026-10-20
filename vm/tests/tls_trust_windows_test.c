@@ -141,8 +141,9 @@ static int verify_copy(HCERTSTORE root, HCERTSTORE ca, X509 *leaf) {
 
 /* chain-leaf.pem is signed by chain-intermediate.pem, which chain-root.pem signs. The peer sends only the leaf, so
  * the chain needs the CA store's intermediate, and still ends at ROOT: the intermediate alone, a self-signed
- * certificate in CA, or an intermediate whose EKU property excludes server authentication never verifies. A
- * Disallowed copy of the intermediate wins over CA. */
+ * certificate in CA never verifies, and an intermediate whose EKU property excludes server authentication is
+ * rejected. A Disallowed copy of the intermediate wins over CA. A cross-signed copy of the ROOT anchor in CA, whose
+ * signer is distrusted, is left out, so it cannot hide the anchor. */
 static void test_ca_store(der_cert ca) {
   der_cert root_cert = read_der(CERTS "chain-root.pem"), inter = read_der(CERTS "chain-intermediate.pem");
   der_cert leaf_der = read_der(CERTS "chain-leaf.pem"), server_der = read_der(CERTS "server.pem");
@@ -159,9 +160,22 @@ static void test_ca_store(der_cert ca) {
   agc_tls_trust_copy_stores(store, disallowed, root, cas);
   assert(verify(store, leaf) == X509_V_ERR_CERT_REJECTED);
   X509_STORE_free(store);
+  der_cert signer = read_der(CERTS "chain-cross-signer.pem"), cross = read_der(CERTS "chain-root-cross.pem");
+  HCERTSTORE distrusted = memory_store(), crossed = memory_store();
+  CertFreeCertificateContext(add_to(distrusted, signer));
+  CertFreeCertificateContext(add_to(crossed, cross));
+  CertFreeCertificateContext(add_to(crossed, inter));
+  X509_STORE *with_cross = X509_STORE_new();
+  agc_tls_trust_copy_stores(with_cross, distrusted, root, crossed);
+  assert(verify(with_cross, leaf) == X509_V_OK);
+  X509_STORE_free(with_cross);
+  CertCloseStore(crossed, 0);
+  CertCloseStore(distrusted, 0);
+  OPENSSL_free(cross.der);
+  OPENSSL_free(signer.der);
   LPSTR client[] = {szOID_PKIX_KP_CLIENT_AUTH};
   set_usage(in_ca, client, 1);
-  assert(verify_copy(root, cas, leaf) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY);
+  assert(verify_copy(root, cas, leaf) == X509_V_ERR_CERT_REJECTED);
   CertFreeCertificateContext(in_ca);
   HCERTSTORE self_signed = memory_store();
   CertFreeCertificateContext(add_to(self_signed, ca));

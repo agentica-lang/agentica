@@ -9,6 +9,7 @@
 
 #include <openssl/crypto.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/objects.h>
 #include <openssl/x509.h>
 #include <openssl/x509_vfy.h>
@@ -91,13 +92,37 @@ bool agc_tls_trust_add_der(struct x509_store_st *store, const unsigned char *der
   return ok;
 }
 
+/* Whether `store` already holds a self-signed certificate with the subject and public key of `x`, so `x` is a
+ * cross-signed copy of that anchor. OpenSSL looks an issuer up by subject name and may take the copy, whose own
+ * issuer is often missing or distrusted, instead of the anchor: the chain then fails or not by store order, which
+ * neither Crypt32 nor OpenSSL's sorted object list keeps stable. A store that cannot be locked answers yes, so the
+ * certificate is left out (fail closed). */
+static bool stands_for_anchor(X509_STORE *store, X509 *x) {
+  EVP_PKEY *key = X509_get0_pubkey(x);
+  if (!key || X509_STORE_lock(store) != 1) return true;
+  STACK_OF(X509_OBJECT) *objects = X509_STORE_get0_objects(store);
+  bool found = false;
+  for (int k = 0; k < sk_X509_OBJECT_num(objects) && !found; k++) {
+    X509 *y = X509_OBJECT_get0_X509(sk_X509_OBJECT_value(objects, k));
+    found = y && (X509_get_extension_flags(y) & EXFLAG_SS) &&
+            X509_NAME_cmp(X509_get_subject_name(y), X509_get_subject_name(x)) == 0 &&
+            EVP_PKEY_eq(X509_get0_pubkey(y), key) == 1;
+  }
+  X509_STORE_unlock(store);
+  return found;
+}
+
 /* A store certificate with no trust settings is an anchor only when it is self-signed (trust_compat in
  * crypto/x509/x509_trust.c); X509_V_FLAG_PARTIAL_CHAIN stays off, so any other one only helps build a chain that
  * must still end at a root. EXFLAG_SI (subject equals issuer) covers every certificate OpenSSL calls self-signed,
- * so refusing it keeps an intermediate store from adding an anchor. */
-bool agc_tls_trust_add_intermediate_der(struct x509_store_st *store, const unsigned char *der, size_t len) {
+ * so refusing it is what keeps an intermediate store from adding an anchor. A rejected copy carries an explicit
+ * reject of serverAuth, as in agc_tls_trust_add_der. */
+bool agc_tls_trust_add_intermediate_der(struct x509_store_st *store, const unsigned char *der, size_t len,
+                                        bool rejected) {
   X509 *x = parse_der(der, len);
-  bool ok = x && !(X509_get_extension_flags(x) & EXFLAG_SI) && X509_STORE_add_cert(store, x) == 1;
+  bool ok = x && !(X509_get_extension_flags(x) & EXFLAG_SI) && !stands_for_anchor(store, x) &&
+            (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
+            X509_STORE_add_cert(store, x) == 1;
   X509_free(x);
   ERR_clear_error();
   return ok;

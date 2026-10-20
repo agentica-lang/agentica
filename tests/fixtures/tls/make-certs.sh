@@ -37,8 +37,10 @@ openssl req -x509 -new -key "$dir/self-signed-key.pem" -subj "/CN=localhost" -da
   -addext "basicConstraints=critical,CA:FALSE" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" \
   -out "$dir/self-signed.pem"
 
-# A three-level chain for the Windows CA-store test: a root, an intermediate it signs and a leaf the intermediate
-# signs. The keys stay in the temporary directory.
+# A three-level chain for the CA-store tests: a root, an intermediate it signs and a leaf the intermediate signs.
+# The intermediate has no extendedKeyUsage extension, so the Windows EKU test sets the Crypt32 property alone.
+# chain-root-cross.pem is a cross-signed copy of the root (same subject and key) signed by chain-cross-signer.pem.
+# The keys stay in the temporary directory.
 key "$work/chain-root-key.pem"
 openssl req -x509 -new -key "$work/chain-root-key.pem" -subj "/CN=Agentica Test Chain Root" -days "$days" \
   -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" -out "$dir/chain-root.pem"
@@ -54,3 +56,12 @@ openssl req -new -key "$work/chain-leaf-key.pem" -subj "/CN=localhost" -out "$wo
 ext "DNS:localhost,IP:127.0.0.1,IP:::1" chain-leaf
 openssl x509 -req -in "$work/chain-leaf.csr" -CA "$dir/chain-intermediate.pem" -CAkey "$work/chain-intermediate-key.pem" \
   -set_serial "0x$(openssl rand -hex 16)" -extfile "$work/chain-leaf.ext" -days "$days" -out "$dir/chain-leaf.pem"
+key "$work/chain-cross-signer-key.pem"
+openssl req -x509 -new -key "$work/chain-cross-signer-key.pem" -subj "/CN=Agentica Test Cross Signer" -days "$days" \
+  -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -out "$dir/chain-cross-signer.pem"
+openssl req -new -key "$work/chain-root-key.pem" -subj "/CN=Agentica Test Chain Root" -out "$work/chain-root-cross.csr"
+printf 'basicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n' > "$work/chain-root-cross.ext"
+openssl x509 -req -in "$work/chain-root-cross.csr" -CA "$dir/chain-cross-signer.pem" \
+  -CAkey "$work/chain-cross-signer-key.pem" -set_serial "0x$(openssl rand -hex 16)" -extfile "$work/chain-root-cross.ext" \
+  -days "$days" -out "$dir/chain-root-cross.pem"

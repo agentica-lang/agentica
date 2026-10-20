@@ -2,9 +2,9 @@
  * The system trust store on Windows, read with Crypt32: the certificates of
  * the current user's Disallowed store, added as rejected, then those of the
  * ROOT store whose valid uses include server authentication, then those of
- * the CA store (intermediates) valid for it, added as chain certificates
- * only, as CPython's ssl.load_default_certs reads ROOT and CA. Every view
- * includes the machine's stores. Platform adapter behind tls_trust.h.
+ * the CA store (intermediates), added as chain certificates only (rejected
+ * when not valid for it), as CPython's ssl.load_default_certs reads ROOT
+ * and CA. Every view includes the machine's stores. Platform adapter behind tls_trust.h.
  */
 #include "tls_trust.h"
 
@@ -43,17 +43,21 @@ static void copy_store(struct x509_store_st *store, HCERTSTORE from, copy_kind k
   if (!from) return;
   PCCERT_CONTEXT cert = NULL;
   while ((cert = CertEnumCertificatesInStore(from, cert)) != NULL) {
-    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || (kind != COPY_REJECTED && !agc_tls_trust_server_auth(cert)))
-      continue;
+    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING)) continue;
     if (kind == COPY_INTERMEDIATE)
-      (void)agc_tls_trust_add_intermediate_der(store, cert->pbCertEncoded, cert->cbCertEncoded);
-    else
+      (void)agc_tls_trust_add_intermediate_der(store, cert->pbCertEncoded, cert->cbCertEncoded,
+                                               !agc_tls_trust_server_auth(cert));
+    else if (kind == COPY_REJECTED || agc_tls_trust_server_auth(cert))
       (void)agc_tls_trust_add_der(store, cert->pbCertEncoded, cert->cbCertEncoded, kind == COPY_REJECTED);
   }
 }
 
-/* Disallowed first: the store keeps the first copy of a certificate, so a distrusted root or intermediate stays
- * rejected. CA last: an intermediate only helps build a chain to a root of ROOT. */
+/* The order matters twice. The store keeps the first copy of a certificate, so Disallowed goes first and a
+ * distrusted root or intermediate stays rejected. CA goes after ROOT, so the cross-signed copies of its anchors are
+ * known and left out. What keeps a CA certificate from becoming an anchor is the self-issued check of
+ * agc_tls_trust_add_intermediate_der, not the order. A CA certificate whose valid uses exclude server
+ * authentication is added rejected rather than skipped: OpenSSL looks in the store first, so a server that sends
+ * that intermediate itself still fails with X509_V_ERR_CERT_REJECTED, as the Windows property says. */
 void agc_tls_trust_copy_stores(struct x509_store_st *store, void *disallowed, void *root, void *ca) {
   copy_store(store, disallowed, COPY_REJECTED);
   copy_store(store, root, COPY_ROOT);

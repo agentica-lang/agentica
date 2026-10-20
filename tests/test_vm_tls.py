@@ -320,6 +320,57 @@ def main() -> Void
 end
 """
 
+CANCEL_PROGRAM = """\
+struct Ports
+  raw: Int
+  secure: Int
+end
+
+def ca() -> String
+  return "#{System.args()[0]}/ca.pem"
+end
+
+def dial(port: Int) -> Result[Socket]
+  return TLS.connect("localhost", port, ca(), 30000)
+end
+
+def read(port: Int) -> Result[String]
+  socket = Result.unwrap!(TLS.connect("localhost", port, ca(), 30000))
+  return TCP.read_line(socket, 60000)
+end
+
+def serve(listener: Listener) -> Bool
+  socket = Result.unwrap!(TCP.accept(listener, 30000))
+  return TCP.read_line(socket, 60000).ok?
+end
+
+def parent(ports: Ports) -> Result[Int]
+  Task.spawn(&dial, ports.raw)
+  Task.spawn(&read, ports.secure)
+  Task.sleep(300)
+  zero = 0
+  return ok(1 / zero)
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  raw = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  secure = Result.unwrap!(TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem"))
+  server = Task.spawn_owning(&serve, secure)
+  ports = Ports(raw: TCP.local_port(raw), secure: TCP.local_port(secure))
+  puts(Task.await(Task.spawn(&parent, ports)).ok?)
+  # The cancelled reader's socket closes, so the server's read ends.
+  puts(Task.await(server))
+  rounds = 0
+  while Task.pending_count() > 0 && rounds < 500
+    Task.sleep(10)
+    rounds = rounds + 1
+  end
+  puts(Task.pending_count())
+  TCP.close_listener(raw)
+end
+"""
+
 TRUST_PROGRAM = """\
 def main() -> Void
   dir = System.args()[0]
@@ -549,6 +600,15 @@ def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tm
     # The third is the raw connection, which the accepting task may not reach before main ends on several schedulers.
     servers = count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$")
     assert servers in ((2, 3) if TEST_SCHEDULERS else (3,)), text
+
+
+def test_a_crashed_owner_cancels_its_tasks_in_a_tls_handshake_and_a_tls_read(tmp_path):
+    """The dial never gets a ServerHello (a plain listener that does not answer); the reader waits in a read on a
+    TLS socket. Both are cancelled when their parent crashes, the server sees its peer go, and the run ends."""
+    trace, env = trace_env(tmp_path)
+    result = run_text(tmp_path, "cancel", CANCEL_PROGRAM, env)
+    assert (result.code, result.stdout) == (0, "false\nfalse\n0\n"), result.stderr
+    assert re.search(r" io end code=0 signal=0$", trace.read_text(), re.M)
 
 
 @HTTPS

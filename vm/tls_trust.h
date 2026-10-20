@@ -30,8 +30,11 @@ bool agc_tls_trust_add_der(struct x509_store_st *store, const unsigned char *der
 
 /* Like agc_tls_trust_add_der for a certificate from a store of chain certificates (the Windows CA store): it is
  * added as an intermediate only. A self-issued certificate (subject equals issuer) is refused, since OpenSSL would
- * take it as a trust anchor. */
-bool agc_tls_trust_add_intermediate_der(struct x509_store_st *store, const unsigned char *der, size_t len);
+ * take it as a trust anchor, and so is one with the subject and public key of a self-signed certificate already in
+ * `store` (a cross-signed copy of that anchor), which could hide the anchor from chain building. Call it after the
+ * anchors are in. */
+bool agc_tls_trust_add_intermediate_der(struct x509_store_st *store, const unsigned char *der, size_t len,
+                                        bool rejected);
 
 struct x509_store_ctx_st;
 
@@ -60,8 +63,9 @@ struct _CERT_CONTEXT;
 bool agc_tls_trust_server_auth(const struct _CERT_CONTEXT *cert);
 
 /* Copies three Crypt32 stores (HCERTSTORE, each may be NULL): every certificate of `disallowed` rejected first,
- * then the roots of `root` valid for server authentication, then the intermediates of `ca` valid for it (never as
- * anchors). agc_tls_trust_load calls it with the system stores Disallowed, ROOT and CA. */
+ * then the roots of `root` valid for server authentication, then the intermediates of `ca` (never as anchors),
+ * rejected when their valid uses exclude server authentication. agc_tls_trust_load calls it with the system stores
+ * Disallowed, ROOT and CA. */
 void agc_tls_trust_copy_stores(struct x509_store_st *store, void *disallowed, void *root, void *ca);
 #endif
 
