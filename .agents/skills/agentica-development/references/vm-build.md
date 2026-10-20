@@ -241,11 +241,12 @@ from `AGENTICA_SWEEP_SEED`, else the
   local diff), not `build/vm/flags`, the Makefile or the source mtimes, so
   `TRACE` does not rebuild them and a CI cache hit stays valid. Compile them
   only through those variables, so a new flag changes the stamp;
-  `vm/*.c` see `-I vm/third_party/libuv/include`, and only `vm/loop.c`,
-  `vm/stream.c`, `vm/process.c`, `vm/tcp.c` and `vm/http_client.c` include
-`uv.h`. Bumping libuv: check out the new tag inside
-  `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
-  `git add vm/third_party/libuv`, and rerun the sanitizer and diff tests.
+  `vm/*.c` see `-I vm/third_party/libuv/include`; the I/O files (`vm/loop.c`,
+  `vm/tcp.c`, `vm/stream.c`, `vm/process.c` and the others that
+  `rg -l uv.h vm` lists) include `uv.h`. Bumping libuv: check out the new
+  tag inside `vm/third_party/libuv`, compare its Linux source list with
+  `UV_NAMES`, `git add vm/third_party/libuv`, and rerun the sanitizer and diff
+  tests.
 - Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
   Windows (`OS=Windows_NT`, MSYS2 UCRT64) in one block: Linux values by
   default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and

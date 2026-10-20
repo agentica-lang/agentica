@@ -114,7 +114,7 @@ static void test_builtin_classes(void) {
   table_marked(agc_process_builtins, agc_process_builtin_count, true);
   table_marked(agc_duplex_builtins, agc_duplex_builtin_count, true);
   table_marked(agc_tcp_builtins, agc_tcp_builtin_count, true);
-  table_marked(agc_http_builtins, agc_http_builtin_count, true);
+  table_marked(agc_http_service_builtins, agc_http_service_builtin_count, true);
   table_marked(agc_http_server_builtins, agc_http_server_builtin_count, true);
   table_marked(agc_string_builtins, agc_string_builtin_count, false);
   table_marked(agc_number_builtins, agc_number_builtin_count, false);

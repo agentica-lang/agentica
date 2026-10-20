@@ -18,13 +18,16 @@ struct agc_channel {
   size_t slots, head, count, capacity;
   size_t reserved_values, reserved_slots;
   uint64_t sent;
-  bool closed;
+  /* A receiver that had parked left without a value: its recv timed out or its task was cancelled. std/http reads
+     it (HttpWire.awaited?) to tell a caller that gave up from one that has not parked yet. */
+  bool closed, abandoned;
   agc_resource *state;
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
 };
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
+/* std/http matches on this text (CHANNEL_CLOSED in stdlib/http.agc). */
 static agc_value closed_error(void) { return agc_error_value("channel: closed"); }
 
 static agc_value timed_out_error(void) { return agc_error_value("channel: timed out"); }
@@ -212,7 +215,8 @@ static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t timeout = agc_as_int(vm, args[1]);
   check_timeout(vm, timeout, span + 2);
   agc_task *t = vm->task;
-  if (resumed(t, c)) {
+  bool parked = resumed(t, c);
+  if (parked) {
     leave_queue(vm, c, t);
     if (t->channel.reserved) {
       agc_value v = t->channel.value;
@@ -230,7 +234,10 @@ static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
     stop_waiting(t);
     return closed_error();
   }
-  return wait(vm, c, t, timeout, false);
+  agc_value result = wait(vm, c, t, timeout, false);
+  /* Woken by its deadline, the receiver did not park again: it timed out. */
+  if (parked && !resumed(t, c)) c->abandoned = true;
+  return result;
 }
 
 static void shut(agc_vm *vm, agc_channel *c) {
@@ -272,12 +279,20 @@ agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
   return !c->state->owner || c->state->owner == vm->task ? c->state : NULL;
 }
 
+/* Whether a receiver that had parked on c left without a value (a recv timeout or a cancel). A receiver that has
+   not parked yet does not count, so a sender cannot mistake a caller that is still on its way for one that left. */
+bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
+  agc_sync_assert(vm);
+  return c->abandoned;
+}
+
 void agc_channel_leave(agc_vm *vm, agc_task *t) {
   agc_sync_assert(vm);
   const agc_channel_wait w = t->channel;
   agc_channel *c = w.channel;
   leave_queue(vm, c, t);
   stop_waiting(t);
+  if (!w.sending) c->abandoned = true;
   if (!w.reserved) return;
   if (w.sending) {
     if (!c->closed && !reserve_slot(vm, c)) c->reserved_slots--;

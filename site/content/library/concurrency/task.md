@@ -342,7 +342,7 @@ Task.pending_count() -> Int
 Gives how many tasks of this run have not ended yet, not counting `main`. A
 task that waits to run, sleeps or waits for another task counts; so does the
 task that asks, unless it is `main`. A task that has returned or crashed no
-longer counts, even when nothing awaited it. `std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step that leaves tasks
+longer counts, even when nothing awaited it. The tasks `std/http` starts for an `HttpClient` never count, and `Test.test` does not see them as leftovers. `std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step that leaves tasks
 running.
 
 ```agentica

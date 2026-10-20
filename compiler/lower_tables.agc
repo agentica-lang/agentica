@@ -28,11 +28,11 @@ export VM_BUILTINS = Set.new([
   "Channel.close", "Channel.closed?", "Process.spawn", "Process.send", "Process.send_bytes", "Process.read_line",
   "Process.read_bytes", "Process.close_stdin", "Process.wait", "Process.close", "TCP.connect", "TCP.listen",
   "TCP.accept", "TCP.local_port", "TCP.close_listener", "TCP.send", "TCP.send_bytes", "TCP.recv_bytes",
-  "TCP.read_line", "TCP.close", "TLS.connect", "TLS.listen", "HttpWire.client", "HttpWire.exchange",
-  "HttpWire.close_client", "HttpWire.chunked", "HttpWire.chunk", "HttpWire.chunk_read",
-  "HttpWire.text", "HttpWire.read_head", "HttpWire.read_text", "HttpWire.encode_response", "HttpWire.error_answer",
-  "HttpWire.close_write", "HttpWire.server", "HttpWire.accept", "HttpWire.spawn", "HttpWire.close_server",
-  "HttpWire.wait", "HttpWire.local_port",
+  "TCP.read_line", "TCP.close", "TLS.connect", "TLS.listen", "HttpWire.service", "HttpWire.awaited?", "HttpWire.jobs",
+  "HttpWire.options", "HttpWire.clean_eof?", "HttpWire.chunked", "HttpWire.chunk", "HttpWire.chunk_read",
+  "HttpWire.text", "HttpWire.read_head", "HttpWire.read_response", "HttpWire.read_text", "HttpWire.encode_request",
+  "HttpWire.encode_response", "HttpWire.error_answer", "HttpWire.close_write", "HttpWire.server", "HttpWire.accept",
+  "HttpWire.spawn", "HttpWire.close_server", "HttpWire.wait", "HttpWire.local_port",
   "LogRegistry.level", "LogRegistry.floor", "LogRegistry.set_level", "LogRegistry.lowest",
   "LogRegistry.install_default", "LogRegistry.attach", "LogRegistry.detach", "LogRegistry.names",
   "LogRegistry.handlers", "LogRegistry.task_id",
@@ -62,12 +62,14 @@ export FLOAT_OPS: Map[String, String] = {
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
-  "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Text", "HttpWire.Reply"
+  "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Text", "HttpWire.Reply", "HttpWire.Job",
+  "HttpWire.Response"
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.
 export STRUCT_NEEDS: Map[String, List[String]] = {
-  "HttpResponse": ["Header"], "HttpRequest": ["Header"], "HttpWire.Head": ["Header"]
+  "HttpResponse": ["Header"], "HttpRequest": ["Header"], "HttpWire.Head": ["Header"],
+  "HttpWire.Job": ["HttpResponse", "Header"], "HttpWire.Response": ["Header"]
 }
 
 ## The most items one `list` instruction gathers and the most entries one `map` instruction gathers; larger literals

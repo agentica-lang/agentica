@@ -14,13 +14,10 @@
 #include <time.h>
 
 #if defined(__linux__) || defined(__APPLE__)
-#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <netinet/in.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <sys/socket.h>
 #include <unistd.h>
 #include <uv.h>
 
@@ -28,9 +25,9 @@
 #define MAX_FNS 22
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CRASH, B_WINDOW, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CRASH, B_WINDOW, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED, F_MAP_ITEM, F_MAP_GROUP, F_MAP_CLOSING, F_MAP_CRASHING };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED, F_MAP_ITEM, F_MAP_GROUP, F_MAP_CLOSING, F_MAP_CRASHING };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -68,13 +65,8 @@ static size_t closed_count;
 static checker check;
 static agc_resource *handle;
 static agc_io_job *jobs[8];
-static agc_value client;
 static agc_task *grandchild;
-static int listener = -1;
 static FILE *quiet;
-static int64_t port;
-static int accepted[8];
-static int accepted_count;
 static int gate[2] = {-1, -1};
 static int idle[2] = {-1, -1};
 static int cancel_calls;
@@ -334,52 +326,6 @@ static agc_value test_close_done(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
-
-static agc_value test_http(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)args;
-  if (agc_is(client, AGC_T_VOID)) {
-    agc_value options[5] = {agc_int(10000), agc_int(60000), agc_int(1), agc_int(1 << 20), text("")};
-    agc_value made = agc_find_builtin((const uint8_t *)"HttpWire.client", 15, 5)->fn(vm, options, span);
-    assert(agc_as_result(vm, made)->ok);
-    client = agc_as_result(vm, made)->value;
-  }
-  agc_value call[8] = {client, text("https"), text("127.0.0.1"), agc_int(port), text("GET"), text("/"),
-                       agc_list_value(agc_list_from_array(NULL, 0)), text("")};
-  return agc_find_builtin((const uint8_t *)"HttpWire.exchange", 17, 8)->fn(vm, call, span);
-}
-
-static void accept_all(void) {
-  for (;;) {
-    int fd = accept(listener, NULL, NULL);
-    if (fd < 0) {
-      assert(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR);
-      return;
-    }
-    assert(accepted_count < 8);
-    accepted[accepted_count++] = fd;
-  }
-}
-
-static agc_value test_until(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  accept_all();
-  if (accepted_count >= agc_as_int(vm, args[0])) {
-    tries = 0;
-    return agc_void();
-  }
-  return nap_again(vm);
-}
-
-static agc_value test_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  int64_t k = agc_as_int(vm, args[0]);
-  assert(k < accepted_count && accepted[k] >= 0);
-  close(accepted[k]);
-  accepted[k] = -1;
-  return agc_void();
-}
-
 static agc_value test_print(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t tag = agc_as_int(vm, args[0]);
@@ -413,9 +359,6 @@ static const agc_builtin test_builtins[] = {
   {"Test.io", 1, test_io, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.finish", 1, test_finish, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.cancel_self", 1, test_self, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"Test.http", 1, test_http, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"Test.until", 1, test_until, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"Test.close", 1, test_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.io_short", 1, test_io_short, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.pool", 1, test_pool_job, AGC_NATIVE_NONE, AGC_COST_NONE, true},
@@ -500,10 +443,6 @@ static void build_tasks(prog *p) {
   spawn(p, F_PARENT, 2, F_SLEEPER, 8);
   finish_fn(p, F_PARENT);
 
-  emit(p, F_HTTP, AGC_OP_MOVE, 1, 0, 1);
-  emit(p, F_HTTP, AGC_OP_CALL_BUILTIN, 1, B_HTTP, 1);
-  mark_arg(p, F_HTTP);
-  emit(p, F_HTTP, AGC_OP_RETURN, 1, 0, 1);
 
   call_reg(p, F_SHORT, B_IO_SHORT, 0, 1);
   mark_arg(p, F_SHORT);
@@ -600,7 +539,6 @@ static void reset(void) {
   owned_closed = 0;
   tries = 0;
   window_calls = 0;
-  client = agc_void();
   memset(jobs, 0, sizeof jobs);
 }
 
@@ -1064,60 +1002,6 @@ static void test_output_waiter(void) {
   out_pipe[0] = out_pipe[1] = -1;
 }
 
-static void check_pool(agc_vm *vm, int64_t n) {
-  (void)n;
-  accept_all();
-  assert(accepted_count == 3);
-  assert(!agc_as_result(vm, reg_task(vm, 0)->result)->ok && !agc_as_result(vm, reg_task(vm, 6)->result)->ok);
-  assert(cancelled(reg_task(vm, 2)) && cancelled(reg_task(vm, 4)));
-  assert(mark_count == 2 && marks[0] == 1 && marks[1] == 4);
-}
-
-static void open_listener(void) {
-  listener = socket(AF_INET, SOCK_STREAM, 0);
-  assert(listener >= 0);
-  struct sockaddr_in addr = {0};
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  assert(bind(listener, (struct sockaddr *)&addr, sizeof addr) == 0);
-  assert(listen(listener, 8) == 0);
-  socklen_t len = sizeof addr;
-  assert(getsockname(listener, (struct sockaddr *)&addr, &len) == 0);
-  port = ntohs(addr.sin_port);
-  assert(fcntl(listener, F_SETFL, O_NONBLOCK) == 0);
-}
-
-static void test_pool(void) {
-  prog p;
-  new_prog(&p);
-  spawn(&p, F_MAIN, 0, F_HTTP, 1);
-  call_int(&p, F_MAIN, B_UNTIL, 1);
-  spawn(&p, F_MAIN, 2, F_HTTP, 2);
-  spawn(&p, F_MAIN, 4, F_HTTP, 3);
-  spawn(&p, F_MAIN, 6, F_HTTP, 4);
-  call_int(&p, F_MAIN, B_SLEEP, 0);
-  call_reg(&p, F_MAIN, B_CANCEL, 4, 1);
-  call_int(&p, F_MAIN, B_CLOSE, 0);
-  call_reg(&p, F_MAIN, B_AWAIT, 0, 1);
-  call_int(&p, F_MAIN, B_UNTIL, 2);
-  call_reg(&p, F_MAIN, B_CANCEL, 2, 1);
-  call_int(&p, F_MAIN, B_UNTIL, 3);
-  call_int(&p, F_MAIN, B_CLOSE, 2);
-  call_reg(&p, F_MAIN, B_AWAIT, 6, 1);
-  call_int(&p, F_MAIN, B_CHECK, 1);
-  finish_fn(&p, F_MAIN);
-  reset();
-  check = check_pool;
-  open_listener();
-  agc_vm vm;
-  agc_outcome o = run(&vm, &p);
-  assert(o.kind == AGC_DONE);
-  for (int k = 0; k < accepted_count; k++)
-    if (accepted[k] >= 0) close(accepted[k]);
-  close(listener);
-  assert(agc_io_close(&vm));
-}
-
 static void check_pool_phase(agc_vm *vm, int64_t n) {
   if (n == 1) {
     assert(cancelled(reg_task(vm, 0)) && cancel_calls == 0 && dropped == 0 && done_calls == 0);
@@ -1346,7 +1230,6 @@ int main(void) {
   test_map_late_closes();
   signal(SIGPIPE, SIG_IGN);
   test_output_waiter();
-  test_pool();
   assert(pipe(gate) == 0);
   test_cancel_pool_phase();
   close(gate[0]);

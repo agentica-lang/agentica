@@ -1,0 +1,27 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 11601,
+  "stdout": [
+    "HEAD /head: 200 [0 chars]",
+    "/head: 200 [3 chars]",
+    "/head: 200 [3 chars]",
+    "/extra: 200 [2 chars]",
+    "/extra: 200 [2 chars]",
+    "/chunked: 200 [500 chars]",
+    "/chunked: 200 [500 chars]",
+    "/204: 204 [0 chars]",
+    "/204: 204 [0 chars]",
+    "conn 1: HEAD /head HTTP/1.1",
+    "conn 2: GET /head HTTP/1.1",
+    "conn 2: GET /head HTTP/1.1",
+    "conn 2: GET /extra HTTP/1.1",
+    "conn 3: GET /extra HTTP/1.1",
+    "conn 4: GET /chunked HTTP/1.1",
+    "conn 5: GET /chunked HTTP/1.1",
+    "conn 6: GET /204 HTTP/1.1",
+    "conn 7: GET /204 HTTP/1.1",
+    ""
+  ],
+  "stderr": []
+}

@@ -1,6 +1,7 @@
 /*
  * The Channel builtins, called directly with hand-made tasks and no bytecode:
- * ring growth and its turn cost, wrap-around, capacity and waiter order.
+ * ring growth and its turn cost, wrap-around, capacity and waiter order, and
+ * when a channel counts as abandoned by its receiver.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -440,6 +441,42 @@ static void test_reservation_beats_deadline(void) {
   assert(got(now(a, RECV, args), 4));
 }
 
+/* Abandoned (HttpWire.awaited? is its negation): only a receiver that parked and left without a value sets it. A
+   sender before any receiver parks, a poll, and a receiver that gets its value do not. */
+static void test_abandoned(void) {
+  agc_value ch = make_channel(1);
+  const agc_channel *c = agc_as_channel(&vm, ch);
+  assert(sent(send(main_task, ch, 1, 0)));
+  assert(!agc_channel_abandoned(&vm, c));
+  assert(got(recv(main_task, ch, 0), 1));
+  assert(failed(recv(main_task, ch, 0), "channel: timed out"));
+  assert(!agc_channel_abandoned(&vm, c));
+  agc_task *a = make_task();
+  wait_recv(a, ch, 5000);
+  send(main_task, ch, 2, 0);
+  assert(next_ready() == a);
+  settle();
+  agc_value args[2] = {ch, agc_int(5000)};
+  assert(got(now(a, RECV, args), 2));
+  assert(!agc_channel_abandoned(&vm, c));
+  agc_task *b = make_task();
+  wait_recv(b, ch, 5000);
+  agc_task_cancel(&vm, b);
+  assert(agc_channel_abandoned(&vm, c));
+  agc_value timed = make_channel(1);
+  agc_task *d = make_task();
+  wait_recv(d, timed, 20);
+  struct timespec delay = {0, 80000000L};
+  while (nanosleep(&delay, &delay) != 0) {}
+  assert(agc_timers_run(&vm));
+  assert(next_ready() == d);
+  settle();
+  assert(!agc_channel_abandoned(&vm, agc_as_channel(&vm, timed)));
+  agc_value args_d[2] = {timed, agc_int(20)};
+  assert(failed(now(d, RECV, args_d), "channel: timed out"));
+  assert(agc_channel_abandoned(&vm, agc_as_channel(&vm, timed)));
+}
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
@@ -471,6 +508,7 @@ int main(void) {
   test_close_wakes_receivers();
   test_timeout_before_reservation();
   test_reservation_beats_deadline();
+  test_abandoned();
   assert(agc_io_close(&vm));
   puts("channel tests passed");
   return 0;

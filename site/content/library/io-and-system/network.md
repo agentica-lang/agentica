@@ -186,7 +186,7 @@ whole call, a 30 s `idle_timeout_ms` for kept connections, 4
 `max_connections` per host and a 1 MiB `max_body_bytes`, with the system's
 CA certificates (`ca_file: ""`). Build `HttpClientOptions` to change them;
 every number must be positive, `max_connections` at most 65536 and
-`max_body_bytes` at most 64 MiB. Calls wait in FIFO order for one of the `max_connections` slots. A call still in flight when `close_client` runs fails with `http: client is closed`.
+`max_body_bytes` at most 64 MiB. Calls wait in FIFO order for one of the `max_connections` slots. A call still in flight when `close_client` runs fails with `http: client is closed`; its request is not sent, unless a connection had already started sending it. The client's work runs as Agentica code in tasks of its own, so it spends the `--max-steps` budget of the run.
 
 ```agentica {mode="check"}
 import HTTP from "std/http"

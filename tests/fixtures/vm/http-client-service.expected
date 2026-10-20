@@ -1,0 +1,20 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 3101,
+  "stdout": [
+    "1",
+    "true",
+    "200 ok",
+    "200 ok",
+    "1",
+    "network: end of input",
+    "http: client is closed",
+    "0",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-UNWRAP-ERROR\",\"file\":\"@fixtures/vm/http-client-service.agc\",\"message\":\"the maker crashes\",\"range\":{\"end\":{\"column\":25,\"line\":25},\"start\":{\"column\":3,\"line\":25}},\"spawned_at\":{\"column\":11,\"file\":\"@fixtures/vm/http-client-service.agc\",\"line\":42},\"stack\":[{\"column\":3,\"file\":\"@fixtures/vm/http-client-service.agc\",\"function\":\"make_and_crash\",\"line\":25}],\"task\":true}",
+    ""
+  ]
+}

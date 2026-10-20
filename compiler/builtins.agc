@@ -73,7 +73,7 @@ export def ref(name: String, arity: Int) -> Result[Model.Builtin]
   return form_for(entry, arity)
 end
 
-## True for a name inside a std-only module, such as HttpWire.client.
+## True for a name inside a std-only module, such as HttpWire.service.
 export def std_only_name?(name: String) -> Bool
   return STD_ONLY.has_key?(module_of(name))
 end

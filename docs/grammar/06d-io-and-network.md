@@ -36,7 +36,8 @@ A client call is whole: it returns after the whole body, which must be valid
 UTF-8. One `timeout_ms` covers the whole call. Calls wait in FIFO order for one
 of the `max_connections` slots (at most 65536). `max_body_bytes` is at most 64
 MiB. A call in flight when `close_client` runs fails with `http: client is
-closed`.
+closed`; its request is not sent, unless a connection had already started
+sending it.
 
 A `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` sent on a reused connection that
 the server had already closed is retried once on a new connection, within the
