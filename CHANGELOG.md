@@ -8,74 +8,43 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-21
+
 ### Added
 
-- Packages: `agentica.toml` declares git dependencies by local name, pinned to a
-  tag or a commit, and `agentica.lock` pins their commits and hashes. Import one
-  as `import Sqlite from "pkg/sqlite/db"`. Packages load from a cache that you
-  fill yourself; fetching is planned. New codes: `PKG-MANIFEST-INVALID`,
-  `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`, `PKG-LOCK-STALE`,
-  `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK` and
-  `CHECK-IMPORT-PACKAGE`.
-- `String.to_bytes(s)`: the UTF-8 bytes of a String as a `List[Int]`, the
-  inverse of `String.from_bytes`.
-- Generic type aliases: `type Matrix[T] = List[List[T]]`, used as
-  `Matrix[Int]`, is transparent substitution with no new runtime type.
-- TLS sockets on Windows, with the same checks as on Linux and macOS.
-- Windows system trust also reads the CA store for intermediates (never as
-  roots).
-- `std/http` (HTTP and HTTPS client and server) runs on Windows.
-- `Lazy[T]`: lazy pipelines over lists, ranges and `Lazy.produce`
-  (`xs.lazy.filter do ... end.first(3)`); terminals return a `Result`.
-- `File.foreach(path, buffer_bytes, timeout_ms)` and `ch.lazy(timeout_ms)`:
-  `Lazy` sources over the lines of a file (closed before the terminal returns)
-  and the values of a channel; `File.foreach(...).each` with no step is
-  `CHECK-LAZY-NO-STEP` (use `File.each_line`).
-- `try` works in every block of a `Lazy` method (`map`, `filter`, `reduce`,
-  `find` ...): a failed `try` ends the pipeline and the terminal returns its
-  error. `lz.write_lines(path, timeout_ms)` writes the lines of a
-  `Lazy[String]` to a file (created or truncated, closed before it returns)
-  and gives `Result[Void]`.
-- CI runs one conformance matrix on Linux, Windows and macOS (Intel and ARM),
-  with a report of what each system tested and skipped.
-- `Task.cancel(task)` cancels a task and its descendants without waiting.
-- A line that starts with `.name` continues the line before it, so a method
-  chain can span lines without parentheses (`|>` chains still need them).
-- `Profile.measure(label) do ... end` adds section rows to the profile,
-  `Profile.steps()` counts a task's steps, and `AGENTICA_PROFILE_FORMAT=folded`
-  writes flame graph stacks.
-- `Crypto.sha256(data: List[Int]) -> List[Int]` gives the 32-byte SHA-256
-  digest of a list of bytes, computed with OpenSSL.
+- Packages: git dependencies in `agentica.toml`, pinned by `agentica.lock`, and
+  imports as `pkg/<name>/<module>` from a cache filled by hand (no fetching
+  yet). New codes `PKG-*` and `CHECK-IMPORT-PACKAGE`.
+- `String.to_bytes(s)`, the UTF-8 bytes of a String.
+- `Crypto.sha256(data)`, the SHA-256 digest of a list of bytes.
+- Generic type aliases: `type Matrix[T] = List[List[T]]`.
+- `Lazy[T]` pipelines over lists, ranges, `Lazy.produce`, file lines
+  (`File.foreach`) and channels (`ch.lazy`), with `try` in every step block
+  and `lz.write_lines(path, timeout_ms)`.
+- `Task.cancel(task)` cancels a task and its descendants.
+- A line that starts with `.name` continues the line before it.
+- `Profile.measure`, `Profile.steps()` and folded flame graph stacks.
+- TLS sockets and `std/http` on Windows; Windows trust reads the CA store for
+  intermediates.
+- One CI conformance matrix on Linux, Windows and macOS (Intel and ARM).
 
 ### Changed
 
-- **Breaking:** when an `agentica.toml` is in the folder of the root file or
-  above it, `pkg/` searches `agc_libs/` beside that manifest, not beside the
-  root file. The search goes up to the root of the file system, and the manifest
-  is read and checked: an unrelated `agentica.toml` in a shared parent folder
-  (such as `/tmp`) can fail every script below it with `PKG-MANIFEST-INVALID`.
-  Without a manifest nothing changes.
-- **Breaking:** `Lazy` is now a reserved type name.
-- **Breaking:** `Profile` is now a reserved type name.
-- **Breaking:** `Crypto` is now a reserved type name.
-- HTTP runs on several schedulers (behind the multicore test switch).
-- The lingering close of `std/http` drops at most 256 KiB of input; a client
-  still sending a large body may see a reset instead of the answer.
+- **Breaking:** with an `agentica.toml` in the folder of the root file or above
+  it (up to the file system root), `pkg/` searches `agc_libs/` beside that
+  manifest, and the manifest must be valid (`PKG-MANIFEST-INVALID`).
+- **Breaking:** `Lazy`, `Profile` and `Crypto` are reserved type names.
+- The lingering close of `std/http` drops at most 256 KiB of input.
 
 ### Fixed
 
-- A cancelled `TCP.accept` or socket read gives up its place at once.
-- A task spawned by a cancelled task starts cancelled.
-- A type alias is read with only its own parameters in scope: an enum type
-  parameter no longer takes the place of a type the alias names
-  (`CHECK-UNKNOWN-TYPE` at the use), and the argument of an unused alias
-  parameter is checked.
-- Windows: `pkg/` roots follow the documented rules: `;` in `AGENTICA_PATH`,
-  drive and UNC roots, `%LOCALAPPDATA%` for the user root, no system roots.
-- Windows: a read of standard input no longer holds a pool thread, so file
-  calls and other tasks go on while it waits, even with `UV_THREADPOOL_SIZE=1`.
-- Windows: a socket given as standard output or error no longer loses the
-  output its reader has not read yet when the run ends.
+- A cancelled `TCP.accept` or socket read gives up its place at once, and a
+  task spawned by a cancelled task starts cancelled.
+- A type alias sees only its own parameters.
+- Windows: `pkg/` roots follow the documented rules.
+- Windows: a standard input read no longer holds a pool thread.
+- Windows: a socket as standard output or error keeps its unread output at
+  exit.
 
 ## [0.5.0-beta.1] - 2026-10-20
 
@@ -246,7 +215,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.5.0-beta.1...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/sonic182/agentica/compare/0.5.0-beta.1...0.5.0
 [0.5.0-beta.1]:
 https://github.com/sonic182/agentica/compare/0.4.1-beta.1...0.5.0-beta.1
 [0.4.1-beta.1]:
