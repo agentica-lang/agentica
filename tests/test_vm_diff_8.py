@@ -58,11 +58,15 @@ def gone(pid):
     return wait_until(lambda: not process_alive(pid), scaled(5))
 
 
+# Windows has no SIGKILL: os.kill ends the process (TerminateProcess) with any number that is not a console event.
+KILL = getattr(signal, "SIGKILL", signal.SIGTERM)
+
+
 def kill_alive(pids):
     for pid in pids:
         if process_alive(pid):
             try:
-                os.kill(int(pid), signal.SIGKILL)
+                os.kill(int(pid), KILL)
             except ProcessLookupError:
                 pass
 
@@ -371,25 +375,35 @@ def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_u
         (0, "error(\"network: operation timed out\")\n\"hi\\n\" 1 65533 false\n", "")
 
 
-@windows_gap(437, "a stop signal that arrives while the VM waits for its last child has no Windows test")
+@pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary: no /bin/sh child, no console to break")
 def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child_exits_first(adopt, request, tmp_path):
+    # The child prints its pid and sleeps. Windows has no /bin/sh, so a Python child (an argument of the program) does
+    # the same, and the stop is the Ctrl+Break of the stop tests of Windows, which only a new process group can take.
+    windows = os.name == "nt"
+    spawn = ('Process.spawn(System.args()[0], ["-c", System.args()[1]], 60000)' if windows else
+             'Process.spawn("/bin/sh", ["-c", "echo $$; exec sleep 30"], 60000)')
     bytecode = compile_program(
         tmp_path, "signal-pending",
-        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 30\"], "
-        "60000))\n  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n"
+        "def main() -> Void\n  p = Result.unwrap!(" + spawn + ")\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n"
         "  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\n  puts(\"survived\")\nend\n")
+    arguments = [sys.executable, "import os,time;print(os.getpid(),flush=True);time.sleep(30)"] if windows else []
     # Nothing reads the VM's stdout after the first line, so its 1 MiB write blocks: the state under test.
-    child = adopt(Child([*vm_command(), "--allow-run", "--", bytecode], env=vm_environment(),
-                        cwd=tmp_path, read_stdout=False))
+    child = adopt(Child([*vm_command(), "--allow-run", "--", bytecode, *arguments], env=vm_environment(),
+                        cwd=tmp_path, read_stdout=False,
+                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0))
     pid = child.process.stdout.readline().decode().strip()
     request.addfinalizer(lambda: kill_alive([pid]))
     assert pid.isdigit(), pid
     time.sleep(0.5)
-    os.kill(int(pid), signal.SIGKILL)
+    os.kill(int(pid), KILL)
     time.sleep(0.3)
-    os.kill(child.process.pid, signal.SIGTERM)
+    if windows:
+        child.process.send_signal(signal.CTRL_BREAK_EVENT)
+    else:
+        os.kill(child.process.pid, signal.SIGTERM)
     threading.Thread(target=child.process.stdout.read, daemon=True).start()
-    assert exit_status(child.wait(RUN_TIMEOUT)) == 128 + signal.SIGTERM
+    assert exit_status(child.wait(RUN_TIMEOUT)) == 128 + (signal.SIGBREAK if windows else signal.SIGTERM)
 
 
 @posix_only("descriptors inherited by number; Windows inherits handles, which vm/tests/process_test.c checks (a child does not get an inheritable handle of the parent)")

@@ -12,13 +12,15 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, cli, compile_agc, host_only, known_issue,
+from tests.agentica_test import (FIXTURES, PYTHON, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only, known_issue,
                                  process_alive, scaled, start_vm, stop_a_vm_that_fills_its_stdout, vm_command,
                                  vm_environment, wait_until)
+from tests.windows_console_support import CHILD as WINDOWS_CHILD, run_on_console
 
 # SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals, so each case that sends one is host-only on Windows, and the
 # reason says which case of tests/test_windows_console_stop.py sends Ctrl+Break for the same behavior. The two cases that
-# need a full FIFO and the Ctrl+C through the CLI have no Windows test yet (issues 433 and 437).
+# need a full FIFO have no Windows test yet (issue 433). Ctrl+C through the CLI runs on both: Windows types it into a
+# pseudo console, the console of the CLI, the VM and the child.
 
 PEER = FIXTURES / "stop-peer.py"
 WAIT_SECONDS = scaled(10)
@@ -71,16 +73,22 @@ end
 """
 
 
-def child_program(trap=""):
+def child_program(trap="", windows=False):
     """Writes "buffered" to a file, spawns `sh` (which prints its pid, then sleeps) and waits or spins.
 
-    With a trap the child is spawned captured, so it ignores the signals the trap names.
+    With a trap the child is spawned captured, so it ignores the signals the trap names. Windows has no `sh`: with
+    `windows` the program spawns, captured, the command that the arguments after the mode give (an executable, the
+    code it runs and the file it writes its pid to), so the test chooses a child that ignores Ctrl+C and Ctrl+Break.
     """
+    spawn = ('Process.%s("/bin/sh", ["-c", "%secho $$; exec sleep 30"]%s, 1000)' %
+             (("spawn", "", "") if trap == "" else ("spawn_captured", trap, ', "."')))
+    if windows:
+        spawn = 'Process.spawn_captured(System.args()[2], ["-c", System.args()[3], System.args()[4]], ".", 1000)'
     return """\
 def main() -> Void
   f = File.open(System.args()[0], "write", 1000).unwrap!
   File.write(f, "buffered", 1000).unwrap!
-  p = Process.%s("/bin/sh", ["-c", "%secho $$; exec sleep 30"]%s, 1000).unwrap!
+  p = %s.unwrap!
   puts(Process.read_line(p, 5000).unwrap!)
   IO.flush()
   if System.args()[1] == "sleep"
@@ -92,15 +100,26 @@ def main() -> Void
     end
   end
 end
-""" % (("spawn", "", "") if trap == "" else ("spawn_captured", trap, ', "."'))
+""" % spawn
 
 
 def gone_soon(pid):
     """True when the process ends within WAIT_SECONDS; otherwise it is killed so it cannot outlive the test."""
     if wait_until(lambda: not process_alive(pid), WAIT_SECONDS, 0.1):
         return True
-    os.kill(pid, signal.SIGKILL)
+    kill_process(pid)
     return False
+
+
+def kill_process(pid):
+    """Ends the process at once: SIGKILL, or on Windows a TerminateProcess, which any other signal number asks for."""
+    try:
+        os.kill(int(pid), getattr(signal, "SIGKILL", signal.SIGTERM))
+    except ProcessLookupError:
+        pass
+    except OSError:
+        if os.name != "nt":
+            raise  # Windows reports a process that is gone as an OSError (WinError 87 or 5)
 
 
 
@@ -217,15 +236,42 @@ def test_a_stop_signal_with_standard_output_stuck_does_not_wait_for_the_flush_li
     assert time.monotonic() - start < min(scaled(5), 25), "the run does not wait for the reader"
 
 
-@known_issue(WINDOWS, 437, "Ctrl+C through the CLI has no Windows test")
-def test_ctrl_c_through_the_cli_stops_a_child_that_ignores_the_signals_and_writes_the_file(tmp_path, adopt):
+def ctrl_c_through_the_cli(request, adopt, source, path):
+    """Runs the program with the CLI, presses Ctrl+C where a terminal does, and returns the child's pid after the CLI
+    ended.
+
+    The CLI, the VM and the child share one console. POSIX: the session and process group of the Child, which gets
+    SIGINT. Windows: a pseudo console, which gets the character 3 and sends CTRL_C_EVENT to every process on it (a
+    process group made by CREATE_NEW_PROCESS_GROUP takes no Ctrl+C, and the console of pytest must not get it). The
+    child writes its pid to a file there, since the test does not read the console.
+    """
+    if os.name != "nt":
+        cli_child = adopt(Child(cli() + ["--allow-run", source, path, "sleep"],
+                                env=vm_environment(), capture_stderr=True))
+        pid = int(cli_child.next_line(6 * WAIT_SECONDS))
+        os.killpg(cli_child.process.pid, signal.SIGINT)
+        cli_child.wait(WAIT_SECONDS)
+        return pid
+    pid_file = path.with_name("child.pid")
+    pids = []
+    request.addfinalizer(lambda: [kill_process(pid) for pid in pids])
+
+    def press_ctrl_c(type_text):
+        assert wait_until(lambda: pid_file.exists() and pid_file.read_text().isdigit(), 6 * WAIT_SECONDS, 0.1), \
+            "the child wrote its pid"
+        pids.append(int(pid_file.read_text()))
+        type_text("\x03")
+
+    command = cli() + ["--allow-run", source, path, "sleep", PYTHON, WINDOWS_CHILD, pid_file]
+    status, shown = run_on_console(command, vm_environment(), WAIT_SECONDS, during=press_ctrl_c)
+    assert status == 128 + signal.SIGINT, shown
+    return pids[0]
+
+
+@pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary: no /bin/sh child, no console to press Ctrl+C in")
+def test_ctrl_c_through_the_cli_stops_a_child_that_ignores_the_signals_and_writes_the_file(tmp_path, adopt, request):
     path = tmp_path / "out.txt"
     source = tmp_path / "program.agc"
-    source.write_text(child_program("trap '' INT TERM; "), encoding="utf-8")
-    # The CLI, the VM and the child share the Child's session and process group, as a terminal's Ctrl-C reaches them.
-    cli_child = adopt(Child(cli() + ["--allow-run", source, path, "sleep"],
-                            env=vm_environment(), capture_stderr=True))
-    pid = int(cli_child.next_line(6 * WAIT_SECONDS))
-    os.killpg(cli_child.process.pid, signal.SIGINT)
-    cli_child.wait(WAIT_SECONDS)
+    source.write_text(child_program("trap '' INT TERM; ", windows=os.name == "nt"), encoding="utf-8")
+    pid = ctrl_c_through_the_cli(request, adopt, source, path)
     check_stopped(pid, path, "cli")
