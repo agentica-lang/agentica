@@ -91,11 +91,17 @@ typedef struct {
   agc_native *native;
 } agc_frame;
 
-typedef enum { AGC_STEP_CALL, AGC_STEP_WAIT, AGC_STEP_END } agc_step_kind;
+/* What a stepper asks for next. CALL calls `fn` with `value` (CALL2 with `value` and `second`); a Void `fn` means the
+   builtin's last argument, its block. WAIT parks on the job the step started. YIELD ends the turn between two items
+   of work, so the task can be switched out; a step returns it only when agc_step_turn said the turn is over. END
+   finishes the call with `value`. */
+typedef enum { AGC_STEP_CALL, AGC_STEP_CALL2, AGC_STEP_WAIT, AGC_STEP_YIELD, AGC_STEP_END } agc_step_kind;
 
 typedef struct {
   agc_step_kind kind;
   agc_value value;
+  agc_value second;
+  agc_value fn;
 } agc_step;
 
 typedef struct agc_stepper agc_stepper;
@@ -520,6 +526,9 @@ void agc_task_parking(agc_vm *vm);
 void agc_task_unpark(agc_vm *vm);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);
+/* Counts one step of a stepper's own work (at span) and returns true when the turn is over: the step must then
+   return AGC_STEP_YIELD. --max-steps fails the run here, as for any step. */
+bool agc_step_turn(agc_vm *vm, uint32_t span);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
 agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);

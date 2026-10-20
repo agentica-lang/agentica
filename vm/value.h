@@ -38,7 +38,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY
 } agc_tag;
 
 typedef struct {
@@ -367,6 +367,8 @@ agc_value agc_http_client_value(agc_http_client *c);
 agc_value agc_test_case_value(agc_test_case *c);
 agc_value agc_http_server_value(agc_http_server *s);
 agc_value agc_channel_value(agc_channel *c);
+/* A Lazy recipe (vm/lazy.c): an immutable node that the VM never looks inside outside that file. */
+agc_value agc_lazy_value(const void *node);
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v);
 agc_task *agc_as_task(agc_vm *vm, agc_value v);
 agc_process *agc_as_process(agc_vm *vm, agc_value v);
@@ -376,6 +378,7 @@ agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v);
 agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v);
 agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v);
 agc_channel *agc_as_channel(agc_vm *vm, agc_value v);
+const void *agc_as_lazy(agc_vm *vm, agc_value v);
 /* The constructors and checked accessors of the common value types are inline: the interpreter and the builtins
  * use them on every instruction, and a call for each access (they used to live in value.c) cost more than the
  * Int add they served. A value of the wrong type calls agc_wrong_tag, which fails with RUNTIME-INTERNAL and does not

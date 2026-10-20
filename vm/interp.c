@@ -291,6 +291,11 @@ static void count_step(agc_vm *vm, uint32_t span) {
 /* One step for a builtin that starts work of its own, as the interpreter counts one for each callback it makes. */
 void agc_count_step(agc_vm *vm, uint32_t span) { count_step(vm, span); }
 
+bool agc_step_turn(agc_vm *vm, uint32_t span) {
+  count_step(vm, span);
+  return vm->yield;
+}
+
 static bool apply_cost(agc_vm *vm) {
   int64_t c = vm->task->turn_cost;
   vm->task->turn_cost = 0;
@@ -484,14 +489,24 @@ static void resume_stepper(agc_vm *vm) {
   agc_sync_drop(vm);
   switch (next.kind) {
     case AGC_STEP_CALL:
+    case AGC_STEP_CALL2: {
       count_step(vm, st->span);
-      call_value(vm, t, st->fn, base + 1, &next.value, 1, base, st->span);
+      agc_value args[2] = {next.value, next.second};
+      agc_value fn = agc_is(next.fn, AGC_T_VOID) ? st->fn : next.fn;
+      call_value(vm, t, fn, base + 1, args, next.kind == AGC_STEP_CALL2 ? 2 : 1, base, st->span);
       t->turn_cost++;
       apply_cost(vm);
       return;
+    }
     case AGC_STEP_WAIT:
       if (!t->parking) agc_fail(vm, "RUNTIME-INTERNAL", "a step waited without parking", st->span);
       t->park_reg = base;
+      return;
+    case AGC_STEP_YIELD:
+      /* The caller of resume_native returns AGC_TURN_YIELD when vm->yield is set; without it, it would run the
+         native frame as bytecode. The frame stays, and the next turn resumes the step with a Void `last`. */
+      if (!vm->yield) agc_fail(vm, "RUNTIME-INTERNAL", "a step yielded with turn left", st->span);
+      t->regs[base] = agc_void();
       return;
     case AGC_STEP_END: finish_native(vm, next.value); return;
   }
@@ -629,7 +644,9 @@ static void start_stepper(agc_vm *vm, const agc_builtin *b, uint32_t base, uint3
   st->stepper = t->stepper;
   st->fn = t->regs[base + b->arity - 1];
   t->stepper = NULL;
-  agc_as_fn(vm, st->fn);
+  /* A stepper with no block (Lazy's to_a) names the function of each call in its step; a Void fn is checked by
+     call_value, which fails on a step that asks for the block. */
+  if (!agc_is(st->fn, AGC_T_FN)) st->fn = agc_void();
   push_native(vm, st, base);
 }
 
