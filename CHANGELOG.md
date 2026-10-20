@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0-beta.1] - 2026-10-20
+
 ### Added
 
 - The `TCP` builtins run on Windows (and are tested on macOS and Windows as on
@@ -315,7 +317,9 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.4.1-beta.1...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.5.0-beta.1...HEAD
+[0.5.0-beta.1]:
+https://github.com/sonic182/agentica/compare/0.4.1-beta.1...0.5.0-beta.1
 [0.4.1-beta.1]:
 https://github.com/sonic182/agentica/compare/0.4.0...0.4.1-beta.1
 [0.4.0]: https://github.com/sonic182/agentica/compare/0.3.0...0.4.0
