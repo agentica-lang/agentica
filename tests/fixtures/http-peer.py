@@ -99,6 +99,14 @@ class Web(http.server.BaseHTTPRequestHandler):
 class Quiet(http.server.ThreadingHTTPServer):
     daemon_threads = True
 
+    def server_bind(self):
+        # HTTPServer.server_bind sets server_name with socket.getfqdn(host),
+        # and on the macOS CI runners that reverse lookup of 127.0.0.1 takes
+        # about 35 s, longer than the test waits for the ports line (#407).
+        # Nothing here reads server_name, so skip the lookup.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
     def handle_error(self, request, client_address):
         pass
 

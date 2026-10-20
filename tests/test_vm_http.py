@@ -328,7 +328,7 @@ def test_server_against_python_raw_sockets_python_http_client_and_node_http_clie
     bytecode = compile_agc(source, tmp_path / "server.agcb")
     vm = adopt(start_vm(bytecode, CERTS, stdin=True))
     port, tls_port = vm.next_line().split()
-    python_run = run([PYTHON, SERVER_PEER, port, "2", tls_port, CERTS], timeout=scaled(120))
+    python_run = run([PYTHON, SERVER_PEER, port, "2", tls_port, CERTS, str(vm.process.pid)], timeout=scaled(120))
     assert python_run.code == 0, python_run.stderr
     assert output_lines(python_run.stdout) == SERVER_PYTHON_LINES
     if node:
