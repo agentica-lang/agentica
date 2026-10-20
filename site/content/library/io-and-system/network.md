@@ -163,7 +163,7 @@ end
 HTTP is the `std/http` library, written in Agentica. Import it with
 `import HTTP from "std/http"`; a call to `HTTP.get` without the import fails
 with `CHECK-UNKNOWN-NAME` and a help that shows the import. It has a client
-(this section) and a server (the next one).
+(this section) and a server (the next one). Both work the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
 Every call is whole: it returns after the whole response arrived, and the body
 is a `String`, which must be valid UTF-8. Status codes such as 404 or 500 are

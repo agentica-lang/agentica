@@ -6,6 +6,9 @@ import subprocess
 import sys
 import time
 
+# Windows would print CRLF; the tests compare LF lines.
+sys.stdout.reconfigure(newline="\n")
+
 PORT = int(sys.argv[1])
 HOST = b"Host: x\r\n"
 
@@ -225,7 +228,33 @@ def secure(port, certs):
 
 
 def rss_kb(pid):
-    return int(subprocess.run(["ps", "-o", "rss=", "-p", pid], capture_output=True, text=True, check=True).stdout)
+    """The resident set of the VM in KB: ps, or on Windows the working set from GetProcessMemoryInfo (no ps there)."""
+    if os.name != "nt":
+        return int(subprocess.run(["ps", "-o", "rss=", "-p", pid], capture_output=True, text=True, check=True).stdout)
+    import ctypes
+    from ctypes import wintypes
+
+    class Counters(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+            (name, ctypes.c_size_t) for name in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                                                 "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                                                 "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.K32GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    # PROCESS_QUERY_LIMITED_INFORMATION
+    handle = kernel32.OpenProcess(0x1000, False, int(pid))
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        counters = Counters(cb=ctypes.sizeof(Counters))
+        if not kernel32.K32GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return counters.WorkingSetSize // 1024
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def flood(vm_pid):
@@ -243,7 +272,8 @@ def flood(vm_pid):
     try:
         while total < 256 * 1024 * 1024:
             total += s.send(junk)
-    except (socket.timeout, BrokenPipeError, ConnectionResetError):
+    # ConnectionError also covers the aborted connection Windows reports when the server closes.
+    except (socket.timeout, ConnectionError):
         pass
     grown = rss_kb(vm_pid) - before
     print("flood", "bounded" if grown < 64 * 1024 else "unbounded %d KB after %d bytes" % (grown, total))

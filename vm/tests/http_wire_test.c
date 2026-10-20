@@ -9,7 +9,7 @@
 #include <setjmp.h>
 #include <string.h>
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static agc_vm vm;
 
 static const agc_builtin *find(const char *name) {

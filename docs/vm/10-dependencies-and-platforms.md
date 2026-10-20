@@ -8,9 +8,11 @@ the interpreter of the resulting program.
 
 This first port covers the compiler driver, regular binary files, UTF-8 paths,
 environment lookup and the process primitives needed by stage0. Windows
-special file streams, locks, rename, recursive removal, asynchronous standard
-I/O, TLS and HTTP remain separate follow-up work. `Path.remove` on Windows
-returns an error without deleting anything.
+special file streams, locks, rename, recursive removal and asynchronous
+standard I/O remain separate follow-up work. `Path.remove` on Windows returns
+an error without deleting anything. The network runs on Windows as on Linux:
+TCP, TLS and `std/http` (client and server) use the same libuv sockets and the
+same C helpers, with no Windows-only protocol code.
 
 The release (`release.yml`) builds one native archive per system on a runner of
 that system (11): Linux x86-64 against glibc 2.28, macOS Intel and Apple silicon
@@ -151,8 +153,8 @@ The vendored build:
   Platforms jobs link the vendored OpenSSL statically on macOS (Intel and
   ARM) and Windows, and `make vendored-check` fails if the binary loads
   OpenSSL, libgc or `msys-2.0.dll`. The TLS adapter and the native trust
-  stores (10.3) build on every system, and TLS sockets run on every system
-  over TCP.
+  stores (10.3) build on every system, TLS sockets run on every system over
+  TCP, and `std/http` (HTTP and HTTPS) runs on every system over both.
 
 ### 10.1 Event loop: libuv, not libevent
 

@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/http` (HTTP and HTTPS client and server) runs on Windows.
+
 - `TLS.connect` and `TLS.listen` run on Windows, with the same checks as on
   Linux and macOS (SNI, host name and IP checks, explicit CA file, TLS 1.2 or
   later, the same error texts). They no longer return `TLS needs Linux or

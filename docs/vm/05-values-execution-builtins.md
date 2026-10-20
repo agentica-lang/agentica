@@ -240,10 +240,9 @@ written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only
 `vm/duplex.c`), `Task.pending_count`, `Task.spawn_owning` (24b, `vm/task.c`),
 `Task.map` (17a, `vm/task_map.c`) and the `Channel` builtins (`vm/channel.c`). A
 channel call that must wait, and `Task.map`, need the event loop. The event
-loop, files, processes, TCP, TLS and the pure `HttpWire` helpers build and run
-on Linux, macOS and Windows; the HTTP service and server build on Linux and
-macOS, with stub tables on Windows (the guards in `vm/http_service.c` and
-`vm/http_server.c`), so `std/http` is not on Windows yet.
+loop, files, processes, TCP, TLS and every `HttpWire` builtin (the pure
+helpers, the client service and the server) build and run on Linux, macOS and
+Windows, so `std/http` works on all three.
 
 ### 7.3 Builtin safety and streams
 

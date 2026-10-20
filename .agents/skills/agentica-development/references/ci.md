@@ -514,12 +514,9 @@ runs the golden tests with the full sweep (`make vm-diff-test`),
   with a step program and a predefined `Given the Agentica program` step,
   files (write,
   append, read, rename, list, stat, remove), processes (`--allow-run` spawning
-  the packaged binary), and loopback TCP and HTTP. TCP must pass on all four.
-  A binary says that it lacks builtins with the loader error `invalid
-  bytecode: unknown builtin`: the smoke skips the HTTP part only for that
-  message and only on Windows, which has TCP but not yet the `std/http`
-  service builtins, so a Linux or macOS binary without them fails. TLS is
-  covered by the OpenSSL version line only (it needs certificates).
+  the packaged binary), and loopback TCP and HTTP (`std/http` client and
+  server), which must pass on all four. TLS is covered by the OpenSSL version
+  line only (it needs certificates).
 - The `collect` job (every run) downloads the artifacts without merging, runs
   `tools/release.py collect` (exactly the four archives of `VERSION`: nothing
   missing, extra or duplicated; each archive verified) and uploads

@@ -164,9 +164,8 @@
   be started by hand. No job installs Racket (the Racket front end was deleted,
   PR #313), and no step checks or regenerates the frozen `vm/unicode_data.c`
   (its header gives the provenance). The macOS and Windows jobs run the test
-  subset named in `platforms.yml`, `tests/test_vm_tcp.py` and
-  `tests/test_vm_tls.py` included (its HTTPS cases skip on Windows); the HTTP
-  tests are Linux only until the multiplatform port reaches them.
+  subset named in `platforms.yml`, `tests/test_vm_tcp.py`,
+  `tests/test_vm_tls.py` and `tests/test_vm_http.py` included.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,
   and git detects the `string-inspect.agc` fixture as binary from its NUL bytes.
   So Windows sees the same sources, spans and output as Linux.
@@ -216,10 +215,8 @@
   `make release-smoke` extracts it into a folder with spaces and non-ASCII
   letters outside the checkout, and runs it with a `PATH` of the system folders
   only: version, help, `check`, `compile`, `run`, `std/` imports, `agentica
-  test` for unit tests and BDD, files, processes, loopback TCP and, where the
-  binary has the `std/http` builtins, loopback HTTP. A binary says that it lacks
-  them with the loader error `unknown builtin`; only on Windows does that skip
-  the HTTP part, and elsewhere it fails the test.
+  test` for unit tests and BDD, files, processes, loopback TCP and loopback
+  HTTP (`std/http` client and server), on every platform.
   The `collect` job checks that exactly the four archives of `VERSION` exist
   and writes `SHA256SUMS`; the `publish` job runs only for a tag that is the
   `VERSION` file and only after all four builds pass. A manual run uploads the
