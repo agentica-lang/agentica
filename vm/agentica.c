@@ -104,7 +104,10 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
   bool crashed = outcome.kind == AGC_FAILED;
   int status = agc_launch_settle(vm, &outcome);
   if (crashed) status = 2;
-  if (!fe->handed || outcome.kind != AGC_EXITED || status != 0 || agc_io_stop_signal()) agc_launch_exit(status);
+  if (!fe->handed || outcome.kind != AGC_EXITED || status != 0 || agc_io_stop_signal()) {
+    agc_output_end(vm);
+    agc_launch_exit(status);
+  }
   /* A job that is still running would keep the front end's loop alive next to the program's: the program must not share
    * a process with anything of the compiler, so this is the end of the run. */
   if (!agc_io_close(vm)) {
