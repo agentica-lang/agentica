@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 77,
+  "stdout": [
+    "dir directory 448",
+    "file file 10 384",
+    "followed file 384",
+    ""
+  ],
+  "stderr": []
+}

@@ -28,8 +28,14 @@ from tests.vm_diff_support import (
 
 
 def posix_only(why):
-    """A case that needs POSIX signals, descriptors, FIFOs or shell scripts; Windows has its own cases of the same builtins."""
+    """A case about a capability that Windows lacks (POSIX signals, descriptor numbers, shell scripts); the reason names
+    what the Windows counterpart checks."""
     return pytest.mark.skipif(os.name != "posix", reason="host-only: " + why)
+
+
+def windows_gap(number, why):
+    """A case whose behavior exists on Windows but whose test needs /bin/sh, a POSIX signal or a FIFO: an open issue."""
+    return pytest.mark.skipif(os.name != "posix", reason="known-issue: #%d %s" % (number, why))
 
 
 PLAIN = Fixture()
@@ -142,7 +148,7 @@ def test_the_vm_command_line_checks_options_and_stops_parsing_at_the_file(tmp_pa
     assert seeded("7")[1] != seeded("8")[1]
 
 
-@host_only(WINDOWS, "the peer gives the VM a Unix socket as descriptor 3 (fcntl); the Windows channel, two pipes, is checked by test_vm_child_channel.py and by `agentica test`")
+@windows_gap(432, "the Windows channel is two pipes, which this Python peer cannot pass to the VM")
 def test_tests_draw_the_same_values_alone_or_with_others(tmp_path):
     tests = compile_program(
         tmp_path, "seeded-tests",
@@ -194,7 +200,7 @@ def test_a_bytecode_file_may_have_a_non_ascii_name_and_a_bad_one_is_rejected(tmp
     assert rejected[2].startswith("agentica run: invalid bytecode: "), rejected[2]
 
 
-@posix_only("checks owner-only permission bits and a symbolic link; test_platform_bootstrap.py checks the flag on Windows")
+@windows_gap(434, "the private input of --driver-pid has no Windows test (test_platform_bootstrap.py checks only that the flag names the parent)")
 def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_it(tmp_path):
     bytecode = fixture_bytecode(tmp_path, "calls")
     copy = tmp_path / "driver-copy.agcb"
@@ -219,7 +225,7 @@ def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_
     assert copy.exists()
 
 
-@posix_only("needs mkfifo; Windows has no FIFO files")
+@windows_gap(433, "the stuck read needs a named pipe on Windows")
 def test_a_read_stuck_on_a_fifo_times_out_closes_the_handle_and_does_not_hold_the_vm_at_exit(tmp_path):
     bytecode = compile_program(
         tmp_path, "fifo-stuck",
@@ -241,7 +247,7 @@ def test_a_read_stuck_on_a_fifo_times_out_closes_the_handle_and_does_not_hold_th
         os.close(held)
 
 
-@posix_only("runs #!/bin/sh scripts through a colon separated PATH; test_process.py has the Windows PATH case")
+@posix_only("#!/bin/sh scripts found through a colon separated PATH; Windows has no #! scripts (test_process.py searches PATH with a copy of node.exe)")
 def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_against_the_working_directory(tmp_path):
     bytecode = compile_program(
         tmp_path, "path-lookup",
@@ -268,7 +274,7 @@ def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_again
         assert run_vm(ALLOWED, bytecode, None, cwd=folder, env={"PATH": search}) == want, search
 
 
-@posix_only("needs SIGTERM and /bin/sh; test_windows_console_stop.py stops the VM and its children on Windows")
+@posix_only("SIGTERM; Windows has Ctrl+Break, which test_windows_console_stop.py sends to end the VM, its child and the buffered file")
 def test_a_program_that_is_stopped_by_sigterm_kills_the_vms_running_children(adopt, request, tmp_path):
     program = tmp_path / "signal-children.agc"
     program.write_text(
@@ -286,7 +292,7 @@ def test_a_program_that_is_stopped_by_sigterm_kills_the_vms_running_children(ado
     assert gone(pid), pid
 
 
-@posix_only("needs SIGTERM and /bin/sh; test_process_windows.py ends children on Windows")
+@windows_gap(434, "grandchild cleanup after close has no Windows test (test_process_windows.py checks only the raw status of the closed child)")
 def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_own_children(request, tmp_path):
     inner = compile_program(
         tmp_path, "captured-inner",
@@ -313,7 +319,7 @@ def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_
             assert gone(pid), "%s: %s" % (mode, pid)
 
 
-@posix_only("needs SIGTERM, SIGKILL and /bin/sh; test_process_windows.py ends children on Windows")
+@windows_gap(434, "close never waiting and the SIGKILL escalation have no Windows test")
 def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_gets_sigkill_a_second_later(
         request, tmp_path):
     bytecode = compile_program(
@@ -344,7 +350,7 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_get
             assert re.search(r" io end code=0 signal=0", result[2]), mode
 
 
-@posix_only("needs /bin/sh and printf to write a raw byte")
+@windows_gap(434, "the output timeout and invalid UTF-8 output of a captured child have no Windows test")
 def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_utf8_as_ufffd(tmp_path):
     bytecode = compile_program(
         tmp_path, "captured-output",
@@ -357,7 +363,7 @@ def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_u
         (0, "error(\"network: operation timed out\")\n\"hi\\n\" 1 65533 false\n", "")
 
 
-@posix_only("needs SIGTERM, SIGKILL and /bin/sh; test_windows_console_stop.py has the Windows stop cases")
+@windows_gap(437, "a stop signal that arrives while the VM waits for its last child has no Windows test")
 def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child_exits_first(adopt, request, tmp_path):
     bytecode = compile_program(
         tmp_path, "signal-pending",
@@ -378,7 +384,7 @@ def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child
     assert exit_status(child.wait(RUN_TIMEOUT)) == 128 + signal.SIGTERM
 
 
-@posix_only("needs inherited descriptor numbers and /bin/sh; vm/tests/process_test.c checks handle inheritance on Windows")
+@posix_only("descriptors inherited by number; Windows inherits handles, which vm/tests/process_test.c checks (a child does not get an inheritable handle of the parent)")
 def test_a_child_does_not_inherit_descriptors_the_vm_inherited(tmp_path):
     bytecode = compile_program(
         tmp_path, "private-fds",

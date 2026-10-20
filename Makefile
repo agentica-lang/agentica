@@ -131,9 +131,14 @@ test-cli: $(PRODUCT)
 # tasks area runs its modules one at a time, because its timing cases need the CPU (make vm-task-map).
 CONFORMANCE_DIR ?= build/conformance
 CONFORMANCE_PLATFORM ?=
+# The golden area samples the --max-steps sweep (the full one is the sweep of CI); env.txt records the tier and the sweep
+# that the area really ran with, and the report prints them.
 conformance-area/%: $(PRODUCT) FORCE
 	@rm -rf "$(CONFORMANCE_DIR)/$*"
-	@$(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW= JUNIT_DIR="$(CONFORMANCE_DIR)/$*" \
+	@mkdir -p "$(CONFORMANCE_DIR)/$*"
+	@sweep="$(if $(filter golden,$*),sampled,$(AGENTICA_SWEEP))"; \
+	  echo "slow= sweep=$$sweep" > "$(CONFORMANCE_DIR)/$*/env.txt"; \
+	  AGENTICA_SWEEP="$$sweep" $(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW= JUNIT_DIR="$(CONFORMANCE_DIR)/$*" \
 	  JOBS=$(if $(filter tasks,$*),1,$(JOBS)) TESTS="$(shell $(PYTHON) tools/conformance.py modules $*)"
 
 conformance-report:

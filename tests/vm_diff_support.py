@@ -496,40 +496,48 @@ def check_sweep(results, limits, full, name, note=""):
     assert finished, "%s finishes under --max-steps %s%s" % (name, limits[-1], note)
 
 
-# Fixtures whose golden output is what Linux answers: the text of an errno, PATH_MAX, the mode bits or a POSIX tool.
-# Another system answers differently with no fault of the VM, and the same behavior is tested there by the case of that
-# system (test_filesystem.py, test_windows_filesystem_safety.py, test_process_windows.py). The reason says what differs.
-_MACOS_PATHS = "macOS has PATH_MAX 1024 and its mkdir and realpath answer other errno values for a path through a file"
-_WINDOWS_PATHS = ("Windows answers ENOENT where Linux says ENOTDIR, has no mode bits, treats // as a UNC prefix and "
-                  "refuses to remove a drive root")
-HOST_ONLY_FIXTURES = {
-    "files-real.agc": {"darwin": _MACOS_PATHS, "windows": _WINDOWS_PATHS},
-    "files-errors.agc": {"darwin": _MACOS_PATHS, "windows": _WINDOWS_PATHS},
-    "files-private.agc": {"windows": _WINDOWS_PATHS},
-    "files-paths.agc": {"windows": _WINDOWS_PATHS},
-    "file-each-line-stop.agc": {"windows": "the program counts the entries of a folder of open descriptors, which "
-                                           "Windows does not have"},
-    "system-env.agc": {"windows": "Windows environment variable names are not case sensitive"},
-    "process-limits.agc": {"windows": "the program runs /bin/sh, which Windows does not have (test_process_windows.py)"},
-    "process-captured-basic.agc": {"windows": "the program runs /bin/pwd (test_process_windows.py)"},
+# A fixture named -posix or -windows holds what that family of systems answers (Linux and macOS, or Windows), and the
+# shared fixtures hold the rest, so the other family skips it as host-only: the system gives another answer on purpose
+# (the text of an errno, a drive letter, a case-insensitive environment). The variant fixtures sit next to each other
+# and exist in pairs, or have a Windows counterpart in tests/test_windows_*.py.
+VARIANT_FAMILY = re.compile(r"-(posix|windows)\.agc$")
+
+# Fixtures that hold what Linux answers and that have no variant yet: the behavior exists on the other system, so
+# the case is an open gap (issue 436), not a host-only skip. The reason says what differs.
+_MACOS_PATHS = "PATH_MAX is 1024 on macOS and mkdir and realpath answer other errno values for a path through a file"
+_WINDOWS_PATHS = "Windows answers ENOENT where Linux says ENOTDIR, and prints a drive letter"
+KNOWN_ISSUE_FIXTURES = {
+    "files-real.agc": {"darwin": (436, _MACOS_PATHS), "windows": (436, _WINDOWS_PATHS)},
+    "files-errors.agc": {"darwin": (436, _MACOS_PATHS), "windows": (436, _WINDOWS_PATHS)},
+    "process-limits.agc": {"windows": (436, "the program runs /bin/sh")},
+    "process-captured-basic.agc": {"windows": (436, "the program runs /bin/pwd")},
+    "file-each-line-stop.agc": {"windows": (435, "the program counts the entries of a folder of open descriptors")},
 }
 
 
-def host_only_reason(name):
+def skip_reason(name):
+    """Why this system does not run the golden of the fixture, or None: a "host-only:" or "known-issue:" text."""
+    family = VARIANT_FAMILY.search(name)
+    if family and (family.group(1) == "windows") != WINDOWS:
+        return "host-only: %s holds what %s answers" % (name, "Windows" if family.group(1) == "windows"
+                                                        else "Linux and macOS")
     system = "windows" if WINDOWS else sys.platform
-    return HOST_ONLY_FIXTURES.get(name, {}).get(system)
+    gap = KNOWN_ISSUE_FIXTURES.get(name, {}).get(system)
+    if gap:
+        return "known-issue: #%d %s: %s" % (gap[0], name, gap[1])
+    if Path(FIXTURE_DIR / name).with_suffix(".channel").is_file() and WINDOWS:
+        return ("known-issue: #432 %s: the Windows channel is two pipes, which the Python channel peer cannot give" %
+                name)
+    return None
 
 
 def check_fixture(program, work):
     """The golden test of one fixture: every format, the step count and the --max-steps sweep."""
     name = program.name
-    reason = host_only_reason(name)
+    reason = skip_reason(name)
     if reason:
-        pytest.skip("host-only: %s: %s" % (name, reason))
+        pytest.skip(reason)
     fixture = Fixture.of(program)
-    if fixture.channel and WINDOWS:
-        pytest.skip("host-only: the golden peer gives the VM a Unix socket as descriptor 3 (fcntl); the Windows "
-                    "channel is two pipes, run by test_vm_child_channel.py and by `agentica test`")
     bytecode = compile_agc(program, work / (program.stem + ".agcb"))
     full = read_expected(program)
     expected_steps = read_expected_steps(program)

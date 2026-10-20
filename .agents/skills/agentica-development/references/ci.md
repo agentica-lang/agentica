@@ -422,31 +422,48 @@ every system or says why not:
    `golden` (`AGENTICA_SWEEP=sampled`), `library`, `files` (and then
    `make test-remove-actions`, the destructive cases in the runner scratch),
    `processes`, `tasks` (one worker, the timing cases) and `network`.
-3. `make conformance-report`: a table in the job summary and an exit code 1
-   when an area has no passed case, a case failed or did not finish, or a case
-   was skipped for a reason that is not allowed.
+3. `make conformance-report`: a table in the job summary (also the tier and
+   the golden sweep that ran), `summary.json` with the outcome of every case,
+   and an exit code 1 when a module did not finish, a case failed, an area has
+   no passed case, or a case was skipped for a reason that is not allowed.
+   The destructive group is a row too: `tools/run_remove_actions.py` writes
+   `build/conformance/destructive/remove-actions.xml`.
+
+A last job, `conformance all-systems`, downloads the four `summary.json` files
+(`tools/conformance.py merge`) and fails when a system is missing or a case ran
+on none of them (host-only or open gap everywhere).
 
 The areas are the lists in `tools/conformance.py`. A new `tests/test_*.py` must
 be in an area or in `EXCLUDED` with a reason, or `tests/test_conformance.py`
-fails. Run one area locally with `make conformance-area/files`, all with `make
-conformance`. Not in the matrix: the Docker and Wine groups, the slow tier,
+fails. Not in the matrix: the Docker and Wine groups, the slow tier,
 sanitizers, fuzz and gc-stress (`ci.yml`, `fuzz.yml`), and
 `test_vm_multicore.py` (several schedulers on every system is the next step).
 
+Run one system by hand: on that system, `make conformance` (all areas and the
+report, `make conformance-area/<area>` for one; a developer machine reports the
+destructive group as not run, and CI fails if it is missing). The report needs
+`CONFORMANCE_PLATFORM=<name>` only to check a CI job against its name.
+
 Skip rules, checked by the report:
 
-- A skip that needs one system's capability (POSIX signals, FIFOs, Windows
-  handles) uses `host_only(condition, reason)` of `tests/agentica_test.py`. Its
-  reason starts with `host-only:` and names the capability the other systems
-  lack. It does not hide a Linux habit: `/proc`, `os.killpg`, `fcntl` and a
-  16 KiB pipe are fixed in the test or its peer, so the case runs on macOS and
-  Windows.
+- `host_only(condition, reason)` of `tests/agentica_test.py`: the system really
+  lacks a capability (POSIX signals, FIFOs, `/dev/stdin`, mode bits on Windows;
+  `/dev/full` on macOS; Windows handles elsewhere). The reason starts with
+  `host-only:`, names the capability, and, when it names a counterpart test,
+  says what that test checks. A harness limit (a test that uses `/bin/sh` for a
+  behavior Windows has too) or a product gap is not host-only. The pair
+  (module, system) must be in `HOST_ONLY_ALLOWED`, which a reviewer reads; a
+  golden fixture named `-posix` or `-windows` is host-only on the other family
+  by its name.
+- `known_issue(condition, number, reason)`: the promise holds on the system but
+  its test is missing, or the product has a bug. The reason is `known-issue:
+  #N ...`, the number is in `KNOWN_ISSUES`, and the report lists every such
+  skip under "Open gaps". Remove the skip, the entry and the issue together.
 - A tool the test needs (Node, `tomllib`, IPv6) is installed by the workflow,
   and a missing one fails: `tool()` and `require()` fail when `CI` or
   `AGENTICA_REQUIRE_VM` is set. A skip for a missing tool fails the report.
-- A product bug that the system has not fixed yet may be skipped with
-  `known-issue: #N reason`; the report lists it under "Open gaps". Remove the
-  skip in the PR that fixes the issue.
+- A golden fixture that differs by system is split into a shared fixture and
+  `-posix` / `-windows` parts, so the shared lines run everywhere.
 - A test that cannot pass because of a hosted-runner limit is not skipped
   silently: say so in the PR.
 

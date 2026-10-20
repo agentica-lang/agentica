@@ -8,17 +8,17 @@ original test saw 128 + signal).
 """
 import os
 import signal
-import threading
 import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, cli, compile_agc, host_only, process_alive, scaled,
-                                 start_vm, vm_command, vm_environment, wait_until)
+from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, cli, compile_agc, host_only, known_issue,
+                                 process_alive, scaled, start_vm, stop_a_vm_that_fills_its_stdout, vm_command,
+                                 vm_environment, wait_until)
 
-# SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals; the Windows console events are tested by
-# tests/test_windows_console_stop.py and tests/test_process_windows.py.
-pytestmark = host_only(WINDOWS, "POSIX stop signals (Windows: test_windows_console_stop.py)")
+# SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals, so each case that sends one is host-only on Windows, and the
+# reason says which case of tests/test_windows_console_stop.py sends Ctrl+Break for the same behavior. The two cases that
+# need a full FIFO and the Ctrl+C through the CLI have no Windows test yet (issues 433 and 437).
 
 PEER = FIXTURES / "stop-peer.py"
 WAIT_SECONDS = scaled(10)
@@ -131,6 +131,7 @@ def full_fifo(adopt, tmp_path):
     return fifo
 
 
+@host_only(WINDOWS, "SIGTERM, SIGINT and SIGHUP; Windows has Ctrl+Break, and test_ctrl_break_takes_the_exit_path in test_windows_console_stop.py checks the child, the file and the exit code")
 def test_a_stop_signal_takes_the_exit_path_children_die_buffered_file_data_is_written_the_vm_dies_by_the_signal(
     tmp_path, adopt
 ):
@@ -144,6 +145,7 @@ def test_a_stop_signal_takes_the_exit_path_children_die_buffered_file_data_is_wr
         check_stopped(pid, path, "%s %s" % (mode, number))
 
 
+@host_only(WINDOWS, "a stop signal inherited as ignored (nohup) has no Windows form")
 def test_a_stop_signal_the_vm_inherited_as_ignored_stays_ignored(tmp_path, adopt):
     vm = launch(adopt, "ignore", "--", bytecode(READY_AND_SLEEP, tmp_path), capture_stderr=True)
     assert vm.next_line(WAIT_SECONDS) == "ready"
@@ -153,6 +155,7 @@ def test_a_stop_signal_the_vm_inherited_as_ignored_stays_ignored(tmp_path, adopt
     assert vm.process.poll() is None, "the ignored signals do not stop the VM"
 
 
+@host_only(WINDOWS, "SIGALRM does not exist on Windows")
 def test_an_outside_sigalrm_keeps_its_default_action(tmp_path, adopt):
     vm = adopt(start_vm(bytecode(READY_AND_SLEEP, tmp_path)))
     assert vm.next_line(WAIT_SECONDS) == "ready"
@@ -160,6 +163,7 @@ def test_an_outside_sigalrm_keeps_its_default_action(tmp_path, adopt):
     assert vm.wait(WAIT_SECONDS) == -signal.SIGALRM
 
 
+@host_only(WINDOWS, "SIGTERM and a shell child that traps it; test_a_second_ctrl_break in test_windows_console_stop.py sends Ctrl+Break twice")
 def test_a_second_stop_signal_before_the_children_are_stopped_waits_for_them(tmp_path, adopt):
     path = tmp_path / "out.txt"
     code = bytecode(child_program("trap '' TERM; "), tmp_path)
@@ -172,6 +176,7 @@ def test_a_second_stop_signal_before_the_children_are_stopped_waits_for_them(tmp
     assert gone_soon(pid), "the child is gone"
 
 
+@known_issue(WINDOWS, 433, "the stuck flush needs a full named pipe on Windows")
 def test_a_second_stop_signal_ends_a_flush_that_cannot_finish_the_first_one_waits_for_it(tmp_path, adopt):
     fifo = full_fifo(adopt, tmp_path)
     vm = launch(adopt, "default", "--", bytecode(STUCK_FLUSH, tmp_path), fifo)
@@ -184,6 +189,7 @@ def test_a_second_stop_signal_ends_a_flush_that_cannot_finish_the_first_one_wait
     assert vm.wait(WAIT_SECONDS) == -signal.SIGTERM
 
 
+@known_issue(WINDOWS, 433, "the stuck flush needs a full named pipe on Windows")
 def test_a_driven_vm_whose_driver_died_does_not_wait_for_its_flush(tmp_path, adopt):
     fifo = full_fifo(adopt, tmp_path)
     driver = adopt(Child([PYTHON, PEER, "drive", *vm_command(), "--", bytecode(STUCK_FLUSH, tmp_path), fifo]))
@@ -192,24 +198,15 @@ def test_a_driven_vm_whose_driver_died_does_not_wait_for_its_flush(tmp_path, ado
     assert gone_soon(pid), "the VM ends after its driver"
 
 
+@host_only(WINDOWS, "SIGTERM; test_ctrl_break_with_standard_output_full in test_windows_console_stop.py checks the same run with Ctrl+Break")
 def test_a_stop_signal_while_standard_output_is_full_ends_the_run_without_a_diagnostic(tmp_path, adopt):
-    # stdout is a pipe that nobody reads until the signal: Child must not drain it.
     vm = adopt(start_vm(bytecode(FULL_STDOUT, tmp_path), read_stdout=False))
-    # Read the first line in a thread: a live VM that prints nothing must fail in WAIT_SECONDS, not hang.
-    first = []
-    reader = threading.Thread(target=lambda: first.append(vm.process.stdout.readline()), daemon=True)
-    reader.start()
-    reader.join(WAIT_SECONDS)
-    assert first and first[0], "the VM printed a line"
-    time.sleep(0.3)
-    os.kill(vm.process.pid, signal.SIGTERM)
-    drain = threading.Thread(target=vm.process.stdout.read, daemon=True)
-    drain.start()
-    assert vm.wait(WAIT_SECONDS) == -signal.SIGTERM
-    drain.join(WAIT_SECONDS)
+    status = stop_a_vm_that_fills_its_stdout(vm, lambda: os.kill(vm.process.pid, signal.SIGTERM), WAIT_SECONDS)
+    assert status == -signal.SIGTERM
     assert vm.stderr_text() == ""
 
 
+@host_only(WINDOWS, "SIGTERM; test_ctrl_break_with_standard_output_stuck in test_windows_console_stop.py checks the same run with Ctrl+Break")
 def test_a_stop_signal_with_standard_output_stuck_does_not_wait_for_the_flush_limit(tmp_path, adopt):
     vm = adopt(start_vm(bytecode(STUCK_STDOUT, tmp_path), read_stdout=False))
     assert vm.next_stderr_line(WAIT_SECONDS) == "ready"
@@ -220,6 +217,7 @@ def test_a_stop_signal_with_standard_output_stuck_does_not_wait_for_the_flush_li
     assert time.monotonic() - start < min(scaled(5), 25), "the run does not wait for the reader"
 
 
+@known_issue(WINDOWS, 437, "Ctrl+C through the CLI has no Windows test")
 def test_ctrl_c_through_the_cli_stops_a_child_that_ignores_the_signals_and_writes_the_file(tmp_path, adopt):
     path = tmp_path / "out.txt"
     source = tmp_path / "program.agc"

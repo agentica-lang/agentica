@@ -14,7 +14,7 @@ from textwrap import dedent
 
 import pytest
 
-from tests.agentica_test import (TESTS, WINDOWS, Child, cli, host_only, process_alive, report_cases, run, scaled,
+from tests.agentica_test import (TESTS, WINDOWS, Child, cli, host_only, known_issue, process_alive, report_cases, run, scaled,
                                  vm_environment, wait_until, write_files)
 
 try:
@@ -204,7 +204,7 @@ def test_programs_under_test_wrong_output_literal_input_and_a_json_line_mismatch
         ['"incorrect"', '"actual\\n"'], ['{"a":1,"b":3}', '{"a":1,"b":"3"}']]
 
 
-@host_only(WINDOWS, "the holder program starts /bin/sh and the cleanup sends SIGKILL")
+@known_issue(WINDOWS, 434, "the cleanup of a failed scenario has no Windows test (the holder starts /bin/sh)")
 def test_a_failed_scenario_leaves_no_process_of_its_program_behind(tmp_path, cleanup):
     directory = suite(tmp_path, {
         "holder.agc": HOLDER_PROGRAM,
@@ -344,7 +344,7 @@ def test_a_json_line_of_a_few_hundred_kb_fits_the_step_budget(tmp_path):
 
 
 @pytest.mark.slow
-@host_only(WINDOWS, "needs /bin/sh, /proc, SIGKILL of one process and flock; Windows ends the tree with a job object")
+@known_issue(WINDOWS, 434, "killing the driver has no Windows test (the holder starts /bin/sh, the check reads /proc)")
 def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and_a_later_run_removes_its_folder(tmp_path, cleanup):
     directory = suite(tmp_path, {
         "holder.agc": HOLDER_PROGRAM,

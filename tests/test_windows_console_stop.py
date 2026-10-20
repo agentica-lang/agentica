@@ -20,7 +20,9 @@ import time
 
 import pytest
 
-from tests.agentica_test import PYTHON, compile_agc, scaled, start_vm, vm_command, vm_environment, wait_until
+from tests.agentica_test import (PYTHON, compile_agc, scaled, start_vm, stop_a_vm_that_fills_its_stdout, vm_command,
+                                 vm_environment, wait_until)
+from tests.test_vm_stop import FULL_STDOUT  # the same program that fills the pipe on the POSIX systems
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="host-only: CTRL_BREAK_EVENT and ConPTY exist on Windows only")
 
@@ -240,13 +242,18 @@ def run_on_console(command, env, limit):
             close_handle(out_read)
 
 
-def test_ctrl_break_takes_the_exit_path_the_child_dies_buffered_file_data_is_written_and_the_exit_is_149(
-    tmp_path, adopt
-):
+def start_with_child(tmp_path, adopt):
+    """The VM in its own process group with a child that ignores Ctrl+Break: (the file it writes, the VM, the child pid)."""
     path = tmp_path / "out.txt"
     vm = adopt(start_vm(bytecode(CHILD_PROGRAM, tmp_path), path, PYTHON, CHILD, flags=["--allow-run"],
                         creationflags=NEW_GROUP))
-    pid = int(vm.next_line(WAIT_SECONDS))
+    return path, vm, int(vm.next_line(WAIT_SECONDS))
+
+
+def test_ctrl_break_takes_the_exit_path_the_child_dies_buffered_file_data_is_written_and_the_exit_is_149(
+    tmp_path, adopt
+):
+    path, vm, pid = start_with_child(tmp_path, adopt)
     vm.process.send_signal(signal.CTRL_BREAK_EVENT)
     assert vm.wait(WAIT_SECONDS) == 128 + SIGBREAK
     assert path.read_text() == "buffered"
@@ -283,3 +290,19 @@ def test_a_line_longer_than_the_buffer_reaches_a_console_with_no_character_cut_i
     # since the console may drop rows that scrolled off between two of its repaints.
     assert "€é" * 20 in text, text[-400:]
     assert text.rfind("cut end") > text.rfind("€é"), text[-400:]
+
+
+def test_a_second_ctrl_break_before_the_children_are_stopped_still_ends_the_run_with_149(tmp_path, adopt):
+    _, vm, pid = start_with_child(tmp_path, adopt)
+    vm.process.send_signal(signal.CTRL_BREAK_EVENT)
+    time.sleep(0.1)
+    vm.process.send_signal(signal.CTRL_BREAK_EVENT)
+    assert vm.wait(WAIT_SECONDS) == 128 + SIGBREAK
+    assert wait_until(lambda: not alive(pid), WAIT_SECONDS, 0.1), "the child is gone"
+
+
+def test_ctrl_break_with_standard_output_full_ends_the_run_without_a_diagnostic(tmp_path, adopt):
+    vm = adopt(start_vm(bytecode(FULL_STDOUT, tmp_path), read_stdout=False, creationflags=NEW_GROUP))
+    status = stop_a_vm_that_fills_its_stdout(vm, lambda: vm.process.send_signal(signal.CTRL_BREAK_EVENT), WAIT_SECONDS)
+    assert status == 128 + SIGBREAK
+    assert vm.stderr_text() == ""

@@ -16,8 +16,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, WINDOWS, Child, cli, compile_agc, host_only, output_lines, run,
-                                 scaled, vm_command, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, WINDOWS, Child, cli, compile_agc, host_only, known_issue, output_lines,
+                                 run, scaled, vm_command, vm_environment)
 
 EXAMPLES = ROOT / "examples"
 STOP_PEER = FIXTURES / "stop-peer.py"
@@ -47,10 +47,12 @@ end
 """
 
 
-# Windows has no FIFOs, /dev/urandom or numbered descriptor folders, and a read of the standard input there can keep a
-# pool thread (docs/vm/10-io-scheduler.md); tests/test_process_windows.py and test_windows_*.py cover that host.
-no_fifo = host_only(WINDOWS, "Windows has no FIFOs (os.mkfifo)")
-no_fd_folder = host_only(WINDOWS, "Windows has no folder of numbered descriptors and no /dev/stdin")
+# Windows has named pipes where POSIX has FIFOs, but these tests make FIFOs with os.mkfifo (issue 433); it has no
+# /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (issue 435); a stdin read there can keep a
+# pool thread (issue 431, docs/vm/10-io-scheduler.md).
+no_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
+no_urandom = host_only(WINDOWS, "/dev/urandom does not exist on Windows")
+no_stdin_path = host_only(WINDOWS, "Windows has no /dev/stdin and its Python cannot pass a descriptor number to the VM")
 
 
 def literal(text):
@@ -181,7 +183,7 @@ def stuck_fifo(new_dir):
     close_reader()
 
 
-@no_fifo
+@no_urandom
 def test_urandom_reads_bytes_directly_and_through_a_symlink(new_dir, run_program):
     alias = new_dir() / "entropy"
     os.symlink("/dev/urandom", alias)
@@ -417,7 +419,7 @@ end
     assert output == "1\n0\nok()\n", "the read parks with one descriptor, and the cancel closes it"
 
 
-@host_only(WINDOWS, "a Windows stdin read can keep a pool thread (docs/vm/10-io-scheduler.md)")
+@known_issue(WINDOWS, 431, "a Windows stdin read can keep a pool thread")
 def test_stdin_waits_on_the_loop_so_file_calls_run_while_a_task_waits_for_input(new_dir, run_vm_bounded):
     root = new_dir()
     path = root / "plain.txt"
@@ -436,7 +438,7 @@ end
     assert (code, output) == (0, 'ok()\nok("x")\n'), errors
 
 
-@no_fd_folder
+@known_issue(WINDOWS, 435, "the descriptors of the VM are listed in a folder that Windows does not have")
 def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock(new_dir, run_vm_bounded):
     root = new_dir()
     code, output, errors = run_vm_bounded(root, r"""def main() -> Void
@@ -456,7 +458,7 @@ end
     assert list(dict.fromkeys(lines[:-1])) == ["[false, false]"]
 
 
-@no_fd_folder
+@no_stdin_path
 def test_pipes_the_vm_got_at_start_stay_readable_an_inherited_descriptor_and_a_piped_stdin(new_dir, run_vm_bounded):
     root = new_dir()
     program = r"""def main() -> Void
@@ -606,7 +608,7 @@ end
     assert 'ok("linked")' in output
 
 
-@host_only(WINDOWS, "the link chains, loops and long paths of Path.real are compared with POSIX realpath")
+@known_issue(WINDOWS, 436, "the Path.real link chains, loops and long paths are compared with POSIX realpath only")
 def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains_loops_and_long_paths(new_dir, os_lines,
                                                                                                      os_peer_lines):
     root = new_dir()

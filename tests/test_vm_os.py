@@ -91,7 +91,7 @@ def main() -> Void
 end
 """
 
-@host_only(WINDOWS, "checks the owner-only mode bits 0600 and 0700 and a dangling link; test_windows_metadata_and_locks.py checks the owner and ACL of private entries on Windows")
+@host_only(WINDOWS, "the mode bits 0600 and 0700 and a dangling link; Windows has no mode bits (test_windows_metadata_and_locks.py checks that private entries report owner 0)")
 def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(root, work):
     # With umask 0 only the mode the VM asks for can explain 0600 and 0700.
     old_umask = os.umask(0)
@@ -111,7 +111,7 @@ def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(ro
     finally:
         os.umask(old_umask)
 
-@host_only(WINDOWS, "compares POSIX mode bits, owners and symbolic links with Python's lstat; test_windows_metadata_and_locks.py checks the Windows metadata")
+@host_only(WINDOWS, "POSIX mode bits, owners and symbolic links against Python's lstat; Windows has none (test_windows_metadata_and_locks.py checks its read-only attribute and owner 0)")
 def test_lstat_describes_links_themselves_and_reports_mode_and_owner_like_python(root, work):
     (root / "file").write_text("hello")
     os.chmod(root / "file", 0o640)
@@ -201,7 +201,7 @@ def test_a_child_does_not_keep_the_lock_after_the_handle_closes(root, work, adop
     holder.close_stdin()
     assert holder.wait() == 0
 
-@host_only(WINDOWS, "needs mkfifo; test_windows_metadata_and_locks.py checks that a device cannot be locked on Windows")
+@host_only(WINDOWS, "a FIFO cannot be locked; Windows has no FIFO files (test_opening_a_device_fails_before_any_lock in test_windows_metadata_and_locks.py checks a device)")
 def test_try_lock_refuses_what_is_not_a_regular_file(root, work):
     os.mkfifo(root / "fifo")
     lines = run_program(root, work, DEVICE_LOCK_PROGRAM, "devicelock", root)

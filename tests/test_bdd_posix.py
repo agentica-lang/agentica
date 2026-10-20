@@ -1,9 +1,10 @@
 """`agentica test` cases that need a POSIX system: file modes and links, a shell script as the binary, and the first
 binary of the bootstrap (its driver is the one of stage0, which does not know the Windows temporary folder).
 
-Windows skips this module as host-only: a folder made unreadable with chmod, a symbolic link, a name that is not
-valid UTF-8 and a `#!/bin/sh` script have no Windows counterpart that the test could build with the standard library.
-Every other `agentica test` case is in tests/test_bdd.py, which every system runs.
+On Windows the cases are skipped one by one. A folder made unreadable with chmod, a symbolic link and a name that is
+not valid UTF-8 do not exist there (host-only). A `#!/bin/sh` script as the binary, and a temporary folder that cannot be
+written, have no Windows test yet (known-issue). Every other `agentica test` case is in tests/test_bdd.py, which every
+system runs.
 """
 import json
 import os
@@ -11,15 +12,13 @@ import re
 
 import pytest
 
-from tests.agentica_test import ROOT, binary, run, vm_environment
+from tests.agentica_test import ROOT, WINDOWS, binary, host_only, known_issue, run, vm_environment
 from tests.test_bdd import ADDS_TEST, HANDLERS, BddCli, bdd, file_error  # noqa: F401  (bdd is the fixture of that module)
 
-pytestmark = pytest.mark.skipif(
-    os.name != "posix", reason="host-only: needs chmod, symbolic links, non-UTF-8 names and #!/bin/sh scripts")
 ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 # The first binary of the bootstrap (the Makefile links it with stage0 and builds the release mode only).
-BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / "agentica"
+BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / ("agentica.exe" if os.name == "nt" else "agentica")
 
 
 def fake_binary(directory, script):
@@ -34,6 +33,7 @@ def fake_binary(directory, script):
     return path
 
 
+@host_only(WINDOWS, "a folder made unreadable with chmod 000, symbolic links and a name that is not valid UTF-8 do not exist on Windows")
 def test_discovery_reports_unreadable_folders_broken_links_bad_names_and_large_files_and_skips_folder_links(bdd, request):
     directory = bdd.suite({
         "a.feature": "Feature: A\nScenario: a\nThen the remembered number is 1\nWhen I remember 1\n"})
@@ -67,6 +67,7 @@ def test_discovery_reports_unreadable_folders_broken_links_bad_names_and_large_f
     assert report["failed"] == 1
 
 
+@known_issue(WINDOWS, 434, "a shell script as the binary has no Windows counterpart")
 def test_a_crashed_runner_is_reported_with_the_error_not_the_last_stack_frame(bdd):
     directory = bdd.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
     fake = fake_binary(directory, [
@@ -81,6 +82,7 @@ def test_a_crashed_runner_is_reported_with_the_error_not_the_last_stack_frame(bd
     assert re.search("RUNTIME-INDEX-OUT-OF-RANGE", error["message"])
 
 
+@known_issue(WINDOWS, 434, "a shell script as the binary has no Windows counterpart")
 def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_earlier_task_crash(bdd):
     directory = bdd.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
     fake = fake_binary(directory, [
@@ -96,6 +98,7 @@ def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_ea
     assert not re.search("DIVISION-BY-ZERO", message)
 
 
+@known_issue(WINDOWS, 434, "a folder that cannot be written is made with chmod 0500; Windows needs an ACL")
 @pytest.mark.skipif(ROOT_USER, reason="root can make folders anywhere")
 def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error_that_names_it(bdd, request):
     scratch = bdd.make_suite({"nothing.txt": ""}, "agentica-bdd-readonly-")

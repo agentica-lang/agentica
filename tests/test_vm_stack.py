@@ -7,13 +7,13 @@ fixtures.
 """
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
 from tests.agentica_test import FIXTURES, compile_agc, vm_binary
 from tests.vm_diff_support import (
-    Fixture, VmCase, check_fixture_filter, fixture_selected, relocate,
+    Fixture, VmCase, check_fixture_filter, fixture_selected, relocate, relocate_windows,
     run_vm_process)
 
 CASES = [
@@ -117,6 +117,18 @@ class StackTraces(VmCase):
 
 for _test in _STACK_TESTS:
     setattr(StackTraces, _test.__name__, _unittest_method(_test))
+
+
+def test_the_golden_paths_of_windows_come_back_as_tokens_in_every_spelling_the_vm_prints():
+    folder = PureWindowsPath("D:/a/_temp/fixtures")
+    text = 'D:\\a\\_temp\\fixtures\\vm\\x.agc "D:\\\\a\\\\_temp\\\\fixtures\\\\y" D:/a/_temp/fixtures/z/w.agc:3'
+    assert relocate_windows(text, folder, "@fixtures") == '@fixtures/vm/x.agc "@fixtures/y" @fixtures/z/w.agc:3'
+    # The escapes of a printed message end the path (the limit of relocate_windows): "\\n" is a newline, not a folder n.
+    printed = 'path: D:/a/_temp/fixtures/missing\\n  system error D:\\a\\_temp\\fixtures/x\\\\n'
+    assert relocate_windows(printed, folder, "@fixtures") == 'path: @fixtures/missing\\n  system error @fixtures/x\\\\n'
+    # An argument has no escapes, so a folder named after one is a separator there.
+    assert relocate_windows("D:\\a\\_temp\\fixtures\\new.agc", folder, "@f", escapes=False) == "@f/new.agc"
+    assert relocate_windows("D:\\\\a\\\\_temp\\\\fixtures\\\\tab.agc", folder, "@f") == "@f/tab.agc"
 
 
 def write_sidecars():

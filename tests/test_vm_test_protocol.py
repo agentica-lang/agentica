@@ -1,12 +1,12 @@
 """The child-channel protocol of `--agentica-test`, driven by an independent peer."""
 import json
 
-from tests.agentica_test import FIXTURES, PYTHON, WINDOWS, compile_agc, host_only, run, vm_binary
+from tests.agentica_test import FIXTURES, PYTHON, WINDOWS, compile_agc, known_issue, run, vm_binary
 
 
-# The peer owns the other end of a socketpair and passes it with pass_fds; on Windows `agentica test`
-# (tests/test_bdd.py) covers the same channel from the driver side.
-@host_only(WINDOWS, "the peer passes a socketpair descriptor to the VM (POSIX pass_fds)")
+# The Windows channel is two pipes at descriptors 3 and 4, which this Python peer cannot give to the VM (issue 432);
+# `agentica test` (tests/test_bdd.py) runs the same protocol end to end on Windows.
+@known_issue(WINDOWS, 432, "the Windows channel is two pipes, which the Python peer cannot pass to the VM")
 def test_peer_drives_a_test_file_over_the_child_channel(tmp_path):
     """Check indexes, records, free stdin and stdout."""
     bytecode = compile_agc(FIXTURES / "test-protocol-peer.agc", tmp_path / "test-protocol-peer.agcb")

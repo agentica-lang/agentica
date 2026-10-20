@@ -1,0 +1,10 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 4,
+  "stdout": [
+    "error(\"system: environment variable is not set\")",
+    ""
+  ],
+  "stderr": []
+}

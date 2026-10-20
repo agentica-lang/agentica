@@ -37,8 +37,10 @@ TARGET_OS = os.environ.get("AGENTICA_TEST_TARGET_OS") or ("windows" if os.name =
 UNDER_WINE = os.environ.get("AGENTICA_TEST_WINE") == "1"
 
 # A case that only some systems can run carries host_only(condition, reason): the skip text always starts with
-# "host-only:" and names the capability the other systems lack. tools/conformance.py accepts only such skips (and the
-# other test tier), so a skip for any other reason, such as a missing tool, fails the conformance report.
+# "host-only:" and names the capability the other systems really lack (not a limit of the test harness, and not a
+# product gap). A feature that exists on the system but has no test there carries known_issue(condition, number,
+# reason) with the number of its issue, and the report lists it as an open gap. tools/conformance.py accepts only these
+# skips (and the other test tier), so a skip for any other reason, such as a missing tool, fails the report.
 WINDOWS = TARGET_OS == "windows"
 # The Python that runs the tests has os.mkfifo, os.killpg, fcntl and SIGHUP (it is not Windows' Python).
 POSIX_PYTHON = os.name == "posix"
@@ -48,6 +50,13 @@ def host_only(condition, reason):
     """pytest.mark.skipif(condition, ...) with a "host-only:" reason."""
     import pytest
     return pytest.mark.skipif(condition, reason="host-only: " + reason)
+
+
+def known_issue(condition, number, reason):
+    """pytest.mark.skipif(condition, ...) with a "known-issue: #N" reason: the promise holds on this system but its
+    test does not exist yet (or the product has a bug), and issue N says so."""
+    import pytest
+    return pytest.mark.skipif(condition, reason="known-issue: #%d %s" % (number, reason))
 
 
 # `make test-multicore` runs whole modules (TCP, TLS, HTTP) on several schedulers: AGENTICA_VM_TEST_MODULE_SCHEDULERS=N
@@ -375,11 +384,34 @@ def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
     except PermissionError:
         # macOS answers EPERM, not ESRCH, for a group whose only process is a zombie, and also while that process is
         # still leaving (it is not reapable yet, so poll() says None). A process that really ignores the signal
-        # would still be there after the wait.
+        # would still be there after the wait. The signal is sent once more first: the group may be gone by now.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            return
+        except (ProcessLookupError, PermissionError):
+            pass
         try:
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             raise PermissionError("killpg(%d) was refused and the process is still running" % process.pid) from None
+
+
+def stop_a_vm_that_fills_its_stdout(vm, stop, seconds):
+    """The exit status of a VM that prints for ever into a pipe nobody reads, after stop() reached it. Child must not
+    drain the pipe (start_vm(..., read_stdout=False)); the first line is read in a thread, so a live VM that prints
+    nothing fails in `seconds` instead of hanging."""
+    first = []
+    reader = threading.Thread(target=lambda: first.append(vm.process.stdout.readline()), daemon=True)
+    reader.start()
+    reader.join(seconds)
+    assert first and first[0], "the VM printed a line"
+    time.sleep(0.3)
+    stop()
+    drain = threading.Thread(target=vm.process.stdout.read, daemon=True)
+    drain.start()
+    status = vm.wait(seconds)
+    drain.join(seconds)
+    return status
 
 
 def _kill_and_collect(process):

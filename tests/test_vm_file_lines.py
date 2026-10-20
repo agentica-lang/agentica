@@ -4,26 +4,25 @@ A 10 MB file streams in order with about size/buffer reads (and, on Linux, bound
 FIFOs fed by fixtures/lines-peer.py check partial reads, stalls, early closes
 and a crash that frees the descriptor of a parked task. Ordinary files check
 line decoding, the end-of-file and overlong errors and descriptor cleanup. The
-descriptor count reads /proc/self/fd (Linux) or /dev/fd (macOS); Windows has
-no such folder and no FIFO, so those cases are marked "host-only:".
+descriptor count reads /proc/self/fd (Linux) or /dev/fd (macOS). Windows has
+named pipes and handle counts for the same checks, but no test uses them yet:
+the FIFO and descriptor-count cases are skipped there as "known-issue:".
 """
-import os
 import re
 import sys
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, WAIT_SECONDS, Child, compile_agc, run, run_vm, vm_command,
-                                 vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, WAIT_SECONDS, WINDOWS, Child, compile_agc, known_issue, run, run_vm,
+                                 vm_command, vm_environment)
 
 PEER = FIXTURES / "lines-peer.py"
 LINUX = sys.platform.startswith("linux")
 # The folder that lists the open descriptors of the process: the programs below name /proc/self/fd, and a macOS run
 # swaps it for /dev/fd when the program is written.
 FD_ROOT = "/dev/fd" if sys.platform == "darwin" else "/proc/self/fd"
-needs_fifo = pytest.mark.skipif(os.name != "posix", reason="host-only: needs mkfifo; Windows has no FIFO files")
-needs_fd_folder = pytest.mark.skipif(
-    os.name != "posix", reason="host-only: counts the entries of /proc/self/fd or /dev/fd; Windows has no such folder")
+needs_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
+needs_fd_folder = known_issue(WINDOWS, 435, "the open descriptors are counted in a folder that Windows does not have")
 BUFFER_BYTES = 4096
 LINE_COUNT = 1400000
 

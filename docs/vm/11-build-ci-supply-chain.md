@@ -152,8 +152,9 @@
     `make fixed-point`, then the areas of `tools/conformance.py` (command
     line, language rules, goldens, library, files, processes, tasks,
     network), and a report that fails when an area has no passed case or a
-    case is skipped without a `host-only:` reason (the Makefile's
-    `WINDOWS_TEST_MODULES` is the list for the local Wine check)
+    case is skipped for a reason that is not on the reviewed list (the
+    Makefile's `WINDOWS_TEST_MODULES`, for the local Wine check, is a
+    separate list and is not derived from the areas)
 
 - **Job:** Fuzz (`fuzz.yml`, by hand)
   - **Runner:** GitHub-hosted `ubuntu-latest`, clang
