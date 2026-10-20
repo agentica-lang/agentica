@@ -72,14 +72,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `tests/test_vm_multicore.py` and `make test-multicore-net`
 
 - **Path:** `vm/net.h`
-  - **Owns:** tcp.c's connection object for other C modules (`agc_conn`,
-    `docs/vm/10-io-http.md` §10.7.1): `agc_conn_open` (DNS, connect, TLS with a
-    borrowed `agc_tls_config`) with a watch callback that runs on every state
-    change, `agc_conn_send`/`agc_conn_sent`, `agc_conn_input`/`agc_conn_read`
-    (the `agc_inbuf`), `agc_conn_ready`/`agc_conn_failed`/`agc_conn_error`,
-    `agc_conn_shut` and `agc_conn_release`; also `agc_tls_load_error`. Call
-    them on the I/O thread, except `agc_conn_socket` and `agc_conn_error` (on a
-    scheduler, see each) and `agc_conn_closed` (anywhere, a hint)
+  - **Owns:** tcp.c's connection object for the HTTP server (`agc_conn`):
+    `agc_conn_observe` (a watch callback on every state change),
+    `agc_conn_accept`, `agc_conn_socket`, `agc_conn_retain`/`_release`,
+    `agc_conn_closed`, `agc_conn_clean_eof`, `agc_conn_half_close` and
+    `agc_net_close`; also `agc_tls_load_error`. The client has no C side: it is
+    `std/http` on `TCP`/`TLS` sockets (`docs/vm/10-io-http.md` §10.7.1)
 
 - **Path:** `vm/http_parse.h`, `vm/http_pico.c`, `vm/http_body.c`
   - **Owns:** the HTTP head adapter and body decoder (§10.6, §10.6.1): limits as
@@ -521,9 +519,14 @@ same over `ssl`, and a raw socket server with
     `agc_task_service`): detached, not in `Task.pending_count`, not a Test.test
     leftover, and its timers are weak, so an idle pool never keeps a stalled run
     alive.
-  - One worker task per connection; its idle `Channel.recv` timeout is the idle
-    timer. A worker whose caller is no longer parked on the reply
-    (`HttpWire.awaited?`) closes the connection instead of pooling it.
+  - One worker task per connection, under a supervisor that awaits it as a
+    `Result` task (a crash frees the slot and answers `http: connection
+    failed`); its idle `Channel.recv` timeout is the idle timer. A worker whose
+    caller is no longer parked on the reply (`HttpWire.awaited?`) closes the
+    connection instead of pooling it, and the owner drops such a waiting job.
+  - A connection is kept only with no byte left after the response (the
+    `buffered` fields of `HttpWire.Response` and `HttpWire.Text`, and a 0-byte
+    `read_text` after a chunked body).
   - An idempotent call that fails on a reused connection before any response
     byte is retried once on a new one (`run_job`).
   - A close-delimited body over TLS needs `close_notify`

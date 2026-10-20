@@ -785,6 +785,8 @@ agc_task *agc_task_group(agc_vm *vm) {
   g->group = true;
   atomic_store_explicit(&g->state, AGC_TASK_PARKED, memory_order_relaxed);
   g->result = agc_void();
+  /* A group inside a service tree is a service task too, so the tasks spawned in it are (agc_task_spawn_in). */
+  g->service = vm->task->service;
   g->test = vm->task->test;
   adopt(vm, vm->task, g);
   return g;

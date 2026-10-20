@@ -28,9 +28,10 @@ static const char *const head_fields[] = {"method",          "target",   "path",
                                           "expect_continue", "buffered", "status", "reason"};
 static const char *const chunk_fields[] = {"done", "next",  "runs", "state",       "remaining", "size", "line",
                                            "block", "count", "name", "name_length", "total",     "limit"};
-static const char *const text_fields[] = {"text", "carry", "bytes", "valid"};
+static const char *const text_fields[] = {"text", "carry", "bytes", "valid", "buffered"};
 static const char *const reply_fields[] = {"head", "closes"};
-static const char *const response_fields[] = {"status", "headers", "length", "chunked", "until_close", "closes"};
+static const char *const response_fields[] = {"status",      "headers", "length",  "chunked",
+                                              "until_close", "closes",  "buffered"};
 static const char *const framing_headers[] = {"content-length", "transfer-encoding"};
 static const char *const managed_headers[] = {"host", "content-length", "transfer-encoding", "connection"};
 static const char *const week_days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
@@ -193,9 +194,11 @@ agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64
    from being kept), a body that runs to the end of input stops it too, and a
    Content-Length over limit is an error. An interim (1xx) head comes back as
    it is: std/http counts those and reads the next head. read_error is the
-   error that ended the input, if any. */
+   error that ended the input, if any; buffered is the count of input bytes
+   after the head, which std/http needs to be 0 to keep a connection whose
+   response has no body. */
 agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bool head_only, uint64_t limit,
-                                  int read_error) {
+                                  int read_error, size_t buffered) {
   agc_http_head head;
   size_t used;
   agc_http_error error;
@@ -214,13 +217,14 @@ agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bo
   if (head.frame == AGC_HTTP_FRAME_CLOSE) closes = true;
   if (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > limit)
     return agc_http_error_result("http: ", agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
-  agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Response", response_fields, 6), 6);
+  agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Response", response_fields, 7), 7);
   r->fields[0] = agc_int(head.status);
   r->fields[1] = header_values(vm, &head);
   r->fields[2] = agc_int(head.frame == AGC_HTTP_FRAME_LENGTH ? (int64_t)head.length : 0);
   r->fields[3] = agc_bool(head.frame == AGC_HTTP_FRAME_CHUNKED);
   r->fields[4] = agc_bool(head.frame == AGC_HTTP_FRAME_CLOSE);
   r->fields[5] = agc_bool(closes);
+  r->fields[6] = agc_int((int64_t)(len - used + buffered));
   return agc_result_value(true, agc_struct_value(r));
 }
 
@@ -353,16 +357,18 @@ static size_t whole_prefix(const uint8_t *s, size_t len) {
 }
 
 /* The HttpWire.Text of buf: valid is false, with empty text, when buf is not
-   UTF-8 up to an unfinished last character. */
-agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes) {
+   UTF-8 up to an unfinished last character. buffered is the count of input
+   bytes still unread after the cut (0 for HttpWire.text). */
+agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes, size_t buffered) {
   size_t whole = whole_prefix(buf, len), chars;
   bool valid = agc_utf8_chars(buf, whole, &chars);
-  agc_struct *t = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Text", text_fields, 4), 4);
+  agc_struct *t = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Text", text_fields, 5), 5);
   t->fields[0] = valid ? agc_string_value(agc_make_string((const char *)buf, whole, chars))
                        : agc_string_value(agc_make_string("", 0, 0));
   t->fields[1] = valid ? byte_list(buf + whole, len - whole) : empty_list();
   t->fields[2] = agc_int((int64_t)bytes);
   t->fields[3] = agc_bool(valid);
+  t->fields[4] = agc_int((int64_t)buffered);
   return agc_struct_value(t);
 }
 
@@ -390,7 +396,7 @@ static agc_value builtin_text(agc_vm *vm, agc_value *args, uint32_t span) {
     at += count;
   }
   agc_charge(vm, total / AGC_COST_BYTES);
-  return agc_http_text_value(vm, buf, total, total - kept);
+  return agc_http_text_value(vm, buf, total, total - kept, 0);
 }
 
 static bool has_named(agc_vm *vm, const agc_list *headers, const char *wanted) {

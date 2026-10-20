@@ -93,7 +93,7 @@ builtin HttpWire.read_head forms=1
 builtin HttpWire.read_response forms=1
   HttpWire.read_response(socket: Socket, head_only: Bool, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Response] shape=(Opaque(Socket), Bool, Int, Int) -> Result(Struct(HttpWire.Response)) rule=Plain impl="HttpWire.read_response" effects=["network"] desc="Internal to std/http: read and parse the next response head, with the framing of a response to HEAD when head_only; an interim (1xx) head comes back as it is."
 builtin HttpWire.read_text forms=1
-  HttpWire.read_text(socket: Socket, max_bytes: Int, carry: List[Int], timeout_ms: Int) -> Result[HttpWire.Text] shape=(Opaque(Socket), Int, List(Int), Int) -> Result(Struct(HttpWire.Text)) rule=Plain impl="HttpWire.read_text" effects=["network"] desc="Internal to std/http: read the bytes available, at most max_bytes (1..1048576), as UTF-8 text after carry; bytes is 0 at the end of input, and valid is false for bytes that are not UTF-8."
+  HttpWire.read_text(socket: Socket, max_bytes: Int, carry: List[Int], timeout_ms: Int) -> Result[HttpWire.Text] shape=(Opaque(Socket), Int, List(Int), Int) -> Result(Struct(HttpWire.Text)) rule=Plain impl="HttpWire.read_text" effects=["network"] desc="Internal to std/http: read the bytes available, at most max_bytes (0..1048576; 0 does not wait), as UTF-8 text after carry; bytes is 0 at the end of input, valid is false for bytes that are not UTF-8, and buffered counts the input bytes left unread."
 builtin HttpWire.server forms=1
   HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer shape=(Opaque(Listener), Int, Fn([Opaque(HttpServer)], Void)) -> Opaque(HttpServer) rule=Plain impl="HttpWire.server" effects=["network"] desc="Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it."
 builtin HttpWire.service forms=1
@@ -507,8 +507,8 @@ record HttpWire.Chunk done: Bool, next: Int, runs: List(Int), state: Int, remain
 record HttpWire.Head method: String, target: String, path: String, headers: List(Struct(Header)), length: Int, chunked: Bool, expect_continue: Bool, buffered: Int, status: Int, reason: String
 record HttpWire.Job origin: String, scheme: String, host: String, port: Int, method: String, head: String, body: String, deadline: Int, reply: Channel(Result(Struct(HttpResponse))), worker: Int, kept: Bool
 record HttpWire.Reply head: String, closes: Bool
-record HttpWire.Response status: Int, headers: List(Struct(Header)), length: Int, chunked: Bool, until_close: Bool, closes: Bool
-record HttpWire.Text text: String, carry: List(Int), bytes: Int, valid: Bool
+record HttpWire.Response status: Int, headers: List(Struct(Header)), length: Int, chunked: Bool, until_close: Bool, closes: Bool, buffered: Int
+record HttpWire.Text text: String, carry: List(Int), bytes: Int, valid: Bool, buffered: Int
 record LogEvent level: Enum(LogLevel, []), message: String, fields: Map(String, String), time_ms: Int, task: Int
 record ProcessOutput stdout: String, stderr: String, truncated: Bool
 enum Await parameters=["T"] variants=Done(Var(T)) | TimedOut

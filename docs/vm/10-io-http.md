@@ -171,13 +171,25 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
 - The owner keeps, per origin (scheme, host and port), the open count, the idle
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the
-  FIFO. A job whose deadline passed while it waited is dropped: its caller has
-  returned the timeout already. When `jobs` is closed, the owner answers every
-  waiting and running job with `http: client is closed`, closes the inboxes of
-  the idle workers and ends.
+  FIFO. A waiting job is dropped, never sent, when its deadline has passed (its
+  caller has returned the timeout already) or when nobody is parked on its
+  reply channel (its caller was cancelled). When `jobs` is closed, the owner
+  answers every waiting and running job with `http: client is closed`, closes
+  the inboxes of the idle workers and ends. An origin with no connection and no
+  waiting job is dropped from the owner's map.
+- Crashes: the owner spawns each worker under a small supervisor task that
+  awaits it as a `Result` task, so a worker's crash is observed, not reported
+  as unobserved, and the supervisor then tells the owner the worker is gone.
+  The owner frees the slot and sends `http: connection failed` to the reply of
+  the worker's last job (the send fails when the worker had answered). The
+  service task awaits the owner the same way: after an owner crash it closes
+  `jobs`, so later calls get `http: client is closed`; the workers are
+  cancelled with the owner and calls in flight return their timeout.
 - A worker owns one connection, made with `TCP.connect` or `TLS.connect` (with
   the client's `ca_file`), so DNS, connect, TLS and the close rules stay in
-  tcp.c. It runs a job, answers on the job's reply channel, tells the owner on
+  tcp.c. Its first job waits in its inbox, so no task keeps that job's body
+  for the worker's life; the owner keeps only each worker's last reply
+  channel. It runs a job, answers on the job's reply channel, tells the owner on
   `jobs` whether it keeps the connection, then waits on its inbox for
   `idle_timeout_ms`. The timeout closes the connection and ends the worker. The
   worker closes its inbox before its last look at it, so the owner cannot hand
@@ -204,8 +216,12 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
   text as it arrives and must be valid UTF-8.
 - A connection is kept only after a complete exchange with no
   `Connection: close` on either side, a framed body, the whole request written
-  and no byte read past the end of a chunked body. Header names are lowercased
-  and values are Latin-1.
+  and no byte left after the response: `HttpWire.Response.buffered` (after a
+  head with no body), `HttpWire.Text.buffered` (after the last body read) and,
+  after a chunked body, the bytes of the last framing read and a `read_text`
+  of 0 bytes, which does not wait, must all be 0. Bytes there are a server bug
+  or a response nobody asked for, and the next call must not read them.
+  Header names are lowercased and values are Latin-1.
 - **Over TLS, a close-delimited body must end with `close_notify`.** tcp.c
   records whether the TLS layer closed before the TCP FIN, and `clean_eof?`
   reads it after the end of input. A bare FIN gives `http: truncated HTTP body`.
@@ -224,16 +240,19 @@ The C client this replaced differs in ways no test sees:
 - An idle connection is not watched for a peer close. The retry covers the
   race.
 - The 1 ms guard before a freed connection went to the next waiter is gone.
-- Bytes still unread in tcp.c's input after a response are not seen. Bytes
-  `std/http` has read past a chunked body are, and they stop the connection
-  from being kept.
 - A cancelled caller only stops waiting: its job runs to its end or its
   deadline, and then its connection is closed.
 - `TLS.connect` loads the CA file for each connection, so each has its own
   `SSL_CTX`, where the C client loaded one per client.
 - A body that is not UTF-8 also closes the connection.
 - A job sent just before `close_client`, which the owner has not taken yet,
-  may still run.
+  may still run, and so may a waiting job the owner hands to a worker while it
+  takes the messages buffered before the close: the owner only sees the close
+  once the channel is empty. A sentinel message would not change that, since
+  it comes after those same messages.
+- The client's work is bytecode now, so it spends the step budget of
+  `--max-steps` (the `http-client` fixture: 2829 steps before, about 5400
+  after).
 - A response costs three more task turns (the owner twice, the worker's inbox),
   so small sequential requests are slower and large bodies faster; the numbers
   are in the PR that made the change.
@@ -267,7 +286,8 @@ HttpWire.local_port(server: HttpServer) -> Int
   is parsed only when a line ends, and only its bytes are taken; a bad head is a
   `Head` with the answer's `status` and `reason`), `read_text` (up to
   `max_bytes` straight into text, with the UTF-8 check and the carry of an
-  unfinished character; `valid` is false for bytes that are not UTF-8) and
+  unfinished character; `valid` is false for bytes that are not UTF-8, and
+  `buffered` counts the input bytes left; `max_bytes` 0 does not wait) and
   `close_write`. `vm/http_server.c` holds the task group, on tcp.c's connection
   object. Header lists are shared with the client in `vm/http_fields.c`.
 - `std/http` reads a request: it waits up to `request_timeout_ms` (the first

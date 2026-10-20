@@ -147,6 +147,7 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "chunked", type: Types.Type.Bool),
         Model.Named(name: "until_close", type: Types.Type.Bool),
         Model.Named(name: "closes", type: Types.Type.Bool),
+        Model.Named(name: "buffered", type: Types.Type.Int),
       ],
     ),
     Model.Record(
@@ -156,6 +157,7 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "carry", type: Types.Type.List(Types.Type.Int)),
         Model.Named(name: "bytes", type: Types.Type.Int),
         Model.Named(name: "valid", type: Types.Type.Bool),
+        Model.Named(name: "buffered", type: Types.Type.Int),
       ],
     ),
     Model.Record(
@@ -925,8 +927,9 @@ ROWS_11: List[Model.Builtin] = [
       implementation: "HttpWire.read_text",
       effects: ["network"],
       description: (
-        "Internal to std/http: read the bytes available, at most max_bytes (1..1048576), as UTF-8 text after carry; " +
-        "bytes is 0 at the end of input, and valid is false for bytes that are not UTF-8."
+        "Internal to std/http: read the bytes available, at most max_bytes (0..1048576; 0 does not wait), as " +
+        "UTF-8 text after carry; bytes is 0 at the end of input, valid is false for bytes that are not UTF-8, and " +
+        "buffered counts the input bytes left unread."
       ),
       alternatives: [],
     ),
