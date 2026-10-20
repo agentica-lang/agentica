@@ -13,12 +13,27 @@
 ## belongs to a run that has ended, and the sweep removes it. A run killed between steps 1 and 3 leaves an
 ## `agentica-bdd-new-HEX`; the sweep removes it too, on the same checks, but only when it has not changed for an hour,
 ## because a run that is alive is in step 1 or 2 for a moment and has no lock held yet.
+##
+## Windows cannot rename a folder that holds a file somebody has open, so there the run makes the final name in step 1
+## and has no step 3. For the same reason the sweep leaves a final name alone until it is a minute old on Windows
+## (WINDOWS_MIN_AGE_SECONDS), so a run that is still starting is not taken by a run that overlaps it. What is left is
+## a residual case: a sweep that meets the folder between the creation of `lock` and the lock itself would take the
+## lock first and the run would fail to lock (`claim` is an error then). It needs a clock that is a minute off or an
+## mtime that is not updated, so it is not expected in practice; #385 tracks pinning the folder before `lock` exists.
+## `discard` on Windows closes the lock and then removes the folder, which is not atomic, but both sides are best
+## effort, so a lost race only leaves the folder for a later sweep.
+##
+## Windows has no sticky bit, so nothing there tells a shared temporary folder from a private one. The protection of
+## the run folder assumes a temporary folder that only the user can modify, as the default per-user one is: another
+## user with the right to delete entries of the parent (FILE_DELETE_CHILD) could replace the run folder before `lock`
+## pins it. The owner check of the sweep on Windows is #393; the pin before `lock` is #385.
 
 import {IO_TIMEOUT} from "bdd_files"
 
 # How many names a run tries before it gives up: a name can be taken, and a hostile user could take names on purpose.
 ATTEMPTS = 16
 STALE_NEW_SECONDS = 3600
+WINDOWS_MIN_AGE_SECONDS = 60
 DIGITS = "0123456789abcdef"
 
 ## A claimed run directory: its final path, and the open lock file. The lock is released when the handle is closed.
@@ -27,15 +42,24 @@ export struct Run
   lock: FileHandle
 end
 
-## The places that can hold the temporary directory, best first: TMPDIR when it is set, then /var/tmp, /usr/tmp and
-## /tmp.
+## The places that can hold the temporary directory, best first. On Windows: the variables TMPDIR, TMP and TEMP in
+## that order (TMP and TEMP are the first two that `GetTempPath` reads) and no fixed folder. Elsewhere: TMPDIR when it
+## is set, then /var/tmp, /usr/tmp and /tmp.
 export def temporary_candidates() -> List[String]
   candidates: List[String] = []
-  from_environment = System.env("TMPDIR")
-  if from_environment.ok?
-    candidates = candidates.push(from_environment.unwrap!)
+  names = ["TMPDIR"]
+  fixed: List[String] = ["/var/tmp", "/usr/tmp", "/tmp"]
+  if windows?()
+    names = ["TMPDIR", "TMP", "TEMP"]
+    fixed = []
   end
-  return candidates.concat(["/var/tmp", "/usr/tmp", "/tmp"])
+  for name in names
+    from_environment = System.env(name)
+    if from_environment.ok?
+      candidates = candidates.push(from_environment.unwrap!)
+    end
+  end
+  return candidates.concat(fixed)
 end
 
 ## The temporary directory: the first of `temporary_candidates()` that is a directory.
@@ -52,7 +76,11 @@ end
 
 ## Makes the run directory in `temporary`, locked and under its final name. Nothing is left behind on a failure.
 export def claim(temporary: String) -> Result[Run]
-  current = try make_private(temporary)
+  prefix = "agentica-bdd-new-"
+  if windows?()
+    prefix = "agentica-bdd-"
+  end
+  current = try make_private(temporary, prefix)
   claimed = lock_and_name(temporary, current)
   if !claimed.ok?
     Path.remove(current, IO_TIMEOUT)
@@ -62,13 +90,14 @@ end
 
 ## Removes the run directory and releases its lock. The removal is best effort: what stays is swept by a later run.
 export def release(run: Run) -> Void
-  Path.remove(run.path, IO_TIMEOUT)
-  File.close(run.lock, IO_TIMEOUT)
+  discard(run.path, run.lock)
 end
 
 ## Removes the run directories of runs that have ended: the folders named `agentica-bdd-HEX` in `temporary`, and the
 ## old ones named `agentica-bdd-new-HEX`, made by the user of `own` (a folder of another user is never touched), that
-## have a `lock` file nobody holds. `own` is not removed. A folder that cannot be inspected or removed stays.
+## have a `lock` file nobody holds. `own` is not removed. A folder that cannot be inspected or removed stays. On
+## Windows the user id is 0 for every folder, so it does not tell the users apart: the folder of another user stays
+## because its owner-only access list makes the inspection of `lock` fail.
 export def sweep(temporary: String, own: Run) -> Void
   owner = File.lstat(own.path, IO_TIMEOUT)
   names = Dir.list(temporary, IO_TIMEOUT)
@@ -85,21 +114,29 @@ export def sweep(temporary: String, own: Run) -> Void
     age = -1
     if hex_name?(name, "agentica-bdd-") and path != own.path
       age = 0
+      if windows?()
+        age = WINDOWS_MIN_AGE_SECONDS
+      end
     elsif hex_name?(name, "agentica-bdd-new-")
       age = STALE_NEW_SECONDS
     end
     if age >= 0
       held = abandoned(path, owner.unwrap!.user_id, age)
       if held.ok?
-        Path.remove(path, IO_TIMEOUT)
-        File.close(held.unwrap!, IO_TIMEOUT)
+        discard(path, held.unwrap!)
       end
     end
   end
 end
 
-## A random name: 16 bytes of /dev/urandom as 32 hex digits, so it cannot be guessed (Random.int has a 31-bit seed).
+## A random name of 32 hex digits. Elsewhere it is 16 bytes of /dev/urandom, so it cannot be guessed (Random.int has a
+## 31-bit seed when the program is run with --seed). Windows has no such file: the name is 8 bytes of Random.int, 4 of
+## the clock and the process id, which is enough there because `Dir.mkdir_private` fails on a name that is taken and
+## makes a folder that only its owner can enter, so a guessed name costs a retry and gives no access.
 export def random_hex() -> Result[String]
+  if windows?()
+    return ok(process_hex())
+  end
   source = try File.open("/dev/urandom", "read", IO_TIMEOUT)
   bytes: List[Int] = []
   while bytes.size < 16
@@ -111,20 +148,59 @@ export def random_hex() -> Result[String]
     bytes = bytes.concat(got.unwrap!)
   end
   try File.close(source, IO_TIMEOUT)
+  return ok(hex_of(bytes))
+end
+
+# Whether the run is on Windows, where the temporary folder, the random names and the ownership checks differ.
+def windows?() -> Bool
+  return System.os() == "windows"
+end
+
+def hex_of(bytes: List[Int]) -> String
   digits = bytes.map do |byte: Int|
     "#{DIGITS.slice(byte.shift_right(4), 1)}#{DIGITS.slice(byte.bit_and(15), 1)}"
   end
-  return ok(digits.join(""))
+  return digits.join("")
 end
 
-# The first free name among ATTEMPTS random ones. A name that is taken is skipped, and any other error ends the
-# attempts the same way, with the last system error.
-def make_private(temporary: String) -> Result[String]
+# 8 bytes from Random.int, 4 from the clock and the process id as 4 bytes: 32 digits like the name from /dev/urandom.
+# The clock keeps the names from repeating when the user gives --seed, which makes Random.int deterministic.
+def process_hex() -> String
+  pid = System.pid()
+  now = Time.now_ms()
+  bytes: List[Int] = []
+  while bytes.size < 8
+    bytes = bytes.push(Random.int(0, 255))
+  end
+  for shift in [24, 16, 8, 0]
+    bytes = bytes.push(now.shift_right(shift).bit_and(255))
+  end
+  for shift in [24, 16, 8, 0]
+    bytes = bytes.push(pid.shift_right(shift).bit_and(255))
+  end
+  return hex_of(bytes)
+end
+
+# Removes the run folder and releases its lock. Elsewhere the lock is held until the folder is gone, so no other sweep
+# takes the same folder; Windows cannot remove a folder with an open file in it, so the lock is closed first there.
+def discard(path: String, lock: FileHandle) -> Void
+  if windows?()
+    File.close(lock, IO_TIMEOUT)
+    Path.remove(path, IO_TIMEOUT)
+  else
+    Path.remove(path, IO_TIMEOUT)
+    File.close(lock, IO_TIMEOUT)
+  end
+end
+
+# The first free name among ATTEMPTS random ones, made as `prefix` and the name. A name that is taken is skipped, and
+# any other error ends the attempts the same way, with the last system error.
+def make_private(temporary: String, prefix: String) -> Result[String]
   last = "no attempt was made"
   attempt = 0
   while attempt < ATTEMPTS
     name = try random_hex()
-    path = try Path.join([temporary, "agentica-bdd-new-#{name}"])
+    path = try Path.join([temporary, "#{prefix}#{name}"])
     made = Dir.mkdir_private(path, IO_TIMEOUT)
     if made.ok?
       return ok(path)
@@ -139,6 +215,10 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
   shared = try shared_and_not_sticky?(temporary, current)
   if shared
     return error("the temporary directory #{temporary} is shared and not sticky; set TMPDIR to a private folder")
+  end
+  if windows?()
+    lock = try take_lock(current)
+    return ok(Run(path: current, lock: lock))
   end
   name = try random_hex()
   final = try Path.join([temporary, "agentica-bdd-#{name}"])
@@ -166,8 +246,13 @@ end
 # A temporary directory where other users can write and delete our entries is not safe for a run that trusts its
 # files: it is the case when others can write (mode o+w) or the group can write (g+w) and the directory is not ours
 # alone in user and group without the setgid bit, and the sticky bit (which stops others from deleting our entries) is
-# not set. `own` is a folder we just made, so it tells our user and group.
+# not set. `own` is a folder we just made, so it tells our user and group. Windows has no such mode bits, so the check
+# cannot run there; the run folder is only for its owner, but it relies on a temporary folder that only the user can
+# modify (see the header).
 def shared_and_not_sticky?(temporary: String, own: String) -> Result[Bool]
+  if windows?()
+    return ok(false)
+  end
   folder = try File.stat(temporary, IO_TIMEOUT)
   mine = try File.lstat(own, IO_TIMEOUT)
   mode = folder.mode
@@ -196,8 +281,9 @@ def hex_name?(name: String, prefix: String) -> Bool
 end
 
 # The lock of a folder that may belong to a run that ended: ok(handle) when the folder is a real folder (not a link) of
-# `owner` with a real `lock` file whose lock this call took, and not changed in the last `age` seconds. The handle
-# keeps the folder from being claimed by another sweep until it is closed. A lock held by a live run is an error.
+# `owner` (on Windows every folder has the user id 0; another user's folder fails at `lock`, see `sweep`) with a real
+# `lock` file whose lock this call took, and not changed in the last `age` seconds. The handle keeps the folder from
+# being claimed by another sweep until it is closed. A lock held by a live run is an error.
 def abandoned(path: String, owner: Int, age: Int) -> Result[FileHandle]
   folder = try File.lstat(path, IO_TIMEOUT)
   lock_path = try Path.join([path, "lock"])
