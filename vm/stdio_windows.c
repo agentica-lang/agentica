@@ -58,7 +58,8 @@ struct agc_memstream {
    waits for `want`, reads into `buf` with `lock` released (`in_read` while it is in _read), and wakes the loop unless
    `closed`. `buf` grows to the largest read asked for and is kept for the whole run; the done half of a read takes it
    while the thread waits for the next `want`. The thread and the loop side each hold a reference: the thread may stay
-   in a read after the close, until input or EOF comes. */
+   in a read after the close, until input or EOF comes. A handle that is not overlapped serializes its I/O, so while
+   the thread is in a read of a socket that is also stdout (inetd), the writes of stdout wait for that read. */
 struct agc_stdin_reader {
   uv_async_t wake;
   uv_mutex_t lock;

@@ -81,6 +81,7 @@ def main():
     parser.add_argument("--socket", action="store_true")
     parser.add_argument("--error-socket", action="store_true")
     parser.add_argument("--stdin-socket", action="store_true")
+    parser.add_argument("--stdin-line", default=None)
     parser.add_argument("--pty", action="store_true")
     parser.add_argument("--close-after", type=int, default=0)
     parser.add_argument("--pipe-size", type=int, default=0)
@@ -110,8 +111,11 @@ def main():
         error_read, error_write = os.pipe()
 
     start = time.monotonic()
-    # --stdin-socket: the socket of stdout is also stdin (inetd style); the peer never writes to it.
+    # --stdin-socket: the socket of stdout is also stdin (inetd style). The peer writes to it only the --stdin-line, a
+    # line sent before the VM starts.
     stdin = write_fd if options.stdin_socket else subprocess.DEVNULL
+    if options.stdin_line is not None:
+        read_socket.sendall(options.stdin_line.encode() + b"\n")
     vm = subprocess.Popen(command, stdin=stdin, stdout=write_fd, stderr=error_write, close_fds=True)
     os.close(write_fd)
     if error_read is not None:

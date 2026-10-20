@@ -559,14 +559,16 @@ section says how the scheduler and the loop keep them, as built.
   stdin, stdout and stderr hold every handle to it, and, if it is also stdin,
   when no read of stdin is in flight. Windows 10 before 1607 has no
   `CompareObjectHandles`, so there a socket given as two standard streams is not
-  shut down. The pipe's handle is a private, non-inheritable copy of the
-  descriptor, so closing it leaves stdout open, and closing it cancels the
-  request in flight. A request takes the ranges of the ring as they are and ends
-  all or nothing, so the ring is consumed when the request ends. Neither a pipe
-  request nor a pool job has a non-blocking try: where Unix makes one
-  non-blocking write (a stop signal, a final notice), Windows starts the request
-  and waits for it, in one wait of up to 200 ms that the stop and the final
-  notices of the exit share (`settle`).
+  shut down. A socket that is not overlapped serializes its I/O: when it is both
+  stdin and stdout, a blocked read of stdin stalls the writes of stdout, and
+  that output is lost after `--flush-timeout`. The pipe's handle is a private,
+  non-inheritable copy of the descriptor, so closing it leaves stdout open, and
+  closing it cancels the request in flight. A request takes the ranges of the
+  ring as they are and ends all or nothing, so the ring is consumed when the
+  request ends. Neither a pipe request nor a pool job has a non-blocking try:
+  where Unix makes one non-blocking write (a stop signal, a final notice),
+  Windows starts the request and waits for it, in one wait of up to 200 ms that
+  the stop and the final notices of the exit share (`settle`).
   The normal end of the run does not use that wait: it is bounded by the flush
   limit. The jobs do not set `flush`, since `agc_output_busy` counts the
   buffered bytes (End of run, below). The trace shows a pool write as
@@ -662,9 +664,11 @@ section says how the scheduler and the loop keep them, as built.
     the flush limit, and with a reader that never reads, the run ends after
     `--flush-timeout` with the existing warning, also when stderr is the same
     stuck pipe (and then no warning is mixed into the data); a socket as stdout
-    not read yet while a timer task keeps running, and a socket as stdout,
-    stderr, both, or stdin and stdout, read only after the exit, that still gets
-    every row; `puts` and `IO.warn` on
+    not read yet while a timer task keeps running; a socket as stdout, stderr,
+    both, or stdin and stdout (with stdin read or not), read only after the
+    exit, that still gets every row; a socket that is full at the end, and a
+    read of a socket stdin in flight at the end, neither of which holds the exit
+    past the flush limit; `puts` and `IO.warn` on
     one pipe and on one pty keep the order of the calls under a slow reader;
     `IO.flush` returns only after the reader started; a task crash diagnostic
     that arrives while stderr is full arrives whole when the reader reads later;

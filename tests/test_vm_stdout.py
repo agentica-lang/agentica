@@ -59,6 +59,9 @@ end
 
 ERROR_ROWS_PROGRAM = ROWS_PROGRAM.replace("puts(", "IO.warn(")
 
+# Reads one line of stdin, which the peer sent before the start, and then prints the rows.
+GETS_ROWS_PROGRAM = ROWS_PROGRAM.replace("def main() -> Void\n", "def main() -> Void\n  IO.warn(IO.gets!())\n")
+
 # A task waits for a line of stdin that never comes while main prints and returns.
 STDIN_WAIT_PROGRAM = """\
 def listen(k: Int) -> Void
@@ -516,13 +519,27 @@ def test_a_socket_as_stdin_and_stdout_read_only_after_the_exit_gets_every_row(tm
 
 
 @not_wine_socket
+def test_a_socket_as_stdin_and_stdout_that_was_read_gets_every_row_after_the_exit(tmp_path):
+    summary, out, err = run_case(tmp_path, "socket_exit_inetd_read", GETS_ROWS_PROGRAM % SOCKET_ROWS,
+                                 peer=["--socket", "--stdin-socket", "--stdin-line", "hello", "--read-after-exit",
+                                       "--pipe-size", str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    assert err == "hello\n"
+    check_rows(lines_of(out), SOCKET_ROWS)
+
+
+@not_wine_socket
 def test_a_read_of_a_socket_stdin_in_flight_at_the_end_does_not_hold_the_exit(tmp_path):
-    summary, _, _ = run_case(tmp_path, "socket_stdin_wait", STDIN_WAIT_PROGRAM,
-                             peer=["--socket", "--stdin-socket", "--read-after-exit", "--pipe-size",
-                                   str(SOCKET_BUFFER)],
-                             vm=["--flush-timeout", "500"])
+    summary, out, _ = run_case(tmp_path, "socket_stdin_wait", STDIN_WAIT_PROGRAM,
+                               peer=["--socket", "--stdin-socket", "--read-after-exit", "--pipe-size",
+                                     str(SOCKET_BUFFER)],
+                               vm=["--flush-timeout", "500"])
     assert summary["status"] == 0
     assert summary["exit"] <= 20, "the exit does not wait for the read"
+    # On Windows the socket is not overlapped, so the writes of stdout wait behind the blocked read of stdin on it and
+    # the rows are lost after the flush limit (docs/vm/10-io-scheduler.md).
+    if not WINDOWS:
+        assert lines_of(out) == ["row 0", "row 1", "row 2"]
 
 
 @not_wine
