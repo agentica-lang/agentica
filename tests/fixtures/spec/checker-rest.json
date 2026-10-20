@@ -9692,6 +9692,32 @@
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 33],
       "covers": "\"1024\""
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  lines: Lazy[String] = File.foreach(\"a.txt\", 1024, 5000)",
+        "  done = lines.each do |line|",
+        "    puts(line)",
+        "    ok()",
+        "  end",
+        "  puts(done.ok?)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(1)",
+        "  ch.lazy(10)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNUSED-VALUE",
+      "start": [3, 3],
+      "covers": "ch.lazy(10)"
     }
   ]
 }

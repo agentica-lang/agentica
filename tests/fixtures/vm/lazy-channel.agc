@@ -15,7 +15,7 @@ end
 
 def stall(ch: Channel[Int]) -> Void
   Result.unwrap!(ch.send(1, 60000))
-  Task.sleep(200)
+  Task.sleep(1000)
   Result.unwrap!(ch.send(2, 60000))
 end
 
@@ -26,6 +26,10 @@ def main() -> Void
   puts("first(2): #{values.first(2)}")
   puts("the rest, squared: #{values.map do |n| n * n end.filter do |n| n % 2 == 0 end.to_a}")
   puts("closed and drained: #{values.to_a}")
+  five: Channel[Int] = Channel.new(8)
+  Task.spawn(&produce, Feed(ch: five, count: 5))
+  puts("take_while: #{five.lazy(60000).take_while do |n| n < 3 end.to_a}")
+  puts("the value take_while rejected is gone: #{five.lazy(60000).to_a}")
   pairs: Channel[Int] = Channel.new(4)
   Task.spawn(&produce, Feed(ch: pairs, count: 5))
   stopped = pairs.lazy(60000).each_slice(2).each do |pair|

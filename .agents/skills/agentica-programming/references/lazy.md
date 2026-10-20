@@ -92,11 +92,16 @@ end
   the file before it returns, on every path (end, `first`/`find` had enough, an
   error from the block, a failed `try`, a read error). A crash or cancel of the
   task closes it at the task's end. Read errors, a missing file or a timeout
-  `<= 0` end the terminal with an error; `buffer_bytes` outside
-  1024..16777216 is `RUNTIME-INVALID-COUNT`.
-- `File.foreach(...).each do ... end` with no step in between is
-  `CHECK-LAZY-NO-STEP`: write `File.each_line(path, n, ms) do |line| ... end`.
+  `<= 0` end the terminal with an error Result; `buffer_bytes` outside
+  1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
+- `File.foreach(...).each do ... end` with no step in between, written as one
+  chain, is `CHECK-LAZY-NO-STEP`: write `File.each_line(path, n, ms) do |line|
+  ... end`.
 - `ch.lazy(timeout_ms)`: each wait for a value obeys the timeout; a timeout
-  ends the terminal with `error("channel: timed out")`; a negative timeout is
-  `RUNTIME-INVALID-DURATION`. A value a terminal took is gone even if a later
-  step dropped it; `take`, `first` and `find` take only what they need.
+  ends the terminal with `error("channel: timed out")`. The timeout rules differ
+  from `File.foreach`: a negative timeout is `RUNTIME-INVALID-DURATION` (not an
+  error Result), and `ch.lazy(0)` is valid (only what is already there).
+- A value a terminal took is gone even if a later step dropped it; `take`,
+  `first` and `find` take only what they need, `take_while` consumes the first
+  value it rejects. A second terminal on a drained, closed channel gives
+  `ok([])`, not an error.

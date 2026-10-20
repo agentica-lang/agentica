@@ -109,9 +109,10 @@ typedef struct agc_stepper agc_stepper;
 typedef agc_step (*agc_step_fn)(agc_vm *vm, agc_stepper *self, agc_value last);
 
 /* Both flags are false in a zeroed state, the default. `unlocked`: the step touches only state its task owns (and
-   immutable values), so the interpreter runs it without rt->sync. Such a step never returns AGC_STEP_WAIT and never
-   parks, and it does not touch waiter, task or channel lists, the registry or the loop: all of those belong to
-   rt->sync. A stepper that may wait leaves the flag false for the whole run. `no_block`: the builtin's last argument
+   immutable values), so the interpreter runs it without rt->sync. Such a step touches waiter, task or channel lists,
+   the registry or the loop only inside a section it locks itself (agc_sync_take ... agc_sync_drop), parks only from
+   inside such a section, and returns with the lock dropped; it returns AGC_STEP_WAIT only after such a park (the
+   Lazy terminals over a file or a channel, vm/lazy.c). `no_block`: the builtin's last argument
    is not a block; every call the step makes names its `fn`. Otherwise the last argument must be a function value. */
 struct agc_stepper {
   agc_step_fn step;
@@ -529,6 +530,8 @@ bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);
 /* One receive from c, as Channel.recv does, for a stepper that holds rt->sync (Lazy over a channel). VALUE puts the
    value in *out; CLOSED means closed and drained; TIMED_OUT means the wait for this value passed timeout_ms; WAIT
    means the task parks (a retry park), and the stepper calls this again with the same c and timeout when it wakes. */
+/* The failure text of a negative channel timeout (Channel.send, Channel.recv, ch.lazy). */
+#define AGC_CHANNEL_BAD_TIMEOUT "channel timeout must be nonnegative"
 typedef enum { AGC_RECV_VALUE, AGC_RECV_CLOSED, AGC_RECV_TIMED_OUT, AGC_RECV_WAIT } agc_recv_status;
 agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout_ms, agc_value *out);
 

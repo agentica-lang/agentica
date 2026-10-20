@@ -2007,6 +2007,27 @@ void agc_files_forget(agc_file_ids *ids, int fd) {
 
 void agc_files_close(agc_vm *vm) { (void)vm; }
 
+bool agc_lines_buffer_ok(int64_t buffer_bytes) { return buffer_bytes >= 1024 && buffer_bytes <= 16777216; }
+
+agc_line_reader *agc_lines_new(agc_vm *vm, agc_value path, int64_t buffer_bytes, int64_t timeout, uint32_t span) {
+  (void)path;
+  (void)buffer_bytes;
+  (void)timeout;
+  agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
+}
+
+agc_lines_status agc_lines_next(agc_vm *vm, agc_line_reader *r, agc_value last, agc_value *out) {
+  (void)r;
+  (void)last;
+  (void)out;
+  agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", 0);
+}
+
+void agc_lines_stop(agc_line_reader *r, agc_value outcome) {
+  (void)r;
+  (void)outcome;
+}
+
 const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
 
 const size_t agc_file_builtin_count = 0;

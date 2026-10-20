@@ -5,10 +5,17 @@ no /proc and runs on Windows too. tests/fixtures/vm/lazy-file.agc (also a VM gol
 terminal in turn: the end, first and find stopping early, an error from the block, a failed try, a read error, a
 crash and a cancel of the task. Each path opens one file at most, so no handle may still be open when the next one
 opens. --max-steps ends the run with the file of the pipeline still open, and the end of the run closes it.
+
+Two cases park the terminal itself on a file read, with a FIFO that tests/fixtures/lines-peer.py holds open: a cancel
+(Task.map's timeout) and a read timeout. They need mkfifo and the peer's FIONREAD, so they run on Linux and macOS only.
 """
+import os
 import re
 
+import pytest
+
 from tests.agentica_test import FIXTURES, WAIT_SECONDS, compile_agc, compile_text, run_vm, vm_environment
+from tests.test_vm_file_lines import start_fifo_peer
 
 EVENT = re.compile(r" io file_(open|close) handle=([0-9]+)$")
 
@@ -20,6 +27,27 @@ def main() -> Void
   puts(r)
 end
 """
+
+
+PARKED = """\
+def read_all(path: String) -> Result[List[String]]
+  return File.foreach(path, 1024, 60000).map do |line| line end.to_a
+end
+
+def main() -> Void
+  path = System.args()[0]
+  if System.args()[1] == "cancel"
+    items = Task.map([path], 1, 300) do |p|
+      read_all(p)
+    end
+    puts(items[0])
+  else
+    puts(File.foreach(path, 1024, 300).map do |line| line end.to_a)
+  end
+end
+"""
+
+FIFO = pytest.mark.skipif(os.name == "nt", reason="needs a FIFO and the POSIX peer (mkfifo, FIONREAD)")
 
 
 def file_events(trace):
@@ -64,3 +92,18 @@ def test_max_steps_ends_a_pipeline_over_a_file_and_the_end_of_the_run_closes_it(
     result, events = traced(tmp_path, bytecode, "--max-steps", "2000", args=[str(data)])
     assert result.code == 1 and "RUNTIME-STEP-LIMIT" in result.stderr, result.stderr
     assert [kind for kind, _ in events] == ["open", "close"], events
+
+
+@FIFO
+@pytest.mark.parametrize("mode,peer_mode,expected", (
+    ("cancel", "idle", 'error("task: timed out")'),
+    ("timeout", "stall", 'error("filesystem: operation timed out")'),
+), ids=("cancel-while-parked-on-a-read", "read-timeout"))
+def test_a_terminal_parked_on_a_file_read_ends_and_releases_the_file(tmp_path, request, mode, peer_mode, expected):
+    _, fifo = start_fifo_peer(tmp_path, peer_mode, request)
+    bytecode = compile_text(PARKED, "parked", tmp_path)
+    result, events = traced(tmp_path, bytecode, args=[str(fifo), mode])
+    assert (result.code, result.stdout) == (0, expected + "\n"), result.stderr
+    opened = [handle for kind, handle in events if kind == "open"]
+    assert len(opened) == 1, events
+    assert ("close", opened[0]) in events, events

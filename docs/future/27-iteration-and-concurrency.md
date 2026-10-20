@@ -19,9 +19,9 @@ for order step 8.2. 27.4 (`File.each_line` and lazy pipelines) is in two
 steps, decided by the owner on 2026-10-14: step 1 is item 17d at order row
 7.2.1h (built), step 2 is item 17e, renamed `Lazy[T]` by the owner on
 2026-10-20; its PR 1 (lists, ranges and `Lazy.produce`) and its PR 2 (the I/O
-sources `File.foreach` and `ch.lazy`) are built. 27.5 records what was decided against (generators, fibers,
-Agent-style shared state, public locks), so it is not proposed again. This
-section finalizes the earlier channel proposal and
+sources `File.foreach` and `ch.lazy`) are built. 27.5 records what was decided
+against (generators, fibers, Agent-style shared state, public locks), so it is
+not proposed again. This section finalizes the earlier channel proposal and
 answers [section
 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
 
@@ -631,23 +631,29 @@ program needs it.
 - `File.foreach(path, buffer_bytes, timeout_ms)`, the lines of a file by path,
   read with the block buffer of step 1 (`vm/files.c` shares one line reader
   between `File.each_line` and `File.foreach`). The file opens when a terminal
-  starts and closes before it returns, whether it reached the end, a step had
-  enough, a callback returned an error or a `try` failed in a block: the
+  starts and is closed before it returns, whether it reached the end, a step
+  had enough, a callback returned an error or a `try` failed in a block: the
   guarantee of `File.open` with a block (§25.9), with the terminal call as the
-  block. A crash or a cancel of the task, and `--max-steps`, end the task
+  block. After a read timeout the handle is released at once, and the OS
+  descriptor closes when the pool read that timed out ends. A crash or a cancel of the task, and `--max-steps`, end the task
   instead, and the end of the task closes the file it owns. A `Lazy` that is
   dropped without a terminal opened nothing. A read error (invalid UTF-8, a
   line over the buffer) ends the terminal with that error; a bad timeout or
   path is the terminal's error, as for `File.each_line`, and a buffer outside
-  1024..16777216 fails `RUNTIME-INVALID-COUNT` when the source is built. The
+  1024..16777216 fails `RUNTIME-INVALID-COUNT` at the argument, when the source
+  is built. The
   reads are the file jobs of step 1, so a terminal parks and never blocks the
   scheduler.
 - `ch.lazy(timeout_ms)`, the values of a channel until it is closed and
   drained. Each wait for a value obeys the timeout, and a timeout ends the
   terminal with `error("channel: timed out")`; a negative timeout fails
-  `RUNTIME-INVALID-DURATION` when the source is built.
-- A terminal over a file or a channel parks on the file job or the channel, so
-  its steps take `rt->sync` (`agc_stepper.unlocked` is false for them); a
+  `RUNTIME-INVALID-DURATION` at the argument, when the source is built
+  (`ch.lazy(0)` is valid: it takes only what is already there). A `take_while`
+  consumes the first value its block rejects: the source gave it before the
+  block saw it.
+- A terminal over a file or a channel parks on the file job or the channel. Its
+  steps run unlocked like the others, and take `rt->sync` only around the line
+  reader and the receive (`vm/lazy.c`), so a long `to_a` never holds it; a
   cancel reaches a parked terminal like any parked task, and `--max-steps` ends
   the run.
 
@@ -662,9 +668,10 @@ The decisions PR 2 took:
   consumed even when a later step dropped it or the terminal ended early: an
   item in a slice not yet given out, or the item whose block returned an error.
   `take`, `first` and `find` stop the source, so they take no value they do not
-  need. The grammar and the site say so.
-- **`File.foreach(...).each` with no step in between is
-  `CHECK-LAZY-NO-STEP`,** with a help that shows `File.each_line`. That chain
+  need, while `take_while` consumes the first value its block rejects. The
+  grammar and the site say so.
+- **`File.foreach(...).each` with no step in between, written as one chain,
+  is `CHECK-LAZY-NO-STEP`,** with a help that shows `File.each_line`. That chain
   is exactly the job of `File.each_line`, so it fails the one-way principle of
   §25. The check looks at the chain as written (the receiver of `.each` is the
   `File.foreach` call); a `Lazy` kept in a variable is not followed. The other

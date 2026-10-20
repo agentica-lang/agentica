@@ -152,7 +152,7 @@ static agc_value builtin_file(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_channel(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_as_channel(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (timeout < 0) lazy_fail_argument(vm, "RUNTIME-INVALID-DURATION", "channel timeout must be nonnegative", span);
+  if (timeout < 0) lazy_fail_argument(vm, "RUNTIME-INVALID-DURATION", AGC_CHANNEL_BAD_TIMEOUT, span);
   lazy_node *node = lazy_new_source(LAZY_CHANNEL, args[0], agc_void());
   node->timeout = timeout;
   return agc_lazy_value(node);
@@ -260,6 +260,24 @@ static agc_value lazy_finish(lazy_run *run) {
   return lazy_error("not found");
 }
 
+/* The two calls of a run that touch shared state: the line reader starts file jobs and closes the handle, a receive
+   changes the channel's lists and parks on them. The run is `unlocked` (agc_stepper), so each takes rt->sync only for
+   the call, and a park is registered inside it; the drop comes before the step returns WAIT. A failure inside jumps
+   out with the lock held, and agc_sync_reset gives it back. */
+static agc_lines_status lazy_lines_next(agc_vm *vm, lazy_run *run, agc_value last, agc_value *out) {
+  agc_sync_take(vm);
+  agc_lines_status status = agc_lines_next(vm, run->lines, last, out);
+  agc_sync_drop(vm);
+  return status;
+}
+
+static agc_recv_status lazy_receive(agc_vm *vm, const lazy_node *source, agc_value *out) {
+  agc_sync_take(vm);
+  agc_recv_status status = agc_channel_receive(vm, agc_as_channel(vm, source->value), source->timeout, out);
+  agc_sync_drop(vm);
+  return status;
+}
+
 /* Closes the file of a file source, then ends the terminal with `result` (kept in run->final while the close waits).
    Every end of a run comes here, so the file is closed whatever ended it: the end of the items, a take or find that
    had enough, an error from a callback or a failed read. A raise, a cancel or --max-steps ends the task instead, and
@@ -273,7 +291,7 @@ static agc_step lazy_done(agc_vm *vm, lazy_run *run, agc_value result, agc_value
   }
   run->waiting = WAIT_NONE;
   agc_value outcome = agc_void();
-  if (agc_lines_next(vm, run->lines, last, &outcome) == AGC_LINES_WAIT) {
+  if (lazy_lines_next(vm, run, last, &outcome) == AGC_LINES_WAIT) {
     run->waiting = WAIT_CLOSE;
     return (agc_step){.kind = AGC_STEP_WAIT};
   }
@@ -368,7 +386,7 @@ static bool lazy_resume(agc_vm *vm, lazy_run *run, agc_value last, agc_step *don
    the run waits (a file job, a channel value) or ends (a read error, a timeout). */
 static lazy_pull lazy_io(agc_vm *vm, lazy_run *run, const lazy_node *source, agc_step *call) {
   if (source->kind == LAZY_CHANNEL) {
-    switch (agc_channel_receive(vm, agc_as_channel(vm, source->value), source->timeout, &run->item)) {
+    switch (lazy_receive(vm, source, &run->item)) {
       case AGC_RECV_VALUE: return NEXT_ITEM;
       case AGC_RECV_CLOSED: return NEXT_NONE;
       case AGC_RECV_TIMED_OUT: *call = lazy_end(lazy_error("channel: timed out")); return NEXT_STEP;
@@ -377,7 +395,7 @@ static lazy_pull lazy_io(agc_vm *vm, lazy_run *run, const lazy_node *source, agc
   } else {
     agc_value last = run->io_last, out = agc_void();
     run->io_last = agc_void();
-    switch (agc_lines_next(vm, run->lines, last, &out)) {
+    switch (lazy_lines_next(vm, run, last, &out)) {
       case AGC_LINES_LINE: run->item = out; return NEXT_ITEM;
       case AGC_LINES_END:
         /* The reader closed the file before it gave END. */
@@ -609,9 +627,10 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   if (source->kind == LAZY_LIST) agc_list_cursor_begin(&run->items, agc_as_list(vm, source->value), 0);
   if (source->kind == LAZY_RANGE) run->more = agc_range_bounds(agc_as_range(vm, source->value), &run->next, &run->last);
   if (source->kind == LAZY_FILE) run->lines = agc_lines_new(vm, source->value, source->count, source->timeout, span);
-  /* A list, range or produce run reads immutable nodes and writes only this run, which belongs to the calling task.
-     An I/O source starts file jobs, closes the file and parks on channel lists, so its run takes rt->sync. */
-  run->stepper.unlocked = source->kind != LAZY_FILE && source->kind != LAZY_CHANNEL;
+  /* A run reads immutable nodes and writes only this run, which belongs to the calling task. An I/O source also starts
+     file jobs, closes the file and parks on channel lists: it takes rt->sync around those calls only (lazy_lines_next,
+     lazy_receive), so a long to_a or a chain of steps never holds it. */
+  run->stepper.unlocked = true;
   agc_task_stepper(vm, &run->stepper);
   return agc_void();
 }
@@ -633,8 +652,8 @@ static agc_value builtin_find(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 /* No row touches state other tasks can reach: a recipe is immutable and a run belongs to the calling task, so no row
-   takes rt->sync. The steps of a terminal over a list, a range or produce do not take it either
-   (agc_stepper.unlocked); the steps over a file or a channel do (lazy_start). Callbacks run as bytecode. */
+   takes rt->sync. The steps of a terminal run unlocked (agc_stepper.unlocked); over a file or a channel they take it
+   around the reader and the receive only. Callbacks run as bytecode. */
 const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_range", 1, builtin_range, AGC_NATIVE_NONE, AGC_COST_NONE, false},

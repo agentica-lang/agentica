@@ -439,7 +439,7 @@ type:
     lz.to_a` (or `lz.first(n)`)
 
 - **Written:** `File.foreach(path, n, ms).each do |line| ... end`, with no step
-  between the source and `.each` (`CHECK-LAZY-NO-STEP`)
+  between the source and `.each`, written as one chain (`CHECK-LAZY-NO-STEP`)
   - **Help:** `File.each_line(path, buffer_bytes, timeout_ms) do |line| ...
     end`; keep `File.foreach` for a chain with a step
 

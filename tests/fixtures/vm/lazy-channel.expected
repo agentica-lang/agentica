@@ -1,11 +1,13 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 439,
+  "steps": 552,
   "stdout": [
     "first(2): ok([1, 2])",
     "the rest, squared: ok([16, 36, 64])",
     "closed and drained: ok([])",
+    "take_while: ok([1, 2])",
+    "the value take_while rejected is gone: ok([4, 5])",
     "  pair [1, 2]",
     "  pair [3, 4]",
     "  pair [5]",

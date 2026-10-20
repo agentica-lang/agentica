@@ -18,7 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`xs.lazy.filter do ... end.first(3)`); terminals return a `Result`.
 - `File.foreach(path, buffer_bytes, timeout_ms)` and `ch.lazy(timeout_ms)`:
   `Lazy` sources over the lines of a file (closed before the terminal returns)
-  and the values of a channel.
+  and the values of a channel; `File.foreach(...).each` with no step is
+  `CHECK-LAZY-NO-STEP` (use `File.each_line`).
 
 ### Changed
 

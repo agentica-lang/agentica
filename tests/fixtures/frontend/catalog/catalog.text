@@ -3,7 +3,7 @@ builtin Channel.close forms=1
 builtin Channel.closed? forms=1
   Channel.closed?(channel: Channel[T]) -> Bool shape=(Channel(Var(T))) -> Bool rule=ChannelTarget impl="Channel.closed?" effects=[] desc="True once the channel is closed and every value was taken; VM only."
 builtin Channel.lazy forms=1
-  Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Prelude impl="" effects=["concurrency"] desc="Source: the values of the channel until it is closed and drained; each wait for a value obeys timeout_ms, and a timeout ends the terminal with error(\"channel: timed out\"); VM only."
+  Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A] shape=(Channel(Var(A)), Int) -> Lazy(Var(A)) rule=Prelude impl="" effects=[] desc="Source: the values of the channel until it is closed and drained; each wait for a value obeys timeout_ms, and a timeout ends the terminal with error(\"channel: timed out\"); VM only."
 builtin Channel.new forms=1
   Channel.new(capacity: Int) -> Channel[T] shape=(Int) -> Channel(Var(T)) rule=ChannelNew impl="Channel.new" effects=[] desc="Create a channel that holds 1 to 1048576 values; needs an expected Channel[T] type; VM only."
 builtin Channel.recv forms=1
@@ -25,7 +25,7 @@ builtin File.each_line forms=1
 builtin File.flush forms=1
   File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void] shape=(Opaque(FileHandle), Int) -> Result(Void) rule=Plain impl="File.flush" effects=["filesystem"] desc="Flush pending file output."
 builtin File.foreach forms=1
-  File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String] shape=(String, Int, Int) -> Lazy(String) rule=Prelude impl="" effects=["filesystem"] desc="Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and closes before it returns; VM only."
+  File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String] shape=(String, Int, Int) -> Lazy(String) rule=Prelude impl="" effects=[] desc="Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and closes before it returns; VM only."
 builtin File.lstat forms=1
   File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo] shape=(String, Int) -> Result(Struct(FileInfo)) rule=Plain impl="File.lstat" effects=["filesystem"] desc="Like File.stat, but a symbolic link is described itself and has kind \"link\"; VM only."
 builtin File.open forms=1

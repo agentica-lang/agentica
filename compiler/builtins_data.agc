@@ -299,7 +299,7 @@ ROWS_1: List[Model.Builtin] = [
       result: Types.Type.Lazy(Types.Type.Var("A")),
       rule: Model.Rule.Prelude,
       implementation: "",
-      effects: ["concurrency"],
+      effects: [],
       description: (
         "Source: the values of the channel until it is closed and drained; each wait for a value obeys timeout_ms, " +
         "and a timeout ends the terminal with error(\"channel: timed out\"); VM only."
@@ -468,7 +468,7 @@ ROWS_4: List[Model.Builtin] = [
       result: Types.Type.Lazy(Types.Type.String),
       rule: Model.Rule.Prelude,
       implementation: "",
-      effects: ["filesystem"],
+      effects: [],
       description: (
         "Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and " +
         "closes before it returns; VM only."

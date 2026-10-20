@@ -76,10 +76,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    (`vm/lazy.c`) counts each item with `agc_step_turn`, charges the rest of
    its work with `agc_charge` and yields when `agc_turn_charge` says so, so it
    never holds the scheduler past its turn. Steps run under `rt->sync` unless
-   the stepper sets `unlocked` (it touches only task-owned state, never
-   returns `AGC_STEP_WAIT`, never parks, and touches no waiter, task or
-   channel list): a `Lazy` terminal over a list, a range or `produce` sets
-   it, one over `File.foreach` or `ch.lazy` does not; a stepper
+   the stepper sets `unlocked`: it touches shared lists only inside sections
+   it locks itself, parks only from inside one, and returns with them closed
+   (`resume_stepper` checks the depth). Every `Lazy` terminal sets it; over
+   `File.foreach` or `ch.lazy` it locks the reader and the receive; a stepper
    whose builtin has no block sets `no_block`, else `start_stepper` checks
    that the last argument is a function.
    Use `List`-style native frames for pure callbacks and a plain blocking

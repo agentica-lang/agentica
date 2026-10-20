@@ -300,7 +300,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `services.h`), a state machine with
     phases START, OPENED, SCAN, READ, CLOSE, CLOSED that a stepper drives one
     line at a time (`lines_step` for `each_line`, the terminal of `vm/lazy.c`
-    for `foreach`; both run under `rt->sync`). It opens the path with
+    for `foreach`, which takes `rt->sync` only around `agc_lines_next`). It
+    opens the path with
     `OP_OPEN_READ`, reads one `OP_READ_BLOCK` job at a time into a buffer of
     `buffer_bytes + 1` bytes made once, with the pending bytes compacted to the
     front (`compact`) and each read clamped to `buffer_bytes` bytes
@@ -315,8 +316,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     then the timeout, then the path contract error; a block error is the result
     and the file is closed with `OP_CLOSE` before it is returned; every path
     that opened the file passes CLOSE before END. The io trace logs
-    `file_open handle=N` and `file_close handle=N` for each file handle, which
-    `tests/test_vm_lazy_io.py` reads to see the closes on every platform)
+    `file_open handle=N` when an open succeeds and `file_close handle=N` when
+    the registry forgets a handle: by `File.close`, by its owner's end, or by a
+    timed-out job (so a timed-out close can log it twice, and a handle still
+    open when the run ends is released without it).
+    `tests/test_vm_lazy_io.py` reads them to see the closes on every platform)
 - `vm/output.c`
   - the writer of stdout and stderr, but not the only one: `vm/process.c`
     forwards a child's stderr to `err.file` with a blocking `fwrite`

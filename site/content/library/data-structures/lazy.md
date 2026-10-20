@@ -53,9 +53,9 @@ ok(["a", "aa", "aaa"])
 
 ### File.foreach
 
-The lines of a file, read as [`File.each_line`](/library/io-and-system/files/#fileeach_line) reads them: a block of `buffer_bytes` (1024 to 16777216, also the longest line) at a time, and `timeout_ms` for each read. Building the `Lazy` opens nothing. The file opens when a terminal starts and closes before the terminal returns, whatever ended it: the end of the file, a `take` or `find` that had enough, an error from the block, a failed `try`. A crash or cancel of the task closes it when the task ends.
+The lines of a file, read as [`File.each_line`](/library/io-and-system/files/#fileeach_line) reads them: a block of `buffer_bytes` (1024 to 16777216, also the longest line) at a time, and `timeout_ms` for each read. Building the `Lazy` opens nothing. The file opens when a terminal starts and is closed before the terminal returns, whatever ended it: the end of the file, a `take` or `find` that had enough, an error from the block, a failed `try`. A crash or cancel of the task closes it when the task ends. After a read timeout the handle is released at once, and the OS descriptor closes when the read that timed out ends.
 
-A read error (invalid UTF-8, a line over the buffer), a missing file or a bad timeout ends the terminal with that error. `File.foreach(...).each do ... end` with no step in between is `CHECK-LAZY-NO-STEP`: write `File.each_line` for that.
+A read error (invalid UTF-8, a line over the buffer), a missing file or a bad timeout ends the terminal with that error. `File.foreach(...).each do ... end` with no step in between, written as one chain, is `CHECK-LAZY-NO-STEP`: write `File.each_line` for that. A buffer outside 1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -70,7 +70,7 @@ end
 
 ### ch.lazy
 
-The values of a channel until it is closed and drained. Each wait for a value obeys `timeout_ms`, and a timeout ends the terminal with `error("channel: timed out")`. A channel cannot be read twice: a second terminal goes on with the values the first did not take, and a value a terminal took is gone, even when a later step dropped it. `take`, `first` and `find` take no value they do not need.
+The values of a channel until it is closed and drained. Each wait for a value obeys `timeout_ms`, and a timeout ends the terminal with `error("channel: timed out")`. A negative timeout is `RUNTIME-INVALID-DURATION` at the argument; `ch.lazy(0)` takes only what is already there. A channel cannot be read twice: a second terminal goes on with the values the first did not take (`ok([])` once it is drained), and a value a terminal took is gone, even when a later step dropped it. `take`, `first` and `find` take no value they do not need; `take_while` consumes the first value its block rejects.
 
 ```agentica
 def produce(ch: Channel[Int]) -> Void

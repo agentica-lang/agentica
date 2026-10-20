@@ -113,8 +113,8 @@ error(...)` work inside it.
   UTF-8 ends the call with an error. The file is closed on every return path.
 - For steps over the lines (`filter`, `map`, `first(n)`, `each_slice` ...), use
   `File.foreach(path, buffer_bytes, timeout_ms)`, a `Lazy[String]` with the
-  same reads (`references/lazy.md`). `File.foreach(...).each` with no step is
-  `CHECK-LAZY-NO-STEP`: that is `File.each_line`.
+  same reads (`references/lazy.md`). `File.foreach(...).each` with no step,
+  written as one chain, is `CHECK-LAZY-NO-STEP`: that is `File.each_line`.
 
 ## Ownership and closing
 

@@ -142,7 +142,7 @@ static void stop_waiting(agc_task *t) { t->channel = (agc_channel_wait){0}; }
 static bool resumed(const agc_task *t, const agc_channel *c) { return t->channel.channel == c; }
 
 static void check_timeout(agc_vm *vm, int64_t timeout, uint32_t span) {
-  if (timeout < 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", "channel timeout must be nonnegative", span);
+  if (timeout < 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", AGC_CHANNEL_BAD_TIMEOUT, span);
 }
 
 static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, bool sending) {

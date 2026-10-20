@@ -177,7 +177,10 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   terminal drives the line reader of `File.each_line` (`agc_lines_*` in
   `services.h`) or `agc_channel_receive` (`port.h`), parks on the file job or
   the channel (`WAIT_IO`, a retry park for the channel), and closes the file in
-  `lazy_done` before every END (`WAIT_CLOSE`). Such a run is not `unlocked`.
+  `lazy_done` before every END (`WAIT_CLOSE`). The run is `unlocked`, and
+  takes `rt->sync` only around those two calls (`lazy_lines_next`,
+  `lazy_receive`); `resume_stepper` fails `RUNTIME-INTERNAL` if an unlocked step
+  returns holding it.
   `CHECK-LAZY-NO-STEP` (`compiler/check_method.agc`) rejects
   `File.foreach(...).each` written as one chain. Goldens:
   `tests/fixtures/vm/lazy-file.agc`, `lazy-channel.agc`,

@@ -122,19 +122,23 @@ be read twice. The library page is
   endless `seed`, `f(seed)`, `f(f(seed))`, ...
 - `File.foreach(path, buffer_bytes, timeout_ms)` (`Lazy[String]`): the lines
   of a file, read as `File.each_line` reads them. The file opens when a
-  terminal starts and closes before the terminal returns, whatever ended it
+  terminal starts and is closed before the terminal returns, whatever ended it
   (the end, a step that had enough, an error from a block, a failed `try`, a
-  read error); a crash or cancel of the task closes it at the task's end. A
+  read error); a crash or cancel of the task closes it at the task's end. After
+  a read timeout the handle is released at once and the OS descriptor closes
+  when the read that timed out ends. A
   read error, a bad timeout or path ends the terminal with that error; a
   buffer outside 1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
-  `File.foreach(...).each do ... end`, with no step in between, is
-  `CHECK-LAZY-NO-STEP`: that is `File.each_line`.
+  `File.foreach(...).each do ... end`, with no step in between, written as one
+  chain, is `CHECK-LAZY-NO-STEP`: that is `File.each_line`.
 - `ch.lazy(timeout_ms)` (`Channel[T]` to `Lazy[T]`): the values of a channel
   until it is closed and drained. Each wait for a value obeys the timeout; a
   timeout ends the terminal with `error("channel: timed out")`. A negative
-  timeout is `RUNTIME-INVALID-DURATION` at the argument. A second terminal on
-  the same channel goes on with the values the first did not take; a value a
-  terminal took is gone even if a later step dropped it.
+  timeout is `RUNTIME-INVALID-DURATION` at the argument; `ch.lazy(0)` takes only
+  what is already there. A second terminal on the same channel goes on with the
+  values the first did not take (`ok([])` once it is drained); a value a
+  terminal took is gone even if a later step dropped it, and `take_while`
+  consumes the first value its block rejects.
 - Steps give a new `Lazy`: `map`, `filter`, `take(n)`, `take_while`, `drop(n)`,
   `drop_while`, `flat_map` (the block gives a `List[U]`), `with_index do |x, i|
   ... end` (maps each item with its index from 0), `each_slice(n)`,
