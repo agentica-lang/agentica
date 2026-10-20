@@ -66,7 +66,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     thread sees it), and the `net` fields `id` and `closed` are atomic for the
     scheduler's checks. `cancel`
     (`request_cancel`) and `pause` (`stop_request`) touch the request and the
-    `net` only, never the resource. At N = 1 every step runs inline, and a
+    `net` only, never the resource. At a detach (a cancelled task),
+    `request_cancel` takes an accept or a read that has taken nothing yet out
+    of its slot at once (#403); a finished one is left to its `done` half,
+    whose result is dropped. At N = 1 every step runs inline, and a
     read of buffered bytes or a send that goes out at once returns without a
     park (`agc_io_here`). Tested at N > 1 by `vm/tests/net_test.c` (exact
     orders), `vm/tests/threads_test.c`, the net programs of

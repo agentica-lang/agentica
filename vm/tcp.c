@@ -1233,12 +1233,18 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
 }
 
 /* On the I/O thread without rt->sync: it stops the request and the net only. A cancelled connect's socket resource is
-   closed by its owner's end (agc_close_owned), on a scheduler. */
+   closed by its owner's end (agc_close_owned), on a scheduler.
+   At a detach (the task was cancelled), an accept or a read that has taken nothing yet leaves its slot at once, as an
+   HTTP server's waiter does (#403): the next connection goes to a live accept, and the bytes stay in the input for the
+   next read, whose reader lock the job's end hands on. An accept in its TLS handshake leaves too, and drop_request
+   closes its connection. A request that `finish` already filled keeps its result: its done half runs and the result
+   is dropped, so a served accept's socket is closed. A connect or a listen waits for its owner's close. */
 static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
   (void)vm;
   (void)context;
   request *q = data;
-  if (!deadline || q->kind == REQ_SEND || !q->counted) return false;
+  if (q->kind == REQ_SEND || !q->counted) return false;
+  if (!deadline && (q->finished || (q->kind != REQ_ACCEPT && !reads(q->kind)))) return false;
   unlink_request(q);
   if (q->kind == REQ_CONNECT) shut(q->n, "cancel");
   return true;

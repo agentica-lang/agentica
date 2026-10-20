@@ -626,8 +626,8 @@ def test_listener_takes_every_connection_that_waited_in_its_backlog(tmp_path, ad
     AcceptEx completions before the first uv_accept). Then, after a timed-out accept and a cancelled one, closing the
     listener with one connection pending makes the next accept return `listener is closed`.
 
-    The cancelled accept keeps its place until its deadline (`request_cancel` stops a TCP wait only then), so it may
-    take the pending connection and drop it: the client reads the end either way."""
+    The cancelled accept leaves the listener's queue at once (#403), so the pending connection waits in the backlog
+    until the close drops it: the client reads the end."""
     count = 16
     vm = adopt(start_vm(compile_text(BACKLOG_PROGRAM % count, "backlog", tmp_path), stdin=True))
     port = int(vm.next_line())
@@ -648,3 +648,40 @@ def test_listener_takes_every_connection_that_waited_in_its_backlog(tmp_path, ad
     finally:
         for client in clients:
             client.close()
+
+
+CANCELLED_WAITS_PROGRAM = """\
+def wait_accept(listener: Listener) -> Result[Socket]
+  return TCP.accept(listener, 60000)
+end
+
+def wait_line(socket: Socket) -> Result[String]
+  return TCP.read_line(socket, 60000)
+end
+
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  port = TCP.local_port(listener)
+  IO.inspect(Task.map([listener], 1, 50, &wait_accept))
+  near = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
+  far = Result.unwrap!(TCP.accept(listener, 5000))
+  Result.unwrap!(TCP.send(far, "first\\n", 5000))
+  IO.inspect(TCP.read_line(near, 5000))
+  IO.inspect(Task.map([near], 1, 50, &wait_line))
+  Result.unwrap!(TCP.send(far, "kept\\n", 5000))
+  IO.inspect(TCP.read_line(near, 5000))
+  TCP.close(near)
+  TCP.close(far)
+  TCP.close_listener(listener)
+end
+"""
+
+
+def test_a_cancelled_accept_or_read_leaves_its_place_at_once(tmp_path):
+    """Task.map cancels a task parked in TCP.accept, then one parked in TCP.read_line, at their 50 ms deadline, long
+    before their own 60 s one. Each wait leaves the listener's queue or the reader slot at once (#403): the next
+    connection goes to the live accept, and the line sent after the cancel reaches the next read. Before, the dead
+    accept took the connection and closed it, and the dead read kept the reader lock, so both live calls timed out."""
+    result = run_text(tmp_path, "cancelled_waits", CANCELLED_WAITS_PROGRAM)
+    assert (result.code, result.stdout) == (0, '[error("task: timed out")]\nok("first")\n'
+                                               '[error("task: timed out")]\nok("kept")\n'), result.stderr
