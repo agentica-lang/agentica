@@ -116,6 +116,9 @@ ENDS_EXPRESSION = Set.new(
   ],
 )
 
+## The keywords that start the head of a block: a leading dot on the line after one is not a continuation.
+BLOCK_HEADS = Set.new(["if", "elsif", "while", "case", "for"])
+
 ## The opener that each closing bracket needs on top of the frames.
 OPENERS = {")": "(", "]": "[", "}": "{"}
 
@@ -286,6 +289,8 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
   line_start = state.line_start
   # The heredocs of the line being lexed ask to skip their bodies at its line break.
   resume = NO_RESUME
+  # The index in `tokens` of the first token of the statement being lexed, for the block-head test of a leading dot.
+  head_at = tokens.size
   # The column of a character is its offset plus this, a sum where the line start would need a subtraction and an
   # addition; it changes where `line_start` does.
   column_base = 1 - line_start
@@ -455,10 +460,11 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         if top.kind == "kw"
           # A line that starts with `.name` continues the line before, so its NL is dropped. It needs a token that
           # can end an expression just before (not an NL, so a blank line ends the statement, nor a `do` or an
-          # operator); the parser rejects any other leading dot.
+          # operator), and the line is not the head of an `if`, `while`, `case` or `for` (a dot on the first line of
+          # its body is then a stray dot, not a change of the condition); the parser rejects any other leading dot.
           joined = false
           if tokens.size > 0 and ENDS_EXPRESSION.include?(tokens[tokens.size - 1].kind)
-            joined = dot_follows?(chars, index) and !ends_in_type?(tokens)
+            joined = dot_follows?(chars, index) and !ends_in_type?(tokens) and !block_head?(tokens, head_at)
           end
           if !joined
             tokens = tokens.push(
@@ -469,6 +475,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
                 span: Source.Span(start: start, stop: newline_end),
               ),
             )
+            head_at = tokens.size
           end
         end
       CharClass.Hash ->
@@ -1113,6 +1120,11 @@ def scan_doc(input: Input, from: Int, line: Int, line_start: Int) -> DocScan
     text: lines.join("\n"),
     next: line_after_doc(chars, size, index),
   )
+end
+
+## Whether the statement that starts at `head_at` is the head of an `if`, `elsif`, `while`, `case` or `for`.
+def block_head?(tokens: List[Tokens.Token], head_at: Int) -> Bool
+  return head_at < tokens.size and BLOCK_HEADS.include?(tokens[head_at].kind)
 end
 
 ## Whether the last token is the name of a type in a type annotation (`-> Void`, `a: Int`) and not a value such as

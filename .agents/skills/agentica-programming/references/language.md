@@ -51,7 +51,8 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
 - A line that starts with `.name` continues the line before it, so a method
   chain spans lines with no parentheses (also after a `do ... end` block). A
   `#` comment may end a line or sit alone between two steps; a blank line, a
-  `##` line, `..`, `...` and `|>` at the start of a line do not continue
+  `##` line, `..`, `...` and `|>` at the start of a line do not continue, and
+  neither does a dot after the head of an `if`, `while`, `case` or `for`
   (`PARSE-UNEXPECTED-TOKEN`).
 
   ```ruby

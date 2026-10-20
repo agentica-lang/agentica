@@ -316,8 +316,10 @@ A line that starts with `.name` drops the NL before it (`dot_follows?`, in the
 `CharClass.Newline` arm of `lex_from`), when the last token is in
 `ENDS_EXPRESSION` and is not a type name after `->` or `:` (`ends_in_type?`).
 The look-ahead skips `#` comment lines; a blank line or a `##` line stops it.
-Any other leading dot stays and the parser rejects it
-(`PARSE-UNEXPECTED-TOKEN` at the dot). Do not use the form in `compiler/`
+A block head (`if`, `elsif`, `while`, `case`, `for` as the first token of the
+statement, tracked by `head_at`) never joins. Any other leading dot stays and
+the parser rejects it (`PARSE-UNEXPECTED-TOKEN` at the dot, except after an
+operator, where it is at the line break). Do not use the form in `compiler/`
 until `bootstrap/stage0.agcb` lexes it.
 
 Top-level declarations need a blank line after `end`

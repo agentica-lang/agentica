@@ -23,17 +23,22 @@
   can be an argument. The parser ignores extra `NL` tokens between declarations
   and statements.
 - If the file does not end with a newline, the lexer adds one before `EOF`.
-- A line whose first token is a `.` followed by a name (`.map`, `.with(`)
-  continues the expression of the line before: the lexer drops the `NL` that
-  ends that line, so a method chain can span lines without parentheses. The
-  line before must end in a token that can end an expression (a name, a
-  literal, a closing bracket or `end`; not a type annotation such as `-> Void`).
-  Comment-only lines (`#`) between the two lines are skipped, and a trailing
-  comment on the line before is fine. A blank line ends the statement, and so
-  does a `##` doc line. `..` and `...` at the start of a line do not continue
-  (ranges stay as they are), and neither does `|>`. A leading dot that
-  continues nothing (the first line of a block, after a blank line, after `do
-  |x|` or after an operator) is `PARSE-UNEXPECTED-TOKEN` at the dot.
+- A line whose first token is a `.` followed by a lowercase name (`.map`,
+  `.with(`; not `.Type` or a number) continues the expression of the line
+  before: the lexer drops the `NL` that ends that line, so a method chain can
+  span lines without parentheses. The line before must end in a token that can
+  end an expression (a name, a literal, a closing bracket or `end`; not a type
+  annotation such as `-> Void`), and it must not be the head of an `if`,
+  `elsif`, `while`, `case` or `for`: a dot on the first line of a body never
+  changes the condition. Comment-only lines (`#`) between the two lines are
+  skipped, and a trailing comment on the line before is fine. A blank line ends
+  the statement, and so does a `##` doc line. `..` and `...` at the start of a
+  line do not continue (ranges stay as they are), and neither does `|>`. A
+  keyword after the dot (`.end`) is rejected as it is on one line. A leading dot
+  that continues nothing (the first line of a block or of an `if`, `while`,
+  `case` or `for` body, after a blank line, after `do |x|` or after an
+  operator) is `PARSE-UNEXPECTED-TOKEN`, at the dot, except after an operator,
+  where it is at the line break.
 - `;`, backslash continuation and implicit continuation after an operator are
   not supported. Wrap a long expression in parentheses. Inside lists and calls,
   use several lines and a trailing comma.
