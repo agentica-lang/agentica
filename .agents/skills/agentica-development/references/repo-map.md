@@ -8,12 +8,16 @@ bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (make
 compiler/         # the front end in Agentica (§18.3): one folder per context, a new file goes in the folder of its context; agentica.toml holds its [style] (lines at most 119 characters); imports across folders are relative (`../check/types`)
   front_end.agc  # the entry point of the front end of the single binary (the Makefile builds this file; make's stages build it)
   app/  # the command line, the pipeline and the replies
-    save_file.agc  # a file written in pieces (compile -o)
     pipeline.agc  # read_root, check_file, build, compile: link, check, lower and write, shared by the CLI and the BDD driver
     cli.agc  # the command line (§18.3, port step 8a): run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
     cli_options.agc cli_help.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; the fixed texts; what a command answers; Launch
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2, 8b): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
+  io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
+    host.agc  # workspace(): the real Workspace (read_text, file_exists, directory_exists, real_path, resolve_path, std_source); process_env(): the Env of this process
+    source_reader.agc  # read, read_shown: a whole file as strict UTF-8 text in chunks (the rules are in syntax/source_file.agc)
+    save_file.agc  # a file written in pieces (compile -o)
   syntax/  # source text, tokens, lexer, parser, AST
+    source_file.agc  # Read (Text | Invalid | Unreadable) and the UTF-8 rules: complete_prefix, replace_invalid, error_position; invalid_utf8 is the LEX-INVALID-UTF8 diagnostic
     source.agc token.agc  # Position and Span, Token and its Value
     lexer.agc       # lex: String -> Outcome[List[Token]];
     unicode.agc unicode_table.agc  # graphic? and the char write form for LEX-UNEXPECTED-CHAR; the table is hand-edited data (from Racket's `char-graphic?`, Unicode 17.0)
@@ -23,12 +27,12 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     parse_base.agc parser.agc  # parse: List[Token] -> Result[Program](parse_base: Env, packed diagnostics, types, patterns; parser: expressions, statements, declarations)
     parse.agc parse_text.agc  # entry: prints the text form of the tree of each file argument
   modules/  # file reading, import resolution, the linker
-    source_file.agc # read: a whole file as strict UTF-8 text in chunks, or the place of the first invalid byte; invalid_utf8 is the LEX-INVALID-UTF8 diagnostic
+    workspace.agc   # Workspace: the port of the stages to the machine, a record of function values (built in io/host.agc)
     modules.agc     # load: root path -> every module, read in a fixed order (explicit stack), with CHECK-IMPORT-*, CHECK-DECL-ORDER, CHECK-REDEFINED-NAME
     resolve_import.agc import_path.agc  # std/, pkg/ and relative import resolution, and the import path rules
     resolve.agc rewrite.agc  # resolve: the linked name of a name; rewrite: the declarations of a file with linked names
     linker.agc      # link_file: Linking.Done(Linked) | Failed(Failure); program(): the flat Program for the checker
-    declarations.agc link_env.agc link_failure.agc  # declaration helpers and CHECK-DECL-ORDER; Env and Settings; Site and packed failures with a file
+    declarations.agc link_env.agc link_failure.agc  # declaration helpers and CHECK-DECL-ORDER; Env and Settings (with the Workspace); Site and packed failures with a file
     link.agc link_text.agc  # entry: prints the text form of the linked program of each root file argument (flags: --stdlib=, --agentica-path=, --xdg-data-home=, --home=, --ids)
   check/  # the checker, types, suggestions, constants and defaults
     suggest.agc  # did_you_mean (the linker also calls it)
@@ -57,7 +61,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
   bytecode/  # the bytecode writer
     bytecode_tables.agc bytecode_bytes.agc bytecode_pool.agc  # bytecode writer: format constants and opcode numbers, little-endian integers, UTF-8 and chunk lists, interned tables
     bytecode_spans.agc bytecode_types.agc bytecode_function.agc bytecode_failure.agc  # the span table, the Types and Decodable sections, one function (constants, updates, builtins, labels), BYTECODE- problems
-    bytecode_writer.agc  # write(root_dir, program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
+    bytecode_writer.agc  # write(workspace, root_dir, program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
     bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc, and `--version=V` for the header)
   diagnostics/  # the diagnostic record and its plain, JSON and AI text
     diagnostic.agc  # Diagnostic and Outcome[T]
@@ -199,6 +203,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_vm_diff_{1..8}.py  # unittest: shards of the golden tests; shard 8 is the VM command line, the product CLI and the process, signal and path cases (references/vm-build.md)
   test_vm_latency.py  # unittest: the latency check, run alone by make vm-latency (references/vm-tasks.md)
   test_vm_task_map.py  # unittest: the timing cases of Task.map, run alone by make vm-task-map (references/vm-tasks.md)
+  test_style_core_purity.py  # the stage folders of compiler/ never call File, Dir, Path (but join), System, Process or FrontEnd (references/frontend.md)
   test_style_line_width.py  # unittest: [style] max_line_width of compiler/agentica.toml and stdlib/agentica.toml (references/frontend.md)
   test_vm_style.py  # unittest: types at the top, no static prototypes, header size (references/vm-c.md)
   test_vm_trace.py  # unittest: traced runs keep exit code, stdout and stderr (references/vm-builtins.md)
@@ -230,9 +235,10 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_windows_filesystem_safety.py  # pytest: Windows filesystem mutation regressions, in Docker or Actions scratch (references/ci.md)
   test_windows_console_stop.py  # pytest, native Windows only: Ctrl+Break exit 149 and a pseudo console as stdout (references/ci.md)
   test_windows_handle_counts.py  # pytest, native Windows only: no file call reaches the VM's own named pipes, and its handle count stays flat (GetProcessHandleCount); POSIX lists /proc/self/fd
+  test_windows_process_cleanup.py  # pytest, native Windows only: the Windows-only cases of the process cleanup: close ends the child tree and never waits, --driver-pid with an access list, an unwritable temporary folder (references/ci.md)
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
   test_bdd.py  # pytest: agentica test over the CLI: step programs, isolation (references/bdd.md)
-  test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes, links and a shell script; host-only on Windows (references/bdd.md)
+  test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes and links; host-only on Windows (references/bdd.md)
   test_bdd_cleanup.py  # pytest: destructive cleanup in the Docker/Actions scratch (references/bdd.md)
   test_bdd_integration.py  # pytest: programs under test, limits, seed, cleanup; slow: large outputs and killed driver (references/bdd.md)
   test_unit_test.py  # unittest: agentica test on *_test.agc files; slow: the test timeout, stderr flood, endless print, flooding listing (references/bdd.md)

@@ -19,6 +19,7 @@ import Problems from "../check/check_failure"
 import Paths from "../modules/import_path"
 import Ir from "../lower/ir"
 import Types from "../check/types"
+import Workspace from "../modules/workspace"
 
 ## The result of writing: the bytes of the file, or the first problem (BYTECODE-LIMIT or BYTECODE-INTERNAL).
 export enum Written
@@ -29,18 +30,18 @@ end
 ## Writes the program. root_dir is the folder of the root file, which the stored names of the sources are relative to.
 ## version is the Agentica version that the header names; the VM loads the file only when it is its own, so an empty
 ## one is BYTECODE-INTERNAL.
-export def write(root_dir: String, program: Ir.Program, version: String) -> Written
+export def write(workspace: Workspace.Workspace, root_dir: String, program: Ir.Program, version: String) -> Written
   if version == ""
     return Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty")))
   end
-  result = build(root_dir, program, version)
+  result = build(workspace, root_dir, program, version)
   if result.ok?
     return Written.Done(result.unwrap!)
   end
   return Written.Failed(Problems.unpack(result.message))
 end
 
-def build(root_dir: String, program: Ir.Program, version: String) -> Result[List[Int]]
+def build(workspace: Workspace.Workspace, root_dir: String, program: Ir.Program, version: String) -> Result[List[Int]]
   try check_limits(program)
   struct_index: Map[String, Int] = {}
   at = 0
@@ -59,7 +60,7 @@ def build(root_dir: String, program: Ir.Program, version: String) -> Result[List
     functions = Bytes.add_all(functions, encoded.parts)
   end
   out = header(version)
-  out = sources(out, root_dir, program)
+  out = sources(out, workspace, root_dir, program)
   out = pool_section(out, tables.spans)
   out = pool_section(out, tables.constants)
   out = structs(out, program)
@@ -121,10 +122,15 @@ def pool_section(out: List[List[Int]], pool: Pool.Pool) -> List[List[Int]]
 end
 
 # The sources: the stored name of each file and its text.
-def sources(out: List[List[Int]], root_dir: String, program: Ir.Program) -> List[List[Int]]
+def sources(
+  out: List[List[Int]],
+  workspace: Workspace.Workspace,
+  root_dir: String,
+  program: Ir.Program,
+) -> List[List[Int]]
   chunks = Bytes.add(out, Bytes.u32(program.sources.size))
   for source in program.sources
-    chunks = Bytes.add(chunks, Bytes.string(Paths.stored_file(root_dir, source.file)))
+    chunks = Bytes.add(chunks, Bytes.string(Paths.stored_file(workspace, root_dir, source.file)))
     chunks = Bytes.add(chunks, Bytes.string(source.text))
   end
   return chunks

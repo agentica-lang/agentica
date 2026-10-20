@@ -25,7 +25,7 @@ MODULE_FIXTURES = FIXTURES / "frontend" / "modules"
 DEFAULT_ENV = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
                "LOCALAPPDATA": "/nonexistent-agentica-local-app-data"}
 
-# compiler/modules/source_file.agc reads 262144 bytes at a time. The cases put a character, or the start of an invalid
+# compiler/io/source_reader.agc reads 262144 bytes at a time. The cases put a character, or the start of an invalid
 # sequence, across the edges of the reads.
 READ_SIZE = 262144
 

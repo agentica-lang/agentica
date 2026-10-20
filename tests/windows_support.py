@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import csv
 import ctypes
 import os
+import subprocess
 import uuid
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -149,3 +152,84 @@ class NamedPipeServer:
 
     def __exit__(self, *problem: object) -> None:
         self.close()
+
+
+def current_user_sid() -> str:
+    """The security identifier of the user that runs the tests, as `S-1-5-21-...`."""
+    identity = subprocess.run(["whoami.exe", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True,
+                              errors="replace", check=False, timeout=60)
+    assert identity.returncode == 0, identity.stderr
+    sid = next(csv.reader(identity.stdout.splitlines()))[1]
+    assert sid.startswith("S-1-"), sid
+    return sid
+
+
+def icacls(path: str | Path, *arguments: str) -> None:
+    """Change the access list of `path` with icacls.exe; the call must succeed."""
+    changed = subprocess.run(["icacls.exe", str(path), *arguments], capture_output=True, text=True,
+                             errors="replace", check=False, timeout=60)
+    assert changed.returncode == 0, changed.stdout + changed.stderr
+
+
+def processes_mentioning(text: str | Path) -> list[int]:
+    """The ids of the processes whose command line contains `text` (without regard to case or the direction of the
+    slashes), the Windows counterpart of reading /proc/<pid>/cmdline."""
+    system = Path(os.environ["SystemRoot"]) / "System32"
+    listing = subprocess.run(
+        [str(system / "WindowsPowerShell" / "v1.0" / "powershell.exe"), "-NoProfile", "-NonInteractive", "-Command",
+         "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+         "Get-CimInstance Win32_Process | ForEach-Object { '{0}|{1}' -f $_.ProcessId, $_.CommandLine }"],
+        capture_output=True, check=False, timeout=60)
+    assert listing.returncode == 0, listing.stderr.decode(errors="replace")
+
+    def plain(value: str) -> str:
+        return value.lower().replace("/", "\\")
+
+    needle = plain(str(text))
+    found = []
+    for line in listing.stdout.decode("utf-8", errors="replace").splitlines():
+        number, _, command = line.partition("|")
+        if number.strip().isdigit() and needle in plain(command):
+            found.append(int(number))
+    return found
+
+
+@contextmanager
+def without_backup_restore_privileges():
+    """Prevent the runner's restore privilege from bypassing ACLs in children."""
+    from ctypes import wintypes
+
+    class Luid(ctypes.Structure):
+        _fields_ = [("low", wintypes.DWORD), ("high", wintypes.LONG)]
+
+    class Privileges(ctypes.Structure):
+        _fields_ = [("count", wintypes.DWORD), ("luid", Luid), ("attributes", wintypes.DWORD)]
+
+    kernel32 = kernel32_file_api()
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    advapi32.LookupPrivilegeValueW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.POINTER(Luid)]
+    advapi32.AdjustTokenPrivileges.argtypes = [
+        wintypes.HANDLE, wintypes.BOOL, ctypes.POINTER(Privileges), wintypes.DWORD,
+        ctypes.POINTER(Privileges), ctypes.POINTER(wintypes.DWORD),
+    ]
+    token = wintypes.HANDLE()
+    assert advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x28, ctypes.byref(token))
+    previous = []
+    try:
+        for name in ("SeBackupPrivilege", "SeRestorePrivilege"):
+            requested = Privileges(count=1)
+            assert advapi32.LookupPrivilegeValueW(None, name, ctypes.byref(requested.luid))
+            old = Privileges()
+            size = wintypes.DWORD()
+            assert advapi32.AdjustTokenPrivileges(
+                token, False, ctypes.byref(requested), ctypes.sizeof(old),
+                ctypes.byref(old), ctypes.byref(size),
+            )
+            previous.append(old)
+        yield
+    finally:
+        for old in reversed(previous):
+            assert advapi32.AdjustTokenPrivileges(token, False, ctypes.byref(old), 0, None, None)
+        kernel32.CloseHandle(token)

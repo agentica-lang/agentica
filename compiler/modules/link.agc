@@ -1,3 +1,4 @@
+import Host from "../io/host"
 import Env from "link_env"
 import LinkText from "link_text"
 
@@ -7,7 +8,7 @@ import LinkText from "link_text"
 # pkg/ search (the process environment otherwise). `--ids` prints the id ranges of the files instead (ids_text).
 def main() -> Void
   stdlib = "stdlib"
-  env = Env.process_env()
+  env = Host.process_env()
   ids = false
   for argument in System.args()
     if argument.starts_with?("--stdlib=")
@@ -24,7 +25,7 @@ def main() -> Void
       ids = true
     else
       puts("== #{argument}")
-      settings = Env.settings(stdlib, env)
+      settings = Env.settings(Host.workspace(), stdlib, env)
       if ids
         puts(LinkText.ids_text(argument, settings))
       else
