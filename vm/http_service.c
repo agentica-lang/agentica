@@ -1,23 +1,28 @@
 /*
- * HttpWire.service, jobs, options and awaited?, called only by
- * stdlib/http.agc: the task tree of an HttpClient. service runs f(jobs), the client's owner task,
- * in a service root (agc_task_service), so no caller's crash, cancel or end
- * reaches it, Task.pending_count and Test.test do not see it, and it owns the
- * jobs channel, which closes when it ends. std/http builds the pool on it.
- * The HttpClient value holds the channel and the options. Linux and macOS,
- * like TCP; a stub table elsewhere. Service layer. Design:
- * docs/vm/10-io-http.md §10.7.1.
+ * HttpWire.service, jobs, options and awaited?, for stdlib/http.agc only: the
+ * task tree of an HttpClient. service runs f(client), the owner task, in a
+ * service root (agc_task_service): no caller's crash, cancel or end reaches it,
+ * Task.pending_count and Test.test do not see it, and it owns the jobs channel.
+ * The HttpClient holds the channel, the options and the TLS context of its
+ * https connections (vm/tcp.c). Linux and macOS; a stub table elsewhere.
+ * Service layer. Design: docs/vm/10-io-http.md §10.7.1.
  */
 #include "services.h"
 
 #if defined(__linux__) || defined(__APPLE__)
-/* HttpWire.service(jobs, options, f): jobs is a new channel, which nobody owns yet. */
+/* HttpWire.service(jobs, options, f): jobs is a new channel, which nobody owns yet; f gets the client. Options of
+   another shape are bytecode the front end would not write: a wrong-type failure, as for any other argument. */
 static agc_value builtin_service(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)agc_task_service(vm, args[2], args[0], span);
+  const agc_struct *o = agc_as_struct(vm, args[1]);
+  if (o->n != AGC_HTTP_OPTIONS_FIELDS) agc_wrong_tag(vm);
+  for (uint32_t k = 0; k < AGC_HTTP_OPTION_CA_FILE; k++) (void)agc_as_int(vm, o->fields[k]);
+  (void)agc_as_string(vm, o->fields[AGC_HTTP_OPTION_CA_FILE]);
   agc_http_client *c = agc_alloc(sizeof(agc_http_client));
   c->jobs = args[0];
   c->options = args[1];
-  return agc_http_client_value(c);
+  agc_value client = agc_http_client_value(c);
+  (void)agc_task_service(vm, args[2], args[0], client, span);
+  return client;
 }
 
 static agc_value builtin_jobs(agc_vm *vm, agc_value *args, uint32_t span) {

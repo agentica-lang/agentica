@@ -37,6 +37,8 @@ HttpWire.chunked
 HttpWire.clean_eof?
 HttpWire.close_server
 HttpWire.close_write
+HttpWire.connect_tls
+HttpWire.drop_tls
 HttpWire.encode_request
 HttpWire.encode_response
 HttpWire.error_answer

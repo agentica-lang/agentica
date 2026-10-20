@@ -45,6 +45,7 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "value", type: Types.Type.String),
       ],
     ),
+    # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_CA_FILE): keep them in step.
     Model.Record(
       name: "HttpClientOptions",
       fields: [
@@ -799,6 +800,31 @@ ROWS_10: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "HttpWire.connect_tls",
+      parameters: [
+        Model.Named(name: "client", type: Types.Type.Opaque("HttpClient")),
+        Model.Named(name: "host", type: Types.Type.String),
+        Model.Named(name: "port", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Opaque("Socket")),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.connect_tls",
+      effects: ["network"],
+      description: "Internal to std/http: TLS.connect with the client's ca_file, on its shared TLS context.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.drop_tls",
+      parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.drop_tls",
+      effects: ["network"],
+      description: "Internal to std/http: give back the client's TLS context; open connections keep theirs.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "HttpWire.encode_request",
       parameters: [
         Model.Named(name: "scheme", type: Types.Type.String),
@@ -954,18 +980,15 @@ ROWS_11: List[Model.Builtin] = [
       parameters: [
         Model.Named(name: "jobs", type: Types.Type.Channel(Types.Type.Struct("HttpWire.Job"))),
         Model.Named(name: "options", type: Types.Type.Struct("HttpClientOptions")),
-        Model.Named(
-          name: "f",
-          type: Types.Type.Fn([Types.Type.Channel(Types.Type.Struct("HttpWire.Job"))], Types.Type.Void),
-        ),
+        Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("HttpClient")], Types.Type.Void)),
       ],
       result: Types.Type.Opaque("HttpClient"),
       rule: Model.Rule.Plain,
       implementation: "HttpWire.service",
       effects: ["concurrency"],
       description: (
-        "Internal to std/http: run f(jobs), a client's owner task, outside every caller's task tree, as the owner " +
-        "of jobs; the client keeps options."
+        "Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the " +
+        "owner of jobs; the client keeps jobs and options."
       ),
       alternatives: [],
     ),

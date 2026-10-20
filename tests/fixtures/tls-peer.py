@@ -67,6 +67,29 @@ def serve_http() -> None:
         print(line, flush=True)
 
 
+def answer_once(context: ssl.SSLContext, conn: socket.socket) -> None:
+    conn.settimeout(20)
+    with context.wrap_socket(conn, server_side=True) as tls:
+        data = b""
+        while b"\r\n\r\n" not in data:
+            chunk = tls.recv(4096)
+            if not chunk:
+                return
+            data += chunk
+        tls.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+
+
+def serve_close() -> None:
+    """HTTPS that answers one request per connection, until the test ends it: every call is a new handshake."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(os.path.join(CERTS, "server.pem"), os.path.join(CERTS, "server-key.pem"))
+    with socket.create_server(("127.0.0.1", 0)) as listener:
+        print(listener.getsockname()[1], flush=True)
+        while True:
+            conn, _ = listener.accept()
+            threading.Thread(target=answer_once, args=(context, conn), daemon=True).start()
+
+
 def connect(port: int) -> None:
     context = ssl.create_default_context(cafile=os.path.join(CERTS, "ca.pem"))
     with socket.create_connection(("127.0.0.1", port)) as raw:
@@ -87,5 +110,7 @@ if __name__ == "__main__":
         serve()
     elif sys.argv[1] == "http":
         serve_http()
+    elif sys.argv[1] == "close":
+        serve_close()
     else:
         connect(int(sys.argv[2]))

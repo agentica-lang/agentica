@@ -76,6 +76,10 @@ builtin HttpWire.close_server forms=1
   HttpWire.close_server(server: HttpServer) -> Void shape=(Opaque(HttpServer)) -> Void rule=Plain impl="HttpWire.close_server" effects=["network"] desc="Internal to std/http: close the listener and cancel the server's tasks."
 builtin HttpWire.close_write forms=1
   HttpWire.close_write(socket: Socket) -> Void shape=(Opaque(Socket)) -> Void rule=Plain impl="HttpWire.close_write" effects=["network"] desc="Internal to std/http: close the write side of a socket once its output is sent; reads go on."
+builtin HttpWire.connect_tls forms=1
+  HttpWire.connect_tls(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket] shape=(Opaque(HttpClient), String, Int, Int) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.connect_tls" effects=["network"] desc="Internal to std/http: TLS.connect with the client's ca_file, on its shared TLS context."
+builtin HttpWire.drop_tls forms=1
+  HttpWire.drop_tls(client: HttpClient) -> Void shape=(Opaque(HttpClient)) -> Void rule=Plain impl="HttpWire.drop_tls" effects=["network"] desc="Internal to std/http: give back the client's TLS context; open connections keep theirs."
 builtin HttpWire.encode_request forms=1
   HttpWire.encode_request(scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: String, max_body_bytes: Int) -> Result[String] shape=(String, String, Int, String, String, List(Struct(Header)), String, Int) -> Result(String) rule=Plain impl="HttpWire.encode_request" effects=[] desc="Internal to std/http: the text of a request head with Host and Content-Length, or the reason the request cannot be sent."
 builtin HttpWire.encode_response forms=1
@@ -97,7 +101,7 @@ builtin HttpWire.read_text forms=1
 builtin HttpWire.server forms=1
   HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer shape=(Opaque(Listener), Int, Fn([Opaque(HttpServer)], Void)) -> Opaque(HttpServer) rule=Plain impl="HttpWire.server" effects=["network"] desc="Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it."
 builtin HttpWire.service forms=1
-  HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpClientOptions, f: Fn[Channel[HttpWire.Job], Void]) -> HttpClient shape=(Channel(Struct(HttpWire.Job)), Struct(HttpClientOptions), Fn([Channel(Struct(HttpWire.Job))], Void)) -> Opaque(HttpClient) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(jobs), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps options."
+  HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpClientOptions, f: Fn[HttpClient, Void]) -> HttpClient shape=(Channel(Struct(HttpWire.Job)), Struct(HttpClientOptions), Fn([Opaque(HttpClient)], Void)) -> Opaque(HttpClient) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
 builtin HttpWire.spawn forms=1
   HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void shape=(Opaque(HttpServer), Opaque(Socket), Fn([Opaque(Socket)], Void)) -> Void rule=Plain impl="HttpWire.spawn" effects=["network"] desc="Internal to std/http: run a connection task in the server's group."
 builtin HttpWire.text forms=1
@@ -553,7 +557,7 @@ ref:Map.get/2 -> Map.get(map: Map[K, V], key: K) -> Result[V] shape=(Map(Var(K),
 ref:Map.get/3 -> Map.get(map: Map[K, V], key: K, default: V) -> V shape=(Map(Var(K), Var(V)), Var(K), Var(V)) -> Var(V) rule=MapGetDefault impl="Map.get" effects=[] desc="Read a value as a Result, or supply an eagerly evaluated default as a third argument."
 ref:Map.get/4 -> -
 ref:Nope/1 -> -
-ref:HttpWire.service/3 -> HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpClientOptions, f: Fn[Channel[HttpWire.Job], Void]) -> HttpClient shape=(Channel(Struct(HttpWire.Job)), Struct(HttpClientOptions), Fn([Channel(Struct(HttpWire.Job))], Void)) -> Opaque(HttpClient) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(jobs), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps options."
+ref:HttpWire.service/3 -> HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpClientOptions, f: Fn[HttpClient, Void]) -> HttpClient shape=(Channel(Struct(HttpWire.Job)), Struct(HttpClientOptions), Fn([Opaque(HttpClient)], Void)) -> Opaque(HttpClient) rule=Plain impl="HttpWire.service" effects=["concurrency"] desc="Internal to std/http: run f(client), a client's owner task, outside every caller's task tree, as the owner of jobs; the client keeps jobs and options."
 ref:List.map/2 -> List.map(list: List[A], f: Fn[A, B]) -> List[B] shape=(List(Var(A)), Fn([Var(A)], Var(B))) -> List(Var(B)) rule=ListMap impl="List.map" effects=[] desc="Map each element in order without changing the input; O(n)."
 std:HttpWire.service -> true
 std:LogRegistry.level -> true

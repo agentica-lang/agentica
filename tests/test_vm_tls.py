@@ -6,6 +6,7 @@ and a client. The certificates are the ones in fixtures/tls. Everything is on
 127.0.0.1 or localhost with port 0.
 """
 import json
+import os
 import re
 
 import pytest
@@ -78,6 +79,122 @@ def main() -> Void
   puts(Result.unwrap!(HTTP.get(pool, "#{base}/a")).body)
   Task.spawn(&hang, Call(pool: pool, url: "#{base}/hang"))
   puts(Result.unwrap!(HTTP.get(pool, "#{base}/ping")).body)
+end
+"""
+
+SHARED_CONTEXT_PROGRAM = """\
+import HTTP from "std/http"
+
+struct Call
+  pool: HttpClient
+  url: String
+end
+
+def get(call: Call) -> Result[HttpResponse]
+  return HTTP.get(call.pool, call.url)
+end
+
+def show(r: Result[HttpResponse]) -> String
+  case r
+    ok(response) -> return response.body
+    error(message) -> return message
+  end
+end
+
+def main() -> Void
+  base = "https://localhost:#{Result.unwrap!(IO.gets())}"
+  ca = System.args()[1]
+  options = HTTP.client_options().with(ca_file: ca, timeout_ms: 20000)
+  pool = Result.unwrap!(HTTP.client(options))
+  puts(show(HTTP.get(pool, base + "/first")))
+  # The client read its CA file once, for its first connection: every later one, three at once here, uses that
+  # context, so spoiling the file changes nothing for it. A new client reads the file again and fails.
+  Result.unwrap!(File.write_text(ca, "not a certificate", 5000))
+  calls: List[Task[Result[HttpResponse]]] = []
+  for n in 0...3
+    calls = calls.push(Task.spawn(&get, Call(pool: pool, url: base + "/again")))
+  end
+  for call in calls
+    puts(show(Task.await(call)))
+  end
+  puts(show(HTTP.get(pool, base + "/last")))
+  other = Result.unwrap!(HTTP.client(options))
+  puts(String.starts_with?(show(HTTP.get(other, base + "/other")), "ssl-load-verify-source!"))
+  HTTP.close_client(pool)
+  HTTP.close_client(other)
+end
+"""
+
+WAITERS_PROGRAM = """\
+import HTTP from "std/http"
+
+struct Call
+  pool: HttpClient
+  url: String
+end
+
+def get(call: Call) -> Result[HttpResponse]
+  return HTTP.get(call.pool, call.url)
+end
+
+def show(r: Result[HttpResponse]) -> String
+  case r
+    ok(response) -> return response.body
+    error(message) -> return message
+  end
+end
+
+def main() -> Void
+  base = "https://localhost:#{System.args()[3]}"
+  # The CA file is a FIFO: the context's build blocks until the test writes it. The first call starts the build and
+  # waits; the two after it wait behind it. The first one's deadline comes while the build still blocks: it leaves
+  # the waiters, and the build goes on for the other two. The client has one timeout, so the two others start half
+  # of it after the first: each side of the first one's deadline has half the timeout to spare.
+  timeout = String.to_int!(System.args()[4])
+  pool = Result.unwrap!(HTTP.client(HTTP.client_options().with(ca_file: System.args()[1], timeout_ms: timeout)))
+  first = Task.spawn(&get, Call(pool: pool, url: base + "/first"))
+  Task.sleep(timeout / 2)
+  calls = [Task.spawn(&get, Call(pool: pool, url: base + "/a")), Task.spawn(&get, Call(pool: pool, url: base + "/b"))]
+  puts(show(Task.await(first)))
+  for call in calls
+    puts(show(Task.await(call)))
+  end
+  HTTP.close_client(pool)
+  # A failed build is not kept: once the file is right, the same client builds again and connects.
+  fixed = System.args()[2]
+  again = Result.unwrap!(HTTP.client(HTTP.client_options().with(ca_file: fixed, timeout_ms: 20000)))
+  puts(String.starts_with?(show(HTTP.get(again, base + "/bad")), "ssl-load-verify-source!"))
+  Result.unwrap!(File.write_text(fixed, Result.unwrap!(File.read_text("#{System.args()[0]}/ca.pem", 5000)), 5000))
+  puts(show(HTTP.get(again, base + "/good")))
+  HTTP.close_client(again)
+end
+"""
+
+CLOSE_IN_HANDSHAKE_PROGRAM = """\
+import HTTP from "std/http"
+
+struct Call
+  pool: HttpClient
+  url: String
+end
+
+def get(call: Call) -> Result[HttpResponse]
+  return HTTP.get(call.pool, call.url)
+end
+
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  options = HTTP.client_options().with(ca_file: "#{System.args()[0]}/ca.pem", timeout_ms: 5000)
+  pool = Result.unwrap!(HTTP.client(options))
+  call = Task.spawn(&get, Call(pool: pool, url: "https://127.0.0.1:#{TCP.local_port(listener)}/"))
+  # The server never answers the ClientHello: the client's connection is in its handshake when the client closes.
+  socket = Result.unwrap!(TCP.accept(listener, 5000))
+  HTTP.close_client(pool)
+  IO.inspect(Task.await(call))
+  # The handshake still holds the client's context; it fails when the server goes, and the context goes with it.
+  TCP.close(socket)
+  Task.sleep(200)
+  puts("done")
 end
 """
 
@@ -366,6 +483,28 @@ def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_ge
     assert server.wait() == 0
 
 
+def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, adopt):
+    one_scheduler()
+    server, port = python_server(adopt, "close")
+    ca = tmp_path / "ca.pem"
+    ca.write_bytes((CERTS / "ca.pem").read_bytes())
+    trace, env = trace_env(tmp_path)
+    result = run_vm(compile_text(SHARED_CONTEXT_PROGRAM, "shared-context", tmp_path), env=vm_environment(env),
+                    args=[CERTS, ca], stdin=port + "\n")
+    assert (result.code, result.stdout) == (0, "ok\nok\nok\nok\nok\ntrue\n"), result.stderr
+    text = trace.read_text()
+    # Five handshakes of the first client on one context it built; the second client's build failed.
+    assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 1, text
+    assert "shared=0" not in text
+    assert len(re.findall(r"tls_handshake_done socket=", text)) == 5, text
+
+
+def test_close_client_while_a_connection_is_in_its_tls_handshake(tmp_path):
+    one_scheduler()
+    result = run_text(tmp_path, "close-in-handshake", CLOSE_IN_HANDSHAKE_PROGRAM)
+    assert (result.code, result.stdout) == (0, 'error("http: client is closed")\ndone\n'), result.stderr
+
+
 def test_handshake_and_load_errors_on_both_sides_of_a_vm_client_and_server(tmp_path):
     result = run_text(tmp_path, "handshakes", HANDSHAKE_PROGRAM)
     assert result.code == 0, result.stderr
@@ -407,3 +546,29 @@ def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tm
     # The third is the raw connection, which the accepting task may not reach before main ends on several schedulers.
     servers = count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$")
     assert servers in ((2, 3) if TEST_SCHEDULERS else (3,)), text
+
+
+def test_https_waiters_on_a_context_build_one_leaves_and_a_failed_build_is_retried(tmp_path, adopt):
+    one_scheduler()
+    server, port = python_server(adopt, "close")
+    fifo = tmp_path / "ca-fifo.pem"
+    os.mkfifo(fifo)
+    fixed = tmp_path / "fixed.pem"
+    fixed.write_text("not a certificate")
+    trace, env = trace_env(tmp_path)
+    # The first call times out after `timeout`; the two others then have half of theirs left.
+    timeout = str(scaled(8000))
+    bytecode = compile_text(WAITERS_PROGRAM, "waiters", tmp_path)
+    vm = adopt(start_vm(bytecode, CERTS, fifo, fixed, port, timeout, env=env))
+    try:
+        assert vm.next_line() == "network: operation timed out"
+    finally:
+        # The build holds the FIFO open for reading; writing it lets the build, and the VM, finish.
+        with open(fifo, "wb") as pipe:
+            pipe.write((CERTS / "ca.pem").read_bytes())
+    assert [vm.next_line() for _ in range(4)] == ["ok", "ok", "true", "ok"]
+    assert vm.wait() == 0, vm.stderr_text()
+    text = trace.read_text()
+    # One build for the waiters (the second client's first build failed, its second one worked).
+    assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 2, text
+    assert len(re.findall(r"tls_handshake_done socket=", text)) == 3, text
