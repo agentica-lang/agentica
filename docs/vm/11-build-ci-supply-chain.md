@@ -195,7 +195,34 @@
   untracked files, or a checksum when it is not a git checkout. They rebuild
   only when the key changes, and CI does not cache them, since ccache rebuilds
   them in under a second.
-- The release workflow caches only the zig toolchain (keyed by `ZIG_SHA256`), no
+- The release workflow (`release.yml`) builds four packages, each on a runner of
+  its own system, with vendored OpenSSL and libgc: `linux-x86_64` on
+  `ubuntu-latest` (the zig build below), `windows-x86_64` on `windows-2025`
+  (MSYS2 UCRT64 GCC), `macos-x86_64` on `macos-15-intel` and `macos-arm64` on
+  `macos-latest` (Apple clang, `MACOSX_DEPLOYMENT_TARGET=12.0`). After the
+  build, `make release-check` (`tools/release-check.sh`) checks the binary in
+  its own format: the architecture it holds, which is also the one of the
+  machine that built it (a runner that is not what its name says fails), the
+  libraries it imports (`otool -L`, `objdump -p`, `readelf -d`), the glibc floor
+  or the Mach-O `minos` (the link target of the final binary: it does not prove
+  that every object or API is safe on macOS 12, and CI does not run macOS 12),
+  and the hardening of the format. On macOS the program
+  is stripped and then signed ad hoc, which Apple silicon needs to start it;
+  there is no Developer ID signature and no notarization. `make release-package`
+  writes `agentica-VERSION-PLATFORM.(tar.gz|zip)` (`tools/release.py`; the
+  same binary gives the same archive bytes, but the binary itself is not
+  reproducible) and
+  `make release-smoke` extracts it into a folder with spaces and non-ASCII
+  letters outside the checkout, and runs it with a `PATH` of the system folders
+  only: version, help, `check`, `compile`, `run`, `std/` imports, `agentica
+  test` for unit tests and BDD, files, processes and, where the binary has the
+  TCP builtins, loopback TCP and HTTP. A binary says that it lacks them with the
+  loader error `unknown builtin`; on Linux and macOS that error fails the test.
+  The `collect` job checks that exactly the four archives of `VERSION` exist
+  and writes `SHA256SUMS`; the `publish` job runs only for a tag that is the
+  `VERSION` file and only after all four builds pass. A manual run uploads the
+  archives and the checksums as artifacts and publishes nothing.
+- The Linux release caches only the zig toolchain (keyed by `ZIG_SHA256`), no
   build objects. It sets `AGENTICA_OPENSSL: vendored` and
   `AGENTICA_GC: vendored`, and builds both with the pinned `zig cc` against
   glibc 2.28. `ZIG_VERSION` and `ZIG_SHA256` in `.github/workflows/release.yml`

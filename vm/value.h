@@ -199,10 +199,22 @@ typedef struct {
   int64_t port;
 } agc_listener;
 
-/* An HttpClient: the jobs channel of its owner task and its HttpClientOptions (vm/http_service.c). */
+/* An HttpClient: the jobs channel of its owner task and its HttpClientOptions (vm/http_service.c), and the TLS client
+   context that its https connections share (vm/tcp.c's, opaque here: made by the first HttpWire.connect_tls, given
+   back by HttpWire.drop_tls, which sets tls_dropped; both under rt->sync). The service task drops it once the client
+   is closed and its pool has ended; a client never closed keeps it until the run ends. The context reads the CA file
+   once, so a change to the file reaches new clients only. */
 typedef struct {
   agc_value jobs, options;
+  void *tls;
+  bool tls_dropped;
 } agc_http_client;
+
+/* HttpClientOptions as the record of compiler/builtins_data.agc lays it out: timeout_ms, idle_timeout_ms,
+   max_connections, max_body_bytes, ca_file. HttpWire.service checks the shape, since the std-only rule lives in the
+   front end and bytecode can call the builtin with any struct. */
+#define AGC_HTTP_OPTIONS_FIELDS 5
+#define AGC_HTTP_OPTION_CA_FILE 4
 
 typedef struct {
   agc_resource *state;

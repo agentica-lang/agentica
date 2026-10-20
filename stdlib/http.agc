@@ -75,6 +75,7 @@ end
 
 # busy holds the reply channel of each worker's last job, not the job, so a large body is not kept alive.
 struct Pool
+  client: HttpClient
   options: HttpClientOptions
   jobs: Channel[HttpWire.Job]
   origins: Map[String, Origin]
@@ -87,6 +88,8 @@ end
 # or gone.
 struct Worker
   id: Int
+  # The client, for the TLS context its https connections share (HttpWire.connect_tls).
+  client: HttpClient
   options: HttpClientOptions
   jobs: Channel[HttpWire.Job]
   inbox: Channel[HttpWire.Job]
@@ -149,7 +152,7 @@ export def client(options: HttpClientOptions) -> Result[HttpClient]
     return error("http: ca_file cannot contain NUL")
   end
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
-  return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own, options) end)
+  return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
 end
 
 ## Closes the client and its connections. A call still in flight fails with `http: client is closed`; its request
@@ -690,10 +693,14 @@ end
 # The client's service task (HttpWire.service runs it, and it owns jobs). It awaits the owner as a Result task, so a
 # crash of the owner is observed here, not reported as unobserved. After a crash the client is closed: later calls
 # get "http: client is closed", the workers are cancelled with the owner, and calls in flight time out.
-def supervise_pool(jobs: Channel[HttpWire.Job], options: HttpClientOptions) -> Void
-  pool = Pool(options: options, jobs: jobs, origins: {}, inboxes: {}, busy: {}, next_id: 1)
+def supervise_pool(client: HttpClient) -> Void
+  jobs = HttpWire.jobs(client)
+  options = HttpWire.options(client)
+  pool = Pool(client: client, options: options, jobs: jobs, origins: {}, inboxes: {}, busy: {}, next_id: 1)
   Task.await(Task.spawn(&run_pool, pool))
   jobs.close
+  # Connections still open or in their handshake keep the context until they end.
+  HttpWire.drop_tls(client)
 end
 
 # The client's owner task: it hands each job to an idle worker of its origin, or to a new worker while the origin has
@@ -772,7 +779,8 @@ def place(pool: Pool, job: HttpWire.Job) -> Placed
   # A new channel with room for one: this send cannot fail.
   inbox.send(job, 0)
   notice = job.with(head: "", body: "", worker: id, kept: false)
-  Task.spawn(&supervise, Worker(id: id, options: pool.options, jobs: pool.jobs, inbox: inbox, notice: notice))
+  worker = Worker(id: id, client: pool.client, options: pool.options, jobs: pool.jobs, inbox: inbox, notice: notice)
+  Task.spawn(&supervise, worker)
   pool = pool.with(inboxes: Map.put(pool.inboxes, id, inbox), busy: Map.put(pool.busy, id, job.reply), next_id: id + 1)
   return Placed(pool: pool, placed: true)
 end
@@ -956,7 +964,7 @@ def connect(worker: Worker, job: HttpWire.Job) -> Result[Socket]
     return error(TIMED_OUT)
   end
   if job.scheme == "https"
-    return TLS.connect(job.host, job.port, worker.options.ca_file, left)
+    return HttpWire.connect_tls(worker.client, job.host, job.port, left)
   end
   return TCP.connect(job.host, job.port, left)
 end

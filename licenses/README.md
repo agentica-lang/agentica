@@ -30,7 +30,9 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception (SPDX:
   - OpenSSL 3 (`vm/third_party/openssl`): Apache-2.0, with its license in
     `LICENSE.txt`;
 
-The release archives ship these notices in `licenses/`: `bdwgc/NOTICE`,
-`libuv/LICENSE` and `LICENSE-extra`, `yyjson/LICENSE`, `picohttpparser/LICENSE`
-(the notice from `picohttpparser.h`), `openssl/LICENSE.txt`,
-`unicode/LICENSE.txt` (also in this repository).
+Every release archive (Linux, macOS and Windows) ships these notices in
+`licenses/`: `bdwgc/NOTICE`, `libuv/LICENSE` and `LICENSE-extra`,
+`yyjson/LICENSE`, `picohttpparser/LICENSE` (the notice from
+`picohttpparser.h`), `openssl/LICENSE.txt`, `unicode/LICENSE.txt` (also in this
+repository). All of these libraries are built into the program, so no archive
+carries a library file of its own.

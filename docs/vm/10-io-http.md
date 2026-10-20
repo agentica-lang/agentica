@@ -188,18 +188,26 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
   service task awaits the owner the same way: after an owner crash it closes
   `jobs`, so later calls get `http: client is closed`; the workers are
   cancelled with the owner and calls in flight return their timeout.
-- A worker owns one connection, made with `TCP.connect` or `TLS.connect` (with
-  the client's `ca_file`), so DNS, connect, TLS and the close rules stay in
-  tcp.c. Its first job waits in its inbox, so no task keeps that job's body
-  for the worker's life; the owner keeps only each worker's last reply
-  channel. It runs a job, answers on the job's reply channel, tells the owner on
-  `jobs` whether it keeps the connection, then waits on its inbox for
-  `idle_timeout_ms`. The timeout closes the connection and ends the worker. The
-  worker closes its inbox before its last look at it, so the owner cannot hand
-  a job to a worker that has left: the send fails, and another worker takes the
-  job. When the caller gave up on the reply channel (`HttpWire.awaited?`),
-  the worker closes the connection instead of keeping it, as the grammar says
-  of a timed-out call (`docs/grammar/06c-tasks-and-tests.md`).
+- A worker owns one connection, made with `TCP.connect` or
+  `HttpWire.connect_tls`, so DNS, connect, TLS and the close rules stay in
+  tcp.c. `HttpWire.connect_tls` is `TLS.connect` with the client's TLS context:
+  tcp.c builds one `SSL_CTX` from the client's `ca_file` on a pool thread at the
+  first `https://` connection, and every later connection makes its `SSL` from
+  it. Each connection, and the build, holds a reference, so `HttpWire.drop_tls`
+  (run by the service task after `close_client`) frees the context only after
+  the last handshake and connection let it go. A failed build is not kept: the
+  next connection tries again. The client's CA file is read once, so a change to
+  it reaches new clients only. Its first job waits in its inbox, so no task
+  keeps that job's body for the worker's life; the owner keeps only each
+  worker's last reply channel. It runs a job, answers on the job's reply
+  channel, tells the owner on `jobs` whether it keeps the connection, then waits
+  on its inbox for `idle_timeout_ms`. The timeout closes the connection and ends
+  the worker. The worker closes its inbox before its last look at it, so the
+  owner cannot hand a job to a worker that has left: the send fails, and another
+  worker takes the job. When the caller gave up on the reply channel
+  (`HttpWire.awaited?`), the worker closes the connection instead of keeping it,
+  as the grammar says of a timed-out call
+  (`docs/grammar/06c-tasks-and-tests.md`).
 - Retry: a job on a reused connection that fails before any response byte (end
   of input, a read or write error) is retried once on a new connection, within
   the same deadline, if its method is `GET`, `HEAD`, `OPTIONS`, `PUT` or
@@ -246,8 +254,6 @@ The C client this replaced differs in ways no test sees:
 - The 1 ms guard before a freed connection went to the next waiter is gone.
 - A cancelled caller only stops waiting: its job runs to its end or its
   deadline, and then its connection is closed.
-- `TLS.connect` loads the CA file for each connection, so each has its own
-  `SSL_CTX`, where the C client loaded one per client.
 - A body that is not UTF-8 also closes the connection.
 - After `close_client` no request goes out that a worker had not started:
   every job still on `jobs`, waiting or in a worker's inbox is answered

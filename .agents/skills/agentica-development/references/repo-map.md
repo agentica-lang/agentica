@@ -224,6 +224,8 @@ examples/               # small programs per feature; examples/README.md lists t
 tools/
   refreeze.py     # rewrites the frozen front-end goldens from the Agentica stages (references/frontend.md)
   jscpd/          # the pinned copy-paste checker (make dup-check)
+  release.py      # release archives: package, smoke (extracted package), collect (references/ci.md)
+  release-check.sh  # ELF, Mach-O and PE checks of a release binary (references/ci.md)
 docs/
   grammar.md   # index of the language grammar
   grammar/     # the language definition, one file per section; the source of truth

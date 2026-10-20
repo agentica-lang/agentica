@@ -10,8 +10,18 @@ This first port covers the compiler driver, regular binary files, UTF-8 paths,
 environment lookup and the process primitives needed by stage0. Windows
 special file streams, locks, rename, recursive removal, asynchronous standard
 I/O and networking remain separate follow-up work. `Path.remove` on Windows
-returns an error without deleting anything. Cross-platform release packaging
-and runtime DLL checks have not yet replaced the Linux release pipeline.
+returns an error without deleting anything.
+
+The release (`release.yml`) builds one native archive per system on a runner of
+that system (11): Linux x86-64 against glibc 2.28, macOS Intel and Apple silicon
+with `MACOSX_DEPLOYMENT_TARGET=12.0`, and Windows x86-64. Every binary links
+libgc, libuv, yyjson, picohttpparser and OpenSSL statically
+(`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`). The system libraries that
+remain are the C library of each system: glibc (at most 2.28 symbols), libSystem
+on macOS, and on Windows the system DLLs with the Universal C Runtime, which is
+part of Windows 10. `tools/release-check.sh` reads the real format of each
+binary (ELF, Mach-O, PE) and fails on a wrong architecture, a library outside
+that list or missing hardening.
 
 - **Dependency:** C compiler
   - **Choice:** C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks

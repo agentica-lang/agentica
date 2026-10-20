@@ -131,7 +131,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `HttpClient` value holds the jobs channel and the options. The pool itself
     (owner, one worker per connection, FIFO, retry) is `stdlib/http.agc`, on
     `TCP`, `TLS`, `Channel` and `Task`; the workers' sockets are tcp.c sockets,
-    so the end of the run sends their TLS close_notify
+    so the end of the run sends their TLS close_notify. `service` builds the
+    client first and passes it to its owner function. The client's TLS context
+    (`HttpWire.connect_tls`, `HttpWire.drop_tls`, #394) is a reference-counted
+    `tls_shared` in `vm/tcp.c`, built once on a pool thread; each connection
+    and the build hold a reference, so `drop_tls` never frees it under a
+    handshake
 
 - **Path:** `vm/tls.h`, `vm/tls_openssl.c`, `vm/tls_trust.h`, `vm/tls_trust.c`,
   `vm/tls_trust_{posix,darwin,windows}.c`

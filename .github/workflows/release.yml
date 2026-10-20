@@ -1,5 +1,12 @@
 name: Release
 
+# Four native packages (docs: references/ci.md of the development skill):
+#   linux-x86_64    ubuntu-latest   pinned zig cc against glibc 2.28           .tar.gz
+#   windows-x86_64  windows-2025    MSYS2 UCRT64 GCC                           .zip
+#   macos-x86_64    macos-15-intel  Apple clang, MACOSX_DEPLOYMENT_TARGET      .tar.gz
+#   macos-arm64     macos-latest    Apple clang, MACOSX_DEPLOYMENT_TARGET      .tar.gz
+# A tag push publishes them with SHA256SUMS once all four build and pass the tests of their extracted package; a manual
+# run (workflow_dispatch) only uploads the same files as artifacts.
 on:
   push:
     tags:
@@ -10,22 +17,12 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  version:
     runs-on: ubuntu-latest
-    env:
-      ZIG_VERSION: 0.15.2
-      ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
-      VM_GLIBC: '2.28'
-      AGENTICA_OPENSSL: vendored
-      AGENTICA_GC: vendored
-      CCACHE: ''
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: true
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
       - name: Validate release version
         id: version
         run: |
@@ -37,6 +34,27 @@ jobs:
               exit 1
             }
           fi
+
+  linux:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      ZIG_VERSION: 0.15.2
+      ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
+      VM_GLIBC: '2.28'
+      AGENTICA_OPENSSL: vendored
+      AGENTICA_GC: vendored
+      CCACHE: ''
+      RELEASE_PLATFORM: linux-x86_64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install poetry==2.1.2
+      - run: poetry install --only test --no-root
       - id: zig
         run: |
           dir="$RUNNER_TOOL_CACHE/zig-$ZIG_VERSION"
@@ -55,42 +73,14 @@ jobs:
       - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - name: Build the binary against glibc ${{ env.VM_GLIBC }}
         run: |
-          set -o pipefail
           # From bootstrap/stage0.agcb with zig cc: the embedding (.incbin in a generated assembly file) and the link
           # have to work with this toolchain and glibc ${{ env.VM_GLIBC }}, which PR CI (gcc) does not use. The fixed point
           # also checks that the binary compiles the front end to the same bytes.
           make vm-test fixed-point CCACHE=
-          [ "$(dist/agentica --version)" = "${{ steps.version.outputs.version }}" ]
+          [ "$(dist/agentica --version)" = "${{ needs.version.outputs.version }}" ]
           strip dist/agentica
-          sections=$(LC_ALL=C readelf -SW dist/agentica)
-          if grep -qE '[.](debug_info|symtab)[[:space:]]' <<< "$sections"; then
-            echo "dist/agentica still has .debug_info or .symtab after strip" >&2
-            exit 1
-          fi
-          # grep finds nothing when objdump prints no versions: `|| true` keeps pipefail from ending the step before the
-          # message below.
-          newest=$({ objdump -T dist/agentica | grep -o 'GLIBC_[0-9.]*' || true; } | sort -uV | tail -n 1)
-          [ -n "$newest" ] || { echo "objdump found no GLIBC symbol versions in dist/agentica" >&2; exit 1; }
-          echo "dist/agentica needs $newest"
-          [ "$(printf '%s\n' "$newest" "GLIBC_$VM_GLIBC" | sort -V | tail -n 1)" = "GLIBC_$VM_GLIBC" ] || {
-            echo "dist/agentica needs $newest, newer than GLIBC_$VM_GLIBC" >&2
-            exit 1
-          }
-          export LC_ALL=C
-          header=$(readelf -h dist/agentica)
-          dynamic=$(readelf -d dist/agentica)
-          segments=$(readelf -lW dist/agentica)
-          symbols=$(objdump -T dist/agentica)
-          grep -q 'Type:[[:space:]]*DYN' <<< "$header" || { echo "dist/agentica is not PIE" >&2; exit 1; }
-          if grep -qE 'NEEDED.*lib(ssl|crypto)' <<< "$dynamic"; then echo "dist/agentica links OpenSSL dynamically" >&2; exit 1; fi
-          if grep -qE 'NEEDED.*libgc[.]' <<< "$dynamic"; then echo "dist/agentica links libgc dynamically" >&2; exit 1; fi
-          ossl=$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $2; sep = "." }' vm/third_party/openssl/VERSION.dat)
-          dist/agentica run --version | grep -qF "OpenSSL $ossl" || { echo "dist/agentica does not report the vendored OpenSSL $ossl" >&2; exit 1; }
-          grep -q 'FLAGS_1).*PIE' <<< "$dynamic" || { echo "dist/agentica is not PIE" >&2; exit 1; }
-          grep -q '(FLAGS).*BIND_NOW' <<< "$dynamic" || { echo "dist/agentica lacks BIND_NOW" >&2; exit 1; }
-          grep -q 'GNU_RELRO' <<< "$segments" || { echo "dist/agentica lacks RELRO" >&2; exit 1; }
-          grep -q '__stack_chk_fail' <<< "$symbols" || { echo "dist/agentica lacks the stack protector" >&2; exit 1; }
-          grep -qE '__(memcpy|read|vsnprintf)_chk' <<< "$symbols" || { echo "dist/agentica lacks _FORTIFY_SOURCE" >&2; exit 1; }
+      - name: Check the ELF binary
+        run: make release-check
       - name: Golden tests on the release binary
         env:
           AGENTICA_REQUIRE_VM: '1'
@@ -105,67 +95,164 @@ jobs:
           ./dist/agentica examples/queue.agc
           make test-distribution
       - name: Package the binary
-        run: |
-          name="agentica-${{ steps.version.outputs.version }}-linux-x86_64"
-          mkdir -p "dist/$name/bin"
-          cp dist/agentica "dist/$name/bin/"
-          cp LICENSE NOTICE "dist/$name/"
-          mkdir -p "dist/$name/licenses/"{bdwgc,libuv,yyjson,picohttpparser,openssl,unicode}
-          sed -n '1,/covered by the GPL\./p' vm/third_party/bdwgc/README.QUICK > "dist/$name/licenses/bdwgc/NOTICE"
-          cp vm/third_party/libuv/LICENSE vm/third_party/libuv/LICENSE-extra "dist/$name/licenses/libuv/"
-          cp vm/third_party/yyjson/LICENSE "dist/$name/licenses/yyjson/"
-          sed -n '1,/^ \*\//p' vm/third_party/picohttpparser/picohttpparser.h > "dist/$name/licenses/picohttpparser/LICENSE"
-          cp vm/third_party/openssl/LICENSE.txt "dist/$name/licenses/openssl/"
-          cp licenses/unicode/LICENSE.txt "dist/$name/licenses/unicode/"
-          tar -czf "dist/$name.tar.gz" -C dist "$name"
-          rm -rf "dist/$name"
-          listing=$(tar -tzf "dist/$name.tar.gz")
-          for f in bin/agentica LICENSE NOTICE licenses/bdwgc/NOTICE \
-            licenses/libuv/LICENSE licenses/libuv/LICENSE-extra licenses/yyjson/LICENSE licenses/picohttpparser/LICENSE licenses/openssl/LICENSE.txt licenses/unicode/LICENSE.txt; do
-            grep -qxF "$name/$f" <<< "$listing" || { echo "$name.tar.gz lacks $name/$f" >&2; exit 1; }
-          done
-          # One program: nothing else in bin/.
-          [ "$(grep -c "^$name/bin/[^/]" <<< "$listing")" = 1 ] || { echo "$name.tar.gz has more than bin/agentica in bin/" >&2; exit 1; }
-          unpacked="$RUNNER_TEMP/unpacked"
-          rm -rf "$unpacked" && mkdir -p "$unpacked"
-          tar -xzf "dist/$name.tar.gz" -C "$unpacked"
-          agentica="$unpacked/$name/bin/agentica"
-          "$agentica" examples/hello.agc
-          "$agentica" --version
-          if LC_ALL=C readelf -d "$agentica" | grep -qE 'NEEDED.*lib(ssl|crypto|gc)[.]'; then echo "the archive's agentica links OpenSSL or libgc dynamically" >&2; exit 1; fi
-          "$agentica" examples/queue.agc
-          "$agentica" compile examples/hello.agc -o "$unpacked/hello.agcb"
-          "$agentica" run -- "$unpacked/hello.agcb"
-          "$agentica" test tests/bdd/specs/ --steps tests/bdd/handlers.agc
-          diff <("$agentica" --seed 7 tests/fixtures/vm/random.agc) <("$agentica" --seed 7 tests/fixtures/vm/random.agc)
-          rm -rf "$unpacked"
+        run: make release-package
+      - name: Test the extracted package
+        run: make release-smoke
       - uses: actions/upload-artifact@v4
         with:
           name: agentica-linux-x86_64
           path: dist/*.tar.gz
           if-no-files-found: error
 
+  macos:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            platform: macos-x86_64
+          - runner: macos-latest
+            platform: macos-arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      # The link target of the binary: clang reads it from the environment and the linker writes it as `minos`, which
+      # tools/release-check.sh compares. It does not prove that every object or API is safe on macOS 12, and CI does not
+      # run macOS 12.
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+      AGENTICA_OPENSSL: vendored
+      AGENTICA_GC: vendored
+      CCACHE: ''
+      RELEASE_PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: brew install make
+      - run: |
+          cc --version
+          uname -m
+      - name: Build the binary
+        run: |
+          gmake vm-test fixed-point
+          [ "$(dist/agentica --version)" = "${{ needs.version.outputs.version }}" ]
+          # strip removes the linker's signature, and an arm64 binary without one does not start: sign it ad hoc. This
+          # is not a Developer ID signature and not notarization (both need credentials).
+          strip -x dist/agentica
+          codesign --force --sign - dist/agentica
+      - name: Check the Mach-O binary
+        run: gmake release-check
+      - name: Smoke-test
+        run: |
+          ./dist/agentica examples/hello.agc
+          ./dist/agentica --version
+      - name: Package the binary
+        run: gmake release-package
+      - name: Test the extracted package
+        run: gmake release-smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentica-${{ matrix.platform }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  windows:
+    needs: version
+    runs-on: windows-2025
+    env:
+      AGENTICA_OPENSSL: vendored
+      AGENTICA_GC: vendored
+      CCACHE: ''
+      RELEASE_PLATFORM: windows-x86_64
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: msys2/setup-msys2@v2.33.0
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          update: false
+          install: make perl mingw-w64-ucrt-x86_64-gcc
+      - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
+      - name: Build the binary
+        run: |
+          make vm-test fixed-point
+          [ "$(dist/agentica.exe --version)" = "${{ needs.version.outputs.version }}" ]
+          strip dist/agentica.exe
+      - name: Check the PE binary
+        run: make release-check
+      - name: Smoke-test
+        run: |
+          ./dist/agentica.exe examples/hello.agc
+          ./dist/agentica.exe --version
+      - name: Package the binary
+        run: make release-package PYTHON=python
+      - name: Test the extracted package
+        # The smoke test gives the package a PATH of the Windows folders only, so a DLL that exists only in MSYS2 shows.
+        run: make release-smoke PYTHON=python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentica-windows-x86_64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  collect:
+    needs: [version, linux, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agentica-*
+          path: artifacts
+      - name: Check that the four archives are there, once each, and write SHA256SUMS
+        run: python3 -I tools/release.py collect --in artifacts --out release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-sha256sums
+          path: release/SHA256SUMS
+          if-no-files-found: error
+
   publish:
-    if: github.event_name == 'push'
-    needs: build
+    # Only a tag push publishes; `version` has checked that the tag is the VERSION file.
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [version, collect]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Install GitHub CLI
-        run: |
-          command -v gh || { sudo apt-get update && sudo apt-get install -y --no-install-recommends gh; }
-          rm -rf dist
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false  # gh uses GH_TOKEN
       - uses: actions/download-artifact@v4
         with:
           pattern: agentica-*
-          path: dist
-          merge-multiple: true
+          path: artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-sha256sums
+          path: sums
+      - name: Gather the release files
+        run: |
+          python3 -I tools/release.py collect --in artifacts --out release
+          diff sums/SHA256SUMS release/SHA256SUMS
+          (cd release && sha256sum -c SHA256SUMS)
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd dist
-          sha256sum agentica-* > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" ./* --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes "" --draft
+          # A tag with a `-` (0.4.1-beta.1) is a SemVer pre-release.
+          flags=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes "" --draft "${flags[@]}"
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false

@@ -531,7 +531,7 @@ agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_
 bool agc_task_owns(agc_vm *vm, agc_value handle);
 void agc_task_close_done(agc_vm *vm, agc_task *t);
 agc_task *agc_task_group(agc_vm *vm);
-agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, uint32_t span);
+agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value arg, uint32_t span);
 void agc_task_observe(agc_vm *vm, agc_task *t);
 bool agc_report_unobserved(agc_vm *vm);
 bool agc_task_join(agc_vm *vm, agc_task *target);
