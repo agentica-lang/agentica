@@ -445,10 +445,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   before a second thread touches the queue (the threaded C tests call it
   first).
 - **The libuv steps of a job are requests** (`vm/loop.c`): START (the timer and
-  the pool work of `start_job`), EXTEND (`agc_io_extend`, which calls
-  `uv_update_time` itself because the clock of the schedulers does not refresh
-  the loop's cached time), CLOSE_TIMER (in `agc_io_finish`, `end_detached`),
-  RELEASE (a reference given back; a scheduler posts it, so the count reaches
+  the pool work of `start_job`), CLOSE_TIMER (in `agc_io_finish`,
+  `end_detached`), RELEASE (a reference given back; a scheduler posts it, so the count reaches
   zero on the loop's thread), DETACH (`agc_io_detach`: the cancel half and the
   ready list, which only the loop's thread touches), EXPIRE_CANCEL (the cancel
   at a detached job's deadline), WAIT_DONE (`agc_io_ready` from a scheduler)
@@ -564,9 +562,7 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   The `io` trace has no line for these waits; `sched` prints `timer_arm task=N
   in_ms=M` and `timer_fire task=N late_ms=M`. Deadlines of real I/O jobs (a work
   or external job) stay on a libuv timer, started by the START request that the
-  job pays anyway, and `agc_io_extend` stays a request; a lock-free extend
-  (store the new deadline, re-key at the pop) is the step if an HTTP idle timer
-  shows up in a profile.
+  job pays anyway.
 - **A post after the loop closed is loud.** `agc_io_share` marks the loop
   shared for good, so `on_io_thread` keeps comparing thread ids after
   `agc_io_close` clears the inbox; `closed` is set there, and a post from
@@ -585,8 +581,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   `t->parked` before it posts START, so a completion that follows at once
   finds the task.
 - **TLS and HTTP steps run in libuv callbacks.** For example `advance` and
-  `flush` in `vm/tcp.c` and `head_step` in `vm/http_server.c`. TLS runs on the
-  I/O thread with the socket state it touches (§16.2).
+  `flush` in `vm/tcp.c`. TLS runs on the I/O thread with the socket state it
+  touches (§16.2).
 - **Atomic task states, and a different READY.** The states are READY, RUNNING,
   PARKING, PARKED, WOKEN and DONE (`agc_task_state` in `vm/port.h`), in an
   `_Atomic` field. READY means "in the run queue", so a waker CASes PARKED to
@@ -791,10 +787,9 @@ for wake-heavy programs is measured in §16.11 ("Wakes between schedulers").
   (`vm/tcp.c`) calls `uv_accept` on the I/O thread, a TLS child finishes its
   handshake there, and the request hands the child to `accept_done`.
 - **Which port function posts each service request** (§15.2). The job
-  requests are posted by `agc_io_start`, `agc_io_extend` and the finish and
-  detach paths of `vm/loop.c`. The steps of TCP and TLS go through the START's
-  `more` step and `agc_loop_call` (§16.9); those of HTTP, `Process` and
-  `Duplex` have no request yet.
+  requests are posted by `agc_io_start` and the finish and detach paths of
+  `vm/loop.c`. The steps of TCP and TLS go through the START's `more` step and
+  `agc_loop_call` (§16.9); those of `Process` and `Duplex` have no request yet.
 - **stdout and stderr once they park** (row 7.2.1f, decided; built for N = 1).
   The per-stream lock of §10.2.3 cannot be held across a park, so the second
   option is taken: a short lock around each stream's buffer and FIFO, never held

@@ -69,13 +69,15 @@ the tests 10.7.4. Streaming is planned in `docs/future/30-hybrid-http.md`.
 
 - **C (`HttpWire`)** is VM-only and std-only. It keeps the byte-level,
   security-critical and shared parts: the parser and decoder (10.6), the UTF-8
-  check, the error answers before dispatch, response writing with
-  `Content-Length` only, the client's pool and its `SSL_CTX` (one per client,
-  until `TlsContext`, `docs/future/29-tls-context.md`), and the server's slots,
-  task group and `close_server`.
+  check, the bytes of the error answers and of the response head, the client's
+  pool and its `SSL_CTX` (one per client, until `TlsContext`,
+  `docs/future/29-tls-context.md`), and the server's slots, task group and
+  `close_server`. The server's parsing functions hold no state: each takes the
+  bytes read so far and returns a record.
 - **`std/http`** keeps the rest: options, URL parsing, request building, the
-  accept and connection loops, keep-alive, handler dispatch, and the header
-  helpers. A body crosses once, as a `String`.
+  accept and connection loops, the server's reads and writes, keep-alive,
+  handler dispatch, and the header helpers. A body crosses as `String` pieces
+  joined once.
 - **Timeouts.** `get`, `post` and `request` block only the calling task. One
   `timeout_ms` covers the whole call: the wait for a pooled connection, DNS,
   connect, the TLS handshake, the request and the response. 4xx and 5xx are
@@ -188,8 +190,15 @@ HttpWire.close_client(client: HttpClient) -> Void
 #### 10.7.2 As built: the server (20c)
 
 ```text
-HttpWire.read_request(socket: Socket, first_byte_timeout_ms: Int, timeout_ms: Int, max_body_bytes: Int) -> Result[HttpRequest]
-HttpWire.write_response(socket: Socket, request: HttpRequest, response: HttpResponse, timeout_ms: Int) -> Result[Bool]
+HttpWire.chunked(max_body_bytes: Int) -> HttpWire.Chunk
+HttpWire.chunk(state: HttpWire.Chunk, data: List[Int], from: Int) -> Result[HttpWire.Chunk]
+HttpWire.chunk_read(state: HttpWire.Chunk, bytes: Int) -> HttpWire.Chunk
+HttpWire.text(carry: List[Int], data: List[Int], runs: List[Int]) -> HttpWire.Text
+HttpWire.read_head(socket: Socket, rest: List[Int], max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Head]
+HttpWire.read_text(socket: Socket, max_bytes: Int, carry: List[Int], timeout_ms: Int) -> Result[HttpWire.Text]
+HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[HttpWire.Reply]
+HttpWire.error_answer(status: Int) -> String
+HttpWire.close_write(socket: Socket) -> Void
 HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer
 HttpWire.accept(server: HttpServer) -> Result[Socket]
 HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void
@@ -198,25 +207,43 @@ HttpWire.wait(server: HttpServer) -> Result[Void]
 HttpWire.local_port(server: HttpServer) -> Int
 ```
 
-- `vm/http_server.c` (Linux; a stub elsewhere) holds them, on tcp.c's connection
+- `vm/http_wire.c` holds the functions that take bytes or records and return
+  records (`HttpWire.Chunk`, `HttpWire.Text`, `HttpWire.Reply`). These, with
+  `HttpWire.Head`, are std-only record types: only a std module can name them,
+  and they reserve no user name. A `Chunk` holds the decoder's state between
+  reads, and `chunk` checks every field before it decodes. `vm/tcp.c` holds the
+  reads: `read_head` (the head stays in the socket's input until it is whole,
+  is parsed only when a line ends, and only its bytes are taken; a bad head is a
+  `Head` with the answer's `status` and `reason`), `read_text` (up to
+  `max_bytes` straight into text, with the UTF-8 check and the carry of an
+  unfinished character; `valid` is false for bytes that are not UTF-8) and
+  `close_write`. `vm/http_server.c` holds the task group, on tcp.c's connection
   object. Header lists are shared with the client in `vm/http_fields.c`.
-- `read_request` waits up to `first_byte_timeout_ms` for the first byte. A raw
-  byte on the socket counts, so a TLS handshake does too. Then the timeout is
-  `timeout_ms`, which bounds the rest of the request. The checks run in this
-  order: the parse errors of 10.6; an `Upgrade` header (501); an `Expect` other
-  than `100-continue` (417); a `Content-Length` over `max_body_bytes` (413);
-  `100 Continue` if `Expect` asked and the body is still to come; the body and
-  its UTF-8 check (400). Every error answer is written by C as
-  `HTTP/1.1 CODE REASON` with `Content-Length: 0` and `Connection: close`. The
-  write side is then shut, and input is read and dropped until the peer closes
-  or the deadline, so unread request bytes cannot turn the close into a reset
-  that loses the answer. The call returns `error("http: <reason>")`. EOF before
-  the first byte is `network: end of input`. EOF mid-request is
+- `std/http` reads a request: it waits up to `request_timeout_ms` (the first
+  request) or `idle_timeout_ms` (later ones) for the first byte. On TLS that
+  wait covers the handshake too. Then `request_timeout_ms`
+  bounds the rest of the request. The checks run in this order: the parse
+  errors of 10.6; an `Upgrade` header (501); an `Expect` other than
+  `100-continue` (417); a `Content-Length` over `max_body_bytes` (413);
+  `100 Continue` if `Expect` asked and no body byte is buffered; then the body,
+  whose bytes are checked as UTF-8 as they arrive, so bytes that can never be
+  UTF-8 get 400 at once, before a later framing error or the end of input. The
+  head goes through `read_head`, chunk framing through `chunk` on 512-byte
+  reads, and body data through `read_text`.
+  Every error answer is `error_answer`: `HTTP/1.1 CODE REASON` with
+  `Content-Length: 0` and `Connection: close`. It is sent within the request
+  deadline, or within 100 ms when that has passed. The write side is then shut
+  (`close_write`), and input is read and dropped until the peer closes or the
+  deadline, so unread request bytes cannot turn the close into a reset that
+  loses the answer. The read returns `error("http: <reason>")`. EOF before the
+  first byte is `network: end of input`. EOF mid-request is
   `http: connection closed before the request was complete`. The deadline
-  returns `network: operation timed out` with no answer. Once a request is
-  complete, the socket stops reading until the next `read_request`, so pipelined
-  bytes cannot grow the buffer.
-- `write_response` builds the whole response before it writes. The status must
+  returns `network: operation timed out` with no answer. TCP reads only while
+  a reader waits, so pipelined bytes cannot grow the buffer past one read.
+  Bytes past one request stay in the socket's input for the next, except the
+  bytes a chunked body's last read took, which `read_head` puts back.
+- The response head is `encode_response`, built before anything is written,
+  with whether the connection closes after it. The status must
   be 200 to 599. A handler's `Content-Length` or `Transfer-Encoding` is refused
   (`Content-Length and Transfer-Encoding are set by the server`), and a 204 or
   304 gets no body. A `Date` header is added unless the handler set one, and the
@@ -224,8 +251,9 @@ HttpWire.local_port(server: HttpServer) -> Int
   response closes the connection, and the handler's `Connection` headers are
   replaced by one `Connection: close`. A bad response is
   `error("http: invalid response: <reason>")`, with nothing written. Otherwise
-  it returns `ok(true)` while the connection stays open, and `ok(false)` after a
-  closing response, which gets the same lingering close as the error answers.
+  the write returns `ok(true)` while the connection stays open, and `ok(false)`
+  after a closing response, which gets the same lingering close as the error
+  answers.
 - `server` takes the listener off its owner's list: the server owns it, so only
   the server's close closes it, ending the server's owner closes both, and
   handing the server to another task with `Task.spawn_owning` moves both. It
@@ -257,12 +285,11 @@ HttpWire.local_port(server: HttpServer) -> Int
   client sees
   the close with no response (Crashes, 10.2.1).
 - `std/http` runs the accept loop in the group. For each socket it spawns the
-  connection loop: `read_request` (the first request waits `request_timeout_ms`
-  for its first byte, later ones `idle_timeout_ms`), the handler with no time
-  limit, then `write_response` with a fresh `request_timeout_ms`. A handler
-  `error`, or a response that `write_response` refuses, gives a 500 with
+  connection loop: read a request, run the handler with no time limit, then
+  write the response with a fresh `request_timeout_ms`. A handler `error`, or
+  a response that `encode_response` refuses, gives a 500 with
   `Connection: close` and one `IO.warn` line (`http: handler error: ...` or
-  `http: invalid response: ...`). The loop ends when `write_response` returns
+  `http: invalid response: ...`). The loop ends when the write returns
   anything but `ok(true)`.
 - The connections are tcp.c sockets, so they get `close_notify` at the end of
   the run (10.3).

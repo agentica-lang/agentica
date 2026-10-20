@@ -36,7 +36,7 @@ typedef struct {
 } finishing;
 
 static int dropped, finished_calls, dropped_without_work, more_calls, idle_drops, swift_done_calls;
-static agc_io_job *waiting_job, *last_job;
+static agc_io_job *waiting_job;
 static agc_vm vm;
 
 static void gate_work(void *data) {
@@ -156,7 +156,7 @@ static void park(agc_task *task) {
 static agc_task *park_on(gate *g, int64_t timeout_ms) {
   agc_task *task = vm.task;
   running();
-  last_job = agc_io_start(&vm, &gate_io, g, agc_int(100), timeout_ms);
+  agc_io_start(&vm, &gate_io, g, agc_int(100), timeout_ms);
   park(task);
   return task;
 }
@@ -178,19 +178,6 @@ static void settle_loop(void) { agc_test_settle_loop(&vm); }
 static void pump_until_idle(void) { agc_test_pump_until_idle(&vm); }
 
 static uint64_t armed_timers(void) { return agc_test_armed_timers(&vm); }
-
-static void longest_due(uv_handle_t *handle, void *arg) {
-  if (handle->type != UV_TIMER || !uv_is_active(handle)) return;
-  uint64_t due = uv_timer_get_due_in((uv_timer_t *)handle);
-  if (due > *(uint64_t *)arg) *(uint64_t *)arg = due;
-}
-
-/* The longest time to go of an armed job timer, in milliseconds. */
-static uint64_t latest_due(void) {
-  uint64_t due = 0;
-  uv_walk(agc_io_uv(&vm), longest_due, &due);
-  return due;
-}
 
 /* The timer wins while the work is still blocked: the task takes the timeout and the job stays, because the work is
    still using its data. The work then ends: its end changes nothing, and the data is dropped once, after it finished. */
@@ -223,16 +210,13 @@ static void test_completion_before_timer(void) {
   finished_calls = 0;
 }
 
-/* A cancel sets the outcome to CANCELLED: a request to move the timer is refused afterwards (the timer keeps its
-   minute), a completion that comes later does not wake the task, and the detached ending takes the result and frees
-   the job. */
+/* A cancel sets the outcome to CANCELLED: a completion that comes later does not wake the task, and the detached
+   ending takes the result and frees the job. */
 static void test_cancel_before_completion(void) {
   gate *g = new_gate();
   agc_task *task = park_on(g, 60000);
   uv_sem_wait(&g->entered);
   agc_io_detach(&vm, task);
-  agc_io_extend(last_job, 1);
-  assert(latest_due() > 30000);
   uv_sem_post(&g->go);
   while (finished_calls == 0) assert(agc_io_poll(&vm, true));
   assert(task->state == AGC_TASK_PARKED && !task->parked);
@@ -242,13 +226,13 @@ static void test_cancel_before_completion(void) {
   task->state = AGC_TASK_RUNNING;
 }
 
-static void extend_later(void *arg) {
-  agc_io_extend(arg, 1);
+static void ready_later(void *arg) {
+  agc_io_ready(arg);
 }
 
-/* Another thread asks to move the timer of a job that waits for a minute. The loop belongs to this thread once the
-   inbox exists, so the request goes through the inbox, wakes the loop, and the timer then fires within the test's
-   deadline. Without the request the job would wait a minute. */
+/* Another thread ends the wait of a job that waits for a minute. The loop belongs to this thread once the inbox
+   exists, so the request goes through the inbox, wakes the loop, and the job ends within the test's deadline.
+   Without the request the job would wait a minute. */
 static void test_request_from_another_thread(void) {
   assert(agc_io_share(&vm, false));
   agc_task *task = vm.task;
@@ -256,10 +240,10 @@ static void test_request_from_another_thread(void) {
   agc_io_job *job = agc_io_start(&vm, &nap_io, NULL, agc_void(), 60000);
   park(task);
   uv_thread_t thread;
-  assert(uv_thread_create(&thread, extend_later, job) == 0);
+  assert(uv_thread_create(&thread, ready_later, job) == 0);
   wait_woken(task);
   assert(uv_thread_join(&thread) == 0);
-  assert(take(task) == -1);
+  assert(take(task) == 1);
   settle_loop();
 }
 
@@ -839,8 +823,11 @@ static void test_timer_only_kind_is_refused(void) {
 }
 
 #ifndef _WIN32
-static void extend_after_close(void *arg) {
-  agc_io_extend(arg, 5);
+static void nothing(void *data) { (void)data; }
+
+static void call_after_close(void *arg) {
+  (void)arg;
+  agc_io_call(&vm, nothing, NULL);
 }
 
 /* Child process: closes the inbox while a job is still held by its pool work, then a second thread posts to it. */
@@ -856,7 +843,7 @@ static void post_after_close_child(void) {
   vm.task->parking = false;
   uv_sem_wait(&g->entered);
   assert(!agc_io_close(&vm));
-  on_thread(extend_after_close, job);
+  on_thread(call_after_close, job);
 }
 
 /* A post from another thread after agc_inbox_close has no consumer: it must end the process loudly (SIGABRT), not run

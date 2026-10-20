@@ -51,7 +51,7 @@ typedef struct agc_io_job job;
    detached (EXPIRE_CANCEL), end the wait of a job whose result the scheduler found itself (WAIT_DONE), and run a call
    that has no job (CALL, agc_io_call). Cancel halves and waits run there because they stop pollers and streams. */
 typedef enum {
-  REQ_START, REQ_EXTEND, REQ_CLOSE_TIMER, REQ_RELEASE, REQ_DETACH, REQ_EXPIRE_CANCEL, REQ_WAIT_DONE, REQ_CALL
+  REQ_START, REQ_CLOSE_TIMER, REQ_RELEASE, REQ_DETACH, REQ_EXPIRE_CANCEL, REQ_WAIT_DONE, REQ_CALL
 } request_kind;
 
 /* What the trace line of a finished job needs, copied before the owner's reference goes: the job may be freed by the
@@ -469,14 +469,6 @@ static void start_pieces(job *j, int64_t timeout_ms) {
   }
 }
 
-/* The timer counts from the loop's cached time, and nothing else refreshes it now that the schedulers' clock
-   (agc_clock_ms) does not. */
-static void extend_timer(job *j, int64_t timeout_ms) {
-  if (!j->timer_live || atomic_load(&j->timer_fired) || agc_job_outcome_of(&j->outcome) != AGC_JOB_PENDING) return;
-  uv_update_time(&j->loop->uv);
-  uv_timer_start(&j->timer, timer_fired, (uint64_t)timeout_ms, 0);
-}
-
 /* Only a loop wait can be cancelled: a pool job's work runs to its end
    (docs/vm/14-core-invariants.md, 14.3). */
 static bool cancellable(const job *j) { return j->kind->cancel && (!j->kind->work || atomic_load(&j->on_loop)); }
@@ -509,9 +501,6 @@ static void handle_request(const agc_request *req) {
   switch ((request_kind)req->kind) {
   case REQ_START:
     start_pieces(j, req->arg);
-    break;
-  case REQ_EXTEND:
-    extend_timer(j, req->arg);
     break;
   case REQ_CLOSE_TIMER:
     close_timer(j);
@@ -1380,8 +1369,6 @@ void agc_io_ready(agc_io_job *j) {
   end_wait(j, AGC_JOB_DONE);
 }
 
-void agc_io_extend(agc_io_job *j, int64_t timeout_ms) { post(j, REQ_EXTEND, timeout_ms); }
-
 bool agc_io_poll(agc_vm *vm, bool wait) {
   if (!vm->rt->loop) return false;
   if (vm->rt->loop->inbox) (void)agc_inbox_run(vm->rt->loop->inbox);
@@ -1822,11 +1809,6 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 }
 
 void agc_io_ready(agc_io_job *j) { (void)j; }
-
-void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
-  (void)j;
-  (void)timeout_ms;
-}
 
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags) {
   (void)kind;

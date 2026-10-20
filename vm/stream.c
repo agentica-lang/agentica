@@ -155,6 +155,29 @@ uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want) {
   return b->data + b->end;
 }
 
+/* Puts LEN bytes back in front of the pending input: bytes a reader took past
+   what it used (std/http's chunked framing reads), so the next read sees them
+   first. False when memory runs out. */
+bool agc_inbuf_unread(agc_inbuf *b, const uint8_t *data, size_t len) {
+  if (!len) return true;
+  if (b->start < len) {
+    size_t used = agc_inbuf_pending(b), need = agc_size_add(len, used);
+    if (b->cap < need) {
+      uint8_t *bigger = realloc(b->data, need);
+      if (!bigger) return false;
+      b->data = bigger;
+      b->cap = need;
+    }
+    if (used) memmove(b->data + len, b->data + b->start, used);
+    b->start = len;
+    b->end = len + used;
+  }
+  b->start -= len;
+  memcpy(b->data + b->start, data, len);
+  b->scanned = 0;
+  return true;
+}
+
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof) {
   if (n > 0)
     b->end += (size_t)n;

@@ -29,15 +29,12 @@ bool agc_conn_clean_eof(const agc_conn *c);
 void agc_conn_hold(agc_conn *c, bool hold);
 agc_inbuf *agc_conn_input(agc_conn *c);
 void agc_conn_read(agc_conn *c);
-void agc_conn_pause(agc_conn *c);
 void agc_conn_goodbye(agc_conn *c);
 void agc_conn_shut(agc_conn *c, const char *why);
 void agc_conn_half_close(agc_conn *c);
 void agc_conn_release(agc_conn *c);
 void agc_conn_retain(agc_conn *c);
-void agc_conn_unobserve(agc_conn *c, const void *watcher);
 bool agc_conn_closed(const agc_conn *c);
-uint64_t agc_conn_heard(const agc_conn *c);
 agc_conn *agc_conn_accept(agc_conn *l);
 /* On a scheduler: the socket value of a connection that agc_conn_accept made and that no step has used yet; the
    resource takes the count that agc_conn_accept took. */

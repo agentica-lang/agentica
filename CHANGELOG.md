@@ -53,6 +53,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The HTTP server checks a request body as UTF-8 as its bytes arrive: bytes
+  that can never be UTF-8 get a 400 at once, before a later chunked framing
+  error (which got its own 400 or 413) or the end of input (which got no
+  answer).
+
+- On HTTPS, the HTTP server's wait for a request's first byte
+  (`request_timeout_ms`, later `idle_timeout_ms`) covers the whole TLS
+  handshake, and the request deadline starts at the first decrypted byte. The
+  first raw byte of the handshake used to start the request deadline.
+
 - A plain `TCP.accept` whose task is cancelled after a connection arrived
   closes that connection (the peer reads end of input) instead of leaving it
   for the next accept, as TLS accepts already did.

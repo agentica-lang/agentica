@@ -14,7 +14,7 @@ import Base from "parse_base"
 import Resolve from "resolve_import"
 import Source from "source"
 import Suggest from "suggest"
-import {BARE_NAMES, ENUMS, RESERVED, STD_ONLY} from "builtins"
+import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "builtins"
 
 ## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of
 ## the user structs the file may update (StructUpdate.visible), and ids, the number of node ids of the program (the
@@ -142,7 +142,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return imported(cx, alias, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, span))
-  elsif function_wanted?(want)
+  elsif function_wanted?(want) or std_record?(alias, member, want)
     return ok("#{alias}.#{member}")
   end
   return error(
@@ -153,6 +153,15 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
       Failure.hint(alias_help(alias, hint)),
     ),
   )
+end
+
+# A builtin record of a std-only module, such as HttpWire.Head: a type that only std/ can name, so it reserves no name
+# in user programs.
+def std_record?(alias: String, member: String, want: Want) -> Bool
+  case want
+    Want.Type -> return STD_ONLY.has_key?(alias) and RECORDS.has_key?("#{alias}.#{member}")
+    _ -> return false
+  end
 end
 
 def function_wanted?(want: Want) -> Bool
