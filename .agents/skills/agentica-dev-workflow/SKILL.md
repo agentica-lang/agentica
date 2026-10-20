@@ -62,6 +62,8 @@ loop.
   file named after the branch (`pr-body-<branch>.md`), never a generic name,
   and pass the PR number to every `gh pr edit` and `gh pr view`. Repeat both
   rules in agent prompts.
+- Stop a hung process by its exact PID (from `$!` or the test's own output).
+  `pgrep -f` and `pkill -f` match the caller's shell and other agents' runs.
 - Commits: a summary line, then short bullets; no attribution lines. Never
   rebase or force-push; merge `origin/master` into the branch.
 - `AGENTS.md` forbids new files under `docs/`, so plans are not written
