@@ -9,8 +9,24 @@
 
 import SourceFile from "../syntax/source_file"
 
+## What a folder holds under one name, without following links: a regular file, a folder, a symbolic link, or
+## anything else (a pipe, a socket, a device).
+export enum EntryKind
+  File
+  Directory
+  Link
+  Other
+end
+
+## One name in a folder and what it is. The package hash (packages/package_hash.agc) lists folders with this.
+export struct Entry
+  name: String
+  kind: EntryKind
+end
+
 ## What the core asks of the machine. Each function takes a path as the front end got it and never raises: a failure
-## is data (`Read.Unreadable`, a `Result` error, `false`).
+## is data (`Read.Unreadable`, a `Result` error, `false`). `list_folder` gives the entries of a folder in no
+## particular order, and `read_bytes` the whole content of a file, for the hash of a package.
 export struct Workspace
   read_text: Fn[String, SourceFile.Read]
   file_exists: Fn[String, Bool]
@@ -18,4 +34,6 @@ export struct Workspace
   real_path: Fn[String, Result[String]]
   resolve_path: Fn[String, Result[String]]
   std_source: Fn[String, Result[String]]
+  list_folder: Fn[String, Result[List[Entry]]]
+  read_bytes: Fn[String, Result[List[Int]]]
 end

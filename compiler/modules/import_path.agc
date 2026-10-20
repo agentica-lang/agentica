@@ -14,11 +14,6 @@ export def last_part(text: String) -> String
   return parts[parts.size - 1]
 end
 
-## The text before the first "/" of a path.
-export def first_part(text: String) -> String
-  return text.split("/")[0]
-end
-
 ## The folder of a file path: everything before the last "/" (empty for a name alone, "/" for a file in the root
 ## folder).
 export def directory_of(path: String) -> String
@@ -53,11 +48,6 @@ export def rooted?(path: String) -> Bool
   separator = path.at(2)
   letter = drive >= 65 and drive <= 90 or drive >= 97 and drive <= 122
   return letter and path.at(1) == ":" and (separator == "/" or separator == "\\")
-end
-
-## Whether the front end runs on Windows, whose canonical paths use "/" but whose roots may be typed with "\".
-export def windows?() -> Bool
-  return System.os() == "windows"
 end
 
 ## A root that does not depend on the working directory. Elsewhere it starts with "/". On Windows it is a drive path

@@ -1,14 +1,17 @@
-## What the front end reads from outside the program it compiles: the environment variables that place pkg/ libraries,
-## where the std/ sources are, the Agentica version the .agcb header names, the path of the running binary, and the
-## Workspace (workspace.agc) that reads files. Nothing here reads the machine: io/host.agc does and passes it in.
+## What the front end reads from outside the program it compiles: the environment variables that place pkg/ libraries
+## and the package cache, where the std/ sources are, the Agentica version the .agcb header names, the path of the
+## running binary, and the Workspace (workspace.agc) that reads files. Nothing here reads the machine: io/host.agc does
+## and passes it in.
 
 import Workspace from "workspace"
 
-## The environment variables the pkg/ search reads, and whether the host is Windows. An unset variable is "".
-## `local_app_data` is the user data folder of Windows, where XDG_DATA_HOME and HOME are not read.
+## The environment variables the pkg/ search and the package cache read, and whether the host is Windows. An unset
+## variable is "". `local_app_data` is the user data folder of Windows, where XDG_DATA_HOME, XDG_CACHE_HOME and HOME
+## are not read.
 export struct Env
   agentica_path: String
   xdg_data_home: String
+  xdg_cache_home: String
   home: String
   local_app_data: String
   windows: Bool

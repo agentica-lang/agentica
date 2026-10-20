@@ -1,5 +1,0 @@
-name = "me/app"
-version = "0.1.0"
-
-[dependencies]
-"owner/repo" = "1.2.0"
