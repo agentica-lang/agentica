@@ -6,6 +6,8 @@
 ## starts again), the words the user typed and `hand_off`, the function that runs a compiled program and gives back its
 ## exit status (front_end_cli.agc hands the bytes to C).
 ##
+## `agentica check --stdin FILE` checks the text on standard input as if FILE held it (io/stdin_buffer.agc).
+##
 ## `agentica run [OPTIONS] -- FILE.agcb [ARGS...]`, which runs a compiled program, is not here: C answers it before it
 ## starts this front end.
 ##
@@ -22,6 +24,7 @@ import CheckText from "../check/check_text"
 import Options from "cli_options"
 import Launch from "cli_launch"
 import Help from "cli_help"
+import StdinBuffer from "../io/stdin_buffer"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 import Ai from "../diagnostics/diagnostic_ai"
@@ -40,11 +43,14 @@ import SourceReader from "../io/source_reader"
 SAVE_TIMEOUT = 60000
 
 # What one run is given besides the words of the user: the options read in front of them, the settings and the
-# hand-off.
+# hand-off. `buffer_file` is the file whose text came from standard input ("" for none), and `buffer_shown` that text
+# for the lines of a message.
 struct Session
   options: Options.Options
   settings: Env.Settings
   hand_off: Fn[Launch.Launch, Int]
+  buffer_file: String
+  buffer_shown: String
 end
 
 ## Runs the command line `args` (the words after the program name) and gives the exit status. Everything it writes goes
@@ -53,7 +59,9 @@ export def run(settings: Env.Settings, args: List[String], hand_off: Fn[Launch.L
   case Options.parse(args, settings.version)
     Options.Parsed.Answer(reply) -> return emit(reply)
     Options.Parsed.Ready(options) ->
-      return dispatch(Session(options: options, settings: settings, hand_off: hand_off))
+      return dispatch(
+        Session(options: options, settings: settings, hand_off: hand_off, buffer_file: "", buffer_shown: ""),
+      )
   end
 end
 
@@ -75,7 +83,14 @@ def dispatch(session: Session) -> Int
   if first == "check" or first == "compile"
     rest = words.drop(1)
   end
+  if first == "check" and rest.size > 0 and rest[0] == "--stdin"
+    return check_stdin(session, rest.drop(1))
+  end
   usable = rest.size >= 1
+  if first == "check"
+    # `check FILE --stdin` would check the disk while the caller means the buffer.
+    usable = usable and !rest.drop(1).any? do |word: String| word == "--stdin" end
+  end
   if first == "compile"
     usable = rest.size == 3 and rest[1] == "-o" and !session.options.dump and !session.options.dump_ir
   end
@@ -85,10 +100,31 @@ def dispatch(session: Session) -> Int
   return program(session, first, rest)
 end
 
+# `check --stdin FILE`: the text of FILE is the standard input. FILE need not exist, but its folder does: imports and
+# agentica.toml resolve from there. Anything but one file name is a usage error, before the input is read.
+def check_stdin(session: Session, files: List[String]) -> Int
+  if files.size != 1 or files[0] == ""
+    return emit(Reply.failed(2, Texts.usage_text()))
+  end
+  case StdinBuffer.take()
+    StdinBuffer.Taken.Failed(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
+    StdinBuffer.Taken.Got(buffer) ->
+      workspace = StdinBuffer.over(session.settings.workspace, files[0], buffer)
+      buffered = Session(
+        options: session.options,
+        settings: session.settings.with(workspace: workspace),
+        hand_off: session.hand_off,
+        buffer_file: files[0],
+        buffer_shown: buffer.shown,
+      )
+      return program(buffered, "check", files)
+  end
+end
+
 # A source file: read, link, check, and then do what the command and the options say.
 def program(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
-  case Pipeline.read_root(source)
+  case Pipeline.read_root(session.settings.workspace, source)
     Pipeline.Root.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
     Pipeline.Root.Invalid(problem) -> return reject(session, problem, source)
     Pipeline.Root.Readable -> return linked(session, verb, rest)
@@ -181,7 +217,7 @@ end
 # path.
 def reject(session: Session, problem: Problems.Problem, source: String) -> Int
   style = session.options.style
-  root = is_root?(problem.file, source)
+  root = is_root?(problem.file, source, session.settings)
   shown = problem
   if root
     shown = problem.with(file: source)
@@ -191,7 +227,7 @@ def reject(session: Session, problem: Problems.Problem, source: String) -> Int
   else
     text = ""
     if Problems.at_source?(problem)
-      text = source_text(problem.file, root, session.settings)
+      text = source_text(session, problem.file, root)
     end
     if style == "ai"
       IO.warn(Ai.ai(shown, text))
@@ -202,19 +238,23 @@ def reject(session: Session, problem: Problems.Problem, source: String) -> Int
   return 1
 end
 
-def is_root?(named: String, typed: String) -> Bool
+# The workspace answers for the canonical path of the root, which is not a file of the disk when it is a buffer.
+def is_root?(named: String, typed: String, settings: Env.Settings) -> Bool
   if named == typed
     return true
   end
-  real = Path.real(typed)
+  real = settings.workspace.real_path.call(typed)
   return real.ok? and real.unwrap! == named
 end
 
 # The text that the lines of a message come from. A std/ module is not a file of the working folder: it goes straight
 # to the provider of the settings (the stdlib/ folder or the binary), even when the folder has a std/ of its own. A
-# file with bytes that are not UTF-8 shows them as U+FFFD.
-def source_text(file: String, root: Bool, settings: Env.Settings) -> String
-  if !root and file.starts_with?("std/")
+# file with bytes that are not UTF-8 shows them as U+FFFD. The root file of `check --stdin` is the text of the input.
+def source_text(session: Session, file: String, root: Bool) -> String
+  settings = session.settings
+  if root and session.buffer_file != ""
+    return session.buffer_shown
+  elsif !root and file.starts_with?("std/")
     return text_of(Resolve.read_source(settings, file))
   end
   return text_of(SourceReader.read_shown(file))

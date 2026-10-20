@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica check --stdin FILE` checks the text on standard input as if `FILE`
+  held it.
+
 ## [0.5.0] - 2026-10-21
 
 ### Added
