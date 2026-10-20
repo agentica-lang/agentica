@@ -1,12 +1,14 @@
 /*
  * The TLS adapter with two sessions in memory: handshakes in tiny slices, a
- * 100,000-byte transfer, close_notify, raw EOF and every verify error.
+ * 100,000-byte transfer, close_notify, raw EOF, every verify error and the
+ * trust sources. No sockets, so it runs on every system.
  */
 #include "../tls.h"
 
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define CERTS "tests/fixtures/tls/"
@@ -17,7 +19,14 @@ typedef struct {
   agc_tls_failure client_failure, server_failure;
 } pair;
 
-#if defined(__linux__) || defined(__APPLE__)
+static void set_cert_file(const char *value) {
+#ifdef _WIN32
+  assert(_putenv_s("SSL_CERT_FILE", value ? value : "") == 0);
+#else
+  assert(value ? setenv("SSL_CERT_FILE", value, 1) == 0 : unsetenv("SSL_CERT_FILE") == 0);
+#endif
+}
+
 static void pass(agc_tls *from, agc_tls *to, size_t step) {
   const uint8_t *data;
   size_t len;
@@ -178,6 +187,22 @@ static void test_config_errors(void) {
   agc_tls_config_free(system);
 }
 
+/* An empty ca_file means system trust: the platform store does not know the test CA, SSL_CERT_FILE replaces that
+ * store, and a non-empty ca_file still wins over SSL_CERT_FILE. */
+static void test_trust_sources(void) {
+  set_cert_file(NULL);
+  expect_client_error("", "localhost", CERTS "server.pem", CERTS "server-key.pem", AGC_TLS_ERR_VERIFY_UNTRUSTED);
+  set_cert_file(CERTS "ca.pem");
+  pair p = connect_pair("", "localhost", CERTS "server.pem", CERTS "server-key.pem", 4096);
+  assert(p.client_status == AGC_TLS_OK && p.server_status == AGC_TLS_OK);
+  free_pair(&p);
+  expect_client_error(CERTS "self-signed.pem", "localhost", CERTS "server.pem", CERTS "server-key.pem",
+                      AGC_TLS_ERR_VERIFY_UNTRUSTED);
+  agc_tls_failure f;
+  expect_config(agc_tls_client_config(CERTS "missing.pem", &f), &f, AGC_TLS_ERR_BAD_CA, ENOENT);
+  set_cert_file(NULL);
+}
+
 static void test_names(void) {
   assert(strcmp(agc_tls_error_name(AGC_TLS_ERR_NONE), "none") == 0);
   assert(strcmp(agc_tls_error_name(AGC_TLS_ERR_INTERNAL), "internal") == 0);
@@ -195,12 +220,7 @@ int main(void) {
   test_verify_errors();
   test_eof_in_handshake();
   test_garbage();
+  test_trust_sources();
   puts("tls tests passed");
   return 0;
 }
-#else
-int main(void) {
-  puts("tls skipped");
-  return 0;
-}
-#endif

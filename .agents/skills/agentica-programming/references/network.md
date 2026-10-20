@@ -32,7 +32,8 @@ without it, are skipped. Ports are 1..65535 for connect and 0..65535 for
 listen. A host containing NUL is an error. TLS listeners and sockets use the
 same TCP operations. TLS verifies certificates and hostnames with TLS 1.2 or
 later; there is no way to turn verification off. An empty CA path uses
-system trust (`SSL_CERT_FILE`, else the system CA bundle, plus
+system trust (`SSL_CERT_FILE`, else the system store: the CA bundle on
+Linux, the Keychain trust settings on macOS, the ROOT store on Windows; plus
 `SSL_CERT_DIR`); a nonempty path is a PEM CA file that replaces system
 trust, and a missing or empty file makes the connect fail. An IP address
 host is checked against the certificate's IP addresses. The server takes a

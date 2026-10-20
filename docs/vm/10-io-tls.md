@@ -26,14 +26,31 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
   every context. Renegotiation is off.
 - **Trust (security rule).** A non-empty `ca_file` replaces system trust. A
   missing or empty file fails the connect with `BAD_CA`. With an empty
-  `ca_file`, the trust is `SSL_CERT_FILE` when set, else the first readable file
-  of the usual system bundles (`/etc/ssl/certs/ca-certificates.crt`,
-  `/etc/pki/tls/certs/ca-bundle.crt`, `/etc/ssl/ca-bundle.pem`,
-  `/etc/pki/tls/cacert.pem`,
-  `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`, `/etc/ssl/cert.pem`). The
-  directory is `SSL_CERT_DIR` when set, else none. A source that fails to load
-  is skipped; verification still fails closed. Windows and macOS system stores
-  wait for those ports.
+  `ca_file`, the trust is `SSL_CERT_FILE` when set, else the system store of
+  the platform (`vm/tls_trust.h`, one adapter per system, which copies roots
+  into the OpenSSL store). The directory is `SSL_CERT_DIR` when set, else none.
+  A source that fails to load is skipped; verification still fails closed.
+  - Linux and other POSIX (`tls_trust_posix.c`): the first readable file of
+    `/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/tls/certs/ca-bundle.crt`,
+    `/etc/ssl/ca-bundle.pem`, `/etc/pki/tls/cacert.pem`,
+    `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`, `/etc/ssl/cert.pem`.
+  - macOS (`tls_trust_darwin.c`, Security framework): the system anchors
+    (`SecTrustCopyAnchorCertificates`), changed by the admin and user trust
+    settings (`SecTrustSettingsCopyCertificates`,
+    `SecTrustSettingsCopyTrustSettings`). A setting counts when its policy is
+    absent or TLS (`kSecPolicyAppleSSL`); an empty settings array or a
+    `TrustRoot`/`TrustAsRoot` result adds a root, a `Deny` removes one, and a
+    grant limited to an application, a host name or a key use is ignored. The
+    user domain overrides the admin domain, which overrides the system. No
+    Linux path is read.
+  - Windows (`tls_trust_windows.c`, Crypt32): the current user's `ROOT` system
+    store (`CertOpenSystemStoreW`, which also shows the machine's roots), each
+    certificate whose valid uses (`CertGetEnhancedKeyUsage`) include server
+    authentication. A root that Windows would download on demand (automatic
+    root update) is not in the store until Windows fetched it; `SSL_CERT_FILE`
+    or `ca_file` covers that case.
+  - The loader runs in the setup pool job with the CA file, never on the
+    scheduler or I/O thread.
 - **Verification (security rule).** The client always verifies the peer. There
   is no verify-none path. An IP-literal host is checked against IP SANs and
   sends no SNI. Any other host gets SNI and hostname verification, with no
@@ -72,13 +89,17 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
   by size (10.2.1). `TLS.connect` and `TLS.listen` charge nothing. Under
   `no_files` both end the run with `RUNTIME-INTERNAL`.
 - **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against each
-  other, covering the handshake, `close_notify`, raw EOF, every verify error and
-  the load errors. The goldens `tls-echo` and `tls-errors` are their own peers.
-  `tests/test_vm_tls.py` covers the rest against Node
+  other, covering the handshake, `close_notify`, raw EOF, every verify error,
+  the load errors and the trust sources (system store, `SSL_CERT_FILE`, and
+  `ca_file` over both). It needs no socket, so it runs on Linux, macOS and
+  Windows; `vm/tests/tls_trust_test.c` checks that the system store loads roots
+  (required on macOS and Windows). The goldens `tls-echo` and `tls-errors` are
+  their own peers. `tests/test_vm_tls.py` covers the rest against Node
   (`tests/fixtures/tls-peer.js`) and Python (`tests/fixtures/tls-peer.py`): EOF
   with and without `close_notify`, the 1 MiB limit, every verify error on both
   sides, timeouts, and system trust through `SSL_CERT_FILE`. The certificates in
   `tests/fixtures/tls/` come from `make-certs.sh`.
+
 
 ### 10.3.1 TCP (as built)
 

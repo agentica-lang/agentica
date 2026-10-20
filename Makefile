@@ -284,7 +284,7 @@ PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -302,6 +302,8 @@ VM_LIBS :=
 else ifeq ($(shell uname -s),Darwin)
 VM_PIE :=
 VM_HARDEN_LDFLAGS :=
+# The system trust store (vm/tls_trust_darwin.c).
+VM_LIBS += -framework Security -framework CoreFoundation
 endif
 UV_NAMES :=
 AGENTICA_GC_DEFAULT := vendored
@@ -311,6 +313,8 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   win/loop-watcher win/pipe win/thread win/poll win/process win/process-stdio win/signal win/snprintf win/stream \
   win/tcp win/tty win/udp win/util win/winapi win/winsock
 VM_LIBS += -lpsapi -luser32 -ladvapi32 -liphlpapi -luserenv -lws2_32 -ldbghelp -lole32 -lshell32 -lsynchronization -lntdll
+# Crypt32: the system trust store (vm/tls_trust_windows.c); with GDI32, what a static libcrypto needs on MinGW.
+VM_LIBS += -lcrypt32 -lgdi32
 else ifeq ($(shell uname -s),Linux)
 AGENTICA_GC_DEFAULT := system
 UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
@@ -876,16 +880,32 @@ vm-sanitize-build: dist/agentica$(EXE)
 vm-sanitize-test: vm-sanitize-build
 	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS)
 
-# Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's
+# The shared libraries a binary loads, one per line, for vendored-check: ELF NEEDED entries, Mach-O load commands, or
+# PE imports.
+OBJDUMP ?= objdump
+ifeq ($(VM_OS),Windows_NT)
+VM_DYNAMIC_DEPS = $(OBJDUMP) -p $(1) | sed -n 's/.*DLL Name: *//p'
+else ifeq ($(shell uname -s),Darwin)
+VM_DYNAMIC_DEPS = otool -L $(1) | sed 1d
+else
+VM_DYNAMIC_DEPS = readelf -d $(1) | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p'
+endif
+VENDORED_BIN := build/vm/release/agentica$(EXE)
+
+# Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's.
+# On Windows it also checks that the binary does not need the MSYS2 runtime (msys-2.0.dll).
 vendored-check:
-	$(MAKE) -j$(JOBS) build/vm/release/agentica AGENTICA_OPENSSL=vendored AGENTICA_GC=vendored
-	@if readelf -d build/vm/release/agentica | grep -qE 'NEEDED.*lib(ssl|crypto|gc)[.]'; then echo "the vendored binary links OpenSSL or libgc dynamically" >&2; exit 1; fi
+	$(MAKE) -j$(JOBS) $(VENDORED_BIN) AGENTICA_OPENSSL=vendored AGENTICA_GC=vendored
+	@deps=$$($(call VM_DYNAMIC_DEPS,$(VENDORED_BIN))); \
+	  test -n "$$deps" || { echo "cannot list the shared libraries of $(VENDORED_BIN)" >&2; exit 1; }; \
+	  if printf '%s\n' "$$deps" | grep -qE '(^|[/[:space:]])lib(ssl|crypto|gc)[-.0-9]|msys-2[.]0[.]dll'; then \
+	    echo "the vendored binary links OpenSSL, libgc or the MSYS2 runtime dynamically:" >&2; printf '%s\n' "$$deps" >&2; exit 1; fi
 	@ossl=$$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $$2; sep = "." }' vm/third_party/openssl/VERSION.dat); \
-	  build/vm/release/agentica run --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored binary does not report OpenSSL $$ossl" >&2; exit 1; }
+	  $(RUN_PROGRAM) $(VENDORED_BIN) run --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored binary does not report OpenSSL $$ossl" >&2; exit 1; }
 
 # vendored-check, then the TLS and HTTP tests on that binary
 vendored-test: vendored-check
-	AGENTICA_VM_BINARY=build/vm/release/agentica $(MAKE) --no-print-directory test-py JOBS=2 TESTS="tests/test_vm_tls.py tests/test_vm_http.py"
+	AGENTICA_VM_BINARY=$(VENDORED_BIN) $(MAKE) --no-print-directory test-py JOBS=2 TESTS="tests/test_vm_tls.py tests/test_vm_http.py"
 
 CLANG_TIDY ?= clang-tidy
 # vm/unicode_data.c is frozen table data (see its header), so it is not linted

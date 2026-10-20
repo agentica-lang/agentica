@@ -137,9 +137,12 @@ The vendored build:
 - Rejected: loading OpenSSL with `dlopen` only when a program uses TLS. It is
   more complex, and the static build costs only about 6 MB more for
   `dist/agentica`.
-- System and vendored builds are exercised on Linux, macOS and Windows.
-  TLS runtime support and native trust stores are a separate concern; the
-  Windows TLS adapter remains disabled until that port is complete.
+- System and vendored builds are exercised on Linux, macOS and Windows. The
+  Platforms jobs link the vendored OpenSSL statically on macOS (Intel and
+  ARM) and Windows, and `make vendored-check` fails if the binary loads
+  OpenSSL, libgc or `msys-2.0.dll`. The TLS adapter and the native trust
+  stores (10.3) build on every system; the TCP and TLS builtins wait for the
+  Windows TCP port.
 
 ### 10.1 Event loop: libuv, not libevent
 
