@@ -28,11 +28,11 @@ export type Pairs[K, V] = List[Map[K, V]]
 - **An unused parameter is allowed.** As for enums, and the language does not
   report unused names. This replaces the earlier plan of a
   `CHECK-TYPE-ALIAS-PARAM` code; no new code was added.
-- **The count.** A use gives exactly as many type arguments as the alias has.
-  A wrong count uses an existing code: `CHECK-UNKNOWN-TYPE`, as an enum with
-  the wrong number of arguments gets today (`resolve_generic` in
-  `compiler/check_types.agc`). The checker has no separate code for the arity
-  of a type, and this part adds none.
+- **The count.** A use gives exactly as many type arguments as the alias has. A
+  wrong count uses an existing code: `CHECK-UNKNOWN-TYPE`, as an enum with the
+  wrong number of arguments gets today (`resolve_generic` in
+  `compiler/check/check_types.agc`). The checker has no separate code for the
+  arity of a type, and this part adds none.
 - **Expansion.** The arguments are substituted for the parameters:
   `Matrix[Int]` is `List[List[Int]]`. It is still transparent.
 - **Not in 49b.** No higher-kinded parameters (a parameter applied to

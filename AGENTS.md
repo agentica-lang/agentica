@@ -9,9 +9,11 @@ bytecode) and the `std/` sources inside. The build starts from the checked-in
 
 ```text
 VERSION             the version, one line (read by the Makefile)
-compiler/           the front end in Agentica (§18): lexer, parser, modules,
-                    builtin catalog, checker, lowering, bytecode writer, BDD
-                    driver, CLI; front_end.agc is the program the binary carries
+compiler/           the front end in Agentica (§18), one folder per context:
+                    app (CLI, pipeline), syntax (lexer, parser), modules
+                    (linker), check, catalog (builtins, prelude), lower,
+                    bytecode, diagnostics, bdd, embedded; front_end.agc at the
+                    root is the program the binary carries
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
 vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, JSON;
                     agentica.c is the main of the binary (`run`, front end, hand-off)

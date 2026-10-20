@@ -1,10 +1,10 @@
-import Writer from "../../../../compiler/bytecode_writer"
-import Ir from "../../../../compiler/ir"
-import Source from "../../../../compiler/source"
-import Types from "../../../../compiler/types"
+import Writer from "../../../../compiler/bytecode/bytecode_writer"
+import Ir from "../../../../compiler/lower/ir"
+import Source from "../../../../compiler/syntax/source"
+import Types from "../../../../compiler/check/types"
 
 # Writes lowered programs that no source file lowers to, to reach the limits of the format and the BYTECODE-INTERNAL
-# paths of compiler/bytecode_writer.agc. tests/frontend-bytecode-test.rkt builds the same programs for the Racket
+# paths of compiler/bytecode/bytecode_writer.agc. tests/frontend-bytecode-test.rkt builds the same programs for the Racket
 # writer and compares what each prints, one line for each name in SCENARIOS.
 #
 # Every program has two files, so that a limit can name the span of a function in the second file (the writer reports
