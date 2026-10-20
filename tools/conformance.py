@@ -54,7 +54,6 @@ KNOWN_ISSUES = {
     431: "Windows: a stdin read can hold a pool thread",
     432: "Windows: no independent peer for the child channel protocol (two pipes at descriptors 3 and 4)",
     433: "Windows: no test for blocking stream files (named pipes instead of FIFOs)",
-    436: "macOS and Windows: golden fixtures for paths, errno text and processes only run on Linux",
     437: "Windows: Ctrl+C through the CLI and a signal during a blocked wait have no test",
     440: "Windows: standard output that is a socket has no test",
 }

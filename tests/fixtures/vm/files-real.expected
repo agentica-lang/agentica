@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 11939,
+  "steps": 1531,
   "stdout": [
     "\"<root>\"",
     "\"<root>\"",
@@ -12,13 +12,8 @@
     "\"<root>/a/b/c/f.txt\"",
     "\"<root>\"",
     "error(\"filesystem: cannot resolve path\\n  path: @tmp/missing\\n  system error: No such file or directory; errno=2\")",
-    "error(\"filesystem: cannot resolve path\\n  path: @tmp/a/missing/..\\n  system error: No such file or directory; errno=2\")",
-    "error(\"filesystem: cannot resolve path\\n  path: @tmp/a/b/c/f.txt/\\n  system error: Not a directory; errno=20\")",
-    "error(\"filesystem: cannot resolve path\\n  path: @tmp/a/b/c/f.txt/x\\n  system error: Not a directory; errno=20\")",
-    "\"/\"",
-    "\"/\"",
     "error(\"path->complete-path: contract violation\\n  expected: (or/c path-string? path-for-some-system?)\\n  given: \\\"\\\"\")",
-    "error(\"path->complete-path: contract violation\\n  expected: (or/c path-string? path-for-some-system?)\\n  given: \\\"@tmp\\\\u0000\\\"\")",
+    "error(\"path->complete-path: contract violation\\n  expected: (or/c path-string? path-for-some-system?)\\n  given: \\\"a\\\\u0000\\\"\")",
     "true",
     "true",
     "true",

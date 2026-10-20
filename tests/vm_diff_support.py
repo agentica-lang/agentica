@@ -502,16 +502,9 @@ def check_sweep(results, limits, full, name, note=""):
 # and exist in pairs, or have a Windows counterpart in tests/test_windows_*.py.
 VARIANT_FAMILY = re.compile(r"-(posix|windows)\.agc$")
 
-# Fixtures that hold what Linux answers and that have no variant yet: the behavior exists on the other system, so
-# the case is an open gap (issue 436), not a host-only skip. The reason says what differs.
-_MACOS_PATHS = "PATH_MAX is 1024 on macOS and mkdir and realpath answer other errno values for a path through a file"
-_WINDOWS_PATHS = "Windows answers ENOENT where Linux says ENOTDIR, and prints a drive letter"
-KNOWN_ISSUE_FIXTURES = {
-    "files-real.agc": {"darwin": (436, _MACOS_PATHS), "windows": (436, _WINDOWS_PATHS)},
-    "files-errors.agc": {"darwin": (436, _MACOS_PATHS), "windows": (436, _WINDOWS_PATHS)},
-    "process-limits.agc": {"windows": (436, "the program runs /bin/sh")},
-    "process-captured-basic.agc": {"windows": (436, "the program runs /bin/pwd")},
-}
+# Fixtures that have a gap on one system: the behavior exists there, so the case is an open gap (a known-issue skip),
+# not a host-only one. The reason says what differs.
+KNOWN_ISSUE_FIXTURES = {}
 
 
 def skip_reason(name):
