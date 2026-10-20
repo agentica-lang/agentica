@@ -26,7 +26,7 @@ end
 
 ## Long numbers
 
-A `_` between digits makes a long number easier to read. It is only visual: `1_000` is the same `Int` as `1000`, and it prints without the `_`.
+A `_` between digits is only visual: `1_000` is the same `Int` as `1000`.
 
 ```agentica
 def main() -> Void
@@ -44,12 +44,11 @@ end
 true
 ```
 
-The `_` must sit between two digits. `1_`, `1__0`, `1_.5` and `1._5` are `LEX-INVALID-NUMBER`. `String.to_int` and `to_f` still reject a `_` in text, because they read outside data.
+`1_`, `1__0`, `1_.5` and `1._5` are `LEX-INVALID-NUMBER`. `String.to_int` and `to_f` reject a `_` in text.
 
 ## Division
 
-`/` on two `Int` values cuts off the decimals, toward zero. `%` is the
-remainder and works on `Int` only.
+`/` on two `Int` values cuts off the decimals, toward zero. `%` is the remainder and works on `Int` only.
 
 ```agentica
 def main() -> Void
@@ -78,8 +77,7 @@ end
 
 ## Mixing Int and Float
 
-The two sides of an operator must have the same type. Convert with `to_f` or
-`Float.to_int!`.
+The two sides of an operator must have the same type. Convert with `to_f` or `Float.to_int!`.
 
 ```agentica
 def main() -> Void
@@ -97,8 +95,7 @@ end
 
 ## Comparison
 
-`<`, `<=`, `>` and `>=` compare two numbers of the same type. `==` and `!=`
-work on numbers, `Bool`, `String` and `nil`.
+`<`, `<=`, `>` and `>=` compare two numbers of the same type. `==` and `!=` work on numbers, `Bool`, `String` and `nil`.
 
 ```agentica
 def main() -> Void
@@ -131,8 +128,7 @@ true
 
 ## Negative numbers
 
-A minus sign is an operator. Use parentheses to call a method on a negative
-literal:
+A minus sign is an operator. Use parentheses to call a method on a negative literal:
 
 ```agentica
 def main() -> Void
@@ -146,9 +142,7 @@ end
 
 ## Text to numbers
 
-`to_i` and `to_f` read a number from a string. They give a
-[Result](/tour/results-and-try/), because the text may not be a number.
-`to_i!` and `to_f!` give the number and stop the program on bad text.
+`to_i` and `to_f` read a number from a string. They give a [Result](/tour/results-and-try/), because the text may not be a number. `to_i!` and `to_f!` give the number and stop the program on bad text.
 
 ```agentica
 def main() -> Void

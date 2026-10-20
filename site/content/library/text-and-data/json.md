@@ -4,14 +4,12 @@ weight: 3
 description: Encode values as JSON, decode JSON into structs, and read dynamic JSON.
 ---
 
-There are two ways to work with JSON:
+Two ways to work with JSON:
 
-- For a known shape, declare a struct. `JSON.encode` writes it and
-  `JSON.decode` reads it back, with type checks.
-- For data whose shape changes, use the `Json` type and the `JSON` functions to
-  build and read it.
+- For a known shape, declare a struct. `JSON.encode` writes it and `JSON.decode` reads it back, with type checks.
+- For data whose shape changes, use the `Json` type and the `JSON` functions to build and read it.
 
-`Json` values print as JSON text with `puts` and `to_s`; `inspect` shows `<Json>`, also inside a list. A parsed JSON object writes its keys sorted (see `JSON.parse`); the order of keys in a built JSON object is not fixed; structs and maps keep their order. Functions whose first parameter is a `Json` are also methods: `JSON.get(j, "a")` is `j.get("a")`.
+`Json` values print as JSON text with `puts` and `to_s`; `inspect` shows `<Json>`, also inside a list. A parsed object writes its keys sorted (see `JSON.parse`). A built object's key order is not fixed, while structs and maps keep theirs. Functions whose first parameter is a `Json` are also methods: `JSON.get(j, "a")` is `j.get("a")`.
 
 ## JSON.encode
 
@@ -19,8 +17,7 @@ There are two ways to work with JSON:
 JSON.encode(value: T) -> String
 ```
 
-Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists,
-maps with `String` keys, and structs. Struct fields keep their order.
+Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, and structs. Struct fields keep their order.
 
 ```agentica
 struct User
@@ -48,8 +45,7 @@ end
 JSON.decode(s: String, type: T) -> Result[T]
 ```
 
-Reads JSON into a struct. The second argument is the struct's name. Missing
-fields and wrong types give an error Result. Extra keys are ignored.
+Reads JSON into a struct. The second argument is the struct's name. Missing fields and wrong types give an error Result. Extra keys are ignored.
 
 ```agentica
 struct User
@@ -118,9 +114,7 @@ end
 false
 ```
 
-A parsed object keeps each key once (the last one wins) and sorts its keys, so
-`JSON.encode(JSON.parse(x))` gives one text per JSON value. Arrays keep their
-order, and `1` stays different from `1.0`.
+A parsed object keeps each key once (the last one wins) and sorts its keys, so `JSON.encode(JSON.parse(x))` gives one text per JSON value. Arrays keep their order, and `1` stays different from `1.0`.
 
 ```agentica
 def main() -> Void
@@ -143,8 +137,7 @@ JSON.get(j: Json, key: String) -> Result[Json]
 JSON.at(j: Json, index: Int) -> Result[Json]
 ```
 
-`get` reads a member of an object; `at` reads an element of an array. A
-missing key, a bad index or the wrong kind gives an error Result.
+`get` reads a member of an object; `at` reads an element of an array. A missing key, a bad index or the wrong kind gives an error Result.
 
 ```agentica
 def main() -> Void

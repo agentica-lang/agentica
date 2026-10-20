@@ -6,8 +6,7 @@ description: The basic types, how to print values, and the program shape.
 
 ## A program
 
-A program is a file of declarations. It has one `main` function, and running
-the file calls it. Blocks end with `end`.
+A program is a file of declarations. It has one `main` function, and running the file calls it. Blocks end with `end`.
 
 ```agentica
 def main() -> Void
@@ -22,10 +21,9 @@ one line
 no new line, then one
 ```
 
-`#` starts a comment that runs to the end of the line. Code cannot sit at the
-top of the file outside a function.
+`#` starts a comment that runs to the end of the line. Code cannot sit at the top of the file outside a function.
 
-A line that starts with `##` is a doc comment. Put it on the lines directly above a `def`, `struct`, `enum`, field or variant to document it. The text is Markdown, and it does not change how the program runs.
+A `##` line is a doc comment, placed directly above a `def`, `struct`, `enum`, field or variant. It is Markdown and does not change the program.
 
 ```agentica
 # An ordinary comment: nothing reads it.
@@ -43,12 +41,11 @@ end
 5
 ```
 
-The first `##` block of a file, followed by a blank line, documents the whole module. Any other `##` block that is not directly above what it documents is `PARSE-DETACHED-DOC`.
+A `##` block at the top of a file, followed by a blank line, documents the module. A `##` block that is not directly above its target is `PARSE-DETACHED-DOC`.
 
 ## Basic types
 
-Every value has a type. The checker knows the type of every expression before
-the program runs.
+Every value has a type. The checker knows the type of every expression before the program runs.
 
 | Type | Values |
 |---|---|
@@ -78,15 +75,11 @@ nil
 
 There are also lists, maps, structs, enums and results. Later pages show them.
 
-An alias gives a long type a short name without creating a new type:
-`type Names = List[String]`. `Names` and `List[String]` are interchangeable in
-annotations and signatures, and an alias has no runtime cost. Aliases can name
-another alias, but cannot be constructors or enum patterns. Cycles are rejected.
+`type Names = List[String]` gives a long type a short name. It is not a new type. Aliases cannot be constructors or enum patterns, and cycles are rejected.
 
 ## Printing values
 
-`puts` prints any value. Strings print as they are. Other values print in a
-short, readable form:
+`puts` prints any value. Strings print as they are. Other values print in a short, readable form:
 
 ```agentica
 def main() -> Void
@@ -122,8 +115,7 @@ hi
 [1, 2]
 ```
 
-`IO.inspect` prints the debug form and gives the value back, so you can put it
-in the middle of an expression:
+`IO.inspect` prints the debug form and gives the value back, so you can put it in the middle of an expression:
 
 ```agentica
 def main() -> Void
@@ -155,8 +147,7 @@ n = 4
 
 ## No truthiness
 
-`if` needs a `Bool`. `0`, `""` and `nil` are not false; using them as a
-condition is a checker error.
+`if` needs a `Bool`. `0`, `""` and `nil` are not false; using them as a condition is a checker error.
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
@@ -168,8 +159,7 @@ end
 
 ## Values never change
 
-Values are immutable. A method gives a new value and leaves the old one as it
-was. Assign the result to keep it.
+Values are immutable. A method gives a new value and leaves the old one as it was. Assign the result to keep it.
 
 ```agentica
 def main() -> Void

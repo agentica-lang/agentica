@@ -4,7 +4,7 @@ weight: 7
 description: Short runnable recipes for sorting, breadth-first search, memoization and recursion.
 ---
 
-Small programs that use the library together. Values are immutable, so each recipe builds new values and passes state along instead of changing it. For the functions used here, see [List](/library/data-structures/list/), [Map](/library/data-structures/map/) and [Result](/library/errors/result/).
+Small programs that use the library together. Values are immutable, so each recipe passes state along instead of changing it. For the functions used here, see [List](/library/data-structures/list/), [Map](/library/data-structures/map/) and [Result](/library/errors/result/).
 
 ## Sorting with sort_by
 
@@ -35,7 +35,7 @@ Ana: 7
 
 ## Breadth-first search
 
-A breadth-first search visits the nodes closest to the start first, so the first time it reaches the goal it has used the fewest steps. A list works as the queue: `head` is the index of the next node to visit, and `push` adds new nodes at the back. A map records the distance of each node and doubles as the visited set. The graph is a `Map` from a node to the list of its neighbours.
+A breadth-first search visits the nodes nearest the start first, so the first time it reaches the goal it has used the fewest steps. A list is the queue (`head` is the next node to visit), and a map of distances doubles as the visited set. The graph maps each node to its neighbours.
 
 ```agentica
 def shortest_path(graph: Map[String, List[String]], start: String, goal: String) -> Result[Int]
@@ -81,7 +81,7 @@ error("no path from home to island")
 
 ## Memoization with a Map
 
-A map cannot be changed from inside a call, so a memoized function returns its cache with the answer and passes the cache on to the next call. Without the cache, `fib(50)` would make billions of calls.
+Maps are immutable, so a memoized function returns its cache with the answer and passes the cache on. Without the cache, `fib(50)` would make billions of calls.
 
 ```agentica
 struct Memo

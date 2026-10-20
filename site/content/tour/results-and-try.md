@@ -6,8 +6,7 @@ description: Return errors as values with Result, check them, and pass them on w
 
 ## Result
 
-A function that can fail returns `Result[T]`. It is either `ok(value)` or
-`error(message)`. The message is always a `String`.
+A function that can fail returns `Result[T]`. It is either `ok(value)` or `error(message)`. The message is always a `String`.
 
 ```agentica
 def divide(a: Int, b: Int) -> Result[Int]
@@ -77,8 +76,7 @@ number 42
 
 ## try
 
-`try` takes the value out of an `ok`. On an `error`, it returns that error from
-the current function at once. The function must return a `Result`.
+`try` takes the value out of an `ok`. On an `error`, it returns that error from the current function at once. The function must return a `Result`.
 
 ```agentica
 def add_texts(a: String, b: String) -> Result[Int]
@@ -100,8 +98,7 @@ error("cannot convert \"three\" to Int")
 
 ## Results with no value
 
-`Result[Void]` means "worked, or failed with a message". Return `ok()` on
-success.
+`Result[Void]` means "worked, or failed with a message". Return `ok()` on success.
 
 ```agentica
 def check_age(age: Int) -> Result[Void]
@@ -124,8 +121,7 @@ error("age must not be negative")
 
 ## Error needs a type
 
-`error("...")` alone does not say which `Result` it is. Give it a type, for
-example with an annotation:
+`error("...")` alone does not say which `Result` it is. Give it a type, for example with an annotation:
 
 ```agentica
 def main() -> Void
@@ -138,11 +134,8 @@ end
 -1
 ```
 
-Without the annotation, `r = error("not ready")` is the error
-`CHECK-RESULT-TYPE`.
+Without the annotation, `r = error("not ready")` is the error `CHECK-RESULT-TYPE`.
 
 ## ! means it can halt
 
-By convention, a name ending in `!` stops the program on failure, and a name
-ending in `?` returns a `Bool`. `to_i` returns a Result; `to_i!` returns the
-number or halts.
+By convention, a name ending in `!` stops the program on failure; a name ending in `?` returns a `Bool`. `to_i` returns a Result; `to_i!` returns the number or halts.

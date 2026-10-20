@@ -6,8 +6,7 @@ description: Run work at the same time with lightweight tasks.
 
 ## Start a task
 
-`Task.spawn` starts a function in a lightweight task. It takes a function
-value and one argument. `Task.await` waits for the task and gives its result.
+`Task.spawn` starts a function in a lightweight task, with one argument. `Task.await` waits for it and gives the result.
 
 ```agentica
 def square(n: Int) -> Int
@@ -24,12 +23,11 @@ end
 49
 ```
 
-The task's type is `Task[R]`, where `R` is the result type of the function.
+The type is `Task[R]`, where `R` is the function's result type.
 
 ## Many tasks
 
-Start all the tasks first, then wait for them. They make progress at the same
-time, which helps when they wait for files or the network.
+Start all the tasks, then wait. They progress at the same time, which helps with files and the network.
 
 ```agentica
 def slow_double(n: Int) -> Int
@@ -50,7 +48,10 @@ end
 
 ## Many items, a few at a time
 
-`Task.map(items, limit, timeout_ms)` runs a block for each item, at most `limit` at a time, and gives one `Result` per item, in the order of the items. The block gives a `Result`, so `try` works in it and a block that cannot fail ends with `ok(...)`. An item that takes longer than `timeout_ms` is cancelled and gets `error("task: timed out")`; the other items go on.
+`Task.map(items, limit, timeout_ms)` runs a block for each item, at most `limit` at a time. It gives one `Result` per item, in order.
+
+- The block returns a `Result`, so `try` works in it.
+- An item running longer than `timeout_ms` is cancelled and gets `error("task: timed out")`. The other items go on.
 
 ```agentica
 def fetch(n: Int) -> Result[String]
@@ -70,7 +71,7 @@ end
 [ok("page 1"), error("task: timed out"), ok("page 3")]
 ```
 
-Use it for work that waits, such as HTTP requests. `limit` does not speed up CPU work on one core. See [Task.map](/library/concurrency/task/#taskmap) for the cancel rules and the handle rules.
+Use it for work that waits, such as HTTP requests. `limit` does not speed up CPU work. See [Task.map](/library/concurrency/task/#taskmap) for the rules.
 
 ## More than one argument
 
@@ -114,7 +115,7 @@ true
 
 ## Wait with a timeout
 
-`Task.await(task, timeout_ms)` waits for at most that many milliseconds. It gives an `Await`: `Await.Done(value)` when the task ended in time, and `Await.TimedOut` when it did not. The task is not stopped, and you can await it again later.
+`Task.await(task, timeout_ms)` waits at most that many milliseconds. It gives `Await.Done(value)` if the task ended in time, else `Await.TimedOut`. The task keeps running; you can await it again.
 
 ```agentica
 def double(inbox: Channel[Int]) -> Int
@@ -144,13 +145,12 @@ done 42
 
 ## Rules
 
-- `await` can be called more than once; it gives the same value.
-- A timeout must be above 0. A timed `await` that times out leaves the task running.
-- If a task other than `main` fails with an error, only that task stops. Its error is printed, the tasks it started are cancelled, and the files and sockets it opened are closed. Awaiting it gives an `error` when the task returns a `Result`, and stops the waiting task otherwise. A failure nobody awaited makes the program exit with code 1 at the end. An error in `main` still stops the whole program.
-- A file, socket, listener or process belongs to the task that opened it, and it is closed when that task ends, however it ends. `Task.spawn_owning` gives one to the task it starts. It also takes a `Channel`, which is then closed when that task ends.
-- When `main` returns, tasks that are still running are cancelled. Await the
-  tasks you need.
-- Tasks do not run on several CPU cores. Output from different tasks may come in any order.
-- To pass values from one task to another, use a [Channel](/library/concurrency/channel/).
+- `await` can run again and gives the same value.
+- A timeout must be above 0. A timed-out task keeps running.
+- A task other than `main` that fails stops alone. Its error is printed, its child tasks are cancelled, and its files and sockets close. Awaiting it gives `error` if it returns a `Result`, else it stops the waiter. An unawaited failure makes the program exit with code 1. An error in `main` stops the program.
+- A file, socket, listener or process belongs to the task that opened it, and closes when that task ends. `Task.spawn_owning` hands one to the new task. It also takes a `Channel`, which closes when that task ends.
+- When `main` returns, running tasks are cancelled. Await what you need.
+- Tasks do not run on several CPU cores. Output may come in any order.
+- To pass values between tasks, use a [Channel](/library/concurrency/channel/).
 
 See [Task](/library/concurrency/task/) and [Channel](/library/concurrency/channel/) for the reference.

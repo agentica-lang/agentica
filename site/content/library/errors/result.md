@@ -4,9 +4,7 @@ weight: 1
 description: Build and read Result values.
 ---
 
-`Result[T]` is `ok(value)` or `error(message)`. The tour page
-[Result and try](/tour/results-and-try/) explains how to use it. The functions
-below are also methods: `Result.ok?(r)` is `r.ok?`.
+`Result[T]` is `ok(value)` or `error(message)`. The tour page [Result and try](/tour/results-and-try/) explains how to use it. The functions below are also methods: `Result.ok?(r)` is `r.ok?`.
 
 ## ok
 
@@ -33,8 +31,7 @@ ok("yes")
 error(message: String) -> Result[T]
 ```
 
-The checker must know which `Result` type it is: from an annotation, a return
-type, a parameter or a field.
+The type comes from an annotation, a return type, a parameter or a field.
 
 ```agentica
 def fail_now() -> Result[Int]

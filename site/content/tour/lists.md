@@ -69,8 +69,7 @@ end
 
 ## Add and change
 
-Lists never change in place. `push` gives a new list with one more element.
-`set` gives a new list with one element replaced.
+Lists never change in place. `push` gives a new list with one more element. `set` gives a new list with one element replaced.
 
 ```agentica
 def main() -> Void
@@ -192,6 +191,4 @@ end
 [0, 0, 0]
 ```
 
-Reading `xs[i]` walks the list, so it takes longer for big lists. Prefer `for`
-or `each` to visit every element. See the [List library page](/library/data-structures/list/)
-for every function.
+Reading `xs[i]` walks the list, so it takes longer for big lists. Prefer `for` or `each` to visit every element. See the [List library page](/library/data-structures/list/) for every function.
