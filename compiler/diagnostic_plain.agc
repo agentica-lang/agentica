@@ -18,8 +18,12 @@ struct Mark
   noted: Bool
 end
 
-## The text of the problem. `text` is the text of the file that the problem names.
+## The text of the problem. `text` is the text of the file that the problem names. A problem at a key of a manifest or
+## a lock has no source lines: the key path takes their place.
 export def format(problem: Problems.Problem, text: String) -> String
+  if problem.key_path != ""
+    return at_key(problem)
+  end
   lines = text.split("\n")
   marks = [mark(problem.span, "^", "", false, lines)]
   for label in problem.labels
@@ -33,6 +37,15 @@ export def format(problem: Problems.Problem, text: String) -> String
   start = problem.span.start
   head = "#{problem.file}:#{start.line}:#{start.column} error[#{problem.code}]"
   return "#{head}\n#{problem.message}\n\n#{body.join("\n")}#{help_line(problem.help, width)}"
+end
+
+## The text of a problem at a key path: the file, the code, the message and the key.
+export def at_key(problem: Problems.Problem) -> String
+  head = "#{problem.file}: error[#{problem.code}]\n#{problem.message}\n\n  = key: #{problem.key_path}"
+  case problem.help
+    Diag.Help.Hint(text) -> return "#{head}\n  = help: #{text}"
+    Diag.Help.NoHelp -> return head
+  end
 end
 
 ## The text of a line (1-based), without one carriage return at its end; empty outside the file.

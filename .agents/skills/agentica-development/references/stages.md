@@ -136,10 +136,20 @@ expected, actual, callee, signature, labels and help). The codes by stage:
     `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL`,
     `CHECK-MODULE-CONTEXT`, `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`,
     `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`,
+    `CHECK-IMPORT-AMBIGUOUS`, `CHECK-IMPORT-PACKAGE`,
     `CHECK-DECL-ORDER`, `CHECK-TYPE-ALIAS-CYCLE`, `CHECK-UNKNOWN-VARIANT`,
     `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE`,
     `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
     `CHECK-UNREACHABLE-CASE-ARM`, `CHECK-LOOP-CONTROL`, `CHECK-TOO-DEEP`
+
+- **Stage:** packages (`manifest.agc`, `lock.agc`, `project.agc`, `package_import.agc`)
+  - **Codes:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
+    `PKG-LOCK-STALE`, `PKG-MAJOR-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
+    (45a). The manifest and lock ones are at a key path of the file
+    (`Failure.fail_key`, `Problem.key_path`, `key_path` in `--json`, with
+    `range` at the start of the file); a TOML syntax error is at its line and
+    column. The hash and link ones are at the import. `CHECK-IMPORT-AMBIGUOUS`
+    and `CHECK-IMPORT-PACKAGE` are import checks (`resolve_import.agc`).
 
 - **Stage:** runtime (VM)
   - **Codes:** `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`,

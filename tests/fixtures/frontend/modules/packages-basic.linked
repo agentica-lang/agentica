@@ -1,0 +1,33 @@
+program #7 0:1:1-88:6:1
+  module "root.agc"
+    declaration: function-decl #6 38:3:1-88:6:1 name="main"
+      result: type-ref #1 52:3:15-56:3:19 name="Void"
+      body: expr-stmt #5 59:4:3-84:5:1
+        value: call #4 59:4:3-83:4:27 name="puts" piped=false
+          arg: call #3 64:4:8-82:4:26 name="@2::hello" piped=false
+            arg: literal #2 76:4:20-81:4:25 value=string:"ana"
+  module "owner/repo@1.2.3/greet.agc"
+    declaration: function-decl #11 86:4:8-177:7:1 name="@2::hello"
+      param: param #3 96:4:18-108:4:30 name="name"
+        type: type-ref #2 102:4:24-108:4:30 name="String"
+      result: type-ref #4 113:4:35-119:4:41 name="String"
+      body: return-stmt #10 122:5:3-173:6:1
+        value: binary #9 129:5:10-172:5:53 op=plus op-span=158:5:39-159:5:40
+          left: call #7 129:5:10-157:5:38 name="@3::shout" piped=false
+            arg: interpolation #6 141:5:22-156:5:37
+              part: text "hello "
+              part: name-ref #5 150:5:31-154:5:35 name="name"
+          right: call #8 160:5:41-172:5:53 name="@4::bang" piped=false
+  module "owner/repo@1.2.3/util/shout.agc"
+    declaration: function-decl #6 7:1:8-66:4:1 name="@3::shout"
+      param: param #1 17:1:18-29:1:30 name="text"
+        type: type-ref #0 23:1:24-29:1:30 name="String"
+      result: type-ref #2 34:1:35-40:1:41 name="String"
+      body: return-stmt #5 43:2:3-62:3:1
+        value: field-access #4 50:2:10-61:2:21 name="upcase"
+          target: name-ref #3 50:2:10-54:2:14 name="text"
+  module "gitlab.com/team/tools@0.4.1/bang.agc"
+    declaration: function-decl #3 7:1:8-45:4:1 name="@4::bang"
+      result: type-ref #0 21:1:22-27:1:28 name="String"
+      body: return-stmt #2 30:2:3-41:3:1
+        value: literal #1 37:2:10-40:2:13 value=string:"!"

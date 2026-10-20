@@ -96,7 +96,7 @@ Two prefixes select where a module comes from:
 - `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in, in
   order:
   1. `agc_libs/` beside the root program (not beside each dependency, and not
-     the working directory);
+     the working directory), or beside `agentica.toml` when the project has one;
   2. absolute roots in `AGENTICA_PATH`, in the listed order;
   3. `$XDG_DATA_HOME/agentica/lib/`, defaulting to
      `~/.local/share/agentica/lib/`;
@@ -120,6 +120,50 @@ the import. Embedded-module diagnostics name their source, such as
 `std/queue.agc`. Embedded modules may use relative paths within their stdlib
 directory; external modules may use ordinary relative imports for their
 dependencies.
+
+## Packages (`agentica.toml`)
+
+A package is a git repository of `.agc` files. A project with an
+`agentica.toml` in the folder of the root file (or above it) can import the
+packages it declares. This version only reads the cache: nothing downloads, so
+the cache has to be filled already (`agentica install` comes later).
+
+```toml
+name = "acme/notes"
+version = "0.3.0"
+
+[dependencies]
+"owner/sqlite-ac" = "1.2.0"
+"gitlab.com/team/json-tools" = "0.4.1"
+```
+
+```ruby
+import Sqlite from "owner/sqlite-ac/sqlite"
+import Json from "gitlab.com/team/json-tools/util/json"
+```
+
+- A key is `owner/repo` (GitHub, no host) or `host/owner/repo`, lowercase, with
+  letters, digits and `. _ -`. The import is the key, then a path inside the
+  repo without `.agc`. A path whose first parts are not a declared key is a
+  relative path, as always. `github.com/owner/repo/x` and the bare `owner/repo`
+  are `CHECK-IMPORT-PATH`; a local file or folder that the path also names is
+  `CHECK-IMPORT-AMBIGUOUS`.
+- `agentica.lock` (TOML, beside the manifest) lists every package, direct or
+  not: `name`, `version`, `source`, `commit`, `hash`, `requires`. A manifest
+  with dependencies and no lock is `PKG-LOCK-MISSING`; a lock that does not meet
+  a minimum is `PKG-LOCK-STALE`; another major is `PKG-MAJOR-CONFLICT`; a bad
+  file is `PKG-MANIFEST-INVALID` or `PKG-LOCK-INVALID`, at a file and key path.
+  A build never writes the lock.
+- The program may import only the packages of its own manifest; a package
+  imports its own files by relative paths (never out of the package) and its
+  dependencies by key. A package that is not in the cache folder is
+  `CHECK-IMPORT-PACKAGE`.
+- The cache is `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`
+  (`~/.cache` when `XDG_CACHE_HOME` is not absolute; `github.com` is the host of
+  GitHub keys; on Windows `%LOCALAPPDATA%/agentica/cache/pkg/`). When a build
+  first imports a package it hashes its `.agc` files and compares them with the
+  lock: a changed, added or missing file is `PKG-HASH-MISMATCH`.
+- `agc_libs/` for `pkg/` is beside `agentica.toml` when there is one.
 
 ## String queue (`std/queue`)
 

@@ -24,9 +24,18 @@ stages may use `Result` with a packed `Problem`. `try` stops at the first error.
 - Linker: `modules.agc` (loader; walks imports with an explicit stack in a
   fixed order), `resolve_import.agc`, `import_path.agc` (`std/`, `pkg/`,
   relative), `resolve.agc`, `rewrite.agc` (linked name of every name),
-  `linker.agc` (`Linker.link_file`, `Linker.program`), `declarations.agc`
+  `linker.agc` (`Linker.link_file`, `Linker.program`), the packages of §45
+  (`project.agc` finds `agentica.toml` and checks the lock once; `manifest.agc`,
+  `lock.agc`, `toml_read.agc` and `semver.agc` read and validate them;
+  `package_import.agc` classifies a package import, checks ambiguity and
+  confinement and verifies the hash of `package_hash.agc`, with `sha256.agc`,
+  once per package; `package_cache.agc` places the cache; `file_probe.agc`),
+  `declarations.agc`
   (`CHECK-DECL-ORDER`), `suggest.agc` (did-you-mean), `link_env.agc` (`Env` and
-  `Settings`: `stdlib/` and environment, passed in, never read inside),
+  `Settings`: `stdlib/` and environment, passed in, never read inside; a new
+  environment variable gets a `--name=V` flag in `link.agc`, `check.agc`,
+  `lower.agc` and `bytecode.agc`, and a value in the hermetic environment of the
+  tests),
   `link_failure.agc`.
 - Catalog: `types.agc`, `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`,
   the `Rule` enum), `builtins.agc` (lookups), `builtins_data.agc` (hand-edited
@@ -128,6 +137,14 @@ Text-form notes:
   and `lower_argument` use the same functions, so they agree. Compiler code must
   not use defaults until `bootstrap/stage0.agcb` can compile them (the two-step
   refresh in `references/ci.md`).
+- Packages: a module has an `origin` (the package it belongs to, its folder in
+  the cache and `key@version`) and a stored `name`; `Ir.SourceFile.name` is what
+  the `.agcb` stores, so a package file is `owner/repo@1.2.3/path.agc` whatever
+  the cache folder. `file` stays the real path, which diagnostics show and the
+  CLI reads for the source lines. A failure at a key of `agentica.toml` or
+  `agentica.lock` has `Failure.key_path` (`Failure.fail_key`); its span is the
+  start of the file. `tests/package_support.py` is a second implementation of
+  the hash and builds the cache of a test.
 - Import forms: `import Alias from "path"`, `import {a, B as C} from "path"`.
   `ImportDecl` has `alias` and `names`; the linker keeps a `named` table
   (`bind_names`, `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`). The path-first

@@ -40,7 +40,7 @@ end
 # What writing a program gives, in one line: the size and a checksum of the bytes, or the code and place of the
 # problem (and the message of a BYTECODE-LIMIT, which is fixed).
 def describe(program: Ir.Program, version: String) -> String
-  case Writer.write("", program, version)
+  case Writer.write(program, version)
     Writer.Written.Done(bytes) ->
       body = bytes.drop(header_size(bytes))
       return "ok #{body.size} #{checksum(body)}"
@@ -98,7 +98,7 @@ def program(
   structs: List[Ir.StructDef], enums: List[Ir.EnumDef], functions: List[Ir.Function], globals: Int
 ) -> Ir.Program
   return Ir.Program(
-    sources: [Ir.SourceFile(file: "a.agc", text: "one\n"), Ir.SourceFile(file: "b.agc", text: "é\n")],
+    sources: [Ir.SourceFile(file: "a.agc", name: "a.agc", text: "one\n"), Ir.SourceFile(file: "b.agc", name: "b.agc", text: "é\n")],
     structs: structs,
     enums: enums,
     functions: functions,

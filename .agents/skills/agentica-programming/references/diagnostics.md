@@ -214,6 +214,23 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     updated with `.with` from another module; `Mod.NAME` on a constant is also
     `CHECK-IMPORT-NAME` (write `import {NAME} from "path"`)
 
+- **Code:** `CHECK-IMPORT-AMBIGUOUS`, `CHECK-IMPORT-PACKAGE`
+  - **Meaning:** an import names a package of `agentica.toml` and also a file
+    or folder beside the importing file: rename one; a declared package is not
+    in the package cache (run `agentica install`, once it exists)
+
+- **Code:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
+  `PKG-LOCK-STALE`, `PKG-MAJOR-CONFLICT`
+  - **Meaning:** `agentica.toml` or `agentica.lock` is bad, missing, or does not
+    agree with the other; the report names the file and a key path such as
+    `dependencies.owner/repo` (`key_path` in `--json`), or a line and column for
+    a TOML syntax error
+
+- **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
+  - **Meaning:** the `.agc` files of a package in the cache are not the ones the
+    lock hashes (an edited, added or missing file), or one is a symbolic link;
+    remove the folder and fill the cache again
+
 - **Code:** `CHECK-IMPORT-RENAME`
   - **Meaning:** `import {A as b}` where the new name breaks the case rule of
     what it renames: a struct or enum gets a capitalized name, a function a

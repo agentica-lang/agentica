@@ -7,6 +7,7 @@ import Checker from "checker"
 import Diag from "diagnostic"
 import Linker from "linker"
 import Env from "link_env"
+import Failure from "link_failure"
 import Lowering from "lowering"
 import SourceFile from "source_file"
 
@@ -54,10 +55,15 @@ export def stage_problem(file: String, problem: Diag.Diagnostic) -> Problems.Pro
   return Problems.problem(file, "", problem.code, problem.message, problem.span, problem.help)
 end
 
+## The problem of a linker failure: the diagnostic in its file, or at a key of agentica.toml or agentica.lock.
+export def link_problem(failure: Failure.Failure) -> Problems.Problem
+  return stage_problem(failure.file, failure.diagnostic).with(key_path: failure.key_path)
+end
+
 ## Links the file at `path` and checks it.
 export def check_file(path: String, settings: Env.Settings) -> Front
   case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return Front.Rejected(stage_problem(failure.file, failure.diagnostic))
+    Linker.Linking.Failed(failure) -> return Front.Rejected(link_problem(failure))
     Linker.Linking.Done(linked) -> return check(linked, settings)
   end
 end
@@ -66,7 +72,7 @@ end
 export def build(front: Checked, settings: Env.Settings) -> Compiled
   case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
-    Lowering.Lowered.Done(program) -> return write(Writer.write(front.linked.root_dir, program, settings.version))
+    Lowering.Lowered.Done(program) -> return write(Writer.write(program, settings.version))
   end
 end
 

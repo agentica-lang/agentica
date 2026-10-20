@@ -87,7 +87,9 @@ limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
 - AST node: `compiler/ast.agc`, the parser, and the passes that walk the tree.
 - Syntax form: `compiler/parser.agc` and `ast.agc`, with a parser golden.
 - Diagnostic code: where the problem is found; prefix `LEX-`, `PARSE-`,
-  `CHECK-`, `RUNTIME-`, `LOWER-` or `BYTECODE-` (`references/stages.md`).
+  `CHECK-`, `RUNTIME-`, `LOWER-` or `BYTECODE-` (`references/stages.md`), or
+  `PKG-` for the manifest, the lock and the package cache (a failure at a key
+  path of `agentica.toml` or `agentica.lock` is `Failure.fail_key`).
 - Builtin: catalog row in `compiler/builtins_data.agc` (golden in
   `tests/fixtures/frontend/catalog/`), checker rule, `VM_BUILTINS` in
   `compiler/lower_tables.agc` (`tests/test_frontend_catalog.py` checks every

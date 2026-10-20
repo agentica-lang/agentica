@@ -11,8 +11,9 @@ import SaveFile from "save_file"
 # `agentica compiler/bytecode.agc [flags] ROOT -o OUT ...` links, checks, lowers and writes each ROOT file to the .agcb
 # file OUT, and prints `== ROOT`, then `wrote N bytes` or the ERROR line of the first failure (those of lower.agc, and
 # BYTECODE- ones). No file is written for a failure. The flags are those of link.agc and apply to the roots after them:
-# `--stdlib=DIR` (the default is stdlib), `--agentica-path=V`, `--xdg-data-home=V`, `--home=V`, `--local-app-data=V`;
-# and `--version=V`, the Agentica version of the header, which a root needs (the front end gets it as an input, 35.3).
+# `--stdlib=DIR` (the default is stdlib), `--agentica-path=V`, `--xdg-data-home=V`, `--xdg-cache-home=V`, `--home=V`,
+# `--local-app-data=V`; and `--version=V`, the Agentica version of the header, which a root needs (the front end gets
+# it as an input, 35.3).
 def main() -> Void
   stdlib = "stdlib"
   env = Env.process_env()
@@ -32,6 +33,8 @@ def main() -> Void
       env = env.with(agentica_path: argument.slice(16, argument.length - 16))
     elsif argument.starts_with?("--xdg-data-home=")
       env = env.with(xdg_data_home: argument.slice(16, argument.length - 16))
+    elsif argument.starts_with?("--xdg-cache-home=")
+      env = env.with(xdg_cache_home: argument.slice(17, argument.length - 17))
     elsif argument.starts_with?("--home=")
       env = env.with(home: argument.slice(7, argument.length - 7))
     elsif argument.starts_with?("--local-app-data=")
@@ -65,7 +68,7 @@ def lower(linked: Linker.Linked, lowered: Lowering.Lowered, output: String, vers
   case lowered
     Lowering.Lowered.Failed(problem) -> return LowerText.problem_text(linked.root_dir, problem)
     Lowering.Lowered.Done(program) ->
-      return write(linked.root_dir, Writer.write(linked.root_dir, program, version), output)
+      return write(linked.root_dir, Writer.write(program, version), output)
   end
 end
 

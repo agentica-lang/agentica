@@ -3,9 +3,9 @@
 **Status:** Designed; it has no roadmap row of its own. On the path to the JIT
 it comes after the native Windows and macOS builds (issue
 [#344](https://github.com/sonic182/agentica/issues/344)) and before the FFI
-([§40.5](40-native-code.md#405-order)). 45-0 (`std/toml`) is done. The owner
-answered the questions of 45.14 on 2026-10-20, so 45a can start. Asked by the
-owner on 2026-10-15 ("Shall we plan this?").
+([§40.5](40-native-code.md#405-order)). 45-0 (`std/toml`) and 45a (manifest,
+lock and imports from the cache) are done. The owner answered the questions of
+45.14 on 2026-10-20. Asked by the owner on 2026-10-15 ("Shall we plan this?").
 
 Decided by the owner on 2026-10-15:
 
@@ -353,7 +353,10 @@ requires = ["gitlab.com/team/json-tools@0.4.1"]
   `PKG-HASH-MISMATCH`.
 - **Cache.** The files go to
   `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, which defaults
-  to `~/.cache/agentica/pkg/`. GitHub uses the host `github.com`. The commit in
+  to `~/.cache/agentica/pkg/`; on Windows, to
+  `%LOCALAPPDATA%/agentica/cache/pkg/` (45a: `XDG_CACHE_HOME` and `HOME` are
+  not read there, and a relative or unset `LOCALAPPDATA` leaves no cache).
+  GitHub uses the host `github.com`. The commit in
   the path means two versions never share a folder. The fill goes into a
   temporary folder that is renamed into place, so a half-written folder is never
   read. If the target already exists, the fill checks its hash. A match is a
@@ -532,7 +535,7 @@ come after port step 8.
   `docs/grammar/05b-modules.md`, a library page, a row in the programming
   skill's library references, and a `CHANGELOG.md` entry, because the module is
   new for users.
-- **45a. Manifest and lock.** Read `agentica.toml` and `agentica.lock` with
+- **45a. Manifest and lock (done).** Read `agentica.toml` and `agentica.lock` with
   `std/toml`. Resolve `owner/repo/...` imports from the cache, with the hash
   check and the `CHECK-IMPORT-*` and `PKG-LOCK-*` checks. Packages are stored
   under their logical path (45.8). There is no fetching: the tests fill the

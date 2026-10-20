@@ -133,7 +133,7 @@ def dump_ir(session: Session, source: String, front: Pipeline.Checked) -> Int
   case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return reject(session, problem, source)
     Lowering.Lowered.Done(program) ->
-      return emit(Reply.printed("#{LowerText.program_text(front.linked.root_dir, program)}\n"))
+      return emit(Reply.printed("#{LowerText.program_text(program)}\n"))
   end
 end
 
@@ -188,7 +188,10 @@ def reject(session: Session, problem: Problems.Problem, source: String) -> Int
   if style == "json"
     IO.warn(JSON.encode(DiagnosticJson.json(shown)))
   else
-    text = source_text(problem.file, root, session.settings)
+    text = ""
+    if problem.key_path == ""
+      text = source_text(problem.file, root, session.settings)
+    end
     if style == "ai"
       IO.warn(Ai.ai(shown, text))
     else

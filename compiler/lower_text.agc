@@ -46,8 +46,8 @@ export def problem_text(root_dir: String, problem: Failure.Problem) -> String
 end
 
 ## The text form of a lowered program: what `agentica --dump-ir` prints.
-export def program_text(root_dir: String, program: Ir.Program) -> String
-  return program_lines(root_dir, program).join("\n")
+export def program_text(program: Ir.Program) -> String
+  return program_lines(program).join("\n")
 end
 
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
@@ -70,16 +70,16 @@ end
 def lowered_text(linked: Linker.Linked, lowered: Lowering.Lowered) -> String
   case lowered
     Lowering.Lowered.Failed(problem) -> return problem_text(linked.root_dir, problem)
-    Lowering.Lowered.Done(program) -> return program_text(linked.root_dir, program)
+    Lowering.Lowered.Done(program) -> return program_text(program)
   end
 end
 
-def program_lines(root_dir: String, program: Ir.Program) -> List[String]
+def program_lines(program: Ir.Program) -> List[String]
   head = "program #{span_text(0, program.span)} entry=#{program.entry}"
   lines: List[String] = ["#{head} globals=#{program.globals}"]
   index = 0
   for source in program.sources
-    shown = Text.quote(Paths.stored_file(root_dir, source.file))
+    shown = Text.quote(source.name)
     lines = lines.push("source #{index} #{shown} chars=#{source.text.length}")
     index += 1
   end

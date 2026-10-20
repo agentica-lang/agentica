@@ -1,0 +1,17 @@
+version = 1
+
+[[package]]
+name = "gitlab.com/team/tools"
+version = "0.4.1"
+source = "https://gitlab.com/team/tools.git"
+commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+hash = "sha256:eec2c68b7df0c482a0dea7a004eb74dba2da04661165ad27d0e735be2534766f"
+requires = []
+
+[[package]]
+name = "owner/repo"
+version = "1.2.3"
+source = "https://github.com/owner/repo.git"
+commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+hash = "sha256:d7ddbe94ad9372ceeb069aa823207a49dd6f724e418cbbc84f7b34f32f63f4b0"
+requires = ["gitlab.com/team/tools@0.4.0"]

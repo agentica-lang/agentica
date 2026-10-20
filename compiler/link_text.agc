@@ -12,7 +12,8 @@ import Text from "text"
 ## as `module "path"`, with its declarations (without export, names linked) one level deeper, in the node text form of
 ## parse_text with ids that start at 0 inside the file. The path is the stored name of the file (Paths.stored_name):
 ## relative to the folder of the root file, with `..` parts above it, or std/NAME.agc. A failure is the lexer's ERROR
-## line with ` file="path"` added. The goldens are in tests/fixtures/frontend/modules/.
+## line with ` file="path"` added, and ` key="path"` for a failure at a key of agentica.toml or agentica.lock. The
+## goldens are in tests/fixtures/frontend/modules/.
 export def link_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) -> return program_lines(linked, {}).join("\n")
@@ -45,7 +46,11 @@ end
 
 ## The ERROR line of a link failure, with the file it is in.
 export def failure_text(root_dir: String, failure: Failure.Failure) -> String
-  return "#{Text.diagnostic_line(failure.diagnostic)} file=#{Text.quote(Paths.stored_file(root_dir, failure.file))}"
+  line = "#{Text.diagnostic_line(failure.diagnostic)} file=#{Text.quote(Paths.stored_file(root_dir, failure.file))}"
+  if failure.key_path != ""
+    return "#{line} key=#{Text.quote(failure.key_path)}"
+  end
+  return line
 end
 
 ## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).

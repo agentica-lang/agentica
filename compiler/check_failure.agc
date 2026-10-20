@@ -12,9 +12,11 @@ export struct Label
 end
 
 ## The first problem the checker found. The notes are "" when the diagnostic has none. signature is the
-## signature of the function being checked; callee the signature of the function or builtin called.
+## signature of the function being checked; callee the signature of the function or builtin called. key_path is the
+## place of a problem in agentica.toml or agentica.lock, which have no source span for it; "" for any other problem.
 export struct Problem
   file: String
+  key_path: String
   code: String
   message: String
   span: Source.Span
@@ -37,6 +39,7 @@ export def problem(
 ) -> Problem
   return Problem(
     file: file,
+    key_path: "",
     code: code,
     message: message,
     span: span,
@@ -53,6 +56,7 @@ end
 export def pack(found: Problem) -> String
   fields = [
     found.file,
+    found.key_path,
     found.code,
     found.message,
     span_text(found.span),
@@ -82,25 +86,26 @@ export def unpack(text: String) -> Problem
     at = newline + 1 + size
   end
   labels: List[Label] = []
-  index = 11
+  index = 12
   while index < fields.size
     labels = labels.push(Label(span: read_span(fields[index]), text: fields[index + 1]))
     index += 2
   end
   help = Diag.Help.NoHelp
-  if fields[4] == "1"
-    help = Diag.Help.Hint(fields[5])
+  if fields[5] == "1"
+    help = Diag.Help.Hint(fields[6])
   end
   return Problem(
     file: fields[0],
-    code: fields[1],
-    message: fields[2],
-    span: read_span(fields[3]),
+    key_path: fields[1],
+    code: fields[2],
+    message: fields[3],
+    span: read_span(fields[4]),
     help: help,
-    expected: fields[6],
-    actual: fields[7],
-    callee: fields[8],
-    signature: fields[9],
+    expected: fields[7],
+    actual: fields[8],
+    callee: fields[9],
+    signature: fields[10],
     labels: labels,
   )
 end

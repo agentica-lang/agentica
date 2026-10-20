@@ -3,8 +3,9 @@ import LinkText from "link_text"
 
 # `agentica compiler/link.agc [flags] ROOT...` prints the text form of linking each root file (link_text.agc). The
 # flags apply to the roots after them. `--stdlib=DIR` is the stdlib/ folder (the default is stdlib).
-# `--agentica-path=V`, `--xdg-data-home=V`, `--home=V` and `--local-app-data=V` replace the environment variable of the
-# pkg/ search (the process environment otherwise). `--ids` prints the id ranges of the files instead (ids_text).
+# `--agentica-path=V`, `--xdg-data-home=V`, `--xdg-cache-home=V`, `--home=V` and `--local-app-data=V` replace the
+# environment variable of the pkg/ search and of the package cache (the process environment otherwise). `--ids` prints
+# the id ranges of the files instead (ids_text).
 def main() -> Void
   stdlib = "stdlib"
   env = Env.process_env()
@@ -16,6 +17,8 @@ def main() -> Void
       env = env.with(agentica_path: argument.slice(16, argument.length - 16))
     elsif argument.starts_with?("--xdg-data-home=")
       env = env.with(xdg_data_home: argument.slice(16, argument.length - 16))
+    elsif argument.starts_with?("--xdg-cache-home=")
+      env = env.with(xdg_cache_home: argument.slice(17, argument.length - 17))
     elsif argument.starts_with?("--home=")
       env = env.with(home: argument.slice(7, argument.length - 7))
     elsif argument.starts_with?("--local-app-data=")

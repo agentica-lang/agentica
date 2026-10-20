@@ -70,9 +70,11 @@ export struct EnumDef
 end
 
 ## A source file of the program, in the order the spans refer to it: the canonical path (std/NAME.agc for a standard
-## module) and the text.
+## module), the name the bytecode stores it under (the path from the folder of the root file, or `key@version/path` for
+## a file of a package) and the text.
 export struct SourceFile
   file: String
+  name: String
   text: String
 end
 

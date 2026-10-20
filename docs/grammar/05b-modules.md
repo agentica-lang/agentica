@@ -105,7 +105,8 @@ or receiver attachment. `as` and `from` are contextual in imports, not reserved.
   time. Nothing needs to be installed, and local files or external roots cannot
   shadow it. Embedded modules may use relative imports inside `std/`.
 - `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in order:
-  `agc_libs/` beside the root program (not beside a dependency); the absolute
+  `agc_libs/` beside the root program, or beside `agentica.toml` when the project
+  has a manifest (not beside a dependency); the absolute
   roots in `AGENTICA_PATH` (`:`-separated, `;` on Windows), in order;
   `$XDG_DATA_HOME/agentica/lib/` (default `~/.local/share/agentica/lib/`; on
   Windows `%LOCALAPPDATA%/agentica/lib/`); then `/usr/local/share/agentica/lib/`
@@ -123,6 +124,97 @@ leaves the user root out. Library paths use forward slashes and reject empty,
 must stay inside its root. These checks apply to namespaced imports only:
 imports are not a filesystem sandbox. A missing module is `CHECK-IMPORT-IO`.
 Diagnostics inside an embedded module name its source, such as `std/queue.agc`.
+
+#### Packages (`agentica.toml` and `agentica.lock`)
+
+A package is a git repository of `.agc` files. A project uses packages when an
+`agentica.toml` (the manifest) is in the folder of the root file or in a folder
+above it; the nearest one counts, and its folder is the project folder. Without
+a manifest nothing changes. Phase 45a reads the manifest and the lock and loads
+packages from a cache that the user filled; fetching (`agentica install`, `add`,
+`update`) is a later phase, so a build never runs git and never uses the
+network. The design is `docs/future/45-packages.md`.
+
+```toml
+name = "acme/notes"
+version = "0.3.0"
+
+[dependencies]
+"owner/sqlite-ac" = "1.2.0"
+"gitlab.com/team/json-tools" = "0.4.1"
+
+[style]
+max_line_width = 119
+```
+
+- The manifest knows `name`, `version`, `[dependencies]` and `[style]`. An
+  unknown key at any level, a key or version of the wrong form, or a TOML syntax
+  error is `PKG-MANIFEST-INVALID`. A package key is `owner/repo` (GitHub) or
+  `host/owner/repo`; each part is lowercase letters, digits and `. _ -`, is not
+  `.` or `..`, and does not start with `-`; the host has a dot and the owner has
+  none; `std` and `pkg` cannot start a key; `github.com/...` is not a key. A
+  version is `MAJOR.MINOR.PATCH` with an optional `-prerelease`, without a `v`
+  and without `+build`. `max_line_width` is read by `agentica check` once phase
+  28 lands.
+- A manifest that declares a dependency needs `agentica.lock` beside it
+  (`PKG-LOCK-MISSING`). The lock is TOML: `version = 1`, then one `[[package]]`
+  for every package of the graph, direct and transitive, with `name` (the key),
+  `version`, `source`, `commit` (40 or 64 lowercase hex digits), `hash`
+  (`sha256:` and 64 lowercase hex digits) and `requires` (the direct
+  dependencies as `key@minimum`). A bad lock is `PKG-LOCK-INVALID`. Every locked
+  version must meet the minimum of each dependent that names it, the manifest
+  and every `requires` included, and a package must be in the lock
+  (`PKG-LOCK-STALE`); a minimum of another major than the locked one is
+  `PKG-MAJOR-CONFLICT`. A new major is a new repository, with its own key. These
+  checks run once for every command that loads code, before any file is read.
+  The build never writes the lock.
+- Manifest and lock errors have no source span. They name the file and the key
+  path, such as `dependencies.owner/sqlite-ac` or `package[1].hash` (`[n]`
+  counts from 0); a TOML syntax error has the line and column instead. In the
+  plain form the key path replaces the source lines (`= key: ...`); in `--ai` it
+  is the `key:` line; in `--json` it is `key_path`, and `range` is the start of
+  the file. `AGENTS.md` lists the `PKG-` prefix with `LEX-`, `PARSE-`, `CHECK-`,
+  `RUNTIME-`, `LOWER-` and `BYTECODE-`.
+- The import form is `import Sqlite from "owner/sqlite-ac/sqlite"`: the key,
+  then a path inside the repository, with no extension
+  (`"owner/sqlite-ac/util/json"` loads `util/json.agc`). A path is a package
+  import only when its first parts are a key that the importing file may use: a
+  key of `[dependencies]` for the files of the project, and the `requires` of
+  the lock for the files of a package. Any other path is relative, as before, so
+  an import that works today keeps its meaning. Writing
+  `github.com/owner/repo/...` for a declared key, or the key alone
+  (`"owner/repo"`), is `CHECK-IMPORT-PATH`. When a file or a folder beside the
+  importing file also matches (`owner/repo/x.agc`, or the folder `owner/repo/`),
+  the import is `CHECK-IMPORT-AMBIGUOUS`. A package that is not in the cache is
+  `CHECK-IMPORT-PACKAGE`.
+- A package file imports its own modules by relative paths, which must stay
+  inside the package: a `../` that leaves it, and a hidden folder or `agc_libs/`
+  of the package, are `CHECK-IMPORT-PATH`. It imports its dependencies by the
+  package form; it cannot see the dependencies of the project, and the project
+  cannot import the dependencies of a package (the manifest of a dependency is
+  never read at build time).
+- The cache holds one folder for each commit:
+  `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, where GitHub
+  is the host `github.com`. `XDG_CACHE_HOME` counts when it is absolute, else
+  `~/.cache` is used (no cache when `HOME` is unset too). On Windows the folder
+  is `%LOCALAPPDATA%/agentica/cache/pkg/` (no cache when it is unset or
+  relative; `XDG_CACHE_HOME` and `HOME` are not read). The commit comes from the
+  lock.
+- The hash covers the `.agc` files of the package folder. Their paths are
+  relative to it, written with `/`, in bytewise order; for each file, its path,
+  a zero byte, its size in decimal, a zero byte and its bytes. The hash is
+  `sha256:` and the SHA-256 of that stream in hex. Hidden folders (any depth),
+  `agc_libs/` at the root and files that are not `.agc` are left out. The first
+  time a build loads a package, it hashes the folder and compares the result
+  with the lock (`PKG-HASH-MISMATCH`); a symbolic link named `*.agc` is
+  `PKG-SYMLINK`. A package that no import reaches is not hashed. Nothing in the
+  cache is changed.
+- The stored name of a package file in the `.agcb` file is
+  `<key>@<version>/path/in/repo.agc`, such as
+  `owner/sqlite-ac@1.2.3/sqlite.agc`, so the bytes do not depend on the cache
+  folder. Diagnostics inside a package name the real file in the cache.
+- `agc_libs/` for `pkg/` imports is searched beside `agentica.toml` when the
+  project has a manifest, else beside the root file.
 
 #### String queue (`std/queue`)
 

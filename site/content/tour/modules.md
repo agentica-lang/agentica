@@ -208,6 +208,32 @@ See [Queue](/library/data-structures/queue/) for every function.
 
 ## Other libraries
 
-Paths that start with `pkg/` load installed libraries. `import Tools from "pkg/acme/tools"` looks for `acme/tools.agc` in `agc_libs/` next to the main program, then in each directory listed in `AGENTICA_PATH`, then in `~/.local/share/agentica/lib/`, `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`. On Windows, `AGENTICA_PATH` is separated by `;` (drive paths such as `C:\libs` are fine), the user directory is `%LOCALAPPDATA%\agentica\lib\`, and there are no system directories.
+Paths that start with `pkg/` load installed libraries. `import Tools from "pkg/acme/tools"` looks for `acme/tools.agc` in `agc_libs/` next to the main program (next to `agentica.toml` when the project has one), then in each directory listed in `AGENTICA_PATH`, then in `~/.local/share/agentica/lib/`, `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`. On Windows, `AGENTICA_PATH` is separated by `;` (drive paths such as `C:\libs` are fine), the user directory is `%LOCALAPPDATA%\agentica\lib\`, and there are no system directories.
+
+## Packages
+
+A package is a git repository of `.agc` files. A project that has an `agentica.toml` next to its main file (or in a folder above it) can import the packages the file declares. The manifest names each package by its key, `owner/repo` for GitHub and `host/owner/repo` for any other host, with the minimum version:
+
+```toml
+name = "acme/notes"
+version = "0.3.0"
+
+[dependencies]
+"owner/sqlite-ac" = "1.2.0"
+"gitlab.com/team/json-tools" = "0.4.1"
+```
+
+The import is the key and then a path inside the repository, without `.agc`:
+
+```text
+import Sqlite from "owner/sqlite-ac/sqlite"
+import Json from "gitlab.com/team/json-tools/util/json"
+```
+
+A path whose first parts are not a declared key is a relative path, as before. If a file or folder beside the importing file also matches the key, the import is `CHECK-IMPORT-AMBIGUOUS`. `github.com/owner/repo/...` is `CHECK-IMPORT-PATH`: write `owner/repo/...`.
+
+The exact versions come from `agentica.lock`, which lists every package of the project, direct or not, with its git commit and the hash of its `.agc` files. A manifest that declares a package needs a lock that agrees with it (`PKG-LOCK-MISSING`, `PKG-LOCK-STALE`, `PKG-MAJOR-CONFLICT`). Errors in `agentica.toml` and `agentica.lock` are `PKG-MANIFEST-INVALID` and `PKG-LOCK-INVALID`, and they name the file and the key (for example `dependencies.owner/sqlite-ac`) instead of a source line.
+
+The files come from a cache folder, `~/.cache/agentica/pkg/` (`$XDG_CACHE_HOME/agentica/pkg/`, or `%LOCALAPPDATA%\agentica\cache\pkg\` on Windows), one folder for each commit. This version does not download anything: the cache has to be filled already, and a package that is not there is `CHECK-IMPORT-PACKAGE`. The first time a build loads a package, it hashes the `.agc` files and compares the hash with the lock, so a changed file is `PKG-HASH-MISMATCH`. A package imports its own files by relative paths that stay inside the package, and its own dependencies by key.
 
 Import cycles are errors (`CHECK-IMPORT-CYCLE`), and so are missing files (`CHECK-IMPORT-IO`).

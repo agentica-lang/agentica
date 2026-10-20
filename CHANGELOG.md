@@ -10,6 +10,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Packages, phase 45a: an `agentica.toml` manifest and an `agentica.lock` lock
+  (both TOML, read with `std/toml`), and imports of the form
+  `import Sqlite from "owner/repo/sqlite"` (`host/owner/repo/...` for hosts
+  other than GitHub) for the packages the manifest declares, loaded from a
+  package cache that you fill by hand: fetching and the `add`, `install`,
+  `update` and `vendor` commands come in later phases. A build hashes the
+  `.agc` files of every package it loads and compares the hash with the lock.
+  The cache is `$XDG_CACHE_HOME/agentica/pkg/` (`~/.cache/agentica/pkg/`,
+  `%LOCALAPPDATA%\agentica\cache\pkg\` on Windows). New codes:
+  `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
+  `PKG-LOCK-STALE`, `PKG-MAJOR-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK`,
+  `CHECK-IMPORT-AMBIGUOUS` and `CHECK-IMPORT-PACKAGE`. A `PKG-` error about
+  `agentica.toml` or `agentica.lock` names the file and the key path
+  (`key_path` in `--json`) in place of a source span.
 - Generic type aliases: `type Matrix[T] = List[List[T]]`, used as
   `Matrix[Int]`, is transparent substitution with no new runtime type.
 - TLS sockets on Windows, with the same checks as on Linux and macOS.
@@ -38,6 +52,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** when an `agentica.toml` is in the folder of the root file or
+  above it, `pkg/` searches `agc_libs/` beside that manifest, not beside the
+  root file. Without a manifest nothing changes.
 - **Breaking:** `Lazy` is now a reserved type name.
 - **Breaking:** `Profile` is now a reserved type name.
 - HTTP runs on several schedulers (behind the multicore test switch).
