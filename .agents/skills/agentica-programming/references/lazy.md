@@ -2,18 +2,23 @@
 
 `Lazy[T]` is a lazy pipeline: a source and steps. Building one runs nothing. A
 terminal runs it and pulls one item at a time through every step, so no step
-builds a whole list. Each terminal runs the source again from the start. A
+builds a whole list. Each terminal runs the source again from the start (a
+channel cannot be read twice: a second terminal goes on where the first
+stopped). A
 `Lazy` is a recipe, not a cursor: there is no `next`, `yield`,
 `Enumerator.new` or generator (a producer is a task that sends into a
 `Channel`, `references/tasks.md`).
 
-Use it for an endless source, or when only the first results of a long chain
-are needed. To walk a whole list, use the eager `List` methods.
+Use it for an endless source, the lines of a big file, the values of a
+channel, or when only the first results of a long chain are needed. To walk a
+whole list, use the eager `List` methods.
 
 ```text
 List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]                         # (1..n).lazy, (0...n).lazy
 Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]                 # seed, f(seed), f(f(seed)) ... without end
+File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]   # lines, read as File.each_line
+Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]  # ch.lazy(ms): values until closed and drained
 
 # Steps: each gives a new Lazy and runs nothing
 Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]
@@ -66,3 +71,37 @@ end
   `Lazy` has, on a list or range (`xs.each_cons(2)`), is `CHECK-UNKNOWN-METHOD`:
   write `xs.lazy.each_cons(2)`.
 - Steps are methods: `lz |> Lazy.map() do ... end` is `CHECK-PIPE-METHOD`.
+
+## Files and channels
+
+```ruby
+def main() -> Void
+  head = File.foreach("app.log", 4096, 1000).first(10)        # opens, reads 10 lines, closes
+  bad = File.foreach("app.log", 4096, 1000).filter do |line| line.include?("ERROR") end.each do |line|
+    puts(line)
+    ok()
+  end
+  puts(head.ok? and bad.ok?)
+  jobs: Channel[Int] = Channel.new(8)
+  Task.spawn(&produce, jobs)                                  # sends into jobs, then jobs.close
+  puts(jobs.lazy(5000).reduce(0) do |sum, n| sum + n end)     # ok(sum), or error("channel: timed out")
+end
+```
+
+- `File.foreach` opens nothing until a terminal starts, and the terminal closes
+  the file before it returns, on every path (end, `first`/`find` had enough, an
+  error from the block, a failed `try`, a read error). A crash or cancel of the
+  task closes it at the task's end. Read errors, a missing file or a timeout
+  `<= 0` end the terminal with an error Result; `buffer_bytes` outside
+  1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
+- `File.foreach(...).each do ... end` with no step in between, written as one
+  chain, is `CHECK-LAZY-NO-STEP`: write `File.each_line(path, n, ms) do |line|
+  ... end`.
+- `ch.lazy(timeout_ms)`: each wait for a value obeys the timeout; a timeout
+  ends the terminal with `error("channel: timed out")`. The timeout rules differ
+  from `File.foreach`: a negative timeout is `RUNTIME-INVALID-DURATION` (not an
+  error Result), and `ch.lazy(0)` is valid (only what is already there).
+- A value a terminal took is gone even if a later step dropped it; `take`,
+  `first` and `find` take only what they need, `take_while` consumes the first
+  value it rejects. A second terminal on a drained, closed channel gives
+  `ok([])`, not an error.

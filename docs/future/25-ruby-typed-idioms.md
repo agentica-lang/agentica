@@ -580,9 +580,9 @@ destructured with a length check.
 streams of unknown length without building lists. **Now in [section
 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):**
 `File.each_line` reads a big file line by line in bounded memory (§27.4, step 1,
-order row 7.2.1h), and `Lazy[T]` is built over lists, ranges and
-`Lazy.produce` (§27.4, step 2, PR 1: `xs.lazy.filter do ... end.first(3)`), with
-I/O sources next; generators with `yield` (`Enumerator.new`, fibers, an
+order row 7.2.1h), and `Lazy[T]` is built over lists, ranges,
+`Lazy.produce`, `File.foreach` and `ch.lazy` (§27.4, step 2:
+`xs.lazy.filter do ... end.first(3)`); generators with `yield` (`Enumerator.new`, fibers, an
 external `next`) are decided against (§27.5), since a task that sends into a
 channel (§27.2) is the producer.
 

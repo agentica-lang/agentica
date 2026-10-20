@@ -488,6 +488,9 @@ static void resume_stepper(agc_vm *vm) {
   if (locked) agc_sync_take(vm);
   agc_step next = st->stepper->step(vm, st->stepper, t->regs[base]);
   if (locked) agc_sync_drop(vm);
+  /* An unlocked step locks its own sections (port.h) and must return with them closed, a park included. */
+  else if (vm->sync_depth)
+    agc_fail(vm, "RUNTIME-INTERNAL", "an unlocked step returned holding rt->sync", st->span);
   switch (next.kind) {
     case AGC_STEP_CALL:
     case AGC_STEP_CALL2: {
