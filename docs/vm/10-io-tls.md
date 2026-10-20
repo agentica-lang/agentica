@@ -27,30 +27,50 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
 - **Trust (security rule).** A non-empty `ca_file` replaces system trust. A
   missing or empty file fails the connect with `BAD_CA`. With an empty
   `ca_file`, the trust is `SSL_CERT_FILE` when set, else the system store of
-  the platform (`vm/tls_trust.h`, one adapter per system, which copies roots
-  into the OpenSSL store). The directory is `SSL_CERT_DIR` when set, else none.
-  A source that fails to load is skipped; verification still fails closed.
+  the platform (`vm/tls_trust.h`). The directory is `SSL_CERT_DIR` when set,
+  else none. A source that fails to load is skipped; verification still fails
+  closed.
+  - The system store is read once per process (`vm/tls_trust.c`, under
+    `CRYPTO_THREAD_run_once`, in the first setup pool job that needs it, never
+    on the scheduler or I/O thread) and copied into each new context, so a
+    trust change while the process runs is not seen. Its certificates are
+    shared, read-only `X509` objects.
+  - A certificate the system distrusts is added with an explicit reject of
+    `serverAuth` (`X509_add1_reject_object`), before any trusted copy (the
+    store keeps the first copy). OpenSSL's `check_trust` then fails a chain
+    through a rejected root or intermediate with `X509_V_ERR_CERT_REJECTED`
+    (`crypto/x509/x509_vfy.c`, `obj_trust` in `crypto/x509/x509_trust.c`).
+    OpenSSL never looks up the peer's own certificate, so the client's verify
+    callback (`agc_tls_trust_verify`) refuses a leaf whose rejected copy is in
+    the store. The error is `VERIFY_UNTRUSTED`.
+  - Only the certificates are copied. Platform rules beyond them are not
+    applied: Apple's date-based distrust and Certificate Transparency policy,
+    the constraints trustd puts on system anchors, and the Windows
+    `NotBefore` and disallowed-filetime properties.
   - Linux and other POSIX (`tls_trust_posix.c`): the first readable file of
     `/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/tls/certs/ca-bundle.crt`,
     `/etc/ssl/ca-bundle.pem`, `/etc/pki/tls/cacert.pem`,
     `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`, `/etc/ssl/cert.pem`.
-  - macOS (`tls_trust_darwin.c`, Security framework): the system anchors
-    (`SecTrustCopyAnchorCertificates`), changed by the admin and user trust
-    settings (`SecTrustSettingsCopyCertificates`,
-    `SecTrustSettingsCopyTrustSettings`). A setting counts when its policy is
-    absent or TLS (`kSecPolicyAppleSSL`); an empty settings array or a
-    `TrustRoot`/`TrustAsRoot` result adds a root, a `Deny` removes one, and a
-    grant limited to an application, a host name or a key use is ignored. The
-    user domain overrides the admin domain, which overrides the system. No
-    Linux path is read.
-  - Windows (`tls_trust_windows.c`, Crypt32): the current user's `ROOT` system
-    store (`CertOpenSystemStoreW`, which also shows the machine's roots), each
-    certificate whose valid uses (`CertGetEnhancedKeyUsage`) include server
-    authentication. A root that Windows would download on demand (automatic
-    root update) is not in the store until Windows fetched it; `SSL_CERT_FILE`
-    or `ca_file` covers that case.
-  - The loader runs in the setup pool job with the CA file, never on the
-    scheduler or I/O thread.
+  - macOS (`tls_trust_darwin.c`, Security framework): the user and admin
+    trust settings (`SecTrustSettingsCopyCertificates`,
+    `SecTrustSettingsCopyTrustSettings`; the user domain overrides the admin
+    domain), then the system anchors (`SecTrustCopyAnchorCertificates`). A
+    setting counts when its policy is absent or TLS (`kSecPolicyAppleSSL`). An
+    empty settings array or a `TrustRoot` result adds a root; `TrustAsRoot` on
+    an intermediate has no effect, because without `X509_V_FLAG_PARTIAL_CHAIN`
+    (kept off) OpenSSL only ends a chain at a self-signed certificate. A
+    `Deny` adds the certificate rejected, so it fails a chain even under a
+    system anchor. A grant limited to an application, a host name or a key use
+    is ignored. This is stricter than Apple's first-match order, and fails
+    closed: any matching `Deny` wins, and a `Deny` limited to one host or
+    application rejects the certificate everywhere. No Linux path is read.
+  - Windows (`tls_trust_windows.c`, Crypt32): the current user's
+    `Disallowed` system store, every certificate added rejected, then the
+    `ROOT` store (`CertOpenSystemStoreW`; both views include the machine's
+    stores), each certificate whose valid uses (`CertGetEnhancedKeyUsage`)
+    include server authentication. A root that Windows would download on
+    demand (automatic root update) is not in the store until Windows fetched
+    it; `SSL_CERT_FILE` or `ca_file` covers that case.
 - **Verification (security rule).** The client always verifies the peer. There
   is no verify-none path. An IP-literal host is checked against IP SANs and
   sends no SNI. Any other host gets SNI and hostname verification, with no
@@ -90,16 +110,16 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
   `no_files` both end the run with `RUNTIME-INTERNAL`.
 - **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against each
   other, covering the handshake, `close_notify`, raw EOF, every verify error,
-  the load errors and the trust sources (system store, `SSL_CERT_FILE`, and
-  `ca_file` over both). It needs no socket, so it runs on Linux, macOS and
-  Windows; `vm/tests/tls_trust_test.c` checks that the system store loads roots
-  (required on macOS and Windows). The goldens `tls-echo` and `tls-errors` are
-  their own peers. `tests/test_vm_tls.py` covers the rest against Node
+  the load errors, the trust sources (system store, `SSL_CERT_FILE`, and
+  `ca_file` over both), rejected roots and leaves (through `X509_verify_cert`
+  and a handshake), and a client config that holds the system store with a root
+  that verifies (required on macOS and Windows). It needs no socket, so it runs
+  on Linux, macOS and Windows. The goldens `tls-echo` and `tls-errors` are their
+  own peers. `tests/test_vm_tls.py` covers the rest against Node
   (`tests/fixtures/tls-peer.js`) and Python (`tests/fixtures/tls-peer.py`): EOF
   with and without `close_notify`, the 1 MiB limit, every verify error on both
   sides, timeouts, and system trust through `SSL_CERT_FILE`. The certificates in
   `tests/fixtures/tls/` come from `make-certs.sh`.
-
 
 ### 10.3.1 TCP (as built)
 

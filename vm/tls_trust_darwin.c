@@ -1,9 +1,8 @@
 /*
- * The system trust store on macOS, from the Security framework: the system
- * anchors, then the admin and user trust settings, which may add a root for
- * TLS or deny one (a user setting overrides an admin one, which overrides the
- * system). Certificates are copied into the OpenSSL store as DER. Platform
- * adapter behind tls_trust.h.
+ * The system trust store on macOS, from the Security framework: the user and
+ * admin trust settings first (a user setting overrides an admin one), then
+ * the system anchors. A denied certificate is added rejected, so a chain
+ * through it fails. Platform adapter behind tls_trust.h.
  */
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
@@ -19,16 +18,11 @@
 #include <Security/SecTrustSettings.h>
 #include <stdbool.h>
 
-#include <openssl/err.h>
-#include <openssl/x509.h>
-#include <openssl/x509_vfy.h>
-
 typedef enum { NO_SETTING, TRUSTED, DENIED } verdict;
 
 typedef struct {
   struct x509_store_st *store;
   CFMutableSetRef decided;
-  size_t added;
 } loader;
 
 static bool number_is(CFDictionaryRef d, CFStringRef key, SInt32 *out) {
@@ -50,10 +44,13 @@ static bool tls_policy(CFDictionaryRef d) {
 }
 
 /* The verdict of a certificate's trust settings for TLS server authentication (Apple documentation of
- * SecTrustSettingsCopyTrustSettings). An empty array means "always trust" as a root. A dictionary applies when its
- * policy is TLS. One that also limits the trust to an application, a host name or a key use counts only when it
- * denies, so a narrow grant never becomes a general root and a narrow denial still removes the root. A missing
- * result means TrustRoot; Unspecified gives no verdict. A denial wins over a grant. */
+ * SecTrustSettingsCopyTrustSettings). An empty array means "always trust". A dictionary applies when its policy is
+ * absent or TLS. One that also limits the trust to an application, a host name or a key use counts only when it
+ * denies: a narrow grant never becomes a general root (on purpose even when its key uses include certificate
+ * signing), and a narrow denial removes the certificate for every host. A missing result means TrustRoot;
+ * Unspecified gives no verdict. Any matching denial wins, which is stricter than Apple's first match and fails
+ * closed. A grant on a non-self-signed certificate (TrustAsRoot) has no effect: without X509_V_FLAG_PARTIAL_CHAIN,
+ * OpenSSL only ends a chain at a self-signed certificate. */
 static verdict tls_verdict(CFArrayRef settings) {
   CFIndex n = CFArrayGetCount(settings);
   if (n == 0) return TRUSTED;
@@ -70,20 +67,17 @@ static verdict tls_verdict(CFArrayRef settings) {
     bool narrow = CFDictionaryContainsKey(d, kSecTrustSettingsApplication) ||
                   CFDictionaryContainsKey(d, kSecTrustSettingsPolicyString) ||
                   (number_is(d, kSecTrustSettingsKeyUsage, &use) && use != (SInt32)kSecTrustSettingsKeyUseAny);
-    bool grant = result == (SInt32)kSecTrustSettingsResultTrustRoot || result == (SInt32)kSecTrustSettingsResultTrustAsRoot;
+    bool grant = result == (SInt32)kSecTrustSettingsResultTrustRoot ||
+                 result == (SInt32)kSecTrustSettingsResultTrustAsRoot;
     if (grant && !narrow) v = TRUSTED;
   }
   return v;
 }
 
-static void add_der(loader *l, SecCertificateRef cert) {
+static void add_cert(loader *l, SecCertificateRef cert, bool rejected) {
   CFDataRef data = SecCertificateCopyData(cert);
   if (!data) return;
-  const unsigned char *der = CFDataGetBytePtr(data);
-  X509 *x = d2i_X509(NULL, &der, (long)CFDataGetLength(data));
-  if (x && X509_STORE_add_cert(l->store, x) == 1) l->added++;
-  X509_free(x);
-  ERR_clear_error();
+  (void)agc_tls_trust_add_der(l->store, CFDataGetBytePtr(data), (size_t)CFDataGetLength(data), rejected);
   CFRelease(data);
 }
 
@@ -101,25 +95,26 @@ static void load_domain(loader *l, SecTrustSettingsDomain domain) {
     CFRelease(settings);
     if (v == NO_SETTING) continue;
     CFSetAddValue(l->decided, cert);
-    if (v == TRUSTED) add_der(l, cert);
+    add_cert(l, cert, v == DENIED);
   }
   CFRelease(certs);
 }
 
-size_t agc_tls_trust_system(struct x509_store_st *store) {
-  loader l = {store, CFSetCreateMutable(kCFAllocatorDefault, 0, &kCFTypeSetCallBacks), 0};
-  if (!l.decided) return 0;
+/* The domains run before the anchors, so a denied anchor is added rejected first and the store ignores the later
+ * copy; a decided certificate is skipped among the anchors anyway. */
+void agc_tls_trust_load(struct x509_store_st *store) {
+  loader l = {store, CFSetCreateMutable(kCFAllocatorDefault, 0, &kCFTypeSetCallBacks)};
+  if (!l.decided) return;
   load_domain(&l, kSecTrustSettingsDomainUser);
   load_domain(&l, kSecTrustSettingsDomainAdmin);
   CFArrayRef anchors = NULL;
   if (SecTrustCopyAnchorCertificates(&anchors) == errSecSuccess && anchors) {
     for (CFIndex k = 0, n = CFArrayGetCount(anchors); k < n; k++) {
       SecCertificateRef cert = (SecCertificateRef)CFArrayGetValueAtIndex(anchors, k);
-      if (!CFSetContainsValue(l.decided, cert)) add_der(&l, cert);
+      if (!CFSetContainsValue(l.decided, cert)) add_cert(&l, cert, false);
     }
     CFRelease(anchors);
   }
   CFRelease(l.decided);
-  return l.added;
 }
 #endif

@@ -1,32 +1,28 @@
 /*
- * The system trust store on Windows: the certificates of the current user's
- * ROOT system store (which includes the machine's roots), read with Crypt32
- * and copied into the OpenSSL store. A root whose valid uses exclude server
- * authentication is left out. Platform adapter behind tls_trust.h.
+ * The system trust store on Windows, read with Crypt32: the certificates of
+ * the current user's Disallowed store, added as rejected, then those of the
+ * ROOT store (both views include the machine's stores) whose valid uses
+ * include server authentication. Platform adapter behind tls_trust.h.
  */
 #include "tls_trust.h"
 
 #ifdef _WIN32
-/* wincrypt.h defines X509_NAME and friends as macros; OpenSSL's headers undefine them, so they come second. */
 #include <windows.h>
 #include <wincrypt.h>
-#include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <openssl/err.h>
-#include <openssl/x509.h>
-#include <openssl/x509_vfy.h>
-
 /* CertGetEnhancedKeyUsage with no flags combines the EKU extension and the EKU property. An empty list means every
- * use when the error is CRYPT_E_NOT_FOUND, and no use otherwise (Microsoft Learn, CertGetEnhancedKeyUsage). */
+ * use when the last error is CRYPT_E_NOT_FOUND, and no use when it is 0 (Microsoft Learn, CertGetEnhancedKeyUsage),
+ * so the error is cleared before the call that fills the list. */
 static bool server_auth(PCCERT_CONTEXT cert) {
   DWORD size = 0;
   if (!CertGetEnhancedKeyUsage(cert, 0, NULL, &size)) return GetLastError() == (DWORD)CRYPT_E_NOT_FOUND;
   CERT_ENHKEY_USAGE *usage = malloc(size);
   if (!usage) return false;
   bool ok = false;
+  SetLastError(0);
   if (CertGetEnhancedKeyUsage(cert, 0, usage, &size)) {
     if (usage->cUsageIdentifier == 0) ok = GetLastError() == (DWORD)CRYPT_E_NOT_FOUND;
     for (DWORD k = 0; k < usage->cUsageIdentifier && !ok; k++)
@@ -36,23 +32,22 @@ static bool server_auth(PCCERT_CONTEXT cert) {
   return ok;
 }
 
-size_t agc_tls_trust_system(struct x509_store_st *store) {
-  HCERTSTORE root = CertOpenSystemStoreW(0, L"ROOT");
-  if (!root) return 0;
-  size_t added = 0;
-  /* Each call frees the context passed in and returns the next one; the loop ends on NULL, so nothing is left to
-   * free (Microsoft Learn, CertEnumCertificatesInStore). */
+/* Copies one system store. Each CertEnumCertificatesInStore call frees the context passed in and returns the next;
+ * the loop ends on NULL, so nothing is left to free (Microsoft Learn, CertEnumCertificatesInStore). */
+static void load_store(struct x509_store_st *store, const wchar_t *name, bool rejected) {
+  HCERTSTORE system = CertOpenSystemStoreW(0, name);
+  if (!system) return;
   PCCERT_CONTEXT cert = NULL;
-  while ((cert = CertEnumCertificatesInStore(root, cert)) != NULL) {
-    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || cert->cbCertEncoded > LONG_MAX || !server_auth(cert))
-      continue;
-    const unsigned char *der = cert->pbCertEncoded;
-    X509 *x = d2i_X509(NULL, &der, (long)cert->cbCertEncoded);
-    if (x && X509_STORE_add_cert(store, x) == 1) added++;
-    X509_free(x);
-    ERR_clear_error();
+  while ((cert = CertEnumCertificatesInStore(system, cert)) != NULL) {
+    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || (!rejected && !server_auth(cert))) continue;
+    (void)agc_tls_trust_add_der(store, cert->pbCertEncoded, cert->cbCertEncoded, rejected);
   }
-  CertCloseStore(root, 0);
-  return added;
+  CertCloseStore(system, 0);
+}
+
+/* Disallowed first: the store keeps the first copy of a certificate, so a distrusted root stays rejected. */
+void agc_tls_trust_load(struct x509_store_st *store) {
+  load_store(store, L"Disallowed", true);
+  load_store(store, L"ROOT", false);
 }
 #endif

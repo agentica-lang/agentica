@@ -105,7 +105,8 @@ static agc_tls_error verify_kind(long result) {
     case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:
     case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
     case X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE:
-    case X509_V_ERR_CERT_UNTRUSTED: return AGC_TLS_ERR_VERIFY_UNTRUSTED;
+    case X509_V_ERR_CERT_UNTRUSTED:
+    case X509_V_ERR_CERT_REJECTED: return AGC_TLS_ERR_VERIFY_UNTRUSTED;
     default: return AGC_TLS_ERR_VERIFY_FAILED;
   }
 }
@@ -193,7 +194,7 @@ const char *agc_tls_error_name(agc_tls_error code) {
 agc_tls_config *agc_tls_client_config(const char *ca_file, agc_tls_failure *failure) {
   SSL_CTX *ctx = new_ctx(TLS_client_method(), failure);
   if (!ctx) return NULL;
-  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, agc_tls_trust_verify);
   if (!*ca_file) {
     system_trust(ctx);
   } else if (SSL_CTX_load_verify_file(ctx, ca_file) != 1) {
@@ -226,6 +227,8 @@ void agc_tls_config_free(agc_tls_config *config) {
   SSL_CTX_free(config->ctx);
   free(config);
 }
+
+struct x509_store_st *agc_tls_config_store(agc_tls_config *config) { return SSL_CTX_get_cert_store(config->ctx); }
 
 static agc_tls *new_session(const agc_tls_config *config, agc_tls_failure *f) {
   agc_tls *t = calloc(1, sizeof *t);

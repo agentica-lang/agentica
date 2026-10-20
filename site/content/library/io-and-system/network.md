@@ -143,7 +143,7 @@ TLS sockets and listeners use the same `TCP` functions, with the same limits
 and timeouts. `TLS.connect` uses TLS 1.2 or later and always checks the
 certificate and the host name (an IP address host is checked against the
 certificate's IP addresses). An empty `ca_file` uses the system's trusted
-certificates: the CA bundle on Linux, the system roots and Keychain trust settings on macOS, the ROOT certificate store on Windows (`SSL_CERT_FILE` replaces the system store, and `SSL_CERT_DIR` adds a directory of certificates); a nonempty
+certificates: the CA bundle on Linux, the system roots and Keychain trust settings on macOS, the ROOT certificate store on Windows, with the certificates the system distrusts rejected and the store read once per process (`SSL_CERT_FILE` replaces the system store, and `SSL_CERT_DIR` adds a directory of certificates); a nonempty
 `ca_file` is a PEM file that replaces them. `TLS.listen` takes PEM files for
 the certificate chain and the private key, and fails when a file is bad or the
 key does not match. A peer that closes without TLS's closing message ends the

@@ -61,10 +61,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - TLS system trust uses the platform's own store when `ca_file` is empty and
   `SSL_CERT_FILE` is not set: the Security framework's roots and Keychain
-  trust settings on macOS (a root the admin or user denies for TLS is no
-  longer trusted, and one they add is), and Crypt32's ROOT store on Windows.
-  Linux keeps its CA bundle search. A nonempty `ca_file` still replaces system
-  trust, and verification cannot be turned off. The TLS adapter and its tests
+  trust settings on macOS (a root the admin or user adds is trusted), and
+  Crypt32's ROOT store on Windows.
+  Linux keeps its CA bundle search. Certificates the system distrusts (macOS
+  Deny settings, the Windows Disallowed store) are rejected, also as an
+  intermediate or the server's own certificate. The store is read once per
+  process. Only the certificates are copied: platform rules beyond them
+  (Apple's date-based distrust and CT policy, the constraints trustd puts on
+  system anchors, Windows NotBefore and disallowed-filetime properties) are
+  not applied. A nonempty `ca_file` still replaces system trust, and
+  verification cannot be turned off. The TLS adapter and its tests
   now build on Windows too, and the Platforms CI links the vendored OpenSSL
   statically on macOS and Windows (no `msys-2.0.dll`); the TCP and TLS
   builtins on Windows come with the TCP port.

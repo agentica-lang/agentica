@@ -1,7 +1,7 @@
 /*
  * The system trust store on Linux and the other POSIX systems: the first
  * readable PEM bundle of the paths that distributions use. macOS has its own
- * adapter (tls_trust_darwin.c). Platform adapter behind tls_trust.h.
+ * loader (tls_trust_darwin.c). Platform adapter behind tls_trust.h.
  */
 #include "tls_trust.h"
 
@@ -19,15 +19,11 @@ static const char *const bundles[] = {
   "/etc/ssl/cert.pem",
 };
 
-size_t agc_tls_trust_system(struct x509_store_st *store) {
+void agc_tls_trust_load(struct x509_store_st *store) {
   for (size_t k = 0; k < sizeof bundles / sizeof bundles[0]; k++) {
     if (access(bundles[k], R_OK) != 0) continue;
-    /* The store is new and owned by this thread, so counting its objects before and after is exact. */
-    int before = sk_X509_OBJECT_num(X509_STORE_get0_objects(store));
     if (X509_STORE_load_file(store, bundles[k]) != 1) ERR_clear_error();
-    int after = sk_X509_OBJECT_num(X509_STORE_get0_objects(store));
-    return after > before ? (size_t)(after - before) : 0;
+    return;
   }
-  return 0;
 }
 #endif

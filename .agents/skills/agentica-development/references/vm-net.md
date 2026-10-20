@@ -133,7 +133,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `TCP`, `TLS`, `Channel` and `Task`; the workers' sockets are tcp.c sockets,
     so the end of the run sends their TLS close_notify
 
-- **Path:** `vm/tls.h`, `vm/tls_openssl.c`, `vm/tls_trust.h`,
+- **Path:** `vm/tls.h`, `vm/tls_openssl.c`, `vm/tls_trust.h`, `vm/tls_trust.c`,
   `vm/tls_trust_{posix,darwin,windows}.c`
   - **Owns:** the TLS adapter (`docs/vm/10-io-tls.md` §10.3): our own types
     (`agc_tls_config`, `agc_tls`, status OK, WANT_READ, WANT_WRITE, CLOSED or
@@ -335,6 +335,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - trust: `SSL_CERT_FILE` or else the platform store (distro bundle, macOS
     Security framework, Windows Crypt32 ROOT), and `SSL_CERT_DIR` or else no
     directory (a failing system source is skipped)
+  - the platform store is loaded once per process (`tls_trust.c`,
+    `CRYPTO_THREAD_run_once`) and copied into each context; distrusted
+    certificates (macOS Deny, Windows Disallowed) go in first with a
+    `serverAuth` reject, and the verify callback `agc_tls_trust_verify`
+    rejects a leaf that OpenSSL itself never looks up
   - a non-empty `ca_file` replaces system trust and must load.
   - SNI plus `SSL_set1_host` per connection, `X509_VERIFY_PARAM_set1_ip_asc` (no
     SNI) for IP literals
