@@ -1,0 +1,24 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 813,
+  "stdout": [
+    "3",
+    "ab",
+    "3",
+    "7",
+    "20",
+    "30",
+    "6",
+    "false",
+    "[1, 4, 9]",
+    "40",
+    "false",
+    "3",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-INDEX-OUT-OF-RANGE\",\"file\":\"@fixtures/vm/profile-measure.agc\",\"message\":\"index 5 is outside a list of length 2\",\"range\":{\"end\":{\"column\":12,\"line\":43},\"start\":{\"column\":11,\"line\":43}},\"spawned_at\":{\"column\":12,\"file\":\"@fixtures/vm/profile-measure.agc\",\"line\":67},\"stack\":[{\"column\":11,\"file\":\"@fixtures/vm/profile-measure.agc\",\"function\":\"block\",\"line\":43},{\"column\":10,\"file\":\"@fixtures/vm/profile-measure.agc\",\"function\":\"crash\",\"line\":42}],\"task\":true}",
+    ""
+  ]
+}

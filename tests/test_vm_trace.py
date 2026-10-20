@@ -270,6 +270,222 @@ def test_the_profile_is_not_part_of_all(tmp_path, traced_vm):
     assert not any(b" profile " in line for line in trace_lines(path))
 
 
+PROFILED = """def work(n: Int) -> Int
+  total = 0
+  i = 0
+  while i < n
+    total += i
+    i += 1
+  end
+  return total
+end
+
+def depth(n: Int) -> Int
+  return Profile.measure("depth") do
+    if n == 0
+      return 0
+    end
+    depth(n - 1) + 1
+  end
+end
+
+def in_task(n: Int) -> Int
+  return Profile.measure("task") do work(n) end
+end
+
+def crash(xs: List[Int]) -> Result[Int]
+  return Profile.measure("crash") do
+    ok(xs[5])
+  end
+end
+
+def main() -> Void
+  before = Profile.steps()
+  both = Profile.measure("outer") do
+    a = Profile.measure("inner") do work(100) end
+    b = Profile.measure("inner") do work(100) end
+    a + b
+  end
+  puts("outer #{Profile.steps() - before} #{both}")
+  puts(Profile.measure("wrap") do depth(20) end)
+  puts(Task.await(Task.spawn(&in_task, 50)))
+  puts(Task.await(Task.spawn(&crash, [1])).ok?)
+  3.times do |k|
+    puts(Profile.measure("after") do depth(k) end)
+  end
+end
+"""
+
+SECTION = re.compile(rb"^agc-trace \S+ profile section calls=([0-9]+) steps=([0-9]+) us=[0-9]+ gc_ms=[0-9]+ name=(\S+)$")
+FOLDED_LINE = re.compile(rb"^[^;\x00-\x1f]+(;[^;\x00-\x1f]+)* [1-9][0-9]*$")
+
+
+def profiled_bytecode(tmp_path):
+    source = tmp_path / "sections.agc"
+    source.write_text(PROFILED)
+    return compile_fixture(source, tmp_path)
+
+
+def test_profile_measure_adds_a_section_row_for_each_label(tmp_path, traced_vm):
+    """Sections are inclusive: outer holds both inner calls, and a label inside itself counts its calls but its steps
+    once, so the recursive depth section has no more steps than the wrap around it. A call that a runtime error ends
+    counts as a call with no steps and leaves the next calls of the task right."""
+    vm = traced_vm[0]
+    bytecode = profiled_bytecode(tmp_path)
+    path = tmp_path / "sections.trace"
+    plain = run_vm(vm, bytecode)
+    traced = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path})
+    assert traced == plain
+    assert plain[0] == 0
+    sections = {}
+    for line in trace_lines(path):
+        found = SECTION.match(line)
+        if found:
+            sections[found.group(3).decode()] = (int(found.group(1)), int(found.group(2)))
+    assert set(sections) == {"outer", "inner", "wrap", "depth", "task", "crash", "after"}
+    assert sections["outer"][0] == 1 and sections["inner"][0] == 2
+    assert sections["inner"][1] < sections["outer"][1]
+    measured = int(plain[1].split(b"\n")[0].split()[1])
+    assert 0 < measured - sections["outer"][1] < 20, (measured, sections["outer"])
+    assert sections["wrap"][0] == 1 and sections["depth"][0] == 21 + 1 + 2 + 3
+    assert sections["depth"][1] < sections["wrap"][1] + sections["after"][1]
+    assert sections["task"][0] == 1 and sections["task"][1] > 50
+    assert sections["crash"] == (1, 0)
+    assert sections["after"][0] == 3 and sections["after"][1] > 0
+
+
+def test_profile_steps_gives_the_same_counts_with_the_profile_off_or_on(tmp_path, traced_vm):
+    vm = traced_vm[0]
+    source = tmp_path / "steps.agc"
+    source.write_text("def main() -> Void\n  a = Profile.steps()\n  10.times do |k|\n    puts(Profile.steps() - a)\n"
+                      "  end\n  puts(Profile.measure(\"m\") do Profile.steps() end)\nend\n")
+    bytecode = compile_fixture(source, tmp_path)
+    plain = run_vm(vm, bytecode)
+    report = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": tmp_path / "r.trace"})
+    folded = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": tmp_path / "f.trace",
+                                   "AGENTICA_PROFILE_FORMAT": "folded", "AGENTICA_PROFILE_SAMPLE": "1"})
+    assert plain[0] == 0 and plain[2] == b""
+    assert report == plain and folded == plain
+
+
+def test_the_folded_profile_is_the_same_on_every_run_and_names_each_frame(tmp_path, traced_vm):
+    """One line per stack, outermost frame first: functions as name@FILE:LINE, blocks as block@FILE:LINE:COL, native
+    loops by their builtin, Profile.measure labels as measure:LABEL. Sampled at every step, the weights add up to the
+    steps of the report."""
+    vm = traced_vm[0]
+    bytecode = profiled_bytecode(tmp_path)
+    folded = {"AGENTICA_VM_TRACE": "profile", "AGENTICA_PROFILE_FORMAT": "folded", "AGENTICA_PROFILE_SAMPLE": "1"}
+    outputs = []
+    for run in range(2):
+        path = tmp_path / ("folded-%d.trace" % run)
+        assert run_vm(vm, bytecode, {**folded, "AGENTICA_VM_TRACE_FILE": path}) == run_vm(vm, bytecode)
+        outputs.append(path.read_bytes())
+    assert outputs[0] == outputs[1]
+    assert outputs[0].endswith(b"\n")
+    lines = outputs[0][:-1].split(b"\n")
+    for line in lines:
+        assert FOLDED_LINE.match(line), line
+    stacks = {line.rsplit(b" ", 1)[0] for line in lines}
+    assert len(stacks) == len(lines)
+    expected = [
+        b"main@sections.agc:30;measure:outer;block@sections.agc:32:35;measure:inner;block@sections.agc:33:34;"
+        b"work@sections.agc:1",
+        b"main@sections.agc:30;measure:wrap;block@sections.agc:38:32;depth@sections.agc:11;measure:depth;"
+        b"block@sections.agc:12:35;depth@sections.agc:11",
+        b"in_task@sections.agc:20;measure:task;block@sections.agc:21:34;work@sections.agc:1",
+        b"main@sections.agc:30;Int.times;block@sections.agc:41:11;measure:after",
+    ]
+    for stack in expected:
+        assert stack in stacks, (stack, sorted(stacks))
+    report = tmp_path / "report.trace"
+    run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": report})
+    total = re.match(rb"^agc-trace \S+ profile total wall_ms=[0-9]+ steps=([0-9]+) ", trace_lines(report)[0])
+    assert sum(int(line.rsplit(b" ", 1)[1]) for line in lines) == int(total.group(1))
+    sampled = tmp_path / "sampled.trace"
+    run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_PROFILE_FORMAT": "folded",
+                          "AGENTICA_PROFILE_SAMPLE": "100", "AGENTICA_VM_TRACE_FILE": sampled})
+    weights = [int(line.rsplit(b" ", 1)[1]) for line in trace_lines(sampled)]
+    assert weights and all(weight % 100 == 0 for weight in weights)
+    assert int(total.group(1)) - 100 < sum(weights) <= int(total.group(1))
+
+
+def test_the_folded_profile_puts_the_stacks_past_its_limit_on_one_truncated_line(tmp_path, traced_vm):
+    """Past the stack limit (lowered by a test switch), the weight of each new stack goes to one last [truncated] line
+    and one warning line follows; the weights still add up to the steps of the report."""
+    vm = traced_vm[0]
+    bytecode = profiled_bytecode(tmp_path)
+    path = tmp_path / "truncated.trace"
+    settings = {"AGENTICA_VM_TRACE": "profile", "AGENTICA_PROFILE_FORMAT": "folded", "AGENTICA_PROFILE_SAMPLE": "1",
+                "AGENTICA_VM_TEST_PROFILE_STACKS": "3", "AGENTICA_VM_TRACE_FILE": path}
+    assert run_vm(vm, bytecode, settings) == run_vm(vm, bytecode)
+    lines = trace_lines(path)
+    assert len(lines) == 5, lines
+    assert all(FOLDED_LINE.match(line) for line in lines[:3]), lines
+    assert re.match(rb"^\[truncated\] [1-9][0-9]*$", lines[3]), lines[3]
+    assert lines[4] == b"agc-trace folded profile full: new stacks weigh on [truncated]; stacks kept 3"
+    report = tmp_path / "report.trace"
+    run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": report})
+    total = re.match(rb"^agc-trace \S+ profile total wall_ms=[0-9]+ steps=([0-9]+) ", trace_lines(report)[0])
+    assert sum(int(line.rsplit(b" ", 1)[1]) for line in lines[:4]) == int(total.group(1))
+
+
+LABELS = """def main() -> Void
+  puts(Profile.measure("a;b") do 1 end)
+  puts(Profile.measure("a%3Bb") do 2 end)
+  puts(Profile.measure("[overflow]") do 3 end)
+  total = (0...4100).to_a.map do |i|
+    Profile.measure("item #{i}") do i end
+  end
+  puts(total.size)
+end
+"""
+
+
+def test_labels_past_the_section_limit_share_one_overflow_section_and_names_stay_apart(tmp_path, traced_vm):
+    """4096 labels keep a section each; the 7 after them count in one [overflow] section, apart from a label of that
+    text. In folded stacks ';' and '%' are written as %XX, so labels that differ there never share a line."""
+    vm = traced_vm[0]
+    source = tmp_path / "labels.agc"
+    source.write_text(LABELS)
+    bytecode = compile_fixture(source, tmp_path)
+    plain = run_vm(vm, bytecode)
+    assert plain[0] == 0, plain
+    path = tmp_path / "labels.trace"
+    assert run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path}) == plain
+    rows = [found.groups() for found in map(SECTION.match, trace_lines(path)) if found]
+    overflow = [int(calls) for calls, _, name in rows if name == b"[overflow]"]
+    assert overflow == [7, 1], rows[:5]
+    assert rows[0][2] == b"[overflow]" and rows[0][0] == b"7"
+    folded = tmp_path / "labels.folded"
+    run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_PROFILE_FORMAT": "folded",
+                          "AGENTICA_PROFILE_SAMPLE": "1", "AGENTICA_VM_TRACE_FILE": folded})
+    lines = trace_lines(folded)
+    assert all(FOLDED_LINE.match(line) for line in lines), lines
+    stacks = [line.rsplit(b" ", 1)[0] for line in lines]
+    assert len(set(stacks)) == len(stacks)
+    frames = {frame for stack in stacks for frame in stack.split(b";")}
+    assert {b"measure:a%3Bb", b"measure:a%253Bb", b"measure:[overflow]", b"measure[overflow]"} <= frames, frames
+
+
+def test_a_bad_profile_format_or_sample_costs_one_warning_line(tmp_path, traced_vm):
+    vm = traced_vm[0]
+    bytecode = profiled_bytecode(tmp_path)
+    for settings, warning, kept in [
+        ({"AGENTICA_PROFILE_FORMAT": "flame"}, rb'^agc-trace unknown profile format "flame"$', rb" profile total "),
+        ({"AGENTICA_PROFILE_FORMAT": "folded", "AGENTICA_PROFILE_SAMPLE": "0"},
+         rb'^agc-trace AGENTICA_PROFILE_SAMPLE needs 1 to 1000000000 steps, not "0"$', rb";measure:outer;"),
+    ]:
+        path = tmp_path / "bad.trace"
+        if path.exists():
+            path.unlink()
+        traced = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path, **settings})
+        assert traced == run_vm(vm, bytecode)
+        lines = trace_lines(path)
+        assert re.match(warning, lines[0]), lines[0]
+        assert not any(line.startswith(b"agc-trace") for line in lines[1:] if kept != rb" profile total ")
+        assert any(kept in line for line in lines[1:])
+
+
 def test_a_connection_task_names_its_servers_group_as_its_parent(tmp_path, traced_vm):
     vm = traced_vm[0]
     path = tmp_path / "http-server-close.trace"

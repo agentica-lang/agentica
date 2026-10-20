@@ -247,6 +247,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Path",
     "Process",
     "ProcessOutput",
+    "Profile",
     "Random",
     "Range",
     "Result",
@@ -2671,6 +2672,32 @@ ROWS_34: List[Model.Builtin] = [
       implementation: "Process.wait",
       effects: ["subprocess"],
       description: "Wait for exit and stderr forwarding; timeout preserves the child.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Profile.measure",
+      parameters: [
+        Model.Named(name: "label", type: Types.Type.String),
+        Model.Named(name: "block", type: Types.Type.Fn([], Types.Type.Var("T"))),
+      ],
+      result: Types.Type.Var("T"),
+      rule: Model.Rule.ProfileMeasure,
+      implementation: "Profile.measure",
+      effects: [],
+      description: (
+        "Run the block and return its value; with AGENTICA_VM_TRACE=profile, its calls, steps, time and GC time " +
+        "go to a section row of the profile under label; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Profile.steps",
+      parameters: [],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Profile.steps",
+      effects: [],
+      description: "Count the steps this task has run so far; the same on every run, with or without the profile.",
       alternatives: [],
     ),
     Model.Builtin(

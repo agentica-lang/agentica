@@ -42,10 +42,15 @@ enum {
   AGC_TRACE_ALL = (1u << 6) - 1
 };
 
+/* `profile_every`: the profile writes folded stacks sampled every that many steps instead of its report
+   (AGENTICA_PROFILE_FORMAT=folded), or 0. `profile_stacks`: the most distinct stacks it keeps, or 0 for its own limit
+   (set only by the test switch AGENTICA_VM_TEST_PROFILE_STACKS). */
 typedef struct {
   unsigned mask;
   int fd;
   uint64_t start_ns;
+  uint64_t profile_every;
+  uint32_t profile_stacks;
 } agc_trace;
 
 typedef struct {
@@ -60,6 +65,7 @@ uint64_t agc_trace_now(void);
 void agc_trace_parse(agc_trace *trace, const char *names, int fd);
 unsigned agc_trace_mask(const char *names);
 void agc_trace_message(int fd, const char *text, const char *value, size_t len, bool quoted);
+void agc_trace_write(int fd, const char *data, size_t len);
 void agc_trace_format(agc_trace_line *line, const agc_trace *trace, unsigned category, const char *format, ...)
   AGC_PRINTF_FORMAT(4, 5);
 void agc_trace_emit(const agc_trace *trace, unsigned category, const char *format, ...)

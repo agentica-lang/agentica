@@ -1,8 +1,7 @@
 /*
  * VM tracing (AGENTICA_VM_TRACE): the parser for the categories, the message
  * and line formatting, and the emitter that writes one line with one write(2).
- * The profile category (calls and steps of each function, time in each builtin)
- * is counted by interp.c and written here at the end of a run.
+ * The profile category is counted by interp.c and written by vm/profile.c.
  * Core layer. Design: docs/vm/08-loader-and-cli.md §9.
  */
 #include "core.h"
@@ -17,8 +16,6 @@
 #define CUT_MARK "..."
 #define CUT_BYTES (sizeof CUT_MARK - 1)
 #define NUMBER_TEXT 48
-#define PROFILE_TOP 30
-#define PROFILE_FILES 12
 #define CONTENT_LIMIT (AGC_TRACE_LINE - 1 - CUT_BYTES)
 
 typedef enum { LEN_INT, LEN_CHAR, LEN_SHORT, LEN_LONG, LEN_LLONG, LEN_SIZE, LEN_MAX, LEN_PTRDIFF } length_kind;
@@ -259,15 +256,18 @@ static void end_line(agc_trace_line *l) {
   l->data[l->len++] = '\n';
 }
 
-static void write_line(int fd, const agc_trace_line *l) {
+/* Writes all of DATA, or gives up on the first error: a trace never fails the run. */
+void agc_trace_write(int fd, const char *data, size_t len) {
   size_t done = 0;
-  while (done < l->len) {
-    ssize_t n = write(fd, l->data + done, l->len - done);
+  while (done < len) {
+    ssize_t n = write(fd, data + done, len - done);
     if (n < 0 && errno == EINTR) continue;
     if (n <= 0) return;
     done += (size_t)n;
   }
 }
+
+static void write_line(int fd, const agc_trace_line *l) { agc_trace_write(fd, l->data, l->len); }
 
 static unsigned category_bit(const char *name, size_t n) {
   if (n == 3 && memcmp(name, "all", 3) == 0) return AGC_TRACE_ALL;
@@ -311,6 +311,8 @@ unsigned agc_trace_mask(const char *names) {
 void agc_trace_parse(agc_trace *trace, const char *names, int fd) {
   trace->mask = 0;
   trace->fd = fd;
+  trace->profile_every = 0;
+  trace->profile_stacks = 0;
   trace->start_ns = agc_trace_now();
   if (!AGC_TRACE_BUILD || !names) return;
   for (const char *at = names;;) {
@@ -348,105 +350,4 @@ void agc_trace_emit(const agc_trace *trace, unsigned category, const char *forma
   end_line(&line);
   write_line(trace->fd, &line);
   errno = saved;
-}
-
-/* The indexes of the `limit` (at most PROFILE_TOP) largest non-zero counts, largest first (the lower index first among
- * equal counts). Returns how many there are. */
-static size_t top_counts(const uint64_t *counts, size_t n, uint32_t *top, size_t limit) {
-  size_t found = 0;
-  for (size_t k = 0; k < n; k++) {
-    if (counts[k] == 0) continue;
-    size_t at = found;
-    while (at > 0 && counts[top[at - 1]] < counts[k]) at--;
-    if (at >= limit) continue;
-    if (found < limit) found++;
-    memmove(top + at + 1, top + at, (found - at - 1) * sizeof *top);
-    top[at] = (uint32_t)k;
-  }
-  return found;
-}
-
-static uint64_t sum_counts(const uint64_t *counts, size_t n) {
-  uint64_t sum = 0;
-  for (size_t k = 0; k < n; k++) sum += counts[k];
-  return sum;
-}
-
-/* Starts the counters of the run when the profile category is on. Called before the first task enters a function. */
-void agc_profile_start(agc_vm *vm) {
-  if (!AGC_TRACE_ON(&vm->rt->trace, AGC_TRACE_PROFILE)) return;
-  const agc_program *p = vm->rt->program;
-  agc_profile *profile = agc_alloc(sizeof *profile);
-  profile->functions = p->function_count;
-  profile->builtins = p->builtin_count;
-  profile->calls = agc_alloc(agc_size_mul((size_t)p->function_count + 1, sizeof(uint64_t)));
-  profile->steps = agc_alloc(agc_size_mul((size_t)p->function_count + 1, sizeof(uint64_t)));
-  profile->builtin_calls = agc_alloc(agc_size_mul((size_t)p->builtin_count + 1, sizeof(uint64_t)));
-  profile->builtin_ns = agc_alloc(agc_size_mul((size_t)p->builtin_count + 1, sizeof(uint64_t)));
-  profile->start_ns = agc_trace_now();
-  agc_gc_measure();
-  vm->profile = profile;
-}
-
-/* The steps and calls of the functions defined in each source file, in the order of the program's sources. */
-static void sum_by_file(const agc_program *p, const agc_profile *profile, uint64_t *steps, uint64_t *calls) {
-  for (uint32_t id = 0; id < profile->functions; id++) {
-    uint32_t file = p->spans[p->functions[id].span].source;
-    steps[file] += profile->steps[id];
-    calls[file] += profile->calls[id];
-  }
-}
-
-/* One total line, then the functions with the most steps, the source files with the most steps and the builtins that
- * took the most time, each with its counts. The step that a counting loop (Range#each, Int#times, upto, downto) or a
- * stepper builtin (File.each_line) takes for each pass is the function "<native>"; List.map, each, filter and the like
- * count no step of their own, only the steps of their callbacks. Builtin time is wall time of the call itself: a
- * builtin that waits (a sleep, a read) is timed until it parks, and the garbage collector runs inside the allocations
- * of any of them. `gc_ms` and `collections` are those of the whole process so far, not of this runtime: the report of
- * the program that `agentica FILE.agc` runs counts the front end's collections too. */
-void agc_profile_report(agc_vm *vm) {
-  const agc_profile *profile = vm->profile;
-  if (!profile) return;
-  const agc_trace *tr = &vm->rt->trace;
-  const agc_program *p = vm->rt->program;
-  size_t functions = (size_t)profile->functions + 1, builtins = (size_t)profile->builtins + 1;
-  agc_gc_info gc = {0};
-  agc_gc_stats(&gc);
-  AGC_TRACE(tr, AGC_TRACE_PROFILE,
-            "total wall_ms=%" PRIu64 " steps=%" PRIu64 " calls=%" PRIu64 " builtin_calls=%" PRIu64
-            " builtin_ms=%" PRIu64 " gc_ms=%" PRIu64 " collections=%" PRIu64,
-            (agc_trace_now() - profile->start_ns) / 1000000u, sum_counts(profile->steps, functions),
-            sum_counts(profile->calls, functions), sum_counts(profile->builtin_calls, builtins),
-            sum_counts(profile->builtin_ns, builtins) / 1000000u, gc.total_ms, gc.collections);
-  uint32_t top[PROFILE_TOP];
-  size_t found = top_counts(profile->steps, functions, top, PROFILE_TOP);
-  for (size_t k = 0; k < found; k++) {
-    uint32_t id = top[k];
-    if (id == profile->functions) {
-      AGC_TRACE(tr, AGC_TRACE_PROFILE, "fn calls=0 steps=%" PRIu64 " name=<native>", profile->steps[id]);
-      continue;
-    }
-    const agc_function *fn = &p->functions[id];
-    const agc_span *at = &p->spans[fn->span];
-    const agc_string *file = p->sources[at->source].name;
-    AGC_TRACE(tr, AGC_TRACE_PROFILE, "fn calls=%" PRIu64 " steps=%" PRIu64 " name=%.*s at=%.*s:%" PRIu32,
-              profile->calls[id], profile->steps[id], agc_trace_len(fn->name->bytes), fn->name->data,
-              agc_trace_len(file->bytes), file->data, at->start_line);
-  }
-  uint64_t *file_steps = agc_alloc(agc_size_mul((size_t)p->source_count + 1, sizeof(uint64_t)));
-  uint64_t *file_calls = agc_alloc(agc_size_mul((size_t)p->source_count + 1, sizeof(uint64_t)));
-  sum_by_file(p, profile, file_steps, file_calls);
-  found = top_counts(file_steps, p->source_count, top, PROFILE_FILES);
-  for (size_t k = 0; k < found; k++) {
-    const agc_string *file = p->sources[top[k]].name;
-    AGC_TRACE(tr, AGC_TRACE_PROFILE, "file calls=%" PRIu64 " steps=%" PRIu64 " name=%.*s", file_calls[top[k]],
-              file_steps[top[k]], agc_trace_len(file->bytes), file->data);
-  }
-  found = top_counts(profile->builtin_ns, builtins, top, PROFILE_TOP);
-  for (size_t k = 0; k < found; k++) {
-    uint32_t id = top[k];
-    const char *name = id < profile->builtins ? p->builtins[id]->name : "";
-    AGC_TRACE(tr, AGC_TRACE_PROFILE, "builtin calls=%" PRIu64 " us=%" PRIu64 " name=%s", profile->builtin_calls[id],
-              profile->builtin_ns[id] / 1000u, name);
-  }
 }

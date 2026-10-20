@@ -56,7 +56,9 @@ record numbers only from an idle machine, in the last section of
   run ends (stderr, or `AGENTICA_VM_TRACE_FILE`): the `total` line (`wall_ms`,
   `steps`, `calls`, `builtin_ms`, `gc_ms`, `collections`), then the 30
   functions with most steps (`fn`, with `at=FILE:LINE`), the 12 files with most
-  steps and the 30 builtins with most time (`us=`). `agentica FILE.agc` prints
+  steps, the 30 builtins with most time (`us=`) and the `section` rows of
+  `Profile.measure`; `AGENTICA_PROFILE_FORMAT=folded` writes flame graph
+  stacks instead (`references/vm-build.md`). `agentica FILE.agc` prints
   two reports, the front end's and the program's; in the second, `gc_ms` and
   `collections` are still those of the whole process. `check` of a file with no
   `main` prints its report too.
