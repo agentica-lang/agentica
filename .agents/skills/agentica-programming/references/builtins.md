@@ -39,6 +39,7 @@ Random.int(min: Int, max: Int) -> Int   # uniform, both ends inclusive; min > ma
 Random.float() -> Float                 # 0.0 up to, not including, 1.0
 Profile.measure(label: String, block: Fn[T]) -> T   # runs the block once; a section row with the profile on
 Profile.steps() -> Int                  # steps of this task so far; the same on every run (performance.md)
+Crypto.sha256(data: List[Int]) -> List[Int]   # 32 digest bytes; an item outside 0..255 halts (RUNTIME-INVALID-NUMBER)
 ```
 
 - `IO.gets` strips LF, CR, or CRLF; a blank line is `ok("")`, not the end.
@@ -49,6 +50,8 @@ Profile.steps() -> Int                  # steps of this task so far; the same on
 - `String.from_bytes` decodes strictly. A byte read can split a UTF-8 character,
   so decode complete sequences only, and switch to text reads only at character
   boundaries.
+- `Crypto.sha256` hashes bytes (a `List[Int]`, as the byte reads give) with
+  OpenSSL. Its time grows with the list. `Crypto` is a reserved type name.
 - `IO.eof?` does not consume a byte and does not wait for a whole UTF-8
   character. Reads have no timeout; step budgets do not interrupt blocking
   input.

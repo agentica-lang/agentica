@@ -196,7 +196,7 @@ Read only what the task needs:
   pattern, block, method or Result, or a core rule not stated here.
 - `references/builtins.md`: a builtin not in the cheat sheet, or an exact
   signature (String, List, Map, Set, Range, Int, Float, IO, System, Time,
-  Random).
+  Random, `Crypto.sha256`).
 - `references/lazy.md`: `Lazy[T]`, an endless source, the lines of a file or
   the values of a channel through steps, writing lines to a file, `try` in a
   step, or the first few results of a long chain of steps.

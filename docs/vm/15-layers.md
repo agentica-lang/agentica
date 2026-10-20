@@ -46,16 +46,17 @@ before it moved; the header split moved no line of a `.c` file except the
   - **May use:** `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv
 
 - **Layer:** **Services**
-  - **Files:** `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`,
-    `tree.c`, `stream.c`, `lazy.c`, `duplex.c`, `process.c`, `system.c`,
-    `tcp.c`, `http_fields.c`, `http_service.c`, `http_server.c`, `http_wire.c`,
-    `logger.c`, `testing.c`
+  - **Files:** `strings.c`, `numbers.c`, `crypto.c`, `json.c`, `json_typed.c`,
+    `files.c`, `tree.c`, `stream.c`, `lazy.c`, `duplex.c`, `process.c`,
+    `system.c`, `tcp.c`, `http_fields.c`, `http_service.c`, `http_server.c`,
+    `http_wire.c`, `logger.c`, `testing.c`
   - **May use:** `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter
     headers, libuv, yyjson (`json.c` only)
 
 - **Layer:** **Adapters**
-  - **Files:** `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c`
-    (`http_parse.h`), `file_io.c` and `file_windows.c` (`file_io.h`),
+  - **Files:** `tls_openssl.c` (`tls.h`), `digest_openssl.c` (`digest.h`),
+    `http_pico.c` and `http_body.c` (`http_parse.h`), `file_io.c` and
+    `file_windows.c` (`file_io.h`),
     `process_posix.c` and `process_windows.c` (`process_os.h`: command search),
     `duplex_posix.c` and `duplex_windows.c` (`duplex_os.h`: child channel ends),
     `system_posix.c` and `system_windows.c` (`system_os.h`: the system name),
@@ -414,14 +415,15 @@ or the `Makefile`); that job checks that `rg` is installed and installs ripgrep
 if not. The script fails when:
 
 1. a `vm/*.c` or `vm/*.h` file is in no list, or a listed file does not exist;
-2. a core file includes `services.h`, `net.h`, `tls.h`, `http_parse.h` or
-   `http_fields.h`;
+2. a core file includes `services.h`, `net.h`, `tls.h`, `digest.h`,
+   `http_parse.h` or `http_fields.h`;
 3. a service or adapter file includes `core.h`;
 4. an adapter file includes `port.h`, `services.h`, `net.h` or `http_fields.h`
    (it may include `value.h`; rule 8 keeps it to the memory functions);
 5. a third-party header is included outside its place: `<gc.h>` only in
-   `value.c`; `<openssl/...>` only in `tls_openssl.c`; `<picohttpparser.h>` only
-   in `http_pico.c`; `"yyjson.h"` only in `json.c`; `<uv.h>` only in `loop.c`,
+   `value.c`; `<openssl/...>` only in `tls_openssl.c` and `digest_openssl.c`;
+   `<picohttpparser.h>` only in `http_pico.c`; `"yyjson.h"` only in `json.c`;
+   `<uv.h>` only in `loop.c`,
    `runq.c`, `sync.c` and `inbox.c` (for `uv_mutex_t`, the one mutex type that
    also builds on Windows, and `uv_async_t`, which wakes the loop),
    `stdio_windows.c` and the stream services (`stream.c`, `duplex.c`,

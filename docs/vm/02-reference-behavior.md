@@ -116,6 +116,11 @@ is not repeated here; read the file.
   forms return the same text as an `error(...)` value.
 - `String.from_bytes` checks that every item is 0 to 255, then decodes strictly:
   no surrogates, no overlong forms, no code points above U+10FFFF.
+- `Crypto.sha256` checks that every item is 0 to 255, else
+  `RUNTIME-INVALID-NUMBER` at the argument, then hashes the bytes with OpenSSL
+  (`vm/digest_openssl.c`, behind `digest.h`) and returns the 32 digest bytes.
+  It charges one turn-cost unit per item (§10.2.1) and runs without the shared
+  lock, since it reads only its argument.
 
 ### 2.4 Printing values
 

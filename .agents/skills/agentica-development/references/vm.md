@@ -54,7 +54,8 @@ goes in `value.h`; one a service calls to wait, do I/O or own a handle goes in
 core and the driver call goes in `core.h`; a service's export goes in
 `services.h`. A `vm/tests/*.c` file includes what it uses. Third-party headers
 stay in their place: `gc.h` in `value.c`, `uv.h` in `loop.c` and the stream
-services, OpenSSL in `tls_openssl.c`, picohttpparser in `http_pico.c`,
+services, OpenSSL in `tls_openssl.c` (and `tls_trust*.c`) and
+`digest_openssl.c`, picohttpparser in `http_pico.c`,
 `yyjson.h` in `json.c`.
 
 ## Rules every change keeps
