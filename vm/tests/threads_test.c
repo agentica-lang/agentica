@@ -133,7 +133,7 @@ static agc_value test_net_where(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value test_service(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_value capacity = agc_int(1);
   agc_value channel = agc_find_builtin((const uint8_t *)"Channel.new", 11, 1)->fn(vm, &capacity, span);
-  (void)agc_task_service(vm, args[0], channel, span);
+  (void)agc_task_service(vm, args[0], channel, channel, span);
   return agc_void();
 }
 

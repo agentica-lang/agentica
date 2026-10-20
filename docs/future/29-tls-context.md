@@ -204,8 +204,9 @@ HTTP.listen_stream_tls(host: String, port: Int, tls: TlsContext, handler: Fn[Htt
 - `HTTP.listen_tls` and `HTTP.listen_stream_tls` (20g) take a server context
   instead of `cert_file` and `key_file`.
 - The client (`docs/vm/10-io-http.md` §10.7.1) keeps the context in its
-  options and its workers call `TLS.connect` with it, so the `SSL_CTX` made for
-  each connection in phase 20 goes away. Each socket takes its own reference
+  options and its workers call `TLS.connect` with it. This replaces the
+  std-only handle of #394, where `HttpWire.connect_tls` builds one `SSL_CTX` per
+  client from its `ca_file`. Each socket takes its own reference
   with `SSL_CTX_up_ref` and drops it with `SSL_CTX_free` when it closes, so a
   context the program no longer holds stays valid while a client uses it
   (29.6). The server side calls `TLS.listen(host, port, tls)`.

@@ -188,9 +188,15 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
   service task awaits the owner the same way: after an owner crash it closes
   `jobs`, so later calls get `http: client is closed`; the workers are
   cancelled with the owner and calls in flight return their timeout.
-- A worker owns one connection, made with `TCP.connect` or `TLS.connect` (with
-  the client's `ca_file`), so DNS, connect, TLS and the close rules stay in
-  tcp.c. Its first job waits in its inbox, so no task keeps that job's body
+- A worker owns one connection, made with `TCP.connect` or
+  `HttpWire.connect_tls`, so DNS, connect, TLS and the close rules stay in
+  tcp.c. `HttpWire.connect_tls` is `TLS.connect` with the client's TLS
+  context: tcp.c builds one `SSL_CTX` from the client's `ca_file` on a pool
+  thread at the first `https://` connection, and every later connection makes
+  its `SSL` from it. Each connection, and the build, holds a reference, so
+  `HttpWire.drop_tls` (run by the service task after `close_client`) frees the
+  context only after the last handshake and connection let it go. A failed
+  build is not kept: the next connection tries again. Its first job waits in its inbox, so no task keeps that job's body
   for the worker's life; the owner keeps only each worker's last reply
   channel. It runs a job, answers on the job's reply channel, tells the owner on
   `jobs` whether it keeps the connection, then waits on its inbox for
@@ -246,8 +252,6 @@ The C client this replaced differs in ways no test sees:
 - The 1 ms guard before a freed connection went to the next waiter is gone.
 - A cancelled caller only stops waiting: its job runs to its end or its
   deadline, and then its connection is closed.
-- `TLS.connect` loads the CA file for each connection, so each has its own
-  `SSL_CTX`, where the C client loaded one per client.
 - A body that is not UTF-8 also closes the connection.
 - After `close_client` no request goes out that a worker had not started:
   every job still on `jobs`, waiting or in a worker's inbox is answered

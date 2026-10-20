@@ -199,9 +199,13 @@ typedef struct {
   int64_t port;
 } agc_listener;
 
-/* An HttpClient: the jobs channel of its owner task and its HttpClientOptions (vm/http_service.c). */
+/* An HttpClient: the jobs channel of its owner task and its HttpClientOptions (vm/http_service.c), and the TLS client
+   context that its https connections share (vm/tcp.c's, opaque here: made by the first HttpWire.connect_tls, given
+   back by HttpWire.drop_tls, which sets tls_dropped; both under rt->sync). */
 typedef struct {
   agc_value jobs, options;
+  void *tls;
+  bool tls_dropped;
 } agc_http_client;
 
 typedef struct {
