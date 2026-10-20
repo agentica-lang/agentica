@@ -103,7 +103,8 @@ Two prefixes select where a module comes from:
   4. `/usr/local/share/agentica/lib/`, then `/usr/share/agentica/lib/`.
 
 On Windows, `AGENTICA_PATH` is separated by `;` and takes drive (`C:\libs`,
-`C:/libs`) and UNC (`\\server\share`) roots, the user root is
+`C:/libs`) and UNC (`\\server\share`) roots, and also `/foo` and `\foo` (from
+the root of the current drive); `C:libs` is relative. The user root is
 `%LOCALAPPDATA%/agentica/lib/` (left out when the variable is unset or
 relative; `XDG_DATA_HOME` and `HOME` are not read), and there are no default
 system roots. Empty `AGENTICA_PATH` entries are ignored; a relative
