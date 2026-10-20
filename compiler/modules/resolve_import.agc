@@ -1,13 +1,37 @@
-## Finds the module an import names: a std/ module in the stdlib/ folder, a pkg/ library in the search roots, or a file
-## next to the importing one. A module is known by its key: the canonical
-## path of a file, or std/NAME.agc for a standard module.
+## Finds the module an import names: a std/ module in the stdlib/ folder, a package of the cache that the manifest
+## declares as pkg/NAME/ (packages/package_import.agc), a pkg/ library in the search roots, or a file next to the
+## importing one. A module is known by its key: the canonical path of a file, or std/NAME.agc for a standard module.
 
 import Diag from "../diagnostics/diagnostic"
+import Packages from "../packages/package_import"
 import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
 import SourceFile from "../syntax/source_file"
 import Workspace from "workspace"
+
+## What a build gives the resolution besides the importing file: libs_dir, the folder whose agc_libs/ is searched first
+## (the folder of the manifest when the project has one, else the folder of the root file), and the packages
+## (packages/package_import.agc).
+export struct Build
+  libs_dir: String
+  scope: Packages.Scope
+end
+
+## The importing file: its key and the package it belongs to.
+export struct Importer
+  key: String
+  origin: Packages.Origin
+end
+
+## The module an import names: its key, the package it belongs to, its stored name when it is not just the path from
+## the root folder (a package file's is `pkg/name@version/path`), and the packages loaded so far.
+export struct Resolution
+  key: String
+  origin: Packages.Origin
+  name: String
+  scope: Packages.Scope
+end
 
 ## True for the key of a standard module, which no canonical path can look like.
 export def embedded?(key: String) -> Bool
@@ -32,30 +56,79 @@ export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
   end
 end
 
-## The key of the module that the import path file (already ending in .agc) names, found from the module with key.
-## root_dir is the folder of the root file, where agc_libs/ is searched first. A failure is CHECK-IMPORT-PATH or
-## CHECK-IMPORT-IO at site.
+## Finds the module that the import path file (already ending in .agc) names, from the importer. A failure is
+## CHECK-IMPORT-PATH, CHECK-IMPORT-IO, CHECK-IMPORT-PACKAGE or a PKG- failure at site.
 export def resolve_import(
   settings: Env.Settings,
-  root_dir: String,
-  key: String,
+  build: Build,
+  importer: Importer,
   file: String,
   site: Failure.Site,
-) -> Result[String]
+) -> Result[Resolution]
   if file.starts_with?("std/")
-    return standard(settings, file, site)
+    key = try standard(settings, file, site)
+    return ok(plain(build, key))
   elsif file.starts_with?("pkg/")
-    return library(settings, root_dir, file, site)
-  elsif embedded?(key)
+    return pkg(settings, build, importer, file, site)
+  elsif embedded?(importer.key)
     # A relative import of a standard module stays in std/.
-    return resolve_import(settings, root_dir, key, key.slice(0, key.length - Paths.last_part(key).length) + file, site)
+    folder = importer.key.slice(0, importer.key.length - Paths.last_part(importer.key).length)
+    return resolve_import(settings, build, importer, folder + file, site)
   end
-  return relative(settings.workspace, key, file, site)
+  return beside(settings.workspace, build, importer, file, site)
 end
 
 # The path of the source of a std/ module under stdlib/: the key without its std/.
 def std_path(key: String) -> String
   return key.slice(4, key.length - 4)
+end
+
+# A module of std/ or pkg/ libraries, which belongs to no package.
+def plain(build: Build, key: String) -> Resolution
+  return Resolution(key: key, origin: Packages.project_origin(), name: "", scope: build.scope)
+end
+
+# A pkg/ import: a package the importing manifest declares, which shadows the library roots for its name, else a
+# library of the roots (for a file of the project).
+def pkg(
+  settings: Env.Settings,
+  build: Build,
+  importer: Importer,
+  file: String,
+  site: Failure.Site,
+) -> Result[Resolution]
+  try Paths.validate_library_path(file, site)
+  case try Packages.match_import(build.scope, importer.origin, file, site)
+    Packages.Match.Library ->
+      key = try library(settings, build.libs_dir, file, site)
+      return ok(plain(build, key))
+    Packages.Match.Package(name, rest) ->
+      located = try Packages.open_package(settings.workspace, settings.env, build.scope, name, rest, site)
+      scope = build.scope.with(opened: located.opened)
+      return ok(Resolution(key: located.file, origin: located.origin, name: located.name, scope: scope))
+  end
+end
+
+# The file next to the importing one. A file of a package may not leave the package.
+def beside(
+  workspace: Workspace.Workspace,
+  build: Build,
+  importer: Importer,
+  file: String,
+  site: Failure.Site,
+) -> Result[Resolution]
+  name = ""
+  if importer.origin.root != ""
+    # The path written is checked before the file system is asked, so a ../ that leaves the package is
+    # CHECK-IMPORT-PATH whether or not the file is there; the file found is checked too, since a link may lead out.
+    written = Paths.folded(Paths.join(Paths.directory_of(importer.key), file))
+    try Packages.stay_inside(importer.origin, written, site)
+  end
+  target = try relative(workspace, importer.key, file, site)
+  if importer.origin.root != ""
+    name = try Packages.stay_inside(importer.origin, target, site)
+  end
+  return ok(Resolution(key: target, origin: importer.origin, name: name, scope: build.scope))
 end
 
 def io_failure(site: Failure.Site, message: String) -> String
@@ -80,9 +153,8 @@ def std_exists?(settings: Env.Settings, file: String) -> Bool
   end
 end
 
-def library(settings: Env.Settings, root_dir: String, file: String, site: Failure.Site) -> Result[String]
-  try Paths.validate_library_path(file, site)
-  roots = try library_roots(settings, root_dir, site)
+def library(settings: Env.Settings, libs_dir: String, file: String, site: Failure.Site) -> Result[String]
+  roots = try library_roots(settings, libs_dir, site)
   rest = file.slice(4, file.length - 4)
   for root in roots
     candidate = Paths.join(root, rest)
@@ -93,10 +165,11 @@ def library(settings: Env.Settings, root_dir: String, file: String, site: Failur
   return error(io_failure(site, "cannot find library module"))
 end
 
-# The search roots of pkg/: agc_libs/ next to the root file, AGENTICA_PATH, the user data folder, then the system
-# folders (none on Windows). Every AGENTICA_PATH entry must be absolute, whether or not it is used. The Windows rules
-# of docs/grammar/05b-modules.md are all here: the ";" separator, drive and UNC roots, and %LOCALAPPDATA%.
-def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) -> Result[List[String]]
+# The search roots of pkg/: agc_libs/ next to the manifest, or to the root file when there is none, AGENTICA_PATH, the
+# user data folder, then the system folders (none on Windows). Every AGENTICA_PATH entry must be absolute, whether or
+# not it is used. The Windows rules of docs/grammar/05b-modules.md are all here: the ";" separator, drive and UNC
+# roots, and %LOCALAPPDATA%.
+def library_roots(settings: Env.Settings, libs_dir: String, site: Failure.Site) -> Result[List[String]]
   on_windows = settings.env.windows
   separator = ":"
   if on_windows
@@ -107,28 +180,18 @@ def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) 
     if entry == ""
       next
     end
-    if !absolute?(entry, on_windows)
+    if !Paths.absolute?(entry, on_windows)
       return error(
         Failure.fail_at(site, "CHECK-IMPORT-PATH", "AGENTICA_PATH roots must be absolute", Diag.Help.NoHelp),
       )
     end
     configured = configured.push(entry)
   end
-  roots = [Paths.join(root_dir, "agc_libs")].concat(configured).concat(user_roots(settings.env, on_windows))
+  roots = [Paths.join(libs_dir, "agc_libs")].concat(configured).concat(user_roots(settings.env, on_windows))
   if on_windows
     return ok(roots)
   end
   return ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
-end
-
-# A root that does not depend on the working directory. Elsewhere it starts with "/". On Windows it is a drive path
-# (C:\ or C:/), a UNC path (\\server\share) or a path from the root of the current drive (/ or \); "C:libs" is
-# relative.
-def absolute?(path: String, on_windows: Bool) -> Bool
-  if on_windows
-    return path.starts_with?("\\") or Paths.rooted?(path)
-  end
-  return path.starts_with?("/")
 end
 
 # Elsewhere, XDG_DATA_HOME when it is absolute, else ~/.local/share; an unset HOME leaves the user root out (the
@@ -136,7 +199,7 @@ end
 # XDG_DATA_HOME and HOME are not read there.
 def user_roots(env: Env.Env, on_windows: Bool) -> List[String]
   if on_windows
-    if absolute?(env.local_app_data, true)
+    if Paths.absolute?(env.local_app_data, true)
       return [Paths.join(env.local_app_data, "agentica/lib")]
     end
     return []
@@ -157,26 +220,10 @@ def contained(workspace: Workspace.Workspace, root: String, candidate: String, s
   if !base.ok? or !target.ok?
     return error(io_failure(site, "cannot resolve import"))
   end
-  if !inside?(parts(base.unwrap!), parts(target.unwrap!))
+  if !Paths.inside?(base.unwrap!, target.unwrap!)
     return error(Failure.fail_at(site, "CHECK-IMPORT-PATH", "library path escapes its root", Diag.Help.NoHelp))
   end
   return ok(target.unwrap!)
-end
-
-def parts(path: String) -> List[String]
-  return path.split("/").filter do |part| part != "" end
-end
-
-def inside?(base: List[String], target: List[String]) -> Bool
-  if target.size < base.size
-    return false
-  end
-  for index in 0...base.size
-    if base[index] != target[index]
-      return false
-    end
-  end
-  return true
 end
 
 # The file next to the importing one. A missing last part is accepted and a missing folder is refused

@@ -3,17 +3,16 @@
 
 import Ast from "../syntax/ast"
 import Declarations from "declarations"
-import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
 import Modules from "modules"
 import Resolve from "resolve"
 import Rewrite from "rewrite"
 
-## One file of the linked program: its stored name (Paths.stored_name of the canonical key: the path from the root
-## folder, which the bytecode keeps), its source text (for the help of the checker), its declarations with linked names
-## and without exports, in the order of the file. first_id and next_id bound the node ids of the file (its imports and
-## exports count too, so the declarations leave gaps).
+## One file of the linked program: its stored name (Module.name: the path from the root folder, which the bytecode
+## keeps, or `key@version/path` for a file of a package), its source text (for the help of the checker), its
+## declarations with linked names and without exports, in the order of the file. first_id and next_id bound the node
+## ids of the file (its imports and exports count too, so the declarations leave gaps).
 export struct LinkedModule
   key: String
   file: String
@@ -107,7 +106,7 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
       LinkedModule(
         key: key,
         file: module.file,
-        name: Paths.stored_name(loaded.root_dir, key),
+        name: module.name,
         prefix: module.prefix,
         first_id: module.first_id,
         next_id: Ast.next_free_id(module.program),

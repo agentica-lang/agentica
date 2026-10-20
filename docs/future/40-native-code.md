@@ -182,8 +182,7 @@ FFI, then the JIT, then AOT if measurements ask for it. The reason: native
 libraries reach a program as packages, so the packages come before the first
 native module. This replaces the order of 2026-10-15 ("the FFI before the JIT,
 right after the bootstrap"). The owner answered
-[45.14](45-packages.md#4514-open-questions) on 2026-10-20, so the phases after
-45-0 can start.
+[45.14](45-packages.md#4514-open-questions) on 2026-10-20.
 
 1. The package system ([§45](45-packages.md)). Native packages come after the
    FFI (45.10).

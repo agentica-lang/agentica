@@ -158,8 +158,13 @@ section for the area you are changing.
   rules: `;`, drive and UNC roots, LOCALAPPDATA, no system roots); first
   existing file wins. Skip missing candidates before normalizing the path (it
   fails for absent parent directories); validate namespace components and
-  canonical symlink containment. Other paths remain source-relative. No package
-  registry, wildcard imports, module state, cycles, or receiver attachment.
+  canonical symlink containment. Other paths remain source-relative, unless
+  their first part is a package name the importing file declares (the project's
+  manifest, or the package's own for a package file; `package_import.agc`). Then
+  the files come from the cache folder of the locked commit, hashed once per
+  build, and a package file may not import outside its package. `agc_libs/` of
+  `pkg/` sits beside `agentica.toml` when there is one. No package registry,
+  wildcard imports, module state, cycles, or receiver attachment.
 - Linking/visibility and cross-file diagnostics are tested through `--json
   check` in the tests/test_spec_*.py modules (the old module test cases) and
   against the frozen goldens in tests/test_frontend_modules.py;

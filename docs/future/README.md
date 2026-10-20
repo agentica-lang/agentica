@@ -171,10 +171,9 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 45
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)
-  - Status: Designed; on the path to the JIT before the FFI
-    ([§40.5](40-native-code.md#405-order)). Decided by the owner on 2026-10-15:
-    `std/toml` first (45-0, done), TOML manifest and lock, `Toml.Value` decode,
-    `owner/repo` imports; §45.14 answered on 2026-10-20, so 45a can start
+  - Status: 45-0 (`std/toml`) and 45a (manifest, lock, `pkg/<name>/`
+    imports from the cache) built; 45b-45d planned. Order:
+    [§40.5](40-native-code.md#405-order). Form: issue #468
 
 - §: 46
   - Title: Signals

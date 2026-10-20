@@ -11,10 +11,11 @@ bytecode) and the `std/` sources inside. The build starts from the checked-in
 VERSION             the version, one line (read by the Makefile)
 compiler/           the front end in Agentica (§18), one folder per context:
                     app (CLI, pipeline), io (the only I/O of the stages),
-                    syntax (lexer, parser), modules (linker), check, catalog
-                    (builtins, prelude), lower, bytecode, diagnostics, bdd,
-                    embedded; front_end.agc at the root is the program the
-                    binary carries
+                    syntax (lexer, parser), modules (linker), packages
+                    (manifest, lock, cache), check, catalog (builtins,
+                    prelude), lower, bytecode, diagnostics, bdd, embedded;
+                    front_end.agc at the root is the program the binary
+                    carries
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
 vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, JSON;
                     agentica.c is the main of the binary (`run`, front end, hand-off)
@@ -135,8 +136,12 @@ phase 13).
   `io/host.agc` builds and `app/` passes in. `app/`, `bdd/` and `io/` may do
   I/O. `tests/test_style_core_purity.py` enforces it.
 - Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
-  `RUNTIME-`, `LOWER-`, `BYTECODE-`), and carry a source span. Tests assert
-  the code (and the span when it matters), never message text.
+  `RUNTIME-`, `LOWER-`, `BYTECODE-`) or by area (`PKG-`: the manifest, the lock
+  and the package cache), and carry a source span. A `PKG-` error about
+  `agentica.toml` or `agentica.lock` carries the file and the key path instead
+  (`key_path` in `--json`; a missing or unreadable file has the file alone).
+  Tests assert the code (and the span, or the file and key path, when it
+  matters), never message text.
 - `compiler/` is the front end: every language change (syntax, checker rule,
   builtin row, builtin record or enum entry, message text) goes there, with its
   golden. The files `builtins_data.agc`, `check_tables.agc` and

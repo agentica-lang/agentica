@@ -13,7 +13,9 @@ import Paths from "import_path"
 import Lexer from "../syntax/lexer"
 import Env from "link_env"
 import Failure from "link_failure"
+import Packages from "../packages/package_import"
 import Parser from "../syntax/parser"
+import Project from "../packages/project"
 import Resolve from "resolve_import"
 import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
@@ -28,10 +30,14 @@ export struct Named
   name: String
 end
 
-## A file of the program once it is loaded. named maps each local name of an import list to what it names.
+## A file of the program once it is loaded. named maps each local name of an import list to what it names. name is the
+## path the file is stored under (Paths.stored_name, or `pkg/name@version/path` for a file of a package), and origin
+## the package it belongs to.
 export struct Module
   key: String
   file: String
+  name: String
+  origin: Packages.Origin
   prefix: String
   first_id: Int
   text: String
@@ -73,6 +79,18 @@ struct Walk
   order: List[String]
   next_id: Int
   root_dir: String
+  build: Resolve.Build
+end
+
+# A file that was read and parsed, ready to join the walk.
+struct Parsed
+  key: String
+  file: String
+  text: String
+  program: Ast.Program
+  first_id: Int
+  name: String
+  origin: Packages.Origin
 end
 
 struct Collected
@@ -93,8 +111,21 @@ export def load(root: String, settings: Env.Settings) -> Result[Loaded]
       Failure.fail_at(Failure.Site(file: file, span: program.span), "CHECK-IMPORT-IO", key.message, Diag.Help.NoHelp),
     )
   end
-  empty = Walk(stack: [], seen: {}, done: {}, order: [], next_id: 0, root_dir: Paths.directory_of(key.unwrap!))
-  walk = try enter(settings, empty, key.unwrap!, file, text, program, 0)
+  root_dir = Paths.directory_of(key.unwrap!)
+  project = try Project.find(workspace, root_dir)
+  scope = try Packages.check_manifests(workspace, settings.env, Packages.scope_of(project))
+  build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: scope)
+  empty = Walk(stack: [], seen: {}, done: {}, order: [], next_id: 0, root_dir: root_dir, build: build)
+  first = Parsed(
+    key: key.unwrap!,
+    file: file,
+    text: text,
+    program: program,
+    first_id: 0,
+    name: Paths.stored_name(root_dir, key.unwrap!),
+    origin: Packages.project_origin(),
+  )
+  walk = try enter(settings, empty, first)
   finished = try run(settings, walk)
   return ok(Loaded(order: finished.order, modules: finished.done, root_dir: finished.root_dir))
 end
@@ -164,19 +195,23 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
     return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", Diag.Help.NoHelp))
   end
   file = try Paths.module_file(decl, site)
-  target = try Resolve.resolve_import(settings, walk.root_dir, module.key, file, site)
+  importer = Resolve.Importer(key: module.key, origin: module.origin)
+  found = try Resolve.resolve_import(settings, walk.build, importer, file, site)
+  target = found.key
   if alias != ""
     aliases = aliases.put(alias, target)
     paths = paths.put(alias, decl.path)
   end
   with_frame = replace_top(walk, after_read(frame.with(paths: paths), aliases, target, decl))
+  # The packages loaded so far are kept whether or not this file is new.
+  known = with_frame.with(build: with_frame.build.with(scope: found.scope))
   state = walk.seen.get(target, -1)
   if state == 1
     return error(Failure.fail_at(site, "CHECK-IMPORT-CYCLE", "import cycle", Diag.Help.NoHelp))
   elsif state == 0
-    return ok(with_frame)
+    return ok(known)
   end
-  return load_file(settings, with_frame, target, site)
+  return load_file(settings, known, found, site)
 end
 
 # An alias import is done once read; a name list waits for its file (pending).
@@ -267,10 +302,24 @@ def replace_top(walk: Walk, frame: Frame) -> Walk
   return walk.with(stack: walk.stack.set(walk.stack.size - 1, frame))
 end
 
-def load_file(settings: Env.Settings, walk: Walk, key: String, site: Failure.Site) -> Result[Walk]
+def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, site: Failure.Site) -> Result[Walk]
+  key = found.key
   text = try imported_text(settings, key, site)
   program = try parse_source(key, text, walk.next_id)
-  return enter(settings, walk, key, key, text, program, walk.next_id)
+  name = found.name
+  if name == ""
+    name = Paths.stored_name(walk.root_dir, key)
+  end
+  parsed = Parsed(
+    key: key,
+    file: key,
+    text: text,
+    program: program,
+    first_id: walk.next_id,
+    name: name,
+    origin: found.origin,
+  )
+  return enter(settings, walk, parsed)
 end
 
 # The text of the root file: CHECK-IMPORT-IO at its start with the system's message, or LEX-INVALID-UTF8.
@@ -296,17 +345,11 @@ end
 
 # Registers a parsed file: the declaration order, then the declared names, then it goes on the stack with the imports
 # to read.
-def enter(
-  settings: Env.Settings,
-  walk: Walk,
-  key: String,
-  file: String,
-  text: String,
-  program: Ast.Program,
-  first_id: Int,
-) -> Result[Walk]
-  try Declarations.check_order(file, program.declarations)
-  collected = try collect(settings, file, program.declarations)
+def enter(settings: Env.Settings, walk: Walk, parsed: Parsed) -> Result[Walk]
+  key = parsed.key
+  program = parsed.program
+  try Declarations.check_order(parsed.file, program.declarations)
+  collected = try collect(settings, parsed.file, program.declarations)
   count = walk.seen.size + 1
   prefix = "@#{count}::"
   if walk.order.size == 0
@@ -314,10 +357,12 @@ def enter(
   end
   module = Module(
     key: key,
-    file: file,
+    file: parsed.file,
+    name: parsed.name,
+    origin: parsed.origin,
     prefix: prefix,
-    first_id: first_id,
-    text: text,
+    first_id: parsed.first_id,
+    text: parsed.text,
     program: program,
     names: collected.names,
     public: collected.public,

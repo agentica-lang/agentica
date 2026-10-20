@@ -9,19 +9,21 @@ import Diag from "diagnostic"
 import Plain from "diagnostic_plain"
 
 ## The compact form for an agent: `check failed: 1 error`, then the code, one `name: value` line for each part the
-## problem has (message, place, function, source line, callee, expected, actual, labels, help).
+## problem has (message, place, function, source line, callee, expected, actual, labels, help). A problem at a key of a
+## manifest or a lock has `key` in place of the line and column and the source line, and a problem about the whole file
+## has the file name alone.
 export def ai(problem: Problems.Problem, text: String) -> String
   start = problem.span.start
   line = trim(Plain.line_text(text.split("\n"), start.line))
-  out = [
-    "check failed: 1 error",
-    "",
-    "[#{problem.code}]",
-    "  message: #{problem.message}",
-    "  at: #{problem.file}:#{start.line}:#{start.column}",
-  ]
-  out = field(out, "in", problem.signature)
-  out = out.push("  source: #{line}")
+  out = ["check failed: 1 error", "", "[#{problem.code}]", "  message: #{problem.message}"]
+  if Problems.at_source?(problem)
+    out = out.push("  at: #{problem.file}:#{start.line}:#{start.column}")
+    out = field(out, "in", problem.signature)
+    out = out.push("  source: #{line}")
+  else
+    out = out.push("  at: #{problem.file}")
+    out = field(out, "key", problem.key_path)
+  end
   out = field(out, "callee", problem.callee)
   out = field(out, "expected", problem.expected)
   out = field(out, "actual", problem.actual)
