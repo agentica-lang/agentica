@@ -43,8 +43,13 @@ def test_discovery_reports_unreadable_folders_broken_links_bad_names_and_large_f
     request.addfinalizer(lambda: os.chmod(locked, 0o700))
     os.symlink(".", os.path.join(directory, "self"))
     os.symlink("missing.feature", os.path.join(directory, "broken.feature"))
-    with open(os.path.join(os.fsencode(directory), b"bad\xff.feature"), "w") as bad:
-        bad.write("Feature: Bad\n")
+    # APFS refuses a name that is not valid UTF-8 (EILSEQ), so on macOS the case checks the other entries only.
+    try:
+        with open(os.path.join(os.fsencode(directory), b"bad\xff.feature"), "w") as bad:
+            bad.write("Feature: Bad\n")
+        bad_name = [("bad\ufffd.feature", "RUNTIME-BDD-INFRA")]
+    except OSError:
+        bad_name = []
     with open(os.path.join(directory, "big.feature"), "w") as big:
         big.write("Feature: Big\n" + "#" * 1048576)
     status, report = bdd.json_test(directory, "--steps", HANDLERS)
@@ -55,7 +60,7 @@ def test_discovery_reports_unreadable_folders_broken_links_bad_names_and_large_f
         codes.append((os.path.basename(file["path"]), problem["code"] if isinstance(problem, dict) else None))
     assert sorted(codes) == sorted([
         ("locked", "RUNTIME-BDD-INFRA"), ("broken.feature", "RUNTIME-BDD-INFRA"),
-        ("bad\ufffd.feature", "RUNTIME-BDD-INFRA"), ("a.feature", None), ("big.feature", "RUNTIME-BDD-IO")])
+        ("a.feature", None), ("big.feature", "RUNTIME-BDD-IO")] + bad_name)
     assert report["failed"] == 1
 
 
