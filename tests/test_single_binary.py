@@ -433,7 +433,7 @@ def test_the_test_command_refuses_a_flag_above_one_like_a_program(tmp_path):
     assert MORE_THAN_ONE not in allowed.stdout + allowed.stderr
 
 
-@pytest.mark.skipif(os.name == "nt", reason="the test driver needs TMPDIR or a POSIX temporary folder")
+@pytest.mark.skipif(UNDER_WINE, reason="Wine cannot make the owner-only run folder of the test driver")
 def test_the_scheduler_variable_reaches_the_vms_that_the_test_driver_starts(tmp_path):
     """The driver cannot see the variable in a flag, so the VM it starts stops with the same message."""
     (tmp_path / "test").mkdir()

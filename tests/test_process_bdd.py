@@ -1,7 +1,7 @@
 """`Process` inside `agentica test`: handlers always spawn, programs under test need --allow-run.
 
-Apart from tests/test_process.py because `agentica test` is not on Windows yet (its driver still keeps its run
-directory under /var/tmp), and the Windows job must not skip a case.
+A module of its own: the case runs `agentica test`, which the Wine check of the Windows job cannot do (Wine makes no
+owner-only folder, which the run directory of the driver is), so the Wine list leaves it out.
 """
 import json
 
@@ -31,8 +31,8 @@ def test_bdd_handlers_can_always_spawn_and_programs_under_test_need_allow_run(tm
     denied = cli_run(*args)
     assert denied.code == 1, (denied.stdout, denied.stderr)
     report = json.loads(denied.stdout)
-    assert report["passed"] == 1
-    assert [item["status"] for item in report["files"][0]["scenarios"]] == ["failed", "passed"]
+    assert report["passed"] == 1, json.dumps(report)
+    assert [item["status"] for item in report["files"][0]["scenarios"]] == ["failed", "passed"], json.dumps(report)
     allowed = cli_run(*args, "--allow-run")
-    assert allowed.code == 0
+    assert allowed.code == 0, (allowed.stdout, allowed.stderr)
     assert json.loads(allowed.stdout)["passed"] == 2

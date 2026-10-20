@@ -255,13 +255,22 @@ then no scenario runs.
   signals, §46). On Linux the runner also ends, and stops its children, when
   the driver is killed with `SIGKILL` (see
   [`vm/10-io-processes.md`](vm/10-io-processes.md) §10.4).
-- **Temporary directory.** Each run holds an exclusive lock on a `lock` file. A
-  later `agentica test` removes a same-user directory whose lock it can take.
-  A run killed while it makes its directory leaves `agentica-bdd-new-HEX`; the
-  sweep removes it too, once it is an hour old and its lock is free.
-  Without `flock`, the run fails with `RUNTIME-BDD-INFRA` (exit 2), and so does
-  a temporary directory that other users can write without the sticky bit; set
-  `TMPDIR` to a private folder.
+- **Temporary directory.** Each run holds an exclusive lock on a `lock` file
+  (`flock`; `LockFileEx` on Windows). A later `agentica test` removes a
+  same-user directory whose lock it can take. A run killed while it makes its
+  directory leaves `agentica-bdd-new-HEX`; the sweep removes it too, once it is
+  an hour old and its lock is free. Without the lock, the run fails with
+  `RUNTIME-BDD-INFRA` (exit 2), and so does a temporary directory that other
+  users can write without the sticky bit; set `TMPDIR` to a private folder.
+  On Windows the folder is the first of `TMPDIR`, `TMP` and `TEMP` that is a
+  folder, the run directory has its final name from the start (there is no
+  `-new-` name and no rename), and the sweep takes a directory only when it is
+  a minute old. Windows has no sticky bit, so nothing checks the temporary
+  folder: the protection assumes a folder that only the user can modify (the
+  default per-user `%TEMP%`), because another user who can delete entries of
+  that folder could swap the run directory before its `lock` pins it. The
+  owner check of the sweep on Windows is issue #393 and pinning the run
+  directory before `lock` exists is #385.
 - **Shared resources.** Test files and scenarios run one at a time, each in its
   own child VM, next to other programs. A fixed temporary file name or port can
   collide with another run; use port 0 and a fresh temporary directory.

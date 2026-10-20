@@ -36,8 +36,8 @@ and exits 2.
     the runner is compiled into the run dir) with `--self` naming a shell script
     that fakes the runner when it is asked for `runner.agcb` and runs the real
 binary otherwise
-    (`front_end_command` and `fake_binary` in `tests/agentica_test.py` and
-`tests/test_bdd.py`);
+    (`front_end_command` in `tests/agentica_test.py`, `fake_binary` in
+`tests/test_bdd_posix.py`, the module of the cases that need POSIX);
   - a missing binary is the driver's `cannot find agentica at PATH`
     infrastructure report in the chosen format.
 - `compiler/bdd_driver.agc` (the driver, over `compiler/bdd_*.agc`;
@@ -46,16 +46,24 @@ binary otherwise
   - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the
     temporary directory (`TMPDIR` if it is a folder, else `/var/tmp`,
     `/usr/tmp`, `/tmp`; the hex is 16 bytes of `/dev/urandom`; 16 tries),
-    refuses
-    a `TMPDIR` without the sticky bit that others can write to, or that its
-    group can write to unless it has the user's uid and gid and no setgid bit
-    (the user-private-group case), locks the dir's `lock` file exclusively for
-    the whole run, then renames the dir to `agentica-bdd-<other hex>` with
-    `Path.rename`, which never replaces, so the sweep never sees an unlocked
-    new dir; then it removes the dirs of the same user whose `lock` it can take,
-    left by a killed driver (links and dirs without `lock` are left alone);
-    an `agentica-bdd-new-<hex>` with a free `lock` goes too, once its mtime
-    is over an hour old (a live run is in that state only for a moment)
+    refuses a `TMPDIR` without the sticky bit that others can write to, or
+    that its group can write to unless it has the user's uid and gid and no
+    setgid bit (the user-private-group case), locks the dir's `lock` file
+    exclusively for the whole run (`flock`), then renames the dir to
+    `agentica-bdd-<other hex>` with `Path.rename`, which never replaces, so the
+    sweep never sees an unlocked new dir; then it removes the dirs of the same
+    user whose `lock` it can take, left by a killed driver (links and dirs
+    without `lock` are left alone); an `agentica-bdd-new-<hex>` with a free
+    `lock` goes too, once its mtime is over an hour old (a live run is in that
+    state only for a moment)
+  - on Windows the same file differs in these points: the folder is the first
+    of `TMPDIR`, `TMP`, `TEMP` that is a folder; the hex is 8 bytes of
+    `Random.int`, 4 of the clock and the process id; the dir has its final
+    name at once (a folder with an open file cannot be renamed, so there is no
+    `-new-` name and no rename); the lock is `LockFileEx`; there is no sticky-bit check (it
+    assumes a temporary folder that only the user can modify); the sweep takes a
+    dir only when it is a minute old, and closes the lock before removing it
+    (a folder with an open file cannot be removed)
   - it writes the `std/` sources into `std/` of the run dir, compiles the
     step program and discovers the feature files (`bdd_discover.agc`;
     `bdd_compile.agc` is the Agentica pipeline from a file to the bytes, or the

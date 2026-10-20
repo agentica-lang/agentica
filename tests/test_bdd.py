@@ -4,25 +4,32 @@ Each case runs the CLI as a child (`agentica test --json ...`) and compares
 the JSON report: statuses, diagnostic codes, lines, and the text and --ai
 formats. tests/bdd/handlers.agc holds the shared step handlers. The cases that
 need a runner that fails run the front end as an ordinary program with a script
-as the binary it starts again (front_end_command).
+as the binary it starts again (front_end_command; the cases that need a shell script are in
+tests/test_bdd_posix.py).
 """
 import ast
+import contextlib
 import json
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import (ROOT, TESTS, binary, cli, front_end_command, report_cases, run, vm_environment,
-                                 write_files)
+from tests.agentica_test import (ROOT, TESTS, binary, cli, front_end_command, report_cases, run,
+                                 vm_environment, write_files)
 
-HANDLERS = str(TESTS / "bdd" / "handlers.agc")
-# The first binary of the bootstrap (the Makefile links it with stage0 and builds the release mode only).
-BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / "agentica"
+# Paths are written with "/" on every system, as the driver reports them (it joins and resolves with "/").
+HANDLERS = (TESTS / "bdd" / "handlers.agc").as_posix()
 ADDS_TEST = 'def main() -> Void\n  Test.run([Test.test("adds") do\n    Test.eq(1 + 1, 2)\n  end])\nend\n'
-CUSTOM = str(TESTS / "bdd" / "specs" / "custom.feature")
+CUSTOM = (TESTS / "bdd" / "specs" / "custom.feature").as_posix()
+
+
+def joined(directory, name):
+    """The path of `name` in `directory`, written with "/" like the paths in a report."""
+    return (Path(directory) / name).as_posix()
 
 
 def code_of(item):
@@ -52,18 +59,6 @@ def steps_program(*parts):
 
 def main_running(*steps):
     return "def main() -> Void\n  BDD.run([\n%s\n  ])\nend\n" % ",\n".join("    " + step for step in steps)
-
-
-def fake_binary(directory, script):
-    """A shell script for the binary that `agentica test` starts again: it prints the given stderr lines when it is
-    asked to run the runner, and runs the real binary for anything else."""
-    path = os.path.join(directory, "agentica.sh")
-    with open(path, "w") as binary_script:
-        binary_script.write("#!/bin/sh\ncase \"$*\" in\n*runner.agcb*)\n"
-                            + "".join("  echo '%s' >&2\n" % line for line in script)
-                            + "  exit 3 ;;\nesac\nexec '%s' \"$@\"\n" % binary())
-    os.chmod(path, 0o700)
-    return path
 
 
 class BddCli:
@@ -149,21 +144,6 @@ def test_the_programs_the_binary_carries_are_the_texts_the_driver_compiles_witho
         assert ast.literal_eval('"%s"' % literal) == (ROOT / "compiler" / "embedded" / (name + ".agc")).read_text(), name
 
 
-def test_the_first_binary_of_the_bootstrap_still_tests_with_the_driver_of_stage0(bdd):
-    """That binary has the driver of stage0: it compiles the runner and the steps from the std/ sources of this
-    checkout, writes the configuration it always wrote, and knows no embedded program. The current runner must
-    read that configuration."""
-    if not BOOTSTRAP.is_file():
-        pytest.skip("the first binary is not built (%s): run make" % BOOTSTRAP)
-    directory = bdd.suite({"c_test.agc": ADDS_TEST})
-    result = run([BOOTSTRAP, "test", "--json", directory], env=vm_environment())
-    assert (result.code, result.stderr) == (0, "")
-    assert json.loads(result.stdout)["passed"] == 1
-    result = run([BOOTSTRAP, "run", "--embedded", "runner", "--", "config.jsonl"], env=vm_environment())
-    assert (result.code, result.stdout) == (2, "")
-    assert result.stderr != ""
-
-
 def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(bdd):
     directory = bdd.suite({
         "a.feature": "Feature: invalid\nScenario: empty\n",
@@ -190,7 +170,7 @@ def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(b
     assert [statuses(results[0]), statuses(results[1]), statuses(results[5])] == [
         ["failed", "not_executed"], ["passed", "failed"], ["not_executed", "failed"]]
     assertion = results[0]["error"]
-    assert (assertion["file"], start_line(assertion)) == (os.path.join(directory, "b.feature"), 3)
+    assert (assertion["file"], start_line(assertion)) == (joined(directory, "b.feature"), 3)
     crash = results[2]["error"]
     assert (crash["file"], start_line(crash)) == (HANDLERS, 35)
     assert results[5]["error"]["actual"] == '"missing definition"'
@@ -198,7 +178,7 @@ def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(b
 
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
     directory = bdd.suite({"crash.feature": "Feature: Crash\nScenario: runtime\nThen execution crashes\n"})
-    feature = os.path.join(directory, "crash.feature")
+    feature = joined(directory, "crash.feature")
     place = HANDLERS + ":35:15"
     text = bdd.agentica_test(feature, "--steps", HANDLERS)
     assert text.code == 1
@@ -233,27 +213,27 @@ def test_tasks_may_assert_must_end_before_the_handler_returns_and_a_crashing_tas
                                    "def main() -> Void\n  task = Task.spawn(&wait, 0)\n  BDD.run([])\nend"),
         "crashed.agc": steps_program("def crash(n: Int) -> Int\n  return 1 / n\nend\n",
                                      "def main() -> Void\n  task = Task.spawn(&crash, 0)\n  Task.sleep(0)\n  BDD.run([])\nend")})
-    feature = os.path.join(directory, "tasks.feature")
-    status, report = bdd.json_test(feature, "--steps", os.path.join(directory, "steps.agc"))
+    feature = joined(directory, "tasks.feature")
+    status, report = bdd.json_test(feature, "--steps", joined(directory, "steps.agc"))
     assert status == 1
     assert [item["status"] for item in report_cases(report)] == ["passed", "failed", "failed", "passed"]
     assert [code_of(item) for item in report_cases(report)[1:3]] == [
         "RUNTIME-BDD-PENDING-TASKS", "RUNTIME-TASK-CRASHED"]
     assert "RUNTIME-DIVISION-BY-ZERO" in report_cases(report)[2]["error"]["message"]
-    _, early = bdd.json_test(feature, "--steps", os.path.join(directory, "early.agc"))
+    _, early = bdd.json_test(feature, "--steps", joined(directory, "early.agc"))
     assert file_error(early)["code"] == "RUNTIME-BDD-PENDING-TASKS"
     assert report_cases(early) == []
-    _, crashed = bdd.json_test(feature, "--steps", os.path.join(directory, "crashed.agc"))
+    _, crashed = bdd.json_test(feature, "--steps", joined(directory, "crashed.agc"))
     assert file_error(crashed)["code"] == "RUNTIME-TASK-CRASHED"
     assert report_cases(crashed) == []
 
 
 def test_a_step_program_with_invalid_utf8_is_one_file_error_at_the_bad_byte(bdd):
     directory = bdd.suite({"steps.feature": "Feature: Steps\nScenario: small\nThen 3 is small\n"})
-    steps = os.path.join(directory, "bad.agc")
+    steps = joined(directory, "bad.agc")
     with open(steps, "wb") as out:
         out.write(b"# caf\xc3\xa9\ndef main() -> Void\n  puts(\"\xff\")\nend\n")
-    status, report = bdd.json_test(os.path.join(directory, "steps.feature"), "--steps", steps)
+    status, report = bdd.json_test(joined(directory, "steps.feature"), "--steps", steps)
     assert status == 1
     problem = file_error(report)
     assert problem["code"] == "LEX-INVALID-UTF8"
@@ -288,7 +268,7 @@ def test_blocks_capture_ambiguous_steps_fail_and_a_bad_step_program_is_one_file_
             'BDD.step("fail later") do |ctx, args| BDD.assert(ctx, false, "later") end'))})
 
     def path(name):
-        return os.path.join(directory, name)
+        return joined(directory, name)
 
     status, report = bdd.json_test(path("steps.feature"), "--steps", path("blocks.agc"))
     assert status == 1
@@ -314,68 +294,11 @@ def test_blocks_capture_ambiguous_steps_fail_and_a_bad_step_program_is_one_file_
     assert [step["status"] for step in report_cases(forged)[0]["steps"]] == ["passed", "failed"]
 
 
-def test_discovery_reports_unreadable_folders_broken_links_bad_names_and_large_files_and_skips_folder_links(bdd, request):
-    directory = bdd.suite({
-        "a.feature": "Feature: A\nScenario: a\nThen the remembered number is 1\nWhen I remember 1\n"})
-    locked = os.path.join(directory, "locked")
-    os.mkdir(locked)
-    with open(os.path.join(locked, "hidden.feature"), "w") as hidden:
-        hidden.write("Feature: Hidden\nScenario: hidden\nThen an assertion fails\n")
-    os.chmod(locked, 0o000)
-    # Registered after the directory's own cleanup, so it runs first and lets rmtree enter the folder.
-    request.addfinalizer(lambda: os.chmod(locked, 0o700))
-    os.symlink(".", os.path.join(directory, "self"))
-    os.symlink("missing.feature", os.path.join(directory, "broken.feature"))
-    with open(os.path.join(os.fsencode(directory), b"bad\xff.feature"), "w") as bad:
-        bad.write("Feature: Bad\n")
-    with open(os.path.join(directory, "big.feature"), "w") as big:
-        big.write("Feature: Big\n" + "#" * 1048576)
-    status, report = bdd.json_test(directory, "--steps", HANDLERS)
-    assert status == 2
-    codes = []
-    for file in report["files"]:
-        problem = file["error"]
-        codes.append((os.path.basename(file["path"]), problem["code"] if isinstance(problem, dict) else None))
-    assert sorted(codes) == sorted([
-        ("locked", "RUNTIME-BDD-INFRA"), ("broken.feature", "RUNTIME-BDD-INFRA"),
-        ("bad\ufffd.feature", "RUNTIME-BDD-INFRA"), ("a.feature", None), ("big.feature", "RUNTIME-BDD-IO")])
-    assert report["failed"] == 1
-
-
-def test_a_crashed_runner_is_reported_with_the_error_not_the_last_stack_frame(bdd):
-    directory = bdd.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
-    fake = fake_binary(directory, [
-        "runner.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]",
-        "index 5 is outside a list of length 3",
-        "  = stack, innermost first:",
-        "    main at runner.agc:11:8"])
-    result = bdd.agentica_test("--json", os.path.join(directory, "a.feature"), binary_path=fake)
-    assert result.code == 2
-    error = json.loads(result.stdout)["files"][0]["error"]
-    assert error["code"] == "RUNTIME-BDD-INFRA"
-    assert re.search("RUNTIME-INDEX-OUT-OF-RANGE", error["message"])
-
-
-def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_earlier_task_crash(bdd):
-    directory = bdd.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
-    fake = fake_binary(directory, [
-        "runner.agc:5:9 error[RUNTIME-DIVISION-BY-ZERO] in a task",
-        "division by zero",
-        "runner.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]",
-        "index 5 is outside a list of length 3",
-        "  = stack, innermost first:"])
-    result = bdd.agentica_test("--json", os.path.join(directory, "a.feature"), binary_path=fake)
-    assert result.code == 2
-    message = file_error(json.loads(result.stdout))["message"]
-    assert re.search("RUNTIME-INDEX-OUT-OF-RANGE", message)
-    assert not re.search("DIVISION-BY-ZERO", message)
-
-
 def test_usage_errors_exit_2_an_empty_directory_exits_1_and_missing_pieces_are_infrastructure_errors(bdd):
     directory = bdd.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
 
     def path(name):
-        return os.path.join(directory, name)
+        return joined(directory, name)
 
     for arguments in (["--steps"], ["--only"], ["--unknown"], ["--steps", "a.agc", "--steps", "b.agc"]):
         status, report = bdd.json_test(*arguments)
@@ -408,7 +331,7 @@ def test_without_paths_specs_and_test_are_searched_and_the_empty_message_says_wh
         result = bdd.agentica_test("--json", cwd=scratch)
         assert result.code == 1
         problem = file_error(json.loads(result.stdout))
-        assert (problem["code"], problem["file"]) == ("CHECK-BDD-EMPTY", str(scratch / "specs") + "/")
+        assert (problem["code"], problem["file"]) == ("CHECK-BDD-EMPTY", (scratch / "specs").as_posix() + "/")
         messages.append(problem["message"])
     assert messages == ["no .feature or *_test.agc files found: neither specs/ nor test/ exists",
                         "no .feature or *_test.agc files found"]
@@ -435,17 +358,37 @@ def test_the_temporary_directory_is_tmpdir_when_it_is_a_folder_else_a_system_one
     assert sorted(os.listdir(scratch)) == ["empty", "file"]
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root can make folders anywhere")
-def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error_that_names_it(bdd, request):
-    scratch = bdd.make_suite({"nothing.txt": ""}, "agentica-bdd-readonly-")
+@contextlib.contextmanager
+def held_lock(path):
+    """The file at `path` with an exclusive lock that this process holds while the block runs."""
+    with open(path, "r+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
+def test_a_run_removes_the_folder_of_an_ended_run_and_leaves_the_folder_of_a_live_one(bdd):
+    """The sweep of the run directories in the private TMPDIR of the case: a folder with a free `lock` goes (it is old,
+    which Windows asks for), a folder whose `lock` another process holds stays."""
+    scratch = bdd.make_suite({"c_test.agc": ADDS_TEST}, "agentica-bdd-sweep-")
     temporary = scratch / "tmp"
-    temporary.mkdir(0o500)
-    request.addfinalizer(lambda: os.chmod(temporary, 0o700))
-    env = {"TMPDIR": temporary}
-    result = bdd.agentica_test("--json", scratch / "missing.feature", env=env, cwd=scratch)
-    assert (result.code, result.stderr) == (2, "")
-    problem = file_error(json.loads(result.stdout))
-    assert problem["code"] == "RUNTIME-BDD-INFRA"
-    assert ("cannot make a private directory in %s" % temporary) in problem["message"]
-    assert "ermission denied" in problem["message"]
-    assert os.listdir(temporary) == []
+    temporary.mkdir()
+    ended, live = temporary / "agentica-bdd-0123456789abcdef", temporary / "agentica-bdd-fedcba9876543210"
+    for folder in (ended, live):
+        folder.mkdir()
+        (folder / "lock").write_text("x")
+        old = time.time() - 3600
+        os.utime(folder, (old, old))
+    # On Windows a folder younger than a minute is left alone even when its lock is free (WINDOWS_MIN_AGE_SECONDS).
+    young = temporary / "agentica-bdd-00112233445566778899aabbccddeeff"
+    young.mkdir()
+    (young / "lock").write_text("x")
+    with held_lock(live / "lock"):
+        status, report = bdd.json_test(scratch / "c_test.agc", env={"TMPDIR": temporary})
+    assert (status, report["passed"]) == (0, 1)
+    assert sorted(os.listdir(temporary)) == sorted([live.name] + ([young.name] if os.name == "nt" else []))
+

@@ -163,7 +163,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_examples.py  # pytest: examples/*.agc, rejected fragments, CLI exit codes; slow: malformed algorithm inputs (references/stages.md)
   test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # pytest: Agentica stages against frozen outputs and goldens; frontend_support.py and frontend_cases.py hold helpers; test_frontend_refreeze.py covers tools/refreeze.py (references/frontend.md)
   test_process.py  # pytest: Process builtins on the VM, every way a run ends (references/vm-net.md)
-  test_process_bdd.py  # pytest: Process in agentica test; apart from test_process.py until it runs on Windows
+  test_process_bdd.py  # pytest: Process in agentica test; apart from test_process.py because it starts the whole driver
   test_process_windows.py  # pytest, native Windows only: the exit pair libuv reports for a stopped child (references/ci.md)
   test_process_lifecycle.py  # pytest: a child is gone when its owner ends, the run is stopped or the driver of its VM is killed, on every system (references/vm-tests.md)
   test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
@@ -203,6 +203,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_windows_console_stop.py  # pytest, native Windows only: Ctrl+Break exit 149 and a pseudo console as stdout (references/ci.md)
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
   test_bdd.py  # pytest: agentica test over the CLI: step programs, isolation (references/bdd.md)
+  test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes, links and a shell script; not in the Windows job (references/bdd.md)
   test_bdd_cleanup.py  # pytest: destructive cleanup in the Docker/Actions scratch (references/bdd.md)
   test_bdd_integration.py  # pytest: programs under test, limits, seed, cleanup; slow: large outputs and killed driver (references/bdd.md)
   test_unit_test.py  # unittest: agentica test on *_test.agc files; slow: the test timeout, stderr flood, endless print, flooding listing (references/bdd.md)
