@@ -1,7 +1,8 @@
 /*
  * TCP and TLS builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9), against a POSIX
  * peer, in orders set by the calls: a close behind a read's START, the deadline before and after the bytes, a served
- * accept of a cancelled task, and a cancelled TLS connect past its deadline. `make vm-tsan` runs it under TSan.
+ * accept of a cancelled task, a cancelled TLS connect past its deadline, and HttpWire.connect_tls on bad options.
+ * `make vm-tsan` runs it under TSan.
  */
 #include "../core.h"
 #include "io_harness.h"
@@ -291,6 +292,21 @@ static void test_cancelled_tls_connect_past_its_deadline(void) {
   agc_test_pump_until_idle(&vm);
   agc_test_settle_loop(&vm);
 }
+
+/* HttpWire.connect_tls on a client whose options are a one-field struct, as bytecode that skips HttpWire.service's
+   check could make: an error result, not a read past the struct. */
+static void test_connect_tls_with_short_client_options(void) {
+  agc_struct *options = agc_new_struct(0, 1);
+  options->fields[0] = agc_int(1);
+  agc_http_client *c = agc_alloc(sizeof *c);
+  c->options = agc_struct_value(options);
+  socket_v = agc_http_client_value(c);
+  calling dial = call("HttpWire.connect_tls", 4, socket_v, text("127.0.0.1"), agc_int(443), agc_int(1000));
+  assert(!start(&dial));
+  assert(error_is(dial.result, "http: invalid client options"));
+  assert(!c->tls);
+  socket_v = agc_nil();
+}
 #endif
 
 int main(void) {
@@ -305,6 +321,7 @@ int main(void) {
   test_bytes_before_the_deadline();
   test_served_accept_of_a_cancelled_task();
   test_cancelled_tls_connect_past_its_deadline();
+  test_connect_tls_with_short_client_options();
 #endif
   puts("net tests passed");
   return 0;

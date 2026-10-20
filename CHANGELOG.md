@@ -61,9 +61,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - An HTTP client builds one TLS context (CA file, trust store) for all its
   `https://` connections instead of one per connection, and frees it once the
-  client is closed and its last connection is gone. A new connection costs a
-  handshake only, which brings new-connection HTTPS back to the speed of the
-  old C client (#394).
+  client is closed and its last connection is gone (a client never closed keeps
+  it until the run ends). The CA file is read once per client, so a change to
+  it reaches new clients only. A new connection costs a handshake only, which
+  brings new-connection HTTPS back to the speed of the old C client (#394).
 
 - The HTTP client is now `std/http` code on `TCP` and `TLS` sockets: an owner
   task per client keeps the per-origin pool and `max_connections`, and one

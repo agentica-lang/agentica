@@ -10,8 +10,13 @@
 #include "services.h"
 
 #if defined(__linux__) || defined(__APPLE__)
-/* HttpWire.service(jobs, options, f): jobs is a new channel, which nobody owns yet; f gets the client. */
+/* HttpWire.service(jobs, options, f): jobs is a new channel, which nobody owns yet; f gets the client. Options of
+   another shape are bytecode the front end would not write: a wrong-type failure, as for any other argument. */
 static agc_value builtin_service(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_struct *o = agc_as_struct(vm, args[1]);
+  if (o->n != AGC_HTTP_OPTIONS_FIELDS) agc_wrong_tag(vm);
+  for (uint32_t k = 0; k < AGC_HTTP_OPTION_CA_FILE; k++) (void)agc_as_int(vm, o->fields[k]);
+  (void)agc_as_string(vm, o->fields[AGC_HTTP_OPTION_CA_FILE]);
   agc_http_client *c = agc_alloc(sizeof(agc_http_client));
   c->jobs = args[0];
   c->options = args[1];

@@ -196,9 +196,10 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
   its `SSL` from it. Each connection, and the build, holds a reference, so
   `HttpWire.drop_tls` (run by the service task after `close_client`) frees the
   context only after the last handshake and connection let it go. A failed
-  build is not kept: the next connection tries again. Its first job waits in its inbox, so no task keeps that job's body
-  for the worker's life; the owner keeps only each worker's last reply
-  channel. It runs a job, answers on the job's reply channel, tells the owner on
+  build is not kept: the next connection tries again. The client's CA file is
+  read once, so a change to it reaches new clients only. Its first job waits in
+  its inbox, so no task keeps that job's body for the worker's life; the owner
+  keeps only each worker's last reply channel. It runs a job, answers on the job's reply channel, tells the owner on
   `jobs` whether it keeps the connection, then waits on its inbox for
   `idle_timeout_ms`. The timeout closes the connection and ends the worker. The
   worker closes its inbox before its last look at it, so the owner cannot hand

@@ -128,7 +128,8 @@ static const char write_failed[] = "error writing to stream port";
    one frees it, on whatever thread gives it back. An SSL takes its own count on the SSL_CTX (SSL_new), so a session
    never outlives its context. `ca_file` is fixed at creation. The rest belongs to the I/O thread; the pool job writes
    only `built` and `failure`, which libuv hands back to that thread in shared_done. A failed build is not kept: the
-   next connection tries again. */
+   next connection tries again. A build is never cancelled, even when its last waiter leaves after the client dropped
+   its count: it holds its own count, so it runs to its end and shared_done gives back the last count. */
 struct tls_shared {
   _Atomic size_t refs;
   char *ca_file;
@@ -1277,15 +1278,34 @@ static bool tls_paths(agc_vm *vm, const agc_value *args, size_t count, char **pa
   return false;
 }
 
-/* SHARED, when not NULL, is the HttpClient context the net takes a count on (HttpWire.connect_tls); CA is then its
-   ca_file, kept for the error text. */
-static agc_value connect_net(agc_vm *vm, char *name, int64_t port, bool secure, char *ca, tls_shared *shared,
+/* The client's context, with a count for the caller: made on first use, NULL once HttpWire.drop_tls gave it back.
+   Under rt->sync, so a drop on another scheduler cannot free it between the look and the count. */
+static tls_shared *client_context(agc_vm *vm, agc_http_client *c, const char *ca_file) {
+  agc_sync_take(vm);
+  tls_shared *s = c->tls;
+  if (!s && !c->tls_dropped) {
+    s = calloc(1, sizeof *s);
+    char *ca = strdup(ca_file);
+    if (!s || !ca) agc_out_of_memory();
+    s->ca_file = ca;
+    atomic_init(&s->refs, 1);
+    c->tls = s;
+  }
+  if (s) atomic_fetch_add_explicit(&s->refs, 1, memory_order_relaxed);
+  agc_sync_drop(vm);
+  return s;
+}
+
+/* CLIENT, when not NULL, is the HttpClient whose context the net takes a count on (HttpWire.connect_tls); CA is then
+   its ca_file, kept for the error text. */
+static agc_value connect_net(agc_vm *vm, char *name, int64_t port, bool secure, char *ca, agc_http_client *client,
                              int64_t timeout) {
   net *n = new_net(vm, name, port, false);
   n->secure = secure;
   n->ca_file = ca;
-  n->shared = shared;
   agc_socket *sk = new_socket(vm, n, true);
+  /* The count is taken once the socket exists, so a failure in making it cannot lose one. */
+  if (client) n->shared = client_context(vm, client, ca);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_connect socket=%" PRIu64 " host=%s port=%" PRId64, sk->state->id, name,
             port);
   return start_open(vm, n, agc_socket_value(sk), timeout);
@@ -1308,24 +1328,6 @@ static agc_value open_socket(agc_vm *vm, const agc_value *args, uint32_t span, b
   return connect_net(vm, name, port, secure, ca, NULL, timeout);
 }
 
-/* The client's context, with a count for the caller: made on first use, NULL once HttpWire.drop_tls gave it back.
-   Under rt->sync, so a drop on another scheduler cannot free it between the look and the count. */
-static tls_shared *client_context(agc_vm *vm, agc_http_client *c, const char *ca_file) {
-  agc_sync_take(vm);
-  tls_shared *s = c->tls;
-  if (!s && !c->tls_dropped) {
-    s = calloc(1, sizeof *s);
-    char *ca = strdup(ca_file);
-    if (!s || !ca) agc_out_of_memory();
-    s->ca_file = ca;
-    atomic_init(&s->refs, 1);
-    c->tls = s;
-  }
-  if (s) atomic_fetch_add_explicit(&s->refs, 1, memory_order_relaxed);
-  agc_sync_drop(vm);
-  return s;
-}
-
 /* HttpWire.connect_tls(client, host, port, timeout_ms) (std-only): TLS.connect with the client's ca_file, on the
    context that the client's connections share, so it is built once (#394). After HttpWire.drop_tls a call builds
    its own context, as TLS.connect does. */
@@ -1337,15 +1339,18 @@ static agc_value builtin_connect_tls(agc_vm *vm, agc_value *args, uint32_t span)
   int64_t timeout = agc_as_int(vm, args[3]);
   if (timeout <= 0) return agc_stream_bad_timeout();
   if (port < 1 || port > 65535) return agc_error_value("network: port must be 1..65535");
-  /* HTTP.client refused a ca_file with NUL, so the field is a C string. */
-  char *ca = agc_cstr(agc_as_string(vm, agc_as_struct(vm, c->options)->fields[4]));
+  /* HttpWire.service checked the shape; checked again, since a bad read here goes past the struct. */
+  const agc_struct *o = agc_as_struct(vm, c->options);
+  if (o->n != AGC_HTTP_OPTIONS_FIELDS) return agc_error_value("http: invalid client options");
   char *name = agc_cstr(host);
-  if (!ca || !name) {
-    free(ca);
+  if (!name) return agc_error_value("network: host cannot contain NUL");
+  /* HTTP.client refuses a ca_file with NUL, so only bytecode that skipped it gets here. */
+  char *ca = agc_cstr(agc_as_string(vm, o->fields[AGC_HTTP_OPTION_CA_FILE]));
+  if (!ca) {
     free(name);
-    return agc_error_value("network: host cannot contain NUL");
+    return agc_error_value("http: invalid client options");
   }
-  return connect_net(vm, name, port, true, ca, client_context(vm, c, ca), timeout);
+  return connect_net(vm, name, port, true, ca, c, timeout);
 }
 
 /* HttpWire.drop_tls(client) (std-only): the client gives its count on its context back, when its owner task ends.
