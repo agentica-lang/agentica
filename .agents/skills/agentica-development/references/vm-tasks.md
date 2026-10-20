@@ -18,7 +18,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     directly. Programs at N = 4: `tests/test_vm_multicore.py`
     (`make test-multicore`, `make vm-tsan-run`) and the TCP and TLS modules
     (`make test-multicore-net`, `AGENTICA_VM_TEST_MODULE_SCHEDULERS`); whole
-    runs in C: `vm/tests/threads_test.c`.
+    runs in C: `vm/tests/threads_test.c`. `agc_task_service` (the
+    `HttpClient`'s tree, `HttpWire.service`) spawns under a root with no
+    parent: its tasks carry `service`, are counted done when spawned (so
+    `Task.pending_count` leaves them out), have no test, and their timers count
+    in `rt->timers_weak`, which the stall checks ignore (`agc_timers_strong`;
+    `test_stall_beside_a_service`).
 
 - **Path:** `vm/runq.c`
   - **Owns:** The global run queue: a FIFO through `agc_task.next` and one

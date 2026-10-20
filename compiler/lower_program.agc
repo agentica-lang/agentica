@@ -104,12 +104,12 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
   )
 end
 
-# The field types of the builtin records JSON.decode can build: all but those with an enum field.
+# The field types of the builtin records JSON.decode can build: all but those with an enum or channel field.
 def builtin_decodable() -> Map[String, List[Types.Type]]
   found: Map[String, List[Types.Type]] = {}
   for name in BUILTIN_STRUCTS
     types = RECORDS[name].map do |field: Model.Named| field.type end
-    if !types.any? do |type: Types.Type| Types.is(type, "Enum") end
+    if !types.any? do |type: Types.Type| Types.is(type, "Enum") or Types.is(type, "Channel") end
       found = found.put(name, types)
     end
   end

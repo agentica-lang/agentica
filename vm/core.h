@@ -258,7 +258,7 @@ uint64_t agc_clock_ms(void);
 
 /* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other
  * waits, and calls agc_task_park_until; the deadline is an agc_clock_ms value. All of these run with rt->sync held,
- * except agc_timers_run, which takes it itself, and agc_timers_next_due, which only reads. */
+ * except agc_timers_run, which takes it itself, and agc_timers_next_due and agc_timers_strong, which only read. */
 void agc_task_park_until(agc_vm *vm, uint64_t deadline_ms, bool retry);
 void agc_timers_disarm(agc_vm *vm, agc_task *t);
 /* Wakes the tasks whose deadline has passed in this scheduler's heap. Called at the turn boundary and when the run
@@ -266,6 +266,8 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t);
 bool agc_timers_run(agc_vm *vm);
 /* The earliest deadline of this scheduler's heap, or UINT64_MAX. */
 uint64_t agc_timers_next_due(const agc_vm *vm);
+/* True when an armed timer of any heap is not a service task's (agc_task_service). */
+bool agc_timers_strong(const agc_vm *vm);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 void agc_input_watch(agc_vm *vm);

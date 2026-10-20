@@ -96,7 +96,8 @@ lowercase; `header_values` matches names case-insensitively and keeps
 duplicates in order. 4xx and 5xx are normal responses. Errors are Results:
 protocol and limit errors start with `http: `, and a timeout is
 `network: operation timed out`. There is no streaming, no automatic redirect
-and no gzip decoding.
+and no gzip decoding. The client's work runs as Agentica code in tasks of its
+own, so it spends the `--max-steps` budget of the run.
 
 ```agentica
 import HTTP from "std/http"

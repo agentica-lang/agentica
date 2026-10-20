@@ -81,7 +81,8 @@ Shared streams have no ordering guarantee across tasks. All tasks share the
 `Task.pending_count()` counts the tasks of this run that have not ended, not
 counting `main`: tasks waiting to run, the caller (unless it is `main`), and
 tasks waiting on a sleep, an await, a channel or I/O. A task that has returned
-or crashed is not counted.
+or crashed is not counted. The tasks `std/http` starts for an `HttpClient` are
+not counted either, and `Test.test` does not see them as leftovers.
 
 `Task.await` halts with `RUNTIME-TASK-AWAIT-CYCLE` at the await when the awaited
 task, or a task it awaits in turn, is waiting for the caller. A task that awaits

@@ -199,8 +199,9 @@ typedef struct {
   int64_t port;
 } agc_listener;
 
+/* An HttpClient: the jobs channel of its owner task and its HttpClientOptions (vm/http_service.c). */
 typedef struct {
-  agc_resource *state;
+  agc_value jobs, options;
 } agc_http_client;
 
 typedef struct {

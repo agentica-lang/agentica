@@ -84,18 +84,17 @@ Read first: `references/vm.md`.
     handle is closed at its end) on the real scheduler: hand-built bytecode
     programs (with a one-line source and a span table, since a crash prints its
     diagnostic) whose builtin table adds test builtins (mark, cancel, a check
-    callback, a handle operation on an external job, an `HttpWire.exchange`
-    wrapper); every cancel state, a job whose deadline timer fired before the
-    cancel (a 200 ms job and a 300 ms block, so the first poll never sees the
-    timer), `RUNTIME-TASK-CANCELLED` at the await span (a task that awaits a
-    cancelled task now crashes, phase 24), the move of children, the
-    `HttpClient` pool against a port-0 socket that never answers TLS, and a pool
-    job with a `more` step (`agc_io_start_then`): cancelled while its work runs,
-    the `cancel` half is not called and the job ends through `done`; cancelled
-    in its loop phase, it is dropped and its poller closes the descriptor; and a
-    writer cancelled while it waits in the FIFO of a full stdout buffer (a pipe
-    filled beforehand): the next one keeps its place and the bytes that arrive
-    are the earlier ones and the next writer's, never the cancelled one's. 17a
+    callback, a handle operation on an external job); every cancel state, a job
+    whose deadline timer fired before the cancel (a 200 ms job and a 300 ms
+    block, so the first poll never sees the timer), `RUNTIME-TASK-CANCELLED` at
+    the await span (a task that awaits a cancelled task now crashes, phase 24),
+    the move of children, and a pool job with a `more` step
+    (`agc_io_start_then`): cancelled while its work runs, the `cancel` half is
+    not called and the job ends through `done`; cancelled in its loop phase, it
+    is dropped and its poller closes the descriptor; and a writer cancelled
+    while it waits in the FIFO of a full stdout buffer (a pipe filled
+    beforehand): the next one keeps its place and the bytes that arrive are the
+    earlier ones and the next writer's, never the cancelled one's. 17a
     adds `test_map_caller_cancelled` (a `Task.map` caller cancelled while parked
     in its call: the items in flight are cancelled, the pending item never
     starts, the call never returns) and `test_map_deadlines` (limit 1, every
@@ -483,12 +482,12 @@ Read first: `references/vm.md`.
     host, expired, self-signed, TLS 1.0/1.1 only, plain text, a stalled
     handshake), system trust through `SSL_CERT_FILE`, a Python TLS 1.2 server, a
     Python HTTPS server that sees `close_notify` on an idle and an active
-    `HttpClient` connection when `main` returns (`client_goodbye`), a VM server
-    with two Node clients (TLS 1.3 and 1.2), a Python client and a client that
-    does not trust it; VM programs that are their own peers for handshake errors
-    on both sides, timeouts and a pending handshake, and the end of a run with
-    TLS work pending (`tls` trace); every case runs once (no step sweep), in
-    about 5 s; needs Node and Python 3 in CI
+    `HttpClient` connection when `main` returns (the workers' tcp.c sockets), a
+    VM server with two Node clients (TLS 1.3 and 1.2), a Python client and a
+    client that does not trust it; VM programs that are their own peers for
+    handshake errors on both sides, timeouts and a pending handshake, and the
+    end of a run with TLS work pending (`tls` trace); every case runs once (no
+    step sweep), in about 5 s; needs Node and Python 3 in CI
 
 - **Path:** `tests/vm_diff_support.py`, `tests/test_vm_diff_{1..8}.py`,
   `tests/fixtures/vm/`

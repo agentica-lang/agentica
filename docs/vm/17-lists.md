@@ -282,7 +282,7 @@ New algorithms and costs. Every row migrates to the API of §17.4. "Cursor" mean
     `files.c:1323`, `process.c:867`, `tcp.c:1089`), process arguments
     (`process.c:599-605`, `728-731`), header scans (`http_fields.c:37-41`,
     `150-156`; the client passes its list at
-    `http_client.c:717`)
+    `http_wire.c:522`)
   - **Today:** index loop
   - **New:** one cursor per pass
   - **Cost:** O(n)

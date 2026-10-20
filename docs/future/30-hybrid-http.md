@@ -131,8 +131,8 @@ uploads to an Agentica server); each would need its own one-way test.
   loses `ca_file` and `HTTP.client` takes a context, and `HTTP.listen_tls` and
   `HTTP.listen_stream_tls` take a context instead of `cert_file` and `key_file`,
   with one CHANGELOG entry and one migration (§29.5). Until then, phase 20 keeps
-  today's file paths, and `HttpWire.client` builds one `SSL_CTX` per client from
-  its `ca_file`.
+  today's file paths, and each client connection's `TLS.connect` builds its own
+  `SSL_CTX` from the client's `ca_file`.
 - **STARTTLS** (`TLS.upgrade`) comes with `TlsContext` (§29.3): simple HTTP does
   not need it, since HTTPS is TLS from the first byte.
 

@@ -456,8 +456,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   that drain is the push of §16.4, and it keeps a woken task behind the one
   whose turn just ended.
 - **Services make their own libuv calls**, on the loop's thread. They make
-  handles through `agc_io_uv` (§15.1), for example in `vm/process.c` and
-  `vm/http_client.c`; the libuv part of their `done`, `expired`, cancel and
+  handles through `agc_io_uv` (§15.1), for example in `vm/process.c`; the
+  libuv part of their `done`, `expired`, cancel and
   `drop` halves (for example `request_expired` in `vm/process.c`, the file
   `drop` in `vm/files.c`) and the poller calls of
   builtins run where the half runs. In the model that code is the start step of
@@ -558,7 +558,11 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   for the stall check (its heap's `next_due`). At N > 1 an idle scheduler waits
   on the run queue until its nearest deadline (`agc_runq_wait_until`), and the
   stall check reads the count of armed timers of every heap
-  (`rt->timers_armed`).
+  (`rt->timers_armed`). A service task's timer (the idle wait of an HTTP client
+  worker, `agc_task_service`) is counted in `rt->timers_weak` too, and both
+  checks wait only for the other timers (`agc_timers_strong`): at N = 1 the
+  bounded run then needs a live loop, else the run has stalled. No other task
+  waits on such a timer, so it cannot be the work that ends a stall.
   The `io` trace has no line for these waits; `sched` prints `timer_arm task=N
   in_ms=M` and `timer_fire task=N late_ms=M`. Deadlines of real I/O jobs (a work
   or external job) stay on a libuv timer, started by the START request that the
