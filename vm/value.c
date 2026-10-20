@@ -312,6 +312,13 @@ agc_value agc_channel_value(agc_channel *c) {
   return v;
 }
 
+agc_value agc_lazy_value(const void *node) {
+  agc_value v;
+  v.tag = AGC_T_LAZY;
+  v.as.p = (void *)node;
+  return v;
+}
+
 uint64_t agc_value_units(agc_value v) {
   while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
@@ -426,6 +433,11 @@ agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v) {
 
 agc_channel *agc_as_channel(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_CHANNEL) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+const void *agc_as_lazy(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_LAZY) agc_wrong_tag(vm);
   return v.as.p;
 }
 

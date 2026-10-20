@@ -14,9 +14,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Windows system trust also reads the CA store for intermediates (never as
   roots).
 - `std/http` (HTTP and HTTPS client and server) runs on Windows.
+- `Lazy[T]`: lazy pipelines over lists, ranges and `Lazy.produce`
+  (`xs.lazy.filter do ... end.first(3)`); terminals return a `Result`.
 
 ### Changed
 
+- **Breaking:** `Lazy` is now a reserved type name.
 - HTTP runs on several schedulers (behind the multicore test switch).
 - The lingering close of `std/http` drops at most 256 KiB of input; a client
   still sending a large body may see a reset instead of the answer.

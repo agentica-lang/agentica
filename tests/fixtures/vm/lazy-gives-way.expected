@@ -1,0 +1,10 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 49025,
+  "stdout": [
+    "main ran beside the pipeline: 4498500",
+    ""
+  ],
+  "stderr": []
+}

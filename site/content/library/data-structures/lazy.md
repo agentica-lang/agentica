@@ -1,0 +1,213 @@
+---
+title: Lazy
+weight: 6
+description: Lazy pipelines over lists, ranges and endless sources, run one item at a time by a terminal.
+---
+
+A `Lazy[T]` is a recipe: a source and the steps after it. Building one does no work. A terminal (`to_a`, `first`, `each`, `reduce`, `find`) runs it, and pulls one item at a time from the source through every step, so no step builds a list of all the items. A step returns a new `Lazy`; the old one is unchanged, and each terminal runs the source again from the start.
+
+Use a `Lazy` for an endless source, or when only the first few results of a long chain are needed. For a list you will walk whole, the eager [List](/library/data-structures/list/) methods are the one form.
+
+```agentica
+def main() -> Void
+  squares = Lazy.produce(1) do |n| n + 1 end.map do |n| n * n end
+  puts(squares.filter do |n| n % 2 == 1 end.first(3))
+  puts((1..10).lazy.each_slice(4).to_a)
+end
+```
+
+```output
+ok([1, 9, 25])
+ok([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]])
+```
+
+Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. A terminal can be switched out between items, so other tasks keep running.
+
+A `Lazy` has no `==`, no `to_s` and no JSON form; `IO.inspect` prints `<Lazy>`. There is no `next`: a `Lazy` is a recipe, not a cursor. A `List` method on a `Lazy`, such as `lz.size`, is `CHECK-UNKNOWN-METHOD` with a help that shows `to_a`; a step only `Lazy` has, such as `xs.each_cons(2)` on a list, shows `.lazy`.
+
+## Sources
+
+```text
+List.lazy(list: List[A]) -> Lazy[A]
+Range.lazy(range: Range) -> Lazy[Int]
+Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]
+```
+
+`Lazy.produce` gives `seed`, then `f(seed)`, then `f(f(seed))`, without end. It does not call its block for an item that no step needs.
+
+```agentica
+def main() -> Void
+  puts([3, 1, 2].lazy.to_a)
+  puts((1...4).lazy.to_a)
+  puts(Lazy.produce("a") do |s| s + "a" end.first(3))
+end
+```
+
+```output
+ok([3, 1, 2])
+ok([1, 2, 3])
+ok(["a", "aa", "aaa"])
+```
+
+## map, filter and flat_map
+
+```text
+Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]
+Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
+Lazy.flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B]
+```
+
+`flat_map` gives the items of the lists its block returns, in order. There is no `filter_map`: write `filter` then `map`.
+
+```agentica
+def main() -> Void
+  xs = [1, 2, 3, 4]
+  puts(xs.lazy.filter do |x| x % 2 == 0 end.map do |x| x * 10 end.to_a)
+  puts(xs.lazy.flat_map do |x| [x, -x] end.first(5))
+end
+```
+
+```output
+ok([20, 40])
+ok([1, -1, 2, -2, 3])
+```
+
+## take, take_while, drop and drop_while
+
+```text
+Lazy.take(lazy: Lazy[A], count: Int) -> Lazy[A]
+Lazy.take_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
+Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A]
+Lazy.drop_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
+```
+
+A negative count is `RUNTIME-INVALID-COUNT` at the argument. `take_while` stops at the first item its block rejects; `drop_while` stops calling its block at the first item it rejects.
+
+```agentica
+def main() -> Void
+  naturals = Lazy.produce(1) do |n| n + 1 end
+  puts(naturals.drop(2).take(3).to_a)
+  puts(naturals.take_while do |n| n < 4 end.to_a)
+  puts([1, 5, 2, 7].lazy.drop_while do |n| n < 3 end.to_a)
+end
+```
+
+```output
+ok([3, 4, 5])
+ok([1, 2, 3])
+ok([5, 2, 7])
+```
+
+## with_index
+
+```text
+Lazy.with_index(lazy: Lazy[A], f: Fn[A, Int, B]) -> Lazy[B]
+```
+
+Maps each item with its index, from 0. To keep the item and the index together, return a struct.
+
+```agentica
+def main() -> Void
+  puts(["a", "b", "c"].lazy.with_index do |s, i| "#{i}:#{s}" end.to_a)
+end
+```
+
+```output
+ok(["0:a", "1:b", "2:c"])
+```
+
+## each_slice, each_cons and chunk_while
+
+```text
+Lazy.each_slice(lazy: Lazy[A], size: Int) -> Lazy[List[A]]
+Lazy.each_cons(lazy: Lazy[A], size: Int) -> Lazy[List[A]]
+Lazy.chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]]
+```
+
+`each_slice` gives slices of `size` items, the last one shorter. `each_cons` gives every window of `size` neighbours, and nothing when the source has fewer. `chunk_while` starts a new group where its block is false for two neighbours. A size below 1 is `RUNTIME-INVALID-COUNT` at the argument.
+
+```agentica
+def main() -> Void
+  xs = [1, 2, 4, 5, 6, 9]
+  puts(xs.lazy.each_slice(4).to_a)
+  puts(xs.lazy.each_cons(3).first(2))
+  puts(xs.lazy.chunk_while do |a, b| b == a + 1 end.to_a)
+end
+```
+
+```output
+ok([[1, 2, 4, 5], [6, 9]])
+ok([[1, 2, 4], [2, 4, 5]])
+ok([[1, 2], [4, 5, 6], [9]])
+```
+
+## to_a and first
+
+```text
+Lazy.to_a(lazy: Lazy[A]) -> Result[List[A]]
+Lazy.first(lazy: Lazy[A], count: Int) -> Result[List[A]]
+```
+
+`first(n)` is `take(n)` then `to_a`: at most `n` items, fewer when the source ends.
+
+```agentica
+def main() -> Void
+  puts([1, 2].lazy.first(5))
+  puts((1..3).lazy.map do |n| n * n end.to_a)
+end
+```
+
+```output
+ok([1, 2])
+ok([1, 4, 9])
+```
+
+## each
+
+```text
+Lazy.each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void]
+```
+
+The block returns `ok()` to go on, or an `error` that stops the pipeline and is the result, as in `File.each_line`. `try` works in the block.
+
+```agentica
+def main() -> Void
+  result = Lazy.produce(1) do |n| n + 1 end.each do |n|
+    if n > 2
+      return error("stopped at #{n}")
+    end
+    puts(n)
+    ok()
+  end
+  puts(result)
+end
+```
+
+```output
+1
+2
+error("stopped at 3")
+```
+
+## reduce and find
+
+```text
+Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]
+Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]
+```
+
+`reduce` folds from the left, as `List.reduce`. `find` gives the first item its block accepts, or `error("not found")` when the source ends, as `List.find`.
+
+```agentica
+def main() -> Void
+  puts((1..4).lazy.reduce(0) do |total, n| total + n end)
+  puts(Lazy.produce(1) do |n| n * 2 end.find do |n| n > 100 end)
+  puts([1, 2].lazy.find do |n| n > 5 end)
+end
+```
+
+```output
+ok(10)
+ok(128)
+error("not found")
+```

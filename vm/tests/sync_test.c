@@ -119,6 +119,7 @@ static void test_builtin_classes(void) {
   table_marked(agc_string_builtins, agc_string_builtin_count, false);
   table_marked(agc_number_builtins, agc_number_builtin_count, false);
   table_marked(agc_json_builtins, agc_json_builtin_count, false);
+  table_marked(agc_lazy_builtins, agc_lazy_builtin_count, false);
   struct {
     const char *name;
     uint32_t arity;

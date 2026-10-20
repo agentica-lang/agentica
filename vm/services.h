@@ -123,6 +123,8 @@ extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
+extern const agc_builtin agc_lazy_builtins[];
+extern const size_t agc_lazy_builtin_count;
 char *agc_system_env(const char *name);
 /* Size of the buffers that hold an operating system name. */
 #define AGC_OS_NAME_MAX 64

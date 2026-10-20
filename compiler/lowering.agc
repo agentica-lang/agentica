@@ -294,6 +294,7 @@ def names_in(type: Types.Type, watched: Set[String]) -> List[String]
     Types.Type.Result(item) -> return names_in(item, watched)
     Types.Type.Task(item) -> return names_in(item, watched)
     Types.Type.Channel(item) -> return names_in(item, watched)
+    Types.Type.Lazy(item) -> return names_in(item, watched)
     Types.Type.Map(key, value) -> return names_in(key, watched).concat(names_in(value, watched))
     Types.Type.Fn(params, result) -> return names_in_all(params, watched).concat(names_in(result, watched))
     _ -> return []

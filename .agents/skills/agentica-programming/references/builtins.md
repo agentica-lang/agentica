@@ -183,6 +183,7 @@ List.uniq(list: List[K]) -> List[K]                      # K is Int or String; k
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]   # key Int, Float or String; first wins ties; empty is an error
 List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]   # NaN keys never win unless all are NaN
+List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run in a terminal (references/lazy.md)
 ```
 
 - `map`, `filter`, and `reduce` cost O(n); `sort` and `sort_by` cost O(n log n);
@@ -259,6 +260,7 @@ Range.include?(r: Range, value: Int) -> Bool
 Range.each(r: Range, f: Fn[Int, Void]) -> Void
 Range.first(r: Range) -> Result[Int]                     # error("the range is empty") when empty
 Range.last(r: Range) -> Result[Int]                      # last included value: (1...5).last is ok(4)
+Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.filter do ... end.first(3) (references/lazy.md)
 ```
 
 - `a..b` includes `b`; `a...b` excludes it. The value is a `Range` with no list
