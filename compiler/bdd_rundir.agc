@@ -15,15 +15,18 @@
 ## because a run that is alive is in step 1 or 2 for a moment and has no lock held yet.
 ##
 ## Windows cannot rename a folder that holds a file somebody has open, so there the run makes the final name in step 1
-## and has no step 3. A sweep that meets that folder between the creation of `lock` and the lock itself takes the
-## lock first and the run fails to lock (`claim` is an error then); the gap is two calls long. For the same reason the
-## sweep leaves a final name alone until it is a minute old on Windows (WINDOWS_MIN_AGE_SECONDS), so a run that is
-## still starting is not taken by a run that overlaps it.
+## and has no step 3. For the same reason the sweep leaves a final name alone until it is a minute old on Windows
+## (WINDOWS_MIN_AGE_SECONDS), so a run that is still starting is not taken by a run that overlaps it. What is left is
+## a residual case: a sweep that meets the folder between the creation of `lock` and the lock itself would take the
+## lock first and the run would fail to lock (`claim` is an error then). It needs a clock that is a minute off or an
+## mtime that is not updated, so it is not expected in practice; #385 tracks pinning the folder before `lock` exists.
+## `discard` on Windows closes the lock and then removes the folder, which is not atomic, but both sides are best
+## effort, so a lost race only leaves the folder for a later sweep.
 ##
 ## Windows has no sticky bit, so nothing there tells a shared temporary folder from a private one. The protection of
 ## the run folder assumes a temporary folder that only the user can modify, as the default per-user one is: another
 ## user with the right to delete entries of the parent (FILE_DELETE_CHILD) could replace the run folder before `lock`
-## pins it.
+## pins it. The owner check of the sweep on Windows is #393; the pin before `lock` is #385.
 
 import {IO_TIMEOUT} from "bdd_files"
 
@@ -127,9 +130,9 @@ export def sweep(temporary: String, own: Run) -> Void
 end
 
 ## A random name of 32 hex digits. Elsewhere it is 16 bytes of /dev/urandom, so it cannot be guessed (Random.int has a
-## 31-bit seed when the program is run with --seed). Windows has no such file: the name is 12 bytes of Random.int and
-## the process id, which is enough there because `Dir.mkdir_private` fails on a name that is taken and makes a folder
-## that only its owner can enter, so a guessed name costs a retry and gives no access.
+## 31-bit seed when the program is run with --seed). Windows has no such file: the name is 8 bytes of Random.int, 4 of
+## the clock and the process id, which is enough there because `Dir.mkdir_private` fails on a name that is taken and
+## makes a folder that only its owner can enter, so a guessed name costs a retry and gives no access.
 export def random_hex() -> Result[String]
   if windows?()
     return ok(process_hex())
@@ -160,12 +163,17 @@ def hex_of(bytes: List[Int]) -> String
   return digits.join("")
 end
 
-# 12 bytes from Random.int and the process id as 4 bytes: 32 digits like the name from /dev/urandom.
+# 8 bytes from Random.int, 4 from the clock and the process id as 4 bytes: 32 digits like the name from /dev/urandom.
+# The clock keeps the names from repeating when the user gives --seed, which makes Random.int deterministic.
 def process_hex() -> String
   pid = System.pid()
+  now = Time.now_ms()
   bytes: List[Int] = []
-  while bytes.size < 12
+  while bytes.size < 8
     bytes = bytes.push(Random.int(0, 255))
+  end
+  for shift in [24, 16, 8, 0]
+    bytes = bytes.push(now.shift_right(shift).bit_and(255))
   end
   for shift in [24, 16, 8, 0]
     bytes = bytes.push(pid.shift_right(shift).bit_and(255))

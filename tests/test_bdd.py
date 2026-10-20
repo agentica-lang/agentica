@@ -383,8 +383,12 @@ def test_a_run_removes_the_folder_of_an_ended_run_and_leaves_the_folder_of_a_liv
         (folder / "lock").write_text("x")
         old = time.time() - 3600
         os.utime(folder, (old, old))
+    # On Windows a folder younger than a minute is left alone even when its lock is free (WINDOWS_MIN_AGE_SECONDS).
+    young = temporary / "agentica-bdd-00112233445566778899aabbccddeeff"
+    young.mkdir()
+    (young / "lock").write_text("x")
     with held_lock(live / "lock"):
         status, report = bdd.json_test(scratch / "c_test.agc", env={"TMPDIR": temporary})
     assert (status, report["passed"]) == (0, 1)
-    assert sorted(os.listdir(temporary)) == [live.name]
+    assert sorted(os.listdir(temporary)) == sorted([live.name] + ([young.name] if os.name == "nt" else []))
 

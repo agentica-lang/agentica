@@ -289,7 +289,7 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   `AGENTICA_CHANNEL=3,4`. `spawn` and `spawn_captured` remove that variable from
   the child's environment, even when the parent inherited it, so a program only
   ever sees a channel its own parent opened for it. The channel works on Linux,
-  macOS and Windows; `agentica test` on Windows comes later.
+  macOS and Windows, `agentica test` included.
 - `channel_read_line(p, timeout_ms)` reads one line the child sent, with the
   rules of `read_line` (at most 1 MiB, LF or CRLF removed, strict UTF-8, an
   empty end is `error("process: end of input")`). When the child's stdout or

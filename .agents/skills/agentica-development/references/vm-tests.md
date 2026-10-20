@@ -279,7 +279,8 @@ Read first: `references/vm.md`.
     stopped or the driver of its VM is killed (`test_process_lifecycle.py`); the
     exit pair libuv reports for a stopped child, Windows only
     (`test_process_windows.py`). `test_process_bdd.py` keeps the `agentica
-    test` case, which is not on Windows yet. The C side is
+    test` case, apart because it starts the whole driver (Windows runs it
+    natively, not under Wine). The C side is
     `vm/tests/process_test.c`.
 
 - **Path:** `tests/test_vm_stop.py`
