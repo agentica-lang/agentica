@@ -40,7 +40,10 @@ RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark
 # still pending),
 # which a run on several threads does not fix. channel-owner-ends counts on a yield (Task.sleep(0)) letting a task it
 # spawned send first; a spinning scheduler takes that task at once and runs it beside the yielder.
-ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning", "logger-tasks",
+# http-client-close-queued counts on the same yield: on another thread the new worker may connect before
+# close_client runs (the call still gets "http: client is closed", but the server sees a connection).
+ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning",
+         "http-client-close-queued", "logger-tasks",
          "task-await-cycle", "task-crash-descendants", "task-crash-result", "task-pending-count", "task-preempt-fail",
          "task-file-close", "tcp-tasks", "test-run-task"}
 # Builtins that a run with several schedulers refuses (agc_program_for_threads in vm/builtin_tables.c, and Test.run on
